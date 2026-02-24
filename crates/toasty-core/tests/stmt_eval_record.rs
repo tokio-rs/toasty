@@ -7,7 +7,9 @@ use toasty_core::stmt::{ConstInput, Expr, Value};
 #[test]
 fn eval_record_empty() {
     assert_eq!(
-        Expr::record(std::iter::empty::<Expr>()).eval_const().unwrap(),
+        Expr::record(std::iter::empty::<Expr>())
+            .eval_const()
+            .unwrap(),
         Value::record_from_vec(vec![])
     );
 }
@@ -39,7 +41,9 @@ fn eval_record_one_string() {
 #[test]
 fn eval_record_two_fields() {
     assert_eq!(
-        Expr::record([Expr::from(true), Expr::from(42i64)]).eval_const().unwrap(),
+        Expr::record([Expr::from(true), Expr::from(42i64)])
+            .eval_const()
+            .unwrap(),
         Value::record_from_vec(vec![Value::Bool(true), Value::I64(42)])
     );
 }

@@ -71,7 +71,10 @@ fn project_arg_field_1() {
 
 #[test]
 fn project_arg_string_field() {
-    let args = vec![Value::record_from_vec(vec![Value::from("alice"), Value::I64(30)])];
+    let args = vec![Value::record_from_vec(vec![
+        Value::from("alice"),
+        Value::I64(30),
+    ])];
     let expr = Expr::arg_project(ExprArg::new(0), Projection::single(0));
     assert_eq!(expr.eval(&args).unwrap(), Value::from("alice"));
 }

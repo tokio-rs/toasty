@@ -57,12 +57,18 @@ fn from_vec_expr_empty_for_expr() {
 #[test]
 fn from_expr_record_for_expr() {
     let record = ExprRecord {
-        fields: vec![Expr::Value(Value::Bool(true)), Expr::Value(Value::from("hi"))],
+        fields: vec![
+            Expr::Value(Value::Bool(true)),
+            Expr::Value(Value::from("hi")),
+        ],
     };
     assert_eq!(
         Expr::from(record),
         Expr::Record(ExprRecord {
-            fields: vec![Expr::Value(Value::Bool(true)), Expr::Value(Value::from("hi"))],
+            fields: vec![
+                Expr::Value(Value::Bool(true)),
+                Expr::Value(Value::from("hi"))
+            ],
         })
     );
 }
@@ -79,10 +85,7 @@ fn from_tuple2_for_expr() {
     assert_eq!(
         expr,
         Expr::Record(ExprRecord {
-            fields: vec![
-                Expr::Value(Value::Bool(true)),
-                Expr::Value(Value::I64(42)),
-            ],
+            fields: vec![Expr::Value(Value::Bool(true)), Expr::Value(Value::I64(42)),],
         })
     );
 }
@@ -113,12 +116,18 @@ fn from_tuple3_for_expr_record() {
 #[test]
 fn from_expr_and_for_expr() {
     let and = ExprAnd {
-        operands: vec![Expr::Value(Value::Bool(true)), Expr::Value(Value::Bool(false))],
+        operands: vec![
+            Expr::Value(Value::Bool(true)),
+            Expr::Value(Value::Bool(false)),
+        ],
     };
     assert_eq!(
         Expr::from(and),
         Expr::And(ExprAnd {
-            operands: vec![Expr::Value(Value::Bool(true)), Expr::Value(Value::Bool(false))],
+            operands: vec![
+                Expr::Value(Value::Bool(true)),
+                Expr::Value(Value::Bool(false))
+            ],
         })
     );
 }
@@ -177,4 +186,3 @@ fn from_expr_binary_op_for_expr() {
         })
     );
 }
-

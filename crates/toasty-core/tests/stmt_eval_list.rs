@@ -28,7 +28,11 @@ fn eval_list_i64_values() {
 fn eval_list_bool_values() {
     assert_eq!(
         Expr::list([true, false, true]).eval_const().unwrap(),
-        Value::List(vec![Value::Bool(true), Value::Bool(false), Value::Bool(true)])
+        Value::List(vec![
+            Value::Bool(true),
+            Value::Bool(false),
+            Value::Bool(true)
+        ])
     );
 }
 
@@ -47,7 +51,9 @@ fn eval_list_string_values() {
 #[test]
 fn eval_list_with_null() {
     assert_eq!(
-        Expr::list([Expr::from(Value::Null), Expr::from(1i64)]).eval_const().unwrap(),
+        Expr::list([Expr::from(Value::Null), Expr::from(1i64)])
+            .eval_const()
+            .unwrap(),
         Value::List(vec![Value::Null, Value::I64(1)])
     );
 }
@@ -58,10 +64,7 @@ fn eval_list_with_null() {
 
 #[test]
 fn eval_list_of_is_null_exprs() {
-    let expr = Expr::list([
-        Expr::is_null(Value::Null),
-        Expr::is_null(1i64),
-    ]);
+    let expr = Expr::list([Expr::is_null(Value::Null), Expr::is_null(1i64)]);
     assert_eq!(
         expr.eval_const().unwrap(),
         Value::List(vec![Value::Bool(true), Value::Bool(false)])

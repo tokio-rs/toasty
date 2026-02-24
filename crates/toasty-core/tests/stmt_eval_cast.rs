@@ -15,7 +15,9 @@ fn cast_i8_to_i64() {
 #[test]
 fn cast_i32_to_i64() {
     assert_eq!(
-        Expr::cast(Value::I32(100_000), Type::I64).eval_const().unwrap(),
+        Expr::cast(Value::I32(100_000), Type::I64)
+            .eval_const()
+            .unwrap(),
         Value::I64(100_000)
     );
 }
@@ -51,7 +53,9 @@ fn cast_i64_to_i8_out_of_range() {
 
 #[test]
 fn cast_i64_to_i32_out_of_range() {
-    assert!(Expr::cast(Value::I64(3_000_000_000), Type::I32).eval_const().is_err());
+    assert!(Expr::cast(Value::I64(3_000_000_000), Type::I32)
+        .eval_const()
+        .is_err());
 }
 
 // ---------------------------------------------------------------------------
@@ -86,7 +90,9 @@ fn cast_u64_to_u8_out_of_range() {
 #[test]
 fn cast_string_to_string() {
     assert_eq!(
-        Expr::cast(Value::from("hello"), Type::String).eval_const().unwrap(),
+        Expr::cast(Value::from("hello"), Type::String)
+            .eval_const()
+            .unwrap(),
         Value::from("hello")
     );
 }
@@ -99,7 +105,9 @@ fn cast_string_to_string() {
 fn cast_uuid_to_string() {
     let id = uuid::Uuid::nil();
     assert_eq!(
-        Expr::cast(Value::Uuid(id), Type::String).eval_const().unwrap(),
+        Expr::cast(Value::Uuid(id), Type::String)
+            .eval_const()
+            .unwrap(),
         Value::from(id.to_string().as_str())
     );
 }

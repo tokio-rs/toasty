@@ -69,7 +69,6 @@ impl Expr {
     pub fn ne(lhs: impl Into<Self>, rhs: impl Into<Self>) -> Self {
         Expr::binary_op(lhs, BinaryOp::Ne, rhs)
     }
-
 }
 
 impl From<ExprBinaryOp> for Expr {

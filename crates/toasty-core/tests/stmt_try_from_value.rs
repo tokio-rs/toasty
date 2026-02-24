@@ -108,7 +108,10 @@ fn try_from_value_i32_wrong_type() {
 
 #[test]
 fn try_from_value_i64_same_type() {
-    assert_eq!(i64::try_from(Value::I64(9_000_000_000)).unwrap(), 9_000_000_000i64);
+    assert_eq!(
+        i64::try_from(Value::I64(9_000_000_000)).unwrap(),
+        9_000_000_000i64
+    );
 }
 
 #[test]
@@ -118,7 +121,10 @@ fn try_from_value_i64_cross_type_from_i32() {
 
 #[test]
 fn try_from_value_i64_cross_type_from_u32() {
-    assert_eq!(i64::try_from(Value::U32(u32::MAX)).unwrap(), u32::MAX as i64);
+    assert_eq!(
+        i64::try_from(Value::U32(u32::MAX)).unwrap(),
+        u32::MAX as i64
+    );
 }
 
 #[test]
@@ -186,7 +192,10 @@ fn try_from_value_u16_cross_type_out_of_range() {
 
 #[test]
 fn try_from_value_u32_same_type() {
-    assert_eq!(u32::try_from(Value::U32(4_294_967_295)).unwrap(), 4_294_967_295u32);
+    assert_eq!(
+        u32::try_from(Value::U32(4_294_967_295)).unwrap(),
+        4_294_967_295u32
+    );
 }
 
 #[test]
@@ -272,7 +281,10 @@ fn try_from_value_isize_wrong_type() {
 
 #[test]
 fn try_from_value_string_success() {
-    assert_eq!(String::try_from(Value::String("hello".to_owned())).unwrap(), "hello");
+    assert_eq!(
+        String::try_from(Value::String("hello".to_owned())).unwrap(),
+        "hello"
+    );
 }
 
 #[test]
@@ -291,12 +303,18 @@ fn try_from_value_string_null() {
 
 #[test]
 fn try_from_value_bytes_success() {
-    assert_eq!(Vec::<u8>::try_from(Value::Bytes(vec![1, 2, 3])).unwrap(), vec![1u8, 2, 3]);
+    assert_eq!(
+        Vec::<u8>::try_from(Value::Bytes(vec![1, 2, 3])).unwrap(),
+        vec![1u8, 2, 3]
+    );
 }
 
 #[test]
 fn try_from_value_bytes_empty() {
-    assert_eq!(Vec::<u8>::try_from(Value::Bytes(vec![])).unwrap(), Vec::<u8>::new());
+    assert_eq!(
+        Vec::<u8>::try_from(Value::Bytes(vec![])).unwrap(),
+        Vec::<u8>::new()
+    );
 }
 
 #[test]

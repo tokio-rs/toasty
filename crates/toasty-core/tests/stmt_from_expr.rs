@@ -57,7 +57,10 @@ fn from_string_ref() {
 
 #[test]
 fn from_value_bool() {
-    assert_eq!(Expr::from(Value::Bool(true)), Expr::Value(Value::Bool(true)));
+    assert_eq!(
+        Expr::from(Value::Bool(true)),
+        Expr::Value(Value::Bool(true))
+    );
 }
 
 #[test]

@@ -17,11 +17,7 @@ use toasty_core::{
     Result, Schema,
 };
 
-use crate::engine::{
-    hir,
-    simplify::Simplify,
-    Engine, HirStatement,
-};
+use crate::engine::{hir, simplify::Simplify, Engine, HirStatement};
 
 impl Engine {
     pub(super) fn lower_stmt(&self, stmt: stmt::Statement) -> Result<HirStatement> {
