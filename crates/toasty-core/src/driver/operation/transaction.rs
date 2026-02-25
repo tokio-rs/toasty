@@ -11,6 +11,15 @@ pub enum Transaction {
 
     /// Rollback a transaction
     Rollback,
+
+    /// Create a savepoint (nested transaction)
+    Savepoint { depth: u32 },
+
+    /// Release a savepoint (commit nested transaction)
+    ReleaseSavepoint { depth: u32 },
+
+    /// Rollback to a savepoint (rollback nested transaction)
+    RollbackToSavepoint { depth: u32 },
 }
 
 impl From<Transaction> for Operation {

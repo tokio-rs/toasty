@@ -1,6 +1,4 @@
 mod statement_cache;
-mod transaction_manager;
-use transaction_manager::TransactionManager;
 mod r#type;
 mod value;
 
@@ -180,7 +178,6 @@ impl Driver for PostgreSQL {
 pub struct Connection {
     client: Client,
     statement_cache: StatementCache,
-    txm: TransactionManager,
 }
 
 impl Connection {
@@ -189,7 +186,6 @@ impl Connection {
         Self {
             client,
             statement_cache: StatementCache::new(100),
-            txm: TransactionManager::new(),
         }
     }
 
@@ -270,16 +266,8 @@ impl toasty_core::driver::Connection for Connection {
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         if let Operation::Transaction(ref tx_op) = op {
             match tx_op {
-                Transaction::Start { isolation } => {
-                    let sql = self.txm.start(*isolation);
-                    self.client
-                        .batch_execute(&sql)
-                        .await
-                        .map_err(toasty_core::Error::driver_operation_failed)?;
-                }
                 Transaction::Commit => {
-                    let sql = self.txm.commit();
-                    self.client.batch_execute(&sql).await.map_err(|e| {
+                    self.client.batch_execute("COMMIT").await.map_err(|e| {
                         if let Some(db_err) = e.as_db_error() {
                             match db_err.code().code() {
                                 "40001" => toasty_core::Error::serialization_failure(
@@ -295,8 +283,24 @@ impl toasty_core::driver::Connection for Connection {
                         }
                     })?;
                 }
-                Transaction::Rollback => {
-                    let sql = self.txm.rollback();
+                tx_op => {
+                    let sql: Cow<'static, str> = match tx_op {
+                        Transaction::Start { isolation } => match isolation {
+                            None => "BEGIN".into(),
+                            Some(level) => {
+                                format!("BEGIN ISOLATION LEVEL {}", level.sql_name()).into()
+                            }
+                        },
+                        Transaction::Rollback => "ROLLBACK".into(),
+                        Transaction::Savepoint { depth } => format!("SAVEPOINT sp_{depth}").into(),
+                        Transaction::ReleaseSavepoint { depth } => {
+                            format!("RELEASE SAVEPOINT sp_{depth}").into()
+                        }
+                        Transaction::RollbackToSavepoint { depth } => {
+                            format!("ROLLBACK TO SAVEPOINT sp_{depth}").into()
+                        }
+                        Transaction::Commit => unreachable!(),
+                    };
                     self.client
                         .batch_execute(&sql)
                         .await

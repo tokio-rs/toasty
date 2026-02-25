@@ -1,8 +1,5 @@
 #![allow(clippy::needless_range_loop)]
 
-mod transaction_manager;
-use transaction_manager::TransactionManager;
-
 mod value;
 pub(crate) use value::Value;
 
@@ -135,15 +132,11 @@ impl Driver for MySQL {
 #[derive(Debug)]
 pub struct Connection {
     conn: Conn,
-    txm: TransactionManager,
 }
 
 impl Connection {
     pub fn new(conn: Conn) -> Self {
-        Self {
-            conn,
-            txm: TransactionManager::new(),
-        }
+        Self { conn }
     }
 
     pub async fn create_table(&mut self, schema: &Schema, table: &Table) -> Result<()> {
@@ -200,38 +193,46 @@ impl toasty_core::driver::Connection for Connection {
         let (sql, ret, last_insert_id_hack): (sql::Statement, _, _) = match op {
             Operation::QuerySql(op) => (op.stmt.into(), op.ret, op.last_insert_id_hack),
             Operation::Transaction(Transaction::Start { isolation }) => {
-                let (pre, begin) = self.txm.start(isolation);
-                if let Some(pre) = pre {
+                if let Some(level) = isolation {
                     self.conn
-                        .query_drop(&pre)
+                        .query_drop(format!(
+                            "SET TRANSACTION ISOLATION LEVEL {}",
+                            level.sql_name()
+                        ))
                         .await
                         .map_err(toasty_core::Error::driver_operation_failed)?;
                 }
                 self.conn
-                    .query_drop(begin.as_ref())
+                    .query_drop("START TRANSACTION")
                     .await
                     .map_err(toasty_core::Error::driver_operation_failed)?;
                 return Ok(Response::count(0));
             }
             Operation::Transaction(Transaction::Commit) => {
-                let sql = self.txm.commit();
-                self.conn
-                    .query_drop(sql.as_ref())
-                    .await
-                    .map_err(|e| match e {
-                        mysql_async::Error::Server(se) => match se.code {
-                            1213 => toasty_core::Error::serialization_failure(se.message),
-                            1792 => toasty_core::Error::read_only_transaction(se.message),
-                            _ => toasty_core::Error::driver_operation_failed(
-                                mysql_async::Error::Server(se),
-                            ),
-                        },
-                        other => toasty_core::Error::driver_operation_failed(other),
-                    })?;
+                self.conn.query_drop("COMMIT").await.map_err(|e| match e {
+                    mysql_async::Error::Server(se) => match se.code {
+                        1213 => toasty_core::Error::serialization_failure(se.message),
+                        1792 => toasty_core::Error::read_only_transaction(se.message),
+                        _ => toasty_core::Error::driver_operation_failed(
+                            mysql_async::Error::Server(se),
+                        ),
+                    },
+                    other => toasty_core::Error::driver_operation_failed(other),
+                })?;
                 return Ok(Response::count(0));
             }
-            Operation::Transaction(Transaction::Rollback) => {
-                let sql = self.txm.rollback();
+            Operation::Transaction(tx_op) => {
+                let sql: Cow<'static, str> = match tx_op {
+                    Transaction::Rollback => "ROLLBACK".into(),
+                    Transaction::Savepoint { depth } => format!("SAVEPOINT sp_{depth}").into(),
+                    Transaction::ReleaseSavepoint { depth } => {
+                        format!("RELEASE SAVEPOINT sp_{depth}").into()
+                    }
+                    Transaction::RollbackToSavepoint { depth } => {
+                        format!("ROLLBACK TO SAVEPOINT sp_{depth}").into()
+                    }
+                    _ => unreachable!(),
+                };
                 self.conn
                     .query_drop(sql.as_ref())
                     .await

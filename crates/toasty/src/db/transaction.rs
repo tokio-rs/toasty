@@ -1,4 +1,4 @@
-use std::{future::Future, ops::Deref, time::Duration};
+use std::{future::Future, ops::Deref, sync::atomic::Ordering, time::Duration};
 
 use toasty_core::driver::{operation::Transaction as TransactionOp, transaction::IsolationLevel};
 use tokio::sync::oneshot;
@@ -15,7 +15,7 @@ struct Transaction<'a> {
 
 enum TransactionConn<'a> {
     Root(Db),
-    Nested(&'a Db),
+    Nested { db: &'a Db, depth: u32 },
 }
 
 impl Transaction<'_> {
@@ -28,15 +28,30 @@ impl Transaction<'_> {
     async fn commit(&mut self) -> crate::Result<()> {
         // We're marking the transaction as done before doing the actual operation since the actual
         // work is being done in a bg task. Even if the Transaction is dropped after the first poll
-        // the operation is finished in the bg task en should not be rolled back on drop.
+        // the operation is finished in the bg task and should not be rolled back on drop.
         self.done = true;
-        self.exec_op(TransactionOp::Commit).await
+        let op = match &self.conn {
+            TransactionConn::Root(_) => TransactionOp::Commit,
+            TransactionConn::Nested { depth, .. } => {
+                TransactionOp::ReleaseSavepoint { depth: *depth }
+            }
+        };
+        self.exec_op(op).await
     }
 
     async fn rollback(&mut self) -> crate::Result<()> {
         // See commit why we're marking this transaction as done early here.
         self.done = true;
-        self.exec_op(TransactionOp::Rollback).await
+        self.exec_op(self.rollback_op()).await
+    }
+
+    fn rollback_op(&self) -> TransactionOp {
+        match &self.conn {
+            TransactionConn::Root(_) => TransactionOp::Rollback,
+            TransactionConn::Nested { depth, .. } => {
+                TransactionOp::RollbackToSavepoint { depth: *depth }
+            }
+        }
     }
 }
 
@@ -46,7 +61,7 @@ impl Deref for Transaction<'_> {
     fn deref(&self) -> &Db {
         match &self.conn {
             TransactionConn::Root(db) => db,
-            TransactionConn::Nested(db) => db,
+            TransactionConn::Nested { db, .. } => db,
         }
     }
 }
@@ -54,9 +69,7 @@ impl Deref for Transaction<'_> {
 impl Drop for Transaction<'_> {
     fn drop(&mut self) {
         if !self.done {
-            // This synchronously sends a roleback command to the connection in the background task.
-            // We don't need to await the future.
-            std::mem::drop(self.exec_op(TransactionOp::Rollback));
+            std::mem::drop(self.exec_op(self.rollback_op()));
         }
     }
 }
@@ -157,27 +170,38 @@ impl Db {
     ) -> crate::Result<Transaction<'a>> {
         // We're wrapping the connection in a Transaction before the actual BEGIN is sent so if the
         // future is cancelled the wrapper rolls the transaction back.
-        let tx = if self.in_transaction {
-            Transaction {
-                done: false,
-                conn: TransactionConn::Nested(self),
+        let (tx, start_op) = match &self.savepoint_depth {
+            Some(counter) => {
+                // Nested: increment depth and create a savepoint
+                let depth = counter.fetch_add(1, Ordering::Relaxed);
+
+                let tx = Transaction {
+                    done: false,
+                    conn: TransactionConn::Nested { db: self, depth },
+                };
+
+                (tx, TransactionOp::Savepoint { depth })
             }
-        } else {
-            let conn = self.pool.get().await?;
+            None => {
+                // Root: acquire a connection and start a transaction
+                let conn = self.pool.get().await?;
 
-            let db = Db::new(
-                self.pool.clone(),
-                self.schema.clone(),
-                ConnectionSource::Transaction(conn),
-            );
+                let db = Db::new(
+                    self.pool.clone(),
+                    self.schema.clone(),
+                    ConnectionSource::Transaction(conn),
+                );
 
-            Transaction {
-                done: false,
-                conn: TransactionConn::Root(db),
+                let tx = Transaction {
+                    done: false,
+                    conn: TransactionConn::Root(db),
+                };
+
+                (tx, TransactionOp::Start { isolation })
             }
         };
 
-        tx.exec_op(TransactionOp::Start { isolation }).await?;
+        tx.exec_op(start_op).await?;
         Ok(tx)
     }
 }

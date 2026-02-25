@@ -4,7 +4,7 @@ mod connection;
 mod pool;
 mod transaction;
 
-use std::sync::Arc;
+use std::sync::{atomic::AtomicU32, Arc};
 
 pub use builder::Builder;
 pub use connect::*;
@@ -34,7 +34,10 @@ pub(crate) enum EngineMsg {
 
 #[derive(Debug)]
 pub struct Db {
-    in_transaction: bool,
+    /// Savepoint nesting depth. `None` = not in a transaction, `Some(0)` = root
+    /// transaction with no nested savepoints, `Some(n)` = n nested savepoints.
+    savepoint_depth: Option<AtomicU32>,
+
     pool: Pool,
 
     pub(crate) schema: Arc<Schema>,
@@ -49,7 +52,11 @@ pub struct Db {
 impl Db {
     pub(crate) fn new(pool: Pool, schema: Arc<Schema>, mut connection: ConnectionSource) -> Self {
         let capabilities = pool.capability();
-        let in_transaction = connection.in_transaction();
+        let savepoint_depth = if connection.in_transaction() {
+            Some(AtomicU32::new(0))
+        } else {
+            None
+        };
 
         let mut engine = Engine::new(schema.clone(), capabilities);
 
@@ -105,7 +112,7 @@ impl Db {
         });
 
         Db {
-            in_transaction,
+            savepoint_depth,
             pool,
             schema,
             in_tx,
@@ -224,7 +231,7 @@ impl Drop for Db {
         // If we're in a transaction, the bg task could still be rolling back a transaction from a
         // dropped future/Transaction. This task will abort after rolling back and trying to read
         // from the channel.
-        if !self.in_transaction {
+        if self.savepoint_depth.is_none() {
             // TODO: make this less aggressive
             self.join_handle.abort();
         }
