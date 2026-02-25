@@ -54,3 +54,6 @@ indexmap.workspace = true
 index_vec.workspace = true
 tokio.workspace = true
 url.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
