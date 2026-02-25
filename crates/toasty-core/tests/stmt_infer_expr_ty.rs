@@ -1,4 +1,4 @@
-use toasty_core::stmt::{BinaryOp, Expr, ExprAnd, ExprArg, ExprContext, Type, Value};
+use toasty_core::stmt::{BinaryOp, Expr, ExprAnd, ExprArg, ExprContext, ExprOr, Type, Value};
 
 fn cx() -> ExprContext<'static, ()> {
     ExprContext::new_free()
@@ -56,7 +56,10 @@ fn infer_and() {
 
 #[test]
 fn infer_or() {
-    let expr = Expr::and(false, true);
+    let expr = ExprOr {
+        operands: vec![false.into(), true.into()],
+    }
+    .into();
     assert_eq!(infer(&expr), Type::Bool);
 }
 
