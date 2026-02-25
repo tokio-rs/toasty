@@ -46,7 +46,7 @@ fn arb_bool_expr() -> impl Strategy<Value = Expr> {
             })
         }),
         // IsNull(i64) → always false, IsNull(null) → always true
-        arb_i64_value().prop_map(|e| Expr::is_null(e)),
+        arb_i64_value().prop_map(Expr::is_null),
         Just(Expr::is_null(Expr::null())),
         // InList(i64, [i64; 0..=3]) → bool, exercises empty/single/multi list paths
         (arb_i64_value(), prop::collection::vec(arb_i64_raw(), 0..=3)).prop_map(
@@ -67,13 +67,11 @@ fn arb_bool_expr() -> impl Strategy<Value = Expr> {
         |inner| {
             prop_oneof![
                 // Not(bool_expr) — double negation, De Morgan's, constant folding
-                inner.clone().prop_map(|e| Expr::not(e)),
+                inner.clone().prop_map(Expr::not),
                 // And([bool_expr; 2..=4]) — flattening, identity, contradiction
-                prop::collection::vec(inner.clone(), 2..=4)
-                    .prop_map(|operands| Expr::and_from_vec(operands)),
+                prop::collection::vec(inner.clone(), 2..=4).prop_map(Expr::and_from_vec),
                 // Or([bool_expr; 2..=4]) — flattening, OR-to-IN conversion
-                prop::collection::vec(inner.clone(), 2..=4)
-                    .prop_map(|operands| Expr::or_from_vec(operands)),
+                prop::collection::vec(inner.clone(), 2..=4).prop_map(Expr::or_from_vec),
                 // Any(List([bool_expr; 1..=4])) — Any+List simplifiers
                 prop::collection::vec(inner.clone(), 1..=4).prop_map(|items| {
                     Expr::Any(ExprAny {
