@@ -134,7 +134,11 @@ fn infer_record_single_field() {
 
 #[test]
 fn infer_record_mixed_fields() {
-    let r = ValueRecord::from_vec(vec![Value::I32(1), Value::String("x".into()), Value::Bool(true)]);
+    let r = ValueRecord::from_vec(vec![
+        Value::I32(1),
+        Value::String("x".into()),
+        Value::Bool(true),
+    ]);
     assert_eq!(
         Value::Record(r).infer_ty(),
         Type::Record(vec![Type::I32, Type::String, Type::Bool])

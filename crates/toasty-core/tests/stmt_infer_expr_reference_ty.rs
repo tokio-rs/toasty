@@ -2,14 +2,14 @@
 //! `ExprReference` variants (Column, Field, Model) in each relevant
 //! `ExprTarget` context, at both nesting=0 and nesting>0.
 
+use toasty_core::schema::app::IndexId as AppIndexId;
 use toasty_core::schema::app::{
     Field, FieldName, FieldPrimitive, FieldTy, ModelId, ModelRoot, PrimaryKey as AppPrimaryKey,
 };
-use toasty_core::schema::app::IndexId as AppIndexId;
+use toasty_core::schema::db::Type as DbType;
 use toasty_core::schema::db::{
     Column, ColumnId, IndexId as DbIndexId, PrimaryKey as DbPrimaryKey, Schema, Table, TableId,
 };
-use toasty_core::schema::db::Type as DbType;
 use toasty_core::schema::Name;
 use toasty_core::stmt::{Expr, ExprColumn, ExprContext, ExprReference, ExprTarget, Type};
 
@@ -24,7 +24,10 @@ fn db_schema(col_types: &[(Type, &str)]) -> Schema {
         .iter()
         .enumerate()
         .map(|(i, (ty, name))| Column {
-            id: ColumnId { table: table_id, index: i },
+            id: ColumnId {
+                table: table_id,
+                index: i,
+            },
             name: name.to_string(),
             ty: ty.clone(),
             storage_ty: DbType::Text,
@@ -40,8 +43,14 @@ fn db_schema(col_types: &[(Type, &str)]) -> Schema {
             name: "t".to_string(),
             columns,
             primary_key: DbPrimaryKey {
-                columns: vec![ColumnId { table: table_id, index: 0 }],
-                index: DbIndexId { table: table_id, index: 0 },
+                columns: vec![ColumnId {
+                    table: table_id,
+                    index: 0,
+                }],
+                index: DbIndexId {
+                    table: table_id,
+                    index: 0,
+                },
             },
             indices: vec![],
         }],
@@ -61,8 +70,14 @@ fn model_root(id: usize, field_types: &[(Type, &str)]) -> ModelRoot {
         .enumerate()
         .map(|(i, (ty, name))| Field {
             id: model_id.field(i),
-            name: FieldName { app_name: name.to_string(), storage_name: None },
-            ty: FieldTy::Primitive(FieldPrimitive { ty: ty.clone(), storage_ty: None }),
+            name: FieldName {
+                app_name: name.to_string(),
+                storage_name: None,
+            },
+            ty: FieldTy::Primitive(FieldPrimitive {
+                ty: ty.clone(),
+                storage_ty: None,
+            }),
             nullable: false,
             primary_key: i == 0,
             auto: None,
@@ -76,7 +91,10 @@ fn model_root(id: usize, field_types: &[(Type, &str)]) -> ModelRoot {
         fields,
         primary_key: AppPrimaryKey {
             fields: vec![model_id.field(0)],
-            index: AppIndexId { model: model_id, index: 0 },
+            index: AppIndexId {
+                model: model_id,
+                index: 0,
+            },
         },
         table_name: None,
         indices: vec![],
@@ -90,7 +108,11 @@ fn model_cx(model: &ModelRoot) -> ExprContext<'_, ()> {
 }
 
 fn col_ref(nesting: usize, column: usize) -> Expr {
-    Expr::Reference(ExprReference::Column(ExprColumn { nesting, table: 0, column }))
+    Expr::Reference(ExprReference::Column(ExprColumn {
+        nesting,
+        table: 0,
+        column,
+    }))
 }
 
 fn field_ref(nesting: usize, index: usize) -> Expr {
@@ -126,7 +148,10 @@ fn column_nesting0_u64() {
 #[test]
 fn column_nesting0_string() {
     let s = db_schema(&[(Type::String, "name")]);
-    assert_eq!(table_cx(&s).infer_expr_ty(&col_ref(0, 0), &[]), Type::String);
+    assert_eq!(
+        table_cx(&s).infer_expr_ty(&col_ref(0, 0), &[]),
+        Type::String
+    );
 }
 
 #[test]
@@ -143,7 +168,11 @@ fn column_nesting0_uuid() {
 
 #[test]
 fn column_nesting0_selected_by_index() {
-    let s = db_schema(&[(Type::I64, "id"), (Type::String, "name"), (Type::Bool, "active")]);
+    let s = db_schema(&[
+        (Type::I64, "id"),
+        (Type::String, "name"),
+        (Type::Bool, "active"),
+    ]);
     let cx = table_cx(&s);
     assert_eq!(cx.infer_expr_ty(&col_ref(0, 0), &[]), Type::I64);
     assert_eq!(cx.infer_expr_ty(&col_ref(0, 1), &[]), Type::String);
@@ -184,7 +213,14 @@ fn field_nesting0_first_field() {
 
 #[test]
 fn field_nesting0_selected_by_index() {
-    let m = model_root(0, &[(Type::I64, "id"), (Type::String, "name"), (Type::Bool, "active")]);
+    let m = model_root(
+        0,
+        &[
+            (Type::I64, "id"),
+            (Type::String, "name"),
+            (Type::Bool, "active"),
+        ],
+    );
     let cx = model_cx(&m);
     assert_eq!(cx.infer_expr_ty(&field_ref(0, 0), &[]), Type::I64);
     assert_eq!(cx.infer_expr_ty(&field_ref(0, 1), &[]), Type::String);
@@ -229,8 +265,14 @@ fn model_ref_nesting0() {
 fn model_ref_nesting0_distinct_ids() {
     let m0 = model_root(0, &[(Type::I64, "id")]);
     let m1 = model_root(1, &[(Type::Uuid, "id")]);
-    assert_eq!(model_cx(&m0).infer_expr_ty(&model_ref(0), &[]), Type::Model(ModelId(0)));
-    assert_eq!(model_cx(&m1).infer_expr_ty(&model_ref(0), &[]), Type::Model(ModelId(1)));
+    assert_eq!(
+        model_cx(&m0).infer_expr_ty(&model_ref(0), &[]),
+        Type::Model(ModelId(0))
+    );
+    assert_eq!(
+        model_cx(&m1).infer_expr_ty(&model_ref(0), &[]),
+        Type::Model(ModelId(1))
+    );
 }
 
 /// nesting=1: a child scope's model reference resolves against the parent model.

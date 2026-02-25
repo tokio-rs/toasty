@@ -199,8 +199,14 @@ fn infer_map_arg_type_from_outer_args() {
     // map(arg(0), item => item)  where arg(0) is List<String>
     // The outer arg resolves to List<String>, so the item type in the map
     // scope is String, and the map body (arg(0) at nesting=0) is String.
-    let base = Expr::arg(ExprArg { position: 0, nesting: 0 });
-    let map_body = Expr::arg(ExprArg { position: 0, nesting: 0 });
+    let base = Expr::arg(ExprArg {
+        position: 0,
+        nesting: 0,
+    });
+    let map_body = Expr::arg(ExprArg {
+        position: 0,
+        nesting: 0,
+    });
     let expr = Expr::map(base, map_body);
     assert_eq!(
         infer_with_args(&expr, &[Type::list(Type::String)]),
