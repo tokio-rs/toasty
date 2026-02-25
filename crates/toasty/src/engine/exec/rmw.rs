@@ -44,7 +44,11 @@ impl Exec<'_> {
                 Transaction::RollbackToSavepoint(id),
             )
         } else {
-            (Transaction::Start, Transaction::Commit, Transaction::Rollback)
+            (
+                Transaction::Start,
+                Transaction::Commit,
+                Transaction::Rollback,
+            )
         };
 
         self.connection

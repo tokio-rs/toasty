@@ -333,7 +333,10 @@ pub async fn rmw_uses_savepoints(t: &mut Test) -> Result<()> {
         assert_struct!(t.log().pop_op(), Operation::Transaction(Transaction::Start));
         assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // read
         assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // write
-        assert_struct!(t.log().pop_op(), Operation::Transaction(Transaction::Commit));
+        assert_struct!(
+            t.log().pop_op(),
+            Operation::Transaction(Transaction::Commit)
+        );
     }
     assert!(t.log().is_empty());
 
@@ -386,7 +389,10 @@ pub async fn rmw_condition_failure_issues_rollback_to_savepoint(t: &mut Test) ->
         // condition failure rolls it back
         assert_struct!(t.log().pop_op(), Operation::Transaction(Transaction::Start));
         assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // read
-        assert_struct!(t.log().pop_op(), Operation::Transaction(Transaction::Rollback));
+        assert_struct!(
+            t.log().pop_op(),
+            Operation::Transaction(Transaction::Rollback)
+        );
     }
     assert!(t.log().is_empty());
 
