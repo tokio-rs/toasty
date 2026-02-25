@@ -484,11 +484,6 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     }
 
     fn visit_stmt_query_mut(&mut self, stmt: &mut stmt::Query) {
-        if !self.capability().sql {
-            assert!(stmt.order_by.is_none(), "TODO: implement ordering for KV");
-            assert!(stmt.limit.is_none(), "TODO: implement limit for KV");
-        }
-
         let mut lower = self.scope_expr(&stmt.body);
 
         if let Some(with) = &mut stmt.with {

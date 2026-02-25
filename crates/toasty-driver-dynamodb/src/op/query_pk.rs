@@ -1,5 +1,5 @@
 use super::{
-    ddb_expression, item_to_record, operation, stmt, Connection, ExprAttrs, Result, Schema,
+    ddb_expression, ddb_key, item_to_record, operation, stmt, Connection, ExprAttrs, Result, Schema,
 };
 use std::sync::Arc;
 use toasty_core::{driver::Response, stmt::ExprContext};
@@ -21,14 +21,29 @@ impl Connection {
             .as_ref()
             .map(|expr| ddb_expression(&cx, &mut expr_attrs, false, expr));
 
-        let res = self
+        let mut query = self
             .client
             .query()
             .table_name(&table.name)
             .key_condition_expression(key_expression)
             .set_filter_expression(filter_expression)
             .set_expression_attribute_names(Some(expr_attrs.attr_names))
-            .set_expression_attribute_values(Some(expr_attrs.attr_values))
+            .set_expression_attribute_values(Some(expr_attrs.attr_values));
+
+        // Apply pagination parameters when present.
+        if let Some(limit) = op.limit {
+            query = query.limit(limit as i32);
+        }
+
+        if let Some(forward) = op.scan_index_forward {
+            query = query.scan_index_forward(forward);
+        }
+
+        if let Some(ref start_key) = op.exclusive_start_key {
+            query = query.set_exclusive_start_key(Some(ddb_key(table, start_key)));
+        }
+
+        let res = query
             .send()
             .await
             .map_err(toasty_core::Error::driver_operation_failed)?;
