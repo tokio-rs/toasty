@@ -119,6 +119,9 @@ impl<'a> TransactionBuilder<'a> {
         self
     }
 
+    /// Transactions are only supported by SQL drivers (SQLite, PostgreSQL, MySQL).
+    /// Prefer using batch operations when possible. Use transactions only when a
+    /// batch operation cannot express the required atomicity.
     pub async fn exec<O, E>(self, f: impl AsyncFnOnce(&Db) -> Result<O, E>) -> Result<O, E>
     where
         E: From<crate::Error>,
@@ -152,6 +155,10 @@ impl<'a> TransactionBuilder<'a> {
 
 impl Db {
     /// Execute a transaction with a 5-second default timeout.
+    ///
+    /// Transactions are only supported by SQL drivers (SQLite, PostgreSQL, MySQL).
+    /// Prefer using batch operations when possible. Use transactions only when a
+    /// batch operation cannot express the required atomicity.
     pub async fn transaction<O, E>(&self, f: impl AsyncFnOnce(&Db) -> Result<O, E>) -> Result<O, E>
     where
         E: From<crate::Error>,
@@ -160,6 +167,9 @@ impl Db {
     }
 
     /// Return a builder for configuring a transaction.
+    ///
+    /// Transactions are only supported by SQL drivers. Prefer using batch operations when
+    /// possible.
     pub fn transaction_builder(&self) -> TransactionBuilder<'_> {
         TransactionBuilder::new(self)
     }
