@@ -16,6 +16,7 @@ dedicated tests in `crates/toasty-core/tests/`, ranked roughly by priority.
 | Type inference — `Value::infer_ty()` | `stmt_infer_value_ty.rs` |
 | Type inference — `ExprContext::infer_expr_ty()` | `stmt_infer_expr_ty.rs`, `stmt_infer_expr_reference_ty.rs` |
 | Value type checking — `Value::is_a()` | `stmt_value_is_a.rs` |
+| Expression property methods — `is_stable`, `is_const`, `is_eval` | `stmt_expr_properties.rs` |
 
 ## Not yet tested — recommended additions
 
@@ -35,21 +36,7 @@ following need explicit tests:
 - Records of different lengths are not equivalent
 - `Unknown` is only equivalent to itself (not to `Null`)
 
-### 2. Expression property methods (LOW PRIORITY)
-
-**Location**: `src/stmt/expr.rs`
-**Proposed file**: `stmt_expr_properties.rs`
-
-`is_stable()`, `is_const()`, and `is_eval()` classify expressions for the query
-optimiser. Worth covering:
-
-- Constants (`Expr::Value`) are stable, const, and eval
-- `Expr::Reference` is not const, not eval
-- `Expr::Default` is not stable, not const
-- Composed expressions (e.g. `And(const, const)`) inherit child properties
-- `Expr::Map` with a non-const base is not const
-
-### 4. Schema verification — `verify::relations_are_indexed` (LOW PRIORITY)
+### 2. Schema verification — `verify::relations_are_indexed` (LOW PRIORITY)
 
 **Location**: `src/schema/verify/relations_are_indexed.rs`
 **Proposed file**: `schema_verify.rs`
