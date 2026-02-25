@@ -47,9 +47,7 @@ impl Connection {
         Ok(Response::value_stream(stmt::ValueStream::from_iter(
             res.items.into_iter().flatten().map(move |item| {
                 let table = schema.table(op.table);
-                let r = item_to_record(&item, table.primary_key_columns());
-                tracing::trace!(?item, ?r, "found item by index");
-                r
+                item_to_record(&item, table.primary_key_columns())
             }),
         )))
     }
