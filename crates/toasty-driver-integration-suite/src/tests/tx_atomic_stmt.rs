@@ -286,11 +286,12 @@ pub async fn update_with_new_association_rolls_back_on_failure(t: &mut Test) -> 
     Ok(())
 }
 
-// ===== ReadModifyWrite savepoints =====
+// ===== ReadModifyWrite transaction behavior =====
 
-/// A successful conditional update (link/unlink) uses SAVEPOINT / RELEASE
-/// SAVEPOINT on drivers that don't support CTE-with-update (SQLite, MySQL).
-/// On PostgreSQL the same operation is a single CTE-based QuerySql.
+/// A successful standalone conditional update (link/unlink) wraps itself in
+/// its own BEGIN...COMMIT on drivers that don't support CTE-with-update
+/// (SQLite, MySQL). When nested inside an outer transaction it uses savepoints
+/// instead. On PostgreSQL the same operation is a single CTE-based QuerySql.
 #[driver_test(id(ID), requires(sql))]
 pub async fn rmw_uses_savepoints(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -328,25 +329,19 @@ pub async fn rmw_uses_savepoints(t: &mut Test) -> Result<()> {
         // PostgreSQL: single CTE bundles the condition + update
         assert_struct!(t.log().pop_op(), Operation::QuerySql(_));
     } else {
-        // SQLite / MySQL: read-modify-write uses savepoints
-        assert_struct!(
-            t.log().pop_op(),
-            Operation::Transaction(Transaction::Savepoint(0))
-        );
+        // SQLite / MySQL: standalone RMW starts its own transaction
+        assert_struct!(t.log().pop_op(), Operation::Transaction(Transaction::Start));
         assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // read
         assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // write
-        assert_struct!(
-            t.log().pop_op(),
-            Operation::Transaction(Transaction::ReleaseSavepoint(0))
-        );
+        assert_struct!(t.log().pop_op(), Operation::Transaction(Transaction::Commit));
     }
     assert!(t.log().is_empty());
 
     Ok(())
 }
 
-/// When an RMW condition fails (todo doesn't belong to this user), the driver
-/// should receive ROLLBACK TO SAVEPOINT — the specific bug that savepoints fix.
+/// When a standalone RMW condition fails (todo doesn't belong to this user),
+/// the driver should receive ROLLBACK on the RMW's own transaction.
 /// On PostgreSQL the CTE handles this in a single statement.
 #[driver_test(id(ID), requires(sql))]
 pub async fn rmw_condition_failure_issues_rollback_to_savepoint(t: &mut Test) -> Result<()> {
@@ -387,16 +382,11 @@ pub async fn rmw_condition_failure_issues_rollback_to_savepoint(t: &mut Test) ->
         // PostgreSQL: a single QuerySql; condition handled inside the CTE
         assert_struct!(t.log().pop_op(), Operation::QuerySql(_));
     } else {
-        // SQLite / MySQL: Savepoint → read → RollbackToSavepoint (the bug fix)
-        assert_struct!(
-            t.log().pop_op(),
-            Operation::Transaction(Transaction::Savepoint(0))
-        );
+        // SQLite / MySQL: standalone RMW starts its own transaction;
+        // condition failure rolls it back
+        assert_struct!(t.log().pop_op(), Operation::Transaction(Transaction::Start));
         assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // read
-        assert_struct!(
-            t.log().pop_op(),
-            Operation::Transaction(Transaction::RollbackToSavepoint(0))
-        );
+        assert_struct!(t.log().pop_op(), Operation::Transaction(Transaction::Rollback));
     }
     assert!(t.log().is_empty());
 

@@ -61,6 +61,10 @@ struct Exec<'a> {
     /// Monotonically increasing counter for generating unique savepoint IDs
     /// within a single plan execution.
     next_savepoint_id: usize,
+    /// True when an outer transaction is active on this connection. Used by
+    /// ReadModifyWrite to decide between savepoints (nested) and its own
+    /// BEGIN/COMMIT (standalone).
+    in_transaction: bool,
 }
 
 impl Engine {
@@ -70,12 +74,14 @@ impl Engine {
             connection: self.pool.get().await?,
             vars: plan.vars,
             next_savepoint_id: 0,
+            in_transaction: false,
         };
 
         if plan.needs_transaction {
             exec.connection
                 .exec(&self.schema.db, Transaction::Start.into())
                 .await?;
+            exec.in_transaction = true;
         }
 
         for step in &plan.actions {

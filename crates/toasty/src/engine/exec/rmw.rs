@@ -32,15 +32,70 @@ impl Exec<'_> {
     ) -> Result<()> {
         assert!(action.input.is_empty(), "TODO");
 
-        let savepoint_id = self.generate_savepoint_id();
+        if self.in_transaction {
+            // Inside an outer transaction: use a savepoint for the nested
+            // atomic boundary so the outer transaction can still commit or
+            // roll back as a whole.
+            let savepoint_id = self.generate_savepoint_id();
 
-        self.connection
-            .exec(
-                &self.engine.schema.db,
-                Transaction::Savepoint(savepoint_id).into(),
-            )
-            .await?;
+            self.connection
+                .exec(
+                    &self.engine.schema.db,
+                    Transaction::Savepoint(savepoint_id).into(),
+                )
+                .await?;
 
+            if let Err(e) = self.rmw_exec(action).await {
+                let _ = self
+                    .connection
+                    .exec(
+                        &self.engine.schema.db,
+                        Transaction::RollbackToSavepoint(savepoint_id).into(),
+                    )
+                    .await;
+                return Err(e);
+            }
+
+            self.connection
+                .exec(
+                    &self.engine.schema.db,
+                    Transaction::ReleaseSavepoint(savepoint_id).into(),
+                )
+                .await?;
+        } else {
+            // Standalone: start our own transaction. MySQL (and other SQL
+            // databases) require an active transaction before SAVEPOINT can be
+            // used, so we use BEGIN/COMMIT directly here instead of savepoints.
+            self.connection
+                .exec(&self.engine.schema.db, Transaction::Start.into())
+                .await?;
+
+            if let Err(e) = self.rmw_exec(action).await {
+                // Best effort: ignore rollback errors so the original error is returned
+                let _ = self
+                    .connection
+                    .exec(&self.engine.schema.db, Transaction::Rollback.into())
+                    .await;
+                return Err(e);
+            }
+
+            self.connection
+                .exec(&self.engine.schema.db, Transaction::Commit.into())
+                .await?;
+        }
+
+        if let Some(output) = &action.output {
+            let rows = Rows::value_stream(ValueStream::default());
+            self.vars.store(output.var, output.num_uses, rows);
+        }
+
+        Ok(())
+    }
+
+    /// Execute the core read-then-write logic, returning an error on either a
+    /// DB failure or a condition mismatch. Rollback (savepoint or transaction)
+    /// is handled by the caller.
+    async fn rmw_exec(&mut self, action: &ReadModifyWrite) -> Result<()> {
         let ty = Some(vec![stmt::Type::I64, stmt::Type::I64]);
 
         let res = self
@@ -75,14 +130,6 @@ impl Exec<'_> {
         };
 
         if record[0] != record[1] {
-            // Roll back only the savepoint, then let the outer transaction handle the rest
-            let _ = self
-                .connection
-                .exec(
-                    &self.engine.schema.db,
-                    Transaction::RollbackToSavepoint(savepoint_id).into(),
-                )
-                .await;
             return Err(toasty_core::Error::condition_failed(
                 "update condition did not match",
             ));
@@ -108,18 +155,6 @@ impl Exec<'_> {
         };
 
         assert_eq!(actual, count as u64);
-
-        self.connection
-            .exec(
-                &self.engine.schema.db,
-                Transaction::ReleaseSavepoint(savepoint_id).into(),
-            )
-            .await?;
-
-        if let Some(output) = &action.output {
-            let rows = Rows::value_stream(ValueStream::default());
-            self.vars.store(output.var, output.num_uses, rows);
-        }
 
         Ok(())
     }
