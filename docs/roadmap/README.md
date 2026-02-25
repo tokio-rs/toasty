@@ -159,6 +159,12 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 
 ### Performance
 
+**Stored Procedures (Pre-Compiled Query Plans)**
+- Compile query plans once and execute them many times with different parameter values
+- Skip the full compilation pipeline (simplification, lowering, HIR/MIR planning) on repeated calls
+- Parameterized statement AST with `Param` slots for value substitution at execution time
+- Pairs with database-level prepared statements for end-to-end optimization
+
 **Optimization Features**
 - Bulk inserts/updates
 - Query caching
