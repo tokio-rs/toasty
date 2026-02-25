@@ -32,57 +32,37 @@ impl Exec<'_> {
     ) -> Result<()> {
         assert!(action.input.is_empty(), "TODO");
 
-        if self.in_transaction {
-            // Inside an outer transaction: use a savepoint for the nested
-            // atomic boundary so the outer transaction can still commit or
-            // roll back as a whole.
-            let savepoint_id = self.generate_savepoint_id();
-
-            self.connection
-                .exec(
-                    &self.engine.schema.db,
-                    Transaction::Savepoint(savepoint_id).into(),
-                )
-                .await?;
-
-            if let Err(e) = self.rmw_exec(action).await {
-                let _ = self
-                    .connection
-                    .exec(
-                        &self.engine.schema.db,
-                        Transaction::RollbackToSavepoint(savepoint_id).into(),
-                    )
-                    .await;
-                return Err(e);
-            }
-
-            self.connection
-                .exec(
-                    &self.engine.schema.db,
-                    Transaction::ReleaseSavepoint(savepoint_id).into(),
-                )
-                .await?;
+        // When nested inside an outer transaction use savepoints so the outer
+        // transaction can still commit or roll back as a whole. When standalone,
+        // start our own transaction (MySQL requires an active BEGIN before
+        // SAVEPOINT can be used, so we can't use savepoints here).
+        let (begin, commit, rollback) = if self.in_transaction {
+            let id = self.generate_savepoint_id();
+            (
+                Transaction::Savepoint(id),
+                Transaction::ReleaseSavepoint(id),
+                Transaction::RollbackToSavepoint(id),
+            )
         } else {
-            // Standalone: start our own transaction. MySQL (and other SQL
-            // databases) require an active transaction before SAVEPOINT can be
-            // used, so we use BEGIN/COMMIT directly here instead of savepoints.
-            self.connection
-                .exec(&self.engine.schema.db, Transaction::Start.into())
-                .await?;
+            (Transaction::Start, Transaction::Commit, Transaction::Rollback)
+        };
 
-            if let Err(e) = self.rmw_exec(action).await {
-                // Best effort: ignore rollback errors so the original error is returned
-                let _ = self
-                    .connection
-                    .exec(&self.engine.schema.db, Transaction::Rollback.into())
-                    .await;
-                return Err(e);
-            }
+        self.connection
+            .exec(&self.engine.schema.db, begin.into())
+            .await?;
 
-            self.connection
-                .exec(&self.engine.schema.db, Transaction::Commit.into())
-                .await?;
+        if let Err(e) = self.rmw_exec(action).await {
+            // Best effort: ignore rollback errors so the original error is returned
+            let _ = self
+                .connection
+                .exec(&self.engine.schema.db, rollback.into())
+                .await;
+            return Err(e);
         }
+
+        self.connection
+            .exec(&self.engine.schema.db, commit.into())
+            .await?;
 
         if let Some(output) = &action.output {
             let rows = Rows::value_stream(ValueStream::default());
