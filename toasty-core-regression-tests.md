@@ -15,6 +15,7 @@ dedicated tests in `crates/toasty-core/tests/`, ranked roughly by priority.
 | Index helpers | `stmt_index.rs` |
 | Type inference — `Value::infer_ty()` | `stmt_infer_value_ty.rs` |
 | Type inference — `ExprContext::infer_expr_ty()` | `stmt_infer_expr_ty.rs`, `stmt_infer_expr_reference_ty.rs` |
+| Value type checking — `Value::is_a()` | `stmt_value_is_a.rs` |
 
 ## Not yet tested — recommended additions
 
@@ -34,21 +35,7 @@ following need explicit tests:
 - Records of different lengths are not equivalent
 - `Unknown` is only equivalent to itself (not to `Null`)
 
-### 2. Value type checking — `Value::is_a()` (MEDIUM PRIORITY)
-
-**Location**: `src/stmt/value.rs`
-**Proposed file**: `stmt_value_is_a.rs`
-
-`Value::is_a(&Type)` is used during evaluation to validate that a value matches an
-expected type. Coverage should include:
-
-- `Value::Null` is a member of every type
-- Scalar values match their own type and no other
-- `Value::List([])` (empty) is a member of any `List<T>`
-- Non-empty lists match only a list of the same element type
-- Records must have the same length and matching field types
-
-### 3. Expression property methods (LOW PRIORITY)
+### 2. Expression property methods (LOW PRIORITY)
 
 **Location**: `src/stmt/expr.rs`
 **Proposed file**: `stmt_expr_properties.rs`
