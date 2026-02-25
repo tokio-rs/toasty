@@ -11,39 +11,14 @@ dedicated tests in `crates/toasty-core/tests/`, ranked roughly by priority.
 | Expression construction from values | `stmt_from_expr.rs`, `stmt_from_value.rs`, `stmt_try_from_value.rs` |
 | Type variants (basic existence/equality) | `stmt_infer.rs` |
 | Schema validation (missing model) | `schema_missing_model.rs` |
-| Projection | `stmt_projection.rs` |
+| Projection — `Projection` struct, `Project` trait, `Expr::project/entry`, `Value::entry` | `stmt_projection.rs`, `stmt_eval_project.rs`, `stmt_value_entry.rs` |
 | Index helpers | `stmt_index.rs` |
+| Type inference — `Value::infer_ty()` | `stmt_infer_value_ty.rs` |
+| Type inference — `ExprContext::infer_expr_ty()` | `stmt_infer_expr_ty.rs`, `stmt_infer_expr_reference_ty.rs` |
 
 ## Not yet tested — recommended additions
 
-### 1. Type inference — `Value::infer_ty()` (HIGH PRIORITY)
-
-**Location**: `src/stmt/value.rs`
-**Proposed file**: `stmt_infer_value_ty.rs`
-
-`Value::infer_ty()` converts a runtime value to its `stmt::Type`. Every value variant
-should return the correct type, and the empty-list edge case (`Type::list(Type::Null)`)
-is easy to miss. Nested containers (list-of-list, record-of-record) should also be covered.
-
-### 2. Type inference — `ExprContext::infer_expr_ty()` (HIGH PRIORITY)
-
-**Location**: `src/stmt/cx.rs`
-**Proposed file**: `stmt_infer_expr_ty.rs`
-
-`ExprContext::infer_expr_ty()` drives the query-planning phase. All schema-free branches
-can be exercised using `ExprContext::new_free()`:
-
-- Boolean predicates (`And`, `Or`, `IsNull`, `BinaryOp`) → `Type::Bool`
-- `Cast` → returns the explicit target type
-- `List` → `Type::list(infer(items[0]))`
-- `Record` → `Type::Record(per-field types)`
-- `Arg` → looked up by position from the `args` slice; test multiple positions and
-  the nested-scope (nesting > 0) path
-- `Map` — creates a new argument scope from the list item type; test that the
-  resulting type wraps the mapped type in a `List`
-- `Project` — unwraps field or list-item type one step at a time
-
-### 3. Type equivalence — `Type::is_equivalent()` (MEDIUM PRIORITY)
+### 1. Type equivalence — `Type::is_equivalent()` (MEDIUM PRIORITY)
 
 **Location**: `src/stmt/ty.rs`
 **Proposed file**: `stmt_type_equivalent.rs`
@@ -59,7 +34,7 @@ following need explicit tests:
 - Records of different lengths are not equivalent
 - `Unknown` is only equivalent to itself (not to `Null`)
 
-### 4. Value type checking — `Value::is_a()` (MEDIUM PRIORITY)
+### 2. Value type checking — `Value::is_a()` (MEDIUM PRIORITY)
 
 **Location**: `src/stmt/value.rs`
 **Proposed file**: `stmt_value_is_a.rs`
@@ -73,7 +48,7 @@ expected type. Coverage should include:
 - Non-empty lists match only a list of the same element type
 - Records must have the same length and matching field types
 
-### 5. Expression property methods (LOW PRIORITY)
+### 3. Expression property methods (LOW PRIORITY)
 
 **Location**: `src/stmt/expr.rs`
 **Proposed file**: `stmt_expr_properties.rs`
@@ -87,7 +62,7 @@ optimiser. Worth covering:
 - Composed expressions (e.g. `And(const, const)`) inherit child properties
 - `Expr::Map` with a non-const base is not const
 
-### 6. Schema verification — `verify::relations_are_indexed` (LOW PRIORITY)
+### 4. Schema verification — `verify::relations_are_indexed` (LOW PRIORITY)
 
 **Location**: `src/schema/verify/relations_are_indexed.rs`
 **Proposed file**: `schema_verify.rs`
@@ -98,7 +73,7 @@ The existing `schema_missing_model.rs` covers one validation path. Additional ca
 - A `belongs_to` relation with an index → OK
 - Multiple relations, only some missing indexes → collect all errors
 
-### 7. DB schema diffing — `schema::db::Diff` (LOW PRIORITY)
+### 5. DB schema diffing — `schema::db::Diff` (LOW PRIORITY)
 
 **Location**: `src/schema/db/diff.rs`
 **Proposed file**: `schema_db_diff.rs`
