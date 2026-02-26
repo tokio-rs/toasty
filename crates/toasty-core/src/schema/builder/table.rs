@@ -270,39 +270,6 @@ impl BuildMapping<'_> {
         bit
     }
 
-    /// Creates a database column, appends it to the table, and returns its ID.
-    fn create_column(
-        &mut self,
-        column_name: String,
-        primitive: &app::FieldPrimitive,
-        nullable: bool,
-        auto_increment: bool,
-    ) -> ColumnId {
-        let storage_ty = db::Type::from_app(
-            &primitive.ty,
-            primitive.storage_ty.as_ref(),
-            &self.db.storage_types,
-        )
-        .expect("unsupported storage type");
-
-        let id = ColumnId {
-            table: self.table.id,
-            index: self.table.columns.len(),
-        };
-
-        let column = db::Column {
-            id,
-            name: column_name,
-            ty: storage_ty.bridge_type(&primitive.ty),
-            storage_ty,
-            nullable,
-            primary_key: false,
-            auto_increment: auto_increment && self.db.auto_increment,
-        };
-
-        self.table.columns.push(column);
-        id
-    }
 
     fn build_table_to_model(&mut self, model: &ModelRoot, mapping: &[mapping::Field]) {
         for (index, field) in model.fields.iter().enumerate() {
@@ -537,6 +504,37 @@ impl<'a, 'b> MapField<'a, 'b> {
         }
     }
 
+    /// Creates a column for `field` using `primitive` for the storage type.
+    ///
+    /// Derives the column name from `self.column_name(field)`, nullability from
+    /// `field.nullable || self.in_enum_variant`, and auto-increment from
+    /// `field.is_auto_increment()`.
+    fn create_column(&mut self, field: &app::Field, primitive: &app::FieldPrimitive) -> ColumnId {
+        let storage_ty = db::Type::from_app(
+            &primitive.ty,
+            primitive.storage_ty.as_ref(),
+            &self.build.db.storage_types,
+        )
+        .expect("unsupported storage type");
+
+        let id = ColumnId {
+            table: self.build.table.id,
+            index: self.build.table.columns.len(),
+        };
+
+        self.build.table.columns.push(db::Column {
+            id,
+            name: self.column_name(field),
+            ty: storage_ty.bridge_type(&primitive.ty),
+            storage_ty,
+            nullable: field.nullable || self.in_enum_variant,
+            primary_key: false,
+            auto_increment: field.is_auto_increment() && self.build.db.auto_increment,
+        });
+
+        id
+    }
+
     /// Creates a child `MapField` for processing an enum's variant fields.
     ///
     /// The child inherits the current prefix extended by `field_name` and has
@@ -655,13 +653,7 @@ impl<'a, 'b> MapField<'a, 'b> {
         field: &app::Field,
         primitive: &app::FieldPrimitive,
     ) -> mapping::Field {
-        let column_name = self.column_name(field);
-        let column_id = self.build.create_column(
-            column_name,
-            primitive,
-            field.nullable || self.in_enum_variant,
-            field.is_auto_increment(),
-        );
+        let column_id = self.create_column(field, primitive);
 
         let expr = self.field_expr(field, field_index);
 
@@ -692,12 +684,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             ty: stmt::Type::I64,
             storage_ty: None,
         };
-        let disc_col_id = self.build.create_column(
-            self.column_name(field),
-            &disc_primitive,
-            field.nullable,
-            false,
-        );
+        let disc_col_id = self.create_column(field, &disc_primitive);
 
         let field_expr = self.field_expr(field, field_index);
 
@@ -748,13 +735,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             for (local_idx, vf) in variant.fields.iter().enumerate() {
                 let vf_field = match &vf.ty {
                     app::FieldTy::Primitive(vf_primitive) => {
-                        // Variant field columns are always nullable.
-                        let vf_col_id = self.build.create_column(
-                            self.column_name(vf),
-                            vf_primitive,
-                            true,
-                            false,
-                        );
+                        let vf_col_id = self.create_column(vf, vf_primitive);
 
                         let arm = stmt::MatchArm {
                             pattern: stmt::Value::I64(variant.discriminant),
@@ -858,9 +839,7 @@ impl<'a, 'b> MapField<'a, 'b> {
                 todo!("deeply nested structs in enum variants not yet supported");
             };
 
-            let sub_col_id =
-                self.build
-                    .create_column(self.column_name(sub_field), sub_primitive, true, false);
+            let sub_col_id = self.create_column(sub_field, sub_primitive);
 
             // The enum value is Record([I64(disc), vf_0, vf_1, ...]).
             // The struct field at local_idx is at position local_idx + 1.
