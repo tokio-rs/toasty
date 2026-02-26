@@ -18,11 +18,11 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
         age: i32,
     }
 
-    let db = test.setup_db(models!(User)).await;
+    let mut db = test.setup_db(models!(User)).await;
 
     // Helper to get the table ID (handles database-specific prefixes automatically)
-    let user_table_id = table_id(&db, "users");
-    let user_id_column = column(&db, "users", "id");
+    let user_table_id = table_id(&mut db, "users");
+    let user_id_column = column(&mut db, "users", "id");
 
     // Clear any setup operations (from reset_db, etc.)
     test.log().clear();
@@ -30,7 +30,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
     let is_sql = test.capability().sql;
 
     // ========== CREATE ==========
-    let user = User::create().name("Alice").age(30).exec(&db).await?;
+    let user = User::create().name("Alice").age(30).exec(&mut db).await?;
 
     // Check the CREATE operation
     let (op, resp) = test.log().pop();
@@ -40,7 +40,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
             target: toasty_core::stmt::InsertTarget::Table(_ {
                 table: == user_table_id,
                 columns.len(): 3,
-                columns: == columns(&db, "users", &["id", "name", "age"]),
+                columns: == columns(&mut db, "users", &["id", "name", "age"]),
                 ..
             }),
             source: _ {
@@ -91,7 +91,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
     let user_id = user.id;
 
     // ========== READ ==========
-    let fetched = User::get_by_id(&db, &user_id).await?;
+    let fetched = User::get_by_id(&mut db, &user_id).await?;
     assert_eq!(fetched.name, "Alice");
     assert_eq!(fetched.age, 30);
 
@@ -138,7 +138,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
     User::filter_by_id(user_id)
         .update()
         .age(31)
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     // Check the UPDATE operation
@@ -181,7 +181,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
     });
 
     // ========== DELETE ==========
-    User::filter_by_id(user_id).delete(&db).await?;
+    User::filter_by_id(user_id).delete(&mut db).await?;
 
     // Check the DELETE operation
     let (op, resp) = test.log().pop();

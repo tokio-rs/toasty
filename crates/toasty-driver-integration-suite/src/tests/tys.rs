@@ -20,7 +20,7 @@ macro_rules! num_ty_test_body {
         }
 
         let test = $test;
-        let db = test.setup_db(models!(Foo)).await;
+        let mut db = test.setup_db(models!(Foo)).await;
         let mut test_values: Vec<$ty> = (*$test_values).to_vec();
 
         // Filter test values based on database capabilities for unsigned integers
@@ -39,15 +39,15 @@ macro_rules! num_ty_test_body {
 
         // Test 1: All test values round-trip
         for &val in &test_values {
-            let created = Foo::create().val(val).exec(&db).await?;
+            let created = Foo::create().val(val).exec(&mut db).await?;
 
             // Verify the INSERT operation stored the correct value
             let (op, _resp) = test.log().pop();
             assert_struct!(op, Operation::QuerySql(_ {
                 stmt: Statement::Insert(_ {
                     target: InsertTarget::Table(_ {
-                        table: == table_id(&db, "foos"),
-                        columns: == columns(&db, "foos", &["id", "val"]),
+                        table: == table_id(&mut db, "foos"),
+                        columns: == columns(&mut db, "foos", &["id", "val"]),
                         ..
                     }),
                     source.body: ExprSet::Values(_ {
@@ -59,7 +59,7 @@ macro_rules! num_ty_test_body {
                 ..
             }));
 
-            let read = Foo::get_by_id(&db, &created.id).await?;
+            let read = Foo::get_by_id(&mut db, &created.id).await?;
             assert_eq!(read.val, val, "Round-trip failed for: {}", val);
 
             // Clear the read operation
@@ -69,13 +69,13 @@ macro_rules! num_ty_test_body {
         // Test 2: Multiple records with different values
         let mut created_records = Vec::new();
         for &val in &test_values {
-            let created = Foo::create().val(val).exec(&db).await?;
+            let created = Foo::create().val(val).exec(&mut db).await?;
             created_records.push((created.id, val));
             test.log().clear();
         }
 
         for (id, expected_val) in created_records {
-            let read = Foo::get_by_id(&db, &id).await?;
+            let read = Foo::get_by_id(&mut db, &id).await?;
             assert_eq!(
                 read.val, expected_val,
                 "Multiple records test failed for: {}",
@@ -86,11 +86,11 @@ macro_rules! num_ty_test_body {
 
         // Test 3: Update chain
         if !test_values.is_empty() {
-            let mut record = Foo::create().val(test_values[0]).exec(&db).await?;
+            let mut record = Foo::create().val(test_values[0]).exec(&mut db).await?;
             test.log().clear();
 
             for &val in &test_values {
-                record.update().val(val).exec(&db).await?;
+                record.update().val(val).exec(&mut db).await?;
 
                 // Verify the UPDATE operation sent the correct value
                 let (op, _resp) = test.log().pop();
@@ -109,7 +109,7 @@ macro_rules! num_ty_test_body {
                     }));
                 }
 
-                let read = Foo::get_by_id(&db, &record.id).await?;
+                let read = Foo::get_by_id(&mut db, &record.id).await?;
                 assert_eq!(read.val, val, "Update chain failed for: {}", val);
                 record.val = val;
 
@@ -243,7 +243,7 @@ pub async fn ty_str(test: &mut Test) -> Result<()> {
         val: String,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     let test_values: Vec<_> = [
         gen_string(0, "empty"),
@@ -272,15 +272,15 @@ pub async fn ty_str(test: &mut Test) -> Result<()> {
 
     // Test 1: All test values round-trip
     for val in &test_values {
-        let created = Foo::create().val((*val).clone()).exec(&db).await?;
+        let created = Foo::create().val((*val).clone()).exec(&mut db).await?;
 
         // Verify the INSERT operation stored the string value
         let (op, _resp) = test.log().pop();
         assert_struct!(op, Operation::QuerySql(_ {
             stmt: Statement::Insert(_ {
                 target: InsertTarget::Table(_ {
-                    table: == table_id(&db, "foos"),
-                    columns: == columns(&db, "foos", &["id", "val"]),
+                    table: == table_id(&mut db, "foos"),
+                    columns: == columns(&mut db, "foos", &["id", "val"]),
                     ..
                 }),
                 source.body: ExprSet::Values(_ {
@@ -292,18 +292,18 @@ pub async fn ty_str(test: &mut Test) -> Result<()> {
             ..
         }));
 
-        let read = Foo::get_by_id(&db, &created.id).await?;
+        let read = Foo::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val);
 
         test.log().clear();
     }
 
     // Test 2: Update chain
-    let mut record = Foo::create().val(&test_values[0]).exec(&db).await?;
+    let mut record = Foo::create().val(&test_values[0]).exec(&mut db).await?;
     test.log().clear();
 
     for val in &test_values {
-        record.update().val(val).exec(&db).await?;
+        record.update().val(val).exec(&mut db).await?;
 
         // Verify the UPDATE operation sent the string value
         let (op, _resp) = test.log().pop();
@@ -322,7 +322,7 @@ pub async fn ty_str(test: &mut Test) -> Result<()> {
             }));
         }
 
-        let read = Foo::get_by_id(&db, &record.id).await?;
+        let read = Foo::get_by_id(&mut db, &record.id).await?;
         assert_eq!(read.val, *val);
 
         test.log().clear();
@@ -354,7 +354,7 @@ pub async fn ty_bytes(test: &mut Test) -> Result<()> {
         val: Vec<u8>,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     let test_values: Vec<Vec<u8>> = vec![
         vec![],
@@ -370,15 +370,15 @@ pub async fn ty_bytes(test: &mut Test) -> Result<()> {
 
     // Test 1: All test values round-trip
     for val in &test_values {
-        let created = Foo::create().val(val.clone()).exec(&db).await?;
+        let created = Foo::create().val(val.clone()).exec(&mut db).await?;
 
         // Verify the INSERT operation stored the bytes value
         let (op, _resp) = test.log().pop();
         assert_struct!(op, Operation::QuerySql(_ {
             stmt: Statement::Insert(_ {
                 target: InsertTarget::Table(_ {
-                    table: == table_id(&db, "foos"),
-                    columns: == columns(&db, "foos", &["id", "val"]),
+                    table: == table_id(&mut db, "foos"),
+                    columns: == columns(&mut db, "foos", &["id", "val"]),
                     ..
                 }),
                 source.body: ExprSet::Values(_ {
@@ -390,18 +390,18 @@ pub async fn ty_bytes(test: &mut Test) -> Result<()> {
             ..
         }));
 
-        let read = Foo::get_by_id(&db, &created.id).await?;
+        let read = Foo::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val);
 
         test.log().clear();
     }
 
     // Test 2: Update chain
-    let mut record = Foo::create().val(test_values[0].clone()).exec(&db).await?;
+    let mut record = Foo::create().val(test_values[0].clone()).exec(&mut db).await?;
     test.log().clear();
 
     for val in &test_values {
-        record.update().val(val.clone()).exec(&db).await?;
+        record.update().val(val.clone()).exec(&mut db).await?;
 
         // Verify the UPDATE operation sent the bytes value
         let (op, _resp) = test.log().pop();
@@ -420,7 +420,7 @@ pub async fn ty_bytes(test: &mut Test) -> Result<()> {
             }));
         }
 
-        let read = Foo::get_by_id(&db, &record.id).await?;
+        let read = Foo::get_by_id(&mut db, &record.id).await?;
         assert_eq!(read.val, *val);
 
         test.log().clear();
@@ -438,22 +438,22 @@ pub async fn ty_uuid(test: &mut Test) -> Result<()> {
         val: uuid::Uuid,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     // Clear setup operations
     test.log().clear();
 
     for _ in 0..16 {
         let val = uuid::Uuid::new_v4();
-        let created = Foo::create().val(val).exec(&db).await?;
+        let created = Foo::create().val(val).exec(&mut db).await?;
 
         // Verify the INSERT operation - UUID should be stored in its native format
         let (op, _resp) = test.log().pop();
         assert_struct!(op, Operation::QuerySql(_ {
             stmt: Statement::Insert(_ {
                 target: InsertTarget::Table(_ {
-                    table: == table_id(&db, "foos"),
-                    columns: == columns(&db, "foos", &["id", "val"]),
+                    table: == table_id(&mut db, "foos"),
+                    columns: == columns(&mut db, "foos", &["id", "val"]),
                     ..
                 }),
                 ..
@@ -501,7 +501,7 @@ pub async fn ty_uuid(test: &mut Test) -> Result<()> {
             ty => todo!("ty={ty:#?}"),
         }
 
-        let read = Foo::get_by_id(&db, &created.id).await?;
+        let read = Foo::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, val);
 
         test.log().clear();
@@ -521,7 +521,7 @@ pub async fn ty_smart_ptrs(test: &mut Test) -> Result<()> {
         boxed: Box<i32>,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     // Clear setup operations
     test.log().clear();
@@ -530,7 +530,7 @@ pub async fn ty_smart_ptrs(test: &mut Test) -> Result<()> {
         .arced(1i32)
         .rced(2i32)
         .boxed(3i32)
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     // Verify the INSERT operation stored the unwrapped values
@@ -538,8 +538,8 @@ pub async fn ty_smart_ptrs(test: &mut Test) -> Result<()> {
     assert_struct!(op, Operation::QuerySql(_ {
         stmt: Statement::Insert(_ {
             target: InsertTarget::Table(_ {
-                table: == table_id(&db, "foos"),
-                columns: == columns(&db, "foos", &["id", "arced", "rced", "boxed"]),
+                table: == table_id(&mut db, "foos"),
+                columns: == columns(&mut db, "foos", &["id", "arced", "rced", "boxed"]),
                 ..
             }),
             source.body: ExprSet::Values(_ {
@@ -551,7 +551,7 @@ pub async fn ty_smart_ptrs(test: &mut Test) -> Result<()> {
         ..
     }));
 
-    let read = Foo::get_by_id(&db, &created.id).await?;
+    let read = Foo::get_by_id(&mut db, &created.id).await?;
     assert_eq!(created.id, read.id);
     assert_eq!(created.arced, read.arced);
     assert_eq!(created.rced, read.rced);

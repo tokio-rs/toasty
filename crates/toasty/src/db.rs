@@ -13,7 +13,7 @@ use tokio::{
 use crate::{engine::Engine, stmt, Cursor, Model, Result, Statement};
 
 use toasty_core::{
-    driver::{Capability, Driver},
+    driver::Driver,
     stmt::{Value, ValueStream},
     Schema,
 };
@@ -27,8 +27,13 @@ pub(crate) struct Shared {
 }
 
 /// Handle to a dedicated connection task.
+///
+/// When dropped, `in_tx` closes the channel, causing the background task to
+/// finish processing remaining messages and exit gracefully.
 struct ConnHandle {
     in_tx: mpsc::UnboundedSender<ConnOp>,
+    /// Kept so we can `.await` graceful shutdown in the future.
+    #[allow(dead_code)]
     join_handle: JoinHandle<()>,
 }
 

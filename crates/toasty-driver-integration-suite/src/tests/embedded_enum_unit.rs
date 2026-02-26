@@ -36,8 +36,8 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
         status: Status,
     }
 
-    let db = t.setup_db(models!(User, Status)).await;
-    let user_table = table_id(&db, "users");
+    let mut db = t.setup_db(models!(User, Status)).await;
+    let user_table = table_id(&mut db, "users");
 
     // Create: enum variant is stored as its discriminant (1 = Pending)
     t.log().clear();
@@ -45,7 +45,7 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
     let mut user = User::create()
         .name("Alice")
         .status(Status::Pending)
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     // Verify column list and that the discriminant is stored as I64, not a string or record
@@ -57,7 +57,7 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
             }),
             target: toasty_core::stmt::InsertTarget::Table(_ {
                 table: == user_table,
-                columns: == columns(&db, "users", &["id", "name", "status"]),
+                columns: == columns(&mut db, "users", &["id", "name", "status"]),
                 ..
             }),
             ..
@@ -66,12 +66,12 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
     }));
 
     // Read: discriminant is loaded back and converted to the enum variant
-    let found = User::get_by_id(&db, &user.id).await?;
+    let found = User::get_by_id(&mut db, &user.id).await?;
     assert_eq!(found.status, Status::Pending);
 
     // Update (instance): replace the enum variant
     t.log().clear();
-    user.update().status(Status::Active).exec(&db).await?;
+    user.update().status(Status::Active).exec(&mut db).await?;
 
     // Verify the status column receives the new discriminant as I64
     // Column index 2 is "status"; value I64(2) = Active discriminant
@@ -95,23 +95,23 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
         }));
     }
 
-    let found = User::get_by_id(&db, &user.id).await?;
+    let found = User::get_by_id(&mut db, &user.id).await?;
     assert_eq!(found.status, Status::Active);
 
     // Update (query-based): same replacement via filter builder
     User::filter_by_id(user.id)
         .update()
         .status(Status::Done)
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
-    let found = User::get_by_id(&db, &user.id).await?;
+    let found = User::get_by_id(&mut db, &user.id).await?;
     assert_eq!(found.status, Status::Done);
 
     // Delete: cleanup
     let id = user.id;
-    user.delete(&db).await?;
-    assert_err!(User::get_by_id(&db, &id).await);
+    user.delete(&mut db).await?;
+    assert_err!(User::get_by_id(&mut db, &id).await);
     Ok(())
 }
 
@@ -142,7 +142,7 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
         status: Status,
     }
 
-    let db = t.setup_db(models!(Task, Status)).await;
+    let mut db = t.setup_db(models!(Task, Status)).await;
 
     // Create tasks with different statuses: 1 pending, 2 active, 1 done
     for (name, status) in [
@@ -151,15 +151,15 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
         ("Task C", Status::Active),
         ("Task D", Status::Done),
     ] {
-        Task::create().name(name).status(status).exec(&db).await?;
+        Task::create().name(name).status(status).exec(&mut db).await?;
     }
 
-    let status_col = column(&db, "tasks", "status");
+    let status_col = column(&mut db, "tasks", "status");
     t.log().clear();
 
     // Filter: only Active tasks (discriminant = 2)
     let active = Task::filter(Task::fields().status().eq(Status::Active))
-        .collect::<Vec<_>>(&db)
+        .collect::<Vec<_>>(&mut db)
         .await?;
     assert_eq!(active.len(), 2);
     {
@@ -183,7 +183,7 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
 
     // Filter: only Pending tasks (discriminant = 1)
     let pending = Task::filter(Task::fields().status().eq(Status::Pending))
-        .collect::<Vec<_>>(&db)
+        .collect::<Vec<_>>(&mut db)
         .await?;
     assert_eq!(pending.len(), 1);
     assert_eq!(pending[0].name, "Task A");
@@ -208,7 +208,7 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
 
     // Filter: only Done tasks (discriminant = 3)
     let done = Task::filter(Task::fields().status().eq(Status::Done))
-        .collect::<Vec<_>>(&db)
+        .collect::<Vec<_>>(&mut db)
         .await?;
     assert_eq!(done.len(), 1);
     assert_eq!(done[0].name, "Task D");

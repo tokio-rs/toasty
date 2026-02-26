@@ -27,18 +27,18 @@ pub async fn different_field_name(test: &mut Test) -> Result<()> {
         title: String,
     }
 
-    let db = test.setup_db(models!(User, Todo)).await;
+    let mut db = test.setup_db(models!(User, Todo)).await;
 
     // Create a user
-    let user = User::create().exec(&db).await?;
+    let user = User::create().exec(&mut db).await?;
 
     // Create a Todo associated with the user
-    let todo = user.todos().create().title("hello world").exec(&db).await?;
+    let todo = user.todos().create().title("hello world").exec(&mut db).await?;
 
     assert_eq!(todo.title, "hello world");
 
     // Load the user
-    let user_reloaded = todo.owner().get(&db).await?;
+    let user_reloaded = todo.owner().get(&mut db).await?;
 
     assert_eq!(user.id, user_reloaded.id);
     Ok(())

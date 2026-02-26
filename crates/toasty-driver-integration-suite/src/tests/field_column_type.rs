@@ -17,13 +17,13 @@ pub async fn specify_constrained_string_field(test: &mut Test) -> Result<()> {
         name: String,
     }
 
-    let db = test.setup_db(models!(User)).await;
+    let mut db = test.setup_db(models!(User)).await;
 
-    let u = User::create().name("foo").exec(&db).await?;
+    let u = User::create().name("foo").exec(&mut db).await?;
     assert_eq!(u.name, "foo");
 
     // Creating a user with a name larger than 5 characters should fail.
-    let res = User::create().name("foo bar").exec(&db).await;
+    let res = User::create().name("foo bar").exec(&mut db).await;
     assert!(res.is_err());
     Ok(())
 }
@@ -91,12 +91,12 @@ pub async fn specify_uuid_as_text(test: &mut Test) -> Result<()> {
         val: uuid::Uuid,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     for _ in 0..16 {
         let val = uuid::Uuid::new_v4();
         let val_str = val.to_string();
-        let created = Foo::create().val(val).exec(&db).await?;
+        let created = Foo::create().val(val).exec(&mut db).await?;
 
         // Verify that the INSERT operation stored the UUID as a text string
         let (op, _resp) = test.log().pop();
@@ -106,8 +106,8 @@ pub async fn specify_uuid_as_text(test: &mut Test) -> Result<()> {
         assert_struct!(op, Operation::QuerySql(_ {
             stmt: Statement::Insert(_ {
                 target: InsertTarget::Table(_ {
-                    table: == table_id(&db, "foos"),
-                    columns: == columns(&db, "foos", &["id", "val"]),
+                    table: == table_id(&mut db, "foos"),
+                    columns: == columns(&mut db, "foos", &["id", "val"]),
                     ..
                 }),
                 source.body: ExprSet::Values(_ {
@@ -119,7 +119,7 @@ pub async fn specify_uuid_as_text(test: &mut Test) -> Result<()> {
             ..
         }));
 
-        let read = Foo::get_by_id(&db, &created.id).await?;
+        let read = Foo::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, val);
 
         let (op, _) = test.log().pop();
@@ -149,12 +149,12 @@ pub async fn specify_uuid_as_bytes(test: &mut Test) -> Result<()> {
         val: uuid::Uuid,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     for _ in 0..16 {
         let val = uuid::Uuid::new_v4();
-        let created = Foo::create().val(val).exec(&db).await?;
-        let read = Foo::get_by_id(&db, &created.id).await?;
+        let created = Foo::create().val(val).exec(&mut db).await?;
+        let read = Foo::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, val);
     }
     Ok(())

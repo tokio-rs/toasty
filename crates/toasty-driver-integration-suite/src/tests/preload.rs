@@ -26,20 +26,20 @@ pub async fn basic_has_many_and_belongs_to_preload(test: &mut Test) -> Result<()
         user: toasty::BelongsTo<User>,
     }
 
-    let db = test.setup_db(models!(User, Todo)).await;
+    let mut db = test.setup_db(models!(User, Todo)).await;
 
     // Create a user with a few todos
     let user = User::create()
         .todo(Todo::create())
         .todo(Todo::create())
         .todo(Todo::create())
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     // Find the user, include TODOs
     let user = User::filter_by_id(user.id)
         .include(User::fields().todos())
-        .get(&db)
+        .get(&mut db)
         .await?;
 
     // This will panic
@@ -49,7 +49,7 @@ pub async fn basic_has_many_and_belongs_to_preload(test: &mut Test) -> Result<()
 
     let todo = Todo::filter_by_id(id)
         .include(Todo::fields().user())
-        .get(&db)
+        .get(&mut db)
         .await?;
 
     assert_eq!(user.id, todo.user.get().id);
@@ -109,45 +109,45 @@ pub async fn multiple_includes_same_model(test: &mut Test) -> Result<()> {
         user: toasty::BelongsTo<User>,
     }
 
-    let db = test.setup_db(models!(User, Post, Comment)).await;
+    let mut db = test.setup_db(models!(User, Post, Comment)).await;
 
     // Create a user
-    let user = User::create().name("Test User").exec(&db).await?;
+    let user = User::create().name("Test User").exec(&mut db).await?;
 
     // Create posts associated with the user
-    Post::create().title("Post 1").user(&user).exec(&db).await?;
+    Post::create().title("Post 1").user(&user).exec(&mut db).await?;
 
-    Post::create().title("Post 2").user(&user).exec(&db).await?;
+    Post::create().title("Post 2").user(&user).exec(&mut db).await?;
 
     // Create comments associated with the user
     Comment::create()
         .text("Comment 1")
         .user(&user)
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     Comment::create()
         .text("Comment 2")
         .user(&user)
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     Comment::create()
         .text("Comment 3")
         .user(&user)
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     // Test individual includes work (baseline)
     let user_with_posts = User::filter_by_id(user.id)
         .include(User::fields().posts())
-        .get(&db)
+        .get(&mut db)
         .await?;
     assert_eq!(2, user_with_posts.posts.get().len());
 
     let user_with_comments = User::filter_by_id(user.id)
         .include(User::fields().comments())
-        .get(&db)
+        .get(&mut db)
         .await?;
     assert_eq!(3, user_with_comments.comments.get().len());
 
@@ -155,7 +155,7 @@ pub async fn multiple_includes_same_model(test: &mut Test) -> Result<()> {
     let loaded_user = User::filter_by_id(user.id)
         .include(User::fields().posts()) // First include
         .include(User::fields().comments()) // Second include
-        .get(&db)
+        .get(&mut db)
         .await?;
 
     assert_eq!(2, loaded_user.posts.get().len());
@@ -192,19 +192,19 @@ pub async fn basic_has_one_and_belongs_to_preload(test: &mut Test) -> Result<()>
         user: toasty::BelongsTo<Option<User>>,
     }
 
-    let db = test.setup_db(models!(User, Profile)).await;
+    let mut db = test.setup_db(models!(User, Profile)).await;
 
     // Create a user with a profile
     let user = User::create()
         .name("John Doe")
         .profile(Profile::create().bio("A person"))
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     // Find the user, include profile
     let user = User::filter_by_id(user.id)
         .include(User::fields().profile())
-        .get(&db)
+        .get(&mut db)
         .await?;
 
     // Verify the profile is preloaded
@@ -217,7 +217,7 @@ pub async fn basic_has_one_and_belongs_to_preload(test: &mut Test) -> Result<()>
     // Test the reciprocal belongs_to preload
     let profile = Profile::filter_by_id(profile_id)
         .include(Profile::fields().user())
-        .get(&db)
+        .get(&mut db)
         .await?;
 
     assert_eq!(user.id, profile.user.get().as_ref().unwrap().id);
@@ -275,20 +275,20 @@ pub async fn multiple_includes_with_has_one(test: &mut Test) -> Result<()> {
         user: toasty::BelongsTo<Option<User>>,
     }
 
-    let db = test.setup_db(models!(User, Profile, Settings)).await;
+    let mut db = test.setup_db(models!(User, Profile, Settings)).await;
 
     // Create a user with both profile and settings
     let user = User::create()
         .name("Jane Doe")
         .profile(Profile::create().bio("Software engineer"))
         .settings(Settings::create().theme("dark"))
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     // Test individual includes work (baseline)
     let user_with_profile = User::filter_by_id(user.id)
         .include(User::fields().profile())
-        .get(&db)
+        .get(&mut db)
         .await?;
     assert!(user_with_profile.profile.get().is_some());
     assert_eq!(
@@ -298,7 +298,7 @@ pub async fn multiple_includes_with_has_one(test: &mut Test) -> Result<()> {
 
     let user_with_settings = User::filter_by_id(user.id)
         .include(User::fields().settings())
-        .get(&db)
+        .get(&mut db)
         .await?;
     assert!(user_with_settings.settings.get().is_some());
     assert_eq!(
@@ -310,7 +310,7 @@ pub async fn multiple_includes_with_has_one(test: &mut Test) -> Result<()> {
     let loaded_user = User::filter_by_id(user.id)
         .include(User::fields().profile()) // First include
         .include(User::fields().settings()) // Second include
-        .get(&db)
+        .get(&mut db)
         .await?;
 
     assert!(loaded_user.profile.get().is_some());
@@ -373,7 +373,7 @@ pub async fn combined_has_many_and_has_one_preload(test: &mut Test) -> Result<()
         user: toasty::BelongsTo<User>,
     }
 
-    let db = test.setup_db(models!(User, Profile, Todo)).await;
+    let mut db = test.setup_db(models!(User, Profile, Todo)).await;
 
     // Create a user with a profile and multiple todos
     let user = User::create()
@@ -382,14 +382,14 @@ pub async fn combined_has_many_and_has_one_preload(test: &mut Test) -> Result<()
         .todo(Todo::create().title("Task 1"))
         .todo(Todo::create().title("Task 2"))
         .todo(Todo::create().title("Task 3"))
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     // Test combined has_one and has_many preload in a single query
     let loaded_user = User::filter_by_id(user.id)
         .include(User::fields().profile()) // has_one include
         .include(User::fields().todos()) // has_many include
-        .get(&db)
+        .get(&mut db)
         .await?;
 
     // Verify has_one association is preloaded
@@ -438,12 +438,12 @@ pub async fn preload_on_empty_table(test: &mut Test) -> Result<()> {
         user: toasty::BelongsTo<User>,
     }
 
-    let db = test.setup_db(models!(User, Todo)).await;
+    let mut db = test.setup_db(models!(User, Todo)).await;
 
     // Query with include on empty table - should return empty result, not SQL error
     let users: Vec<User> = User::all()
         .include(User::fields().todos())
-        .collect(&db)
+        .collect(&mut db)
         .await?;
 
     assert_eq!(0, users.len());
@@ -482,12 +482,12 @@ pub async fn preload_on_empty_query(test: &mut Test) -> Result<()> {
         user: toasty::BelongsTo<User>,
     }
 
-    let db = test.setup_db(models!(User, Todo)).await;
+    let mut db = test.setup_db(models!(User, Todo)).await;
 
     // Query with include on empty table - should return empty result, not SQL error
     let users: Vec<User> = User::filter_by_name("foo")
         .include(User::fields().todos())
-        .collect(&db)
+        .collect(&mut db)
         .await?;
 
     assert_eq!(0, users.len());
