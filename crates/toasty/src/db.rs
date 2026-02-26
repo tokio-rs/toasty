@@ -40,8 +40,8 @@ struct ConnHandle {
 /// Operations sent to the connection task.
 enum ConnOp {
     /// Execute a statement (compile + run on the connection).
-    Exec {
-        stmt: toasty_core::stmt::Statement,
+    ExecStatement {
+        stmt: Box<toasty_core::stmt::Statement>,
         tx: oneshot::Sender<Result<ValueStream>>,
     },
     /// Push schema to the database.
@@ -73,8 +73,8 @@ impl Db {
             let join_handle = tokio::spawn(async move {
                 while let Some(op) = in_rx.recv().await {
                     match op {
-                        ConnOp::Exec { stmt, tx } => {
-                            match engine.exec(&mut connection, stmt).await {
+                        ConnOp::ExecStatement { stmt, tx } => {
+                            match engine.exec(&mut connection, *stmt).await {
                                 Ok(mut value_stream) => {
                                     let (row_tx, mut row_rx) =
                                         mpsc::unbounded_channel::<crate::Result<Value>>();
@@ -97,10 +97,7 @@ impl Db {
                             }
                         }
                         ConnOp::PushSchema { tx } => {
-                            let result = connection
-                                .push_schema(&engine.schema.db)
-                                .await
-                                .map_err(Into::into);
+                            let result = connection.push_schema(&engine.schema.db).await;
                             let _ = tx.send(result);
                         }
                     }
@@ -151,8 +148,8 @@ impl Db {
 
         let conn = self.connection().await?;
         conn.in_tx
-            .send(ConnOp::Exec {
-                stmt: statement.untyped,
+            .send(ConnOp::ExecStatement {
+                stmt: Box::new(statement.untyped),
                 tx,
             })
             .unwrap();
