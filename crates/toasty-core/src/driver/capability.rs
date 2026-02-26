@@ -59,6 +59,9 @@ pub struct Capability {
     /// Whether OR is supported in index key conditions (e.g. DynamoDB KeyConditionExpression).
     /// DynamoDB: false. All other backends: true (SQL backends never use index key conditions).
     pub index_or_predicate: bool,
+
+    /// Whether to test connection pool behavior.
+    pub test_connection_pool: bool,
 }
 
 #[derive(Debug)]
@@ -189,6 +192,8 @@ impl Capability {
         decimal_arbitrary_precision: false,
 
         index_or_predicate: true,
+
+        test_connection_pool: false,
     };
 
     /// PostgreSQL capabilities
@@ -209,6 +214,8 @@ impl Capability {
         // PostgreSQL has native NUMERIC type with arbitrary precision
         native_decimal: true,
         decimal_arbitrary_precision: true,
+
+        test_connection_pool: true,
 
         ..Self::SQLITE
     };
@@ -232,6 +239,9 @@ impl Capability {
         // MySQL has DECIMAL type but requires fixed precision/scale upfront
         native_decimal: true,
         decimal_arbitrary_precision: false,
+
+        test_connection_pool: true,
+
         ..Self::SQLITE
     };
 
@@ -259,6 +269,8 @@ impl Capability {
         decimal_arbitrary_precision: false,
 
         index_or_predicate: false,
+
+        test_connection_pool: false,
     };
 }
 

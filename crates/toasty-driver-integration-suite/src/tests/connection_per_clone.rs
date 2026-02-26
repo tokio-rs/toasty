@@ -2,6 +2,10 @@ use crate::prelude::*;
 
 #[driver_test(id(ID))]
 pub async fn clone_acquires_separate_connection(t: &mut Test) -> Result<()> {
+    if !t.capability().test_connection_pool {
+        return Ok(());
+    }
+
     #[derive(Debug, toasty::Model)]
     struct Item {
         #[key]
@@ -14,7 +18,10 @@ pub async fn clone_acquires_separate_connection(t: &mut Test) -> Result<()> {
     // Before any operation, no connection has been acquired yet (the one from
     // push_schema during setup_db already holds one).
     let status = db.pool().status();
-    assert_eq!(status.size, 1, "setup_db should have acquired one connection");
+    assert_eq!(
+        status.size, 1,
+        "setup_db should have acquired one connection"
+    );
     assert_eq!(
         status.available, 0,
         "that connection should be in use by db"
@@ -35,10 +42,7 @@ pub async fn clone_acquires_separate_connection(t: &mut Test) -> Result<()> {
         status.size, 2,
         "using the clone should have acquired a second connection"
     );
-    assert_eq!(
-        status.available, 0,
-        "both connections should be in use"
-    );
+    assert_eq!(status.available, 0, "both connections should be in use");
 
     // Drop the clone — its connection should return to the pool.
     drop(db2);
