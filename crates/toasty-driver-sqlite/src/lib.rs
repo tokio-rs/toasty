@@ -9,7 +9,10 @@ use std::{
 };
 use toasty_core::{
     async_trait,
-    driver::{operation::Operation, Capability, Driver, Response},
+    driver::{
+        operation::{IsolationLevel, Operation, Transaction},
+        Capability, Driver, Response,
+    },
     schema::db::{Migration, Schema, SchemaDiff, Table},
     stmt, Result,
 };
@@ -148,7 +151,15 @@ impl toasty_core::driver::Connection for Connection {
                 (op.stmt.into(), op.ret)
             }
             // Operation::Insert(op) => op.stmt.into(),
-            Operation::Transaction(op) => {
+            Operation::Transaction(mut op) => {
+                if let Transaction::Start { isolation, .. } = &mut op {
+                    if !matches!(isolation, Some(IsolationLevel::Serializable) | None) {
+                        return Err(toasty_core::Error::unsupported_feature(
+                            "SQLite only supports Serializable isolation",
+                        ));
+                    }
+                    *isolation = None;
+                }
                 let sql = sql::Serializer::sqlite(schema).serialize_transaction(&op);
                 self.connection
                     .execute(&sql, [])
