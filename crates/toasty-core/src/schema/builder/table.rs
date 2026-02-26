@@ -746,7 +746,7 @@ impl<'a, 'b> MapField<'a, 'b> {
         assert!(!self.in_enum_variant);
 
         // Create the discriminant column. It inherits nullability from the enum field.
-        let disc_col_id = self.create_column(field, &embedded_enum.discriminant);
+        let column_id = self.create_column(field, &embedded_enum.discriminant);
         let field_expr = self.field_expr(field, field_index);
 
         // For data-carrying enums the model value is Record([I64(disc), ...]),
@@ -760,10 +760,9 @@ impl<'a, 'b> MapField<'a, 'b> {
 
         let lowering_index =
             self.build
-                .push_lowering(disc_col_id, &embedded_enum.discriminant.ty, disc_expr);
+                .push_lowering(column_id, &embedded_enum.discriminant.ty, disc_expr);
 
         let bit = self.build.next_bit();
-
         let sub_projection = self.sub_projection(field_index);
 
         let disc_proj = stmt::Expr::project(field_expr.clone(), stmt::Projection::single(0));
@@ -797,7 +796,7 @@ impl<'a, 'b> MapField<'a, 'b> {
         let field_mask = stmt::PathFieldSet::from_iter([bit]);
         mapping::Field::Enum(mapping::FieldEnum {
             discriminant: mapping::FieldPrimitive {
-                column: disc_col_id,
+                column: column_id,
                 lowering: lowering_index,
                 field_mask: field_mask.clone(),
                 sub_projection: stmt::Projection::identity(),
