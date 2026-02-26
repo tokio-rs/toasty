@@ -72,6 +72,17 @@ struct MapField<'a, 'b> {
     /// nullability. Set while processing fields that belong to an enum variant,
     /// since only the active variant's columns are populated.
     in_enum_variant: bool,
+
+    /// The root model field whose value is projected to reach the current
+    /// nesting level. `None` at the top level (each field is its own source).
+    /// Once set when entering the first embedded struct, it stays the same
+    /// through all deeper nesting levels.
+    source_field_id: Option<FieldId>,
+
+    /// The projection from `source_field_id` down to the current nesting level.
+    /// Identity at the top level and when first entering an embedded struct;
+    /// extended by one step per additional level of nesting.
+    base_projection: stmt::Projection,
 }
 
 impl BuildSchema<'_> {
@@ -231,8 +242,7 @@ impl BuildTableFromModels<'_> {
 
 impl BuildMapping<'_> {
     fn build_mapping(mut self, model: &ModelRoot) {
-        let fields =
-            MapField::new(&mut self).map_fields(&model.fields, None, stmt::Projection::identity());
+        let fields = MapField::new(&mut self).map_fields(&model.fields);
 
         assert!(!self.model_to_table.is_empty());
         assert_eq!(self.model_to_table.len(), self.lowering_columns.len());
@@ -488,6 +498,8 @@ impl<'a, 'b> MapField<'a, 'b> {
             build,
             prefix: vec![],
             in_enum_variant: false,
+            source_field_id: None,
+            base_projection: stmt::Projection::identity(),
         }
     }
 
@@ -524,8 +536,9 @@ impl<'a, 'b> MapField<'a, 'b> {
     /// Creates a child `MapField` for recursing into an embedded field.
     ///
     /// The child inherits the current prefix extended by `name` and inherits
-    /// `in_enum_variant` unchanged. Used when entering struct fields so that
-    /// sub-field columns are named `{..prefix..}_{name}_{sub_field}`.
+    /// `in_enum_variant`, `source_field_id`, and `base_projection` unchanged.
+    /// Used when entering struct fields so that sub-field columns are named
+    /// `{..prefix..}_{name}_{sub_field}`.
     fn with_prefix(&mut self, name: &str) -> MapField<'_, 'b> {
         let mut prefix = self.prefix.clone();
         prefix.push(name.to_owned());
@@ -533,54 +546,87 @@ impl<'a, 'b> MapField<'a, 'b> {
             build: self.build,
             prefix,
             in_enum_variant: self.in_enum_variant,
+            source_field_id: self.source_field_id,
+            base_projection: self.base_projection.clone(),
         }
     }
 
-    fn map_fields(
-        &mut self,
-        fields: &[app::Field],
-        source_field_id: Option<FieldId>,
-        base_projection: stmt::Projection,
-    ) -> Vec<mapping::Field> {
+    /// Creates a child `MapField` for recursing into an embedded struct field.
+    ///
+    /// Updates `source_field_id` and `base_projection` to reflect the new
+    /// nesting level: if entering the first embedded level, sets the source
+    /// to this field with an identity projection; at deeper levels, keeps the
+    /// original source and extends the projection by `field_index`.
+    fn for_struct(&mut self, field: &app::Field, field_index: usize) -> MapField<'_, 'b> {
+        // Compute new values before borrowing self mutably for with_prefix.
+        let source_field_id = self.source_field_id.or(Some(field.id));
+        let base_projection = if self.source_field_id.is_none() {
+            stmt::Projection::identity()
+        } else {
+            let mut proj = self.base_projection.clone();
+            proj.push(field_index);
+            proj
+        };
+        let mut child = self.with_prefix(field.name.storage_name());
+        child.source_field_id = source_field_id;
+        child.base_projection = base_projection;
+        child
+    }
+
+    /// Returns the sub-projection from the root source field to a field at
+    /// `field_index` within the current nesting level.
+    ///
+    /// At the top level (`source_field_id` is `None`) the field is its own
+    /// root, so the sub-projection is identity. Inside an embedded type the
+    /// sub-projection is `base_projection` extended by `field_index`.
+    fn sub_projection(&self, field_index: usize) -> stmt::Projection {
+        if self.source_field_id.is_some() {
+            let mut proj = self.base_projection.clone();
+            proj.push(field_index);
+            proj
+        } else {
+            stmt::Projection::identity()
+        }
+    }
+
+    /// Builds the lowering expression for a field at the current nesting level.
+    ///
+    /// At the top level (`source_field_id` is `None`) each field references
+    /// itself directly. Inside an embedded struct the expression projects from
+    /// the root source field through `base_projection` extended by `field_index`.
+    fn field_expr(&self, field: &app::Field, field_index: usize) -> stmt::Expr {
+        if let Some(source) = self.source_field_id {
+            let base = stmt::Expr::ref_self_field(source);
+            let mut projection = self.base_projection.clone();
+            projection.push(field_index);
+            stmt::Expr::project(base, projection)
+        } else {
+            stmt::Expr::ref_self_field(field.id)
+        }
+    }
+
+    fn map_fields(&mut self, fields: &[app::Field]) -> Vec<mapping::Field> {
         let mut mapping = Vec::with_capacity(fields.len());
         for (field_index, field) in fields.iter().enumerate() {
-            mapping.push(self.map_field(field_index, field, source_field_id, &base_projection));
+            mapping.push(self.map_field(field_index, field));
         }
         mapping
     }
 
-    fn map_field(
-        &mut self,
-        field_index: usize,
-        field: &app::Field,
-        source_field_id: Option<FieldId>,
-        base_projection: &stmt::Projection,
-    ) -> mapping::Field {
+    fn map_field(&mut self, field_index: usize, field: &app::Field) -> mapping::Field {
         match &field.ty {
-            app::FieldTy::Primitive(primitive) => self.map_field_primitive(
-                field_index,
-                field,
-                primitive,
-                source_field_id,
-                base_projection,
-            ),
+            app::FieldTy::Primitive(primitive) => {
+                self.map_field_primitive(field_index, field, primitive)
+            }
             app::FieldTy::Embedded(embedded) => {
                 let embedded_model = self.build.app.model(embedded.target);
                 if let app::Model::EmbeddedEnum(embedded_enum) = embedded_model {
-                    self.map_field_enum(
-                        field_index,
-                        field,
-                        embedded_enum,
-                        source_field_id,
-                        base_projection,
-                    )
+                    self.map_field_enum(field_index, field, embedded_enum)
                 } else {
                     self.map_field_struct(
                         field_index,
                         field,
                         embedded_model.expect_embedded_struct(),
-                        source_field_id,
-                        base_projection,
                     )
                 }
             }
@@ -599,8 +645,6 @@ impl<'a, 'b> MapField<'a, 'b> {
         field_index: usize,
         field: &app::Field,
         primitive: &app::FieldPrimitive,
-        source_field_id: Option<FieldId>,
-        base_projection: &stmt::Projection,
     ) -> mapping::Field {
         let column_name = self.column_name(field);
         let column_id = self.build.create_column(
@@ -610,7 +654,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             field.is_auto_increment(),
         );
 
-        let expr = field_expr(field, field_index, source_field_id, base_projection);
+        let expr = self.field_expr(field, field_index);
 
         let lowering = self.build.encode_column(column_id, &primitive.ty, expr);
         let lowering_index = self.build.model_to_table.len();
@@ -619,13 +663,7 @@ impl<'a, 'b> MapField<'a, 'b> {
 
         let bit = self.build.next_bit();
 
-        let sub_projection = if source_field_id.is_some() {
-            let mut proj = base_projection.clone();
-            proj.push(field_index);
-            proj
-        } else {
-            stmt::Projection::identity()
-        };
+        let sub_projection = self.sub_projection(field_index);
 
         mapping::Field::Primitive(mapping::FieldPrimitive {
             column: column_id,
@@ -642,8 +680,6 @@ impl<'a, 'b> MapField<'a, 'b> {
         field_index: usize,
         field: &app::Field,
         embedded_enum: &app::EmbeddedEnum,
-        source_field_id: Option<FieldId>,
-        base_projection: &stmt::Projection,
     ) -> mapping::Field {
         // Create the discriminant column. It inherits nullability from the enum field.
         let disc_primitive = app::FieldPrimitive {
@@ -657,7 +693,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             false,
         );
 
-        let field_expr = field_expr(field, field_index, source_field_id, base_projection);
+        let field_expr = self.field_expr(field, field_index);
 
         // For data-carrying enums the model value is Record([I64(disc), ...]),
         // so project [0] to extract the discriminant; for unit-only enums the
@@ -677,13 +713,7 @@ impl<'a, 'b> MapField<'a, 'b> {
 
         let bit = self.build.next_bit();
 
-        let sub_projection = if source_field_id.is_some() {
-            let mut proj = base_projection.clone();
-            proj.push(field_index);
-            proj
-        } else {
-            stmt::Projection::identity()
-        };
+        let sub_projection = self.sub_projection(field_index);
 
         let disc_proj = stmt::Expr::project(field_expr.clone(), stmt::Projection::single(0));
 
@@ -784,21 +814,12 @@ impl<'a, 'b> MapField<'a, 'b> {
         field_index: usize,
         field: &app::Field,
         embedded_struct: &app::EmbeddedStruct,
-        source_field_id: Option<FieldId>,
-        base_projection: &stmt::Projection,
     ) -> mapping::Field {
-        let nested_source = source_field_id.or(Some(field.id));
-        let nested_projection = if source_field_id.is_none() {
-            stmt::Projection::identity()
-        } else {
-            let mut proj = base_projection.clone();
-            proj.push(field_index);
-            proj
-        };
+        let sub_projection = self.sub_projection(field_index);
 
         let nested_fields = self
-            .with_prefix(field.name.storage_name())
-            .map_fields(&embedded_struct.fields, nested_source, nested_projection.clone());
+            .for_struct(field, field_index)
+            .map_fields(&embedded_struct.fields);
 
         let columns: indexmap::IndexMap<ColumnId, usize> =
             nested_fields.iter().flat_map(|f| f.columns()).collect();
@@ -810,7 +831,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             fields: nested_fields,
             columns,
             field_mask,
-            sub_projection: nested_projection,
+            sub_projection,
         })
     }
 
@@ -881,21 +902,5 @@ impl<'a, 'b> MapField<'a, 'b> {
             field_mask,
             sub_projection: stmt::Projection::single(local_idx + 1),
         })
-    }
-}
-
-fn field_expr(
-    field: &app::Field,
-    field_index: usize,
-    source_field_id: Option<FieldId>,
-    base_projection: &stmt::Projection,
-) -> stmt::Expr {
-    if let Some(source) = source_field_id {
-        let base = stmt::Expr::ref_self_field(source);
-        let mut projection = base_projection.clone();
-        projection.push(field_index);
-        stmt::Expr::project(base, projection)
-    } else {
-        stmt::Expr::ref_self_field(field.id)
     }
 }
