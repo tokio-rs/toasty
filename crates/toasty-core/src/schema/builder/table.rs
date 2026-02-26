@@ -512,177 +512,6 @@ impl<'a, 'b> MapField<'a, 'b> {
         }
     }
 
-    /// Builds the final database column name for `field` at the current nesting level.
-    ///
-    /// Joins `self.prefix` components with `_`, appends the field name, then
-    /// prepends `schema_prefix` (if any) with `__`. Because `schema_prefix` is
-    /// applied here — never stored in `self.prefix` — it is always applied
-    /// exactly once regardless of nesting depth.
-    fn column_name(&self, field: &app::Field) -> String {
-        let field_name = field.name.storage_name();
-        let embed = if self.prefix.is_empty() {
-            field_name.to_owned()
-        } else {
-            format!("{}_{field_name}", self.prefix.join("_"))
-        };
-        match self.build.schema_prefix.as_deref() {
-            None => embed,
-            Some(sp) => format!("{sp}__{embed}"),
-        }
-    }
-
-    /// Creates a column for `field` using `primitive` for the storage type.
-    ///
-    /// Derives the column name from `self.column_name(field)`, nullability from
-    /// `field.nullable || self.in_enum_variant`, and auto-increment from
-    /// `field.is_auto_increment()`.
-    fn create_column(&mut self, field: &app::Field, primitive: &app::FieldPrimitive) -> ColumnId {
-        let storage_ty = db::Type::from_app(
-            &primitive.ty,
-            primitive.storage_ty.as_ref(),
-            &self.build.db.storage_types,
-        )
-        .expect("unsupported storage type");
-
-        let id = ColumnId {
-            table: self.build.table.id,
-            index: self.build.table.columns.len(),
-        };
-
-        self.build.table.columns.push(db::Column {
-            id,
-            name: self.column_name(field),
-            ty: storage_ty.bridge_type(&primitive.ty),
-            storage_ty,
-            nullable: field.nullable || self.in_enum_variant,
-            primary_key: false,
-            auto_increment: field.is_auto_increment() && self.build.db.auto_increment,
-        });
-
-        id
-    }
-
-    /// Creates a child `MapField` for recursing into an embedded field.
-    ///
-    /// The child inherits the current prefix extended by `name` and inherits
-    /// `in_enum_variant`, `field_base`, and `field_expr_base` unchanged. Used
-    /// when entering struct/variant fields so that sub-field columns are named
-    /// `{..prefix..}_{name}_{sub_field}`.
-    fn with_prefix(&mut self, name: &str) -> MapField<'_, 'b> {
-        let mut prefix = self.prefix.clone();
-        prefix.push(name.to_owned());
-        MapField {
-            build: self.build,
-            prefix,
-            in_enum_variant: self.in_enum_variant,
-            field_base: self.field_base.clone(),
-            field_expr_base: self.field_expr_base.clone(),
-        }
-    }
-
-    /// Creates a variant-specific child `MapField`.
-    ///
-    /// Sets `field_base` so that `field_expr` on the child projects from the
-    /// enum field, sets `in_enum_variant = true`, and installs a
-    /// `field_expr_base` of `match_expr(disc_proj, [arm(discriminant,
-    /// Expr::arg(0))], null())` so that every `field_expr` call is
-    /// automatically wrapped in the discriminant check.
-    fn for_variant(
-        &mut self,
-        field: &app::Field,
-        field_index: usize,
-        disc_proj: stmt::Expr,
-        discriminant: i64,
-    ) -> MapField<'_, 'b> {
-        let field_base = self.extend_field_base(field, field_index);
-
-        let field_expr_base = stmt::Expr::match_expr(
-            disc_proj,
-            vec![stmt::MatchArm {
-                pattern: stmt::Value::I64(discriminant),
-                expr: stmt::Expr::arg(0),
-            }],
-            stmt::Expr::null(),
-        );
-        let mut child = self.with_prefix(field.name.storage_name());
-        child.in_enum_variant = true;
-        child.field_base = Some(field_base);
-        child
-            .field_expr_base
-            .substitute(SingleArgInput(field_expr_base));
-        child
-    }
-
-    /// Creates a child `MapField` for recursing into an embedded struct field.
-    ///
-    /// Updates `field_base` to reflect the new nesting level: if entering the
-    /// first embedded level, sets the source to this field with an identity
-    /// projection; at deeper levels, extends the existing projection by
-    /// `field_index`.
-    fn for_struct(&mut self, field: &app::Field, field_index: usize) -> MapField<'_, 'b> {
-        let field_base = self.extend_field_base(field, field_index);
-        let mut child = self.with_prefix(field.name.storage_name());
-        child.field_base = Some(field_base);
-        child
-    }
-
-    /// Extends `parent_base` by one projection step to produce the `field_base`
-    /// for a child `MapField` entering `field` at `field_index` within the parent.
-    ///
-    /// If `parent_base` is the top-level sentinel (`Expr::arg(0)`), the child
-    /// starts a fresh projection rooted at `field.id`. Otherwise the existing
-    /// `ExprProject` is extended by `field_index`.
-    fn extend_field_base(&self, field: &app::Field, field_index: usize) -> stmt::Expr {
-        match &self.field_base {
-            None => stmt::Expr::ref_self_field(field.id),
-            Some(stmt::Expr::Project(ep)) => {
-                let mut proj = ep.projection.clone();
-                proj.push(field_index);
-                stmt::Expr::project(*ep.base.clone(), proj)
-            }
-            Some(expr) => stmt::Expr::project(expr.clone(), [field_index]),
-        }
-    }
-
-    /// Returns the sub-projection from the root source field to a field at
-    /// `field_index` within the current nesting level.
-    ///
-    /// If `field_base` is an `ExprProject`, the sub-projection is its
-    /// projection extended by `field_index`. At the top level (`field_base`
-    /// is `Expr::arg(0)`) the field is its own root, so identity is returned.
-    fn sub_projection(&self, field_index: usize) -> stmt::Projection {
-        match &self.field_base {
-            None => stmt::Projection::identity(),
-            Some(stmt::Expr::Project(ep)) => {
-                let mut proj = ep.projection.clone();
-                proj.push(field_index);
-                proj
-            }
-            Some(_) => [field_index].into(),
-        }
-    }
-
-    /// Builds the lowering expression for a field at the current nesting level.
-    ///
-    /// At the top level (`field_base` is `Expr::arg(0)`) each field references
-    /// itself directly. Inside an embedded struct/variant the expression extends
-    /// `field_base` by `field_index`. The raw expression is then substituted
-    /// into `field_expr_base` (which may wrap it in a match guard).
-    fn field_expr(&self, field: &app::Field, field_index: usize) -> stmt::Expr {
-        let raw = match self.field_base.clone() {
-            None => stmt::Expr::ref_self_field(field.id),
-            Some(stmt::Expr::Project(mut expr_project)) => {
-                expr_project.projection.push(field_index);
-                expr_project.into()
-            }
-            Some(expr) => stmt::Expr::project(expr, [field_index]),
-        };
-
-        let mut result = self.field_expr_base.clone();
-        result.substitute(SingleArgInput(raw));
-        result
-    }
-
     fn map_fields(&mut self, fields: &[app::Field]) -> Vec<mapping::Field> {
         fields
             .iter()
@@ -831,5 +660,176 @@ impl<'a, 'b> MapField<'a, 'b> {
             field_mask,
             sub_projection,
         })
+    }
+
+    /// Builds the final database column name for `field` at the current nesting level.
+    ///
+    /// Joins `self.prefix` components with `_`, appends the field name, then
+    /// prepends `schema_prefix` (if any) with `__`. Because `schema_prefix` is
+    /// applied here — never stored in `self.prefix` — it is always applied
+    /// exactly once regardless of nesting depth.
+    fn column_name(&self, field: &app::Field) -> String {
+        let field_name = field.name.storage_name();
+        let embed = if self.prefix.is_empty() {
+            field_name.to_owned()
+        } else {
+            format!("{}_{field_name}", self.prefix.join("_"))
+        };
+        match self.build.schema_prefix.as_deref() {
+            None => embed,
+            Some(sp) => format!("{sp}__{embed}"),
+        }
+    }
+
+    /// Creates a column for `field` using `primitive` for the storage type.
+    ///
+    /// Derives the column name from `self.column_name(field)`, nullability from
+    /// `field.nullable || self.in_enum_variant`, and auto-increment from
+    /// `field.is_auto_increment()`.
+    fn create_column(&mut self, field: &app::Field, primitive: &app::FieldPrimitive) -> ColumnId {
+        let storage_ty = db::Type::from_app(
+            &primitive.ty,
+            primitive.storage_ty.as_ref(),
+            &self.build.db.storage_types,
+        )
+        .expect("unsupported storage type");
+
+        let id = ColumnId {
+            table: self.build.table.id,
+            index: self.build.table.columns.len(),
+        };
+
+        self.build.table.columns.push(db::Column {
+            id,
+            name: self.column_name(field),
+            ty: storage_ty.bridge_type(&primitive.ty),
+            storage_ty,
+            nullable: field.nullable || self.in_enum_variant,
+            primary_key: false,
+            auto_increment: field.is_auto_increment() && self.build.db.auto_increment,
+        });
+
+        id
+    }
+
+    /// Extends `parent_base` by one projection step to produce the `field_base`
+    /// for a child `MapField` entering `field` at `field_index` within the parent.
+    ///
+    /// If `parent_base` is the top-level sentinel (`Expr::arg(0)`), the child
+    /// starts a fresh projection rooted at `field.id`. Otherwise the existing
+    /// `ExprProject` is extended by `field_index`.
+    fn extend_field_base(&self, field: &app::Field, field_index: usize) -> stmt::Expr {
+        match &self.field_base {
+            None => stmt::Expr::ref_self_field(field.id),
+            Some(stmt::Expr::Project(ep)) => {
+                let mut proj = ep.projection.clone();
+                proj.push(field_index);
+                stmt::Expr::project(*ep.base.clone(), proj)
+            }
+            Some(expr) => stmt::Expr::project(expr.clone(), [field_index]),
+        }
+    }
+
+    /// Returns the sub-projection from the root source field to a field at
+    /// `field_index` within the current nesting level.
+    ///
+    /// If `field_base` is an `ExprProject`, the sub-projection is its
+    /// projection extended by `field_index`. At the top level (`field_base`
+    /// is `Expr::arg(0)`) the field is its own root, so identity is returned.
+    fn sub_projection(&self, field_index: usize) -> stmt::Projection {
+        match &self.field_base {
+            None => stmt::Projection::identity(),
+            Some(stmt::Expr::Project(ep)) => {
+                let mut proj = ep.projection.clone();
+                proj.push(field_index);
+                proj
+            }
+            Some(_) => [field_index].into(),
+        }
+    }
+
+    /// Builds the lowering expression for a field at the current nesting level.
+    ///
+    /// At the top level (`field_base` is `Expr::arg(0)`) each field references
+    /// itself directly. Inside an embedded struct/variant the expression extends
+    /// `field_base` by `field_index`. The raw expression is then substituted
+    /// into `field_expr_base` (which may wrap it in a match guard).
+    fn field_expr(&self, field: &app::Field, field_index: usize) -> stmt::Expr {
+        let raw = match self.field_base.clone() {
+            None => stmt::Expr::ref_self_field(field.id),
+            Some(stmt::Expr::Project(mut expr_project)) => {
+                expr_project.projection.push(field_index);
+                expr_project.into()
+            }
+            Some(expr) => stmt::Expr::project(expr, [field_index]),
+        };
+
+        let mut result = self.field_expr_base.clone();
+        result.substitute(SingleArgInput(raw));
+        result
+    }
+
+    /// Creates a child `MapField` for recursing into an embedded field.
+    ///
+    /// The child inherits the current prefix extended by `name` and inherits
+    /// `in_enum_variant`, `field_base`, and `field_expr_base` unchanged. Used
+    /// when entering struct/variant fields so that sub-field columns are named
+    /// `{..prefix..}_{name}_{sub_field}`.
+    fn with_prefix(&mut self, name: &str) -> MapField<'_, 'b> {
+        let mut prefix = self.prefix.clone();
+        prefix.push(name.to_owned());
+        MapField {
+            build: self.build,
+            prefix,
+            in_enum_variant: self.in_enum_variant,
+            field_base: self.field_base.clone(),
+            field_expr_base: self.field_expr_base.clone(),
+        }
+    }
+
+    /// Creates a variant-specific child `MapField`.
+    ///
+    /// Sets `field_base` so that `field_expr` on the child projects from the
+    /// enum field, sets `in_enum_variant = true`, and installs a
+    /// `field_expr_base` of `match_expr(disc_proj, [arm(discriminant,
+    /// Expr::arg(0))], null())` so that every `field_expr` call is
+    /// automatically wrapped in the discriminant check.
+    fn for_variant(
+        &mut self,
+        field: &app::Field,
+        field_index: usize,
+        disc_proj: stmt::Expr,
+        discriminant: i64,
+    ) -> MapField<'_, 'b> {
+        let field_base = self.extend_field_base(field, field_index);
+
+        let field_expr_base = stmt::Expr::match_expr(
+            disc_proj,
+            vec![stmt::MatchArm {
+                pattern: stmt::Value::I64(discriminant),
+                expr: stmt::Expr::arg(0),
+            }],
+            stmt::Expr::null(),
+        );
+        let mut child = self.with_prefix(field.name.storage_name());
+        child.in_enum_variant = true;
+        child.field_base = Some(field_base);
+        child
+            .field_expr_base
+            .substitute(SingleArgInput(field_expr_base));
+        child
+    }
+
+    /// Creates a child `MapField` for recursing into an embedded struct field.
+    ///
+    /// Updates `field_base` to reflect the new nesting level: if entering the
+    /// first embedded level, sets the source to this field with an identity
+    /// projection; at deeper levels, extends the existing projection by
+    /// `field_index`.
+    fn for_struct(&mut self, field: &app::Field, field_index: usize) -> MapField<'_, 'b> {
+        let field_base = self.extend_field_base(field, field_index);
+        let mut child = self.with_prefix(field.name.storage_name());
+        child.field_base = Some(field_base);
+        child
     }
 }
