@@ -45,7 +45,7 @@ impl Exec<'_> {
             )
         } else {
             (
-                Transaction::Start,
+                Transaction::start(),
                 Transaction::Commit,
                 Transaction::Rollback,
             )
