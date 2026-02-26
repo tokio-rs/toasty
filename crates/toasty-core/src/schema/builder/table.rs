@@ -107,11 +107,12 @@ struct MapField<'a, 'b> {
 
     /// A template expression with `Expr::arg(0)` as a placeholder for the raw
     /// field expression. `field_expr` substitutes the raw field expression into
-    /// this template before returning. `None` means identity (no wrapping).
+    /// this template before returning. The identity value is `Expr::arg(0)`
+    /// itself, which substitutes to the raw expression unchanged.
     ///
     /// Used by variant-specific `MapField` instances to automatically wrap
     /// field expressions in the discriminant match guard.
-    field_expr_base: Option<stmt::Expr>,
+    field_expr_base: stmt::Expr,
 
     /// Added to `field_index` in `field_expr` when building the projection.
     ///
@@ -523,7 +524,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             in_enum_variant: false,
             source_field_id: None,
             base_projection: stmt::Projection::identity(),
-            field_expr_base: None,
+            field_expr_base: stmt::Expr::arg(0),
             field_index_offset: 0,
         }
     }
@@ -614,7 +615,7 @@ impl<'a, 'b> MapField<'a, 'b> {
         child.in_enum_variant = true;
         child.source_field_id = source_field_id;
         child.base_projection = base_projection;
-        child.field_expr_base = Some(field_expr_base);
+        child.field_expr_base = field_expr_base;
         child.field_index_offset = 1;
         child
     }
@@ -622,10 +623,9 @@ impl<'a, 'b> MapField<'a, 'b> {
     /// Creates a child `MapField` for recursing into an embedded field.
     ///
     /// The child inherits the current prefix extended by `name` and inherits
-    /// `in_enum_variant`, `source_field_id`, and `base_projection` unchanged.
-    /// `field_expr_base` is always reset to `None` (identity) for the child.
-    /// Used when entering struct fields so that sub-field columns are named
-    /// `{..prefix..}_{name}_{sub_field}`.
+    /// `in_enum_variant`, `source_field_id`, `base_projection`, and
+    /// `field_expr_base` unchanged. Used when entering struct fields so that
+    /// sub-field columns are named `{..prefix..}_{name}_{sub_field}`.
     fn with_prefix(&mut self, name: &str) -> MapField<'_, 'b> {
         let mut prefix = self.prefix.clone();
         prefix.push(name.to_owned());
@@ -635,7 +635,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             in_enum_variant: self.in_enum_variant,
             source_field_id: self.source_field_id,
             base_projection: self.base_projection.clone(),
-            field_expr_base: None,
+            field_expr_base: self.field_expr_base.clone(),
             field_index_offset: 0,
         }
     }
@@ -696,13 +696,9 @@ impl<'a, 'b> MapField<'a, 'b> {
             stmt::Expr::ref_self_field(field.id)
         };
 
-        if let Some(base) = &self.field_expr_base {
-            let mut result = base.clone();
-            result.substitute(SingleArgInput(raw));
-            result
-        } else {
-            raw
-        }
+        let mut result = self.field_expr_base.clone();
+        result.substitute(SingleArgInput(raw));
+        result
     }
 
     fn map_fields(&mut self, fields: &[app::Field]) -> Vec<mapping::Field> {
