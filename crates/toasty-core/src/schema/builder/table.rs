@@ -676,7 +676,6 @@ impl<'a, 'b> MapField<'a, 'b> {
     ) -> mapping::Field {
         // Create the discriminant column. It inherits nullability from the enum field.
         let disc_col_id = self.create_column(field, &embedded_enum.discriminant);
-
         let field_expr = self.field_expr(field, field_index);
 
         // For data-carrying enums the model value is Record([I64(disc), ...]),
