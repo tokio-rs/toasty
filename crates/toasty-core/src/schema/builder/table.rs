@@ -7,8 +7,29 @@ use crate::{
         mapping::{self, Mapping, TableToModel},
         Name,
     },
-    stmt::{self},
+    stmt::{self, ExprArg, Input, Projection},
 };
+
+/// An `Input` that replaces `Arg(0)` with a single concrete expression.
+///
+/// Used by `MapField::field_expr` to substitute the raw field expression into
+/// `field_expr_base`, which may contain `Expr::arg(0)` as a placeholder.
+struct SingleArgInput(stmt::Expr);
+
+impl Input for SingleArgInput {
+    fn resolve_arg(&mut self, expr_arg: &ExprArg, projection: &Projection) -> Option<stmt::Expr> {
+        if expr_arg.position == 0 {
+            let expr = self.0.clone();
+            Some(if projection.is_identity() {
+                expr
+            } else {
+                stmt::Expr::project(expr, projection.clone())
+            })
+        } else {
+            None
+        }
+    }
+}
 
 struct BuildTableFromModels<'a> {
     /// Application schema (for looking up model definitions)
@@ -83,6 +104,27 @@ struct MapField<'a, 'b> {
     /// Identity at the top level and when first entering an embedded struct;
     /// extended by one step per additional level of nesting.
     base_projection: stmt::Projection,
+
+    /// A template expression with `Expr::arg(0)` as a placeholder for the raw
+    /// field expression. `field_expr` substitutes the raw field expression into
+    /// this template before returning. `None` means identity (no wrapping).
+    ///
+    /// Used by variant-specific `MapField` instances to automatically wrap
+    /// field expressions in the discriminant match guard.
+    field_expr_base: Option<stmt::Expr>,
+
+    /// Added to `field_index` in `field_expr` when building the projection.
+    ///
+    /// A data-carrying enum value is represented as `Record([disc, vf0, vf1,
+    /// ...])`, so position 0 is the discriminant and variant fields start at
+    /// position 1. The variant field loop uses 0-based `local_idx`, so without
+    /// an offset `field_expr(vf, 0)` would project to position 0 (the
+    /// discriminant) instead of position 1 (the first variant field).
+    ///
+    /// Set to 1 on variant-level `MapField` instances (via `for_variant`) so
+    /// that `field_expr(vf, local_idx)` projects to `local_idx + 1`. Zero
+    /// everywhere else.
+    field_index_offset: usize,
 }
 
 impl BuildSchema<'_> {
@@ -481,6 +523,8 @@ impl<'a, 'b> MapField<'a, 'b> {
             in_enum_variant: false,
             source_field_id: None,
             base_projection: stmt::Projection::identity(),
+            field_expr_base: None,
+            field_index_offset: 0,
         }
     }
 
@@ -536,19 +580,56 @@ impl<'a, 'b> MapField<'a, 'b> {
 
     /// Creates a child `MapField` for processing an enum's variant fields.
     ///
-    /// The child inherits the current prefix extended by `field_name` and has
-    /// `in_enum_variant` set to `true`, so variant field columns are nullable
-    /// and named `{..prefix..}_{field_name}_{vf_name}`.
-    fn for_enum_variant(&mut self, field_name: &str) -> MapField<'_, 'b> {
-        let mut child = self.with_prefix(field_name);
+    /// Sets `source_field_id` and `base_projection` to reflect that the enum
+    /// field is now the root source (mirroring `for_struct`), extends the
+    /// prefix by the field name, and sets `in_enum_variant = true`.
+    fn for_enum_variant(&mut self, field: &app::Field, field_index: usize) -> MapField<'_, 'b> {
+        let source_field_id = self.source_field_id.or(Some(field.id));
+        let base_projection = if self.source_field_id.is_none() {
+            stmt::Projection::identity()
+        } else {
+            let mut proj = self.base_projection.clone();
+            proj.push(field_index);
+            proj
+        };
+        let mut child = self.with_prefix(field.name.storage_name());
         child.in_enum_variant = true;
+        child.source_field_id = source_field_id;
+        child.base_projection = base_projection;
         child
+    }
+
+    /// Creates a variant-specific child `MapField` by cloning the current
+    /// context and setting `field_expr_base` to the discriminant match guard.
+    ///
+    /// When `field_expr` is called on this child, the raw field expression is
+    /// substituted for `Expr::arg(0)` in the match template, automatically
+    /// wrapping it in the discriminant check.
+    fn for_variant(&mut self, disc_proj: stmt::Expr, discriminant: i64) -> MapField<'_, 'b> {
+        let field_expr_base = stmt::Expr::match_expr(
+            disc_proj,
+            vec![stmt::MatchArm {
+                pattern: stmt::Value::I64(discriminant),
+                expr: stmt::Expr::arg(0),
+            }],
+            stmt::Expr::null(),
+        );
+        MapField {
+            build: self.build,
+            prefix: self.prefix.clone(),
+            in_enum_variant: self.in_enum_variant,
+            source_field_id: self.source_field_id,
+            base_projection: self.base_projection.clone(),
+            field_expr_base: Some(field_expr_base),
+            field_index_offset: 1,
+        }
     }
 
     /// Creates a child `MapField` for recursing into an embedded field.
     ///
     /// The child inherits the current prefix extended by `name` and inherits
     /// `in_enum_variant`, `source_field_id`, and `base_projection` unchanged.
+    /// `field_expr_base` is always reset to `None` (identity) for the child.
     /// Used when entering struct fields so that sub-field columns are named
     /// `{..prefix..}_{name}_{sub_field}`.
     fn with_prefix(&mut self, name: &str) -> MapField<'_, 'b> {
@@ -560,6 +641,8 @@ impl<'a, 'b> MapField<'a, 'b> {
             in_enum_variant: self.in_enum_variant,
             source_field_id: self.source_field_id,
             base_projection: self.base_projection.clone(),
+            field_expr_base: None,
+            field_index_offset: 0,
         }
     }
 
@@ -606,14 +689,25 @@ impl<'a, 'b> MapField<'a, 'b> {
     /// At the top level (`source_field_id` is `None`) each field references
     /// itself directly. Inside an embedded struct the expression projects from
     /// the root source field through `base_projection` extended by `field_index`.
+    ///
+    /// If `field_expr_base` is set, the raw expression is substituted for
+    /// `Expr::arg(0)` in the template before returning.
     fn field_expr(&self, field: &app::Field, field_index: usize) -> stmt::Expr {
-        if let Some(source) = self.source_field_id {
+        let raw = if let Some(source) = self.source_field_id {
             let base = stmt::Expr::ref_self_field(source);
             let mut projection = self.base_projection.clone();
-            projection.push(field_index);
+            projection.push(field_index + self.field_index_offset);
             stmt::Expr::project(base, projection)
         } else {
             stmt::Expr::ref_self_field(field.id)
+        };
+
+        if let Some(base) = &self.field_expr_base {
+            let mut result = base.clone();
+            result.substitute(SingleArgInput(raw));
+            result
+        } else {
+            raw
         }
     }
 
@@ -697,9 +791,12 @@ impl<'a, 'b> MapField<'a, 'b> {
 
         let disc_proj = stmt::Expr::project(field_expr.clone(), stmt::Projection::single(0));
 
-        let variants = self
-            .for_enum_variant(field.name.storage_name())
-            .map_variants(embedded_enum, &field_expr, &disc_proj, bit);
+        let variants = self.for_enum_variant(field, field_index).map_variants(
+            embedded_enum,
+            &field_expr,
+            &disc_proj,
+            bit,
+        );
 
         mapping::Field::Enum(mapping::FieldEnum {
             disc_column: disc_col_id,
@@ -717,67 +814,68 @@ impl<'a, 'b> MapField<'a, 'b> {
         disc_proj: &stmt::Expr,
         bit: usize,
     ) -> Vec<mapping::EnumVariant> {
-        let mut variants = Vec::new();
+        assert!(
+            self.field_expr_base.is_none(),
+            "map_variants requires identity field_expr_base"
+        );
 
-        for variant in &embedded_enum.variants {
-            let mut vf_fields = Vec::new();
+        embedded_enum
+            .variants
+            .iter()
+            .map(|variant| {
+                let fields = self
+                    .for_variant(disc_proj.clone(), variant.discriminant)
+                    .map_variant(variant, field_expr, disc_proj, bit);
+                mapping::EnumVariant {
+                    discriminant: variant.discriminant,
+                    fields,
+                }
+            })
+            .collect()
+    }
 
-            for (local_idx, vf) in variant.fields.iter().enumerate() {
-                let vf_field = match &vf.ty {
-                    app::FieldTy::Primitive(vf_primitive) => {
-                        let vf_col_id = self.create_column(vf, vf_primitive);
-
-                        let arm = stmt::MatchArm {
-                            pattern: stmt::Value::I64(variant.discriminant),
-                            expr: stmt::Expr::project(
-                                field_expr.clone(),
-                                stmt::Projection::single(local_idx + 1),
-                            ),
-                        };
-
-                        let vf_lowering = self.build.push_lowering(
-                            vf_col_id,
-                            &vf_primitive.ty,
-                            stmt::Expr::match_expr(
-                                disc_proj.clone(),
-                                vec![arm],
-                                stmt::Expr::null(),
-                            ),
-                        );
-
-                        mapping::Field::Primitive(mapping::FieldPrimitive {
-                            column: vf_col_id,
-                            lowering: vf_lowering,
-                            field_mask: stmt::PathFieldSet::from_iter([bit]),
-                            sub_projection: stmt::Projection::single(local_idx + 1),
-                        })
-                    }
-                    app::FieldTy::Embedded(embedded) => {
-                        let embedded_model = self.build.app.model(embedded.target);
-                        let embedded_struct = embedded_model.expect_embedded_struct();
-                        self.with_prefix(vf.name.storage_name())
-                            .map_variant_struct_field(
-                                local_idx,
-                                embedded_struct,
-                                field_expr,
-                                disc_proj,
-                                variant.discriminant,
-                                bit,
-                            )
-                    }
-                    _ => panic!("unexpected field type in enum variant"),
-                };
-
-                vf_fields.push(vf_field);
-            }
-
-            variants.push(mapping::EnumVariant {
-                discriminant: variant.discriminant,
-                fields: vf_fields,
-            });
-        }
-
-        variants
+    fn map_variant(
+        &mut self,
+        variant: &app::EnumVariant,
+        field_expr: &stmt::Expr,
+        disc_proj: &stmt::Expr,
+        bit: usize,
+    ) -> Vec<mapping::Field> {
+        variant
+            .fields
+            .iter()
+            .enumerate()
+            .map(|(local_idx, vf)| match &vf.ty {
+                app::FieldTy::Primitive(vf_primitive) => {
+                    let vf_col_id = self.create_column(vf, vf_primitive);
+                    let vf_lowering = self.build.push_lowering(
+                        vf_col_id,
+                        &vf_primitive.ty,
+                        self.field_expr(vf, local_idx),
+                    );
+                    mapping::Field::Primitive(mapping::FieldPrimitive {
+                        column: vf_col_id,
+                        lowering: vf_lowering,
+                        field_mask: stmt::PathFieldSet::from_iter([bit]),
+                        sub_projection: stmt::Projection::single(local_idx + 1),
+                    })
+                }
+                app::FieldTy::Embedded(embedded) => {
+                    let embedded_model = self.build.app.model(embedded.target);
+                    let embedded_struct = embedded_model.expect_embedded_struct();
+                    self.with_prefix(vf.name.storage_name())
+                        .map_variant_struct_field(
+                            local_idx,
+                            embedded_struct,
+                            field_expr,
+                            disc_proj,
+                            variant.discriminant,
+                            bit,
+                        )
+                }
+                _ => panic!("unexpected field type in enum variant"),
+            })
+            .collect()
     }
 
     fn map_field_struct(
