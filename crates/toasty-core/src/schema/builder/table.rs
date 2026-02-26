@@ -550,9 +550,6 @@ impl<'a, 'b> MapField<'a, 'b> {
         field: &app::Field,
         embedded_enum: &app::EmbeddedEnum,
     ) -> mapping::Field {
-        // For now, nesting enums is not supported
-        assert!(!self.in_enum_variant);
-
         // Create the discriminant column. It inherits nullability from the enum field.
         let column_id = self.create_column(field, &embedded_enum.discriminant);
         let field_expr = self.field_expr(field, field_index);

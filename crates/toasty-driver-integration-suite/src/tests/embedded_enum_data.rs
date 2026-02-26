@@ -417,6 +417,81 @@ pub async fn struct_in_data_variant(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// Roundtrip test for an enum embedded inside a variant field of another enum (enum-in-enum).
+/// The inner enum is unit-only; the outer has one data variant and one unit variant.
+#[driver_test]
+pub async fn enum_in_enum_roundtrip(test: &mut Test) -> Result<()> {
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    enum Channel {
+        #[column(variant = 1)]
+        Email,
+        #[column(variant = 2)]
+        Sms,
+    }
+
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    enum Notification {
+        #[column(variant = 1)]
+        Send { channel: Channel, message: String },
+        #[column(variant = 2)]
+        Suppress,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Alert {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        notification: Notification,
+    }
+
+    let db = test.setup_db(models!(Alert, Notification, Channel)).await;
+
+    let a1 = Alert::create()
+        .notification(Notification::Send {
+            channel: Channel::Email,
+            message: "hello".to_string(),
+        })
+        .exec(&db)
+        .await?;
+
+    let a2 = Alert::create()
+        .notification(Notification::Send {
+            channel: Channel::Sms,
+            message: "world".to_string(),
+        })
+        .exec(&db)
+        .await?;
+
+    let a3 = Alert::create()
+        .notification(Notification::Suppress)
+        .exec(&db)
+        .await?;
+
+    let found_a1 = Alert::get_by_id(&db, &a1.id).await?;
+    assert_eq!(
+        found_a1.notification,
+        Notification::Send {
+            channel: Channel::Email,
+            message: "hello".to_string(),
+        }
+    );
+
+    let found_a2 = Alert::get_by_id(&db, &a2.id).await?;
+    assert_eq!(
+        found_a2.notification,
+        Notification::Send {
+            channel: Channel::Sms,
+            message: "world".to_string(),
+        }
+    );
+
+    let found_a3 = Alert::get_by_id(&db, &a3.id).await?;
+    assert_eq!(found_a3.notification, Notification::Suppress);
+
+    Ok(())
+}
+
 /// Verifies field indices are assigned globally across multiple data variants.
 /// With two variants having two fields each, indices should be 0, 1, 2, 3.
 #[driver_test]
