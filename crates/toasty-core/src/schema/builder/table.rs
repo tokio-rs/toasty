@@ -621,28 +621,22 @@ impl<'a, 'b> MapField<'a, 'b> {
     }
 
     fn map_fields(&mut self, fields: &[app::Field]) -> Vec<mapping::Field> {
-        let mut mapping = Vec::with_capacity(fields.len());
-        for (field_index, field) in fields.iter().enumerate() {
-            mapping.push(self.map_field(field_index, field));
-        }
-        mapping
+        fields
+            .iter()
+            .enumerate()
+            .map(|(index, field)| self.map_field(index, field))
+            .collect()
     }
 
-    fn map_field(&mut self, field_index: usize, field: &app::Field) -> mapping::Field {
+    fn map_field(&mut self, index: usize, field: &app::Field) -> mapping::Field {
         match &field.ty {
-            app::FieldTy::Primitive(primitive) => {
-                self.map_field_primitive(field_index, field, primitive)
-            }
+            app::FieldTy::Primitive(primitive) => self.map_field_primitive(index, field, primitive),
             app::FieldTy::Embedded(embedded) => {
                 let embedded_model = self.build.app.model(embedded.target);
                 if let app::Model::EmbeddedEnum(embedded_enum) = embedded_model {
-                    self.map_field_enum(field_index, field, embedded_enum)
+                    self.map_field_enum(index, field, embedded_enum)
                 } else {
-                    self.map_field_struct(
-                        field_index,
-                        field,
-                        embedded_model.expect_embedded_struct(),
-                    )
+                    self.map_field_struct(index, field, embedded_model.expect_embedded_struct())
                 }
             }
             app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
