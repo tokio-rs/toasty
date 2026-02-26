@@ -1,5 +1,10 @@
 use toasty_core::stmt::{BinaryOp, Expr, ExprArg, ExprReference, Projection, Type};
 
+fn outer_arg() -> Expr {
+    // nesting=1: escapes the innermost Map scope, references an outer argument
+    Expr::arg(ExprArg { position: 0, nesting: 1 })
+}
+
 // Helpers
 fn val() -> Expr {
     Expr::from(42i64)
@@ -240,28 +245,76 @@ fn record_with_default_not_stable() {
 }
 
 // ---------------------------------------------------------------------------
-// Expr::Map — is_stable and is_eval only (is_const is not implemented for Map)
+// Expr::Map — all three properties
 // ---------------------------------------------------------------------------
 
 #[test]
-fn map_const_base_is_stable_is_eval() {
-    // map(list_of_consts, identity arg body)
+fn map_const_base_local_arg_body_is_stable_const_eval() {
+    // arg(nesting=0) inside the map body is a local binding (the mapped element)
     let e = Expr::map(Expr::list([val(), val()]), arg());
     assert!(e.is_stable());
+    assert!(e.is_const());
     assert!(e.is_eval());
 }
 
 #[test]
-fn map_default_base_not_stable_not_eval() {
-    let e = Expr::map(Expr::Default, arg());
-    assert!(!e.is_stable());
+fn map_const_base_outer_arg_body_not_const() {
+    // arg(nesting=1) escapes the map scope — references an outer arg, not const
+    let e = Expr::map(Expr::list([val()]), outer_arg());
+    assert!(e.is_stable());
+    assert!(!e.is_const());
+    assert!(e.is_eval()); // is_eval doesn't distinguish nesting
+}
+
+#[test]
+fn map_const_base_reference_body_not_const_not_eval() {
+    // map body references external data → not const, not eval
+    let e = Expr::map(Expr::list([val()]), reference());
+    assert!(e.is_stable());
+    assert!(!e.is_const());
     assert!(!e.is_eval());
 }
 
 #[test]
-fn map_reference_base_is_stable_not_eval() {
-    // Reference is stable but not eval; so map is stable=true but eval=false
+fn map_default_base_not_stable_not_const_not_eval() {
+    let e = Expr::map(Expr::Default, arg());
+    assert!(!e.is_stable());
+    assert!(!e.is_const());
+    assert!(!e.is_eval());
+}
+
+#[test]
+fn map_reference_base_is_stable_not_const_not_eval() {
     let e = Expr::map(reference(), arg());
     assert!(e.is_stable());
+    assert!(!e.is_const());
     assert!(!e.is_eval());
+}
+
+#[test]
+fn nested_map_inner_local_arg_is_const() {
+    // map(list, map(list, arg(nesting=0)))
+    // arg(nesting=0) is local to the inner map — const
+    let inner = Expr::map(Expr::list([val()]), arg());
+    let outer = Expr::map(Expr::list([val()]), inner);
+    assert!(outer.is_const());
+}
+
+#[test]
+fn nested_map_outer_element_arg_is_const() {
+    // map(list, x => map(list, y => x))  i.e. arg(nesting=1) in the inner body
+    // arg(nesting=1) refers to the outer map's current element — still a local binding
+    let inner = Expr::map(Expr::list([val()]), outer_arg());
+    let outer = Expr::map(Expr::list([val()]), inner);
+    assert!(outer.is_const());
+}
+
+#[test]
+fn nested_map_escape_both_scopes_not_const() {
+    // map(list, map(list, arg(nesting=2)))
+    // arg(nesting=2) escapes both map scopes — references truly external data, not const
+    let escape = Expr::arg(ExprArg { position: 0, nesting: 2 });
+    let inner = Expr::map(Expr::list([val()]), escape);
+    let outer = Expr::map(Expr::list([val()]), inner);
+    assert!(!outer.is_const());
 }
