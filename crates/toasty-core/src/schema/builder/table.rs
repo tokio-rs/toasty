@@ -43,6 +43,10 @@ struct BuildMapping<'a> {
     model_to_table: Vec<stmt::Expr>,
     model_pk_to_table: Vec<stmt::Expr>,
     table_to_model: Vec<stmt::Expr>,
+    /// When true, columns are created nullable regardless of the field's own
+    /// nullability. Set while processing fields that belong to an enum variant,
+    /// since only the active variant's columns are populated.
+    in_enum_variant: bool,
 }
 
 impl BuildSchema<'_> {
@@ -135,6 +139,7 @@ impl BuildTableFromModels<'_> {
             model_to_table: vec![],
             model_pk_to_table: vec![],
             table_to_model: vec![],
+            in_enum_variant: false,
         }
         .build_mapping(root);
 
@@ -443,7 +448,7 @@ impl BuildMapping<'_> {
         let column_id = self.create_column(
             column_name,
             primitive,
-            field.nullable,
+            field.nullable || self.in_enum_variant,
             field.is_auto_increment(),
         );
 
@@ -530,37 +535,60 @@ impl BuildMapping<'_> {
             let mut vf_fields = Vec::new();
 
             for (local_idx, vf) in variant.fields.iter().enumerate() {
-                // Create the variant field column. Variant field columns are always
-                // nullable because only the owning variant populates them.
+                // Variant field columns are always nullable because only the
+                // owning variant populates them.
                 let vf_col_name = format_column_name(vf, None, Some(&disc_col_name));
-                let app::FieldTy::Primitive(vf_primitive) = &vf.ty else {
-                    panic!("variant field must be a primitive type");
+
+                let vf_field = match &vf.ty {
+                    app::FieldTy::Primitive(vf_primitive) => {
+                        let vf_col_id =
+                            self.create_column(vf_col_name, vf_primitive, true, false);
+
+                        let arm = stmt::MatchArm {
+                            pattern: stmt::Value::I64(variant.discriminant),
+                            expr: stmt::Expr::project(
+                                field_expr.clone(),
+                                stmt::Projection::single(local_idx + 1),
+                            ),
+                        };
+
+                        let vf_lowering_expr = self.encode_column(
+                            vf_col_id,
+                            &vf_primitive.ty,
+                            stmt::Expr::match_expr(
+                                disc_proj.clone(),
+                                vec![arm],
+                                stmt::Expr::null(),
+                            ),
+                        );
+                        let vf_lowering = self.model_to_table.len();
+                        self.lowering_columns.push(vf_col_id);
+                        self.model_to_table.push(vf_lowering_expr);
+
+                        mapping::Field::Primitive(mapping::FieldPrimitive {
+                            column: vf_col_id,
+                            lowering: vf_lowering,
+                            field_mask: stmt::PathFieldSet::from_iter([bit]),
+                            sub_projection: stmt::Projection::single(local_idx + 1),
+                        })
+                    }
+                    app::FieldTy::Embedded(embedded) => {
+                        let embedded_model = self.app.model(embedded.target);
+                        let embedded_struct = embedded_model.expect_embedded_struct();
+                        self.map_variant_struct_field(
+                            local_idx,
+                            &vf_col_name,
+                            embedded_struct,
+                            &field_expr,
+                            &disc_proj,
+                            variant.discriminant,
+                            bit,
+                        )
+                    }
+                    _ => panic!("unexpected field type in enum variant"),
                 };
-                let vf_col_id = self.create_column(vf_col_name, vf_primitive, true, false);
 
-                let arm = stmt::MatchArm {
-                    pattern: stmt::Value::I64(variant.discriminant),
-                    expr: stmt::Expr::project(
-                        field_expr.clone(),
-                        stmt::Projection::single(local_idx + 1),
-                    ),
-                };
-
-                let vf_lowering_expr = self.encode_column(
-                    vf_col_id,
-                    &vf_primitive.ty,
-                    stmt::Expr::match_expr(disc_proj.clone(), vec![arm], stmt::Expr::null()),
-                );
-                let vf_lowering = self.model_to_table.len();
-                self.lowering_columns.push(vf_col_id);
-                self.model_to_table.push(vf_lowering_expr);
-
-                vf_fields.push(mapping::Field::Primitive(mapping::FieldPrimitive {
-                    column: vf_col_id,
-                    lowering: vf_lowering,
-                    field_mask: stmt::PathFieldSet::from_iter([bit]),
-                    sub_projection: stmt::Projection::single(local_idx + 1),
-                }));
+                vf_fields.push(vf_field);
             }
 
             variants.push(mapping::EnumVariant {
@@ -615,6 +643,75 @@ impl BuildMapping<'_> {
             columns,
             field_mask,
             sub_projection: nested_projection,
+        })
+    }
+
+    /// Expands a struct-typed field inside a data-carrying enum variant into
+    /// its flattened column representation.
+    ///
+    /// Each primitive sub-field of the struct becomes a standalone nullable
+    /// column named `{vf_col_name}_{sub_field_name}`. The model_to_table
+    /// lowering for each sub-field is wrapped in a discriminant match arm so
+    /// only the owning variant populates the column.
+    fn map_variant_struct_field(
+        &mut self,
+        local_idx: usize,
+        vf_col_name: &str,
+        embedded_struct: &app::EmbeddedStruct,
+        field_expr: &stmt::Expr,
+        disc_proj: &stmt::Expr,
+        discriminant: i64,
+        bit: usize,
+    ) -> mapping::Field {
+        let mut sub_fields = Vec::new();
+
+        for (sub_idx, sub_field) in embedded_struct.fields.iter().enumerate() {
+            let app::FieldTy::Primitive(sub_primitive) = &sub_field.ty else {
+                todo!("deeply nested structs in enum variants not yet supported");
+            };
+
+            let sub_col_name = format_column_name(sub_field, None, Some(vf_col_name));
+            let sub_col_id = self.create_column(sub_col_name, sub_primitive, true, false);
+
+            // The enum value is Record([I64(disc), vf_0, vf_1, ...]).
+            // The struct field at local_idx is at position local_idx + 1.
+            // The sub-field at sub_idx is at position sub_idx within the struct record.
+            let mut arm_proj = stmt::Projection::single(local_idx + 1);
+            arm_proj.push(sub_idx);
+
+            let arm = stmt::MatchArm {
+                pattern: stmt::Value::I64(discriminant),
+                expr: stmt::Expr::project(field_expr.clone(), arm_proj.clone()),
+            };
+
+            let sub_lowering_expr = self.encode_column(
+                sub_col_id,
+                &sub_primitive.ty,
+                stmt::Expr::match_expr(disc_proj.clone(), vec![arm], stmt::Expr::null()),
+            );
+            let sub_lowering = self.model_to_table.len();
+            self.lowering_columns.push(sub_col_id);
+            self.model_to_table.push(sub_lowering_expr);
+
+            sub_fields.push(mapping::Field::Primitive(mapping::FieldPrimitive {
+                column: sub_col_id,
+                lowering: sub_lowering,
+                field_mask: stmt::PathFieldSet::from_iter([bit]),
+                sub_projection: arm_proj,
+            }));
+        }
+
+        let columns: indexmap::IndexMap<ColumnId, usize> =
+            sub_fields.iter().flat_map(|f| f.columns()).collect();
+        let field_mask = sub_fields
+            .iter()
+            .fold(stmt::PathFieldSet::new(), |acc, f| acc | f.field_mask());
+
+        mapping::Field::Struct(mapping::FieldStruct {
+            fields: sub_fields,
+            columns,
+            field_mask,
+            sub_projection: stmt::Projection::single(local_idx + 1),
         })
     }
 
