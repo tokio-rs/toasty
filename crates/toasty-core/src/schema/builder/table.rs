@@ -60,6 +60,14 @@ struct MapField<'a, 'b> {
     /// State shared across the entire mapping process.
     build: &'a mut BuildMapping<'b>,
 
+    /// Accumulated embed-prefix components (without schema_prefix), pushed on
+    /// entry to each nested field and popped on exit.
+    ///
+    /// Final column names join these with `_`, append the field name, then
+    /// prepend the schema prefix (if any) with `__`. Keeping components
+    /// separate ensures schema_prefix is applied exactly once.
+    prefix: Vec<String>,
+
     /// When true, columns are created nullable regardless of the field's own
     /// nullability. Set while processing fields that belong to an enum variant,
     /// since only the active variant's columns are populated.
@@ -224,7 +232,7 @@ impl BuildTableFromModels<'_> {
 impl BuildMapping<'_> {
     fn build_mapping(mut self, model: &ModelRoot) {
         let fields = MapField::new(&mut self)
-            .map_fields(&model.fields, None, None, stmt::Projection::identity());
+            .map_fields(&model.fields, None, stmt::Projection::identity());
 
         assert!(!self.model_to_table.is_empty());
         assert_eq!(self.model_to_table.len(), self.lowering_columns.len());
@@ -478,14 +486,33 @@ impl<'a, 'b> MapField<'a, 'b> {
     fn new(build: &'a mut BuildMapping<'b>) -> Self {
         MapField {
             build,
+            prefix: vec![],
             in_enum_variant: false,
+        }
+    }
+
+    /// Builds the final database column name for `field` at the current nesting level.
+    ///
+    /// Joins `self.prefix` components with `_`, appends the field name, then
+    /// prepends `schema_prefix` (if any) with `__`. Because `schema_prefix` is
+    /// applied here — never stored in `self.prefix` — it is always applied
+    /// exactly once regardless of nesting depth.
+    fn column_name(&self, field: &app::Field) -> String {
+        let field_name = field.name.storage_name();
+        let embed = if self.prefix.is_empty() {
+            field_name.to_owned()
+        } else {
+            format!("{}_{field_name}", self.prefix.join("_"))
+        };
+        match self.build.schema_prefix.as_deref() {
+            None => embed,
+            Some(sp) => format!("{sp}__{embed}"),
         }
     }
 
     fn map_fields(
         &mut self,
         fields: &[app::Field],
-        prefix: Option<&str>,
         source_field_id: Option<FieldId>,
         base_projection: stmt::Projection,
     ) -> Vec<mapping::Field> {
@@ -494,7 +521,6 @@ impl<'a, 'b> MapField<'a, 'b> {
             mapping.push(self.map_field(
                 field_index,
                 field,
-                prefix,
                 source_field_id,
                 &base_projection,
             ));
@@ -506,7 +532,6 @@ impl<'a, 'b> MapField<'a, 'b> {
         &mut self,
         field_index: usize,
         field: &app::Field,
-        prefix: Option<&str>,
         source_field_id: Option<FieldId>,
         base_projection: &stmt::Projection,
     ) -> mapping::Field {
@@ -515,7 +540,6 @@ impl<'a, 'b> MapField<'a, 'b> {
                 field_index,
                 field,
                 primitive,
-                prefix,
                 source_field_id,
                 base_projection,
             ),
@@ -526,7 +550,6 @@ impl<'a, 'b> MapField<'a, 'b> {
                         field_index,
                         field,
                         embedded_enum,
-                        prefix,
                         source_field_id,
                         base_projection,
                     )
@@ -535,7 +558,6 @@ impl<'a, 'b> MapField<'a, 'b> {
                         field_index,
                         field,
                         embedded_model.expect_embedded_struct(),
-                        prefix,
                         source_field_id,
                         base_projection,
                     )
@@ -556,12 +578,10 @@ impl<'a, 'b> MapField<'a, 'b> {
         field_index: usize,
         field: &app::Field,
         primitive: &app::FieldPrimitive,
-        prefix: Option<&str>,
         source_field_id: Option<FieldId>,
         base_projection: &stmt::Projection,
     ) -> mapping::Field {
-        let column_name =
-            format_column_name(field, self.build.schema_prefix.as_deref(), prefix);
+        let column_name = self.column_name(field);
         let column_id = self.build.create_column(
             column_name,
             primitive,
@@ -601,20 +621,16 @@ impl<'a, 'b> MapField<'a, 'b> {
         field_index: usize,
         field: &app::Field,
         embedded_enum: &app::EmbeddedEnum,
-        prefix: Option<&str>,
         source_field_id: Option<FieldId>,
         base_projection: &stmt::Projection,
     ) -> mapping::Field {
-        let disc_col_name =
-            format_column_name(field, self.build.schema_prefix.as_deref(), prefix);
-
         // Create the discriminant column. It inherits nullability from the enum field.
         let disc_primitive = app::FieldPrimitive {
             ty: stmt::Type::I64,
             storage_ty: None,
         };
         let disc_col_id = self.build.create_column(
-            disc_col_name.clone(),
+            self.column_name(field),
             &disc_primitive,
             field.nullable,
             false,
@@ -649,18 +665,21 @@ impl<'a, 'b> MapField<'a, 'b> {
         let disc_proj = stmt::Expr::project(field_expr.clone(), stmt::Projection::single(0));
         let mut variants = Vec::new();
 
+        // Push the enum field name so variant field columns are named
+        // `{enum_field}_{vf_name}` (plus any outer prefix/schema_prefix).
+        self.prefix.push(field.name.storage_name().to_owned());
+        let saved_in_enum_variant = self.in_enum_variant;
+        self.in_enum_variant = true;
+
         for variant in &embedded_enum.variants {
             let mut vf_fields = Vec::new();
 
             for (local_idx, vf) in variant.fields.iter().enumerate() {
-                // Variant field columns are always nullable because only the
-                // owning variant populates them.
-                let vf_col_name = format_column_name(vf, None, Some(&disc_col_name));
-
                 let vf_field = match &vf.ty {
                     app::FieldTy::Primitive(vf_primitive) => {
+                        // Variant field columns are always nullable.
                         let vf_col_id =
-                            self.build.create_column(vf_col_name, vf_primitive, true, false);
+                            self.build.create_column(self.column_name(vf), vf_primitive, true, false);
 
                         let arm = stmt::MatchArm {
                             pattern: stmt::Value::I64(variant.discriminant),
@@ -693,15 +712,18 @@ impl<'a, 'b> MapField<'a, 'b> {
                     app::FieldTy::Embedded(embedded) => {
                         let embedded_model = self.build.app.model(embedded.target);
                         let embedded_struct = embedded_model.expect_embedded_struct();
-                        self.map_variant_struct_field(
+                        // Push vf name so sub-fields are named `{enum_field}_{vf}_{sub_field}`.
+                        self.prefix.push(vf.name.storage_name().to_owned());
+                        let result = self.map_variant_struct_field(
                             local_idx,
-                            &vf_col_name,
                             embedded_struct,
                             &field_expr,
                             &disc_proj,
                             variant.discriminant,
                             bit,
-                        )
+                        );
+                        self.prefix.pop();
+                        result
                     }
                     _ => panic!("unexpected field type in enum variant"),
                 };
@@ -714,6 +736,9 @@ impl<'a, 'b> MapField<'a, 'b> {
                 fields: vf_fields,
             });
         }
+
+        self.in_enum_variant = saved_in_enum_variant;
+        self.prefix.pop();
 
         mapping::Field::Enum(mapping::FieldEnum {
             disc_column: disc_col_id,
@@ -729,11 +754,9 @@ impl<'a, 'b> MapField<'a, 'b> {
         field_index: usize,
         field: &app::Field,
         embedded_struct: &app::EmbeddedStruct,
-        prefix: Option<&str>,
         source_field_id: Option<FieldId>,
         base_projection: &stmt::Projection,
     ) -> mapping::Field {
-        let nested_prefix = format_column_name(field, None, prefix);
         let nested_source = source_field_id.or(Some(field.id));
         let nested_projection = if source_field_id.is_none() {
             stmt::Projection::identity()
@@ -743,12 +766,13 @@ impl<'a, 'b> MapField<'a, 'b> {
             proj
         };
 
+        self.prefix.push(field.name.storage_name().to_owned());
         let nested_fields = self.map_fields(
             &embedded_struct.fields,
-            Some(&nested_prefix),
             nested_source,
             nested_projection.clone(),
         );
+        self.prefix.pop();
 
         let columns: indexmap::IndexMap<ColumnId, usize> =
             nested_fields.iter().flat_map(|f| f.columns()).collect();
@@ -768,13 +792,12 @@ impl<'a, 'b> MapField<'a, 'b> {
     /// its flattened column representation.
     ///
     /// Each primitive sub-field of the struct becomes a standalone nullable
-    /// column named `{vf_col_name}_{sub_field_name}`. The model_to_table
-    /// lowering for each sub-field is wrapped in a discriminant match arm so
-    /// only the owning variant populates the column.
+    /// column; the caller is responsible for pushing the struct field's name
+    /// onto `self.prefix` before calling so that `column_name` produces the
+    /// correct `{enum_field}_{vf_name}_{sub_field}` names.
     fn map_variant_struct_field(
         &mut self,
         local_idx: usize,
-        vf_col_name: &str,
         embedded_struct: &app::EmbeddedStruct,
         field_expr: &stmt::Expr,
         disc_proj: &stmt::Expr,
@@ -788,8 +811,7 @@ impl<'a, 'b> MapField<'a, 'b> {
                 todo!("deeply nested structs in enum variants not yet supported");
             };
 
-            let sub_col_name = format_column_name(sub_field, None, Some(vf_col_name));
-            let sub_col_id = self.build.create_column(sub_col_name, sub_primitive, true, false);
+            let sub_col_id = self.build.create_column(self.column_name(sub_field), sub_primitive, true, false);
 
             // The enum value is Record([I64(disc), vf_0, vf_1, ...]).
             // The struct field at local_idx is at position local_idx + 1.
@@ -834,18 +856,6 @@ impl<'a, 'b> MapField<'a, 'b> {
     }
 }
 
-/// Formats a database column name from its components.
-///
-/// - `schema_prefix`: model name prefix used when multiple models share one table
-///   (separated from the rest with `__`)
-/// - `embed_prefix`: accumulated field path for embedded structs
-///   (separated with `_`)
-///
-/// Examples:
-/// - `format_column_name(field, None, None)` → `"street"`
-/// - `format_column_name(field, None, Some("address"))` → `"address_street"`
-/// - `format_column_name(field, Some("user"), None)` → `"user__street"`
-/// - `format_column_name(field, Some("user"), Some("address"))` → `"user__address_street"`
 fn field_expr(
     field: &app::Field,
     field_index: usize,
@@ -862,16 +872,3 @@ fn field_expr(
     }
 }
 
-fn format_column_name(
-    field: &app::Field,
-    schema_prefix: Option<&str>,
-    embed_prefix: Option<&str>,
-) -> String {
-    let field_name = field.name.storage_name();
-    match (schema_prefix, embed_prefix) {
-        (None, None) => field_name.to_owned(),
-        (Some(sp), None) => format!("{sp}__{field_name}"),
-        (None, Some(ep)) => format!("{ep}_{field_name}"),
-        (Some(sp), Some(ep)) => format!("{sp}__{ep}_{field_name}"),
-    }
-}
