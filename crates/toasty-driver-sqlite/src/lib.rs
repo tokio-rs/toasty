@@ -10,7 +10,7 @@ use std::{
 use toasty_core::{
     async_trait,
     driver::{
-        operation::{Operation, Transaction},
+        operation::{IsolationLevel, Operation, Transaction},
         Capability, Driver, Response,
     },
     schema::db::{Migration, Schema, SchemaDiff, Table},
@@ -151,21 +151,18 @@ impl toasty_core::driver::Connection for Connection {
                 (op.stmt.into(), op.ret)
             }
             // Operation::Insert(op) => op.stmt.into(),
-            Operation::Transaction(Transaction::Start) => {
+            Operation::Transaction(mut op) => {
+                if let Transaction::Start { isolation, .. } = &mut op {
+                    if !matches!(isolation, Some(IsolationLevel::Serializable) | None) {
+                        return Err(toasty_core::Error::unsupported_feature(
+                            "SQLite only supports Serializable isolation",
+                        ));
+                    }
+                    *isolation = None;
+                }
+                let sql = sql::Serializer::sqlite(schema).serialize_transaction(&op);
                 self.connection
-                    .execute("BEGIN", [])
-                    .map_err(toasty_core::Error::driver_operation_failed)?;
-                return Ok(Response::count(0));
-            }
-            Operation::Transaction(Transaction::Commit) => {
-                self.connection
-                    .execute("COMMIT", [])
-                    .map_err(toasty_core::Error::driver_operation_failed)?;
-                return Ok(Response::count(0));
-            }
-            Operation::Transaction(Transaction::Rollback) => {
-                self.connection
-                    .execute("ROLLBACK", [])
+                    .execute(&sql, [])
                     .map_err(toasty_core::Error::driver_operation_failed)?;
                 return Ok(Response::count(0));
             }

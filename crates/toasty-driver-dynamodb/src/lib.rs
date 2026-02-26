@@ -10,7 +10,7 @@ use toasty_core::{
     driver::{operation::Operation, Capability, Driver, Response},
     schema::db::{Column, ColumnId, Migration, Schema, SchemaDiff, Table},
     stmt::{self, ExprContext},
-    Result,
+    Error, Result,
 };
 
 use aws_sdk_dynamodb::{
@@ -200,6 +200,9 @@ impl Connection {
                     _ => todo!("op={:#?}", op),
                 }
             }
+            Operation::Transaction(_) => Err(Error::unsupported_feature(
+                "transactions are not supported by the DynamoDB driver",
+            )),
             _ => todo!("op={op:#?}"),
         }
     }

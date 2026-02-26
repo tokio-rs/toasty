@@ -12,4 +12,7 @@ pub(crate) struct ExecPlan {
     ///
     /// When `None`, nothing is returned
     pub(crate) returning: Option<VarId>,
+
+    /// When true, the executor wraps the entire plan in a transaction.
+    pub(crate) needs_transaction: bool,
 }

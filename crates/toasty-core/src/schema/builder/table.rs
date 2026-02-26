@@ -7,29 +7,8 @@ use crate::{
         mapping::{self, Mapping, TableToModel},
         Name,
     },
-    stmt::{self, ExprArg, Input, Projection},
+    stmt::{self, Projection},
 };
-
-/// An `Input` that replaces `Arg(0)` with a single concrete expression.
-///
-/// Used by `MapField::field_expr` to substitute the raw field expression into
-/// `field_expr_base`, which may contain `Expr::arg(0)` as a placeholder.
-struct SingleArgInput(stmt::Expr);
-
-impl Input for SingleArgInput {
-    fn resolve_arg(&mut self, expr_arg: &ExprArg, projection: &Projection) -> Option<stmt::Expr> {
-        if expr_arg.position == 0 {
-            let expr = self.0.clone();
-            Some(if projection.is_identity() {
-                expr
-            } else {
-                stmt::Expr::project(expr, projection.clone())
-            })
-        } else {
-            None
-        }
-    }
-}
 
 struct BuildTableFromModels<'a> {
     /// Application schema (for looking up model definitions)
@@ -765,7 +744,7 @@ impl<'a, 'b> MapField<'a, 'b> {
         };
 
         let mut result = self.field_expr_base.clone();
-        result.substitute(SingleArgInput(raw));
+        result.substitute(&[raw]);
         result
     }
 
@@ -814,9 +793,7 @@ impl<'a, 'b> MapField<'a, 'b> {
         let mut child = self.with_prefix(field.name.storage_name());
         child.in_enum_variant = true;
         child.field_base = Some(field_base);
-        child
-            .field_expr_base
-            .substitute(SingleArgInput(field_expr_base));
+        child.field_expr_base.substitute(&[field_expr_base]);
         child
     }
 

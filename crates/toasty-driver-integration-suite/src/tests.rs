@@ -29,4 +29,5 @@ pub mod one_model_sort_limit;
 pub mod preload;
 pub mod reset_db;
 pub mod sync_send;
+pub mod tx_atomic_stmt;
 pub mod tys;

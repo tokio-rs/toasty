@@ -29,7 +29,10 @@ mod value;
 
 use crate::stmt::Statement;
 
-use toasty_core::schema::db::{self, Index, Table};
+use toasty_core::{
+    driver::operation::{IsolationLevel, Transaction},
+    schema::db::{self, Index, Table},
+};
 
 /// Context information when serializing VALUES in an INSERT statement
 #[derive(Debug, Clone)]
@@ -91,6 +94,70 @@ impl<'a> Serializer<'a> {
 
         ret.push(';');
         ret
+    }
+
+    /// Serialize a transaction control operation to a SQL string.
+    ///
+    /// The generated SQL is flavor-specific (e.g., MySQL uses `START TRANSACTION`
+    /// while other databases use `BEGIN`). Savepoints are named `sp_{id}`.
+    pub fn serialize_transaction(&self, op: &Transaction) -> String {
+        match op {
+            Transaction::Start {
+                isolation,
+                read_only,
+            } => self.serialize_transaction_start(*isolation, *read_only),
+            Transaction::Commit => "COMMIT".to_string(),
+            Transaction::Rollback => "ROLLBACK".to_string(),
+            Transaction::Savepoint(id) => format!("SAVEPOINT sp_{id}"),
+            Transaction::ReleaseSavepoint(id) => format!("RELEASE SAVEPOINT sp_{id}"),
+            Transaction::RollbackToSavepoint(id) => format!("ROLLBACK TO SAVEPOINT sp_{id}"),
+        }
+    }
+
+    fn serialize_transaction_start(
+        &self,
+        isolation: Option<IsolationLevel>,
+        read_only: bool,
+    ) -> String {
+        fn isolation_level_str(level: IsolationLevel) -> &'static str {
+            match level {
+                IsolationLevel::ReadUncommitted => "READ UNCOMMITTED",
+                IsolationLevel::ReadCommitted => "READ COMMITTED",
+                IsolationLevel::RepeatableRead => "REPEATABLE READ",
+                IsolationLevel::Serializable => "SERIALIZABLE",
+            }
+        }
+
+        match self.flavor {
+            Flavor::Mysql => {
+                let mut sql = String::new();
+                if let Some(level) = isolation {
+                    sql.push_str("SET TRANSACTION ISOLATION LEVEL ");
+                    sql.push_str(isolation_level_str(level));
+                    sql.push_str("; ");
+                }
+                sql.push_str("START TRANSACTION");
+                if read_only {
+                    sql.push_str(" READ ONLY");
+                }
+                sql
+            }
+            Flavor::Postgresql => {
+                let mut sql = String::from("BEGIN");
+                if let Some(level) = isolation {
+                    sql.push_str(" ISOLATION LEVEL ");
+                    sql.push_str(isolation_level_str(level));
+                }
+                if read_only {
+                    sql.push_str(" READ ONLY");
+                }
+                sql
+            }
+            Flavor::Sqlite => {
+                // SQLite doesn't support per-transaction isolation levels or read-only mode
+                "BEGIN".to_string()
+            }
+        }
     }
 
     fn table(&self, id: impl Into<db::TableId>) -> &'a Table {
