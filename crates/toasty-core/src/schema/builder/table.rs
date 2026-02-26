@@ -653,7 +653,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             stmt::Projection::identity()
         } else {
             let mut proj = self.base_projection.clone();
-            proj.push(field_index);
+            proj.push(field_index + self.field_index_offset);
             proj
         };
         let mut child = self.with_prefix(field.name.storage_name());
@@ -671,7 +671,7 @@ impl<'a, 'b> MapField<'a, 'b> {
     fn sub_projection(&self, field_index: usize) -> stmt::Projection {
         if self.source_field_id.is_some() {
             let mut proj = self.base_projection.clone();
-            proj.push(field_index);
+            proj.push(field_index + self.field_index_offset);
             proj
         } else {
             stmt::Projection::identity()
@@ -787,7 +787,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             .map(|variant| {
                 let fields = self
                     .for_variant(field, field_index, disc_proj.clone(), variant.discriminant)
-                    .map_variant(variant, &field_expr, &disc_proj);
+                    .map_variant(variant);
                 mapping::EnumVariant {
                     discriminant: variant.discriminant,
                     fields,
@@ -804,12 +804,7 @@ impl<'a, 'b> MapField<'a, 'b> {
         })
     }
 
-    fn map_variant(
-        &mut self,
-        variant: &app::EnumVariant,
-        field_expr: &stmt::Expr,
-        disc_proj: &stmt::Expr,
-    ) -> Vec<mapping::Field> {
+    fn map_variant(&mut self, variant: &app::EnumVariant) -> Vec<mapping::Field> {
         variant
             .fields
             .iter()
@@ -833,13 +828,7 @@ impl<'a, 'b> MapField<'a, 'b> {
                 app::FieldTy::Embedded(embedded) => {
                     let embedded_model = self.build.app.model(embedded.target);
                     let embedded_struct = embedded_model.expect_embedded_struct();
-                    self.with_prefix(vf.name.storage_name()).map_variant_struct_field(
-                        local_idx,
-                        embedded_struct,
-                        field_expr,
-                        disc_proj,
-                        variant.discriminant,
-                    )
+                    self.map_field_struct(local_idx, vf, embedded_struct)
                 }
                 _ => panic!("unexpected field type in enum variant"),
             })
@@ -872,67 +861,4 @@ impl<'a, 'b> MapField<'a, 'b> {
         })
     }
 
-    /// Expands a struct-typed field inside a data-carrying enum variant into
-    /// its flattened column representation.
-    ///
-    /// Each primitive sub-field of the struct becomes a standalone nullable
-    /// column; the caller is responsible for pushing the struct field's name
-    /// onto `self.prefix` before calling so that `column_name` produces the
-    /// correct `{enum_field}_{vf_name}_{sub_field}` names.
-    fn map_variant_struct_field(
-        &mut self,
-        local_idx: usize,
-        embedded_struct: &app::EmbeddedStruct,
-        field_expr: &stmt::Expr,
-        disc_proj: &stmt::Expr,
-        discriminant: i64,
-    ) -> mapping::Field {
-        let mut sub_fields = Vec::new();
-
-        for (sub_idx, sub_field) in embedded_struct.fields.iter().enumerate() {
-            let app::FieldTy::Primitive(sub_primitive) = &sub_field.ty else {
-                todo!("deeply nested structs in enum variants not yet supported");
-            };
-
-            let sub_col_id = self.create_column(sub_field, sub_primitive);
-
-            // The enum value is Record([I64(disc), vf_0, vf_1, ...]).
-            // The struct field at local_idx is at position local_idx + 1.
-            // The sub-field at sub_idx is at position sub_idx within the struct record.
-            let mut arm_proj = stmt::Projection::single(local_idx + 1);
-            arm_proj.push(sub_idx);
-
-            let arm = stmt::MatchArm {
-                pattern: stmt::Value::I64(discriminant),
-                expr: stmt::Expr::project(field_expr.clone(), arm_proj.clone()),
-            };
-
-            let sub_lowering = self.build.push_lowering(
-                sub_col_id,
-                &sub_primitive.ty,
-                stmt::Expr::match_expr(disc_proj.clone(), vec![arm], stmt::Expr::null()),
-            );
-
-            let bit = self.build.next_bit();
-            sub_fields.push(mapping::Field::Primitive(mapping::FieldPrimitive {
-                column: sub_col_id,
-                lowering: sub_lowering,
-                field_mask: stmt::PathFieldSet::from_iter([bit]),
-                sub_projection: arm_proj,
-            }));
-        }
-
-        let columns: indexmap::IndexMap<ColumnId, usize> =
-            sub_fields.iter().flat_map(|f| f.columns()).collect();
-        let field_mask = sub_fields
-            .iter()
-            .fold(stmt::PathFieldSet::new(), |acc, f| acc | f.field_mask());
-
-        mapping::Field::Struct(mapping::FieldStruct {
-            fields: sub_fields,
-            columns,
-            field_mask,
-            sub_projection: stmt::Projection::single(local_idx + 1),
-        })
-    }
 }
