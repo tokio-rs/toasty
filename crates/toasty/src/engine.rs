@@ -65,6 +65,7 @@ impl Engine {
         &mut self,
         stmt: Statement,
         conn: ConnHandle<'_>,
+        savepoint_depth: Option<usize>,
     ) -> Result<ValueStream> {
         if cfg!(debug_assertions) {
             self.verify(&stmt);
@@ -85,7 +86,7 @@ impl Engine {
 
         // The plan is called once (single entry record stream) with no arguments
         // (empty record).
-        self.exec_plan(plan, conn).await
+        self.exec_plan(plan, conn, savepoint_depth).await
     }
 
     /// Returns a new [`ExprContext`](stmt::ExprContext) for this engine's schema.

@@ -4,7 +4,10 @@ mod connection;
 mod pool;
 mod transaction;
 
-use std::sync::{atomic::AtomicUsize, Arc};
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc,
+};
 
 pub use builder::Builder;
 pub use connect::*;
@@ -25,10 +28,11 @@ use toasty_core::{
 };
 
 pub(crate) enum EngineMsg {
-    Statement(
-        Box<toasty_core::stmt::Statement>,
-        oneshot::Sender<Result<ValueStream>>,
-    ),
+    Statement {
+        stmt: Box<toasty_core::stmt::Statement>,
+        tx: oneshot::Sender<Result<ValueStream>>,
+        savepoint_depth: Option<usize>,
+    },
     Transaction(Transaction, oneshot::Sender<Result<()>>),
 }
 
@@ -71,7 +75,7 @@ impl Db {
                     Ok(c) => c,
                     Err(e) => {
                         match msg {
-                            EngineMsg::Statement(_, tx) => {
+                            EngineMsg::Statement { tx, .. } => {
                                 let _ = tx.send(Err(e));
                             }
                             EngineMsg::Transaction(_, tx) => {
@@ -82,7 +86,11 @@ impl Db {
                     }
                 };
                 match msg {
-                    EngineMsg::Statement(stmt, tx) => match engine.exec(*stmt, conn).await {
+                    EngineMsg::Statement {
+                        stmt,
+                        tx,
+                        savepoint_depth,
+                    } => match engine.exec(*stmt, conn, savepoint_depth).await {
                         Ok(mut value_stream) => {
                             let (row_tx, mut row_rx) =
                                 tokio::sync::mpsc::unbounded_channel::<crate::Result<Value>>();
@@ -159,10 +167,18 @@ impl Db {
     /// Execute a statement
     pub async fn exec<M: Model>(&self, statement: Statement<M>) -> Result<ValueStream> {
         let (tx, rx) = oneshot::channel();
+        let savepoint_depth = self
+            .savepoint_depth
+            .as_ref()
+            .map(|s| s.load(Ordering::Relaxed));
 
         // Send the statement to the execution engine
         self.in_tx
-            .send(EngineMsg::Statement(Box::new(statement.untyped), tx))
+            .send(EngineMsg::Statement {
+                stmt: Box::new(statement.untyped),
+                tx,
+                savepoint_depth,
+            })
             .unwrap();
 
         // Return the typed result

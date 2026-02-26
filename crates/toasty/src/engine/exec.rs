@@ -72,6 +72,7 @@ impl Engine {
         &mut self,
         plan: ExecPlan,
         conn: ConnHandle<'_>,
+        savepoint_depth: Option<usize>,
     ) -> Result<ValueStream> {
         let in_transaction = matches!(conn, ConnHandle::Transaction(_));
 
@@ -79,7 +80,7 @@ impl Engine {
             engine: self,
             connection: conn,
             vars: plan.vars,
-            next_savepoint_id: 0,
+            next_savepoint_id: savepoint_depth.unwrap_or(0),
             in_transaction,
         };
 
