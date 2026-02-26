@@ -61,6 +61,7 @@ pub struct Capability {
     pub index_or_predicate: bool,
 
     /// Whether to test connection pool behavior.
+    /// TODO: We only need this for the `connection_per_clone.rs` test, come up with a better way.
     pub test_connection_pool: bool,
 }
 
