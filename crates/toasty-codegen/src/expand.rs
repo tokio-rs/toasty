@@ -179,6 +179,10 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
                     #toasty::schema::app::EmbeddedEnum {
                         id,
                         name: #name,
+                        discriminant: #toasty::schema::app::FieldPrimitive {
+                            ty: #toasty::Type::I64,
+                            storage_ty: ::std::option::Option::None,
+                        },
                         variants: vec![ #( #variant_tokens ),* ],
                     }
                 )

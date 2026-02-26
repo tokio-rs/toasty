@@ -1,4 +1,4 @@
-use super::{Field, FieldId, Index, Name, PrimaryKey};
+use super::{Field, FieldId, FieldPrimitive, Index, Name, PrimaryKey};
 use crate::{driver, stmt, Result};
 use std::fmt;
 
@@ -109,6 +109,9 @@ pub struct EmbeddedEnum {
 
     /// Name of the model
     pub name: Name,
+
+    /// The primitive type used for the discriminant column
+    pub discriminant: FieldPrimitive,
 
     /// The enum's variants
     pub variants: Vec<EnumVariant>,

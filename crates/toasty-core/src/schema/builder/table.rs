@@ -270,7 +270,6 @@ impl BuildMapping<'_> {
         bit
     }
 
-
     fn build_table_to_model(&mut self, model: &ModelRoot, mapping: &[mapping::Field]) {
         for (index, field) in model.fields.iter().enumerate() {
             let expr = self.build_table_to_model_field(field, &mapping[index]);
@@ -654,13 +653,9 @@ impl<'a, 'b> MapField<'a, 'b> {
         primitive: &app::FieldPrimitive,
     ) -> mapping::Field {
         let column_id = self.create_column(field, primitive);
-
         let expr = self.field_expr(field, field_index);
-
         let lowering_index = self.build.push_lowering(column_id, &primitive.ty, expr);
-
         let bit = self.build.next_bit();
-
         let sub_projection = self.sub_projection(field_index);
 
         mapping::Field::Primitive(mapping::FieldPrimitive {
@@ -680,11 +675,7 @@ impl<'a, 'b> MapField<'a, 'b> {
         embedded_enum: &app::EmbeddedEnum,
     ) -> mapping::Field {
         // Create the discriminant column. It inherits nullability from the enum field.
-        let disc_primitive = app::FieldPrimitive {
-            ty: stmt::Type::I64,
-            storage_ty: None,
-        };
-        let disc_col_id = self.create_column(field, &disc_primitive);
+        let disc_col_id = self.create_column(field, &embedded_enum.discriminant);
 
         let field_expr = self.field_expr(field, field_index);
 
@@ -697,9 +688,9 @@ impl<'a, 'b> MapField<'a, 'b> {
             field_expr.clone()
         };
 
-        let lowering_index = self
-            .build
-            .push_lowering(disc_col_id, &stmt::Type::I64, disc_expr);
+        let lowering_index =
+            self.build
+                .push_lowering(disc_col_id, &embedded_enum.discriminant.ty, disc_expr);
 
         let bit = self.build.next_bit();
 
