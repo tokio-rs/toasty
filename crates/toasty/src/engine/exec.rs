@@ -79,7 +79,7 @@ impl Engine {
 
         if plan.needs_transaction {
             exec.connection
-                .exec(&self.schema.db, Transaction::Start.into())
+                .exec(&self.schema.db, Transaction::start().into())
                 .await?;
             exec.in_transaction = true;
         }

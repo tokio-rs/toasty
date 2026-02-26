@@ -41,7 +41,13 @@ pub async fn multi_op_create_wraps_in_transaction(t: &mut Test) -> Result<()> {
         .exec(&db)
         .await?;
 
-    assert_struct!(t.log().pop_op(), Operation::Transaction(Transaction::Start));
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Start {
+            isolation: None,
+            read_only: false
+        })
+    );
     assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT user
     assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT todo
     assert_struct!(
@@ -72,7 +78,7 @@ pub async fn single_op_skips_transaction(t: &mut Test) -> Result<()> {
     t.log().clear();
     User::create().exec(&db).await?;
 
-    // Only the INSERT — no Transaction::Start bookending it
+    // Only the INSERT — no Transaction::Start { isolation: None, read_only: false } bookending it
     assert_struct!(t.log().pop_op(), Operation::QuerySql(_));
     assert!(t.log().is_empty());
 
@@ -134,9 +140,15 @@ pub async fn create_with_has_many_rolls_back_on_failure(t: &mut Test) -> Result<
             .await
     );
 
-    // Transaction::Start → INSERT user (succeeds, logged) →
+    // Transaction::Start { isolation: None, read_only: false } → INSERT user (succeeds, logged) →
     // INSERT todo (fails on unique constraint, NOT logged) → Transaction::Rollback
-    assert_struct!(t.log().pop_op(), Operation::Transaction(Transaction::Start));
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Start {
+            isolation: None,
+            read_only: false
+        })
+    );
     assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT user
     assert_struct!(
         t.log().pop_op(),
@@ -202,7 +214,13 @@ pub async fn create_with_has_one_rolls_back_on_failure(t: &mut Test) -> Result<(
             .await
     );
 
-    assert_struct!(t.log().pop_op(), Operation::Transaction(Transaction::Start));
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Start {
+            isolation: None,
+            read_only: false
+        })
+    );
     assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT user
     assert_struct!(
         t.log().pop_op(),
@@ -271,7 +289,13 @@ pub async fn update_with_new_association_rolls_back_on_failure(t: &mut Test) -> 
 
     // INSERT todo runs first (succeeds, logged), then UPDATE user fails on unique
     // name → Transaction::Rollback undoes the INSERT.
-    assert_struct!(t.log().pop_op(), Operation::Transaction(Transaction::Start));
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Start {
+            isolation: None,
+            read_only: false
+        })
+    );
     assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT todo (rolled back)
     assert_struct!(
         t.log().pop_op(),
@@ -330,7 +354,13 @@ pub async fn rmw_uses_savepoints(t: &mut Test) -> Result<()> {
         assert_struct!(t.log().pop_op(), Operation::QuerySql(_));
     } else {
         // SQLite / MySQL: standalone RMW starts its own transaction
-        assert_struct!(t.log().pop_op(), Operation::Transaction(Transaction::Start));
+        assert_struct!(
+            t.log().pop_op(),
+            Operation::Transaction(Transaction::Start {
+                isolation: None,
+                read_only: false
+            })
+        );
         assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // read
         assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // write
         assert_struct!(
@@ -387,7 +417,13 @@ pub async fn rmw_condition_failure_issues_rollback_to_savepoint(t: &mut Test) ->
     } else {
         // SQLite / MySQL: standalone RMW starts its own transaction;
         // condition failure rolls it back
-        assert_struct!(t.log().pop_op(), Operation::Transaction(Transaction::Start));
+        assert_struct!(
+            t.log().pop_op(),
+            Operation::Transaction(Transaction::Start {
+                isolation: None,
+                read_only: false
+            })
+        );
         assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // read
         assert_struct!(
             t.log().pop_op(),
