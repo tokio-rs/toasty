@@ -1,10 +1,6 @@
-use crate::{db::PoolConnection, engine::Engine, Result};
+use crate::{db::PoolConnection, engine::Engine, Executor, Result};
 
-use std::sync::Arc;
-use toasty_core::{
-    driver::operation::{IsolationLevel, Transaction as TransactionOp},
-    schema::db::Schema as DbSchema,
-};
+use toasty_core::driver::operation::{self, IsolationLevel};
 
 /// An active database transaction.
 ///
@@ -29,6 +25,10 @@ pub struct Transaction<'db> {
 
     /// Monotonic counter for generating unique savepoint names.
     savepoint_counter: usize,
+
+    /// When a savepoint is dropped it cannot make an asynchronous request.
+    /// Instead, it stores its ID here so we can roll back later.
+    pending_savepoint_rollback: Option<usize>,
 }
 
 impl<'db> Transaction<'db> {
@@ -37,7 +37,7 @@ impl<'db> Transaction<'db> {
         let mut connection = engine.pool.get().await?;
 
         connection
-            .exec(&engine.schema.db, TransactionOp::start().into())
+            .exec(&engine.schema.db, operation::Transaction::start().into())
             .await?;
 
         Ok(Transaction {
@@ -46,6 +46,7 @@ impl<'db> Transaction<'db> {
             connection: Some(connection),
             committed: false,
             savepoint_counter: 0,
+            pending_savepoint_rollback: None,
         })
     }
 
@@ -60,7 +61,7 @@ impl<'db> Transaction<'db> {
         connection
             .exec(
                 &engine.schema.db,
-                TransactionOp::Start {
+                operation::Transaction::Start {
                     isolation,
                     read_only,
                 }
@@ -74,6 +75,7 @@ impl<'db> Transaction<'db> {
             connection: Some(connection),
             committed: false,
             savepoint_counter: 0,
+            pending_savepoint_rollback: None,
         })
     }
 
@@ -81,7 +83,7 @@ impl<'db> Transaction<'db> {
     pub async fn commit(mut self) -> Result<()> {
         let db_schema = self.engine.schema.db.clone();
         self.conn_mut()
-            .exec(&db_schema, TransactionOp::Commit.into())
+            .exec(&db_schema, operation::Transaction::Commit.into())
             .await?;
         self.committed = true;
         Ok(())
@@ -91,24 +93,24 @@ impl<'db> Transaction<'db> {
     pub async fn rollback(mut self) -> Result<()> {
         let db_schema = self.engine.schema.db.clone();
         self.conn_mut()
-            .exec(&db_schema, TransactionOp::Rollback.into())
+            .exec(&db_schema, operation::Transaction::Rollback.into())
             .await?;
         self.committed = true;
         Ok(())
     }
 
     /// Create a savepoint within this transaction.
-    pub async fn savepoint(&mut self) -> Result<Savepoint<'_, Transaction<'db>>> {
+    pub async fn savepoint(&'db mut self) -> Result<Savepoint<'_>> {
         let id = self.savepoint_counter;
         self.savepoint_counter += 1;
 
         let db_schema = self.engine.schema.db.clone();
         self.conn_mut()
-            .exec(&db_schema, TransactionOp::Savepoint(id).into())
+            .exec(&db_schema, operation::Transaction::Savepoint(id).into())
             .await?;
 
         Ok(Savepoint {
-            parent: self,
+            parent: SavepointParent::Transaction(self),
             id,
             released: false,
         })
@@ -129,7 +131,7 @@ impl Drop for Transaction<'_> {
                 tokio::spawn(async move {
                     let mut connection = connection;
                     let _ = connection
-                        .exec(&db_schema, TransactionOp::Rollback.into())
+                        .exec(&db_schema, operation::Transaction::Rollback.into())
                         .await;
                 });
             }
@@ -137,7 +139,20 @@ impl Drop for Transaction<'_> {
     }
 }
 
-// ===== Savepoint =====
+/// Helper enum to manage recursively defined savepoints.
+enum SavepointParent<'a> {
+    Transaction(&'a mut Transaction<'a>),
+    Savepoint(&'a mut Savepoint<'a>),
+}
+
+impl<'a> SavepointParent<'a> {
+    fn transaction_mut(&mut self) -> &mut Transaction<'a> {
+        match self {
+            Self::Transaction(inner) => inner,
+            Self::Savepoint(inner) => inner.parent.transaction_mut(),
+        }
+    }
+}
 
 /// A savepoint within a transaction or another savepoint.
 ///
@@ -146,58 +161,22 @@ impl Drop for Transaction<'_> {
 ///
 /// If dropped without calling [`release`](Self::release) or
 /// [`rollback`](Self::rollback), the savepoint is automatically rolled back.
-pub struct Savepoint<'a, P> {
-    parent: &'a mut P,
+pub struct Savepoint<'a> {
+    parent: SavepointParent<'a>,
     id: usize,
     released: bool,
 }
 
-/// Internal trait for types that provide access to a pinned transaction
-/// connection. Implemented by `Transaction` and `Savepoint`.
-pub(crate) trait TxConnection {
-    fn conn_mut(&mut self) -> &mut PoolConnection;
-    fn db_schema(&self) -> &Arc<DbSchema>;
-    fn next_savepoint_id(&mut self) -> usize;
-}
-
-impl TxConnection for Transaction<'_> {
-    fn conn_mut(&mut self) -> &mut PoolConnection {
-        self.conn_mut()
-    }
-
-    fn db_schema(&self) -> &Arc<DbSchema> {
-        &self.engine.schema.db
-    }
-
-    fn next_savepoint_id(&mut self) -> usize {
-        let id = self.savepoint_counter;
-        self.savepoint_counter += 1;
-        id
-    }
-}
-
-impl<P: TxConnection> TxConnection for Savepoint<'_, P> {
-    fn conn_mut(&mut self) -> &mut PoolConnection {
-        self.parent.conn_mut()
-    }
-
-    fn db_schema(&self) -> &Arc<DbSchema> {
-        self.parent.db_schema()
-    }
-
-    fn next_savepoint_id(&mut self) -> usize {
-        self.parent.next_savepoint_id()
-    }
-}
-
-#[allow(private_bounds)]
-impl<P: TxConnection> Savepoint<'_, P> {
+impl Savepoint<'_> {
     /// Commit (release) the savepoint. Changes become part of the parent scope.
     pub async fn release(mut self) -> Result<()> {
-        let db_schema = self.parent.db_schema().clone();
-        self.parent
-            .conn_mut()
-            .exec(&db_schema, TransactionOp::ReleaseSavepoint(self.id).into())
+        let schema = self.parent.transaction_mut().engine.schema.db.clone();
+        let connection = self.parent.transaction_mut().conn_mut();
+        connection
+            .exec(
+                &schema,
+                operation::Transaction::ReleaseSavepoint(self.id).into(),
+            )
             .await?;
         self.released = true;
         Ok(())
@@ -205,12 +184,12 @@ impl<P: TxConnection> Savepoint<'_, P> {
 
     /// Roll back to the savepoint. Undoes all work since the savepoint was created.
     pub async fn rollback(mut self) -> Result<()> {
-        let db_schema = self.parent.db_schema().clone();
-        self.parent
-            .conn_mut()
+        let schema = self.parent.transaction_mut().engine.schema.db.clone();
+        let connection = self.parent.transaction_mut().conn_mut();
+        connection
             .exec(
-                &db_schema,
-                TransactionOp::RollbackToSavepoint(self.id).into(),
+                &schema,
+                operation::Transaction::RollbackToSavepoint(self.id).into(),
             )
             .await?;
         self.released = true;
@@ -218,36 +197,31 @@ impl<P: TxConnection> Savepoint<'_, P> {
     }
 
     /// Create a nested savepoint.
-    pub async fn savepoint(&mut self) -> Result<Savepoint<'_, Self>> {
-        let id = self.parent.next_savepoint_id();
-        let db_schema = self.parent.db_schema().clone();
-        self.parent
-            .conn_mut()
-            .exec(&db_schema, TransactionOp::Savepoint(id).into())
+    pub async fn savepoint(&mut self) -> Result<Savepoint<'_>> {
+        let id = self.parent.transaction_mut().next_savepoint_id();
+        let schema = self.parent.transaction_mut().engine.schema.db.clone();
+        let connection = self.parent.transaction_mut().conn_mut();
+        connection
+            .exec(&schema, operation::Transaction::Savepoint(id).into())
             .await?;
         Ok(Savepoint {
-            parent: self,
+            parent: SavepointParent::Savepoint(self),
             id,
             released: false,
         })
     }
 }
 
-impl<P> Drop for Savepoint<'_, P> {
+impl Drop for Savepoint<'_> {
     fn drop(&mut self) {
         if !self.released {
-            // We can't do async in drop and don't own the connection.
-            // In practice, users should always call .release() or .rollback().
-            // The next operation on the parent will see a consistent state.
-            eprintln!(
-                "warning: savepoint sp_{} dropped without release() or rollback()",
-                self.id
-            );
+            // We cannot do the asynchronous `RollbackToSavepoint` operation in the synchronous drop
+            // method, so we notify the parent `Transaction` to do this for us before the next incoming
+            // operation.
+            self.parent.transaction_mut().pending_savepoint_rollback = Some(self.id);
         }
     }
 }
-
-// ===== TransactionBuilder =====
 
 /// Builder for configuring a transaction before starting it.
 pub struct TransactionBuilder<'db> {
