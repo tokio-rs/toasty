@@ -510,6 +510,32 @@ impl<'a, 'b> MapField<'a, 'b> {
         }
     }
 
+    /// Creates a child `MapField` for processing an enum's variant fields.
+    ///
+    /// The child inherits the current prefix extended by `field_name` and has
+    /// `in_enum_variant` set to `true`, so variant field columns are nullable
+    /// and named `{..prefix..}_{field_name}_{vf_name}`.
+    fn for_enum_variant(&mut self, field_name: &str) -> MapField<'_, 'b> {
+        let mut child = self.with_prefix(field_name);
+        child.in_enum_variant = true;
+        child
+    }
+
+    /// Creates a child `MapField` for recursing into an embedded field.
+    ///
+    /// The child inherits the current prefix extended by `name` and inherits
+    /// `in_enum_variant` unchanged. Used when entering struct fields so that
+    /// sub-field columns are named `{..prefix..}_{name}_{sub_field}`.
+    fn with_prefix(&mut self, name: &str) -> MapField<'_, 'b> {
+        let mut prefix = self.prefix.clone();
+        prefix.push(name.to_owned());
+        MapField {
+            build: self.build,
+            prefix,
+            in_enum_variant: self.in_enum_variant,
+        }
+    }
+
     fn map_fields(
         &mut self,
         fields: &[app::Field],
@@ -661,16 +687,9 @@ impl<'a, 'b> MapField<'a, 'b> {
 
         let disc_proj = stmt::Expr::project(field_expr.clone(), stmt::Projection::single(0));
 
-        // Push the enum field name so variant field columns are named
-        // `{enum_field}_{vf_name}` (plus any outer prefix/schema_prefix).
-        self.prefix.push(field.name.storage_name().to_owned());
-        let saved_in_enum_variant = self.in_enum_variant;
-        self.in_enum_variant = true;
-
-        let variants = self.map_variants(embedded_enum, &field_expr, &disc_proj, bit);
-
-        self.in_enum_variant = saved_in_enum_variant;
-        self.prefix.pop();
+        let variants = self
+            .for_enum_variant(field.name.storage_name())
+            .map_variants(embedded_enum, &field_expr, &disc_proj, bit);
 
         mapping::Field::Enum(mapping::FieldEnum {
             disc_column: disc_col_id,
@@ -735,18 +754,15 @@ impl<'a, 'b> MapField<'a, 'b> {
                     app::FieldTy::Embedded(embedded) => {
                         let embedded_model = self.build.app.model(embedded.target);
                         let embedded_struct = embedded_model.expect_embedded_struct();
-                        // Push vf name so sub-fields are named `{enum_field}_{vf}_{sub_field}`.
-                        self.prefix.push(vf.name.storage_name().to_owned());
-                        let result = self.map_variant_struct_field(
-                            local_idx,
-                            embedded_struct,
-                            field_expr,
-                            disc_proj,
-                            variant.discriminant,
-                            bit,
-                        );
-                        self.prefix.pop();
-                        result
+                        self.with_prefix(vf.name.storage_name())
+                            .map_variant_struct_field(
+                                local_idx,
+                                embedded_struct,
+                                field_expr,
+                                disc_proj,
+                                variant.discriminant,
+                                bit,
+                            )
                     }
                     _ => panic!("unexpected field type in enum variant"),
                 };
@@ -780,13 +796,9 @@ impl<'a, 'b> MapField<'a, 'b> {
             proj
         };
 
-        self.prefix.push(field.name.storage_name().to_owned());
-        let nested_fields = self.map_fields(
-            &embedded_struct.fields,
-            nested_source,
-            nested_projection.clone(),
-        );
-        self.prefix.pop();
+        let nested_fields = self
+            .with_prefix(field.name.storage_name())
+            .map_fields(&embedded_struct.fields, nested_source, nested_projection.clone());
 
         let columns: indexmap::IndexMap<ColumnId, usize> =
             nested_fields.iter().flat_map(|f| f.columns()).collect();
