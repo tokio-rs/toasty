@@ -206,36 +206,64 @@ impl Expr {
     /// This means it contains no `Reference`, `Stmt`, or `Arg` expressions that
     /// reference external inputs.
     ///
-    /// Note: `Arg` expressions inside `Map` bodies are allowed because they reference
-    /// the mapped expression itself, not external data.
+    /// `Arg` expressions inside `Map` bodies *with `nesting` less than the current
+    /// map depth* are local bindings (bound to the mapped element), not external
+    /// inputs, and are therefore considered const in that context.
     pub fn is_const(&self) -> bool {
+        self.is_const_at_depth(0)
+    }
+
+    /// Inner implementation of [`is_const`] that tracks the number of enclosing
+    /// `Map` scopes. An `Arg` with `nesting < map_depth` is a local binding
+    /// introduced by one of those `Map`s and does not count as external input.
+    fn is_const_at_depth(&self, map_depth: usize) -> bool {
         match self {
             // Always constant
             Self::Value(_) => true,
 
+            // Arg: local if nesting is within map_depth, otherwise external
+            Self::Arg(arg) => arg.nesting < map_depth,
+
             // Never constant - references external data
             Self::Reference(_)
             | Self::Stmt(_)
-            | Self::Arg(_)
             | Self::InSubquery(_)
             | Self::Exists(_)
-            | Self::Default => false,
+            | Self::Default
+            | Self::Func(_) => false,
 
-            // Const if all children are const
-            Self::Record(expr_record) => expr_record.iter().all(|expr| expr.is_const()),
-            Self::List(expr_list) => expr_list.items.iter().all(|expr| expr.is_const()),
-            Self::Cast(expr_cast) => expr_cast.expr.is_const(),
-            Self::BinaryOp(expr_binary) => expr_binary.lhs.is_const() && expr_binary.rhs.is_const(),
-            Self::And(expr_and) => expr_and.iter().all(|expr| expr.is_const()),
-            Self::Any(expr_any) => expr_any.expr.is_const(),
-            Self::Not(expr_not) => expr_not.expr.is_const(),
-            Self::Or(expr_or) => expr_or.iter().all(|expr| expr.is_const()),
-            Self::IsNull(expr_is_null) => expr_is_null.expr.is_const(),
-            Self::InList(expr_in_list) => {
-                expr_in_list.expr.is_const() && expr_in_list.list.is_const()
+            // Const if all children are const at the same depth
+            Self::Record(expr_record) => expr_record
+                .iter()
+                .all(|expr| expr.is_const_at_depth(map_depth)),
+            Self::List(expr_list) => expr_list
+                .items
+                .iter()
+                .all(|expr| expr.is_const_at_depth(map_depth)),
+            Self::Cast(expr_cast) => expr_cast.expr.is_const_at_depth(map_depth),
+            Self::BinaryOp(expr_binary) => {
+                expr_binary.lhs.is_const_at_depth(map_depth)
+                    && expr_binary.rhs.is_const_at_depth(map_depth)
             }
-            Self::Project(expr_project) => expr_project.base.is_const(),
-            _ => todo!("expr={self:#?}"),
+            Self::And(expr_and) => expr_and
+                .iter()
+                .all(|expr| expr.is_const_at_depth(map_depth)),
+            Self::Any(expr_any) => expr_any.expr.is_const_at_depth(map_depth),
+            Self::Not(expr_not) => expr_not.expr.is_const_at_depth(map_depth),
+            Self::Or(expr_or) => expr_or.iter().all(|expr| expr.is_const_at_depth(map_depth)),
+            Self::IsNull(expr_is_null) => expr_is_null.expr.is_const_at_depth(map_depth),
+            Self::InList(expr_in_list) => {
+                expr_in_list.expr.is_const_at_depth(map_depth)
+                    && expr_in_list.list.is_const_at_depth(map_depth)
+            }
+            Self::Project(expr_project) => expr_project.base.is_const_at_depth(map_depth),
+
+            // Map: base is checked at the current depth; the map body is checked
+            // at depth+1 so that arg(nesting=0) in the body is treated as local.
+            Self::Map(expr_map) => {
+                expr_map.base.is_const_at_depth(map_depth)
+                    && expr_map.map.is_const_at_depth(map_depth + 1)
+            }
         }
     }
 
