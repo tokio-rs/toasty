@@ -13,7 +13,10 @@ use simplify::Simplify;
 mod ty;
 mod verify;
 
-use crate::{db::Pool, Result};
+use crate::{
+    db::{Pool, PoolConnection},
+    Result,
+};
 use std::sync::Arc;
 use toasty_core::{
     driver::{Capability, Driver},
@@ -59,6 +62,16 @@ impl Engine {
     /// through the full compilation pipeline (lowering → planning → execution)
     /// before being sent to the database driver.
     pub(crate) async fn exec(&self, stmt: Statement) -> Result<ValueStream> {
+        self.exec_on(stmt, &mut self.pool.get().await?).await
+    }
+
+    /// Executes a statement on a given database connection. This is used in transactions,
+    /// where multiple statements need be executed on the same connection.
+    pub(crate) async fn exec_on(
+        &self,
+        stmt: Statement,
+        connection: &mut PoolConnection,
+    ) -> Result<ValueStream> {
         if cfg!(debug_assertions) {
             self.verify(&stmt);
         }
@@ -78,7 +91,7 @@ impl Engine {
 
         // The plan is called once (single entry record stream) with no arguments
         // (empty record).
-        self.exec_plan(plan).await
+        self.exec_plan(plan, connection).await
     }
 
     /// Returns a new [`ExprContext`](stmt::ExprContext) for this engine's schema.

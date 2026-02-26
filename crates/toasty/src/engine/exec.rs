@@ -56,7 +56,7 @@ use toasty_core::{
 
 struct Exec<'a> {
     engine: &'a Engine,
-    connection: PoolConnection,
+    connection: &'a mut PoolConnection,
     vars: VarStore,
     /// Monotonically increasing counter for generating unique savepoint IDs
     /// within a single plan execution.
@@ -68,10 +68,14 @@ struct Exec<'a> {
 }
 
 impl Engine {
-    pub(crate) async fn exec_plan(&self, plan: ExecPlan) -> Result<ValueStream> {
+    pub(crate) async fn exec_plan(
+        &self,
+        plan: ExecPlan,
+        connection: &mut PoolConnection,
+    ) -> Result<ValueStream> {
         let mut exec = Exec {
             engine: self,
-            connection: self.pool.get().await?,
+            connection,
             vars: plan.vars,
             next_savepoint_id: 0,
             in_transaction: false,

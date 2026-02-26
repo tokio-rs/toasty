@@ -70,21 +70,7 @@ pub struct Transaction<'db> {
 
 impl<'db> Transaction<'db> {
     pub(crate) async fn begin(db: &'db mut crate::Db) -> Result<Transaction<'db>> {
-        let engine = db.engine.clone();
-        let mut connection = engine.pool.get().await?;
-
-        connection
-            .exec(&engine.schema.db, operation::Transaction::start().into())
-            .await?;
-
-        Ok(Transaction {
-            _db: db,
-            engine,
-            connection: Some(connection),
-            committed: false,
-            savepoint_counter: 0,
-            pending_savepoint_rollback: None,
-        })
+        Self::begin_with(db, None, false).await
     }
 
     pub(crate) async fn begin_with(
