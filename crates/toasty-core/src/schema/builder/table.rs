@@ -7,7 +7,7 @@ use crate::{
         mapping::{self, Mapping, TableToModel},
         Name,
     },
-    stmt::{self, Projection},
+    stmt,
 };
 
 struct BuildTableFromModels<'a> {
