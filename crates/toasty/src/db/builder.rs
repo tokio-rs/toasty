@@ -4,7 +4,10 @@ use crate::{
     Db, Register, Result,
 };
 
-use toasty_core::schema::{self, app};
+use toasty_core::{
+    driver::Driver,
+    schema::{self, app},
+};
 
 use std::sync::Arc;
 
@@ -40,21 +43,18 @@ impl Builder {
         self.build(Connect::new(url)?).await
     }
 
-    pub async fn build(&mut self, driver: impl toasty_core::driver::Driver) -> Result<Db> {
+    pub async fn build(&mut self, driver: impl Driver) -> Result<Db> {
         let pool = Pool::new(driver)?;
-
         // Validate capability consistency
         pool.capability().validate()?;
 
         let capability = pool.capability();
-
         let schema = self.core.build(self.build_app_schema()?, capability)?;
-
         let engine = Engine::new(Arc::new(schema), capability);
 
         Ok(Db {
             shared: Arc::new(Shared { engine, pool }),
-            conn: None,
+            connection: None,
         })
     }
 }

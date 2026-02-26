@@ -30,15 +30,15 @@ pub(crate) struct Shared {
 ///
 /// When dropped, `in_tx` closes the channel, causing the background task to
 /// finish processing remaining messages and exit gracefully.
-struct ConnHandle {
-    in_tx: mpsc::UnboundedSender<ConnOp>,
+struct ConnectionHandle {
+    in_tx: mpsc::UnboundedSender<ConnectionOperation>,
     /// Kept so we can `.await` graceful shutdown in the future.
     #[allow(dead_code)]
     join_handle: JoinHandle<()>,
 }
 
 /// Operations sent to the connection task.
-enum ConnOp {
+enum ConnectionOperation {
     /// Execute a statement (compile + run on the connection).
     ExecStatement {
         stmt: Box<toasty_core::stmt::Statement>,
@@ -50,11 +50,12 @@ enum ConnOp {
 
 /// A database handle. Each instance owns (or will lazily acquire) a dedicated
 /// connection from the pool. Cloning produces a new handle that will acquire its
-/// own connection on first use.
+/// own connection on first use. Dropping the [`Db`] instance will release the database connection
+/// back to the pool.
 #[derive(Clone)]
 pub struct Db {
     shared: Arc<Shared>,
-    conn: Option<Arc<ConnHandle>>,
+    connection: Option<Arc<ConnectionHandle>>,
 }
 
 impl Db {
@@ -63,17 +64,17 @@ impl Db {
     }
 
     /// Lazily acquire a connection and spawn the background task.
-    async fn connection(&mut self) -> Result<&ConnHandle> {
-        if self.conn.is_none() {
+    async fn connection(&mut self) -> Result<&ConnectionHandle> {
+        if self.connection.is_none() {
             let mut connection = self.shared.pool.get().await?;
             let engine = self.shared.engine.clone();
 
-            let (in_tx, mut in_rx) = mpsc::unbounded_channel::<ConnOp>();
+            let (in_tx, mut in_rx) = mpsc::unbounded_channel::<ConnectionOperation>();
 
             let join_handle = tokio::spawn(async move {
                 while let Some(op) = in_rx.recv().await {
                     match op {
-                        ConnOp::ExecStatement { stmt, tx } => {
+                        ConnectionOperation::ExecStatement { stmt, tx } => {
                             match engine.exec(&mut connection, *stmt).await {
                                 Ok(mut value_stream) => {
                                     let (row_tx, mut row_rx) =
@@ -96,7 +97,7 @@ impl Db {
                                 }
                             }
                         }
-                        ConnOp::PushSchema { tx } => {
+                        ConnectionOperation::PushSchema { tx } => {
                             let result = connection.push_schema(&engine.schema.db).await;
                             let _ = tx.send(result);
                         }
@@ -105,9 +106,9 @@ impl Db {
                 // Channel closed → connection drops → returns to pool
             });
 
-            self.conn = Some(Arc::new(ConnHandle { in_tx, join_handle }));
+            self.connection = Some(Arc::new(ConnectionHandle { in_tx, join_handle }));
         }
-        Ok(self.conn.as_ref().unwrap())
+        Ok(self.connection.as_ref().unwrap())
     }
 
     /// Execute a query, returning all matching records
@@ -148,7 +149,7 @@ impl Db {
 
         let conn = self.connection().await?;
         conn.in_tx
-            .send(ConnOp::ExecStatement {
+            .send(ConnectionOperation::ExecStatement {
                 stmt: Box::new(statement.untyped),
                 tx,
             })
@@ -195,7 +196,9 @@ impl Db {
     pub async fn push_schema(&mut self) -> Result<()> {
         let (tx, rx) = oneshot::channel();
         let conn = self.connection().await?;
-        conn.in_tx.send(ConnOp::PushSchema { tx }).unwrap();
+        conn.in_tx
+            .send(ConnectionOperation::PushSchema { tx })
+            .unwrap();
         rx.await.unwrap()
     }
 
@@ -215,13 +218,19 @@ impl Db {
     pub fn capability(&self) -> &Capability {
         self.shared.engine.capability()
     }
+
+    /// Returns a reference to the connection pool backing this handle.
+    #[doc(hidden)]
+    pub fn pool(&self) -> &Pool {
+        &self.shared.pool
+    }
 }
 
 impl std::fmt::Debug for Db {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Db")
             .field("engine", &self.shared.engine)
-            .field("connected", &self.conn.is_some())
+            .field("connected", &self.connection.is_some())
             .finish()
     }
 }

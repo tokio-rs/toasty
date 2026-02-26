@@ -89,6 +89,18 @@ impl Pool {
     pub fn capability(&self) -> &'static Capability {
         self.capability
     }
+
+    /// Returns the current status of the pool, including the number of
+    /// connections, how many are available, and how many waiters are queued.
+    pub fn status(&self) -> PoolStatus {
+        let s = self.inner.status();
+        PoolStatus {
+            max_size: s.max_size,
+            size: s.size,
+            available: s.available,
+            waiting: s.waiting,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -111,6 +123,22 @@ impl deadpool::managed::Manager for Manager {
     ) -> deadpool::managed::RecycleResult<Self::Error> {
         Ok(())
     }
+}
+
+/// Snapshot of the pool's current state.
+#[derive(Clone, Copy, Debug)]
+pub struct PoolStatus {
+    /// The maximum number of connections the pool will manage.
+    pub max_size: usize,
+
+    /// The current number of connections (both in-use and idle).
+    pub size: usize,
+
+    /// The number of idle connections ready to be checked out.
+    pub available: usize,
+
+    /// The number of tasks waiting for a connection to become available.
+    pub waiting: usize,
 }
 
 /// A connection retrieved from a pool.
