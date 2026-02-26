@@ -86,7 +86,7 @@ impl Pool {
     }
 
     /// Returns the database driver's capabilities.
-    pub fn capability(&self) -> &Capability {
+    pub fn capability(&self) -> &'static Capability {
         self.capability
     }
 }

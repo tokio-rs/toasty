@@ -86,7 +86,7 @@ impl Expand<'_> {
         }
 
         quote! {
-            #vis async fn #get_method_ident(#self_arg db: &#toasty::Db, #( #args ),* ) -> #toasty::Result<#model_ident> {
+            #vis async fn #get_method_ident(#self_arg db: &mut #toasty::Db, #( #args ),* ) -> #toasty::Result<#model_ident> {
                 #base #filter_method_ident( #( #arg_idents ),* )
                     .get(db)
                     .await
@@ -96,7 +96,7 @@ impl Expand<'_> {
                 #base #filter_method_ident( #( #arg_idents ),* ).update()
             }
 
-            #vis async fn #delete_method_ident(#self_arg db: &#toasty::Db, #( #args ),* ) -> #toasty::Result<()> {
+            #vis async fn #delete_method_ident(#self_arg db: &mut #toasty::Db, #( #args ),* ) -> #toasty::Result<()> {
                 #base #filter_method_ident( #( #arg_idents ),* )
                     .delete(db)
                     .await
