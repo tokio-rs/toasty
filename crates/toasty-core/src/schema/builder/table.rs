@@ -231,8 +231,8 @@ impl BuildTableFromModels<'_> {
 
 impl BuildMapping<'_> {
     fn build_mapping(mut self, model: &ModelRoot) {
-        let fields = MapField::new(&mut self)
-            .map_fields(&model.fields, None, stmt::Projection::identity());
+        let fields =
+            MapField::new(&mut self).map_fields(&model.fields, None, stmt::Projection::identity());
 
         assert!(!self.model_to_table.is_empty());
         assert_eq!(self.model_to_table.len(), self.lowering_columns.len());
@@ -518,12 +518,7 @@ impl<'a, 'b> MapField<'a, 'b> {
     ) -> Vec<mapping::Field> {
         let mut mapping = Vec::with_capacity(fields.len());
         for (field_index, field) in fields.iter().enumerate() {
-            mapping.push(self.map_field(
-                field_index,
-                field,
-                source_field_id,
-                &base_projection,
-            ));
+            mapping.push(self.map_field(field_index, field, source_field_id, &base_projection));
         }
         mapping
     }
@@ -647,7 +642,9 @@ impl<'a, 'b> MapField<'a, 'b> {
             field_expr.clone()
         };
 
-        let lowering = self.build.encode_column(disc_col_id, &stmt::Type::I64, disc_expr);
+        let lowering = self
+            .build
+            .encode_column(disc_col_id, &stmt::Type::I64, disc_expr);
         let lowering_index = self.build.model_to_table.len();
         self.build.lowering_columns.push(disc_col_id);
         self.build.model_to_table.push(lowering);
@@ -663,13 +660,35 @@ impl<'a, 'b> MapField<'a, 'b> {
         };
 
         let disc_proj = stmt::Expr::project(field_expr.clone(), stmt::Projection::single(0));
-        let mut variants = Vec::new();
 
         // Push the enum field name so variant field columns are named
         // `{enum_field}_{vf_name}` (plus any outer prefix/schema_prefix).
         self.prefix.push(field.name.storage_name().to_owned());
         let saved_in_enum_variant = self.in_enum_variant;
         self.in_enum_variant = true;
+
+        let variants = self.map_variants(embedded_enum, &field_expr, &disc_proj, bit);
+
+        self.in_enum_variant = saved_in_enum_variant;
+        self.prefix.pop();
+
+        mapping::Field::Enum(mapping::FieldEnum {
+            disc_column: disc_col_id,
+            disc_lowering: lowering_index,
+            variants,
+            field_mask: stmt::PathFieldSet::from_iter([bit]),
+            sub_projection,
+        })
+    }
+
+    fn map_variants(
+        &mut self,
+        embedded_enum: &app::EmbeddedEnum,
+        field_expr: &stmt::Expr,
+        disc_proj: &stmt::Expr,
+        bit: usize,
+    ) -> Vec<mapping::EnumVariant> {
+        let mut variants = Vec::new();
 
         for variant in &embedded_enum.variants {
             let mut vf_fields = Vec::new();
@@ -678,8 +697,12 @@ impl<'a, 'b> MapField<'a, 'b> {
                 let vf_field = match &vf.ty {
                     app::FieldTy::Primitive(vf_primitive) => {
                         // Variant field columns are always nullable.
-                        let vf_col_id =
-                            self.build.create_column(self.column_name(vf), vf_primitive, true, false);
+                        let vf_col_id = self.build.create_column(
+                            self.column_name(vf),
+                            vf_primitive,
+                            true,
+                            false,
+                        );
 
                         let arm = stmt::MatchArm {
                             pattern: stmt::Value::I64(variant.discriminant),
@@ -717,8 +740,8 @@ impl<'a, 'b> MapField<'a, 'b> {
                         let result = self.map_variant_struct_field(
                             local_idx,
                             embedded_struct,
-                            &field_expr,
-                            &disc_proj,
+                            field_expr,
+                            disc_proj,
                             variant.discriminant,
                             bit,
                         );
@@ -737,16 +760,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             });
         }
 
-        self.in_enum_variant = saved_in_enum_variant;
-        self.prefix.pop();
-
-        mapping::Field::Enum(mapping::FieldEnum {
-            disc_column: disc_col_id,
-            disc_lowering: lowering_index,
-            variants,
-            field_mask: stmt::PathFieldSet::from_iter([bit]),
-            sub_projection,
-        })
+        variants
     }
 
     fn map_field_struct(
@@ -811,7 +825,9 @@ impl<'a, 'b> MapField<'a, 'b> {
                 todo!("deeply nested structs in enum variants not yet supported");
             };
 
-            let sub_col_id = self.build.create_column(self.column_name(sub_field), sub_primitive, true, false);
+            let sub_col_id =
+                self.build
+                    .create_column(self.column_name(sub_field), sub_primitive, true, false);
 
             // The enum value is Record([I64(disc), vf_0, vf_1, ...]).
             // The struct field at local_idx is at position local_idx + 1.
@@ -871,4 +887,3 @@ fn field_expr(
         stmt::Expr::ref_self_field(field.id)
     }
 }
-
