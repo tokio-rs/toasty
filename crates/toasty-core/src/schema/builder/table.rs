@@ -791,7 +791,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             .map(|variant| {
                 let fields = self
                     .for_variant(field, field_index, disc_proj.clone(), variant.discriminant)
-                    .map_variant(variant, &field_expr, &disc_proj, bit);
+                    .map_variant(variant, &field_expr, &disc_proj);
                 mapping::EnumVariant {
                     discriminant: variant.discriminant,
                     fields,
@@ -813,7 +813,6 @@ impl<'a, 'b> MapField<'a, 'b> {
         variant: &app::EnumVariant,
         field_expr: &stmt::Expr,
         disc_proj: &stmt::Expr,
-        bit: usize,
     ) -> Vec<mapping::Field> {
         variant
             .fields
@@ -827,6 +826,7 @@ impl<'a, 'b> MapField<'a, 'b> {
                         &vf_primitive.ty,
                         self.field_expr(vf, local_idx),
                     );
+                    let bit = self.build.next_bit();
                     mapping::Field::Primitive(mapping::FieldPrimitive {
                         column: vf_col_id,
                         lowering: vf_lowering,
@@ -837,15 +837,13 @@ impl<'a, 'b> MapField<'a, 'b> {
                 app::FieldTy::Embedded(embedded) => {
                     let embedded_model = self.build.app.model(embedded.target);
                     let embedded_struct = embedded_model.expect_embedded_struct();
-                    self.with_prefix(vf.name.storage_name())
-                        .map_variant_struct_field(
-                            local_idx,
-                            embedded_struct,
-                            field_expr,
-                            disc_proj,
-                            variant.discriminant,
-                            bit,
-                        )
+                    self.with_prefix(vf.name.storage_name()).map_variant_struct_field(
+                        local_idx,
+                        embedded_struct,
+                        field_expr,
+                        disc_proj,
+                        variant.discriminant,
+                    )
                 }
                 _ => panic!("unexpected field type in enum variant"),
             })
@@ -892,7 +890,6 @@ impl<'a, 'b> MapField<'a, 'b> {
         field_expr: &stmt::Expr,
         disc_proj: &stmt::Expr,
         discriminant: i64,
-        bit: usize,
     ) -> mapping::Field {
         let mut sub_fields = Vec::new();
 
@@ -920,6 +917,7 @@ impl<'a, 'b> MapField<'a, 'b> {
                 stmt::Expr::match_expr(disc_proj.clone(), vec![arm], stmt::Expr::null()),
             );
 
+            let bit = self.build.next_bit();
             sub_fields.push(mapping::Field::Primitive(mapping::FieldPrimitive {
                 column: sub_col_id,
                 lowering: sub_lowering,
