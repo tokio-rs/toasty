@@ -508,7 +508,11 @@ impl BuildMapping<'_> {
 /// If `parent_base` is the top-level sentinel (`Expr::arg(0)`), the child
 /// starts a fresh projection rooted at `field.id`. Otherwise the existing
 /// `ExprProject` is extended by `field_index`.
-fn extend_field_base(parent_base: &stmt::Expr, field: &app::Field, field_index: usize) -> stmt::Expr {
+fn extend_field_base(
+    parent_base: &stmt::Expr,
+    field: &app::Field,
+    field_index: usize,
+) -> stmt::Expr {
     match parent_base {
         stmt::Expr::Arg(_) => stmt::Expr::project(
             stmt::Expr::ref_self_field(field.id),
@@ -712,6 +716,7 @@ impl<'a, 'b> MapField<'a, 'b> {
                 }
             }
             app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
+                assert!(!self.in_enum_variant);
                 let bit = self.build.next_bit();
                 mapping::Field::Relation(mapping::FieldRelation {
                     field_mask: stmt::PathFieldSet::from_iter([bit]),
@@ -749,6 +754,9 @@ impl<'a, 'b> MapField<'a, 'b> {
         field: &app::Field,
         embedded_enum: &app::EmbeddedEnum,
     ) -> mapping::Field {
+        // For now, nesting enums is not supported
+        assert!(!self.in_enum_variant);
+
         // Create the discriminant column. It inherits nullability from the enum field.
         let disc_col_id = self.create_column(field, &embedded_enum.discriminant);
         let field_expr = self.field_expr(field, field_index);
@@ -800,33 +808,10 @@ impl<'a, 'b> MapField<'a, 'b> {
             .fields
             .iter()
             .enumerate()
-            .map(|(local_idx, vf)| {
+            .map(|(local_idx, field)| {
                 // Variant fields are stored at positions 1.. in the Record
                 // (position 0 is the discriminant), so adjust the index.
-                let field_index = local_idx + 1;
-                match &vf.ty {
-                    app::FieldTy::Primitive(vf_primitive) => {
-                        let vf_col_id = self.create_column(vf, vf_primitive);
-                        let vf_lowering = self.build.push_lowering(
-                            vf_col_id,
-                            &vf_primitive.ty,
-                            self.field_expr(vf, field_index),
-                        );
-                        let bit = self.build.next_bit();
-                        mapping::Field::Primitive(mapping::FieldPrimitive {
-                            column: vf_col_id,
-                            lowering: vf_lowering,
-                            field_mask: stmt::PathFieldSet::from_iter([bit]),
-                            sub_projection: self.sub_projection(field_index),
-                        })
-                    }
-                    app::FieldTy::Embedded(embedded) => {
-                        let embedded_model = self.build.app.model(embedded.target);
-                        let embedded_struct = embedded_model.expect_embedded_struct();
-                        self.map_field_struct(field_index, vf, embedded_struct)
-                    }
-                    _ => panic!("unexpected field type in enum variant"),
-                }
+                self.map_field(local_idx + 1, field)
             })
             .collect()
     }
@@ -856,5 +841,4 @@ impl<'a, 'b> MapField<'a, 'b> {
             sub_projection,
         })
     }
-
 }
