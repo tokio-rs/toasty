@@ -1,6 +1,43 @@
-use crate::{db::PoolConnection, engine::Engine, Executor, Result};
+use crate::{db::PoolConnection, engine::Engine, Result};
 
-use toasty_core::driver::operation::{self, IsolationLevel};
+use toasty_core::driver::{
+    operation::{self, IsolationLevel},
+    Operation, Response,
+};
+
+/// Builder for configuring a transaction before starting it.
+pub struct TransactionBuilder<'db> {
+    db: &'db mut crate::Db,
+    isolation: Option<IsolationLevel>,
+    read_only: bool,
+}
+
+impl<'db> TransactionBuilder<'db> {
+    pub(crate) fn new(db: &'db mut crate::Db) -> Self {
+        TransactionBuilder {
+            db,
+            isolation: None,
+            read_only: false,
+        }
+    }
+
+    /// Set the isolation level for this transaction.
+    pub fn isolation(mut self, level: IsolationLevel) -> Self {
+        self.isolation = Some(level);
+        self
+    }
+
+    /// Set whether this transaction is read-only.
+    pub fn read_only(mut self, read_only: bool) -> Self {
+        self.read_only = read_only;
+        self
+    }
+
+    /// Begin the transaction with the configured options.
+    pub async fn begin(self) -> Result<Transaction<'db>> {
+        Transaction::begin_with(self.db, self.isolation, self.read_only).await
+    }
+}
 
 /// An active database transaction.
 ///
@@ -81,34 +118,23 @@ impl<'db> Transaction<'db> {
 
     /// Commit the transaction.
     pub async fn commit(mut self) -> Result<()> {
-        let db_schema = self.engine.schema.db.clone();
-        self.conn_mut()
-            .exec(&db_schema, operation::Transaction::Commit.into())
-            .await?;
+        self.exec(operation::Transaction::Commit.into()).await?;
         self.committed = true;
         Ok(())
     }
 
     /// Roll back the transaction.
     pub async fn rollback(mut self) -> Result<()> {
-        let db_schema = self.engine.schema.db.clone();
-        self.conn_mut()
-            .exec(&db_schema, operation::Transaction::Rollback.into())
-            .await?;
+        self.exec(operation::Transaction::Rollback.into()).await?;
         self.committed = true;
         Ok(())
     }
 
     /// Create a savepoint within this transaction.
     pub async fn savepoint(&'db mut self) -> Result<Savepoint<'_>> {
-        let id = self.savepoint_counter;
-        self.savepoint_counter += 1;
-
-        let db_schema = self.engine.schema.db.clone();
-        self.conn_mut()
-            .exec(&db_schema, operation::Transaction::Savepoint(id).into())
+        let id = self.next_savepoint_id();
+        self.exec(operation::Transaction::Savepoint(id).into())
             .await?;
-
         Ok(Savepoint {
             parent: SavepointParent::Transaction(self),
             id,
@@ -116,10 +142,29 @@ impl<'db> Transaction<'db> {
         })
     }
 
-    fn conn_mut(&mut self) -> &mut PoolConnection {
-        self.connection
+    fn next_savepoint_id(&mut self) -> usize {
+        let id = self.savepoint_counter;
+        self.savepoint_counter += 1;
+        id
+    }
+
+    async fn exec(&mut self, plan: Operation) -> Result<Response> {
+        let schema = self.engine.schema.db.clone();
+        let connection = self
+            .connection
             .as_mut()
-            .expect("connection taken after commit/rollback")
+            .expect("connection taken after commit/rollback");
+
+        // Rolls back a dropped savepoint that is still pending its rollback invocation.
+        if let Some(savepoint) = self.pending_savepoint_rollback.take() {
+            connection
+                .exec(
+                    &schema,
+                    operation::Transaction::RollbackToSavepoint(savepoint).into(),
+                )
+                .await?;
+        }
+        connection.exec(&schema, plan).await
     }
 }
 
@@ -167,16 +212,12 @@ pub struct Savepoint<'a> {
     released: bool,
 }
 
-impl Savepoint<'_> {
+impl<'a> Savepoint<'a> {
     /// Commit (release) the savepoint. Changes become part of the parent scope.
     pub async fn release(mut self) -> Result<()> {
-        let schema = self.parent.transaction_mut().engine.schema.db.clone();
-        let connection = self.parent.transaction_mut().conn_mut();
-        connection
-            .exec(
-                &schema,
-                operation::Transaction::ReleaseSavepoint(self.id).into(),
-            )
+        let id = self.id;
+        self.transaction_mut()
+            .exec(operation::Transaction::ReleaseSavepoint(id).into())
             .await?;
         self.released = true;
         Ok(())
@@ -198,17 +239,19 @@ impl Savepoint<'_> {
 
     /// Create a nested savepoint.
     pub async fn savepoint(&mut self) -> Result<Savepoint<'_>> {
-        let id = self.parent.transaction_mut().next_savepoint_id();
-        let schema = self.parent.transaction_mut().engine.schema.db.clone();
-        let connection = self.parent.transaction_mut().conn_mut();
-        connection
-            .exec(&schema, operation::Transaction::Savepoint(id).into())
+        let id = self.transaction_mut().next_savepoint_id();
+        self.transaction_mut()
+            .exec(operation::Transaction::Savepoint(id).into())
             .await?;
         Ok(Savepoint {
             parent: SavepointParent::Savepoint(self),
             id,
             released: false,
         })
+    }
+
+    fn transaction_mut(&mut self) -> &mut Transaction<'a> {
+        self.parent.transaction_mut()
     }
 }
 
@@ -220,39 +263,5 @@ impl Drop for Savepoint<'_> {
             // operation.
             self.parent.transaction_mut().pending_savepoint_rollback = Some(self.id);
         }
-    }
-}
-
-/// Builder for configuring a transaction before starting it.
-pub struct TransactionBuilder<'db> {
-    db: &'db mut crate::Db,
-    isolation: Option<IsolationLevel>,
-    read_only: bool,
-}
-
-impl<'db> TransactionBuilder<'db> {
-    pub(crate) fn new(db: &'db mut crate::Db) -> Self {
-        TransactionBuilder {
-            db,
-            isolation: None,
-            read_only: false,
-        }
-    }
-
-    /// Set the isolation level for this transaction.
-    pub fn isolation(mut self, level: IsolationLevel) -> Self {
-        self.isolation = Some(level);
-        self
-    }
-
-    /// Set whether this transaction is read-only.
-    pub fn read_only(mut self, read_only: bool) -> Self {
-        self.read_only = read_only;
-        self
-    }
-
-    /// Begin the transaction with the configured options.
-    pub async fn begin(self) -> Result<Transaction<'db>> {
-        Transaction::begin_with(self.db, self.isolation, self.read_only).await
     }
 }
