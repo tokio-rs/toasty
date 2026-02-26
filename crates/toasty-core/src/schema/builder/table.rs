@@ -30,6 +30,11 @@ struct BuildTableFromModels<'a> {
 
 /// Computes a model's mapping, creating table columns and mapping expressions
 /// in a single recursive pass over the model's fields.
+///
+/// Holds state that persists across the entire mapping process: the shared
+/// mutable accumulators (columns, lowering expressions, bit counter) plus
+/// references to the table and schema. The recursive field-mapping logic lives
+/// on [`MapField`], which borrows `BuildMapping` and carries per-level context.
 struct BuildMapping<'a> {
     app: &'a app::Schema,
     db: &'a driver::Capability,
@@ -43,6 +48,18 @@ struct BuildMapping<'a> {
     model_to_table: Vec<stmt::Expr>,
     model_pk_to_table: Vec<stmt::Expr>,
     table_to_model: Vec<stmt::Expr>,
+}
+
+/// Per-level state for the recursive `map_field*` methods.
+///
+/// Analogous to `LowerStatement` in `lower.rs`: `MapField` holds context that
+/// may change between recursive calls, while [`BuildMapping`] holds the shared
+/// mutable accumulators (columns, lowering expressions, bit counter) that
+/// persist across the entire mapping process.
+struct MapField<'a, 'b> {
+    /// State shared across the entire mapping process.
+    build: &'a mut BuildMapping<'b>,
+
     /// When true, columns are created nullable regardless of the field's own
     /// nullability. Set while processing fields that belong to an enum variant,
     /// since only the active variant's columns are populated.
@@ -139,7 +156,6 @@ impl BuildTableFromModels<'_> {
             model_to_table: vec![],
             model_pk_to_table: vec![],
             table_to_model: vec![],
-            in_enum_variant: false,
         }
         .build_mapping(root);
 
@@ -207,7 +223,8 @@ impl BuildTableFromModels<'_> {
 
 impl BuildMapping<'_> {
     fn build_mapping(mut self, model: &ModelRoot) {
-        let fields = self.map_fields(&model.fields, None, None, stmt::Projection::identity());
+        let fields = MapField::new(&mut self)
+            .map_fields(&model.fields, None, None, stmt::Projection::identity());
 
         assert!(!self.model_to_table.is_empty());
         assert_eq!(self.model_to_table.len(), self.lowering_columns.len());
@@ -366,6 +383,105 @@ impl BuildMapping<'_> {
         }
     }
 
+    fn encode_column(
+        &self,
+        column_id: ColumnId,
+        ty: &stmt::Type,
+        expr: impl Into<stmt::Expr>,
+    ) -> stmt::Expr {
+        let expr = expr.into();
+        let column = self.table.column(column_id);
+
+        assert_ne!(stmt::Type::Null, *ty);
+
+        match &column.ty {
+            column_ty if column_ty == ty => expr,
+            // If the types do not match, attempt casting as a fallback.
+            _ => stmt::Expr::cast(expr, &column.ty),
+        }
+    }
+
+    /// Maps table columns to model field expressions during query lowering.
+    ///
+    /// Called during query planning to replace model field references with the
+    /// appropriate table column expressions. Handles type conversions between
+    /// table storage and model types.
+    fn map_table_column_to_model(
+        &self,
+        column_id: ColumnId,
+        primitive: &app::FieldPrimitive,
+    ) -> stmt::Expr {
+        let column = self.table.column(column_id);
+
+        // NOTE: nesting and table are stubs here (though often the actual values).
+        // The engine must substitute these with the actual TableRef index in the query's TableSource.
+        let expr_column = stmt::Expr::column(stmt::ExprColumn {
+            nesting: 0,
+            table: 0,
+            column: column_id.index,
+        });
+
+        match &column.ty {
+            c_ty if *c_ty == primitive.ty => expr_column,
+            // If the types do not match, attempt casting as a fallback.
+            _ => stmt::Expr::cast(expr_column, &primitive.ty),
+        }
+    }
+
+    fn build_table_to_model_field_struct(
+        &self,
+        model: &app::EmbeddedStruct,
+        mapping: &mapping::FieldStruct,
+    ) -> stmt::Expr {
+        let exprs: Vec<_> = model
+            .fields
+            .iter()
+            .enumerate()
+            .map(|(index, field)| self.build_table_to_model_field(field, &mapping.fields[index]))
+            .collect();
+        stmt::Expr::record(exprs)
+    }
+
+    fn build_table_to_model_field(
+        &self,
+        field: &app::Field,
+        mapping: &mapping::Field,
+    ) -> stmt::Expr {
+        match &field.ty {
+            app::FieldTy::Primitive(primitive) => {
+                let column_id = mapping.as_primitive().unwrap().column;
+                self.map_table_column_to_model(column_id, primitive)
+            }
+            app::FieldTy::Embedded(embedded) => match self.app.model(embedded.target) {
+                app::Model::EmbeddedEnum(embedded) => {
+                    let mapping = mapping
+                        .as_enum()
+                        .expect("embedded enum field should have enum mapping");
+                    self.build_table_to_model_field_enum(embedded, mapping)
+                }
+                app::Model::EmbeddedStruct(embedded) => {
+                    let mapping = mapping
+                        .as_struct()
+                        .expect("embedded struct field should have struct mapping");
+                    self.build_table_to_model_field_struct(embedded, mapping)
+                }
+                _ => unreachable!("invalid schema"),
+            },
+            app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
+                stmt::Value::Null.into()
+            }
+        }
+    }
+}
+
+impl<'a, 'b> MapField<'a, 'b> {
+    fn new(build: &'a mut BuildMapping<'b>) -> Self {
+        MapField {
+            build,
+            in_enum_variant: false,
+        }
+    }
+
     fn map_fields(
         &mut self,
         fields: &[app::Field],
@@ -404,7 +520,7 @@ impl BuildMapping<'_> {
                 base_projection,
             ),
             app::FieldTy::Embedded(embedded) => {
-                let embedded_model = self.app.model(embedded.target);
+                let embedded_model = self.build.app.model(embedded.target);
                 if let app::Model::EmbeddedEnum(embedded_enum) = embedded_model {
                     self.map_field_enum(
                         field_index,
@@ -426,7 +542,7 @@ impl BuildMapping<'_> {
                 }
             }
             app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
-                let bit = self.next_bit();
+                let bit = self.build.next_bit();
                 mapping::Field::Relation(mapping::FieldRelation {
                     field_mask: stmt::PathFieldSet::from_iter([bit]),
                 })
@@ -444,8 +560,9 @@ impl BuildMapping<'_> {
         source_field_id: Option<FieldId>,
         base_projection: &stmt::Projection,
     ) -> mapping::Field {
-        let column_name = format_column_name(field, self.schema_prefix.as_deref(), prefix);
-        let column_id = self.create_column(
+        let column_name =
+            format_column_name(field, self.build.schema_prefix.as_deref(), prefix);
+        let column_id = self.build.create_column(
             column_name,
             primitive,
             field.nullable || self.in_enum_variant,
@@ -454,12 +571,12 @@ impl BuildMapping<'_> {
 
         let expr = field_expr(field, field_index, source_field_id, base_projection);
 
-        let lowering = self.encode_column(column_id, &primitive.ty, expr);
-        let lowering_index = self.model_to_table.len();
-        self.lowering_columns.push(column_id);
-        self.model_to_table.push(lowering);
+        let lowering = self.build.encode_column(column_id, &primitive.ty, expr);
+        let lowering_index = self.build.model_to_table.len();
+        self.build.lowering_columns.push(column_id);
+        self.build.model_to_table.push(lowering);
 
-        let bit = self.next_bit();
+        let bit = self.build.next_bit();
 
         let sub_projection = if source_field_id.is_some() {
             let mut proj = base_projection.clone();
@@ -488,14 +605,15 @@ impl BuildMapping<'_> {
         source_field_id: Option<FieldId>,
         base_projection: &stmt::Projection,
     ) -> mapping::Field {
-        let disc_col_name = format_column_name(field, self.schema_prefix.as_deref(), prefix);
+        let disc_col_name =
+            format_column_name(field, self.build.schema_prefix.as_deref(), prefix);
 
         // Create the discriminant column. It inherits nullability from the enum field.
         let disc_primitive = app::FieldPrimitive {
             ty: stmt::Type::I64,
             storage_ty: None,
         };
-        let disc_col_id = self.create_column(
+        let disc_col_id = self.build.create_column(
             disc_col_name.clone(),
             &disc_primitive,
             field.nullable,
@@ -513,12 +631,12 @@ impl BuildMapping<'_> {
             field_expr.clone()
         };
 
-        let lowering = self.encode_column(disc_col_id, &stmt::Type::I64, disc_expr);
-        let lowering_index = self.model_to_table.len();
-        self.lowering_columns.push(disc_col_id);
-        self.model_to_table.push(lowering);
+        let lowering = self.build.encode_column(disc_col_id, &stmt::Type::I64, disc_expr);
+        let lowering_index = self.build.model_to_table.len();
+        self.build.lowering_columns.push(disc_col_id);
+        self.build.model_to_table.push(lowering);
 
-        let bit = self.next_bit();
+        let bit = self.build.next_bit();
 
         let sub_projection = if source_field_id.is_some() {
             let mut proj = base_projection.clone();
@@ -542,7 +660,7 @@ impl BuildMapping<'_> {
                 let vf_field = match &vf.ty {
                     app::FieldTy::Primitive(vf_primitive) => {
                         let vf_col_id =
-                            self.create_column(vf_col_name, vf_primitive, true, false);
+                            self.build.create_column(vf_col_name, vf_primitive, true, false);
 
                         let arm = stmt::MatchArm {
                             pattern: stmt::Value::I64(variant.discriminant),
@@ -552,7 +670,7 @@ impl BuildMapping<'_> {
                             ),
                         };
 
-                        let vf_lowering_expr = self.encode_column(
+                        let vf_lowering_expr = self.build.encode_column(
                             vf_col_id,
                             &vf_primitive.ty,
                             stmt::Expr::match_expr(
@@ -561,9 +679,9 @@ impl BuildMapping<'_> {
                                 stmt::Expr::null(),
                             ),
                         );
-                        let vf_lowering = self.model_to_table.len();
-                        self.lowering_columns.push(vf_col_id);
-                        self.model_to_table.push(vf_lowering_expr);
+                        let vf_lowering = self.build.model_to_table.len();
+                        self.build.lowering_columns.push(vf_col_id);
+                        self.build.model_to_table.push(vf_lowering_expr);
 
                         mapping::Field::Primitive(mapping::FieldPrimitive {
                             column: vf_col_id,
@@ -573,7 +691,7 @@ impl BuildMapping<'_> {
                         })
                     }
                     app::FieldTy::Embedded(embedded) => {
-                        let embedded_model = self.app.model(embedded.target);
+                        let embedded_model = self.build.app.model(embedded.target);
                         let embedded_struct = embedded_model.expect_embedded_struct();
                         self.map_variant_struct_field(
                             local_idx,
@@ -671,7 +789,7 @@ impl BuildMapping<'_> {
             };
 
             let sub_col_name = format_column_name(sub_field, None, Some(vf_col_name));
-            let sub_col_id = self.create_column(sub_col_name, sub_primitive, true, false);
+            let sub_col_id = self.build.create_column(sub_col_name, sub_primitive, true, false);
 
             // The enum value is Record([I64(disc), vf_0, vf_1, ...]).
             // The struct field at local_idx is at position local_idx + 1.
@@ -684,14 +802,14 @@ impl BuildMapping<'_> {
                 expr: stmt::Expr::project(field_expr.clone(), arm_proj.clone()),
             };
 
-            let sub_lowering_expr = self.encode_column(
+            let sub_lowering_expr = self.build.encode_column(
                 sub_col_id,
                 &sub_primitive.ty,
                 stmt::Expr::match_expr(disc_proj.clone(), vec![arm], stmt::Expr::null()),
             );
-            let sub_lowering = self.model_to_table.len();
-            self.lowering_columns.push(sub_col_id);
-            self.model_to_table.push(sub_lowering_expr);
+            let sub_lowering = self.build.model_to_table.len();
+            self.build.lowering_columns.push(sub_col_id);
+            self.build.model_to_table.push(sub_lowering_expr);
 
             sub_fields.push(mapping::Field::Primitive(mapping::FieldPrimitive {
                 column: sub_col_id,
@@ -713,96 +831,6 @@ impl BuildMapping<'_> {
             field_mask,
             sub_projection: stmt::Projection::single(local_idx + 1),
         })
-    }
-
-    fn encode_column(
-        &self,
-        column_id: ColumnId,
-        ty: &stmt::Type,
-        expr: impl Into<stmt::Expr>,
-    ) -> stmt::Expr {
-        let expr = expr.into();
-        let column = self.table.column(column_id);
-
-        assert_ne!(stmt::Type::Null, *ty);
-
-        match &column.ty {
-            column_ty if column_ty == ty => expr,
-            // If the types do not match, attempt casting as a fallback.
-            _ => stmt::Expr::cast(expr, &column.ty),
-        }
-    }
-
-    /// Maps table columns to model field expressions during query lowering.
-    ///
-    /// Called during query planning to replace model field references with the
-    /// appropriate table column expressions. Handles type conversions between
-    /// table storage and model types.
-    fn map_table_column_to_model(
-        &self,
-        column_id: ColumnId,
-        primitive: &app::FieldPrimitive,
-    ) -> stmt::Expr {
-        let column = self.table.column(column_id);
-
-        // NOTE: nesting and table are stubs here (though often the actual values).
-        // The engine must substitute these with the actual TableRef index in the query's TableSource.
-        let expr_column = stmt::Expr::column(stmt::ExprColumn {
-            nesting: 0,
-            table: 0,
-            column: column_id.index,
-        });
-
-        match &column.ty {
-            c_ty if *c_ty == primitive.ty => expr_column,
-            // If the types do not match, attempt casting as a fallback.
-            _ => stmt::Expr::cast(expr_column, &primitive.ty),
-        }
-    }
-
-    fn build_table_to_model_field_struct(
-        &self,
-        model: &app::EmbeddedStruct,
-        mapping: &mapping::FieldStruct,
-    ) -> stmt::Expr {
-        let exprs: Vec<_> = model
-            .fields
-            .iter()
-            .enumerate()
-            .map(|(index, field)| self.build_table_to_model_field(field, &mapping.fields[index]))
-            .collect();
-        stmt::Expr::record(exprs)
-    }
-
-    fn build_table_to_model_field(
-        &self,
-        field: &app::Field,
-        mapping: &mapping::Field,
-    ) -> stmt::Expr {
-        match &field.ty {
-            app::FieldTy::Primitive(primitive) => {
-                let column_id = mapping.as_primitive().unwrap().column;
-                self.map_table_column_to_model(column_id, primitive)
-            }
-            app::FieldTy::Embedded(embedded) => match self.app.model(embedded.target) {
-                app::Model::EmbeddedEnum(embedded) => {
-                    let mapping = mapping
-                        .as_enum()
-                        .expect("embedded enum field should have enum mapping");
-                    self.build_table_to_model_field_enum(embedded, mapping)
-                }
-                app::Model::EmbeddedStruct(embedded) => {
-                    let mapping = mapping
-                        .as_struct()
-                        .expect("embedded struct field should have struct mapping");
-                    self.build_table_to_model_field_struct(embedded, mapping)
-                }
-                _ => unreachable!("invalid schema"),
-            },
-            app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
-                stmt::Value::Null.into()
-            }
-        }
     }
 }
 
