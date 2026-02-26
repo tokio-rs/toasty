@@ -48,7 +48,12 @@ pub async fn crud_user_todos(test: &mut Test) -> Result<()> {
     );
 
     // Create a Todo associated with the user
-    let todo = user.todos().create().title("hello world").exec(&mut db).await?;
+    let todo = user
+        .todos()
+        .create()
+        .title("hello world")
+        .exec(&mut db)
+        .await?;
 
     // Find the todo by ID
     let list = Todo::filter_by_id(todo.id)
@@ -87,7 +92,11 @@ pub async fn crud_user_todos(test: &mut Test) -> Result<()> {
             user.todos().create().title(title).exec(&mut db).await?
         } else {
             // Create via todo builder
-            Todo::create().user(&user).title(title).exec(&mut db).await?
+            Todo::create()
+                .user(&user)
+                .title(title)
+                .exec(&mut db)
+                .await?
         };
 
         ids.push(todo.id);
@@ -370,7 +379,12 @@ pub async fn has_many_when_fk_is_composite(test: &mut Test) -> Result<()> {
     );
 
     // Create a Todo associated with the user
-    let todo = user.todos().create().title("hello world").exec(&mut db).await?;
+    let todo = user
+        .todos()
+        .create()
+        .title("hello world")
+        .exec(&mut db)
+        .await?;
 
     // Find the todo by ID
     let list = Todo::filter_by_user_id_and_id(user.id, todo.id)
@@ -405,7 +419,11 @@ pub async fn has_many_when_fk_is_composite(test: &mut Test) -> Result<()> {
             user.todos().create().title(title).exec(&mut db).await?
         } else {
             // Create via todo builder
-            Todo::create().user(&user).title(title).exec(&mut db).await?
+            Todo::create()
+                .user(&user)
+                .title(title)
+                .exec(&mut db)
+                .await?
         };
 
         ids.push(todo.id);

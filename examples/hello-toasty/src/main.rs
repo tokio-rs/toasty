@@ -86,7 +86,12 @@ async fn main() -> toasty::Result<()> {
 
     println!(" ~~~~~~~~~~~ CREATE TODOs ~~~~~~~~~~~~");
 
-    let todo = u2.todos().create().title("finish toasty").exec(&mut db).await?;
+    let todo = u2
+        .todos()
+        .create()
+        .title("finish toasty")
+        .exec(&mut db)
+        .await?;
 
     println!("CREATED = {todo:#?}");
 
@@ -131,7 +136,10 @@ async fn main() -> toasty::Result<()> {
 
     user.todos().remove(&mut db, todos.last().unwrap()).await?;
 
-    assert_eq!(len - 1, user.todos().collect::<Vec<_>>(&mut db).await?.len());
+    assert_eq!(
+        len - 1,
+        user.todos().collect::<Vec<_>>(&mut db).await?.len()
+    );
 
     println!(">>> DONE <<<");
 

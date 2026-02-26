@@ -48,9 +48,7 @@ impl Builder {
 
         let capability = pool.capability();
 
-        let schema = self
-            .core
-            .build(self.build_app_schema()?, capability)?;
+        let schema = self.core.build(self.build_app_schema()?, capability)?;
 
         let engine = Engine::new(Arc::new(schema), capability);
 

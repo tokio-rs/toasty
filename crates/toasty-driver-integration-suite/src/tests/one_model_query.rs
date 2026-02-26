@@ -31,7 +31,9 @@ pub async fn query_index_eq(test: &mut Test) -> Result<()> {
         User::create().name(name).email(email).exec(&mut db).await?;
     }
 
-    let users = User::filter_by_name("one").collect::<Vec<_>>(&mut db).await?;
+    let users = User::filter_by_name("one")
+        .collect::<Vec<_>>(&mut db)
+        .await?;
 
     assert_eq!(1, users.len());
     assert_eq!("one", users[0].name);
@@ -222,7 +224,11 @@ pub async fn query_local_key_cmp(test: &mut Test) -> Result<()> {
         ("info", 18),
         ("warn", 19),
     ] {
-        Event::create().kind(kind).timestamp(ts).exec(&mut db).await?;
+        Event::create()
+            .kind(kind)
+            .timestamp(ts)
+            .exec(&mut db)
+            .await?;
     }
 
     let events: Vec<_> = Event::filter_by_kind("info")
@@ -773,7 +779,11 @@ pub async fn query_arbitrary_constraint(test: &mut Test) -> Result<()> {
         ("info", 18),
         ("warn", 19),
     ] {
-        Event::create().kind(kind).timestamp(ts).exec(&mut db).await?;
+        Event::create()
+            .kind(kind)
+            .timestamp(ts)
+            .exec(&mut db)
+            .await?;
     }
 
     let events: Vec<_> = Event::filter(Event::fields().timestamp().gt(12))

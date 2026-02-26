@@ -397,7 +397,10 @@ pub async fn ty_bytes(test: &mut Test) -> Result<()> {
     }
 
     // Test 2: Update chain
-    let mut record = Foo::create().val(test_values[0].clone()).exec(&mut db).await?;
+    let mut record = Foo::create()
+        .val(test_values[0].clone())
+        .exec(&mut db)
+        .await?;
     test.log().clear();
 
     for val in &test_values {

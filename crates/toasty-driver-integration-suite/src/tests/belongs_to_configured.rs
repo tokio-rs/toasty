@@ -33,7 +33,12 @@ pub async fn different_field_name(test: &mut Test) -> Result<()> {
     let user = User::create().exec(&mut db).await?;
 
     // Create a Todo associated with the user
-    let todo = user.todos().create().title("hello world").exec(&mut db).await?;
+    let todo = user
+        .todos()
+        .create()
+        .title("hello world")
+        .exec(&mut db)
+        .await?;
 
     assert_eq!(todo.title, "hello world");
 

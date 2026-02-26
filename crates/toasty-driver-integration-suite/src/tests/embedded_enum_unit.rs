@@ -151,7 +151,11 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
         ("Task C", Status::Active),
         ("Task D", Status::Done),
     ] {
-        Task::create().name(name).status(status).exec(&mut db).await?;
+        Task::create()
+            .name(name)
+            .status(status)
+            .exec(&mut db)
+            .await?;
     }
 
     let status_col = column(&db, "tasks", "status");

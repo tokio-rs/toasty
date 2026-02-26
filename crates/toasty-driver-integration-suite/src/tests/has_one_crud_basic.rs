@@ -38,7 +38,12 @@ pub async fn crud_has_one_bi_direction_optional(test: &mut Test) -> Result<()> {
     assert_none!(user.profile().get(&mut db).await?);
 
     // Create a profile for the user
-    let profile = user.profile().create().bio("a person").exec(&mut db).await?;
+    let profile = user
+        .profile()
+        .create()
+        .bio("a person")
+        .exec(&mut db)
+        .await?;
 
     // Load the profile
     let profile_reload = user.profile().get(&mut db).await?.unwrap();
@@ -81,7 +86,10 @@ pub async fn crud_has_one_bi_direction_optional(test: &mut Test) -> Result<()> {
     let profile_reloaded = Profile::filter_by_id(profile.id).get(&mut db).await?;
     assert_none!(profile_reloaded.user_id);
 
-    user.update().profile(&profile_reloaded).exec(&mut db).await?;
+    user.update()
+        .profile(&profile_reloaded)
+        .exec(&mut db)
+        .await?;
 
     let profile_reloaded = Profile::get_by_id(&mut db, &profile.id).await?;
     assert_eq!(&user.id, profile_reloaded.user_id.as_ref().unwrap());
@@ -388,7 +396,10 @@ pub async fn unset_has_one_with_required_pair_in_pk_query_update(test: &mut Test
 
     let mut db = test.setup_db(models!(User, Profile)).await;
 
-    let user = User::create().profile(Profile::create()).exec(&mut db).await?;
+    let user = User::create()
+        .profile(Profile::create())
+        .exec(&mut db)
+        .await?;
     let profile = user.profile().get(&mut db).await?.unwrap();
 
     assert_eq!(user.id, profile.user_id);

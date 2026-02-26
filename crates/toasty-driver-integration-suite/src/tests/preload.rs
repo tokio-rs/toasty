@@ -115,9 +115,17 @@ pub async fn multiple_includes_same_model(test: &mut Test) -> Result<()> {
     let user = User::create().name("Test User").exec(&mut db).await?;
 
     // Create posts associated with the user
-    Post::create().title("Post 1").user(&user).exec(&mut db).await?;
+    Post::create()
+        .title("Post 1")
+        .user(&user)
+        .exec(&mut db)
+        .await?;
 
-    Post::create().title("Post 2").user(&user).exec(&mut db).await?;
+    Post::create()
+        .title("Post 2")
+        .user(&user)
+        .exec(&mut db)
+        .await?;
 
     // Create comments associated with the user
     Comment::create()

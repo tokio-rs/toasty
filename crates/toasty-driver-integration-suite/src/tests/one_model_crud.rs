@@ -115,7 +115,10 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
     let mut ids = vec![];
 
     for i in 0..10 {
-        let item = Foo::create().val(format!("hello {i}")).exec(&mut db).await?;
+        let item = Foo::create()
+            .val(format!("hello {i}"))
+            .exec(&mut db)
+            .await?;
 
         assert_ne!(item.id, created.id);
         ids.push(item.id);
@@ -283,7 +286,11 @@ pub async fn unique_index_required_field_update(test: &mut Test) -> Result<()> {
     assert_err!(User::create().email(email).exec(&mut db).await);
 
     // Updating the email address by object
-    user2.update().email("user2@example.com").exec(&mut db).await?;
+    user2
+        .update()
+        .email("user2@example.com")
+        .exec(&mut db)
+        .await?;
 
     // Reload the user by ID
     let user_reloaded = User::filter_by_id(user2.id).get(&mut db).await?;
@@ -294,7 +301,12 @@ pub async fn unique_index_required_field_update(test: &mut Test) -> Result<()> {
     assert_none!(User::filter_by_email(email).first(&mut db).await?);
 
     // Trying to create a user with the updated email address fails
-    assert_err!(User::create().email("user2@example.com").exec(&mut db).await);
+    assert_err!(
+        User::create()
+            .email("user2@example.com")
+            .exec(&mut db)
+            .await
+    );
 
     // Creating a user with the **old** email address succeeds
     let user3 = User::create().email(email).exec(&mut db).await?;
@@ -312,14 +324,26 @@ pub async fn unique_index_required_field_update(test: &mut Test) -> Result<()> {
     assert_none!(User::filter_by_email(&user2.email).first(&mut db).await?);
 
     // Find the user by the new address.
-    let u = User::filter_by_email("user3@example.com").get(&mut db).await?;
+    let u = User::filter_by_email("user3@example.com")
+        .get(&mut db)
+        .await?;
 
     assert_eq!(u.id, user2.id);
 
-    assert_err!(User::create().email("user3@example.com").exec(&mut db).await);
+    assert_err!(
+        User::create()
+            .email("user3@example.com")
+            .exec(&mut db)
+            .await
+    );
 
     // But we *can* create a user w/ the old email
-    assert_ok!(User::create().email("user2@example.com").exec(&mut db).await);
+    assert_ok!(
+        User::create()
+            .email("user2@example.com")
+            .exec(&mut db)
+            .await
+    );
     Ok(())
 }
 
@@ -350,10 +374,17 @@ pub async fn unique_index_nullable_field_update(test: &mut Test) -> Result<()> {
     assert!(u1_reload.email.is_none());
 
     // Finding by a bogus email finds nothing
-    assert_none!(User::filter_by_email("foo@example.com").first(&mut db).await?);
+    assert_none!(
+        User::filter_by_email("foo@example.com")
+            .first(&mut db)
+            .await?
+    );
 
     // Create a user **with** an email
-    let mut u3 = User::create().email("three@example.com").exec(&mut db).await?;
+    let mut u3 = User::create()
+        .email("three@example.com")
+        .exec(&mut db)
+        .await?;
     assert_eq!(u3.email, Some("three@example.com".to_string()));
 
     let u3_reload = User::get_by_email(&mut db, "three@example.com").await?;
@@ -386,8 +417,13 @@ pub async fn unique_index_nullable_field_update(test: &mut Test) -> Result<()> {
     assert!(u3.email.is_none());
 
     // We can create a new user using the freed email
-    let u4 = User::create().email("three@example.com").exec(&mut db).await?;
-    let u4_reload = User::filter_by_email("three@example.com").get(&mut db).await?;
+    let u4 = User::create()
+        .email("three@example.com")
+        .exec(&mut db)
+        .await?;
+    let u4_reload = User::filter_by_email("three@example.com")
+        .get(&mut db)
+        .await?;
     assert_eq!(u4_reload.id, u4.id);
     Ok(())
 }
@@ -477,7 +513,9 @@ pub async fn empty_batch_get_by_id(test: &mut Test) -> Result<()> {
         ids.push(item.id);
     }
 
-    let items: Vec<_> = Foo::filter_by_id_batch(&[] as &[ID]).collect(&mut db).await?;
+    let items: Vec<_> = Foo::filter_by_id_batch(&[] as &[ID])
+        .collect(&mut db)
+        .await?;
 
     assert_eq!(0, items.len());
     Ok(())
