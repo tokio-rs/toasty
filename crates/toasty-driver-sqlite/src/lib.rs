@@ -11,6 +11,7 @@ use toasty_core::{
     async_trait,
     driver::{
         operation::{Operation, Transaction},
+        transaction::IsolationLevel,
         Capability, Driver, Response,
     },
     schema::db::{Migration, Schema, SchemaDiff, Table},
@@ -148,35 +149,21 @@ impl toasty_core::driver::Connection for Connection {
                 );
                 (op.stmt.into(), op.ret)
             }
-            Operation::Transaction(tx_op) => {
-                let sql: Cow<'static, str> = match tx_op {
-                    Transaction::Start { isolation } => {
-                        match isolation {
-                            None
-                            | Some(
-                                toasty_core::driver::transaction::IsolationLevel::Serializable,
-                            ) => {}
-                            Some(_) => {
-                                return Err(toasty_core::Error::unsupported_feature(
-                                    "SQLite only supports Serializable isolation",
-                                ))
-                            }
-                        }
-                        "BEGIN".into()
+            Operation::Transaction(mut op) => {
+                if let Transaction::Start { isolation } = &mut op {
+                    if !matches!(isolation, Some(IsolationLevel::Serializable) | None) {
+                        return Err(toasty_core::Error::unsupported_feature(
+                            "SQLite only supports Serializable isolation",
+                        ));
                     }
-                    Transaction::Commit => "COMMIT".into(),
-                    Transaction::Rollback => "ROLLBACK".into(),
-                    Transaction::Savepoint { depth } => format!("SAVEPOINT sp_{depth}").into(),
-                    Transaction::ReleaseSavepoint { depth } => {
-                        format!("RELEASE SAVEPOINT sp_{depth}").into()
-                    }
-                    Transaction::RollbackToSavepoint { depth } => {
-                        format!("ROLLBACK TO SAVEPOINT sp_{depth}").into()
-                    }
-                };
+                    *isolation = None;
+                }
+
+                let sql = sql::Serializer::sqlite(schema).serialize_transaction(&op);
                 self.connection
                     .execute(&sql, [])
                     .map_err(toasty_core::Error::driver_operation_failed)?;
+
                 return Ok(Response::count(0));
             }
             _ => todo!("op={:#?}", op),

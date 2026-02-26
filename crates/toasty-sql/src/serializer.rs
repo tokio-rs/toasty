@@ -1,5 +1,7 @@
 #[macro_use]
 mod fmt;
+use std::borrow::Cow;
+
 use fmt::ToSql;
 
 mod column;
@@ -29,7 +31,10 @@ mod value;
 
 use crate::stmt::Statement;
 
-use toasty_core::schema::db::{self, Index, Table};
+use toasty_core::{
+    driver::operation::Transaction,
+    schema::db::{self, Index, Table},
+};
 
 /// Context information when serializing VALUES in an INSERT statement
 #[derive(Debug, Clone)]
@@ -91,6 +96,30 @@ impl<'a> Serializer<'a> {
 
         ret.push(';');
         ret
+    }
+
+    /// Serialize a transaction control operation to a SQL string.
+    ///
+    /// The generated SQL is flavor-specific (e.g., MySQL uses `START TRANSACTION`
+    /// while other databases use `BEGIN`). Savepoints are named `sp_{id}`.
+    pub fn serialize_transaction(&self, op: &Transaction) -> Cow<'static, str> {
+        match op {
+            Transaction::Start { isolation } => match (&self.flavor, isolation) {
+                (Flavor::Mysql, None) => "START TRANSACTION".into(),
+                (Flavor::Mysql, Some(level)) => format!(
+                    "SET TRANSACTION ISOLATION LEVEL {}; START TRANSACTION",
+                    level.sql_name()
+                )
+                .into(),
+                (_, None) => "BEGIN".into(),
+                (_, Some(level)) => format!("BEGIN ISOLATION LEVEL {}", level.sql_name()).into(),
+            },
+            Transaction::Commit => "COMMIT".into(),
+            Transaction::Rollback => "ROLLBACK".into(),
+            Transaction::Savepoint(id) => format!("SAVEPOINT sp_{id}").into(),
+            Transaction::ReleaseSavepoint(id) => format!("RELEASE SAVEPOINT sp_{id}").into(),
+            Transaction::RollbackToSavepoint(id) => format!("ROLLBACK TO SAVEPOINT sp_{id}").into(),
+        }
     }
 
     fn table(&self, id: impl Into<db::TableId>) -> &'a Table {

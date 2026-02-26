@@ -8,7 +8,7 @@ use postgres::{tls::MakeTlsConnect, types::ToSql, Socket};
 use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     async_trait,
-    driver::{operation::Transaction, Capability, Driver, Operation, Response},
+    driver::{Capability, Driver, Operation, Response},
     schema::db::{Migration, Schema, SchemaDiff, Table},
     stmt,
     stmt::ValueRecord,
@@ -264,52 +264,6 @@ impl From<Client> for Connection {
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
-        if let Operation::Transaction(ref tx_op) = op {
-            match tx_op {
-                Transaction::Commit => {
-                    self.client.batch_execute("COMMIT").await.map_err(|e| {
-                        if let Some(db_err) = e.as_db_error() {
-                            match db_err.code().code() {
-                                "40001" => toasty_core::Error::serialization_failure(
-                                    db_err.message().to_string(),
-                                ),
-                                "25006" => toasty_core::Error::read_only_transaction(
-                                    db_err.message().to_string(),
-                                ),
-                                _ => toasty_core::Error::driver_operation_failed(e),
-                            }
-                        } else {
-                            toasty_core::Error::driver_operation_failed(e)
-                        }
-                    })?;
-                }
-                tx_op => {
-                    let sql: Cow<'static, str> = match tx_op {
-                        Transaction::Start { isolation } => match isolation {
-                            None => "BEGIN".into(),
-                            Some(level) => {
-                                format!("BEGIN ISOLATION LEVEL {}", level.sql_name()).into()
-                            }
-                        },
-                        Transaction::Rollback => "ROLLBACK".into(),
-                        Transaction::Savepoint { depth } => format!("SAVEPOINT sp_{depth}").into(),
-                        Transaction::ReleaseSavepoint { depth } => {
-                            format!("RELEASE SAVEPOINT sp_{depth}").into()
-                        }
-                        Transaction::RollbackToSavepoint { depth } => {
-                            format!("ROLLBACK TO SAVEPOINT sp_{depth}").into()
-                        }
-                        Transaction::Commit => unreachable!(),
-                    };
-                    self.client
-                        .batch_execute(&sql)
-                        .await
-                        .map_err(toasty_core::Error::driver_operation_failed)?;
-                }
-            }
-            return Ok(Response::count(0));
-        }
-
         let (sql, ret_tys): (sql::Statement, _) = match op {
             Operation::Insert(op) => (op.stmt.into(), None),
             Operation::QuerySql(query) => {
@@ -318,6 +272,23 @@ impl toasty_core::driver::Connection for Connection {
                     "last_insert_id_hack is MySQL-specific and should not be set for PostgreSQL"
                 );
                 (query.stmt.into(), query.ret)
+            }
+            Operation::Transaction(op) => {
+                let sql = sql::Serializer::postgresql(schema).serialize_transaction(&op);
+
+                self.client.batch_execute(&sql).await.map_err(|e| {
+                    if let Some(db_err) = e.as_db_error() {
+                        match db_err.code().code() {
+                            "40001" => toasty_core::Error::serialization_failure(db_err.message()),
+                            "25006" => toasty_core::Error::read_only_transaction(db_err.message()),
+                            _ => toasty_core::Error::driver_operation_failed(e),
+                        }
+                    } else {
+                        toasty_core::Error::driver_operation_failed(e)
+                    }
+                })?;
+
+                return Ok(Response::count(0));
             }
             op => todo!("op={:#?}", op),
         };

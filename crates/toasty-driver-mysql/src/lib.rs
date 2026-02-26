@@ -10,7 +10,7 @@ use mysql_async::{
 use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     async_trait,
-    driver::{operation::Transaction, Capability, Driver, Operation, Response},
+    driver::{Capability, Driver, Operation, Response},
     schema::db::{Migration, Schema, SchemaDiff, Table},
     stmt::{self, ValueRecord},
     Result,
@@ -183,7 +183,7 @@ impl Connection {
 
 impl From<Conn> for Connection {
     fn from(conn: Conn) -> Self {
-        Self::new(conn)
+        Self { conn }
     }
 }
 
@@ -192,24 +192,10 @@ impl toasty_core::driver::Connection for Connection {
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         let (sql, ret, last_insert_id_hack): (sql::Statement, _, _) = match op {
             Operation::QuerySql(op) => (op.stmt.into(), op.ret, op.last_insert_id_hack),
-            Operation::Transaction(Transaction::Start { isolation }) => {
-                if let Some(level) = isolation {
-                    self.conn
-                        .query_drop(format!(
-                            "SET TRANSACTION ISOLATION LEVEL {}",
-                            level.sql_name()
-                        ))
-                        .await
-                        .map_err(toasty_core::Error::driver_operation_failed)?;
-                }
-                self.conn
-                    .query_drop("START TRANSACTION")
-                    .await
-                    .map_err(toasty_core::Error::driver_operation_failed)?;
-                return Ok(Response::count(0));
-            }
-            Operation::Transaction(Transaction::Commit) => {
-                self.conn.query_drop("COMMIT").await.map_err(|e| match e {
+            Operation::Transaction(op) => {
+                let sql = sql::Serializer::mysql(schema).serialize_transaction(&op);
+
+                self.conn.query_drop(sql).await.map_err(|e| match e {
                     mysql_async::Error::Server(se) => match se.code {
                         1213 => toasty_core::Error::serialization_failure(se.message),
                         1792 => toasty_core::Error::read_only_transaction(se.message),
@@ -219,24 +205,6 @@ impl toasty_core::driver::Connection for Connection {
                     },
                     other => toasty_core::Error::driver_operation_failed(other),
                 })?;
-                return Ok(Response::count(0));
-            }
-            Operation::Transaction(tx_op) => {
-                let sql: Cow<'static, str> = match tx_op {
-                    Transaction::Rollback => "ROLLBACK".into(),
-                    Transaction::Savepoint { depth } => format!("SAVEPOINT sp_{depth}").into(),
-                    Transaction::ReleaseSavepoint { depth } => {
-                        format!("RELEASE SAVEPOINT sp_{depth}").into()
-                    }
-                    Transaction::RollbackToSavepoint { depth } => {
-                        format!("ROLLBACK TO SAVEPOINT sp_{depth}").into()
-                    }
-                    _ => unreachable!(),
-                };
-                self.conn
-                    .query_drop(sql.as_ref())
-                    .await
-                    .map_err(toasty_core::Error::driver_operation_failed)?;
                 return Ok(Response::count(0));
             }
             op => todo!("op={:#?}", op),

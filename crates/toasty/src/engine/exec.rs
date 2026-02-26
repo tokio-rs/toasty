@@ -50,7 +50,7 @@ pub(crate) use var::{VarDecls, VarId, VarStore};
 
 use crate::{db::ConnHandle, engine::Engine, Result};
 use toasty_core::{
-    driver::Rows,
+    driver::{operation::Transaction, Rows},
     stmt::{self, ValueStream},
 };
 
@@ -58,6 +58,13 @@ struct Exec<'a> {
     engine: &'a Engine,
     connection: ConnHandle<'a>,
     vars: VarStore,
+    /// Monotonically increasing counter for generating unique savepoint IDs
+    /// within a single plan execution.
+    next_savepoint_id: usize,
+    /// True when an outer transaction is active on this connection. Used by
+    /// ReadModifyWrite to decide between savepoints (nested) and its own
+    /// BEGIN/COMMIT (standalone).
+    in_transaction: bool,
 }
 
 impl Engine {
@@ -66,14 +73,53 @@ impl Engine {
         plan: ExecPlan,
         conn: ConnHandle<'_>,
     ) -> Result<ValueStream> {
+        let in_transaction = matches!(conn, ConnHandle::Transaction(_));
+
         let mut exec = Exec {
             engine: self,
             connection: conn,
             vars: plan.vars,
+            next_savepoint_id: 0,
+            in_transaction,
         };
 
+        // Wrap multi-op plans in a transaction (or savepoint if already in one)
+        let (begin, commit, rollback) = if plan.needs_transaction {
+            if exec.in_transaction {
+                let id = exec.generate_savepoint_id();
+                (
+                    Some(Transaction::Savepoint(id)),
+                    Some(Transaction::ReleaseSavepoint(id)),
+                    Some(Transaction::RollbackToSavepoint(id)),
+                )
+            } else {
+                (
+                    Some(Transaction::Start { isolation: None }),
+                    Some(Transaction::Commit),
+                    Some(Transaction::Rollback),
+                )
+            }
+        } else {
+            (None, None, None)
+        };
+
+        if let Some(begin) = begin {
+            exec.connection.exec(&self.schema.db, begin.into()).await?;
+            exec.in_transaction = true;
+        }
+
         for step in &plan.actions {
-            exec.exec_step(step).await?;
+            if let Err(e) = exec.exec_step(step).await {
+                if let Some(rollback) = rollback {
+                    // Best effort: ignore rollback errors so the original error is returned
+                    let _ = exec.connection.exec(&self.schema.db, rollback.into()).await;
+                }
+                return Err(e);
+            }
+        }
+
+        if let Some(commit) = commit {
+            exec.connection.exec(&self.schema.db, commit.into()).await?;
         }
 
         Ok(if let Some(returning) = plan.returning {
@@ -107,6 +153,12 @@ fn try_extract_any_map_list(expr: &stmt::Expr) -> Option<(&[stmt::Value], &stmt:
 }
 
 impl Exec<'_> {
+    fn generate_savepoint_id(&mut self) -> usize {
+        let id = self.next_savepoint_id;
+        self.next_savepoint_id += 1;
+        id
+    }
+
     async fn exec_step(&mut self, action: &Action) -> Result<()> {
         match action {
             Action::DeleteByKey(action) => self.action_delete_by_key(action).await,

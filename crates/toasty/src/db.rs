@@ -4,7 +4,7 @@ mod connection;
 mod pool;
 mod transaction;
 
-use std::sync::{atomic::AtomicU32, Arc};
+use std::sync::{atomic::AtomicUsize, Arc};
 
 pub use builder::Builder;
 pub use connect::*;
@@ -36,7 +36,7 @@ pub(crate) enum EngineMsg {
 pub struct Db {
     /// Savepoint nesting depth. `None` = not in a transaction, `Some(0)` = root
     /// transaction with no nested savepoints, `Some(n)` = n nested savepoints.
-    savepoint_depth: Option<AtomicU32>,
+    savepoint_depth: Option<AtomicUsize>,
 
     pool: Pool,
 
@@ -53,7 +53,7 @@ impl Db {
     pub(crate) fn new(pool: Pool, schema: Arc<Schema>, mut connection: ConnectionSource) -> Self {
         let capabilities = pool.capability();
         let savepoint_depth = if connection.in_transaction() {
-            Some(AtomicU32::new(0))
+            Some(AtomicUsize::new(0))
         } else {
             None
         };

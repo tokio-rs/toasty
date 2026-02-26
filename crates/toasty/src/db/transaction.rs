@@ -15,7 +15,7 @@ struct Transaction<'a> {
 
 enum TransactionConn<'a> {
     Root(Db),
-    Nested { db: &'a Db, depth: u32 },
+    Nested { db: &'a Db, depth: usize },
 }
 
 impl Transaction<'_> {
@@ -32,9 +32,7 @@ impl Transaction<'_> {
         self.done = true;
         let op = match &self.conn {
             TransactionConn::Root(_) => TransactionOp::Commit,
-            TransactionConn::Nested { depth, .. } => {
-                TransactionOp::ReleaseSavepoint { depth: *depth }
-            }
+            TransactionConn::Nested { depth, .. } => TransactionOp::ReleaseSavepoint(*depth),
         };
         self.exec_op(op).await
     }
@@ -48,9 +46,7 @@ impl Transaction<'_> {
     fn rollback_op(&self) -> TransactionOp {
         match &self.conn {
             TransactionConn::Root(_) => TransactionOp::Rollback,
-            TransactionConn::Nested { depth, .. } => {
-                TransactionOp::RollbackToSavepoint { depth: *depth }
-            }
+            TransactionConn::Nested { depth, .. } => TransactionOp::RollbackToSavepoint(*depth),
         }
     }
 }
@@ -190,7 +186,7 @@ impl Db {
                     conn: TransactionConn::Nested { db: self, depth },
                 };
 
-                (tx, TransactionOp::Savepoint { depth })
+                (tx, TransactionOp::Savepoint(depth))
             }
             None => {
                 // Root: acquire a connection and start a transaction
