@@ -10,9 +10,10 @@ use tokio::{
     task::JoinHandle,
 };
 
-use crate::{engine::Engine, stmt, Cursor, Model, Result, Statement};
+use crate::{engine::Engine, executor::Executor, stmt, Cursor, Model, Result, Statement};
 
-use toasty_core::{driver::Driver, stmt::ValueStream, Schema};
+use std::sync::Arc;
+use toasty_core::{async_trait, driver::Driver, stmt::ValueStream, Schema};
 
 #[derive(Debug)]
 pub struct Db {
@@ -110,6 +111,19 @@ impl Db {
         cursor.next().await.unwrap()
     }
 
+    /// Start an interactive transaction.
+    ///
+    /// The returned `Transaction` borrows `&mut self`, preventing concurrent
+    /// use of this `Db` handle while the transaction is open.
+    pub async fn transaction(&mut self) -> Result<crate::Transaction<'_>> {
+        crate::Transaction::begin(self).await
+    }
+
+    /// Create a builder for configuring a transaction before starting it.
+    pub fn transaction_builder(&mut self) -> crate::TransactionBuilder<'_> {
+        crate::TransactionBuilder::new(self)
+    }
+
     /// Creates tables and indices defined in the schema on the database.
     pub async fn push_schema(&self) -> Result<()> {
         self.engine
@@ -135,6 +149,19 @@ impl Db {
 
     pub fn capability(&self) -> &Capability {
         self.engine.capability()
+    }
+}
+
+#[async_trait]
+impl Executor for Db {
+    async fn exec_statement(&self, stmt: toasty_core::stmt::Statement) -> Result<ValueStream> {
+        let (tx, rx) = oneshot::channel();
+        self.in_tx.send((stmt, tx)).unwrap();
+        rx.await.unwrap()
+    }
+
+    fn schema(&self) -> &Arc<Schema> {
+        &self.engine.schema
     }
 }
 
