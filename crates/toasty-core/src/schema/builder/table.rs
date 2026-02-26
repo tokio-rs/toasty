@@ -96,13 +96,12 @@ struct MapField<'a, 'b> {
 
     /// Base expression for the current nesting level.
     ///
-    /// `Expr::arg(0)` at the top level (sentinel: each field references itself
-    /// via `field.id`). `Expr::Project(source_ref, proj)` at any nested level,
-    /// where `source_ref` is the top-level source field reference and `proj`
-    /// is the projection from that source down to the current container (not
-    /// including the final `field_index` step). `field_expr` and `sub_projection`
-    /// extend it by `field_index` to reach a specific field.
-    field_base: stmt::Expr,
+    /// `None` at the top level. `Expr::Project(source_ref, proj)` at any nested
+    /// level, where `source_ref` is the top-level source field reference and
+    /// `proj` is the projection from that source down to the current container
+    /// (not including the final `field_index` step). `field_expr` and
+    /// `sub_projection` extend it by `field_index` to reach a specific field.
+    field_base: Option<stmt::Expr>,
 
     /// A template expression with `Expr::arg(0)` as a placeholder for the raw
     /// field expression. `field_expr` substitutes the raw field expression into
@@ -502,51 +501,13 @@ impl BuildMapping<'_> {
     }
 }
 
-/// Extends `parent_base` by one projection step to produce the `field_base`
-/// for a child `MapField` entering `field` at `field_index` within the parent.
-///
-/// If `parent_base` is the top-level sentinel (`Expr::arg(0)`), the child
-/// starts a fresh projection rooted at `field.id`. Otherwise the existing
-/// `ExprProject` is extended by `field_index`.
-fn extend_field_base(
-    parent_base: &stmt::Expr,
-    field: &app::Field,
-    field_index: usize,
-) -> stmt::Expr {
-    match parent_base {
-        stmt::Expr::Arg(_) => stmt::Expr::project(
-            stmt::Expr::ref_self_field(field.id),
-            stmt::Projection::identity(),
-        ),
-        stmt::Expr::Project(ep) => {
-            let mut proj = ep.projection.clone();
-            proj.push(field_index);
-            stmt::Expr::project(*ep.base.clone(), proj)
-        }
-        _ => unreachable!("unexpected field_base variant"),
-    }
-}
-
-/// Extends an `ExprProject` expression by one projection step.
-///
-/// Panics if `base` is not `Expr::Project`.
-fn extend_projection(base: stmt::Expr, step: usize) -> stmt::Expr {
-    match base {
-        stmt::Expr::Project(mut ep) => {
-            ep.projection.push(step);
-            stmt::Expr::Project(ep)
-        }
-        _ => unreachable!("extend_projection called on non-project expr"),
-    }
-}
-
 impl<'a, 'b> MapField<'a, 'b> {
     fn new(build: &'a mut BuildMapping<'b>) -> Self {
         MapField {
             build,
             prefix: vec![],
             in_enum_variant: false,
-            field_base: stmt::Expr::arg(0),
+            field_base: None,
             field_expr_base: stmt::Expr::arg(0),
         }
     }
@@ -601,36 +562,6 @@ impl<'a, 'b> MapField<'a, 'b> {
         id
     }
 
-    /// Creates a variant-specific child `MapField`.
-    ///
-    /// Sets `field_base` so that `field_expr` on the child projects from the
-    /// enum field, sets `in_enum_variant = true`, and installs a
-    /// `field_expr_base` of `match_expr(disc_proj, [arm(discriminant,
-    /// Expr::arg(0))], null())` so that every `field_expr` call is
-    /// automatically wrapped in the discriminant check.
-    fn for_variant(
-        &mut self,
-        field: &app::Field,
-        field_index: usize,
-        disc_proj: stmt::Expr,
-        discriminant: i64,
-    ) -> MapField<'_, 'b> {
-        let field_base = extend_field_base(&self.field_base, field, field_index);
-        let field_expr_base = stmt::Expr::match_expr(
-            disc_proj,
-            vec![stmt::MatchArm {
-                pattern: stmt::Value::I64(discriminant),
-                expr: stmt::Expr::arg(0),
-            }],
-            stmt::Expr::null(),
-        );
-        let mut child = self.with_prefix(field.name.storage_name());
-        child.in_enum_variant = true;
-        child.field_base = field_base;
-        child.field_expr_base = field_expr_base;
-        child
-    }
-
     /// Creates a child `MapField` for recursing into an embedded field.
     ///
     /// The child inherits the current prefix extended by `name` and inherits
@@ -649,6 +580,39 @@ impl<'a, 'b> MapField<'a, 'b> {
         }
     }
 
+    /// Creates a variant-specific child `MapField`.
+    ///
+    /// Sets `field_base` so that `field_expr` on the child projects from the
+    /// enum field, sets `in_enum_variant = true`, and installs a
+    /// `field_expr_base` of `match_expr(disc_proj, [arm(discriminant,
+    /// Expr::arg(0))], null())` so that every `field_expr` call is
+    /// automatically wrapped in the discriminant check.
+    fn for_variant(
+        &mut self,
+        field: &app::Field,
+        field_index: usize,
+        disc_proj: stmt::Expr,
+        discriminant: i64,
+    ) -> MapField<'_, 'b> {
+        let field_base = self.extend_field_base(field, field_index);
+
+        let field_expr_base = stmt::Expr::match_expr(
+            disc_proj,
+            vec![stmt::MatchArm {
+                pattern: stmt::Value::I64(discriminant),
+                expr: stmt::Expr::arg(0),
+            }],
+            stmt::Expr::null(),
+        );
+        let mut child = self.with_prefix(field.name.storage_name());
+        child.in_enum_variant = true;
+        child.field_base = Some(field_base);
+        child
+            .field_expr_base
+            .substitute(SingleArgInput(field_expr_base));
+        child
+    }
+
     /// Creates a child `MapField` for recursing into an embedded struct field.
     ///
     /// Updates `field_base` to reflect the new nesting level: if entering the
@@ -656,10 +620,28 @@ impl<'a, 'b> MapField<'a, 'b> {
     /// projection; at deeper levels, extends the existing projection by
     /// `field_index`.
     fn for_struct(&mut self, field: &app::Field, field_index: usize) -> MapField<'_, 'b> {
-        let field_base = extend_field_base(&self.field_base, field, field_index);
+        let field_base = self.extend_field_base(field, field_index);
         let mut child = self.with_prefix(field.name.storage_name());
-        child.field_base = field_base;
+        child.field_base = Some(field_base);
         child
+    }
+
+    /// Extends `parent_base` by one projection step to produce the `field_base`
+    /// for a child `MapField` entering `field` at `field_index` within the parent.
+    ///
+    /// If `parent_base` is the top-level sentinel (`Expr::arg(0)`), the child
+    /// starts a fresh projection rooted at `field.id`. Otherwise the existing
+    /// `ExprProject` is extended by `field_index`.
+    fn extend_field_base(&self, field: &app::Field, field_index: usize) -> stmt::Expr {
+        match &self.field_base {
+            None => stmt::Expr::ref_self_field(field.id),
+            Some(stmt::Expr::Project(ep)) => {
+                let mut proj = ep.projection.clone();
+                proj.push(field_index);
+                stmt::Expr::project(*ep.base.clone(), proj)
+            }
+            Some(expr) => stmt::Expr::project(expr.clone(), [field_index]),
+        }
     }
 
     /// Returns the sub-projection from the root source field to a field at
@@ -670,12 +652,13 @@ impl<'a, 'b> MapField<'a, 'b> {
     /// is `Expr::arg(0)`) the field is its own root, so identity is returned.
     fn sub_projection(&self, field_index: usize) -> stmt::Projection {
         match &self.field_base {
-            stmt::Expr::Project(ep) => {
+            None => stmt::Projection::identity(),
+            Some(stmt::Expr::Project(ep)) => {
                 let mut proj = ep.projection.clone();
                 proj.push(field_index);
                 proj
             }
-            _ => stmt::Projection::identity(),
+            Some(_) => [field_index].into(),
         }
     }
 
@@ -686,9 +669,13 @@ impl<'a, 'b> MapField<'a, 'b> {
     /// `field_base` by `field_index`. The raw expression is then substituted
     /// into `field_expr_base` (which may wrap it in a match guard).
     fn field_expr(&self, field: &app::Field, field_index: usize) -> stmt::Expr {
-        let raw = match &self.field_base {
-            stmt::Expr::Arg(_) => stmt::Expr::ref_self_field(field.id),
-            base => extend_projection(base.clone(), field_index),
+        let raw = match self.field_base.clone() {
+            None => stmt::Expr::ref_self_field(field.id),
+            Some(stmt::Expr::Project(mut expr_project)) => {
+                expr_project.projection.push(field_index);
+                expr_project.into()
+            }
+            Some(expr) => stmt::Expr::project(expr, [field_index]),
         };
 
         let mut result = self.field_expr_base.clone();
