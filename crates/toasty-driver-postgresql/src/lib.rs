@@ -267,6 +267,15 @@ impl From<Client> for Connection {
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
+        if let Operation::Transaction(ref t) = op {
+            let sql = sql::Serializer::postgresql(schema).serialize_transaction(t);
+            self.client
+                .execute(&sql as &str, &[])
+                .await
+                .map_err(toasty_core::Error::driver_operation_failed)?;
+            return Ok(Response::count(0));
+        }
+
         let (sql, ret_tys): (sql::Statement, _) = match op {
             Operation::Insert(op) => (op.stmt.into(), None),
             Operation::QuerySql(query) => {

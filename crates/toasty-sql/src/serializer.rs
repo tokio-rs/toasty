@@ -29,7 +29,10 @@ mod value;
 
 use crate::stmt::Statement;
 
-use toasty_core::schema::db::{self, Index, Table};
+use toasty_core::{
+    driver::operation::Transaction,
+    schema::db::{self, Index, Table},
+};
 
 /// Context information when serializing VALUES in an INSERT statement
 #[derive(Debug, Clone)]
@@ -91,6 +94,24 @@ impl<'a> Serializer<'a> {
 
         ret.push(';');
         ret
+    }
+
+    /// Serialize a transaction control operation to a SQL string.
+    ///
+    /// The generated SQL is flavor-specific (e.g., MySQL uses `START TRANSACTION`
+    /// while other databases use `BEGIN`). Savepoints are named `sp_{id}`.
+    pub fn serialize_transaction(&self, op: &Transaction) -> String {
+        match op {
+            Transaction::Start => match self.flavor {
+                Flavor::Mysql => "START TRANSACTION".to_string(),
+                _ => "BEGIN".to_string(),
+            },
+            Transaction::Commit => "COMMIT".to_string(),
+            Transaction::Rollback => "ROLLBACK".to_string(),
+            Transaction::Savepoint(id) => format!("SAVEPOINT sp_{id}"),
+            Transaction::ReleaseSavepoint(id) => format!("RELEASE SAVEPOINT sp_{id}"),
+            Transaction::RollbackToSavepoint(id) => format!("ROLLBACK TO SAVEPOINT sp_{id}"),
+        }
     }
 
     fn table(&self, id: impl Into<db::TableId>) -> &'a Table {

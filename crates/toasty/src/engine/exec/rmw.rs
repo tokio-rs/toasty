@@ -32,12 +32,54 @@ impl Exec<'_> {
     ) -> Result<()> {
         assert!(action.input.is_empty(), "TODO");
 
-        let res = self
-            .connection
-            .exec(&self.engine.schema.db, Transaction::Start.into())
-            .await?;
-        assert!(matches!(res.rows, Rows::Count(0)));
+        // When nested inside an outer transaction use savepoints so the outer
+        // transaction can still commit or roll back as a whole. When standalone,
+        // start our own transaction (MySQL requires an active BEGIN before
+        // SAVEPOINT can be used, so we can't use savepoints here).
+        let (begin, commit, rollback) = if self.in_transaction {
+            let id = self.generate_savepoint_id();
+            (
+                Transaction::Savepoint(id),
+                Transaction::ReleaseSavepoint(id),
+                Transaction::RollbackToSavepoint(id),
+            )
+        } else {
+            (
+                Transaction::Start,
+                Transaction::Commit,
+                Transaction::Rollback,
+            )
+        };
 
+        self.connection
+            .exec(&self.engine.schema.db, begin.into())
+            .await?;
+
+        if let Err(e) = self.rmw_exec(action).await {
+            // Best effort: ignore rollback errors so the original error is returned
+            let _ = self
+                .connection
+                .exec(&self.engine.schema.db, rollback.into())
+                .await;
+            return Err(e);
+        }
+
+        self.connection
+            .exec(&self.engine.schema.db, commit.into())
+            .await?;
+
+        if let Some(output) = &action.output {
+            let rows = Rows::value_stream(ValueStream::default());
+            self.vars.store(output.var, output.num_uses, rows);
+        }
+
+        Ok(())
+    }
+
+    /// Execute the core read-then-write logic, returning an error on either a
+    /// DB failure or a condition mismatch. Rollback (savepoint or transaction)
+    /// is handled by the caller.
+    async fn rmw_exec(&mut self, action: &ReadModifyWrite) -> Result<()> {
         let ty = Some(vec![stmt::Type::I64, stmt::Type::I64]);
 
         let res = self
@@ -97,17 +139,6 @@ impl Exec<'_> {
         };
 
         assert_eq!(actual, count as u64);
-
-        let res = self
-            .connection
-            .exec(&self.engine.schema.db, Transaction::Commit.into())
-            .await?;
-        assert!(matches!(res.rows, Rows::Count(0)));
-
-        if let Some(output) = &action.output {
-            let rows = Rows::value_stream(ValueStream::default());
-            self.vars.store(output.var, output.num_uses, rows);
-        }
 
         Ok(())
     }
