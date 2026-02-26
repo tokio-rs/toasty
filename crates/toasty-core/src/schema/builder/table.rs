@@ -401,6 +401,21 @@ impl BuildMapping<'_> {
         }
     }
 
+    /// Encodes `expr` for `column_id`, appends the result to `model_to_table`,
+    /// records the column in `lowering_columns`, and returns the lowering index.
+    fn push_lowering(
+        &mut self,
+        column_id: ColumnId,
+        ty: &stmt::Type,
+        expr: impl Into<stmt::Expr>,
+    ) -> usize {
+        let lowering_expr = self.encode_column(column_id, ty, expr);
+        let lowering_index = self.model_to_table.len();
+        self.lowering_columns.push(column_id);
+        self.model_to_table.push(lowering_expr);
+        lowering_index
+    }
+
     fn encode_column(
         &self,
         column_id: ColumnId,
@@ -656,10 +671,7 @@ impl<'a, 'b> MapField<'a, 'b> {
 
         let expr = self.field_expr(field, field_index);
 
-        let lowering = self.build.encode_column(column_id, &primitive.ty, expr);
-        let lowering_index = self.build.model_to_table.len();
-        self.build.lowering_columns.push(column_id);
-        self.build.model_to_table.push(lowering);
+        let lowering_index = self.build.push_lowering(column_id, &primitive.ty, expr);
 
         let bit = self.build.next_bit();
 
@@ -704,12 +716,9 @@ impl<'a, 'b> MapField<'a, 'b> {
             field_expr.clone()
         };
 
-        let lowering = self
+        let lowering_index = self
             .build
-            .encode_column(disc_col_id, &stmt::Type::I64, disc_expr);
-        let lowering_index = self.build.model_to_table.len();
-        self.build.lowering_columns.push(disc_col_id);
-        self.build.model_to_table.push(lowering);
+            .push_lowering(disc_col_id, &stmt::Type::I64, disc_expr);
 
         let bit = self.build.next_bit();
 
@@ -761,7 +770,7 @@ impl<'a, 'b> MapField<'a, 'b> {
                             ),
                         };
 
-                        let vf_lowering_expr = self.build.encode_column(
+                        let vf_lowering = self.build.push_lowering(
                             vf_col_id,
                             &vf_primitive.ty,
                             stmt::Expr::match_expr(
@@ -770,9 +779,6 @@ impl<'a, 'b> MapField<'a, 'b> {
                                 stmt::Expr::null(),
                             ),
                         );
-                        let vf_lowering = self.build.model_to_table.len();
-                        self.build.lowering_columns.push(vf_col_id);
-                        self.build.model_to_table.push(vf_lowering_expr);
 
                         mapping::Field::Primitive(mapping::FieldPrimitive {
                             column: vf_col_id,
@@ -873,14 +879,11 @@ impl<'a, 'b> MapField<'a, 'b> {
                 expr: stmt::Expr::project(field_expr.clone(), arm_proj.clone()),
             };
 
-            let sub_lowering_expr = self.build.encode_column(
+            let sub_lowering = self.build.push_lowering(
                 sub_col_id,
                 &sub_primitive.ty,
                 stmt::Expr::match_expr(disc_proj.clone(), vec![arm], stmt::Expr::null()),
             );
-            let sub_lowering = self.build.model_to_table.len();
-            self.build.lowering_columns.push(sub_col_id);
-            self.build.model_to_table.push(sub_lowering_expr);
 
             sub_fields.push(mapping::Field::Primitive(mapping::FieldPrimitive {
                 column: sub_col_id,
