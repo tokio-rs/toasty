@@ -17,7 +17,7 @@ mod query_sql;
 pub use query_sql::QuerySql;
 
 mod transaction;
-pub use transaction::Transaction;
+pub use transaction::{IsolationLevel, Transaction};
 
 mod update_by_key;
 pub use update_by_key::UpdateByKey;

@@ -5,7 +5,7 @@ mod response;
 pub use response::{Response, Rows};
 
 pub mod operation;
-pub use operation::Operation;
+pub use operation::{IsolationLevel, Operation};
 
 use crate::{
     async_trait,
