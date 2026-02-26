@@ -233,18 +233,21 @@ impl Expr {
             | Self::Func(_) => false,
 
             // Const if all children are const at the same depth
-            Self::Record(expr_record) => {
-                expr_record.iter().all(|expr| expr.is_const_at_depth(map_depth))
-            }
-            Self::List(expr_list) => {
-                expr_list.items.iter().all(|expr| expr.is_const_at_depth(map_depth))
-            }
+            Self::Record(expr_record) => expr_record
+                .iter()
+                .all(|expr| expr.is_const_at_depth(map_depth)),
+            Self::List(expr_list) => expr_list
+                .items
+                .iter()
+                .all(|expr| expr.is_const_at_depth(map_depth)),
             Self::Cast(expr_cast) => expr_cast.expr.is_const_at_depth(map_depth),
             Self::BinaryOp(expr_binary) => {
                 expr_binary.lhs.is_const_at_depth(map_depth)
                     && expr_binary.rhs.is_const_at_depth(map_depth)
             }
-            Self::And(expr_and) => expr_and.iter().all(|expr| expr.is_const_at_depth(map_depth)),
+            Self::And(expr_and) => expr_and
+                .iter()
+                .all(|expr| expr.is_const_at_depth(map_depth)),
             Self::Any(expr_any) => expr_any.expr.is_const_at_depth(map_depth),
             Self::Not(expr_not) => expr_not.expr.is_const_at_depth(map_depth),
             Self::Or(expr_or) => expr_or.iter().all(|expr| expr.is_const_at_depth(map_depth)),

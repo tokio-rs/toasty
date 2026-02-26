@@ -2,7 +2,10 @@ use toasty_core::stmt::{BinaryOp, Expr, ExprArg, ExprReference, Projection, Type
 
 fn outer_arg() -> Expr {
     // nesting=1: escapes the innermost Map scope, references an outer argument
-    Expr::arg(ExprArg { position: 0, nesting: 1 })
+    Expr::arg(ExprArg {
+        position: 0,
+        nesting: 1,
+    })
 }
 
 // Helpers
@@ -313,7 +316,10 @@ fn nested_map_outer_element_arg_is_const() {
 fn nested_map_escape_both_scopes_not_const() {
     // map(list, map(list, arg(nesting=2)))
     // arg(nesting=2) escapes both map scopes — references truly external data, not const
-    let escape = Expr::arg(ExprArg { position: 0, nesting: 2 });
+    let escape = Expr::arg(ExprArg {
+        position: 0,
+        nesting: 2,
+    });
     let inner = Expr::map(Expr::list([val()]), escape);
     let outer = Expr::map(Expr::list([val()]), inner);
     assert!(!outer.is_const());
