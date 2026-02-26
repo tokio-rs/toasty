@@ -784,9 +784,21 @@ impl<'a, 'b> MapField<'a, 'b> {
             .variants
             .iter()
             .map(|variant| {
-                let fields = self
-                    .for_variant(field, field_index, disc_proj.clone(), variant.discriminant)
-                    .map_variant(variant);
+                let mut mapper =
+                    self.for_variant(field, field_index, disc_proj.clone(), variant.discriminant);
+
+                // let fields = mapper.map_variant(variant);
+                let fields = variant
+                    .fields
+                    .iter()
+                    .enumerate()
+                    .map(|(index, field)| {
+                        // Variant fields are stored at positions 1.. in the Record
+                        // (position 0 is the discriminant), so adjust the index.
+                        mapper.map_field(index + 1, field)
+                    })
+                    .collect();
+
                 mapping::EnumVariant {
                     discriminant: variant.discriminant,
                     fields,
@@ -801,19 +813,6 @@ impl<'a, 'b> MapField<'a, 'b> {
             field_mask: stmt::PathFieldSet::from_iter([bit]),
             sub_projection,
         })
-    }
-
-    fn map_variant(&mut self, variant: &app::EnumVariant) -> Vec<mapping::Field> {
-        variant
-            .fields
-            .iter()
-            .enumerate()
-            .map(|(local_idx, field)| {
-                // Variant fields are stored at positions 1.. in the Record
-                // (position 0 is the discriminant), so adjust the index.
-                self.map_field(local_idx + 1, field)
-            })
-            .collect()
     }
 
     fn map_field_struct(
