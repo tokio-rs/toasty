@@ -694,14 +694,15 @@ impl<'a, 'b> MapField<'a, 'b> {
     fn map_field(&mut self, index: usize, field: &app::Field) -> mapping::Field {
         match &field.ty {
             app::FieldTy::Primitive(primitive) => self.map_field_primitive(index, field, primitive),
-            app::FieldTy::Embedded(embedded) => {
-                let embedded_model = self.build.app.model(embedded.target);
-                if let app::Model::EmbeddedEnum(embedded_enum) = embedded_model {
+            app::FieldTy::Embedded(embedded) => match self.build.app.model(embedded.target) {
+                app::Model::EmbeddedEnum(embedded_enum) => {
                     self.map_field_enum(index, field, embedded_enum)
-                } else {
-                    self.map_field_struct(index, field, embedded_model.expect_embedded_struct())
                 }
-            }
+                app::Model::EmbeddedStruct(embedded_struct) => {
+                    self.map_field_struct(index, field, embedded_struct)
+                }
+                _ => unreachable!(),
+            },
             app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
                 assert!(!self.in_enum_variant);
                 let bit = self.build.next_bit();
