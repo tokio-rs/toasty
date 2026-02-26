@@ -108,7 +108,7 @@ impl Field {
                 as Box<dyn Iterator<Item = (ColumnId, usize)> + '_>,
             Field::Struct(fs) => Box::new(fs.columns.iter().map(|(k, v)| (*k, *v))),
             Field::Enum(fe) => Box::new(
-                std::iter::once((fe.disc_column, fe.disc_lowering)).chain(
+                std::iter::once((fe.discriminant.column, fe.discriminant.lowering)).chain(
                     fe.variants
                         .iter()
                         .flat_map(|v| v.fields.iter().flat_map(|f| f.columns())),
@@ -186,11 +186,8 @@ pub struct FieldStruct {
 /// have no extra columns (all variant-field columns are NULL for them).
 #[derive(Debug, Clone)]
 pub struct FieldEnum {
-    /// The discriminant column ID.
-    pub disc_column: ColumnId,
-
-    /// Index into `Model::model_to_table` for the discriminant lowering expression.
-    pub disc_lowering: usize,
+    /// Mapping for the discriminant column.
+    pub discriminant: FieldPrimitive,
 
     /// Per-variant mappings, in the same order as `app::EmbeddedEnum::variants`.
     pub variants: Vec<EnumVariant>,

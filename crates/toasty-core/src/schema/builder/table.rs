@@ -320,7 +320,7 @@ impl BuildMapping<'_> {
         let disc_col_ref = stmt::Expr::column(stmt::ExprColumn {
             nesting: 0,
             table: 0,
-            column: mapping.disc_column.index,
+            column: mapping.discriminant.column.index,
         });
 
         if !model.has_data_variants() {
@@ -794,11 +794,16 @@ impl<'a, 'b> MapField<'a, 'b> {
             })
             .collect();
 
+        let field_mask = stmt::PathFieldSet::from_iter([bit]);
         mapping::Field::Enum(mapping::FieldEnum {
-            disc_column: disc_col_id,
-            disc_lowering: lowering_index,
+            discriminant: mapping::FieldPrimitive {
+                column: disc_col_id,
+                lowering: lowering_index,
+                field_mask: field_mask.clone(),
+                sub_projection: stmt::Projection::identity(),
+            },
             variants,
-            field_mask: stmt::PathFieldSet::from_iter([bit]),
+            field_mask,
             sub_projection,
         })
     }

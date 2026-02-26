@@ -344,8 +344,11 @@ pub async fn root_model_with_embedded_enum_field(test: &mut Test) {
                 ..
             }),
             mapping::Field::Enum(FieldEnum {
-                disc_column: == user_table.columns[1].id,
-                disc_lowering: 1,
+                discriminant: FieldPrimitive {
+                    column: == user_table.columns[1].id,
+                    lowering: 1,
+                    ..
+                },
                 variants.len(): 3,
                 ..
             }),
