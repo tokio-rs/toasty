@@ -52,10 +52,19 @@ enum ConnectionOperation {
 /// connection from the pool. Cloning produces a new handle that will acquire its
 /// own connection on first use. Dropping the [`Db`] instance will release the database connection
 /// back to the pool.
-#[derive(Clone)]
 pub struct Db {
     shared: Arc<Shared>,
-    connection: Option<Arc<ConnectionHandle>>,
+    connection: Option<ConnectionHandle>,
+}
+
+impl Clone for Db {
+    fn clone(&self) -> Self {
+        Db {
+            shared: self.shared.clone(),
+            // Cloned Db will acquire a new connection lazily.
+            connection: None,
+        }
+    }
 }
 
 impl Db {
@@ -106,7 +115,7 @@ impl Db {
                 // Channel closed → connection drops → returns to pool
             });
 
-            self.connection = Some(Arc::new(ConnectionHandle { in_tx, join_handle }));
+            self.connection = Some(ConnectionHandle { in_tx, join_handle });
         }
         Ok(self.connection.as_ref().unwrap())
     }

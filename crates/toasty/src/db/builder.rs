@@ -45,10 +45,9 @@ impl Builder {
 
     pub async fn build(&mut self, driver: impl Driver) -> Result<Db> {
         let pool = Pool::new(driver)?;
-        // Validate capability consistency
-        pool.capability().validate()?;
-
         let capability = pool.capability();
+        // Validate capability consistency
+        capability.validate()?;
         let schema = self.core.build(self.build_app_schema()?, capability)?;
         let engine = Engine::new(Arc::new(schema), capability);
 
