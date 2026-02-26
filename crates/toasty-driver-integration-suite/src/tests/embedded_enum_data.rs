@@ -349,9 +349,6 @@ pub async fn data_variant_with_jiff_timestamp(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-// TODO: struct-in-enum flattening not yet implemented (struct-typed variant fields
-// need recursive column expansion in the schema builder).
-#[ignore]
 #[driver_test]
 pub async fn struct_in_data_variant(test: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
