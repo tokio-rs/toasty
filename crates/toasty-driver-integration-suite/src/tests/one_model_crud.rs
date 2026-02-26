@@ -94,7 +94,7 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
 
     let mut db = test.setup_db(models!(Foo)).await;
 
-    let foo_table_id = table_id(&mut db, "foos");
+    let foo_table_id = table_id(&db, "foos");
     let is_sql = test.capability().sql;
 
     let mut created = Foo::create().val("hello world").exec(&mut db).await?;

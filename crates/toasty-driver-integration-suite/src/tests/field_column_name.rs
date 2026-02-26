@@ -27,8 +27,8 @@ pub async fn specify_custom_column_name(test: &mut Test) -> Result<()> {
     let (op, _resp) = test.log().pop();
 
     // Get the expected column IDs for the users table
-    let user_table_id = table_id(&mut db, "users");
-    let expected_columns = columns(&mut db, "users", &["id", "my_name"]);
+    let user_table_id = table_id(&db, "users");
+    let expected_columns = columns(&db, "users", &["id", "my_name"]);
 
     // Verify the operation uses the correct table and column names
     assert_struct!(op, Operation::QuerySql(_ {
@@ -71,8 +71,8 @@ pub async fn specify_custom_column_name_with_type(test: &mut Test) -> Result<()>
     let (op, _resp) = test.log().pop();
 
     // Get the expected column IDs for the users table
-    let user_table_id = table_id(&mut db, "users");
-    let expected_columns = columns(&mut db, "users", &["id", "my_name"]);
+    let user_table_id = table_id(&db, "users");
+    let expected_columns = columns(&db, "users", &["id", "my_name"]);
 
     // Verify the operation uses the correct table and column names
     assert_struct!(op, Operation::QuerySql(_ {

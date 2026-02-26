@@ -21,8 +21,8 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
     let mut db = test.setup_db(models!(User)).await;
 
     // Helper to get the table ID (handles database-specific prefixes automatically)
-    let user_table_id = table_id(&mut db, "users");
-    let user_id_column = column(&mut db, "users", "id");
+    let user_table_id = table_id(&db, "users");
+    let user_id_column = column(&db, "users", "id");
 
     // Clear any setup operations (from reset_db, etc.)
     test.log().clear();
@@ -40,7 +40,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
             target: toasty_core::stmt::InsertTarget::Table(_ {
                 table: == user_table_id,
                 columns.len(): 3,
-                columns: == columns(&mut db, "users", &["id", "name", "age"]),
+                columns: == columns(&db, "users", &["id", "name", "age"]),
                 ..
             }),
             source: _ {

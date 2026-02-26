@@ -27,7 +27,7 @@ pub async fn update_by_partition_key(test: &mut Test) {
 
     let mut db = test.setup_db(models!(Todo)).await;
 
-    let todo_table_id = table_id(&mut db, "todos");
+    let todo_table_id = table_id(&db, "todos");
     let is_sql = test.capability().sql;
 
     let todo1 = Todo::create()
@@ -137,7 +137,7 @@ pub async fn delete_by_partition_key(test: &mut Test) {
 
     let mut db = test.setup_db(models!(Todo)).await;
 
-    let todo_table_id = table_id(&mut db, "todos");
+    let todo_table_id = table_id(&db, "todos");
     let is_sql = test.capability().sql;
 
     let todo1 = Todo::create()

@@ -279,8 +279,8 @@ pub async fn ty_str(test: &mut Test) -> Result<()> {
         assert_struct!(op, Operation::QuerySql(_ {
             stmt: Statement::Insert(_ {
                 target: InsertTarget::Table(_ {
-                    table: == table_id(&mut db, "foos"),
-                    columns: == columns(&mut db, "foos", &["id", "val"]),
+                    table: == table_id(&db, "foos"),
+                    columns: == columns(&db, "foos", &["id", "val"]),
                     ..
                 }),
                 source.body: ExprSet::Values(_ {
@@ -377,8 +377,8 @@ pub async fn ty_bytes(test: &mut Test) -> Result<()> {
         assert_struct!(op, Operation::QuerySql(_ {
             stmt: Statement::Insert(_ {
                 target: InsertTarget::Table(_ {
-                    table: == table_id(&mut db, "foos"),
-                    columns: == columns(&mut db, "foos", &["id", "val"]),
+                    table: == table_id(&db, "foos"),
+                    columns: == columns(&db, "foos", &["id", "val"]),
                     ..
                 }),
                 source.body: ExprSet::Values(_ {
@@ -452,8 +452,8 @@ pub async fn ty_uuid(test: &mut Test) -> Result<()> {
         assert_struct!(op, Operation::QuerySql(_ {
             stmt: Statement::Insert(_ {
                 target: InsertTarget::Table(_ {
-                    table: == table_id(&mut db, "foos"),
-                    columns: == columns(&mut db, "foos", &["id", "val"]),
+                    table: == table_id(&db, "foos"),
+                    columns: == columns(&db, "foos", &["id", "val"]),
                     ..
                 }),
                 ..
@@ -538,8 +538,8 @@ pub async fn ty_smart_ptrs(test: &mut Test) -> Result<()> {
     assert_struct!(op, Operation::QuerySql(_ {
         stmt: Statement::Insert(_ {
             target: InsertTarget::Table(_ {
-                table: == table_id(&mut db, "foos"),
-                columns: == columns(&mut db, "foos", &["id", "arced", "rced", "boxed"]),
+                table: == table_id(&db, "foos"),
+                columns: == columns(&db, "foos", &["id", "arced", "rced", "boxed"]),
                 ..
             }),
             source.body: ExprSet::Values(_ {

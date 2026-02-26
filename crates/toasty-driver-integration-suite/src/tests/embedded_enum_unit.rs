@@ -37,7 +37,7 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
     }
 
     let mut db = t.setup_db(models!(User, Status)).await;
-    let user_table = table_id(&mut db, "users");
+    let user_table = table_id(&db, "users");
 
     // Create: enum variant is stored as its discriminant (1 = Pending)
     t.log().clear();
@@ -57,7 +57,7 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
             }),
             target: toasty_core::stmt::InsertTarget::Table(_ {
                 table: == user_table,
-                columns: == columns(&mut db, "users", &["id", "name", "status"]),
+                columns: == columns(&db, "users", &["id", "name", "status"]),
                 ..
             }),
             ..
@@ -154,7 +154,7 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
         Task::create().name(name).status(status).exec(&mut db).await?;
     }
 
-    let status_col = column(&mut db, "tasks", "status");
+    let status_col = column(&db, "tasks", "status");
     t.log().clear();
 
     // Filter: only Active tasks (discriminant = 2)

@@ -106,8 +106,8 @@ pub async fn specify_uuid_as_text(test: &mut Test) -> Result<()> {
         assert_struct!(op, Operation::QuerySql(_ {
             stmt: Statement::Insert(_ {
                 target: InsertTarget::Table(_ {
-                    table: == table_id(&mut db, "foos"),
-                    columns: == columns(&mut db, "foos", &["id", "val"]),
+                    table: == table_id(&db, "foos"),
+                    columns: == columns(&db, "foos", &["id", "val"]),
                     ..
                 }),
                 source.body: ExprSet::Values(_ {
