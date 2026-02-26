@@ -349,6 +349,74 @@ pub async fn data_variant_with_jiff_timestamp(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+// TODO: struct-in-enum flattening not yet implemented (struct-typed variant fields
+// need recursive column expansion in the schema builder).
+#[ignore]
+#[driver_test]
+pub async fn struct_in_data_variant(test: &mut Test) -> Result<()> {
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    struct Address {
+        street: String,
+        city: String,
+    }
+
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    enum Destination {
+        #[column(variant = 1)]
+        Digital { email: String },
+        #[column(variant = 2)]
+        Physical { address: Address },
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Shipment {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        destination: Destination,
+    }
+
+    let db = test.setup_db(models!(Shipment, Destination, Address)).await;
+
+    let digital = Shipment::create()
+        .destination(Destination::Digital {
+            email: "user@example.com".to_string(),
+        })
+        .exec(&db)
+        .await?;
+
+    let physical = Shipment::create()
+        .destination(Destination::Physical {
+            address: Address {
+                street: "123 Main St".to_string(),
+                city: "Seattle".to_string(),
+            },
+        })
+        .exec(&db)
+        .await?;
+
+    let found_digital = Shipment::get_by_id(&db, &digital.id).await?;
+    assert_eq!(
+        found_digital.destination,
+        Destination::Digital {
+            email: "user@example.com".to_string()
+        }
+    );
+
+    let found_physical = Shipment::get_by_id(&db, &physical.id).await?;
+    assert_eq!(
+        found_physical.destination,
+        Destination::Physical {
+            address: Address {
+                street: "123 Main St".to_string(),
+                city: "Seattle".to_string(),
+            },
+        }
+    );
+
+    Ok(())
+}
+
 /// Verifies field indices are assigned globally across multiple data variants.
 /// With two variants having two fields each, indices should be 0, 1, 2, 3.
 #[driver_test]
