@@ -194,10 +194,16 @@ impl toasty_core::driver::Connection for Connection {
             Operation::QuerySql(op) => (op.stmt.into(), op.ret, op.last_insert_id_hack),
             Operation::Transaction(op) => {
                 let sql = sql::Serializer::mysql(schema).serialize_transaction(&op);
-                self.conn
-                    .query_drop(sql)
-                    .await
-                    .map_err(toasty_core::Error::driver_operation_failed)?;
+                self.conn.query_drop(sql).await.map_err(|e| match e {
+                    mysql_async::Error::Server(se) => match se.code {
+                        1213 => toasty_core::Error::serialization_failure(se.message),
+                        1792 => toasty_core::Error::read_only_transaction(se.message),
+                        _ => toasty_core::Error::driver_operation_failed(
+                            mysql_async::Error::Server(se),
+                        ),
+                    },
+                    other => toasty_core::Error::driver_operation_failed(other),
+                })?;
                 return Ok(Response::count(0));
             }
             op => todo!("op={:#?}", op),
