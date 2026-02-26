@@ -578,12 +578,22 @@ impl<'a, 'b> MapField<'a, 'b> {
         id
     }
 
-    /// Creates a child `MapField` for processing an enum's variant fields.
+    /// Creates a variant-specific child `MapField`.
     ///
-    /// Sets `source_field_id` and `base_projection` to reflect that the enum
-    /// field is now the root source (mirroring `for_struct`), extends the
-    /// prefix by the field name, and sets `in_enum_variant = true`.
-    fn for_enum_variant(&mut self, field: &app::Field, field_index: usize) -> MapField<'_, 'b> {
+    /// Sets `source_field_id` and `base_projection` so that `field_expr` on
+    /// the child projects from the enum field (mirroring `for_struct`), sets
+    /// `in_enum_variant = true`, and installs a `field_expr_base` of
+    /// `match_expr(disc_proj, [arm(discriminant, Expr::arg(0))], null())` so
+    /// that every `field_expr` call is automatically wrapped in the
+    /// discriminant check. `field_index_offset` is set to 1 to skip the
+    /// discriminant at record position 0.
+    fn for_variant(
+        &mut self,
+        field: &app::Field,
+        field_index: usize,
+        disc_proj: stmt::Expr,
+        discriminant: i64,
+    ) -> MapField<'_, 'b> {
         let source_field_id = self.source_field_id.or(Some(field.id));
         let base_projection = if self.source_field_id.is_none() {
             stmt::Projection::identity()
@@ -592,20 +602,6 @@ impl<'a, 'b> MapField<'a, 'b> {
             proj.push(field_index);
             proj
         };
-        let mut child = self.with_prefix(field.name.storage_name());
-        child.in_enum_variant = true;
-        child.source_field_id = source_field_id;
-        child.base_projection = base_projection;
-        child
-    }
-
-    /// Creates a variant-specific child `MapField` by cloning the current
-    /// context and setting `field_expr_base` to the discriminant match guard.
-    ///
-    /// When `field_expr` is called on this child, the raw field expression is
-    /// substituted for `Expr::arg(0)` in the match template, automatically
-    /// wrapping it in the discriminant check.
-    fn for_variant(&mut self, disc_proj: stmt::Expr, discriminant: i64) -> MapField<'_, 'b> {
         let field_expr_base = stmt::Expr::match_expr(
             disc_proj,
             vec![stmt::MatchArm {
@@ -614,15 +610,13 @@ impl<'a, 'b> MapField<'a, 'b> {
             }],
             stmt::Expr::null(),
         );
-        MapField {
-            build: self.build,
-            prefix: self.prefix.clone(),
-            in_enum_variant: self.in_enum_variant,
-            source_field_id: self.source_field_id,
-            base_projection: self.base_projection.clone(),
-            field_expr_base: Some(field_expr_base),
-            field_index_offset: 1,
-        }
+        let mut child = self.with_prefix(field.name.storage_name());
+        child.in_enum_variant = true;
+        child.source_field_id = source_field_id;
+        child.base_projection = base_projection;
+        child.field_expr_base = Some(field_expr_base);
+        child.field_index_offset = 1;
+        child
     }
 
     /// Creates a child `MapField` for recursing into an embedded field.
@@ -791,12 +785,19 @@ impl<'a, 'b> MapField<'a, 'b> {
 
         let disc_proj = stmt::Expr::project(field_expr.clone(), stmt::Projection::single(0));
 
-        let variants = self.for_enum_variant(field, field_index).map_variants(
-            embedded_enum,
-            &field_expr,
-            &disc_proj,
-            bit,
-        );
+        let variants = embedded_enum
+            .variants
+            .iter()
+            .map(|variant| {
+                let fields = self
+                    .for_variant(field, field_index, disc_proj.clone(), variant.discriminant)
+                    .map_variant(variant, &field_expr, &disc_proj, bit);
+                mapping::EnumVariant {
+                    discriminant: variant.discriminant,
+                    fields,
+                }
+            })
+            .collect();
 
         mapping::Field::Enum(mapping::FieldEnum {
             disc_column: disc_col_id,
@@ -805,33 +806,6 @@ impl<'a, 'b> MapField<'a, 'b> {
             field_mask: stmt::PathFieldSet::from_iter([bit]),
             sub_projection,
         })
-    }
-
-    fn map_variants(
-        &mut self,
-        embedded_enum: &app::EmbeddedEnum,
-        field_expr: &stmt::Expr,
-        disc_proj: &stmt::Expr,
-        bit: usize,
-    ) -> Vec<mapping::EnumVariant> {
-        assert!(
-            self.field_expr_base.is_none(),
-            "map_variants requires identity field_expr_base"
-        );
-
-        embedded_enum
-            .variants
-            .iter()
-            .map(|variant| {
-                let fields = self
-                    .for_variant(disc_proj.clone(), variant.discriminant)
-                    .map_variant(variant, field_expr, disc_proj, bit);
-                mapping::EnumVariant {
-                    discriminant: variant.discriminant,
-                    fields,
-                }
-            })
-            .collect()
     }
 
     fn map_variant(
