@@ -16,9 +16,9 @@ pub async fn ensure_types_sync_send(t: &mut Test) -> Result<()> {
         email: String,
     }
 
-    let db = t.setup_db(models!(User)).await;
+    let mut db = t.setup_db(models!(User)).await;
 
-    let res = assert_sync_send(User::filter_by_email("hello@example.com").first(&db)).await?;
+    let res = assert_sync_send(User::filter_by_email("hello@example.com").first(&mut db)).await?;
 
     if let Some(user) = res {
         assert_eq!(user.email, "hello@example.com");

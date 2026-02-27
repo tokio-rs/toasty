@@ -11,7 +11,7 @@ pub async fn batch_get_by_key(test: &mut Test) -> Result<()> {
         two: String,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
     let mut keys = vec![];
 
     for i in 0..5 {
@@ -19,7 +19,7 @@ pub async fn batch_get_by_key(test: &mut Test) -> Result<()> {
         let foo = Foo::create()
             .one(format!("foo-{i}"))
             .two(format!("bar-{i}"))
-            .exec(&db)
+            .exec(&mut db)
             .await?;
 
         keys.push((foo.one.clone(), foo.two.clone()));
@@ -30,7 +30,7 @@ pub async fn batch_get_by_key(test: &mut Test) -> Result<()> {
         (&keys[1].0, &keys[1].1),
         (&keys[2].0, &keys[2].1),
     ])
-    .collect(&db)
+    .collect(&mut db)
     .await?;
 
     assert_eq!(3, foos.len());

@@ -31,7 +31,7 @@ struct Todo {
 
 #[tokio::main]
 async fn main() -> toasty::Result<()> {
-    let db = toasty::Db::builder()
+    let mut db = toasty::Db::builder()
         .register::<User>()
         .register::<Todo>()
         .connect(
@@ -47,7 +47,7 @@ async fn main() -> toasty::Result<()> {
     let user = User::create()
         .name("John Doe")
         .email("john@example.com")
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     println!("created user; name={:?}; email={:?}", user.name, user.email);
@@ -58,7 +58,7 @@ async fn main() -> toasty::Result<()> {
             .create()
             .title(*title)
             .order(i as i64)
-            .exec(&db)
+            .exec(&mut db)
             .await?;
 
         println!(
@@ -75,7 +75,7 @@ async fn main() -> toasty::Result<()> {
     let mut todos = user
         .todos()
         .query(Todo::fields().order().eq(1))
-        .all(&db)
+        .all(&mut db)
         .await?;
 
     while let Some(todo) = todos.next().await {

@@ -177,7 +177,7 @@ pub async fn create_and_query_embedded(t: &mut Test) -> Result<()> {
         address: Address,
     }
 
-    let db = t.setup_db(models!(User, Address)).await;
+    let mut db = t.setup_db(models!(User, Address)).await;
 
     let mut user = User::create()
         .name("Alice")
@@ -185,11 +185,11 @@ pub async fn create_and_query_embedded(t: &mut Test) -> Result<()> {
             street: "123 Main St".to_string(),
             city: "Springfield".to_string(),
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     // Read: embedded struct is reconstructed from flattened columns
-    let found = User::get_by_id(&db, &user.id).await?;
+    let found = User::get_by_id(&mut db, &user.id).await?;
     assert_eq!(found.address.street, "123 Main St");
     assert_eq!(found.address.city, "Springfield");
 
@@ -199,10 +199,10 @@ pub async fn create_and_query_embedded(t: &mut Test) -> Result<()> {
             street: "456 Oak Ave".to_string(),
             city: "Shelbyville".to_string(),
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
-    let found = User::get_by_id(&db, &user.id).await?;
+    let found = User::get_by_id(&mut db, &user.id).await?;
     assert_eq!(found.address.street, "456 Oak Ave");
 
     // Update (query-based): tests query builder with embedded fields
@@ -212,16 +212,16 @@ pub async fn create_and_query_embedded(t: &mut Test) -> Result<()> {
             street: "789 Pine Rd".to_string(),
             city: "Capital City".to_string(),
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
-    let found = User::get_by_id(&db, &user.id).await?;
+    let found = User::get_by_id(&mut db, &user.id).await?;
     assert_eq!(found.address.street, "789 Pine Rd");
 
     // Delete: cleanup
     let id = user.id;
-    user.delete(&db).await?;
-    assert_err!(User::get_by_id(&db, &id).await);
+    user.delete(&mut db).await?;
+    assert_err!(User::get_by_id(&mut db, &id).await);
     Ok(())
 }
 
@@ -291,7 +291,7 @@ pub async fn query_embedded_struct_fields(t: &mut Test) -> Result<()> {
         address: Address,
     }
 
-    let db = t.setup_db(models!(User, Address)).await;
+    let mut db = t.setup_db(models!(User, Address)).await;
 
     // Create users in different countries and cities
     let users_data = [
@@ -313,7 +313,7 @@ pub async fn query_embedded_struct_fields(t: &mut Test) -> Result<()> {
                 city: city.to_string(),
                 zip: zip.to_string(),
             })
-            .exec(&db)
+            .exec(&mut db)
             .await?;
     }
 
@@ -321,7 +321,7 @@ pub async fn query_embedded_struct_fields(t: &mut Test) -> Result<()> {
     let mut all_users = Vec::new();
     for country in ["USA", "CAN"] {
         let mut users = User::filter(User::fields().country().eq(country))
-            .collect::<Vec<_>>(&db)
+            .collect::<Vec<_>>(&mut db)
             .await?;
         all_users.append(&mut users);
     }
@@ -335,7 +335,7 @@ pub async fn query_embedded_struct_fields(t: &mut Test) -> Result<()> {
             .eq("USA")
             .and(User::fields().address().city().eq("Seattle")),
     )
-    .collect::<Vec<_>>(&db)
+    .collect::<Vec<_>>(&mut db)
     .await?;
 
     assert_eq!(seattle_users.len(), 2);
@@ -350,7 +350,7 @@ pub async fn query_embedded_struct_fields(t: &mut Test) -> Result<()> {
             .eq("CAN")
             .and(User::fields().address().city().eq("Vancouver")),
     )
-    .collect::<Vec<_>>(&db)
+    .collect::<Vec<_>>(&mut db)
     .await?;
 
     assert_eq!(vancouver_users.len(), 2);
@@ -362,7 +362,7 @@ pub async fn query_embedded_struct_fields(t: &mut Test) -> Result<()> {
             .eq("USA")
             .and(User::fields().address().zip().eq("98101")),
     )
-    .collect::<Vec<_>>(&db)
+    .collect::<Vec<_>>(&mut db)
     .await?;
 
     assert_eq!(user_98101.len(), 1);
@@ -391,7 +391,7 @@ pub async fn query_embedded_fields_comparison_ops(t: &mut Test) -> Result<()> {
         stats: Stats,
     }
 
-    let db = t.setup_db(models!(Player, Stats)).await;
+    let mut db = t.setup_db(models!(Player, Stats)).await;
 
     for (name, score, rank) in [
         ("Alice", 100, 1),
@@ -403,31 +403,31 @@ pub async fn query_embedded_fields_comparison_ops(t: &mut Test) -> Result<()> {
         Player::create()
             .name(name)
             .stats(Stats { score, rank })
-            .exec(&db)
+            .exec(&mut db)
             .await?;
     }
 
     // Test gt: score > 80 should return Alice (100) and Bob (85)
     let high_scorers = Player::filter(Player::fields().stats().score().gt(80))
-        .collect::<Vec<_>>(&db)
+        .collect::<Vec<_>>(&mut db)
         .await?;
     assert_eq!(high_scorers.len(), 2);
 
     // Test le: score <= 55 should return Diana (55) and Eve (40)
     let low_scorers = Player::filter(Player::fields().stats().score().le(55))
-        .collect::<Vec<_>>(&db)
+        .collect::<Vec<_>>(&mut db)
         .await?;
     assert_eq!(low_scorers.len(), 2);
 
     // Test ne: score != 70 excludes only Charlie
     let not_charlie = Player::filter(Player::fields().stats().score().ne(70))
-        .collect::<Vec<_>>(&db)
+        .collect::<Vec<_>>(&mut db)
         .await?;
     assert_eq!(not_charlie.len(), 4);
 
     // Test ge: score >= 70 should return Alice, Bob, Charlie
     let mid_to_high = Player::filter(Player::fields().stats().score().ge(70))
-        .collect::<Vec<_>>(&db)
+        .collect::<Vec<_>>(&mut db)
         .await?;
     assert_eq!(mid_to_high.len(), 3);
     Ok(())
@@ -455,7 +455,7 @@ pub async fn query_embedded_multiple_fields(t: &mut Test) -> Result<()> {
         coords: Coordinates,
     }
 
-    let db = t.setup_db(models!(Location, Coordinates)).await;
+    let mut db = t.setup_db(models!(Location, Coordinates)).await;
 
     for (name, x, y, z) in [
         ("Origin", 0, 0, 0),
@@ -467,7 +467,7 @@ pub async fn query_embedded_multiple_fields(t: &mut Test) -> Result<()> {
         Location::create()
             .name(name)
             .coords(Coordinates { x, y, z })
-            .exec(&db)
+            .exec(&mut db)
             .await?;
     }
 
@@ -479,7 +479,7 @@ pub async fn query_embedded_multiple_fields(t: &mut Test) -> Result<()> {
             .eq(10)
             .and(Location::fields().coords().y().eq(20)),
     )
-    .collect::<Vec<_>>(&db)
+    .collect::<Vec<_>>(&mut db)
     .await?;
 
     assert_eq!(matching.len(), 2);
@@ -497,7 +497,7 @@ pub async fn query_embedded_multiple_fields(t: &mut Test) -> Result<()> {
             .and(Location::fields().coords().y().eq(20))
             .and(Location::fields().coords().z().eq(0)),
     )
-    .collect::<Vec<_>>(&db)
+    .collect::<Vec<_>>(&mut db)
     .await?;
 
     assert_eq!(exact_match.len(), 1);
@@ -526,7 +526,7 @@ pub async fn update_with_embedded_field_filter(t: &mut Test) -> Result<()> {
         meta: Metadata,
     }
 
-    let db = t.setup_db(models!(Document, Metadata)).await;
+    let mut db = t.setup_db(models!(Document, Metadata)).await;
 
     // Setup: Doc A (v1, draft), Doc B (v2, draft), Doc C (v1, published)
     for (title, version, status) in [
@@ -540,7 +540,7 @@ pub async fn update_with_embedded_field_filter(t: &mut Test) -> Result<()> {
                 version,
                 status: status.to_string(),
             })
-            .exec(&db)
+            .exec(&mut db)
             .await?;
     }
 
@@ -558,24 +558,24 @@ pub async fn update_with_embedded_field_filter(t: &mut Test) -> Result<()> {
         version: 2,
         status: "draft".to_string(),
     })
-    .exec(&db)
+    .exec(&mut db)
     .await?;
 
     // Doc A should be updated (was v1 draft, now v2 draft)
     let doc_a = Document::filter(Document::fields().title().eq("Doc A"))
-        .collect::<Vec<_>>(&db)
+        .collect::<Vec<_>>(&mut db)
         .await?;
     assert_eq!(doc_a[0].meta.version, 2);
 
     // Doc B should be unchanged (was v2 draft, still v2 draft)
     let doc_b = Document::filter(Document::fields().title().eq("Doc B"))
-        .collect::<Vec<_>>(&db)
+        .collect::<Vec<_>>(&mut db)
         .await?;
     assert_eq!(doc_b[0].meta.version, 2);
 
     // Doc C should be unchanged (was v1 published, still v1 published - wrong status)
     let doc_c = Document::filter(Document::fields().title().eq("Doc C"))
-        .collect::<Vec<_>>(&db)
+        .collect::<Vec<_>>(&mut db)
         .await?;
     assert_eq!(doc_c[0].meta.version, 1);
     Ok(())
@@ -602,7 +602,7 @@ pub async fn partial_update_embedded_fields(t: &mut Test) -> Result<()> {
         address: Address,
     }
 
-    let db = t.setup_db(models!(User, Address)).await;
+    let mut db = t.setup_db(models!(User, Address)).await;
 
     // Create a user with initial address
     let mut user = User::create()
@@ -612,7 +612,7 @@ pub async fn partial_update_embedded_fields(t: &mut Test) -> Result<()> {
             city: "Boston".to_string(),
             zip: "02101".to_string(),
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     // Verify initial state
@@ -628,7 +628,7 @@ pub async fn partial_update_embedded_fields(t: &mut Test) -> Result<()> {
         .with_address(|a| {
             a.city("Seattle");
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     // Verify only city was updated
@@ -640,7 +640,7 @@ pub async fn partial_update_embedded_fields(t: &mut Test) -> Result<()> {
     });
 
     // Verify the update persisted to database
-    let found = User::get_by_id(&db, &user.id).await?;
+    let found = User::get_by_id(&mut db, &user.id).await?;
     assert_struct!(found.address, _ {
         street: "123 Main St",
         city: "Seattle",
@@ -653,7 +653,7 @@ pub async fn partial_update_embedded_fields(t: &mut Test) -> Result<()> {
         .with_address(|a| {
             a.city("Portland").zip("97201");
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     // Verify both fields were updated, street unchanged
@@ -665,7 +665,7 @@ pub async fn partial_update_embedded_fields(t: &mut Test) -> Result<()> {
     });
 
     // Verify the update persisted
-    let found = User::get_by_id(&db, &user.id).await?;
+    let found = User::get_by_id(&mut db, &user.id).await?;
     assert_struct!(found.address, _ {
         street: "123 Main St",
         city: "Portland",
@@ -681,7 +681,7 @@ pub async fn partial_update_embedded_fields(t: &mut Test) -> Result<()> {
         .with_address(|a| {
             a.zip("97202");
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     // Verify all updates applied in memory
@@ -693,7 +693,7 @@ pub async fn partial_update_embedded_fields(t: &mut Test) -> Result<()> {
     });
 
     // Verify both accumulated assignments persisted to the database
-    let found = User::get_by_id(&db, &user.id).await?;
+    let found = User::get_by_id(&mut db, &user.id).await?;
     assert_struct!(found.address, _ {
         street: "456 Oak Ave",
         city: "Portland",
@@ -1037,7 +1037,7 @@ pub async fn crud_nested_embedded(t: &mut Test) -> Result<()> {
         headquarters: Office,
     }
 
-    let db = t.setup_db(models!(Company, Office, Address)).await;
+    let mut db = t.setup_db(models!(Company, Office, Address)).await;
 
     // Create: nested embedded structs are flattened into a single row
     let mut company = Company::create()
@@ -1049,7 +1049,7 @@ pub async fn crud_nested_embedded(t: &mut Test) -> Result<()> {
                 city: "Springfield".to_string(),
             },
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     assert_struct!(company.headquarters, _ {
@@ -1063,7 +1063,7 @@ pub async fn crud_nested_embedded(t: &mut Test) -> Result<()> {
     });
 
     // Read: nested embedded struct is reconstructed from flattened columns
-    let found = Company::get_by_id(&db, &company.id).await?;
+    let found = Company::get_by_id(&mut db, &company.id).await?;
     assert_struct!(found.headquarters, _ {
         name: "Main Office",
         address: _ {
@@ -1084,10 +1084,10 @@ pub async fn crud_nested_embedded(t: &mut Test) -> Result<()> {
                 city: "Seattle".to_string(),
             },
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
-    let found = Company::get_by_id(&db, &company.id).await?;
+    let found = Company::get_by_id(&mut db, &company.id).await?;
     assert_struct!(found.headquarters, _ {
         name: "West Coast HQ",
         address: _ {
@@ -1108,10 +1108,10 @@ pub async fn crud_nested_embedded(t: &mut Test) -> Result<()> {
                 city: "Boston".to_string(),
             },
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
-    let found = Company::get_by_id(&db, &company.id).await?;
+    let found = Company::get_by_id(&mut db, &company.id).await?;
     assert_struct!(found.headquarters, _ {
         name: "East Coast HQ",
         address: _ {
@@ -1124,8 +1124,8 @@ pub async fn crud_nested_embedded(t: &mut Test) -> Result<()> {
 
     // Delete: cleanup
     let id = company.id;
-    company.delete(&db).await?;
-    assert_err!(Company::get_by_id(&db, &id).await);
+    company.delete(&mut db).await?;
+    assert_err!(Company::get_by_id(&mut db, &id).await);
     Ok(())
 }
 
@@ -1155,7 +1155,7 @@ pub async fn partial_update_nested_embedded(t: &mut Test) -> Result<()> {
         headquarters: Office,
     }
 
-    let db = t.setup_db(models!(Company, Office, Address)).await;
+    let mut db = t.setup_db(models!(Company, Office, Address)).await;
 
     let mut company = Company::create()
         .name("Acme")
@@ -1166,7 +1166,7 @@ pub async fn partial_update_nested_embedded(t: &mut Test) -> Result<()> {
                 city: "Boston".to_string(),
             },
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     // Nested partial update: change only the city inside headquarters.address.
@@ -1178,10 +1178,10 @@ pub async fn partial_update_nested_embedded(t: &mut Test) -> Result<()> {
                 a.city("Seattle");
             });
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
-    let found = Company::get_by_id(&db, &company.id).await?;
+    let found = Company::get_by_id(&mut db, &company.id).await?;
     assert_struct!(found.headquarters, _ {
         name: "Main Office",
         address: _ {
@@ -1199,10 +1199,10 @@ pub async fn partial_update_nested_embedded(t: &mut Test) -> Result<()> {
         .with_headquarters(|h| {
             h.name("West Coast HQ");
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
-    let found = Company::get_by_id(&db, &company.id).await?;
+    let found = Company::get_by_id(&mut db, &company.id).await?;
     assert_struct!(found.headquarters, _ {
         name: "West Coast HQ",
         address: _ {
@@ -1222,10 +1222,10 @@ pub async fn partial_update_nested_embedded(t: &mut Test) -> Result<()> {
                 a.city("Boston");
             });
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
-    let found = Company::get_by_id(&db, &company.id).await?;
+    let found = Company::get_by_id(&mut db, &company.id).await?;
     assert_struct!(found.headquarters, _ {
         name: "East Coast HQ",
         address: _ {
@@ -1259,7 +1259,7 @@ pub async fn query_based_partial_update_embedded(t: &mut Test) -> Result<()> {
         address: Address,
     }
 
-    let db = t.setup_db(models!(User, Address)).await;
+    let mut db = t.setup_db(models!(User, Address)).await;
 
     let user = User::create()
         .name("Alice")
@@ -1268,7 +1268,7 @@ pub async fn query_based_partial_update_embedded(t: &mut Test) -> Result<()> {
             city: "Boston".to_string(),
             zip: "02101".to_string(),
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     // Single field: filter-based partial update targeting only city.
@@ -1278,10 +1278,10 @@ pub async fn query_based_partial_update_embedded(t: &mut Test) -> Result<()> {
         .with_address(|a| {
             a.city("Seattle");
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
-    let found = User::get_by_id(&db, &user.id).await?;
+    let found = User::get_by_id(&mut db, &user.id).await?;
     assert_struct!(found.address, _ {
         street: "123 Main St",
         city: "Seattle",
@@ -1295,10 +1295,10 @@ pub async fn query_based_partial_update_embedded(t: &mut Test) -> Result<()> {
         .with_address(|a| {
             a.city("Portland").zip("97201");
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
-    let found = User::get_by_id(&db, &user.id).await?;
+    let found = User::get_by_id(&mut db, &user.id).await?;
     assert_struct!(found.address, _ {
         street: "123 Main St",
         city: "Portland",

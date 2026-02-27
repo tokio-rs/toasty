@@ -15,15 +15,15 @@ pub async fn sort_asc(test: &mut Test) -> Result<()> {
         order: i64,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     for i in 0..100 {
-        Foo::create().order(i).exec(&db).await?;
+        Foo::create().order(i).exec(&mut db).await?;
     }
 
     let foos_asc: Vec<_> = Foo::all()
         .order_by(Foo::fields().order().asc())
-        .collect(&db)
+        .collect(&mut db)
         .await?;
 
     assert_eq!(foos_asc.len(), 100);
@@ -34,7 +34,7 @@ pub async fn sort_asc(test: &mut Test) -> Result<()> {
 
     let foos_desc: Vec<_> = Foo::all()
         .order_by(Foo::fields().order().desc())
-        .collect(&db)
+        .collect(&mut db)
         .await?;
 
     assert_eq!(foos_desc.len(), 100);
@@ -57,16 +57,16 @@ pub async fn paginate(test: &mut Test) -> Result<()> {
         order: i64,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     for i in 0..100 {
-        Foo::create().order(i).exec(&db).await?;
+        Foo::create().order(i).exec(&mut db).await?;
     }
 
     let foos: Page<_> = Foo::all()
         .order_by(Foo::fields().order().desc())
         .paginate(10)
-        .collect(&db)
+        .collect(&mut db)
         .await?;
 
     assert_eq!(foos.len(), 10);
@@ -78,7 +78,7 @@ pub async fn paginate(test: &mut Test) -> Result<()> {
         .order_by(Foo::fields().order().desc())
         .paginate(10)
         .after(90)
-        .collect(&db)
+        .collect(&mut db)
         .await?;
 
     assert_eq!(foos.len(), 10);
@@ -86,19 +86,19 @@ pub async fn paginate(test: &mut Test) -> Result<()> {
         assert_eq!(foos[i].order, order);
     }
 
-    let foos: Page<_> = foos.next(&db).await?.unwrap();
+    let foos: Page<_> = foos.next(&mut db).await?.unwrap();
     assert_eq!(foos.len(), 10);
     for (i, order) in (70..80).rev().enumerate() {
         assert_eq!(foos[i].order, order);
     }
 
-    let foos: Page<_> = foos.prev(&db).await?.unwrap();
+    let foos: Page<_> = foos.prev(&mut db).await?.unwrap();
     assert_eq!(foos.len(), 10);
     for (i, order) in (80..90).rev().enumerate() {
         assert_eq!(foos[i].order, order);
     }
 
-    let foos: Page<_> = foos.next(&db).await?.unwrap();
+    let foos: Page<_> = foos.next(&mut db).await?.unwrap();
     assert_eq!(foos.len(), 10);
     for (i, order) in (70..80).rev().enumerate() {
         assert_eq!(foos[i].order, order);
@@ -118,21 +118,21 @@ pub async fn limit(t: &mut Test) -> Result<()> {
         order: i64,
     }
 
-    let db = t.setup_db(models!(Foo)).await;
+    let mut db = t.setup_db(models!(Foo)).await;
 
     for i in 0..20 {
-        Foo::create().order(i).exec(&db).await?;
+        Foo::create().order(i).exec(&mut db).await?;
     }
 
     // Basic limit without ordering
-    let foos: Vec<_> = Foo::all().limit(5).collect(&db).await?;
+    let foos: Vec<_> = Foo::all().limit(5).collect(&mut db).await?;
     assert_eq!(foos.len(), 5);
 
     // Limit combined with ordering
     let foos: Vec<_> = Foo::all()
         .order_by(Foo::fields().order().desc())
         .limit(7)
-        .collect(&db)
+        .collect(&mut db)
         .await?;
     assert_eq!(foos.len(), 7);
     for i in 0..6 {
@@ -140,7 +140,7 @@ pub async fn limit(t: &mut Test) -> Result<()> {
     }
 
     // Limit larger than the result set returns all results
-    let foos: Vec<_> = Foo::all().limit(100).collect(&db).await?;
+    let foos: Vec<_> = Foo::all().limit(100).collect(&mut db).await?;
     assert_eq!(foos.len(), 20);
 
     Ok(())
