@@ -16,6 +16,100 @@ impl Expand<'_> {
             .any(|v| !v.fields.is_empty())
     }
 
+    /// Generates the `{Enum}Fields` struct for embedded enums with
+    /// `is_{variant}()` methods and delegated comparison methods.
+    pub(super) fn expand_enum_field_struct(&self) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let model_ident = &self.model.ident;
+        let embedded_enum = self.model.kind.expect_embedded_enum();
+        let field_struct_ident = &embedded_enum.field_struct_ident;
+        let has_data = self.expand_enum_has_data_variants();
+
+        let is_variant_methods: Vec<_> = embedded_enum
+            .variants
+            .iter()
+            .map(|variant| {
+                let method_name = syn::Ident::new(
+                    &format!("is_{}", variant.name.ident),
+                    variant.ident.span(),
+                );
+                let disc = variant.discriminant;
+
+                // Data-carrying enums store values as Record([disc, fields...]),
+                // so we project([0]) to extract the discriminant. Unit-only enums
+                // store the discriminant directly as I64, so we compare the path
+                // as-is.
+                let lhs = if has_data {
+                    quote! {
+                        #toasty::core::stmt::Expr::project(path_stmt, [0usize])
+                    }
+                } else {
+                    quote! { path_stmt }
+                };
+
+                quote! {
+                    #vis fn #method_name(&self) -> #toasty::stmt::Expr<bool> {
+                        let path_stmt: #toasty::core::stmt::Expr = {
+                            let p: #toasty::core::stmt::Path = self.path().into();
+                            p.into_stmt()
+                        };
+                        #toasty::stmt::Expr::from_untyped(
+                            #toasty::core::stmt::Expr::eq(
+                                #lhs,
+                                #toasty::core::stmt::Expr::Value(
+                                    #toasty::core::stmt::Value::I64(#disc),
+                                ),
+                            )
+                        )
+                    }
+                }
+            })
+            .collect();
+
+        quote! {
+            #vis struct #field_struct_ident {
+                path: #toasty::Path<#model_ident>,
+            }
+
+            impl #field_struct_ident {
+                fn path(&self) -> #toasty::Path<#model_ident> {
+                    self.path.clone()
+                }
+
+                #( #is_variant_methods )*
+
+                #vis fn eq(&self, rhs: impl #toasty::stmt::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
+                    self.path().eq(rhs)
+                }
+
+                #vis fn ne(&self, rhs: impl #toasty::stmt::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
+                    self.path().ne(rhs)
+                }
+
+                #vis fn gt(&self, rhs: impl #toasty::stmt::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
+                    self.path().gt(rhs)
+                }
+
+                #vis fn ge(&self, rhs: impl #toasty::stmt::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
+                    self.path().ge(rhs)
+                }
+
+                #vis fn lt(&self, rhs: impl #toasty::stmt::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
+                    self.path().lt(rhs)
+                }
+
+                #vis fn le(&self, rhs: impl #toasty::stmt::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
+                    self.path().le(rhs)
+                }
+
+                #vis fn in_set(&self, rhs: impl #toasty::stmt::IntoExpr<[#model_ident]>) -> #toasty::stmt::Expr<bool> {
+                    self.path().in_set(rhs)
+                }
+            }
+        }
+    }
+
     /// Generates the `EnumVariant` schema structs with globally-assigned field indices.
     /// Field indices are unique across all variants (not per-variant).
     pub(super) fn expand_enum_variants(&self) -> Vec<TokenStream> {

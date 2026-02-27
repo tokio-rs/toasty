@@ -65,6 +65,9 @@ pub(crate) struct ModelEmbeddedStruct {
 
 #[derive(Debug)]
 pub(crate) struct ModelEmbeddedEnum {
+    /// The field struct identifier (e.g., `ContactInfoFields`)
+    pub(crate) field_struct_ident: syn::Ident,
+
     /// The enum's variants with their names and discriminant values
     pub(crate) variants: Vec<EnumVariantDef>,
 }
@@ -378,7 +381,10 @@ impl Model {
             name: Name::from_ident(&ast.ident),
             ident: ast.ident.clone(),
             fields: vec![],
-            kind: ModelKind::EmbeddedEnum(ModelEmbeddedEnum { variants }),
+            kind: ModelKind::EmbeddedEnum(ModelEmbeddedEnum {
+                field_struct_ident: enum_ident("Fields", ast),
+                variants,
+            }),
             indices: vec![],
             table: None,
         })
@@ -386,5 +392,9 @@ impl Model {
 }
 
 fn struct_ident(suffix: &str, model: &syn::ItemStruct) -> syn::Ident {
+    syn::Ident::new(&format!("{}{}", model.ident, suffix), model.ident.span())
+}
+
+fn enum_ident(suffix: &str, model: &syn::ItemEnum) -> syn::Ident {
     syn::Ident::new(&format!("{}{}", model.ident, suffix), model.ident.span())
 }

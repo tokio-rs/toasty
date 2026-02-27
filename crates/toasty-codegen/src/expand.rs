@@ -166,7 +166,13 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     let into_expr_arms = e.expand_enum_into_expr_arms();
     let ty_expr = e.expand_enum_ty();
 
+    let embedded_enum = model.kind.expect_embedded_enum();
+    let field_struct_ident = &embedded_enum.field_struct_ident;
+    let enum_field_struct = e.expand_enum_field_struct();
+
     wrap_in_const(quote! {
+        #enum_field_struct
+
         impl #toasty::Register for #model_ident {
             fn id() -> #toasty::ModelId {
                 static ID: std::sync::OnceLock<#toasty::ModelId> = std::sync::OnceLock::new();
@@ -192,7 +198,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
         impl #toasty::Embed for #model_ident {}
 
         impl #toasty::stmt::Primitive for #model_ident {
-            type FieldAccessor = #toasty::Path<Self>;
+            type FieldAccessor = #field_struct_ident;
             type UpdateBuilder<'a> = ();
 
             fn ty() -> #toasty::Type {
@@ -226,7 +232,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
             }
 
             fn make_field_accessor(path: #toasty::Path<Self>) -> Self::FieldAccessor {
-                path
+                #field_struct_ident { path }
             }
 
             fn field_ty(

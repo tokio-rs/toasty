@@ -14,6 +14,13 @@ impl Simplify<'_> {
             return Some(*expr.else_expr.clone());
         }
 
+        // Uniform arms: if every arm produces the same expression, the Match
+        // is redundant — return that expression directly. This handles e.g.
+        // Match(disc, [1 => disc, 2 => disc]) → disc
+        if !expr.arms.is_empty() && expr.arms.iter().all(|arm| arm.expr == expr.arms[0].expr) {
+            return Some(expr.arms[0].expr.clone());
+        }
+
         None
     }
 }
@@ -98,6 +105,56 @@ mod tests {
 
         let result = simplify.simplify_expr_match(&mut expr);
 
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn uniform_arms_folds_to_single_expr() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // Match(arg(0), [0 => arg(1), 1 => arg(1)]) → arg(1)
+        let mut expr = ExprMatch {
+            subject: Box::new(Expr::arg(0)),
+            arms: vec![
+                MatchArm {
+                    pattern: Value::from(0i64),
+                    expr: Expr::arg(1),
+                },
+                MatchArm {
+                    pattern: Value::from(1i64),
+                    expr: Expr::arg(1),
+                },
+            ],
+            else_expr: Box::new(Expr::null()),
+        };
+
+        let result = simplify.simplify_expr_match(&mut expr);
+        assert_eq!(result, Some(Expr::arg(1)));
+    }
+
+    #[test]
+    fn non_uniform_arms_not_simplified() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // Match(arg(0), [0 => arg(1), 1 => arg(2)]) — different arm exprs, no fold.
+        let mut expr = ExprMatch {
+            subject: Box::new(Expr::arg(0)),
+            arms: vec![
+                MatchArm {
+                    pattern: Value::from(0i64),
+                    expr: Expr::arg(1),
+                },
+                MatchArm {
+                    pattern: Value::from(1i64),
+                    expr: Expr::arg(2),
+                },
+            ],
+            else_expr: Box::new(Expr::null()),
+        };
+
+        let result = simplify.simplify_expr_match(&mut expr);
         assert!(result.is_none());
     }
 
