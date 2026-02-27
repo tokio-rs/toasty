@@ -113,10 +113,7 @@ impl Exec<'_> {
             last_insert_id_hack: mysql_insert_returning.as_ref().map(|info| info.num_rows),
         };
 
-        let mut res = self
-            .connection
-            .exec(&self.engine.schema.db, op.into())
-            .await?;
+        let mut res = self.connection.exec(&self.engine.schema, op.into()).await?;
 
         if action.conditional_update_with_no_returning {
             let Rows::Stream(rows) = res.rows else {

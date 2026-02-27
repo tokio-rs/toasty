@@ -52,20 +52,20 @@ impl Exec<'_> {
         };
 
         self.connection
-            .exec(&self.engine.schema.db, begin.into())
+            .exec(&self.engine.schema, begin.into())
             .await?;
 
         if let Err(e) = self.rmw_exec(action).await {
             // Best effort: ignore rollback errors so the original error is returned
             let _ = self
                 .connection
-                .exec(&self.engine.schema.db, rollback.into())
+                .exec(&self.engine.schema, rollback.into())
                 .await;
             return Err(e);
         }
 
         self.connection
-            .exec(&self.engine.schema.db, commit.into())
+            .exec(&self.engine.schema, commit.into())
             .await?;
 
         if let Some(output) = &action.output {
@@ -85,7 +85,7 @@ impl Exec<'_> {
         let res = self
             .connection
             .exec(
-                &self.engine.schema.db,
+                &self.engine.schema,
                 operation::QuerySql {
                     stmt: action.read.clone().into(),
                     ret: ty,
@@ -122,7 +122,7 @@ impl Exec<'_> {
         let res = self
             .connection
             .exec(
-                &self.engine.schema.db,
+                &self.engine.schema,
                 operation::QuerySql {
                     stmt: action.write.clone(),
                     ret: None,
