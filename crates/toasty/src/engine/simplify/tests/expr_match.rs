@@ -139,3 +139,75 @@ fn non_constant_subject_simplifies_all_arms() {
     assert!(matches!(&m.arms[0].expr, Expr::Value(Value::Record(_))));
     assert!(matches!(&m.arms[1].expr, Expr::Value(Value::Record(_))));
 }
+
+/// When the subject is constant and no arm matches, the match folds to the
+/// else expression — even if that else expression is `Expr::Error`.
+#[test]
+fn constant_subject_no_match_folds_to_error_else() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    // `match 99 { 1 => "a" } else error("unexpected")` → `error("unexpected")`
+    let mut expr = Expr::Match(ExprMatch {
+        subject: Box::new(Expr::from(99i64)),
+        arms: vec![MatchArm {
+            pattern: Value::from(1i64),
+            expr: Expr::from("a"),
+        }],
+        else_expr: Box::new(Expr::error("unexpected")),
+    });
+
+    simplify.visit_expr_mut(&mut expr);
+
+    assert!(matches!(&expr, Expr::Error(e) if e.message == "unexpected"));
+}
+
+/// When the subject is constant and the matching arm body is `Expr::Error`,
+/// the match folds to that error.
+#[test]
+fn constant_subject_matching_arm_is_error() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    // `match 1 { 1 => error("bad"), 2 => "ok" } else "default"` → `error("bad")`
+    let mut expr = Expr::Match(ExprMatch {
+        subject: Box::new(Expr::from(1i64)),
+        arms: vec![
+            MatchArm {
+                pattern: Value::from(1i64),
+                expr: Expr::error("bad"),
+            },
+            MatchArm {
+                pattern: Value::from(2i64),
+                expr: Expr::from("ok"),
+            },
+        ],
+        else_expr: Box::new(Expr::from("default")),
+    });
+
+    simplify.visit_expr_mut(&mut expr);
+
+    assert!(matches!(&expr, Expr::Error(e) if e.message == "bad"));
+}
+
+/// When the subject is constant and a normal arm matches, the error else
+/// branch is not reached.
+#[test]
+fn constant_subject_match_found_error_else_not_reached() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    // `match 1 { 1 => "ok" } else error("unexpected")` → `"ok"`
+    let mut expr = Expr::Match(ExprMatch {
+        subject: Box::new(Expr::from(1i64)),
+        arms: vec![MatchArm {
+            pattern: Value::from(1i64),
+            expr: Expr::from("ok"),
+        }],
+        else_expr: Box::new(Expr::error("unexpected")),
+    });
+
+    simplify.visit_expr_mut(&mut expr);
+
+    assert!(matches!(&expr, Expr::Value(Value::String(s)) if s == "ok"));
+}
