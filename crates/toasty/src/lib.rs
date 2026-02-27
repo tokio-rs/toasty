@@ -10,6 +10,9 @@ pub use cursor::Cursor;
 pub mod db;
 pub use db::Db;
 
+mod executor;
+pub use executor::Executor;
+
 mod engine;
 
 mod model;
@@ -26,6 +29,9 @@ pub mod schema;
 pub mod stmt;
 pub use stmt::Statement;
 
+mod transaction;
+pub use transaction::{Savepoint, Transaction, TransactionBuilder};
+
 pub use toasty_macros::{create, query, Embed, Model};
 
 pub use toasty_core::{Error, Result};
@@ -40,7 +46,7 @@ pub mod codegen_support {
         relation::Relation,
         relation::{BelongsTo, HasMany, HasOne},
         stmt::{self, IntoExpr, IntoInsert, IntoSelect, Path},
-        Db, Embed, Error, Model, Register, Result, Statement,
+        Db, Embed, Error, Executor, Model, Register, Result, Statement,
     };
     pub use std::{convert::Into, default::Default, option::Option};
     pub use toasty_core as core;
@@ -57,3 +63,5 @@ pub mod codegen_support {
 pub mod driver {
     pub use toasty_core::driver::*;
 }
+
+pub use toasty_core::driver::IsolationLevel;
