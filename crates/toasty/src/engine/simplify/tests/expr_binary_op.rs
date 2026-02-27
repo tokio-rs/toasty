@@ -623,8 +623,14 @@ fn match_eq_constant_value() {
     let schema = test_schema();
     let mut simplify = Simplify::new(&schema);
 
-    // Match(col, [1 => Record([col, addr]), 2 => Record([col, num])]) == Value(Record([I64(1), "alice"]))
+    // Match(col, [1 => Record([col, addr]), 2 => Record([col, num])],
+    //       else: Record([col, Error])) == Value(Record([I64(1), "alice"]))
     // → col == 1 AND addr == "alice"
+    //
+    // The else branch uses Record([col, Error]) matching the real-world
+    // data-carrying enum pattern. Tuple decomposition produces col == I64(1)
+    // which contradicts the NOT(col == 1) guard, so the complement law
+    // folds the else term to false.
     let mut expr = Expr::binary_op(
         Expr::match_expr(
             Expr::arg(0),
@@ -638,7 +644,7 @@ fn match_eq_constant_value() {
                     expr: Expr::record([Expr::arg(0), Expr::arg(2)]),
                 },
             ],
-            Expr::null(),
+            Expr::record([Expr::arg(0), Expr::error("unreachable")]),
         ),
         BinaryOp::Eq,
         Expr::from(Value::Record(ValueRecord::from_vec(vec![
@@ -661,7 +667,8 @@ fn match_eq_scalar_folds_matching_arm() {
     let schema = test_schema();
     let mut simplify = Simplify::new(&schema);
 
-    // Match(arg(0), [1 => "a", 2 => "b"]) == "a" → arg(0) == 1
+    // Match(arg(0), [1 => "a", 2 => "b"], else: "__") == "a" → arg(0) == 1
+    // The else value "__" != "a" folds to false, pruning the else term.
     let mut expr = Expr::binary_op(
         Expr::match_expr(
             Expr::arg(0),
@@ -675,7 +682,7 @@ fn match_eq_scalar_folds_matching_arm() {
                     expr: Expr::from("b"),
                 },
             ],
-            Expr::null(),
+            Expr::from("__"),
         ),
         BinaryOp::Eq,
         Expr::from("a"),
@@ -698,7 +705,8 @@ fn match_eq_no_matching_arm_folds_to_false() {
     let schema = test_schema();
     let mut simplify = Simplify::new(&schema);
 
-    // Match(arg(0), [1 => "a", 2 => "b"]) == "c" → false (all arms pruned)
+    // Match(arg(0), [1 => "a", 2 => "b"], else: "__") == "c" → false (all arms pruned)
+    // The else value "__" != "c" folds to false, pruning the else term too.
     let mut expr = Expr::binary_op(
         Expr::match_expr(
             Expr::arg(0),
@@ -712,7 +720,7 @@ fn match_eq_no_matching_arm_folds_to_false() {
                     expr: Expr::from("b"),
                 },
             ],
-            Expr::null(),
+            Expr::from("__"),
         ),
         BinaryOp::Eq,
         Expr::from("c"),
@@ -728,7 +736,7 @@ fn match_on_rhs() {
     let schema = test_schema();
     let mut simplify = Simplify::new(&schema);
 
-    // "a" == Match(arg(0), [1 => "a", 2 => "b"]) → arg(0) == 1
+    // "a" == Match(arg(0), [1 => "a", 2 => "b"], else: "__") → arg(0) == 1
     let mut expr = Expr::binary_op(
         Expr::from("a"),
         BinaryOp::Eq,
@@ -744,7 +752,7 @@ fn match_on_rhs() {
                     expr: Expr::from("b"),
                 },
             ],
-            Expr::null(),
+            Expr::from("__"),
         ),
     );
 
@@ -764,9 +772,10 @@ fn match_ne_preserves_non_matching_arms() {
     let schema = test_schema();
     let mut simplify = Simplify::new(&schema);
 
-    // Match(arg(0), [1 => "a", 2 => "b"]) != "a"
+    // Match(arg(0), [1 => "a", 2 => "b"], else: "a") != "a"
     // arm 1: arg(0) == 1 AND "a" != "a" → false → pruned
     // arm 2: arg(0) == 2 AND "b" != "a" → arg(0) == 2
+    // else:  NOT(arg(0)==1) AND NOT(arg(0)==2) AND "a" != "a" → false → pruned
     let mut expr = Expr::binary_op(
         Expr::match_expr(
             Expr::arg(0),
@@ -780,7 +789,7 @@ fn match_ne_preserves_non_matching_arms() {
                     expr: Expr::from("b"),
                 },
             ],
-            Expr::null(),
+            Expr::from("a"),
         ),
         BinaryOp::Ne,
         Expr::from("a"),
@@ -805,7 +814,7 @@ fn match_with_non_constant_subject() {
     let mut simplify = simplify.scope(model.expect_root());
 
     // Match over a column reference (the real-world case)
-    // Match(field[0], [1 => "a", 2 => "b"]) == "a"
+    // Match(field[0], [1 => "a", 2 => "b"], else: "__") == "a"
     let subject = Expr::Reference(ExprReference::Field {
         nesting: 0,
         index: 0,
@@ -824,7 +833,7 @@ fn match_with_non_constant_subject() {
                     expr: Expr::from("b"),
                 },
             ],
-            Expr::null(),
+            Expr::from("__"),
         ),
         BinaryOp::Eq,
         Expr::from("a"),

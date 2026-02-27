@@ -114,8 +114,10 @@ impl Simplify<'_> {
         false
     }
 
-    /// Checks for contradicting equality constraints: `a == c1 AND a == c2`
-    /// where c1 and c2 are different constant values. Returns true if found.
+    /// Checks for contradicting equality constraints:
+    ///
+    /// - `a == c1 AND a == c2` where c1 != c2 → contradiction
+    /// - `a == c AND a != c` → contradiction
     ///
     /// TODO: This runs O(n^2) on every AND node during the walk, which is
     /// wasteful — most AND nodes don't contain contradictions. This should move
@@ -138,11 +140,38 @@ impl Simplify<'_> {
             })
             .collect();
 
+        // `a == c1 AND a == c2` where c1 != c2
         for i in 0..eq_constraints.len() {
             for j in (i + 1)..eq_constraints.len() {
                 if eq_constraints[i].0 == eq_constraints[j].0
                     && eq_constraints[i].1 != eq_constraints[j].1
                 {
+                    return true;
+                }
+            }
+        }
+
+        // `a == c AND a != c`
+        // This arises when NOT(a == c) is simplified to a != c before the
+        // complement check runs.
+        let ne_constraints: Vec<_> = expr
+            .operands
+            .iter()
+            .filter_map(|op| {
+                if let Expr::BinaryOp(binop) = op {
+                    if binop.op == BinaryOp::Ne {
+                        if let Expr::Value(val) = binop.rhs.as_ref() {
+                            return Some((binop.lhs.as_ref(), val));
+                        }
+                    }
+                }
+                None
+            })
+            .collect();
+
+        for (eq_lhs, eq_val) in &eq_constraints {
+            for (ne_lhs, ne_val) in &ne_constraints {
+                if eq_lhs == ne_lhs && eq_val == ne_val {
                     return true;
                 }
             }

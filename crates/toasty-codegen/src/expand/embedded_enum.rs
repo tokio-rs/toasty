@@ -30,10 +30,8 @@ impl Expand<'_> {
             .variants
             .iter()
             .map(|variant| {
-                let method_name = syn::Ident::new(
-                    &format!("is_{}", variant.name.ident),
-                    variant.ident.span(),
-                );
+                let method_name =
+                    syn::Ident::new(&format!("is_{}", variant.name.ident), variant.ident.span());
                 let disc = variant.discriminant;
 
                 // Data-carrying enums store values as Record([disc, fields...]),

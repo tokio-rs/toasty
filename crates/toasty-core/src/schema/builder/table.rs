@@ -315,7 +315,27 @@ impl BuildMapping<'_> {
                 expr: arm_expr,
             });
         }
-        stmt::Expr::match_expr(disc_col_ref, arms, stmt::Expr::null())
+        // The else branch uses the same Record shape as data arms but with
+        // Expr::Error for each field slot. This makes projections work
+        // uniformly: projecting [0] extracts disc_col (pruning the errors),
+        // while projecting [1] yields Expr::Error (unreachable at runtime).
+        let max_fields = model
+            .variants
+            .iter()
+            .map(|v| v.fields.len())
+            .max()
+            .unwrap_or(0);
+        let else_expr = if max_fields == 0 {
+            stmt::Expr::error("unexpected enum discriminant")
+        } else {
+            let mut elems = vec![disc_col_ref.clone()];
+            for _ in 0..max_fields {
+                elems.push(stmt::Expr::error("unexpected enum discriminant"));
+            }
+            stmt::Expr::record(elems)
+        };
+
+        stmt::Expr::match_expr(disc_col_ref, arms, else_expr)
     }
 
     /// Encodes `expr` for `column_id`, appends the result to `model_to_table`,

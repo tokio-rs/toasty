@@ -1,12 +1,32 @@
 use super::Expr;
 
-/// An expression that, when evaluated, produces an error.
+/// An expression representing an unreachable branch.
 ///
-/// This is used for conditional branches that represent error states. For
-/// example, `ExprMatch` may be semantically exhaustive, but because the database
-/// may return unexpected values, we still need an else branch. That else branch
-/// is an `Expr::Error` — it should never be reached at runtime, but if it is,
-/// evaluation fails with the contained message.
+/// `Expr::Error` marks code paths that should never execute at runtime. The
+/// primary use is the else branch of `ExprMatch` on enum discriminants: all
+/// valid discriminants are covered by explicit arms, so the else branch is
+/// semantically unreachable. If it IS reached (e.g., due to data corruption or
+/// a schema mismatch), evaluation fails with the contained message.
+///
+/// # Simplifier semantics
+///
+/// Because Error is unreachable, simplification rules treat it as an opaque
+/// value — no special propagation is needed. Existing rules handle it
+/// naturally:
+///
+/// - `false AND (Error == x)` → `false` (short-circuit on `false`)
+/// - `Record([disc, Error]) == Record([I64(1), "alice"])` decomposes into
+///   `disc == I64(1) AND Error == "alice"`, and if `disc == I64(1)`
+///   contradicts a guard like `disc != I64(1)`, the whole AND folds to
+///   `false`.
+///
+/// In all well-formed cases, the guard constraints around Error cause the
+/// branch to be pruned without requiring Error-specific rules.
+///
+/// # Type inference
+///
+/// `Expr::Error` infers as `Type::Unknown`. `TypeUnion::insert` skips
+/// `Unknown`, so an Error branch doesn't widen inferred type unions.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprError {
     /// The error message to surface if this expression is evaluated.

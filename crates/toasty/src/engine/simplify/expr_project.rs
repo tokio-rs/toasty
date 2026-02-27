@@ -47,12 +47,10 @@ impl Simplify<'_> {
                     expr.projection.clone(),
                 );
             }
-            if !matches!(&*match_expr.else_expr, stmt::Expr::Value(stmt::Value::Null)) {
-                *match_expr.else_expr = stmt::Expr::project(
-                    std::mem::replace(&mut *match_expr.else_expr, stmt::Expr::null()),
-                    expr.projection.clone(),
-                );
-            }
+            *match_expr.else_expr = stmt::Expr::project(
+                std::mem::replace(&mut *match_expr.else_expr, stmt::Expr::null()),
+                expr.projection.clone(),
+            );
             return Some(std::mem::replace(&mut *expr.base, stmt::Expr::null()));
         }
 

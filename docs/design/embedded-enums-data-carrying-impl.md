@@ -32,7 +32,7 @@ members of `Field` are always `false`/`None`/`[]` for variant fields.
 
 ## Codegen Changes
 
-**Parsing**: `toasty-codegen/src/schema/` must parse variant fields and include them
+**Parsing**: `toasty-codegen/src/schema/` parses variant fields and includes them
 in `EmbeddedEnum` registration so the runtime schema is complete.
 
 **`Primitive::load`**: generated arms dispatch on value type first (I64 vs Record),
@@ -42,12 +42,19 @@ its positional index in the record.
 **`IntoExpr`**: unit variants emit `Value::I64(disc)` as today; data variants emit
 `Value::Record([I64(disc), field_exprs...])`.
 
+**`{Enum}Fields` struct**: all enums (unit-only and data-carrying) generate a
+`{Enum}Fields` struct with `is_{variant}()` methods for discriminant-only filtering.
+For data-carrying enums, `is_{variant}()` uses `project(path, [0])` to extract the
+discriminant from the record representation. For unit-only enums, it compares the
+path directly. The struct also delegates comparison methods (`eq`, `ne`, etc.) to
+`Path<Self>`.
+
 ## Engine: `Expr::Match`
 
-Both `table_to_model` and `model_to_table` are expressed using a new AST node:
+Both `table_to_model` and `model_to_table` are expressed using:
 
 ```
-Match { subject: Expr, arms: [(pattern: Value, expr: Expr)] }
+Match { subject: Expr, arms: [(pattern: Value, expr: Expr)], else_expr: Expr }
 ```
 
 `Expr::Match` is never serialized to SQL — it is either evaluated in the engine
@@ -59,6 +66,21 @@ For an enum field, `table_to_model` emits a `Match` on the discriminator column.
 Each arm produces the value shape `Primitive::load` expects: unit arms emit
 `I64(disc)`, data arms emit `Record([I64(disc), ...field_col_refs])`.
 
+### else branch: `Expr::Error`
+
+The else branch of an enum `Match` represents the case where the discriminant column
+holds an unrecognized value — semantically unreachable for well-formed data.
+
+For data-carrying enums, the else branch is `Record([disc_col, Error, ...Error])` —
+the same Record shape as data arms, but with `Expr::Error` in every field slot. This
+design is critical for the simplifier: projections distribute uniformly into the else
+branch, and field-slot projections yield `Expr::Error` (correct: accessing a field
+on an unknown variant is an error), while discriminant projections (`[0]`) yield
+`disc_col` (the same as every arm). This enables the uniform-arms optimization to
+fire after projection.
+
+For unit-only enums with data variants, else is `Expr::Error` directly.
+
 ### model_to_table
 
 Runs the inverse: the incoming value (`I64` or `Record`) is matched on its
@@ -68,61 +90,109 @@ variant column. This NULL-out is mandatory: because writes may not have a loaded
 model, the engine has no knowledge of the prior variant and must clear all
 non-active columns unconditionally.
 
-## Queries
+## Simplifier Rules
 
-The query builder generates field references and projections as it does for embedded
-structs. After lowering, `ref(enum_field)` is replaced by the `table_to_model`
-`Expr::Match`. The simplifier then eliminates the `Match` using **case distribution**:
+### Project into Match (expr_project.rs)
 
-> `f(Match(subj, arms))` → `Match(subj, [p => f(e) for (p, e) in arms])`
+Distributes a projection into each Match arm AND the else branch:
 
-Push `f` into each arm, fold constants, discard arms that become `false`, then
-rewrite the residual `Match(subj, arms)` as `OR(subj = pi AND ci)`.
+```
+project(Match(subj, [p => e, ...], else), [i])
+  → Match(subj, [p => project(e, [i]), ...], else: project(else, [i]))
+```
 
-**Variant-only check** (`is_email()`): pushing `.eq(I64(1))` into the arms produces
-`true` for the matching arm and `false` for all others (type mismatch between `I64`
-and `Record`). Result: `disc_col = 1`.
+Projection is pushed into the else branch unconditionally — `Expr::Error` inside
+a Record is handled naturally (projecting `[0]` out of `Record([disc, Error])`
+yields `disc`; projecting `[1]` yields `Error`).
 
-**Variant+field check** (`email.address.eq("x")`): pushing `project([1])` into the
-arms first eliminates unit arms (scalar has no `[1]`) and extracts the field column
-from data arms. Pushing `.eq("x")` after that produces `disc_col = N AND field_col =
-"x"`. The discriminant guard falls out automatically — it is a consequence of case
-distribution, not a special case.
+### Uniform arms (expr_match.rs)
 
-Case distribution is preferable to a flat-Record `table_to_model` (all variant
-columns always present, with NULLs) because the encoding is semantically precise,
-the rule is general, and the resulting SQL is exact.
+When all arms AND the else branch produce the same expression, the Match is
+redundant:
 
-### OR Tautology Elimination
+```
+Match(subj, [1 => disc, 2 => disc], else: disc)  →  disc
+```
 
-`is_bar() || is_baz()` over an enum with exactly `{Bar, Baz}` is a tautology.
-After lowering and case distribution, this becomes `disc_col = 1 OR disc_col = 2`.
-`simplify_expr_or` detects that the value set covers all discriminants for the enum
-type and replaces the expression with `TRUE` (non-nullable field) or `IS NOT NULL`
-(nullable). This fires pre-lower, where the enum field type is directly accessible in
-the schema. For data-carrying enums, case distribution first normalises each
-`is_variant()` check to a discriminant comparison; the tautology rule then fires
-independently.
+The else branch MUST equal the common arm expression for this rule to fire. This
+makes the transformation provably correct — no branch is dropped that could produce
+a different value.
 
-## Partial Updates
+### Match elimination in binary ops (expr_binary_op.rs)
 
-See `docs/design/enums-and-embedded-structs.md § Enum updates` for the public API.
+Distributes a binary op over match arms, producing an OR of guarded comparisons.
+The else branch is included with a negated guard:
 
-**Whole-variant replacement** (`.contact(value)`): `IntoExpr` encodes the value as
-`I64` or `Record`; the engine expands it through the `model_to_table` `Expr::Match`,
-producing flat column assignments that set the discriminator and active variant
-fields, and NULL every inactive column.
+```
+Match(subj, [p1 => e1, p2 => e2], else: e3) == rhs
+  → OR(subj == p1 AND e1 == rhs,
+       subj == p2 AND e2 == rhs,
+       subj != p1 AND subj != p2 AND e3 == rhs)
+```
 
-**Within-variant partial update** (`.with_contact(|c| c.phone(...))`): the update
-builder emits assignments for the specific columns directly — no discriminant
-dispatch. Because the target variant is statically known (the caller invoked
-`.phone(...)` not `.email(...)`), the engine automatically injects a condition
-`disc_col = N` into the WHERE clause. This turns a mismatched-variant write into a
-no-op (zero rows affected) rather than silent corruption.
+Each term is fully simplified inline. Terms that fold to false/null are pruned.
+No special handling is needed for the else branch — it is always included and
+existing simplification rules handle `Expr::Error` naturally (see below).
 
-The codegen produces `{Enum}Update<'a>` with one method per variant, each scoped to
-that variant's fields. Calling a unit variant's method (no fields) sets only the
-discriminator, equivalent to whole-variant replacement.
+### `Expr::Error` semantics
+
+`Expr::Error` is treated as "unreachable" — not as a poison value that propagates.
+No special Error propagation rules exist. Instead, existing rules eliminate Error
+through the surrounding context:
+
+- **Data-carrying enum else**: `Record([disc, Error, ...])`. After tuple
+  decomposition, the guard `disc != p1 AND disc != p2` contradicts the
+  decomposed `disc == c` from the comparison target. The contradicting
+  equality rule (`a == c AND a != c → false`) folds the AND to false.
+
+- **`false AND (Error == x)`**: The `false` short-circuit in AND eliminates the
+  term without needing to simplify `Error == x`.
+
+- **`Record([1, Error]) == Record([0, "alice"])`**: Tuple decomposition produces
+  `1 == 0 AND Error == "alice"`. The `1 == 0 → false` folds the AND to false.
+
+In all well-formed cases, the guard constraints around Error cause the branch to
+be pruned without requiring Error-specific rules.
+
+### Type inference for `Expr::Error`
+
+`Expr::Error` infers as `Type::Unknown`. `TypeUnion::insert` skips `Unknown`, so
+an Error branch in a Match doesn't widen the inferred type union.
+
+### Variant-only filter flow
+
+`is_email()` generates `eq(project(path, [0]), I64(1))`. After lowering:
+
+```
+eq(project(Match(disc, [1 => Record([disc, addr]), 2 => Record([disc, num])],
+                 else: Record([disc, Error])), [0]),
+   I64(1))
+```
+
+1. Project-into-Match distributes `[0]` into all branches including else
+2. `project(Record([disc, addr]), [0])` → `disc` (for each arm)
+3. `project(Record([disc, Error]), [0])` → `disc` (for else)
+4. Uniform-arms fires: all arms AND else produce `disc` → folds to `disc`
+5. Result: `eq(disc, I64(1))` — a clean `disc_col = 1` predicate
+
+### Full-value equality filter flow
+
+`contact().eq(ContactInfo::Email { address: "alice@example.com" })` generates
+`eq(path, Record([I64(1), "alice@example.com"]))`. After lowering:
+
+```
+eq(Match(disc, [1 => Record([disc, addr]), 2 => Record([disc, num])],
+         else: Record([disc, Error])),
+   Record([I64(1), "alice@example.com"]))
+```
+
+1. Match elimination distributes eq into each arm AND else as OR
+2. `disc == 1 AND Record([disc, addr]) == Record([I64(1), "alice"])` → simplifies
+3. `disc == 2 AND Record([disc, num]) == Record([I64(1), "alice"])` → false (pruned)
+4. Else: `disc != 1 AND disc != 2 AND Record([disc, Error]) == Record([I64(1), "alice"])`
+   → tuple decomposition: `disc != 1 AND disc != 2 AND disc == 1 AND Error == "alice"`
+   → contradicting equality (`disc == 1 AND disc != 1`) → false (pruned)
+5. Result: `disc_col = 1 AND addr_col = 'alice@example.com'`
 
 ## Correctness Sharp Edges
 
@@ -133,43 +203,54 @@ unconditionally NULL every column they do not own.
 **NULL discriminators are disallowed.** The discriminator column carries `NOT NULL`,
 consistent with unit enums today. `Option<Enum>` support is a future concern.
 
-**Within-variant partial updates on mismatched variants affect zero rows.** The
-auto-injected discriminant condition prevents corruption but produces a silent no-op
-if the DB holds a different variant. Future rows-affected checking could surface this
-as an error.
+**Unknown discriminants fail at load time.** An unrecognized discriminant (e.g. from
+a newer schema version) produces a runtime error via `Expr::Error`. Removing a
+variant requires a data migration.
 
 **No DB-level integrity for active variant fields.** All variant columns are nullable
 (to accommodate inactive variants), so a NULL in a required active field is caught
 only at load time by `Primitive::load`, not at write time.
 
-**Unknown discriminants fail at load time.** An unrecognized discriminant (e.g. from
-a newer schema version) produces a runtime error. Removing a variant requires a data
-migration.
-
 ## DynamoDB
 
 Equivalent encoding to be determined when implementing the DynamoDB driver phase.
 
-## Implementation Phases
+## Implementation Status
 
-1. **Schema**: add `fields: Vec<Field>` to `EnumVariant`; update `Register::schema()`
-   codegen; `Primitive::ty()` returns `Type::Model` when any data variant is present.
+### Completed
 
-2. **Value encoding**: update `Primitive::load()` codegen for unit/data dispatch;
-   update `IntoExpr` to emit `Record` for data variants.
+1. **Schema**: `fields: Vec<Field>` on `EnumVariant`; codegen parsing; `Primitive::ty()`
+   returns `Type::Model` for data-carrying enums.
 
-3. **`Expr::Match`**: add `Match`/`MatchArm` to `toasty-core::stmt`; implement
-   `table_to_model` and `model_to_table` for enum fields.
+2. **Value encoding**: `Primitive::load()` dispatches on I64 vs Record;
+   `IntoExpr` emits Record for data variants.
 
-4. **Simplifier**: case distribution in `simplify_expr_binary_op` and
-   `simplify_expr_project`; residual-Match → `OR(subj = pi AND ci)` rewrite;
-   OR tautology elimination in `simplify_expr_or`.
+3. **`Expr::Match` + `Expr::Error`**: Match/MatchArm AST nodes with visitors, eval,
+   and simplifier integration. `Expr::Error` for unreachable branches.
+   `build_table_to_model_field_enum` uses `Record([disc, Error, ...])` for the
+   else branch.
 
-5. **Integration tests**: CRUD for pure data-carrying enum; mixed enum; nested
-   enum-in-struct and struct-in-enum; filter by variant; filter by variant field;
-   whole-variant and within-variant update.
+4. **Simplifier**: project-into-Match distribution; uniform-arms folding (with
+   else-branch check); Match-to-OR elimination in binary ops; case distribution
+   for binary ops with Match operands.
 
-6. **DynamoDB**: equivalent encoding in the DynamoDB driver.
+5. **`{Enum}Fields` codegen**: all enums generate a fields struct with
+   `is_{variant}()` methods and delegated comparison methods.
+
+6. **Integration tests**: CRUD for data-carrying enums; full-value equality filter;
+   variant-only filter (`is_email()`); unit enum variant filter (`is_pending()`).
+
+### Remaining
+
+- **Variant+field filter** (`contact().email().address().eq("x")`): per-variant field
+  accessors that project into the variant's data fields. Requires generating
+  accessor methods on the fields struct for each variant's fields.
+
+- **Partial updates**: within-variant partial update builder.
+
+- **OR tautology elimination**: `is_bar() || is_baz()` over `{Bar, Baz}` → `TRUE`.
+
+- **DynamoDB**: equivalent encoding in the DynamoDB driver.
 
 ## Open Questions
 

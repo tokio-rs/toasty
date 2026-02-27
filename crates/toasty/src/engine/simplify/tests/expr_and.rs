@@ -634,11 +634,13 @@ fn multiple_nulls_and_true_becomes_null() {
 // Error operand tests
 
 #[test]
-fn error_operand_preserved_in_and() {
+fn error_operand_not_simplified_in_and() {
     let schema = test_schema();
     let mut simplify = Simplify::new(&schema);
 
-    // `and(error("boom"), arg(0))` → no simplification (error is not true/false/null)
+    // `and(error("boom"), arg(0))` → no simplification.
+    // Error represents an unreachable branch; it does not poison the AND.
+    // In practice, other operands (guards) will drive the AND to false.
     let mut expr = ExprAnd {
         operands: vec![Expr::error("boom"), Expr::arg(0)],
     };
@@ -646,7 +648,6 @@ fn error_operand_preserved_in_and() {
 
     assert!(result.is_none());
     assert_eq!(expr.operands.len(), 2);
-    assert!(matches!(&expr.operands[0], Expr::Error(_)));
 }
 
 #[test]

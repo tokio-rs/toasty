@@ -226,6 +226,9 @@ impl Simplify<'_> {
 
         let mut operands = Vec::new();
 
+        // Collect arm patterns before consuming the arms (needed for the else guard).
+        let patterns: Vec<_> = match_expr.arms.iter().map(|a| a.pattern.clone()).collect();
+
         for arm in match_expr.arms {
             let guard = Expr::binary_op(
                 (*match_expr.subject).clone(),
@@ -250,11 +253,34 @@ impl Simplify<'_> {
             operands.push(term);
         }
 
-        // The else arm is null for data-carrying enums (the common case).
-        // A null comparison always produces null under SQL three-valued logic,
-        // so it gets pruned just like a false branch.
-        if !matches!(*match_expr.else_expr, Expr::Value(stmt::Value::Null)) {
-            todo!("non-null else arm in match elimination");
+        // Include the else branch with a guard that negates all arm patterns.
+        {
+            let guards: Vec<Expr> = patterns
+                .into_iter()
+                .map(|pattern| {
+                    Expr::not(Expr::binary_op(
+                        (*match_expr.subject).clone(),
+                        stmt::BinaryOp::Eq,
+                        Expr::from(pattern),
+                    ))
+                })
+                .collect();
+
+            let comparison = if match_on_lhs {
+                Expr::binary_op(*match_expr.else_expr, op, other)
+            } else {
+                Expr::binary_op(other, op, *match_expr.else_expr)
+            };
+
+            let mut else_operands = guards;
+            else_operands.push(comparison);
+            let mut term = Expr::and_from_vec(else_operands);
+            self.visit_expr_mut(&mut term);
+
+            // Prune dead branches
+            if !term.is_false() && !matches!(&term, Expr::Value(stmt::Value::Null)) {
+                operands.push(term);
+            }
         }
 
         Expr::or_from_vec(operands)

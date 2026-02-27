@@ -450,6 +450,10 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                 union.insert(else_ty);
                 union.simplify()
             }
+            // Error is a bottom type — it can never be evaluated, so it
+            // could be any type. Return Unknown so it unifies with whatever
+            // the other branches produce.
+            Expr::Error(_) => Type::Unknown,
             _ => todo!("{expr:#?}"),
         }
     }
