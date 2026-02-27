@@ -1,12 +1,12 @@
 use super::{
-    ddb_key_schema, AttributeDefinition, Connection, GlobalSecondaryIndex, Projection,
-    ProjectionType, ProvisionedThroughput, Result, Schema, Table, TypeExt,
+    db, ddb_key_schema, AttributeDefinition, Connection, GlobalSecondaryIndex, Projection,
+    ProjectionType, ProvisionedThroughput, Result, Table, TypeExt,
 };
 
 impl Connection {
     pub(crate) async fn create_table(
         &mut self,
-        schema: &Schema,
+        schema: &db::Schema,
         table: &Table,
         reset: bool,
     ) -> Result<()> {

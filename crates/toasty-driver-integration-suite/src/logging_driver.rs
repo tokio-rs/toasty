@@ -6,8 +6,8 @@ use toasty::driver::Driver;
 use toasty_core::{
     async_trait,
     driver::{Capability, Connection, Operation, Response, Rows},
-    schema::db::{AppliedMigration, Migration, Schema, SchemaDiff},
-    Result,
+    schema::db::{AppliedMigration, Migration, SchemaDiff},
+    Result, Schema,
 };
 
 #[derive(Debug)]
