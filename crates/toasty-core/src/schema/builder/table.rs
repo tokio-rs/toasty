@@ -473,10 +473,10 @@ impl<'a, 'b> MapField<'a, 'b> {
         primitive: &app::FieldPrimitive,
     ) -> mapping::Field {
         let column_id = self.create_column(field, primitive);
-        let expr = self.field_expr(field, field_index);
+        let expr = self.field_expr(field, stmt::Step::Field(field_index));
         let lowering_index = self.build.push_lowering(column_id, &primitive.ty, expr);
         let bit = self.build.next_bit();
-        let sub_projection = self.sub_projection(field_index);
+        let sub_projection = self.sub_projection(stmt::Step::Field(field_index));
 
         mapping::Field::Primitive(mapping::FieldPrimitive {
             column: column_id,
@@ -496,13 +496,13 @@ impl<'a, 'b> MapField<'a, 'b> {
     ) -> mapping::Field {
         // Create the discriminant column. It inherits nullability from the enum field.
         let column_id = self.create_column(field, &embedded_enum.discriminant);
-        let field_expr = self.field_expr(field, field_index);
+        let field_expr = self.field_expr(field, stmt::Step::Field(field_index));
 
         // For data-carrying enums the model value is Record([I64(disc), ...]),
         // so project [0] to extract the discriminant; for unit-only enums the
         // value IS the I64 discriminant directly.
         let disc_expr = if embedded_enum.has_data_variants() {
-            stmt::Expr::project(field_expr.clone(), stmt::Projection::single(0))
+            stmt::Expr::project(field_expr.clone(), stmt::Projection::field(0))
         } else {
             field_expr.clone()
         };
@@ -514,7 +514,7 @@ impl<'a, 'b> MapField<'a, 'b> {
         let bit = self.build.next_bit();
         let sub_projection = self.sub_projection(field_index);
 
-        let disc_proj = stmt::Expr::project(field_expr.clone(), stmt::Projection::single(0));
+        let disc_proj = stmt::Expr::project(field_expr.clone(), stmt::Projection::field(0));
 
         let variants = embedded_enum
             .variants
@@ -639,14 +639,15 @@ impl<'a, 'b> MapField<'a, 'b> {
     /// starts a fresh projection rooted at `field.id`. Otherwise the existing
     /// `ExprProject` is extended by `field_index`.
     fn extend_field_base(&self, field: &app::Field, field_index: usize) -> stmt::Expr {
+        let step = stmt::Step::Field(field_index);
         match &self.field_base {
             None => stmt::Expr::ref_self_field(field.id),
             Some(stmt::Expr::Project(ep)) => {
                 let mut proj = ep.projection.clone();
-                proj.push(field_index);
+                proj.push(step);
                 stmt::Expr::project(*ep.base.clone(), proj)
             }
-            Some(expr) => stmt::Expr::project(expr.clone(), [field_index]),
+            Some(expr) => stmt::Expr::project(expr.clone(), [step]),
         }
     }
 
@@ -656,15 +657,15 @@ impl<'a, 'b> MapField<'a, 'b> {
     /// If `field_base` is an `ExprProject`, the sub-projection is its
     /// projection extended by `field_index`. At the top level (`field_base`
     /// is `Expr::arg(0)`) the field is its own root, so identity is returned.
-    fn sub_projection(&self, field_index: usize) -> stmt::Projection {
+    fn sub_projection(&self, step: stmt::Step) -> stmt::Projection {
         match &self.field_base {
             None => stmt::Projection::identity(),
             Some(stmt::Expr::Project(ep)) => {
                 let mut proj = ep.projection.clone();
-                proj.push(field_index);
+                proj.push(step);
                 proj
             }
-            Some(_) => [field_index].into(),
+            Some(_) => step.into(),
         }
     }
 
@@ -674,14 +675,14 @@ impl<'a, 'b> MapField<'a, 'b> {
     /// itself directly. Inside an embedded struct/variant the expression extends
     /// `field_base` by `field_index`. The raw expression is then substituted
     /// into `field_expr_base` (which may wrap it in a match guard).
-    fn field_expr(&self, field: &app::Field, field_index: usize) -> stmt::Expr {
+    fn field_expr(&self, field: &app::Field, step: stmt::Step) -> stmt::Expr {
         let raw = match self.field_base.clone() {
             None => stmt::Expr::ref_self_field(field.id),
             Some(stmt::Expr::Project(mut expr_project)) => {
-                expr_project.projection.push(field_index);
+                expr_project.projection.push(step);
                 expr_project.into()
             }
-            Some(expr) => stmt::Expr::project(expr, [field_index]),
+            Some(expr) => stmt::Expr::project(expr, step),
         };
 
         let mut result = self.field_expr_base.clone();

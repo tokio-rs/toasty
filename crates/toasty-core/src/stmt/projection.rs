@@ -159,6 +159,12 @@ impl From<&Step> for Projection {
     }
 }
 
+impl<const N: usize> From<[Step; N]> for Projection {
+    fn from(value: [Step; N]) -> Self {
+        value.as_ref().into()
+    }
+}
+
 impl From<&[Step]> for Projection {
     fn from(value: &[Step]) -> Self {
         match value {
