@@ -14,7 +14,7 @@ pub async fn ty_bigdecimal(test: &mut Test) -> Result<(), BoxError> {
         val: BigDecimal,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     let test_values = vec![
         BigDecimal::from_str("0")?,
@@ -30,8 +30,8 @@ pub async fn ty_bigdecimal(test: &mut Test) -> Result<(), BoxError> {
     ];
 
     for val in &test_values {
-        let created = Foo::create().val(val.clone()).exec(&db).await?;
-        let read = Foo::get_by_id(&db, &created.id).await?;
+        let created = Foo::create().val(val.clone()).exec(&mut db).await?;
+        let read = Foo::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
     }
     Ok(())
@@ -50,7 +50,7 @@ pub async fn ty_bigdecimal_as_text(test: &mut Test) -> Result<(), BoxError> {
         val: BigDecimal,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     let test_values = vec![
         BigDecimal::from_str("0")?,
@@ -60,8 +60,8 @@ pub async fn ty_bigdecimal_as_text(test: &mut Test) -> Result<(), BoxError> {
     ];
 
     for val in &test_values {
-        let created = Foo::create().val(val.clone()).exec(&db).await?;
-        let read = Foo::get_by_id(&db, &created.id).await?;
+        let created = Foo::create().val(val.clone()).exec(&mut db).await?;
+        let read = Foo::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
     }
     Ok(())
@@ -82,7 +82,7 @@ pub async fn ty_bigdecimal_as_numeric_arbitrary_precision(test: &mut Test) -> Re
         val: BigDecimal,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     let test_values = vec![
         BigDecimal::from_str("0")?,
@@ -93,8 +93,8 @@ pub async fn ty_bigdecimal_as_numeric_arbitrary_precision(test: &mut Test) -> Re
     ];
 
     for val in &test_values {
-        let created = Foo::create().val(val.clone()).exec(&db).await?;
-        let read = Foo::get_by_id(&db, &created.id).await?;
+        let created = Foo::create().val(val.clone()).exec(&mut db).await?;
+        let read = Foo::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
     }
     Ok(())
@@ -112,7 +112,7 @@ pub async fn ty_bigdecimal_as_numeric_fixed_precision(test: &mut Test) -> Result
         val: BigDecimal,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     let test_values = vec![
         BigDecimal::from_str("0")?,
@@ -123,8 +123,8 @@ pub async fn ty_bigdecimal_as_numeric_fixed_precision(test: &mut Test) -> Result
     ];
 
     for val in &test_values {
-        let created = Foo::create().val(val.clone()).exec(&db).await?;
-        let read = Foo::get_by_id(&db, &created.id).await?;
+        let created = Foo::create().val(val.clone()).exec(&mut db).await?;
+        let read = Foo::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
     }
     Ok(())

@@ -33,12 +33,12 @@ pub async fn multi_op_create_wraps_in_transaction(t: &mut Test) -> Result<()> {
         title: String,
     }
 
-    let db = t.setup_db(models!(User, Todo)).await;
+    let mut db = t.setup_db(models!(User, Todo)).await;
 
     t.log().clear();
     let user = User::create()
         .todo(Todo::create().title("task"))
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     assert_struct!(
@@ -56,7 +56,7 @@ pub async fn multi_op_create_wraps_in_transaction(t: &mut Test) -> Result<()> {
     );
     assert!(t.log().is_empty());
 
-    let todos = user.todos().collect::<Vec<_>>(&db).await?;
+    let todos = user.todos().collect::<Vec<_>>(&mut db).await?;
     assert_eq!(1, todos.len());
 
     Ok(())
@@ -73,10 +73,10 @@ pub async fn single_op_skips_transaction(t: &mut Test) -> Result<()> {
         id: ID,
     }
 
-    let db = t.setup_db(models!(User)).await;
+    let mut db = t.setup_db(models!(User)).await;
 
     t.log().clear();
-    User::create().exec(&db).await?;
+    User::create().exec(&mut db).await?;
 
     // Only the INSERT — no Transaction::Start { isolation: None, read_only: false } bookending it
     assert_struct!(t.log().pop_op(), Operation::QuerySql(_));
@@ -124,19 +124,19 @@ pub async fn create_with_has_many_rolls_back_on_failure(t: &mut Test) -> Result<
         title: String,
     }
 
-    let db = t.setup_db(models!(User, Todo)).await;
+    let mut db = t.setup_db(models!(User, Todo)).await;
 
     // Seed the title that will cause the second INSERT to fail.
     User::create()
         .todo(Todo::create().title("taken"))
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     t.log().clear();
     assert_err!(
         User::create()
             .todo(Todo::create().title("taken"))
-            .exec(&db)
+            .exec(&mut db)
             .await
     );
 
@@ -157,7 +157,7 @@ pub async fn create_with_has_many_rolls_back_on_failure(t: &mut Test) -> Result<
     assert!(t.log().is_empty());
 
     // No orphaned user — count unchanged from pre-seed
-    let users = User::all().collect::<Vec<_>>(&db).await?;
+    let users = User::all().collect::<Vec<_>>(&mut db).await?;
     assert_eq!(1, users.len());
 
     Ok(())
@@ -198,19 +198,19 @@ pub async fn create_with_has_one_rolls_back_on_failure(t: &mut Test) -> Result<(
         user: toasty::BelongsTo<User>,
     }
 
-    let db = t.setup_db(models!(User, Profile)).await;
+    let mut db = t.setup_db(models!(User, Profile)).await;
 
     // Seed the bio that will cause the second INSERT to fail.
     User::create()
         .profile(Profile::create().bio("taken"))
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     t.log().clear();
     assert_err!(
         User::create()
             .profile(Profile::create().bio("taken"))
-            .exec(&db)
+            .exec(&mut db)
             .await
     );
 
@@ -229,7 +229,7 @@ pub async fn create_with_has_one_rolls_back_on_failure(t: &mut Test) -> Result<(
     assert!(t.log().is_empty());
 
     // No orphaned user — count unchanged from pre-seed
-    let users = User::all().collect::<Vec<_>>(&db).await?;
+    let users = User::all().collect::<Vec<_>>(&mut db).await?;
     assert_eq!(1, users.len());
 
     Ok(())
@@ -272,18 +272,18 @@ pub async fn update_with_new_association_rolls_back_on_failure(t: &mut Test) -> 
         title: String,
     }
 
-    let db = t.setup_db(models!(User, Todo)).await;
+    let mut db = t.setup_db(models!(User, Todo)).await;
 
-    let mut user = User::create().name("original").exec(&db).await?;
+    let mut user = User::create().name("original").exec(&mut db).await?;
     // Seed the name collision — this user's name will be duplicated by the failing UPDATE.
-    User::create().name("taken").exec(&db).await?;
+    User::create().name("taken").exec(&mut db).await?;
 
     t.log().clear();
     assert_err!(
         user.update()
             .name("taken") // UPDATE will fail: unique name
             .todo(Todo::create().title("new-todo")) // INSERT runs first and succeeds
-            .exec(&db)
+            .exec(&mut db)
             .await
     );
 
@@ -304,7 +304,7 @@ pub async fn update_with_new_association_rolls_back_on_failure(t: &mut Test) -> 
     assert!(t.log().is_empty());
 
     // INSERT was rolled back — no orphaned todo
-    let todos = user.todos().collect::<Vec<_>>(&db).await?;
+    let todos = user.todos().collect::<Vec<_>>(&mut db).await?;
     assert!(todos.is_empty());
 
     Ok(())
@@ -341,13 +341,13 @@ pub async fn rmw_uses_savepoints(t: &mut Test) -> Result<()> {
         user: toasty::BelongsTo<Option<User>>,
     }
 
-    let db = t.setup_db(models!(User, Todo)).await;
+    let mut db = t.setup_db(models!(User, Todo)).await;
 
-    let user = User::create().todo(Todo::create()).exec(&db).await?;
-    let todos: Vec<_> = user.todos().collect(&db).await?;
+    let user = User::create().todo(Todo::create()).exec(&mut db).await?;
+    let todos: Vec<_> = user.todos().collect(&mut db).await?;
 
     t.log().clear();
-    user.todos().remove(&db, &todos[0]).await?;
+    user.todos().remove(&mut db, &todos[0]).await?;
 
     if t.capability().cte_with_update {
         // PostgreSQL: single CTE bundles the condition + update
@@ -401,15 +401,15 @@ pub async fn rmw_condition_failure_issues_rollback_to_savepoint(t: &mut Test) ->
         user: toasty::BelongsTo<Option<User>>,
     }
 
-    let db = t.setup_db(models!(User, Todo)).await;
+    let mut db = t.setup_db(models!(User, Todo)).await;
 
-    let user1 = User::create().exec(&db).await?;
-    let user2 = User::create().todo(Todo::create()).exec(&db).await?;
-    let u2_todos: Vec<_> = user2.todos().collect(&db).await?;
+    let user1 = User::create().exec(&mut db).await?;
+    let user2 = User::create().todo(Todo::create()).exec(&mut db).await?;
+    let u2_todos: Vec<_> = user2.todos().collect(&mut db).await?;
 
     t.log().clear();
     // Remove u2's todo via user1 — condition (user_id = user1.id) won't match
-    assert_err!(user1.todos().remove(&db, &u2_todos[0]).await);
+    assert_err!(user1.todos().remove(&mut db, &u2_todos[0]).await);
 
     if t.capability().cte_with_update {
         // PostgreSQL: a single QuerySql; condition handled inside the CTE
@@ -433,7 +433,7 @@ pub async fn rmw_condition_failure_issues_rollback_to_savepoint(t: &mut Test) ->
     assert!(t.log().is_empty());
 
     // The todo is untouched — still belongs to user2
-    let reloaded = Todo::get_by_id(&db, u2_todos[0].id).await?;
+    let reloaded = Todo::get_by_id(&mut db, u2_todos[0].id).await?;
     assert_struct!(reloaded, _ { user_id: Some(== user2.id), .. });
 
     Ok(())

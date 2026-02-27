@@ -2,6 +2,7 @@ pub mod belongs_to_configured;
 pub mod belongs_to_one_way;
 pub mod belongs_to_self_referential;
 pub mod bigdecimal;
+pub mod connection_per_clone;
 pub mod decimal;
 pub mod default_and_update;
 pub mod embedded_enum_data;

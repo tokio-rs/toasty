@@ -33,11 +33,11 @@ pub async fn scoped_query_eq(test: &mut Test) -> Result<()> {
         order: i64,
     }
 
-    let db = test.setup_db(models!(User, Todo)).await;
+    let mut db = test.setup_db(models!(User, Todo)).await;
 
     // Create some users
-    let u1 = User::create().exec(&db).await?;
-    let u2 = User::create().exec(&db).await?;
+    let u1 = User::create().exec(&mut db).await?;
+    let u2 = User::create().exec(&mut db).await?;
 
     let mut u1_todo_ids = vec![];
 
@@ -56,7 +56,7 @@ pub async fn scoped_query_eq(test: &mut Test) -> Result<()> {
             .create()
             .title(title)
             .order(order as i64)
-            .exec(&db)
+            .exec(&mut db)
             .await?;
         u1_todo_ids.push(todo.id);
     }
@@ -67,14 +67,14 @@ pub async fn scoped_query_eq(test: &mut Test) -> Result<()> {
         .create()
         .title("attend world cup")
         .order(0)
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     // Query todos scoped by user 1
     let todos = u1
         .todos()
         .query(Todo::fields().order().eq(0))
-        .collect::<Vec<_>>(&db)
+        .collect::<Vec<_>>(&mut db)
         .await?;
 
     assert_eq!(1, todos.len());
@@ -86,7 +86,7 @@ pub async fn scoped_query_eq(test: &mut Test) -> Result<()> {
     let todos = u2
         .todos()
         .query(Todo::fields().order().eq(0))
-        .all(&db)
+        .all(&mut db)
         .await?
         .collect::<Vec<_>>()
         .await?;
@@ -100,7 +100,7 @@ pub async fn scoped_query_eq(test: &mut Test) -> Result<()> {
         .create()
         .title("another order 0 TODO")
         .order(0)
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     let mut actual = HashSet::new();
@@ -109,7 +109,7 @@ pub async fn scoped_query_eq(test: &mut Test) -> Result<()> {
     let mut todos = u1
         .todos()
         .query(Todo::fields().order().eq(0))
-        .all(&db)
+        .all(&mut db)
         .await?;
 
     while let Some(todo) = todos.next().await {
@@ -124,7 +124,7 @@ pub async fn scoped_query_eq(test: &mut Test) -> Result<()> {
     let todos = u2
         .todos()
         .query(Todo::fields().order().eq(1))
-        .all(&db)
+        .all(&mut db)
         .await?
         .collect::<Vec<_>>()
         .await?;
@@ -163,9 +163,9 @@ pub async fn scoped_query_gt(test: &mut Test) -> Result<()> {
         order: i64,
     }
 
-    let db = test.setup_db(models!(User, Todo)).await;
+    let mut db = test.setup_db(models!(User, Todo)).await;
 
-    let user = User::create().exec(&db).await?;
+    let user = User::create().exec(&mut db).await?;
 
     let todos = Todo::create_many()
         .item(Todo::create().user(&user).title("First").order(0))
@@ -173,7 +173,7 @@ pub async fn scoped_query_gt(test: &mut Test) -> Result<()> {
         .item(Todo::create().user(&user).title("Third").order(2))
         .item(Todo::create().user(&user).title("Fourth").order(3))
         .item(Todo::create().user(&user).title("Fifth").order(4))
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     assert_eq!(5, todos.len());
@@ -182,7 +182,7 @@ pub async fn scoped_query_gt(test: &mut Test) -> Result<()> {
     let todos: Vec<_> = user
         .todos()
         .query(Todo::fields().order().ne(2))
-        .collect(&db)
+        .collect(&mut db)
         .await?;
 
     assert_eq_unordered!(
@@ -198,7 +198,7 @@ pub async fn scoped_query_gt(test: &mut Test) -> Result<()> {
     let todos: Vec<_> = user
         .todos()
         .query(Todo::fields().order().gt(2))
-        .collect(&db)
+        .collect(&mut db)
         .await?;
 
     assert_eq_unordered!(
@@ -210,7 +210,7 @@ pub async fn scoped_query_gt(test: &mut Test) -> Result<()> {
     let todos: Vec<_> = user
         .todos()
         .query(Todo::fields().order().ge(2))
-        .collect(&db)
+        .collect(&mut db)
         .await?;
 
     assert_eq_unordered!(
@@ -222,7 +222,7 @@ pub async fn scoped_query_gt(test: &mut Test) -> Result<()> {
     let todos: Vec<_> = user
         .todos()
         .query(Todo::fields().order().lt(2))
-        .collect(&db)
+        .collect(&mut db)
         .await?;
 
     assert_eq_unordered!(
@@ -234,7 +234,7 @@ pub async fn scoped_query_gt(test: &mut Test) -> Result<()> {
     let todos: Vec<_> = user
         .todos()
         .query(Todo::fields().order().le(2))
-        .collect(&db)
+        .collect(&mut db)
         .await?;
 
     assert_eq_unordered!(
