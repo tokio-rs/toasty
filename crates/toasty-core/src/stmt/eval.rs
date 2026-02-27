@@ -174,6 +174,9 @@ impl Expr {
             Expr::Default => Err(crate::Error::expression_evaluation_failed(
                 "DEFAULT can only be evaluated by the database",
             )),
+            Expr::Error(expr_error) => Err(crate::Error::expression_evaluation_failed(
+                &expr_error.message,
+            )),
             Expr::IsNull(expr_is_null) => {
                 let value = expr_is_null.expr.eval_ref(scope, input)?;
                 Ok(value.is_null().into())

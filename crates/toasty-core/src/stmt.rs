@@ -48,6 +48,9 @@ pub use expr_binary_op::ExprBinaryOp;
 mod expr_cast;
 pub use expr_cast::ExprCast;
 
+mod expr_error;
+pub use expr_error::ExprError;
+
 mod expr_exists;
 pub use expr_exists::ExprExists;
 
