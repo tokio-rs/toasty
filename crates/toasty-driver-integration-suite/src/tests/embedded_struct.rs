@@ -1329,7 +1329,7 @@ pub async fn embedded_struct_with_jiff_fields(t: &mut Test) -> Result<()> {
         schedule: Schedule,
     }
 
-    let db = t.setup_db(models!(Event, Schedule)).await;
+    let mut db = t.setup_db(models!(Event, Schedule)).await;
 
     let starts_at = jiff::Timestamp::from_second(1_700_000_000).unwrap();
     let due_date = jiff::civil::date(2025, 6, 15);
@@ -1344,10 +1344,10 @@ pub async fn embedded_struct_with_jiff_fields(t: &mut Test) -> Result<()> {
             reminder_time,
             scheduled_at,
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
-    let found = Event::get_by_id(&db, &event.id).await?;
+    let found = Event::get_by_id(&mut db, &event.id).await?;
     assert_struct!(found.schedule, _ {
         starts_at: == starts_at,
         due_date: == due_date,
@@ -1385,17 +1385,17 @@ pub async fn unit_enum_in_embedded_struct(t: &mut Test) -> Result<()> {
         meta: Meta,
     }
 
-    let db = t.setup_db(models!(Task, Meta, Priority)).await;
+    let mut db = t.setup_db(models!(Task, Meta, Priority)).await;
 
     let mut task = Task::create()
         .meta(Meta {
             label: "fix bug".to_string(),
             priority: Priority::High,
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
-    let found = Task::get_by_id(&db, &task.id).await?;
+    let found = Task::get_by_id(&mut db, &task.id).await?;
     assert_eq!(found.meta.label, "fix bug");
     assert_eq!(found.meta.priority, Priority::High);
 
@@ -1403,10 +1403,10 @@ pub async fn unit_enum_in_embedded_struct(t: &mut Test) -> Result<()> {
         .with_meta(|m| {
             m.priority(Priority::Normal);
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
-    let found = Task::get_by_id(&db, &task.id).await?;
+    let found = Task::get_by_id(&mut db, &task.id).await?;
     assert_eq!(found.meta.priority, Priority::Normal);
 
     Ok(())
@@ -1433,7 +1433,7 @@ pub async fn embedded_struct_with_uuid_field(t: &mut Test) -> Result<()> {
         meta: Meta,
     }
 
-    let db = t.setup_db(models!(Item, Meta)).await;
+    let mut db = t.setup_db(models!(Item, Meta)).await;
 
     let ref_id = Uuid::new_v4();
 
@@ -1443,11 +1443,11 @@ pub async fn embedded_struct_with_uuid_field(t: &mut Test) -> Result<()> {
             ref_id,
             label: "v1".to_string(),
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     // Read back and verify the UUID survived the round-trip
-    let found = Item::get_by_id(&db, &item.id).await?;
+    let found = Item::get_by_id(&mut db, &item.id).await?;
     assert_eq!(found.meta.ref_id, ref_id);
     assert_eq!(found.meta.label, "v1");
 

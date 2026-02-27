@@ -4,7 +4,7 @@ use crate::model::Register;
 use toasty_core::{
     driver::Capability,
     schema::{app, Builder},
-    stmt::{BinaryOp, Expr, ExprCast, ExprReference, Type, Value},
+    stmt::{BinaryOp, Expr, ExprCast, ExprReference, MatchArm, Type, Value, ValueRecord, VisitMut},
 };
 
 #[derive(toasty::Model)]
@@ -614,4 +614,228 @@ fn single_element_tuple_eq() {
 
     let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
     assert!(matches!(result, Some(Expr::BinaryOp(op)) if op.op.is_eq()));
+}
+
+// --- Match elimination tests ---
+
+#[test]
+fn match_eq_constant_value() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    // Match(col, [1 => Record([col, addr]), 2 => Record([col, num])]) == Value(Record([I64(1), "alice"]))
+    // → col == 1 AND addr == "alice"
+    let mut expr = Expr::binary_op(
+        Expr::match_expr(
+            Expr::arg(0),
+            vec![
+                MatchArm {
+                    pattern: Value::from(1i64),
+                    expr: Expr::record([Expr::arg(0), Expr::arg(1)]),
+                },
+                MatchArm {
+                    pattern: Value::from(2i64),
+                    expr: Expr::record([Expr::arg(0), Expr::arg(2)]),
+                },
+            ],
+            Expr::null(),
+        ),
+        BinaryOp::Eq,
+        Expr::from(Value::Record(ValueRecord::from_vec(vec![
+            Value::from(1i64),
+            Value::from("alice"),
+        ]))),
+    );
+
+    simplify.visit_expr_mut(&mut expr);
+
+    // Should be: arg(0) == 1 AND arg(1) == "alice"
+    let Expr::And(and) = &expr else {
+        panic!("expected And, got {expr:?}");
+    };
+    assert_eq!(and.len(), 2);
+}
+
+#[test]
+fn match_eq_scalar_folds_matching_arm() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    // Match(arg(0), [1 => "a", 2 => "b"]) == "a" → arg(0) == 1
+    let mut expr = Expr::binary_op(
+        Expr::match_expr(
+            Expr::arg(0),
+            vec![
+                MatchArm {
+                    pattern: Value::from(1i64),
+                    expr: Expr::from("a"),
+                },
+                MatchArm {
+                    pattern: Value::from(2i64),
+                    expr: Expr::from("b"),
+                },
+            ],
+            Expr::null(),
+        ),
+        BinaryOp::Eq,
+        Expr::from("a"),
+    );
+
+    simplify.visit_expr_mut(&mut expr);
+
+    // Only arm 1 survives (arm 2: "b" == "a" → false, pruned)
+    // Result: arg(0) == 1
+    let Expr::BinaryOp(binop) = &expr else {
+        panic!("expected BinaryOp, got {expr:?}");
+    };
+    assert!(binop.op.is_eq());
+    assert!(matches!(*binop.lhs, Expr::Arg(_)));
+    assert!(matches!(*binop.rhs, Expr::Value(Value::I64(1))));
+}
+
+#[test]
+fn match_eq_no_matching_arm_folds_to_false() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    // Match(arg(0), [1 => "a", 2 => "b"]) == "c" → false (all arms pruned)
+    let mut expr = Expr::binary_op(
+        Expr::match_expr(
+            Expr::arg(0),
+            vec![
+                MatchArm {
+                    pattern: Value::from(1i64),
+                    expr: Expr::from("a"),
+                },
+                MatchArm {
+                    pattern: Value::from(2i64),
+                    expr: Expr::from("b"),
+                },
+            ],
+            Expr::null(),
+        ),
+        BinaryOp::Eq,
+        Expr::from("c"),
+    );
+
+    simplify.visit_expr_mut(&mut expr);
+
+    assert!(expr.is_false(), "expected false, got {expr:?}");
+}
+
+#[test]
+fn match_on_rhs() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    // "a" == Match(arg(0), [1 => "a", 2 => "b"]) → arg(0) == 1
+    let mut expr = Expr::binary_op(
+        Expr::from("a"),
+        BinaryOp::Eq,
+        Expr::match_expr(
+            Expr::arg(0),
+            vec![
+                MatchArm {
+                    pattern: Value::from(1i64),
+                    expr: Expr::from("a"),
+                },
+                MatchArm {
+                    pattern: Value::from(2i64),
+                    expr: Expr::from("b"),
+                },
+            ],
+            Expr::null(),
+        ),
+    );
+
+    simplify.visit_expr_mut(&mut expr);
+
+    // Only arm 1 survives
+    let Expr::BinaryOp(binop) = &expr else {
+        panic!("expected BinaryOp, got {expr:?}");
+    };
+    assert!(binop.op.is_eq());
+    assert!(matches!(*binop.lhs, Expr::Arg(_)));
+    assert!(matches!(*binop.rhs, Expr::Value(Value::I64(1))));
+}
+
+#[test]
+fn match_ne_preserves_non_matching_arms() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    // Match(arg(0), [1 => "a", 2 => "b"]) != "a"
+    // arm 1: arg(0) == 1 AND "a" != "a" → false → pruned
+    // arm 2: arg(0) == 2 AND "b" != "a" → arg(0) == 2
+    let mut expr = Expr::binary_op(
+        Expr::match_expr(
+            Expr::arg(0),
+            vec![
+                MatchArm {
+                    pattern: Value::from(1i64),
+                    expr: Expr::from("a"),
+                },
+                MatchArm {
+                    pattern: Value::from(2i64),
+                    expr: Expr::from("b"),
+                },
+            ],
+            Expr::null(),
+        ),
+        BinaryOp::Ne,
+        Expr::from("a"),
+    );
+
+    simplify.visit_expr_mut(&mut expr);
+
+    // Only arm 2 survives → arg(0) == 2
+    let Expr::BinaryOp(binop) = &expr else {
+        panic!("expected BinaryOp, got {expr:?}");
+    };
+    assert!(binop.op.is_eq());
+    assert!(matches!(*binop.lhs, Expr::Arg(_)));
+    assert!(matches!(*binop.rhs, Expr::Value(Value::I64(2))));
+}
+
+#[test]
+fn match_with_non_constant_subject() {
+    let schema = test_schema();
+    let model = schema.app.model(User::id());
+    let simplify = Simplify::new(&schema);
+    let mut simplify = simplify.scope(model.expect_root());
+
+    // Match over a column reference (the real-world case)
+    // Match(field[0], [1 => "a", 2 => "b"]) == "a"
+    let subject = Expr::Reference(ExprReference::Field {
+        nesting: 0,
+        index: 0,
+    });
+
+    let mut expr = Expr::binary_op(
+        Expr::match_expr(
+            subject,
+            vec![
+                MatchArm {
+                    pattern: Value::from(1i64),
+                    expr: Expr::from("a"),
+                },
+                MatchArm {
+                    pattern: Value::from(2i64),
+                    expr: Expr::from("b"),
+                },
+            ],
+            Expr::null(),
+        ),
+        BinaryOp::Eq,
+        Expr::from("a"),
+    );
+
+    simplify.visit_expr_mut(&mut expr);
+
+    // Only arm 1 survives. The guard becomes field[0] == 1.
+    // The exact shape depends on canonicalization, but there should be no Match left.
+    assert!(
+        !matches!(&expr, Expr::Match(_)),
+        "Match should be eliminated, got {expr:?}"
+    );
 }
