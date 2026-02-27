@@ -56,6 +56,7 @@ impl Connection {
         match &unique_indices[..] {
             [] => {
                 if insert_items.len() == 1 {
+                    tracing::trace!(table_name = %table.name, "inserting single item");
                     let insert_items = insert_items.into_iter().next().unwrap();
 
                     self.client
@@ -66,6 +67,7 @@ impl Connection {
                         .await
                         .map_err(toasty_core::Error::driver_operation_failed)?;
                 } else {
+                    tracing::trace!(table_name = %table.name, item_count = insert_items.len(), "batch inserting items");
                     let mut request_items = HashMap::new();
                     request_items.insert(
                         table.name.clone(),

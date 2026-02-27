@@ -10,5 +10,6 @@ aws-config.workspace = true
 aws-sdk-dynamodb.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+tracing.workspace = true
 url.workspace = true
 uuid.workspace = true
