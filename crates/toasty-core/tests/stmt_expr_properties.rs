@@ -58,6 +58,25 @@ fn default_not_eval() {
 }
 
 // ---------------------------------------------------------------------------
+// Leaf: Expr::Error — stable, const, eval
+// ---------------------------------------------------------------------------
+
+#[test]
+fn error_is_stable() {
+    assert!(Expr::error("boom").is_stable());
+}
+
+#[test]
+fn error_is_const() {
+    assert!(Expr::error("boom").is_const());
+}
+
+#[test]
+fn error_is_eval() {
+    assert!(Expr::error("boom").is_eval());
+}
+
+// ---------------------------------------------------------------------------
 // Leaf: Expr::Reference — stable, not const, not eval
 // ---------------------------------------------------------------------------
 

@@ -2,9 +2,9 @@ use crate::stmt::{ExprExists, Input};
 
 use super::{
     expr_reference::ExprReference, Entry, EntryMut, EntryPath, ExprAnd, ExprAny, ExprArg,
-    ExprBinaryOp, ExprCast, ExprFunc, ExprInList, ExprInSubquery, ExprIsNull, ExprList, ExprMap,
-    ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord, ExprStmt, Node, Projection, Substitute,
-    Value, Visit, VisitMut,
+    ExprBinaryOp, ExprCast, ExprError, ExprFunc, ExprInList, ExprInSubquery, ExprIsNull, ExprList,
+    ExprMap, ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord, ExprStmt, Node, Projection,
+    Substitute, Value, Visit, VisitMut,
 };
 use std::fmt;
 
@@ -29,6 +29,9 @@ pub enum Expr {
     /// Suggests that the database should use its default value. Useful for
     /// auto-increment fields and other columns with default values.
     Default,
+
+    /// An error expression that fails evaluation with a message.
+    Error(ExprError),
 
     /// An exists expression `[ NOT ] EXISTS(SELECT ...)`, used in expressions like
     /// `WHERE [ NOT ] EXISTS (SELECT ...)`.
@@ -176,6 +179,9 @@ impl Expr {
             // Never stable - generates new values each evaluation
             Self::Default => false,
 
+            // Error expressions are stable (they always produce the same error)
+            Self::Error(_) => true,
+
             // Stable if all children are stable
             Self::Record(expr_record) => expr_record.iter().all(|expr| expr.is_stable()),
             Self::List(expr_list) => expr_list.items.iter().all(|expr| expr.is_stable()),
@@ -230,6 +236,9 @@ impl Expr {
 
             // Arg: local if nesting is within map_depth, otherwise external
             Self::Arg(arg) => arg.nesting < map_depth,
+
+            // Error expressions are constant (no external data)
+            Self::Error(_) => true,
 
             // Never constant - references external data
             Self::Reference(_)
@@ -293,6 +302,9 @@ impl Expr {
 
             // Args are OK for evaluation
             Self::Arg(_) => true,
+
+            // Error expressions are evaluable (they produce an error)
+            Self::Error(_) => true,
 
             // Never evaluable - references external data
             Self::Default
@@ -457,6 +469,7 @@ impl fmt::Debug for Expr {
             Self::BinaryOp(e) => e.fmt(f),
             Self::Cast(e) => e.fmt(f),
             Self::Default => write!(f, "Default"),
+            Self::Error(e) => e.fmt(f),
             Self::Exists(e) => e.fmt(f),
             Self::Func(e) => e.fmt(f),
             Self::InList(e) => e.fmt(f),

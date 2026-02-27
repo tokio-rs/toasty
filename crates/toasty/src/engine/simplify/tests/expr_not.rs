@@ -329,3 +329,18 @@ fn not_in_non_empty_list_not_simplified() {
 
     assert!(result.is_none());
 }
+
+// Error tests
+
+#[test]
+fn not_error_not_simplified() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    // `not(error("boom"))` → not simplified (error is not a value/binary_op/and/or/in_list)
+    let mut expr = not_expr(Expr::error("boom"));
+
+    let result = simplify.simplify_expr_not(&mut expr);
+
+    assert!(result.is_none());
+}

@@ -2,13 +2,13 @@
 
 use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprAny, ExprArg,
-    ExprBinaryOp, ExprCast, ExprColumn, ExprExists, ExprFunc, ExprInList, ExprInSubquery,
-    ExprIsNull, ExprList, ExprMap, ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord,
-    ExprReference, ExprSet, ExprSetOp, ExprStmt, Filter, FuncCount, FuncLastInsertId, Insert,
-    InsertTarget, Join, JoinOp, Limit, Node, Offset, OrderBy, OrderByExpr, Path, Projection, Query,
-    Returning, Select, Source, SourceModel, SourceTable, SourceTableId, Statement, TableDerived,
-    TableFactor, TableRef, TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values,
-    With,
+    ExprBinaryOp, ExprCast, ExprColumn, ExprError, ExprExists, ExprFunc, ExprInList,
+    ExprInSubquery, ExprIsNull, ExprList, ExprMap, ExprMatch, ExprNot, ExprOr, ExprProject,
+    ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, Filter, FuncCount, FuncLastInsertId,
+    Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset, OrderBy, OrderByExpr, Path,
+    Projection, Query, Returning, Select, Source, SourceModel, SourceTable, SourceTableId,
+    Statement, TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update, UpdateTarget,
+    Value, ValueRecord, Values, With,
 };
 
 pub trait VisitMut {
@@ -65,6 +65,10 @@ pub trait VisitMut {
 
     fn visit_expr_default_mut(&mut self) {
         visit_expr_default_mut(self);
+    }
+
+    fn visit_expr_error_mut(&mut self, i: &mut ExprError) {
+        visit_expr_error_mut(self, i);
     }
 
     fn visit_expr_exists_mut(&mut self, i: &mut ExprExists) {
@@ -309,6 +313,10 @@ impl<V: VisitMut> VisitMut for &mut V {
         VisitMut::visit_expr_default_mut(&mut **self);
     }
 
+    fn visit_expr_error_mut(&mut self, i: &mut ExprError) {
+        VisitMut::visit_expr_error_mut(&mut **self, i);
+    }
+
     fn visit_expr_exists_mut(&mut self, i: &mut ExprExists) {
         VisitMut::visit_expr_exists_mut(&mut **self, i);
     }
@@ -543,6 +551,7 @@ where
         Expr::BinaryOp(expr) => v.visit_expr_binary_op_mut(expr),
         Expr::Cast(expr) => v.visit_expr_cast_mut(expr),
         Expr::Default => v.visit_expr_default_mut(),
+        Expr::Error(expr) => v.visit_expr_error_mut(expr),
         Expr::Exists(expr) => v.visit_expr_exists_mut(expr),
         Expr::Func(expr) => v.visit_expr_func_mut(expr),
         Expr::InList(expr) => v.visit_expr_in_list_mut(expr),
@@ -609,6 +618,13 @@ pub fn visit_expr_default_mut<V>(v: &mut V)
 where
     V: VisitMut + ?Sized,
 {
+}
+
+pub fn visit_expr_error_mut<V>(v: &mut V, node: &mut ExprError)
+where
+    V: VisitMut + ?Sized,
+{
+    // ExprError has no child expressions to visit
 }
 
 pub fn visit_expr_exists_mut<V>(v: &mut V, node: &mut ExprExists)
