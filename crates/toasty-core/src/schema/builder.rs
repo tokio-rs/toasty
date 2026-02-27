@@ -84,7 +84,6 @@ impl Builder {
                     columns: vec![],
                     fields: vec![], // Will be populated during mapping phase
                     model_to_table: stmt::ExprRecord::default(),
-                    model_pk_to_table: stmt::Expr::null(),
                     table_to_model: TableToModel::default(),
                 },
             );
