@@ -4,9 +4,7 @@ use crate::model::Register;
 use toasty_core::{
     driver::Capability,
     schema::{app, Builder},
-    stmt::{
-        BinaryOp, Expr, ExprCast, ExprReference, MatchArm, Type, Value, ValueRecord, VisitMut,
-    },
+    stmt::{BinaryOp, Expr, ExprCast, ExprReference, MatchArm, Type, Value, ValueRecord, VisitMut},
 };
 
 #[derive(toasty::Model)]

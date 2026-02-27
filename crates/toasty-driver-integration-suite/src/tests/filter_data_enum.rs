@@ -22,14 +22,14 @@ pub async fn filter_data_enum(t: &mut Test) -> Result<()> {
         contact: ContactInfo,
     }
 
-    let db = t.setup_db(models!(User, ContactInfo)).await;
+    let mut db = t.setup_db(models!(User, ContactInfo)).await;
 
     User::create()
         .name("Alice")
         .contact(ContactInfo::Email {
             address: "alice@example.com".to_string(),
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     User::create()
@@ -37,13 +37,13 @@ pub async fn filter_data_enum(t: &mut Test) -> Result<()> {
         .contact(ContactInfo::Phone {
             number: "555-1234".to_string(),
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     let emails = User::filter(User::fields().contact().eq(ContactInfo::Email {
         address: "alice@example.com".to_string(),
     }))
-    .collect::<Vec<_>>(&db)
+    .collect::<Vec<_>>(&mut db)
     .await?;
 
     assert_eq!(emails.len(), 1);
@@ -75,14 +75,14 @@ pub async fn create_and_get_data_enum(t: &mut Test) -> Result<()> {
         contact: ContactInfo,
     }
 
-    let db = t.setup_db(models!(User, ContactInfo)).await;
+    let mut db = t.setup_db(models!(User, ContactInfo)).await;
 
     let alice = User::create()
         .name("Alice")
         .contact(ContactInfo::Email {
             address: "alice@example.com".to_string(),
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     let bob = User::create()
@@ -90,10 +90,10 @@ pub async fn create_and_get_data_enum(t: &mut Test) -> Result<()> {
         .contact(ContactInfo::Phone {
             number: "555-1234".to_string(),
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
-    let found_alice = User::get_by_id(&db, &alice.id).await?;
+    let found_alice = User::get_by_id(&mut db, &alice.id).await?;
     assert_eq!(found_alice.name, "Alice");
     assert_eq!(
         found_alice.contact,
@@ -102,7 +102,7 @@ pub async fn create_and_get_data_enum(t: &mut Test) -> Result<()> {
         }
     );
 
-    let found_bob = User::get_by_id(&db, &bob.id).await?;
+    let found_bob = User::get_by_id(&mut db, &bob.id).await?;
     assert_eq!(found_bob.name, "Bob");
     assert_eq!(
         found_bob.contact,

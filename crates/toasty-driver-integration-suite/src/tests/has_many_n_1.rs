@@ -99,7 +99,7 @@ pub async fn query_by_index_optimization(test: &mut Test) -> Result<()> {
         board: toasty::BelongsTo<Board>,
     }
 
-    let db = test.setup_db(models!(Board, User)).await;
+    let mut db = test.setup_db(models!(Board, User)).await;
     if db.capability().sql {
         // Statement count is correct for DDB, but not MySQL
         return Ok(());
@@ -112,13 +112,13 @@ pub async fn query_by_index_optimization(test: &mut Test) -> Result<()> {
         .user(User::create().name("User 3"))
         .user(User::create().name("User 4"))
         .user(User::create().name("User 5"))
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     Board::create()
         .name("Test Board2")
         .user(User::create().name("User 6"))
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     // Clear operation log before the query we want to test
@@ -127,7 +127,7 @@ pub async fn query_by_index_optimization(test: &mut Test) -> Result<()> {
     // Query board with .include(users())
     let board_from_db = Board::filter_by_id(board.id)
         .include(Board::fields().users())
-        .get(&db)
+        .get(&mut db)
         .await?;
 
     // Check the logged operations

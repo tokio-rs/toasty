@@ -1,8 +1,8 @@
 use std::cmp::PartialOrd;
 
 use super::Simplify;
-use toasty_core::stmt::{self, Expr, VisitMut};
 use toasty_core::schema::app::{FieldTy, Model};
+use toasty_core::stmt::{self, Expr, VisitMut};
 
 impl Simplify<'_> {
     pub(super) fn simplify_expr_eq_operand(&mut self, operand: &mut stmt::Expr) {
