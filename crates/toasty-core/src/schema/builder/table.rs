@@ -46,7 +46,6 @@ struct BuildMapping<'a> {
     next_bit: usize,
     lowering_columns: Vec<ColumnId>,
     model_to_table: Vec<stmt::Expr>,
-    model_pk_to_table: Vec<stmt::Expr>,
     table_to_model: Vec<stmt::Expr>,
 }
 
@@ -180,7 +179,6 @@ impl BuildTableFromModels<'_> {
             next_bit: 0,
             lowering_columns: vec![],
             model_to_table: vec![],
-            model_pk_to_table: vec![],
             table_to_model: vec![],
         }
         .build_mapping(root);
@@ -255,20 +253,12 @@ impl BuildMapping<'_> {
         assert_eq!(self.model_to_table.len(), self.lowering_columns.len());
 
         self.build_table_to_model(model, &fields);
-        self.build_pk_lowering(model);
 
         self.mapping.fields = fields;
         self.mapping.columns = self.lowering_columns;
         self.mapping.model_to_table = stmt::ExprRecord::from_vec(self.model_to_table);
         self.mapping.table_to_model =
             TableToModel::new(stmt::ExprRecord::from_vec(self.table_to_model));
-        self.mapping.model_pk_to_table = if self.model_pk_to_table.len() == 1 {
-            let expr = self.model_pk_to_table.into_iter().next().unwrap();
-            debug_assert!(expr.is_field() || expr.is_cast(), "expr={expr:#?}");
-            expr
-        } else {
-            stmt::ExprRecord::from_vec(self.model_pk_to_table).into()
-        };
     }
 
     fn next_bit(&mut self) -> usize {
@@ -326,52 +316,6 @@ impl BuildMapping<'_> {
             });
         }
         stmt::Expr::match_expr(disc_col_ref, arms, stmt::Expr::null())
-    }
-
-    fn build_pk_lowering(&mut self, model: &ModelRoot) {
-        for pk_field in &self.table.primary_key.columns {
-            let index = self
-                .lowering_columns
-                .iter()
-                .position(|column_id| column_id == pk_field)
-                .unwrap();
-
-            assert!(
-                index < self.model_to_table.len(),
-                "column={:#?}; index={}; lowering_columns={:#?}; mapping={:#?}",
-                pk_field,
-                index,
-                self.lowering_columns,
-                self.model_to_table
-            );
-
-            let expr = self.model_to_table[index].map_projections(|projection| {
-                let [step, ..] = &projection[..] else {
-                    todo!(
-                        "projection={:#?}; mapping={:#?}",
-                        projection,
-                        self.model_to_table
-                    )
-                };
-
-                for (i, field_id) in model.primary_key.fields.iter().enumerate() {
-                    if field_id.index == *step {
-                        let mut p = projection.clone();
-                        p[0] = i;
-                        return p;
-                    }
-                }
-
-                todo!(
-                    "boom; projection={:?}; mapping={:#?}; PK={:#?}",
-                    projection,
-                    self.model_to_table,
-                    model.primary_key
-                );
-            });
-
-            self.model_pk_to_table.push(expr);
-        }
     }
 
     /// Encodes `expr` for `column_id`, appends the result to `model_to_table`,
