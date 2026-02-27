@@ -3,8 +3,8 @@ use crate::stmt::{ExprExists, Input};
 use super::{
     expr_reference::ExprReference, Entry, EntryMut, EntryPath, ExprAnd, ExprAny, ExprArg,
     ExprBinaryOp, ExprCast, ExprFunc, ExprInList, ExprInSubquery, ExprIsNull, ExprList, ExprMap,
-    ExprNot, ExprOr, ExprProject, ExprRecord, ExprStmt, Node, Projection, Substitute, Value, Visit,
-    VisitMut,
+    ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord, ExprStmt, Node, Projection, Substitute,
+    Value, Visit, VisitMut,
 };
 use std::fmt;
 
@@ -49,6 +49,9 @@ pub enum Expr {
 
     /// Apply an expression to each item in a list
     Map(ExprMap),
+
+    /// A match expression that dispatches on a subject expression
+    Match(ExprMatch),
 
     /// Negates a boolean expression
     Not(ExprNot),
@@ -190,6 +193,10 @@ impl Expr {
             }
             Self::Project(expr_project) => expr_project.base.is_stable(),
             Self::Map(expr_map) => expr_map.base.is_stable() && expr_map.map.is_stable(),
+            Self::Match(expr_match) => {
+                expr_match.subject.is_stable()
+                    && expr_match.arms.iter().all(|arm| arm.expr.is_stable())
+            }
 
             // References and statements - stable (they reference existing data)
             Self::Reference(_) | Self::Arg(_) => true,
@@ -264,6 +271,13 @@ impl Expr {
                 expr_map.base.is_const_at_depth(map_depth)
                     && expr_map.map.is_const_at_depth(map_depth + 1)
             }
+            Self::Match(expr_match) => {
+                expr_match.subject.is_const_at_depth(map_depth)
+                    && expr_match
+                        .arms
+                        .iter()
+                        .all(|arm| arm.expr.is_const_at_depth(map_depth))
+            }
         }
     }
 
@@ -302,6 +316,9 @@ impl Expr {
             }
             Self::Project(expr_project) => expr_project.base.is_eval(),
             Self::Map(expr_map) => expr_map.base.is_eval() && expr_map.map.is_eval(),
+            Self::Match(expr_match) => {
+                expr_match.subject.is_eval() && expr_match.arms.iter().all(|arm| arm.expr.is_eval())
+            }
             Self::Func(_) => false,
         }
     }
@@ -446,6 +463,7 @@ impl fmt::Debug for Expr {
             Self::InSubquery(e) => e.fmt(f),
             Self::IsNull(e) => e.fmt(f),
             Self::Map(e) => e.fmt(f),
+            Self::Match(e) => e.fmt(f),
             Self::Not(e) => e.fmt(f),
             Self::Or(e) => e.fmt(f),
             Self::Project(e) => e.fmt(f),

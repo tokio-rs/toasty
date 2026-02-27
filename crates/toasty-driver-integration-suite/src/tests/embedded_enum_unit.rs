@@ -1,6 +1,6 @@
 use toasty::schema::{
     app::FieldTy,
-    mapping::{self, FieldPrimitive},
+    mapping::{self, FieldEnum, FieldPrimitive},
 };
 
 use crate::{helpers::column, prelude::*};
@@ -335,8 +335,6 @@ pub async fn root_model_with_embedded_enum_field(test: &mut Test) {
     let user_table = schema.table_for(user);
     let user_mapping = &schema.mapping.models[&User::id()];
 
-    // Enum field maps directly to a primitive column — discriminant IS the stored value,
-    // no record wrapping needed (unlike embedded structs which use Field::Embedded).
     assert_struct!(user_mapping, _ {
         columns.len(): 2,
         fields: [
@@ -345,9 +343,13 @@ pub async fn root_model_with_embedded_enum_field(test: &mut Test) {
                 lowering: 0,
                 ..
             }),
-            mapping::Field::Primitive(FieldPrimitive {
-                column: == user_table.columns[1].id,
-                lowering: 1,
+            mapping::Field::Enum(FieldEnum {
+                discriminant: FieldPrimitive {
+                    column: == user_table.columns[1].id,
+                    lowering: 1,
+                    ..
+                },
+                variants.len(): 3,
                 ..
             }),
         ],

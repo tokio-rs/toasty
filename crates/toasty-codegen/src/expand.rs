@@ -1,4 +1,5 @@
 mod create;
+mod embedded_enum;
 mod fields;
 mod filters;
 mod model;
@@ -151,36 +152,19 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
 pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     let toasty = quote!(_toasty::codegen_support);
     let model_ident = &model.ident;
-    let embedded_enum = model.kind.expect_embedded_enum();
+
+    let e = Expand {
+        model,
+        filters: vec![],
+        toasty: toasty.clone(),
+    };
 
     let name = schema::expand_name(&toasty, &model.name);
-
-    let variants = embedded_enum.variants.iter().map(|variant| {
-        let variant_name = schema::expand_name(&toasty, &variant.name);
-        let discriminant = variant.discriminant;
-        quote! {
-            #toasty::schema::app::EnumVariant {
-                name: #variant_name,
-                discriminant: #discriminant,
-            }
-        }
-    });
-
-    let load_arms = embedded_enum.variants.iter().map(|variant| {
-        let ident = &variant.ident;
-        let discriminant = variant.discriminant;
-        quote! { #discriminant => Ok(#model_ident::#ident), }
-    });
-
-    let into_expr_arms: Vec<_> = embedded_enum
-        .variants
-        .iter()
-        .map(|variant| {
-            let ident = &variant.ident;
-            let discriminant = variant.discriminant;
-            quote! { #model_ident::#ident => #discriminant, }
-        })
-        .collect();
+    let variant_tokens = e.expand_enum_variants();
+    let unit_load_arms = e.expand_enum_unit_load_arms();
+    let data_load_arms = e.expand_enum_data_load_arms();
+    let into_expr_arms = e.expand_enum_into_expr_arms();
+    let ty_expr = e.expand_enum_ty();
 
     wrap_in_const(quote! {
         impl #toasty::Register for #model_ident {
@@ -195,7 +179,11 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
                     #toasty::schema::app::EmbeddedEnum {
                         id,
                         name: #name,
-                        variants: vec![ #( #variants ),* ],
+                        discriminant: #toasty::schema::app::FieldPrimitive {
+                            ty: #toasty::Type::I64,
+                            storage_ty: ::std::option::Option::None,
+                        },
+                        variants: vec![ #( #variant_tokens ),* ],
                     }
                 )
             }
@@ -208,19 +196,32 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
             type UpdateBuilder<'a> = ();
 
             fn ty() -> #toasty::Type {
-                #toasty::Type::I64
+                #ty_expr
             }
 
             fn load(value: #toasty::Value) -> #toasty::Result<Self> {
                 match value {
                     #toasty::Value::I64(d) => match d {
-                        #( #load_arms )*
+                        #( #unit_load_arms )*
                         _ => Err(#toasty::Error::type_conversion(
                             #toasty::Value::I64(d),
                             stringify!(#model_ident),
                         )),
                     },
-                    _ => Err(#toasty::Error::type_conversion(value, stringify!(#model_ident))),
+                    #toasty::Value::Record(mut record) => match record[0].take() {
+                        #toasty::Value::I64(d) => match d {
+                            #( #data_load_arms )*
+                            _ => Err(#toasty::Error::type_conversion(
+                                #toasty::Value::I64(d),
+                                stringify!(#model_ident),
+                            )),
+                        },
+                        other => Err(#toasty::Error::type_conversion(
+                            other,
+                            stringify!(#model_ident),
+                        )),
+                    },
+                    value => Err(#toasty::Error::type_conversion(value, stringify!(#model_ident))),
                 }
             }
 
@@ -242,25 +243,11 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
 
         impl #toasty::stmt::IntoExpr<#model_ident> for #model_ident {
             fn into_expr(self) -> #toasty::stmt::Expr<#model_ident> {
-                let discriminant: i64 = match self {
-                    #( #into_expr_arms )*
-                };
-                #toasty::stmt::Expr::from_untyped(
-                    #toasty::core::stmt::Expr::Value(
-                        #toasty::core::stmt::Value::I64(discriminant)
-                    )
-                )
+                match self { #( #into_expr_arms )* }
             }
 
             fn by_ref(&self) -> #toasty::stmt::Expr<#model_ident> {
-                let discriminant: i64 = match *self {
-                    #( #into_expr_arms )*
-                };
-                #toasty::stmt::Expr::from_untyped(
-                    #toasty::core::stmt::Expr::Value(
-                        #toasty::core::stmt::Value::I64(discriminant)
-                    )
-                )
+                match self { #( #into_expr_arms )* }
             }
         }
     })

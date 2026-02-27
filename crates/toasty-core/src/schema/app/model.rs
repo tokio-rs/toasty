@@ -1,4 +1,4 @@
-use super::{Field, FieldId, Index, Name, PrimaryKey};
+use super::{Field, FieldId, FieldPrimitive, Index, Name, PrimaryKey};
 use crate::{driver, stmt, Result};
 use std::fmt;
 
@@ -110,6 +110,9 @@ pub struct EmbeddedEnum {
     /// Name of the model
     pub name: Name,
 
+    /// The primitive type used for the discriminant column
+    pub discriminant: FieldPrimitive,
+
     /// The enum's variants
     pub variants: Vec<EnumVariant>,
 }
@@ -121,10 +124,23 @@ pub struct EnumVariant {
 
     /// The discriminant value stored in the database column
     pub discriminant: i64,
+
+    /// Fields carried by this variant (empty for unit variants)
+    pub fields: Vec<Field>,
 }
 
 impl EmbeddedEnum {
-    pub(crate) fn verify(&self, _db: &driver::Capability) -> Result<()> {
+    /// Returns true if at least one variant carries data fields.
+    pub fn has_data_variants(&self) -> bool {
+        self.variants.iter().any(|v| !v.fields.is_empty())
+    }
+
+    pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
+        for variant in &self.variants {
+            for field in &variant.fields {
+                field.verify(db)?;
+            }
+        }
         Ok(())
     }
 }
