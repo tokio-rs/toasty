@@ -1,6 +1,9 @@
 use super::{Field, FieldId, FieldTy, Model, ModelId};
 
-use crate::{stmt, Result};
+use crate::{
+    stmt::{self, Step},
+    Result,
+};
 use indexmap::IndexMap;
 
 #[derive(Debug, Default)]
@@ -51,7 +54,7 @@ impl Schema {
         root: &'a Model,
         projection: &stmt::Projection,
     ) -> Option<&'a Field> {
-        let [first, rest @ ..] = projection.as_slice() else {
+        let [Step::Field(first), rest @ ..] = projection.as_slice() else {
             return None;
         };
 
@@ -60,23 +63,30 @@ impl Schema {
 
         // Walk through remaining steps
         for step in rest {
-            current_field = match &current_field.ty {
-                FieldTy::Primitive(..) => {
+            current_field = match (&current_field.ty, step) {
+                (FieldTy::Primitive(..), _) => {
                     // Cannot project through primitive fields
                     return None;
                 }
-                FieldTy::Embedded(embedded) => self
-                    .model(embedded.target)
-                    .expect_embedded_struct()
-                    .fields
-                    .get(*step)?,
-                FieldTy::BelongsTo(belongs_to) => {
+                (FieldTy::Embedded(embedded), _) => match (self.model(embedded.target), step) {
+                    (Model::EmbeddedStruct(embedded_struct), Step::Field(step)) => {
+                        embedded_struct.fields.get(*step)?
+                    }
+                    (Model::EmbeddedEnum(embedded_enum), Step::Variant(_)) => {
+                        todo!("resolve variant; embedded_enum={embedded_enum:#?}")
+                    }
+                    _ => return None,
+                },
+                (FieldTy::BelongsTo(belongs_to), Step::Field(step)) => {
                     belongs_to.target(self).expect_root().fields.get(*step)?
                 }
-                FieldTy::HasMany(has_many) => {
+                (FieldTy::HasMany(has_many), Step::Field(step)) => {
                     has_many.target(self).expect_root().fields.get(*step)?
                 }
-                FieldTy::HasOne(has_one) => has_one.target(self).expect_root().fields.get(*step)?,
+                (FieldTy::HasOne(has_one), Step::Field(step)) => {
+                    has_one.target(self).expect_root().fields.get(*step)?
+                }
+                _ => return None,
             };
         }
 

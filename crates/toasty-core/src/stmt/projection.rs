@@ -28,10 +28,17 @@ enum Steps {
     Identity,
 
     /// One field step
-    Single([usize; 1]),
+    Single([Step; 1]),
 
     /// Multi field steps
-    Multi(Vec<usize>),
+    Multi(Vec<Step>),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Step {
+    Field(usize),
+    Index(usize),
+    Variant(usize),
 }
 
 // Custom Hash implementation to ensure compatibility with Equivalent trait:
@@ -65,7 +72,7 @@ impl Hash for Steps {
     }
 }
 
-pub struct Iter<'a>(std::slice::Iter<'a, usize>);
+pub struct Iter<'a>(std::slice::Iter<'a, Step>);
 
 impl Projection {
     pub const fn identity() -> Self {
@@ -79,24 +86,17 @@ impl Projection {
         matches!(self.steps, Steps::Identity)
     }
 
-    pub fn single(step: usize) -> Self {
-        Self {
-            steps: Steps::Single([step]),
+    pub const fn field(index: usize) -> Projection {
+        Projection {
+            steps: Steps::Single([Step::Field(index)]),
         }
     }
 
-    /// Mostly here for `const`
-    pub const fn from_index(index: usize) -> Self {
-        Self {
-            steps: Steps::Single([index]),
-        }
-    }
-
-    pub fn as_slice(&self) -> &[usize] {
+    pub fn as_slice(&self) -> &[Step] {
         self.steps.as_slice()
     }
 
-    pub fn push(&mut self, step: usize) {
+    pub fn push(&mut self, step: Step) {
         match &mut self.steps {
             Steps::Identity => {
                 self.steps = Steps::Single([step]);
@@ -117,7 +117,7 @@ impl Projection {
 }
 
 impl ops::Deref for Projection {
-    type Target = [usize];
+    type Target = [Step];
 
     fn deref(&self) -> &Self::Target {
         self.steps.as_slice()
@@ -135,7 +135,7 @@ impl ops::DerefMut for Projection {
 }
 
 impl<'a> IntoIterator for &'a Projection {
-    type Item = usize;
+    type Item = Step;
     type IntoIter = Iter<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -143,35 +143,27 @@ impl<'a> IntoIterator for &'a Projection {
     }
 }
 
-impl From<&Field> for Projection {
-    fn from(value: &Field) -> Self {
-        Self::single(value.id.index)
+impl From<Step> for Projection {
+    fn from(value: Step) -> Self {
+        Projection {
+            steps: Steps::Single([value]),
+        }
     }
 }
 
-impl From<FieldId> for Projection {
-    fn from(value: FieldId) -> Self {
-        Self::single(value.index)
+impl From<&Step> for Projection {
+    fn from(value: &Step) -> Self {
+        Projection {
+            steps: Steps::Single([*value]),
+        }
     }
 }
 
-impl From<ColumnId> for Projection {
-    fn from(value: ColumnId) -> Self {
-        Self::single(value.index)
-    }
-}
-
-impl From<usize> for Projection {
-    fn from(value: usize) -> Self {
-        Self::single(value)
-    }
-}
-
-impl From<&[usize]> for Projection {
-    fn from(value: &[usize]) -> Self {
+impl From<&[Step]> for Projection {
+    fn from(value: &[Step]) -> Self {
         match value {
-            [] => Self::identity(),
-            [value] => Self::single(*value),
+            [] => Projection::identity(),
+            [value] => Projection::from(value),
             value => Self {
                 steps: Steps::Multi(value.into()),
             },
@@ -179,9 +171,21 @@ impl From<&[usize]> for Projection {
     }
 }
 
-impl<const N: usize> From<[usize; N]> for Projection {
-    fn from(value: [usize; N]) -> Self {
-        Self::from(&value[..])
+impl From<&Field> for Projection {
+    fn from(value: &Field) -> Self {
+        Step::Field(value.id.index).into()
+    }
+}
+
+impl From<FieldId> for Projection {
+    fn from(value: FieldId) -> Self {
+        Step::Field(value.index).into()
+    }
+}
+
+impl From<ColumnId> for Projection {
+    fn from(value: ColumnId) -> Self {
+        Step::Field(value.index).into()
     }
 }
 
@@ -202,7 +206,7 @@ impl fmt::Debug for Projection {
 }
 
 impl Steps {
-    fn as_slice(&self) -> &[usize] {
+    fn as_slice(&self) -> &[Step] {
         match self {
             Self::Identity => &[],
             Self::Single(step) => &step[..],
@@ -212,9 +216,9 @@ impl Steps {
 }
 
 impl Iterator for Iter<'_> {
-    type Item = usize;
+    type Item = Step;
 
-    fn next(&mut self) -> Option<usize> {
+    fn next(&mut self) -> Option<Step> {
         self.0.next().copied()
     }
 }
@@ -255,49 +259,10 @@ impl Project for &&Value {
     }
 }
 
-// Allow using usize directly where Projection is expected (for single-step projections)
-impl Equivalent<Projection> for usize {
-    fn equivalent(&self, key: &Projection) -> bool {
-        matches!(key.as_slice(), [index] if *index == *self)
-    }
-}
-
 // Allow using &Projection where Projection is expected
 impl Equivalent<Projection> for &Projection {
     fn equivalent(&self, key: &Projection) -> bool {
         *self == key
-    }
-}
-
-// Allow using [usize] slices where Projection is expected
-impl Equivalent<Projection> for [usize] {
-    fn equivalent(&self, key: &Projection) -> bool {
-        self == key.as_slice()
-    }
-}
-
-// PartialEq implementations for ergonomic comparisons
-impl PartialEq<usize> for Projection {
-    fn eq(&self, other: &usize) -> bool {
-        matches!(self.as_slice(), [index] if *index == *other)
-    }
-}
-
-impl PartialEq<Projection> for usize {
-    fn eq(&self, other: &Projection) -> bool {
-        other == self
-    }
-}
-
-impl PartialEq<[usize]> for Projection {
-    fn eq(&self, other: &[usize]) -> bool {
-        self.as_slice() == other
-    }
-}
-
-impl PartialEq<Projection> for [usize] {
-    fn eq(&self, other: &Projection) -> bool {
-        other == self
     }
 }
 

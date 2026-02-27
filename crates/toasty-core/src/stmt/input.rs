@@ -1,5 +1,7 @@
 use crate::{
-    stmt::{Expr, ExprArg, ExprContext, ExprReference, Project, Projection, Resolve, Type, Value},
+    stmt::{
+        Expr, ExprArg, ExprContext, ExprReference, Project, Projection, Resolve, Step, Type, Value,
+    },
     Schema,
 };
 
@@ -52,10 +54,10 @@ impl<I: Input, T: Resolve> Input for TypedInput<'_, I, T> {
             let mut ty = &self.tys[expr_arg.position];
 
             for step in projection {
-                ty = match ty {
-                    Type::Record(tys) => &tys[step],
-                    Type::List(item) => item,
-                    _ => todo!("ty={ty:#?}"),
+                ty = match (ty, step) {
+                    (Type::Record(tys), Step::Index(step)) => &tys[step],
+                    (Type::List(item), Step::Index(step)) => item,
+                    _ => todo!("ty={ty:#?}; step={step:#?}"),
                 };
             }
 

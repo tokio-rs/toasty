@@ -1,4 +1,4 @@
-use super::{Expr, Projection};
+use super::{Expr, Projection, Step};
 use crate::schema::app::{FieldId, ModelId};
 
 /// Describes a traversal through fields.
@@ -24,14 +24,14 @@ impl Path {
     pub fn field(root: impl Into<ModelId>, field: usize) -> Self {
         Self {
             root: root.into(),
-            projection: Projection::single(field),
+            projection: Projection::field(field),
         }
     }
 
     pub const fn from_index(root: ModelId, index: usize) -> Self {
         Self {
             root,
-            projection: Projection::from_index(index),
+            projection: Projection::field(index),
         }
     }
 
@@ -52,7 +52,7 @@ impl Path {
     pub fn into_stmt(self) -> Expr {
         match self.projection.as_slice() {
             [] => Expr::ref_ancestor_model(0),
-            [field, project @ ..] => {
+            [Step::Field(field), project @ ..] => {
                 let mut ret = Expr::ref_self_field(FieldId {
                     model: self.root,
                     index: *field,
@@ -64,6 +64,7 @@ impl Path {
 
                 ret
             }
+            _ => panic!("invalid path"),
         }
     }
 }
