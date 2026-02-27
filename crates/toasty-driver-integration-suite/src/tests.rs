@@ -6,6 +6,7 @@ pub mod decimal;
 pub mod default_and_update;
 pub mod embedded_enum_data;
 pub mod embedded_enum_unit;
+pub mod filter_data_enum;
 pub mod embedded_struct;
 pub mod field_auto;
 pub mod field_column_name;
