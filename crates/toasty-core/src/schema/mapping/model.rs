@@ -47,14 +47,6 @@ pub struct Model {
     /// concatenations for discriminated storage formats.
     pub model_to_table: stmt::ExprRecord,
 
-    /// Expression template for converting the model's primary key to table
-    /// columns.
-    ///
-    /// A specialized subset of `model_to_table` containing only the expressions
-    /// needed to produce the table's primary key columns from the model's key
-    /// fields.
-    pub model_pk_to_table: stmt::Expr,
-
     /// Expression template for converting table column values to model field
     /// values.
     ///
