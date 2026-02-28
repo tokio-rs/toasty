@@ -2,6 +2,9 @@ use super::Simplify;
 use std::mem;
 use toasty_core::stmt::{self, BinaryOp, Expr};
 
+/// Collected `(lhs, value)` pairs from `==` and `!=` comparisons: `(eqs, nes)`.
+type EqNePairs<'a> = (Vec<(&'a Expr, &'a stmt::Value)>, Vec<(&'a Expr, &'a stmt::Value)>);
+
 impl Simplify<'_> {
     pub(super) fn simplify_expr_and(&mut self, expr: &mut stmt::ExprAnd) -> Option<stmt::Expr> {
         // Flatten any nested ands
@@ -65,28 +68,17 @@ impl Simplify<'_> {
             return Some(false.into());
         }
 
-        // Contradicting equality: `a == c1 and a == c2` → `false` when c1 != c2
-        if Self::has_contradicting_equality(&expr.operands) {
-            return Some(false.into());
-        }
-
         // Range to equality: `a >= c and a <= c` → `a = c`
         self.try_range_to_equality(expr);
 
-        // Prune OR branches contradicted by other AND operands.
+        // Contradicting equality check + OR branch pruning.
         //
-        // AND(x == 1, OR(AND(x == 1, a), AND(x != 1, b)))
-        //   → prune second OR branch (x == 1 contradicts x != 1)
-        //   → AND(x == 1, a)
-        //
-        // This arises after match elimination distributes a binary op over
-        // match arms: the else branch gets a negated guard that contradicts
-        // the outer discriminant check.
-        self.prune_or_branches(expr);
-
-        // Re-check for false after pruning (all OR branches removed → false).
-        if expr.operands.iter().any(|e| e.is_false()) {
-            return Some(false.into());
+        // Extracts eq/ne constraints from non-OR operands, then:
+        // 1. Checks for flat contradictions (e.g. `a == 1 AND a == 2` → false)
+        // 2. Prunes OR branches that contradict the constraints (e.g.
+        //    `AND(x == 1, OR(AND(x == 1, a), AND(x != 1, b)))` → `AND(x == 1, a)`)
+        if let Some(result) = Self::check_contradictions(expr) {
+            return Some(result);
         }
 
         if expr.operands.is_empty() {
@@ -128,19 +120,6 @@ impl Simplify<'_> {
         }
 
         false
-    }
-
-    /// Checks for contradicting equality constraints:
-    ///
-    /// - `a == c1 AND a == c2` where c1 != c2 → contradiction
-    /// - `a == c AND a != c` → contradiction
-    ///
-    /// TODO: This runs O(n^2) on every AND node during the walk, which is
-    /// wasteful — most AND nodes don't contain contradictions. This should move
-    /// to a dedicated post-lowering pass that runs once against the stable
-    /// predicate tree. See `docs/roadmap/query-engine.md`.
-    fn has_contradicting_equality(operands: &[Expr]) -> bool {
-        Self::has_cross_contradiction(operands, operands)
     }
 
     /// Finds pairs of range comparisons that collapse to equality.
@@ -201,15 +180,17 @@ impl Simplify<'_> {
         expr.operands.retain(|e| !e.is_true());
     }
 
-    /// For each OR child of this AND, prune branches that are contradicted by
-    /// other AND operands.
+    /// Checks for contradicting equality constraints among the AND's operands,
+    /// and prunes OR branches that are contradicted by non-OR operands.
     ///
-    /// Given `AND(P, OR(B1, B2))`, tests each `Bi` by combining it with `P`.
-    /// If the combined constraints contain a contradicting equality, `Bi` is
-    /// provably false and is removed from the OR.
+    /// Extracts `(lhs, value)` pairs from eq/ne comparisons once, then uses
+    /// them for both:
+    /// 1. Flat contradiction detection (`a == 1 AND a == 2` → false)
+    /// 2. OR branch pruning (`AND(x == 1, OR(AND(x != 1, b), ...))` → prune)
     ///
-    /// After pruning, surviving branches are flattened back into the AND.
-    fn prune_or_branches(&self, expr: &mut stmt::ExprAnd) {
+    /// Returns `Some(false)` if a flat contradiction or fully-pruned OR is
+    /// found; otherwise mutates `expr` in place and returns `None`.
+    fn check_contradictions(expr: &mut stmt::ExprAnd) -> Option<Expr> {
         // Separate OR operands from non-OR constraints.
         let mut or_operands: Vec<Expr> = Vec::new();
         for op in mem::take(&mut expr.operands) {
@@ -220,21 +201,29 @@ impl Simplify<'_> {
             }
         }
 
-        if or_operands.is_empty() {
-            return;
+        // Extract eq/ne pairs from the non-OR constraints.
+        let constraints = Self::collect_eq_ne(&expr.operands);
+
+        // Check for flat contradictions among the constraints.
+        if Self::eq_ne_sets_contradict(&constraints, &constraints) {
+            return Some(false.into());
         }
 
-        // Prune each OR's branches against the non-OR constraints.
+        // Prune OR branches that contradict the constraints.
         for or_op in &mut or_operands {
             let Expr::Or(or_expr) = or_op else {
                 unreachable!()
             };
 
             or_expr.operands.retain(|branch| {
-                !Self::branch_contradicts(&expr.operands, branch)
+                let branch_ops: &[Expr] = match branch {
+                    Expr::And(and) => &and.operands,
+                    other => std::slice::from_ref(other),
+                };
+                let branch_eq_ne = Self::collect_eq_ne(branch_ops);
+                !Self::eq_ne_sets_contradict(&constraints, &branch_eq_ne)
             });
 
-            // Collapse after pruning.
             match or_expr.operands.len() {
                 0 => *or_op = false.into(),
                 1 => *or_op = or_expr.operands.remove(0),
@@ -242,8 +231,7 @@ impl Simplify<'_> {
             }
         }
 
-        // Put the (possibly simplified) OR operands back and flatten any
-        // nested ANDs that resulted from unwrapping single-branch ORs.
+        // Put OR operands back, flattening surviving AND branches.
         for op in or_operands {
             match op {
                 Expr::And(and) => expr.operands.extend(and.operands),
@@ -251,8 +239,12 @@ impl Simplify<'_> {
             }
         }
 
-        // Deduplicate: flattening may introduce duplicates (e.g. disc==1
-        // from both the outer AND and the surviving OR branch).
+        // Re-check for false (all OR branches pruned → false).
+        if expr.operands.iter().any(|e| e.is_false()) {
+            return Some(false.into());
+        }
+
+        // Deduplicate after flattening.
         let mut seen = Vec::new();
         expr.operands.retain(|operand| {
             if seen.contains(operand) {
@@ -262,57 +254,46 @@ impl Simplify<'_> {
                 true
             }
         });
+
+        None
     }
 
-    /// Returns `true` if `branch` combined with `constraints` contains a
-    /// contradicting equality.
-    fn branch_contradicts(constraints: &[Expr], branch: &Expr) -> bool {
-        let branch_operands: &[Expr] = match branch {
-            Expr::And(and) => &and.operands,
-            other => std::slice::from_ref(other),
-        };
+    /// Extracts `(lhs, value)` pairs from `==` and `!=` comparisons.
+    fn collect_eq_ne(operands: &[Expr]) -> EqNePairs<'_> {
+        let mut eqs = Vec::new();
+        let mut nes = Vec::new();
 
-        Self::has_cross_contradiction(constraints, branch_operands)
-    }
-
-    /// Checks whether two sets of operands, if ANDed together, would produce
-    /// a contradiction. Specifically, returns `true` when:
-    ///
-    /// - `a == 1` appears in one set and `a == 2` in the other (conflicting equalities)
-    /// - `a == 1` appears in one set and `a != 1` in the other (equality vs negation)
-    fn has_cross_contradiction(a: &[Expr], b: &[Expr]) -> bool {
-        fn collect_eq_ne(operands: &[Expr]) -> (Vec<(&Expr, &stmt::Value)>, Vec<(&Expr, &stmt::Value)>) {
-            let mut eqs = Vec::new();
-            let mut nes = Vec::new();
-
-            for op in operands {
-                if let Expr::BinaryOp(binop) = op {
-                    if let Expr::Value(val) = binop.rhs.as_ref() {
-                        match binop.op {
-                            BinaryOp::Eq => eqs.push((binop.lhs.as_ref(), val)),
-                            BinaryOp::Ne => nes.push((binop.lhs.as_ref(), val)),
-                            _ => {}
-                        }
+        for op in operands {
+            if let Expr::BinaryOp(binop) = op {
+                if let Expr::Value(val) = binop.rhs.as_ref() {
+                    match binop.op {
+                        BinaryOp::Eq => eqs.push((binop.lhs.as_ref(), val)),
+                        BinaryOp::Ne => nes.push((binop.lhs.as_ref(), val)),
+                        _ => {}
                     }
                 }
             }
-
-            (eqs, nes)
         }
 
-        let (a_eqs, a_nes) = collect_eq_ne(a);
-        let (b_eqs, b_nes) = collect_eq_ne(b);
+        (eqs, nes)
+    }
 
-        // a == c1 in one set, a == c2 in the other (c1 != c2)
-        for (a_lhs, a_val) in &a_eqs {
-            for (b_lhs, b_val) in &b_eqs {
+    /// Returns `true` if two sets of eq/ne constraints contradict each other:
+    ///
+    /// - `a == 1` in one set and `a == 2` in the other
+    /// - `a == 1` in one set and `a != 1` in the other
+    fn eq_ne_sets_contradict(a: &EqNePairs<'_>, b: &EqNePairs<'_>) -> bool {
+        let (a_eqs, a_nes) = a;
+        let (b_eqs, b_nes) = b;
+
+        for (a_lhs, a_val) in a_eqs {
+            for (b_lhs, b_val) in b_eqs {
                 if a_lhs == b_lhs && a_val != b_val {
                     return true;
                 }
             }
         }
 
-        // a == c in one set, a != c in the other
         for (eq_lhs, eq_val) in a_eqs.iter().chain(b_eqs.iter()) {
             for (ne_lhs, ne_val) in a_nes.iter().chain(b_nes.iter()) {
                 if eq_lhs == ne_lhs && eq_val == ne_val {
