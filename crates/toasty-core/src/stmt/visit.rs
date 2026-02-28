@@ -3,12 +3,12 @@
 use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprAny, ExprArg,
     ExprBinaryOp, ExprCast, ExprColumn, ExprError, ExprExists, ExprFunc, ExprInList,
-    ExprInSubquery, ExprIsNull, ExprList, ExprMap, ExprMatch, ExprNot, ExprOr, ExprProject,
-    ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, Filter, FuncCount, FuncLastInsertId,
-    Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset, OrderBy, OrderByExpr, Path,
-    Projection, Query, Returning, Select, Source, SourceModel, SourceTable, SourceTableId,
-    Statement, TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update, UpdateTarget,
-    Value, ValueRecord, Values, With,
+    ExprInSubquery, ExprIsNull, ExprIsVariant, ExprList, ExprMap, ExprMatch, ExprNot, ExprOr,
+    ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, Filter, FuncCount,
+    FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset, OrderBy,
+    OrderByExpr, Path, Projection, Query, Returning, Select, Source, SourceModel, SourceTable,
+    SourceTableId, Statement, TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update,
+    UpdateTarget, Value, ValueRecord, Values, With,
 };
 
 pub trait Visit {
@@ -97,6 +97,10 @@ pub trait Visit {
 
     fn visit_expr_is_null(&mut self, i: &ExprIsNull) {
         visit_expr_is_null(self, i);
+    }
+
+    fn visit_expr_is_variant(&mut self, i: &ExprIsVariant) {
+        visit_expr_is_variant(self, i);
     }
 
     fn visit_expr_map(&mut self, i: &ExprMap) {
@@ -341,6 +345,10 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_expr_is_null(&mut **self, i);
     }
 
+    fn visit_expr_is_variant(&mut self, i: &ExprIsVariant) {
+        Visit::visit_expr_is_variant(&mut **self, i);
+    }
+
     fn visit_expr_map(&mut self, i: &ExprMap) {
         Visit::visit_expr_map(&mut **self, i);
     }
@@ -557,6 +565,7 @@ where
         Expr::InList(expr) => v.visit_expr_in_list(expr),
         Expr::InSubquery(expr) => v.visit_expr_in_subquery(expr),
         Expr::IsNull(expr) => v.visit_expr_is_null(expr),
+        Expr::IsVariant(expr) => v.visit_expr_is_variant(expr),
         Expr::Map(expr) => v.visit_expr_map(expr),
         Expr::Match(expr) => v.visit_expr_match(expr),
         Expr::Not(expr) => v.visit_expr_not(expr),
@@ -681,6 +690,13 @@ where
 }
 
 pub fn visit_expr_is_null<V>(v: &mut V, node: &ExprIsNull)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_expr(&node.expr);
+}
+
+pub fn visit_expr_is_variant<V>(v: &mut V, node: &ExprIsVariant)
 where
     V: Visit + ?Sized,
 {

@@ -1,7 +1,20 @@
-use super::{Field, FieldId, FieldTy, Model, ModelId};
+use super::{EnumVariant, Field, FieldId, FieldTy, Model, ModelId};
 
 use crate::{stmt, Result};
 use indexmap::IndexMap;
+
+/// Result of resolving a projection through the application schema.
+///
+/// A projection can resolve to either a concrete field or an enum variant
+/// (when the projection stops at a variant discriminant without descending
+/// into a variant's fields).
+#[derive(Debug)]
+pub enum Resolved<'a> {
+    /// The projection resolved to a concrete field.
+    Field(&'a Field),
+    /// The projection resolved to an enum variant (discriminant-only access).
+    Variant(&'a EnumVariant),
+}
 
 #[derive(Debug, Default)]
 pub struct Schema {
@@ -37,20 +50,22 @@ impl Schema {
         self.models.get(&id.into()).expect("invalid model ID")
     }
 
-    /// Resolve a projection to a field, walking through the schema
+    /// Resolve a projection through the schema, returning either a field or
+    /// an enum variant.
     ///
     /// Starting from the root model, walks through each step of the projection,
-    /// resolving fields and following relations/embedded types as needed.
+    /// resolving fields, following relations/embedded types, and recognizing
+    /// enum variant discriminant access.
     ///
-    /// Returns None if:
+    /// Returns `None` if:
     /// - The projection is empty
-    /// - Any step references an invalid field index
+    /// - Any step references an invalid field/variant index
     /// - A step tries to project through a primitive type
-    pub fn resolve_field<'a>(
+    pub fn resolve<'a>(
         &'a self,
         root: &'a Model,
         projection: &stmt::Projection,
-    ) -> Option<&'a Field> {
+    ) -> Option<Resolved<'a>> {
         let [first, rest @ ..] = projection.as_slice() else {
             return None;
         };
@@ -62,7 +77,7 @@ impl Schema {
         // embedded enums consume two steps (variant discriminant + field index).
         let mut steps = rest.iter();
         while let Some(step) = steps.next() {
-            current_field = match &current_field.ty {
+            match &current_field.ty {
                 FieldTy::Primitive(..) => {
                     // Cannot project through primitive fields
                     return None;
@@ -70,38 +85,55 @@ impl Schema {
                 FieldTy::Embedded(embedded) => {
                     let target = self.model(embedded.target);
                     match target {
-                        Model::EmbeddedStruct(s) => s.fields.get(*step)?,
+                        Model::EmbeddedStruct(s) => {
+                            current_field = s.fields.get(*step)?;
+                        }
                         Model::EmbeddedEnum(e) => {
-                            // For embedded enums, the projection can be either:
-                            // 1. Single step (e.g., [0]) — sub-record access like
-                            //    discriminant extraction. No deeper field to resolve;
-                            //    return the enum field itself.
-                            // 2. Two steps (e.g., [variant_disc, field_idx]) — access
-                            //    a field within a specific variant.
-                            let Some(field_step) = steps.next() else {
-                                // Single step: sub-record access on the enum
-                                return Some(current_field);
-                            };
                             let variant = e
                                 .variants
                                 .iter()
                                 .find(|v| v.discriminant as usize == *step)?;
-                            variant.fields.get(*field_step)?
+
+                            // Check if there's a field index step after the variant
+                            if let Some(field_step) = steps.next() {
+                                // Two steps: variant disc + field index → field
+                                current_field = variant.fields.get(*field_step)?;
+                            } else {
+                                // Single step: variant discriminant only → variant
+                                return Some(Resolved::Variant(variant));
+                            }
                         }
                         _ => return None,
                     }
                 }
                 FieldTy::BelongsTo(belongs_to) => {
-                    belongs_to.target(self).expect_root().fields.get(*step)?
+                    current_field = belongs_to.target(self).expect_root().fields.get(*step)?;
                 }
                 FieldTy::HasMany(has_many) => {
-                    has_many.target(self).expect_root().fields.get(*step)?
+                    current_field = has_many.target(self).expect_root().fields.get(*step)?;
                 }
-                FieldTy::HasOne(has_one) => has_one.target(self).expect_root().fields.get(*step)?,
+                FieldTy::HasOne(has_one) => {
+                    current_field = has_one.target(self).expect_root().fields.get(*step)?;
+                }
             };
         }
 
-        Some(current_field)
+        Some(Resolved::Field(current_field))
+    }
+
+    /// Resolve a projection to a field, walking through the schema.
+    ///
+    /// Returns `None` if the projection is empty, invalid, or resolves to an
+    /// enum variant rather than a field.
+    pub fn resolve_field<'a>(
+        &'a self,
+        root: &'a Model,
+        projection: &stmt::Projection,
+    ) -> Option<&'a Field> {
+        match self.resolve(root, projection) {
+            Some(Resolved::Field(field)) => Some(field),
+            _ => None,
+        }
     }
 
     pub fn resolve_field_path<'a>(&'a self, path: &stmt::Path) -> Option<&'a Field> {

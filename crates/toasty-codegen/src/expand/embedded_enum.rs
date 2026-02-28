@@ -26,7 +26,6 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let embedded_enum = self.model.kind.expect_embedded_enum();
         let field_struct_ident = &embedded_enum.field_struct_ident;
-        let has_data = self.expand_enum_has_data_variants();
 
         let is_variant_methods: Vec<_> = embedded_enum
             .variants
@@ -36,18 +35,6 @@ impl Expand<'_> {
                     syn::Ident::new(&format!("is_{}", variant.name.ident), variant.ident.span());
                 let disc = variant.discriminant;
 
-                // Data-carrying enums store values as Record([disc, fields...]),
-                // so we project([0]) to extract the discriminant. Unit-only enums
-                // store the discriminant directly as I64, so we compare the path
-                // as-is.
-                let lhs = if has_data {
-                    quote! {
-                        #toasty::core::stmt::Expr::project(path_stmt, [0usize])
-                    }
-                } else {
-                    quote! { path_stmt }
-                };
-
                 quote! {
                     #vis fn #method_name(&self) -> #toasty::stmt::Expr<bool> {
                         let path_stmt: #toasty::core::stmt::Expr = {
@@ -55,12 +42,7 @@ impl Expand<'_> {
                             p.into_stmt()
                         };
                         #toasty::stmt::Expr::from_untyped(
-                            #toasty::core::stmt::Expr::eq(
-                                #lhs,
-                                #toasty::core::stmt::Expr::Value(
-                                    #toasty::core::stmt::Value::I64(#disc),
-                                ),
-                            )
+                            #toasty::core::stmt::Expr::is_variant(path_stmt, #disc)
                         )
                     }
                 }

@@ -31,6 +31,6 @@ mod relation;
 pub use relation::{BelongsTo, HasMany, HasOne};
 
 mod schema;
-pub use schema::Schema;
+pub use schema::{Resolved, Schema};
 
 use super::Name;

@@ -365,6 +365,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                 self.infer_expr_reference_ty(expr_ref)
             }
             Expr::IsNull(_) => Type::Bool,
+            Expr::IsVariant(_) => Type::Bool,
             Expr::List(e) => {
                 debug_assert!(!e.items.is_empty());
                 Type::list(self.infer_expr_ty2(args, &e.items[0], returning_expr))

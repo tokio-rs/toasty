@@ -120,6 +120,7 @@ impl VerifyExpr<'_> {
             | InList(_)
             | InSubquery(_)
             | IsNull(_)
+            | IsVariant(_)
             | Not(_)
             | Or(_)
             | Value(stmt::Value::Bool(_)) => {}
@@ -151,15 +152,11 @@ impl stmt::Visit for VerifyExpr<'_> {
     }
 
     fn visit_projection(&mut self, i: &stmt::Projection) {
-        // The path should resolve. Verifying type is done at a higher level
-        if self
-            .schema
-            .app
-            .resolve_field(self.schema.app.model(self.model), i)
-            .is_none()
-        {
-            todo!()
-        }
+        let root = self.schema.app.model(self.model);
+        assert!(
+            self.schema.app.resolve(root, i).is_some(),
+            "invalid projection: {i:?}"
+        );
     }
 
     fn visit_expr_project(&mut self, i: &stmt::ExprProject) {
@@ -171,14 +168,11 @@ impl stmt::Visit for VerifyExpr<'_> {
             for step in &i.projection[..] {
                 full.push(*step);
             }
-            if self
-                .schema
-                .app
-                .resolve_field(self.schema.app.model(self.model), &full)
-                .is_none()
-            {
-                todo!("failed to resolve projection: {full:?}")
-            }
+            let root = self.schema.app.model(self.model);
+            assert!(
+                self.schema.app.resolve(root, &full).is_some(),
+                "failed to resolve projection: {full:?}"
+            );
         } else {
             // For other base expressions (nested projects, etc.), visit the
             // base but skip projection validation since the projection is

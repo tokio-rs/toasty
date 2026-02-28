@@ -314,6 +314,69 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     .into();
                 }
             }
+            stmt::Expr::IsVariant(e) => {
+                // Determine if the enum is data-carrying before lowering the
+                // inner expression (which rewrites field refs to column refs).
+                let has_data = match &*e.expr {
+                    stmt::Expr::Reference(stmt::ExprReference::Field { nesting, index }) => {
+                        let model = self
+                            .expr_cx
+                            .target_at(*nesting)
+                            .as_model_unwrap();
+                        let field = &model.fields[*index];
+                        match &field.ty {
+                            app::FieldTy::Embedded(embedded) => {
+                                let target = self.schema().app.model(embedded.target);
+                                match target {
+                                    app::Model::EmbeddedEnum(e) => {
+                                        e.variants.iter().any(|v| !v.fields.is_empty())
+                                    }
+                                    _ => false,
+                                }
+                            }
+                            _ => false,
+                        }
+                    }
+                    _ => {
+                        // Infer from the expression type
+                        let ty = self.expr_cx.infer_expr_ty(&e.expr, &[]);
+                        match ty {
+                            stmt::Type::Model(model_id) => {
+                                let model = self.schema().app.model(model_id);
+                                match model {
+                                    app::Model::EmbeddedEnum(ee) => {
+                                        ee.variants.iter().any(|v| !v.fields.is_empty())
+                                    }
+                                    _ => false,
+                                }
+                            }
+                            _ => false,
+                        }
+                    }
+                };
+
+                let variant = e.variant;
+
+                // Lower the inner expression
+                self.visit_expr_mut(&mut e.expr);
+
+                let lowered_expr = e.expr.take();
+
+                // Emit the appropriate comparison
+                if has_data {
+                    // Data-carrying: project([0]) to extract discriminant from Record
+                    *expr = stmt::Expr::eq(
+                        stmt::Expr::project(lowered_expr, [0usize]),
+                        stmt::Expr::Value(stmt::Value::I64(variant)),
+                    );
+                } else {
+                    // Unit-only: compare directly
+                    *expr = stmt::Expr::eq(
+                        lowered_expr,
+                        stmt::Expr::Value(stmt::Value::I64(variant)),
+                    );
+                }
+            }
             stmt::Expr::Reference(expr_reference) => {
                 match expr_reference {
                     stmt::ExprReference::Field { nesting, index } => {

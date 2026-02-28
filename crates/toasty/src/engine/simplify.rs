@@ -6,6 +6,7 @@ mod expr_cast;
 mod expr_exists;
 mod expr_in_list;
 mod expr_is_null;
+mod expr_is_variant;
 mod expr_list;
 mod expr_map;
 mod expr_match;
@@ -77,6 +78,7 @@ impl VisitMut for Simplify<'_> {
             Expr::Or(expr) => self.simplify_expr_or(expr),
             Expr::Record(expr) => self.simplify_expr_record(expr),
             Expr::IsNull(expr) => self.simplify_expr_is_null(expr),
+            Expr::IsVariant(expr) => self.simplify_expr_is_variant(expr),
             Expr::Project(expr) => self.simplify_expr_project(expr),
             _ => None,
         };
