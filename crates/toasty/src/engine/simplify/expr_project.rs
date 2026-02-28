@@ -36,6 +36,39 @@ impl Simplify<'_> {
             }
         }
 
+        // Variant+field projection through a Match: when the projection has 2+
+        // steps [variant_disc, field_idx, ...], select the specific Match arm
+        // whose guard matches variant_disc, then extract the field at position
+        // field_idx + 1 from that arm's Record (offset by 1 because disc is at
+        // position 0). Non-matching arms are irrelevant since the projection
+        // explicitly targets one variant.
+        //
+        // Example: project(Match(d, [1 => Record([d, a])], else), [1, 0])
+        //        → a   (field 0 of variant 1, at Record position 1)
+        if let stmt::Expr::Match(match_expr) = &*expr.base {
+            if expr.projection.len() >= 2 {
+                let variant_disc = expr.projection[0];
+                let field_idx = expr.projection[1];
+                let further = &expr.projection.as_slice()[2..];
+
+                if let Some(arm) = match_expr.arms.iter().find(|a| {
+                    matches!(&a.pattern, stmt::Value::I64(d) if *d as usize == variant_disc)
+                }) {
+                    // The arm's Record has disc at [0] and fields starting at [1]
+                    let record_position = field_idx + 1;
+
+                    if let Some(entry) = arm.expr.entry(record_position) {
+                        let field_expr = entry.to_expr();
+                        if further.is_empty() {
+                            return Some(field_expr);
+                        } else {
+                            return Some(stmt::Expr::project(field_expr, further));
+                        }
+                    }
+                }
+            }
+        }
+
         // Project into Match: distribute the projection into each arm's expression.
         // Example: project(Match(d, [1 => Record([d, a]), 2 => Record([d, n])]), [0])
         //        → Match(d, [1 => project(Record([d, a]), [0]), 2 => project(Record([d, n]), [0])])

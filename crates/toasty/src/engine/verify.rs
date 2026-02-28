@@ -162,6 +162,31 @@ impl stmt::Visit for VerifyExpr<'_> {
         }
     }
 
+    fn visit_expr_project(&mut self, i: &stmt::ExprProject) {
+        // For project expressions where the base is a field reference in the
+        // current scope, combine the field index with the project's projection
+        // to form the full path, then resolve from the root model.
+        if let stmt::Expr::Reference(stmt::ExprReference::Field { nesting: 0, index }) = &*i.base {
+            let mut full = stmt::Projection::single(*index);
+            for step in &i.projection[..] {
+                full.push(*step);
+            }
+            if self
+                .schema
+                .app
+                .resolve_field(self.schema.app.model(self.model), &full)
+                .is_none()
+            {
+                todo!("failed to resolve projection: {full:?}")
+            }
+        } else {
+            // For other base expressions (nested projects, etc.), visit the
+            // base but skip projection validation since the projection is
+            // relative to the base expression's type.
+            self.visit_expr(&i.base);
+        }
+    }
+
     fn visit_expr_binary_op(&mut self, i: &stmt::ExprBinaryOp) {
         stmt::visit::visit_expr_binary_op(self, i);
     }

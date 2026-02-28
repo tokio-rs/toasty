@@ -17,7 +17,9 @@ impl Expand<'_> {
     }
 
     /// Generates the `{Enum}Fields` struct for embedded enums with
-    /// `is_{variant}()` methods and delegated comparison methods.
+    /// `is_{variant}()` methods, variant accessor methods, and delegated
+    /// comparison methods. Also generates per-variant field structs for
+    /// data-carrying variants (e.g., `ContactInfoEmailFields`).
     pub(super) fn expand_enum_field_struct(&self) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
@@ -65,6 +67,82 @@ impl Expand<'_> {
             })
             .collect();
 
+        // Generate variant accessor methods for data-carrying variants.
+        // E.g., `fn email(&self) -> ContactInfoEmailFields` on `ContactInfoFields`.
+        // The variant method adds the variant discriminant to the path.
+        let variant_accessor_methods: Vec<_> = embedded_enum
+            .variants
+            .iter()
+            .filter(|v| !v.fields.is_empty())
+            .map(|variant| {
+                let method_name = &variant.name.ident;
+                let variant_field_struct_ident = syn::Ident::new(
+                    &format!("{}{}Fields", model_ident, variant.ident),
+                    variant.ident.span(),
+                );
+                let disc = util::int(variant.discriminant as usize);
+
+                quote! {
+                    #vis fn #method_name(&self) -> #variant_field_struct_ident {
+                        #variant_field_struct_ident {
+                            path: self.path().chain(
+                                #toasty::Path::from_field_index::<#model_ident>(#disc)
+                            )
+                        }
+                    }
+                }
+            })
+            .collect();
+
+        // Generate per-variant field structs for data-carrying variants.
+        // E.g., `ContactInfoEmailFields` with methods like `fn address(&self) -> Path<String>`.
+        let variant_field_structs: Vec<_> = embedded_enum
+            .variants
+            .iter()
+            .filter(|v| !v.fields.is_empty())
+            .map(|variant| {
+                let variant_field_struct_ident = syn::Ident::new(
+                    &format!("{}{}Fields", model_ident, variant.ident),
+                    variant.ident.span(),
+                );
+
+                let field_methods: Vec<_> = variant
+                    .fields
+                    .iter()
+                    .enumerate()
+                    .map(|(field_index, vf)| {
+                        let field_ident = &vf.ident;
+                        let field_ty = &vf.ty;
+                        let field_offset = util::int(field_index);
+
+                        quote! {
+                            #vis fn #field_ident(&self) -> <#field_ty as #toasty::stmt::Primitive>::FieldAccessor {
+                                <#field_ty as #toasty::stmt::Primitive>::make_field_accessor(
+                                    self.path().chain(
+                                        #toasty::Path::from_field_index::<#model_ident>(#field_offset)
+                                    )
+                                )
+                            }
+                        }
+                    })
+                    .collect();
+
+                quote! {
+                    #vis struct #variant_field_struct_ident {
+                        path: #toasty::Path<#model_ident>,
+                    }
+
+                    impl #variant_field_struct_ident {
+                        fn path(&self) -> #toasty::Path<#model_ident> {
+                            self.path.clone()
+                        }
+
+                        #( #field_methods )*
+                    }
+                }
+            })
+            .collect();
+
         quote! {
             #vis struct #field_struct_ident {
                 path: #toasty::Path<#model_ident>,
@@ -76,6 +154,8 @@ impl Expand<'_> {
                 }
 
                 #( #is_variant_methods )*
+
+                #( #variant_accessor_methods )*
 
                 #vis fn eq(&self, rhs: impl #toasty::stmt::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
                     self.path().eq(rhs)
@@ -105,6 +185,8 @@ impl Expand<'_> {
                     self.path().in_set(rhs)
                 }
             }
+
+            #( #variant_field_structs )*
         }
     }
 

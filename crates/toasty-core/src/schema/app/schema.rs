@@ -58,18 +58,39 @@ impl Schema {
         // Get the first field from the root model
         let mut current_field = root.expect_root().fields.get(*first)?;
 
-        // Walk through remaining steps
-        for step in rest {
+        // Walk through remaining steps. Uses a manual iterator because
+        // embedded enums consume two steps (variant discriminant + field index).
+        let mut steps = rest.iter();
+        while let Some(step) = steps.next() {
             current_field = match &current_field.ty {
                 FieldTy::Primitive(..) => {
                     // Cannot project through primitive fields
                     return None;
                 }
-                FieldTy::Embedded(embedded) => self
-                    .model(embedded.target)
-                    .expect_embedded_struct()
-                    .fields
-                    .get(*step)?,
+                FieldTy::Embedded(embedded) => {
+                    let target = self.model(embedded.target);
+                    match target {
+                        Model::EmbeddedStruct(s) => s.fields.get(*step)?,
+                        Model::EmbeddedEnum(e) => {
+                            // For embedded enums, the projection can be either:
+                            // 1. Single step (e.g., [0]) — sub-record access like
+                            //    discriminant extraction. No deeper field to resolve;
+                            //    return the enum field itself.
+                            // 2. Two steps (e.g., [variant_disc, field_idx]) — access
+                            //    a field within a specific variant.
+                            let Some(field_step) = steps.next() else {
+                                // Single step: sub-record access on the enum
+                                return Some(current_field);
+                            };
+                            let variant = e
+                                .variants
+                                .iter()
+                                .find(|v| v.discriminant as usize == *step)?;
+                            variant.fields.get(*field_step)?
+                        }
+                        _ => return None,
+                    }
+                }
                 FieldTy::BelongsTo(belongs_to) => {
                     belongs_to.target(self).expect_root().fields.get(*step)?
                 }
