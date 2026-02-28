@@ -180,37 +180,13 @@ impl Simplify<'_> {
     }
 
     /// Checks for contradicting equality constraints within a single operand
-    /// list using an `i < j` scan: `a == 1 AND a == 2` → true,
-    /// `a == 1 AND a != 1` → true.
+    /// list: `a == 1 AND a == 2` → true, `a == 1 AND a != 1` → true.
     fn has_self_contradiction(operands: &[Expr]) -> bool {
         for i in 0..operands.len() {
-            let Some((i_lhs, i_op, i_val)) = Self::extract_eq_ne(&operands[i]) else {
-                continue;
-            };
-
-            for other in &operands[i + 1..] {
-                let Some((j_lhs, j_op, j_val)) = Self::extract_eq_ne(other) else {
-                    continue;
-                };
-
-                if i_lhs != j_lhs {
-                    continue;
-                }
-
-                match (i_op, j_op) {
-                    // a == 1 AND a == 2
-                    (BinaryOp::Eq, BinaryOp::Eq) if i_val != j_val => return true,
-                    // a == 1 AND a != 1, or a != 1 AND a == 1
-                    (BinaryOp::Eq, BinaryOp::Ne) | (BinaryOp::Ne, BinaryOp::Eq)
-                        if i_val == j_val =>
-                    {
-                        return true
-                    }
-                    _ => {}
-                }
+            if Self::branch_contradicts_outer(&operands[i..=i], &operands[i + 1..]) {
+                return true;
             }
         }
-
         false
     }
 
