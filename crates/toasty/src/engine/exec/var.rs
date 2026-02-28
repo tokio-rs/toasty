@@ -67,7 +67,11 @@ impl VarStore {
                 rows
             }
             Rows::Value(value) => {
-                assert!(value.is_a(&self.tys[var.0]));
+                assert!(
+                    value.is_a(&self.tys[var.0]),
+                    "type mismatch: {value:?} is not a {:?}",
+                    self.tys[var.0]
+                );
                 Rows::Value(value)
             }
             Rows::Stream(value_stream) => {

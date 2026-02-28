@@ -1012,6 +1012,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 self.insert_mir_with_deps(mir::QueryPk {
                     input,
                     table: index_plan.table_id(),
+                    index: None, // Querying primary key
                     columns: self.load_data.columns.clone(),
                     pk_filter: index_plan.index_filter.take(),
                     row_filter: index_plan.result_filter.take(),
@@ -1041,6 +1042,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 let query_pk_node = self.insert_mir_with_deps(mir::QueryPk {
                     input,
                     table: index_plan.table_id(),
+                    index: None, // Querying primary key
                     columns,
                     pk_filter: index_plan.index_filter.take(),
                     row_filter: index_plan.result_filter.take(),
@@ -1100,6 +1102,39 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         assert!(index_plan.post_filter.is_none(), "TODO");
         assert!(inputs.len() <= 1, "TODO: inputs={:#?}", inputs);
 
+        // For queries on NON-UNIQUE indexes, use QueryPk optimization
+        // Non-unique indexes are created as DynamoDB GSIs with ProjectionType::All,
+        // meaning they contain all table columns and can return full records.
+        // Unique indexes are created as separate tables and don't support this optimization.
+        // This method is already on the nosql path, so we can assume the behavior of unique indexes.
+        // To support DDB's other projection types, Index will need to track projected columns, not
+        // just the columns that are part of the index key.
+        if stmt.is_query() && !index_plan.index.unique {
+            let input = if inputs.is_empty() {
+                None
+            } else {
+                Some(inputs[0])
+            };
+
+            // Use QueryPk with index to query the secondary index and return full records
+            // This eliminates the N+1 pattern of FindPkByIndex + GetByKey
+            return self.insert_mir_with_deps(mir::QueryPk {
+                input,
+                table: index_plan.index.on,
+                index: Some(index_plan.index.id), // Query the secondary index
+                columns: self.load_data.columns.clone(), // Return full records
+                pk_filter: index_plan.index_filter.take(),
+                row_filter: index_plan.result_filter.take(),
+                ty: ty.clone(), // Full record type, not just PKs
+                limit: None,
+                scan_index_forward: None,
+                exclusive_start_key: None,
+            });
+        }
+
+        // For mutations, unique indexes, or other cases, use FindPkByIndex + GetByKey
+        // - Mutations only need primary keys, not full records
+        // - Unique indexes don't have full column projections in DynamoDB
         let index_key_ty = self.index_key_ty(index_plan);
 
         let get_by_key_input = self.insert_mir_with_deps(mir::FindPkByIndex {

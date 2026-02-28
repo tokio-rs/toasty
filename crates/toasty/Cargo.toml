@@ -53,4 +53,8 @@ uuid.workspace = true
 indexmap.workspace = true
 index_vec.workspace = true
 tokio.workspace = true
+tracing.workspace = true
 url.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true

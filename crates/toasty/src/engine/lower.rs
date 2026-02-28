@@ -1182,7 +1182,7 @@ fn build_update_returning(
                 // Recurse to build a nested SparseRecord. The lowering pipeline
                 // resolves each reference to the correct column, and the simplifier
                 // folds project(record([...]), [i]) → column_ref.
-                let emb_mapping = mf.as_embedded().unwrap();
+                let emb_mapping = mf.as_struct().unwrap();
                 exprs.push(build_update_returning(
                     model_id,
                     Some(root_field_id),

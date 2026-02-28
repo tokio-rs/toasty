@@ -1,6 +1,6 @@
 use super::Operation;
 use crate::{
-    schema::db::{ColumnId, TableId},
+    schema::db::{ColumnId, IndexId, TableId},
     stmt,
 };
 
@@ -8,6 +8,9 @@ use crate::{
 pub struct QueryPk {
     /// Table to query
     pub table: TableId,
+
+    /// Optional index to query. None = primary key, Some(id) = secondary index
+    pub index: Option<IndexId>,
 
     /// Which columns to get
     pub select: Vec<ColumnId>,

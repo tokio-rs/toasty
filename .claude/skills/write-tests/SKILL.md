@@ -1,6 +1,6 @@
 ---
 name: write-tests
-description: Author or edit tests for the Toasty project, following project testing conventions
+description: Always use this skill before writing any test code in the Toasty repository
 ---
 
 # Writing Toasty Tests

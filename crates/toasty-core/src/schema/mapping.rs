@@ -1,5 +1,5 @@
 mod field;
-pub use field::{Field, FieldEmbedded, FieldPrimitive, FieldRelation};
+pub use field::{EnumVariant, Field, FieldEnum, FieldPrimitive, FieldRelation, FieldStruct};
 
 mod model;
 pub use model::{Model, TableToModel};

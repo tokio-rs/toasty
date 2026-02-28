@@ -16,12 +16,14 @@ mod expr_in_list;
 mod expr_is_null;
 mod expr_list;
 mod expr_map;
+mod expr_match;
 mod expr_not;
 mod expr_or;
 mod expr_project;
 mod expr_record;
 mod lift_in_subquery;
 mod lift_pk_select;
+mod prop_const;
 mod stmt_query;
 
 pub fn test_schema() -> toasty_core::Schema {

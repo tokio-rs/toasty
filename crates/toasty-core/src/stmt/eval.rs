@@ -174,6 +174,9 @@ impl Expr {
             Expr::Default => Err(crate::Error::expression_evaluation_failed(
                 "DEFAULT can only be evaluated by the database",
             )),
+            Expr::Error(expr_error) => Err(crate::Error::expression_evaluation_failed(
+                &expr_error.message,
+            )),
             Expr::IsNull(expr_is_null) => {
                 let value = expr_is_null.expr.eval_ref(scope, input)?;
                 Ok(value.is_null().into())
@@ -297,6 +300,15 @@ impl Expr {
                 };
 
                 Ok(items.iter().any(|item| item == &needle).into())
+            }
+            Expr::Match(expr_match) => {
+                let subject = expr_match.subject.eval_ref(scope, input)?;
+                for arm in &expr_match.arms {
+                    if subject == arm.pattern {
+                        return arm.expr.eval_ref(scope, input);
+                    }
+                }
+                expr_match.else_expr.eval_ref(scope, input)
             }
             Expr::Value(value) => Ok(value.clone()),
             Expr::Func(_) => Err(crate::Error::expression_evaluation_failed(

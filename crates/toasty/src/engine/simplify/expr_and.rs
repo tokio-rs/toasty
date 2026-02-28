@@ -65,6 +65,11 @@ impl Simplify<'_> {
             return Some(false.into());
         }
 
+        // Contradicting equality: `a == c1 and a == c2` → `false` when c1 != c2
+        if self.has_contradicting_equality(expr) {
+            return Some(false.into());
+        }
+
         // Range to equality: `a >= c and a <= c` → `a = c`
         self.try_range_to_equality(expr);
 
@@ -103,6 +108,43 @@ impl Simplify<'_> {
             // Check if not(operand) exists and operand is non-nullable
             if negated.contains(&operand) && operand.is_always_non_nullable() {
                 return true;
+            }
+        }
+
+        false
+    }
+
+    /// Checks for contradicting equality constraints: `a == c1 AND a == c2`
+    /// where c1 and c2 are different constant values. Returns true if found.
+    ///
+    /// TODO: This runs O(n^2) on every AND node during the walk, which is
+    /// wasteful — most AND nodes don't contain contradictions. This should move
+    /// to a dedicated post-lowering pass that runs once against the stable
+    /// predicate tree. See `docs/roadmap/query-engine.md`.
+    fn has_contradicting_equality(&self, expr: &stmt::ExprAnd) -> bool {
+        // Collect (lhs, rhs_value) pairs from `expr == constant` operands
+        let eq_constraints: Vec<_> = expr
+            .operands
+            .iter()
+            .filter_map(|op| {
+                if let Expr::BinaryOp(binop) = op {
+                    if binop.op == BinaryOp::Eq {
+                        if let Expr::Value(val) = binop.rhs.as_ref() {
+                            return Some((binop.lhs.as_ref(), val));
+                        }
+                    }
+                }
+                None
+            })
+            .collect();
+
+        for i in 0..eq_constraints.len() {
+            for j in (i + 1)..eq_constraints.len() {
+                if eq_constraints[i].0 == eq_constraints[j].0
+                    && eq_constraints[i].1 != eq_constraints[j].1
+                {
+                    return true;
+                }
             }
         }
 

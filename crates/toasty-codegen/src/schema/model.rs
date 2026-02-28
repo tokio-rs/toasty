@@ -79,6 +79,23 @@ pub(crate) struct EnumVariantDef {
 
     /// Discriminant value stored in the database column
     pub(crate) discriminant: i64,
+
+    /// Fields carried by this variant (empty for unit variants)
+    pub(crate) fields: Vec<VariantField>,
+
+    /// True when variant fields are named (struct-like `Foo { a: T }`),
+    /// false for tuple-like (`Foo(T)`). Unused when `fields` is empty.
+    pub(crate) fields_named: bool,
+}
+
+#[derive(Debug)]
+pub(crate) struct VariantField {
+    /// Rust identifier for this field (user-written for named fields,
+    /// synthesized as `fieldN` for unnamed fields)
+    pub(crate) ident: syn::Ident,
+
+    /// The Rust type of the field
+    pub(crate) ty: syn::Type,
 }
 
 #[derive(Debug)]
@@ -290,13 +307,33 @@ impl Model {
         let mut errs = ErrorSet::new();
 
         for variant in &ast.variants {
-            if !matches!(variant.fields, syn::Fields::Unit) {
-                errs.push(syn::Error::new_spanned(
-                    &variant.fields,
-                    "only unit enum variants are supported in embedded enums",
-                ));
-                continue;
-            }
+            // Parse variant fields (named, unnamed, or unit)
+            let (variant_fields, fields_named) = match &variant.fields {
+                syn::Fields::Unit => (vec![], false),
+                syn::Fields::Named(named) => {
+                    let fields = named
+                        .named
+                        .iter()
+                        .map(|f| VariantField {
+                            ident: f.ident.as_ref().unwrap().clone(),
+                            ty: f.ty.clone(),
+                        })
+                        .collect();
+                    (fields, true)
+                }
+                syn::Fields::Unnamed(unnamed) => {
+                    let fields = unnamed
+                        .unnamed
+                        .iter()
+                        .enumerate()
+                        .map(|(i, f)| VariantField {
+                            ident: syn::Ident::new(&format!("field{i}"), variant.ident.span()),
+                            ty: f.ty.clone(),
+                        })
+                        .collect();
+                    (fields, false)
+                }
+            };
 
             let mut discriminant = None;
             for attr in &variant.attrs {
@@ -327,6 +364,8 @@ impl Model {
                 ident: variant.ident.clone(),
                 name: Name::from_ident(&variant.ident),
                 discriminant,
+                fields: variant_fields,
+                fields_named,
             });
         }
 

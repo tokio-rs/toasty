@@ -767,3 +767,51 @@ fn or_to_in_non_const_rhs_not_converted() {
     assert_eq!(expr.operands.len(), 2);
     assert!(expr.operands.iter().all(|e| matches!(e, Expr::BinaryOp(_))));
 }
+
+// Error operand tests
+
+#[test]
+fn error_operand_preserved_in_or() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    // `or(error("boom"), arg(0))` → no simplification (error is not true/false/null)
+    let mut expr = ExprOr {
+        operands: vec![Expr::error("boom"), Expr::arg(0)],
+    };
+    let result = simplify.simplify_expr_or(&mut expr);
+
+    assert!(result.is_none());
+    assert_eq!(expr.operands.len(), 2);
+    assert!(matches!(&expr.operands[0], Expr::Error(_)));
+}
+
+#[test]
+fn error_or_false_keeps_error() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    // `or(error("boom"), false)` → `error("boom")` (false is removed, error remains)
+    let mut expr = ExprOr {
+        operands: vec![Expr::error("boom"), false.into()],
+    };
+    let result = simplify.simplify_expr_or(&mut expr);
+
+    assert!(result.is_some());
+    assert!(matches!(&result.unwrap(), Expr::Error(e) if e.message == "boom"));
+}
+
+#[test]
+fn error_or_true_becomes_true() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    // `or(error("boom"), true)` → `true` (true short-circuits OR)
+    let mut expr = ExprOr {
+        operands: vec![Expr::error("boom"), true.into()],
+    };
+    let result = simplify.simplify_expr_or(&mut expr);
+
+    assert!(result.is_some());
+    assert!(result.unwrap().is_true());
+}

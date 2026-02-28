@@ -23,14 +23,14 @@ pub async fn limit_on_partition_query(test: &mut Test) -> Result<()> {
         title: String,
     }
 
-    let db = test.setup_db(models!(Todo)).await;
+    let mut db = test.setup_db(models!(Todo)).await;
 
     for i in 0..10 {
         Todo::create()
             .user_id("alice")
             .order(i)
             .title(format!("todo-{i}"))
-            .exec(&db)
+            .exec(&mut db)
             .await?;
     }
 
@@ -42,7 +42,7 @@ pub async fn limit_on_partition_query(test: &mut Test) -> Result<()> {
     // Query with a limit — on NoSQL this must produce a QueryPk with limit set.
     let todos: Vec<_> = Todo::filter_by_user_id("alice")
         .limit(3)
-        .collect(&db)
+        .collect(&mut db)
         .await?;
 
     assert_eq!(todos.len(), 3);
@@ -83,14 +83,14 @@ pub async fn order_desc_on_partition_query(test: &mut Test) -> Result<()> {
         title: String,
     }
 
-    let db = test.setup_db(models!(Todo)).await;
+    let mut db = test.setup_db(models!(Todo)).await;
 
     for i in 0..5 {
         Todo::create()
             .user_id("alice")
             .order(i)
             .title(format!("todo-{i}"))
-            .exec(&db)
+            .exec(&mut db)
             .await?;
     }
 
@@ -103,7 +103,7 @@ pub async fn order_desc_on_partition_query(test: &mut Test) -> Result<()> {
     let todos: Vec<_> = Todo::filter_by_user_id("alice")
         .order_by(Todo::fields().order().desc())
         .limit(3)
-        .collect(&db)
+        .collect(&mut db)
         .await?;
 
     assert_eq!(todos.len(), 3);
@@ -139,14 +139,14 @@ pub async fn order_asc_on_partition_query(test: &mut Test) -> Result<()> {
         title: String,
     }
 
-    let db = test.setup_db(models!(Todo)).await;
+    let mut db = test.setup_db(models!(Todo)).await;
 
     for i in 0..5 {
         Todo::create()
             .user_id("alice")
             .order(i)
             .title(format!("todo-{i}"))
-            .exec(&db)
+            .exec(&mut db)
             .await?;
     }
 
@@ -159,7 +159,7 @@ pub async fn order_asc_on_partition_query(test: &mut Test) -> Result<()> {
     let todos: Vec<_> = Todo::filter_by_user_id("alice")
         .order_by(Todo::fields().order().asc())
         .limit(3)
-        .collect(&db)
+        .collect(&mut db)
         .await?;
 
     assert_eq!(todos.len(), 3);

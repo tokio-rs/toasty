@@ -13,7 +13,7 @@ pub async fn ty_timestamp(test: &mut Test) -> Result<(), BoxError> {
         val: Timestamp,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     let test_values = vec![
         Timestamp::from_second(946684800)?,  // 2000-01-01T00:00:00Z
@@ -26,8 +26,8 @@ pub async fn ty_timestamp(test: &mut Test) -> Result<(), BoxError> {
     ];
 
     for val in &test_values {
-        let created = Foo::create().val(*val).exec(&db).await?;
-        let read = Foo::get_by_id(&db, &created.id).await?;
+        let created = Foo::create().val(*val).exec(&mut db).await?;
+        let read = Foo::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
     }
     Ok(())
@@ -46,7 +46,7 @@ pub async fn ty_zoned(test: &mut Test) -> Result<(), BoxError> {
         val: Zoned,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     let test_values = vec![
         "2000-01-01T00:00:00+00:00[UTC]".parse::<Zoned>()?,
@@ -57,8 +57,8 @@ pub async fn ty_zoned(test: &mut Test) -> Result<(), BoxError> {
     ];
 
     for val in &test_values {
-        let created = Foo::create().val(val.clone()).exec(&db).await?;
-        let read = Foo::get_by_id(&db, &created.id).await?;
+        let created = Foo::create().val(val.clone()).exec(&mut db).await?;
+        let read = Foo::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
     }
     Ok(())
@@ -77,7 +77,7 @@ pub async fn ty_date(test: &mut Test) -> Result<()> {
         val: Date,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     let test_values = vec![
         Date::constant(2000, 1, 1),
@@ -91,8 +91,8 @@ pub async fn ty_date(test: &mut Test) -> Result<()> {
     ];
 
     for val in &test_values {
-        let created = Foo::create().val(*val).exec(&db).await?;
-        let read = Foo::get_by_id(&db, &created.id).await?;
+        let created = Foo::create().val(*val).exec(&mut db).await?;
+        let read = Foo::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
     }
     Ok(())
@@ -111,7 +111,7 @@ pub async fn ty_time(test: &mut Test) -> Result<()> {
         val: Time,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     let test_values = vec![
         Time::constant(0, 0, 0, 0),
@@ -123,8 +123,8 @@ pub async fn ty_time(test: &mut Test) -> Result<()> {
     ];
 
     for val in &test_values {
-        let created = Foo::create().val(*val).exec(&db).await?;
-        let read = Foo::get_by_id(&db, &created.id).await?;
+        let created = Foo::create().val(*val).exec(&mut db).await?;
+        let read = Foo::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
     }
     Ok(())
@@ -143,7 +143,7 @@ pub async fn ty_datetime(test: &mut Test) -> Result<()> {
         val: DateTime,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     let test_values = vec![
         DateTime::constant(2000, 1, 1, 0, 0, 0, 0),
@@ -157,8 +157,8 @@ pub async fn ty_datetime(test: &mut Test) -> Result<()> {
     ];
 
     for val in &test_values {
-        let created = Foo::create().val(*val).exec(&db).await?;
-        let read = Foo::get_by_id(&db, &created.id).await?;
+        let created = Foo::create().val(*val).exec(&mut db).await?;
+        let read = Foo::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
     }
     Ok(())
@@ -178,7 +178,7 @@ pub async fn ty_timestamp_precision_2(test: &mut Test) -> Result<(), BoxError> {
         val: Timestamp,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     // Test value with nanosecond precision
     let original = Timestamp::from_second(946684800)?
@@ -189,8 +189,8 @@ pub async fn ty_timestamp_precision_2(test: &mut Test) -> Result<(), BoxError> {
     let expected = Timestamp::from_second(946684800)?
         .checked_add(jiff::Span::new().nanoseconds(120_000_000))?;
 
-    let created = Foo::create().val(original).exec(&db).await?;
-    let read = Foo::get_by_id(&db, &created.id).await?;
+    let created = Foo::create().val(original).exec(&mut db).await?;
+    let read = Foo::get_by_id(&mut db, &created.id).await?;
 
     assert_eq!(
         read.val, expected,
@@ -214,7 +214,7 @@ pub async fn ty_time_precision_2(test: &mut Test) -> Result<()> {
         val: Time,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     // Test value with nanosecond precision
     let original = Time::constant(14, 30, 45, 123_456_789);
@@ -223,8 +223,8 @@ pub async fn ty_time_precision_2(test: &mut Test) -> Result<()> {
     // 123_456_789 ns -> 120_000_000 ns
     let expected = Time::constant(14, 30, 45, 120_000_000);
 
-    let created = Foo::create().val(original).exec(&db).await?;
-    let read = Foo::get_by_id(&db, &created.id).await?;
+    let created = Foo::create().val(original).exec(&mut db).await?;
+    let read = Foo::get_by_id(&mut db, &created.id).await?;
 
     assert_eq!(
         read.val, expected,
@@ -248,7 +248,7 @@ pub async fn ty_datetime_precision_2(test: &mut Test) -> Result<()> {
         val: DateTime,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     // Test value with nanosecond precision
     let original = DateTime::constant(2024, 6, 15, 14, 30, 45, 123_456_789);
@@ -257,8 +257,8 @@ pub async fn ty_datetime_precision_2(test: &mut Test) -> Result<()> {
     // 123_456_789 ns -> 120_000_000 ns
     let expected = DateTime::constant(2024, 6, 15, 14, 30, 45, 120_000_000);
 
-    let created = Foo::create().val(original).exec(&db).await?;
-    let read = Foo::get_by_id(&db, &created.id).await?;
+    let created = Foo::create().val(original).exec(&mut db).await?;
+    let read = Foo::get_by_id(&mut db, &created.id).await?;
 
     assert_eq!(
         read.val, expected,
@@ -282,7 +282,7 @@ pub async fn ty_timestamp_as_text(test: &mut Test) -> Result<(), BoxError> {
         val: Timestamp,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     let test_values = vec![
         Timestamp::from_second(946684800)?,  // 2000-01-01T00:00:00Z
@@ -291,8 +291,8 @@ pub async fn ty_timestamp_as_text(test: &mut Test) -> Result<(), BoxError> {
     ];
 
     for val in &test_values {
-        let created = Foo::create().val(*val).exec(&db).await?;
-        let read = Foo::get_by_id(&db, &created.id).await?;
+        let created = Foo::create().val(*val).exec(&mut db).await?;
+        let read = Foo::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
     }
     Ok(())
@@ -312,7 +312,7 @@ pub async fn ty_date_as_text(test: &mut Test) -> Result<()> {
         val: Date,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     let test_values = vec![
         Date::constant(2000, 1, 1),
@@ -321,8 +321,8 @@ pub async fn ty_date_as_text(test: &mut Test) -> Result<()> {
     ];
 
     for val in &test_values {
-        let created = Foo::create().val(*val).exec(&db).await?;
-        let read = Foo::get_by_id(&db, &created.id).await?;
+        let created = Foo::create().val(*val).exec(&mut db).await?;
+        let read = Foo::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
     }
     Ok(())
@@ -342,7 +342,7 @@ pub async fn ty_time_as_text(test: &mut Test) -> Result<()> {
         val: Time,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     let test_values = vec![
         Time::constant(0, 0, 0, 0),
@@ -352,8 +352,8 @@ pub async fn ty_time_as_text(test: &mut Test) -> Result<()> {
     ];
 
     for val in &test_values {
-        let created = Foo::create().val(*val).exec(&db).await?;
-        let read = Foo::get_by_id(&db, &created.id).await?;
+        let created = Foo::create().val(*val).exec(&mut db).await?;
+        let read = Foo::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
     }
     Ok(())
@@ -373,7 +373,7 @@ pub async fn ty_datetime_as_text(test: &mut Test) -> Result<()> {
         val: DateTime,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     let test_values = vec![
         DateTime::constant(2000, 1, 1, 0, 0, 0, 0),
@@ -382,8 +382,8 @@ pub async fn ty_datetime_as_text(test: &mut Test) -> Result<()> {
     ];
 
     for val in &test_values {
-        let created = Foo::create().val(*val).exec(&db).await?;
-        let read = Foo::get_by_id(&db, &created.id).await?;
+        let created = Foo::create().val(*val).exec(&mut db).await?;
+        let read = Foo::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
     }
     Ok(())

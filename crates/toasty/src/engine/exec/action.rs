@@ -47,6 +47,30 @@ pub(crate) enum Action {
     UpdateByKey(UpdateByKey),
 }
 
+impl Action {
+    /// Returns true if this action issues a database operation.
+    ///
+    /// Used to determine whether a plan needs to be wrapped in a transaction.
+    /// In-memory actions (Filter, Project, NestedMerge, SetVar, Eval) return false.
+    pub(crate) fn is_db_op(&self) -> bool {
+        match self {
+            Action::DeleteByKey(_)
+            | Action::ExecStatement(_)
+            | Action::FindPkByIndex(_)
+            | Action::GetByKey(_)
+            | Action::QueryPk(_)
+            | Action::ReadModifyWrite(_)
+            | Action::UpdateByKey(_) => true,
+
+            Action::Eval(_)
+            | Action::Filter(_)
+            | Action::NestedMerge(_)
+            | Action::Project(_)
+            | Action::SetVar(_) => false,
+        }
+    }
+}
+
 impl fmt::Debug for Action {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

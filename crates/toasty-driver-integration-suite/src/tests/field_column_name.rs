@@ -17,9 +17,9 @@ pub async fn specify_custom_column_name(test: &mut Test) -> Result<()> {
         name: String,
     }
 
-    let db = test.setup_db(models!(User)).await;
+    let mut db = test.setup_db(models!(User)).await;
 
-    let u = User::create().name("foo").exec(&db).await?;
+    let u = User::create().name("foo").exec(&mut db).await?;
     assert_eq!(u.name, "foo");
 
     // Verify that the INSERT operation used the correct column name "my_name"
@@ -61,9 +61,9 @@ pub async fn specify_custom_column_name_with_type(test: &mut Test) -> Result<()>
         name: String,
     }
 
-    let db = test.setup_db(models!(User)).await;
+    let mut db = test.setup_db(models!(User)).await;
 
-    let u = User::create().name("foo").exec(&db).await?;
+    let u = User::create().name("foo").exec(&mut db).await?;
     assert_eq!(u.name, "foo");
 
     // Verify that the INSERT operation used the correct column name "my_name"
@@ -99,7 +99,7 @@ pub async fn specify_custom_column_name_with_type(test: &mut Test) -> Result<()>
     }
 
     // Creating a user with a name larger than 5 characters should fail.
-    let res = User::create().name("foo bar").exec(&db).await;
+    let res = User::create().name("foo bar").exec(&mut db).await;
     assert!(res.is_err());
     Ok(())
 }
