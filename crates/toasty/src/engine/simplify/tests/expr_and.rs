@@ -1,6 +1,6 @@
 use super::test_schema;
 use crate::engine::simplify::Simplify;
-use toasty_core::stmt::{BinaryOp, Expr, ExprAnd};
+use toasty_core::stmt::{BinaryOp, Expr, ExprAnd, ExprOr};
 
 /// Builds `and(a, and(b, c))`, a nested AND structure for testing
 /// flattening.
@@ -233,8 +233,6 @@ fn idempotent_with_different() {
 
 #[test]
 fn absorption_and_or() {
-    use toasty_core::stmt::ExprOr;
-
     let schema = test_schema();
     let mut simplify = Simplify::new(&schema);
 
@@ -255,8 +253,6 @@ fn absorption_and_or() {
 
 #[test]
 fn absorption_with_multiple_operands() {
-    use toasty_core::stmt::ExprOr;
-
     let schema = test_schema();
     let mut simplify = Simplify::new(&schema);
 
@@ -280,8 +276,6 @@ fn absorption_with_multiple_operands() {
 
 #[test]
 fn absorption_two_and_three_or() {
-    use toasty_core::stmt::ExprOr;
-
     let schema = test_schema();
     let mut simplify = Simplify::new(&schema);
 
@@ -678,4 +672,287 @@ fn error_and_false_becomes_false() {
 
     assert!(result.is_some());
     assert!(result.unwrap().is_false());
+}
+
+// --- AND-over-OR branch pruning tests ---
+
+/// The core enum variant+field pattern: disc == 1 in the outer AND
+/// contradicts disc != 1 in the else branch of the OR.
+///
+/// AND(disc == 1, OR(AND(disc == 1, addr == "alice"), AND(disc != 1, Error == "alice")))
+///   → AND(disc == 1, addr == "alice")
+#[test]
+fn prune_or_branch_contradicting_outer_eq() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    let disc_eq_1 = Expr::eq(Expr::arg(0), Expr::from(1i64));
+    let addr_eq_alice = Expr::eq(Expr::arg(1), Expr::from("alice"));
+    let disc_ne_1 = Expr::ne(Expr::arg(0), Expr::from(1i64));
+    let error_eq_alice = Expr::eq(Expr::error("unreachable"), Expr::from("alice"));
+
+    let mut expr = ExprAnd {
+        operands: vec![
+            disc_eq_1.clone(),
+            Expr::Or(ExprOr {
+                operands: vec![
+                    Expr::and(disc_eq_1.clone(), addr_eq_alice.clone()),
+                    Expr::and(disc_ne_1, error_eq_alice),
+                ],
+            }),
+        ],
+    };
+
+    let result = simplify.simplify_expr_and(&mut expr);
+
+    // Should simplify: OR collapses to single branch, then AND flattens
+    // and deduplicates disc == 1.
+    assert!(result.is_none()); // Still has 2 operands
+    assert_eq!(expr.operands.len(), 2);
+
+    // The two remaining operands should be disc == 1 and addr == "alice"
+    assert!(expr.operands.contains(&disc_eq_1));
+    assert!(expr.operands.contains(&addr_eq_alice));
+}
+
+/// Multiple OR branches where only the matching one survives.
+///
+/// AND(x == 1, OR(AND(x == 1, a), AND(x == 2, b), AND(x == 3, c)))
+///   → AND(x == 1, a)
+#[test]
+fn prune_or_multiple_contradicting_branches() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    let x_eq_1 = Expr::eq(Expr::arg(0), Expr::from(1i64));
+    let x_eq_2 = Expr::eq(Expr::arg(0), Expr::from(2i64));
+    let x_eq_3 = Expr::eq(Expr::arg(0), Expr::from(3i64));
+
+    let mut expr = ExprAnd {
+        operands: vec![
+            x_eq_1.clone(),
+            Expr::Or(ExprOr {
+                operands: vec![
+                    Expr::and(x_eq_1.clone(), Expr::arg(1)),
+                    Expr::and(x_eq_2, Expr::arg(2)),
+                    Expr::and(x_eq_3, Expr::arg(3)),
+                ],
+            }),
+        ],
+    };
+
+    let result = simplify.simplify_expr_and(&mut expr);
+
+    assert!(result.is_none());
+    assert_eq!(expr.operands.len(), 2);
+    assert!(expr.operands.contains(&x_eq_1));
+    assert!(expr.operands.contains(&Expr::arg(1)));
+}
+
+/// When no OR branch contradicts the outer constraint, nothing is pruned.
+#[test]
+fn prune_or_no_contradiction_preserved() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    // AND(x == 1, OR(AND(y == 2, a), AND(y == 3, b)))
+    // x == 1 doesn't contradict y == 2 or y == 3 — no pruning.
+    let mut expr = ExprAnd {
+        operands: vec![
+            Expr::eq(Expr::arg(0), Expr::from(1i64)),
+            Expr::Or(ExprOr {
+                operands: vec![
+                    Expr::and(
+                        Expr::eq(Expr::arg(1), Expr::from(2i64)),
+                        Expr::arg(2),
+                    ),
+                    Expr::and(
+                        Expr::eq(Expr::arg(1), Expr::from(3i64)),
+                        Expr::arg(3),
+                    ),
+                ],
+            }),
+        ],
+    };
+
+    let result = simplify.simplify_expr_and(&mut expr);
+
+    // No simplification — 2 operands remain, OR still has 2 branches.
+    assert!(result.is_none());
+    assert_eq!(expr.operands.len(), 2);
+    assert!(matches!(&expr.operands[1], Expr::Or(or) if or.operands.len() == 2));
+}
+
+/// All OR branches pruned → OR becomes false → AND becomes false.
+#[test]
+fn prune_or_all_branches_contradicted() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    // AND(x == 1, OR(AND(x == 2, a), AND(x == 3, b)))
+    // Both branches contradict x == 1, so OR → false → AND → false.
+    let mut expr = ExprAnd {
+        operands: vec![
+            Expr::eq(Expr::arg(0), Expr::from(1i64)),
+            Expr::Or(ExprOr {
+                operands: vec![
+                    Expr::and(
+                        Expr::eq(Expr::arg(0), Expr::from(2i64)),
+                        Expr::arg(1),
+                    ),
+                    Expr::and(
+                        Expr::eq(Expr::arg(0), Expr::from(3i64)),
+                        Expr::arg(2),
+                    ),
+                ],
+            }),
+        ],
+    };
+
+    let result = simplify.simplify_expr_and(&mut expr);
+
+    assert!(result.is_some());
+    assert!(result.unwrap().is_false());
+}
+
+/// A non-AND branch in the OR is tested as a single-element constraint.
+///
+/// AND(x == 1, OR(x == 2, AND(x == 1, a)))
+///   → prune `x == 2` (contradicts x == 1)
+///   → AND(x == 1, a)
+#[test]
+fn prune_or_non_and_branch() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    let x_eq_1 = Expr::eq(Expr::arg(0), Expr::from(1i64));
+    let x_eq_2 = Expr::eq(Expr::arg(0), Expr::from(2i64));
+
+    let mut expr = ExprAnd {
+        operands: vec![
+            x_eq_1.clone(),
+            Expr::Or(ExprOr {
+                operands: vec![
+                    x_eq_2, // bare expr, not wrapped in AND
+                    Expr::and(x_eq_1.clone(), Expr::arg(1)),
+                ],
+            }),
+        ],
+    };
+
+    let result = simplify.simplify_expr_and(&mut expr);
+
+    assert!(result.is_none());
+    assert_eq!(expr.operands.len(), 2);
+    assert!(expr.operands.contains(&x_eq_1));
+    assert!(expr.operands.contains(&Expr::arg(1)));
+}
+
+/// Multiple non-OR operands form the constraint set.
+///
+/// AND(x == 1, y == 2, OR(AND(x == 1, y == 3, a), AND(x == 1, y == 2, b)))
+///   → prune first OR branch (y == 2 contradicts y == 3)
+///   → AND(x == 1, y == 2, b)
+#[test]
+fn prune_or_multiple_constraints() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    let x_eq_1 = Expr::eq(Expr::arg(0), Expr::from(1i64));
+    let y_eq_2 = Expr::eq(Expr::arg(1), Expr::from(2i64));
+    let y_eq_3 = Expr::eq(Expr::arg(1), Expr::from(3i64));
+
+    let mut expr = ExprAnd {
+        operands: vec![
+            x_eq_1.clone(),
+            y_eq_2.clone(),
+            Expr::Or(ExprOr {
+                operands: vec![
+                    Expr::and_from_vec(vec![x_eq_1.clone(), y_eq_3, Expr::arg(2)]),
+                    Expr::and_from_vec(vec![x_eq_1.clone(), y_eq_2.clone(), Expr::arg(3)]),
+                ],
+            }),
+        ],
+    };
+
+    let result = simplify.simplify_expr_and(&mut expr);
+
+    // After pruning + flatten + dedup: AND(x == 1, y == 2, arg(3))
+    assert!(result.is_none());
+    assert_eq!(expr.operands.len(), 3);
+    assert!(expr.operands.contains(&x_eq_1));
+    assert!(expr.operands.contains(&y_eq_2));
+    assert!(expr.operands.contains(&Expr::arg(3)));
+}
+
+/// When the AND has no non-OR operands, no pruning occurs.
+#[test]
+fn prune_or_no_constraints_no_change() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    // AND(OR(a, b), OR(c, d)) — no non-OR constraints to propagate.
+    let mut expr = ExprAnd {
+        operands: vec![
+            Expr::Or(ExprOr {
+                operands: vec![Expr::arg(0), Expr::arg(1)],
+            }),
+            Expr::Or(ExprOr {
+                operands: vec![Expr::arg(2), Expr::arg(3)],
+            }),
+        ],
+    };
+
+    let result = simplify.simplify_expr_and(&mut expr);
+
+    assert!(result.is_none());
+    assert_eq!(expr.operands.len(), 2);
+}
+
+/// End-to-end through visit_expr_mut: the full enum variant+field pattern.
+///
+/// AND(disc == 1, eq(Match(disc, [1 => addr, 2 => arg(2)], else: Error), "alice"))
+///   → match elimination produces OR
+///   → AND-over-OR pruning removes else branch
+///   → AND(disc == 1, addr == "alice")
+#[test]
+fn prune_or_end_to_end_via_visit() {
+    use toasty_core::stmt::{ExprMatch, MatchArm, Value, VisitMut};
+
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    let disc = Expr::arg(0);
+    let addr = Expr::arg(1);
+
+    let mut expr = Expr::and(
+        Expr::eq(disc.clone(), Expr::from(1i64)),
+        Expr::eq(
+            Expr::Match(ExprMatch {
+                subject: Box::new(disc.clone()),
+                arms: vec![
+                    MatchArm {
+                        pattern: Value::from(1i64),
+                        expr: addr.clone(),
+                    },
+                    MatchArm {
+                        pattern: Value::from(2i64),
+                        expr: Expr::arg(2),
+                    },
+                ],
+                else_expr: Box::new(Expr::error("unreachable")),
+            }),
+            Expr::from("alice"),
+        ),
+    );
+
+    simplify.visit_expr_mut(&mut expr);
+
+    // Result should be AND(disc == 1, addr == "alice")
+    let Expr::And(and) = &expr else {
+        panic!("expected AND, got: {expr:?}");
+    };
+    assert_eq!(and.operands.len(), 2);
+    assert!(and.operands.contains(&Expr::eq(disc, Expr::from(1i64))));
+    assert!(and.operands.contains(&Expr::eq(addr, Expr::from("alice"))));
 }
