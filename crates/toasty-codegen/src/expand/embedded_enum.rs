@@ -30,10 +30,11 @@ impl Expand<'_> {
         let is_variant_methods: Vec<_> = embedded_enum
             .variants
             .iter()
-            .map(|variant| {
+            .enumerate()
+            .map(|(variant_index, variant)| {
                 let method_name =
                     syn::Ident::new(&format!("is_{}", variant.name.ident), variant.ident.span());
-                let disc = variant.discriminant;
+                let variant_idx = util::int(variant_index);
 
                 quote! {
                     #vis fn #method_name(&self) -> #toasty::stmt::Expr<bool> {
@@ -41,8 +42,12 @@ impl Expand<'_> {
                             let p: #toasty::core::stmt::Path = self.path().into();
                             p.into_stmt()
                         };
+                        let variant_id = #toasty::core::schema::app::VariantId {
+                            model: <#model_ident as #toasty::Register>::id(),
+                            index: #variant_idx,
+                        };
                         #toasty::stmt::Expr::from_untyped(
-                            #toasty::core::stmt::Expr::is_variant(path_stmt, #disc)
+                            #toasty::core::stmt::Expr::is_variant(path_stmt, variant_id)
                         )
                     }
                 }

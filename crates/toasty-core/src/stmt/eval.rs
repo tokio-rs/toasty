@@ -181,28 +181,9 @@ impl Expr {
                 let value = expr_is_null.expr.eval_ref(scope, input)?;
                 Ok(value.is_null().into())
             }
-            Expr::IsVariant(expr_is_variant) => {
-                let value = expr_is_variant.expr.eval_ref(scope, input)?;
-                let disc = match &value {
-                    // Data-carrying enums: Record([disc, fields...])
-                    Value::Record(record) => match &record[0] {
-                        Value::I64(d) => *d,
-                        _ => {
-                            return Err(crate::Error::expression_evaluation_failed(
-                                "enum record discriminant is not I64",
-                            ))
-                        }
-                    },
-                    // Unit enums: bare I64
-                    Value::I64(d) => *d,
-                    _ => {
-                        return Err(crate::Error::expression_evaluation_failed(
-                            "IsVariant requires an enum value (I64 or Record)",
-                        ))
-                    }
-                };
-                Ok((disc == expr_is_variant.variant).into())
-            }
+            Expr::IsVariant(_) => Err(crate::Error::expression_evaluation_failed(
+                "IsVariant must be lowered before evaluation",
+            )),
             Expr::Not(expr_not) => {
                 let value = expr_not.expr.eval_ref_bool(scope, input)?;
                 Ok((!value).into())

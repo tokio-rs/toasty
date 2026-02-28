@@ -233,11 +233,32 @@ impl Model {
     }
 }
 
+/// Identifies a specific variant within an embedded enum model.
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub struct VariantId {
+    /// The enum model this variant belongs to.
+    pub model: ModelId,
+    /// Index of the variant within `EmbeddedEnum::variants`.
+    pub index: usize,
+}
+
+impl fmt::Debug for VariantId {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(fmt, "VariantId({}/{})", self.model.0, self.index)
+    }
+}
+
 impl ModelId {
     /// Create a `FieldId` representing the current model's field at index
     /// `index`.
     pub const fn field(self, index: usize) -> FieldId {
         FieldId { model: self, index }
+    }
+
+    /// Create a `VariantId` representing the current model's variant at
+    /// `index`.
+    pub const fn variant(self, index: usize) -> VariantId {
+        VariantId { model: self, index }
     }
 
     pub(crate) const fn placeholder() -> Self {

@@ -1,4 +1,4 @@
-use super::{EnumVariant, Field, FieldId, FieldTy, Model, ModelId};
+use super::{EnumVariant, Field, FieldId, FieldTy, Model, ModelId, VariantId};
 
 use crate::{stmt, Result};
 use indexmap::IndexMap;
@@ -39,6 +39,14 @@ impl Schema {
             Model::EmbeddedEnum(_) => panic!("embedded enum has no fields"),
         };
         fields.get(id.index).expect("invalid field ID")
+    }
+
+    /// Get a variant by ID
+    pub fn variant(&self, id: VariantId) -> &EnumVariant {
+        let Model::EmbeddedEnum(e) = self.model(id.model) else {
+            panic!("VariantId references a non-enum model");
+        };
+        e.variants.get(id.index).expect("invalid variant index")
     }
 
     pub fn models(&self) -> impl Iterator<Item = &Model> {

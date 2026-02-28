@@ -1,3 +1,5 @@
+use crate::schema::app::VariantId;
+
 use super::Expr;
 
 /// Tests whether an expression evaluates to a specific enum variant.
@@ -9,12 +11,12 @@ use super::Expr;
 pub struct ExprIsVariant {
     /// Expression evaluating to an enum value.
     pub expr: Box<Expr>,
-    /// Variant discriminant to check against.
-    pub variant: i64,
+    /// Identifies the variant to check against.
+    pub variant: VariantId,
 }
 
 impl Expr {
-    pub fn is_variant(expr: impl Into<Self>, variant: i64) -> Self {
+    pub fn is_variant(expr: impl Into<Self>, variant: VariantId) -> Self {
         ExprIsVariant {
             expr: Box::new(expr.into()),
             variant,
