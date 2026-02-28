@@ -2,9 +2,6 @@ use super::Simplify;
 use std::mem;
 use toasty_core::stmt::{self, BinaryOp, Expr};
 
-/// Collected `(lhs, value)` pairs from `==` and `!=` comparisons: `(eqs, nes)`.
-type EqNePairs<'a> = (Vec<(&'a Expr, &'a stmt::Value)>, Vec<(&'a Expr, &'a stmt::Value)>);
-
 impl Simplify<'_> {
     pub(super) fn simplify_expr_and(&mut self, expr: &mut stmt::ExprAnd) -> Option<stmt::Expr> {
         // Flatten any nested ands
@@ -71,13 +68,15 @@ impl Simplify<'_> {
         // Range to equality: `a >= c and a <= c` → `a = c`
         self.try_range_to_equality(expr);
 
-        // Contradicting equality check + OR branch pruning.
-        //
-        // Extracts eq/ne constraints from non-OR operands, then:
-        // 1. Checks for flat contradictions (e.g. `a == 1 AND a == 2` → false)
-        // 2. Prunes OR branches that contradict the constraints (e.g.
-        //    `AND(x == 1, OR(AND(x == 1, a), AND(x != 1, b)))` → `AND(x == 1, a)`)
-        if let Some(result) = Self::check_contradictions(expr) {
+        // Contradicting equality: `a == 1 AND a == 2` → false,
+        // `a == 1 AND a != 1` → false
+        if Self::has_self_contradiction(&expr.operands) {
+            return Some(false.into());
+        }
+
+        // OR branch pruning: `AND(x == 1, OR(AND(x != 1, b), ...))` → prune
+        // branches whose eq/ne constraints contradict the outer AND constraints.
+        if let Some(result) = Self::prune_or_branches(expr) {
             return Some(result);
         }
 
@@ -180,17 +179,45 @@ impl Simplify<'_> {
         expr.operands.retain(|e| !e.is_true());
     }
 
-    /// Checks for contradicting equality constraints among the AND's operands,
-    /// and prunes OR branches that are contradicted by non-OR operands.
-    ///
-    /// Extracts `(lhs, value)` pairs from eq/ne comparisons once, then uses
-    /// them for both:
-    /// 1. Flat contradiction detection (`a == 1 AND a == 2` → false)
-    /// 2. OR branch pruning (`AND(x == 1, OR(AND(x != 1, b), ...))` → prune)
-    ///
-    /// Returns `Some(false)` if a flat contradiction or fully-pruned OR is
-    /// found; otherwise mutates `expr` in place and returns `None`.
-    fn check_contradictions(expr: &mut stmt::ExprAnd) -> Option<Expr> {
+    /// Checks for contradicting equality constraints within a single operand
+    /// list using an `i < j` scan: `a == 1 AND a == 2` → true,
+    /// `a == 1 AND a != 1` → true.
+    fn has_self_contradiction(operands: &[Expr]) -> bool {
+        for i in 0..operands.len() {
+            let Some((i_lhs, i_op, i_val)) = Self::extract_eq_ne(&operands[i]) else {
+                continue;
+            };
+
+            for other in &operands[i + 1..] {
+                let Some((j_lhs, j_op, j_val)) = Self::extract_eq_ne(other) else {
+                    continue;
+                };
+
+                if i_lhs != j_lhs {
+                    continue;
+                }
+
+                match (i_op, j_op) {
+                    // a == 1 AND a == 2
+                    (BinaryOp::Eq, BinaryOp::Eq) if i_val != j_val => return true,
+                    // a == 1 AND a != 1, or a != 1 AND a == 1
+                    (BinaryOp::Eq, BinaryOp::Ne) | (BinaryOp::Ne, BinaryOp::Eq)
+                        if i_val == j_val =>
+                    {
+                        return true
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        false
+    }
+
+    /// Prunes OR branches whose eq/ne constraints contradict the outer AND's
+    /// non-OR constraints. Returns `Some(false)` if pruning produces a false
+    /// operand; otherwise mutates `expr` in place and returns `None`.
+    fn prune_or_branches(expr: &mut stmt::ExprAnd) -> Option<Expr> {
         // Separate OR operands from non-OR constraints.
         let mut or_operands: Vec<Expr> = Vec::new();
         for op in mem::take(&mut expr.operands) {
@@ -201,15 +228,11 @@ impl Simplify<'_> {
             }
         }
 
-        // Extract eq/ne pairs from the non-OR constraints.
-        let constraints = Self::collect_eq_ne(&expr.operands);
-
-        // Check for flat contradictions among the constraints.
-        if Self::eq_ne_sets_contradict(&constraints, &constraints) {
-            return Some(false.into());
+        if or_operands.is_empty() {
+            return None;
         }
 
-        // Prune OR branches that contradict the constraints.
+        // Prune OR branches that contradict the outer constraints.
         for or_op in &mut or_operands {
             let Expr::Or(or_expr) = or_op else {
                 unreachable!()
@@ -220,8 +243,7 @@ impl Simplify<'_> {
                     Expr::And(and) => &and.operands,
                     other => std::slice::from_ref(other),
                 };
-                let branch_eq_ne = Self::collect_eq_ne(branch_ops);
-                !Self::eq_ne_sets_contradict(&constraints, &branch_eq_ne)
+                !Self::branch_contradicts_outer(&expr.operands, branch_ops)
             });
 
             match or_expr.operands.len() {
@@ -239,12 +261,13 @@ impl Simplify<'_> {
             }
         }
 
-        // Re-check for false (all OR branches pruned → false).
+        // All OR branches pruned → false.
         if expr.operands.iter().any(|e| e.is_false()) {
             return Some(false.into());
         }
 
-        // Deduplicate after flattening.
+        // Deduplicate after flattening (flatten can reintroduce operands
+        // already present in the outer AND).
         let mut seen = Vec::new();
         expr.operands.retain(|operand| {
             if seen.contains(operand) {
@@ -258,50 +281,48 @@ impl Simplify<'_> {
         None
     }
 
-    /// Extracts `(lhs, value)` pairs from `==` and `!=` comparisons.
-    fn collect_eq_ne(operands: &[Expr]) -> EqNePairs<'_> {
-        let mut eqs = Vec::new();
-        let mut nes = Vec::new();
+    /// Returns `true` if any eq/ne constraint in `branch` contradicts any
+    /// eq/ne constraint in `outer`.
+    fn branch_contradicts_outer(outer: &[Expr], branch: &[Expr]) -> bool {
+        for outer_op in outer {
+            let Some((o_lhs, o_op, o_val)) = Self::extract_eq_ne(outer_op) else {
+                continue;
+            };
 
-        for op in operands {
-            if let Expr::BinaryOp(binop) = op {
-                if let Expr::Value(val) = binop.rhs.as_ref() {
-                    match binop.op {
-                        BinaryOp::Eq => eqs.push((binop.lhs.as_ref(), val)),
-                        BinaryOp::Ne => nes.push((binop.lhs.as_ref(), val)),
-                        _ => {}
+            for branch_op in branch {
+                let Some((b_lhs, b_op, b_val)) = Self::extract_eq_ne(branch_op) else {
+                    continue;
+                };
+
+                if o_lhs != b_lhs {
+                    continue;
+                }
+
+                match (o_op, b_op) {
+                    (BinaryOp::Eq, BinaryOp::Eq) if o_val != b_val => return true,
+                    (BinaryOp::Eq, BinaryOp::Ne) | (BinaryOp::Ne, BinaryOp::Eq)
+                        if o_val == b_val =>
+                    {
+                        return true
                     }
-                }
-            }
-        }
-
-        (eqs, nes)
-    }
-
-    /// Returns `true` if two sets of eq/ne constraints contradict each other:
-    ///
-    /// - `a == 1` in one set and `a == 2` in the other
-    /// - `a == 1` in one set and `a != 1` in the other
-    fn eq_ne_sets_contradict(a: &EqNePairs<'_>, b: &EqNePairs<'_>) -> bool {
-        let (a_eqs, a_nes) = a;
-        let (b_eqs, b_nes) = b;
-
-        for (a_lhs, a_val) in a_eqs {
-            for (b_lhs, b_val) in b_eqs {
-                if a_lhs == b_lhs && a_val != b_val {
-                    return true;
-                }
-            }
-        }
-
-        for (eq_lhs, eq_val) in a_eqs.iter().chain(b_eqs.iter()) {
-            for (ne_lhs, ne_val) in a_nes.iter().chain(b_nes.iter()) {
-                if eq_lhs == ne_lhs && eq_val == ne_val {
-                    return true;
+                    _ => {}
                 }
             }
         }
 
         false
+    }
+
+    /// Extracts `(lhs, op, rhs_value)` from an `Expr::BinaryOp` if it is an
+    /// `==` or `!=` with a constant value on the right.
+    fn extract_eq_ne(expr: &Expr) -> Option<(&Expr, BinaryOp, &stmt::Value)> {
+        if let Expr::BinaryOp(binop) = expr {
+            if let Expr::Value(val) = binop.rhs.as_ref() {
+                if matches!(binop.op, BinaryOp::Eq | BinaryOp::Ne) {
+                    return Some((binop.lhs.as_ref(), binop.op, val));
+                }
+            }
+        }
+        None
     }
 }
