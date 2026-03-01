@@ -32,8 +32,7 @@ impl Expand<'_> {
             .iter()
             .enumerate()
             .map(|(variant_index, variant)| {
-                let method_name =
-                    syn::Ident::new(&format!("is_{}", variant.name.ident), variant.ident.span());
+                let method_name = &variant.is_method_ident;
                 let variant_idx = util::int(variant_index);
 
                 quote! {
@@ -63,10 +62,7 @@ impl Expand<'_> {
             .filter(|v| !v.fields.is_empty())
             .map(|variant| {
                 let method_name = &variant.name.ident;
-                let variant_field_struct_ident = syn::Ident::new(
-                    &format!("{}{}Fields", model_ident, variant.ident),
-                    variant.ident.span(),
-                );
+                let variant_field_struct_ident = variant.field_struct_ident.as_ref().unwrap();
                 let disc = util::int(variant.discriminant as usize);
 
                 quote! {
@@ -88,10 +84,7 @@ impl Expand<'_> {
             .iter()
             .filter(|v| !v.fields.is_empty())
             .map(|variant| {
-                let variant_field_struct_ident = syn::Ident::new(
-                    &format!("{}{}Fields", model_ident, variant.ident),
-                    variant.ident.span(),
-                );
+                let variant_field_struct_ident = variant.field_struct_ident.as_ref().unwrap();
 
                 let field_methods: Vec<_> = variant
                     .fields

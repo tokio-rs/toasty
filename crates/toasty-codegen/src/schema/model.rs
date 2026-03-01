@@ -89,6 +89,13 @@ pub(crate) struct EnumVariantDef {
     /// True when variant fields are named (struct-like `Foo { a: T }`),
     /// false for tuple-like (`Foo(T)`). Unused when `fields` is empty.
     pub(crate) fields_named: bool,
+
+    /// Ident for the `is_{variant}()` method (e.g., `is_email`)
+    pub(crate) is_method_ident: syn::Ident,
+
+    /// Ident for the per-variant field struct (e.g., `ContactInfoEmailFields`).
+    /// Only set for data-carrying variants.
+    pub(crate) field_struct_ident: Option<syn::Ident>,
 }
 
 #[derive(Debug)]
@@ -363,12 +370,26 @@ impl Model {
                 }
             };
 
+            let name = Name::from_ident(&variant.ident);
+            let is_method_ident =
+                syn::Ident::new(&format!("is_{}", name.ident), variant.ident.span());
+            let field_struct_ident = if variant_fields.is_empty() {
+                None
+            } else {
+                Some(syn::Ident::new(
+                    &format!("{}{}Fields", ast.ident, variant.ident),
+                    variant.ident.span(),
+                ))
+            };
+
             variants.push(EnumVariantDef {
                 ident: variant.ident.clone(),
-                name: Name::from_ident(&variant.ident),
+                name,
                 discriminant,
                 fields: variant_fields,
                 fields_named,
+                is_method_ident,
+                field_struct_ident,
             });
         }
 
