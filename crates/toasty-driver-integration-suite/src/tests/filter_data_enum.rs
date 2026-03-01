@@ -184,6 +184,89 @@ pub async fn filter_unit_enum_by_variant(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// Filters by enum variant using `is_{variant}()` combined with a partition key.
+/// The partition key satisfies DynamoDB's index requirement; the variant check
+/// becomes a FilterExpression applied server-side after the key lookup.
+#[driver_test]
+pub async fn filter_enum_variant_with_partition_key(t: &mut Test) -> Result<()> {
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    enum Status {
+        #[column(variant = 1)]
+        Pending,
+        #[column(variant = 2)]
+        Active,
+        #[column(variant = 3)]
+        Done,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = owner, local = id)]
+    #[allow(dead_code)]
+    struct Task {
+        #[auto]
+        id: uuid::Uuid,
+        owner: String,
+        title: String,
+        status: Status,
+    }
+
+    let mut db = t.setup_db(models!(Task, Status)).await;
+
+    for (owner, title, status) in [
+        ("alice", "Task A", Status::Pending),
+        ("alice", "Task B", Status::Active),
+        ("alice", "Task C", Status::Active),
+        ("alice", "Task D", Status::Done),
+        ("bob", "Task E", Status::Active),
+    ] {
+        Task::create()
+            .owner(owner)
+            .title(title)
+            .status(status)
+            .exec(&mut db)
+            .await?;
+    }
+
+    // Partition key + variant filter
+    let active = Task::filter(
+        Task::fields()
+            .owner()
+            .eq("alice")
+            .and(Task::fields().status().is_active()),
+    )
+    .collect::<Vec<_>>(&mut db)
+    .await?;
+
+    assert_eq!(active.len(), 2);
+
+    let done = Task::filter(
+        Task::fields()
+            .owner()
+            .eq("alice")
+            .and(Task::fields().status().is_done()),
+    )
+    .collect::<Vec<_>>(&mut db)
+    .await?;
+
+    assert_eq!(done.len(), 1);
+    assert_eq!(done[0].title, "Task D");
+
+    // Bob has one active task
+    let bob_active = Task::filter(
+        Task::fields()
+            .owner()
+            .eq("bob")
+            .and(Task::fields().status().is_active()),
+    )
+    .collect::<Vec<_>>(&mut db)
+    .await?;
+
+    assert_eq!(bob_active.len(), 1);
+    assert_eq!(bob_active[0].title, "Task E");
+
+    Ok(())
+}
+
 /// Creates records with different data-carrying enum variants and retrieves them
 /// by primary key, verifying enum values round-trip correctly. This exercises
 /// the same create + read path on all drivers including DynamoDB.
