@@ -501,3 +501,101 @@ pub async fn preload_on_empty_query(test: &mut Test) -> Result<()> {
     assert_eq!(0, users.len());
     Ok(())
 }
+
+#[driver_test(id(ID))]
+pub async fn nested_has_many_preload(test: &mut Test) {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        #[has_many]
+        todos: toasty::HasMany<Todo>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: ID,
+
+        title: String,
+
+        #[index]
+        user_id: ID,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::BelongsTo<User>,
+
+        #[has_many]
+        steps: toasty::HasMany<Step>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Step {
+        #[key]
+        #[auto]
+        id: ID,
+
+        description: String,
+
+        #[index]
+        todo_id: ID,
+
+        #[belongs_to(key = todo_id, references = id)]
+        todo: toasty::BelongsTo<Todo>,
+    }
+
+    let db = test.setup_db(models!(User, Todo, Step)).await;
+
+    // Create a user with todos, each with steps
+    let user = User::create()
+        .name("Alice")
+        .todo(
+            Todo::create()
+                .title("Todo 1")
+                .step(Step::create().description("Step 1a"))
+                .step(Step::create().description("Step 1b")),
+        )
+        .todo(
+            Todo::create()
+                .title("Todo 2")
+                .step(Step::create().description("Step 2a"))
+                .step(Step::create().description("Step 2b"))
+                .step(Step::create().description("Step 2c")),
+        )
+        .exec(&db)
+        .await
+        .unwrap();
+
+    // Load user with nested include: todos AND their steps
+    let user = User::filter_by_id(user.id)
+        .include(User::fields().todos().steps())
+        .get(&db)
+        .await
+        .unwrap();
+
+    // Verify todos are loaded
+    let todos = user.todos.get();
+    assert_eq!(2, todos.len());
+
+    // Verify steps are loaded on each todo
+    let mut all_step_descriptions: Vec<&str> = Vec::new();
+    for todo in todos {
+        let steps = todo.steps.get();
+        for step in steps {
+            all_step_descriptions.push(&step.description);
+        }
+    }
+    all_step_descriptions.sort();
+    assert_eq!(
+        all_step_descriptions,
+        vec!["Step 1a", "Step 1b", "Step 2a", "Step 2b", "Step 2c"]
+    );
+}
