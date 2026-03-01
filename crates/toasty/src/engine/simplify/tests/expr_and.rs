@@ -762,14 +762,8 @@ fn prune_or_no_contradiction_preserved() {
             Expr::eq(Expr::arg(0), Expr::from(1i64)),
             Expr::Or(ExprOr {
                 operands: vec![
-                    Expr::and(
-                        Expr::eq(Expr::arg(1), Expr::from(2i64)),
-                        Expr::arg(2),
-                    ),
-                    Expr::and(
-                        Expr::eq(Expr::arg(1), Expr::from(3i64)),
-                        Expr::arg(3),
-                    ),
+                    Expr::and(Expr::eq(Expr::arg(1), Expr::from(2i64)), Expr::arg(2)),
+                    Expr::and(Expr::eq(Expr::arg(1), Expr::from(3i64)), Expr::arg(3)),
                 ],
             }),
         ],
@@ -796,14 +790,8 @@ fn prune_or_all_branches_contradicted() {
             Expr::eq(Expr::arg(0), Expr::from(1i64)),
             Expr::Or(ExprOr {
                 operands: vec![
-                    Expr::and(
-                        Expr::eq(Expr::arg(0), Expr::from(2i64)),
-                        Expr::arg(1),
-                    ),
-                    Expr::and(
-                        Expr::eq(Expr::arg(0), Expr::from(3i64)),
-                        Expr::arg(2),
-                    ),
+                    Expr::and(Expr::eq(Expr::arg(0), Expr::from(2i64)), Expr::arg(1)),
+                    Expr::and(Expr::eq(Expr::arg(0), Expr::from(3i64)), Expr::arg(2)),
                 ],
             }),
         ],

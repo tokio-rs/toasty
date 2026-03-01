@@ -51,9 +51,9 @@ impl Simplify<'_> {
                 let field_idx = expr.projection[1];
                 let further = &expr.projection.as_slice()[2..];
 
-                if let Some(arm) = match_expr.arms.iter().find(|a| {
-                    matches!(&a.pattern, stmt::Value::I64(d) if *d as usize == variant_disc)
-                }) {
+                if let Some(arm) = match_expr.arms.iter().find(
+                    |a| matches!(&a.pattern, stmt::Value::I64(d) if *d as usize == variant_disc),
+                ) {
                     // The arm's Record has disc at [0] and fields starting at [1]
                     let record_position = field_idx + 1;
 

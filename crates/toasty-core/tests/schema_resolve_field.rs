@@ -150,9 +150,7 @@ fn resolve_primitive_field() {
     let root = s.model(USER);
 
     // User.name => field at index 1
-    let field = s
-        .resolve_field(root, &stmt::Projection::from([1]))
-        .unwrap();
+    let field = s.resolve_field(root, &stmt::Projection::from([1])).unwrap();
     assert_eq!(field.name.app_name, "name");
 }
 
@@ -280,20 +278,14 @@ fn resolve_returns_variant_for_enum_discriminant_access() {
     let root = s.model(USER);
 
     // Single step into data-carrying enum — variant discriminant
-    let resolved = s
-        .resolve(root, &stmt::Projection::from([3, 0]))
-        .unwrap();
+    let resolved = s.resolve(root, &stmt::Projection::from([3, 0])).unwrap();
     assert!(matches!(resolved, Resolved::Variant(v) if v.name.upper_camel_case() == "Email"));
 
-    let resolved = s
-        .resolve(root, &stmt::Projection::from([3, 1]))
-        .unwrap();
+    let resolved = s.resolve(root, &stmt::Projection::from([3, 1])).unwrap();
     assert!(matches!(resolved, Resolved::Variant(v) if v.name.upper_camel_case() == "Phone"));
 
     // Single step into unit enum — variant discriminant
-    let resolved = s
-        .resolve(root, &stmt::Projection::from([2, 0]))
-        .unwrap();
+    let resolved = s.resolve(root, &stmt::Projection::from([2, 0])).unwrap();
     assert!(matches!(resolved, Resolved::Variant(v) if v.name.upper_camel_case() == "Active"));
 }
 
@@ -303,9 +295,7 @@ fn resolve_returns_field_for_enum_variant_field() {
     let root = s.model(USER);
 
     // Two steps into data-carrying enum — variant field access
-    let resolved = s
-        .resolve(root, &stmt::Projection::from([3, 0, 0]))
-        .unwrap();
+    let resolved = s.resolve(root, &stmt::Projection::from([3, 0, 0])).unwrap();
     assert!(matches!(resolved, Resolved::Field(f) if f.name.app_name == "address"));
 }
 

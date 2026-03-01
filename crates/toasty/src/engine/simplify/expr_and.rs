@@ -178,7 +178,6 @@ impl Simplify<'_> {
 
         expr.operands.retain(|e| !e.is_true());
     }
-
 }
 
 /// Checks for contradicting equality constraints within a single operand
@@ -278,9 +277,7 @@ fn branch_contradicts_outer(outer: &[Expr], branch: &[Expr]) -> bool {
 
             match (o_op, b_op) {
                 (BinaryOp::Eq, BinaryOp::Eq) if o_val != b_val => return true,
-                (BinaryOp::Eq, BinaryOp::Ne) | (BinaryOp::Ne, BinaryOp::Eq)
-                    if o_val == b_val =>
-                {
+                (BinaryOp::Eq, BinaryOp::Ne) | (BinaryOp::Ne, BinaryOp::Eq) if o_val == b_val => {
                     return true
                 }
                 _ => {}

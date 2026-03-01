@@ -316,7 +316,11 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             }
             stmt::Expr::IsVariant(e) => {
                 // Look up the enum model and variant directly via VariantId
-                let enum_model = self.schema().app.model(e.variant.model).expect_embedded_enum();
+                let enum_model = self
+                    .schema()
+                    .app
+                    .model(e.variant.model)
+                    .expect_embedded_enum();
                 let has_data = enum_model.has_data_variants();
                 let discriminant = enum_model.variants[e.variant.index].discriminant;
 
