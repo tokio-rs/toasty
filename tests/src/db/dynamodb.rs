@@ -4,7 +4,7 @@ use toasty::{
     driver::{Capability, Driver},
 };
 use tokio::sync::OnceCell;
-
+use toasty_driver_dynamodb::DynamoDb;
 use crate::{isolation::TestIsolation, Setup};
 
 pub struct SetupDynamoDb {
@@ -27,13 +27,8 @@ impl SetupDynamoDb {
             .get_or_init(|| async {
                 use aws_config::BehaviorVersion;
 
-                // Create DynamoDB client with test credentials (matching the driver setup)
-                let config = aws_config::defaults(BehaviorVersion::latest())
-                    .region("us-east-1")
-                    .credentials_provider(aws_sdk_dynamodb::config::Credentials::for_tests())
-                    .endpoint_url("http://localhost:8000")
-                    .load()
-                    .await;
+                // Create DynamoDB client loading config from environment
+                let config = aws_config::defaults(BehaviorVersion::latest()).load().await;
                 aws_sdk_dynamodb::Client::new(&config)
             })
             .await
@@ -49,9 +44,7 @@ impl Default for SetupDynamoDb {
 #[async_trait::async_trait]
 impl Setup for SetupDynamoDb {
     fn driver(&self) -> Box<dyn Driver> {
-        let url =
-            std::env::var("TOASTY_TEST_DYNAMODB_URL").unwrap_or_else(|_| "dynamodb://".to_string());
-        Box::new(Connect::new(&url).unwrap())
+        Box::new(DynamoDb::new(self.get_client()))
     }
 
     fn configure_builder(&self, builder: &mut toasty::db::Builder) {
