@@ -1,6 +1,11 @@
 #![cfg(feature = "dynamodb")]
 
+use aws_config::meta::region::RegionProviderChain;
 use aws_config::BehaviorVersion;
+<<<<<<< HEAD
+=======
+use aws_sdk_dynamodb::config::Credentials;
+>>>>>>> 8747309 (Simplify DynamoDB Client creation)
 use aws_sdk_dynamodb::Client;
 use std::sync::OnceLock;
 use toasty_driver_dynamodb::DynamoDb;
@@ -18,26 +23,26 @@ impl DynamoDbSetup {
 
     fn get_client(&self) -> &Client {
         self.client.get_or_init(|| {
-            // Set default AWS environment variables if not already set
-            if std::env::var("AWS_REGION").is_err() {
-                std::env::set_var("AWS_REGION", "us-east-1");
-            }
-            if std::env::var("AWS_ENDPOINT_URL_DYNAMODB").is_err() {
-                std::env::set_var("AWS_ENDPOINT_URL_DYNAMODB", "http://localhost:8000");
-            }
-            if std::env::var("AWS_ACCESS_KEY_ID").is_err() {
-                std::env::set_var("AWS_ACCESS_KEY_ID", "test");
-            }
-            if std::env::var("AWS_SECRET_ACCESS_KEY").is_err() {
-                std::env::set_var("AWS_SECRET_ACCESS_KEY", "test");
-            }
-
             // Spawn a thread to handle async AWS SDK initialization
             std::thread::spawn(|| {
                 tokio::runtime::Runtime::new()
                     .expect("Failed to create tokio runtime")
                     .block_on(async {
                         let config = aws_config::defaults(BehaviorVersion::latest()).load().await;
+                        // Configure for DDB Local, if configs are not already provided.
+                        // We can point tests to real DDB with a couple of environment variables.
+                        let region_provider =
+                            RegionProviderChain::default_provider().or_else("us-east-1");
+                        let mut config_loader =
+                            aws_config::defaults(BehaviorVersion::latest()).region(region_provider);
+                        if std::env::var("AWS_ENDPOINT_URL_DYNAMODB").is_err() {
+                            config_loader = config_loader.endpoint_url("http://localhost:8000");
+                        }
+                        if std::env::var("AWS_ACCESS_KEY_ID").is_err() {
+                            config_loader =
+                                config_loader.credentials_provider(Credentials::for_tests());
+                        }
+                        let config = config_loader.load().await;
                         Client::new(&config)
                     })
             })
