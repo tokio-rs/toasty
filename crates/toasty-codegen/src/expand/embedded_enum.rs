@@ -32,8 +32,7 @@ impl Expand<'_> {
             .iter()
             .enumerate()
             .map(|(variant_index, variant)| {
-                let method_name =
-                    syn::Ident::new(&format!("is_{}", variant.name.ident), variant.ident.span());
+                let method_name = &variant.is_method_ident;
                 let variant_idx = util::int(variant_index);
 
                 quote! {
@@ -55,43 +54,40 @@ impl Expand<'_> {
             .collect();
 
         // Generate variant accessor methods for data-carrying variants.
-        // E.g., `fn email(&self) -> ContactInfoEmailFields` on `ContactInfoFields`.
-        // The variant method adds the variant discriminant to the path.
+        // E.g., `fn email(&self) -> ContactInfoEmailVariant` on `ContactInfoFields`.
+        // Returns a variant handle (no path modification); the handle provides
+        // `.matches()` for field-level filtering and `.is()` for variant checks.
         let variant_accessor_methods: Vec<_> = embedded_enum
             .variants
             .iter()
             .filter(|v| !v.fields.is_empty())
             .map(|variant| {
                 let method_name = &variant.name.ident;
-                let variant_field_struct_ident = syn::Ident::new(
-                    &format!("{}{}Fields", model_ident, variant.ident),
-                    variant.ident.span(),
-                );
-                let disc = util::int(variant.discriminant as usize);
+                let variant_handle_ident = &variant.variant_handle_ident;
 
                 quote! {
-                    #vis fn #method_name(&self) -> #variant_field_struct_ident {
-                        #variant_field_struct_ident {
-                            path: self.path().chain(
-                                #toasty::Path::from_field_index::<#model_ident>(#disc)
-                            )
+                    #vis fn #method_name(&self) -> #variant_handle_ident {
+                        #variant_handle_ident {
+                            path: self.path()
                         }
                     }
                 }
             })
             .collect();
 
-        // Generate per-variant field structs for data-carrying variants.
-        // E.g., `ContactInfoEmailFields` with methods like `fn address(&self) -> Path<String>`.
+        // Generate per-variant handle + field structs for data-carrying variants.
+        // The handle (e.g., `ContactInfoEmailVariant`) provides `.matches()` and `.is()`.
+        // The fields struct (e.g., `ContactInfoEmailFields`) is the closure argument
+        // for `.matches()`, with field accessor methods.
         let variant_field_structs: Vec<_> = embedded_enum
             .variants
             .iter()
-            .filter(|v| !v.fields.is_empty())
-            .map(|variant| {
-                let variant_field_struct_ident = syn::Ident::new(
-                    &format!("{}{}Fields", model_ident, variant.ident),
-                    variant.ident.span(),
-                );
+            .enumerate()
+            .filter(|(_, v)| !v.fields.is_empty())
+            .map(|(variant_index, variant)| {
+                let variant_handle_ident = &variant.variant_handle_ident;
+                let variant_field_struct_ident = &variant.variant_field_struct_ident;
+                let variant_idx = util::int(variant_index);
 
                 let field_methods: Vec<_> = variant
                     .fields
@@ -100,7 +96,8 @@ impl Expand<'_> {
                     .map(|(field_index, vf)| {
                         let field_ident = &vf.ident;
                         let field_ty = &vf.ty;
-                        let field_offset = util::int(field_index);
+                        // +1 to skip the discriminant at record position 0
+                        let field_offset = util::int(field_index + 1);
 
                         quote! {
                             #vis fn #field_ident(&self) -> <#field_ty as #toasty::stmt::Primitive>::FieldAccessor {
@@ -115,6 +112,50 @@ impl Expand<'_> {
                     .collect();
 
                 quote! {
+                    #vis struct #variant_handle_ident {
+                        path: #toasty::Path<#model_ident>,
+                    }
+
+                    impl #variant_handle_ident {
+                        fn path(&self) -> #toasty::Path<#model_ident> {
+                            self.path.clone()
+                        }
+
+                        #vis fn matches(
+                            &self,
+                            f: impl FnOnce(#variant_field_struct_ident) -> #toasty::stmt::Expr<bool>,
+                        ) -> #toasty::stmt::Expr<bool> {
+                            let path_stmt: #toasty::core::stmt::Expr = {
+                                let p: #toasty::core::stmt::Path = self.path().into();
+                                p.into_stmt()
+                            };
+                            let variant_id = #toasty::core::schema::app::VariantId {
+                                model: <#model_ident as #toasty::Register>::id(),
+                                index: #variant_idx,
+                            };
+                            let is_var = #toasty::stmt::Expr::from_untyped(
+                                #toasty::core::stmt::Expr::is_variant(path_stmt, variant_id)
+                            );
+                            let fields = #variant_field_struct_ident { path: self.path() };
+                            let body = f(fields);
+                            is_var.and(body)
+                        }
+
+                        #vis fn is(&self) -> #toasty::stmt::Expr<bool> {
+                            let path_stmt: #toasty::core::stmt::Expr = {
+                                let p: #toasty::core::stmt::Path = self.path().into();
+                                p.into_stmt()
+                            };
+                            let variant_id = #toasty::core::schema::app::VariantId {
+                                model: <#model_ident as #toasty::Register>::id(),
+                                index: #variant_idx,
+                            };
+                            #toasty::stmt::Expr::from_untyped(
+                                #toasty::core::stmt::Expr::is_variant(path_stmt, variant_id)
+                            )
+                        }
+                    }
+
                     #vis struct #variant_field_struct_ident {
                         path: #toasty::Path<#model_ident>,
                     }

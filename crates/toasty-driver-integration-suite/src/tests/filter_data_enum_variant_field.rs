@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
-/// Filtering by a field within a specific enum variant using variant+field
-/// accessor chain: `contact().email().address().eq("x")`.
+/// Filtering by a field within a specific enum variant using the closure-based
+/// `.matches()` API: `contact().email().matches(|e| e.address().eq("x"))`.
 #[driver_test(requires(sql))]
 pub async fn filter_by_variant_field(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
@@ -53,8 +53,7 @@ pub async fn filter_by_variant_field(t: &mut Test) -> Result<()> {
         User::fields()
             .contact()
             .email()
-            .address()
-            .eq("alice@example.com"),
+            .matches(|e| e.address().eq("alice@example.com")),
     )
     .collect::<Vec<_>>(&mut db)
     .await?;
@@ -63,9 +62,14 @@ pub async fn filter_by_variant_field(t: &mut Test) -> Result<()> {
     assert_eq!(results[0].name, "Alice");
 
     // Filter by phone number field
-    let results = User::filter(User::fields().contact().phone().number().eq("555-1234"))
-        .collect::<Vec<_>>(&mut db)
-        .await?;
+    let results = User::filter(
+        User::fields()
+            .contact()
+            .phone()
+            .matches(|e| e.number().eq("555-1234")),
+    )
+    .collect::<Vec<_>>(&mut db)
+    .await?;
 
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].name, "Bob");
@@ -75,8 +79,7 @@ pub async fn filter_by_variant_field(t: &mut Test) -> Result<()> {
         User::fields()
             .contact()
             .email()
-            .address()
-            .eq("nobody@example.com"),
+            .matches(|e| e.address().eq("nobody@example.com")),
     )
     .collect::<Vec<_>>(&mut db)
     .await?;
@@ -143,8 +146,7 @@ pub async fn filter_variant_field_with_partition_key(t: &mut Test) -> Result<()>
             User::fields()
                 .contact()
                 .email()
-                .address()
-                .eq("alice@example.com"),
+                .matches(|e| e.address().eq("alice@example.com")),
         ),
     )
     .collect::<Vec<_>>(&mut db)
