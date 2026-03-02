@@ -67,7 +67,7 @@ impl Expand<'_> {
                     #query_struct_ident::from_stmt(#toasty::stmt::Select::filter(expr))
                 }
 
-                #vis async fn delete(self, db: &#toasty::Db) -> #toasty::Result<()> {
+                #vis async fn delete(self, db: &mut #toasty::Db) -> #toasty::Result<()> {
                     use #toasty::IntoSelect;
                     let stmt = self.into_select().delete();
                     db.exec(stmt).await?;

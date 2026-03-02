@@ -45,12 +45,12 @@ impl Expand<'_> {
                 #filter_methods
 
                 /// Iterate all entries in the relation
-                #vis async fn all(self, db: &#toasty::Db) -> #toasty::Result<#toasty::Cursor<#model_ident>> {
+                #vis async fn all(self, db: &mut #toasty::Db) -> #toasty::Result<#toasty::Cursor<#model_ident>> {
                     use #toasty::IntoSelect;
                     db.all(self.stmt.into_select()).await
                 }
 
-                #vis async fn collect<#collect_ty>(self, db: &#toasty::Db) -> #toasty::Result<#collect_ty>
+                #vis async fn collect<#collect_ty>(self, db: &mut #toasty::Db) -> #toasty::Result<#collect_ty>
                 where
                     #collect_ty: #toasty::FromCursor<#model_ident>
                 {
@@ -74,14 +74,14 @@ impl Expand<'_> {
                 }
 
                 /// Add an item to the association
-                #vis async fn insert(self, db: &#toasty::Db, item: impl #toasty::IntoExpr<[#model_ident]>) -> #toasty::Result<()> {
+                #vis async fn insert(self, db: &mut #toasty::Db, item: impl #toasty::IntoExpr<[#model_ident]>) -> #toasty::Result<()> {
                     let stmt = self.stmt.insert(item);
                     db.exec(stmt).await?;
                     Ok(())
                 }
 
                 /// Remove items from the association
-                #vis async fn remove(self, db: &#toasty::Db, item: impl #toasty::IntoExpr<#model_ident>) -> #toasty::Result<()> {
+                #vis async fn remove(self, db: &mut #toasty::Db, item: impl #toasty::IntoExpr<#model_ident>) -> #toasty::Result<()> {
                     let stmt = self.stmt.remove(item);
                     db.exec(stmt).await?;
                     Ok(())
@@ -109,7 +109,7 @@ impl Expand<'_> {
                     builder
                 }
 
-                #vis async fn get(self, db: &#toasty::Db) -> #toasty::Result<#model_ident> {
+                #vis async fn get(self, db: &mut #toasty::Db) -> #toasty::Result<#model_ident> {
                     use #toasty::IntoSelect;
                     db.get(self.stmt.into_select()).await
                 }
@@ -136,7 +136,7 @@ impl Expand<'_> {
                     builder
                 }
 
-                #vis async fn get(self, db: &#toasty::Db) -> #toasty::Result<#toasty::Option<#model_ident>> {
+                #vis async fn get(self, db: &mut #toasty::Db) -> #toasty::Result<#toasty::Option<#model_ident>> {
                     use #toasty::IntoSelect;
                     db.first(self.stmt.into_select()).await
                 }

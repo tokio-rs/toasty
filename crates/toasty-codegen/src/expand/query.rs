@@ -29,15 +29,15 @@ impl Expand<'_> {
 
                 #filter_methods
 
-                #vis async fn all(self, db: &#toasty::Db) -> #toasty::Result<#toasty::Cursor<#model_ident>> {
+                #vis async fn all(self, db: &mut #toasty::Db) -> #toasty::Result<#toasty::Cursor<#model_ident>> {
                     db.all(self.stmt).await
                 }
 
-                #vis async fn first(self, db: &#toasty::Db) -> #toasty::Result<#toasty::Option<#model_ident>> {
+                #vis async fn first(self, db: &mut #toasty::Db) -> #toasty::Result<#toasty::Option<#model_ident>> {
                     db.first(self.stmt).await
                 }
 
-                #vis async fn get(self, db: &#toasty::Db) -> #toasty::Result<#model_ident> {
+                #vis async fn get(self, db: &mut #toasty::Db) -> #toasty::Result<#model_ident> {
                     db.get(self.stmt).await
                 }
 
@@ -45,12 +45,12 @@ impl Expand<'_> {
                     #update_struct_ident::from(self)
                 }
 
-                #vis async fn delete(self, db: &#toasty::Db) -> #toasty::Result<()> {
+                #vis async fn delete(self, db: &mut #toasty::Db) -> #toasty::Result<()> {
                     db.exec(self.stmt.delete()).await?;
                     Ok(())
                 }
 
-                #vis async fn collect<#collect_ty>(self, db: &#toasty::Db) -> #toasty::Result<#collect_ty>
+                #vis async fn collect<#collect_ty>(self, db: &mut #toasty::Db) -> #toasty::Result<#collect_ty>
                 where
                     #collect_ty: #toasty::FromCursor<#model_ident>
                 {

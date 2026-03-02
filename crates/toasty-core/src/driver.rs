@@ -9,7 +9,10 @@ pub use operation::{IsolationLevel, Operation};
 
 use crate::{
     async_trait,
-    schema::db::{AppliedMigration, Migration, Schema, SchemaDiff},
+    schema::{
+        db::{AppliedMigration, Migration, SchemaDiff},
+        Schema,
+    },
 };
 
 use std::{borrow::Cow, fmt::Debug, sync::Arc};

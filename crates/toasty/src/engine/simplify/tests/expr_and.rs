@@ -630,3 +630,51 @@ fn multiple_nulls_and_true_becomes_null() {
     assert!(result.is_some());
     assert!(result.unwrap().is_value_null());
 }
+
+// Error operand tests
+
+#[test]
+fn error_operand_preserved_in_and() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    // `and(error("boom"), arg(0))` → no simplification (error is not true/false/null)
+    let mut expr = ExprAnd {
+        operands: vec![Expr::error("boom"), Expr::arg(0)],
+    };
+    let result = simplify.simplify_expr_and(&mut expr);
+
+    assert!(result.is_none());
+    assert_eq!(expr.operands.len(), 2);
+    assert!(matches!(&expr.operands[0], Expr::Error(_)));
+}
+
+#[test]
+fn error_and_true_keeps_error() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    // `and(error("boom"), true)` → `error("boom")` (true is removed, error remains)
+    let mut expr = ExprAnd {
+        operands: vec![Expr::error("boom"), true.into()],
+    };
+    let result = simplify.simplify_expr_and(&mut expr);
+
+    assert!(result.is_some());
+    assert!(matches!(&result.unwrap(), Expr::Error(e) if e.message == "boom"));
+}
+
+#[test]
+fn error_and_false_becomes_false() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    // `and(error("boom"), false)` → `false` (false short-circuits AND)
+    let mut expr = ExprAnd {
+        operands: vec![Expr::error("boom"), false.into()],
+    };
+    let result = simplify.simplify_expr_and(&mut expr);
+
+    assert!(result.is_some());
+    assert!(result.unwrap().is_false());
+}

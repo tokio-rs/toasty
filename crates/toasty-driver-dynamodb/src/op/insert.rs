@@ -1,5 +1,5 @@
 use super::{
-    stmt, Connection, Put, PutRequest, Result, Schema, TransactWriteItem, Value, WriteRequest,
+    db, stmt, Connection, Put, PutRequest, Result, TransactWriteItem, Value, WriteRequest,
 };
 use std::collections::HashMap;
 use toasty_core::driver::Response;
@@ -7,7 +7,7 @@ use toasty_core::driver::Response;
 impl Connection {
     pub(crate) async fn exec_insert(
         &mut self,
-        schema: &Schema,
+        schema: &db::Schema,
         insert: stmt::Insert,
     ) -> Result<Response> {
         assert!(insert.returning.is_none());

@@ -56,3 +56,17 @@ fn non_const_not_simplified() {
 
     assert!(result.is_none());
 }
+
+#[test]
+fn record_with_error_field_not_simplified() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    // `record([1, error("boom")])` — error is not a Value, so not folded
+    let mut expr = ExprRecord {
+        fields: vec![Expr::Value(Value::from(1i64)), Expr::error("boom")],
+    };
+    let result = simplify.simplify_expr_record(&mut expr);
+
+    assert!(result.is_none());
+}

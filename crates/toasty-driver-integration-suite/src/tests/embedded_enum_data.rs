@@ -150,14 +150,14 @@ pub async fn data_variant_roundtrip(test: &mut Test) -> Result<()> {
         contact: ContactInfo,
     }
 
-    let db = test.setup_db(models!(User, ContactInfo)).await;
+    let mut db = test.setup_db(models!(User, ContactInfo)).await;
 
     let alice = User::create()
         .name("Alice")
         .contact(ContactInfo::Email {
             address: "alice@example.com".to_string(),
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     let bob = User::create()
@@ -165,11 +165,11 @@ pub async fn data_variant_roundtrip(test: &mut Test) -> Result<()> {
         .contact(ContactInfo::Phone {
             number: "555-1234".to_string(),
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     // Read back and check values are reconstructed correctly.
-    let found_alice = User::get_by_id(&db, &alice.id).await?;
+    let found_alice = User::get_by_id(&mut db, &alice.id).await?;
     assert_eq!(
         found_alice.contact,
         ContactInfo::Email {
@@ -177,7 +177,7 @@ pub async fn data_variant_roundtrip(test: &mut Test) -> Result<()> {
         }
     );
 
-    let found_bob = User::get_by_id(&db, &bob.id).await?;
+    let found_bob = User::get_by_id(&mut db, &bob.id).await?;
     assert_eq!(
         found_bob.contact,
         ContactInfo::Phone {
@@ -186,8 +186,8 @@ pub async fn data_variant_roundtrip(test: &mut Test) -> Result<()> {
     );
 
     // Clean up.
-    alice.delete(&db).await?;
-    bob.delete(&db).await?;
+    alice.delete(&mut db).await?;
+    bob.delete(&mut db).await?;
     Ok(())
 }
 
@@ -214,12 +214,12 @@ pub async fn mixed_enum_roundtrip(test: &mut Test) -> Result<()> {
         status: Status,
     }
 
-    let db = test.setup_db(models!(Task, Status)).await;
+    let mut db = test.setup_db(models!(Task, Status)).await;
 
     let pending = Task::create()
         .title("Pending task")
         .status(Status::Pending)
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     let failed = Task::create()
@@ -227,19 +227,19 @@ pub async fn mixed_enum_roundtrip(test: &mut Test) -> Result<()> {
         .status(Status::Failed {
             reason: "out of memory".to_string(),
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     let done = Task::create()
         .title("Done task")
         .status(Status::Done)
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
-    let found_pending = Task::get_by_id(&db, &pending.id).await?;
+    let found_pending = Task::get_by_id(&mut db, &pending.id).await?;
     assert_eq!(found_pending.status, Status::Pending);
 
-    let found_failed = Task::get_by_id(&db, &failed.id).await?;
+    let found_failed = Task::get_by_id(&mut db, &failed.id).await?;
     assert_eq!(
         found_failed.status,
         Status::Failed {
@@ -247,7 +247,7 @@ pub async fn mixed_enum_roundtrip(test: &mut Test) -> Result<()> {
         }
     );
 
-    let found_done = Task::get_by_id(&db, &done.id).await?;
+    let found_done = Task::get_by_id(&mut db, &done.id).await?;
     assert_eq!(found_done.status, Status::Done);
 
     Ok(())
@@ -273,26 +273,26 @@ pub async fn data_variant_with_uuid_field(test: &mut Test) -> Result<()> {
         order_ref: OrderRef,
     }
 
-    let db = test.setup_db(models!(Order, OrderRef)).await;
+    let mut db = test.setup_db(models!(Order, OrderRef)).await;
 
     let internal_id = uuid::Uuid::new_v4();
 
     let o1 = Order::create()
         .order_ref(OrderRef::Internal { id: internal_id })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     let o2 = Order::create()
         .order_ref(OrderRef::External {
             code: "EXT-001".to_string(),
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
-    let found_o1 = Order::get_by_id(&db, &o1.id).await?;
+    let found_o1 = Order::get_by_id(&mut db, &o1.id).await?;
     assert_eq!(found_o1.order_ref, OrderRef::Internal { id: internal_id });
 
-    let found_o2 = Order::get_by_id(&db, &o2.id).await?;
+    let found_o2 = Order::get_by_id(&mut db, &o2.id).await?;
     assert_eq!(
         found_o2.order_ref,
         OrderRef::External {
@@ -324,26 +324,26 @@ pub async fn data_variant_with_jiff_timestamp(test: &mut Test) -> Result<()> {
         time: EventTime,
     }
 
-    let db = test.setup_db(models!(Event, EventTime)).await;
+    let mut db = test.setup_db(models!(Event, EventTime)).await;
 
     let ts = jiff::Timestamp::from_second(1_700_000_000).unwrap();
 
     let scheduled = Event::create()
         .name("launch")
         .time(EventTime::Scheduled { at: ts })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     let unscheduled = Event::create()
         .name("tbd")
         .time(EventTime::Unscheduled)
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
-    let found_scheduled = Event::get_by_id(&db, &scheduled.id).await?;
+    let found_scheduled = Event::get_by_id(&mut db, &scheduled.id).await?;
     assert_eq!(found_scheduled.time, EventTime::Scheduled { at: ts });
 
-    let found_unscheduled = Event::get_by_id(&db, &unscheduled.id).await?;
+    let found_unscheduled = Event::get_by_id(&mut db, &unscheduled.id).await?;
     assert_eq!(found_unscheduled.time, EventTime::Unscheduled);
 
     Ok(())
@@ -373,13 +373,13 @@ pub async fn struct_in_data_variant(test: &mut Test) -> Result<()> {
         destination: Destination,
     }
 
-    let db = test.setup_db(models!(Shipment, Destination, Address)).await;
+    let mut db = test.setup_db(models!(Shipment, Destination, Address)).await;
 
     let digital = Shipment::create()
         .destination(Destination::Digital {
             email: "user@example.com".to_string(),
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     let physical = Shipment::create()
@@ -389,10 +389,10 @@ pub async fn struct_in_data_variant(test: &mut Test) -> Result<()> {
                 city: "Seattle".to_string(),
             },
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
-    let found_digital = Shipment::get_by_id(&db, &digital.id).await?;
+    let found_digital = Shipment::get_by_id(&mut db, &digital.id).await?;
     assert_eq!(
         found_digital.destination,
         Destination::Digital {
@@ -400,7 +400,7 @@ pub async fn struct_in_data_variant(test: &mut Test) -> Result<()> {
         }
     );
 
-    let found_physical = Shipment::get_by_id(&db, &physical.id).await?;
+    let found_physical = Shipment::get_by_id(&mut db, &physical.id).await?;
     assert_eq!(
         found_physical.destination,
         Destination::Physical {
@@ -442,14 +442,14 @@ pub async fn enum_in_enum_roundtrip(test: &mut Test) -> Result<()> {
         notification: Notification,
     }
 
-    let db = test.setup_db(models!(Alert, Notification, Channel)).await;
+    let mut db = test.setup_db(models!(Alert, Notification, Channel)).await;
 
     let a1 = Alert::create()
         .notification(Notification::Send {
             channel: Channel::Email,
             message: "hello".to_string(),
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     let a2 = Alert::create()
@@ -457,15 +457,15 @@ pub async fn enum_in_enum_roundtrip(test: &mut Test) -> Result<()> {
             channel: Channel::Sms,
             message: "world".to_string(),
         })
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     let a3 = Alert::create()
         .notification(Notification::Suppress)
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
-    let found_a1 = Alert::get_by_id(&db, &a1.id).await?;
+    let found_a1 = Alert::get_by_id(&mut db, &a1.id).await?;
     assert_eq!(
         found_a1.notification,
         Notification::Send {
@@ -474,7 +474,7 @@ pub async fn enum_in_enum_roundtrip(test: &mut Test) -> Result<()> {
         }
     );
 
-    let found_a2 = Alert::get_by_id(&db, &a2.id).await?;
+    let found_a2 = Alert::get_by_id(&mut db, &a2.id).await?;
     assert_eq!(
         found_a2.notification,
         Notification::Send {
@@ -483,7 +483,7 @@ pub async fn enum_in_enum_roundtrip(test: &mut Test) -> Result<()> {
         }
     );
 
-    let found_a3 = Alert::get_by_id(&db, &a3.id).await?;
+    let found_a3 = Alert::get_by_id(&mut db, &a3.id).await?;
     assert_eq!(found_a3.notification, Notification::Suppress);
 
     Ok(())

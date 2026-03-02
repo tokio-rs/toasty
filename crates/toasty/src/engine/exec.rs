@@ -56,7 +56,7 @@ use toasty_core::{
 
 struct Exec<'a> {
     engine: &'a Engine,
-    connection: PoolConnection,
+    connection: &'a mut PoolConnection,
     vars: VarStore,
     /// Monotonically increasing counter for generating unique savepoint IDs
     /// within a single plan execution.
@@ -68,10 +68,14 @@ struct Exec<'a> {
 }
 
 impl Engine {
-    pub(crate) async fn exec_plan(&self, plan: ExecPlan) -> Result<ValueStream> {
+    pub(crate) async fn exec_plan(
+        &self,
+        connection: &mut PoolConnection,
+        plan: ExecPlan,
+    ) -> Result<ValueStream> {
         let mut exec = Exec {
             engine: self,
-            connection: self.pool.get().await?,
+            connection,
             vars: plan.vars,
             next_savepoint_id: 0,
             in_transaction: false,
@@ -79,7 +83,7 @@ impl Engine {
 
         if plan.needs_transaction {
             exec.connection
-                .exec(&self.schema.db, Transaction::start().into())
+                .exec(&self.schema, Transaction::start().into())
                 .await?;
             exec.in_transaction = true;
         }
@@ -90,7 +94,7 @@ impl Engine {
                     // Best effort: ignore rollback errors so the original error is returned
                     let _ = exec
                         .connection
-                        .exec(&self.schema.db, Transaction::Rollback.into())
+                        .exec(&self.schema, Transaction::Rollback.into())
                         .await;
                 }
                 return Err(e);
@@ -99,7 +103,7 @@ impl Engine {
 
         if plan.needs_transaction {
             exec.connection
-                .exec(&self.schema.db, Transaction::Commit.into())
+                .exec(&self.schema, Transaction::Commit.into())
                 .await?;
         }
 

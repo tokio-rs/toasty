@@ -8,9 +8,9 @@ pub(crate) use value::Value;
 use toasty_core::{
     async_trait,
     driver::{operation::Operation, Capability, Driver, Response},
-    schema::db::{Column, ColumnId, Migration, Schema, SchemaDiff, Table},
+    schema::db::{self, Column, ColumnId, Migration, SchemaDiff, Table},
     stmt::{self, ExprContext},
-    Error, Result,
+    Error, Result, Schema,
 };
 
 use aws_sdk_dynamodb::{
@@ -127,8 +127,8 @@ impl toasty_core::driver::Connection for Connection {
     }
 
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
-        for table in &schema.tables {
-            self.create_table(schema, table, true).await?;
+        for table in &schema.db.tables {
+            self.create_table(&schema.db, table, true).await?;
         }
         Ok(())
     }
@@ -154,8 +154,8 @@ impl Connection {
         match op {
             Operation::GetByKey(op) => self.exec_get_by_key(schema, op).await,
             Operation::QueryPk(op) => self.exec_query_pk(schema, op).await,
-            Operation::DeleteByKey(op) => self.exec_delete_by_key(schema, op).await,
-            Operation::UpdateByKey(op) => self.exec_update_by_key(schema, op).await,
+            Operation::DeleteByKey(op) => self.exec_delete_by_key(&schema.db, op).await,
+            Operation::UpdateByKey(op) => self.exec_update_by_key(&schema.db, op).await,
             Operation::FindPkByIndex(op) => self.exec_find_pk_by_index(schema, op).await,
             Operation::QuerySql(op) => {
                 assert!(
@@ -163,7 +163,7 @@ impl Connection {
                     "last_insert_id_hack is MySQL-specific and should not be set for DynamoDB"
                 );
                 match op.stmt {
-                    stmt::Statement::Insert(op) => self.exec_insert(schema, op).await,
+                    stmt::Statement::Insert(op) => self.exec_insert(&schema.db, op).await,
                     _ => todo!("op={:#?}", op),
                 }
             }
@@ -232,7 +232,7 @@ fn item_to_record<'a, 'stmt>(
 }
 
 fn ddb_expression(
-    cx: &ExprContext<'_, Schema>,
+    cx: &ExprContext<'_, db::Schema>,
     attrs: &mut ExprAttrs,
     primary: bool,
     expr: &stmt::Expr,

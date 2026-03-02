@@ -10,8 +10,8 @@ impl Connection {
         schema: &Arc<Schema>,
         op: operation::QueryPk,
     ) -> Result<Response> {
-        let table = schema.table(op.table);
-        let cx = ExprContext::new_with_target(&**schema, table);
+        let table = schema.db.table(op.table);
+        let cx = ExprContext::new_with_target(&schema.db, table);
 
         let mut expr_attrs = ExprAttrs::default();
 
@@ -26,7 +26,7 @@ impl Connection {
 
         // Build the query based on whether we're querying primary key or an index
         let result = if let Some(index_id) = op.index {
-            let index = schema.index(index_id);
+            let index = schema.db.index(index_id);
 
             if index.unique {
                 // assert!(!index.unique, "Index needs all fields");
@@ -70,7 +70,9 @@ impl Connection {
             res.items.into_iter().flatten().map(move |item| {
                 item_to_record(
                     &item,
-                    op.select.iter().map(|column_id| schema.column(*column_id)),
+                    op.select
+                        .iter()
+                        .map(|column_id| schema.db.column(*column_id)),
                 )
             }),
         )))

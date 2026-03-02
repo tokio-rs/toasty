@@ -11,9 +11,9 @@ use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     async_trait,
     driver::{Capability, Driver, Operation, Response},
-    schema::db::{Migration, Schema, SchemaDiff, Table},
+    schema::db::{self, Migration, SchemaDiff, Table},
     stmt::{self, ValueRecord},
-    Result,
+    Result, Schema,
 };
 use toasty_sql::{self as sql, TypedValue};
 use url::Url;
@@ -139,7 +139,7 @@ impl Connection {
         Self { conn }
     }
 
-    pub async fn create_table(&mut self, schema: &Schema, table: &Table) -> Result<()> {
+    pub async fn create_table(&mut self, schema: &db::Schema, table: &Table) -> Result<()> {
         let serializer = sql::Serializer::mysql(schema);
 
         let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
@@ -193,7 +193,7 @@ impl toasty_core::driver::Connection for Connection {
         let (sql, ret, last_insert_id_hack): (sql::Statement, _, _) = match op {
             Operation::QuerySql(op) => (op.stmt.into(), op.ret, op.last_insert_id_hack),
             Operation::Transaction(op) => {
-                let sql = sql::Serializer::mysql(schema).serialize_transaction(&op);
+                let sql = sql::Serializer::mysql(&schema.db).serialize_transaction(&op);
                 self.conn.query_drop(sql).await.map_err(|e| match e {
                     mysql_async::Error::Server(se) => match se.code {
                         1213 => toasty_core::Error::serialization_failure(se.message),
@@ -211,7 +211,7 @@ impl toasty_core::driver::Connection for Connection {
 
         let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
 
-        let sql_as_str = sql::Serializer::mysql(schema).serialize(&sql, &mut params);
+        let sql_as_str = sql::Serializer::mysql(&schema.db).serialize(&sql, &mut params);
 
         let params = params
             .into_iter()
@@ -313,8 +313,8 @@ impl toasty_core::driver::Connection for Connection {
     }
 
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
-        for table in &schema.tables {
-            self.create_table(schema, table).await?;
+        for table in &schema.db.tables {
+            self.create_table(&schema.db, table).await?;
         }
         Ok(())
     }

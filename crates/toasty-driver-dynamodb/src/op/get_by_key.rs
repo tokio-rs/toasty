@@ -10,7 +10,7 @@ impl Connection {
         schema: &Arc<Schema>,
         op: operation::GetByKey,
     ) -> Result<Response> {
-        let table = schema.table(op.table);
+        let table = schema.db.table(op.table);
 
         if op.keys.len() == 1 {
             // TODO: set attributes to get
@@ -25,7 +25,7 @@ impl Connection {
                 .map_err(toasty_core::Error::driver_operation_failed)?;
 
             if let Some(item) = res.item() {
-                let row = item_to_record(item, op.select.iter().map(|id| schema.column(*id)))?;
+                let row = item_to_record(item, op.select.iter().map(|id| schema.db.column(*id)))?;
                 Ok(Response::value_stream(stmt::ValueStream::from_value(row)))
             } else {
                 Ok(Response::empty_value_stream())
@@ -73,7 +73,9 @@ impl Connection {
                 items.into_iter().map(move |item| {
                     item_to_record(
                         &item,
-                        op.select.iter().map(|column_id| schema.column(*column_id)),
+                        op.select
+                            .iter()
+                            .map(|column_id| schema.db.column(*column_id)),
                     )
                 }),
             )))

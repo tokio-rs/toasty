@@ -21,7 +21,7 @@ impl<M: Model> CreateMany<M> {
         self
     }
 
-    pub async fn exec(self, db: &Db) -> Result<Vec<M>> {
+    pub async fn exec(self, db: &mut Db) -> Result<Vec<M>> {
         // If there are no records to create, then return an empty vec
         if self.stmts.is_empty() {
             return Ok(vec![]);
@@ -38,7 +38,7 @@ impl<M: Model> CreateMany<M> {
         merged.untyped.source.single = false;
 
         let records = db.exec(merged.into()).await?;
-        let cursor = Cursor::new(db.engine.schema.clone(), records);
+        let cursor = Cursor::new(db.schema().clone(), records);
         cursor.collect().await
     }
 }

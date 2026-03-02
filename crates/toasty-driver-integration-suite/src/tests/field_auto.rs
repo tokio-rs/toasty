@@ -12,9 +12,9 @@ pub async fn auto_uuid_v4(test: &mut Test) -> Result<()> {
         auto_field: uuid::Uuid,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
-    let u = Foo::create().exec(&db).await?;
+    let u = Foo::create().exec(&mut db).await?;
     // Sanity check that it actually generated a UUID
     assert!(uuid::Uuid::parse_str(&u.auto_field.to_string()).is_ok());
     Ok(())
@@ -32,9 +32,9 @@ pub async fn auto_uuid_v7(test: &mut Test) -> Result<()> {
         auto_field: uuid::Uuid,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
-    let u = Foo::create().exec(&db).await?;
+    let u = Foo::create().exec(&mut db).await?;
     // Sanity check that it actually generated a UUID
     assert!(uuid::Uuid::parse_str(&u.auto_field.to_string()).is_ok());
     Ok(())
@@ -49,10 +49,10 @@ pub async fn auto_increment_explicit(test: &mut Test) -> Result<()> {
         auto_field: u32,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     for i in 1..10 {
-        let u = Foo::create().exec(&db).await?;
+        let u = Foo::create().exec(&mut db).await?;
         assert_eq!(u.auto_field, i);
     }
     Ok(())
@@ -67,10 +67,10 @@ pub async fn auto_increment_implicit(test: &mut Test) -> Result<()> {
         auto_field: u32,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     for i in 1..10 {
-        let u = Foo::create().exec(&db).await?;
+        let u = Foo::create().exec(&mut db).await?;
         assert_eq!(u.auto_field, i);
     }
     Ok(())
@@ -134,13 +134,13 @@ pub async fn auto_increment_with_associations(test: &mut Test) -> Result<()> {
         foo: toasty::BelongsTo<Foo>,
     }
 
-    let db = test.setup_db(models!(Foo, Bar)).await;
+    let mut db = test.setup_db(models!(Foo, Bar)).await;
 
     for i in 1..10 {
         let u = Foo::create()
             .bar(Bar::create())
             .bar(Bar::create())
-            .exec(&db)
+            .exec(&mut db)
             .await?;
         assert_eq!(u.id, i);
         assert_eq!(u.bars.get()[0].foo_id, i);
