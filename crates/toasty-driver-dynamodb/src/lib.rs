@@ -24,16 +24,33 @@ use aws_sdk_dynamodb::{
     Client,
 };
 use std::{borrow::Cow, collections::HashMap, sync::Arc};
-use url::Url;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DynamoDb {
     url: String,
+    client: Client,
 }
 
 impl DynamoDb {
-    pub fn new(url: String) -> Self {
-        Self { url }
+    /// Create driver with pre-built client (backward compatible, synchronous)
+    pub fn new(url: String, client: Client) -> Self {
+        Self { url, client }
+    }
+
+    /// Create driver loading AWS config from environment (async factory)
+    /// Reads: AWS_REGION, AWS_ENDPOINT_URL_DYNAMODB, AWS credentials, etc.
+    pub async fn from_env(url: String) -> Result<Self> {
+        use aws_config::BehaviorVersion;
+
+        let sdk_config = aws_config::defaults(BehaviorVersion::latest()).load().await;
+        let client = Client::new(&sdk_config);
+        Ok(Self::new(url, client))
+    }
+
+    /// Create driver with custom SdkConfig (synchronous)
+    pub fn with_sdk_config(url: String, sdk_config: &aws_config::SdkConfig) -> Self {
+        let client = Client::new(sdk_config);
+        Self::new(url, client)
     }
 }
 
@@ -48,7 +65,8 @@ impl Driver for DynamoDb {
     }
 
     async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::driver::Connection>> {
-        Ok(Box::new(Connection::connect(&self.url).await?))
+        // Clone the shared client - cheap operation (Client uses Arc internally)
+        Ok(Box::new(Connection::new(self.client.clone())))
     }
 
     fn generate_migration(&self, _schema_diff: &SchemaDiff<'_>) -> Migration {
@@ -56,12 +74,10 @@ impl Driver for DynamoDb {
     }
 
     async fn reset_db(&self) -> toasty_core::Result<()> {
-        let conn = Connection::connect(&self.url).await?;
-
-        // List and delete all tables (paginated)
+        // Use shared client directly
         let mut exclusive_start_table_name = None;
         loop {
-            let mut req = conn.client.list_tables();
+            let mut req = self.client.list_tables();
             if let Some(start) = &exclusive_start_table_name {
                 req = req.exclusive_start_table_name(start);
             }
@@ -73,7 +89,7 @@ impl Driver for DynamoDb {
 
             if let Some(table_names) = &resp.table_names {
                 for table_name in table_names {
-                    conn.client
+                    self.client
                         .delete_table()
                         .table_name(table_name)
                         .send()
@@ -101,55 +117,6 @@ pub struct Connection {
 impl Connection {
     pub fn new(client: Client) -> Self {
         Self { client }
-    }
-
-    pub async fn connect(url: &str) -> Result<Self> {
-        let url = Url::parse(url).map_err(toasty_core::Error::driver_operation_failed)?;
-
-        if url.scheme() != "dynamodb" {
-            return Err(toasty_core::Error::invalid_connection_url(format!(
-                "connection URL does not have a `dynamodb` scheme; url={url}"
-            )));
-        }
-
-        use aws_config::BehaviorVersion;
-        use aws_sdk_dynamodb::config::Credentials;
-
-        let mut aws_config = aws_config::defaults(BehaviorVersion::latest())
-            .region("us-east-1")
-            .credentials_provider(Credentials::for_tests());
-
-        if let Some(host) = url.host() {
-            let mut endpoint_url = format!("http://{host}");
-
-            if let Some(port) = url.port() {
-                endpoint_url.push_str(&format!(":{port}"));
-            }
-
-            aws_config = aws_config.endpoint_url(&endpoint_url);
-        }
-
-        let sdk_config = aws_config.load().await;
-
-        let client = Client::new(&sdk_config);
-
-        Ok(Self { client })
-    }
-
-    pub async fn from_env() -> Result<Self> {
-        use aws_config::BehaviorVersion;
-        use aws_sdk_dynamodb::config::Credentials;
-
-        let sdk_config = aws_config::defaults(BehaviorVersion::latest())
-            .region("foo")
-            .credentials_provider(Credentials::for_tests())
-            .endpoint_url("http://localhost:8000")
-            .load()
-            .await;
-
-        let client = Client::new(&sdk_config);
-
-        Ok(Self { client })
     }
 }
 

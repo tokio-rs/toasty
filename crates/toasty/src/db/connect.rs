@@ -39,7 +39,22 @@ impl Connect {
 
         let driver: Box<dyn Driver> = match url.scheme() {
             #[cfg(feature = "dynamodb")]
-            "dynamodb" => Box::new(toasty_driver_dynamodb::DynamoDb::new(url.to_string())),
+            "dynamodb" => {
+                // DynamoDB driver requires async initialization to load AWS config from environment
+                // Spawn a new thread to avoid runtime context issues
+                let driver = std::thread::spawn({
+                    let url = url.to_string();
+                    move || {
+                        tokio::runtime::Runtime::new()
+                            .expect("Failed to create tokio runtime")
+                            .block_on(toasty_driver_dynamodb::DynamoDb::from_env(url))
+                    }
+                })
+                .join()
+                .expect("Failed to join driver initialization thread")
+                .map_err(toasty_core::Error::driver_operation_failed)?;
+                Box::new(driver)
+            }
             #[cfg(not(feature = "dynamodb"))]
             "dynamodb" => {
                 return Err(toasty_core::Error::unsupported_feature(

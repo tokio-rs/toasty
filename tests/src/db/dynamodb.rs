@@ -1,11 +1,9 @@
-use std::collections::HashMap;
-use toasty::{
-    db::Connect,
-    driver::{Capability, Driver},
-};
-use tokio::sync::OnceCell;
-
 use crate::{isolation::TestIsolation, Setup};
+use std::collections::HashMap;
+use toasty::driver::{Capability, Driver};
+use toasty_driver_dynamodb::DynamoDb;
+use tokio::runtime::Runtime;
+use tokio::sync::OnceCell;
 
 pub struct SetupDynamoDb {
     isolation: TestIsolation,
@@ -27,13 +25,8 @@ impl SetupDynamoDb {
             .get_or_init(|| async {
                 use aws_config::BehaviorVersion;
 
-                // Create DynamoDB client with test credentials (matching the driver setup)
-                let config = aws_config::defaults(BehaviorVersion::latest())
-                    .region("us-east-1")
-                    .credentials_provider(aws_sdk_dynamodb::config::Credentials::for_tests())
-                    .endpoint_url("http://localhost:8000")
-                    .load()
-                    .await;
+                // Create DynamoDB client loading config from environment
+                let config = aws_config::defaults(BehaviorVersion::latest()).load().await;
                 aws_sdk_dynamodb::Client::new(&config)
             })
             .await
@@ -49,9 +42,12 @@ impl Default for SetupDynamoDb {
 #[async_trait::async_trait]
 impl Setup for SetupDynamoDb {
     fn driver(&self) -> Box<dyn Driver> {
-        let url =
-            std::env::var("TOASTY_TEST_DYNAMODB_URL").unwrap_or_else(|_| "dynamodb://".to_string());
-        Box::new(Connect::new(&url).unwrap())
+        let rt = Runtime::new().unwrap();
+
+        // Block the current thread to run the async function
+        // This function can be an existing async function or an async block
+        let client = rt.block_on(self.get_client());
+        Box::new(DynamoDb::new("dynamodb://".to_string(), client.clone()))
     }
 
     fn configure_builder(&self, builder: &mut toasty::db::Builder) {
