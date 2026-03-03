@@ -178,12 +178,12 @@ impl Simplify<'_> {
             //
             // Each arm is fully simplified inline. Arms that fold to false/null
             // are pruned.
-            (Expr::Match(_), _) => {
+            (Expr::Match(m), _) if m.subject.is_stable() => {
                 let match_expr = lhs.take();
                 let other = rhs.take();
                 Some(self.eliminate_match_in_binary_op(op, match_expr, other, true))
             }
-            (_, Expr::Match(_)) => {
+            (_, Expr::Match(m)) if m.subject.is_stable() => {
                 let other = lhs.take();
                 let match_expr = rhs.take();
                 Some(self.eliminate_match_in_binary_op(op, match_expr, other, false))

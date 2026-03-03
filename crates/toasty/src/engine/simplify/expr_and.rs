@@ -184,7 +184,7 @@ impl Simplify<'_> {
 /// list: `a == 1 AND a == 2` → true, `a == 1 AND a != 1` → true.
 fn has_self_contradiction(operands: &[Expr]) -> bool {
     for i in 0..operands.len() {
-        if branch_contradicts_outer(&operands[i..=i], &operands[i + 1..]) {
+        if is_contradicting_eq_constraints(&operands[i..=i], &operands[i + 1..]) {
             return true;
         }
     }
@@ -220,7 +220,7 @@ fn prune_or_branches(expr: &mut stmt::ExprAnd) -> Option<Expr> {
                 Expr::And(and) => &and.operands,
                 other => std::slice::from_ref(other),
             };
-            !branch_contradicts_outer(&expr.operands, branch_ops)
+            !is_contradicting_eq_constraints(&expr.operands, branch_ops)
         });
 
         match or_expr.operands.len() {
@@ -258,15 +258,15 @@ fn prune_or_branches(expr: &mut stmt::ExprAnd) -> Option<Expr> {
     None
 }
 
-/// Returns `true` if any eq/ne constraint in `branch` contradicts any
-/// eq/ne constraint in `outer`.
-fn branch_contradicts_outer(outer: &[Expr], branch: &[Expr]) -> bool {
-    for outer_op in outer {
+/// Returns `true` if any eq/ne constraint in `a` contradicts any
+/// eq/ne constraint in `b`.
+fn is_contradicting_eq_constraints(a: &[Expr], b: &[Expr]) -> bool {
+    for outer_op in a {
         let Some((o_lhs, o_op, o_val)) = extract_eq_ne(outer_op) else {
             continue;
         };
 
-        for branch_op in branch {
+        for branch_op in b {
             let Some((b_lhs, b_op, b_val)) = extract_eq_ne(branch_op) else {
                 continue;
             };
