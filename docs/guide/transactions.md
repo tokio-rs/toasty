@@ -57,7 +57,7 @@ async fn transfer(db: &mut Db) -> toasty::Result<()> {
 
 ## The Executor Trait
 
-If you want to create a function that is generic over whether the `Db` as an active `Transaction` you can use the `toasty::Executor` trait which is implemented for both.
+If you want to create a function that is generic over whether `Db`s and `Transaction`s you can use the `toasty::Executor` trait which is implemented for both.
 
 ```rust
 async fn create_user(executor: &mut dyn toasty::Executor, name: &str) -> toasty::Result<User> {
