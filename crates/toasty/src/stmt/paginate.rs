@@ -1,6 +1,6 @@
 use super::Select;
 
-use crate::{engine::eval::Func, Cursor, Db, Model, Result};
+use crate::{engine::eval::Func, Cursor, Executor, ExecutorExt, Model, Result};
 
 use toasty_core::stmt::{self, visit_mut, Expr, ExprRecord, OrderBy, Projection, Value, VisitMut};
 
@@ -58,7 +58,7 @@ impl<M: Model> Paginate<M> {
         self
     }
 
-    pub async fn collect(mut self, db: &mut Db) -> Result<crate::Page<M>> {
+    pub async fn collect(mut self, executor: &mut dyn Executor) -> Result<crate::Page<M>> {
         // Extract the limit from the query to determine page size
         let page_size = match &self.query.untyped.limit {
             Some(stmt::Limit { limit, .. }) => {
@@ -66,14 +66,15 @@ impl<M: Model> Paginate<M> {
                     stmt::Expr::Value(stmt::Value::I64(n)) => *n as usize,
                     _ => {
                         // Fallback if we can't determine the limit
-                        let items: Vec<M> = db.all(self.query.clone()).await?.collect().await?;
+                        let items: Vec<M> =
+                            executor.all(self.query.clone()).await?.collect().await?;
                         return Ok(crate::Page::new(items, self.query, None, None));
                     }
                 }
             }
             _ => {
                 // Not a paginated query, just collect all items
-                let items: Vec<M> = db.all(self.query.clone()).await?.collect().await?;
+                let items: Vec<M> = executor.all(self.query.clone()).await?.collect().await?;
                 return Ok(crate::Page::new(items, self.query, None, None));
             }
         };
@@ -91,7 +92,11 @@ impl<M: Model> Paginate<M> {
             order_by.reverse();
         }
 
-        let mut items: Vec<_> = db.exec(query_with_extra.into()).await?.collect().await?;
+        let mut items: Vec<_> = executor
+            .exec(query_with_extra.into())
+            .await?
+            .collect()
+            .await?;
         let has_next = (items.len() > page_size) || self.reverse;
         let has_prev = (items.len() > page_size) || !self.reverse;
         items.truncate(page_size);
@@ -118,7 +123,7 @@ impl<M: Model> Paginate<M> {
         };
 
         Ok(crate::Page::new(
-            Cursor::new(db.schema().clone(), items.into())
+            Cursor::new(executor.schema().clone(), items.into())
                 .collect()
                 .await?,
             self.query,

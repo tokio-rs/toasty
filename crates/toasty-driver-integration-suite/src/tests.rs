@@ -33,4 +33,5 @@ pub mod preload;
 pub mod reset_db;
 pub mod sync_send;
 pub mod tx_atomic_stmt;
+pub mod tx_interactive;
 pub mod tys;
