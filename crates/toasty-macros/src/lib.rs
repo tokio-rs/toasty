@@ -1,5 +1,7 @@
 extern crate proc_macro;
 
+mod create;
+
 use proc_macro::TokenStream;
 use quote::quote;
 
@@ -35,6 +37,9 @@ pub fn query(_input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro]
-pub fn create(_input: TokenStream) -> TokenStream {
-    quote!(println!("TODO")).into()
+pub fn create(input: TokenStream) -> TokenStream {
+    match create::generate(input.into()) {
+        Ok(output) => output.into(),
+        Err(e) => e.to_compile_error().into(),
+    }
 }

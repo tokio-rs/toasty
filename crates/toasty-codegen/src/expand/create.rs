@@ -133,11 +133,17 @@ impl Expand<'_> {
                     }
                     FieldTy::HasMany(rel) => {
                         let singular = &rel.singular.ident;
+                        let plural = name;
                         let ty = &rel.ty;
 
                         quote! {
                             #vis fn #singular(mut self, #singular: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
                                 self.stmt.insert(#index, #singular.into_expr());
+                                self
+                            }
+
+                            #vis fn #plural(mut self, #plural: impl #toasty::IntoExpr<[<#ty as #toasty::Relation>::Model]>) -> Self {
+                                self.stmt.insert_all(#index, #plural.into_expr());
                                 self
                             }
                         }
