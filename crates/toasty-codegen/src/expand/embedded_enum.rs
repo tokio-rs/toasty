@@ -63,7 +63,7 @@ impl Expand<'_> {
             .filter(|v| !v.fields.is_empty())
             .map(|variant| {
                 let method_name = &variant.name.ident;
-                let variant_handle_ident = &variant.variant_handle_ident;
+                let variant_handle_ident = variant.variant_handle_ident.as_ref().unwrap();
 
                 quote! {
                     #vis fn #method_name(&self) -> #variant_handle_ident {
@@ -85,8 +85,8 @@ impl Expand<'_> {
             .enumerate()
             .filter(|(_, v)| !v.fields.is_empty())
             .map(|(variant_index, variant)| {
-                let variant_handle_ident = &variant.variant_handle_ident;
-                let variant_field_struct_ident = &variant.variant_field_struct_ident;
+                let variant_handle_ident = variant.variant_handle_ident.as_ref().unwrap();
+                let variant_field_struct_ident = variant.field_struct_ident.as_ref().unwrap();
                 let variant_idx = util::int(variant_index);
 
                 let field_methods: Vec<_> = variant

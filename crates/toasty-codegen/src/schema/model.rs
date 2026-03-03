@@ -90,16 +90,16 @@ pub(crate) struct EnumVariantDef {
     /// false for tuple-like (`Foo(T)`). Unused when `fields` is empty.
     pub(crate) fields_named: bool,
 
-    /// `is_{variant}()` method identifier (e.g., `is_email`)
+    /// Ident for the `is_{variant}()` method (e.g., `is_email`)
     pub(crate) is_method_ident: syn::Ident,
 
     /// Variant handle struct identifier (e.g., `ContactInfoEmailVariant`).
-    /// Only used for data-carrying variants.
-    pub(crate) variant_handle_ident: syn::Ident,
+    /// Only set for data-carrying variants.
+    pub(crate) variant_handle_ident: Option<syn::Ident>,
 
-    /// Variant fields struct identifier (e.g., `ContactInfoEmailFields`).
-    /// Only used for data-carrying variants.
-    pub(crate) variant_field_struct_ident: syn::Ident,
+    /// Ident for the per-variant field struct (e.g., `ContactInfoEmailFields`).
+    /// Only set for data-carrying variants.
+    pub(crate) field_struct_ident: Option<syn::Ident>,
 }
 
 #[derive(Debug)]
@@ -375,17 +375,22 @@ impl Model {
             };
 
             let name = Name::from_ident(&variant.ident);
-
             let is_method_ident =
                 syn::Ident::new(&format!("is_{}", name.ident), variant.ident.span());
-            let variant_handle_ident = syn::Ident::new(
-                &format!("{}{}Variant", ast.ident, variant.ident),
-                variant.ident.span(),
-            );
-            let variant_field_struct_ident = syn::Ident::new(
-                &format!("{}{}Fields", ast.ident, variant.ident),
-                variant.ident.span(),
-            );
+            let (variant_handle_ident, field_struct_ident) = if variant_fields.is_empty() {
+                (None, None)
+            } else {
+                (
+                    Some(syn::Ident::new(
+                        &format!("{}{}Variant", ast.ident, variant.ident),
+                        variant.ident.span(),
+                    )),
+                    Some(syn::Ident::new(
+                        &format!("{}{}Fields", ast.ident, variant.ident),
+                        variant.ident.span(),
+                    )),
+                )
+            };
 
             variants.push(EnumVariantDef {
                 ident: variant.ident.clone(),
@@ -395,7 +400,7 @@ impl Model {
                 fields_named,
                 is_method_ident,
                 variant_handle_ident,
-                variant_field_struct_ident,
+                field_struct_ident,
             });
         }
 
