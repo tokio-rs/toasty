@@ -4,6 +4,9 @@ use std::sync::Arc;
 use toasty_core::{async_trait, stmt::ValueStream, Schema};
 
 /// Anything that can execute queries — `Db` or `Transaction`.
+///
+/// This trait is dyn-compatible. Generic convenience methods live on
+/// [`ExecutorExt`], which is blanket-implemented for all `Executor` types.
 #[async_trait]
 pub trait Executor: Send + Sync {
     /// Starts a (potentially nested) transaction.
@@ -16,7 +19,15 @@ pub trait Executor: Send + Sync {
     /// Returns the schema associated with this executor.
     #[doc(hidden)]
     fn schema(&mut self) -> &Arc<Schema>;
+}
 
+/// Extension methods for [`Executor`].
+///
+/// Automatically implemented for every type that implements `Executor`.
+/// These methods are generic over the model type, so they cannot be part of
+/// the dyn-compatible `Executor` trait.
+#[async_trait]
+pub trait ExecutorExt: Executor {
     /// Execute a query, returning all matching records.
     async fn all<M: Model + Send>(&mut self, query: stmt::Select<M>) -> Result<Cursor<M>> {
         let records = self.exec(query.into()).await?;
@@ -54,7 +65,8 @@ pub trait Executor: Send + Sync {
 
     /// Execute a statement, returning a raw value stream.
     async fn exec<M: Model + Send>(&mut self, statement: Statement<M>) -> Result<ValueStream> {
-        self.exec_untyped(statement.untyped).await
+        let untyped = statement.untyped;
+        self.exec_untyped(untyped).await
     }
 
     /// Execute a statement, expecting exactly one record.
@@ -88,3 +100,5 @@ pub trait Executor: Send + Sync {
         cursor.next().await.unwrap()
     }
 }
+
+impl<T: Executor + ?Sized> ExecutorExt for T {}

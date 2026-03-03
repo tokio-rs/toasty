@@ -37,11 +37,11 @@ impl Exec<'_> {
         // start our own transaction (MySQL requires an active BEGIN before
         // SAVEPOINT can be used, so we can't use savepoints here).
         let (begin, commit, rollback) = if self.in_transaction {
-            let id = self.generate_savepoint_id();
+            let name = "read_modify_write";
             (
-                Transaction::Savepoint(id),
-                Transaction::ReleaseSavepoint(id),
-                Transaction::RollbackToSavepoint(id),
+                Transaction::Savepoint(name.to_owned()),
+                Transaction::ReleaseSavepoint(name.to_owned()),
+                Transaction::RollbackToSavepoint(name.to_owned()),
             )
         } else {
             (

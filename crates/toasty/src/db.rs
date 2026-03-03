@@ -31,18 +31,19 @@ pub(crate) struct Shared {
 ///
 /// When dropped, `in_tx` closes the channel, causing the background task to
 /// finish processing remaining messages and exit gracefully.
-struct ConnectionHandle {
-    in_tx: mpsc::UnboundedSender<ConnectionOperation>,
+pub(crate) struct ConnectionHandle {
+    pub(crate) in_tx: mpsc::UnboundedSender<ConnectionOperation>,
     /// Kept so we can `.await` graceful shutdown in the future.
     #[allow(dead_code)]
     join_handle: JoinHandle<()>,
 }
 
 /// Operations sent to the connection task.
-enum ConnectionOperation {
+pub(crate) enum ConnectionOperation {
     /// Execute a statement (compile + run on the connection).
     ExecStatement {
         stmt: Box<toasty_core::stmt::Statement>,
+        in_transaction: bool,
         tx: oneshot::Sender<Result<ValueStream>>,
     },
     ExecOperation {
@@ -78,7 +79,7 @@ impl Db {
     }
 
     /// Lazily acquire a connection and spawn the background task.
-    async fn connection(&mut self) -> Result<&ConnectionHandle> {
+    pub(crate) async fn connection(&mut self) -> Result<&ConnectionHandle> {
         if self.connection.is_none() {
             let mut connection = self.shared.pool.get().await?;
             let engine = self.shared.engine.clone();
@@ -88,29 +89,30 @@ impl Db {
             let join_handle = tokio::spawn(async move {
                 while let Some(op) = in_rx.recv().await {
                     match op {
-                        ConnectionOperation::ExecStatement { stmt, tx } => {
-                            match engine.exec(&mut connection, *stmt).await {
-                                Ok(mut value_stream) => {
-                                    let (row_tx, mut row_rx) =
-                                        mpsc::unbounded_channel::<crate::Result<Value>>();
+                        ConnectionOperation::ExecStatement {
+                            stmt,
+                            in_transaction,
+                            tx,
+                        } => match engine.exec(&mut connection, *stmt, in_transaction).await {
+                            Ok(mut value_stream) => {
+                                let (row_tx, mut row_rx) =
+                                    mpsc::unbounded_channel::<crate::Result<Value>>();
 
-                                    let _ = tx.send(Ok(ValueStream::from_stream(
-                                        async_stream::stream! {
-                                            while let Some(res) = row_rx.recv().await {
-                                                yield res
-                                            }
-                                        },
-                                    )));
+                                let _ =
+                                    tx.send(Ok(ValueStream::from_stream(async_stream::stream! {
+                                        while let Some(res) = row_rx.recv().await {
+                                            yield res
+                                        }
+                                    })));
 
-                                    while let Some(res) = value_stream.next().await {
-                                        let _ = row_tx.send(res);
-                                    }
-                                }
-                                Err(err) => {
-                                    let _ = tx.send(Err(err));
+                                while let Some(res) = value_stream.next().await {
+                                    let _ = row_tx.send(res);
                                 }
                             }
-                        }
+                            Err(err) => {
+                                let _ = tx.send(Err(err));
+                            }
+                        },
                         ConnectionOperation::ExecOperation {
                             operation: stmt,
                             tx,
@@ -203,6 +205,7 @@ impl Executor for Db {
         conn.in_tx
             .send(ConnectionOperation::ExecStatement {
                 stmt: Box::new(stmt),
+                in_transaction: false,
                 tx,
             })
             .unwrap();

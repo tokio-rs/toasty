@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{Executor, Result};
+use crate::{db::ConnectionOperation, Executor, Result};
 
 use toasty_core::{
     async_trait,
@@ -8,6 +8,7 @@ use toasty_core::{
     stmt::ValueStream,
     Schema,
 };
+use tokio::sync::oneshot;
 
 /// Builder for configuring a transaction before starting it.
 pub struct TransactionBuilder<'db> {
@@ -59,7 +60,7 @@ pub struct Transaction<'db> {
     finalized: bool,
 
     /// If this is a nested transaction (implemented through savepoints),
-    /// this holds the savepoint ID.
+    /// this holds the savepoint stack depth to be used as an identifier.
     savepoint: Option<usize>,
 }
 
@@ -92,9 +93,9 @@ impl<'db> Transaction<'db> {
     /// Commit the transaction.
     pub async fn commit(mut self) -> Result<()> {
         match self.savepoint {
-            Some(savepoint) => self
+            Some(_) => self
                 .db
-                .exec_operation(operation::Transaction::ReleaseSavepoint(savepoint).into()),
+                .exec_operation(operation::Transaction::ReleaseSavepoint(self.savepoint()).into()),
             None => self
                 .db
                 .exec_operation(operation::Transaction::Commit.into()),
@@ -107,9 +108,9 @@ impl<'db> Transaction<'db> {
     /// Roll back the transaction.
     pub async fn rollback(mut self) -> Result<()> {
         match self.savepoint {
-            Some(savepoint) => self
-                .db
-                .exec_operation(operation::Transaction::RollbackToSavepoint(savepoint).into()),
+            Some(_) => self.db.exec_operation(
+                operation::Transaction::RollbackToSavepoint(self.savepoint()).into(),
+            ),
             None => self
                 .db
                 .exec_operation(operation::Transaction::Rollback.into()),
@@ -117,6 +118,10 @@ impl<'db> Transaction<'db> {
         .await?;
         self.finalized = true;
         Ok(())
+    }
+
+    fn savepoint(&self) -> String {
+        format!("tx_{}", self.savepoint.unwrap())
     }
 }
 
@@ -126,9 +131,9 @@ impl Drop for Transaction<'_> {
             // Fire-and-forget rollback if the transaction is dropped without explicit
             // commit/rollback.
             let _ = match self.savepoint {
-                Some(savepoint) => self
-                    .db
-                    .exec_operation(operation::Transaction::RollbackToSavepoint(savepoint).into()),
+                Some(_) => self.db.exec_operation(
+                    operation::Transaction::RollbackToSavepoint(self.savepoint()).into(),
+                ),
                 None => self
                     .db
                     .exec_operation(operation::Transaction::Rollback.into()),
@@ -140,9 +145,12 @@ impl Drop for Transaction<'_> {
 #[async_trait]
 impl<'a> Executor for Transaction<'a> {
     async fn transaction(&mut self) -> Result<Transaction<'_>> {
-        let savepoint = 5;
+        let savepoint = match self.savepoint {
+            Some(savepoint) => savepoint + 1,
+            None => 1,
+        };
         self.db
-            .exec_operation(operation::Transaction::Savepoint(savepoint).into())
+            .exec_operation(operation::Transaction::Savepoint(self.savepoint()).into())
             .await?;
 
         Ok(Transaction {
@@ -153,7 +161,18 @@ impl<'a> Executor for Transaction<'a> {
     }
 
     async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> Result<ValueStream> {
-        self.db.exec_untyped(stmt).await
+        let (tx, rx) = oneshot::channel();
+
+        let conn = self.db.connection().await?;
+        conn.in_tx
+            .send(ConnectionOperation::ExecStatement {
+                stmt: Box::new(stmt),
+                in_transaction: true,
+                tx,
+            })
+            .unwrap();
+
+        rx.await.unwrap()
     }
 
     fn schema(&mut self) -> &Arc<Schema> {

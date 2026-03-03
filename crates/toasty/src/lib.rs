@@ -30,7 +30,7 @@ pub mod stmt;
 pub use stmt::Statement;
 
 mod transaction;
-pub use transaction::{Savepoint, Transaction, TransactionBuilder};
+pub use transaction::{Transaction, TransactionBuilder};
 
 pub use toasty_macros::{create, query, Embed, Model};
 
