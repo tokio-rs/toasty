@@ -87,7 +87,27 @@ impl Db {
             let (in_tx, mut in_rx) = mpsc::unbounded_channel::<ConnectionOperation>();
 
             let join_handle = tokio::spawn(async move {
-                let mut connection = shared.pool.get().await.unwrap();
+                let mut connection = match shared.pool.get().await {
+                    Ok(conn) => conn,
+                    Err(err) => {
+                        // Connection acquisition failed — reply with the error
+                        // to every pending and future operation, then exit.
+                        while let Some(op) = in_rx.recv().await {
+                            match op {
+                                ConnectionOperation::ExecStatement { tx, .. } => {
+                                    let _ = tx.send(Err(err.clone()));
+                                }
+                                ConnectionOperation::ExecOperation { tx, .. } => {
+                                    let _ = tx.send(Err(err.clone()));
+                                }
+                                ConnectionOperation::PushSchema { tx } => {
+                                    let _ = tx.send(Err(err.clone()));
+                                }
+                            }
+                        }
+                        return;
+                    }
+                };
                 while let Some(op) = in_rx.recv().await {
                     match op {
                         ConnectionOperation::ExecStatement {
