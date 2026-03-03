@@ -101,17 +101,43 @@ impl<'a> Serializer<'a> {
     /// The generated SQL is flavor-specific (e.g., MySQL uses `START TRANSACTION`
     /// while other databases use `BEGIN`). Savepoints are named `sp_{id}`.
     pub fn serialize_transaction(&self, op: &Transaction) -> String {
+        let mut ret = String::new();
+
+        let mut f = Formatter {
+            serializer: self,
+            dst: &mut ret,
+            params: &mut Vec::<TypedValue>::new(),
+            depth: 0,
+            alias: false,
+            insert_context: None,
+        };
+
+        let cx = ExprContext::new(self.schema);
+
         match op {
             Transaction::Start {
                 isolation,
                 read_only,
-            } => self.serialize_transaction_start(*isolation, *read_only),
-            Transaction::Commit => "COMMIT".to_string(),
-            Transaction::Rollback => "ROLLBACK".to_string(),
-            Transaction::Savepoint(id) => format!("SAVEPOINT sp_{id}"),
-            Transaction::ReleaseSavepoint(id) => format!("RELEASE SAVEPOINT sp_{id}"),
-            Transaction::RollbackToSavepoint(id) => format!("ROLLBACK TO SAVEPOINT sp_{id}"),
-        }
+            } => fmt!(
+                &cx,
+                &mut f,
+                self.serialize_transaction_start(*isolation, *read_only)
+            ),
+            Transaction::Commit => fmt!(&cx, &mut f, "COMMIT"),
+            Transaction::Rollback => fmt!(&cx, &mut f, "ROLLBACK"),
+            Transaction::Savepoint(name) => {
+                fmt!(&cx, &mut f, "SAVEPOINT " Ident(name))
+            }
+            Transaction::ReleaseSavepoint(name) => {
+                fmt!(&cx, &mut f, "RELEASE SAVEPOINT " Ident(name))
+            }
+            Transaction::RollbackToSavepoint(name) => {
+                fmt!(&cx, &mut f, "ROLLBACK TO SAVEPOINT " Ident(name))
+            }
+        };
+
+        ret.push(';');
+        ret
     }
 
     fn serialize_transaction_start(
