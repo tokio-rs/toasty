@@ -96,8 +96,7 @@ impl Expand<'_> {
                     .map(|(field_index, vf)| {
                         let field_ident = &vf.ident;
                         let field_ty = &vf.ty;
-                        // +1 to skip the discriminant at record position 0
-                        let field_offset = util::int(field_index + 1);
+                        let field_offset = util::int(field_index);
 
                         quote! {
                             #vis fn #field_ident(&self) -> <#field_ty as #toasty::stmt::Primitive>::FieldAccessor {
@@ -136,7 +135,9 @@ impl Expand<'_> {
                             let is_var = #toasty::stmt::Expr::from_untyped(
                                 #toasty::core::stmt::Expr::is_variant(path_stmt, variant_id)
                             );
-                            let fields = #variant_field_struct_ident { path: self.path() };
+                            let fields = #variant_field_struct_ident {
+                                path: self.path().into_variant(variant_id),
+                            };
                             let body = f(fields);
                             is_var.and(body)
                         }

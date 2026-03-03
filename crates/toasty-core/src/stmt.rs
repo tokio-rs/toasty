@@ -159,7 +159,7 @@ mod op_set;
 pub use op_set::SetOp;
 
 mod path;
-pub use path::Path;
+pub use path::{Path, PathRoot};
 
 mod path_field_set;
 pub use path_field_set::PathFieldSet;

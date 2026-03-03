@@ -145,7 +145,7 @@ impl Schema {
     }
 
     pub fn resolve_field_path<'a>(&'a self, path: &stmt::Path) -> Option<&'a Field> {
-        let model = self.model(path.root);
+        let model = self.model(path.root.expect_model());
         self.resolve_field(model, &path.projection)
     }
 }
