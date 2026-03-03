@@ -178,11 +178,11 @@ pub async fn create_macro_nested_association(test: &mut Test) -> Result<()> {
 
     let mut db = test.setup_db(models!(User, Todo)).await;
 
-    // Nested association using plural field name — translates to:
-    // User::create().name("Carl").todos([Todo::create().title("get something done")])
+    // Nested association — no type prefix needed; type inferred from field.
+    // Translates to: User::create().name("Carl").with_todos(|b| b.item(|b| b.title("...")))
     let user = toasty::create!(User, {
         name: "Carl",
-        todos: [Todo { title: "get something done" }]
+        todos: [{ title: "get something done" }]
     })
     .exec(&mut db)
     .await?;
@@ -227,13 +227,11 @@ pub async fn create_macro_nested_multiple(test: &mut Test) -> Result<()> {
 
     let mut db = test.setup_db(models!(User, Todo)).await;
 
-    // Multiple nested associations — translates to:
-    // User::create()
-    //     .name("Carl")
-    //     .todos([Todo::create().title("first"), Todo::create().title("second")])
+    // Multiple nested associations — no type prefix needed.
+    // Translates to: User::create().name("Carl").with_todos(|b| b.item(...).item(...))
     let user = toasty::create!(User, {
         name: "Carl",
-        todos: [Todo { title: "first" }, Todo { title: "second" }]
+        todos: [{ title: "first" }, { title: "second" }]
     })
     .exec(&mut db)
     .await?;
@@ -246,6 +244,55 @@ pub async fn create_macro_nested_multiple(test: &mut Test) -> Result<()> {
     todos.sort_by(|a, b| a.title.cmp(&b.title));
     assert_eq!(todos[0].title, "first");
     assert_eq!(todos[1].title, "second");
+
+    Ok(())
+}
+
+#[driver_test(id(ID))]
+pub async fn create_macro_with_belongs_to(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        #[has_many]
+        todos: toasty::HasMany<Todo>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: ID,
+
+        #[index]
+        user_id: ID,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::BelongsTo<User>,
+
+        title: String,
+    }
+
+    let mut db = test.setup_db(models!(User, Todo)).await;
+
+    // Create a todo with an inline belongs_to user — no type prefix needed.
+    // Translates to: Todo::create().title("buy milk").with_user(|b| b.name("Carl"))
+    let todo = toasty::create!(Todo, {
+        title: "buy milk",
+        user: { name: "Carl" }
+    })
+    .exec(&mut db)
+    .await?;
+
+    assert_eq!(todo.title, "buy milk");
+
+    // The user should have been created inline
+    let user = User::get_by_id(&mut db, &todo.user_id).await?;
+    assert_eq!(user.name, "Carl");
 
     Ok(())
 }

@@ -47,6 +47,7 @@ impl<T: Model> HasMany<T> {
 
 impl<T: Relation> Relation for HasMany<T> {
     type Model = T::Model;
+    type Create = T::Create;
     type Expr = T::Expr;
     type Query = T::Query;
     type Many = T::Many;

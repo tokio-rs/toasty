@@ -43,7 +43,7 @@ pub trait Model: Register + Sized {
     type Query;
 
     /// Create builder type for this model
-    type Create;
+    type Create: Default;
 
     /// Update builder type for this model
     type Update<'a>;
