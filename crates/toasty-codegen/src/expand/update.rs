@@ -191,8 +191,9 @@ impl Expand<'_> {
             impl<#target_ty: #toasty::ApplyUpdate> #update_struct_ident<#target_ty> {
                 #builder_methods
 
-                #vis async fn exec(self, db: &mut #toasty::Db) -> #toasty::Result<()> {
-                    let stream = db.exec(self.stmt.into()).await?;
+                #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<()> {
+                    use #toasty::ExecutorExt;
+                    let stream = executor.exec(self.stmt.into()).await?;
                     let values = stream.collect().await?;
                     self.target.apply_result(values)?;
                     Ok(())
