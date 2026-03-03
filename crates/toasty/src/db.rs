@@ -47,7 +47,7 @@ pub(crate) enum ConnectionOperation {
         tx: oneshot::Sender<Result<ValueStream>>,
     },
     ExecOperation {
-        operation: Operation,
+        operation: Box<Operation>,
         tx: oneshot::Sender<Result<Response>>,
     },
     /// Push schema to the database.
@@ -79,14 +79,15 @@ impl Db {
     }
 
     /// Lazily acquire a connection and spawn the background task.
-    pub(crate) async fn connection(&mut self) -> Result<&ConnectionHandle> {
+    pub(crate) fn connection(&mut self) -> Result<&ConnectionHandle> {
         if self.connection.is_none() {
-            let mut connection = self.shared.pool.get().await?;
+            let shared = self.shared.clone();
             let engine = self.shared.engine.clone();
 
             let (in_tx, mut in_rx) = mpsc::unbounded_channel::<ConnectionOperation>();
 
             let join_handle = tokio::spawn(async move {
+                let mut connection = shared.pool.get().await.unwrap();
                 while let Some(op) = in_rx.recv().await {
                     match op {
                         ConnectionOperation::ExecStatement {
@@ -113,11 +114,8 @@ impl Db {
                                 let _ = tx.send(Err(err));
                             }
                         },
-                        ConnectionOperation::ExecOperation {
-                            operation: stmt,
-                            tx,
-                        } => {
-                            let result = connection.exec(&engine.schema, stmt).await;
+                        ConnectionOperation::ExecOperation { operation, tx } => {
+                            let result = connection.exec(&engine.schema, *operation).await;
                             let _ = tx.send(result);
                         }
                         ConnectionOperation::PushSchema { tx } => {
@@ -137,9 +135,12 @@ impl Db {
     pub(crate) async fn exec_operation(&mut self, operation: Operation) -> Result<Response> {
         let (tx, rx) = oneshot::channel();
 
-        let conn = self.connection().await?;
+        let conn = self.connection()?;
         conn.in_tx
-            .send(ConnectionOperation::ExecOperation { operation, tx })
+            .send(ConnectionOperation::ExecOperation {
+                operation: Box::new(operation),
+                tx,
+            })
             .unwrap();
 
         rx.await.unwrap()
@@ -152,7 +153,7 @@ impl Db {
     /// Creates tables and indices defined in the schema on the database.
     pub async fn push_schema(&mut self) -> Result<()> {
         let (tx, rx) = oneshot::channel();
-        let conn = self.connection().await?;
+        let conn = self.connection()?;
         conn.in_tx
             .send(ConnectionOperation::PushSchema { tx })
             .unwrap();
@@ -201,7 +202,7 @@ impl Executor for Db {
     async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> Result<ValueStream> {
         let (tx, rx) = oneshot::channel();
 
-        let conn = self.connection().await?;
+        let conn = self.connection()?;
         conn.in_tx
             .send(ConnectionOperation::ExecStatement {
                 stmt: Box::new(stmt),

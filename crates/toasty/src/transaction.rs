@@ -128,16 +128,22 @@ impl<'db> Transaction<'db> {
 impl Drop for Transaction<'_> {
     fn drop(&mut self) {
         if !self.finalized {
-            // Fire-and-forget rollback if the transaction is dropped without explicit
-            // commit/rollback.
-            let _ = match self.savepoint {
-                Some(_) => self.db.exec_operation(
-                    operation::Transaction::RollbackToSavepoint(self.savepoint()).into(),
-                ),
-                None => self
-                    .db
-                    .exec_operation(operation::Transaction::Rollback.into()),
+            let op = match self.savepoint {
+                Some(_) => operation::Transaction::RollbackToSavepoint(self.savepoint()),
+                None => operation::Transaction::Rollback,
             };
+
+            // Fire-and-forget rollback: send the operation to the background
+            // connection task without awaiting the response. We access the
+            // channel directly because `exec_operation` is async and futures
+            // are lazy — calling it in Drop would never actually send.
+            if let Ok(conn) = self.db.connection() {
+                let (tx, _rx) = oneshot::channel();
+                let _ = conn.in_tx.send(ConnectionOperation::ExecOperation {
+                    operation: Box::new(op.into()),
+                    tx,
+                });
+            }
         }
     }
 }
@@ -145,25 +151,27 @@ impl Drop for Transaction<'_> {
 #[async_trait]
 impl<'a> Executor for Transaction<'a> {
     async fn transaction(&mut self) -> Result<Transaction<'_>> {
-        let savepoint = match self.savepoint {
-            Some(savepoint) => savepoint + 1,
-            None => 1,
-        };
-        self.db
-            .exec_operation(operation::Transaction::Savepoint(self.savepoint()).into())
-            .await?;
-
-        Ok(Transaction {
+        let transaction = Transaction {
             db: self.db,
             finalized: false,
-            savepoint: Some(savepoint),
-        })
+            savepoint: Some(match self.savepoint {
+                Some(savepoint) => savepoint + 1,
+                None => 1,
+            }),
+        };
+
+        transaction
+            .db
+            .exec_operation(operation::Transaction::Savepoint(transaction.savepoint()).into())
+            .await?;
+
+        Ok(transaction)
     }
 
     async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> Result<ValueStream> {
         let (tx, rx) = oneshot::channel();
 
-        let conn = self.db.connection().await?;
+        let conn = self.db.connection()?;
         conn.in_tx
             .send(ConnectionOperation::ExecStatement {
                 stmt: Box::new(stmt),
