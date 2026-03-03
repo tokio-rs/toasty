@@ -21,7 +21,7 @@ pub struct Page<M> {
     pub prev_cursor: Option<stmt::Expr>,
 }
 
-impl<M: Model + Send> Page<M> {
+impl<M: Model> Page<M> {
     pub(crate) fn new(
         items: Vec<M>,
         query: Select<M>,

@@ -16,7 +16,7 @@ pub struct Paginate<M> {
     reverse: bool,
 }
 
-impl<M: Model + Send> Paginate<M> {
+impl<M: Model> Paginate<M> {
     pub fn new(mut query: Select<M>, per_page: usize) -> Self {
         assert!(
             query.untyped.limit.is_none(),
