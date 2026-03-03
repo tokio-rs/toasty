@@ -13,8 +13,8 @@ use toasty_core::{
         operation::{IsolationLevel, Operation, Transaction},
         Capability, Driver, Response,
     },
-    schema::db::{Migration, Schema, SchemaDiff, Table},
-    stmt, Result,
+    schema::db::{self, Migration, SchemaDiff, Table},
+    stmt, Result, Schema,
 };
 use toasty_sql::{self as sql, TypedValue};
 use url::Url;
@@ -160,7 +160,7 @@ impl toasty_core::driver::Connection for Connection {
                     }
                     *isolation = None;
                 }
-                let sql = sql::Serializer::sqlite(schema).serialize_transaction(&op);
+                let sql = sql::Serializer::sqlite(&schema.db).serialize_transaction(&op);
                 self.connection
                     .execute(&sql, [])
                     .map_err(toasty_core::Error::driver_operation_failed)?;
@@ -170,7 +170,7 @@ impl toasty_core::driver::Connection for Connection {
         };
 
         let mut params: Vec<toasty_sql::TypedValue> = vec![];
-        let sql_str = sql::Serializer::sqlite(schema).serialize(&sql, &mut params);
+        let sql_str = sql::Serializer::sqlite(&schema.db).serialize(&sql, &mut params);
 
         let mut stmt = self.connection.prepare_cached(&sql_str).unwrap();
 
@@ -243,8 +243,8 @@ impl toasty_core::driver::Connection for Connection {
     }
 
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
-        for table in &schema.tables {
-            self.create_table(schema, table)?;
+        for table in &schema.db.tables {
+            self.create_table(&schema.db, table)?;
         }
 
         Ok(())
@@ -337,7 +337,7 @@ impl toasty_core::driver::Connection for Connection {
 }
 
 impl Connection {
-    fn create_table(&mut self, schema: &Schema, table: &Table) -> Result<()> {
+    fn create_table(&mut self, schema: &db::Schema, table: &Table) -> Result<()> {
         let serializer = sql::Serializer::sqlite(schema);
 
         let mut params: Vec<toasty_sql::TypedValue> = vec![];

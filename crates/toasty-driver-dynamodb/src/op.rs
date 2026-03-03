@@ -14,6 +14,6 @@ use super::{
 };
 use toasty_core::{
     driver::operation,
-    schema::db::{Schema, Table},
-    stmt, Result,
+    schema::db::{self, Table},
+    stmt, Result, Schema,
 };

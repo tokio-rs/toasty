@@ -107,7 +107,7 @@ impl Db {
                             }
                         }
                         ConnectionOperation::PushSchema { tx } => {
-                            let result = connection.push_schema(&engine.schema.db).await;
+                            let result = connection.push_schema(&engine.schema).await;
                             let _ = tx.send(result);
                         }
                     }

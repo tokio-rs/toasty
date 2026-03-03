@@ -5,7 +5,6 @@ use crate::schema::mapping::TableToModel;
 use crate::schema::{Mapping, Schema, Table, TableId};
 use crate::{driver, stmt};
 use indexmap::IndexMap;
-use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct Builder {
@@ -93,9 +92,9 @@ impl Builder {
 
         let schema = Schema {
             app,
-            db: Arc::new(db::Schema {
+            db: db::Schema {
                 tables: builder.tables,
-            }),
+            },
             mapping: builder.mapping,
         };
 

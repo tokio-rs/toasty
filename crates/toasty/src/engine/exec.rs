@@ -83,7 +83,7 @@ impl Engine {
 
         if plan.needs_transaction {
             exec.connection
-                .exec(&self.schema.db, Transaction::start().into())
+                .exec(&self.schema, Transaction::start().into())
                 .await?;
             exec.in_transaction = true;
         }
@@ -94,7 +94,7 @@ impl Engine {
                     // Best effort: ignore rollback errors so the original error is returned
                     let _ = exec
                         .connection
-                        .exec(&self.schema.db, Transaction::Rollback.into())
+                        .exec(&self.schema, Transaction::Rollback.into())
                         .await;
                 }
                 return Err(e);
@@ -103,7 +103,7 @@ impl Engine {
 
         if plan.needs_transaction {
             exec.connection
-                .exec(&self.schema.db, Transaction::Commit.into())
+                .exec(&self.schema, Transaction::Commit.into())
                 .await?;
         }
 
