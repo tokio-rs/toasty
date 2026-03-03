@@ -115,6 +115,10 @@ pub struct EmbeddedEnum {
 
     /// The enum's variants
     pub variants: Vec<EnumVariant>,
+
+    /// All fields across all variants, with global indices. Each field's
+    /// `variant` field identifies which variant it belongs to.
+    pub fields: Vec<Field>,
 }
 
 #[derive(Debug, Clone)]
@@ -124,22 +128,28 @@ pub struct EnumVariant {
 
     /// The discriminant value stored in the database column
     pub discriminant: i64,
-
-    /// Fields carried by this variant (empty for unit variants)
-    pub fields: Vec<Field>,
 }
 
 impl EmbeddedEnum {
     /// Returns true if at least one variant carries data fields.
     pub fn has_data_variants(&self) -> bool {
-        self.variants.iter().any(|v| !v.fields.is_empty())
+        !self.fields.is_empty()
+    }
+
+    /// Returns fields belonging to a specific variant.
+    pub fn variant_fields(&self, variant_index: usize) -> impl Iterator<Item = &Field> {
+        let variant_id = VariantId {
+            model: self.id,
+            index: variant_index,
+        };
+        self.fields
+            .iter()
+            .filter(move |f| f.variant == Some(variant_id))
     }
 
     pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
-        for variant in &self.variants {
-            for field in &variant.fields {
-                field.verify(db)?;
-            }
+        for field in &self.fields {
+            field.verify(db)?;
         }
         Ok(())
     }

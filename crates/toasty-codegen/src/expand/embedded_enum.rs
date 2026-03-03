@@ -1,19 +1,23 @@
 use super::{schema, util, Expand};
-use crate::schema::VariantField;
+use crate::schema::FieldTy;
 
 use proc_macro2::TokenStream;
 use quote::quote;
 
 impl Expand<'_> {
+    /// Returns fields belonging to a specific variant index.
+    fn variant_fields(&self, variant_index: usize) -> Vec<&crate::schema::Field> {
+        self.model
+            .fields
+            .iter()
+            .filter(|f| f.variant == Some(variant_index))
+            .collect()
+    }
+
     /// True when at least one variant carries data fields, which changes
     /// what `Primitive::ty()` returns.
     pub(super) fn expand_enum_has_data_variants(&self) -> bool {
-        self.model
-            .kind
-            .expect_embedded_enum()
-            .variants
-            .iter()
-            .any(|v| !v.fields.is_empty())
+        !self.model.fields.is_empty()
     }
 
     /// Generates the `{Enum}Fields` struct for embedded enums with
@@ -60,7 +64,7 @@ impl Expand<'_> {
         let variant_accessor_methods: Vec<_> = embedded_enum
             .variants
             .iter()
-            .filter(|v| !v.fields.is_empty())
+            .filter(|v| v.variant_handle_ident.is_some())
             .map(|variant| {
                 let method_name = &variant.name.ident;
                 let variant_handle_ident = variant.variant_handle_ident.as_ref().unwrap();
@@ -83,19 +87,19 @@ impl Expand<'_> {
             .variants
             .iter()
             .enumerate()
-            .filter(|(_, v)| !v.fields.is_empty())
+            .filter(|(_, v)| v.variant_handle_ident.is_some())
             .map(|(variant_index, variant)| {
                 let variant_handle_ident = variant.variant_handle_ident.as_ref().unwrap();
                 let variant_field_struct_ident = variant.field_struct_ident.as_ref().unwrap();
                 let variant_idx = util::int(variant_index);
 
-                let field_methods: Vec<_> = variant
-                    .fields
+                let field_methods: Vec<_> = self
+                    .variant_fields(variant_index)
                     .iter()
                     .enumerate()
-                    .map(|(field_index, vf)| {
-                        let field_ident = &vf.ident;
-                        let field_ty = &vf.ty;
+                    .map(|(field_index, field)| {
+                        let field_ident = &field.name.ident;
+                        let field_ty = expect_primitive_ty(field);
                         let field_offset = util::int(field_index);
 
                         quote! {
@@ -206,12 +210,11 @@ impl Expand<'_> {
         }
     }
 
-    /// Generates the `EnumVariant` schema structs with globally-assigned field indices.
-    /// Field indices are unique across all variants (not per-variant).
+    /// Generates the `EnumVariant` schema structs (without fields — fields are
+    /// stored at the `EmbeddedEnum` level).
     pub(super) fn expand_enum_variants(&self) -> Vec<TokenStream> {
         let toasty = &self.toasty;
         let embedded_enum = self.model.kind.expect_embedded_enum();
-        let mut global_field_index = 0usize;
 
         embedded_enum
             .variants
@@ -219,35 +222,30 @@ impl Expand<'_> {
             .map(|variant| {
                 let variant_name = schema::expand_name(toasty, &variant.name);
                 let discriminant = variant.discriminant;
-                let field_tokens =
-                    self.expand_enum_variant_field_tokens(&variant.fields, &mut global_field_index);
                 quote! {
                     #toasty::schema::app::EnumVariant {
                         name: #variant_name,
                         discriminant: #discriminant,
-                        fields: vec![ #( #field_tokens ),* ],
                     }
                 }
             })
             .collect()
     }
 
-    /// Generates `Field` schema tokens for one variant's fields, advancing
-    /// `next_index` for each field so indices remain globally unique across
-    /// all variants in the enum.
-    fn expand_enum_variant_field_tokens(
-        &self,
-        fields: &[VariantField],
-        next_index: &mut usize,
-    ) -> Vec<TokenStream> {
+    /// Generates the flat list of `Field` schema tokens for all variant fields,
+    /// with each field tagged with its `VariantId`.
+    pub(super) fn expand_enum_flat_field_tokens(&self) -> Vec<TokenStream> {
         let toasty = &self.toasty;
-        fields
+
+        self.model
+            .fields
             .iter()
-            .map(|vf| {
-                let index = util::int(*next_index);
-                *next_index += 1;
-                let app_name = vf.ident.to_string();
-                let ty = &vf.ty;
+            .map(|field| {
+                let index = util::int(field.id);
+                let app_name = field.name.ident.to_string();
+                let ty = expect_primitive_ty(field);
+                let variant_index = field.variant.expect("enum field must have variant");
+                let variant_idx = util::int(variant_index);
                 quote! {
                     #toasty::schema::app::Field {
                         id: #toasty::schema::app::FieldId {
@@ -263,6 +261,10 @@ impl Expand<'_> {
                         primary_key: false,
                         auto: None,
                         constraints: vec![],
+                        variant: Some(#toasty::core::schema::app::VariantId {
+                            model: id,
+                            index: #variant_idx,
+                        }),
                     }
                 }
             })
@@ -273,13 +275,14 @@ impl Expand<'_> {
     /// Only unit variants are emitted here; data variants appear in `expand_enum_data_load_arms`.
     pub(super) fn expand_enum_unit_load_arms(&self) -> Vec<TokenStream> {
         let model_ident = &self.model.ident;
-        self.model
-            .kind
-            .expect_embedded_enum()
+        let embedded_enum = self.model.kind.expect_embedded_enum();
+
+        embedded_enum
             .variants
             .iter()
-            .filter(|v| v.fields.is_empty())
-            .map(|variant| {
+            .enumerate()
+            .filter(|(variant_index, _)| self.variant_fields(*variant_index).is_empty())
+            .map(|(_, variant)| {
                 let ident = &variant.ident;
                 let discriminant = variant.discriminant;
                 quote! { #discriminant => Ok(#model_ident::#ident), }
@@ -294,19 +297,21 @@ impl Expand<'_> {
     pub(super) fn expand_enum_data_load_arms(&self) -> Vec<TokenStream> {
         let toasty = &self.toasty;
         let model_ident = &self.model.ident;
-        self.model
-            .kind
-            .expect_embedded_enum()
+        let embedded_enum = self.model.kind.expect_embedded_enum();
+
+        embedded_enum
             .variants
             .iter()
-            .filter(|v| !v.fields.is_empty())
-            .map(|variant| {
+            .enumerate()
+            .filter(|(variant_index, _)| !self.variant_fields(*variant_index).is_empty())
+            .map(|(variant_index, variant)| {
                 let ident = &variant.ident;
                 let discriminant = variant.discriminant;
+                let fields = self.variant_fields(variant_index);
                 if variant.fields_named {
-                    let field_loads = variant.fields.iter().enumerate().map(|(i, vf)| {
-                        let field_ident = &vf.ident;
-                        let ty = &vf.ty;
+                    let field_loads = fields.iter().enumerate().map(|(i, field)| {
+                        let field_ident = &field.name.ident;
+                        let ty = expect_primitive_ty(field);
                         let record_pos = util::int(i + 1);
                         quote! {
                             #field_ident: <#ty as #toasty::stmt::Primitive>::load(record[#record_pos].take())?,
@@ -316,8 +321,8 @@ impl Expand<'_> {
                         #discriminant => Ok(#model_ident::#ident { #( #field_loads )* }),
                     }
                 } else {
-                    let field_loads = variant.fields.iter().enumerate().map(|(i, vf)| {
-                        let ty = &vf.ty;
+                    let field_loads = fields.iter().enumerate().map(|(i, field)| {
+                        let ty = expect_primitive_ty(field);
                         let record_pos = util::int(i + 1);
                         quote! {
                             <#ty as #toasty::stmt::Primitive>::load(record[#record_pos].take())?,
@@ -339,15 +344,17 @@ impl Expand<'_> {
     pub(super) fn expand_enum_into_expr_arms(&self) -> Vec<TokenStream> {
         let toasty = &self.toasty;
         let model_ident = &self.model.ident;
-        self.model
-            .kind
-            .expect_embedded_enum()
+        let embedded_enum = self.model.kind.expect_embedded_enum();
+
+        embedded_enum
             .variants
             .iter()
-            .map(|variant| {
+            .enumerate()
+            .map(|(variant_index, variant)| {
                 let ident = &variant.ident;
                 let discriminant = variant.discriminant;
-                if variant.fields.is_empty() {
+                let fields = self.variant_fields(variant_index);
+                if fields.is_empty() {
                     // In a mixed enum (has_data_variants), the model value is always a
                     // Record so that `project([0])` uniformly extracts the discriminant
                     // for the `model_to_table` mapping.  Unit-only enums keep the plain
@@ -372,15 +379,15 @@ impl Expand<'_> {
                         }
                     }
                 } else {
-                    let field_idents: Vec<_> = variant.fields.iter().map(|vf| &vf.ident).collect();
+                    let field_idents: Vec<_> = fields.iter().map(|f| &f.name.ident).collect();
                     let disc_expr = quote! {
                         #toasty::core::stmt::Expr::Value(
                             #toasty::core::stmt::Value::I64(#discriminant)
                         )
                     };
-                    let field_exprs = variant.fields.iter().map(|vf| {
-                        let field_ident = &vf.ident;
-                        let ty = &vf.ty;
+                    let field_exprs = fields.iter().map(|field| {
+                        let field_ident = &field.name.ident;
+                        let ty = expect_primitive_ty(field);
                         quote! {
                             {
                                 let expr: #toasty::stmt::Expr<#ty> =
@@ -425,5 +432,12 @@ impl Expand<'_> {
         } else {
             quote! { #toasty::Type::I64 }
         }
+    }
+}
+
+fn expect_primitive_ty(field: &crate::schema::Field) -> &syn::Type {
+    match &field.ty {
+        FieldTy::Primitive(ty) => ty,
+        _ => panic!("expected primitive field type for enum variant field"),
     }
 }

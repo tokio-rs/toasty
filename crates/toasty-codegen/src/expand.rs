@@ -161,6 +161,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
 
     let name = schema::expand_name(&toasty, &model.name);
     let variant_tokens = e.expand_enum_variants();
+    let field_tokens = e.expand_enum_flat_field_tokens();
     let unit_load_arms = e.expand_enum_unit_load_arms();
     let data_load_arms = e.expand_enum_data_load_arms();
     let into_expr_arms = e.expand_enum_into_expr_arms();
@@ -190,6 +191,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
                             storage_ty: ::std::option::Option::None,
                         },
                         variants: vec![ #( #variant_tokens ),* ],
+                        fields: vec![ #( #field_tokens ),* ],
                     }
                 )
             }

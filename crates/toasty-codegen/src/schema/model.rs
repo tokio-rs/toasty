@@ -1,4 +1,7 @@
-use super::{Column, ErrorSet, Field, Index, IndexField, IndexScope, ModelAttr, Name, PrimaryKey};
+use super::{
+    Column, ErrorSet, Field, FieldAttr, FieldTy, Index, IndexField, IndexScope, ModelAttr, Name,
+    PrimaryKey,
+};
 
 #[derive(Debug)]
 pub(crate) enum ModelKind {
@@ -83,9 +86,6 @@ pub(crate) struct EnumVariantDef {
     /// Discriminant value stored in the database column
     pub(crate) discriminant: i64,
 
-    /// Fields carried by this variant (empty for unit variants)
-    pub(crate) fields: Vec<VariantField>,
-
     /// True when variant fields are named (struct-like `Foo { a: T }`),
     /// false for tuple-like (`Foo(T)`). Unused when `fields` is empty.
     pub(crate) fields_named: bool,
@@ -100,16 +100,6 @@ pub(crate) struct EnumVariantDef {
     /// Ident for the per-variant field struct (e.g., `ContactInfoEmailFields`).
     /// Only set for data-carrying variants.
     pub(crate) field_struct_ident: Option<syn::Ident>,
-}
-
-#[derive(Debug)]
-pub(crate) struct VariantField {
-    /// Rust identifier for this field (user-written for named fields,
-    /// synthesized as `fieldN` for unnamed fields)
-    pub(crate) ident: syn::Ident,
-
-    /// The Rust type of the field
-    pub(crate) ty: syn::Type,
 }
 
 #[derive(Debug)]
@@ -318,36 +308,65 @@ impl Model {
         }
 
         let mut variants = vec![];
+        let mut all_fields: Vec<Field> = vec![];
         let mut errs = ErrorSet::new();
+        let mut global_field_index = 0usize;
 
-        for variant in &ast.variants {
+        for (variant_index, variant) in ast.variants.iter().enumerate() {
             // Parse variant fields (named, unnamed, or unit)
-            let (variant_fields, fields_named) = match &variant.fields {
+            let (variant_field_idents, fields_named) = match &variant.fields {
                 syn::Fields::Unit => (vec![], false),
                 syn::Fields::Named(named) => {
-                    let fields = named
+                    let fields: Vec<_> = named
                         .named
                         .iter()
-                        .map(|f| VariantField {
-                            ident: f.ident.as_ref().unwrap().clone(),
-                            ty: f.ty.clone(),
-                        })
+                        .map(|f| (f.ident.as_ref().unwrap().clone(), f.ty.clone()))
                         .collect();
                     (fields, true)
                 }
                 syn::Fields::Unnamed(unnamed) => {
-                    let fields = unnamed
+                    let fields: Vec<_> = unnamed
                         .unnamed
                         .iter()
                         .enumerate()
-                        .map(|(i, f)| VariantField {
-                            ident: syn::Ident::new(&format!("field{i}"), variant.ident.span()),
-                            ty: f.ty.clone(),
+                        .map(|(i, f)| {
+                            (
+                                syn::Ident::new(&format!("field{i}"), variant.ident.span()),
+                                f.ty.clone(),
+                            )
                         })
                         .collect();
                     (fields, false)
                 }
             };
+
+            let has_fields = !variant_field_idents.is_empty();
+
+            // Create Field entries for each variant field
+            for (ident, ty) in &variant_field_idents {
+                let name = Name::from_ident(ident);
+                let set_ident = syn::Ident::new(&format!("set_{}", name.ident), ident.span());
+                let with_ident = syn::Ident::new(&format!("with_{}", name.ident), ident.span());
+
+                all_fields.push(Field {
+                    id: global_field_index,
+                    attrs: FieldAttr {
+                        key: None,
+                        unique: false,
+                        auto: None,
+                        index: false,
+                        column: None,
+                        default_expr: None,
+                        update_expr: None,
+                    },
+                    name,
+                    ty: FieldTy::Primitive(ty.clone()),
+                    set_ident,
+                    with_ident,
+                    variant: Some(variant_index),
+                });
+                global_field_index += 1;
+            }
 
             let mut discriminant = None;
             for attr in &variant.attrs {
@@ -377,7 +396,7 @@ impl Model {
             let name = Name::from_ident(&variant.ident);
             let is_method_ident =
                 syn::Ident::new(&format!("is_{}", name.ident), variant.ident.span());
-            let (variant_handle_ident, field_struct_ident) = if variant_fields.is_empty() {
+            let (variant_handle_ident, field_struct_ident) = if !has_fields {
                 (None, None)
             } else {
                 (
@@ -396,7 +415,6 @@ impl Model {
                 ident: variant.ident.clone(),
                 name,
                 discriminant,
-                fields: variant_fields,
                 fields_named,
                 is_method_ident,
                 variant_handle_ident,
@@ -412,7 +430,7 @@ impl Model {
             vis: ast.vis.clone(),
             name: Name::from_ident(&ast.ident),
             ident: ast.ident.clone(),
-            fields: vec![],
+            fields: all_fields,
             kind: ModelKind::EmbeddedEnum(ModelEmbeddedEnum {
                 field_struct_ident: enum_ident("Fields", ast),
                 variants,

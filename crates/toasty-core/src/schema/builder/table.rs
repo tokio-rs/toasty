@@ -298,13 +298,16 @@ impl BuildMapping<'_> {
 
         let mut arms = Vec::new();
 
-        for (variant, mapping) in model.variants.iter().zip(&mapping.variants) {
-            let arm_expr = if variant.fields.is_empty() {
+        for (variant_index, (variant, mapping)) in
+            model.variants.iter().zip(&mapping.variants).enumerate()
+        {
+            let variant_fields: Vec<_> = model.variant_fields(variant_index).collect();
+            let arm_expr = if variant_fields.is_empty() {
                 disc_col_ref.clone()
             } else {
                 let mut record_elems = vec![disc_col_ref.clone()];
 
-                for (local_idx, field) in variant.fields.iter().enumerate() {
+                for (local_idx, field) in variant_fields.iter().enumerate() {
                     let expr = self.build_table_to_model_field(field, &mapping.fields[local_idx]);
                     record_elems.push(expr);
                 }
@@ -322,7 +325,8 @@ impl BuildMapping<'_> {
         let max_fields = model
             .variants
             .iter()
-            .map(|v| v.fields.len())
+            .enumerate()
+            .map(|(i, _)| model.variant_fields(i).count())
             .max()
             .unwrap_or(0);
         let else_expr = if max_fields == 0 {
@@ -539,14 +543,13 @@ impl<'a, 'b> MapField<'a, 'b> {
         let variants = embedded_enum
             .variants
             .iter()
-            .map(|variant| {
+            .enumerate()
+            .map(|(variant_index, variant)| {
                 let mut mapper =
                     self.for_variant(field, field_index, disc_proj.clone(), variant.discriminant);
 
-                // let fields = mapper.map_variant(variant);
-                let fields = variant
-                    .fields
-                    .iter()
+                let fields = embedded_enum
+                    .variant_fields(variant_index)
                     .enumerate()
                     .map(|(index, field)| {
                         // Variant fields are stored at positions 1.. in the Record

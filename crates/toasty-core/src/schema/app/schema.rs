@@ -36,7 +36,7 @@ impl Schema {
         let fields = match self.model(id.model) {
             Model::Root(root) => &root.fields,
             Model::EmbeddedStruct(embedded) => &embedded.fields,
-            Model::EmbeddedEnum(_) => panic!("embedded enum has no fields"),
+            Model::EmbeddedEnum(e) => &e.fields,
         };
         fields.get(id.index).expect("invalid field ID")
     }
@@ -105,7 +105,7 @@ impl Schema {
                             // Check if there's a field index step after the variant
                             if let Some(field_step) = steps.next() {
                                 // Two steps: variant disc + field index → field
-                                current_field = variant.fields.get(*field_step)?;
+                                current_field = e.fields.get(*field_step)?;
                             } else {
                                 // Single step: variant discriminant only → variant
                                 return Some(Resolved::Variant(variant));

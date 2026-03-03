@@ -22,6 +22,7 @@ fn id_field(model: ModelId) -> Field {
         primary_key: true,
         auto: None,
         constraints: vec![],
+        variant: None,
     }
 }
 
@@ -40,6 +41,29 @@ fn prim_field(model: ModelId, index: usize, name: &str) -> Field {
         primary_key: false,
         auto: None,
         constraints: vec![],
+        variant: None,
+    }
+}
+
+fn variant_field(model: ModelId, index: usize, name: &str, variant_index: usize) -> Field {
+    Field {
+        id: model.field(index),
+        name: FieldName {
+            app_name: name.to_string(),
+            storage_name: None,
+        },
+        ty: FieldTy::Primitive(FieldPrimitive {
+            ty: stmt::Type::String,
+            storage_ty: None,
+        }),
+        nullable: false,
+        primary_key: false,
+        auto: None,
+        constraints: vec![],
+        variant: Some(VariantId {
+            model,
+            index: variant_index,
+        }),
     }
 }
 
@@ -58,6 +82,7 @@ fn embedded_field(model: ModelId, index: usize, name: &str, target: ModelId) -> 
         primary_key: false,
         auto: None,
         constraints: vec![],
+        variant: None,
     }
 }
 
@@ -78,14 +103,13 @@ fn schema() -> Schema {
             EnumVariant {
                 name: Name::new("Active"),
                 discriminant: 0,
-                fields: vec![],
             },
             EnumVariant {
                 name: Name::new("Inactive"),
                 discriminant: 1,
-                fields: vec![],
             },
         ],
+        fields: vec![],
     });
 
     let contact = Model::EmbeddedEnum(EmbeddedEnum {
@@ -99,13 +123,15 @@ fn schema() -> Schema {
             EnumVariant {
                 name: Name::new("Email"),
                 discriminant: 0,
-                fields: vec![prim_field(CONTACT_ENUM, 0, "address")],
             },
             EnumVariant {
                 name: Name::new("Phone"),
                 discriminant: 1,
-                fields: vec![prim_field(CONTACT_ENUM, 1, "number")],
             },
+        ],
+        fields: vec![
+            variant_field(CONTACT_ENUM, 0, "address", 0),
+            variant_field(CONTACT_ENUM, 1, "number", 1),
         ],
     });
 
@@ -215,9 +241,9 @@ fn resolve_data_enum_variant_field() {
         .unwrap();
     assert_eq!(field.name.app_name, "address");
 
-    // User.contact -> Phone(disc=1) -> number(positional=0) => [3, 1, 0]
+    // User.contact -> Phone(disc=1) -> number(global index=1) => [3, 1, 1]
     let field = s
-        .resolve_field(root, &stmt::Projection::from([3, 1, 0]))
+        .resolve_field(root, &stmt::Projection::from([3, 1, 1]))
         .unwrap();
     assert_eq!(field.name.app_name, "number");
 }

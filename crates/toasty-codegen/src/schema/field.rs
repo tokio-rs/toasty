@@ -23,6 +23,10 @@ pub(crate) struct Field {
 
     /// Identifier for the `with_field` builder method on update builder
     pub(crate) with_ident: syn::Ident,
+
+    /// If this field belongs to an enum variant, the variant's index within
+    /// the enum. `None` for fields on root models and embedded structs.
+    pub(crate) variant: Option<usize>,
 }
 
 #[derive(Debug)]
@@ -270,6 +274,7 @@ impl Field {
             ty,
             set_ident,
             with_ident,
+            variant: None,
         })
     }
 }
