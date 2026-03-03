@@ -20,6 +20,53 @@ impl Expand<'_> {
         !self.model.fields.is_empty()
     }
 
+    /// Generates tokens for an `is_variant(path, variant_id)` expression.
+    /// Reused by `is_{variant}()` methods and the `matches()` method.
+    fn expand_is_variant_expr(&self, variant_idx: &TokenStream) -> TokenStream {
+        let toasty = &self.toasty;
+        let model_ident = &self.model.ident;
+        quote! {
+            {
+                let path_stmt: #toasty::core::stmt::Expr = {
+                    let p: #toasty::core::stmt::Path = self.path().into();
+                    p.into_stmt()
+                };
+                let variant_id = #toasty::core::schema::app::VariantId {
+                    model: <#model_ident as #toasty::Register>::id(),
+                    index: #variant_idx,
+                };
+                #toasty::stmt::Expr::from_untyped(
+                    #toasty::core::stmt::Expr::is_variant(path_stmt, variant_id)
+                )
+            }
+        }
+    }
+
+    /// Generates delegated comparison methods (`eq`, `ne`, `gt`, `ge`, `lt`,
+    /// `le`, `in_set`) that forward to `self.path()`.
+    fn expand_comparison_methods(&self) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let model_ident = &self.model.ident;
+
+        let methods = ["eq", "ne", "gt", "ge", "lt", "le"].iter().map(|name| {
+            let method_ident = syn::Ident::new(name, proc_macro2::Span::call_site());
+            quote! {
+                #vis fn #method_ident(&self, rhs: impl #toasty::stmt::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
+                    self.path().#method_ident(rhs)
+                }
+            }
+        });
+
+        quote! {
+            #( #methods )*
+
+            #vis fn in_set(&self, rhs: impl #toasty::stmt::IntoExpr<[#model_ident]>) -> #toasty::stmt::Expr<bool> {
+                self.path().in_set(rhs)
+            }
+        }
+    }
+
     /// Generates the `{Enum}Fields` struct for embedded enums with
     /// `is_{variant}()` methods, variant accessor methods, and delegated
     /// comparison methods. Also generates per-variant field structs for
@@ -38,29 +85,17 @@ impl Expand<'_> {
             .map(|(variant_index, variant)| {
                 let method_name = &variant.is_method_ident;
                 let variant_idx = util::int(variant_index);
+                let is_variant_check = self.expand_is_variant_expr(&variant_idx);
 
                 quote! {
                     #vis fn #method_name(&self) -> #toasty::stmt::Expr<bool> {
-                        let path_stmt: #toasty::core::stmt::Expr = {
-                            let p: #toasty::core::stmt::Path = self.path().into();
-                            p.into_stmt()
-                        };
-                        let variant_id = #toasty::core::schema::app::VariantId {
-                            model: <#model_ident as #toasty::Register>::id(),
-                            index: #variant_idx,
-                        };
-                        #toasty::stmt::Expr::from_untyped(
-                            #toasty::core::stmt::Expr::is_variant(path_stmt, variant_id)
-                        )
+                        #is_variant_check
                     }
                 }
             })
             .collect();
 
         // Generate variant accessor methods for data-carrying variants.
-        // E.g., `fn email(&self) -> ContactInfoEmailVariant` on `ContactInfoFields`.
-        // Returns a variant handle (no path modification); the handle provides
-        // `.matches()` for field-level filtering and `.is()` for variant checks.
         let variant_accessor_methods: Vec<_> = embedded_enum
             .variants
             .iter()
@@ -80,9 +115,6 @@ impl Expand<'_> {
             .collect();
 
         // Generate per-variant handle + field structs for data-carrying variants.
-        // The handle (e.g., `ContactInfoEmailVariant`) provides `.matches()` and `.is()`.
-        // The fields struct (e.g., `ContactInfoEmailFields`) is the closure argument
-        // for `.matches()`, with field accessor methods.
         let variant_field_structs: Vec<_> = embedded_enum
             .variants
             .iter()
@@ -92,6 +124,7 @@ impl Expand<'_> {
                 let variant_handle_ident = variant.variant_handle_ident.as_ref().unwrap();
                 let variant_field_struct_ident = variant.field_struct_ident.as_ref().unwrap();
                 let variant_idx = util::int(variant_index);
+                let is_variant_check = self.expand_is_variant_expr(&variant_idx);
 
                 let field_methods: Vec<_> = self
                     .variant_fields(variant_index)
@@ -101,16 +134,7 @@ impl Expand<'_> {
                         let field_ident = &field.name.ident;
                         let field_ty = expect_primitive_ty(field);
                         let field_offset = util::int(field_index);
-
-                        quote! {
-                            #vis fn #field_ident(&self) -> <#field_ty as #toasty::stmt::Primitive>::FieldAccessor {
-                                <#field_ty as #toasty::stmt::Primitive>::make_field_accessor(
-                                    self.path().chain(
-                                        #toasty::Path::from_field_index::<#model_ident>(#field_offset)
-                                    )
-                                )
-                            }
-                        }
+                        self.expand_primitive_field_method(field_ident, field_ty, &field_offset)
                     })
                     .collect();
 
@@ -128,24 +152,17 @@ impl Expand<'_> {
                             &self,
                             f: impl FnOnce(#variant_field_struct_ident) -> #toasty::stmt::Expr<bool>,
                         ) -> #toasty::stmt::Expr<bool> {
-                            let path_stmt: #toasty::core::stmt::Expr = {
-                                let p: #toasty::core::stmt::Path = self.path().into();
-                                p.into_stmt()
-                            };
+                            let is_var: #toasty::stmt::Expr<bool> = #is_variant_check;
                             let variant_id = #toasty::core::schema::app::VariantId {
                                 model: <#model_ident as #toasty::Register>::id(),
                                 index: #variant_idx,
                             };
-                            let is_var = #toasty::stmt::Expr::from_untyped(
-                                #toasty::core::stmt::Expr::is_variant(path_stmt, variant_id)
-                            );
                             let fields = #variant_field_struct_ident {
                                 path: self.path().into_variant(variant_id),
                             };
                             let body = f(fields);
                             is_var.and(body)
                         }
-
                     }
 
                     #vis struct #variant_field_struct_ident {
@@ -163,6 +180,8 @@ impl Expand<'_> {
             })
             .collect();
 
+        let comparison_methods = self.expand_comparison_methods();
+
         quote! {
             #vis struct #field_struct_ident {
                 path: #toasty::Path<#model_ident>,
@@ -177,33 +196,7 @@ impl Expand<'_> {
 
                 #( #variant_accessor_methods )*
 
-                #vis fn eq(&self, rhs: impl #toasty::stmt::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
-                    self.path().eq(rhs)
-                }
-
-                #vis fn ne(&self, rhs: impl #toasty::stmt::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
-                    self.path().ne(rhs)
-                }
-
-                #vis fn gt(&self, rhs: impl #toasty::stmt::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
-                    self.path().gt(rhs)
-                }
-
-                #vis fn ge(&self, rhs: impl #toasty::stmt::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
-                    self.path().ge(rhs)
-                }
-
-                #vis fn lt(&self, rhs: impl #toasty::stmt::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
-                    self.path().lt(rhs)
-                }
-
-                #vis fn le(&self, rhs: impl #toasty::stmt::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
-                    self.path().le(rhs)
-                }
-
-                #vis fn in_set(&self, rhs: impl #toasty::stmt::IntoExpr<[#model_ident]>) -> #toasty::stmt::Expr<bool> {
-                    self.path().in_set(rhs)
-                }
+                #comparison_methods
             }
 
             #( #variant_field_structs )*
@@ -387,14 +380,7 @@ impl Expand<'_> {
                     let field_exprs = fields.iter().map(|field| {
                         let field_ident = &field.name.ident;
                         let ty = expect_primitive_ty(field);
-                        quote! {
-                            {
-                                let expr: #toasty::stmt::Expr<#ty> =
-                                    #toasty::stmt::IntoExpr::into_expr(#field_ident);
-                                let untyped: #toasty::core::stmt::Expr = expr.into();
-                                untyped
-                            }
-                        }
+                        self.expand_into_untyped_expr(ty, field_ident)
                     });
 
                     quote! {

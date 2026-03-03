@@ -22,47 +22,23 @@ impl Expand<'_> {
 
                 match &field.ty {
                     Primitive(ty) => {
-                        // Use the Primitive trait's FieldAccessor to determine the return type
-                        // For primitives, this will be Path<T>
-                        // For embedded types, this will be {Type}Fields
-                        quote! {
-                            #vis fn #field_ident(&self) -> <#ty as #toasty::stmt::Primitive>::FieldAccessor {
-                                <#ty as #toasty::stmt::Primitive>::make_field_accessor(
-                                    self.path().chain(#toasty::Path::from_field_index::<#model_ident>(#field_offset))
-                                )
-                            }
-                        }
+                        self.expand_primitive_field_method(field_ident, ty, &field_offset)
                     }
                     BelongsTo(rel) => {
-                        let ty = &rel.ty;
-
-                        quote! {
-                            #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::OneField {
-                                <#ty as #toasty::Relation>::OneField::from_path(
-                                    self.path().chain(#toasty::Path::from_field_index::<#model_ident>(#field_offset))
-                                )
-                            }
-                        }
+                        self.expand_one_relation_field_method(field_ident, &rel.ty, &field_offset)
+                    }
+                    HasOne(rel) => {
+                        self.expand_one_relation_field_method(field_ident, &rel.ty, &field_offset)
                     }
                     HasMany(rel) => {
                         let ty = &rel.ty;
+                        let path = quote! {
+                            self.path().chain(#toasty::Path::from_field_index::<#model_ident>(#field_offset))
+                        };
 
                         quote! {
                             #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::ManyField {
-                                <#ty as #toasty::Relation>::ManyField::from_path(
-                                    self.path().chain(#toasty::Path::from_field_index::<#model_ident>(#field_offset))
-                                )
-                            }
-                        }
-                    }
-                    HasOne(rel) => {
-                        let ty = &rel.ty;
-
-                        quote! {
-                            #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::OneField {
-                                <#ty as #toasty::Relation>::OneField::from_path(
-                                    self.path().chain(#toasty::Path::from_field_index::<#model_ident>(#field_offset))
-                                )
+                                <#ty as #toasty::Relation>::ManyField::from_path(#path)
                             }
                         }
                     }

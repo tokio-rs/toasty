@@ -261,6 +261,83 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     })
 }
 
+// === Shared token-generation helpers ===
+
+impl Expand<'_> {
+    /// Generates a block that converts a Rust value into an untyped `core::stmt::Expr`
+    /// via the typed `IntoExpr` trait.
+    ///
+    /// Produced token pattern:
+    /// ```ignore
+    /// {
+    ///     let expr: Expr<T> = IntoExpr::into_expr(value);
+    ///     let untyped: core::stmt::Expr = expr.into();
+    ///     untyped
+    /// }
+    /// ```
+    fn expand_into_untyped_expr(
+        &self,
+        ty: impl quote::ToTokens,
+        value: impl quote::ToTokens,
+    ) -> TokenStream {
+        let toasty = &self.toasty;
+        quote! {
+            {
+                let expr: #toasty::stmt::Expr<#ty> =
+                    #toasty::stmt::IntoExpr::into_expr(#value);
+                let untyped: #toasty::core::stmt::Expr = expr.into();
+                untyped
+            }
+        }
+    }
+
+    /// Generates a field accessor method for a `BelongsTo` or `HasOne`
+    /// relation using `Relation::OneField`.
+    fn expand_one_relation_field_method(
+        &self,
+        field_ident: &syn::Ident,
+        ty: &syn::Type,
+        field_offset: &TokenStream,
+    ) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let model_ident = &self.model.ident;
+
+        quote! {
+            #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::OneField {
+                <#ty as #toasty::Relation>::OneField::from_path(
+                    self.path().chain(
+                        #toasty::Path::from_field_index::<#model_ident>(#field_offset)
+                    )
+                )
+            }
+        }
+    }
+
+    /// Generates a field accessor method for a primitive field using the
+    /// `Primitive::make_field_accessor` trait.
+    fn expand_primitive_field_method(
+        &self,
+        field_ident: &syn::Ident,
+        ty: &syn::Type,
+        field_offset: &TokenStream,
+    ) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let model_ident = &self.model.ident;
+
+        quote! {
+            #vis fn #field_ident(&self) -> <#ty as #toasty::stmt::Primitive>::FieldAccessor {
+                <#ty as #toasty::stmt::Primitive>::make_field_accessor(
+                    self.path().chain(
+                        #toasty::Path::from_field_index::<#model_ident>(#field_offset)
+                    )
+                )
+            }
+        }
+    }
+}
+
 fn wrap_in_const(code: TokenStream) -> TokenStream {
     quote! {
         const _: () = {
