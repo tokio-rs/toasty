@@ -6,7 +6,7 @@ pub struct CreateMany<M: Model> {
     stmts: Vec<stmt::Insert<M>>,
 }
 
-impl<M: Model + Send> CreateMany<M> {
+impl<M: Model> CreateMany<M> {
     pub fn new() -> Self {
         Self::default()
     }
