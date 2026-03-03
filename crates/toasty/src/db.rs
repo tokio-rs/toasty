@@ -10,9 +10,10 @@ use tokio::{
     task::JoinHandle,
 };
 
-use crate::{engine::Engine, stmt, Cursor, Model, Result, Statement};
+use crate::{engine::Engine, Executor, Result, Transaction, TransactionBuilder};
 
 use toasty_core::{
+    async_trait,
     driver::Driver,
     stmt::{Value, ValueStream},
     Schema,
@@ -43,6 +44,10 @@ enum ConnectionOperation {
     ExecStatement {
         stmt: Box<toasty_core::stmt::Statement>,
         tx: oneshot::Sender<Result<ValueStream>>,
+    },
+    ExecOperation {
+        operation: Operation,
+        tx: oneshot::Sender<Result<Response>>,
     },
     /// Push schema to the database.
     PushSchema { tx: oneshot::Sender<Result<()>> },
@@ -106,6 +111,13 @@ impl Db {
                                 }
                             }
                         }
+                        ConnectionOperation::ExecOperation {
+                            operation: stmt,
+                            tx,
+                        } => {
+                            let result = connection.exec(&engine.schema, stmt).await;
+                            let _ = tx.send(result);
+                        }
                         ConnectionOperation::PushSchema { tx } => {
                             let result = connection.push_schema(&engine.schema).await;
                             let _ = tx.send(result);
@@ -120,85 +132,19 @@ impl Db {
         Ok(self.connection.as_ref().unwrap())
     }
 
-    /// Execute a query, returning all matching records
-    pub async fn all<M: Model>(&mut self, query: stmt::Select<M>) -> Result<Cursor<M>> {
-        let records = self.exec(query.into()).await?;
-        Ok(Cursor::new(self.shared.engine.schema.clone(), records))
-    }
-
-    pub async fn first<M: Model>(&mut self, query: stmt::Select<M>) -> Result<Option<M>> {
-        let mut res = self.all(query).await?;
-        match res.next().await {
-            Some(Ok(value)) => Ok(Some(value)),
-            Some(Err(err)) => Err(err),
-            None => Ok(None),
-        }
-    }
-
-    pub async fn get<M: Model>(&mut self, query: stmt::Select<M>) -> Result<M> {
-        let mut res = self.all(query).await?;
-
-        match res.next().await {
-            Some(Ok(value)) => Ok(value),
-            Some(Err(err)) => Err(err),
-            None => Err(toasty_core::Error::record_not_found(
-                "query returned no results",
-            )),
-        }
-    }
-
-    pub async fn delete<M: Model>(&mut self, query: stmt::Select<M>) -> Result<()> {
-        self.exec(query.delete()).await?;
-        Ok(())
-    }
-
-    /// Execute a statement
-    pub async fn exec<M: Model>(&mut self, statement: Statement<M>) -> Result<ValueStream> {
+    pub(crate) async fn exec_operation(&mut self, operation: Operation) -> Result<Response> {
         let (tx, rx) = oneshot::channel();
 
         let conn = self.connection().await?;
         conn.in_tx
-            .send(ConnectionOperation::ExecStatement {
-                stmt: Box::new(statement.untyped),
-                tx,
-            })
+            .send(ConnectionOperation::ExecOperation { operation, tx })
             .unwrap();
 
         rx.await.unwrap()
     }
 
-    /// Execute a statement, assume only one record is returned
-    #[doc(hidden)]
-    pub async fn exec_one<M: Model>(&mut self, statement: Statement<M>) -> Result<stmt::Value> {
-        let mut res = self.exec(statement).await?;
-        let Some(ret) = res.next().await else {
-            return Err(toasty_core::Error::record_not_found(
-                "statement returned no results",
-            ));
-        };
-        let next = res.next().await;
-        let None = next else {
-            return Err(toasty_core::Error::invalid_record_count(
-                "expected 1 record, found multiple",
-            ));
-        };
-
-        ret
-    }
-
-    /// Execute model creation
-    ///
-    /// Used by generated code
-    #[doc(hidden)]
-    pub async fn exec_insert_one<M: Model>(&mut self, mut stmt: stmt::Insert<M>) -> Result<M> {
-        // TODO: HAX
-        stmt.untyped.source.single = false;
-
-        // Execute the statement and return the result
-        let records = self.exec(stmt.into()).await?;
-        let mut cursor = Cursor::new(self.shared.engine.schema.clone(), records);
-
-        cursor.next().await.unwrap()
+    pub fn transaction_builder(&mut self) -> TransactionBuilder<'_> {
+        TransactionBuilder::new(self)
     }
 
     /// Creates tables and indices defined in the schema on the database.
@@ -241,5 +187,30 @@ impl std::fmt::Debug for Db {
             .field("engine", &self.shared.engine)
             .field("connected", &self.connection.is_some())
             .finish()
+    }
+}
+
+#[async_trait]
+impl Executor for Db {
+    async fn transaction(&mut self) -> Result<Transaction<'_>> {
+        Transaction::begin(self).await
+    }
+
+    async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> Result<ValueStream> {
+        let (tx, rx) = oneshot::channel();
+
+        let conn = self.connection().await?;
+        conn.in_tx
+            .send(ConnectionOperation::ExecStatement {
+                stmt: Box::new(stmt),
+                tx,
+            })
+            .unwrap();
+
+        rx.await.unwrap()
+    }
+
+    fn schema(&mut self) -> &Arc<Schema> {
+        Db::schema(self)
     }
 }

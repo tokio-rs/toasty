@@ -1,8 +1,12 @@
-use crate::{db::PoolConnection, engine::Engine, Result};
+use std::sync::Arc;
 
-use toasty_core::driver::{
-    operation::{self, IsolationLevel},
-    Operation, Response,
+use crate::{Executor, Result};
+
+use toasty_core::{
+    async_trait,
+    driver::operation::{self, IsolationLevel},
+    stmt::ValueStream,
+    Schema,
 };
 
 /// Builder for configuring a transaction before starting it.
@@ -48,24 +52,15 @@ impl<'db> TransactionBuilder<'db> {
 /// [`rollback`](Self::rollback), the transaction is automatically rolled back.
 pub struct Transaction<'db> {
     /// Holds the mutable borrow of Db to prevent concurrent use.
-    _db: &'db mut crate::Db,
+    db: &'db mut crate::Db,
 
     /// Cloned engine for schema access and query compilation.
-    engine: Engine,
-
-    /// Pinned connection for the duration of the transaction.
-    /// `Option` so that `Drop` can `.take()` and move it into a spawned task.
-    connection: Option<PoolConnection>,
-
     /// Whether commit or rollback has been called.
-    committed: bool,
+    finalized: bool,
 
-    /// Monotonic counter for generating unique savepoint names.
-    savepoint_counter: usize,
-
-    /// When a savepoint is dropped it cannot make an asynchronous request.
-    /// Instead, it stores its ID here so we can roll back later.
-    pending_savepoint_rollback: Option<usize>,
+    /// If this is a nested transaction (implemented through savepoints),
+    /// this holds the savepoint ID.
+    savepoint: Option<usize>,
 }
 
 impl<'db> Transaction<'db> {
@@ -78,151 +73,90 @@ impl<'db> Transaction<'db> {
         isolation: Option<IsolationLevel>,
         read_only: bool,
     ) -> Result<Transaction<'db>> {
-        let engine = db.engine.clone();
-        let mut connection = engine.pool.get().await?;
-
-        connection
-            .exec(
-                &engine.schema.db,
-                operation::Transaction::Start {
-                    isolation,
-                    read_only,
-                }
-                .into(),
-            )
-            .await?;
+        db.exec_operation(
+            operation::Transaction::Start {
+                isolation,
+                read_only,
+            }
+            .into(),
+        )
+        .await?;
 
         Ok(Transaction {
-            _db: db,
-            engine,
-            connection: Some(connection),
-            committed: false,
-            savepoint_counter: 0,
-            pending_savepoint_rollback: None,
+            db,
+            finalized: false,
+            savepoint: None,
         })
     }
 
     /// Commit the transaction.
     pub async fn commit(mut self) -> Result<()> {
-        self.exec(operation::Transaction::Commit.into()).await?;
-        self.committed = true;
+        match self.savepoint {
+            Some(savepoint) => self
+                .db
+                .exec_operation(operation::Transaction::ReleaseSavepoint(savepoint).into()),
+            None => self
+                .db
+                .exec_operation(operation::Transaction::Commit.into()),
+        }
+        .await?;
+        self.finalized = true;
         Ok(())
     }
 
     /// Roll back the transaction.
     pub async fn rollback(mut self) -> Result<()> {
-        self.exec(operation::Transaction::Rollback.into()).await?;
-        self.committed = true;
-        Ok(())
-    }
-
-    /// Create a savepoint within this transaction.
-    pub async fn savepoint<'a: 'db>(&'a mut self) -> Result<Savepoint<'a>> {
-        let id = self.next_savepoint_id();
-        self.exec(operation::Transaction::Savepoint(id).into())
-            .await?;
-        Ok(Savepoint {
-            transaction: self,
-            id,
-            released: false,
-        })
-    }
-
-    fn next_savepoint_id(&mut self) -> usize {
-        let id = self.savepoint_counter;
-        self.savepoint_counter += 1;
-        id
-    }
-
-    async fn exec(&mut self, plan: Operation) -> Result<Response> {
-        let schema = self.engine.schema.db.clone();
-        let connection = self
-            .connection
-            .as_mut()
-            .expect("connection taken after commit/rollback");
-
-        // Rolls back a dropped savepoint that is still pending its rollback invocation.
-        if let Some(savepoint) = self.pending_savepoint_rollback.take() {
-            connection
-                .exec(
-                    &schema,
-                    operation::Transaction::RollbackToSavepoint(savepoint).into(),
-                )
-                .await?;
+        match self.savepoint {
+            Some(savepoint) => self
+                .db
+                .exec_operation(operation::Transaction::RollbackToSavepoint(savepoint).into()),
+            None => self
+                .db
+                .exec_operation(operation::Transaction::Rollback.into()),
         }
-        connection.exec(&schema, plan).await
+        .await?;
+        self.finalized = true;
+        Ok(())
     }
 }
 
 impl Drop for Transaction<'_> {
     fn drop(&mut self) {
-        if !self.committed {
-            if let Some(connection) = self.connection.take() {
-                let db_schema = self.engine.schema.db.clone();
-                tokio::spawn(async move {
-                    let mut connection = connection;
-                    let _ = connection
-                        .exec(&db_schema, operation::Transaction::Rollback.into())
-                        .await;
-                });
-            }
+        if !self.finalized {
+            // Fire-and-forget rollback if the transaction is dropped without explicit
+            // commit/rollback.
+            let _ = match self.savepoint {
+                Some(savepoint) => self
+                    .db
+                    .exec_operation(operation::Transaction::RollbackToSavepoint(savepoint).into()),
+                None => self
+                    .db
+                    .exec_operation(operation::Transaction::Rollback.into()),
+            };
         }
     }
 }
 
-/// A savepoint within a transaction or another savepoint.
-///
-/// The mutable borrow of the parent enforces that only one savepoint is active
-/// at a given nesting level.
-///
-/// If dropped without calling [`release`](Self::release) or
-/// [`rollback`](Self::rollback), the savepoint is automatically rolled back.
-pub struct Savepoint<'a> {
-    transaction: &'a mut Transaction<'a>,
-    id: usize,
-    released: bool,
-}
-
-impl<'a> Savepoint<'a> {
-    /// Commit (release) the savepoint. Changes become part of the parent scope.
-    pub async fn release(mut self) -> Result<()> {
-        self.transaction
-            .exec(operation::Transaction::ReleaseSavepoint(self.id).into())
+#[async_trait]
+impl<'a> Executor for Transaction<'a> {
+    async fn transaction(&mut self) -> Result<Transaction<'_>> {
+        let savepoint = 5;
+        self.db
+            .exec_operation(operation::Transaction::Savepoint(savepoint).into())
             .await?;
-        self.released = true;
-        Ok(())
-    }
 
-    /// Roll back to the savepoint. Undoes all work since the savepoint was created.
-    pub async fn rollback(mut self) -> Result<()> {
-        self.transaction
-            .exec(operation::Transaction::RollbackToSavepoint(self.id).into())
-            .await?;
-        self.released = true;
-        Ok(())
-    }
-
-    /// Create a nested savepoint.
-    pub async fn savepoint<'b: 'a>(&'b mut self) -> Result<Savepoint<'b>> {
-        let id = self.transaction.next_savepoint_id();
-        self.transaction
-            .exec(operation::Transaction::Savepoint(id).into())
-            .await?;
-        Ok(Savepoint {
-            transaction: self.transaction,
-            id,
-            released: false,
+        Ok(Transaction {
+            db: self.db,
+            finalized: false,
+            savepoint: Some(savepoint),
         })
     }
-}
 
-impl Drop for Savepoint<'_> {
-    fn drop(&mut self) {
-        if !self.released {
-            // We cannot do the asynchronous `RollbackToSavepoint` operation in the synchronous drop
-            // method, so we notify the parent `Transaction` to do this for us before the next incoming
-            // operation.
-            self.transaction.pending_savepoint_rollback = Some(self.id);
-        }
+    async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> Result<ValueStream> {
+        self.db.exec_untyped(stmt).await
+    }
+
+    fn schema(&mut self) -> &Arc<Schema> {
+        self.db.schema()
     }
 }

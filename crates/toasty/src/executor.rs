@@ -1,27 +1,30 @@
-use crate::{stmt, Cursor, Model, Result, Statement};
+use crate::{stmt, Cursor, Model, Result, Statement, Transaction};
 
 use std::sync::Arc;
 use toasty_core::{async_trait, stmt::ValueStream, Schema};
 
-/// Anything that can execute queries — `Db`, `Transaction`, or `Savepoint`.
+/// Anything that can execute queries — `Db` or `Transaction`.
 #[async_trait]
 pub trait Executor: Send + Sync {
+    /// Starts a (potentially nested) transaction.
+    async fn transaction(&mut self) -> Result<Transaction<'_>>;
+
     /// Execute an untyped statement, returning a raw value stream.
     #[doc(hidden)]
-    async fn exec_statement(&self, stmt: toasty_core::stmt::Statement) -> Result<ValueStream>;
+    async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> Result<ValueStream>;
 
     /// Returns the schema associated with this executor.
     #[doc(hidden)]
-    fn schema(&self) -> &Arc<Schema>;
+    fn schema(&mut self) -> &Arc<Schema>;
 
     /// Execute a query, returning all matching records.
-    async fn all<M: Model + Send>(&self, query: stmt::Select<M>) -> Result<Cursor<M>> {
+    async fn all<M: Model + Send>(&mut self, query: stmt::Select<M>) -> Result<Cursor<M>> {
         let records = self.exec(query.into()).await?;
         Ok(Cursor::new(self.schema().clone(), records))
     }
 
     /// Execute a query, returning the first matching record or `None`.
-    async fn first<M: Model + Send>(&self, query: stmt::Select<M>) -> Result<Option<M>> {
+    async fn first<M: Model + Send>(&mut self, query: stmt::Select<M>) -> Result<Option<M>> {
         let mut res = self.all(query).await?;
         match res.next().await {
             Some(Ok(value)) => Ok(Some(value)),
@@ -31,7 +34,7 @@ pub trait Executor: Send + Sync {
     }
 
     /// Execute a query, returning exactly one record or an error.
-    async fn get<M: Model + Send>(&self, query: stmt::Select<M>) -> Result<M> {
+    async fn get<M: Model + Send>(&mut self, query: stmt::Select<M>) -> Result<M> {
         let mut res = self.all(query).await?;
 
         match res.next().await {
@@ -44,19 +47,19 @@ pub trait Executor: Send + Sync {
     }
 
     /// Delete all records matching the query.
-    async fn delete<M: Model + Send>(&self, query: stmt::Select<M>) -> Result<()> {
+    async fn delete<M: Model + Send>(&mut self, query: stmt::Select<M>) -> Result<()> {
         self.exec(query.delete()).await?;
         Ok(())
     }
 
     /// Execute a statement, returning a raw value stream.
-    async fn exec<M: Model + Send>(&self, statement: Statement<M>) -> Result<ValueStream> {
-        self.exec_statement(statement.untyped).await
+    async fn exec<M: Model + Send>(&mut self, statement: Statement<M>) -> Result<ValueStream> {
+        self.exec_untyped(statement.untyped).await
     }
 
     /// Execute a statement, expecting exactly one record.
     #[doc(hidden)]
-    async fn exec_one<M: Model + Send>(&self, statement: Statement<M>) -> Result<stmt::Value> {
+    async fn exec_one<M: Model + Send>(&mut self, statement: Statement<M>) -> Result<stmt::Value> {
         let mut res = self.exec(statement).await?;
         let Some(ret) = res.next().await else {
             return Err(toasty_core::Error::record_not_found(
@@ -75,10 +78,7 @@ pub trait Executor: Send + Sync {
 
     /// Execute an insert, returning the created model instance.
     #[doc(hidden)]
-    async fn exec_insert_one<M: Model + Send>(
-        &self,
-        mut stmt: stmt::Insert<M>,
-    ) -> Result<M> {
+    async fn exec_insert_one<M: Model + Send>(&mut self, mut stmt: stmt::Insert<M>) -> Result<M> {
         // TODO: HAX
         stmt.untyped.source.single = false;
 
