@@ -161,11 +161,11 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
 
     let name = schema::expand_name(&toasty, &model.name);
     let variant_tokens = e.expand_enum_variants();
-    let field_tokens = e.expand_enum_flat_field_tokens();
+    let field_tokens = e.expand_enum_schema_fields();
     let unit_load_arms = e.expand_enum_unit_load_arms();
     let data_load_arms = e.expand_enum_data_load_arms();
     let into_expr_arms = e.expand_enum_into_expr_arms();
-    let ty_expr = e.expand_enum_ty();
+    let ty_expr = e.expand_enum_primitive_ty();
 
     let embedded_enum = model.kind.expect_embedded_enum();
     let field_struct_ident = &embedded_enum.field_struct_ident;

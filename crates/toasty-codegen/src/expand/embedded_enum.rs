@@ -234,7 +234,7 @@ impl Expand<'_> {
 
     /// Generates the flat list of `Field` schema tokens for all variant fields,
     /// with each field tagged with its `VariantId`.
-    pub(super) fn expand_enum_flat_field_tokens(&self) -> Vec<TokenStream> {
+    pub(super) fn expand_enum_schema_fields(&self) -> Vec<TokenStream> {
         let toasty = &self.toasty;
 
         self.model
@@ -308,29 +308,27 @@ impl Expand<'_> {
                 let ident = &variant.ident;
                 let discriminant = variant.discriminant;
                 let fields = self.variant_fields(variant_index);
-                if variant.fields_named {
-                    let field_loads = fields.iter().enumerate().map(|(i, field)| {
-                        let field_ident = &field.name.ident;
-                        let ty = expect_primitive_ty(field);
-                        let record_pos = util::int(i + 1);
-                        quote! {
-                            #field_ident: <#ty as #toasty::stmt::Primitive>::load(record[#record_pos].take())?,
-                        }
-                    });
-                    quote! {
-                        #discriminant => Ok(#model_ident::#ident { #( #field_loads )* }),
+
+                let field_loads: Vec<_> = fields.iter().enumerate().map(|(i, field)| {
+                    let field_ident = &field.name.ident;
+                    let ty = expect_primitive_ty(field);
+                    let record_pos = util::int(i + 1);
+                    let load = quote! { <#ty as #toasty::stmt::Primitive>::load(record[#record_pos].take())? };
+                    if variant.fields_named {
+                        quote! { #field_ident: #load, }
+                    } else {
+                        quote! { #load, }
                     }
+                }).collect();
+
+                let construction = if variant.fields_named {
+                    quote! { #model_ident::#ident { #( #field_loads )* } }
                 } else {
-                    let field_loads = fields.iter().enumerate().map(|(i, field)| {
-                        let ty = expect_primitive_ty(field);
-                        let record_pos = util::int(i + 1);
-                        quote! {
-                            <#ty as #toasty::stmt::Primitive>::load(record[#record_pos].take())?,
-                        }
-                    });
-                    quote! {
-                        #discriminant => Ok(#model_ident::#ident( #( #field_loads )* )),
-                    }
+                    quote! { #model_ident::#ident( #( #field_loads )* ) }
+                };
+
+                quote! {
+                    #discriminant => Ok(#construction),
                 }
             })
             .collect()
@@ -354,6 +352,11 @@ impl Expand<'_> {
                 let ident = &variant.ident;
                 let discriminant = variant.discriminant;
                 let fields = self.variant_fields(variant_index);
+
+                let discriminant_expr = quote!(#toasty::core::stmt::Expr::Value(
+                    #toasty::core::stmt::Value::I64(#discriminant)
+                ));
+
                 if fields.is_empty() {
                     // In a mixed enum (has_data_variants), the model value is always a
                     // Record so that `project([0])` uniformly extracts the discriminant
@@ -362,29 +365,25 @@ impl Expand<'_> {
                     if self.expand_enum_has_data_variants() {
                         quote! {
                             #model_ident::#ident => #toasty::stmt::Expr::from_untyped(
-                                #toasty::core::stmt::Expr::record([
-                                    #toasty::core::stmt::Expr::Value(
-                                        #toasty::core::stmt::Value::I64(#discriminant)
-                                    )
-                                ])
+                                #toasty::core::stmt::Expr::record([#discriminant_expr])
                             ),
                         }
                     } else {
                         quote! {
                             #model_ident::#ident => #toasty::stmt::Expr::from_untyped(
-                                #toasty::core::stmt::Expr::Value(
-                                    #toasty::core::stmt::Value::I64(#discriminant)
-                                )
+                                #discriminant_expr
                             ),
                         }
                     }
                 } else {
                     let field_idents: Vec<_> = fields.iter().map(|f| &f.name.ident).collect();
-                    let disc_expr = quote! {
-                        #toasty::core::stmt::Expr::Value(
-                            #toasty::core::stmt::Value::I64(#discriminant)
-                        )
+
+                    let pattern = if variant.fields_named {
+                        quote! { #model_ident::#ident { #( #field_idents ),* } }
+                    } else {
+                        quote! { #model_ident::#ident( #( #field_idents ),* ) }
                     };
+
                     let field_exprs = fields.iter().map(|field| {
                         let field_ident = &field.name.ident;
                         let ty = expect_primitive_ty(field);
@@ -397,26 +396,15 @@ impl Expand<'_> {
                             }
                         }
                     });
-                    if variant.fields_named {
-                        quote! {
-                            #model_ident::#ident { #( #field_idents ),* } =>
-                                #toasty::stmt::Expr::from_untyped(
-                                    #toasty::core::stmt::Expr::record([
-                                        #disc_expr,
-                                        #( #field_exprs ),*
-                                    ])
-                                ),
-                        }
-                    } else {
-                        quote! {
-                            #model_ident::#ident( #( #field_idents ),* ) =>
-                                #toasty::stmt::Expr::from_untyped(
-                                    #toasty::core::stmt::Expr::record([
-                                        #disc_expr,
-                                        #( #field_exprs ),*
-                                    ])
-                                ),
-                        }
+
+                    quote! {
+                        #pattern =>
+                            #toasty::stmt::Expr::from_untyped(
+                                #toasty::core::stmt::Expr::record([
+                                    #discriminant_expr,
+                                    #( #field_exprs ),*
+                                ])
+                            ),
                     }
                 }
             })
@@ -425,7 +413,7 @@ impl Expand<'_> {
 
     /// Generates the `Primitive::ty()` return expression. Unit-only enums map to
     /// `Type::I64`; enums with at least one data variant map to `Type::Model`.
-    pub(super) fn expand_enum_ty(&self) -> TokenStream {
+    pub(super) fn expand_enum_primitive_ty(&self) -> TokenStream {
         let toasty = &self.toasty;
         if self.expand_enum_has_data_variants() {
             quote! { #toasty::Type::Model(Self::id()) }
