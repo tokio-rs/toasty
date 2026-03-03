@@ -1,4 +1,4 @@
-use crate::{stmt, Cursor, Db, Model, Result};
+use crate::{stmt, Cursor, Executor, ExecutorExt, Model, Result};
 
 pub struct CreateMany<M: Model> {
     /// The builder holds an `Insert` statement which can create multiple
@@ -6,7 +6,7 @@ pub struct CreateMany<M: Model> {
     stmts: Vec<stmt::Insert<M>>,
 }
 
-impl<M: Model> CreateMany<M> {
+impl<M: Model + Send> CreateMany<M> {
     pub fn new() -> Self {
         Self::default()
     }
@@ -21,7 +21,7 @@ impl<M: Model> CreateMany<M> {
         self
     }
 
-    pub async fn exec(self, db: &mut Db) -> Result<Vec<M>> {
+    pub async fn exec(self, executor: &mut dyn Executor) -> Result<Vec<M>> {
         // If there are no records to create, then return an empty vec
         if self.stmts.is_empty() {
             return Ok(vec![]);
@@ -37,8 +37,8 @@ impl<M: Model> CreateMany<M> {
 
         merged.untyped.source.single = false;
 
-        let records = db.exec(merged.into()).await?;
-        let cursor = Cursor::new(db.schema().clone(), records);
+        let records = executor.exec(merged.into()).await?;
+        let cursor = Cursor::new(executor.schema().clone(), records);
         cursor.collect().await
     }
 }

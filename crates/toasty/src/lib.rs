@@ -11,7 +11,7 @@ pub mod db;
 pub use db::Db;
 
 mod executor;
-pub use executor::Executor;
+pub use executor::{Executor, ExecutorExt};
 
 mod engine;
 
@@ -46,7 +46,7 @@ pub mod codegen_support {
         relation::Relation,
         relation::{BelongsTo, HasMany, HasOne},
         stmt::{self, IntoExpr, IntoInsert, IntoSelect, Path},
-        Db, Embed, Error, Executor, Model, Register, Result, Statement,
+        Db, Embed, Error, Executor, ExecutorExt, Model, Register, Result, Statement,
     };
     pub use std::{convert::Into, default::Default, option::Option};
     pub use toasty_core as core;

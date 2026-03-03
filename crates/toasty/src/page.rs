@@ -1,8 +1,8 @@
 use std::ops::Deref;
 
 use crate::stmt::{Paginate, Select};
-use crate::Result;
-use crate::{Db, Model};
+use crate::Model;
+use crate::{Executor, Result};
 use toasty_core::stmt;
 
 /// A page of results from a paginated query.
@@ -21,7 +21,7 @@ pub struct Page<M> {
     pub prev_cursor: Option<stmt::Expr>,
 }
 
-impl<M: Model> Page<M> {
+impl<M: Model + Send> Page<M> {
     pub(crate) fn new(
         items: Vec<M>,
         query: Select<M>,
@@ -62,12 +62,12 @@ impl<M: Model> Page<M> {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn next(&self, db: &mut Db) -> Result<Option<Page<M>>> {
+    pub async fn next(&self, executor: &mut dyn Executor) -> Result<Option<Page<M>>> {
         match &self.next_cursor {
             Some(cursor) => Ok(Some(
                 Paginate::from(self.query.clone())
                     .after(cursor.clone())
-                    .collect(db)
+                    .collect(executor)
                     .await?,
             )),
             None => Ok(None),
@@ -90,12 +90,12 @@ impl<M: Model> Page<M> {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn prev(&self, db: &mut Db) -> Result<Option<Page<M>>> {
+    pub async fn prev(&self, executor: &mut dyn Executor) -> Result<Option<Page<M>>> {
         match &self.prev_cursor {
             Some(cursor) => Ok(Some(
                 Paginate::from(self.query.clone())
                     .before(cursor.clone())
-                    .collect(db)
+                    .collect(executor)
                     .await?,
             )),
             None => Ok(None),

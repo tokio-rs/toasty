@@ -1,6 +1,6 @@
 use super::Select;
 
-use crate::{engine::eval::Func, Cursor, Executor, Model, Result};
+use crate::{engine::eval::Func, Cursor, Executor, ExecutorExt, Model, Result};
 
 use toasty_core::stmt::{self, visit_mut, Expr, ExprRecord, OrderBy, Projection, Value, VisitMut};
 
