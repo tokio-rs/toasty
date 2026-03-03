@@ -15,6 +15,15 @@ fn eval_default_is_error() {
 }
 
 // ---------------------------------------------------------------------------
+// Expr::Error — explicitly errors (unreachable branch was reached)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn eval_error_is_error() {
+    assert!(Expr::error("unexpected").eval_const().is_err());
+}
+
+// ---------------------------------------------------------------------------
 // Expr::Map with non-list base — todo!() error handling
 // ---------------------------------------------------------------------------
 

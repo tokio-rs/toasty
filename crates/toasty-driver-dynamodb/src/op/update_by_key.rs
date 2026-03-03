@@ -1,7 +1,7 @@
 use super::{
-    ddb_expression, ddb_key, operation, stmt, Connection, Delete, ExprAttrs, Put, Result,
-    ReturnValuesOnConditionCheckFailure, Schema, SdkError, TransactWriteItem, Update,
-    UpdateItemError, Value,
+    db, ddb_expression, ddb_key, operation, stmt, Connection, Delete, ExprAttrs, Put, Result,
+    ReturnValuesOnConditionCheckFailure, SdkError, TransactWriteItem, Update, UpdateItemError,
+    Value,
 };
 use std::{collections::HashMap, fmt::Write};
 use toasty_core::{driver::Response, stmt::ExprContext};
@@ -9,7 +9,7 @@ use toasty_core::{driver::Response, stmt::ExprContext};
 impl Connection {
     pub(crate) async fn exec_update_by_key(
         &mut self,
-        schema: &Schema,
+        schema: &db::Schema,
         op: operation::UpdateByKey,
     ) -> Result<Response> {
         let table = schema.table(op.table);

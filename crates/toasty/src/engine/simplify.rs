@@ -8,6 +8,7 @@ mod expr_in_list;
 mod expr_is_null;
 mod expr_list;
 mod expr_map;
+mod expr_match;
 mod expr_not;
 mod expr_or;
 mod expr_project;
@@ -71,6 +72,7 @@ impl VisitMut for Simplify<'_> {
             Expr::InSubquery(expr) => self.lift_in_subquery(&expr.expr, &expr.query),
             Expr::List(expr) => self.simplify_expr_list(expr),
             Expr::Map(_) => self.simplify_expr_map(i),
+            Expr::Match(expr) => self.simplify_expr_match(expr),
             Expr::Not(expr) => self.simplify_expr_not(expr),
             Expr::Or(expr) => self.simplify_expr_or(expr),
             Expr::Record(expr) => self.simplify_expr_record(expr),
@@ -81,6 +83,28 @@ impl VisitMut for Simplify<'_> {
 
         if let Some(expr) = maybe_expr {
             *i = expr;
+        }
+    }
+
+    fn visit_expr_match_mut(&mut self, i: &mut stmt::ExprMatch) {
+        // Simplify the subject first.
+        self.visit_expr_mut(&mut i.subject);
+
+        // If the subject simplified to a constant, only simplify the matching arm.
+        // Skipping dead-code arms avoids panics on expressions like
+        // `project([1], Record([I64(disc)]))` that would be invalid to evaluate.
+        if let Expr::Value(ref value) = *i.subject {
+            let value = value.clone();
+            for arm in &mut i.arms {
+                if arm.pattern == value {
+                    self.visit_expr_mut(&mut arm.expr);
+                    return;
+                }
+            }
+        } else {
+            for arm in &mut i.arms {
+                self.visit_expr_mut(&mut arm.expr);
+            }
         }
     }
 

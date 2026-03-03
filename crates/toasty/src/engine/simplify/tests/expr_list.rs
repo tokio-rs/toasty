@@ -81,3 +81,17 @@ fn non_const_not_simplified() {
 
     assert!(result.is_none());
 }
+
+#[test]
+fn list_with_error_item_not_simplified() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    // `list([1, error("boom")])` — error is not a Value, so not folded
+    let mut expr = ExprList {
+        items: vec![Expr::Value(Value::from(1i64)), Expr::error("boom")],
+    };
+    let result = simplify.simplify_expr_list(&mut expr);
+
+    assert!(result.is_none());
+}

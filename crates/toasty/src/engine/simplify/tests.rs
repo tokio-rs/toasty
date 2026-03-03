@@ -16,6 +16,7 @@ mod expr_in_list;
 mod expr_is_null;
 mod expr_list;
 mod expr_map;
+mod expr_match;
 mod expr_not;
 mod expr_or;
 mod expr_project;

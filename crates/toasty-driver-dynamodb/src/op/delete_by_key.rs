@@ -1,5 +1,5 @@
 use super::{
-    ddb_expression, ddb_key, operation, Connection, Delete, ExprAttrs, Result, Schema, SdkError,
+    db, ddb_expression, ddb_key, operation, Connection, Delete, ExprAttrs, Result, SdkError,
     TransactWriteItem,
 };
 use std::collections::HashMap;
@@ -8,7 +8,7 @@ use toasty_core::{driver::Response, stmt::ExprContext};
 impl Connection {
     pub(crate) async fn exec_delete_by_key(
         &mut self,
-        schema: &Schema,
+        schema: &db::Schema,
         op: operation::DeleteByKey,
     ) -> Result<Response> {
         use aws_sdk_dynamodb::operation::delete_item::DeleteItemError;

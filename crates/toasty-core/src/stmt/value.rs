@@ -155,6 +155,9 @@ impl Value {
     }
 
     pub fn is_a(&self, ty: &Type) -> bool {
+        if let Type::Union(types) = ty {
+            return types.iter().any(|t| self.is_a(t));
+        }
         match self {
             Self::Null => true,
             Self::Bool(_) => ty.is_bool(),

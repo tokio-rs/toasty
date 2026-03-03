@@ -7,7 +7,7 @@ use crate::{
 };
 use toasty_core::{
     driver::{operation, Rows},
-    schema::db::{ColumnId, TableId},
+    schema::db::{ColumnId, IndexId, TableId},
     stmt,
 };
 
@@ -21,6 +21,9 @@ pub(crate) struct QueryPk {
 
     /// Table to query
     pub table: TableId,
+
+    /// Optional index to query. None = primary key, Some(id) = secondary index
+    pub index: Option<IndexId>,
 
     /// Columns to get
     pub columns: Vec<ColumnId>,
@@ -61,9 +64,10 @@ impl Exec<'_> {
                 let res = self
                     .connection
                     .exec(
-                        &self.engine.schema.db,
+                        &self.engine.schema,
                         operation::QueryPk {
                             table: action.table,
+                            index: action.index,
                             select: action.columns.clone(),
                             pk_filter: per_call_filter,
                             filter: action.row_filter.clone(),
@@ -98,9 +102,10 @@ impl Exec<'_> {
         let res = self
             .connection
             .exec(
-                &self.engine.schema.db,
+                &self.engine.schema,
                 operation::QueryPk {
                     table: action.table,
+                    index: action.index,
                     select: action.columns.clone(),
                     pk_filter,
                     filter: action.row_filter.clone(),

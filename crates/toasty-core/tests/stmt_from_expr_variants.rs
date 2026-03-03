@@ -1,6 +1,24 @@
 use toasty_core::stmt::{
-    BinaryOp, Expr, ExprAnd, ExprBinaryOp, ExprIsNull, ExprList, ExprNot, ExprRecord, Value,
+    BinaryOp, Expr, ExprAnd, ExprBinaryOp, ExprError, ExprIsNull, ExprList, ExprNot, ExprRecord,
+    Value,
 };
+
+// ---------------------------------------------------------------------------
+// From<ExprError> for Expr
+// ---------------------------------------------------------------------------
+
+#[test]
+fn from_expr_error_for_expr() {
+    let error = ExprError {
+        message: "bad value".into(),
+    };
+    assert_eq!(
+        Expr::from(error),
+        Expr::Error(ExprError {
+            message: "bad value".into(),
+        })
+    );
+}
 
 // ---------------------------------------------------------------------------
 // From<ExprList> for Expr

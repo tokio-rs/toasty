@@ -9,8 +9,7 @@ use toasty::{
 use toasty_core::{
     async_trait,
     driver::{Capability, Connection, Operation, Response, Rows},
-    schema::db::Schema,
-    Result,
+    Result, Schema,
 };
 
 #[derive(Debug)]

@@ -81,6 +81,10 @@ fn verify_expr(expr: &stmt::Expr) -> bool {
         IsNull(expr) => verify_expr(&expr.expr),
         List(expr) => expr.items.iter().all(verify_expr),
         Map(expr) => verify_expr(&expr.base) && verify_expr(&expr.map),
+        Match(expr_match) => {
+            verify_expr(&expr_match.subject)
+                && expr_match.arms.iter().all(|arm| verify_expr(&arm.expr))
+        }
         Project(expr) => verify_expr(&expr.base),
         Record(expr) => expr.fields.iter().all(verify_expr),
         Reference(_) => false,

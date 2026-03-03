@@ -47,7 +47,7 @@ impl DbTest {
         self.exec_log = ExecLog::new(ops_log);
 
         // Build the database with the logging driver
-        let db = builder.build(logging_driver).await?;
+        let mut db = builder.build(logging_driver).await?;
         db.push_schema().await?;
 
         Ok(db)

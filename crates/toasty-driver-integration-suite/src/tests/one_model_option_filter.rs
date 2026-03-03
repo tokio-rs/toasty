@@ -15,26 +15,26 @@ pub async fn filter_option_is_none(test: &mut Test) -> Result<()> {
         bio: Option<String>,
     }
 
-    let db = test.setup_db(models!(User)).await;
+    let mut db = test.setup_db(models!(User)).await;
 
     // Create users with and without bio
     User::create()
         .name("Alice")
         .bio("Likes Rust")
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
-    User::create().name("Bob").exec(&db).await?;
+    User::create().name("Bob").exec(&mut db).await?;
 
     User::create()
         .name("Charlie")
         .bio("Likes databases")
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     // Filter for users with no bio (IS NULL)
     let users = User::filter(User::fields().bio().is_none())
-        .collect::<Vec<_>>(&db)
+        .collect::<Vec<_>>(&mut db)
         .await?;
 
     assert_eq!(1, users.len());
@@ -56,26 +56,26 @@ pub async fn filter_option_is_some(test: &mut Test) -> Result<()> {
         bio: Option<String>,
     }
 
-    let db = test.setup_db(models!(User)).await;
+    let mut db = test.setup_db(models!(User)).await;
 
     // Create users with and without bio
     User::create()
         .name("Alice")
         .bio("Likes Rust")
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
-    User::create().name("Bob").exec(&db).await?;
+    User::create().name("Bob").exec(&mut db).await?;
 
     User::create()
         .name("Charlie")
         .bio("Likes databases")
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     // Filter for users with a bio (IS NOT NULL)
     let users = User::filter(User::fields().bio().is_some())
-        .collect::<Vec<_>>(&db)
+        .collect::<Vec<_>>(&mut db)
         .await?;
 
     assert_eq!(2, users.len());
@@ -102,25 +102,25 @@ pub async fn filter_option_combined_with_other_filters(test: &mut Test) -> Resul
         age: i64,
     }
 
-    let db = test.setup_db(models!(User)).await;
+    let mut db = test.setup_db(models!(User)).await;
 
     User::create()
         .name("Alice")
         .bio("Likes Rust")
         .age(25)
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
-    User::create().name("Bob").age(30).exec(&db).await?;
+    User::create().name("Bob").age(30).exec(&mut db).await?;
 
     User::create()
         .name("Charlie")
         .bio("Likes databases")
         .age(35)
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
-    User::create().name("Diana").age(25).exec(&db).await?;
+    User::create().name("Diana").age(25).exec(&mut db).await?;
 
     // Combine is_some with an equality filter: has bio AND age > 30
     let users = User::filter(
@@ -129,7 +129,7 @@ pub async fn filter_option_combined_with_other_filters(test: &mut Test) -> Resul
             .is_some()
             .and(User::fields().age().gt(30)),
     )
-    .collect::<Vec<_>>(&db)
+    .collect::<Vec<_>>(&mut db)
     .await?;
 
     assert_eq!(1, users.len());
@@ -142,7 +142,7 @@ pub async fn filter_option_combined_with_other_filters(test: &mut Test) -> Resul
             .is_none()
             .and(User::fields().age().eq(25)),
     )
-    .collect::<Vec<_>>(&db)
+    .collect::<Vec<_>>(&mut db)
     .await?;
 
     assert_eq!(1, users.len());
@@ -166,32 +166,32 @@ pub async fn filter_option_multiple_nullable_fields(test: &mut Test) -> Result<(
         summary: Option<String>,
     }
 
-    let db = test.setup_db(models!(Article)).await;
+    let mut db = test.setup_db(models!(Article)).await;
 
     // Both set
     Article::create()
         .title("A")
         .subtitle("sub-A")
         .summary("sum-A")
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     // Only subtitle set
     Article::create()
         .title("B")
         .subtitle("sub-B")
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     // Only summary set
     Article::create()
         .title("C")
         .summary("sum-C")
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     // Neither set
-    Article::create().title("D").exec(&db).await?;
+    Article::create().title("D").exec(&mut db).await?;
 
     // Filter: subtitle is_some AND summary is_none
     let articles = Article::filter(
@@ -200,7 +200,7 @@ pub async fn filter_option_multiple_nullable_fields(test: &mut Test) -> Result<(
             .is_some()
             .and(Article::fields().summary().is_none()),
     )
-    .collect::<Vec<_>>(&db)
+    .collect::<Vec<_>>(&mut db)
     .await?;
 
     assert_eq!(1, articles.len());
@@ -213,7 +213,7 @@ pub async fn filter_option_multiple_nullable_fields(test: &mut Test) -> Result<(
             .is_none()
             .and(Article::fields().summary().is_none()),
     )
-    .collect::<Vec<_>>(&db)
+    .collect::<Vec<_>>(&mut db)
     .await?;
 
     assert_eq!(1, articles.len());
@@ -234,27 +234,27 @@ pub async fn filter_option_with_partition_key(test: &mut Test) -> Result<()> {
         description: Option<String>,
     }
 
-    let db = test.setup_db(models!(Product)).await;
+    let mut db = test.setup_db(models!(Product)).await;
 
     // Create products in the "Electronics" category
     Product::create()
         .category("Electronics")
         .name("Laptop")
         .description("A powerful laptop")
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     Product::create()
         .category("Electronics")
         .name("Mouse")
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     Product::create()
         .category("Electronics")
         .name("Keyboard")
         .description("Mechanical keyboard")
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     // Create products in the "Books" category
@@ -262,13 +262,13 @@ pub async fn filter_option_with_partition_key(test: &mut Test) -> Result<()> {
         .category("Books")
         .name("Rust Programming")
         .description("Learn Rust")
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     Product::create()
         .category("Books")
         .name("Cooking 101")
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     // Filter by partition key AND description is_none
@@ -278,7 +278,7 @@ pub async fn filter_option_with_partition_key(test: &mut Test) -> Result<()> {
             .eq("Electronics")
             .and(Product::fields().description().is_none()),
     )
-    .all(&db)
+    .all(&mut db)
     .await?
     .collect::<Vec<_>>()
     .await?;
@@ -293,7 +293,7 @@ pub async fn filter_option_with_partition_key(test: &mut Test) -> Result<()> {
             .eq("Electronics")
             .and(Product::fields().description().is_some()),
     )
-    .all(&db)
+    .all(&mut db)
     .await?
     .collect::<Vec<_>>()
     .await?;
@@ -310,7 +310,7 @@ pub async fn filter_option_with_partition_key(test: &mut Test) -> Result<()> {
             .eq("Books")
             .and(Product::fields().description().is_none()),
     )
-    .all(&db)
+    .all(&mut db)
     .await?
     .collect::<Vec<_>>()
     .await?;

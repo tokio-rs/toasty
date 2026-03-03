@@ -1,4 +1,4 @@
-use super::{PathFieldSet, Value};
+use super::{PathFieldSet, TypeUnion, Value};
 use crate::{
     schema::app::{FieldId, ModelId},
     stmt, Result,
@@ -154,9 +154,9 @@ pub enum Type {
     #[cfg(feature = "jiff")]
     DateTime,
 
-    /// The null type can be cast to any type.
-    ///
-    /// TODO: we should get rid of this.
+    /// The null type. Represents the type of a null value and is cast-able to
+    /// any type. Also used as the element type of an empty list whose item type
+    /// is not yet known.
     Null,
 
     SparseRecord(PathFieldSet),
@@ -166,6 +166,14 @@ pub enum Type {
 
     /// A type that could not be inferred (e.g., empty list)
     Unknown,
+
+    /// A union of possible types.
+    ///
+    /// Used when a match expression's arms can produce values of different types
+    /// (e.g., a mixed enum where unit arms return `I64` and data arms return
+    /// `Record`). A value is compatible with a union if it satisfies any of the
+    /// member types.
+    Union(TypeUnion),
 }
 
 impl Type {
@@ -406,6 +414,9 @@ impl Type {
 
             // Sparse records must have the same field set
             (Type::SparseRecord(a), Type::SparseRecord(b)) => a == b,
+
+            // Two unions are equivalent if they contain the same set of member types
+            (Type::Union(a), Type::Union(b)) => a == b,
 
             // Different type variants are not equivalent
             _ => false,

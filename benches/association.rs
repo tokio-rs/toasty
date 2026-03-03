@@ -86,10 +86,10 @@ async fn setup_database_and_data(
     setup.configure_builder(&mut builder);
 
     let logging_driver = LoggingDriver::new(setup.driver());
-    let db = builder.build(logging_driver).await.unwrap();
+    let mut db = builder.build(logging_driver).await.unwrap();
     db.push_schema().await.unwrap();
 
-    setup_test_data(&db, users, posts, comments).await;
+    setup_test_data(&mut db, users, posts, comments).await;
 
     db
 }
@@ -128,7 +128,7 @@ fn association_benchmarks(c: &mut Criterion) {
             let size_label = format!("{}u_{}p_{}c", users, posts, comments);
 
             let rt = tokio::runtime::Runtime::new().unwrap();
-            let db = rt.block_on(async {
+            let mut db = rt.block_on(async {
                 setup_database_and_data(setup_fn(), *users, *posts, *comments).await
             });
 
@@ -141,7 +141,7 @@ fn association_benchmarks(c: &mut Criterion) {
                             let users: Vec<User> = User::all()
                                 .include(User::fields().posts())
                                 .include(User::fields().comments())
-                                .collect(&db)
+                                .collect(&mut db)
                                 .await
                                 .unwrap();
                             black_box(users)
