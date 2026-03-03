@@ -142,19 +142,6 @@ impl Expand<'_> {
                             is_var.and(body)
                         }
 
-                        #vis fn is(&self) -> #toasty::stmt::Expr<bool> {
-                            let path_stmt: #toasty::core::stmt::Expr = {
-                                let p: #toasty::core::stmt::Path = self.path().into();
-                                p.into_stmt()
-                            };
-                            let variant_id = #toasty::core::schema::app::VariantId {
-                                model: <#model_ident as #toasty::Register>::id(),
-                                index: #variant_idx,
-                            };
-                            #toasty::stmt::Expr::from_untyped(
-                                #toasty::core::stmt::Expr::is_variant(path_stmt, variant_id)
-                            )
-                        }
                     }
 
                     #vis struct #variant_field_struct_ident {
