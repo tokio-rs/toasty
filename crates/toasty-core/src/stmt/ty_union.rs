@@ -18,7 +18,13 @@ impl TypeUnion {
     }
 
     /// Insert `ty` if it is not already present. Returns whether it was inserted.
+    ///
+    /// `Type::Unknown` is skipped — it carries no type information and should
+    /// not widen the union (e.g. an `Expr::Error` branch in a Match).
     pub fn insert(&mut self, ty: Type) -> bool {
+        if matches!(ty, Type::Unknown) {
+            return false;
+        }
         if self.types.contains(&ty) {
             return false;
         }

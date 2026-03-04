@@ -8,7 +8,7 @@ mod error;
 pub(crate) use error::ErrorSet;
 
 mod field;
-pub(crate) use field::{Field, FieldTy};
+pub(crate) use field::{Field, FieldAttr, FieldTy};
 
 mod fk;
 pub(crate) use fk::ForeignKeyField;
@@ -26,7 +26,7 @@ mod key_attr;
 pub(crate) use key_attr::KeyAttr;
 
 mod model;
-pub(crate) use model::{Model, ModelKind, VariantField};
+pub(crate) use model::{Model, ModelKind};
 
 mod model_attr;
 pub(crate) use model_attr::ModelAttr;

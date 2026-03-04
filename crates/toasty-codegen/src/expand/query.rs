@@ -29,32 +29,36 @@ impl Expand<'_> {
 
                 #filter_methods
 
-                #vis async fn all(self, db: &mut #toasty::Db) -> #toasty::Result<#toasty::Cursor<#model_ident>> {
-                    db.all(self.stmt).await
+                #vis async fn all(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#toasty::Cursor<#model_ident>> {
+                    use #toasty::ExecutorExt;
+                    executor.all(self.stmt).await
                 }
 
-                #vis async fn first(self, db: &mut #toasty::Db) -> #toasty::Result<#toasty::Option<#model_ident>> {
-                    db.first(self.stmt).await
+                #vis async fn first(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#toasty::Option<#model_ident>> {
+                    use #toasty::ExecutorExt;
+                    executor.first(self.stmt).await
                 }
 
-                #vis async fn get(self, db: &mut #toasty::Db) -> #toasty::Result<#model_ident> {
-                    db.get(self.stmt).await
+                #vis async fn get(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
+                    use #toasty::ExecutorExt;
+                    executor.get(self.stmt).await
                 }
 
                 #vis fn update(self) -> #update_struct_ident {
                     #update_struct_ident::from(self)
                 }
 
-                #vis async fn delete(self, db: &mut #toasty::Db) -> #toasty::Result<()> {
-                    db.exec(self.stmt.delete()).await?;
+                #vis async fn delete(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<()> {
+                    use #toasty::ExecutorExt;
+                    executor.exec(self.stmt.delete()).await?;
                     Ok(())
                 }
 
-                #vis async fn collect<#collect_ty>(self, db: &mut #toasty::Db) -> #toasty::Result<#collect_ty>
+                #vis async fn collect<#collect_ty>(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#collect_ty>
                 where
                     #collect_ty: #toasty::FromCursor<#model_ident>
                 {
-                    self.all(db).await?.collect().await
+                    self.all(executor).await?.collect().await
                 }
 
                 #vis fn paginate(self, per_page: usize) -> #toasty::stmt::Paginate<#model_ident> {

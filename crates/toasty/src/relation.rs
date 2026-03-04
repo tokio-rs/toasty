@@ -14,7 +14,7 @@ use super::Model;
 use toasty_core::schema::app::FieldId;
 use toasty_core::stmt::Value;
 
-pub trait Relation {
+pub trait Relation: Sized {
     /// The target model
     type Model: Model;
 

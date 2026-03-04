@@ -11,7 +11,7 @@ pub struct Association<T: ?Sized> {
 impl<M: Model> Association<[M]> {
     /// A basic has_many association
     pub fn many<T: Model>(source: Select<T>, path: Path<[M]>) -> Self {
-        assert_eq!(path.untyped.root, T::id());
+        assert_eq!(path.untyped.root.expect_model(), T::id());
 
         Self {
             untyped: stmt::Association {
@@ -25,7 +25,7 @@ impl<M: Model> Association<[M]> {
     /// A has_one or belongs_to association via a query, which implies there
     /// could be more than one result.
     pub fn many_via_one<T: Model>(source: Select<T>, path: Path<M>) -> Self {
-        assert_eq!(path.untyped.root, T::id());
+        assert_eq!(path.untyped.root.expect_model(), T::id());
 
         Self {
             untyped: stmt::Association {
@@ -66,7 +66,7 @@ impl<M: Model> Association<[M]> {
 
 impl<M: Model> Association<M> {
     pub fn one<T: Model>(source: Select<T>, path: Path<M>) -> Self {
-        assert_eq!(path.untyped.root, T::id());
+        assert_eq!(path.untyped.root.expect_model(), T::id());
 
         Self {
             untyped: stmt::Association {
