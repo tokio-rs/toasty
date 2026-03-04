@@ -105,7 +105,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
             const NULLABLE: bool = false;
 
             fn ty() -> #toasty::Type {
-                #toasty::Type::Model(Self::id())
+                #toasty::Type::Model(<Self as #toasty::Register>::id())
             }
 
             fn load(value: #toasty::Value) -> #toasty::Result<Self> {
@@ -130,7 +130,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
             fn field_ty(_storage_ty: Option<#toasty::schema::db::Type>) -> #toasty::schema::app::FieldTy {
                 #toasty::schema::app::FieldTy::Embedded(
                     #toasty::schema::app::Embedded {
-                        target: Self::id(),
+                        target: <Self as #toasty::Register>::id(),
                         expr_ty: Self::ty(),
                     }
                 )
@@ -242,7 +242,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
             ) -> #toasty::schema::app::FieldTy {
                 #toasty::schema::app::FieldTy::Embedded(
                     #toasty::schema::app::Embedded {
-                        target: Self::id(),
+                        target: <Self as #toasty::Register>::id(),
                         expr_ty: Self::ty(),
                     }
                 )
