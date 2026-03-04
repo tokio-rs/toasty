@@ -79,8 +79,7 @@ fn parse_create_item(input: ParseStream) -> syn::Result<CreateItem> {
         // Array: [item, item, ...]
         let content;
         bracketed!(content in input);
-        let items =
-            Punctuated::<CreateItemInList, syn::Token![,]>::parse_terminated(&content)?;
+        let items = Punctuated::<CreateItemInList, syn::Token![,]>::parse_terminated(&content)?;
         Ok(CreateItem::List(items.into_iter().map(|i| i.0).collect()))
     } else {
         // Plain expression — but guard against struct literals with a type prefix
@@ -122,6 +121,10 @@ impl Parse for FieldEntry {
         let with_name = syn::Ident::new(&format!("with_{}", name), name.span());
         input.parse::<syn::Token![:]>()?;
         let value = parse_create_item(input)?;
-        Ok(FieldEntry { name, with_name, value })
+        Ok(FieldEntry {
+            name,
+            with_name,
+            value,
+        })
     }
 }
