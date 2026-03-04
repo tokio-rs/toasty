@@ -1,6 +1,6 @@
 use crate::{
     stmt::{self, IntoInsert},
-    Cursor, Db, Model, Result,
+    Cursor, Executor, ExecutorExt, Model, Result,
 };
 use toasty_core::stmt as core_stmt;
 
@@ -62,7 +62,7 @@ impl<M: Model> CreateMany<M> {
         merged.into_list_expr()
     }
 
-    pub async fn exec(self, db: &mut Db) -> Result<Vec<M>> {
+    pub async fn exec(self, executor: &mut dyn Executor) -> Result<Vec<M>> {
         // If there are no records to create, then return an empty vec
         if self.stmts.is_empty() {
             return Ok(vec![]);
@@ -78,8 +78,8 @@ impl<M: Model> CreateMany<M> {
 
         merged.untyped.source.single = false;
 
-        let records = db.exec(merged.into()).await?;
-        let cursor = Cursor::new(db.schema().clone(), records);
+        let records = executor.exec(merged.into()).await?;
+        let cursor = Cursor::new(executor.schema().clone(), records);
         cursor.collect().await
     }
 }

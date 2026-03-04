@@ -1,4 +1,4 @@
-use crate::{relation::Relation, Model};
+use crate::relation::Relation;
 
 use toasty_core::stmt::Value;
 
@@ -9,7 +9,7 @@ pub struct HasMany<T> {
     values: Option<Vec<T>>,
 }
 
-impl<T: Model> HasMany<T> {
+impl<T: Relation> HasMany<T> {
     pub fn load(input: Value) -> crate::Result<Self> {
         match input {
             Value::List(items) => {
@@ -62,6 +62,10 @@ impl<T: Relation> Relation for HasMany<T> {
 
     fn nullable() -> bool {
         T::nullable()
+    }
+
+    fn load(value: Value) -> Result<Self, crate::Error> {
+        Self::load(value)
     }
 }
 

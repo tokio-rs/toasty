@@ -1,4 +1,4 @@
-use crate::{relation::Relation, Model};
+use crate::relation::Relation;
 
 use toasty_core::stmt::Value;
 
@@ -9,7 +9,7 @@ pub struct BelongsTo<T> {
     value: Option<Box<T>>,
 }
 
-impl<T: Model> BelongsTo<T> {
+impl<T: Relation> BelongsTo<T> {
     pub fn load(input: Value) -> crate::Result<Self> {
         Ok(match input {
             Value::Null => Self::default(),
@@ -50,6 +50,10 @@ impl<T: Relation> Relation for BelongsTo<T> {
 
     fn nullable() -> bool {
         T::nullable()
+    }
+
+    fn load(value: Value) -> Result<Self, crate::Error> {
+        Self::load(value)
     }
 }
 

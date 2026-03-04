@@ -36,6 +36,19 @@ impl Simplify<'_> {
             }
         }
 
+        // Project into Match: distribute the projection into each arm's expression.
+        // Example: project(Match(d, [1 => Record([d, a]), 2 => Record([d, n])]), [0])
+        //        → Match(d, [1 => project(Record([d, a]), [0]), 2 => project(Record([d, n]), [0])])
+        //        → Match(d, [1 => d, 2 => d])   (after recursive simplification)
+        if let stmt::Expr::Match(match_expr) = &mut *expr.base {
+            for arm in &mut match_expr.arms {
+                arm.expr = stmt::Expr::project(arm.expr.take(), expr.projection.clone());
+            }
+            *match_expr.else_expr =
+                stmt::Expr::project(match_expr.else_expr.take(), expr.projection.clone());
+            return Some(expr.base.take());
+        }
+
         None
     }
 }

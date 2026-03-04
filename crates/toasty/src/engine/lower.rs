@@ -314,6 +314,36 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     .into();
                 }
             }
+            stmt::Expr::IsVariant(e) => {
+                // Look up the enum model and variant directly via VariantId
+                let enum_model = self
+                    .schema()
+                    .app
+                    .model(e.variant.model)
+                    .expect_embedded_enum();
+                let has_data = enum_model.has_data_variants();
+                let discriminant = enum_model.variants[e.variant.index].discriminant;
+
+                // Lower the inner expression
+                self.visit_expr_mut(&mut e.expr);
+
+                let lowered_expr = e.expr.take();
+
+                // Emit the appropriate comparison
+                if has_data {
+                    // Data-carrying: project([0]) to extract discriminant from Record
+                    *expr = stmt::Expr::eq(
+                        stmt::Expr::project(lowered_expr, [0usize]),
+                        stmt::Expr::Value(stmt::Value::I64(discriminant)),
+                    );
+                } else {
+                    // Unit-only: compare directly
+                    *expr = stmt::Expr::eq(
+                        lowered_expr,
+                        stmt::Expr::Value(stmt::Value::I64(discriminant)),
+                    );
+                }
+            }
             stmt::Expr::Reference(expr_reference) => {
                 match expr_reference {
                     stmt::ExprReference::Field { nesting, index } => {

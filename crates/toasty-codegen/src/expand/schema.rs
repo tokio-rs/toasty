@@ -184,6 +184,7 @@ impl Expand<'_> {
                     primary_key: #primary_key,
                     auto: #auto,
                     constraints: vec![],
+                    variant: None,
                 }
             }
         });

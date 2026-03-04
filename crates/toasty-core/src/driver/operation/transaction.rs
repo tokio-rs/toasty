@@ -29,14 +29,14 @@ pub enum Transaction {
     /// Rollback a transaction
     Rollback,
 
-    /// Create a savepoint with the given numeric identifier
-    Savepoint(usize),
+    /// Create a savepoint with the given identifier
+    Savepoint(String),
 
     /// Release (commit) a savepoint
-    ReleaseSavepoint(usize),
+    ReleaseSavepoint(String),
 
     /// Rollback to a savepoint, undoing work since it was created
-    RollbackToSavepoint(usize),
+    RollbackToSavepoint(String),
 }
 
 impl Transaction {
