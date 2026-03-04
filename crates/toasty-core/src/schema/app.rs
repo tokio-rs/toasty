@@ -22,7 +22,7 @@ mod index;
 pub use index::{Index, IndexField, IndexId};
 
 mod model;
-pub use model::{EmbeddedEnum, EmbeddedStruct, EnumVariant, Model, ModelId, ModelRoot};
+pub use model::{EmbeddedEnum, EmbeddedStruct, EnumVariant, Model, ModelId, ModelRoot, VariantId};
 
 mod pk;
 pub use pk::PrimaryKey;
@@ -31,6 +31,6 @@ mod relation;
 pub use relation::{BelongsTo, HasMany, HasOne};
 
 mod schema;
-pub use schema::Schema;
+pub use schema::{Resolved, Schema};
 
 use super::Name;

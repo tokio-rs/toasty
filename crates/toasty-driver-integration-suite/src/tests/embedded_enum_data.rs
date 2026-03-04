@@ -23,19 +23,17 @@ pub async fn data_carrying_enum_schema(test: &mut Test) {
                 _ {
                     name.upper_camel_case(): "Email",
                     discriminant: 1,
-                    fields: [
-                        _ { id.index: 0, name.app_name: "address", .. },
-                    ],
                     ..
                 },
                 _ {
                     name.upper_camel_case(): "Phone",
                     discriminant: 2,
-                    fields: [
-                        _ { id.index: 1, name.app_name: "number", .. },
-                    ],
                     ..
                 },
+            ],
+            fields: [
+                _ { id.index: 0, name.app_name: "address", .. },
+                _ { id.index: 1, name.app_name: "number", .. },
             ],
             ..
         }),
@@ -67,23 +65,21 @@ pub async fn mixed_enum_schema(test: &mut Test) {
                 _ {
                     name.upper_camel_case(): "Pending",
                     discriminant: 1,
-                    fields.len(): 0,
                     ..
                 },
                 _ {
                     name.upper_camel_case(): "Failed",
                     discriminant: 2,
-                    fields: [
-                        _ { id.index: 0, name.app_name: "reason", .. },
-                    ],
                     ..
                 },
                 _ {
                     name.upper_camel_case(): "Done",
                     discriminant: 3,
-                    fields.len(): 0,
                     ..
                 },
+            ],
+            fields: [
+                _ { id.index: 0, name.app_name: "reason", .. },
             ],
             ..
         }),
@@ -507,21 +503,11 @@ pub async fn global_field_indices(test: &mut Test) {
 
     assert_struct!(schema.app.models, #{
         Event::id(): toasty::schema::app::Model::EmbeddedEnum(_ {
-            variants: [
-                _ {
-                    fields: [
-                        _ { id.index: 0, name.app_name: "user_id", .. },
-                        _ { id.index: 1, name.app_name: "ip", .. },
-                    ],
-                    ..
-                },
-                _ {
-                    fields: [
-                        _ { id.index: 2, name.app_name: "item_id", .. },
-                        _ { id.index: 3, name.app_name: "amount", .. },
-                    ],
-                    ..
-                },
+            fields: [
+                _ { id.index: 0, name.app_name: "user_id", .. },
+                _ { id.index: 1, name.app_name: "ip", .. },
+                _ { id.index: 2, name.app_name: "item_id", .. },
+                _ { id.index: 3, name.app_name: "amount", .. },
             ],
             ..
         }),

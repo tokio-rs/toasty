@@ -245,25 +245,16 @@ impl Expand<'_> {
             let field_ident = &field.name.ident;
             let ty = match &field.ty {
                 FieldTy::Primitive(ty) => ty,
-                _ => {
-                    // Relations and nested embedded types are not yet supported
-                    panic!("only primitive fields are supported in embedded types")
-                }
+                _ => panic!("only primitive fields are supported in embedded types"),
             };
 
-            let into_expr = if by_ref {
+            let value = if by_ref {
                 quote!((&self.#field_ident))
             } else {
                 quote!(self.#field_ident)
             };
 
-            quote! {
-                {
-                    let expr: #toasty::stmt::Expr<#ty> = #toasty::IntoExpr::into_expr(#into_expr);
-                    let untyped: #toasty::core::stmt::Expr = expr.into();
-                    untyped
-                }
-            }
+            self.expand_into_untyped_expr(ty, value)
         });
 
         quote! {
