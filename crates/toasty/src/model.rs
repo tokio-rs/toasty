@@ -1,4 +1,7 @@
-use crate::Error;
+use crate::{
+    stmt::{IntoExpr, IntoInsert},
+    Error,
+};
 use toasty_core::{
     schema::app::{self, ModelId},
     stmt,
@@ -43,7 +46,7 @@ pub trait Model: Register + Sized {
     type Query;
 
     /// Create builder type for this model
-    type Create: Default;
+    type Create: Default + IntoInsert<Model = Self> + IntoExpr<Self>;
 
     /// Update builder type for this model
     type Update<'a>;

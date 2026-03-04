@@ -28,10 +28,7 @@ impl<M: Model> CreateMany<M> {
     /// Closure-based variant of `item`: builds a single record using the model's
     /// create builder. `f` receives a default create builder and must return it
     /// after setting the desired fields.
-    pub fn with_item(mut self, f: impl FnOnce(M::Create) -> M::Create) -> Self
-    where
-        M::Create: stmt::IntoInsert<Model = M>,
-    {
+    pub fn with_item(mut self, f: impl FnOnce(M::Create) -> M::Create) -> Self {
         let create = f(M::Create::default());
         let stmt = create.into_insert();
         assert!(

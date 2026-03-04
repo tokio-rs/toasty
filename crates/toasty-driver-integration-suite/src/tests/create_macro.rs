@@ -296,3 +296,78 @@ pub async fn create_macro_with_belongs_to(test: &mut Test) -> Result<()> {
 
     Ok(())
 }
+
+#[driver_test(id(ID))]
+pub async fn create_macro_deeply_nested(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        #[has_many]
+        todos: toasty::HasMany<Todo>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: ID,
+
+        #[index]
+        user_id: ID,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::BelongsTo<User>,
+
+        title: String,
+
+        #[has_many]
+        tags: toasty::HasMany<Tag>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Tag {
+        #[key]
+        #[auto]
+        id: ID,
+
+        #[index]
+        todo_id: ID,
+
+        #[belongs_to(key = todo_id, references = id)]
+        todo: toasty::BelongsTo<Todo>,
+
+        name: String,
+    }
+
+    let mut db = test.setup_db(models!(User, Todo, Tag)).await;
+
+    // Three levels deep: User → Todo → Tag
+    let user = toasty::create!(User, {
+        name: "Carl",
+        todos: [{
+            title: "get something done",
+            tags: [{ name: "urgent" }, { name: "work" }]
+        }]
+    })
+    .exec(&mut db)
+    .await?;
+
+    assert_eq!(user.name, "Carl");
+
+    let todos: Vec<_> = user.todos().collect(&mut db).await?;
+    assert_eq!(todos.len(), 1);
+    assert_eq!(todos[0].title, "get something done");
+
+    let mut tags: Vec<_> = todos[0].tags().collect(&mut db).await?;
+    tags.sort_by(|a, b| a.name.cmp(&b.name));
+    assert_eq!(tags.len(), 2);
+    assert_eq!(tags[0].name, "urgent");
+    assert_eq!(tags[1].name, "work");
+
+    Ok(())
+}
