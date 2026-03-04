@@ -1,4 +1,8 @@
-use crate::{stmt, Cursor, Executor, ExecutorExt, Model, Result};
+use crate::{
+    stmt::{self, IntoInsert},
+    Cursor, Executor, ExecutorExt, Model, Result,
+};
+use toasty_core::stmt as core_stmt;
 
 pub struct CreateMany<M: Model> {
     /// The builder holds an `Insert` statement which can create multiple
@@ -19,6 +23,40 @@ impl<M: Model> CreateMany<M> {
         );
         self.stmts.push(stmt);
         self
+    }
+
+    /// Closure-based variant of `item`: builds a single record using the model's
+    /// create builder. `f` receives a default create builder and must return it
+    /// after setting the desired fields.
+    pub fn with_item(mut self, f: impl FnOnce(M::Create) -> M::Create) -> Self {
+        let create = f(M::Create::default());
+        let stmt = create.into_insert();
+        assert!(
+            stmt.untyped.source.single,
+            "BUG: insert statement should have `single` flag set"
+        );
+        self.stmts.push(stmt);
+        self
+    }
+
+    /// Convert the collected inserts into a list expression suitable for
+    /// embedding in a parent insert statement (e.g., as a nested HasMany value).
+    ///
+    /// Unlike `exec`, this does not run any database query.
+    pub fn into_expr(self) -> stmt::Expr<[M]> {
+        if self.stmts.is_empty() {
+            return stmt::Expr::from_untyped(core_stmt::Expr::list(std::iter::empty::<
+                core_stmt::Expr,
+            >()));
+        }
+        let mut stmts = self.stmts.into_iter();
+        let mut merged = stmts.next().unwrap();
+        for stmt in stmts {
+            merged.merge(stmt);
+        }
+        // Clear the single flag so the engine handles multi-row inserts correctly.
+        merged.untyped.source.single = false;
+        merged.into_list_expr()
     }
 
     pub async fn exec(self, executor: &mut dyn Executor) -> Result<Vec<M>> {

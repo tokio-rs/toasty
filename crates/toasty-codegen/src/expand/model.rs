@@ -98,6 +98,7 @@ impl Expand<'_> {
 
             impl #toasty::Relation for #model_ident {
                 type Model = #model_ident;
+                type Create = #create_struct_ident;
                 type Expr = #model_ident;
                 type Query = #query_struct_ident;
                 type Many = Many;

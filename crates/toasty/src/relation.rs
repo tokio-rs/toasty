@@ -10,6 +10,7 @@ pub use has_one::HasOne;
 pub mod option;
 
 use super::Model;
+use crate::stmt::{IntoExpr, IntoInsert};
 
 use toasty_core::schema::app::FieldId;
 use toasty_core::stmt::Value;
@@ -17,6 +18,9 @@ use toasty_core::stmt::Value;
 pub trait Relation: Sized {
     /// The target model
     type Model: Model;
+
+    /// Create builder for the target model
+    type Create: Default + IntoInsert<Model = Self::Model> + IntoExpr<Self::Model>;
 
     /// The target expression (e.g. `Option<Model>`)
     type Expr;
