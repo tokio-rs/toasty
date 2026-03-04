@@ -1,4 +1,5 @@
 use super::Simplify;
+use bit_set::BitSet;
 use std::mem;
 use toasty_core::stmt;
 
@@ -68,6 +69,12 @@ impl Simplify<'_> {
 
         // Complement law, `a or not(a)` → `true` (only if `a` is non-nullable)
         if self.try_complement_or(expr) {
+            return Some(true.into());
+        }
+
+        // Variant tautology: `is_variant(x, 0) or is_variant(x, 1)` covering all
+        // variants of the enum → `true`
+        if self.try_variant_tautology_or(expr) {
             return Some(true.into());
         }
 
@@ -181,6 +188,46 @@ impl Simplify<'_> {
         }
 
         false
+    }
+
+    /// Checks for variant tautology: when all variants of an enum are tested
+    /// via `IsVariant` on the same expression, the OR is always true.
+    ///
+    /// `is_variant(x, 0) or is_variant(x, 1)` over `{0, 1}` → `true`
+    fn try_variant_tautology_or(&self, expr: &stmt::ExprOr) -> bool {
+        // Find the first IsVariant to use as anchor
+        let Some(first) = expr.operands.iter().find_map(|op| match op {
+            stmt::Expr::IsVariant(iv) => Some(iv),
+            _ => None,
+        }) else {
+            return false;
+        };
+
+        let anchor_expr = &first.expr;
+        let model_id = first.variant.model;
+        let num_variants = self
+            .schema()
+            .app
+            .model(model_id)
+            .expect_embedded_enum()
+            .variants
+            .len();
+
+        let mut seen = BitSet::with_capacity(num_variants);
+
+        for operand in &expr.operands {
+            let stmt::Expr::IsVariant(iv) = operand else {
+                continue;
+            };
+
+            if iv.expr != *anchor_expr || iv.variant.model != model_id {
+                return false;
+            }
+
+            seen.insert(iv.variant.index);
+        }
+
+        seen.len() == num_variants
     }
 
     /// Converts disjunctive equality chains to IN lists.
