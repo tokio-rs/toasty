@@ -402,7 +402,7 @@ impl Expand<'_> {
     pub(super) fn expand_enum_primitive_ty(&self) -> TokenStream {
         let toasty = &self.toasty;
         if self.expand_enum_has_data_variants() {
-            quote! { #toasty::Type::Model(Self::id()) }
+            quote! { #toasty::Type::Model(<Self as #toasty::Register>::id()) }
         } else {
             quote! { #toasty::Type::I64 }
         }
