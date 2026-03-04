@@ -9,6 +9,7 @@ pub mod default_and_update;
 pub mod embedded_enum_data;
 pub mod embedded_enum_unit;
 pub mod embedded_struct;
+pub mod embedded_struct_index;
 pub mod field_auto;
 pub mod field_column_name;
 pub mod field_column_type;

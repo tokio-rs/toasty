@@ -183,47 +183,77 @@ impl BuildTableFromModels<'_> {
         }
         .build_mapping(root);
 
-        self.populate_model_indices(model.id(), root);
+        let model_fields = &self.mapping.model(model.id()).fields;
+        let mut indices = Vec::new();
+        self.collect_indices(&root.fields, model_fields, &root.indices, &mut indices);
+
+        for index in indices {
+            if index.primary_key {
+                self.table.primary_key.columns = index.columns.iter().map(|c| c.column).collect();
+            }
+
+            self.table.indices.push(index);
+        }
     }
 
-    fn populate_model_indices(&mut self, model_id: app::ModelId, root: &ModelRoot) {
-        for model_index in &root.indices {
+    /// Collects DB-level indices from app-level index definitions, then recurses
+    /// into embedded struct fields to collect their indices as well.
+    fn collect_indices(
+        &self,
+        fields: &[app::Field],
+        field_mappings: &[mapping::Field],
+        indices: &[app::Index],
+        out: &mut Vec<db::Index>,
+    ) {
+        for app_index in indices {
             let mut index = db::Index {
                 id: IndexId {
                     table: self.table.id,
-                    index: self.table.indices.len(),
+                    index: out.len(),
                 },
                 name: String::new(),
                 on: self.table.id,
                 columns: vec![],
-                unique: model_index.unique,
-                primary_key: model_index.primary_key,
+                unique: app_index.unique,
+                primary_key: app_index.primary_key,
             };
 
-            for index_field in &model_index.fields {
-                let column = self.mapping.model(model_id).fields[index_field.field.index]
+            for index_field in &app_index.fields {
+                let column = field_mappings[index_field.field.index]
                     .as_primitive()
-                    .unwrap()
+                    .expect("indexed field should map to a primitive column")
                     .column;
 
-                match &root.fields[index_field.field.index].ty {
-                    app::FieldTy::Primitive(_) => index.columns.push(db::IndexColumn {
-                        column,
-                        op: index_field.op,
-                        scope: index_field.scope,
-                    }),
-                    app::FieldTy::Embedded(_) => todo!("embedded field indexing"),
-                    app::FieldTy::BelongsTo(_) => todo!(),
-                    app::FieldTy::HasMany(_) => todo!(),
-                    app::FieldTy::HasOne(_) => todo!(),
-                }
-
-                if model_index.primary_key {
-                    self.table.primary_key.columns.push(column);
-                }
+                index.columns.push(db::IndexColumn {
+                    column,
+                    op: index_field.op,
+                    scope: index_field.scope,
+                });
             }
 
-            self.table.indices.push(index);
+            out.push(index);
+        }
+
+        for (field_index, field) in fields.iter().enumerate() {
+            let app::FieldTy::Embedded(embedded) = &field.ty else {
+                continue;
+            };
+
+            let app::Model::EmbeddedStruct(embedded_struct) = self.app.model(embedded.target)
+            else {
+                continue;
+            };
+
+            let field_mapping = field_mappings[field_index]
+                .as_struct()
+                .expect("embedded struct field should have struct mapping");
+
+            self.collect_indices(
+                &embedded_struct.fields,
+                &field_mapping.fields,
+                &embedded_struct.indices,
+                out,
+            );
         }
     }
 

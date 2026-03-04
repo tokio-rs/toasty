@@ -91,6 +91,13 @@ pub struct EmbeddedStruct {
 
     /// Fields contained by the embedded struct
     pub fields: Vec<Field>,
+
+    /// Indices defined on this embedded struct's fields.
+    ///
+    /// These reference fields within this embedded struct (not the parent model).
+    /// The schema builder propagates them to physical DB indexes on the parent
+    /// table's flattened columns.
+    pub indices: Vec<Index>,
 }
 
 impl EmbeddedStruct {

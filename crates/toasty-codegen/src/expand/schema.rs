@@ -36,6 +36,7 @@ impl Expand<'_> {
                             id,
                             name: #name,
                             fields: #fields,
+                            indices: #indices,
                         }
                     )
                 }
