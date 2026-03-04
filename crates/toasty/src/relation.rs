@@ -12,6 +12,7 @@ pub mod option;
 use super::Model;
 
 use toasty_core::schema::app::FieldId;
+use toasty_core::stmt::Value;
 
 pub trait Relation: Sized {
     /// The target model
@@ -39,4 +40,10 @@ pub trait Relation: Sized {
     fn nullable() -> bool {
         false
     }
+
+    /// Load an instance of this relation target from a value.
+    ///
+    /// Implemented by models (delegating to `Model::load`) and by `Option<T>`
+    /// (handling null values).
+    fn load(value: Value) -> Result<Self, crate::Error>;
 }
