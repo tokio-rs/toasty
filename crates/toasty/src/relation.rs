@@ -45,7 +45,5 @@ pub trait Relation: Sized {
     ///
     /// Implemented by models (delegating to `Model::load`) and by `Option<T>`
     /// (handling null values).
-    fn load(value: Value) -> Result<Self, crate::Error>
-    where
-        Self: Sized;
+    fn load(value: Value) -> Result<Self, crate::Error>;
 }
