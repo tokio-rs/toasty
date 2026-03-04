@@ -65,7 +65,7 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 
 ### Data Modification
 
-**[Upsert](./upsert.md)**
+**Upsert**
 - Insert-or-update: atomic `INSERT ... ON CONFLICT DO UPDATE` (PostgreSQL/SQLite), `ON DUPLICATE KEY UPDATE` (MySQL), `MERGE` (SQL Server/Oracle)
 - Insert-or-ignore (`DO NOTHING` / `INSERT IGNORE`)
 - Conflict target: by column(s), by constraint name, partial indexes (PostgreSQL)
