@@ -16,7 +16,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
     }
 }
 
-#[proc_macro_derive(Embed, attributes(column))]
+#[proc_macro_derive(Embed, attributes(column, index, unique))]
 pub fn derive_embed(input: TokenStream) -> TokenStream {
     match toasty_codegen::generate_embed(input.into()) {
         Ok(output) => output.into(),

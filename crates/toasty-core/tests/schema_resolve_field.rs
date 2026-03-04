@@ -142,6 +142,7 @@ fn schema() -> Schema {
             prim_field(ADDRESS, 0, "street"),
             prim_field(ADDRESS, 1, "city"),
         ],
+        indices: vec![],
     });
 
     let user = Model::Root(ModelRoot {
