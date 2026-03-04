@@ -240,15 +240,15 @@ Equivalent encoding to be determined when implementing the DynamoDB driver phase
 6. **Integration tests**: CRUD for data-carrying enums; full-value equality filter;
    variant-only filter (`is_email()`); unit enum variant filter (`is_pending()`).
 
+7. **Variant+field filter** (`contact().email().matches(|e| e.address().eq("x"))`):
+   per-variant field accessors with closure-based `.matches()` API.
+
+8. **OR tautology elimination**: `is_variant(x, 0) or is_variant(x, 1)` covering all
+   variants of an enum folds to `true` in the OR simplifier.
+
 ### Remaining
 
-- **Variant+field filter** (`contact().email().address().eq("x")`): per-variant field
-  accessors that project into the variant's data fields. Requires generating
-  accessor methods on the fields struct for each variant's fields.
-
 - **Partial updates**: within-variant partial update builder.
-
-- **OR tautology elimination**: `is_bar() || is_baz()` over `{Bar, Baz}` → `TRUE`.
 
 - **DynamoDB**: equivalent encoding in the DynamoDB driver.
 
