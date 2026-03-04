@@ -249,7 +249,7 @@ impl Expand<'_> {
                             app_name: #app_name.to_string(),
                             storage_name: None,
                         },
-                        ty: <#ty as #toasty::stmt::Primitive>::field_ty(None),
+                        ty: <#ty as #toasty::stmt::Primitive>::field_ty(None, None),
                         nullable: <#ty as #toasty::stmt::Primitive>::NULLABLE,
                         primary_key: false,
                         auto: None,

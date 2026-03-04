@@ -17,6 +17,7 @@ fn id_field(model: ModelId) -> Field {
         ty: FieldTy::Primitive(FieldPrimitive {
             ty: stmt::Type::String,
             storage_ty: None,
+            serialize: None,
         }),
         nullable: false,
         primary_key: true,
@@ -36,6 +37,7 @@ fn prim_field(model: ModelId, index: usize, name: &str) -> Field {
         ty: FieldTy::Primitive(FieldPrimitive {
             ty: stmt::Type::String,
             storage_ty: None,
+            serialize: None,
         }),
         nullable: false,
         primary_key: false,
@@ -55,6 +57,7 @@ fn variant_field(model: ModelId, index: usize, name: &str, variant_index: usize)
         ty: FieldTy::Primitive(FieldPrimitive {
             ty: stmt::Type::String,
             storage_ty: None,
+            serialize: None,
         }),
         nullable: false,
         primary_key: false,
@@ -98,6 +101,7 @@ fn schema() -> Schema {
         discriminant: FieldPrimitive {
             ty: stmt::Type::I64,
             storage_ty: None,
+            serialize: None,
         },
         variants: vec![
             EnumVariant {
@@ -118,6 +122,7 @@ fn schema() -> Schema {
         discriminant: FieldPrimitive {
             ty: stmt::Type::I64,
             storage_ty: None,
+            serialize: None,
         },
         variants: vec![
             EnumVariant {

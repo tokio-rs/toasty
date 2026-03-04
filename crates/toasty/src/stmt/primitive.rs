@@ -62,10 +62,12 @@ pub trait Primitive: Sized {
     /// Embedded types override this to return Embedded field type.
     fn field_ty(
         storage_ty: Option<toasty_core::schema::db::Type>,
+        serialize: Option<toasty_core::schema::app::SerializeFormat>,
     ) -> toasty_core::schema::app::FieldTy {
         toasty_core::schema::app::FieldTy::Primitive(toasty_core::schema::app::FieldPrimitive {
             ty: Self::ty(),
             storage_ty,
+            serialize,
         })
     }
 }

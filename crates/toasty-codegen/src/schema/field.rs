@@ -4,6 +4,12 @@ use super::{BelongsTo, Column, ErrorSet, HasMany, HasOne, Name};
 
 use syn::spanned::Spanned;
 
+/// Codegen-level representation of a serialization format.
+#[derive(Debug, Clone)]
+pub(crate) enum SerializeFormat {
+    Json,
+}
+
 #[derive(Debug)]
 pub(crate) struct Field {
     /// Index of field in the containing model
@@ -51,6 +57,9 @@ pub(crate) struct FieldAttr {
 
     /// Expression to apply on create and update: `#[update(<expr>)]`
     pub(crate) update_expr: Option<syn::Expr>,
+
+    /// Serialization format for the field: `#[serialize(json)]`
+    pub(crate) serialize: Option<SerializeFormat>,
 }
 
 #[derive(Debug)]
@@ -94,6 +103,7 @@ impl Field {
             column: None,
             default_expr: None,
             update_expr: None,
+            serialize: None,
         };
 
         let mut ty = None;
@@ -190,6 +200,23 @@ impl Field {
                 } else {
                     attrs.update_expr = Some(attr.parse_args()?);
                 }
+            } else if attr.path().is_ident("serialize") {
+                if attrs.serialize.is_some() {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "duplicate #[serialize] attribute",
+                    ));
+                } else {
+                    let format: syn::Ident = attr.parse_args()?;
+                    if format == "json" {
+                        attrs.serialize = Some(SerializeFormat::Json);
+                    } else {
+                        errs.push(syn::Error::new_spanned(
+                            &format,
+                            "unsupported serialization format; expected `json`",
+                        ));
+                    }
+                }
             } else if attr.path().is_ident("toasty") {
                 // todo
             }
@@ -229,6 +256,13 @@ impl Field {
             errs.push(syn::Error::new_spanned(
                 field,
                 "#[update] cannot be used on relation fields",
+            ));
+        }
+
+        if ty.is_some() && attrs.serialize.is_some() {
+            errs.push(syn::Error::new_spanned(
+                field,
+                "#[serialize] cannot be used on relation fields",
             ));
         }
 
