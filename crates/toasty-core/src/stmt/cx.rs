@@ -5,8 +5,8 @@ use crate::{
     },
     stmt::{
         Delete, Expr, ExprArg, ExprColumn, ExprReference, ExprSet, Insert, InsertTarget, Query,
-        Returning, Select, Source, SourceTable, Statement, TableFactor, TableRef, Type, Update,
-        UpdateTarget,
+        Returning, Select, Source, SourceTable, Statement, TableFactor, TableRef, Type, TypeUnion,
+        Update, UpdateTarget,
     },
     Schema,
 };
@@ -365,6 +365,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                 self.infer_expr_reference_ty(expr_ref)
             }
             Expr::IsNull(_) => Type::Bool,
+            Expr::IsVariant(_) => Type::Bool,
             Expr::List(e) => {
                 debug_assert!(!e.items.is_empty());
                 Type::list(self.infer_expr_ty2(args, &e.items[0], returning_expr))
@@ -436,6 +437,24 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                     .collect(),
             ),
             Expr::Value(value) => value.infer_ty(),
+            Expr::Match(expr_match) => {
+                // Collect the distinct non-null types from all arms and the else
+                // branch. If all agree on one type, return it directly. If they
+                // differ, return a Union so callers know exactly which shapes are
+                // possible at runtime.
+                let mut union = TypeUnion::new();
+                for arm in &expr_match.arms {
+                    let ty = self.infer_expr_ty2(args, &arm.expr, returning_expr);
+                    union.insert(ty);
+                }
+                let else_ty = self.infer_expr_ty2(args, &expr_match.else_expr, returning_expr);
+                union.insert(else_ty);
+                union.simplify()
+            }
+            // Error is a bottom type — it can never be evaluated, so it
+            // could be any type. Return Unknown so it unifies with whatever
+            // the other branches produce.
+            Expr::Error(_) => Type::Unknown,
             _ => todo!("{expr:#?}"),
         }
     }

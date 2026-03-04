@@ -10,24 +10,24 @@ pub async fn reset_db_and_recreate(t: &mut Test) -> Result<()> {
     }
 
     // Setup and insert data
-    let db = t.setup_db(models!(User)).await;
-    User::create().id(1).name("Alice").exec(&db).await?;
-    User::create().id(2).name("Bob").exec(&db).await?;
+    let mut db = t.setup_db(models!(User)).await;
+    User::create().id(1).name("Alice").exec(&mut db).await?;
+    User::create().id(2).name("Bob").exec(&mut db).await?;
 
     // Verify data exists by key lookup
-    let alice = User::get_by_id(&db, &1).await?;
+    let alice = User::get_by_id(&mut db, &1).await?;
     assert_eq!(alice.name, "Alice");
-    let bob = User::get_by_id(&db, &2).await?;
+    let bob = User::get_by_id(&mut db, &2).await?;
     assert_eq!(bob.name, "Bob");
 
     // Reset the database
     db.reset_db().await?;
 
     // Re-setup (tables were dropped along with the database)
-    let db = t.setup_db(models!(User)).await;
+    let mut db = t.setup_db(models!(User)).await;
 
     // Verify the data is gone — lookups by known keys should return nothing
-    assert_err!(User::get_by_id(&db, &1).await);
-    assert_err!(User::get_by_id(&db, &2).await);
+    assert_err!(User::get_by_id(&mut db, &1).await);
+    assert_err!(User::get_by_id(&mut db, &2).await);
     Ok(())
 }

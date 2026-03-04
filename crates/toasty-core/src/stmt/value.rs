@@ -155,6 +155,9 @@ impl Value {
     }
 
     pub fn is_a(&self, ty: &Type) -> bool {
+        if let Type::Union(types) = ty {
+            return types.iter().any(|t| self.is_a(t));
+        }
         match self {
             Self::Null => true,
             Self::Bool(_) => ty.is_bool(),
@@ -337,6 +340,17 @@ impl PartialOrd for Value {
 impl From<bool> for Value {
     fn from(src: bool) -> Self {
         Self::Bool(src)
+    }
+}
+
+impl TryFrom<Value> for bool {
+    type Error = crate::Error;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Bool(v) => Ok(v),
+            _ => Err(crate::Error::type_conversion(value, "bool")),
+        }
     }
 }
 

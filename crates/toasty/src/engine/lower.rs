@@ -10,18 +10,14 @@ use toasty_core::{
     driver::Capability,
     schema::{
         app::{self, FieldTy, ModelRoot},
-        db::{Column, ColumnId},
+        db::ColumnId,
         mapping,
     },
     stmt::{self, visit_mut, IntoExprTarget, VisitMut},
     Result, Schema,
 };
 
-use crate::engine::{
-    hir,
-    simplify::{self, Simplify},
-    Engine, HirStatement,
-};
+use crate::engine::{hir, simplify::Simplify, Engine, HirStatement};
 
 impl Engine {
     pub(super) fn lower_stmt(&self, stmt: stmt::Statement) -> Result<HirStatement> {
@@ -316,6 +312,36 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                         list: Box::new(arg),
                     }
                     .into();
+                }
+            }
+            stmt::Expr::IsVariant(e) => {
+                // Look up the enum model and variant directly via VariantId
+                let enum_model = self
+                    .schema()
+                    .app
+                    .model(e.variant.model)
+                    .expect_embedded_enum();
+                let has_data = enum_model.has_data_variants();
+                let discriminant = enum_model.variants[e.variant.index].discriminant;
+
+                // Lower the inner expression
+                self.visit_expr_mut(&mut e.expr);
+
+                let lowered_expr = e.expr.take();
+
+                // Emit the appropriate comparison
+                if has_data {
+                    // Data-carrying: project([0]) to extract discriminant from Record
+                    *expr = stmt::Expr::eq(
+                        stmt::Expr::project(lowered_expr, [0usize]),
+                        stmt::Expr::Value(stmt::Value::I64(discriminant)),
+                    );
+                } else {
+                    // Unit-only: compare directly
+                    *expr = stmt::Expr::eq(
+                        lowered_expr,
+                        stmt::Expr::Value(stmt::Value::I64(discriminant)),
+                    );
                 }
             }
             stmt::Expr::Reference(expr_reference) => {
@@ -713,91 +739,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         }
     }
 
-    fn apply_lowering_filter_constraint(&self, filter: &mut stmt::Filter) {
-        let Some(model) = self.expr_cx.target().as_model() else {
-            return;
-        };
-
-        let table = self.schema().table_for(model);
-        let mapping = self.mapping_unwrap();
-
-        // TODO: we really shouldn't have to simplify here, but until
-        // simplification includes overlapping predicate pruning, we have to do
-        // this here.
-        if let Some(expr) = &mut filter.expr {
-            simplify::simplify_expr(self.expr_cx, expr);
-        }
-
-        let mut operands = vec![];
-
-        for column in table.primary_key_columns() {
-            let pattern = match &mapping.model_to_table[column.id.index] {
-                stmt::Expr::ConcatStr(expr) => {
-                    // hax
-                    let stmt::Expr::Value(stmt::Value::String(a)) = &expr.exprs[0] else {
-                        todo!()
-                    };
-                    let stmt::Expr::Value(stmt::Value::String(b)) = &expr.exprs[1] else {
-                        todo!()
-                    };
-
-                    format!("{a}{b}")
-                }
-                stmt::Expr::Value(_) => todo!(),
-                _ => continue,
-            };
-
-            if let Some(filter) = &filter.expr {
-                if self.is_eq_constrained(filter, column) {
-                    continue;
-                }
-            }
-
-            assert_eq!(self.mapping_unwrap().columns[column.id.index], column.id);
-
-            operands.push(stmt::Expr::begins_with(
-                self.expr_cx.expr_ref_column(column),
-                pattern,
-            ));
-        }
-
-        if operands.is_empty() {
-            return;
-        }
-
-        filter.add_filter(stmt::Expr::and_from_vec(operands));
-    }
-
-    fn is_eq_constrained(&self, expr: &stmt::Expr, column: &Column) -> bool {
-        use stmt::Expr::*;
-
-        match expr {
-            And(expr) => expr.iter().any(|expr| self.is_eq_constrained(expr, column)),
-            Or(expr) => expr.iter().all(|expr| self.is_eq_constrained(expr, column)),
-            BinaryOp(expr) => {
-                if !expr.op.is_eq() {
-                    return false;
-                }
-
-                match (&*expr.lhs, &*expr.rhs) {
-                    (Reference(lhs), _) => {
-                        self.expr_cx.resolve_expr_reference(lhs).expect_column().id == column.id
-                    }
-                    (_, Reference(rhs)) => {
-                        self.expr_cx.resolve_expr_reference(rhs).expect_column().id == column.id
-                    }
-                    _ => false,
-                }
-            }
-            InList(expr) => match &*expr.expr {
-                Reference(lhs) => {
-                    self.expr_cx.resolve_expr_reference(lhs).expect_column().id == column.id
-                }
-                _ => todo!("expr={:#?}", expr),
-            },
-            _ => todo!("expr={:#?}", expr),
-        }
-    }
+    fn apply_lowering_filter_constraint(&self, _filter: &mut stmt::Filter) {}
 
     fn lower_expr_field(&self, nesting: usize, index: usize) -> stmt::Expr {
         match self.cx {
@@ -1275,7 +1217,7 @@ fn build_update_returning(
                 // Recurse to build a nested SparseRecord. The lowering pipeline
                 // resolves each reference to the correct column, and the simplifier
                 // folds project(record([...]), [i]) → column_ref.
-                let emb_mapping = mf.as_embedded().unwrap();
+                let emb_mapping = mf.as_struct().unwrap();
                 exprs.push(build_update_returning(
                     model_id,
                     Some(root_field_id),

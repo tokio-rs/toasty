@@ -42,6 +42,11 @@ impl ExecLog {
             (driver_op.operation, driver_op.response)
         }
     }
+
+    #[track_caller]
+    pub fn pop_op(&mut self) -> Operation {
+        self.pop().0
+    }
 }
 
 impl fmt::Debug for ExecLog {

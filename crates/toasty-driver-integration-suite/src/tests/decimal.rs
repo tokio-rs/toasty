@@ -14,7 +14,7 @@ pub async fn ty_decimal(test: &mut Test) -> Result<(), BoxError> {
         val: Decimal,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     let test_values = vec![
         Decimal::from_str("0")?,
@@ -30,8 +30,8 @@ pub async fn ty_decimal(test: &mut Test) -> Result<(), BoxError> {
     ];
 
     for val in &test_values {
-        let created = Foo::create().val(*val).exec(&db).await?;
-        let read = Foo::get_by_id(&db, &created.id).await?;
+        let created = Foo::create().val(*val).exec(&mut db).await?;
+        let read = Foo::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
     }
     Ok(())
@@ -52,7 +52,7 @@ pub async fn ty_decimal_as_text(test: &mut Test) -> Result<(), BoxError> {
         val: Decimal,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     let test_values = vec![
         Decimal::from_str("0")?,
@@ -62,8 +62,8 @@ pub async fn ty_decimal_as_text(test: &mut Test) -> Result<(), BoxError> {
     ];
 
     for val in &test_values {
-        let created = Foo::create().val(*val).exec(&db).await?;
-        let read = Foo::get_by_id(&db, &created.id).await?;
+        let created = Foo::create().val(*val).exec(&mut db).await?;
+        let read = Foo::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
     }
     Ok(())
@@ -81,7 +81,7 @@ pub async fn ty_decimal_as_numeric_arbitrary_precision(test: &mut Test) -> Resul
         val: Decimal,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     let test_values = vec![
         Decimal::from_str("0")?,
@@ -92,8 +92,8 @@ pub async fn ty_decimal_as_numeric_arbitrary_precision(test: &mut Test) -> Resul
     ];
 
     for val in &test_values {
-        let created = Foo::create().val(*val).exec(&db).await?;
-        let read = Foo::get_by_id(&db, &created.id).await?;
+        let created = Foo::create().val(*val).exec(&mut db).await?;
+        let read = Foo::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
     }
     Ok(())
@@ -111,7 +111,7 @@ pub async fn ty_decimal_as_numeric_fixed_precision(test: &mut Test) -> Result<()
         val: Decimal,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     let test_values = vec![
         Decimal::from_str("0")?,
@@ -122,8 +122,8 @@ pub async fn ty_decimal_as_numeric_fixed_precision(test: &mut Test) -> Result<()
     ];
 
     for val in &test_values {
-        let created = Foo::create().val(*val).exec(&db).await?;
-        let read = Foo::get_by_id(&db, &created.id).await?;
+        let created = Foo::create().val(*val).exec(&mut db).await?;
+        let read = Foo::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
     }
     Ok(())

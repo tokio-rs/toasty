@@ -8,7 +8,8 @@ use indexmap::IndexMap;
 ///
 /// Different field types have different storage strategies:
 /// - Primitive fields map to a single column
-/// - Embedded fields flatten to multiple columns (one per primitive field in the embedded struct)
+/// - Struct fields flatten an embedded struct to multiple columns
+/// - Enum fields map to a discriminant column plus per-variant data columns
 /// - Relation fields (`BelongsTo`, `HasMany`, `HasOne`) don't have direct column storage
 #[derive(Debug, Clone)]
 pub enum Field {
@@ -16,7 +17,10 @@ pub enum Field {
     Primitive(FieldPrimitive),
 
     /// An embedded struct field flattened into multiple columns.
-    Embedded(FieldEmbedded),
+    Struct(FieldStruct),
+
+    /// An embedded enum field stored as a discriminant column plus per-variant data columns.
+    Enum(FieldEnum),
 
     /// A relation field that doesn't map to columns in this table.
     Relation(FieldRelation),
@@ -30,7 +34,8 @@ impl Field {
     /// correspond to the primitives it covers:
     ///
     /// - `Primitive` → singleton set containing only its own bit
-    /// - `Embedded`  → union of all nested primitive bits (recursively)
+    /// - `Struct`    → union of all nested primitive bits (recursively)
+    /// - `Enum`      → singleton set (the whole enum value changes atomically)
     /// - `Relation`  → singleton set (assigned a bit for uniform tracking)
     ///
     /// Masks are used during update lowering to determine whether a partial
@@ -41,7 +46,8 @@ impl Field {
     pub fn field_mask(&self) -> PathFieldSet {
         match self {
             Field::Primitive(p) => p.field_mask.clone(),
-            Field::Embedded(e) => e.field_mask.clone(),
+            Field::Struct(s) => s.field_mask.clone(),
+            Field::Enum(e) => e.field_mask.clone(),
             Field::Relation(r) => r.field_mask.clone(),
         }
     }
@@ -52,7 +58,8 @@ impl Field {
         static IDENTITY: Projection = Projection::identity();
         match self {
             Field::Primitive(p) => &p.sub_projection,
-            Field::Embedded(e) => &e.sub_projection,
+            Field::Struct(s) => &s.sub_projection,
+            Field::Enum(e) => &e.sub_projection,
             Field::Relation(_) => &IDENTITY,
         }
     }
@@ -75,9 +82,16 @@ impl Field {
         }
     }
 
-    pub fn as_embedded(&self) -> Option<&FieldEmbedded> {
+    pub fn as_struct(&self) -> Option<&FieldStruct> {
         match self {
-            Field::Embedded(e) => Some(e),
+            Field::Struct(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub fn as_enum(&self) -> Option<&FieldEnum> {
+        match self {
+            Field::Enum(e) => Some(e),
             _ => None,
         }
     }
@@ -85,18 +99,23 @@ impl Field {
     /// Returns an iterator over all (column, lowering) pairs impacted by this field.
     ///
     /// For primitive fields, yields a single pair.
-    /// For embedded fields, yields all columns in the flattened structure.
+    /// For struct fields, yields all flattened columns.
+    /// For enum fields, yields the discriminant column plus all variant data columns.
     /// For relation fields, yields nothing.
     pub fn columns(&self) -> impl Iterator<Item = (ColumnId, usize)> + '_ {
-        let single = match self {
-            Field::Primitive(fp) => Some((fp.column, fp.lowering)),
-            _ => None,
-        };
-        let multi = match self {
-            Field::Embedded(fe) => Some(fe.columns.iter().map(|(k, v)| (*k, *v))),
-            _ => None,
-        };
-        single.into_iter().chain(multi.into_iter().flatten())
+        match self {
+            Field::Primitive(fp) => Box::new(std::iter::once((fp.column, fp.lowering)))
+                as Box<dyn Iterator<Item = (ColumnId, usize)> + '_>,
+            Field::Struct(fs) => Box::new(fs.columns.iter().map(|(k, v)| (*k, *v))),
+            Field::Enum(fe) => Box::new(
+                std::iter::once((fe.discriminant.column, fe.discriminant.lowering)).chain(
+                    fe.variants
+                        .iter()
+                        .flat_map(|v| v.fields.iter().flat_map(|f| f.columns())),
+                ),
+            ),
+            Field::Relation(_) => Box::new(std::iter::empty()),
+        }
     }
 }
 
@@ -137,37 +156,58 @@ pub struct FieldPrimitive {
 /// with names like `{field}_{embedded_field}`. This structure tracks the mapping
 /// for each field in the embedded struct.
 #[derive(Debug, Clone)]
-pub struct FieldEmbedded {
+pub struct FieldStruct {
     /// Per-field mappings for the embedded struct's fields.
     ///
-    /// Indexed by field index within the embedded model. Relation fields use
-    /// `Field::Relation` (though they aren't allowed in embedded types).
+    /// Indexed by field index within the embedded model.
     pub fields: Vec<Field>,
 
     /// Flattened mapping from columns to lowering expression indices.
     ///
     /// This map contains all columns impacted by this embedded field, paired
     /// with their corresponding lowering expression index in `Model::model_to_table`.
-    /// This allows treating full embedded struct updates uniformly with partial
-    /// updates and primitive field updates.
     pub columns: IndexMap<ColumnId, usize>,
 
     /// Update coverage mask for this embedded field.
     ///
     /// The union of the `field_mask` bits of every primitive nested within this
-    /// embedded struct (recursively). During update lowering, intersecting
-    /// `changed_mask` with this mask reveals whether the update has full coverage
-    /// of the embedded field (intersection equals `field_mask`) or only partial
-    /// coverage (recurse into sub-fields to build a `SparseRecord`).
+    /// embedded struct (recursively).
     pub field_mask: PathFieldSet,
 
     /// The projection from the root model field down to this embedded field
     /// within the type hierarchy. Identity for root-level embedded fields.
-    ///
-    /// When the embedded field is fully covered by an update, we emit
-    /// `project(ref_self_field(root_field_id), sub_projection)` to reference
-    /// the entire embedded value for constantization.
     pub sub_projection: Projection,
+}
+
+/// Maps an embedded enum field to its discriminant column and per-variant data columns.
+///
+/// The discriminant column always stores the active variant's integer discriminant.
+/// Each data variant additionally has nullable columns for its fields; unit variants
+/// have no extra columns (all variant-field columns are NULL for them).
+#[derive(Debug, Clone)]
+pub struct FieldEnum {
+    /// Mapping for the discriminant column.
+    pub discriminant: FieldPrimitive,
+
+    /// Per-variant mappings, in the same order as `app::EmbeddedEnum::variants`.
+    pub variants: Vec<EnumVariant>,
+
+    /// Update coverage mask for the enum field (singleton: the whole enum changes atomically).
+    pub field_mask: PathFieldSet,
+
+    /// Sub-projection from the root model field to this enum field.
+    pub sub_projection: Projection,
+}
+
+/// Mapping for a single variant of an embedded enum.
+#[derive(Debug, Clone)]
+pub struct EnumVariant {
+    /// The discriminant value for this variant.
+    pub discriminant: i64,
+
+    /// Field mappings for this variant's data fields, in declaration order.
+    /// Empty for unit variants. Supports nesting (each entry is a full `Field`).
+    pub fields: Vec<Field>,
 }
 
 /// Maps a relation field (`BelongsTo`, `HasMany`, `HasOne`).
@@ -179,10 +219,5 @@ pub struct FieldEmbedded {
 #[derive(Debug, Clone)]
 pub struct FieldRelation {
     /// Update coverage mask for this relation field.
-    ///
-    /// A singleton bitset giving the relation a unique bit in the model's field
-    /// mask space. This lets relation assignments be detected uniformly through
-    /// the same mask intersection logic used for primitive and embedded fields,
-    /// even though relations have no column storage in this table.
     pub field_mask: PathFieldSet,
 }

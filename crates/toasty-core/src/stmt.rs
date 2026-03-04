@@ -42,20 +42,14 @@ pub use expr_any::ExprAny;
 mod expr_arg;
 pub use expr_arg::ExprArg;
 
-mod expr_begins_with;
-pub use expr_begins_with::ExprBeginsWith;
-
 mod expr_binary_op;
 pub use expr_binary_op::ExprBinaryOp;
 
 mod expr_cast;
 pub use expr_cast::ExprCast;
 
-mod expr_concat;
-pub use expr_concat::ExprConcat;
-
-mod expr_concat_str;
-pub use expr_concat_str::ExprConcatStr;
+mod expr_error;
+pub use expr_error::ExprError;
 
 mod expr_exists;
 pub use expr_exists::ExprExists;
@@ -72,11 +66,8 @@ pub use expr_in_subquery::ExprInSubquery;
 mod expr_is_null;
 pub use expr_is_null::ExprIsNull;
 
-mod expr_key;
-pub use expr_key::ExprKey;
-
-mod expr_like;
-pub use expr_like::ExprLike;
+mod expr_is_variant;
+pub use expr_is_variant::ExprIsVariant;
 
 mod expr_list;
 pub use expr_list::ExprList;
@@ -84,14 +75,14 @@ pub use expr_list::ExprList;
 mod expr_map;
 pub use expr_map::ExprMap;
 
+mod expr_match;
+pub use expr_match::{ExprMatch, MatchArm};
+
 mod expr_not;
 pub use expr_not::ExprNot;
 
 mod expr_or;
 pub use expr_or::ExprOr;
-
-mod expr_pattern;
-pub use expr_pattern::ExprPattern;
 
 mod expr_project;
 pub use expr_project::ExprProject;
@@ -110,9 +101,6 @@ pub use expr_set_op::ExprSetOp;
 
 mod expr_stmt;
 pub use expr_stmt::ExprStmt;
-
-mod expr_ty;
-pub use expr_ty::ExprTy;
 
 mod filter;
 pub use filter::Filter;
@@ -171,7 +159,7 @@ mod op_set;
 pub use op_set::SetOp;
 
 mod path;
-pub use path::Path;
+pub use path::{Path, PathRoot};
 
 mod path_field_set;
 pub use path_field_set::PathFieldSet;
@@ -217,6 +205,9 @@ pub use table_with_joins::TableWithJoins;
 
 mod ty;
 pub use ty::Type;
+
+mod ty_union;
+pub use ty_union::TypeUnion;
 
 #[cfg(feature = "jiff")]
 mod ty_jiff;

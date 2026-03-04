@@ -175,17 +175,62 @@ impl From<ExprRecord> for Expr {
     }
 }
 
-impl<E1, E2> From<(E1, E2)> for ExprRecord
-where
-    E1: Into<Expr>,
-    E2: Into<Expr>,
-{
-    fn from(src: (E1, E2)) -> Self {
-        Self {
-            fields: vec![src.0.into(), src.1.into()],
+macro_rules! impl_for_tuple {
+    ( $len:literal; $(($T:ident, $idx:tt)),+ ) => {
+        impl<$($T),+> From<($($T,)+)> for ExprRecord
+        where
+            $($T: Into<Expr>,)+
+        {
+            fn from(src: ($($T,)+)) -> Self {
+                Self {
+                    fields: vec![$(src.$idx.into()),+],
+                }
+            }
         }
-    }
+
+        impl<$($T),+> PartialEq<($($T,)+)> for Expr
+        where
+            $(Expr: PartialEq<$T>,)+
+            $(Value: PartialEq<$T>,)+
+        {
+            fn eq(&self, other: &($($T,)+)) -> bool {
+                match self {
+                    Expr::Record(r) => {
+                        r.fields.len() == $len
+                            $(&& r.fields[$idx].eq(&other.$idx))+
+                    }
+                    Expr::Value(Value::Record(r)) => {
+                        r.fields.len() == $len
+                            $(&& r.fields[$idx].eq(&other.$idx))+
+                    }
+                    _ => false,
+                }
+            }
+        }
+
+        impl<$($T),+> PartialEq<Expr> for ($($T,)+)
+        where
+            Expr: PartialEq<($($T,)+)>,
+        {
+            fn eq(&self, other: &Expr) -> bool {
+                other.eq(self)
+            }
+        }
+    };
 }
+
+impl_for_tuple!(1; (T0, 0));
+impl_for_tuple!(2; (T0, 0), (T1, 1));
+impl_for_tuple!(3; (T0, 0), (T1, 1), (T2, 2));
+impl_for_tuple!(4; (T0, 0), (T1, 1), (T2, 2), (T3, 3));
+impl_for_tuple!(5; (T0, 0), (T1, 1), (T2, 2), (T3, 3), (T4, 4));
+impl_for_tuple!(6; (T0, 0), (T1, 1), (T2, 2), (T3, 3), (T4, 4), (T5, 5));
+impl_for_tuple!(7; (T0, 0), (T1, 1), (T2, 2), (T3, 3), (T4, 4), (T5, 5), (T6, 6));
+impl_for_tuple!(8; (T0, 0), (T1, 1), (T2, 2), (T3, 3), (T4, 4), (T5, 5), (T6, 6), (T7, 7));
+impl_for_tuple!(9; (T0, 0), (T1, 1), (T2, 2), (T3, 3), (T4, 4), (T5, 5), (T6, 6), (T7, 7), (T8, 8));
+impl_for_tuple!(10; (T0, 0), (T1, 1), (T2, 2), (T3, 3), (T4, 4), (T5, 5), (T6, 6), (T7, 7), (T8, 8), (T9, 9));
+impl_for_tuple!(11; (T0, 0), (T1, 1), (T2, 2), (T3, 3), (T4, 4), (T5, 5), (T6, 6), (T7, 7), (T8, 8), (T9, 9), (T10, 10));
+impl_for_tuple!(12; (T0, 0), (T1, 1), (T2, 2), (T3, 3), (T4, 4), (T5, 5), (T6, 6), (T7, 7), (T8, 8), (T9, 9), (T10, 10), (T11, 11));
 
 impl Node for ExprRecord {
     fn visit<V: Visit>(&self, mut visit: V) {

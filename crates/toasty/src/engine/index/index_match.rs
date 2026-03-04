@@ -35,24 +35,6 @@ impl<'stmt> IndexMatch<'stmt> {
         use stmt::Expr::*;
 
         match expr {
-            Pattern(stmt::ExprPattern::BeginsWith(e)) => {
-                debug_assert!(e.pattern.is_value(), "TODO");
-
-                // Equivalent to a binary op with a `<=` operator.
-                match &*e.expr {
-                    stmt::Expr::Reference(expr_column @ stmt::ExprReference::Column(_)) => {
-                        let m = self.match_expr_binary_op_column(
-                            cx,
-                            expr_column,
-                            expr,
-                            stmt::BinaryOp::Le,
-                        );
-                        assert!(m, "TODO; expr={expr:#?}");
-                        m
-                    }
-                    _ => todo!("expr={:#?}", expr),
-                }
-            }
             BinaryOp(e) => match (&*e.lhs, &*e.rhs) {
                 (stmt::Expr::Reference(lhs @ stmt::ExprReference::Column(_)), rhs) => {
                     assert!(
@@ -300,7 +282,7 @@ impl<'stmt> IndexMatch<'stmt> {
         use stmt::Expr::*;
 
         match expr {
-            Pattern(stmt::ExprPattern::BeginsWith(_)) | InList(_) | IsNull(_) | Not(_) => {
+            InList(_) | IsNull(_) | Not(_) => {
                 if self
                     .columns
                     .iter()

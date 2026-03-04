@@ -2,9 +2,9 @@ use crate::stmt::{ExprExists, Input};
 
 use super::{
     expr_reference::ExprReference, Entry, EntryMut, EntryPath, ExprAnd, ExprAny, ExprArg,
-    ExprBinaryOp, ExprCast, ExprConcat, ExprConcatStr, ExprFunc, ExprInList, ExprInSubquery,
-    ExprIsNull, ExprKey, ExprList, ExprMap, ExprNot, ExprOr, ExprPattern, ExprProject, ExprRecord,
-    ExprStmt, ExprTy, Node, Projection, Substitute, Value, Visit, VisitMut,
+    ExprBinaryOp, ExprCast, ExprError, ExprFunc, ExprInList, ExprInSubquery, ExprIsNull,
+    ExprIsVariant, ExprList, ExprMap, ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord,
+    ExprStmt, Node, Projection, Substitute, Value, Visit, VisitMut,
 };
 use std::fmt;
 
@@ -26,16 +26,12 @@ pub enum Expr {
     /// Cast an expression to a different type
     Cast(ExprCast),
 
-    /// Concat multiple expressions together
-    /// TODO: name this something different?
-    Concat(ExprConcat),
-
-    /// Concat strings
-    ConcatStr(ExprConcatStr),
-
     /// Suggests that the database should use its default value. Useful for
     /// auto-increment fields and other columns with default values.
     Default,
+
+    /// An error expression that fails evaluation with a message.
+    Error(ExprError),
 
     /// An exists expression `[ NOT ] EXISTS(SELECT ...)`, used in expressions like
     /// `WHERE [ NOT ] EXISTS (SELECT ...)`.
@@ -54,20 +50,20 @@ pub enum Expr {
     /// binary expression because of how databases treat null comparisons.
     IsNull(ExprIsNull),
 
-    /// References a model's primary key
-    Key(ExprKey),
+    /// Whether an expression evaluates to a specific enum variant.
+    IsVariant(ExprIsVariant),
 
     /// Apply an expression to each item in a list
     Map(ExprMap),
+
+    /// A match expression that dispatches on a subject expression
+    Match(ExprMatch),
 
     /// Negates a boolean expression
     Not(ExprNot),
 
     /// OR a set of binary expressions
     Or(ExprOr),
-
-    /// Checks if an expression matches a pattern.
-    Pattern(ExprPattern),
 
     /// Project an expression
     Project(ExprProject),
@@ -84,9 +80,6 @@ pub enum Expr {
 
     /// Evaluate a sub-statement
     Stmt(ExprStmt),
-
-    /// A type reference. This is used by the "is a" expression
-    Type(ExprTy),
 
     /// Evaluates to a constant value reference
     Value(Value),
@@ -155,12 +148,12 @@ impl Expr {
             Self::BinaryOp(_) => true,
             // IS NULL checks always evaluate to true or false.
             Self::IsNull(_) => true,
+            // Variant checks always evaluate to true or false.
+            Self::IsVariant(_) => true,
             // EXISTS checks always evaluate to true or false.
             Self::Exists(_) => true,
             // IN expressions always evaluate to true or false.
             Self::InList(_) | Self::InSubquery(_) => true,
-            // Pattern matching always evaluates to true or false.
-            Self::Pattern(_) => true,
             // For other expressions, we cannot prove non-nullability.
             _ => false,
         }
@@ -186,10 +179,13 @@ impl Expr {
     pub fn is_stable(&self) -> bool {
         match self {
             // Always stable - constant values
-            Self::Value(_) | Self::Type(_) => true,
+            Self::Value(_) => true,
 
             // Never stable - generates new values each evaluation
             Self::Default => false,
+
+            // Error expressions are stable (they always produce the same error)
+            Self::Error(_) => true,
 
             // Stable if all children are stable
             Self::Record(expr_record) => expr_record.iter().all(|expr| expr.is_stable()),
@@ -202,21 +198,17 @@ impl Expr {
             Self::Any(expr_any) => expr_any.expr.is_stable(),
             Self::Or(expr_or) => expr_or.iter().all(|expr| expr.is_stable()),
             Self::IsNull(expr_is_null) => expr_is_null.expr.is_stable(),
+            Self::IsVariant(expr_is_variant) => expr_is_variant.expr.is_stable(),
             Self::Not(expr_not) => expr_not.expr.is_stable(),
             Self::InList(expr_in_list) => {
                 expr_in_list.expr.is_stable() && expr_in_list.list.is_stable()
             }
-            Self::Concat(expr_concat) => expr_concat.iter().all(|expr| expr.is_stable()),
-            Self::ConcatStr(expr_concat_str) => {
-                expr_concat_str.exprs.iter().all(|expr| expr.is_stable())
-            }
             Self::Project(expr_project) => expr_project.base.is_stable(),
-            Self::Pattern(expr_pattern) => match expr_pattern {
-                super::ExprPattern::BeginsWith(e) => e.expr.is_stable() && e.pattern.is_stable(),
-                super::ExprPattern::Like(e) => e.expr.is_stable() && e.pattern.is_stable(),
-            },
             Self::Map(expr_map) => expr_map.base.is_stable() && expr_map.map.is_stable(),
-            Self::Key(_) => true,
+            Self::Match(expr_match) => {
+                expr_match.subject.is_stable()
+                    && expr_match.arms.iter().all(|arm| arm.expr.is_stable())
+            }
 
             // References and statements - stable (they reference existing data)
             Self::Reference(_) | Self::Arg(_) => true,
@@ -233,40 +225,75 @@ impl Expr {
     /// This means it contains no `Reference`, `Stmt`, or `Arg` expressions that
     /// reference external inputs.
     ///
-    /// Note: `Arg` expressions inside `Map` bodies are allowed because they reference
-    /// the mapped expression itself, not external data.
+    /// `Arg` expressions inside `Map` bodies *with `nesting` less than the current
+    /// map depth* are local bindings (bound to the mapped element), not external
+    /// inputs, and are therefore considered const in that context.
     pub fn is_const(&self) -> bool {
+        self.is_const_at_depth(0)
+    }
+
+    /// Inner implementation of [`is_const`] that tracks the number of enclosing
+    /// `Map` scopes. An `Arg` with `nesting < map_depth` is a local binding
+    /// introduced by one of those `Map`s and does not count as external input.
+    fn is_const_at_depth(&self, map_depth: usize) -> bool {
         match self {
             // Always constant
-            Self::Value(_) | Self::Type(_) => true,
+            Self::Value(_) => true,
+
+            // Arg: local if nesting is within map_depth, otherwise external
+            Self::Arg(arg) => arg.nesting < map_depth,
+
+            // Error expressions are constant (no external data)
+            Self::Error(_) => true,
 
             // Never constant - references external data
             Self::Reference(_)
             | Self::Stmt(_)
-            | Self::Arg(_)
             | Self::InSubquery(_)
             | Self::Exists(_)
-            | Self::Default => false,
+            | Self::Default
+            | Self::Func(_) => false,
 
-            // Const if all children are const
-            Self::Record(expr_record) => expr_record.iter().all(|expr| expr.is_const()),
-            Self::List(expr_list) => expr_list.items.iter().all(|expr| expr.is_const()),
-            Self::Cast(expr_cast) => expr_cast.expr.is_const(),
-            Self::BinaryOp(expr_binary) => expr_binary.lhs.is_const() && expr_binary.rhs.is_const(),
-            Self::And(expr_and) => expr_and.iter().all(|expr| expr.is_const()),
-            Self::Any(expr_any) => expr_any.expr.is_const(),
-            Self::Not(expr_not) => expr_not.expr.is_const(),
-            Self::Or(expr_or) => expr_or.iter().all(|expr| expr.is_const()),
-            Self::IsNull(expr_is_null) => expr_is_null.expr.is_const(),
+            // Const if all children are const at the same depth
+            Self::Record(expr_record) => expr_record
+                .iter()
+                .all(|expr| expr.is_const_at_depth(map_depth)),
+            Self::List(expr_list) => expr_list
+                .items
+                .iter()
+                .all(|expr| expr.is_const_at_depth(map_depth)),
+            Self::Cast(expr_cast) => expr_cast.expr.is_const_at_depth(map_depth),
+            Self::BinaryOp(expr_binary) => {
+                expr_binary.lhs.is_const_at_depth(map_depth)
+                    && expr_binary.rhs.is_const_at_depth(map_depth)
+            }
+            Self::And(expr_and) => expr_and
+                .iter()
+                .all(|expr| expr.is_const_at_depth(map_depth)),
+            Self::Any(expr_any) => expr_any.expr.is_const_at_depth(map_depth),
+            Self::Not(expr_not) => expr_not.expr.is_const_at_depth(map_depth),
+            Self::Or(expr_or) => expr_or.iter().all(|expr| expr.is_const_at_depth(map_depth)),
+            Self::IsNull(expr_is_null) => expr_is_null.expr.is_const_at_depth(map_depth),
+            Self::IsVariant(expr_is_variant) => expr_is_variant.expr.is_const_at_depth(map_depth),
             Self::InList(expr_in_list) => {
-                expr_in_list.expr.is_const() && expr_in_list.list.is_const()
+                expr_in_list.expr.is_const_at_depth(map_depth)
+                    && expr_in_list.list.is_const_at_depth(map_depth)
             }
-            Self::Concat(expr_concat) => expr_concat.iter().all(|expr| expr.is_const()),
-            Self::ConcatStr(expr_concat_str) => {
-                expr_concat_str.exprs.iter().all(|expr| expr.is_const())
+            Self::Project(expr_project) => expr_project.base.is_const_at_depth(map_depth),
+
+            // Map: base is checked at the current depth; the map body is checked
+            // at depth+1 so that arg(nesting=0) in the body is treated as local.
+            Self::Map(expr_map) => {
+                expr_map.base.is_const_at_depth(map_depth)
+                    && expr_map.map.is_const_at_depth(map_depth + 1)
             }
-            Self::Project(expr_project) => expr_project.base.is_const(),
-            _ => todo!("expr={self:#?}"),
+            Self::Match(expr_match) => {
+                expr_match.subject.is_const_at_depth(map_depth)
+                    && expr_match
+                        .arms
+                        .iter()
+                        .all(|arm| arm.expr.is_const_at_depth(map_depth))
+            }
         }
     }
 
@@ -278,10 +305,13 @@ impl Expr {
     pub fn is_eval(&self) -> bool {
         match self {
             // Always evaluable
-            Self::Value(_) | Self::Type(_) => true,
+            Self::Value(_) => true,
 
             // Args are OK for evaluation
             Self::Arg(_) => true,
+
+            // Error expressions are evaluable (they produce an error)
+            Self::Error(_) => true,
 
             // Never evaluable - references external data
             Self::Default
@@ -300,27 +330,16 @@ impl Expr {
             Self::Or(expr_or) => expr_or.iter().all(|expr| expr.is_eval()),
             Self::Not(expr_not) => expr_not.expr.is_eval(),
             Self::IsNull(expr_is_null) => expr_is_null.expr.is_eval(),
+            Self::IsVariant(expr_is_variant) => expr_is_variant.expr.is_eval(),
             Self::InList(expr_in_list) => {
                 expr_in_list.expr.is_eval() && expr_in_list.list.is_eval()
             }
-            Self::Concat(expr_concat) => expr_concat.iter().all(|expr| expr.is_eval()),
-            Self::ConcatStr(expr_concat_str) => {
-                expr_concat_str.exprs.iter().all(|expr| expr.is_eval())
-            }
             Self::Project(expr_project) => expr_project.base.is_eval(),
-            Self::Pattern(expr_pattern) => match expr_pattern {
-                super::ExprPattern::BeginsWith(e) => e.expr.is_eval() && e.pattern.is_eval(),
-                super::ExprPattern::Like(e) => e.expr.is_eval() && e.pattern.is_eval(),
-            },
             Self::Map(expr_map) => expr_map.base.is_eval() && expr_map.map.is_eval(),
-            Self::Key(_) => true,
-            Self::Func(expr_func) => match expr_func {
-                super::ExprFunc::Count(func_count) => {
-                    func_count.arg.as_ref().is_none_or(|e| e.is_eval())
-                        && func_count.filter.as_ref().is_none_or(|e| e.is_eval())
-                }
-                super::ExprFunc::LastInsertId(_) => true,
-            },
+            Self::Match(expr_match) => {
+                expr_match.subject.is_eval() && expr_match.arms.iter().all(|arm| arm.expr.is_eval())
+            }
+            Self::Func(_) => false,
         }
     }
 
@@ -457,25 +476,23 @@ impl fmt::Debug for Expr {
             Self::Arg(e) => e.fmt(f),
             Self::BinaryOp(e) => e.fmt(f),
             Self::Cast(e) => e.fmt(f),
-            Self::Concat(e) => e.fmt(f),
-            Self::ConcatStr(e) => e.fmt(f),
             Self::Default => write!(f, "Default"),
+            Self::Error(e) => e.fmt(f),
             Self::Exists(e) => e.fmt(f),
             Self::Func(e) => e.fmt(f),
             Self::InList(e) => e.fmt(f),
             Self::InSubquery(e) => e.fmt(f),
             Self::IsNull(e) => e.fmt(f),
-            Self::Key(e) => e.fmt(f),
+            Self::IsVariant(e) => e.fmt(f),
             Self::Map(e) => e.fmt(f),
+            Self::Match(e) => e.fmt(f),
             Self::Not(e) => e.fmt(f),
             Self::Or(e) => e.fmt(f),
-            Self::Pattern(e) => e.fmt(f),
             Self::Project(e) => e.fmt(f),
             Self::Record(e) => e.fmt(f),
             Self::Reference(e) => e.fmt(f),
             Self::List(e) => e.fmt(f),
             Self::Stmt(e) => e.fmt(f),
-            Self::Type(e) => e.fmt(f),
             Self::Value(e) => e.fmt(f),
         }
     }

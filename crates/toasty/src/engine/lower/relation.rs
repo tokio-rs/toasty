@@ -277,7 +277,7 @@ impl LowerStatement<'_, '_> {
 
         let mut stmt = stmt::Query::new_select(
             pair.id.model,
-            stmt::Expr::eq(stmt::Expr::key(pair.id.model), value),
+            stmt::Expr::eq(stmt::Expr::ref_ancestor_model(0), value),
         )
         .update();
 
@@ -310,7 +310,7 @@ impl LowerStatement<'_, '_> {
     ) {
         let selection = stmt::Query::new_select(
             pair.id.model,
-            stmt::Expr::eq(stmt::Expr::key(pair.id.model), value),
+            stmt::Expr::eq(stmt::Expr::ref_ancestor_model(0), value),
         );
 
         if pair.nullable {

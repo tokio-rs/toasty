@@ -1,5 +1,6 @@
 use super::Relation;
 use toasty_core::schema::app::FieldId;
+use toasty_core::stmt::Value;
 
 impl<T: Relation> Relation for Option<T> {
     type Model = T::Model;
@@ -17,5 +18,12 @@ impl<T: Relation> Relation for Option<T> {
 
     fn nullable() -> bool {
         true
+    }
+
+    fn load(value: Value) -> Result<Self, crate::Error> {
+        match value {
+            Value::Null => Ok(None),
+            v => Ok(Some(T::load(v)?)),
+        }
     }
 }

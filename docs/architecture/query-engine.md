@@ -146,7 +146,7 @@ Given a model with a renamed column:
 ```rust
 #[derive(Model)]
 struct User {
-    #[key] id: Id<Self>,
+    #[key] #[auto] id: u64,
     #[column(name = "first_and_last_name")]
     name: String,
     email: String,

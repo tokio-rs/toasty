@@ -24,11 +24,10 @@ impl Verify<'_> {
         debug_assert!(self.verify_ids_populated());
 
         for model in self.schema.app.models() {
-            let fields = match model {
-                super::app::Model::Root(root) => &root.fields[..],
-                super::app::Model::EmbeddedStruct(embedded) => &embedded.fields[..],
+            let super::app::Model::Root(root) = model else {
+                continue;
             };
-            for field in fields {
+            for field in &root.fields {
                 self.verify_relations_are_indexed(field);
                 self.verify_auto_field_type(field);
             }
@@ -50,11 +49,10 @@ impl Verify<'_> {
         for model in self.schema.app.models() {
             assert_ne!(model.id(), ModelId::placeholder());
 
-            let fields = match model {
-                super::app::Model::Root(root) => &root.fields[..],
-                super::app::Model::EmbeddedStruct(embedded) => &embedded.fields[..],
+            let super::app::Model::Root(root) = model else {
+                continue;
             };
-            for field in fields {
+            for field in &root.fields {
                 if let Some(has_many) = field.ty.as_has_many() {
                     assert_ne!(has_many.pair, FieldId::placeholder());
                 }

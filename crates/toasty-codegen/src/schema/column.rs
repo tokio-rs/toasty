@@ -5,6 +5,7 @@ use syn::parenthesized;
 pub(crate) struct Column {
     pub(crate) name: Option<syn::LitStr>,
     pub(crate) ty: Option<ColumnType>,
+    pub(crate) variant: Option<i64>,
 }
 
 impl Column {
@@ -18,6 +19,7 @@ impl syn::parse::Parse for Column {
         let mut result = Self {
             name: None,
             ty: None,
+            variant: None,
         };
 
         // Loop through the list of comma separated arguments to fill in the result one by one.
@@ -36,6 +38,17 @@ impl syn::parse::Parse for Column {
                     return Err(syn::Error::new(input.span(), "duplicate column name"));
                 }
                 result.name = Some(input.parse()?);
+            } else if lookahead.peek(kw::variant) {
+                if result.variant.is_some() {
+                    return Err(syn::Error::new(
+                        input.span(),
+                        "duplicate variant discriminant",
+                    ));
+                }
+                let _variant_token: kw::variant = input.parse()?;
+                let _eq_token: syn::Token![=] = input.parse()?;
+                let lit: syn::LitInt = input.parse()?;
+                result.variant = Some(lit.base10_parse()?);
             } else if lookahead.peek(syn::Token![type]) {
                 if result.ty.is_some() {
                     return Err(syn::Error::new(input.span(), "duplicate column type"));
@@ -58,6 +71,7 @@ impl syn::parse::Parse for Column {
 }
 
 mod kw {
+    syn::custom_keyword!(variant);
     syn::custom_keyword!(boolean);
 
     syn::custom_keyword!(int);

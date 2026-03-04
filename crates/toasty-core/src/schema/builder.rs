@@ -5,7 +5,6 @@ use crate::schema::mapping::TableToModel;
 use crate::schema::{Mapping, Schema, Table, TableId};
 use crate::{driver, stmt};
 use indexmap::IndexMap;
-use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct Builder {
@@ -84,7 +83,6 @@ impl Builder {
                     columns: vec![],
                     fields: vec![], // Will be populated during mapping phase
                     model_to_table: stmt::ExprRecord::default(),
-                    model_pk_to_table: stmt::Expr::null(),
                     table_to_model: TableToModel::default(),
                 },
             );
@@ -94,9 +92,9 @@ impl Builder {
 
         let schema = Schema {
             app,
-            db: Arc::new(db::Schema {
+            db: db::Schema {
                 tables: builder.tables,
-            }),
+            },
             mapping: builder.mapping,
         };
 
@@ -118,6 +116,7 @@ impl BuildSchema<'_> {
         let fields = match model {
             app::Model::Root(root) => &mut root.fields[..],
             app::Model::EmbeddedStruct(embedded) => &mut embedded.fields[..],
+            app::Model::EmbeddedEnum(_) => return Ok(()),
         };
         for field in fields.iter_mut() {
             if let app::FieldTy::Primitive(primitive) = &mut field.ty {

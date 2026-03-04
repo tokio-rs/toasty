@@ -17,10 +17,22 @@ impl Like<Any> for Expr {
     }
 }
 
+impl PartialEq<Any> for Expr {
+    fn eq(&self, _: &Any) -> bool {
+        true
+    }
+}
+
 /// Any wildcard matches any value
 impl Like<Any> for Value {
     fn like(&self, _pattern: &Any) -> bool {
         true // Any matches everything
+    }
+}
+
+impl PartialEq<Any> for Value {
+    fn eq(&self, _: &Any) -> bool {
+        true
     }
 }
 

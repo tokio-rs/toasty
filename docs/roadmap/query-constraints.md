@@ -18,8 +18,6 @@ These expression types exist in `toasty-core` (`crates/toasty-core/src/stmt/expr
 
 | Expression | Core AST | SQL Serialized | User API | Notes |
 |---|---|---|---|---|
-| NOT | `ExprNot` | Yes | `.not()` on `Expr<bool>` | Fully implemented |
-| IS NULL | `ExprIsNull` | Yes | No `.is_null()` on `Path<T>` | Core + SQL work, no user API |
 | LIKE | `ExprPattern::Like` | Yes | None | SQL serialization exists |
 | Begins With | `ExprPattern::BeginsWith` | Yes | None | Converted to `LIKE 'prefix%'` in SQL |
 | EXISTS | `ExprExists` | Yes | None on user API | Used internally by engine |
@@ -31,11 +29,6 @@ The following table compares Toasty's constraint support against 8 mature ORMs, 
 
 | Feature | Toasty | Prisma | Drizzle | Django | SQLAlchemy | Diesel | SeaORM | Hibernate |
 |---|---|---|---|---|---|---|---|---|---|
-| **Logical Operators** | | | | | | | | |
-| NOT | Yes | Yes | Yes | Yes | Yes | Per-op | Yes | Yes |
-| **Null Handling** | | | | | | | | |
-| IS NULL | AST only | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
-| IS NOT NULL | No | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | **Set Operations** | | | | | | | | |
 | NOT IN | No | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | **Range** | | | | | | | | |
@@ -68,12 +61,6 @@ The following table compares Toasty's constraint support against 8 mature ORMs, 
 ### Features with Existing Internal Support
 
 These features have core AST and SQL serialization but need user-facing APIs:
-
-**IS NULL / IS NOT NULL**
-- Core AST: `ExprIsNull` exists with SQL serialization
-- Needed: `.is_null()` and `.is_not_null()` on `Path<Option<T>>`
-- File: `crates/toasty/src/stmt/path.rs`
-- Use case: Nullable fields filtering (e.g., "deleted_at IS NULL", "email IS NOT NULL")
 
 **String Pattern Matching**
 - Core AST: `ExprPattern::BeginsWith` and `ExprPattern::Like` exist with SQL serialization
@@ -215,10 +202,9 @@ Based on the analysis above, the following groupings maximize user value:
 
 **Group 1: Expose Existing Internals**
 Items with core AST and SQL serialization that only need user-facing methods:
-- `.is_null()` / `.is_not_null()` on `Path<Option<T>>`
 - `.not_in_set()` on `Path<T>` (negate existing `InList`)
 
-Estimated scope: ~100 lines of user-facing API code + integration tests (for remaining items)
+Estimated scope: ~50 lines of user-facing API code + integration tests
 
 **Group 2: String Operations**
 Partial AST support that needs completion and exposure:
@@ -246,12 +232,10 @@ Requires deeper engine work:
 
 A comprehensive query constraint system would allow users to:
 
-1. Filter on any combination of field conditions using AND, OR, and NOT
-2. Check for NULL/non-NULL values
-3. Search strings by substring, prefix, and suffix (case-sensitive and case-insensitive)
-4. Use IN/NOT IN with both literal lists and subqueries
-5. Filter by related model attributes
-6. Use at least basic aggregate queries (COUNT)
-7. Fall back to raw SQL for anything the ORM can't express
+1. Search strings by substring, prefix, and suffix (case-sensitive and case-insensitive)
+2. Use NOT IN with literal lists and subqueries
+3. Filter by related model attributes
+4. Use at least basic aggregate queries (COUNT)
+5. Fall back to raw SQL for anything the ORM can't express
 
 This would put Toasty on par with the filtering capabilities of Diesel and SeaORM, and cover the vast majority of queries needed by typical web applications.

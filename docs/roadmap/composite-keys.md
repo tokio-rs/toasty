@@ -28,7 +28,7 @@ struct Foo {
 struct Todo {
     #[auto]
     id: uuid::Uuid,
-    user_id: Id<User>,
+    user_id: uuid::Uuid,
     title: String,
 }
 ```

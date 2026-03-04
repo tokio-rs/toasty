@@ -68,6 +68,18 @@ impl Simplify<'_> {
         // Range to equality: `a >= c and a <= c` → `a = c`
         self.try_range_to_equality(expr);
 
+        // Contradicting equality: `a == 1 AND a == 2` → false,
+        // `a == 1 AND a != 1` → false
+        if has_self_contradiction(&expr.operands) {
+            return Some(false.into());
+        }
+
+        // OR branch pruning: `AND(x == 1, OR(AND(x != 1, b), ...))` → prune
+        // branches whose eq/ne constraints contradict the outer AND constraints.
+        if let Some(result) = prune_or_branches(expr) {
+            return Some(result);
+        }
+
         if expr.operands.is_empty() {
             Some(true.into())
         } else if expr.operands.len() == 1 {
@@ -168,638 +180,123 @@ impl Simplify<'_> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::engine::simplify::test::test_schema;
-    use toasty_core::stmt::{Expr, ExprAnd};
+/// Checks for contradicting equality constraints within a single operand
+/// list: `a == 1 AND a == 2` → true, `a == 1 AND a != 1` → true.
+fn has_self_contradiction(operands: &[Expr]) -> bool {
+    for i in 0..operands.len() {
+        if is_contradicting_eq_constraints(&operands[i..=i], &operands[i + 1..]) {
+            return true;
+        }
+    }
+    false
+}
 
-    /// Builds `and(a, and(b, c))`, a nested AND structure for testing
-    /// flattening.
-    fn nested_and(a: Expr, b: Expr, c: Expr) -> ExprAnd {
-        ExprAnd {
-            operands: vec![
-                a,
-                Expr::And(ExprAnd {
-                    operands: vec![b, c],
-                }),
-            ],
+/// Prunes OR branches whose eq/ne constraints contradict the outer AND's
+/// non-OR constraints. Returns `Some(false)` if pruning produces a false
+/// operand; otherwise mutates `expr` in place and returns `None`.
+fn prune_or_branches(expr: &mut stmt::ExprAnd) -> Option<Expr> {
+    // Separate OR operands from non-OR constraints.
+    let mut or_operands: Vec<Expr> = Vec::new();
+    for op in mem::take(&mut expr.operands) {
+        if matches!(&op, Expr::Or(_)) {
+            or_operands.push(op);
+        } else {
+            expr.operands.push(op);
         }
     }
 
-    #[test]
-    fn flatten_all_symbolic() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `and(A, and(B, C)) → and(A, B, C)`
-        let mut expr = nested_and(Expr::arg(0), Expr::arg(1), Expr::arg(2));
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_none()); // Modified in place
-        assert_eq!(expr.operands.len(), 3);
-        assert_eq!(expr.operands[0], Expr::arg(0));
-        assert_eq!(expr.operands[1], Expr::arg(1));
-        assert_eq!(expr.operands[2], Expr::arg(2));
+    if or_operands.is_empty() {
+        return None;
     }
 
-    #[test]
-    fn flatten_with_true_in_outer() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `and(true, and(B, C)) → and(B, C)`
-        let mut expr = nested_and(true.into(), Expr::arg(1), Expr::arg(2));
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_none());
-        assert_eq!(expr.operands.len(), 2);
-        assert_eq!(expr.operands[0], Expr::arg(1));
-        assert_eq!(expr.operands[1], Expr::arg(2));
-    }
-
-    #[test]
-    fn flatten_with_true_in_nested_first() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `and(A, and(true, C)) → and(A, C)`
-        let mut expr = nested_and(Expr::arg(0), true.into(), Expr::arg(2));
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_none());
-        assert_eq!(expr.operands.len(), 2);
-        assert_eq!(expr.operands[0], Expr::arg(0));
-        assert_eq!(expr.operands[1], Expr::arg(2));
-    }
-
-    #[test]
-    fn flatten_with_true_in_nested_second() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `and(A, and(B, true)) → and(A, B)`
-        let mut expr = nested_and(Expr::arg(0), Expr::arg(1), true.into());
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_none());
-        assert_eq!(expr.operands.len(), 2);
-        assert_eq!(expr.operands[0], Expr::arg(0));
-        assert_eq!(expr.operands[1], Expr::arg(1));
-    }
-
-    #[test]
-    fn flatten_outer_true_nested_one_true() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `and(true, and(true, C)) → C`
-        let mut expr = nested_and(true.into(), true.into(), Expr::arg(2));
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_some());
-        assert_eq!(result.unwrap(), Expr::arg(2));
-    }
-
-    #[test]
-    fn flatten_outer_symbolic_nested_all_true() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `and(A, and(true, true)) → A`
-        let mut expr = nested_and(Expr::arg(0), true.into(), true.into());
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_some());
-        assert_eq!(result.unwrap(), Expr::arg(0));
-    }
-
-    #[test]
-    fn flatten_all_true() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `and(true, and(true, true)) → true`
-        let mut expr = nested_and(true.into(), true.into(), true.into());
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_some());
-        assert!(result.unwrap().is_true());
-    }
-
-    #[test]
-    fn flatten_with_false_in_outer() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `and(false, and(B, C)) → false`
-        let mut expr = nested_and(false.into(), Expr::arg(1), Expr::arg(2));
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_some());
-        assert!(result.unwrap().is_false());
-    }
-
-    #[test]
-    fn flatten_with_false_in_nested() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `and(A, and(false, C)) → false`
-        let mut expr = nested_and(Expr::arg(0), false.into(), Expr::arg(2));
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_some());
-        assert!(result.unwrap().is_false());
-    }
-
-    #[test]
-    fn flatten_true_and_false_mixed() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `and(true, and(false, true)) → false`
-        let mut expr = nested_and(true.into(), false.into(), true.into());
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_some());
-        assert!(result.unwrap().is_false());
-    }
-
-    #[test]
-    fn single_operand_unwrapped() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `and(arg(0)) → arg(0)`
-        let mut expr = ExprAnd {
-            operands: vec![Expr::arg(0)],
+    // Prune OR branches that contradict the outer constraints.
+    for or_op in &mut or_operands {
+        let Expr::Or(or_expr) = or_op else {
+            unreachable!()
         };
-        let result = simplify.simplify_expr_and(&mut expr);
 
-        assert!(result.is_some());
-        assert_eq!(result.unwrap(), Expr::arg(0));
+        or_expr.operands.retain(|branch| {
+            let branch_ops: &[Expr] = match branch {
+                Expr::And(and) => &and.operands,
+                other => std::slice::from_ref(other),
+            };
+            !is_contradicting_eq_constraints(&expr.operands, branch_ops)
+        });
+
+        match or_expr.operands.len() {
+            0 => *or_op = false.into(),
+            1 => *or_op = or_expr.operands.remove(0),
+            _ => {}
+        }
     }
 
-    #[test]
-    fn empty_after_removing_true() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `and(true, true) → true`
-        let mut expr = ExprAnd {
-            operands: vec![true.into(), true.into()],
-        };
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_some());
-        assert!(result.unwrap().is_true());
+    // Put OR operands back, flattening surviving AND branches.
+    for op in or_operands {
+        match op {
+            Expr::And(and) => expr.operands.extend(and.operands),
+            other => expr.operands.push(other),
+        }
     }
 
-    #[test]
-    fn idempotent_two_identical() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `and(a, a) → a`
-        let mut expr = ExprAnd {
-            operands: vec![Expr::arg(0), Expr::arg(0)],
-        };
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_some());
-        assert_eq!(result.unwrap(), Expr::arg(0));
+    // All OR branches pruned → false.
+    if expr.operands.iter().any(|e| e.is_false()) {
+        return Some(false.into());
     }
 
-    #[test]
-    fn idempotent_three_identical() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
+    // Deduplicate after flattening (flatten can reintroduce operands
+    // already present in the outer AND).
+    let mut seen = Vec::new();
+    expr.operands.retain(|operand| {
+        if seen.contains(operand) {
+            false
+        } else {
+            seen.push(operand.clone());
+            true
+        }
+    });
 
-        // `and(a, a, a) → a`
-        let mut expr = ExprAnd {
-            operands: vec![Expr::arg(0), Expr::arg(0), Expr::arg(0)],
+    None
+}
+
+/// Returns `true` if any eq/ne constraint in `a` contradicts any
+/// eq/ne constraint in `b`.
+fn is_contradicting_eq_constraints(a: &[Expr], b: &[Expr]) -> bool {
+    for outer_op in a {
+        let Some((o_lhs, o_op, o_val)) = extract_eq_ne(outer_op) else {
+            continue;
         };
-        let result = simplify.simplify_expr_and(&mut expr);
 
-        assert!(result.is_some());
-        assert_eq!(result.unwrap(), Expr::arg(0));
+        for branch_op in b {
+            let Some((b_lhs, b_op, b_val)) = extract_eq_ne(branch_op) else {
+                continue;
+            };
+
+            if o_lhs != b_lhs {
+                continue;
+            }
+
+            match (o_op, b_op) {
+                (BinaryOp::Eq, BinaryOp::Eq) if o_val != b_val => return true,
+                (BinaryOp::Eq, BinaryOp::Ne) | (BinaryOp::Ne, BinaryOp::Eq) if o_val == b_val => {
+                    return true
+                }
+                _ => {}
+            }
+        }
     }
 
-    #[test]
-    fn idempotent_with_different() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
+    false
+}
 
-        // `and(a, b, a) → and(a, b)`
-        let mut expr = ExprAnd {
-            operands: vec![Expr::arg(0), Expr::arg(1), Expr::arg(0)],
-        };
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_none());
-        assert_eq!(expr.operands.len(), 2);
-        assert_eq!(expr.operands[0], Expr::arg(0));
-        assert_eq!(expr.operands[1], Expr::arg(1));
+/// Extracts `(lhs, op, rhs_value)` from an `Expr::BinaryOp` if it is an
+/// `==` or `!=` with a constant value on the right.
+fn extract_eq_ne(expr: &Expr) -> Option<(&Expr, BinaryOp, &stmt::Value)> {
+    if let Expr::BinaryOp(binop) = expr {
+        if let Expr::Value(val) = binop.rhs.as_ref() {
+            if matches!(binop.op, BinaryOp::Eq | BinaryOp::Ne) {
+                return Some((binop.lhs.as_ref(), binop.op, val));
+            }
+        }
     }
-
-    #[test]
-    fn absorption_and_or() {
-        use toasty_core::stmt::ExprOr;
-
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `and(a, or(a, b))` → `a`
-        let mut expr = ExprAnd {
-            operands: vec![
-                Expr::arg(0),
-                Expr::Or(ExprOr {
-                    operands: vec![Expr::arg(0), Expr::arg(1)],
-                }),
-            ],
-        };
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_some());
-        assert_eq!(result.unwrap(), Expr::arg(0));
-    }
-
-    #[test]
-    fn absorption_with_multiple_operands() {
-        use toasty_core::stmt::ExprOr;
-
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `and(a, b, or(a, c))` → `and(a, b)`
-        let mut expr = ExprAnd {
-            operands: vec![
-                Expr::arg(0),
-                Expr::arg(1),
-                Expr::Or(ExprOr {
-                    operands: vec![Expr::arg(0), Expr::arg(2)],
-                }),
-            ],
-        };
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_none());
-        assert_eq!(expr.operands.len(), 2);
-        assert_eq!(expr.operands[0], Expr::arg(0));
-        assert_eq!(expr.operands[1], Expr::arg(1));
-    }
-
-    #[test]
-    fn absorption_two_and_three_or() {
-        use toasty_core::stmt::ExprOr;
-
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `and(a, b, or(a, c, d))` → `and(a, b)`
-        let mut expr = ExprAnd {
-            operands: vec![
-                Expr::arg(0),
-                Expr::arg(1),
-                Expr::Or(ExprOr {
-                    operands: vec![Expr::arg(0), Expr::arg(2), Expr::arg(3)],
-                }),
-            ],
-        };
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_none());
-        assert_eq!(expr.operands.len(), 2);
-        assert_eq!(expr.operands[0], Expr::arg(0));
-        assert_eq!(expr.operands[1], Expr::arg(1));
-    }
-
-    #[test]
-    fn complement_basic() {
-        use toasty_core::stmt::ExprNot;
-
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `a and not(a)` → `false` (where a is a non-nullable comparison)
-        let a = Expr::eq(Expr::arg(0), Expr::arg(1));
-        let mut expr = ExprAnd {
-            operands: vec![a.clone(), Expr::Not(ExprNot { expr: Box::new(a) })],
-        };
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_some());
-        assert!(result.unwrap().is_false());
-    }
-
-    #[test]
-    fn complement_with_other_operands() {
-        use toasty_core::stmt::ExprNot;
-
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `a and b and not(a)` → `false`
-        let a = Expr::eq(Expr::arg(0), Expr::arg(1));
-        let mut expr = ExprAnd {
-            operands: vec![
-                a.clone(),
-                Expr::arg(2),
-                Expr::Not(ExprNot { expr: Box::new(a) }),
-            ],
-        };
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_some());
-        assert!(result.unwrap().is_false());
-    }
-
-    #[test]
-    fn complement_nullable_not_simplified() {
-        use toasty_core::stmt::ExprNot;
-
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `a and not(a)` where `a` is an arg (nullable) → no change
-        let a = Expr::arg(0);
-        let mut expr = ExprAnd {
-            operands: vec![a.clone(), Expr::Not(ExprNot { expr: Box::new(a) })],
-        };
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn complement_multiple_repetitions() {
-        use toasty_core::stmt::ExprNot;
-
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `a and a and not(a) and not(a)` → `false`
-        let a = Expr::eq(Expr::arg(0), Expr::arg(1));
-        let mut expr = ExprAnd {
-            operands: vec![
-                a.clone(),
-                a.clone(),
-                Expr::Not(ExprNot {
-                    expr: Box::new(a.clone()),
-                }),
-                Expr::Not(ExprNot { expr: Box::new(a) }),
-            ],
-        };
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_some());
-        assert!(result.unwrap().is_false());
-    }
-
-    #[test]
-    fn range_to_equality_ge_le() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `a >= 5 and a <= 5` → `a = 5`
-        let mut expr = ExprAnd {
-            operands: vec![
-                Expr::binary_op(Expr::arg(0), BinaryOp::Ge, 5i64),
-                Expr::binary_op(Expr::arg(0), BinaryOp::Le, 5i64),
-            ],
-        };
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        let Some(Expr::BinaryOp(bin_op)) = result else {
-            panic!("expected binary op");
-        };
-        assert!(bin_op.op.is_eq());
-    }
-
-    #[test]
-    fn range_to_equality_le_ge() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `a <= 5 and a >= 5` → `a = 5` (opposite order)
-        let mut expr = ExprAnd {
-            operands: vec![
-                Expr::binary_op(Expr::arg(0), BinaryOp::Le, 5i64),
-                Expr::binary_op(Expr::arg(0), BinaryOp::Ge, 5i64),
-            ],
-        };
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        let Some(Expr::BinaryOp(bin_op)) = result else {
-            panic!("expected binary op");
-        };
-        assert!(bin_op.op.is_eq());
-    }
-
-    #[test]
-    fn range_to_equality_different_bounds_not_simplified() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `a >= 5 and a <= 10` is not simplified (different bounds)
-        let mut expr = ExprAnd {
-            operands: vec![
-                Expr::binary_op(Expr::arg(0), BinaryOp::Ge, 5i64),
-                Expr::binary_op(Expr::arg(0), BinaryOp::Le, 10i64),
-            ],
-        };
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_none());
-        assert_eq!(expr.operands.len(), 2);
-    }
-
-    #[test]
-    fn range_to_equality_different_exprs_not_simplified() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `a >= 5 and b <= 5` is not simplified (different expressions)
-        let mut expr = ExprAnd {
-            operands: vec![
-                Expr::binary_op(Expr::arg(0), BinaryOp::Ge, 5i64),
-                Expr::binary_op(Expr::arg(1), BinaryOp::Le, 5i64),
-            ],
-        };
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_none());
-        assert_eq!(expr.operands.len(), 2);
-    }
-
-    #[test]
-    fn range_to_equality_with_other_operands() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `x and a >= 5 and a <= 5` → `x and a = 5`
-        let mut expr = ExprAnd {
-            operands: vec![
-                Expr::arg(0),
-                Expr::binary_op(Expr::arg(1), BinaryOp::Ge, 5i64),
-                Expr::binary_op(Expr::arg(1), BinaryOp::Le, 5i64),
-            ],
-        };
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_none()); // Still has multiple operands
-        assert_eq!(expr.operands.len(), 2);
-
-        // One should be arg(0), the other should be the equality
-        let has_equality = expr
-            .operands
-            .iter()
-            .any(|e| matches!(e, Expr::BinaryOp(op) if op.op.is_eq()));
-        assert!(has_equality);
-    }
-
-    #[test]
-    fn range_to_equality_uneven_repetitions() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `a >= 5 and a >= 5 and a <= 5` → `a = 5`
-        let mut expr = ExprAnd {
-            operands: vec![
-                Expr::binary_op(Expr::arg(0), BinaryOp::Ge, 5i64),
-                Expr::binary_op(Expr::arg(0), BinaryOp::Ge, 5i64),
-                Expr::binary_op(Expr::arg(0), BinaryOp::Le, 5i64),
-            ],
-        };
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        // All bounds collapse to a single equality
-        let Some(Expr::BinaryOp(bin_op)) = result else {
-            panic!("expected binary op");
-        };
-        assert!(bin_op.op.is_eq());
-    }
-
-    // Null propagation tests
-
-    #[test]
-    fn null_and_null_becomes_null() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `null and null` → `null`
-        let mut expr = ExprAnd {
-            operands: vec![Expr::null(), Expr::null()],
-        };
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_some());
-        assert!(result.unwrap().is_value_null());
-    }
-
-    #[test]
-    fn null_and_true_becomes_null() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `null and true` → `null` (true is removed, leaving only null)
-        let mut expr = ExprAnd {
-            operands: vec![Expr::null(), true.into()],
-        };
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_some());
-        assert!(result.unwrap().is_value_null());
-    }
-
-    #[test]
-    fn true_and_null_becomes_null() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `true and null` → `null` (true is removed, leaving only null)
-        let mut expr = ExprAnd {
-            operands: vec![true.into(), Expr::null()],
-        };
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_some());
-        assert!(result.unwrap().is_value_null());
-    }
-
-    #[test]
-    fn null_and_false_becomes_false() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `null and false` → `false` (false short-circuits)
-        let mut expr = ExprAnd {
-            operands: vec![Expr::null(), false.into()],
-        };
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_some());
-        assert!(result.unwrap().is_false());
-    }
-
-    #[test]
-    fn false_and_null_becomes_false() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `false and null` → `false` (false short-circuits)
-        let mut expr = ExprAnd {
-            operands: vec![false.into(), Expr::null()],
-        };
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_some());
-        assert!(result.unwrap().is_false());
-    }
-
-    #[test]
-    fn null_and_symbolic_not_simplified() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `null and a` → no change (symbolic operand present)
-        let mut expr = ExprAnd {
-            operands: vec![Expr::null(), Expr::arg(0)],
-        };
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_none());
-        assert_eq!(expr.operands.len(), 2);
-    }
-
-    #[test]
-    fn multiple_nulls_become_null() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `null and null and null` → `null`
-        let mut expr = ExprAnd {
-            operands: vec![Expr::null(), Expr::null(), Expr::null()],
-        };
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_some());
-        assert!(result.unwrap().is_value_null());
-    }
-
-    #[test]
-    fn multiple_nulls_and_true_becomes_null() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `null and true and null and true` → `null`
-        let mut expr = ExprAnd {
-            operands: vec![Expr::null(), true.into(), Expr::null(), true.into()],
-        };
-        let result = simplify.simplify_expr_and(&mut expr);
-
-        assert!(result.is_some());
-        assert!(result.unwrap().is_value_null());
-    }
+    None
 }

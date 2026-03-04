@@ -25,7 +25,7 @@ pub async fn update_by_partition_key(test: &mut Test) {
         title: String,
     }
 
-    let db = test.setup_db(models!(Todo)).await;
+    let mut db = test.setup_db(models!(Todo)).await;
 
     let todo_table_id = table_id(&db, "todos");
     let is_sql = test.capability().sql;
@@ -33,14 +33,14 @@ pub async fn update_by_partition_key(test: &mut Test) {
     let todo1 = Todo::create()
         .user_id("alice")
         .title("original1")
-        .exec(&db)
+        .exec(&mut db)
         .await
         .unwrap();
 
     let todo2 = Todo::create()
         .user_id("alice")
         .title("original2")
-        .exec(&db)
+        .exec(&mut db)
         .await
         .unwrap();
 
@@ -50,7 +50,7 @@ pub async fn update_by_partition_key(test: &mut Test) {
     Todo::filter_by_user_id("alice")
         .update()
         .title("updated")
-        .exec(&db)
+        .exec(&mut db)
         .await
         .unwrap();
 
@@ -105,13 +105,13 @@ pub async fn update_by_partition_key(test: &mut Test) {
     assert!(test.log().is_empty(), "log should be empty after update");
 
     test.log().clear();
-    let reloaded1 = Todo::get_by_user_id_and_id(&db, &todo1.user_id, todo1.id)
+    let reloaded1 = Todo::get_by_user_id_and_id(&mut db, &todo1.user_id, todo1.id)
         .await
         .unwrap();
     assert_eq!(reloaded1.title, "updated");
 
     test.log().clear();
-    let reloaded2 = Todo::get_by_user_id_and_id(&db, &todo2.user_id, todo2.id)
+    let reloaded2 = Todo::get_by_user_id_and_id(&mut db, &todo2.user_id, todo2.id)
         .await
         .unwrap();
     assert_eq!(reloaded2.title, "updated");
@@ -135,7 +135,7 @@ pub async fn delete_by_partition_key(test: &mut Test) {
         title: String,
     }
 
-    let db = test.setup_db(models!(Todo)).await;
+    let mut db = test.setup_db(models!(Todo)).await;
 
     let todo_table_id = table_id(&db, "todos");
     let is_sql = test.capability().sql;
@@ -143,14 +143,14 @@ pub async fn delete_by_partition_key(test: &mut Test) {
     let todo1 = Todo::create()
         .user_id("alice")
         .title("todo1")
-        .exec(&db)
+        .exec(&mut db)
         .await
         .unwrap();
 
     let todo2 = Todo::create()
         .user_id("alice")
         .title("todo2")
-        .exec(&db)
+        .exec(&mut db)
         .await
         .unwrap();
 
@@ -161,7 +161,10 @@ pub async fn delete_by_partition_key(test: &mut Test) {
     test.log().clear();
 
     // Delete all todos for "alice" using only the partition key filter.
-    Todo::filter_by_user_id("alice").delete(&db).await.unwrap();
+    Todo::filter_by_user_id("alice")
+        .delete(&mut db)
+        .await
+        .unwrap();
 
     if is_sql {
         let (op, resp) = test.log().pop();
@@ -210,6 +213,6 @@ pub async fn delete_by_partition_key(test: &mut Test) {
 
     assert!(test.log().is_empty(), "log should be empty after delete");
 
-    assert_err!(Todo::get_by_user_id_and_id(&db, &user_id, id1).await);
-    assert_err!(Todo::get_by_user_id_and_id(&db, &user_id, id2).await);
+    assert_err!(Todo::get_by_user_id_and_id(&mut db, &user_id, id1).await);
+    assert_err!(Todo::get_by_user_id_and_id(&mut db, &user_id, id2).await);
 }

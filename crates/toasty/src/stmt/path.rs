@@ -1,7 +1,10 @@
 use super::{Expr, IntoExpr, IntoSelect};
 use crate::Register;
 use std::{fmt, marker::PhantomData};
-use toasty_core::stmt::{self, Direction, OrderByExpr};
+use toasty_core::{
+    schema::app::VariantId,
+    stmt::{self, Direction, OrderByExpr},
+};
 
 pub struct Path<T: ?Sized> {
     pub(super) untyped: stmt::Path,
@@ -21,10 +24,7 @@ impl<T: ?Sized> Path<T> {
         T: Register,
     {
         Self {
-            untyped: stmt::Path {
-                root: T::id(),
-                projection: stmt::Projection::identity(),
-            },
+            untyped: stmt::Path::model(T::id()),
             _p: PhantomData,
         }
     }
@@ -32,6 +32,15 @@ impl<T: ?Sized> Path<T> {
     pub fn from_field_index<M: Register>(index: usize) -> Self {
         Self {
             untyped: stmt::Path::from_index(M::id(), index),
+            _p: PhantomData,
+        }
+    }
+
+    /// Converts this path into a variant-rooted path for use in `.matches()`
+    /// closures on embedded enum fields.
+    pub fn into_variant(self, variant_id: VariantId) -> Self {
+        Self {
+            untyped: stmt::Path::from_variant(self.untyped, variant_id),
             _p: PhantomData,
         }
     }

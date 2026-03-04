@@ -17,7 +17,7 @@ impl Expand<'_> {
                 &root.create_struct_ident,
                 &root.update_struct_ident,
             ),
-            ModelKind::EmbeddedStruct(_) => {
+            ModelKind::EmbeddedStruct(_) | ModelKind::EmbeddedEnum(_) => {
                 // Embedded models don't generate CRUD methods, just return early
                 return TokenStream::new();
             }
@@ -67,10 +67,11 @@ impl Expand<'_> {
                     #query_struct_ident::from_stmt(#toasty::stmt::Select::filter(expr))
                 }
 
-                #vis async fn delete(self, db: &#toasty::Db) -> #toasty::Result<()> {
+                #vis async fn delete(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<()> {
                     use #toasty::IntoSelect;
+                    use #toasty::ExecutorExt;
                     let stmt = self.into_select().delete();
-                    db.exec(stmt).await?;
+                    executor.exec(stmt).await?;
                     Ok(())
                 }
             }
@@ -106,6 +107,10 @@ impl Expand<'_> {
                 type OptionOne = OptionOne;
 
                 #field_name_to_id
+
+                fn load(value: #toasty::Value) -> #toasty::Result<Self> {
+                    <Self as #toasty::Model>::load(value)
+                }
             }
 
             impl #toasty::stmt::IntoExpr<#model_ident> for #model_ident {
@@ -244,25 +249,16 @@ impl Expand<'_> {
             let field_ident = &field.name.ident;
             let ty = match &field.ty {
                 FieldTy::Primitive(ty) => ty,
-                _ => {
-                    // Relations and nested embedded types are not yet supported
-                    panic!("only primitive fields are supported in embedded types")
-                }
+                _ => panic!("only primitive fields are supported in embedded types"),
             };
 
-            let into_expr = if by_ref {
+            let value = if by_ref {
                 quote!((&self.#field_ident))
             } else {
                 quote!(self.#field_ident)
             };
 
-            quote! {
-                {
-                    let expr: #toasty::stmt::Expr<#ty> = #toasty::IntoExpr::into_expr(#into_expr);
-                    let untyped: #toasty::core::stmt::Expr = expr.into();
-                    untyped
-                }
-            }
+            self.expand_into_untyped_expr(ty, value)
         });
 
         quote! {

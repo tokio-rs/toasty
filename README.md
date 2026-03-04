@@ -19,7 +19,7 @@ You will define your data model using Rust structs annotated with the
 struct User {
     #[key]
     #[auto]
-    id: Id<Self>,
+    id: u64,
 
     name: String,
 
@@ -36,10 +36,10 @@ struct User {
 struct Todo {
     #[key]
     #[auto]
-    id: Id<Self>,
+    id: u64,
 
     #[index]
-    user_id: Id<User>,
+    user_id: u64,
 
     #[belongs_to(key = user_id, references = id)]
     user: toasty::BelongsTo<User>,

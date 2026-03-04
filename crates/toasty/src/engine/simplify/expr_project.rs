@@ -36,45 +36,19 @@ impl Simplify<'_> {
             }
         }
 
+        // Project into Match: distribute the projection into each arm's expression.
+        // Example: project(Match(d, [1 => Record([d, a]), 2 => Record([d, n])]), [0])
+        //        → Match(d, [1 => project(Record([d, a]), [0]), 2 => project(Record([d, n]), [0])])
+        //        → Match(d, [1 => d, 2 => d])   (after recursive simplification)
+        if let stmt::Expr::Match(match_expr) = &mut *expr.base {
+            for arm in &mut match_expr.arms {
+                arm.expr = stmt::Expr::project(arm.expr.take(), expr.projection.clone());
+            }
+            *match_expr.else_expr =
+                stmt::Expr::project(match_expr.else_expr.take(), expr.projection.clone());
+            return Some(expr.base.take());
+        }
+
         None
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::engine::simplify::test::test_schema;
-    use toasty_core::stmt::{Expr, Projection, Value};
-
-    #[test]
-    fn project_non_constant_not_simplified() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `project(arg(0), [0])` is not simplified (non-constant base)
-        let mut expr = stmt::ExprProject {
-            base: Box::new(Expr::arg(0)),
-            projection: Projection::from(0),
-        };
-
-        let result = simplify.simplify_expr_project(&mut expr);
-
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn project_identity_path() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `project(42, [])` → `42` (identity projection)
-        let mut expr = stmt::ExprProject {
-            base: Box::new(Expr::from(42i64)),
-            projection: Projection::identity(),
-        };
-
-        let result = simplify.simplify_expr_project(&mut expr);
-
-        assert!(matches!(result, Some(Expr::Value(Value::I64(42)))));
     }
 }

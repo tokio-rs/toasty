@@ -1,4 +1,7 @@
-use super::{ErrorSet, Field, Index, IndexField, IndexScope, ModelAttr, Name, PrimaryKey};
+use super::{
+    Column, ErrorSet, Field, FieldAttr, FieldTy, Index, IndexField, IndexScope, ModelAttr, Name,
+    PrimaryKey,
+};
 
 #[derive(Debug)]
 pub(crate) enum ModelKind {
@@ -6,20 +9,32 @@ pub(crate) enum ModelKind {
     Root(ModelRoot),
     /// Embedded struct model that is flattened into parent
     EmbeddedStruct(ModelEmbeddedStruct),
+    /// Embedded enum stored as a single integer discriminant column
+    EmbeddedEnum(ModelEmbeddedEnum),
 }
 
 impl ModelKind {
     pub(crate) fn expect_root(&self) -> &ModelRoot {
         match self {
             ModelKind::Root(root) => root,
-            ModelKind::EmbeddedStruct(_) => panic!("expected root model, found embedded"),
+            ModelKind::EmbeddedStruct(_) => panic!("expected root model, found embedded struct"),
+            ModelKind::EmbeddedEnum(_) => panic!("expected root model, found embedded enum"),
         }
     }
 
     pub(crate) fn expect_embedded(&self) -> &ModelEmbeddedStruct {
         match self {
             ModelKind::EmbeddedStruct(embedded) => embedded,
-            ModelKind::Root(_) => panic!("expected embedded model, found root"),
+            ModelKind::Root(_) => panic!("expected embedded struct, found root model"),
+            ModelKind::EmbeddedEnum(_) => panic!("expected embedded struct, found embedded enum"),
+        }
+    }
+
+    pub(crate) fn expect_embedded_enum(&self) -> &ModelEmbeddedEnum {
+        match self {
+            ModelKind::EmbeddedEnum(e) => e,
+            ModelKind::Root(_) => panic!("expected embedded enum, found root model"),
+            ModelKind::EmbeddedStruct(_) => panic!("expected embedded enum, found embedded struct"),
         }
     }
 }
@@ -49,6 +64,42 @@ pub(crate) struct ModelEmbeddedStruct {
 
     /// Update builder struct identifier
     pub(crate) update_struct_ident: syn::Ident,
+}
+
+#[derive(Debug)]
+pub(crate) struct ModelEmbeddedEnum {
+    /// The field struct identifier (e.g., `ContactInfoFields`)
+    pub(crate) field_struct_ident: syn::Ident,
+
+    /// The enum's variants with their names and discriminant values
+    pub(crate) variants: Vec<EnumVariantDef>,
+}
+
+#[derive(Debug)]
+pub(crate) struct EnumVariantDef {
+    /// Rust identifier for this variant (e.g., `Pending`)
+    pub(crate) ident: syn::Ident,
+
+    /// Name parts for schema generation
+    pub(crate) name: Name,
+
+    /// Discriminant value stored in the database column
+    pub(crate) discriminant: i64,
+
+    /// True when variant fields are named (struct-like `Foo { a: T }`),
+    /// false for tuple-like (`Foo(T)`). Unused when `fields` is empty.
+    pub(crate) fields_named: bool,
+
+    /// Ident for the `is_{variant}()` method (e.g., `is_email`)
+    pub(crate) is_method_ident: syn::Ident,
+
+    /// Variant handle struct identifier (e.g., `ContactInfoEmailVariant`).
+    /// Only set for data-carrying variants.
+    pub(crate) variant_handle_ident: Option<syn::Ident>,
+
+    /// Ident for the per-variant field struct (e.g., `ContactInfoEmailFields`).
+    /// Only set for data-carrying variants.
+    pub(crate) field_struct_ident: Option<syn::Ident>,
 }
 
 #[derive(Debug)]
@@ -240,15 +291,160 @@ impl Model {
                     .iter()
                     .map(|index| &self.fields[*index]),
             ),
-            ModelKind::EmbeddedStruct(_) => None,
+            ModelKind::EmbeddedStruct(_) | ModelKind::EmbeddedEnum(_) => None,
         }
     }
 
     pub(crate) fn has_associations(&self) -> bool {
         self.fields.iter().any(|f| f.ty.is_relation())
     }
+
+    pub(crate) fn from_enum_ast(ast: &syn::ItemEnum) -> syn::Result<Self> {
+        if !ast.generics.params.is_empty() {
+            return Err(syn::Error::new_spanned(
+                &ast.generics,
+                "enum generics are not supported",
+            ));
+        }
+
+        let mut variants = vec![];
+        let mut all_fields: Vec<Field> = vec![];
+        let mut errs = ErrorSet::new();
+        let mut global_field_index = 0usize;
+
+        for (variant_index, variant) in ast.variants.iter().enumerate() {
+            // Parse variant fields (named, unnamed, or unit)
+            let (variant_field_idents, fields_named) = match &variant.fields {
+                syn::Fields::Unit => (vec![], false),
+                syn::Fields::Named(named) => {
+                    let fields: Vec<_> = named
+                        .named
+                        .iter()
+                        .map(|f| (f.ident.as_ref().unwrap().clone(), f.ty.clone()))
+                        .collect();
+                    (fields, true)
+                }
+                syn::Fields::Unnamed(unnamed) => {
+                    let fields: Vec<_> = unnamed
+                        .unnamed
+                        .iter()
+                        .enumerate()
+                        .map(|(i, f)| {
+                            (
+                                syn::Ident::new(&format!("field{i}"), variant.ident.span()),
+                                f.ty.clone(),
+                            )
+                        })
+                        .collect();
+                    (fields, false)
+                }
+            };
+
+            let has_fields = !variant_field_idents.is_empty();
+
+            // Create Field entries for each variant field
+            for (ident, ty) in &variant_field_idents {
+                let name = Name::from_ident(ident);
+                let set_ident = syn::Ident::new(&format!("set_{}", name.ident), ident.span());
+                let with_ident = syn::Ident::new(&format!("with_{}", name.ident), ident.span());
+
+                all_fields.push(Field {
+                    id: global_field_index,
+                    attrs: FieldAttr {
+                        key: None,
+                        unique: false,
+                        auto: None,
+                        index: false,
+                        column: None,
+                        default_expr: None,
+                        update_expr: None,
+                    },
+                    name,
+                    ty: FieldTy::Primitive(ty.clone()),
+                    set_ident,
+                    with_ident,
+                    variant: Some(variant_index),
+                });
+                global_field_index += 1;
+            }
+
+            let mut discriminant = None;
+            for attr in &variant.attrs {
+                if attr.path().is_ident("column") {
+                    match Column::from_ast(attr) {
+                        Ok(col) => {
+                            if let Some(d) = col.variant {
+                                discriminant = Some(d);
+                            }
+                        }
+                        Err(e) => errs.push(e),
+                    }
+                }
+            }
+
+            let discriminant = match discriminant {
+                Some(d) => d,
+                None => {
+                    errs.push(syn::Error::new_spanned(
+                        variant,
+                        "embedded enum variant must have a #[column(variant = N)] attribute",
+                    ));
+                    continue;
+                }
+            };
+
+            let name = Name::from_ident(&variant.ident);
+            let is_method_ident =
+                syn::Ident::new(&format!("is_{}", name.ident), variant.ident.span());
+            let (variant_handle_ident, field_struct_ident) = if !has_fields {
+                (None, None)
+            } else {
+                (
+                    Some(syn::Ident::new(
+                        &format!("{}{}Variant", ast.ident, variant.ident),
+                        variant.ident.span(),
+                    )),
+                    Some(syn::Ident::new(
+                        &format!("{}{}Fields", ast.ident, variant.ident),
+                        variant.ident.span(),
+                    )),
+                )
+            };
+
+            variants.push(EnumVariantDef {
+                ident: variant.ident.clone(),
+                name,
+                discriminant,
+                fields_named,
+                is_method_ident,
+                variant_handle_ident,
+                field_struct_ident,
+            });
+        }
+
+        if let Some(err) = errs.collect() {
+            return Err(err);
+        }
+
+        Ok(Self {
+            vis: ast.vis.clone(),
+            name: Name::from_ident(&ast.ident),
+            ident: ast.ident.clone(),
+            fields: all_fields,
+            kind: ModelKind::EmbeddedEnum(ModelEmbeddedEnum {
+                field_struct_ident: enum_ident("Fields", ast),
+                variants,
+            }),
+            indices: vec![],
+            table: None,
+        })
+    }
 }
 
 fn struct_ident(suffix: &str, model: &syn::ItemStruct) -> syn::Ident {
+    syn::Ident::new(&format!("{}{}", model.ident, suffix), model.ident.span())
+}
+
+fn enum_ident(suffix: &str, model: &syn::ItemEnum) -> syn::Ident {
     syn::Ident::new(&format!("{}{}", model.ident, suffix), model.ident.span())
 }

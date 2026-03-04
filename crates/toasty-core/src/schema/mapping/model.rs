@@ -47,14 +47,6 @@ pub struct Model {
     /// concatenations for discriminated storage formats.
     pub model_to_table: stmt::ExprRecord,
 
-    /// Expression template for converting the model's primary key to table
-    /// columns.
-    ///
-    /// A specialized subset of `model_to_table` containing only the expressions
-    /// needed to produce the table's primary key columns from the model's key
-    /// fields.
-    pub model_pk_to_table: stmt::Expr,
-
     /// Expression template for converting table column values to model field
     /// values.
     ///
@@ -126,7 +118,7 @@ impl Model {
     ///
     /// Returns `Some(&Field)` if the projection is valid. The field can be:
     /// - `Field::Primitive` for partial updates to a specific primitive
-    /// - `Field::Embedded` for full replacement of an embedded struct
+    /// - `Field::Struct` for full replacement of an embedded struct
     ///
     /// Returns `None` if the projection is invalid or points to a relation field.
     pub fn resolve_field_mapping(&self, projection: &stmt::Projection) -> Option<&Field> {
@@ -140,16 +132,14 @@ impl Model {
         // Walk through remaining steps
         for step in rest {
             match current_field {
-                Field::Embedded(field_embedded) => {
-                    // Navigate into the embedded field's subfields
-                    current_field = field_embedded.fields.get(*step)?;
+                Field::Struct(field_struct) => {
+                    current_field = field_struct.fields.get(*step)?;
                 }
                 Field::Primitive(_) => {
                     // Cannot project through primitive fields
                     return None;
                 }
                 _ => {
-                    // Cannot project through relation fields
                     return None;
                 }
             }

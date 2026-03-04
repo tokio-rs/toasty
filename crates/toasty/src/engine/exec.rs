@@ -50,26 +50,70 @@ pub(crate) use var::{VarDecls, VarId, VarStore};
 
 use crate::{db::PoolConnection, engine::Engine, Result};
 use toasty_core::{
-    driver::Rows,
+    driver::{operation::Transaction, Rows},
     stmt::{self, ValueStream},
 };
 
 struct Exec<'a> {
     engine: &'a Engine,
-    connection: PoolConnection,
+    connection: &'a mut PoolConnection,
     vars: VarStore,
+    /// True when an outer transaction is active on this connection. Used by
+    /// ReadModifyWrite to decide between savepoints (nested) and its own
+    /// BEGIN/COMMIT (standalone).
+    in_transaction: bool,
 }
 
 impl Engine {
-    pub(crate) async fn exec_plan(&self, plan: ExecPlan) -> Result<ValueStream> {
+    pub(crate) async fn exec_plan(
+        &self,
+        connection: &mut PoolConnection,
+        plan: ExecPlan,
+        in_transaction: bool,
+    ) -> Result<ValueStream> {
         let mut exec = Exec {
             engine: self,
-            connection: self.pool.get().await?,
+            connection,
             vars: plan.vars,
+            in_transaction,
         };
 
+        // When nested inside an outer transaction use savepoints so the outer
+        // transaction can still commit or roll back as a whole. When standalone,
+        // start our own transaction (MySQL requires an active BEGIN before
+        // SAVEPOINT can be used, so we can't use savepoints here).
+        let (begin, commit, rollback) = if exec.in_transaction {
+            let name = "statement";
+            (
+                Transaction::Savepoint(name.to_owned()),
+                Transaction::ReleaseSavepoint(name.to_owned()),
+                Transaction::RollbackToSavepoint(name.to_owned()),
+            )
+        } else {
+            (
+                Transaction::start(),
+                Transaction::Commit,
+                Transaction::Rollback,
+            )
+        };
+
+        if plan.needs_transaction {
+            exec.connection.exec(&self.schema, begin.into()).await?;
+            exec.in_transaction = true;
+        }
+
         for step in &plan.actions {
-            exec.exec_step(step).await?;
+            if let Err(e) = exec.exec_step(step).await {
+                if plan.needs_transaction {
+                    // Best effort: ignore rollback errors so the original error is returned
+                    let _ = exec.connection.exec(&self.schema, rollback.into()).await;
+                }
+                return Err(e);
+            }
+        }
+
+        if plan.needs_transaction {
+            exec.connection.exec(&self.schema, commit.into()).await?;
         }
 
         Ok(if let Some(returning) = plan.returning {

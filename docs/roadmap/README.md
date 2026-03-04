@@ -28,7 +28,6 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 - `.last()` convenience method
 
 **[Query Constraints & Filtering](./query-constraints.md)**
-- IS NULL (core AST exists, needs user API)
 - String operations: contains, starts with, ends with, LIKE (partial AST support)
 - NOT IN
 - Case-insensitive matching
@@ -46,6 +45,31 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 - Embedded collections (arrays, maps, sets, etc.)
 
 ### Relationships & Loading
+
+**Partial Model Loading**
+- Allow models to have fields that are not loaded by default (e.g. a large `body` column on an `Article` model)
+- Fields opt-in via a `#[deferred]` attribute and must be wrapped in a `Deferred<T>` type
+- By default, queries skip deferred fields; callers opt-in with `.include(Article::body)` (same API as relation preloading)
+- Accessing a `Deferred<T>` that was not loaded either returns an error or panics with a clear message
+- Works with primitive types, embedded structs, and embedded enums — just a subset of columns in the same table
+  ```rust
+  #[toasty::model]
+  struct Article {
+      #[key]
+      #[auto]
+      id: u64,
+      title: String,
+      author: BelongsTo<User>,
+      #[deferred]
+      body: Deferred<String>,   // not loaded unless explicitly included
+  }
+
+  // Load metadata only (no body column fetched)
+  let articles = Article::all().collect(&db).await?;
+
+  // Load with body
+  let articles = Article::all().include(Article::body).collect(&db).await?;
+  ```
 
 **Relationships**
 - Many-to-many relationships
@@ -86,6 +110,15 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 - Raw SQL fragments within typed queries (escape hatch for complex expressions)
 
 ### Data Modification
+
+**Upsert**
+- Insert-or-update: atomic `INSERT ... ON CONFLICT DO UPDATE` (PostgreSQL/SQLite), `ON DUPLICATE KEY UPDATE` (MySQL), `MERGE` (SQL Server/Oracle)
+- Insert-or-ignore (`DO NOTHING` / `INSERT IGNORE`)
+- Conflict target: by column(s), by constraint name, partial indexes (PostgreSQL)
+- Column update control: update all non-key columns, named subset, or raw SQL expression
+- Access to the proposed row via `EXCLUDED` pseudo-table in the update expression
+- Bulk upsert (multi-row `VALUES`)
+- DynamoDB: `PutItem` (unconditional replace) vs. `UpdateItem` with condition expression
 
 **Mutation Result Information**
 - Return affected row counts from update operations (how many records were updated)
@@ -135,6 +168,18 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 
 ### Performance
 
+**[Query Engine Optimization](./query-engine.md)**
+- Dedicated post-lowering optimization pass for expensive predicate analysis (run once, not per-node)
+- Equivalence classes for transitive constraint reasoning (`a = b AND b = 5` implies `a = 5`)
+- Structured constraint representation (constant bindings, range bounds, exclusion sets)
+- Targeted predicate normalization without full DNF conversion
+
+**Stored Procedures (Pre-Compiled Query Plans)**
+- Compile query plans once and execute them many times with different parameter values
+- Skip the full compilation pipeline (simplification, lowering, HIR/MIR planning) on repeated calls
+- Parameterized statement AST with `Param` slots for value substitution at execution time
+- Pairs with database-level prepared statements for end-to-end optimization
+
 **Optimization Features**
 - Bulk inserts/updates
 - Query caching
@@ -161,6 +206,20 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 
 **Tooling & Debugging**
 - Query logging
+
+### Safety & Security
+
+**Sensitive Value Flagging**
+- Flag sensitive fields (e.g. passwords, tokens, secrets) so they are automatically redacted in logs and debug output
+- Attribute-based opt-in: `#[sensitive]` on model fields marks values that must never appear in plaintext outside the database
+- All logging, query tracing, and error messages strip or mask flagged values
+- Prevents accidental credential leakage in application logs, query dumps, and diagnostics
+
+**Trusted vs Untrusted Input**
+- Distinguish between values originating from untrusted user input and values produced internally by the query engine (e.g. literal numbers, generated keys)
+- Engine-produced values can skip escaping/parameterization since they are known-safe, reducing unnecessary overhead
+- Untrusted input continues to be parameterized or escaped to prevent SQL injection
+- Enables more efficient SQL generation without weakening safety guarantees for external data
 
 ## Notes
 
