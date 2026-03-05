@@ -79,6 +79,129 @@ impl FieldTy {
     }
 }
 
+impl FieldAttr {
+    pub(crate) fn is_indexed(&self) -> bool {
+        self.unique || self.index
+    }
+
+    /// Parse `FieldAttr`-related attributes from an attribute list.
+    ///
+    /// Handles `#[key]`, `#[auto]`, `#[unique]`, `#[index]`, `#[column]`,
+    /// `#[default]`, and `#[update]`. Other attributes are silently skipped.
+    pub(crate) fn from_attrs(attrs: &[syn::Attribute]) -> syn::Result<Self> {
+        let mut errs = ErrorSet::new();
+        let mut field_attr = FieldAttr {
+            key: None,
+            unique: false,
+            auto: None,
+            index: false,
+            column: None,
+            default_expr: None,
+            update_expr: None,
+            serialize: None,
+        };
+
+        for attr in attrs {
+            if attr.path().is_ident("key") {
+                if field_attr.key.is_some() {
+                    errs.push(syn::Error::new_spanned(attr, "duplicate #[key] attribute"));
+                } else {
+                    field_attr.key = Some(attr.clone());
+                }
+            } else if attr.path().is_ident("auto") {
+                if field_attr.auto.is_some() {
+                    errs.push(syn::Error::new_spanned(attr, "duplicate #[auto] attribute"));
+                } else {
+                    match AutoStrategy::from_ast(attr) {
+                        Ok(strategy) => field_attr.auto = Some(strategy),
+                        Err(e) => errs.push(e),
+                    }
+                }
+            } else if attr.path().is_ident("unique") {
+                if field_attr.unique {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "duplicate #[unique] attribute",
+                    ));
+                } else {
+                    field_attr.unique = true;
+                }
+            } else if attr.path().is_ident("index") {
+                if field_attr.index {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "duplicate #[index] attribute",
+                    ));
+                } else {
+                    field_attr.index = true;
+                }
+            } else if attr.path().is_ident("column") {
+                if field_attr.column.is_some() {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "duplicate #[column] attribute",
+                    ));
+                } else {
+                    match Column::from_ast(attr) {
+                        Ok(col) => field_attr.column = Some(col),
+                        Err(e) => errs.push(e),
+                    }
+                }
+            } else if attr.path().is_ident("default") {
+                if field_attr.default_expr.is_some() {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "duplicate #[default] attribute",
+                    ));
+                } else {
+                    match attr.parse_args() {
+                        Ok(expr) => field_attr.default_expr = Some(expr),
+                        Err(e) => errs.push(e),
+                    }
+                }
+            } else if attr.path().is_ident("update") {
+                if field_attr.update_expr.is_some() {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "duplicate #[update] attribute",
+                    ));
+                } else {
+                    match attr.parse_args() {
+                        Ok(expr) => field_attr.update_expr = Some(expr),
+                        Err(e) => errs.push(e),
+                    }
+                }
+            } else if attr.path().is_ident("serialize") {
+                if field_attr.serialize.is_some() {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "duplicate #[serialize] attribute",
+                    ));
+                } else {
+                    match attr.parse_args::<syn::Ident>() {
+                        Ok(format) if format == "json" => {
+                            field_attr.serialize = Some(SerializeFormat::Json);
+                        }
+                        Ok(format) => {
+                            errs.push(syn::Error::new_spanned(
+                                &format,
+                                "unsupported serialization format; expected `json`",
+                            ));
+                        }
+                        Err(e) => errs.push(e),
+                    }
+                }
+            }
+        }
+
+        if let Some(err) = errs.collect() {
+            return Err(err);
+        }
+
+        Ok(field_attr)
+    }
+}
+
 impl Field {
     pub(super) fn from_ast(
         field: &syn::Field,
@@ -94,52 +217,13 @@ impl Field {
         let set_ident = syn::Ident::new(&format!("set_{}", name.ident), ident.span());
         let with_ident = syn::Ident::new(&format!("with_{}", name.ident), ident.span());
 
-        let mut errs = ErrorSet::new();
-        let mut attrs = FieldAttr {
-            key: None,
-            unique: false,
-            auto: None,
-            index: false,
-            column: None,
-            default_expr: None,
-            update_expr: None,
-            serialize: None,
-        };
+        let mut attrs = FieldAttr::from_attrs(&field.attrs)?;
 
+        let mut errs = ErrorSet::new();
         let mut ty = None;
 
         for attr in &field.attrs {
-            if attr.path().is_ident("key") {
-                if attrs.key.is_some() {
-                    errs.push(syn::Error::new_spanned(attr, "duplicate #[key] attribute"));
-                } else {
-                    attrs.key = Some(attr.clone());
-                }
-            } else if attr.path().is_ident("auto") {
-                if attrs.auto.is_some() {
-                    errs.push(syn::Error::new_spanned(attr, "duplicate #[auto] attribute"));
-                } else {
-                    attrs.auto = Some(AutoStrategy::from_ast(attr)?);
-                }
-            } else if attr.path().is_ident("unique") {
-                if attrs.unique {
-                    errs.push(syn::Error::new_spanned(
-                        attr,
-                        "duplicate #[unique] attribute",
-                    ));
-                } else {
-                    attrs.unique = true;
-                }
-            } else if attr.path().is_ident("index") {
-                if attrs.index {
-                    errs.push(syn::Error::new_spanned(
-                        attr,
-                        "duplicate #[index] attribute",
-                    ));
-                } else {
-                    attrs.index = true;
-                }
-            } else if attr.path().is_ident("belongs_to") {
+            if attr.path().is_ident("belongs_to") {
                 if ty.is_some() {
                     errs.push(syn::Error::new_spanned(
                         attr,
@@ -173,52 +257,6 @@ impl Field {
                 } else {
                     ty = Some(FieldTy::HasOne(HasOne::from_ast(&field.ty, field.span())?));
                 }
-            } else if attr.path().is_ident("column") {
-                if attrs.column.is_some() {
-                    errs.push(syn::Error::new_spanned(
-                        attr,
-                        "duplicate #[column] attribute",
-                    ));
-                } else {
-                    attrs.column = Some(Column::from_ast(attr)?);
-                }
-            } else if attr.path().is_ident("default") {
-                if attrs.default_expr.is_some() {
-                    errs.push(syn::Error::new_spanned(
-                        attr,
-                        "duplicate #[default] attribute",
-                    ));
-                } else {
-                    attrs.default_expr = Some(attr.parse_args()?);
-                }
-            } else if attr.path().is_ident("update") {
-                if attrs.update_expr.is_some() {
-                    errs.push(syn::Error::new_spanned(
-                        attr,
-                        "duplicate #[update] attribute",
-                    ));
-                } else {
-                    attrs.update_expr = Some(attr.parse_args()?);
-                }
-            } else if attr.path().is_ident("serialize") {
-                if attrs.serialize.is_some() {
-                    errs.push(syn::Error::new_spanned(
-                        attr,
-                        "duplicate #[serialize] attribute",
-                    ));
-                } else {
-                    let format: syn::Ident = attr.parse_args()?;
-                    if format == "json" {
-                        attrs.serialize = Some(SerializeFormat::Json);
-                    } else {
-                        errs.push(syn::Error::new_spanned(
-                            &format,
-                            "unsupported serialization format; expected `json`",
-                        ));
-                    }
-                }
-            } else if attr.path().is_ident("toasty") {
-                // todo
             }
         }
 

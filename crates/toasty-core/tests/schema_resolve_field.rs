@@ -114,6 +114,7 @@ fn schema() -> Schema {
             },
         ],
         fields: vec![],
+        indices: vec![],
     });
 
     let contact = Model::EmbeddedEnum(EmbeddedEnum {
@@ -138,6 +139,7 @@ fn schema() -> Schema {
             variant_field(CONTACT_ENUM, 0, "address", 0),
             variant_field(CONTACT_ENUM, 1, "number", 1),
         ],
+        indices: vec![],
     });
 
     let address = Model::EmbeddedStruct(EmbeddedStruct {

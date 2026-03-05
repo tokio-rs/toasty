@@ -239,21 +239,63 @@ impl BuildTableFromModels<'_> {
                 continue;
             };
 
-            let app::Model::EmbeddedStruct(embedded_struct) = self.app.model(embedded.target)
-            else {
-                continue;
-            };
+            match self.app.model(embedded.target) {
+                app::Model::EmbeddedStruct(embedded_struct) => {
+                    let field_mapping = field_mappings[field_index]
+                        .as_struct()
+                        .expect("embedded struct field should have struct mapping");
 
-            let field_mapping = field_mappings[field_index]
-                .as_struct()
-                .expect("embedded struct field should have struct mapping");
+                    self.collect_indices(
+                        &embedded_struct.fields,
+                        &field_mapping.fields,
+                        &embedded_struct.indices,
+                        out,
+                    );
+                }
+                app::Model::EmbeddedEnum(embedded_enum) => {
+                    if embedded_enum.indices.is_empty() {
+                        continue;
+                    }
 
-            self.collect_indices(
-                &embedded_struct.fields,
-                &field_mapping.fields,
-                &embedded_struct.indices,
-                out,
-            );
+                    let field_mapping = field_mappings[field_index]
+                        .as_enum()
+                        .expect("embedded enum field should have enum mapping");
+
+                    // Build a flat mapping from global field index to the
+                    // field's mapping within its variant. Enum fields use
+                    // global indices; each field belongs to a specific variant
+                    // and has a local offset within that variant.
+                    let mut flat_mappings: Vec<mapping::Field> =
+                        vec![
+                            mapping::Field::Relation(mapping::FieldRelation {
+                                field_mask: crate::stmt::PathFieldSet::new(),
+                            });
+                            embedded_enum.fields.len()
+                        ];
+
+                    for (variant_idx, variant_mapping) in field_mapping.variants.iter().enumerate()
+                    {
+                        let mut local_idx = 0;
+                        for (global_idx, f) in embedded_enum.fields.iter().enumerate() {
+                            let app::VariantId { index: vi, .. } =
+                                f.variant.expect("enum field must have variant");
+                            if vi != variant_idx {
+                                continue;
+                            }
+                            flat_mappings[global_idx] = variant_mapping.fields[local_idx].clone();
+                            local_idx += 1;
+                        }
+                    }
+
+                    self.collect_indices(
+                        &embedded_enum.fields,
+                        &flat_mappings,
+                        &embedded_enum.indices,
+                        out,
+                    );
+                }
+                _ => continue,
+            }
         }
     }
 

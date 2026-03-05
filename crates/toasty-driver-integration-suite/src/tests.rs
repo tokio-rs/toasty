@@ -7,6 +7,7 @@ pub mod create_macro;
 pub mod decimal;
 pub mod default_and_update;
 pub mod embedded_enum_data;
+pub mod embedded_enum_index;
 pub mod embedded_enum_unit;
 pub mod embedded_struct;
 pub mod embedded_struct_index;
