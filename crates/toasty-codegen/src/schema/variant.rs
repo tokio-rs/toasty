@@ -74,8 +74,7 @@ impl Variant {
 
         let fields_named = matches!(&variant.fields, syn::Fields::Named(_));
         let name = Name::from_ident(&variant.ident);
-        let is_method_ident =
-            syn::Ident::new(&format!("is_{}", name.ident), variant.ident.span());
+        let is_method_ident = syn::Ident::new(&format!("is_{}", name.ident), variant.ident.span());
 
         let (variant_handle_ident, field_struct_ident) = if !has_fields {
             (None, None)
