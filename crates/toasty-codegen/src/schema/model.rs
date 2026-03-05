@@ -313,55 +313,43 @@ impl Model {
         let mut global_field_index = 0usize;
 
         for (variant_index, variant) in ast.variants.iter().enumerate() {
-            // Parse variant fields (named, unnamed, or unit)
-            let (variant_field_idents, fields_named) = match &variant.fields {
-                syn::Fields::Unit => (vec![], false),
-                syn::Fields::Named(named) => {
-                    let fields: Vec<_> = named
-                        .named
-                        .iter()
-                        .map(|f| (f.ident.as_ref().unwrap().clone(), f.ty.clone()))
-                        .collect();
-                    (fields, true)
-                }
-                syn::Fields::Unnamed(unnamed) => {
-                    let fields: Vec<_> = unnamed
-                        .unnamed
-                        .iter()
-                        .enumerate()
-                        .map(|(i, f)| {
-                            (
-                                syn::Ident::new(&format!("field{i}"), variant.ident.span()),
-                                f.ty.clone(),
-                            )
-                        })
-                        .collect();
-                    (fields, false)
-                }
+            let fields_named = matches!(&variant.fields, syn::Fields::Named(_));
+
+            // Collect (ident, syn::Field) pairs for each variant field
+            let variant_field_pairs: Vec<_> = match &variant.fields {
+                syn::Fields::Unit => vec![],
+                syn::Fields::Named(named) => named
+                    .named
+                    .iter()
+                    .map(|f| (f.ident.as_ref().unwrap().clone(), f))
+                    .collect(),
+                syn::Fields::Unnamed(unnamed) => unnamed
+                    .unnamed
+                    .iter()
+                    .enumerate()
+                    .map(|(i, f)| {
+                        (
+                            syn::Ident::new(&format!("field{i}"), variant.ident.span()),
+                            f,
+                        )
+                    })
+                    .collect(),
             };
 
-            let has_fields = !variant_field_idents.is_empty();
+            let has_fields = !variant_field_pairs.is_empty();
 
             // Create Field entries for each variant field
-            for (ident, ty) in &variant_field_idents {
+            for (ident, f) in &variant_field_pairs {
+                let attrs = FieldAttr::from_attrs(&f.attrs)?;
                 let name = Name::from_ident(ident);
                 let set_ident = syn::Ident::new(&format!("set_{}", name.ident), ident.span());
                 let with_ident = syn::Ident::new(&format!("with_{}", name.ident), ident.span());
 
                 all_fields.push(Field {
                     id: global_field_index,
-                    attrs: FieldAttr {
-                        key: None,
-                        unique: false,
-                        auto: None,
-                        index: false,
-                        column: None,
-                        default_expr: None,
-                        update_expr: None,
-                        serialize: None,
-                    },
+                    attrs,
                     name,
-                    ty: FieldTy::Primitive(ty.clone()),
+                    ty: FieldTy::Primitive(f.ty.clone()),
                     set_ident,
                     with_ident,
                     variant: Some(variant_index),
@@ -427,6 +415,30 @@ impl Model {
             return Err(err);
         }
 
+        // Create indices for all variant fields annotated with #[unique] or #[index]
+        let mut indices = vec![];
+        for (index, field) in all_fields.iter().enumerate() {
+            if field.attrs.unique {
+                indices.push(Index {
+                    fields: vec![IndexField {
+                        field: index,
+                        scope: IndexScope::Partition,
+                    }],
+                    unique: true,
+                    primary_key: false,
+                });
+            } else if field.attrs.index {
+                indices.push(Index {
+                    fields: vec![IndexField {
+                        field: index,
+                        scope: IndexScope::Partition,
+                    }],
+                    unique: false,
+                    primary_key: false,
+                });
+            }
+        }
+
         Ok(Self {
             vis: ast.vis.clone(),
             name: Name::from_ident(&ast.ident),
@@ -436,7 +448,7 @@ impl Model {
                 field_struct_ident: enum_ident("Fields", ast),
                 variants,
             }),
-            indices: vec![],
+            indices,
             table: None,
         })
     }

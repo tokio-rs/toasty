@@ -126,6 +126,13 @@ pub struct EmbeddedEnum {
     /// All fields across all variants, with global indices. Each field's
     /// `variant` field identifies which variant it belongs to.
     pub fields: Vec<Field>,
+
+    /// Indices defined on this embedded enum's variant fields.
+    ///
+    /// These reference fields within this embedded enum (not the parent model).
+    /// The schema builder propagates them to physical DB indexes on the parent
+    /// table's flattened columns.
+    pub indices: Vec<Index>,
 }
 
 #[derive(Debug, Clone)]

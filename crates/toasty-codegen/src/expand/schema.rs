@@ -236,7 +236,7 @@ impl Expand<'_> {
         }
     }
 
-    fn expand_model_indices(&self) -> TokenStream {
+    pub(super) fn expand_model_indices(&self) -> TokenStream {
         use crate::schema::IndexScope;
 
         let toasty = &self.toasty;
