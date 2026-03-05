@@ -14,6 +14,7 @@ fn make_id_field(model_id: ModelId) -> Field {
         ty: FieldTy::Primitive(FieldPrimitive {
             ty: stmt::Type::String,
             storage_ty: None,
+            serialize: None,
         }),
         nullable: false,
         primary_key: true,

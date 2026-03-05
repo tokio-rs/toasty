@@ -358,6 +358,7 @@ impl Model {
                         column: None,
                         default_expr: None,
                         update_expr: None,
+                        serialize: None,
                     },
                     name,
                     ty: FieldTy::Primitive(ty.clone()),

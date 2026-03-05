@@ -127,7 +127,10 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
                 #update_struct_ident { stmt, projection }
             }
 
-            fn field_ty(_storage_ty: Option<#toasty::schema::db::Type>) -> #toasty::schema::app::FieldTy {
+            fn field_ty(
+                _storage_ty: Option<#toasty::schema::db::Type>,
+                _serialize: Option<#toasty::schema::app::SerializeFormat>,
+            ) -> #toasty::schema::app::FieldTy {
                 #toasty::schema::app::FieldTy::Embedded(
                     #toasty::schema::app::Embedded {
                         target: <Self as #toasty::Register>::id(),
@@ -189,6 +192,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
                         discriminant: #toasty::schema::app::FieldPrimitive {
                             ty: #toasty::Type::I64,
                             storage_ty: ::std::option::Option::None,
+                            serialize: ::std::option::Option::None,
                         },
                         variants: vec![ #( #variant_tokens ),* ],
                         fields: vec![ #( #field_tokens ),* ],
@@ -239,6 +243,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
 
             fn field_ty(
                 _storage_ty: Option<#toasty::schema::db::Type>,
+                _serialize: Option<#toasty::schema::app::SerializeFormat>,
             ) -> #toasty::schema::app::FieldTy {
                 #toasty::schema::app::FieldTy::Embedded(
                     #toasty::schema::app::Embedded {

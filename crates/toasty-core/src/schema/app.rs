@@ -13,7 +13,7 @@ mod embedded;
 pub use embedded::Embedded;
 
 mod field;
-pub use field::{Field, FieldId, FieldName, FieldPrimitive, FieldTy};
+pub use field::{Field, FieldId, FieldName, FieldPrimitive, FieldTy, SerializeFormat};
 
 mod fk;
 pub use fk::{ForeignKey, ForeignKeyField};

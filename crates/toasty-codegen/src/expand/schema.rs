@@ -1,5 +1,5 @@
 use super::{util, Expand};
-use crate::schema::{AutoStrategy, Column, FieldTy, ModelKind, Name, UuidVersion};
+use crate::schema::{AutoStrategy, Column, FieldTy, ModelKind, Name, SerializeFormat, UuidVersion};
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -88,8 +88,15 @@ impl Expand<'_> {
                         _ => quote!(None),
                     };
 
+                    let serialize = match &field.attrs.serialize {
+                        Some(SerializeFormat::Json) => {
+                            quote!(Some(#toasty::schema::app::SerializeFormat::Json))
+                        }
+                        None => quote!(None),
+                    };
+
                     nullable = quote!(<#ty as #toasty::stmt::Primitive>::NULLABLE);
-                    field_ty = quote!(<#ty as #toasty::stmt::Primitive>::field_ty(#storage_ty));
+                    field_ty = quote!(<#ty as #toasty::stmt::Primitive>::field_ty(#storage_ty, #serialize));
                 }
                 FieldTy::BelongsTo(rel) => {
                     let ty = &rel.ty;

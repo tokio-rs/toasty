@@ -1,5 +1,5 @@
 mod primitive;
-pub use primitive::FieldPrimitive;
+pub use primitive::{FieldPrimitive, SerializeFormat};
 
 use super::{
     AutoStrategy, BelongsTo, Constraint, Embedded, HasMany, HasOne, Model, ModelId, Schema,
