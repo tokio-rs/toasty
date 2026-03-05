@@ -415,22 +415,13 @@ impl Model {
 
 fn collect_field_indices(fields: &[Field], indices: &mut Vec<Index>) {
     for (index, field) in fields.iter().enumerate() {
-        if field.attrs.unique {
+        if field.attrs.is_indexed() {
             indices.push(Index {
                 fields: vec![IndexField {
                     field: index,
                     scope: IndexScope::Partition,
                 }],
-                unique: true,
-                primary_key: false,
-            });
-        } else if field.attrs.index {
-            indices.push(Index {
-                fields: vec![IndexField {
-                    field: index,
-                    scope: IndexScope::Partition,
-                }],
-                unique: false,
+                unique: field.attrs.unique,
                 primary_key: false,
             });
         }

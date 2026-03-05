@@ -80,6 +80,10 @@ impl FieldTy {
 }
 
 impl FieldAttr {
+    pub(crate) fn is_indexed(&self) -> bool {
+        self.unique || self.index
+    }
+
     /// Parse `FieldAttr`-related attributes from an attribute list.
     ///
     /// Handles `#[key]`, `#[auto]`, `#[unique]`, `#[index]`, `#[column]`,
