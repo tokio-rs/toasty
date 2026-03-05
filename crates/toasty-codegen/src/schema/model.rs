@@ -250,27 +250,7 @@ impl Model {
         };
 
         // Create indices for all fields annotated with unique or index
-        for (index, field) in fields.iter().enumerate() {
-            if field.attrs.unique {
-                indices.push(Index {
-                    fields: vec![IndexField {
-                        field: index,
-                        scope: IndexScope::Partition,
-                    }],
-                    unique: true,
-                    primary_key: false,
-                });
-            } else if field.attrs.index {
-                indices.push(Index {
-                    fields: vec![IndexField {
-                        field: index,
-                        scope: IndexScope::Partition,
-                    }],
-                    unique: false,
-                    primary_key: false,
-                });
-            }
-        }
+        collect_field_indices(&fields, &mut indices);
 
         Ok(Self {
             vis: ast.vis.clone(),
@@ -415,29 +395,8 @@ impl Model {
             return Err(err);
         }
 
-        // Create indices for all variant fields annotated with #[unique] or #[index]
         let mut indices = vec![];
-        for (index, field) in all_fields.iter().enumerate() {
-            if field.attrs.unique {
-                indices.push(Index {
-                    fields: vec![IndexField {
-                        field: index,
-                        scope: IndexScope::Partition,
-                    }],
-                    unique: true,
-                    primary_key: false,
-                });
-            } else if field.attrs.index {
-                indices.push(Index {
-                    fields: vec![IndexField {
-                        field: index,
-                        scope: IndexScope::Partition,
-                    }],
-                    unique: false,
-                    primary_key: false,
-                });
-            }
-        }
+        collect_field_indices(&all_fields, &mut indices);
 
         Ok(Self {
             vis: ast.vis.clone(),
@@ -451,6 +410,30 @@ impl Model {
             indices,
             table: None,
         })
+    }
+}
+
+fn collect_field_indices(fields: &[Field], indices: &mut Vec<Index>) {
+    for (index, field) in fields.iter().enumerate() {
+        if field.attrs.unique {
+            indices.push(Index {
+                fields: vec![IndexField {
+                    field: index,
+                    scope: IndexScope::Partition,
+                }],
+                unique: true,
+                primary_key: false,
+            });
+        } else if field.attrs.index {
+            indices.push(Index {
+                fields: vec![IndexField {
+                    field: index,
+                    scope: IndexScope::Partition,
+                }],
+                unique: false,
+                primary_key: false,
+            });
+        }
     }
 }
 
