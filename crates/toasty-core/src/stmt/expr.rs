@@ -3,7 +3,7 @@ use crate::stmt::{ExprExists, Input};
 use super::{
     expr_reference::ExprReference, Entry, EntryMut, EntryPath, ExprAnd, ExprAny, ExprArg,
     ExprBinaryOp, ExprCast, ExprError, ExprFunc, ExprInList, ExprInSubquery, ExprIsNull,
-    ExprIsVariant, ExprList, ExprMap, ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord,
+    ExprIsVariant, ExprLet, ExprList, ExprMap, ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord,
     ExprStmt, Node, Projection, Substitute, Value, Visit, VisitMut,
 };
 use std::fmt;
@@ -52,6 +52,9 @@ pub enum Expr {
 
     /// Whether an expression evaluates to a specific enum variant.
     IsVariant(ExprIsVariant),
+
+    /// A scoped binding expression (transient — inlined before planning)
+    Let(ExprLet),
 
     /// Apply an expression to each item in a list
     Map(ExprMap),
@@ -204,6 +207,9 @@ impl Expr {
                 expr_in_list.expr.is_stable() && expr_in_list.list.is_stable()
             }
             Self::Project(expr_project) => expr_project.base.is_stable(),
+            Self::Let(expr_let) => {
+                expr_let.bindings.iter().all(|b| b.is_stable()) && expr_let.body.is_stable()
+            }
             Self::Map(expr_map) => expr_map.base.is_stable() && expr_map.map.is_stable(),
             Self::Match(expr_match) => {
                 expr_match.subject.is_stable()
@@ -281,6 +287,15 @@ impl Expr {
             }
             Self::Project(expr_project) => expr_project.base.is_const_at_depth(map_depth),
 
+            // Let: binding is checked at the current depth; the body is checked
+            // at depth+1 so that arg(nesting=0) in the body is treated as local.
+            Self::Let(expr_let) => {
+                expr_let
+                    .bindings
+                    .iter()
+                    .all(|b| b.is_const_at_depth(map_depth))
+                    && expr_let.body.is_const_at_depth(map_depth + 1)
+            }
             // Map: base is checked at the current depth; the map body is checked
             // at depth+1 so that arg(nesting=0) in the body is treated as local.
             Self::Map(expr_map) => {
@@ -335,6 +350,9 @@ impl Expr {
                 expr_in_list.expr.is_eval() && expr_in_list.list.is_eval()
             }
             Self::Project(expr_project) => expr_project.base.is_eval(),
+            Self::Let(expr_let) => {
+                expr_let.bindings.iter().all(|b| b.is_eval()) && expr_let.body.is_eval()
+            }
             Self::Map(expr_map) => expr_map.base.is_eval() && expr_map.map.is_eval(),
             Self::Match(expr_match) => {
                 expr_match.subject.is_eval() && expr_match.arms.iter().all(|arm| arm.expr.is_eval())
@@ -484,6 +502,7 @@ impl fmt::Debug for Expr {
             Self::InSubquery(e) => e.fmt(f),
             Self::IsNull(e) => e.fmt(f),
             Self::IsVariant(e) => e.fmt(f),
+            Self::Let(e) => e.fmt(f),
             Self::Map(e) => e.fmt(f),
             Self::Match(e) => e.fmt(f),
             Self::Not(e) => e.fmt(f),

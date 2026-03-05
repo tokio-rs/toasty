@@ -22,7 +22,13 @@ impl<T: Relation> Relation for Option<T> {
 
     fn load(value: Value) -> Result<Self, crate::Error> {
         match value {
-            Value::Null => Ok(None),
+            // Encoded "loaded as None" from SELECT+include path.
+            // The nested merge's Match expression transforms Value::Null
+            // (no matching row) into I64(0) to distinguish from
+            // Value::Null (unloaded), which HasOne::load handles.
+            Value::I64(0) => Ok(None),
+            // Any other value is the raw model record (from INSERT or
+            // SELECT+include when a matching row exists).
             v => Ok(Some(T::load(v)?)),
         }
     }

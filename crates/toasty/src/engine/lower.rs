@@ -821,9 +821,36 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         // Simplify the new stmt to handle relations.
         Simplify::with_context(self.expr_cx).visit_stmt_query_mut(&mut stmt);
 
-        returning
-            .entry_mut(*field_index)
-            .insert(stmt::Expr::stmt(stmt));
+        let mut sub_expr = stmt::Expr::stmt(stmt);
+
+        // For nullable single relations (HasOne<Option<T>>, BelongsTo<Option<T>>),
+        // wrap the sub-expression with a Let + Match to encode the result using
+        // variant-encoded values that distinguish loaded-None from unloaded.
+        //
+        //   Let {
+        //     binding: Stmt(query),
+        //     body: Match {
+        //       subject: Arg(0),
+        //       arms: [Null → I64(0)],
+        //       else_: Arg(0)
+        //     }
+        //   }
+        if field.nullable() && !field.ty.is_has_many() {
+            sub_expr = stmt::Expr::Let(stmt::ExprLet {
+                bindings: vec![sub_expr],
+                body: Box::new(stmt::Expr::match_expr(
+                    stmt::Expr::arg(0),
+                    vec![stmt::MatchArm {
+                        pattern: stmt::Value::Null,
+                        expr: stmt::Expr::from(0i64),
+                    }],
+                    // Non-null: pass through as-is (raw model record)
+                    stmt::Expr::arg(0),
+                )),
+            });
+        }
+
+        returning.entry_mut(*field_index).insert(sub_expr);
     }
 
     /// Returns the ArgId for the new reference

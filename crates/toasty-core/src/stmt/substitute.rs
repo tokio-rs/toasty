@@ -1,4 +1,6 @@
-use crate::stmt::{visit_mut, ExprSet, Input, Projection, Query, TableDerived, TableRef, Values};
+use crate::stmt::{
+    visit, visit_mut, ExprSet, Input, Projection, Query, TableDerived, TableRef, Values,
+};
 
 use super::{Expr, Value};
 
@@ -38,9 +40,49 @@ where
         } else {
             // Recurse into child expressions
             match expr {
+                Expr::Let(expr_let) => {
+                    // Substitute only recurses into the bindings. The body
+                    // references the binding results via Arg(nesting=0), so
+                    // we must not substitute those. Assert that the body
+                    // only contains nesting-0 args (which refer to the Let
+                    // bindings, not to the outer scope).
+                    debug_assert!(
+                        {
+                            let mut ok = true;
+                            visit::for_each_expr(&*expr_let.body, |e| {
+                                if let Expr::Arg(a) = e {
+                                    if a.nesting != 0 {
+                                        ok = false;
+                                    }
+                                }
+                            });
+                            ok
+                        },
+                        "Let body contains args with nesting > 0"
+                    );
+                    for binding in &mut expr_let.bindings {
+                        self.visit_expr_mut(binding);
+                    }
+                }
                 Expr::Map(expr_map) => {
-                    // Only recurse into the base expression as arguments
-                    // reference the base.
+                    // Substitute only recurses into the base. The map body
+                    // references the base elements via Arg(nesting=0), so
+                    // we must not substitute those. Assert that the map
+                    // body only contains nesting-0 args.
+                    debug_assert!(
+                        {
+                            let mut ok = true;
+                            visit::for_each_expr(&*expr_map.map, |e| {
+                                if let Expr::Arg(a) = e {
+                                    if a.nesting != 0 {
+                                        ok = false;
+                                    }
+                                }
+                            });
+                            ok
+                        },
+                        "Map body contains args with nesting > 0"
+                    );
                     self.visit_expr_mut(&mut expr_map.base);
                 }
                 _ => {

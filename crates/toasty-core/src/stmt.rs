@@ -69,6 +69,9 @@ pub use expr_is_null::ExprIsNull;
 mod expr_is_variant;
 pub use expr_is_variant::ExprIsVariant;
 
+mod expr_let;
+pub use expr_let::ExprLet;
+
 mod expr_list;
 pub use expr_list::ExprList;
 

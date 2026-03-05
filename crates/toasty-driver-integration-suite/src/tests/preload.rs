@@ -31,15 +31,15 @@ pub async fn preload_has_one_option_none_then_some(test: &mut Test) -> Result<()
         user: toasty::BelongsTo<Option<User>>,
     }
 
-    let db = test.setup_db(models!(User, Profile)).await;
+    let mut db = test.setup_db(models!(User, Profile)).await;
 
     // Create a user WITHOUT a profile
-    let user_no_profile = User::create().name("No Profile").exec(&db).await?;
+    let user_no_profile = User::create().name("No Profile").exec(&mut db).await?;
 
     // Preload the profile — no profile exists, so it should be `None` (loaded)
     let user_no_profile = User::filter_by_id(user_no_profile.id)
         .include(User::fields().profile())
-        .get(&db)
+        .get(&mut db)
         .await?;
 
     // `.get()` must not panic — the relation was preloaded and is None
@@ -49,13 +49,13 @@ pub async fn preload_has_one_option_none_then_some(test: &mut Test) -> Result<()
     let user_with_profile = User::create()
         .name("Has Profile")
         .profile(Profile::create().bio("A bio"))
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     // Preload the profile — a profile exists, so it should be `Some`
     let user_with_profile = User::filter_by_id(user_with_profile.id)
         .include(User::fields().profile())
-        .get(&db)
+        .get(&mut db)
         .await?;
 
     let profile = user_with_profile.profile.get().as_ref().unwrap();
