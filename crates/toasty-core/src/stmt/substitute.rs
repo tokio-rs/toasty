@@ -63,7 +63,10 @@ where
                     // Substitute only recurses into the bindings. The body
                     // references the binding results via Arg(nesting=0), so
                     // we must not substitute those.
-                    assert_only_local_args(&expr_let.body, "Let body contains args with nesting > 0");
+                    assert_only_local_args(
+                        &expr_let.body,
+                        "Let body contains args with nesting > 0",
+                    );
                     for binding in &mut expr_let.bindings {
                         self.visit_expr_mut(binding);
                     }
@@ -72,7 +75,10 @@ where
                     // Substitute only recurses into the base. The map body
                     // references the base elements via Arg(nesting=0), so
                     // we must not substitute those.
-                    assert_only_local_args(&expr_map.map, "Map body contains args with nesting > 0");
+                    assert_only_local_args(
+                        &expr_map.map,
+                        "Map body contains args with nesting > 0",
+                    );
                     self.visit_expr_mut(&mut expr_map.base);
                 }
                 _ => {
