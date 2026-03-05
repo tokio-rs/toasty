@@ -14,6 +14,25 @@ impl<I> Substitute<I> {
     }
 }
 
+/// Assert that `expr` only contains `Arg` nodes with `nesting == 0`.
+fn assert_only_local_args(expr: &Expr, msg: &str) {
+    debug_assert!(
+        {
+            let mut ok = true;
+            visit::for_each_expr(expr, |e| {
+                if let Expr::Arg(a) = e {
+                    if a.nesting != 0 {
+                        ok = false;
+                    }
+                }
+            });
+            ok
+        },
+        "{}",
+        msg
+    );
+}
+
 impl<I> visit_mut::VisitMut for Substitute<I>
 where
     I: Input,
@@ -43,23 +62,8 @@ where
                 Expr::Let(expr_let) => {
                     // Substitute only recurses into the bindings. The body
                     // references the binding results via Arg(nesting=0), so
-                    // we must not substitute those. Assert that the body
-                    // only contains nesting-0 args (which refer to the Let
-                    // bindings, not to the outer scope).
-                    debug_assert!(
-                        {
-                            let mut ok = true;
-                            visit::for_each_expr(&*expr_let.body, |e| {
-                                if let Expr::Arg(a) = e {
-                                    if a.nesting != 0 {
-                                        ok = false;
-                                    }
-                                }
-                            });
-                            ok
-                        },
-                        "Let body contains args with nesting > 0"
-                    );
+                    // we must not substitute those.
+                    assert_only_local_args(&expr_let.body, "Let body contains args with nesting > 0");
                     for binding in &mut expr_let.bindings {
                         self.visit_expr_mut(binding);
                     }
@@ -67,22 +71,8 @@ where
                 Expr::Map(expr_map) => {
                     // Substitute only recurses into the base. The map body
                     // references the base elements via Arg(nesting=0), so
-                    // we must not substitute those. Assert that the map
-                    // body only contains nesting-0 args.
-                    debug_assert!(
-                        {
-                            let mut ok = true;
-                            visit::for_each_expr(&*expr_map.map, |e| {
-                                if let Expr::Arg(a) = e {
-                                    if a.nesting != 0 {
-                                        ok = false;
-                                    }
-                                }
-                            });
-                            ok
-                        },
-                        "Map body contains args with nesting > 0"
-                    );
+                    // we must not substitute those.
+                    assert_only_local_args(&expr_map.map, "Map body contains args with nesting > 0");
                     self.visit_expr_mut(&mut expr_map.base);
                 }
                 _ => {
