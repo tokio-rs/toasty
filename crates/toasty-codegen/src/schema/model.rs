@@ -1,6 +1,6 @@
 use super::{
-    Column, ErrorSet, Field, FieldAttr, FieldTy, Index, IndexField, IndexScope, ModelAttr, Name,
-    PrimaryKey,
+    ErrorSet, Field, FieldAttr, FieldTy, Index, IndexField, IndexScope, ModelAttr, Name,
+    PrimaryKey, Variant,
 };
 
 #[derive(Debug)]
@@ -72,34 +72,7 @@ pub(crate) struct ModelEmbeddedEnum {
     pub(crate) field_struct_ident: syn::Ident,
 
     /// The enum's variants with their names and discriminant values
-    pub(crate) variants: Vec<EnumVariantDef>,
-}
-
-#[derive(Debug)]
-pub(crate) struct EnumVariantDef {
-    /// Rust identifier for this variant (e.g., `Pending`)
-    pub(crate) ident: syn::Ident,
-
-    /// Name parts for schema generation
-    pub(crate) name: Name,
-
-    /// Discriminant value stored in the database column
-    pub(crate) discriminant: i64,
-
-    /// True when variant fields are named (struct-like `Foo { a: T }`),
-    /// false for tuple-like (`Foo(T)`). Unused when `fields` is empty.
-    pub(crate) fields_named: bool,
-
-    /// Ident for the `is_{variant}()` method (e.g., `is_email`)
-    pub(crate) is_method_ident: syn::Ident,
-
-    /// Variant handle struct identifier (e.g., `ContactInfoEmailVariant`).
-    /// Only set for data-carrying variants.
-    pub(crate) variant_handle_ident: Option<syn::Ident>,
-
-    /// Ident for the per-variant field struct (e.g., `ContactInfoEmailFields`).
-    /// Only set for data-carrying variants.
-    pub(crate) field_struct_ident: Option<syn::Ident>,
+    pub(crate) variants: Vec<Variant>,
 }
 
 #[derive(Debug)]
@@ -293,8 +266,6 @@ impl Model {
         let mut global_field_index = 0usize;
 
         for (variant_index, variant) in ast.variants.iter().enumerate() {
-            let fields_named = matches!(&variant.fields, syn::Fields::Named(_));
-
             // Collect (ident, syn::Field) pairs for each variant field
             let variant_field_pairs: Vec<_> = match &variant.fields {
                 syn::Fields::Unit => vec![],
@@ -337,58 +308,13 @@ impl Model {
                 global_field_index += 1;
             }
 
-            let mut discriminant = None;
-            for attr in &variant.attrs {
-                if attr.path().is_ident("column") {
-                    match Column::from_ast(attr) {
-                        Ok(col) => {
-                            if let Some(d) = col.variant {
-                                discriminant = Some(d);
-                            }
-                        }
-                        Err(e) => errs.push(e),
-                    }
-                }
-            }
-
-            let discriminant = match discriminant {
-                Some(d) => d,
-                None => {
-                    errs.push(syn::Error::new_spanned(
-                        variant,
-                        "embedded enum variant must have a #[column(variant = N)] attribute",
-                    ));
+            match Variant::from_ast(variant, &ast.ident, has_fields) {
+                Ok(v) => variants.push(v),
+                Err(e) => {
+                    errs.push(e);
                     continue;
                 }
-            };
-
-            let name = Name::from_ident(&variant.ident);
-            let is_method_ident =
-                syn::Ident::new(&format!("is_{}", name.ident), variant.ident.span());
-            let (variant_handle_ident, field_struct_ident) = if !has_fields {
-                (None, None)
-            } else {
-                (
-                    Some(syn::Ident::new(
-                        &format!("{}{}Variant", ast.ident, variant.ident),
-                        variant.ident.span(),
-                    )),
-                    Some(syn::Ident::new(
-                        &format!("{}{}Fields", ast.ident, variant.ident),
-                        variant.ident.span(),
-                    )),
-                )
-            };
-
-            variants.push(EnumVariantDef {
-                ident: variant.ident.clone(),
-                name,
-                discriminant,
-                fields_named,
-                is_method_ident,
-                variant_handle_ident,
-                field_struct_ident,
-            });
+            }
         }
 
         if let Some(err) = errs.collect() {
