@@ -266,9 +266,12 @@ impl BuildTableFromModels<'_> {
                     // global indices; each field belongs to a specific variant
                     // and has a local offset within that variant.
                     let mut flat_mappings: Vec<mapping::Field> =
-                        vec![mapping::Field::Relation(mapping::FieldRelation {
-                            field_mask: crate::stmt::PathFieldSet::new(),
-                        }); embedded_enum.fields.len()];
+                        vec![
+                            mapping::Field::Relation(mapping::FieldRelation {
+                                field_mask: crate::stmt::PathFieldSet::new(),
+                            });
+                            embedded_enum.fields.len()
+                        ];
 
                     for (variant_idx, variant_mapping) in field_mapping.variants.iter().enumerate()
                     {
@@ -279,8 +282,7 @@ impl BuildTableFromModels<'_> {
                             if vi != variant_idx {
                                 continue;
                             }
-                            flat_mappings[global_idx] =
-                                variant_mapping.fields[local_idx].clone();
+                            flat_mappings[global_idx] = variant_mapping.fields[local_idx].clone();
                             local_idx += 1;
                         }
                     }
