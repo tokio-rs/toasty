@@ -79,6 +79,7 @@ fn verify_expr(expr: &stmt::Expr) -> bool {
         BinaryOp(expr) => verify_expr(&expr.lhs) && verify_expr(&expr.rhs),
         Cast(expr) => verify_expr(&expr.expr),
         IsNull(expr) => verify_expr(&expr.expr),
+        Let(expr) => expr.bindings.iter().all(verify_expr) && verify_expr(&expr.body),
         List(expr) => expr.items.iter().all(verify_expr),
         Map(expr) => verify_expr(&expr.base) && verify_expr(&expr.map),
         Match(expr_match) => {
