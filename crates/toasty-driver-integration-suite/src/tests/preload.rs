@@ -566,3 +566,203 @@ pub async fn preload_on_empty_query(test: &mut Test) -> Result<()> {
     assert_eq!(0, users.len());
     Ok(())
 }
+
+/// HasMany<T> + BelongsTo<Option<T>>: nullable FK allows children to exist
+/// without a parent. Tests preloading from both directions.
+#[driver_test(id(ID))]
+pub async fn preload_has_many_with_optional_belongs_to(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        #[has_many]
+        todos: toasty::HasMany<Todo>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: ID,
+
+        #[index]
+        title: String,
+
+        #[index]
+        user_id: Option<ID>,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::BelongsTo<Option<User>>,
+    }
+
+    let mut db = test.setup_db(models!(User, Todo)).await;
+
+    // Create a user with linked todos
+    let user = User::create()
+        .name("Alice")
+        .todo(Todo::create().title("Task 1"))
+        .todo(Todo::create().title("Task 2"))
+        .exec(&mut db)
+        .await?;
+
+    // Preload HasMany from parent side
+    let user = User::filter_by_id(user.id)
+        .include(User::fields().todos())
+        .get(&mut db)
+        .await?;
+
+    assert_eq!(2, user.todos.get().len());
+
+    let todo_id = user.todos.get()[0].id;
+
+    // Preload BelongsTo<Option<User>> from child side — linked todo
+    let todo = Todo::filter_by_id(todo_id)
+        .include(Todo::fields().user())
+        .get(&mut db)
+        .await?;
+
+    assert_eq!(user.id, todo.user.get().as_ref().unwrap().id);
+
+    Ok(())
+}
+
+/// HasOne<Option<T>> + BelongsTo<T> (required FK): the child always points to a
+/// parent, but the parent may or may not have a child. Tests preloading from
+/// both directions.
+#[driver_test(id(ID))]
+pub async fn preload_has_one_optional_with_required_belongs_to(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        #[has_one]
+        profile: toasty::HasOne<Option<Profile>>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Profile {
+        #[key]
+        #[auto]
+        id: ID,
+
+        bio: String,
+
+        #[unique]
+        user_id: ID,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::BelongsTo<User>,
+    }
+
+    let mut db = test.setup_db(models!(User, Profile)).await;
+
+    // Create a user WITH a profile
+    let user_with = User::create()
+        .name("Has Profile")
+        .profile(Profile::create().bio("hello"))
+        .exec(&mut db)
+        .await?;
+
+    // Create a user WITHOUT a profile
+    let user_without = User::create().name("No Profile").exec(&mut db).await?;
+
+    // Preload HasOne<Option<Profile>> — profile exists
+    let loaded = User::filter_by_id(user_with.id)
+        .include(User::fields().profile())
+        .get(&mut db)
+        .await?;
+
+    let profile = loaded.profile.get().as_ref().unwrap();
+    assert_eq!("hello", profile.bio);
+    assert_eq!(user_with.id, profile.user_id);
+
+    // Preload HasOne<Option<Profile>> — no profile
+    let loaded = User::filter_by_id(user_without.id)
+        .include(User::fields().profile())
+        .get(&mut db)
+        .await?;
+
+    assert!(loaded.profile.get().is_none());
+
+    // Preload BelongsTo<User> (required) from child side
+    let profile = Profile::filter_by_user_id(user_with.id)
+        .include(Profile::fields().user())
+        .get(&mut db)
+        .await?;
+
+    assert_eq!(user_with.id, profile.user.get().id);
+    assert_eq!("Has Profile", profile.user.get().name);
+
+    Ok(())
+}
+
+/// HasOne<T> (required) + BelongsTo<Option<T>>: creating a parent requires
+/// providing a child, but the child FK is nullable. Tests preloading from both
+/// directions.
+#[driver_test(id(ID))]
+pub async fn preload_has_one_required_with_optional_belongs_to(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        #[has_one]
+        profile: toasty::HasOne<Profile>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Profile {
+        #[key]
+        #[auto]
+        id: ID,
+
+        bio: String,
+
+        #[unique]
+        user_id: Option<ID>,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::BelongsTo<Option<User>>,
+    }
+
+    let mut db = test.setup_db(models!(User, Profile)).await;
+
+    // Create a user (must provide a profile since HasOne<T> is required)
+    let user = User::create()
+        .name("Alice")
+        .profile(Profile::create().bio("a bio"))
+        .exec(&mut db)
+        .await?;
+
+    // Preload HasOne<Profile> (required) from parent side
+    let loaded = User::filter_by_id(user.id)
+        .include(User::fields().profile())
+        .get(&mut db)
+        .await?;
+
+    let profile = loaded.profile.get();
+    assert_eq!("a bio", profile.bio);
+    assert_eq!(user.id, *profile.user_id.as_ref().unwrap());
+
+    // Preload BelongsTo<Option<User>> from child side
+    let profile = Profile::filter_by_id(profile.id)
+        .include(Profile::fields().user())
+        .get(&mut db)
+        .await?;
+
+    assert_eq!(user.id, profile.user.get().as_ref().unwrap().id);
+    assert_eq!("Alice", profile.user.get().as_ref().unwrap().name);
+
+    Ok(())
+}
