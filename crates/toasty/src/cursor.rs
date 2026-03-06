@@ -1,4 +1,4 @@
-use crate::{model::Load, Error};
+use crate::{Load, Error};
 use toasty_core::stmt;
 
 pub struct Cursor<M> {
