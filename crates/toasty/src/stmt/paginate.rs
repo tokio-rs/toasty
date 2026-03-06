@@ -1,6 +1,6 @@
 use super::Select;
 
-use crate::{engine::eval::Func, Cursor, Executor, ExecutorExt, Model, Result};
+use crate::{engine::eval::Func, Cursor, Executor, ExecutorExt, Load, Result};
 
 use toasty_core::stmt::{self, visit_mut, Expr, ExprRecord, OrderBy, Projection, Value, VisitMut};
 
@@ -16,7 +16,7 @@ pub struct Paginate<M> {
     reverse: bool,
 }
 
-impl<M: Model> Paginate<M> {
+impl<M> Paginate<M> {
     pub fn new(mut query: Select<M>, per_page: usize) -> Self {
         assert!(
             query.untyped.limit.is_none(),
@@ -57,7 +57,9 @@ impl<M: Model> Paginate<M> {
         self.reverse = true;
         self
     }
+}
 
+impl<M: Load> Paginate<M> {
     pub async fn collect(mut self, executor: &mut dyn Executor) -> Result<crate::Page<M>> {
         // Extract the limit from the query to determine page size
         let page_size = match &self.query.untyped.limit {
