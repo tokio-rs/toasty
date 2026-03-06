@@ -36,12 +36,21 @@ pub trait Register {
     fn schema() -> app::Model;
 }
 
+/// Load an instance of a type from a [`Value`][stmt::Value].
+///
+/// The value is expected to be a `Value::Record` containing the type's fields.
+/// This trait is implemented by both root models and any other types that can
+/// be deserialized from the database value representation.
+pub trait Load: Sized {
+    fn load(value: stmt::Value) -> Result<Self, Error>;
+}
+
 /// Trait for root models that map to database tables and can be queried.
 ///
 /// Root models have primary keys, can be queried independently, and support
 /// full CRUD operations. They extend `Register` with queryability and
 /// deserialization capabilities.
-pub trait Model: Register + Sized {
+pub trait Model: Register + Load {
     /// Query builder type for this model
     type Query;
 
@@ -53,11 +62,6 @@ pub trait Model: Register + Sized {
 
     /// Update by query builder type for this model
     type UpdateQuery;
-
-    /// Load an instance of the model from a value.
-    ///
-    /// The value is expected to be a `Value::Record` containing the model's fields.
-    fn load(value: stmt::Value) -> Result<Self, Error>;
 }
 
 /// Trait for embedded types that are flattened into their parent model's table.

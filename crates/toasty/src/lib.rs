@@ -16,7 +16,7 @@ pub use executor::{Executor, ExecutorExt};
 mod engine;
 
 mod model;
-pub use model::{Embed, Model, Register};
+pub use model::{Embed, Load, Model, Register};
 
 mod page;
 pub use page::Page;
@@ -46,7 +46,7 @@ pub mod codegen_support {
         relation::Relation,
         relation::{BelongsTo, HasMany, HasOne},
         stmt::{self, IntoExpr, IntoInsert, IntoSelect, Path},
-        Db, Embed, Error, Executor, ExecutorExt, Model, Register, Result, Statement,
+        Db, Embed, Error, Executor, ExecutorExt, Load, Model, Register, Result, Statement,
     };
     #[cfg(feature = "serde")]
     pub use serde_json;

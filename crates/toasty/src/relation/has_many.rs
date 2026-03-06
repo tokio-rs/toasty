@@ -1,3 +1,4 @@
+use crate::model::Load;
 use crate::relation::Relation;
 
 use toasty_core::stmt::Value;
@@ -9,8 +10,8 @@ pub struct HasMany<T> {
     values: Option<Vec<T>>,
 }
 
-impl<T: Relation> HasMany<T> {
-    pub fn load(input: Value) -> crate::Result<Self> {
+impl<T: Relation> Load for HasMany<T> {
+    fn load(input: Value) -> crate::Result<Self> {
         match input {
             Value::List(items) => {
                 let mut values = vec![];
@@ -27,7 +28,9 @@ impl<T: Relation> HasMany<T> {
             _ => todo!("unexpected input: input={:#?}", input),
         }
     }
+}
 
+impl<T: Relation> HasMany<T> {
     #[track_caller]
     pub fn get(&self) -> &[T] {
         self.values
@@ -62,10 +65,6 @@ impl<T: Relation> Relation for HasMany<T> {
 
     fn nullable() -> bool {
         T::nullable()
-    }
-
-    fn load(value: Value) -> Result<Self, crate::Error> {
-        Self::load(value)
     }
 }
 

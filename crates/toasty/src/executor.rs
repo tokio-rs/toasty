@@ -32,7 +32,7 @@ pub trait ExecutorExt: Executor {
     fn all<M: Model>(&mut self, query: stmt::Select<M>) -> impl Future<Output = Result<Cursor<M>>> {
         async move {
             let records = self.exec(query.into()).await?;
-            Ok(Cursor::new(self.schema().clone(), records))
+            Ok(Cursor::new(records))
         }
     }
 
@@ -120,7 +120,7 @@ pub trait ExecutorExt: Executor {
             stmt.untyped.source.single = false;
 
             let records = self.exec(stmt.into()).await?;
-            let mut cursor = Cursor::new(self.schema().clone(), records);
+            let mut cursor = Cursor::new(records);
 
             cursor.next().await.unwrap()
         }

@@ -85,15 +85,17 @@ impl Expand<'_> {
                 #model_schema
             }
 
+            impl #toasty::Load for #model_ident {
+                fn load(value: #toasty::Value) -> #toasty::Result<Self> {
+                    #load_body
+                }
+            }
+
             impl #toasty::Model for #model_ident {
                 type Query = #query_struct_ident;
                 type Create = #create_struct_ident;
                 type Update<'a> = #update_struct_ident<&'a mut Self>;
                 type UpdateQuery = #update_struct_ident;
-
-                fn load(value: #toasty::Value) -> #toasty::Result<Self> {
-                    #load_body
-                }
             }
 
             impl #toasty::Relation for #model_ident {
@@ -108,10 +110,6 @@ impl Expand<'_> {
                 type OptionOne = OptionOne;
 
                 #field_name_to_id
-
-                fn load(value: #toasty::Value) -> #toasty::Result<Self> {
-                    <Self as #toasty::Model>::load(value)
-                }
             }
 
             impl #toasty::stmt::IntoExpr<#model_ident> for #model_ident {

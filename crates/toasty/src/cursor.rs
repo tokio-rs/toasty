@@ -1,10 +1,7 @@
-use crate::{Error, Model};
-use toasty_core::{stmt, Schema};
-
-use std::sync::Arc;
+use crate::{model::Load, Error};
+use toasty_core::stmt;
 
 pub struct Cursor<M> {
-    schema: Arc<Schema>,
     values: stmt::ValueStream,
     _p: std::marker::PhantomData<M>,
 }
@@ -13,10 +10,9 @@ pub trait FromCursor<A>: Extend<A> + Default {}
 
 impl<A, T: Extend<A> + Default> FromCursor<A> for T {}
 
-impl<M: Model> Cursor<M> {
-    pub(crate) fn new(schema: Arc<Schema>, values: stmt::ValueStream) -> Self {
+impl<M: Load> Cursor<M> {
+    pub(crate) fn new(values: stmt::ValueStream) -> Self {
         Self {
-            schema,
             values,
             _p: std::marker::PhantomData,
         }
@@ -24,10 +20,7 @@ impl<M: Model> Cursor<M> {
 
     pub async fn next(&mut self) -> Option<Result<M, Error>> {
         Some(match self.values.next().await? {
-            Ok(value) => {
-                self.validate_row(&value);
-                M::load(value)
-            }
+            Ok(value) => M::load(value),
             Err(e) => Err(e),
         })
     }
@@ -44,18 +37,5 @@ impl<M: Model> Cursor<M> {
         }
 
         Ok(ret)
-    }
-
-    #[track_caller]
-    fn validate_row(&self, value: &stmt::Value) {
-        if cfg!(debug_assertions) {
-            if let stmt::Value::Record(record) = value {
-                let expect_num_columns = self.schema.app.model(M::id()).expect_root().fields.len();
-
-                if record.len() != expect_num_columns {
-                    panic!("expected row to have {expect_num_columns} columns; {record:#?}");
-                }
-            }
-        }
     }
 }
