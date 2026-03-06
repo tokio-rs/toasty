@@ -8,7 +8,7 @@ use crate::prelude::*;
 
 use toasty_core::{
     driver::{Operation, Rows},
-    stmt::{ExprSet, Statement},
+    stmt::{self, ExprSet, Statement},
 };
 
 /// Query with a limit on a partitioned composite key dispatches `QueryPk` with
@@ -72,7 +72,7 @@ pub async fn limit_on_partition_query(test: &mut Test) -> Result<()> {
 }
 
 /// Query with descending order_by on a partitioned composite key dispatches
-/// `QueryPk` with `scan_index_forward: Some(false)` on NoSQL drivers.
+/// `QueryPk` with `order: Some(Direction::Desc)` on NoSQL drivers.
 #[driver_test]
 pub async fn order_desc_on_partition_query(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -99,7 +99,7 @@ pub async fn order_desc_on_partition_query(test: &mut Test) -> Result<()> {
     let todo_table_id = table_id(&db, "todos");
     let is_sql = test.capability().sql;
 
-    // Query with descending order — on NoSQL, scan_index_forward must be false.
+    // Query with descending order — on NoSQL, order must be Desc.
     let todos: Vec<_> = Todo::filter_by_user_id("alice")
         .order_by(Todo::fields().order().desc())
         .limit(3)
@@ -119,7 +119,7 @@ pub async fn order_desc_on_partition_query(test: &mut Test) -> Result<()> {
         assert_struct!(op, Operation::QueryPk(_ {
             table: == todo_table_id,
             limit: Some(3),
-            scan_index_forward: Some(false),
+            order: Some(stmt::Direction::Desc),
             ..
         }));
     }
@@ -128,7 +128,7 @@ pub async fn order_desc_on_partition_query(test: &mut Test) -> Result<()> {
 }
 
 /// Query with ascending order_by on a partitioned composite key dispatches
-/// `QueryPk` with `scan_index_forward: Some(true)` on NoSQL drivers.
+/// `QueryPk` with `order: Some(Direction::Asc)` on NoSQL drivers.
 #[driver_test]
 pub async fn order_asc_on_partition_query(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -155,7 +155,7 @@ pub async fn order_asc_on_partition_query(test: &mut Test) -> Result<()> {
     let todo_table_id = table_id(&db, "todos");
     let is_sql = test.capability().sql;
 
-    // Query with ascending order — on NoSQL, scan_index_forward must be true.
+    // Query with ascending order — on NoSQL, order must be Asc.
     let todos: Vec<_> = Todo::filter_by_user_id("alice")
         .order_by(Todo::fields().order().asc())
         .limit(3)
@@ -174,7 +174,7 @@ pub async fn order_asc_on_partition_query(test: &mut Test) -> Result<()> {
         assert_struct!(op, Operation::QueryPk(_ {
             table: == todo_table_id,
             limit: Some(3),
-            scan_index_forward: Some(true),
+            order: Some(stmt::Direction::Asc),
             ..
         }));
     }

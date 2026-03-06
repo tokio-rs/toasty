@@ -1005,7 +1005,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
             if stmt.is_query() {
                 // Extract pagination fields from the query statement.
-                let (limit, scan_index_forward, exclusive_start_key) =
+                let (limit, order, cursor) =
                     Self::extract_query_pk_pagination(&stmt);
 
                 // For queries, stream all matching records with the requested columns.
@@ -1018,8 +1018,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     row_filter: index_plan.result_filter.take(),
                     ty: ty.clone(),
                     limit,
-                    scan_index_forward,
-                    exclusive_start_key,
+                    order,
+                    cursor,
                 })
             } else {
                 // For mutations (UPDATE/DELETE) with a partial primary-key filter,
@@ -1048,8 +1048,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     row_filter: index_plan.result_filter.take(),
                     ty: index_key_ty,
                     limit: None,
-                    scan_index_forward: None,
-                    exclusive_start_key: None,
+                    order: None,
+                    cursor: None,
                 });
 
                 self.build_key_operation(&stmt, index_plan, query_pk_node, ty)
@@ -1057,11 +1057,11 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         }
     }
 
-    /// Extract pagination parameters (limit, scan direction, cursor) from a
+    /// Extract pagination parameters (limit, sort direction, cursor) from a
     /// query statement for use with `QueryPk` on NoSQL drivers.
     fn extract_query_pk_pagination(
         stmt: &stmt::Statement,
-    ) -> (Option<i64>, Option<bool>, Option<stmt::Value>) {
+    ) -> (Option<i64>, Option<stmt::Direction>, Option<stmt::Value>) {
         let query = match stmt.as_query() {
             Some(q) => q,
             None => return (None, None, None),
@@ -1072,15 +1072,14 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             _ => None,
         });
 
-        let scan_index_forward = query.order_by.as_ref().and_then(|ob| {
-            // Use the first ordering expression's direction.
+        let order = query.order_by.as_ref().and_then(|ob| {
             ob.exprs.first().map(|e| match e.order {
-                Some(stmt::Direction::Desc) => false,
-                _ => true,
+                Some(stmt::Direction::Desc) => stmt::Direction::Desc,
+                _ => stmt::Direction::Asc,
             })
         });
 
-        let exclusive_start_key = query
+        let cursor = query
             .limit
             .as_ref()
             .and_then(|l| l.offset.as_ref())
@@ -1089,7 +1088,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 _ => None,
             });
 
-        (limit, scan_index_forward, exclusive_start_key)
+        (limit, order, cursor)
     }
 
     fn plan_secondary_index_execution(
@@ -1127,8 +1126,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 row_filter: index_plan.result_filter.take(),
                 ty: ty.clone(), // Full record type, not just PKs
                 limit: None,
-                scan_index_forward: None,
-                exclusive_start_key: None,
+                order: None,
+                cursor: None,
             });
         }
 

@@ -51,10 +51,10 @@ impl Connection {
                 if let Some(limit) = op.limit {
                     query = query.limit(limit as i32);
                 }
-                if let Some(forward) = op.scan_index_forward {
-                    query = query.scan_index_forward(forward);
+                if let Some(ref direction) = op.order {
+                    query = query.scan_index_forward(*direction == stmt::Direction::Asc);
                 }
-                if let Some(ref start_key) = op.exclusive_start_key {
+                if let Some(ref start_key) = op.cursor {
                     query = query.set_exclusive_start_key(Some(ddb_key(table, start_key)));
                 }
 
@@ -78,10 +78,10 @@ impl Connection {
             if let Some(limit) = op.limit {
                 query = query.limit(limit as i32);
             }
-            if let Some(forward) = op.scan_index_forward {
-                query = query.scan_index_forward(forward);
+            if let Some(ref direction) = op.order {
+                query = query.scan_index_forward(*direction == stmt::Direction::Asc);
             }
-            if let Some(ref start_key) = op.exclusive_start_key {
+            if let Some(ref start_key) = op.cursor {
                 query = query.set_exclusive_start_key(Some(ddb_key(table, start_key)));
             }
 

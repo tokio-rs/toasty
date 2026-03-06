@@ -22,19 +22,16 @@ pub struct QueryPk {
     /// caller.
     pub filter: Option<stmt::Expr>,
 
-    /// Maximum number of items to evaluate. Maps to DynamoDB's `Limit`
-    /// parameter. `None` means no limit (return all matching items).
+    /// Maximum number of items to return. `None` means no limit.
     pub limit: Option<i64>,
 
-    /// Controls sort key ordering for queries on a table with a composite
-    /// primary key. `true` means ascending (default DynamoDB behavior), `false`
-    /// means descending. Maps to DynamoDB's `ScanIndexForward` parameter.
-    pub scan_index_forward: Option<bool>,
+    /// Sort key ordering direction for queries on a table with a composite
+    /// primary key. `None` uses the driver's default ordering.
+    pub order: Option<stmt::Direction>,
 
-    /// Cursor for resuming a paginated query. Contains the serialized primary
-    /// key of the last evaluated item from a previous query response. Maps to
-    /// DynamoDB's `ExclusiveStartKey` parameter.
-    pub exclusive_start_key: Option<stmt::Value>,
+    /// Cursor for resuming a paginated query. Contains the serialized key of
+    /// the last item from a previous page of results.
+    pub cursor: Option<stmt::Value>,
 }
 
 impl From<QueryPk> for Operation {

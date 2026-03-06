@@ -36,14 +36,14 @@ pub(crate) struct QueryPk {
     /// The return type.
     pub(crate) ty: stmt::Type,
 
-    /// Maximum number of items to evaluate.
+    /// Maximum number of items to return.
     pub(crate) limit: Option<i64>,
 
-    /// Sort key ordering (`true` = ascending, `false` = descending).
-    pub(crate) scan_index_forward: Option<bool>,
+    /// Sort key ordering direction.
+    pub(crate) order: Option<stmt::Direction>,
 
     /// Cursor for resuming a paginated query.
-    pub(crate) exclusive_start_key: Option<stmt::Value>,
+    pub(crate) cursor: Option<stmt::Value>,
 }
 
 impl QueryPk {
@@ -88,8 +88,8 @@ impl QueryPk {
             pk_filter: self.pk_filter.clone(),
             row_filter: self.row_filter.clone(),
             limit: self.limit,
-            scan_index_forward: self.scan_index_forward,
-            exclusive_start_key: self.exclusive_start_key.clone(),
+            order: self.order,
+            cursor: self.cursor.clone(),
         }
     }
 }
