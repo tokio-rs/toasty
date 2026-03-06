@@ -365,6 +365,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                 self.infer_expr_reference_ty(expr_ref)
             }
             Expr::IsNull(_) => Type::Bool,
+            Expr::IsVariant(_) => Type::Bool,
             Expr::List(e) => {
                 debug_assert!(!e.items.is_empty());
                 Type::list(self.infer_expr_ty2(args, &e.items[0], returning_expr))
@@ -436,6 +437,15 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                     .collect(),
             ),
             Expr::Value(value) => value.infer_ty(),
+            Expr::Let(expr_let) => {
+                let scope_tys: Vec<_> = expr_let
+                    .bindings
+                    .iter()
+                    .map(|b| self.infer_expr_ty2(args, b, returning_expr))
+                    .collect();
+                let args = args.scope(&scope_tys);
+                self.infer_expr_ty2(&args, &expr_let.body, returning_expr)
+            }
             Expr::Match(expr_match) => {
                 // Collect the distinct non-null types from all arms and the else
                 // branch. If all agree on one type, return it directly. If they
@@ -450,6 +460,10 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                 union.insert(else_ty);
                 union.simplify()
             }
+            // Error is a bottom type — it can never be evaluated, so it
+            // could be any type. Return Unknown so it unifies with whatever
+            // the other branches produce.
+            Expr::Error(_) => Type::Unknown,
             _ => todo!("{expr:#?}"),
         }
     }

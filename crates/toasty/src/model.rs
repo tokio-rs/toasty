@@ -1,4 +1,7 @@
-use crate::Error;
+use crate::{
+    stmt::{IntoExpr, IntoInsert},
+    Error,
+};
 use toasty_core::{
     schema::app::{self, ModelId},
     stmt,
@@ -43,7 +46,7 @@ pub trait Model: Register + Sized {
     type Query;
 
     /// Create builder type for this model
-    type Create;
+    type Create: Default + IntoInsert<Model = Self> + IntoExpr<Self>;
 
     /// Update builder type for this model
     type Update<'a>;
@@ -65,27 +68,4 @@ pub trait Model: Register + Sized {
 pub trait Embed: Register {
     // Inherits id() and schema() from Register
     // No additional methods needed
-}
-
-// TODO: This is a hack to aid in the transition from schema code gen to proc
-// macro. This should be removed once the proc macro is implemented.
-impl<T: Model> Register for Option<T> {
-    fn id() -> ModelId {
-        T::id()
-    }
-
-    fn schema() -> app::Model {
-        T::schema()
-    }
-}
-
-impl<T: Model> Model for Option<T> {
-    type Query = T::Query;
-    type Create = T::Create;
-    type Update<'a> = T::Update<'a>;
-    type UpdateQuery = T::UpdateQuery;
-
-    fn load(value: stmt::Value) -> Result<Self, Error> {
-        Ok(Some(T::load(value)?))
-    }
 }

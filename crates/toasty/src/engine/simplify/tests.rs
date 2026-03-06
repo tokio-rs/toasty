@@ -14,6 +14,7 @@ mod expr_cast;
 mod expr_exists;
 mod expr_in_list;
 mod expr_is_null;
+mod expr_let;
 mod expr_list;
 mod expr_map;
 mod expr_match;

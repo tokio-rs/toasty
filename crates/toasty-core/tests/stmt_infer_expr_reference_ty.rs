@@ -77,11 +77,13 @@ fn model_root(id: usize, field_types: &[(Type, &str)]) -> ModelRoot {
             ty: FieldTy::Primitive(FieldPrimitive {
                 ty: ty.clone(),
                 storage_ty: None,
+                serialize: None,
             }),
             nullable: false,
             primary_key: i == 0,
             auto: None,
             constraints: vec![],
+            variant: None,
         })
         .collect();
 

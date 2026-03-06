@@ -2,9 +2,9 @@ use crate::stmt::{ExprExists, Input};
 
 use super::{
     expr_reference::ExprReference, Entry, EntryMut, EntryPath, ExprAnd, ExprAny, ExprArg,
-    ExprBinaryOp, ExprCast, ExprError, ExprFunc, ExprInList, ExprInSubquery, ExprIsNull, ExprList,
-    ExprMap, ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord, ExprStmt, Node, Projection,
-    Substitute, Value, Visit, VisitMut,
+    ExprBinaryOp, ExprCast, ExprError, ExprFunc, ExprInList, ExprInSubquery, ExprIsNull,
+    ExprIsVariant, ExprLet, ExprList, ExprMap, ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord,
+    ExprStmt, Node, Projection, Substitute, Value, Visit, VisitMut,
 };
 use std::fmt;
 
@@ -49,6 +49,12 @@ pub enum Expr {
     /// Whether an expression is (or is not) null. This is different from a
     /// binary expression because of how databases treat null comparisons.
     IsNull(ExprIsNull),
+
+    /// Whether an expression evaluates to a specific enum variant.
+    IsVariant(ExprIsVariant),
+
+    /// A scoped binding expression (transient — inlined before planning)
+    Let(ExprLet),
 
     /// Apply an expression to each item in a list
     Map(ExprMap),
@@ -145,6 +151,8 @@ impl Expr {
             Self::BinaryOp(_) => true,
             // IS NULL checks always evaluate to true or false.
             Self::IsNull(_) => true,
+            // Variant checks always evaluate to true or false.
+            Self::IsVariant(_) => true,
             // EXISTS checks always evaluate to true or false.
             Self::Exists(_) => true,
             // IN expressions always evaluate to true or false.
@@ -193,11 +201,15 @@ impl Expr {
             Self::Any(expr_any) => expr_any.expr.is_stable(),
             Self::Or(expr_or) => expr_or.iter().all(|expr| expr.is_stable()),
             Self::IsNull(expr_is_null) => expr_is_null.expr.is_stable(),
+            Self::IsVariant(expr_is_variant) => expr_is_variant.expr.is_stable(),
             Self::Not(expr_not) => expr_not.expr.is_stable(),
             Self::InList(expr_in_list) => {
                 expr_in_list.expr.is_stable() && expr_in_list.list.is_stable()
             }
             Self::Project(expr_project) => expr_project.base.is_stable(),
+            Self::Let(expr_let) => {
+                expr_let.bindings.iter().all(|b| b.is_stable()) && expr_let.body.is_stable()
+            }
             Self::Map(expr_map) => expr_map.base.is_stable() && expr_map.map.is_stable(),
             Self::Match(expr_match) => {
                 expr_match.subject.is_stable()
@@ -268,12 +280,22 @@ impl Expr {
             Self::Not(expr_not) => expr_not.expr.is_const_at_depth(map_depth),
             Self::Or(expr_or) => expr_or.iter().all(|expr| expr.is_const_at_depth(map_depth)),
             Self::IsNull(expr_is_null) => expr_is_null.expr.is_const_at_depth(map_depth),
+            Self::IsVariant(expr_is_variant) => expr_is_variant.expr.is_const_at_depth(map_depth),
             Self::InList(expr_in_list) => {
                 expr_in_list.expr.is_const_at_depth(map_depth)
                     && expr_in_list.list.is_const_at_depth(map_depth)
             }
             Self::Project(expr_project) => expr_project.base.is_const_at_depth(map_depth),
 
+            // Let: binding is checked at the current depth; the body is checked
+            // at depth+1 so that arg(nesting=0) in the body is treated as local.
+            Self::Let(expr_let) => {
+                expr_let
+                    .bindings
+                    .iter()
+                    .all(|b| b.is_const_at_depth(map_depth))
+                    && expr_let.body.is_const_at_depth(map_depth + 1)
+            }
             // Map: base is checked at the current depth; the map body is checked
             // at depth+1 so that arg(nesting=0) in the body is treated as local.
             Self::Map(expr_map) => {
@@ -323,10 +345,14 @@ impl Expr {
             Self::Or(expr_or) => expr_or.iter().all(|expr| expr.is_eval()),
             Self::Not(expr_not) => expr_not.expr.is_eval(),
             Self::IsNull(expr_is_null) => expr_is_null.expr.is_eval(),
+            Self::IsVariant(expr_is_variant) => expr_is_variant.expr.is_eval(),
             Self::InList(expr_in_list) => {
                 expr_in_list.expr.is_eval() && expr_in_list.list.is_eval()
             }
             Self::Project(expr_project) => expr_project.base.is_eval(),
+            Self::Let(expr_let) => {
+                expr_let.bindings.iter().all(|b| b.is_eval()) && expr_let.body.is_eval()
+            }
             Self::Map(expr_map) => expr_map.base.is_eval() && expr_map.map.is_eval(),
             Self::Match(expr_match) => {
                 expr_match.subject.is_eval() && expr_match.arms.iter().all(|arm| arm.expr.is_eval())
@@ -475,6 +501,8 @@ impl fmt::Debug for Expr {
             Self::InList(e) => e.fmt(f),
             Self::InSubquery(e) => e.fmt(f),
             Self::IsNull(e) => e.fmt(f),
+            Self::IsVariant(e) => e.fmt(f),
+            Self::Let(e) => e.fmt(f),
             Self::Map(e) => e.fmt(f),
             Self::Match(e) => e.fmt(f),
             Self::Not(e) => e.fmt(f),

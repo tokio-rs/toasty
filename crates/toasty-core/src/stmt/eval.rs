@@ -181,6 +181,18 @@ impl Expr {
                 let value = expr_is_null.expr.eval_ref(scope, input)?;
                 Ok(value.is_null().into())
             }
+            Expr::IsVariant(_) => Err(crate::Error::expression_evaluation_failed(
+                "IsVariant must be lowered before evaluation",
+            )),
+            Expr::Let(expr_let) => {
+                let args: Vec<_> = expr_let
+                    .bindings
+                    .iter()
+                    .map(|b| b.eval_ref(scope, input))
+                    .collect::<Result<_, _>>()?;
+                let scope = scope.scope(&args);
+                expr_let.body.eval_ref(&scope, input)
+            }
             Expr::Not(expr_not) => {
                 let value = expr_not.expr.eval_ref_bool(scope, input)?;
                 Ok((!value).into())

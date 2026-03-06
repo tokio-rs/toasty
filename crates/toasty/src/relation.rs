@@ -10,12 +10,17 @@ pub use has_one::HasOne;
 pub mod option;
 
 use super::Model;
+use crate::stmt::{IntoExpr, IntoInsert};
 
 use toasty_core::schema::app::FieldId;
+use toasty_core::stmt::Value;
 
-pub trait Relation {
+pub trait Relation: Sized {
     /// The target model
     type Model: Model;
+
+    /// Create builder for the target model
+    type Create: Default + IntoInsert<Model = Self::Model> + IntoExpr<Self::Model>;
 
     /// The target expression (e.g. `Option<Model>`)
     type Expr;
@@ -39,4 +44,10 @@ pub trait Relation {
     fn nullable() -> bool {
         false
     }
+
+    /// Load an instance of this relation target from a value.
+    ///
+    /// Implemented by models (delegating to `Model::load`) and by `Option<T>`
+    /// (handling null values).
+    fn load(value: Value) -> Result<Self, crate::Error>;
 }

@@ -183,47 +183,119 @@ impl BuildTableFromModels<'_> {
         }
         .build_mapping(root);
 
-        self.populate_model_indices(model.id(), root);
+        let model_fields = &self.mapping.model(model.id()).fields;
+        let mut indices = Vec::new();
+        self.collect_indices(&root.fields, model_fields, &root.indices, &mut indices);
+
+        for index in indices {
+            if index.primary_key {
+                self.table.primary_key.columns = index.columns.iter().map(|c| c.column).collect();
+            }
+
+            self.table.indices.push(index);
+        }
     }
 
-    fn populate_model_indices(&mut self, model_id: app::ModelId, root: &ModelRoot) {
-        for model_index in &root.indices {
+    /// Collects DB-level indices from app-level index definitions, then recurses
+    /// into embedded struct fields to collect their indices as well.
+    fn collect_indices(
+        &self,
+        fields: &[app::Field],
+        field_mappings: &[mapping::Field],
+        indices: &[app::Index],
+        out: &mut Vec<db::Index>,
+    ) {
+        for app_index in indices {
             let mut index = db::Index {
                 id: IndexId {
                     table: self.table.id,
-                    index: self.table.indices.len(),
+                    index: out.len(),
                 },
                 name: String::new(),
                 on: self.table.id,
                 columns: vec![],
-                unique: model_index.unique,
-                primary_key: model_index.primary_key,
+                unique: app_index.unique,
+                primary_key: app_index.primary_key,
             };
 
-            for index_field in &model_index.fields {
-                let column = self.mapping.model(model_id).fields[index_field.field.index]
+            for index_field in &app_index.fields {
+                let column = field_mappings[index_field.field.index]
                     .as_primitive()
-                    .unwrap()
+                    .expect("indexed field should map to a primitive column")
                     .column;
 
-                match &root.fields[index_field.field.index].ty {
-                    app::FieldTy::Primitive(_) => index.columns.push(db::IndexColumn {
-                        column,
-                        op: index_field.op,
-                        scope: index_field.scope,
-                    }),
-                    app::FieldTy::Embedded(_) => todo!("embedded field indexing"),
-                    app::FieldTy::BelongsTo(_) => todo!(),
-                    app::FieldTy::HasMany(_) => todo!(),
-                    app::FieldTy::HasOne(_) => todo!(),
-                }
-
-                if model_index.primary_key {
-                    self.table.primary_key.columns.push(column);
-                }
+                index.columns.push(db::IndexColumn {
+                    column,
+                    op: index_field.op,
+                    scope: index_field.scope,
+                });
             }
 
-            self.table.indices.push(index);
+            out.push(index);
+        }
+
+        for (field_index, field) in fields.iter().enumerate() {
+            let app::FieldTy::Embedded(embedded) = &field.ty else {
+                continue;
+            };
+
+            match self.app.model(embedded.target) {
+                app::Model::EmbeddedStruct(embedded_struct) => {
+                    let field_mapping = field_mappings[field_index]
+                        .as_struct()
+                        .expect("embedded struct field should have struct mapping");
+
+                    self.collect_indices(
+                        &embedded_struct.fields,
+                        &field_mapping.fields,
+                        &embedded_struct.indices,
+                        out,
+                    );
+                }
+                app::Model::EmbeddedEnum(embedded_enum) => {
+                    if embedded_enum.indices.is_empty() {
+                        continue;
+                    }
+
+                    let field_mapping = field_mappings[field_index]
+                        .as_enum()
+                        .expect("embedded enum field should have enum mapping");
+
+                    // Build a flat mapping from global field index to the
+                    // field's mapping within its variant. Enum fields use
+                    // global indices; each field belongs to a specific variant
+                    // and has a local offset within that variant.
+                    let mut flat_mappings: Vec<mapping::Field> =
+                        vec![
+                            mapping::Field::Relation(mapping::FieldRelation {
+                                field_mask: crate::stmt::PathFieldSet::new(),
+                            });
+                            embedded_enum.fields.len()
+                        ];
+
+                    for (variant_idx, variant_mapping) in field_mapping.variants.iter().enumerate()
+                    {
+                        let mut local_idx = 0;
+                        for (global_idx, f) in embedded_enum.fields.iter().enumerate() {
+                            let app::VariantId { index: vi, .. } =
+                                f.variant.expect("enum field must have variant");
+                            if vi != variant_idx {
+                                continue;
+                            }
+                            flat_mappings[global_idx] = variant_mapping.fields[local_idx].clone();
+                            local_idx += 1;
+                        }
+                    }
+
+                    self.collect_indices(
+                        &embedded_enum.fields,
+                        &flat_mappings,
+                        &embedded_enum.indices,
+                        out,
+                    );
+                }
+                _ => continue,
+            }
         }
     }
 
@@ -298,13 +370,16 @@ impl BuildMapping<'_> {
 
         let mut arms = Vec::new();
 
-        for (variant, mapping) in model.variants.iter().zip(&mapping.variants) {
-            let arm_expr = if variant.fields.is_empty() {
+        for (variant_index, (variant, mapping)) in
+            model.variants.iter().zip(&mapping.variants).enumerate()
+        {
+            let variant_fields: Vec<_> = model.variant_fields(variant_index).collect();
+            let arm_expr = if variant_fields.is_empty() {
                 disc_col_ref.clone()
             } else {
                 let mut record_elems = vec![disc_col_ref.clone()];
 
-                for (local_idx, field) in variant.fields.iter().enumerate() {
+                for (local_idx, field) in variant_fields.iter().enumerate() {
                     let expr = self.build_table_to_model_field(field, &mapping.fields[local_idx]);
                     record_elems.push(expr);
                 }
@@ -315,7 +390,28 @@ impl BuildMapping<'_> {
                 expr: arm_expr,
             });
         }
-        stmt::Expr::match_expr(disc_col_ref, arms, stmt::Expr::null())
+        // The else branch uses the same Record shape as data arms but with
+        // Expr::Error for each field slot. This makes projections work
+        // uniformly: projecting [0] extracts disc_col (pruning the errors),
+        // while projecting [1] yields Expr::Error (unreachable at runtime).
+        let max_fields = model
+            .variants
+            .iter()
+            .enumerate()
+            .map(|(i, _)| model.variant_fields(i).count())
+            .max()
+            .unwrap_or(0);
+        let else_expr = if max_fields == 0 {
+            stmt::Expr::error("unexpected enum discriminant")
+        } else {
+            let mut elems = vec![disc_col_ref.clone()];
+            for _ in 0..max_fields {
+                elems.push(stmt::Expr::error("unexpected enum discriminant"));
+            }
+            stmt::Expr::record(elems)
+        };
+
+        stmt::Expr::match_expr(disc_col_ref, arms, else_expr)
     }
 
     /// Encodes `expr` for `column_id`, appends the result to `model_to_table`,
@@ -519,14 +615,13 @@ impl<'a, 'b> MapField<'a, 'b> {
         let variants = embedded_enum
             .variants
             .iter()
-            .map(|variant| {
+            .enumerate()
+            .map(|(variant_index, variant)| {
                 let mut mapper =
                     self.for_variant(field, field_index, disc_proj.clone(), variant.discriminant);
 
-                // let fields = mapper.map_variant(variant);
-                let fields = variant
-                    .fields
-                    .iter()
+                let fields = embedded_enum
+                    .variant_fields(variant_index)
                     .enumerate()
                     .map(|(index, field)| {
                         // Variant fields are stored at positions 1.. in the Record

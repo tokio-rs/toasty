@@ -56,6 +56,8 @@ This pass would handle:
 - Contradicting equality pruning
 - Redundant predicate elimination
 - Tautology detection
+- `ExprLet` inlining (currently done at the end of `lower_returning`; should
+  move here so all post-lowering expression rewrites live in one place)
 
 **Why after lowering:** Before lowering, predicates reference model-level fields
 and contain relationship navigation that the lowering phase rewrites. Running

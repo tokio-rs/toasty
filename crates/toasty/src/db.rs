@@ -10,9 +10,10 @@ use tokio::{
     task::JoinHandle,
 };
 
-use crate::{engine::Engine, stmt, Cursor, Model, Result, Statement};
+use crate::{engine::Engine, Executor, Result, Transaction, TransactionBuilder};
 
 use toasty_core::{
+    async_trait,
     driver::Driver,
     stmt::{Value, ValueStream},
     Schema,
@@ -30,19 +31,24 @@ pub(crate) struct Shared {
 ///
 /// When dropped, `in_tx` closes the channel, causing the background task to
 /// finish processing remaining messages and exit gracefully.
-struct ConnectionHandle {
-    in_tx: mpsc::UnboundedSender<ConnectionOperation>,
+pub(crate) struct ConnectionHandle {
+    pub(crate) in_tx: mpsc::UnboundedSender<ConnectionOperation>,
     /// Kept so we can `.await` graceful shutdown in the future.
     #[allow(dead_code)]
     join_handle: JoinHandle<()>,
 }
 
 /// Operations sent to the connection task.
-enum ConnectionOperation {
+pub(crate) enum ConnectionOperation {
     /// Execute a statement (compile + run on the connection).
     ExecStatement {
         stmt: Box<toasty_core::stmt::Statement>,
+        in_transaction: bool,
         tx: oneshot::Sender<Result<ValueStream>>,
+    },
+    ExecOperation {
+        operation: Box<Operation>,
+        tx: oneshot::Sender<Result<Response>>,
     },
     /// Push schema to the database.
     PushSchema { tx: oneshot::Sender<Result<()>> },
@@ -73,38 +79,64 @@ impl Db {
     }
 
     /// Lazily acquire a connection and spawn the background task.
-    async fn connection(&mut self) -> Result<&ConnectionHandle> {
+    pub(crate) fn connection(&mut self) -> Result<&ConnectionHandle> {
         if self.connection.is_none() {
-            let mut connection = self.shared.pool.get().await?;
+            let shared = self.shared.clone();
             let engine = self.shared.engine.clone();
 
             let (in_tx, mut in_rx) = mpsc::unbounded_channel::<ConnectionOperation>();
 
             let join_handle = tokio::spawn(async move {
-                while let Some(op) = in_rx.recv().await {
-                    match op {
-                        ConnectionOperation::ExecStatement { stmt, tx } => {
-                            match engine.exec(&mut connection, *stmt).await {
-                                Ok(mut value_stream) => {
-                                    let (row_tx, mut row_rx) =
-                                        mpsc::unbounded_channel::<crate::Result<Value>>();
-
-                                    let _ = tx.send(Ok(ValueStream::from_stream(
-                                        async_stream::stream! {
-                                            while let Some(res) = row_rx.recv().await {
-                                                yield res
-                                            }
-                                        },
-                                    )));
-
-                                    while let Some(res) = value_stream.next().await {
-                                        let _ = row_tx.send(res);
-                                    }
+                let mut connection = match shared.pool.get().await {
+                    Ok(conn) => conn,
+                    Err(err) => {
+                        // Connection acquisition failed — reply with the error
+                        // to every pending and future operation, then exit.
+                        while let Some(op) = in_rx.recv().await {
+                            match op {
+                                ConnectionOperation::ExecStatement { tx, .. } => {
+                                    let _ = tx.send(Err(err.clone()));
                                 }
-                                Err(err) => {
-                                    let _ = tx.send(Err(err));
+                                ConnectionOperation::ExecOperation { tx, .. } => {
+                                    let _ = tx.send(Err(err.clone()));
+                                }
+                                ConnectionOperation::PushSchema { tx } => {
+                                    let _ = tx.send(Err(err.clone()));
                                 }
                             }
+                        }
+                        return;
+                    }
+                };
+                while let Some(op) = in_rx.recv().await {
+                    match op {
+                        ConnectionOperation::ExecStatement {
+                            stmt,
+                            in_transaction,
+                            tx,
+                        } => match engine.exec(&mut connection, *stmt, in_transaction).await {
+                            Ok(mut value_stream) => {
+                                let (row_tx, mut row_rx) =
+                                    mpsc::unbounded_channel::<crate::Result<Value>>();
+
+                                let _ =
+                                    tx.send(Ok(ValueStream::from_stream(async_stream::stream! {
+                                        while let Some(res) = row_rx.recv().await {
+                                            yield res
+                                        }
+                                    })));
+
+                                while let Some(res) = value_stream.next().await {
+                                    let _ = row_tx.send(res);
+                                }
+                            }
+                            Err(err) => {
+                                let _ = tx.send(Err(err));
+                            }
+                        },
+                        ConnectionOperation::ExecOperation { operation, tx } => {
+                            let result = connection.exec(&engine.schema, *operation).await;
+                            let _ = tx.send(result);
                         }
                         ConnectionOperation::PushSchema { tx } => {
                             let result = connection.push_schema(&engine.schema).await;
@@ -120,46 +152,13 @@ impl Db {
         Ok(self.connection.as_ref().unwrap())
     }
 
-    /// Execute a query, returning all matching records
-    pub async fn all<M: Model>(&mut self, query: stmt::Select<M>) -> Result<Cursor<M>> {
-        let records = self.exec(query.into()).await?;
-        Ok(Cursor::new(self.shared.engine.schema.clone(), records))
-    }
-
-    pub async fn first<M: Model>(&mut self, query: stmt::Select<M>) -> Result<Option<M>> {
-        let mut res = self.all(query).await?;
-        match res.next().await {
-            Some(Ok(value)) => Ok(Some(value)),
-            Some(Err(err)) => Err(err),
-            None => Ok(None),
-        }
-    }
-
-    pub async fn get<M: Model>(&mut self, query: stmt::Select<M>) -> Result<M> {
-        let mut res = self.all(query).await?;
-
-        match res.next().await {
-            Some(Ok(value)) => Ok(value),
-            Some(Err(err)) => Err(err),
-            None => Err(toasty_core::Error::record_not_found(
-                "query returned no results",
-            )),
-        }
-    }
-
-    pub async fn delete<M: Model>(&mut self, query: stmt::Select<M>) -> Result<()> {
-        self.exec(query.delete()).await?;
-        Ok(())
-    }
-
-    /// Execute a statement
-    pub async fn exec<M: Model>(&mut self, statement: Statement<M>) -> Result<ValueStream> {
+    pub(crate) async fn exec_operation(&mut self, operation: Operation) -> Result<Response> {
         let (tx, rx) = oneshot::channel();
 
-        let conn = self.connection().await?;
+        let conn = self.connection()?;
         conn.in_tx
-            .send(ConnectionOperation::ExecStatement {
-                stmt: Box::new(statement.untyped),
+            .send(ConnectionOperation::ExecOperation {
+                operation: Box::new(operation),
                 tx,
             })
             .unwrap();
@@ -167,44 +166,14 @@ impl Db {
         rx.await.unwrap()
     }
 
-    /// Execute a statement, assume only one record is returned
-    #[doc(hidden)]
-    pub async fn exec_one<M: Model>(&mut self, statement: Statement<M>) -> Result<stmt::Value> {
-        let mut res = self.exec(statement).await?;
-        let Some(ret) = res.next().await else {
-            return Err(toasty_core::Error::record_not_found(
-                "statement returned no results",
-            ));
-        };
-        let next = res.next().await;
-        let None = next else {
-            return Err(toasty_core::Error::invalid_record_count(
-                "expected 1 record, found multiple",
-            ));
-        };
-
-        ret
-    }
-
-    /// Execute model creation
-    ///
-    /// Used by generated code
-    #[doc(hidden)]
-    pub async fn exec_insert_one<M: Model>(&mut self, mut stmt: stmt::Insert<M>) -> Result<M> {
-        // TODO: HAX
-        stmt.untyped.source.single = false;
-
-        // Execute the statement and return the result
-        let records = self.exec(stmt.into()).await?;
-        let mut cursor = Cursor::new(self.shared.engine.schema.clone(), records);
-
-        cursor.next().await.unwrap()
+    pub fn transaction_builder(&mut self) -> TransactionBuilder<'_> {
+        TransactionBuilder::new(self)
     }
 
     /// Creates tables and indices defined in the schema on the database.
     pub async fn push_schema(&mut self) -> Result<()> {
         let (tx, rx) = oneshot::channel();
-        let conn = self.connection().await?;
+        let conn = self.connection()?;
         conn.in_tx
             .send(ConnectionOperation::PushSchema { tx })
             .unwrap();
@@ -241,5 +210,31 @@ impl std::fmt::Debug for Db {
             .field("engine", &self.shared.engine)
             .field("connected", &self.connection.is_some())
             .finish()
+    }
+}
+
+#[async_trait]
+impl Executor for Db {
+    async fn transaction(&mut self) -> Result<Transaction<'_>> {
+        Transaction::begin(self).await
+    }
+
+    async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> Result<ValueStream> {
+        let (tx, rx) = oneshot::channel();
+
+        let conn = self.connection()?;
+        conn.in_tx
+            .send(ConnectionOperation::ExecStatement {
+                stmt: Box::new(stmt),
+                in_transaction: false,
+                tx,
+            })
+            .unwrap();
+
+        rx.await.unwrap()
+    }
+
+    fn schema(&mut self) -> &Arc<Schema> {
+        Db::schema(self)
     }
 }

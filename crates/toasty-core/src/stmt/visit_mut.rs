@@ -3,12 +3,12 @@
 use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprAny, ExprArg,
     ExprBinaryOp, ExprCast, ExprColumn, ExprError, ExprExists, ExprFunc, ExprInList,
-    ExprInSubquery, ExprIsNull, ExprList, ExprMap, ExprMatch, ExprNot, ExprOr, ExprProject,
-    ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, Filter, FuncCount, FuncLastInsertId,
-    Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset, OrderBy, OrderByExpr, Path,
-    Projection, Query, Returning, Select, Source, SourceModel, SourceTable, SourceTableId,
-    Statement, TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update, UpdateTarget,
-    Value, ValueRecord, Values, With,
+    ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprList, ExprMap, ExprMatch, ExprNot,
+    ExprOr, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, Filter,
+    FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset, OrderBy,
+    OrderByExpr, Path, Projection, Query, Returning, Select, Source, SourceModel, SourceTable,
+    SourceTableId, Statement, TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update,
+    UpdateTarget, Value, ValueRecord, Values, With,
 };
 
 pub trait VisitMut {
@@ -97,6 +97,14 @@ pub trait VisitMut {
 
     fn visit_expr_is_null_mut(&mut self, i: &mut ExprIsNull) {
         visit_expr_is_null_mut(self, i);
+    }
+
+    fn visit_expr_is_variant_mut(&mut self, i: &mut ExprIsVariant) {
+        visit_expr_is_variant_mut(self, i);
+    }
+
+    fn visit_expr_let_mut(&mut self, i: &mut ExprLet) {
+        visit_expr_let_mut(self, i);
     }
 
     fn visit_expr_map_mut(&mut self, i: &mut ExprMap) {
@@ -341,6 +349,14 @@ impl<V: VisitMut> VisitMut for &mut V {
         VisitMut::visit_expr_is_null_mut(&mut **self, i);
     }
 
+    fn visit_expr_is_variant_mut(&mut self, i: &mut ExprIsVariant) {
+        VisitMut::visit_expr_is_variant_mut(&mut **self, i);
+    }
+
+    fn visit_expr_let_mut(&mut self, i: &mut ExprLet) {
+        VisitMut::visit_expr_let_mut(&mut **self, i);
+    }
+
     fn visit_expr_map_mut(&mut self, i: &mut ExprMap) {
         VisitMut::visit_expr_map_mut(&mut **self, i);
     }
@@ -557,6 +573,8 @@ where
         Expr::InList(expr) => v.visit_expr_in_list_mut(expr),
         Expr::InSubquery(expr) => v.visit_expr_in_subquery_mut(expr),
         Expr::IsNull(expr) => v.visit_expr_is_null_mut(expr),
+        Expr::IsVariant(expr) => v.visit_expr_is_variant_mut(expr),
+        Expr::Let(expr) => v.visit_expr_let_mut(expr),
         Expr::Map(expr) => v.visit_expr_map_mut(expr),
         Expr::Match(expr) => v.visit_expr_match_mut(expr),
         Expr::Not(expr) => v.visit_expr_not_mut(expr),
@@ -685,6 +703,23 @@ where
     V: VisitMut + ?Sized,
 {
     v.visit_expr_mut(&mut node.expr);
+}
+
+pub fn visit_expr_is_variant_mut<V>(v: &mut V, node: &mut ExprIsVariant)
+where
+    V: VisitMut + ?Sized,
+{
+    v.visit_expr_mut(&mut node.expr);
+}
+
+pub fn visit_expr_let_mut<V>(v: &mut V, node: &mut ExprLet)
+where
+    V: VisitMut + ?Sized,
+{
+    for binding in &mut node.bindings {
+        v.visit_expr_mut(binding);
+    }
+    v.visit_expr_mut(&mut node.body);
 }
 
 pub fn visit_expr_map_mut<V>(v: &mut V, node: &mut ExprMap)

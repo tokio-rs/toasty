@@ -58,9 +58,6 @@ struct Exec<'a> {
     engine: &'a Engine,
     connection: &'a mut PoolConnection,
     vars: VarStore,
-    /// Monotonically increasing counter for generating unique savepoint IDs
-    /// within a single plan execution.
-    next_savepoint_id: usize,
     /// True when an outer transaction is active on this connection. Used by
     /// ReadModifyWrite to decide between savepoints (nested) and its own
     /// BEGIN/COMMIT (standalone).
@@ -72,19 +69,36 @@ impl Engine {
         &self,
         connection: &mut PoolConnection,
         plan: ExecPlan,
+        in_transaction: bool,
     ) -> Result<ValueStream> {
         let mut exec = Exec {
             engine: self,
             connection,
             vars: plan.vars,
-            next_savepoint_id: 0,
-            in_transaction: false,
+            in_transaction,
+        };
+
+        // When nested inside an outer transaction use savepoints so the outer
+        // transaction can still commit or roll back as a whole. When standalone,
+        // start our own transaction (MySQL requires an active BEGIN before
+        // SAVEPOINT can be used, so we can't use savepoints here).
+        let (begin, commit, rollback) = if exec.in_transaction {
+            let name = "statement";
+            (
+                Transaction::Savepoint(name.to_owned()),
+                Transaction::ReleaseSavepoint(name.to_owned()),
+                Transaction::RollbackToSavepoint(name.to_owned()),
+            )
+        } else {
+            (
+                Transaction::start(),
+                Transaction::Commit,
+                Transaction::Rollback,
+            )
         };
 
         if plan.needs_transaction {
-            exec.connection
-                .exec(&self.schema, Transaction::start().into())
-                .await?;
+            exec.connection.exec(&self.schema, begin.into()).await?;
             exec.in_transaction = true;
         }
 
@@ -92,19 +106,14 @@ impl Engine {
             if let Err(e) = exec.exec_step(step).await {
                 if plan.needs_transaction {
                     // Best effort: ignore rollback errors so the original error is returned
-                    let _ = exec
-                        .connection
-                        .exec(&self.schema, Transaction::Rollback.into())
-                        .await;
+                    let _ = exec.connection.exec(&self.schema, rollback.into()).await;
                 }
                 return Err(e);
             }
         }
 
         if plan.needs_transaction {
-            exec.connection
-                .exec(&self.schema, Transaction::Commit.into())
-                .await?;
+            exec.connection.exec(&self.schema, commit.into()).await?;
         }
 
         Ok(if let Some(returning) = plan.returning {
@@ -138,12 +147,6 @@ fn try_extract_any_map_list(expr: &stmt::Expr) -> Option<(&[stmt::Value], &stmt:
 }
 
 impl Exec<'_> {
-    fn generate_savepoint_id(&mut self) -> usize {
-        let id = self.next_savepoint_id;
-        self.next_savepoint_id += 1;
-        id
-    }
-
     async fn exec_step(&mut self, action: &Action) -> Result<()> {
         match action {
             Action::DeleteByKey(action) => self.action_delete_by_key(action).await,

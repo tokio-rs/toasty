@@ -14,11 +14,13 @@ fn make_id_field(model_id: ModelId) -> Field {
         ty: FieldTy::Primitive(FieldPrimitive {
             ty: stmt::Type::String,
             storage_ty: None,
+            serialize: None,
         }),
         nullable: false,
         primary_key: true,
         auto: None,
         constraints: vec![],
+        variant: None,
     }
 }
 
@@ -53,6 +55,7 @@ fn make_relation_field(model_id: ModelId, index: usize, name: &str, ty: FieldTy)
         primary_key: false,
         auto: None,
         constraints: vec![],
+        variant: None,
     }
 }
 
