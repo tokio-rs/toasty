@@ -108,7 +108,7 @@ impl ToSql for &stmt::Expr {
                             let name = Ident(&column.name);
                             fmt!(cx, f, "tbl_" depth "_" expr_column.table "." name)
                         }
-                        ResolvedRef::Cte { .. } | ResolvedRef::Derived { .. } => {
+                        ResolvedRef::Cte { .. } | ResolvedRef::Derived(_) => {
                             fmt!(cx, f, "tbl_" depth "_" expr_column.table "." ColumnAlias(expr_column.column))
                         }
                         ResolvedRef::Model(model) => {

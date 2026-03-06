@@ -2,7 +2,7 @@ use std::cmp::PartialOrd;
 
 use super::Simplify;
 use toasty_core::schema::app::{FieldTy, Model};
-use toasty_core::stmt::{self, Expr, VisitMut};
+use toasty_core::stmt::{self, Expr, ResolvedRef, VisitMut};
 
 impl Simplify<'_> {
     pub(super) fn simplify_expr_eq_operand(&mut self, operand: &mut stmt::Expr) {
@@ -67,7 +67,7 @@ impl Simplify<'_> {
             self.simplify_expr_eq_operand(rhs);
         }
 
-        match (&mut *lhs, &mut *rhs) {
+        let result = match (&mut *lhs, &mut *rhs) {
             // Self-comparison, e.g.,
             //
             //  - `x = x` → `true`
@@ -188,6 +188,14 @@ impl Simplify<'_> {
                 let match_expr = rhs.take();
                 Some(self.eliminate_match_in_binary_op(op, match_expr, other, false))
             }
+            // Null propagation: `expr <op> null` → `null` (and symmetric)
+            //
+            // Any comparison with NULL yields NULL (SQL three-valued logic).
+            // This catches cases like `column = null` after input substitution
+            // provides a null FK value.
+            (_, Expr::Value(stmt::Value::Null)) | (Expr::Value(stmt::Value::Null), _) => {
+                return Some(Expr::null());
+            }
             // Canonicalization, `literal <op> col` → `col <op_commuted> literal`
             (Expr::Value(_), rhs) if !rhs.is_value() => {
                 std::mem::swap(lhs, rhs);
@@ -207,6 +215,34 @@ impl Simplify<'_> {
                 Some(Expr::from(op.is_eq()))
             }
             _ => None,
+        };
+
+        if result.is_some() {
+            return result;
+        }
+
+        // Null propagation for derived VALUES columns.
+        //
+        // If either operand is a column reference into a derived VALUES
+        // table where every row has NULL at that column position, the
+        // binary op can never produce a non-null result.
+        if self.is_always_null_derived_column(lhs) || self.is_always_null_derived_column(rhs) {
+            return Some(Expr::null());
+        }
+
+        None
+    }
+
+    /// Returns `true` if `expr` is a column reference that resolves to a
+    /// derived VALUES table where every row has NULL at the referenced column.
+    fn is_always_null_derived_column(&self, expr: &Expr) -> bool {
+        let Expr::Reference(expr_ref) = expr else {
+            return false;
+        };
+
+        match self.cx.resolve_expr_reference(expr_ref) {
+            ResolvedRef::Derived(derived_ref) => derived_ref.is_column_always_null(),
+            _ => false,
         }
     }
 

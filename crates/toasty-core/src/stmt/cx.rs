@@ -5,8 +5,8 @@ use crate::{
     },
     stmt::{
         Delete, Expr, ExprArg, ExprColumn, ExprReference, ExprSet, Insert, InsertTarget, Query,
-        Returning, Select, Source, SourceTable, Statement, TableFactor, TableRef, Type, TypeUnion,
-        Update, UpdateTarget,
+        Returning, Select, Source, SourceTable, Statement, TableDerived, TableFactor, TableRef,
+        Type, TypeUnion, Update, UpdateTarget,
     },
     Schema,
 };
@@ -69,13 +69,56 @@ pub enum ResolvedRef<'a> {
 
     /// A resolved reference to a derived table (subquery in FROM clause) column.
     ///
-    /// Contains the nesting level and column index for derived table references when
-    /// resolving ExprReference::Column expressions that point to derived table outputs.
-    /// Similar to CTEs, derived tables use col_<index> naming for their columns.
+    /// Contains the nesting level, column index, and a reference to the derived
+    /// table itself. This allows consumers to inspect the derived table's
+    /// content (e.g., checking VALUES rows for constant values).
+    Derived(DerivedRef<'a>),
+}
+
+/// A resolved reference into a derived table column.
+#[derive(Debug)]
+pub struct DerivedRef<'a> {
+    /// How many query scopes up from the current scope.
+    pub nesting: usize,
+
+    /// The column index within the derived table's output.
+    pub index: usize,
+
+    /// Reference to the derived table definition.
+    pub derived: &'a TableDerived,
+}
+
+impl DerivedRef<'_> {
+    /// Returns `true` if the derived table is backed by a VALUES body and every
+    /// row has `Null` at this column position.
     ///
-    /// Example: Resolving a reference to the first column of a derived table at the
-    /// current nesting level returns Derived { nesting: 0, index: 0 }.
-    Derived { nesting: usize, index: usize },
+    /// Returns `false` conservatively when the body is not VALUES, the VALUES
+    /// is empty, or any row doesn't have a recognizable null at the column.
+    pub fn is_column_always_null(&self) -> bool {
+        let ExprSet::Values(values) = &self.derived.subquery.body else {
+            return false;
+        };
+
+        if values.is_empty() {
+            return false;
+        }
+
+        values.rows.iter().all(|row| self.row_column_is_null(row))
+    }
+
+    fn row_column_is_null(&self, row: &Expr) -> bool {
+        match row {
+            Expr::Value(super::Value::Record(record)) => {
+                self.index < record.len() && record[self.index].is_null()
+            }
+            Expr::Record(record) => {
+                self.index < record.len()
+                    && matches!(&record.fields[self.index], Expr::Value(super::Value::Null))
+            }
+            Expr::Value(super::Value::Null) => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -251,12 +294,12 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                                 };
                                 ResolvedRef::Column(&table.columns[expr_column.column])
                             }
-                            TableRef::Derived { .. } => {
-                                // Derived tables use col_<index> naming like CTEs
-                                ResolvedRef::Derived {
+                            TableRef::Derived(derived) => {
+                                ResolvedRef::Derived(DerivedRef {
                                     nesting: expr_column.nesting,
                                     index: expr_column.column,
-                                }
+                                    derived,
+                                })
                             }
                             TableRef::Cte {
                                 nesting: cte_nesting,
@@ -474,7 +517,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             ResolvedRef::Column(column) => column.ty.clone(),
             ResolvedRef::Field(field) => field.expr_ty().clone(),
             ResolvedRef::Cte { .. } => todo!("type inference for CTE columns not implemented"),
-            ResolvedRef::Derived { .. } => {
+            ResolvedRef::Derived(_) => {
                 todo!("type inference for derived table columns not implemented")
             }
         }
