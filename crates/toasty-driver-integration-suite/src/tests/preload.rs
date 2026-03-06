@@ -828,7 +828,7 @@ pub async fn nested_has_many_preload(test: &mut Test) {
         todo: toasty::BelongsTo<Todo>,
     }
 
-    let db = test.setup_db(models!(User, Todo, Step)).await;
+    let mut db = test.setup_db(models!(User, Todo, Step)).await;
 
     // Create a user with todos, each with steps
     let user = User::create()
@@ -846,14 +846,14 @@ pub async fn nested_has_many_preload(test: &mut Test) {
                 .step(Step::create().description("Step 2b"))
                 .step(Step::create().description("Step 2c")),
         )
-        .exec(&db)
+        .exec(&mut db)
         .await
         .unwrap();
 
     // Load user with nested include: todos AND their steps
     let user = User::filter_by_id(user.id)
         .include(User::fields().todos().steps())
-        .get(&db)
+        .get(&mut db)
         .await
         .unwrap();
 

@@ -828,7 +828,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         // when it encounters the Returning::Model on this subquery.
         if !rest.is_empty() {
             let remaining_path = stmt::Path {
-                root: target_model_id,
+                root: stmt::PathRoot::Model(target_model_id),
                 projection: stmt::Projection::from(rest),
             };
             stmt.include(remaining_path);
