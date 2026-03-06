@@ -181,3 +181,83 @@ fn nested_scopes_derived_inner_table_outer() {
         ResolvedRef::Column(_)
     ));
 }
+
+// ---------------------------------------------------------------------------
+// DerivedRef::is_column_always_null
+// ---------------------------------------------------------------------------
+
+fn resolve_derived<'a>(
+    cx: &'a ExprContext<'a, DbSchema>,
+    col: &'a ExprReference,
+) -> DerivedRef<'a> {
+    match cx.resolve_expr_reference(col) {
+        ResolvedRef::Derived(d) => d,
+        other => panic!("expected Derived, got {other:?}"),
+    }
+}
+
+#[test]
+fn is_column_always_null_single_null_row() {
+    let schema = db_schema();
+    let source = source_with_derived(derived_from_values(vec![val_row(vec![Value::Null])]));
+    let cx = ExprContext::new_with_target(&schema, ExprTarget::Source(&source));
+
+    assert!(resolve_derived(&cx, &col_ref(0, 0, 0)).is_column_always_null());
+}
+
+#[test]
+fn is_column_always_null_multiple_null_rows() {
+    let schema = db_schema();
+    let source = source_with_derived(derived_from_values(vec![
+        val_row(vec![Value::Null]),
+        val_row(vec![Value::Null]),
+    ]));
+    let cx = ExprContext::new_with_target(&schema, ExprTarget::Source(&source));
+
+    assert!(resolve_derived(&cx, &col_ref(0, 0, 0)).is_column_always_null());
+}
+
+#[test]
+fn is_column_always_null_false_when_non_null() {
+    let schema = db_schema();
+    let source = source_with_derived(derived_from_values(vec![val_row(vec![Value::I64(42)])]));
+    let cx = ExprContext::new_with_target(&schema, ExprTarget::Source(&source));
+
+    assert!(!resolve_derived(&cx, &col_ref(0, 0, 0)).is_column_always_null());
+}
+
+#[test]
+fn is_column_always_null_false_when_mixed() {
+    let schema = db_schema();
+    let source = source_with_derived(derived_from_values(vec![
+        val_row(vec![Value::Null]),
+        val_row(vec![Value::I64(42)]),
+    ]));
+    let cx = ExprContext::new_with_target(&schema, ExprTarget::Source(&source));
+
+    assert!(!resolve_derived(&cx, &col_ref(0, 0, 0)).is_column_always_null());
+}
+
+#[test]
+fn is_column_always_null_false_when_empty_values() {
+    let schema = db_schema();
+    let source = source_with_derived(derived_from_values(vec![]));
+    let cx = ExprContext::new_with_target(&schema, ExprTarget::Source(&source));
+
+    assert!(!resolve_derived(&cx, &col_ref(0, 0, 0)).is_column_always_null());
+}
+
+#[test]
+fn is_column_always_null_checks_correct_column() {
+    let schema = db_schema();
+    let source = source_with_derived(derived_from_values(vec![val_row(vec![
+        Value::I64(1),
+        Value::Null,
+    ])]));
+    let cx = ExprContext::new_with_target(&schema, ExprTarget::Source(&source));
+
+    // Column 0 is non-null
+    assert!(!resolve_derived(&cx, &col_ref(0, 0, 0)).is_column_always_null());
+    // Column 1 is null
+    assert!(resolve_derived(&cx, &col_ref(0, 0, 1)).is_column_always_null());
+}

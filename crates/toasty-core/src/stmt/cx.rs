@@ -88,6 +88,39 @@ pub struct DerivedRef<'a> {
     pub derived: &'a TableDerived,
 }
 
+impl DerivedRef<'_> {
+    /// Returns `true` if the derived table is backed by a VALUES body and every
+    /// row has `Null` at this column position.
+    ///
+    /// Returns `false` conservatively when the body is not VALUES, the VALUES
+    /// is empty, or any row doesn't have a recognizable null at the column.
+    pub fn is_column_always_null(&self) -> bool {
+        let ExprSet::Values(values) = &self.derived.subquery.body else {
+            return false;
+        };
+
+        if values.is_empty() {
+            return false;
+        }
+
+        values.rows.iter().all(|row| self.row_column_is_null(row))
+    }
+
+    fn row_column_is_null(&self, row: &Expr) -> bool {
+        match row {
+            Expr::Value(super::Value::Record(record)) => {
+                self.index < record.len() && record[self.index].is_null()
+            }
+            Expr::Record(record) => {
+                self.index < record.len()
+                    && matches!(&record.fields[self.index], Expr::Value(super::Value::Null))
+            }
+            Expr::Value(super::Value::Null) => true,
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum ExprTarget<'a> {
     /// Expression does *not* reference any model or table.
