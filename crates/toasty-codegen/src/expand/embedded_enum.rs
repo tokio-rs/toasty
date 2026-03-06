@@ -214,7 +214,7 @@ impl Expand<'_> {
             .iter()
             .map(|variant| {
                 let variant_name = schema::expand_name(toasty, &variant.name);
-                let discriminant = variant.discriminant;
+                let discriminant = variant.attrs.discriminant;
                 quote! {
                     #toasty::schema::app::EnumVariant {
                         name: #variant_name,
@@ -277,7 +277,7 @@ impl Expand<'_> {
             .filter(|(variant_index, _)| self.variant_fields(*variant_index).is_empty())
             .map(|(_, variant)| {
                 let ident = &variant.ident;
-                let discriminant = variant.discriminant;
+                let discriminant = variant.attrs.discriminant;
                 quote! { #discriminant => Ok(#model_ident::#ident), }
             })
             .collect()
@@ -299,7 +299,7 @@ impl Expand<'_> {
             .filter(|(variant_index, _)| !self.variant_fields(*variant_index).is_empty())
             .map(|(variant_index, variant)| {
                 let ident = &variant.ident;
-                let discriminant = variant.discriminant;
+                let discriminant = variant.attrs.discriminant;
                 let fields = self.variant_fields(variant_index);
 
                 let field_loads: Vec<_> = fields.iter().enumerate().map(|(i, field)| {
@@ -343,7 +343,7 @@ impl Expand<'_> {
             .enumerate()
             .map(|(variant_index, variant)| {
                 let ident = &variant.ident;
-                let discriminant = variant.discriminant;
+                let discriminant = variant.attrs.discriminant;
                 let fields = self.variant_fields(variant_index);
 
                 let discriminant_expr = quote!(#toasty::core::stmt::Expr::Value(

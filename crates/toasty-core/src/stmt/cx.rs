@@ -437,6 +437,15 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                     .collect(),
             ),
             Expr::Value(value) => value.infer_ty(),
+            Expr::Let(expr_let) => {
+                let scope_tys: Vec<_> = expr_let
+                    .bindings
+                    .iter()
+                    .map(|b| self.infer_expr_ty2(args, b, returning_expr))
+                    .collect();
+                let args = args.scope(&scope_tys);
+                self.infer_expr_ty2(&args, &expr_let.body, returning_expr)
+            }
             Expr::Match(expr_match) => {
                 // Collect the distinct non-null types from all arms and the else
                 // branch. If all agree on one type, return it directly. If they

@@ -37,5 +37,8 @@ pub(crate) use name::Name;
 mod pk;
 pub(crate) use pk::PrimaryKey;
 
+mod variant;
+pub(crate) use variant::Variant;
+
 mod column;
 pub(crate) use column::Column;

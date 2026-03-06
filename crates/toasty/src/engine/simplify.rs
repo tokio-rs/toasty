@@ -6,6 +6,7 @@ mod expr_cast;
 mod expr_exists;
 mod expr_in_list;
 mod expr_is_null;
+mod expr_let;
 mod expr_list;
 mod expr_map;
 mod expr_match;
@@ -70,6 +71,7 @@ impl VisitMut for Simplify<'_> {
             Expr::Exists(expr) => self.simplify_expr_exists(expr),
             Expr::InList(expr) => self.simplify_expr_in_list(expr),
             Expr::InSubquery(expr) => self.lift_in_subquery(&expr.expr, &expr.query),
+            Expr::Let(expr) => self.simplify_expr_let(expr),
             Expr::List(expr) => self.simplify_expr_list(expr),
             Expr::Map(_) => self.simplify_expr_map(i),
             Expr::Match(expr) => self.simplify_expr_match(expr),

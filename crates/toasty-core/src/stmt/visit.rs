@@ -3,9 +3,9 @@
 use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprAny, ExprArg,
     ExprBinaryOp, ExprCast, ExprColumn, ExprError, ExprExists, ExprFunc, ExprInList,
-    ExprInSubquery, ExprIsNull, ExprIsVariant, ExprList, ExprMap, ExprMatch, ExprNot, ExprOr,
-    ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, Filter, FuncCount,
-    FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset, OrderBy,
+    ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprList, ExprMap, ExprMatch, ExprNot,
+    ExprOr, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, Filter,
+    FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset, OrderBy,
     OrderByExpr, Path, Projection, Query, Returning, Select, Source, SourceModel, SourceTable,
     SourceTableId, Statement, TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update,
     UpdateTarget, Value, ValueRecord, Values, With,
@@ -101,6 +101,10 @@ pub trait Visit {
 
     fn visit_expr_is_variant(&mut self, i: &ExprIsVariant) {
         visit_expr_is_variant(self, i);
+    }
+
+    fn visit_expr_let(&mut self, i: &ExprLet) {
+        visit_expr_let(self, i);
     }
 
     fn visit_expr_map(&mut self, i: &ExprMap) {
@@ -349,6 +353,10 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_expr_is_variant(&mut **self, i);
     }
 
+    fn visit_expr_let(&mut self, i: &ExprLet) {
+        Visit::visit_expr_let(&mut **self, i);
+    }
+
     fn visit_expr_map(&mut self, i: &ExprMap) {
         Visit::visit_expr_map(&mut **self, i);
     }
@@ -566,6 +574,7 @@ where
         Expr::InSubquery(expr) => v.visit_expr_in_subquery(expr),
         Expr::IsNull(expr) => v.visit_expr_is_null(expr),
         Expr::IsVariant(expr) => v.visit_expr_is_variant(expr),
+        Expr::Let(expr) => v.visit_expr_let(expr),
         Expr::Map(expr) => v.visit_expr_map(expr),
         Expr::Match(expr) => v.visit_expr_match(expr),
         Expr::Not(expr) => v.visit_expr_not(expr),
@@ -701,6 +710,16 @@ where
     V: Visit + ?Sized,
 {
     v.visit_expr(&node.expr);
+}
+
+pub fn visit_expr_let<V>(v: &mut V, node: &ExprLet)
+where
+    V: Visit + ?Sized,
+{
+    for binding in &node.bindings {
+        v.visit_expr(binding);
+    }
+    v.visit_expr(&node.body);
 }
 
 pub fn visit_expr_map<V>(v: &mut V, node: &ExprMap)
