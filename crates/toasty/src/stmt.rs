@@ -34,9 +34,6 @@ mod primitive_jiff;
 mod select;
 pub use select::Select;
 
-mod to_statement;
-pub use to_statement::ToStatement;
-
 mod update;
 pub use update::Update;
 
