@@ -1,4 +1,4 @@
-use super::{Id, PathFieldSet, TypeEnum, Value};
+use super::{PathFieldSet, TypeUnion, Value};
 use crate::{
     schema::app::{FieldId, ModelId},
     stmt, Result,
@@ -66,6 +66,7 @@ use crate::{
 /// - [`stmt::Value`] - Values typed by this system
 /// - [`stmt::Expr`] - Expressions typed by this system
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Type {
     /// Boolean value
     Bool,
@@ -100,9 +101,6 @@ pub enum Type {
     /// 128-bit universally unique identifier (UUID)
     Uuid,
 
-    /// An opaque type that uniquely identifies an instance of a model.
-    Id(ModelId),
-
     /// An instance of a model key
     Key(ModelId),
 
@@ -117,9 +115,6 @@ pub enum Type {
 
     /// A fixed-length tuple where each item can have a different type.
     Record(Vec<Type>),
-
-    /// An enumeration of multiple types
-    Enum(TypeEnum),
 
     // An array of bytes that is more efficient than List(u8)
     Bytes,
@@ -159,9 +154,9 @@ pub enum Type {
     #[cfg(feature = "jiff")]
     DateTime,
 
-    /// The null type can be cast to any type.
-    ///
-    /// TODO: we should get rid of this.
+    /// The null type. Represents the type of a null value and is cast-able to
+    /// any type. Also used as the element type of an empty list whose item type
+    /// is not yet known.
     Null,
 
     SparseRecord(PathFieldSet),
@@ -171,6 +166,14 @@ pub enum Type {
 
     /// A type that could not be inferred (e.g., empty list)
     Unknown,
+
+    /// A union of possible types.
+    ///
+    /// Used when a match expression's arms can produce values of different types
+    /// (e.g., a mixed enum where unit arms return `I64` and data arms return
+    /// `Record`). A value is compatible with a union if it satisfies any of the
+    /// member types.
+    Union(TypeUnion),
 }
 
 impl Type {
@@ -188,10 +191,6 @@ impl Type {
 
     pub fn is_bool(&self) -> bool {
         matches!(self, Self::Bool)
-    }
-
-    pub fn is_id(&self) -> bool {
-        matches!(self, Self::Id(_))
     }
 
     pub fn is_model(&self) -> bool {
@@ -294,9 +293,6 @@ impl Type {
         Ok(match (value, self) {
             // Identity
             (value @ Value::String(_), Self::String) => value,
-            // String <-> Id
-            (Value::Id(value), _) => value.cast(self)?,
-            (Value::String(value), Self::Id(ty)) => Value::Id(Id::from_string(*ty, value)),
             // String <-> Uuid
             (Value::Uuid(value), Self::String) => Value::String(value.to_string()),
             (Value::String(value), Self::Uuid) => {
@@ -404,7 +400,6 @@ impl Type {
             (Type::DateTime, Type::DateTime) => true,
 
             // Model-related types must match model IDs
-            (Type::Id(a), Type::Id(b)) => a == b,
             (Type::Key(a), Type::Key(b)) => a == b,
             (Type::Model(a), Type::Model(b)) => a == b,
             (Type::ForeignKey(a), Type::ForeignKey(b)) => a == b,
@@ -417,11 +412,11 @@ impl Type {
                 a.len() == b.len() && a.iter().zip(b.iter()).all(|(a, b)| a.is_equivalent(b))
             }
 
-            // Enum types must be structurally equivalent
-            (Type::Enum(a), Type::Enum(b)) => a == b,
-
             // Sparse records must have the same field set
             (Type::SparseRecord(a), Type::SparseRecord(b)) => a == b,
+
+            // Two unions are equivalent if they contain the same set of member types
+            (Type::Union(a), Type::Union(b)) => a == b,
 
             // Different type variants are not equivalent
             _ => false,

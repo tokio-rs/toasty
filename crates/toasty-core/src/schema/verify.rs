@@ -24,7 +24,10 @@ impl Verify<'_> {
         debug_assert!(self.verify_ids_populated());
 
         for model in self.schema.app.models() {
-            for field in &model.fields {
+            let super::app::Model::Root(root) = model else {
+                continue;
+            };
+            for field in &root.fields {
                 self.verify_relations_are_indexed(field);
                 self.verify_auto_field_type(field);
             }
@@ -44,9 +47,12 @@ impl Verify<'_> {
 
     fn verify_ids_populated(&self) -> bool {
         for model in self.schema.app.models() {
-            assert_ne!(model.id, ModelId::placeholder());
+            assert_ne!(model.id(), ModelId::placeholder());
 
-            for field in &model.fields {
+            let super::app::Model::Root(root) = model else {
+                continue;
+            };
+            for field in &root.fields {
                 if let Some(has_many) = field.ty.as_has_many() {
                     assert_ne!(has_many.pair, FieldId::placeholder());
                 }
@@ -82,7 +88,10 @@ impl Verify<'_> {
 
     fn verify_model_indices_are_scoped_correctly(&self) {
         for model in self.schema.app.models() {
-            for index in &model.indices {
+            let super::app::Model::Root(root) = model else {
+                continue;
+            };
+            for index in &root.indices {
                 let mut seen_local = false;
 
                 for field in &index.fields {
@@ -219,14 +228,6 @@ impl Verify<'_> {
                 assert!(
                     field_ty.is_uuid(),
                     "field `{}` has Auto::Uuid but type is not Uuid: {:?}",
-                    field.name.app_name,
-                    field_ty
-                );
-            }
-            AutoStrategy::Id => {
-                assert!(
-                    field_ty.is_id(),
-                    "field `{}` has Auto::Id but type is not Id: {:?}",
                     field.name.app_name,
                     field_ty
                 );

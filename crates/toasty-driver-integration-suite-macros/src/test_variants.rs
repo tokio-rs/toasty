@@ -174,6 +174,13 @@ pub fn expand(input: TokenStream) -> TokenStream {
             // Generate the test function name and path
             let (test_fn_name, fn_path) = input.generate_test_name_and_path(expansion);
 
+            // Optionally emit set_serial(true) for serial tests
+            let serial_call = if attr.serial {
+                quote! { test.set_serial(true); }
+            } else {
+                quote! {}
+            };
+
             // Generate the test function with extra attributes
             Some(quote! {
                 #(#extra_attrs)*
@@ -183,9 +190,8 @@ pub fn expand(input: TokenStream) -> TokenStream {
                         ::std::sync::Arc::new(#driver_expr)
                     );
 
-                    test.run(async move |t| {
-                        #fn_path(t).await;
-                    });
+                    #serial_call
+                    test.run(async move |t| { #fn_path(t).await });
                 }
             })
         })

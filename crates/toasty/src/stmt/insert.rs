@@ -21,6 +21,7 @@ impl<M: Model> Insert<M> {
                 target: stmt::InsertTarget::Model(M::id()),
                 source: stmt::Query::new_single(vec![stmt::ExprRecord::from_vec(
                     M::schema()
+                        .expect_root()
                         .fields
                         .iter()
                         .map(|field| match field.auto() {
@@ -68,6 +69,26 @@ impl<M: Model> Insert<M> {
                 expr_list.items.push(expr.into());
             }
             _ => todo!("existing={target:#?}; expr={:#?}", expr.into()),
+        }
+    }
+
+    /// Merge a list expression into the field, extending any existing list.
+    pub fn insert_all(&mut self, field: usize, expr: impl Into<stmt::Expr>) {
+        let target = self.expr_mut(field);
+        let incoming = expr.into();
+
+        match target {
+            stmt::Expr::Value(stmt::Value::Null) => {
+                *target = incoming;
+            }
+            stmt::Expr::List(existing) => {
+                if let stmt::Expr::List(incoming_list) = incoming {
+                    existing.items.extend(incoming_list.items);
+                } else {
+                    existing.items.push(incoming);
+                }
+            }
+            _ => todo!("existing={target:#?}; expr={:#?}", incoming),
         }
     }
 

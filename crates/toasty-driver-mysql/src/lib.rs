@@ -7,19 +7,20 @@ use mysql_async::{
     prelude::{Queryable, ToValue},
     Conn, Pool,
 };
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     async_trait,
-    driver::{operation::Transaction, Capability, Driver, Operation, Response},
-    schema::db::{Schema, Table},
+    driver::{Capability, Driver, Operation, Response},
+    schema::db::{self, Migration, SchemaDiff, Table},
     stmt::{self, ValueRecord},
-    Result,
+    Result, Schema,
 };
-use toasty_sql as sql;
+use toasty_sql::{self as sql, TypedValue};
 use url::Url;
 
 #[derive(Debug)]
 pub struct MySQL {
+    url: String,
     pool: Pool,
 }
 
@@ -54,18 +55,16 @@ impl MySQL {
         let opts = mysql_async::OptsBuilder::from_opts(opts).client_found_rows(true);
 
         let pool = Pool::new(opts);
-        Ok(Self { pool })
-    }
-}
-
-impl From<Pool> for MySQL {
-    fn from(pool: Pool) -> Self {
-        Self { pool }
+        Ok(Self { url: url_str, pool })
     }
 }
 
 #[async_trait]
 impl Driver for MySQL {
+    fn url(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.url)
+    }
+
     fn capability(&self) -> &'static Capability {
         &Capability::MYSQL
     }
@@ -77,6 +76,56 @@ impl Driver for MySQL {
             .await
             .map_err(toasty_core::Error::driver_operation_failed)?;
         Ok(Box::new(Connection::new(conn)))
+    }
+
+    fn generate_migration(&self, schema_diff: &SchemaDiff<'_>) -> Migration {
+        let statements = sql::MigrationStatement::from_diff(schema_diff, &Capability::MYSQL);
+
+        let sql_strings: Vec<String> = statements
+            .iter()
+            .map(|stmt| {
+                let mut params = Vec::<TypedValue>::new();
+                let sql =
+                    sql::Serializer::mysql(stmt.schema()).serialize(stmt.statement(), &mut params);
+                assert!(
+                    params.is_empty(),
+                    "migration statements should not have parameters"
+                );
+                sql
+            })
+            .collect();
+
+        Migration::new_sql_with_breakpoints(&sql_strings)
+    }
+
+    async fn reset_db(&self) -> toasty_core::Result<()> {
+        let mut conn = self
+            .pool
+            .get_conn()
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        let dbname = conn
+            .opts()
+            .db_name()
+            .ok_or_else(|| {
+                toasty_core::Error::invalid_connection_url("no database name configured")
+            })?
+            .to_string();
+
+        conn.query_drop(format!("DROP DATABASE IF EXISTS `{}`", dbname))
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        conn.query_drop(format!("CREATE DATABASE `{}`", dbname))
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        conn.query_drop(format!("USE `{}`", dbname))
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        Ok(())
     }
 }
 
@@ -90,7 +139,7 @@ impl Connection {
         Self { conn }
     }
 
-    pub async fn create_table(&mut self, schema: &Schema, table: &Table) -> Result<()> {
+    pub async fn create_table(&mut self, schema: &db::Schema, table: &Table) -> Result<()> {
         let serializer = sql::Serializer::mysql(schema);
 
         let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
@@ -130,34 +179,6 @@ impl Connection {
 
         Ok(())
     }
-
-    /// Drops a table.
-    pub async fn drop_table(
-        &mut self,
-        schema: &Schema,
-        table: &Table,
-        if_exists: bool,
-    ) -> Result<()> {
-        let serializer = sql::Serializer::mysql(schema);
-        let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
-
-        let sql = if if_exists {
-            serializer.serialize(&sql::Statement::drop_table_if_exists(table), &mut params)
-        } else {
-            serializer.serialize(&sql::Statement::drop_table(table), &mut params)
-        };
-
-        assert!(
-            params.is_empty(),
-            "dropping a table shouldn't involve any parameters"
-        );
-
-        self.conn
-            .exec_drop(&sql, ())
-            .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
-        Ok(())
-    }
 }
 
 impl From<Conn> for Connection {
@@ -171,25 +192,18 @@ impl toasty_core::driver::Connection for Connection {
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         let (sql, ret, last_insert_id_hack): (sql::Statement, _, _) = match op {
             Operation::QuerySql(op) => (op.stmt.into(), op.ret, op.last_insert_id_hack),
-            Operation::Transaction(Transaction::Start) => {
-                self.conn
-                    .query_drop("START TRANSACTION")
-                    .await
-                    .map_err(toasty_core::Error::driver_operation_failed)?;
-                return Ok(Response::count(0));
-            }
-            Operation::Transaction(Transaction::Commit) => {
-                self.conn
-                    .query_drop("COMMIT")
-                    .await
-                    .map_err(toasty_core::Error::driver_operation_failed)?;
-                return Ok(Response::count(0));
-            }
-            Operation::Transaction(Transaction::Rollback) => {
-                self.conn
-                    .query_drop("ROLLBACK")
-                    .await
-                    .map_err(toasty_core::Error::driver_operation_failed)?;
+            Operation::Transaction(op) => {
+                let sql = sql::Serializer::mysql(&schema.db).serialize_transaction(&op);
+                self.conn.query_drop(sql).await.map_err(|e| match e {
+                    mysql_async::Error::Server(se) => match se.code {
+                        1213 => toasty_core::Error::serialization_failure(se.message),
+                        1792 => toasty_core::Error::read_only_transaction(se.message),
+                        _ => toasty_core::Error::driver_operation_failed(
+                            mysql_async::Error::Server(se),
+                        ),
+                    },
+                    other => toasty_core::Error::driver_operation_failed(other),
+                })?;
                 return Ok(Response::count(0));
             }
             op => todo!("op={:#?}", op),
@@ -197,7 +211,7 @@ impl toasty_core::driver::Connection for Connection {
 
         let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
 
-        let sql_as_str = sql::Serializer::mysql(schema).serialize(&sql, &mut params);
+        let sql_as_str = sql::Serializer::mysql(&schema.db).serialize(&sql, &mut params);
 
         let params = params
             .into_iter()
@@ -298,12 +312,104 @@ impl toasty_core::driver::Connection for Connection {
         }
     }
 
-    async fn reset_db(&mut self, schema: &Schema) -> Result<()> {
-        for table in &schema.tables {
-            self.drop_table(schema, table, true).await?;
-            self.create_table(schema, table).await?;
+    async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
+        for table in &schema.db.tables {
+            self.create_table(&schema.db, table).await?;
+        }
+        Ok(())
+    }
+
+    async fn applied_migrations(
+        &mut self,
+    ) -> Result<Vec<toasty_core::schema::db::AppliedMigration>> {
+        // Ensure the migrations table exists
+        self.conn
+            .exec_drop(
+                "CREATE TABLE IF NOT EXISTS __toasty_migrations (
+                id BIGINT UNSIGNED PRIMARY KEY,
+                name TEXT NOT NULL,
+                applied_at TIMESTAMP NOT NULL
+            )",
+                (),
+            )
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        // Query all applied migrations
+        let rows: Vec<u64> = self
+            .conn
+            .exec("SELECT id FROM __toasty_migrations ORDER BY applied_at", ())
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        Ok(rows
+            .into_iter()
+            .map(toasty_core::schema::db::AppliedMigration::new)
+            .collect())
+    }
+
+    async fn apply_migration(
+        &mut self,
+        id: u64,
+        name: String,
+        migration: &toasty_core::schema::db::Migration,
+    ) -> Result<()> {
+        // Ensure the migrations table exists
+        self.conn
+            .exec_drop(
+                "CREATE TABLE IF NOT EXISTS __toasty_migrations (
+                id BIGINT UNSIGNED PRIMARY KEY,
+                name TEXT NOT NULL,
+                applied_at TIMESTAMP NOT NULL
+            )",
+                (),
+            )
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        // Start transaction
+        let mut transaction = self
+            .conn
+            .start_transaction(Default::default())
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        // Execute each migration statement
+        for statement in migration.statements() {
+            if let Err(e) = transaction
+                .query_drop(statement)
+                .await
+                .map_err(toasty_core::Error::driver_operation_failed)
+            {
+                transaction
+                    .rollback()
+                    .await
+                    .map_err(toasty_core::Error::driver_operation_failed)?;
+                return Err(e);
+            }
         }
 
+        // Record the migration
+        if let Err(e) = transaction
+            .exec_drop(
+                "INSERT INTO __toasty_migrations (id, name, applied_at) VALUES (?, ?, NOW())",
+                (id, name),
+            )
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)
+        {
+            transaction
+                .rollback()
+                .await
+                .map_err(toasty_core::Error::driver_operation_failed)?;
+            return Err(e);
+        }
+
+        // Commit transaction
+        transaction
+            .commit()
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
         Ok(())
     }
 }

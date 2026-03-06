@@ -7,9 +7,6 @@ pub use delete::Delete;
 mod expr;
 pub use expr::Expr;
 
-mod id;
-pub use id::Id;
-
 mod insert;
 pub use insert::Insert;
 
@@ -43,7 +40,7 @@ pub use to_statement::ToStatement;
 mod update;
 pub use update::Update;
 
-pub use toasty_core::stmt::{OrderBy, Value};
+pub use toasty_core::stmt::{OrderBy, Projection, Value};
 
 use crate::Model;
 

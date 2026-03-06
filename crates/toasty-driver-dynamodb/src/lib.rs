@@ -8,9 +8,9 @@ pub(crate) use value::Value;
 use toasty_core::{
     async_trait,
     driver::{operation::Operation, Capability, Driver, Response},
-    schema::db::{Column, ColumnId, Schema, Table},
+    schema::db::{self, Column, ColumnId, Migration, SchemaDiff, Table},
     stmt::{self, ExprContext},
-    Result,
+    Error, Result, Schema,
 };
 
 use aws_sdk_dynamodb::{
@@ -23,7 +23,7 @@ use aws_sdk_dynamodb::{
     },
     Client,
 };
-use std::{collections::HashMap, sync::Arc};
+use std::{borrow::Cow, collections::HashMap, sync::Arc};
 use url::Url;
 
 #[derive(Debug)]
@@ -39,12 +39,56 @@ impl DynamoDb {
 
 #[async_trait]
 impl Driver for DynamoDb {
+    fn url(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.url)
+    }
+
     fn capability(&self) -> &'static Capability {
         &Capability::DYNAMODB
     }
 
     async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::driver::Connection>> {
         Ok(Box::new(Connection::connect(&self.url).await?))
+    }
+
+    fn generate_migration(&self, _schema_diff: &SchemaDiff<'_>) -> Migration {
+        unimplemented!("DynamoDB migrations are not yet supported. DynamoDB schema changes require manual table updates through the AWS console or SDK.")
+    }
+
+    async fn reset_db(&self) -> toasty_core::Result<()> {
+        let conn = Connection::connect(&self.url).await?;
+
+        // List and delete all tables (paginated)
+        let mut exclusive_start_table_name = None;
+        loop {
+            let mut req = conn.client.list_tables();
+            if let Some(start) = &exclusive_start_table_name {
+                req = req.exclusive_start_table_name(start);
+            }
+
+            let resp = req
+                .send()
+                .await
+                .map_err(toasty_core::Error::driver_operation_failed)?;
+
+            if let Some(table_names) = &resp.table_names {
+                for table_name in table_names {
+                    conn.client
+                        .delete_table()
+                        .table_name(table_name)
+                        .send()
+                        .await
+                        .map_err(toasty_core::Error::driver_operation_failed)?;
+                }
+            }
+
+            exclusive_start_table_name = resp.last_evaluated_table_name;
+            if exclusive_start_table_name.is_none() {
+                break;
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -115,12 +159,26 @@ impl toasty_core::driver::Connection for Connection {
         self.exec2(schema, op).await
     }
 
-    async fn reset_db(&mut self, schema: &Schema) -> Result<()> {
-        for table in &schema.tables {
-            self.create_table(schema, table, true).await?;
+    async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
+        for table in &schema.db.tables {
+            self.create_table(&schema.db, table, true).await?;
         }
-
         Ok(())
+    }
+
+    async fn applied_migrations(
+        &mut self,
+    ) -> Result<Vec<toasty_core::schema::db::AppliedMigration>> {
+        todo!("DynamoDB migrations are not yet implemented")
+    }
+
+    async fn apply_migration(
+        &mut self,
+        _id: u64,
+        _name: String,
+        _migration: &toasty_core::schema::db::Migration,
+    ) -> Result<()> {
+        todo!("DynamoDB migrations are not yet implemented")
     }
 }
 
@@ -129,8 +187,8 @@ impl Connection {
         match op {
             Operation::GetByKey(op) => self.exec_get_by_key(schema, op).await,
             Operation::QueryPk(op) => self.exec_query_pk(schema, op).await,
-            Operation::DeleteByKey(op) => self.exec_delete_by_key(schema, op).await,
-            Operation::UpdateByKey(op) => self.exec_update_by_key(schema, op).await,
+            Operation::DeleteByKey(op) => self.exec_delete_by_key(&schema.db, op).await,
+            Operation::UpdateByKey(op) => self.exec_update_by_key(&schema.db, op).await,
             Operation::FindPkByIndex(op) => self.exec_find_pk_by_index(schema, op).await,
             Operation::QuerySql(op) => {
                 assert!(
@@ -138,10 +196,13 @@ impl Connection {
                     "last_insert_id_hack is MySQL-specific and should not be set for DynamoDB"
                 );
                 match op.stmt {
-                    stmt::Statement::Insert(op) => self.exec_insert(schema, op).await,
+                    stmt::Statement::Insert(op) => self.exec_insert(&schema.db, op).await,
                     _ => todo!("op={:#?}", op),
                 }
             }
+            Operation::Transaction(_) => Err(Error::unsupported_feature(
+                "transactions are not supported by the DynamoDB driver",
+            )),
             _ => todo!("op={op:#?}"),
         }
     }
@@ -204,7 +265,7 @@ fn item_to_record<'a, 'stmt>(
 }
 
 fn ddb_expression(
-    cx: &ExprContext<'_, Schema>,
+    cx: &ExprContext<'_, db::Schema>,
     attrs: &mut ExprAttrs,
     primary: bool,
     expr: &stmt::Expr,
@@ -224,7 +285,6 @@ fn ddb_expression(
                 stmt::BinaryOp::Ge => format!("{lhs} >= {rhs}"),
                 stmt::BinaryOp::Lt => format!("{lhs} < {rhs}"),
                 stmt::BinaryOp::Le => format!("{lhs} <= {rhs}"),
-                _ => todo!("OP {:?}", expr_binary_op.op),
             }
         }
         stmt::Expr::Reference(expr_reference) => {
@@ -248,11 +308,6 @@ fn ddb_expression(
                 .collect::<Vec<_>>();
             operands.join(" OR ")
         }
-        stmt::Expr::Pattern(stmt::ExprPattern::BeginsWith(begins_with)) => {
-            let expr = ddb_expression(cx, attrs, primary, &begins_with.expr);
-            let substr = ddb_expression(cx, attrs, primary, &begins_with.pattern);
-            format!("begins_with({expr}, {substr})")
-        }
         stmt::Expr::InList(in_list) => {
             let expr = ddb_expression(cx, attrs, primary, &in_list.expr);
 
@@ -270,6 +325,14 @@ fn ddb_expression(
             };
 
             format!("{expr} IN ({items})")
+        }
+        stmt::Expr::IsNull(expr_is_null) => {
+            let inner = ddb_expression(cx, attrs, primary, &expr_is_null.expr);
+            format!("attribute_not_exists({inner})")
+        }
+        stmt::Expr::Not(expr_not) => {
+            let inner = ddb_expression(cx, attrs, primary, &expr_not.expr);
+            format!("(NOT {inner})")
         }
         _ => todo!("FILTER = {:#?}", expr),
     }

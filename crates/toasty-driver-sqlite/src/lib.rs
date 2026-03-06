@@ -3,19 +3,20 @@ pub(crate) use value::Value;
 
 use rusqlite::Connection as RusqliteConnection;
 use std::{
+    borrow::Cow,
     path::{Path, PathBuf},
     sync::Arc,
 };
 use toasty_core::{
     async_trait,
     driver::{
-        operation::{Operation, Transaction},
+        operation::{IsolationLevel, Operation, Transaction},
         Capability, Driver, Response,
     },
-    schema::db::{Schema, Table},
-    stmt, Result,
+    schema::db::{self, Migration, SchemaDiff, Table},
+    stmt, Result, Schema,
 };
-use toasty_sql as sql;
+use toasty_sql::{self as sql, TypedValue};
 use url::Url;
 
 #[derive(Debug)]
@@ -57,6 +58,13 @@ impl Sqlite {
 
 #[async_trait]
 impl Driver for Sqlite {
+    fn url(&self) -> Cow<'_, str> {
+        match self {
+            Sqlite::InMemory => Cow::Borrowed("sqlite::memory:"),
+            Sqlite::File(path) => Cow::Owned(format!("sqlite:{}", path.display())),
+        }
+    }
+
     fn capability(&self) -> &'static Capability {
         &Capability::SQLITE
     }
@@ -71,6 +79,43 @@ impl Driver for Sqlite {
 
     fn max_connections(&self) -> Option<usize> {
         matches!(self, Self::InMemory).then_some(1)
+    }
+
+    fn generate_migration(&self, schema_diff: &SchemaDiff<'_>) -> Migration {
+        let statements = sql::MigrationStatement::from_diff(schema_diff, &Capability::SQLITE);
+
+        let sql_strings: Vec<String> = statements
+            .iter()
+            .map(|stmt| {
+                let mut params = Vec::<TypedValue>::new();
+                let sql =
+                    sql::Serializer::sqlite(stmt.schema()).serialize(stmt.statement(), &mut params);
+                assert!(
+                    params.is_empty(),
+                    "migration statements should not have parameters"
+                );
+                sql
+            })
+            .collect();
+
+        Migration::new_sql_with_breakpoints(&sql_strings)
+    }
+
+    async fn reset_db(&self) -> toasty_core::Result<()> {
+        match self {
+            Sqlite::File(path) => {
+                // Delete the file and recreate it
+                if path.exists() {
+                    std::fs::remove_file(path)
+                        .map_err(toasty_core::Error::driver_operation_failed)?;
+                }
+            }
+            Sqlite::InMemory => {
+                // Nothing to do — each connect() creates a fresh in-memory database
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -106,21 +151,18 @@ impl toasty_core::driver::Connection for Connection {
                 (op.stmt.into(), op.ret)
             }
             // Operation::Insert(op) => op.stmt.into(),
-            Operation::Transaction(Transaction::Start) => {
+            Operation::Transaction(mut op) => {
+                if let Transaction::Start { isolation, .. } = &mut op {
+                    if !matches!(isolation, Some(IsolationLevel::Serializable) | None) {
+                        return Err(toasty_core::Error::unsupported_feature(
+                            "SQLite only supports Serializable isolation",
+                        ));
+                    }
+                    *isolation = None;
+                }
+                let sql = sql::Serializer::sqlite(&schema.db).serialize_transaction(&op);
                 self.connection
-                    .execute("BEGIN", [])
-                    .map_err(toasty_core::Error::driver_operation_failed)?;
-                return Ok(Response::count(0));
-            }
-            Operation::Transaction(Transaction::Commit) => {
-                self.connection
-                    .execute("COMMIT", [])
-                    .map_err(toasty_core::Error::driver_operation_failed)?;
-                return Ok(Response::count(0));
-            }
-            Operation::Transaction(Transaction::Rollback) => {
-                self.connection
-                    .execute("ROLLBACK", [])
+                    .execute(&sql, [])
                     .map_err(toasty_core::Error::driver_operation_failed)?;
                 return Ok(Response::count(0));
             }
@@ -128,7 +170,7 @@ impl toasty_core::driver::Connection for Connection {
         };
 
         let mut params: Vec<toasty_sql::TypedValue> = vec![];
-        let sql_str = sql::Serializer::sqlite(schema).serialize(&sql, &mut params);
+        let sql_str = sql::Serializer::sqlite(&schema.db).serialize(&sql, &mut params);
 
         let mut stmt = self.connection.prepare_cached(&sql_str).unwrap();
 
@@ -200,17 +242,102 @@ impl toasty_core::driver::Connection for Connection {
         Ok(Response::value_stream(stmt::ValueStream::from_vec(ret)))
     }
 
-    async fn reset_db(&mut self, schema: &Schema) -> Result<()> {
-        for table in &schema.tables {
-            self.create_table(schema, table)?;
+    async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
+        for table in &schema.db.tables {
+            self.create_table(&schema.db, table)?;
         }
 
+        Ok(())
+    }
+
+    async fn applied_migrations(
+        &mut self,
+    ) -> Result<Vec<toasty_core::schema::db::AppliedMigration>> {
+        // Ensure the migrations table exists
+        self.connection
+            .execute(
+                "CREATE TABLE IF NOT EXISTS __toasty_migrations (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                applied_at TEXT NOT NULL
+            )",
+                [],
+            )
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        // Query all applied migrations
+        let mut stmt = self
+            .connection
+            .prepare("SELECT id FROM __toasty_migrations ORDER BY applied_at")
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        let rows = stmt
+            .query_map([], |row| {
+                let id: u64 = row.get(0)?;
+                Ok(toasty_core::schema::db::AppliedMigration::new(id))
+            })
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(toasty_core::Error::driver_operation_failed)
+    }
+
+    async fn apply_migration(
+        &mut self,
+        id: u64,
+        name: String,
+        migration: &toasty_core::schema::db::Migration,
+    ) -> Result<()> {
+        // Ensure the migrations table exists
+        self.connection
+            .execute(
+                "CREATE TABLE IF NOT EXISTS __toasty_migrations (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                applied_at TEXT NOT NULL
+            )",
+                [],
+            )
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        // Start transaction
+        self.connection
+            .execute("BEGIN", [])
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        // Execute each migration statement
+        for statement in migration.statements() {
+            if let Err(e) = self
+                .connection
+                .execute(statement, [])
+                .map_err(toasty_core::Error::driver_operation_failed)
+            {
+                self.connection
+                    .execute("ROLLBACK", [])
+                    .map_err(toasty_core::Error::driver_operation_failed)?;
+                return Err(e);
+            }
+        }
+
+        // Record the migration
+        if let Err(e) = self.connection.execute(
+            "INSERT INTO __toasty_migrations (id, name, applied_at) VALUES (?1, ?2, datetime('now'))",
+            rusqlite::params![id, name],
+        ).map_err(toasty_core::Error::driver_operation_failed) {
+            self.connection.execute("ROLLBACK", []).map_err(toasty_core::Error::driver_operation_failed)?;
+            return Err(e);
+        }
+
+        // Commit transaction
+        self.connection
+            .execute("COMMIT", [])
+            .map_err(toasty_core::Error::driver_operation_failed)?;
         Ok(())
     }
 }
 
 impl Connection {
-    fn create_table(&mut self, schema: &Schema, table: &Table) -> Result<()> {
+    fn create_table(&mut self, schema: &db::Schema, table: &Table) -> Result<()> {
         let serializer = sql::Serializer::sqlite(schema);
 
         let mut params: Vec<toasty_sql::TypedValue> = vec![];

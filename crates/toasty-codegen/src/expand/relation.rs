@@ -11,6 +11,9 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let query_ident = &self.model.kind.expect_root().query_struct_ident;
         let create_builder_ident = &self.model.kind.expect_root().create_struct_ident;
+        let collect_ty = util::ident("A");
+        let eq_ty = util::ident("T");
+        let in_query_ty = util::ident("Q");
         let filter_methods = self.expand_relation_filter_methods();
         let many_field_association_methods = self.expand_field_association_methods();
         let one_field_association_methods = self.expand_field_association_methods();
@@ -44,16 +47,17 @@ impl Expand<'_> {
                 #filter_methods
 
                 /// Iterate all entries in the relation
-                #vis async fn all(self, db: &#toasty::Db) -> #toasty::Result<#toasty::Cursor<#model_ident>> {
+                #vis async fn all(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#toasty::Cursor<#model_ident>> {
                     use #toasty::IntoSelect;
-                    db.all(self.stmt.into_select()).await
+                    use #toasty::ExecutorExt;
+                    executor.all(self.stmt.into_select()).await
                 }
 
-                #vis async fn collect<A>(self, db: &#toasty::Db) -> #toasty::Result<A>
+                #vis async fn collect<#collect_ty>(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#collect_ty>
                 where
-                    A: #toasty::FromCursor<#model_ident>
+                    #collect_ty: #toasty::FromCursor<#model_ident>
                 {
-                    self.all(db).await?.collect().await
+                    self.all(executor).await?.collect().await
                 }
 
                 #vis fn query(
@@ -73,16 +77,18 @@ impl Expand<'_> {
                 }
 
                 /// Add an item to the association
-                #vis async fn insert(self, db: &#toasty::Db, item: impl #toasty::IntoExpr<[#model_ident]>) -> #toasty::Result<()> {
+                #vis async fn insert(self, executor: &mut dyn #toasty::Executor, item: impl #toasty::IntoExpr<[#model_ident]>) -> #toasty::Result<()> {
+                    use #toasty::ExecutorExt;
                     let stmt = self.stmt.insert(item);
-                    db.exec(stmt).await?;
+                    executor.exec(stmt).await?;
                     Ok(())
                 }
 
                 /// Remove items from the association
-                #vis async fn remove(self, db: &#toasty::Db, item: impl #toasty::IntoExpr<#model_ident>) -> #toasty::Result<()> {
+                #vis async fn remove(self, executor: &mut dyn #toasty::Executor, item: impl #toasty::IntoExpr<#model_ident>) -> #toasty::Result<()> {
+                    use #toasty::ExecutorExt;
                     let stmt = self.stmt.remove(item);
-                    db.exec(stmt).await?;
+                    executor.exec(stmt).await?;
                     Ok(())
                 }
             }
@@ -108,9 +114,10 @@ impl Expand<'_> {
                     builder
                 }
 
-                #vis async fn get(self, db: &#toasty::Db) -> #toasty::Result<#model_ident> {
+                #vis async fn get(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
                     use #toasty::IntoSelect;
-                    db.get(self.stmt.into_select()).await
+                    use #toasty::ExecutorExt;
+                    executor.get(self.stmt.into_select()).await
                 }
             }
 
@@ -135,9 +142,10 @@ impl Expand<'_> {
                     builder
                 }
 
-                #vis async fn get(self, db: &#toasty::Db) -> #toasty::Result<#toasty::Option<#model_ident>> {
+                #vis async fn get(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#toasty::Option<#model_ident>> {
                     use #toasty::IntoSelect;
-                    db.first(self.stmt.into_select()).await
+                    use #toasty::ExecutorExt;
+                    executor.first(self.stmt.into_select()).await
                 }
             }
 
@@ -160,17 +168,17 @@ impl Expand<'_> {
                     OneField { path }
                 }
 
-                #vis fn eq<T>(self, rhs: T) -> #toasty::stmt::Expr<bool>
+                #vis fn eq<#eq_ty>(self, rhs: #eq_ty) -> #toasty::stmt::Expr<bool>
                 where
-                    T: #toasty::IntoExpr<#model_ident>,
+                    #eq_ty: #toasty::IntoExpr<#model_ident>,
                 {
                     use #toasty::IntoExpr;
                     self.path.eq(rhs.into_expr())
                 }
 
-                #vis fn in_query<Q>(self, rhs: Q) -> #toasty::stmt::Expr<bool>
+                #vis fn in_query<#in_query_ty>(self, rhs: #in_query_ty) -> #toasty::stmt::Expr<bool>
                 where
-                    Q: #toasty::IntoSelect<Model = #model_ident>,
+                    #in_query_ty: #toasty::IntoSelect<Model = #model_ident>,
                 {
                     self.path.in_query(rhs)
                 }
@@ -287,7 +295,7 @@ impl Expand<'_> {
         let filter = if rel.foreign_key.len() == 1 {
             quote!( #( #operands )* )
         } else {
-            quote!( stmt::Expr::and_all([ #(#operands),* ]) )
+            quote!( #toasty::stmt::Expr::and_all([ #(#operands),* ]) )
         };
 
         let verify_pair_belongs_to_exists = syn::Ident::new(
@@ -310,10 +318,11 @@ impl Expand<'_> {
             }
 
             #[doc(hidden)]
-            #vis fn #verify_pair_belongs_to_exists(&self) {
+            #vis fn #verify_pair_belongs_to_exists(&self) -> &#ty {
                 #(
                     #suppress_unused_field_warnings
                 )*
+                &self.#field_ident
             }
         }
     }
@@ -334,7 +343,10 @@ impl Expand<'_> {
             field_ident.span(),
         );
 
-        let my_msg = format!("HasMany requires the {{A}}::{pair_ident} field to be of type `BelongsTo<Self>`, but it was `{{Self}}` instead");
+        let verify_a = util::ident("A");
+        let verify_t = util::ident("T");
+
+        let my_msg = format!("HasMany requires the {{{verify_a}}}::{pair_ident} field to be of type `BelongsTo<Self>`, but it was `{{Self}}` instead");
         let my_label =
             "Has many associations require the target to include a back-reference".to_string();
 
@@ -342,8 +354,8 @@ impl Expand<'_> {
             // Reference the field to generate a compiler error if it is missing.
             #[allow(unreachable_code)]
             if false {
-                fn load<T: #toasty::Model>() -> T {
-                    T::load(todo!()).unwrap()
+                fn load<#verify_t: #toasty::Model>() -> #verify_t {
+                    #verify_t::load(todo!()).unwrap()
                 }
 
                 #[diagnostic::on_unimplemented(
@@ -352,23 +364,22 @@ impl Expand<'_> {
                     note = "Note 1",
                     // note = "Note 2"
                 )]
-                trait Verify<A> {
+                trait Verify<#verify_a> {
                 }
 
                 #[diagnostic::do_not_recommend]
-                impl<A> Verify<A> for #toasty::BelongsTo<#model_ident> {
+                impl<#verify_a> Verify<#verify_a> for #toasty::BelongsTo<#model_ident> {
                 }
 
                 #[diagnostic::do_not_recommend]
-                impl<A> Verify<A> for #toasty::BelongsTo<Option<#model_ident>> {
+                impl<#verify_a> Verify<#verify_a> for #toasty::BelongsTo<Option<#model_ident>> {
                 }
 
-                fn verify<T: Verify<A>, A>(_: &T) {
+                fn verify<#verify_t: Verify<#verify_a>, #verify_a>(_: &#verify_t) {
                 }
 
                 let instance = load::<<#ty as #toasty::Relation>::Model>();
-                verify::<_, <#ty as #toasty::Relation>::Model>(&instance.#pair_ident);
-                instance.#verify_pair_belongs_to_exists_for_field();
+                verify::<_, <#ty as #toasty::Relation>::Model>(instance.#verify_pair_belongs_to_exists_for_field());
             }
         };
 
@@ -398,7 +409,15 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let pair_ident = syn::Ident::new(&self.model.name.ident.to_string(), rel.span);
 
-        let my_msg = format!("HasOne requires the {{A}}::{pair_ident} field to be of type `BelongsTo<Self>`, but it was `{{Self}}` instead");
+        let verify_pair_belongs_to_exists_for_field = syn::Ident::new(
+            &format!("verify_pair_belongs_to_exists_for_{pair_ident}"),
+            field_ident.span(),
+        );
+
+        let verify_a = util::ident("A");
+        let verify_t = util::ident("T");
+
+        let my_msg = format!("HasOne requires the {{{verify_a}}}::{pair_ident} field to be of type `BelongsTo<Self>`, but it was `{{Self}}` instead");
         let my_label =
             "Has one associations require the target to include a back-reference".to_string();
 
@@ -406,8 +425,8 @@ impl Expand<'_> {
             // Reference the field to generate a compiler error if it is missing.
             #[allow(unreachable_code)]
             if false {
-                fn load<T: #toasty::Model>() -> T {
-                    T::load(todo!()).unwrap()
+                fn load<#verify_t: #toasty::Model>() -> #verify_t {
+                    #verify_t::load(todo!()).unwrap()
                 }
 
                 #[diagnostic::on_unimplemented(
@@ -416,22 +435,22 @@ impl Expand<'_> {
                     note = "Note 1",
                     // note = "Note 2"
                 )]
-                trait Verify<A> {
+                trait Verify<#verify_a> {
                 }
 
                 #[diagnostic::do_not_recommend]
-                impl<A> Verify<A> for #toasty::BelongsTo<#model_ident> {
+                impl<#verify_a> Verify<#verify_a> for #toasty::BelongsTo<#model_ident> {
                 }
 
                 #[diagnostic::do_not_recommend]
-                impl<A> Verify<A> for #toasty::BelongsTo<Option<#model_ident>> {
+                impl<#verify_a> Verify<#verify_a> for #toasty::BelongsTo<Option<#model_ident>> {
                 }
 
-                fn verify<T: Verify<A>, A>(_: T) {
+                fn verify<#verify_t: Verify<#verify_a>, #verify_a>(_: &#verify_t) {
                 }
 
                 let instance = load::<<#ty as #toasty::Relation>::Model>();
-                verify::<_, <#ty as #toasty::Relation>::Model>(instance.#pair_ident);
+                verify::<_, <#ty as #toasty::Relation>::Model>(instance.#verify_pair_belongs_to_exists_for_field());
             }
         };
 

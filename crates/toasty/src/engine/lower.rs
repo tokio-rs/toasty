@@ -9,19 +9,15 @@ use index_vec::IndexVec;
 use toasty_core::{
     driver::Capability,
     schema::{
-        app::{self, FieldTy, Model},
-        db::{Column, ColumnId},
+        app::{self, FieldTy, ModelRoot},
+        db::ColumnId,
         mapping,
     },
     stmt::{self, visit_mut, IntoExprTarget, VisitMut},
     Result, Schema,
 };
 
-use crate::engine::{
-    hir,
-    simplify::{self, Simplify},
-    Engine, HirStatement,
-};
+use crate::engine::{hir, simplify::Simplify, Engine, HirStatement};
 
 impl Engine {
     pub(super) fn lower_stmt(&self, stmt: stmt::Statement) -> Result<HirStatement> {
@@ -202,71 +198,40 @@ impl LowerStatement<'_, '_> {
 impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     fn visit_assignments_mut(&mut self, i: &mut stmt::Assignments) {
         let mut assignments = stmt::Assignments::default();
+        let mapping = self.mapping_unwrap();
 
-        for index in i.keys() {
-            let field = &self.model_unwrap().fields[index];
-
-            if field.primary_key {
-                todo!("updating PK not supported yet");
-            }
-
+        for (projection, assignment) in &*i {
             // Phase 1: Lower the assignment expression
-            let assignment = &i[index];
             assert!(assignment.op.is_set(), "only SET supported");
-            let mut lowered_field_value = assignment.expr.clone();
-            self.visit_expr_mut(&mut lowered_field_value);
+            let mut lowered_expr = assignment.expr.clone();
+            self.visit_expr_mut(&mut lowered_expr);
 
-            // Phase 2: For each impacted column, lower model_to_table expr and substitute
-            let mapping = self.mapping_unwrap();
-            let field_mapping = &mapping.fields[index];
+            // Phase 2: Resolve field mapping (handles primitives, partial updates, and full replacements)
+            let Some(field) = mapping.resolve_field_mapping(projection) else {
+                self.state
+                    .errors
+                    .push(crate::Error::invalid_statement(format!(
+                        "invalid assignment projection: {:?}",
+                        projection
+                    )));
+                continue;
+            };
 
-            match &field.ty {
-                app::FieldTy::Primitive(_) => {
-                    let field_primitive = field_mapping
-                        .as_primitive()
-                        .expect("only primitive fields are assignable");
-                    let column = field_primitive.column;
-                    let mut lowering_expr =
-                        mapping.model_to_table[field_primitive.lowering].clone();
-                    // Substitute field reference with lowered value (handles identity projection)
-                    let input = AssignmentInput {
-                        field_id: field.id,
-                        value: &lowered_field_value,
-                    };
-                    lowering_expr.substitute(input);
-                    // Lower the result
-                    self.visit_expr_mut(&mut lowering_expr);
-                    assignments.set(column, lowering_expr);
-                }
-                app::FieldTy::Embedded(_) => {
-                    let field_embedded = field_mapping
-                        .as_embedded()
-                        .expect("field should be embedded");
+            // Phase 3: Apply lowering expression
+            // Iterate over all columns impacted by this field
+            for (column, lowering_idx) in field.columns() {
+                let mut lowering_expr = mapping.model_to_table[lowering_idx].clone();
 
-                    // For each field in the embedded struct
-                    for embedded_field in field_embedded.fields.iter() {
-                        match embedded_field {
-                            mapping::Field::Primitive(field_primitive) => {
-                                let column = field_primitive.column;
-                                let mut lowering_expr = mapping.model_to_table[field_primitive.lowering].clone();
-                                // Substitute field reference (handles projection into embedded value automatically)
-                                let input = AssignmentInput {
-                                    field_id: field.id,
-                                    value: &lowered_field_value,
-                                };
-                                lowering_expr.substitute(input);
-                                // Lower the result
-                                self.visit_expr_mut(&mut lowering_expr);
-                                assignments.set(column, lowering_expr);
-                            }
-                            _ => panic!("nested embedded fields not supported yet; field={embedded_field:#?}"),
-                        }
-                    }
-                }
-                _ => panic!(
-                    "relation fields should already have been handled; field_ty={:#?}",
-                    field.ty
-                ),
+                // Substitute field reference with value
+                let input = AssignmentInput {
+                    assignment_projection: projection.clone(),
+                    value: &lowered_expr,
+                };
+                lowering_expr.substitute(input);
+
+                // Lower the result
+                self.visit_expr_mut(&mut lowering_expr);
+                assignments.set(column, lowering_expr);
             }
         }
 
@@ -347,6 +312,36 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                         list: Box::new(arg),
                     }
                     .into();
+                }
+            }
+            stmt::Expr::IsVariant(e) => {
+                // Look up the enum model and variant directly via VariantId
+                let enum_model = self
+                    .schema()
+                    .app
+                    .model(e.variant.model)
+                    .expect_embedded_enum();
+                let has_data = enum_model.has_data_variants();
+                let discriminant = enum_model.variants[e.variant.index].discriminant;
+
+                // Lower the inner expression
+                self.visit_expr_mut(&mut e.expr);
+
+                let lowered_expr = e.expr.take();
+
+                // Emit the appropriate comparison
+                if has_data {
+                    // Data-carrying: project([0]) to extract discriminant from Record
+                    *expr = stmt::Expr::eq(
+                        stmt::Expr::project(lowered_expr, [0usize]),
+                        stmt::Expr::Value(stmt::Value::I64(discriminant)),
+                    );
+                } else {
+                    // Unit-only: compare directly
+                    *expr = stmt::Expr::eq(
+                        lowered_expr,
+                        stmt::Expr::Value(stmt::Value::I64(discriminant)),
+                    );
                 }
             }
             stmt::Expr::Reference(expr_reference) => {
@@ -565,28 +560,23 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 returning_changed = true;
 
                 if let Some(model) = lower.model() {
-                    let mut fields = vec![];
+                    let mapping = lower.mapping_unwrap();
 
-                    // TODO: Really gotta either fix SparseRecord or get rid of it... It does not maintain key order.
-                    let field_set: stmt::PathFieldSet = stmt.assignments.keys().collect();
-
-                    for i in field_set.iter() {
-                        let field = &model.fields[i];
-
-                        if field.ty.is_primitive() || field.ty.is_embedded() {
-                            fields.push(stmt::Expr::ref_self_field(app::FieldId {
-                                model: model.id,
-                                index: i,
-                            }));
-                        } else {
-                            // This will be populated later during relation planning
-                            fields.push(stmt::Expr::null());
+                    // Step 1 — build a mask of all primitives being changed by
+                    // OR-ing each assigned field's coverage mask together.
+                    let mut changed_bits = stmt::PathFieldSet::new();
+                    for projection in stmt.assignments.keys() {
+                        if let Some(mf) = mapping.resolve_field_mapping(projection) {
+                            changed_bits |= mf.field_mask();
                         }
                     }
 
-                    *returning = stmt::Returning::Expr(stmt::Expr::cast(
-                        stmt::ExprRecord::from_vec(fields),
-                        stmt::Type::SparseRecord(field_set),
+                    // Step 2 — build the returning expression.
+                    *returning = stmt::Returning::Expr(build_update_returning(
+                        model.id,
+                        None,
+                        &mapping.fields,
+                        &changed_bits,
                     ));
                 }
             }
@@ -662,19 +652,6 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                     stmt::BinaryOp::Ne => stmt::Expr::is_not_null(other),
                     _ => todo!(),
                 })
-            }
-            (stmt::Expr::DecodeEnum(base, _, variant), other)
-            | (other, stmt::Expr::DecodeEnum(base, _, variant)) => {
-                assert!(op.is_eq());
-
-                Some(stmt::Expr::eq(
-                    (**base).clone(),
-                    stmt::Expr::concat_str((
-                        variant.to_string(),
-                        "#",
-                        stmt::Expr::cast(other.clone(), stmt::Type::String),
-                    )),
-                ))
             }
             (stmt::Expr::Cast(expr_cast), other) => {
                 let target_ty = self.capability().native_type_for(&expr_cast.ty);
@@ -762,91 +739,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         }
     }
 
-    fn apply_lowering_filter_constraint(&self, filter: &mut stmt::Filter) {
-        let Some(model) = self.expr_cx.target().as_model() else {
-            return;
-        };
-
-        let table = self.schema().table_for(model);
-        let mapping = self.mapping_unwrap();
-
-        // TODO: we really shouldn't have to simplify here, but until
-        // simplification includes overlapping predicate pruning, we have to do
-        // this here.
-        if let Some(expr) = &mut filter.expr {
-            simplify::simplify_expr(self.expr_cx, expr);
-        }
-
-        let mut operands = vec![];
-
-        for column in table.primary_key_columns() {
-            let pattern = match &mapping.model_to_table[column.id.index] {
-                stmt::Expr::ConcatStr(expr) => {
-                    // hax
-                    let stmt::Expr::Value(stmt::Value::String(a)) = &expr.exprs[0] else {
-                        todo!()
-                    };
-                    let stmt::Expr::Value(stmt::Value::String(b)) = &expr.exprs[1] else {
-                        todo!()
-                    };
-
-                    format!("{a}{b}")
-                }
-                stmt::Expr::Value(_) => todo!(),
-                _ => continue,
-            };
-
-            if let Some(filter) = &filter.expr {
-                if self.is_eq_constrained(filter, column) {
-                    continue;
-                }
-            }
-
-            assert_eq!(self.mapping_unwrap().columns[column.id.index], column.id);
-
-            operands.push(stmt::Expr::begins_with(
-                self.expr_cx.expr_ref_column(column),
-                pattern,
-            ));
-        }
-
-        if operands.is_empty() {
-            return;
-        }
-
-        filter.add_filter(stmt::Expr::and_from_vec(operands));
-    }
-
-    fn is_eq_constrained(&self, expr: &stmt::Expr, column: &Column) -> bool {
-        use stmt::Expr::*;
-
-        match expr {
-            And(expr) => expr.iter().any(|expr| self.is_eq_constrained(expr, column)),
-            Or(expr) => expr.iter().all(|expr| self.is_eq_constrained(expr, column)),
-            BinaryOp(expr) => {
-                if !expr.op.is_eq() {
-                    return false;
-                }
-
-                match (&*expr.lhs, &*expr.rhs) {
-                    (Reference(lhs), _) => {
-                        self.expr_cx.resolve_expr_reference(lhs).expect_column().id == column.id
-                    }
-                    (_, Reference(rhs)) => {
-                        self.expr_cx.resolve_expr_reference(rhs).expect_column().id == column.id
-                    }
-                    _ => false,
-                }
-            }
-            InList(expr) => match &*expr.expr {
-                Reference(lhs) => {
-                    self.expr_cx.resolve_expr_reference(lhs).expect_column().id == column.id
-                }
-                _ => todo!("expr={:#?}", expr),
-            },
-            _ => todo!("expr={:#?}", expr),
-        }
-    }
+    fn apply_lowering_filter_constraint(&self, _filter: &mut stmt::Filter) {}
 
     fn lower_expr_field(&self, nesting: usize, index: usize) -> stmt::Expr {
         match self.cx {
@@ -944,9 +837,36 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         // Simplify the new stmt to handle relations.
         Simplify::with_context(self.expr_cx).visit_stmt_query_mut(&mut stmt);
 
-        returning
-            .entry_mut(*field_index)
-            .insert(stmt::Expr::stmt(stmt));
+        let mut sub_expr = stmt::Expr::stmt(stmt);
+
+        // For nullable single relations (HasOne<Option<T>>, BelongsTo<Option<T>>),
+        // wrap the sub-expression with a Let + Match to encode the result using
+        // variant-encoded values that distinguish loaded-None from unloaded.
+        //
+        //   Let {
+        //     binding: Stmt(query),
+        //     body: Match {
+        //       subject: Arg(0),
+        //       arms: [Null → I64(0)],
+        //       else_: Arg(0)
+        //     }
+        //   }
+        if field.nullable() && !field.ty.is_has_many() {
+            sub_expr = stmt::Expr::Let(stmt::ExprLet {
+                bindings: vec![sub_expr],
+                body: Box::new(stmt::Expr::match_expr(
+                    stmt::Expr::arg(0),
+                    vec![stmt::MatchArm {
+                        pattern: stmt::Value::Null,
+                        expr: stmt::Expr::from(0i64),
+                    }],
+                    // Non-null: pass through as-is (raw model record)
+                    stmt::Expr::arg(0),
+                )),
+            });
+        }
+
+        returning.entry_mut(*field_index).insert(sub_expr);
     }
 
     /// Returns the ArgId for the new reference
@@ -1065,12 +985,12 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         self.schema().app.field(id.into())
     }
 
-    fn model(&self) -> Option<&'a Model> {
+    fn model(&self) -> Option<&'a ModelRoot> {
         self.expr_cx.target().as_model()
     }
 
     #[track_caller]
-    fn model_unwrap(&self) -> &'a Model {
+    fn model_unwrap(&self) -> &'a ModelRoot {
         self.expr_cx.target().as_model_unwrap()
     }
 
@@ -1251,7 +1171,7 @@ impl LoweringContext<'_> {
 /// Provides assignment values when substituting field references in `model_to_table`
 /// expressions. Handles projections automatically for embedded fields.
 struct AssignmentInput<'a> {
-    field_id: app::FieldId,
+    assignment_projection: stmt::Projection,
     value: &'a stmt::Expr,
 }
 
@@ -1259,36 +1179,100 @@ impl stmt::Input for AssignmentInput<'_> {
     fn resolve_ref(
         &mut self,
         expr_reference: &stmt::ExprReference,
-        projection: &stmt::Projection,
+        expr_projection: &stmt::Projection,
     ) -> Option<stmt::Expr> {
-        // Check if this reference is to our field
-        if let stmt::ExprReference::Field { nesting: 0, index } = expr_reference {
-            if *index == self.field_id.index {
-                // For embedded fields, the value is a Record and projection extracts nested fields
-                // For primitive fields, projection is identity
-                if projection.is_identity() {
-                    return Some(self.value.clone());
+        let stmt::ExprReference::Field { nesting: 0, index } = expr_reference else {
+            return None;
+        };
+
+        let assignment_steps = self.assignment_projection.as_slice();
+
+        if *index != assignment_steps[0] {
+            return None;
+        }
+
+        let remaining_steps = &assignment_steps[1..];
+
+        if expr_projection.as_slice() == remaining_steps {
+            Some(self.value.clone())
+        } else {
+            self.value.entry(expr_projection).map(|e| e.to_expr())
+        }
+    }
+}
+
+/// Builds the returning expression for a `Returning::Changed` update.
+///
+/// Iterates `mapping_fields` using `changed_bits` to determine what to include:
+///
+/// - Relation fields → null placeholder (populated during relation planning)
+/// - Field whose `field_mask` is fully covered by `changed_bits` → emit
+///   `project(ref_self_field, sub_projection)` (constantized later; project
+///   omitted when `sub_projection` is identity)
+/// - Field only partially covered → recurse to build a nested `SparseRecord`
+///
+/// `root_field_id` controls how the self-field reference is constructed:
+/// - `None` at the top level: derived per-iteration as `{ model_id, i }`, since
+///   each model field is its own root.
+/// - `Some(id)` when recursing into an embedded type: fixed throughout, because
+///   all sub-field expressions project from the same top-level ancestor field.
+fn build_update_returning(
+    model_id: app::ModelId,
+    root_field_id: Option<app::FieldId>,
+    mapping_fields: &[mapping::Field],
+    changed_bits: &stmt::PathFieldSet,
+) -> stmt::Expr {
+    let mut exprs = vec![];
+    let mut field_set = stmt::PathFieldSet::new();
+
+    for (i, mf) in mapping_fields.iter().enumerate() {
+        let intersection = changed_bits.clone() & mf.field_mask();
+
+        if intersection.is_empty() {
+            continue;
+        }
+
+        field_set.insert(i);
+
+        if mf.is_relation() {
+            // Relation field: null placeholder for the relation planner to fill
+            // in via set_returning_field.
+            exprs.push(stmt::Expr::null());
+        } else {
+            let root_field_id = root_field_id.unwrap_or(app::FieldId {
+                model: model_id,
+                index: i,
+            });
+
+            if intersection == mf.field_mask() {
+                // Full coverage: all primitives in this field are being updated.
+                // Emit a projected field reference; the lowering + constantize
+                // pipeline will substitute the assignment value.
+                let base = stmt::Expr::ref_self_field(root_field_id);
+                let expr = if mf.sub_projection().is_identity() {
+                    base
                 } else {
-                    // Handle projection into the value
-                    return match self.value {
-                        stmt::Expr::Value(value) => {
-                            // Use Value's entry method which handles projections
-                            Some(value.entry(projection).to_expr())
-                        }
-                        stmt::Expr::Record(record) => {
-                            // For Expr::Record, manually project
-                            let indices = projection.as_slice();
-                            if indices.len() == 1 {
-                                record.fields.get(indices[0]).cloned()
-                            } else {
-                                None
-                            }
-                        }
-                        _ => None,
-                    };
-                }
+                    stmt::Expr::project(base, mf.sub_projection().clone())
+                };
+                exprs.push(expr);
+            } else {
+                // Partial embedded update: only some sub-fields are changing.
+                // Recurse to build a nested SparseRecord. The lowering pipeline
+                // resolves each reference to the correct column, and the simplifier
+                // folds project(record([...]), [i]) → column_ref.
+                let emb_mapping = mf.as_struct().unwrap();
+                exprs.push(build_update_returning(
+                    model_id,
+                    Some(root_field_id),
+                    &emb_mapping.fields,
+                    &intersection,
+                ));
             }
         }
-        None
     }
+
+    stmt::Expr::cast(
+        stmt::ExprRecord::from_vec(exprs),
+        stmt::Type::SparseRecord(field_set),
+    )
 }

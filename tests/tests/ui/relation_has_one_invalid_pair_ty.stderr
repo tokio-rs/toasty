@@ -1,13 +1,8 @@
-error[E0277]: HasOne requires the Profile::user field to be of type `BelongsTo<Self>`, but it was `std::string::String` instead
- --> tests/ui/relation_has_one_invalid_pair_ty.rs:9:5
-  |
-9 |     #[has_one]
-  |     ^ Has one associations require the target to include a back-reference
-  |
-  = help: the trait `Verify<Profile>` is not implemented for `std::string::String`
-  = note: Note 1
-note: required by a bound in `verify`
- --> tests/ui/relation_has_one_invalid_pair_ty.rs:9:5
-  |
-9 |     #[has_one]
-  |     ^ required by this bound in `verify`
+error[E0599]: no method named `verify_pair_belongs_to_exists_for_user` found for struct `Profile` in the current scope
+  --> tests/ui/relation_has_one_invalid_pair_ty.rs:8:5
+   |
+ 8 |     profile: toasty::HasOne<Option<Profile>>,
+   |     ^^^^^^^ method not found in `Profile`
+...
+12 | struct Profile {
+   | -------------- method `verify_pair_belongs_to_exists_for_user` not found for this struct

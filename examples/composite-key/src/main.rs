@@ -1,10 +1,8 @@
-use toasty::stmt::Id;
-
 #[derive(Debug, toasty::Model)]
 struct User {
     #[key]
     #[auto]
-    id: Id<Self>,
+    id: uuid::Uuid,
 
     name: String,
 
@@ -19,7 +17,7 @@ struct User {
 #[key(partition = user_id, local = id)]
 struct Todo {
     #[auto]
-    id: Id<Self>,
+    id: uuid::Uuid,
 
     title: String,
 
@@ -28,12 +26,12 @@ struct Todo {
     #[belongs_to(key = user_id, references = id)]
     user: toasty::BelongsTo<User>,
 
-    user_id: Id<User>,
+    user_id: uuid::Uuid,
 }
 
 #[tokio::main]
 async fn main() -> toasty::Result<()> {
-    let db = toasty::Db::builder()
+    let mut db = toasty::Db::builder()
         .register::<User>()
         .register::<Todo>()
         .connect(
@@ -44,12 +42,12 @@ async fn main() -> toasty::Result<()> {
         .await?;
 
     // For now, reset!s
-    db.reset_db().await?;
+    db.push_schema().await?;
 
     let user = User::create()
         .name("John Doe")
         .email("john@example.com")
-        .exec(&db)
+        .exec(&mut db)
         .await?;
 
     println!("created user; name={:?}; email={:?}", user.name, user.email);
@@ -60,7 +58,7 @@ async fn main() -> toasty::Result<()> {
             .create()
             .title(*title)
             .order(i as i64)
-            .exec(&db)
+            .exec(&mut db)
             .await?;
 
         println!(
@@ -77,7 +75,7 @@ async fn main() -> toasty::Result<()> {
     let mut todos = user
         .todos()
         .query(Todo::fields().order().eq(1))
-        .all(&db)
+        .all(&mut db)
         .await?;
 
     while let Some(todo) = todos.next().await {

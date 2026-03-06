@@ -15,8 +15,7 @@ mod verify;
 
 use crate::Result;
 use app::ModelId;
-use db::{ColumnId, Table, TableId};
-use std::sync::Arc;
+use db::{Table, TableId};
 
 #[derive(Debug)]
 pub struct Schema {
@@ -24,7 +23,7 @@ pub struct Schema {
     pub app: app::Schema,
 
     /// Database-level schema
-    pub db: Arc<db::Schema>,
+    pub db: db::Schema,
 
     /// Maps the app-level schema to the db-level schema
     pub mapping: Mapping,

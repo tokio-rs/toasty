@@ -1,7 +1,8 @@
-error[E0609]: no field `user` on type `Profile`
- --> tests/ui/relation_has_one_no_pair.rs:9:5
-  |
-9 |     #[has_one]
-  |     ^ unknown field
-  |
-  = note: available field is: `id`
+error[E0599]: no method named `verify_pair_belongs_to_exists_for_user` found for struct `Profile` in the current scope
+  --> tests/ui/relation_has_one_no_pair.rs:8:5
+   |
+ 8 |     profile: toasty::HasOne<Option<Profile>>,
+   |     ^^^^^^^ method not found in `Profile`
+...
+12 | struct Profile {
+   | -------------- method `verify_pair_belongs_to_exists_for_user` not found for this struct

@@ -168,7 +168,6 @@ impl SetupDynamoDb {
             toasty_core::stmt::Value::U16(u) => Ok(AttributeValue::N(u.to_string())),
             toasty_core::stmt::Value::U8(u) => Ok(AttributeValue::N(u.to_string())),
             toasty_core::stmt::Value::Bool(b) => Ok(AttributeValue::Bool(*b)),
-            toasty_core::stmt::Value::Id(id) => Ok(AttributeValue::S(id.to_string())),
             toasty_core::stmt::Value::Null => Ok(AttributeValue::Null(true)),
             _ => todo!("Unsupported stmt::Value type for DynamoDB: {value:?}"),
         }

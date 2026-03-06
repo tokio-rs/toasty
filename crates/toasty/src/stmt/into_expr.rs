@@ -180,6 +180,16 @@ impl IntoExpr<Self> for String {
     }
 }
 
+impl IntoExpr<Self> for Vec<u8> {
+    fn into_expr(self) -> Expr<Self> {
+        Expr::from_value(self.into())
+    }
+
+    fn by_ref(&self) -> Expr<Self> {
+        Expr::from_value(self.clone().into())
+    }
+}
+
 #[cfg(feature = "rust_decimal")]
 impl IntoExpr<Self> for rust_decimal::Decimal {
     fn into_expr(self) -> Expr<Self> {

@@ -119,6 +119,9 @@ impl VerifyExpr<'_> {
             | BinaryOp(_)
             | InList(_)
             | InSubquery(_)
+            | IsNull(_)
+            | IsVariant(_)
+            | Not(_)
             | Or(_)
             | Value(stmt::Value::Bool(_)) => {}
             expr => panic!("Not a bool? {expr:#?}"),
@@ -135,6 +138,11 @@ impl stmt::Visit for VerifyExpr<'_> {
         }
     }
 
+    fn visit_expr_not(&mut self, i: &stmt::ExprNot) {
+        stmt::visit::visit_expr_not(self, i);
+        self.assert_bool_expr(&i.expr);
+    }
+
     fn visit_expr_or(&mut self, i: &stmt::ExprOr) {
         stmt::visit::visit_expr_or(self, i);
 
@@ -144,8 +152,33 @@ impl stmt::Visit for VerifyExpr<'_> {
     }
 
     fn visit_projection(&mut self, i: &stmt::Projection) {
-        // The path should resolve. Verifying type is done at a higher level
-        let _ = i.resolve_field(&self.schema.app, self.schema.app.model(self.model));
+        let root = self.schema.app.model(self.model);
+        assert!(
+            self.schema.app.resolve(root, i).is_some(),
+            "invalid projection: {i:?}"
+        );
+    }
+
+    fn visit_expr_project(&mut self, i: &stmt::ExprProject) {
+        // For project expressions where the base is a field reference in the
+        // current scope, combine the field index with the project's projection
+        // to form the full path, then resolve from the root model.
+        if let stmt::Expr::Reference(stmt::ExprReference::Field { nesting: 0, index }) = &*i.base {
+            let mut full = stmt::Projection::single(*index);
+            for step in &i.projection[..] {
+                full.push(*step);
+            }
+            let root = self.schema.app.model(self.model);
+            assert!(
+                self.schema.app.resolve(root, &full).is_some(),
+                "failed to resolve projection: {full:?}"
+            );
+        } else {
+            // For other base expressions (nested projects, etc.), visit the
+            // base but skip projection validation since the projection is
+            // relative to the base expression's type.
+            self.visit_expr(&i.base);
+        }
     }
 
     fn visit_expr_binary_op(&mut self, i: &stmt::ExprBinaryOp) {

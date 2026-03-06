@@ -1,25 +1,40 @@
-use super::{ErrorSet, Field, Index, IndexField, IndexScope, ModelAttr, Name, PrimaryKey};
+use super::{
+    ErrorSet, Field, FieldAttr, FieldTy, Index, IndexField, IndexScope, ModelAttr, Name,
+    PrimaryKey, Variant,
+};
 
 #[derive(Debug)]
 pub(crate) enum ModelKind {
     /// Root model with table, primary key, and query builders
     Root(ModelRoot),
-    /// Embedded model that is flattened into parent
-    Embedded(ModelEmbedded),
+    /// Embedded struct model that is flattened into parent
+    EmbeddedStruct(ModelEmbeddedStruct),
+    /// Embedded enum stored as a single integer discriminant column
+    EmbeddedEnum(ModelEmbeddedEnum),
 }
 
 impl ModelKind {
     pub(crate) fn expect_root(&self) -> &ModelRoot {
         match self {
             ModelKind::Root(root) => root,
-            ModelKind::Embedded(_) => panic!("expected root model, found embedded"),
+            ModelKind::EmbeddedStruct(_) => panic!("expected root model, found embedded struct"),
+            ModelKind::EmbeddedEnum(_) => panic!("expected root model, found embedded enum"),
         }
     }
 
-    pub(crate) fn expect_embedded(&self) -> &ModelEmbedded {
+    pub(crate) fn expect_embedded(&self) -> &ModelEmbeddedStruct {
         match self {
-            ModelKind::Embedded(embedded) => embedded,
-            ModelKind::Root(_) => panic!("expected embedded model, found root"),
+            ModelKind::EmbeddedStruct(embedded) => embedded,
+            ModelKind::Root(_) => panic!("expected embedded struct, found root model"),
+            ModelKind::EmbeddedEnum(_) => panic!("expected embedded struct, found embedded enum"),
+        }
+    }
+
+    pub(crate) fn expect_embedded_enum(&self) -> &ModelEmbeddedEnum {
+        match self {
+            ModelKind::EmbeddedEnum(e) => e,
+            ModelKind::Root(_) => panic!("expected embedded enum, found root model"),
+            ModelKind::EmbeddedStruct(_) => panic!("expected embedded enum, found embedded struct"),
         }
     }
 }
@@ -40,15 +55,24 @@ pub(crate) struct ModelRoot {
 
     /// Update builder struct identifier
     pub(crate) update_struct_ident: syn::Ident,
-
-    /// Update by query builder struct identifier
-    pub(crate) update_query_struct_ident: syn::Ident,
 }
 
 #[derive(Debug)]
-pub(crate) struct ModelEmbedded {
+pub(crate) struct ModelEmbeddedStruct {
     /// The field struct identifier
     pub(crate) field_struct_ident: syn::Ident,
+
+    /// Update builder struct identifier
+    pub(crate) update_struct_ident: syn::Ident,
+}
+
+#[derive(Debug)]
+pub(crate) struct ModelEmbeddedEnum {
+    /// The field struct identifier (e.g., `ContactInfoFields`)
+    pub(crate) field_struct_ident: syn::Ident,
+
+    /// The enum's variants with their names and discriminant values
+    pub(crate) variants: Vec<Variant>,
 }
 
 #[derive(Debug)]
@@ -172,8 +196,9 @@ impl Model {
 
         // Build ModelKind based on whether this is embedded or root
         let kind = if is_embedded {
-            ModelKind::Embedded(ModelEmbedded {
+            ModelKind::EmbeddedStruct(ModelEmbeddedStruct {
                 field_struct_ident: struct_ident("Fields", ast),
+                update_struct_ident: struct_ident("Update", ast),
             })
         } else {
             let pk_fields = pk_index_fields
@@ -194,32 +219,11 @@ impl Model {
                 query_struct_ident: struct_ident("Query", ast),
                 create_struct_ident: struct_ident("Create", ast),
                 update_struct_ident: struct_ident("Update", ast),
-                update_query_struct_ident: struct_ident("UpdateQuery", ast),
             })
         };
 
         // Create indices for all fields annotated with unique or index
-        for (index, field) in fields.iter().enumerate() {
-            if field.attrs.unique {
-                indices.push(Index {
-                    fields: vec![IndexField {
-                        field: index,
-                        scope: IndexScope::Partition,
-                    }],
-                    unique: true,
-                    primary_key: false,
-                });
-            } else if field.attrs.index {
-                indices.push(Index {
-                    fields: vec![IndexField {
-                        field: index,
-                        scope: IndexScope::Partition,
-                    }],
-                    unique: false,
-                    primary_key: false,
-                });
-            }
-        }
+        collect_field_indices(&fields, &mut indices);
 
         Ok(Self {
             vis: ast.vis.clone(),
@@ -240,15 +244,120 @@ impl Model {
                     .iter()
                     .map(|index| &self.fields[*index]),
             ),
-            ModelKind::Embedded(_) => None,
+            ModelKind::EmbeddedStruct(_) | ModelKind::EmbeddedEnum(_) => None,
         }
     }
 
     pub(crate) fn has_associations(&self) -> bool {
         self.fields.iter().any(|f| f.ty.is_relation())
     }
+
+    pub(crate) fn from_enum_ast(ast: &syn::ItemEnum) -> syn::Result<Self> {
+        if !ast.generics.params.is_empty() {
+            return Err(syn::Error::new_spanned(
+                &ast.generics,
+                "enum generics are not supported",
+            ));
+        }
+
+        let mut variants = vec![];
+        let mut all_fields: Vec<Field> = vec![];
+        let mut errs = ErrorSet::new();
+        let mut global_field_index = 0usize;
+
+        for (variant_index, variant) in ast.variants.iter().enumerate() {
+            // Collect (ident, syn::Field) pairs for each variant field
+            let variant_field_pairs: Vec<_> = match &variant.fields {
+                syn::Fields::Unit => vec![],
+                syn::Fields::Named(named) => named
+                    .named
+                    .iter()
+                    .map(|f| (f.ident.as_ref().unwrap().clone(), f))
+                    .collect(),
+                syn::Fields::Unnamed(unnamed) => unnamed
+                    .unnamed
+                    .iter()
+                    .enumerate()
+                    .map(|(i, f)| {
+                        (
+                            syn::Ident::new(&format!("field{i}"), variant.ident.span()),
+                            f,
+                        )
+                    })
+                    .collect(),
+            };
+
+            let has_fields = !variant_field_pairs.is_empty();
+
+            // Create Field entries for each variant field
+            for (ident, f) in &variant_field_pairs {
+                let attrs = FieldAttr::from_attrs(&f.attrs)?;
+                let name = Name::from_ident(ident);
+                let set_ident = syn::Ident::new(&format!("set_{}", name.ident), ident.span());
+                let with_ident = syn::Ident::new(&format!("with_{}", name.ident), ident.span());
+
+                all_fields.push(Field {
+                    id: global_field_index,
+                    attrs,
+                    name,
+                    ty: FieldTy::Primitive(f.ty.clone()),
+                    set_ident,
+                    with_ident,
+                    variant: Some(variant_index),
+                });
+                global_field_index += 1;
+            }
+
+            match Variant::from_ast(variant, &ast.ident, has_fields) {
+                Ok(v) => variants.push(v),
+                Err(e) => {
+                    errs.push(e);
+                    continue;
+                }
+            }
+        }
+
+        if let Some(err) = errs.collect() {
+            return Err(err);
+        }
+
+        let mut indices = vec![];
+        collect_field_indices(&all_fields, &mut indices);
+
+        Ok(Self {
+            vis: ast.vis.clone(),
+            name: Name::from_ident(&ast.ident),
+            ident: ast.ident.clone(),
+            fields: all_fields,
+            kind: ModelKind::EmbeddedEnum(ModelEmbeddedEnum {
+                field_struct_ident: enum_ident("Fields", ast),
+                variants,
+            }),
+            indices,
+            table: None,
+        })
+    }
+}
+
+fn collect_field_indices(fields: &[Field], indices: &mut Vec<Index>) {
+    for (index, field) in fields.iter().enumerate() {
+        if field.attrs.is_indexed() {
+            indices.push(Index {
+                fields: vec![IndexField {
+                    field: index,
+                    scope: IndexScope::Partition,
+                }],
+                unique: field.attrs.unique,
+                primary_key: false,
+            });
+        }
+    }
 }
 
 fn struct_ident(suffix: &str, model: &syn::ItemStruct) -> syn::Ident {
+    syn::Ident::new(&format!("{}{}", model.ident, suffix), model.ident.span())
+}
+
+fn enum_ident(suffix: &str, model: &syn::ItemEnum) -> syn::Ident {
     syn::Ident::new(&format!("{}{}", model.ident, suffix), model.ident.span())
 }

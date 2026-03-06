@@ -3,28 +3,26 @@ mod expr_and;
 mod expr_any;
 mod expr_binary_op;
 mod expr_cast;
-mod expr_concat_str;
 mod expr_exists;
 mod expr_in_list;
 mod expr_is_null;
+mod expr_let;
 mod expr_list;
 mod expr_map;
+mod expr_match;
 mod expr_not;
 mod expr_or;
 mod expr_project;
 mod expr_record;
 mod stmt_query;
-mod value;
 
 // Simplifications
 // TODO: unify names
 mod lift_in_subquery;
 mod lift_pk_select;
-mod rewrite_root_path_expr;
-
 use toasty_core::{
     schema::{
-        app::{Field, FieldId, Model, ModelId},
+        app::{Field, FieldId},
         *,
     },
     stmt::{self, Expr, IntoExprTarget, Node, VisitMut},
@@ -70,12 +68,13 @@ impl VisitMut for Simplify<'_> {
                 self.simplify_expr_binary_op(expr.op, &mut expr.lhs, &mut expr.rhs)
             }
             Expr::Cast(expr) => self.simplify_expr_cast(expr),
-            Expr::ConcatStr(expr) => self.simplify_expr_concat_str(expr),
             Expr::Exists(expr) => self.simplify_expr_exists(expr),
             Expr::InList(expr) => self.simplify_expr_in_list(expr),
             Expr::InSubquery(expr) => self.lift_in_subquery(&expr.expr, &expr.query),
+            Expr::Let(expr) => self.simplify_expr_let(expr),
             Expr::List(expr) => self.simplify_expr_list(expr),
             Expr::Map(_) => self.simplify_expr_map(i),
+            Expr::Match(expr) => self.simplify_expr_match(expr),
             Expr::Not(expr) => self.simplify_expr_not(expr),
             Expr::Or(expr) => self.simplify_expr_or(expr),
             Expr::Record(expr) => self.simplify_expr_record(expr),
@@ -86,6 +85,28 @@ impl VisitMut for Simplify<'_> {
 
         if let Some(expr) = maybe_expr {
             *i = expr;
+        }
+    }
+
+    fn visit_expr_match_mut(&mut self, i: &mut stmt::ExprMatch) {
+        // Simplify the subject first.
+        self.visit_expr_mut(&mut i.subject);
+
+        // If the subject simplified to a constant, only simplify the matching arm.
+        // Skipping dead-code arms avoids panics on expressions like
+        // `project([1], Record([I64(disc)]))` that would be invalid to evaluate.
+        if let Expr::Value(ref value) = *i.subject {
+            let value = value.clone();
+            for arm in &mut i.arms {
+                if arm.pattern == value {
+                    self.visit_expr_mut(&mut arm.expr);
+                    return;
+                }
+            }
+        } else {
+            for arm in &mut i.arms {
+                self.visit_expr_mut(&mut arm.expr);
+            }
         }
     }
 
@@ -223,10 +244,6 @@ impl<'a> Simplify<'a> {
         self.cx.schema()
     }
 
-    fn model(&self, model_id: impl Into<ModelId>) -> &Model {
-        self.cx.schema().app.model(model_id.into())
-    }
-
     fn field(&self, field_id: impl Into<FieldId>) -> &Field {
         self.cx.schema().app.field(field_id.into())
     }
@@ -275,28 +292,4 @@ impl<'a> Simplify<'a> {
 }
 
 #[cfg(test)]
-mod test {
-    use toasty_core::{
-        driver::Capability,
-        schema::{
-            app::{self, Model},
-            Builder,
-        },
-    };
-
-    /// Creates an empty schema for testing simplification.
-    pub fn test_schema() -> toasty_core::Schema {
-        Builder::new()
-            .build(app::Schema::default(), &Capability::SQLITE)
-            .expect("empty schema should build")
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_schema_with(models: &[Model]) -> toasty_core::Schema {
-        let app_schema = app::Schema::from_macro(models).expect("schema should build from macro");
-
-        Builder::new()
-            .build(app_schema, &Capability::SQLITE)
-            .expect("schema should build")
-    }
-}
+mod tests;

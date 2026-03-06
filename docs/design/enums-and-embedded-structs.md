@@ -630,6 +630,15 @@ Character::all().filter(
 
 ## Updating
 
+Update builders provide two methods per field:
+- `.field(value)` - Direct value assignment
+- `.with_field(|f| ...)` - Closure-based update
+
+The `.with_*` methods provide a uniform API across all field types and enable:
+- **Embedded types**: Partial updates (only set specific nested fields)
+- **Primitives**: Future type-specific operations (e.g., `NumericUpdate::increment()`)
+- **Enums**: Update variant fields without changing the discriminator
+
 ### Whole replacement
 
 Setting an embedded struct field on an update replaces all of its columns:
@@ -648,8 +657,11 @@ User::filter_by_id(id).update()
 
 ### Partial updates
 
-Each embedded struct generates a companion `{Type}Update` type. It collects individual
-field assignments and only updates the columns for fields that are explicitly set.
+Each field (primitive or embedded) generates a companion `{Type}Update<'a>` type that
+provides a view into the update statement's assignments. These update types hold a
+reference to the statement and a projection path, allowing them to directly mutate
+the statement as fields are set. This enables efficient nested updates without intermediate
+allocations.
 
 ```rust
 #[derive(toasty::Embed)]
@@ -659,43 +671,62 @@ struct Address {
     zip: String,
 }
 
-// AddressUpdate is generated automatically by `#[derive(toasty::Embed)]`
+// AddressUpdate<'a> is generated automatically by `#[derive(toasty::Embed)]`
+// StringUpdate<'a> is generated for primitive String fields
 ```
 
-The same `.address()` method on the update builder accepts either an `Address` (whole
-replacement) or an `AddressUpdate` (partial update):
+**Embedded types:**
 
 ```rust
+// Whole replacement — sets all address columns
+user.update()
+    .address(Address { street: "123 Main", city: "Seattle", zip: "98101" })
+    .exec(&db).await?;
+
 // Partial update — only address_city is SET
 user.update()
-    .address(AddressUpdate::new().city("Seattle"))
+    .with_address(|a| {
+        a.set_city("Seattle");
+    })
     .exec(&db).await?;
 
 // Multiple sub-fields — only address_city and address_zip are SET
 user.update()
-    .address(AddressUpdate::new().city("Seattle").zip("98101"))
+    .with_address(|a| {
+        a.set_city("Seattle");
+        a.set_zip("98101");
+    })
     .exec(&db).await?;
 
 // Query-based partial update
 User::filter_by_id(id).update()
-    .address(AddressUpdate::new().city("Seattle"))
+    .with_address(|a| a.set_city("Seattle"))
     .exec(&db).await?;
 ```
 
-`AddressUpdate` has the same field setter methods as the root update builder — one per
-field, each accepting `impl IntoExpr<T>`:
+**Primitive types:**
 
 ```rust
-AddressUpdate::new()
-    .street("456 Oak Ave")
-    .city("Portland")
-    .zip("97201")
+// Direct value
+user.update()
+    .name("Alice")
+    .exec(&db).await?;
+
+// Via closure (enables future type-specific operations)
+user.update()
+    .with_name(|n| {
+        n.set("Alice");
+    })
+    .exec(&db).await?;
 ```
+
+For now, primitive update builders only provide `.set()`. Future enhancements could add
+type-specific operations like `NumericUpdate::increment()`, `StringUpdate::append()`, etc.
 
 ### Partial updates with nested embedded structs
 
-Nested embedded structs also generate `{Type}Update` types. Pass them to the parent's
-update builder:
+Nested embedded structs also generate `{Type}Update<'a>` types. The `.with_*` methods
+can be nested naturally:
 
 ```rust
 #[derive(toasty::Embed)]
@@ -706,17 +737,21 @@ struct Office {
 
 // Update only headquarters_location_city
 company.update()
-    .headquarters(OfficeUpdate::new()
-        .location(AddressUpdate::new().city("Seattle"))
-    )
+    .with_headquarters(|h| {
+        h.with_location(|a| {
+            a.set_city("Seattle");
+        });
+    })
     .exec(&db).await?;
 
 // Update headquarters_name and headquarters_location_zip
 company.update()
-    .headquarters(OfficeUpdate::new()
-        .name("West Coast HQ")
-        .location(AddressUpdate::new().zip("98101"))
-    )
+    .with_headquarters(|h| {
+        h.with_name(|n| n.set("West Coast HQ"));
+        h.with_location(|a| {
+            a.set_zip("98101");
+        });
+    })
     .exec(&db).await?;
 ```
 
@@ -733,7 +768,7 @@ user.update()
     .exec(&db).await?;
 ```
 
-For data-carrying variants, use `{Type}Update` to update fields within the current
+For data-carrying variants, use `.with_contact()` to update fields within the current
 variant without changing the discriminator:
 
 ```rust
@@ -747,14 +782,23 @@ enum ContactMethod {
 
 // Update only the phone number, leave country and discriminator unchanged
 user.update()
-    .contact(ContactMethodUpdate::phone().number("555-1234"))
+    .with_contact(|c| {
+        c.phone(|p| {
+            p.with_number(|n| n.set("555-1234"));
+        });
+    })
     .exec(&db).await?;
 
-// Query-based
+// Update email variant
 User::filter_by_id(id).update()
-    .contact(ContactMethodUpdate::email().address("new@example.com"))
+    .with_contact(|c| {
+        c.email(|e| {
+            e.with_address(|a| a.set("new@example.com"));
+        });
+    })
     .exec(&db).await?;
 ```
 
-`ContactMethodUpdate` has one constructor per variant. Each constructor returns a builder
-scoped to that variant's fields. The discriminator is not changed by partial updates.
+`ContactMethodUpdate<'a>` has one method per variant (e.g., `.phone()`, `.email()`). Each
+method accepts a closure that receives a builder scoped to that variant's fields. The
+discriminator is not changed by partial updates.

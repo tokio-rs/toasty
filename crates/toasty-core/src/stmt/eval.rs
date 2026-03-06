@@ -1,7 +1,11 @@
 use crate::{
-    stmt::{BinaryOp, ConstInput, Expr, ExprArg, ExprSet, Input, Projection, Statement, Value},
+    stmt::{
+        BinaryOp, ConstInput, Expr, ExprArg, ExprSet, Input, Limit, Offset, Projection, Statement,
+        Value,
+    },
     Result,
 };
+use std::cmp::Ordering;
 
 enum ScopeStack<'a> {
     Root,
@@ -29,16 +33,75 @@ impl Statement {
                     ));
                 }
 
-                assert!(query.order_by.is_none(), "TODO");
-                assert!(query.limit.is_none(), "TODO");
-                assert!(!query.single, "TODO");
+                if query.order_by.is_some() {
+                    return Err(crate::Error::expression_evaluation_failed(
+                        "cannot evaluate statement with ORDER BY clause",
+                    ));
+                }
 
-                query.body.eval_ref(scope, input)
+                let mut result = query.body.eval_ref(scope, input)?;
+
+                if let Some(limit) = &query.limit {
+                    limit.eval_ref(&mut result, scope, input)?;
+                }
+
+                if query.single {
+                    let Value::List(mut items) = result else {
+                        return Err(crate::Error::expression_evaluation_failed(
+                            "single-row query requires body to evaluate to a list",
+                        ));
+                    };
+                    if items.len() != 1 {
+                        return Err(crate::Error::expression_evaluation_failed(
+                            "single-row query did not return exactly one row",
+                        ));
+                    }
+                    return Ok(items.remove(0));
+                }
+
+                Ok(result)
             }
             _ => Err(crate::Error::expression_evaluation_failed(
                 "can only evaluate Query statements",
             )),
         }
+    }
+}
+
+impl Limit {
+    fn eval_ref(
+        &self,
+        value: &mut Value,
+        scope: &ScopeStack<'_>,
+        input: &mut impl Input,
+    ) -> Result<()> {
+        let Value::List(ref mut items) = value else {
+            return Err(crate::Error::expression_evaluation_failed(
+                "LIMIT requires body to evaluate to a list",
+            ));
+        };
+
+        if let Some(offset) = &self.offset {
+            match offset {
+                Offset::Count(offset_expr) => {
+                    let skip = offset_expr.eval_ref_usize(scope, input)?;
+                    if skip >= items.len() {
+                        items.clear();
+                    } else {
+                        items.drain(..skip);
+                    }
+                }
+                Offset::After(_) => {
+                    return Err(crate::Error::expression_evaluation_failed(
+                        "keyset-based OFFSET cannot be evaluated client-side",
+                    ));
+                }
+            }
+        }
+
+        let n = self.limit.eval_ref_usize(scope, input)?;
+        items.truncate(n);
+        Ok(())
     }
 }
 
@@ -101,35 +164,34 @@ impl Expr {
                 match expr_binary_op.op {
                     BinaryOp::Eq => Ok((lhs == rhs).into()),
                     BinaryOp::Ne => Ok((lhs != rhs).into()),
-                    BinaryOp::Ge => Ok((lhs >= rhs).into()),
-                    BinaryOp::Gt => Ok((lhs > rhs).into()),
-                    BinaryOp::Le => Ok((lhs <= rhs).into()),
-                    BinaryOp::Lt => Ok((lhs < rhs).into()),
-                    BinaryOp::IsA => todo!("IsA binary op not yet implemented"),
+                    BinaryOp::Ge => Ok((cmp_ordered(&lhs, &rhs)? != Ordering::Less).into()),
+                    BinaryOp::Gt => Ok((cmp_ordered(&lhs, &rhs)? == Ordering::Greater).into()),
+                    BinaryOp::Le => Ok((cmp_ordered(&lhs, &rhs)? != Ordering::Greater).into()),
+                    BinaryOp::Lt => Ok((cmp_ordered(&lhs, &rhs)? == Ordering::Less).into()),
                 }
             }
             Expr::Cast(expr_cast) => expr_cast.ty.cast(expr_cast.expr.eval_ref(scope, input)?),
-            Expr::ConcatStr(expr_concat_str) => {
-                let mut ret = String::new();
-
-                for expr in &expr_concat_str.exprs {
-                    let Value::String(s) = expr.eval_ref(scope, input)? else {
-                        return Err(crate::Error::expression_evaluation_failed(
-                            "string concatenation requires string values",
-                        ));
-                    };
-
-                    ret.push_str(&s);
-                }
-
-                Ok(ret.into())
-            }
             Expr::Default => Err(crate::Error::expression_evaluation_failed(
                 "DEFAULT can only be evaluated by the database",
+            )),
+            Expr::Error(expr_error) => Err(crate::Error::expression_evaluation_failed(
+                &expr_error.message,
             )),
             Expr::IsNull(expr_is_null) => {
                 let value = expr_is_null.expr.eval_ref(scope, input)?;
                 Ok(value.is_null().into())
+            }
+            Expr::IsVariant(_) => Err(crate::Error::expression_evaluation_failed(
+                "IsVariant must be lowered before evaluation",
+            )),
+            Expr::Let(expr_let) => {
+                let args: Vec<_> = expr_let
+                    .bindings
+                    .iter()
+                    .map(|b| b.eval_ref(scope, input))
+                    .collect::<Result<_, _>>()?;
+                let scope = scope.scope(&args);
+                expr_let.body.eval_ref(&scope, input)
             }
             Expr::Not(expr_not) => {
                 let value = expr_not.expr.eval_ref_bool(scope, input)?;
@@ -148,7 +210,9 @@ impl Expr {
                 let mut base = expr_map.base.eval_ref(scope, input)?;
 
                 let Value::List(ref mut items) = &mut base else {
-                    todo!("error handling; base={base:#?}")
+                    return Err(crate::Error::expression_evaluation_failed(
+                        "Map base must evaluate to a list",
+                    ));
                 };
 
                 for item in items.iter_mut() {
@@ -203,25 +267,65 @@ impl Expr {
 
                 expr.eval_ref(scope, input)
             }
-            Expr::Value(value) => Ok(value.clone()),
-            Expr::DecodeEnum(expr, ty, variant) => {
-                let Value::String(base) = expr.eval_ref(scope, input)? else {
-                    todo!()
-                };
-                let (decoded_variant, rest) = base.split_once("#").unwrap();
-                let decoded_variant: usize = decoded_variant.parse().map_err(|_| {
-                    crate::Error::type_conversion(
-                        Value::String(decoded_variant.to_string()),
-                        "usize",
-                    )
-                })?;
+            Expr::Or(expr_or) => {
+                debug_assert!(!expr_or.operands.is_empty());
 
-                if decoded_variant != *variant {
-                    todo!("error; decoded={decoded_variant:#?}; expr={expr:#?}; ty={ty:#?}; variant={variant:#?}");
+                for operand in &expr_or.operands {
+                    if operand.eval_ref_bool(scope, input)? {
+                        return Ok(true.into());
+                    }
                 }
 
-                ty.cast(rest.into())
+                Ok(false.into())
             }
+            Expr::Any(expr_any) => {
+                let list = expr_any.expr.eval_ref(scope, input)?;
+
+                let Value::List(items) = list else {
+                    return Err(crate::Error::expression_evaluation_failed(
+                        "Any expression must evaluate to a list",
+                    ));
+                };
+
+                for item in &items {
+                    match item {
+                        Value::Bool(true) => return Ok(true.into()),
+                        Value::Bool(false) => {}
+                        _ => {
+                            return Err(crate::Error::expression_evaluation_failed(
+                                "Any expression items must evaluate to bool",
+                            ))
+                        }
+                    }
+                }
+
+                Ok(false.into())
+            }
+            Expr::InList(expr_in_list) => {
+                let needle = expr_in_list.expr.eval_ref(scope, input)?;
+                let list = expr_in_list.list.eval_ref(scope, input)?;
+
+                let Value::List(items) = list else {
+                    return Err(crate::Error::expression_evaluation_failed(
+                        "InList right-hand side must evaluate to a list",
+                    ));
+                };
+
+                Ok(items.iter().any(|item| item == &needle).into())
+            }
+            Expr::Match(expr_match) => {
+                let subject = expr_match.subject.eval_ref(scope, input)?;
+                for arm in &expr_match.arms {
+                    if subject == arm.pattern {
+                        return arm.expr.eval_ref(scope, input);
+                    }
+                }
+                expr_match.else_expr.eval_ref(scope, input)
+            }
+            Expr::Value(value) => Ok(value.clone()),
+            Expr::Func(_) => Err(crate::Error::expression_evaluation_failed(
+                "database functions cannot be evaluated client-side",
+            )),
             _ => todo!("expr={self:#?}"),
         }
     }
@@ -231,6 +335,15 @@ impl Expr {
             Value::Bool(ret) => Ok(ret),
             _ => Err(crate::Error::expression_evaluation_failed(
                 "expected boolean value",
+            )),
+        }
+    }
+
+    fn eval_ref_usize(&self, scope: &ScopeStack<'_>, input: &mut impl Input) -> Result<usize> {
+        match self.eval_ref(scope, input)? {
+            Value::I64(n) if n >= 0 => Ok(n as usize),
+            _ => Err(crate::Error::expression_evaluation_failed(
+                "expected non-negative integer",
             )),
         }
     }
@@ -250,7 +363,7 @@ impl ScopeStack<'_> {
             nesting -= 1;
 
             scope = match scope {
-                ScopeStack::Root => todo!("error handling"),
+                ScopeStack::Root => return None,
                 ScopeStack::Scope { parent, .. } => parent,
             };
         }
@@ -264,4 +377,15 @@ impl ScopeStack<'_> {
     fn scope<'child>(&'child self, args: &'child [Value]) -> ScopeStack<'child> {
         ScopeStack::Scope { args, parent: self }
     }
+}
+
+fn cmp_ordered(lhs: &Value, rhs: &Value) -> Result<Ordering> {
+    if lhs.is_null() || rhs.is_null() {
+        return Err(crate::Error::expression_evaluation_failed(
+            "ordered comparison with NULL is undefined",
+        ));
+    }
+    lhs.partial_cmp(rhs).ok_or_else(|| {
+        crate::Error::expression_evaluation_failed("ordered comparison between incompatible types")
+    })
 }

@@ -161,7 +161,6 @@ impl Setup for SetupSqlite {
                 toasty_core::stmt::Value::Bool(b) => {
                     sqlite_params.push(if b { "1".to_string() } else { "0".to_string() })
                 }
-                toasty_core::stmt::Value::Id(id) => sqlite_params.push(id.to_string()),
                 _ => todo!("Unsupported filter value type for SQLite: {value:?}"),
             }
         }

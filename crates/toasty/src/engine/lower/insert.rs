@@ -73,7 +73,7 @@ impl LowerStatement<'_, '_> {
     // Checks all fields of a record and handles nulls
     fn apply_app_level_insertion_defaults(
         &mut self,
-        model: &app::Model,
+        model: &app::ModelRoot,
         expr: &mut stmt::Expr,
         set_fields: &mut BitSet<usize>,
     ) {
@@ -116,10 +116,6 @@ impl LowerStatement<'_, '_> {
                         _ => panic!("#[auto] not allowed on non-primitive fields"),
                     };
                     match auto {
-                        app::AutoStrategy::Id => {
-                            let id = uuid::Uuid::new_v4().to_string();
-                            field_expr.insert(stmt::Id::from_string(model.id, id).into());
-                        }
                         app::AutoStrategy::Uuid(version) => {
                             let id = match version {
                                 app::UuidVersion::V4 => uuid::Uuid::new_v4(),
@@ -200,7 +196,7 @@ impl LowerStatement<'_, '_> {
         }));
     }
 
-    fn verify_field_constraints(&mut self, model: &app::Model, expr: &mut stmt::Expr) {
+    fn verify_field_constraints(&mut self, model: &app::ModelRoot, expr: &mut stmt::Expr) {
         for field in &model.fields {
             if field.nullable && field.constraints.is_empty() {
                 continue;

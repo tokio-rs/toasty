@@ -13,6 +13,7 @@ postgresql = ["toasty/postgresql"]
 
 [dependencies]
 toasty.workspace = true
+uuid.workspace = true
 toasty-core.workspace = true
 tokio.workspace = true
 criterion = "0.7.0"

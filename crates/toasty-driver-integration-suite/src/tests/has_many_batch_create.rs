@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
 #[driver_test(id(ID))]
-pub async fn user_batch_create_todos_one_level_basic_fk(test: &mut Test) {
+pub async fn user_batch_create_todos_one_level_basic_fk(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -29,30 +29,30 @@ pub async fn user_batch_create_todos_one_level_basic_fk(test: &mut Test) {
         title: String,
     }
 
-    let db = test.setup_db(models!(User, Todo)).await;
+    let mut db = test.setup_db(models!(User, Todo)).await;
 
     // Create a user with some todos
     let user = User::create()
         .name("Ann Chovey")
         .todo(Todo::create().title("Make pizza"))
-        .exec(&db)
-        .await
-        .unwrap();
+        .exec(&mut db)
+        .await?;
 
     assert_eq!(user.name, "Ann Chovey");
 
     // There are associated TODOs
-    let todos: Vec<_> = user.todos().collect(&db).await.unwrap();
+    let todos: Vec<_> = user.todos().collect(&mut db).await?;
     assert_eq!(1, todos.len());
     assert_eq!("Make pizza", todos[0].title);
 
     // Find the todo by ID
-    let todo = Todo::get_by_id(&db, &todos[0].id).await.unwrap();
+    let todo = Todo::get_by_id(&mut db, &todos[0].id).await?;
     assert_eq!("Make pizza", todo.title);
+    Ok(())
 }
 
 #[driver_test(id(ID))]
-pub async fn user_batch_create_todos_two_levels_basic_fk(test: &mut Test) {
+pub async fn user_batch_create_todos_two_levels_basic_fk(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -98,7 +98,7 @@ pub async fn user_batch_create_todos_two_levels_basic_fk(test: &mut Test) {
         todos: toasty::HasMany<Todo>,
     }
 
-    let db = test.setup_db(models!(User, Todo, Category)).await;
+    let mut db = test.setup_db(models!(User, Todo, Category)).await;
 
     // Create a user with some todos
     let user = User::create()
@@ -108,22 +108,21 @@ pub async fn user_batch_create_todos_two_levels_basic_fk(test: &mut Test) {
                 .title("Make pizza")
                 .category(Category::create().name("Eating")),
         )
-        .exec(&db)
-        .await
-        .unwrap();
+        .exec(&mut db)
+        .await?;
     assert_eq!(user.name, "Ann Chovey");
 
     // There are associated TODOs
-    let todos: Vec<_> = user.todos().collect(&db).await.unwrap();
+    let todos: Vec<_> = user.todos().collect(&mut db).await?;
     assert_eq!(1, todos.len());
     assert_eq!("Make pizza", todos[0].title);
 
     // Find the todo by ID
-    let todo = Todo::get_by_id(&db, &todos[0].id).await.unwrap();
+    let todo = Todo::get_by_id(&mut db, &todos[0].id).await?;
     assert_eq!("Make pizza", todo.title);
 
     // Find the category by ID
-    let category = Category::get_by_id(&db, &todo.category_id).await.unwrap();
+    let category = Category::get_by_id(&mut db, &todo.category_id).await?;
     assert_eq!(category.name, "Eating");
 
     // Create more than one todo per user
@@ -139,12 +138,11 @@ pub async fn user_batch_create_todos_two_levels_basic_fk(test: &mut Test) {
                 .title("do something else")
                 .category(Category::create().name("other things")),
         )
-        .exec(&db)
-        .await
-        .unwrap();
+        .exec(&mut db)
+        .await?;
 
     // There are associated TODOs
-    let todos: Vec<_> = user.todos().collect(&db).await.unwrap();
+    let todos: Vec<_> = user.todos().collect(&mut db).await?;
     assert_eq_unordered!(
         todos.iter().map(|todo| &todo.title[..]),
         ["do something", "do something else"]
@@ -153,7 +151,7 @@ pub async fn user_batch_create_todos_two_levels_basic_fk(test: &mut Test) {
     let mut categories = vec![];
 
     for todo in &todos {
-        categories.push(todo.category().get(&db).await.unwrap());
+        categories.push(todo.category().get(&mut db).await?);
     }
 
     assert_eq_unordered!(
@@ -161,12 +159,13 @@ pub async fn user_batch_create_todos_two_levels_basic_fk(test: &mut Test) {
         ["things", "other things"]
     );
 
-    let todos: Vec<_> = category.todos().collect(&db).await.unwrap();
+    let todos: Vec<_> = category.todos().collect(&mut db).await?;
     assert_eq!(1, todos.len());
+    Ok(())
 }
 
 #[driver_test(id(ID))]
-pub async fn user_batch_create_todos_set_category_by_value(test: &mut Test) {
+pub async fn user_batch_create_todos_set_category_by_value(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -212,23 +211,22 @@ pub async fn user_batch_create_todos_set_category_by_value(test: &mut Test) {
         todos: toasty::HasMany<Todo>,
     }
 
-    let db = test.setup_db(models!(User, Todo, Category)).await;
+    let mut db = test.setup_db(models!(User, Todo, Category)).await;
 
-    let category = Category::create().name("Eating").exec(&db).await.unwrap();
+    let category = Category::create().name("Eating").exec(&mut db).await?;
     assert_eq!(category.name, "Eating");
 
     let user = User::create()
         .name("John Doe")
         .todo(Todo::create().title("Pizza").category(&category))
         .todo(Todo::create().title("Hamburger").category(&category))
-        .exec(&db)
-        .await
-        .unwrap();
+        .exec(&mut db)
+        .await?;
 
     assert_eq!(user.name, "John Doe");
 
     // There are associated TODOs
-    let todos: Vec<_> = user.todos().collect(&db).await.unwrap();
+    let todos: Vec<_> = user.todos().collect(&mut db).await?;
     assert_eq_unordered!(
         todos.iter().map(|todo| &todo.title[..]),
         ["Pizza", "Hamburger"]
@@ -238,11 +236,12 @@ pub async fn user_batch_create_todos_set_category_by_value(test: &mut Test) {
         assert_eq!(todo.category_id, category.id);
     }
 
-    let todos: Vec<_> = category.todos().collect(&db).await.unwrap();
+    let todos: Vec<_> = category.todos().collect(&mut db).await?;
     assert_eq_unordered!(
         todos.iter().map(|todo| &todo.title[..]),
         ["Pizza", "Hamburger"]
     );
+    Ok(())
 }
 
 /// Regression test for batch creation with optional fields
@@ -259,7 +258,7 @@ pub async fn user_batch_create_todos_set_category_by_value(test: &mut Test) {
 /// batch inserts with auto-increment fields encounter an Expr::Stmt (nested insert)
 /// that is not yet handled.
 #[driver_test(id(ID))]
-pub async fn user_batch_create_todos_with_optional_field(test: &mut Test) {
+pub async fn user_batch_create_todos_with_optional_field(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -292,30 +291,30 @@ pub async fn user_batch_create_todos_with_optional_field(test: &mut Test) {
         title: String,
     }
 
-    let db = test.setup_db(models!(User, Todo)).await;
+    let mut db = test.setup_db(models!(User, Todo)).await;
 
     // This operation currently panics due to unimplemented code path
     let user = User::create()
         .name("Ann Chovey")
         .todo(Todo::create().title("Make pizza"))
         .todo(Todo::create().title("Sleep"))
-        .exec(&db)
-        .await
-        .unwrap();
+        .exec(&mut db)
+        .await?;
 
     assert_eq!(user.name, "Ann Chovey");
 
     // Verify both todos were created
-    let todos: Vec<_> = user.todos().collect(&db).await.unwrap();
+    let todos: Vec<_> = user.todos().collect(&mut db).await?;
     assert_eq!(2, todos.len());
 
     let mut titles: Vec<_> = todos.iter().map(|t| &t.title[..]).collect();
     titles.sort();
     assert_eq!(titles, vec!["Make pizza", "Sleep"]);
+    Ok(())
 }
 
 #[driver_test(id(ID))]
-pub async fn user_batch_create_two_todos_simple(test: &mut Test) {
+pub async fn user_batch_create_two_todos_simple(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -347,7 +346,7 @@ pub async fn user_batch_create_two_todos_simple(test: &mut Test) {
         title: String,
     }
 
-    let db = test.setup_db(models!(User, Todo)).await;
+    let mut db = test.setup_db(models!(User, Todo)).await;
 
     // Create a user with two todos in a single operation
     let user = User::create()
@@ -355,18 +354,18 @@ pub async fn user_batch_create_two_todos_simple(test: &mut Test) {
         .email("ann.chovey@example.com")
         .todo(Todo::create().title("Make pizza"))
         .todo(Todo::create().title("Sleep"))
-        .exec(&db)
-        .await
-        .unwrap();
+        .exec(&mut db)
+        .await?;
 
     assert_eq!(user.name, "Ann Chovey");
 
     // There should be 2 associated TODOs
-    let todos: Vec<_> = user.todos().collect(&db).await.unwrap();
+    let todos: Vec<_> = user.todos().collect(&mut db).await?;
     assert_eq!(2, todos.len());
 
     // Verify the titles
     let mut titles: Vec<_> = todos.iter().map(|t| &t.title[..]).collect();
     titles.sort();
     assert_eq!(titles, vec!["Make pizza", "Sleep"]);
+    Ok(())
 }

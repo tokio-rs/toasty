@@ -17,7 +17,7 @@ At the Rust level, each model is a distinct type:
 struct User {
     #[key]
     #[auto]
-    id: Id<Self>,
+    id: u64,
     name: String,
     email: String,
 }
@@ -26,8 +26,8 @@ struct User {
 struct Todo {
     #[key]
     #[auto]
-    id: Id<Self>,
-    user_id: Id<User>,
+    id: u64,
+    user_id: u64,
     title: String,
 }
 
@@ -38,7 +38,7 @@ User::filter_by_id(&user_id).filter(User::FIELDS.name().eq("John")).all(&db).awa
 // Type system prevents field/model confusion:
 // User::FIELDS.title()  // ← Compile error! User has no title field
 // Todo::FIELDS.email()  // ← Compile error! Todo has no email field
-// User::FIELDS.name().eq(&todo_id)  // ← Compile error! Id<Todo> doesn't match String
+// User::FIELDS.name().eq(&todo_id)  // ← Compile error! u64 doesn't match String
 ```
 
 The query builder API maintains this type safety through generics and traits, preventing you from accidentally mixing model types or referencing non-existent fields. The API uses generic types (`Statement<M>`, `Select<M>`, etc.) that wrap `toasty_core::stmt` types.

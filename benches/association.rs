@@ -1,7 +1,6 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use std::hint::black_box;
 use tests::{models, LoggingDriver, Setup};
-use toasty::stmt::Id;
 
 type SetupFactory = Box<dyn Fn() -> Box<dyn Setup>>;
 
@@ -10,7 +9,7 @@ type SetupFactory = Box<dyn Fn() -> Box<dyn Setup>>;
 struct User {
     #[key]
     #[auto]
-    id: Id<Self>,
+    id: uuid::Uuid,
     name: String,
     #[has_many]
     posts: toasty::HasMany<Post>,
@@ -23,10 +22,10 @@ struct User {
 struct Post {
     #[key]
     #[auto]
-    id: Id<Self>,
+    id: uuid::Uuid,
     title: String,
     #[index]
-    user_id: Id<User>,
+    user_id: uuid::Uuid,
     #[belongs_to(key = user_id, references = id)]
     user: toasty::BelongsTo<User>,
 }
@@ -36,10 +35,10 @@ struct Post {
 struct Comment {
     #[key]
     #[auto]
-    id: Id<Self>,
+    id: uuid::Uuid,
     text: String,
     #[index]
-    user_id: Id<User>,
+    user_id: uuid::Uuid,
     #[belongs_to(key = user_id, references = id)]
     user: toasty::BelongsTo<User>,
 }
@@ -87,10 +86,10 @@ async fn setup_database_and_data(
     setup.configure_builder(&mut builder);
 
     let logging_driver = LoggingDriver::new(setup.driver());
-    let db = builder.build(logging_driver).await.unwrap();
-    db.reset_db().await.unwrap();
+    let mut db = builder.build(logging_driver).await.unwrap();
+    db.push_schema().await.unwrap();
 
-    setup_test_data(&db, users, posts, comments).await;
+    setup_test_data(&mut db, users, posts, comments).await;
 
     db
 }
@@ -129,7 +128,7 @@ fn association_benchmarks(c: &mut Criterion) {
             let size_label = format!("{}u_{}p_{}c", users, posts, comments);
 
             let rt = tokio::runtime::Runtime::new().unwrap();
-            let db = rt.block_on(async {
+            let mut db = rt.block_on(async {
                 setup_database_and_data(setup_fn(), *users, *posts, *comments).await
             });
 
@@ -140,9 +139,9 @@ fn association_benchmarks(c: &mut Criterion) {
                     b.iter(|| {
                         rt.block_on(async {
                             let users: Vec<User> = User::all()
-                                .include(User::FIELDS.posts())
-                                .include(User::FIELDS.comments())
-                                .collect(&db)
+                                .include(User::fields().posts())
+                                .include(User::fields().comments())
+                                .collect(&mut db)
                                 .await
                                 .unwrap();
                             black_box(users)

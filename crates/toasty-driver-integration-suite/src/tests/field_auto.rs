@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
 #[driver_test(id(ID))]
-pub async fn auto_uuid_v4(test: &mut Test) {
+pub async fn auto_uuid_v4(test: &mut Test) -> Result<()> {
     #[derive(toasty::Model)]
     struct Foo {
         #[key]
@@ -12,15 +12,16 @@ pub async fn auto_uuid_v4(test: &mut Test) {
         auto_field: uuid::Uuid,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
-    let u = Foo::create().exec(&db).await.unwrap();
+    let u = Foo::create().exec(&mut db).await?;
     // Sanity check that it actually generated a UUID
     assert!(uuid::Uuid::parse_str(&u.auto_field.to_string()).is_ok());
+    Ok(())
 }
 
 #[driver_test(id(ID))]
-pub async fn auto_uuid_v7(test: &mut Test) {
+pub async fn auto_uuid_v7(test: &mut Test) -> Result<()> {
     #[derive(toasty::Model)]
     struct Foo {
         #[key]
@@ -31,15 +32,16 @@ pub async fn auto_uuid_v7(test: &mut Test) {
         auto_field: uuid::Uuid,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
-    let u = Foo::create().exec(&db).await.unwrap();
+    let u = Foo::create().exec(&mut db).await?;
     // Sanity check that it actually generated a UUID
     assert!(uuid::Uuid::parse_str(&u.auto_field.to_string()).is_ok());
+    Ok(())
 }
 
 #[driver_test(requires(auto_increment))]
-pub async fn auto_increment_explicit(test: &mut Test) {
+pub async fn auto_increment_explicit(test: &mut Test) -> Result<()> {
     #[derive(toasty::Model)]
     struct Foo {
         #[key]
@@ -47,16 +49,17 @@ pub async fn auto_increment_explicit(test: &mut Test) {
         auto_field: u32,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     for i in 1..10 {
-        let u = Foo::create().exec(&db).await.unwrap();
+        let u = Foo::create().exec(&mut db).await?;
         assert_eq!(u.auto_field, i);
     }
+    Ok(())
 }
 
 #[driver_test(id(ID), requires(auto_increment))]
-pub async fn auto_increment_implicit(test: &mut Test) {
+pub async fn auto_increment_implicit(test: &mut Test) -> Result<()> {
     #[derive(toasty::Model)]
     struct Foo {
         #[key]
@@ -64,12 +67,13 @@ pub async fn auto_increment_implicit(test: &mut Test) {
         auto_field: u32,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
 
     for i in 1..10 {
-        let u = Foo::create().exec(&db).await.unwrap();
+        let u = Foo::create().exec(&mut db).await?;
         assert_eq!(u.auto_field, i);
     }
+    Ok(())
 }
 
 // Test that auto-increment with composite primary keys is rejected
@@ -102,7 +106,7 @@ pub async fn auto_increment_with_composite_key_errors(test: &mut Test) {
 // we want to make sure this works.
 #[driver_test(id(ID), requires(auto_increment))]
 #[allow(clippy::disallowed_names)]
-pub async fn auto_increment_with_associations(test: &mut Test) {
+pub async fn auto_increment_with_associations(test: &mut Test) -> Result<()> {
     #[derive(toasty::Model)]
     #[allow(clippy::disallowed_names)]
     struct Foo {
@@ -130,19 +134,19 @@ pub async fn auto_increment_with_associations(test: &mut Test) {
         foo: toasty::BelongsTo<Foo>,
     }
 
-    let db = test.setup_db(models!(Foo, Bar)).await;
+    let mut db = test.setup_db(models!(Foo, Bar)).await;
 
     for i in 1..10 {
         let u = Foo::create()
             .bar(Bar::create())
             .bar(Bar::create())
-            .exec(&db)
-            .await
-            .unwrap();
+            .exec(&mut db)
+            .await?;
         assert_eq!(u.id, i);
         assert_eq!(u.bars.get()[0].foo_id, i);
         assert_eq!(u.bars.get()[1].foo_id, i);
         assert_eq!(u.bars.get()[0].id, i * 2 - 1);
         assert_eq!(u.bars.get()[1].id, i * 2);
     }
+    Ok(())
 }

@@ -11,6 +11,7 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let create_struct_ident = &self.model.kind.expect_root().create_struct_ident;
         let create_methods = self.expand_create_methods();
+        let default_stmts = self.expand_create_default_stmts();
 
         quote! {
             #vis struct #create_struct_ident {
@@ -20,8 +21,9 @@ impl Expand<'_> {
             impl #create_struct_ident {
                 #create_methods
 
-                #vis async fn exec(self, db: &#toasty::Db) -> #toasty::Result<#model_ident> {
-                    db.exec_insert_one(self.stmt).await
+                #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
+                    use #toasty::ExecutorExt;
+                    executor.exec_insert_one(self.stmt).await
                 }
             }
 
@@ -65,16 +67,44 @@ impl Expand<'_> {
 
             impl Default for #create_struct_ident {
                 fn default() -> #create_struct_ident {
-                    #create_struct_ident {
+                    let mut s = #create_struct_ident {
                         stmt: #toasty::stmt::Insert::blank_single(),
-                    }
+                    };
+                    #default_stmts
+                    s
                 }
             }
         }
     }
 
+    fn expand_create_default_stmts(&self) -> TokenStream {
+        let toasty = &self.toasty;
+
+        self.model
+            .fields
+            .iter()
+            .enumerate()
+            .filter_map(|(index, field)| {
+                // #[default] takes priority over #[update] on create
+                let expr = field
+                    .attrs
+                    .default_expr
+                    .as_ref()
+                    .or(field.attrs.update_expr.as_ref())?;
+                let FieldTy::Primitive(ty) = &field.ty else {
+                    return None;
+                };
+                let index_tokenized = util::int(index);
+                Some(quote! {
+                    s.stmt.set(#index_tokenized, <#ty as #toasty::IntoExpr<#ty>>::into_expr(#expr));
+                })
+            })
+            .collect()
+    }
+
     fn expand_create_methods(&self) -> TokenStream {
         let toasty = &self.toasty;
+        let vis = &self.model.vis;
         let model_ident = &self.model.ident;
 
         self.model
@@ -83,14 +113,16 @@ impl Expand<'_> {
             .enumerate()
             .map(move |(index, field)| {
                 let name = &field.name.ident;
+                let with_ident = &field.with_ident;
                 let index_tokenized = util::int(index);
 
                 match &field.ty {
                     FieldTy::BelongsTo(rel) => {
                         let ty = &rel.ty;
+                        let rel_create = quote!(<#ty as #toasty::Relation>::Create);
 
                         quote! {
-                            pub fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
+                            #vis fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
                                 // Silences unused field warning when the field is set on creation.
                                 if false {
                                     let m = <#model_ident as #toasty::Model>::load(Default::default()).unwrap();
@@ -100,32 +132,63 @@ impl Expand<'_> {
                                 self.stmt.set(#index_tokenized, #name.into_expr());
                                 self
                             }
+
+                            /// Closure-based variant: build the related model inline using its create builder.
+                            #vis fn #with_ident(mut self, f: impl ::std::ops::FnOnce(#rel_create) -> #rel_create) -> Self {
+                                let create = f(::std::default::Default::default());
+                                let expr: #toasty::stmt::Expr<<#ty as #toasty::Relation>::Model> = #toasty::IntoExpr::into_expr(create);
+                                self.stmt.set(#index_tokenized, expr);
+                                self
+                            }
                         }
                     }
                     FieldTy::HasMany(rel) => {
                         let singular = &rel.singular.ident;
+                        let plural = name;
                         let ty = &rel.ty;
+                        let rel_model = quote!(<#ty as #toasty::Relation>::Model);
 
                         quote! {
-                            pub fn #singular(mut self, #singular: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
-                                self.stmt.insert(#index, #singular.into_expr());
+                            #vis fn #singular(mut self, #singular: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
+                                self.stmt.insert(#index_tokenized, #singular.into_expr());
+                                self
+                            }
+
+                            #vis fn #plural(mut self, #plural: impl #toasty::IntoExpr<[<#ty as #toasty::Relation>::Model]>) -> Self {
+                                self.stmt.insert_all(#index_tokenized, #plural.into_expr());
+                                self
+                            }
+
+                            /// Closure-based variant: build a collection of nested items using `CreateMany::with_item`.
+                            #vis fn #with_ident(mut self, f: impl ::std::ops::FnOnce(#toasty::CreateMany<#rel_model>) -> #toasty::CreateMany<#rel_model>) -> Self {
+                                let many = f(#toasty::CreateMany::new());
+                                self.stmt.insert_all(#index_tokenized, many.into_expr());
                                 self
                             }
                         }
                     }
                     FieldTy::HasOne(rel) => {
                         let ty = &rel.ty;
+                        let rel_create = quote!(<#ty as #toasty::Relation>::Create);
 
                         quote! {
-                            pub fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
+                            #vis fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
                                 self.stmt.set(#index_tokenized, #name.into_expr());
+                                self
+                            }
+
+                            /// Closure-based variant: build the related model inline using its create builder.
+                            #vis fn #with_ident(mut self, f: impl ::std::ops::FnOnce(#rel_create) -> #rel_create) -> Self {
+                                let create = f(::std::default::Default::default());
+                                let expr: #toasty::stmt::Expr<<#ty as #toasty::Relation>::Model> = #toasty::IntoExpr::into_expr(create);
+                                self.stmt.set(#index_tokenized, expr);
                                 self
                             }
                         }
                     }
                     FieldTy::Primitive(ty) => {
                         quote! {
-                            pub fn #name(mut self, #name: impl #toasty::IntoExpr<#ty>) -> Self {
+                            #vis fn #name(mut self, #name: impl #toasty::IntoExpr<#ty>) -> Self {
                                 self.stmt.set(#index_tokenized, #name.into_expr());
                                 self
                             }

@@ -172,7 +172,6 @@ impl ToValue for Value {
             CoreValue::U16(value) => value.to_value(),
             CoreValue::U32(value) => value.to_value(),
             CoreValue::U64(value) => value.to_value(),
-            CoreValue::Id(id) => id.to_string().to_value(),
             CoreValue::Null => mysql_async::Value::NULL,
             CoreValue::String(value) => value.to_value(),
             CoreValue::Bytes(value) => value.to_value(),

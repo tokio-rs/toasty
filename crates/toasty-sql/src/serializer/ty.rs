@@ -10,7 +10,7 @@ impl ToSql for &db::Type {
             db::Type::Boolean => fmt!(cx, f, "BOOLEAN"),
             db::Type::Integer(1..=2) => fmt!(cx, f, "SMALLINT"),
             db::Type::Integer(3..=4) => fmt!(cx, f, "INTEGER"),
-            db::Type::Integer(5..=8) => fmt!(cx, f, "bigint"),
+            db::Type::Integer(5..=8) => fmt!(cx, f, "BIGINT"),
             db::Type::Integer(_) => todo!(),
             db::Type::UnsignedInteger(size) => {
                 match f.serializer.flavor {

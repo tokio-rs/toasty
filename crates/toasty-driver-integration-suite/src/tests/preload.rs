@@ -1,7 +1,72 @@
 use crate::prelude::*;
 
+/// Tests that preloading a `HasOne<Option<_>>` correctly distinguishes between
+/// "not loaded" and "loaded as None" when the relation does not exist.
 #[driver_test(id(ID))]
-pub async fn basic_has_many_and_belongs_to_preload(test: &mut Test) {
+pub async fn preload_has_one_option_none_then_some(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        #[has_one]
+        profile: toasty::HasOne<Option<Profile>>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Profile {
+        #[key]
+        #[auto]
+        id: ID,
+
+        bio: String,
+
+        #[unique]
+        user_id: Option<ID>,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::BelongsTo<Option<User>>,
+    }
+
+    let mut db = test.setup_db(models!(User, Profile)).await;
+
+    // Create a user WITHOUT a profile
+    let user_no_profile = User::create().name("No Profile").exec(&mut db).await?;
+
+    // Preload the profile — no profile exists, so it should be `None` (loaded)
+    let user_no_profile = User::filter_by_id(user_no_profile.id)
+        .include(User::fields().profile())
+        .get(&mut db)
+        .await?;
+
+    // `.get()` must not panic — the relation was preloaded and is None
+    assert!(user_no_profile.profile.get().is_none());
+
+    // Create a user WITH a profile
+    let user_with_profile = User::create()
+        .name("Has Profile")
+        .profile(Profile::create().bio("A bio"))
+        .exec(&mut db)
+        .await?;
+
+    // Preload the profile — a profile exists, so it should be `Some`
+    let user_with_profile = User::filter_by_id(user_with_profile.id)
+        .include(User::fields().profile())
+        .get(&mut db)
+        .await?;
+
+    let profile = user_with_profile.profile.get().as_ref().unwrap();
+    assert_eq!("A bio", profile.bio);
+    assert_eq!(user_with_profile.id, *profile.user_id.as_ref().unwrap());
+
+    Ok(())
+}
+
+#[driver_test(id(ID))]
+pub async fn basic_has_many_and_belongs_to_preload(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -26,23 +91,21 @@ pub async fn basic_has_many_and_belongs_to_preload(test: &mut Test) {
         user: toasty::BelongsTo<User>,
     }
 
-    let db = test.setup_db(models!(User, Todo)).await;
+    let mut db = test.setup_db(models!(User, Todo)).await;
 
     // Create a user with a few todos
     let user = User::create()
         .todo(Todo::create())
         .todo(Todo::create())
         .todo(Todo::create())
-        .exec(&db)
-        .await
-        .unwrap();
+        .exec(&mut db)
+        .await?;
 
     // Find the user, include TODOs
     let user = User::filter_by_id(user.id)
         .include(User::fields().todos())
-        .get(&db)
-        .await
-        .unwrap();
+        .get(&mut db)
+        .await?;
 
     // This will panic
     assert_eq!(3, user.todos.get().len());
@@ -51,16 +114,16 @@ pub async fn basic_has_many_and_belongs_to_preload(test: &mut Test) {
 
     let todo = Todo::filter_by_id(id)
         .include(Todo::fields().user())
-        .get(&db)
-        .await
-        .unwrap();
+        .get(&mut db)
+        .await?;
 
     assert_eq!(user.id, todo.user.get().id);
     assert_eq!(user.id, todo.user_id);
+    Ok(())
 }
 
 #[driver_test(id(ID))]
-pub async fn multiple_includes_same_model(test: &mut Test) {
+pub async fn multiple_includes_same_model(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -111,77 +174,70 @@ pub async fn multiple_includes_same_model(test: &mut Test) {
         user: toasty::BelongsTo<User>,
     }
 
-    let db = test.setup_db(models!(User, Post, Comment)).await;
+    let mut db = test.setup_db(models!(User, Post, Comment)).await;
 
     // Create a user
-    let user = User::create().name("Test User").exec(&db).await.unwrap();
+    let user = User::create().name("Test User").exec(&mut db).await?;
 
     // Create posts associated with the user
     Post::create()
         .title("Post 1")
         .user(&user)
-        .exec(&db)
-        .await
-        .unwrap();
+        .exec(&mut db)
+        .await?;
 
     Post::create()
         .title("Post 2")
         .user(&user)
-        .exec(&db)
-        .await
-        .unwrap();
+        .exec(&mut db)
+        .await?;
 
     // Create comments associated with the user
     Comment::create()
         .text("Comment 1")
         .user(&user)
-        .exec(&db)
-        .await
-        .unwrap();
+        .exec(&mut db)
+        .await?;
 
     Comment::create()
         .text("Comment 2")
         .user(&user)
-        .exec(&db)
-        .await
-        .unwrap();
+        .exec(&mut db)
+        .await?;
 
     Comment::create()
         .text("Comment 3")
         .user(&user)
-        .exec(&db)
-        .await
-        .unwrap();
+        .exec(&mut db)
+        .await?;
 
     // Test individual includes work (baseline)
     let user_with_posts = User::filter_by_id(user.id)
         .include(User::fields().posts())
-        .get(&db)
-        .await
-        .unwrap();
+        .get(&mut db)
+        .await?;
     assert_eq!(2, user_with_posts.posts.get().len());
 
     let user_with_comments = User::filter_by_id(user.id)
         .include(User::fields().comments())
-        .get(&db)
-        .await
-        .unwrap();
+        .get(&mut db)
+        .await?;
     assert_eq!(3, user_with_comments.comments.get().len());
 
     // Test multiple includes in one query
     let loaded_user = User::filter_by_id(user.id)
         .include(User::fields().posts()) // First include
         .include(User::fields().comments()) // Second include
-        .get(&db)
-        .await
-        .unwrap();
+        .get(&mut db)
+        .await?;
 
     assert_eq!(2, loaded_user.posts.get().len());
     assert_eq!(3, loaded_user.comments.get().len());
+    Ok(())
 }
 
 #[driver_test(id(ID))]
-pub async fn basic_has_one_and_belongs_to_preload(test: &mut Test) {
+pub async fn basic_has_one_and_belongs_to_preload(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -209,22 +265,20 @@ pub async fn basic_has_one_and_belongs_to_preload(test: &mut Test) {
         user: toasty::BelongsTo<Option<User>>,
     }
 
-    let db = test.setup_db(models!(User, Profile)).await;
+    let mut db = test.setup_db(models!(User, Profile)).await;
 
     // Create a user with a profile
     let user = User::create()
         .name("John Doe")
         .profile(Profile::create().bio("A person"))
-        .exec(&db)
-        .await
-        .unwrap();
+        .exec(&mut db)
+        .await?;
 
     // Find the user, include profile
     let user = User::filter_by_id(user.id)
         .include(User::fields().profile())
-        .get(&db)
-        .await
-        .unwrap();
+        .get(&mut db)
+        .await?;
 
     // Verify the profile is preloaded
     let profile = user.profile.get().as_ref().unwrap();
@@ -236,16 +290,16 @@ pub async fn basic_has_one_and_belongs_to_preload(test: &mut Test) {
     // Test the reciprocal belongs_to preload
     let profile = Profile::filter_by_id(profile_id)
         .include(Profile::fields().user())
-        .get(&db)
-        .await
-        .unwrap();
+        .get(&mut db)
+        .await?;
 
     assert_eq!(user.id, profile.user.get().as_ref().unwrap().id);
     assert_eq!("John Doe", profile.user.get().as_ref().unwrap().name);
+    Ok(())
 }
 
 #[driver_test(id(ID))]
-pub async fn multiple_includes_with_has_one(test: &mut Test) {
+pub async fn multiple_includes_with_has_one(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct User {
@@ -294,23 +348,21 @@ pub async fn multiple_includes_with_has_one(test: &mut Test) {
         user: toasty::BelongsTo<Option<User>>,
     }
 
-    let db = test.setup_db(models!(User, Profile, Settings)).await;
+    let mut db = test.setup_db(models!(User, Profile, Settings)).await;
 
     // Create a user with both profile and settings
     let user = User::create()
         .name("Jane Doe")
         .profile(Profile::create().bio("Software engineer"))
         .settings(Settings::create().theme("dark"))
-        .exec(&db)
-        .await
-        .unwrap();
+        .exec(&mut db)
+        .await?;
 
     // Test individual includes work (baseline)
     let user_with_profile = User::filter_by_id(user.id)
         .include(User::fields().profile())
-        .get(&db)
-        .await
-        .unwrap();
+        .get(&mut db)
+        .await?;
     assert!(user_with_profile.profile.get().is_some());
     assert_eq!(
         "Software engineer",
@@ -319,9 +371,8 @@ pub async fn multiple_includes_with_has_one(test: &mut Test) {
 
     let user_with_settings = User::filter_by_id(user.id)
         .include(User::fields().settings())
-        .get(&db)
-        .await
-        .unwrap();
+        .get(&mut db)
+        .await?;
     assert!(user_with_settings.settings.get().is_some());
     assert_eq!(
         "dark",
@@ -332,9 +383,8 @@ pub async fn multiple_includes_with_has_one(test: &mut Test) {
     let loaded_user = User::filter_by_id(user.id)
         .include(User::fields().profile()) // First include
         .include(User::fields().settings()) // Second include
-        .get(&db)
-        .await
-        .unwrap();
+        .get(&mut db)
+        .await?;
 
     assert!(loaded_user.profile.get().is_some());
     assert_eq!(
@@ -343,10 +393,11 @@ pub async fn multiple_includes_with_has_one(test: &mut Test) {
     );
     assert!(loaded_user.settings.get().is_some());
     assert_eq!("dark", loaded_user.settings.get().as_ref().unwrap().theme);
+    Ok(())
 }
 
 #[driver_test(id(ID))]
-pub async fn combined_has_many_and_has_one_preload(test: &mut Test) {
+pub async fn combined_has_many_and_has_one_preload(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct User {
@@ -395,7 +446,7 @@ pub async fn combined_has_many_and_has_one_preload(test: &mut Test) {
         user: toasty::BelongsTo<User>,
     }
 
-    let db = test.setup_db(models!(User, Profile, Todo)).await;
+    let mut db = test.setup_db(models!(User, Profile, Todo)).await;
 
     // Create a user with a profile and multiple todos
     let user = User::create()
@@ -404,17 +455,15 @@ pub async fn combined_has_many_and_has_one_preload(test: &mut Test) {
         .todo(Todo::create().title("Task 1"))
         .todo(Todo::create().title("Task 2"))
         .todo(Todo::create().title("Task 3"))
-        .exec(&db)
-        .await
-        .unwrap();
+        .exec(&mut db)
+        .await?;
 
     // Test combined has_one and has_many preload in a single query
     let loaded_user = User::filter_by_id(user.id)
         .include(User::fields().profile()) // has_one include
         .include(User::fields().todos()) // has_many include
-        .get(&db)
-        .await
-        .unwrap();
+        .get(&mut db)
+        .await?;
 
     // Verify has_one association is preloaded
     assert!(loaded_user.profile.get().is_some());
@@ -431,14 +480,11 @@ pub async fn combined_has_many_and_has_one_preload(test: &mut Test) {
     assert!(todo_titles.contains(&"Task 1"));
     assert!(todo_titles.contains(&"Task 2"));
     assert!(todo_titles.contains(&"Task 3"));
+    Ok(())
 }
 
-#[driver_test(id(ID))]
-pub async fn preload_on_empty_table(test: &mut Test) {
-    if !test.capability().sql {
-        return;
-    }
-
+#[driver_test(id(ID), requires(sql))]
+pub async fn preload_on_empty_table(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -465,20 +511,20 @@ pub async fn preload_on_empty_table(test: &mut Test) {
         user: toasty::BelongsTo<User>,
     }
 
-    let db = test.setup_db(models!(User, Todo)).await;
+    let mut db = test.setup_db(models!(User, Todo)).await;
 
     // Query with include on empty table - should return empty result, not SQL error
     let users: Vec<User> = User::all()
         .include(User::fields().todos())
-        .collect(&db)
-        .await
-        .unwrap();
+        .collect(&mut db)
+        .await?;
 
     assert_eq!(0, users.len());
+    Ok(())
 }
 
 #[driver_test(id(ID))]
-pub async fn preload_on_empty_query(test: &mut Test) {
+pub async fn preload_on_empty_query(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -509,16 +555,227 @@ pub async fn preload_on_empty_query(test: &mut Test) {
         user: toasty::BelongsTo<User>,
     }
 
-    let db = test.setup_db(models!(User, Todo)).await;
+    let mut db = test.setup_db(models!(User, Todo)).await;
 
     // Query with include on empty table - should return empty result, not SQL error
     let users: Vec<User> = User::filter_by_name("foo")
         .include(User::fields().todos())
-        .collect(&db)
-        .await
-        .unwrap();
+        .collect(&mut db)
+        .await?;
 
     assert_eq!(0, users.len());
+    Ok(())
+}
+
+/// HasMany<T> + BelongsTo<Option<T>>: nullable FK allows children to exist
+/// without a parent. Tests preloading from both directions.
+#[driver_test(id(ID))]
+pub async fn preload_has_many_with_optional_belongs_to(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        #[has_many]
+        todos: toasty::HasMany<Todo>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: ID,
+
+        #[index]
+        title: String,
+
+        #[index]
+        user_id: Option<ID>,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::BelongsTo<Option<User>>,
+    }
+
+    let mut db = test.setup_db(models!(User, Todo)).await;
+
+    // Create a user with linked todos
+    let user = User::create()
+        .name("Alice")
+        .todo(Todo::create().title("Task 1"))
+        .todo(Todo::create().title("Task 2"))
+        .exec(&mut db)
+        .await?;
+
+    // Preload HasMany from parent side
+    let user = User::filter_by_id(user.id)
+        .include(User::fields().todos())
+        .get(&mut db)
+        .await?;
+
+    assert_eq!(2, user.todos.get().len());
+
+    let todo_id = user.todos.get()[0].id;
+
+    // Preload BelongsTo<Option<User>> from child side — linked todo
+    let todo = Todo::filter_by_id(todo_id)
+        .include(Todo::fields().user())
+        .get(&mut db)
+        .await?;
+
+    assert_eq!(user.id, todo.user.get().as_ref().unwrap().id);
+
+    // Create an orphan todo (no user)
+    let orphan = Todo::create().title("Orphan").exec(&mut db).await?;
+
+    // Preload BelongsTo<Option<User>> on orphan — should be None
+    let orphan = Todo::filter_by_id(orphan.id)
+        .include(Todo::fields().user())
+        .get(&mut db)
+        .await?;
+
+    assert!(orphan.user.get().is_none());
+
+    Ok(())
+}
+
+/// HasOne<Option<T>> + BelongsTo<T> (required FK): the child always points to a
+/// parent, but the parent may or may not have a child. Tests preloading from
+/// both directions.
+#[driver_test(id(ID))]
+pub async fn preload_has_one_optional_with_required_belongs_to(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        #[has_one]
+        profile: toasty::HasOne<Option<Profile>>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Profile {
+        #[key]
+        #[auto]
+        id: ID,
+
+        bio: String,
+
+        #[unique]
+        user_id: ID,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::BelongsTo<User>,
+    }
+
+    let mut db = test.setup_db(models!(User, Profile)).await;
+
+    // Create a user WITH a profile
+    let user_with = User::create()
+        .name("Has Profile")
+        .profile(Profile::create().bio("hello"))
+        .exec(&mut db)
+        .await?;
+
+    // Create a user WITHOUT a profile
+    let user_without = User::create().name("No Profile").exec(&mut db).await?;
+
+    // Preload HasOne<Option<Profile>> — profile exists
+    let loaded = User::filter_by_id(user_with.id)
+        .include(User::fields().profile())
+        .get(&mut db)
+        .await?;
+
+    let profile = loaded.profile.get().as_ref().unwrap();
+    assert_eq!("hello", profile.bio);
+    assert_eq!(user_with.id, profile.user_id);
+
+    // Preload HasOne<Option<Profile>> — no profile
+    let loaded = User::filter_by_id(user_without.id)
+        .include(User::fields().profile())
+        .get(&mut db)
+        .await?;
+
+    assert!(loaded.profile.get().is_none());
+
+    // Preload BelongsTo<User> (required) from child side
+    let profile = Profile::filter_by_user_id(user_with.id)
+        .include(Profile::fields().user())
+        .get(&mut db)
+        .await?;
+
+    assert_eq!(user_with.id, profile.user.get().id);
+    assert_eq!("Has Profile", profile.user.get().name);
+
+    Ok(())
+}
+
+/// HasOne<T> (required) + BelongsTo<Option<T>>: creating a parent requires
+/// providing a child, but the child FK is nullable. Tests preloading from both
+/// directions.
+#[driver_test(id(ID))]
+pub async fn preload_has_one_required_with_optional_belongs_to(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        #[has_one]
+        profile: toasty::HasOne<Profile>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Profile {
+        #[key]
+        #[auto]
+        id: ID,
+
+        bio: String,
+
+        #[unique]
+        user_id: Option<ID>,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::BelongsTo<Option<User>>,
+    }
+
+    let mut db = test.setup_db(models!(User, Profile)).await;
+
+    // Create a user (must provide a profile since HasOne<T> is required)
+    let user = User::create()
+        .name("Alice")
+        .profile(Profile::create().bio("a bio"))
+        .exec(&mut db)
+        .await?;
+
+    // Preload HasOne<Profile> (required) from parent side
+    let loaded = User::filter_by_id(user.id)
+        .include(User::fields().profile())
+        .get(&mut db)
+        .await?;
+
+    let profile = loaded.profile.get();
+    assert_eq!("a bio", profile.bio);
+    assert_eq!(user.id, *profile.user_id.as_ref().unwrap());
+
+    // Preload BelongsTo<Option<User>> from child side
+    let profile = Profile::filter_by_id(profile.id)
+        .include(Profile::fields().user())
+        .get(&mut db)
+        .await?;
+
+    assert_eq!(user.id, profile.user.get().as_ref().unwrap().id);
+    assert_eq!("Alice", profile.user.get().as_ref().unwrap().name);
+
+    Ok(())
 }
 
 #[driver_test(id(ID))]

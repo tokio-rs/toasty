@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
 #[driver_test]
-pub async fn batch_get_by_key(test: &mut Test) {
+pub async fn batch_get_by_key(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
@@ -11,7 +11,7 @@ pub async fn batch_get_by_key(test: &mut Test) {
         two: String,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Foo)).await;
     let mut keys = vec![];
 
     for i in 0..5 {
@@ -19,9 +19,8 @@ pub async fn batch_get_by_key(test: &mut Test) {
         let foo = Foo::create()
             .one(format!("foo-{i}"))
             .two(format!("bar-{i}"))
-            .exec(&db)
-            .await
-            .unwrap();
+            .exec(&mut db)
+            .await?;
 
         keys.push((foo.one.clone(), foo.two.clone()));
     }
@@ -31,9 +30,8 @@ pub async fn batch_get_by_key(test: &mut Test) {
         (&keys[1].0, &keys[1].1),
         (&keys[2].0, &keys[2].1),
     ])
-    .collect(&db)
-    .await
-    .unwrap();
+    .collect(&mut db)
+    .await?;
 
     assert_eq!(3, foos.len());
 
@@ -41,4 +39,5 @@ pub async fn batch_get_by_key(test: &mut Test) {
     for foo in foos {
         assert!(keys.iter().any(|key| foo.one == key.0 && foo.two == key.1));
     }
+    Ok(())
 }

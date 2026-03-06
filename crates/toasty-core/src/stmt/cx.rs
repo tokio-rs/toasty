@@ -1,12 +1,12 @@
 use crate::{
     schema::{
-        app::{Field, Model, ModelId},
+        app::{Field, Model, ModelId, ModelRoot},
         db::{self, Column, ColumnId, Table, TableId},
     },
     stmt::{
         Delete, Expr, ExprArg, ExprColumn, ExprReference, ExprSet, Insert, InsertTarget, Query,
-        Returning, Select, Source, SourceTable, Statement, TableFactor, TableRef, Type, Update,
-        UpdateTarget,
+        Returning, Select, Source, SourceTable, Statement, TableDerived, TableFactor, TableRef,
+        Type, TypeUnion, Update, UpdateTarget,
     },
     Schema,
 };
@@ -54,7 +54,7 @@ pub enum ResolvedRef<'a> {
     Field(&'a Field),
 
     /// A resolved reference to a model
-    Model(&'a Model),
+    Model(&'a ModelRoot),
 
     /// A resolved reference to a Common Table Expression (CTE) column.
     ///
@@ -69,13 +69,56 @@ pub enum ResolvedRef<'a> {
 
     /// A resolved reference to a derived table (subquery in FROM clause) column.
     ///
-    /// Contains the nesting level and column index for derived table references when
-    /// resolving ExprReference::Column expressions that point to derived table outputs.
-    /// Similar to CTEs, derived tables use col_<index> naming for their columns.
+    /// Contains the nesting level, column index, and a reference to the derived
+    /// table itself. This allows consumers to inspect the derived table's
+    /// content (e.g., checking VALUES rows for constant values).
+    Derived(DerivedRef<'a>),
+}
+
+/// A resolved reference into a derived table column.
+#[derive(Debug)]
+pub struct DerivedRef<'a> {
+    /// How many query scopes up from the current scope.
+    pub nesting: usize,
+
+    /// The column index within the derived table's output.
+    pub index: usize,
+
+    /// Reference to the derived table definition.
+    pub derived: &'a TableDerived,
+}
+
+impl DerivedRef<'_> {
+    /// Returns `true` if the derived table is backed by a VALUES body and every
+    /// row has `Null` at this column position.
     ///
-    /// Example: Resolving a reference to the first column of a derived table at the
-    /// current nesting level returns Derived { nesting: 0, index: 0 }.
-    Derived { nesting: usize, index: usize },
+    /// Returns `false` conservatively when the body is not VALUES, the VALUES
+    /// is empty, or any row doesn't have a recognizable null at the column.
+    pub fn is_column_always_null(&self) -> bool {
+        let ExprSet::Values(values) = &self.derived.subquery.body else {
+            return false;
+        };
+
+        if values.is_empty() {
+            return false;
+        }
+
+        values.rows.iter().all(|row| self.row_column_is_null(row))
+    }
+
+    fn row_column_is_null(&self, row: &Expr) -> bool {
+        match row {
+            Expr::Value(super::Value::Record(record)) => {
+                self.index < record.len() && record[self.index].is_null()
+            }
+            Expr::Record(record) => {
+                self.index < record.len()
+                    && matches!(&record.fields[self.index], Expr::Value(super::Value::Null))
+            }
+            Expr::Value(super::Value::Null) => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -84,7 +127,7 @@ pub enum ExprTarget<'a> {
     Free,
 
     /// Expression references a single model
-    Model(&'a Model),
+    Model(&'a ModelRoot),
 
     /// Expression references a single table
     ///
@@ -96,7 +139,7 @@ pub enum ExprTarget<'a> {
 }
 
 pub trait Resolve {
-    fn table_for_model(&self, model: &Model) -> Option<&Table>;
+    fn table_for_model(&self, model: &ModelRoot) -> Option<&Table>;
 
     /// Returns a reference to the application Model with the specified ID.
     ///
@@ -251,12 +294,12 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                                 };
                                 ResolvedRef::Column(&table.columns[expr_column.column])
                             }
-                            TableRef::Derived { .. } => {
-                                // Derived tables use col_<index> naming like CTEs
-                                ResolvedRef::Derived {
+                            TableRef::Derived(derived) => {
+                                ResolvedRef::Derived(DerivedRef {
                                     nesting: expr_column.nesting,
                                     index: expr_column.column,
-                                }
+                                    derived,
+                                })
                             }
                             TableRef::Cte {
                                 nesting: cte_nesting,
@@ -365,6 +408,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                 self.infer_expr_reference_ty(expr_ref)
             }
             Expr::IsNull(_) => Type::Bool,
+            Expr::IsVariant(_) => Type::Bool,
             Expr::List(e) => {
                 debug_assert!(!e.items.is_empty());
                 Type::list(self.infer_expr_ty2(args, &e.items[0], returning_expr))
@@ -436,8 +480,33 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                     .collect(),
             ),
             Expr::Value(value) => value.infer_ty(),
-            // -- hax
-            Expr::DecodeEnum(_, ty, _) => ty.clone(),
+            Expr::Let(expr_let) => {
+                let scope_tys: Vec<_> = expr_let
+                    .bindings
+                    .iter()
+                    .map(|b| self.infer_expr_ty2(args, b, returning_expr))
+                    .collect();
+                let args = args.scope(&scope_tys);
+                self.infer_expr_ty2(&args, &expr_let.body, returning_expr)
+            }
+            Expr::Match(expr_match) => {
+                // Collect the distinct non-null types from all arms and the else
+                // branch. If all agree on one type, return it directly. If they
+                // differ, return a Union so callers know exactly which shapes are
+                // possible at runtime.
+                let mut union = TypeUnion::new();
+                for arm in &expr_match.arms {
+                    let ty = self.infer_expr_ty2(args, &arm.expr, returning_expr);
+                    union.insert(ty);
+                }
+                let else_ty = self.infer_expr_ty2(args, &expr_match.else_expr, returning_expr);
+                union.insert(else_ty);
+                union.simplify()
+            }
+            // Error is a bottom type — it can never be evaluated, so it
+            // could be any type. Return Unknown so it unifies with whatever
+            // the other branches produce.
+            Expr::Error(_) => Type::Unknown,
             _ => todo!("{expr:#?}"),
         }
     }
@@ -448,7 +517,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             ResolvedRef::Column(column) => column.ty.clone(),
             ResolvedRef::Field(field) => field.expr_ty().clone(),
             ResolvedRef::Cte { .. } => todo!("type inference for CTE columns not implemented"),
-            ResolvedRef::Derived { .. } => {
+            ResolvedRef::Derived(_) => {
                 todo!("type inference for derived table columns not implemented")
             }
         }
@@ -456,9 +525,8 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
 }
 
 impl<'a> ExprContext<'a, Schema> {
-    pub fn target_as_model(&self) -> Option<&'a Model> {
-        let model_id = self.target.model_id()?;
-        Some(self.schema.app.model(model_id))
+    pub fn target_as_model(&self) -> Option<&'a ModelRoot> {
+        self.target.as_model()
     }
 
     pub fn expr_ref_column(&self, column_id: impl Into<ColumnId>) -> ExprReference {
@@ -521,7 +589,7 @@ impl<'a> ResolvedRef<'a> {
     }
 
     #[track_caller]
-    pub fn expect_model(self) -> &'a Model {
+    pub fn expect_model(self) -> &'a ModelRoot {
         match self {
             ResolvedRef::Model(model) => model,
             _ => panic!("Expected ResolvedRef::Model, found {:?}", self),
@@ -538,8 +606,8 @@ impl Resolve for Schema {
         Some(self.db.table(id))
     }
 
-    fn table_for_model(&self, model: &Model) -> Option<&Table> {
-        Some(self.table_for(model))
+    fn table_for_model(&self, model: &ModelRoot) -> Option<&Table> {
+        Some(self.table_for(model.id))
     }
 }
 
@@ -552,7 +620,7 @@ impl Resolve for db::Schema {
         Some(db::Schema::table(self, id))
     }
 
-    fn table_for_model(&self, _model: &Model) -> Option<&Table> {
+    fn table_for_model(&self, _model: &ModelRoot) -> Option<&Table> {
         None
     }
 }
@@ -566,13 +634,13 @@ impl Resolve for () {
         None
     }
 
-    fn table_for_model(&self, _model: &Model) -> Option<&Table> {
+    fn table_for_model(&self, _model: &ModelRoot) -> Option<&Table> {
         None
     }
 }
 
 impl<'a> ExprTarget<'a> {
-    pub fn as_model(self) -> Option<&'a Model> {
+    pub fn as_model(self) -> Option<&'a ModelRoot> {
         match self {
             ExprTarget::Model(model) => Some(model),
             _ => None,
@@ -580,7 +648,7 @@ impl<'a> ExprTarget<'a> {
     }
 
     #[track_caller]
-    pub fn as_model_unwrap(self) -> &'a Model {
+    pub fn as_model_unwrap(self) -> &'a ModelRoot {
         match self.as_model() {
             Some(model) => model,
             _ => panic!("expected ExprTarget::Model; was {self:#?}"),
@@ -631,7 +699,7 @@ impl<'a, T: Resolve> IntoExprTarget<'a, T> for ExprTarget<'a> {
     }
 }
 
-impl<'a, T> IntoExprTarget<'a, T> for &'a Model {
+impl<'a, T> IntoExprTarget<'a, T> for &'a ModelRoot {
     fn into_expr_target(self, _schema: &'a T) -> ExprTarget<'a> {
         ExprTarget::Model(self)
     }
@@ -693,7 +761,7 @@ impl<'a, T: Resolve> IntoExprTarget<'a, T> for &'a InsertTarget {
                 let Some(model) = schema.model(*model) else {
                     todo!()
                 };
-                ExprTarget::Model(model)
+                ExprTarget::Model(model.expect_root())
             }
             InsertTarget::Table(insert_table) => {
                 let table = schema.table(insert_table.table).unwrap();
@@ -711,7 +779,7 @@ impl<'a, T: Resolve> IntoExprTarget<'a, T> for &'a UpdateTarget {
                 let Some(model) = schema.model(*model) else {
                     todo!()
                 };
-                ExprTarget::Model(model)
+                ExprTarget::Model(model.expect_root())
             }
             UpdateTarget::Table(table_id) => {
                 let Some(table) = schema.table(*table_id) else {
@@ -730,7 +798,7 @@ impl<'a, T: Resolve> IntoExprTarget<'a, T> for &'a Source {
                 let Some(model) = schema.model(source_model.model) else {
                     todo!()
                 };
-                ExprTarget::Model(model)
+                ExprTarget::Model(model.expect_root())
             }
             Source::Table(source_table) => {
                 ExprTarget::Source(source_table).into_expr_target(schema)

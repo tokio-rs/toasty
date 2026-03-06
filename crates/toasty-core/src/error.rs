@@ -8,8 +8,12 @@ mod invalid_driver_configuration;
 mod invalid_record_count;
 mod invalid_result;
 mod invalid_schema;
+mod invalid_statement;
 mod invalid_type_conversion;
+mod read_only_transaction;
 mod record_not_found;
+mod serialization_failure;
+mod transaction_timeout;
 mod unsupported_feature;
 mod validation;
 
@@ -23,9 +27,13 @@ use invalid_driver_configuration::InvalidDriverConfiguration;
 use invalid_record_count::InvalidRecordCount;
 use invalid_result::InvalidResult;
 use invalid_schema::InvalidSchema;
+use invalid_statement::InvalidStatement;
 use invalid_type_conversion::InvalidTypeConversion;
+use read_only_transaction::ReadOnlyTransaction;
 use record_not_found::RecordNotFound;
+use serialization_failure::SerializationFailure;
 use std::sync::Arc;
+use transaction_timeout::TransactionTimeout;
 use unsupported_feature::UnsupportedFeature;
 use validation::ValidationFailed;
 
@@ -60,6 +68,10 @@ enum ErrorKind {
     RecordNotFound(RecordNotFound),
     InvalidResult(InvalidResult),
     InvalidSchema(InvalidSchema),
+    InvalidStatement(InvalidStatement),
+    ReadOnlyTransaction(ReadOnlyTransaction),
+    SerializationFailure(SerializationFailure),
+    TransactionTimeout(TransactionTimeout),
     UnsupportedFeature(UnsupportedFeature),
     ValidationFailed(ValidationFailed),
     ConditionFailed(ConditionFailed),
@@ -150,6 +162,10 @@ impl core::fmt::Display for ErrorKind {
             RecordNotFound(err) => core::fmt::Display::fmt(err, f),
             InvalidResult(err) => core::fmt::Display::fmt(err, f),
             InvalidSchema(err) => core::fmt::Display::fmt(err, f),
+            InvalidStatement(err) => core::fmt::Display::fmt(err, f),
+            ReadOnlyTransaction(err) => core::fmt::Display::fmt(err, f),
+            SerializationFailure(err) => core::fmt::Display::fmt(err, f),
+            TransactionTimeout(err) => core::fmt::Display::fmt(err, f),
             UnsupportedFeature(err) => core::fmt::Display::fmt(err, f),
             ValidationFailed(err) => core::fmt::Display::fmt(err, f),
             ConditionFailed(err) => core::fmt::Display::fmt(err, f),
@@ -389,6 +405,56 @@ mod tests {
         assert_eq!(
             err.to_string(),
             "driver initialization failed: invalid driver configuration: inconsistent capability flags"
+        );
+    }
+
+    #[test]
+    fn invalid_statement_error() {
+        let err = Error::invalid_statement("field `unknown_field` does not exist on model `User`");
+        assert_eq!(
+            err.to_string(),
+            "invalid statement: field `unknown_field` does not exist on model `User`"
+        );
+    }
+
+    #[test]
+    fn invalid_statement_with_context() {
+        let err = Error::invalid_statement("cannot update primary key field `id`")
+            .context(Error::from_args(format_args!("statement lowering failed")));
+        assert_eq!(
+            err.to_string(),
+            "statement lowering failed: invalid statement: cannot update primary key field `id`"
+        );
+    }
+
+    #[test]
+    fn read_only_transaction_display() {
+        let err = Error::read_only_transaction("cannot execute UPDATE in a read-only transaction");
+        assert_eq!(
+            err.to_string(),
+            "read-only transaction: cannot execute UPDATE in a read-only transaction"
+        );
+    }
+
+    #[test]
+    fn read_only_transaction_is_predicate() {
+        let err = Error::read_only_transaction("write not allowed");
+        assert!(err.is_read_only_transaction());
+    }
+
+    #[test]
+    fn read_only_transaction_predicate_false_for_other_errors() {
+        let err = Error::serialization_failure("concurrent update conflict");
+        assert!(!err.is_read_only_transaction());
+    }
+
+    #[test]
+    fn read_only_transaction_with_context() {
+        let err = Error::read_only_transaction("INSERT not allowed")
+            .context(Error::from_args(format_args!("create user failed")));
+        assert_eq!(
+            err.to_string(),
+            "create user failed: read-only transaction: INSERT not allowed"
         );
     }
 }

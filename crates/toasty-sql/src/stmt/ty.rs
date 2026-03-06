@@ -14,7 +14,6 @@ impl ColumnType {
     pub(crate) fn from_schema(ty: &stmt::Type, indexed: bool) -> Self {
         match ty {
             stmt::Type::Bool => Self::Boolean,
-            stmt::Type::Id(_) => Self::Text,
             stmt::Type::I8 => Self::Integer,
             stmt::Type::I16 => Self::Integer,
             stmt::Type::I32 => Self::Integer,
@@ -30,7 +29,6 @@ impl ColumnType {
                     Self::Text
                 }
             }
-            stmt::Type::Enum(_) => Self::Text,
             _ => todo!("ty={:#?}", ty),
         }
     }

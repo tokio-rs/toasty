@@ -1,8 +1,9 @@
 mod primitive;
-pub use primitive::FieldPrimitive;
+pub use primitive::{FieldPrimitive, SerializeFormat};
 
 use super::{
     AutoStrategy, BelongsTo, Constraint, Embedded, HasMany, HasOne, Model, ModelId, Schema,
+    VariantId,
 };
 use crate::{driver, stmt, Result};
 use std::fmt;
@@ -29,9 +30,14 @@ pub struct Field {
 
     /// Any additional field constraints
     pub constraints: Vec<Constraint>,
+
+    /// If this field belongs to an enum variant, identifies that variant.
+    /// `None` for fields on root models and embedded structs.
+    pub variant: Option<VariantId>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FieldId {
     pub model: ModelId,
     pub index: usize,
@@ -100,7 +106,11 @@ impl Field {
     /// Returns a fully qualified name for the field.
     pub fn full_name(&self, schema: &Schema) -> String {
         let model = schema.model(self.id.model);
-        format!("{}::{}", model.name.upper_camel_case(), self.name.app_name)
+        format!(
+            "{}::{}",
+            model.name().upper_camel_case(),
+            self.name.app_name
+        )
     }
 
     /// If the field is a relation, return the relation's target ModelId.

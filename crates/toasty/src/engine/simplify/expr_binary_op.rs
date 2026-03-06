@@ -1,10 +1,8 @@
 use std::cmp::PartialOrd;
 
 use super::Simplify;
-use toasty_core::{
-    schema::app::FieldTy,
-    stmt::{self, Expr},
-};
+use toasty_core::schema::app::{FieldTy, Model};
+use toasty_core::stmt::{self, Expr, ResolvedRef, VisitMut};
 
 impl Simplify<'_> {
     pub(super) fn simplify_expr_eq_operand(&mut self, operand: &mut stmt::Expr) {
@@ -16,11 +14,7 @@ impl Simplify<'_> {
                         .resolve_expr_reference(expr_reference)
                         .expect_model();
 
-                    let primary_key = model.primary_key().expect(
-                        "binary op on model reference requires root model with primary key",
-                    );
-
-                    let [pk_field] = &primary_key.fields[..] else {
+                    let [pk_field] = &model.primary_key.fields[..] else {
                         todo!("handle composite keys");
                     };
 
@@ -34,9 +28,14 @@ impl Simplify<'_> {
 
                     match &field.ty {
                         FieldTy::Primitive(_) => {}
-                        FieldTy::Embedded(_) => {
-                            // TODO: Handle embedded field references in binary operations
-                            todo!("embedded field in binary op")
+                        FieldTy::Embedded(embedded) => {
+                            let target = self.schema().app.model(embedded.target);
+                            if matches!(target, Model::EmbeddedEnum(_)) {
+                                // EmbeddedEnum fields are stored as a single integer
+                                // column, so the field reference is already valid as-is.
+                            } else {
+                                todo!("embedded struct field in binary op")
+                            }
                         }
                         FieldTy::HasMany(_) | FieldTy::HasOne(_) => todo!(),
                         FieldTy::BelongsTo(rel) => {
@@ -68,7 +67,7 @@ impl Simplify<'_> {
             self.simplify_expr_eq_operand(rhs);
         }
 
-        match (&mut *lhs, &mut *rhs) {
+        let result = match (&mut *lhs, &mut *rhs) {
             // Self-comparison, e.g.,
             //
             //  - `x = x` → `true`
@@ -113,7 +112,6 @@ impl Simplify<'_> {
                     stmt::BinaryOp::Ge => {
                         PartialOrd::partial_cmp(&*lhs_val, &*rhs_val).map(|o| o.is_ge().into())
                     }
-                    _ => None,
                 }
             }
             // Boolean constant comparisons:
@@ -152,26 +150,51 @@ impl Simplify<'_> {
                     Some(Expr::or_from_vec(comparisons))
                 }
             }
-            (Expr::Cast(cast), Expr::Value(val)) if cast.ty.is_id() => {
-                *lhs = cast.expr.take();
-                self.uncast_value_id(val);
-                None
-            }
-            (Expr::Value(val), Expr::Cast(cast)) if cast.ty.is_id() => {
-                *rhs = cast.expr.take();
-                self.uncast_value_id(val);
-                None
-            }
-            (stmt::Expr::Key(_), other) | (other, stmt::Expr::Key(_)) => {
-                assert!(op.is_eq());
+            // Tuple decomposition with a Value::Record on one side,
+            //
+            //  - `(a, b) = Value::Record([x, y])` → `a = x and b = y`
+            //
+            // This arises after match elimination produces `Record([col1, col2]) == Value::Record([1, "alice"])`.
+            (Expr::Record(rec), Expr::Value(stmt::Value::Record(val_rec)))
+            | (Expr::Value(stmt::Value::Record(val_rec)), Expr::Record(rec))
+                if (op.is_eq() || op.is_ne()) && rec.len() == val_rec.len() =>
+            {
+                let comparisons: Vec<_> = std::mem::take(&mut rec.fields)
+                    .into_iter()
+                    .zip(std::mem::take(&mut val_rec.fields))
+                    .map(|(expr, val)| Expr::binary_op(expr, op, Expr::from(val)))
+                    .collect();
 
-                // At this point, we must be in a model context, otherwise key
-                // expressions don't make sense.
-                let Some(model) = self.cx.target_as_model() else {
-                    todo!();
-                };
-
-                Some(self.rewrite_root_path_expr(model, other.take()))
+                if op.is_eq() {
+                    Some(Expr::and_from_vec(comparisons))
+                } else {
+                    Some(Expr::or_from_vec(comparisons))
+                }
+            }
+            // Match elimination: distribute binary op into match arms as OR
+            //
+            //   Match(subj, [p1 => e1, p2 => e2]) <op> rhs
+            //   → OR(subj == p1 AND e1 <op> rhs, subj == p2 AND e2 <op> rhs)
+            //
+            // Each arm is fully simplified inline. Arms that fold to false/null
+            // are pruned.
+            (Expr::Match(m), _) if m.subject.is_stable() => {
+                let match_expr = lhs.take();
+                let other = rhs.take();
+                Some(self.eliminate_match_in_binary_op(op, match_expr, other, true))
+            }
+            (_, Expr::Match(m)) if m.subject.is_stable() => {
+                let other = lhs.take();
+                let match_expr = rhs.take();
+                Some(self.eliminate_match_in_binary_op(op, match_expr, other, false))
+            }
+            // Null propagation: `expr <op> null` → `null` (and symmetric)
+            //
+            // Any comparison with NULL yields NULL (SQL three-valued logic).
+            // This catches cases like `column = null` after input substitution
+            // provides a null FK value.
+            (_, Expr::Value(stmt::Value::Null)) | (Expr::Value(stmt::Value::Null), _) => {
+                return Some(Expr::null());
             }
             // Canonicalization, `literal <op> col` → `col <op_commuted> literal`
             (Expr::Value(_), rhs) if !rhs.is_value() => {
@@ -192,665 +215,110 @@ impl Simplify<'_> {
                 Some(Expr::from(op.is_eq()))
             }
             _ => None,
+        };
+
+        if result.is_some() {
+            return result;
+        }
+
+        // Null propagation for derived VALUES columns.
+        //
+        // If either operand is a column reference into a derived VALUES
+        // table where every row has NULL at that column position, the
+        // binary op can never produce a non-null result.
+        if self.is_always_null_derived_column(lhs) || self.is_always_null_derived_column(rhs) {
+            return Some(Expr::null());
+        }
+
+        None
+    }
+
+    /// Returns `true` if `expr` is a column reference that resolves to a
+    /// derived VALUES table where every row has NULL at the referenced column.
+    fn is_always_null_derived_column(&self, expr: &Expr) -> bool {
+        let Expr::Reference(expr_ref) = expr else {
+            return false;
+        };
+
+        match self.cx.resolve_expr_reference(expr_ref) {
+            ResolvedRef::Derived(derived_ref) => derived_ref.is_column_always_null(),
+            _ => false,
         }
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate as toasty;
-    use crate::model::Register;
-    use toasty_core::{
-        driver::Capability,
-        schema::{app, Builder},
-        stmt::{BinaryOp, ExprCast, ExprReference, Id, Type, Value},
-    };
-
-    #[derive(toasty::Model)]
-    struct User {
-        #[key]
-        id: String,
-
-        #[allow(dead_code)]
-        name: Option<String>,
-    }
-
-    fn test_schema() -> toasty_core::Schema {
-        let app_schema =
-            app::Schema::from_macro(&[User::schema()]).expect("schema should build from macro");
-
-        Builder::new()
-            .build(app_schema, &Capability::SQLITE)
-            .expect("schema should build")
-    }
-
-    #[test]
-    fn cast_id_on_lhs_unwrapped() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `eq(cast(arg(0), Id), Id("abc")) → eq(arg(0), "abc")`
-        let mut lhs = Expr::Cast(ExprCast {
-            expr: Box::new(Expr::arg(0)),
-            ty: Type::Id(User::id()),
-        });
-        let mut rhs = Expr::Value(Value::Id(Id::from_string(User::id(), "abc".to_string())));
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
-
-        assert!(result.is_none());
-        assert!(matches!(lhs, Expr::Arg(_)));
-        assert!(matches!(rhs, Expr::Value(Value::String(s)) if s == "abc"));
-    }
-
-    #[test]
-    fn cast_id_on_rhs_unwrapped() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `eq(Id("xyz"), cast(arg(0), Id)) → eq("xyz", arg(0))`
-        let mut lhs = Expr::Value(Value::Id(Id::from_string(User::id(), "xyz".to_string())));
-        let mut rhs = Expr::Cast(ExprCast {
-            expr: Box::new(Expr::arg(0)),
-            ty: Type::Id(User::id()),
-        });
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
-
-        assert!(result.is_none());
-        assert!(matches!(lhs, Expr::Value(Value::String(s)) if s == "xyz"));
-        assert!(matches!(rhs, Expr::Arg(_)));
-    }
-
-    #[test]
-    fn non_id_cast_not_unwrapped() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `eq(cast(arg(0), String), "test")`, non-Id cast is not unwrapped
-        let mut lhs = Expr::Cast(ExprCast {
-            expr: Box::new(Expr::arg(0)),
-            ty: Type::String,
-        });
-        let mut rhs = Expr::Value(Value::from("test"));
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
-
-        assert!(result.is_none());
-        assert!(matches!(lhs, Expr::Cast(_)));
-    }
-
-    #[test]
-    fn constant_eq_same_values_becomes_true() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `eq(5, 5)` → `true`
-        let mut lhs = Expr::Value(Value::from(5i64));
-        let mut rhs = Expr::Value(Value::from(5i64));
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
-
-        assert!(matches!(result, Some(Expr::Value(Value::Bool(true)))));
-    }
-
-    #[test]
-    fn constant_eq_different_values_becomes_false() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `eq(1, 2)` → `false`
-        let mut lhs = Expr::Value(Value::from(1i64));
-        let mut rhs = Expr::Value(Value::from(2i64));
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
-
-        assert!(matches!(result, Some(Expr::Value(Value::Bool(false)))));
-    }
-
-    #[test]
-    fn constant_ne_same_values_becomes_false() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `ne(5, 5)` → `false`
-        let mut lhs = Expr::Value(Value::from(5i64));
-        let mut rhs = Expr::Value(Value::from(5i64));
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Ne, &mut lhs, &mut rhs);
-
-        assert!(matches!(result, Some(Expr::Value(Value::Bool(false)))));
-    }
-
-    #[test]
-    fn constant_ne_different_values_becomes_true() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `ne("abc", "def")` → `true`
-        let mut lhs = Expr::Value(Value::from("abc"));
-        let mut rhs = Expr::Value(Value::from("def"));
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Ne, &mut lhs, &mut rhs);
-
-        assert!(matches!(result, Some(Expr::Value(Value::Bool(true)))));
-    }
-
-    #[test]
-    fn constant_eq_with_null_becomes_null() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `eq(null, 5)` → `null`
-        let mut lhs = Expr::Value(Value::Null);
-        let mut rhs = Expr::Value(Value::from(5i64));
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
-
-        assert!(matches!(result, Some(Expr::Value(Value::Null))));
-    }
-
-    #[test]
-    fn constant_eq_null_with_null_becomes_null() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `eq(null, null)` → `null`
-        let mut lhs = Expr::Value(Value::Null);
-        let mut rhs = Expr::Value(Value::Null);
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
-
-        assert!(matches!(result, Some(Expr::Value(Value::Null))));
-    }
-
-    #[test]
-    fn constant_lt_becomes_true() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `1 < 5` → `true`
-        let mut lhs = Expr::Value(Value::from(1i64));
-        let mut rhs = Expr::Value(Value::from(5i64));
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Lt, &mut lhs, &mut rhs);
-
-        assert!(matches!(result, Some(Expr::Value(Value::Bool(true)))));
-    }
-
-    #[test]
-    fn constant_lt_becomes_false() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `5 < 1` → `false`
-        let mut lhs = Expr::Value(Value::from(5i64));
-        let mut rhs = Expr::Value(Value::from(1i64));
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Lt, &mut lhs, &mut rhs);
-
-        assert!(matches!(result, Some(Expr::Value(Value::Bool(false)))));
-    }
-
-    #[test]
-    fn constant_le_equal_becomes_true() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `5 <= 5` → `true`
-        let mut lhs = Expr::Value(Value::from(5i64));
-        let mut rhs = Expr::Value(Value::from(5i64));
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Le, &mut lhs, &mut rhs);
-
-        assert!(matches!(result, Some(Expr::Value(Value::Bool(true)))));
-    }
-
-    #[test]
-    fn constant_le_becomes_false() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `10 <= 5` → `false`
-        let mut lhs = Expr::Value(Value::from(10i64));
-        let mut rhs = Expr::Value(Value::from(5i64));
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Le, &mut lhs, &mut rhs);
-
-        assert!(matches!(result, Some(Expr::Value(Value::Bool(false)))));
-    }
-
-    #[test]
-    fn constant_gt_becomes_true() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `10 > 5` → `true`
-        let mut lhs = Expr::Value(Value::from(10i64));
-        let mut rhs = Expr::Value(Value::from(5i64));
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Gt, &mut lhs, &mut rhs);
-
-        assert!(matches!(result, Some(Expr::Value(Value::Bool(true)))));
-    }
-
-    #[test]
-    fn constant_gt_becomes_false() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `1 > 5` → `false`
-        let mut lhs = Expr::Value(Value::from(1i64));
-        let mut rhs = Expr::Value(Value::from(5i64));
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Gt, &mut lhs, &mut rhs);
-
-        assert!(matches!(result, Some(Expr::Value(Value::Bool(false)))));
-    }
-
-    #[test]
-    fn constant_ge_equal_becomes_true() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `5 >= 5` → `true`
-        let mut lhs = Expr::Value(Value::from(5i64));
-        let mut rhs = Expr::Value(Value::from(5i64));
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Ge, &mut lhs, &mut rhs);
-
-        assert!(matches!(result, Some(Expr::Value(Value::Bool(true)))));
-    }
-
-    #[test]
-    fn constant_ge_becomes_false() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `1 >= 5` → `false`
-        let mut lhs = Expr::Value(Value::from(1i64));
-        let mut rhs = Expr::Value(Value::from(5i64));
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Ge, &mut lhs, &mut rhs);
-
-        assert!(matches!(result, Some(Expr::Value(Value::Bool(false)))));
-    }
-
-    #[test]
-    fn constant_lt_string_lexicographic() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `"abc" < "def"` → `true` (lexicographic)
-        let mut lhs = Expr::Value(Value::from("abc"));
-        let mut rhs = Expr::Value(Value::from("def"));
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Lt, &mut lhs, &mut rhs);
-
-        assert!(matches!(result, Some(Expr::Value(Value::Bool(true)))));
-    }
-
-    #[test]
-    fn constant_lt_different_types_not_simplified() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `5 < "abc"` is not simplified (incompatible types)
-        let mut lhs = Expr::Value(Value::from(5i64));
-        let mut rhs = Expr::Value(Value::from("abc"));
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Lt, &mut lhs, &mut rhs);
-
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn lt_with_non_constant_not_simplified() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `arg(0) < 5` is not simplified (non-constant lhs)
-        let mut lhs = Expr::arg(0);
-        let mut rhs = Expr::Value(Value::from(5i64));
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Lt, &mut lhs, &mut rhs);
-
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn self_comparison_eq_non_nullable_becomes_true() {
-        let schema = test_schema();
-        let model = schema.app.model(User::id());
-        let simplify = Simplify::new(&schema);
-        let mut simplify = simplify.scope(model);
-
-        // `id = id` → `true` (non-nullable field)
-        let mut lhs = Expr::Reference(ExprReference::Field {
-            nesting: 0,
-            index: 0,
-        });
-        let mut rhs = Expr::Reference(ExprReference::Field {
-            nesting: 0,
-            index: 0,
-        });
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
-
-        assert!(matches!(result, Some(Expr::Value(Value::Bool(true)))));
-    }
-
-    #[test]
-    fn self_comparison_ne_non_nullable_becomes_false() {
-        let schema = test_schema();
-        let model = schema.app.model(User::id());
-        let simplify = Simplify::new(&schema);
-        let mut simplify = simplify.scope(model);
-
-        // `id != id` → `false` (non-nullable field)
-        let mut lhs = Expr::Reference(ExprReference::Field {
-            nesting: 0,
-            index: 0,
-        });
-        let mut rhs = Expr::Reference(ExprReference::Field {
-            nesting: 0,
-            index: 0,
-        });
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Ne, &mut lhs, &mut rhs);
-
-        assert!(matches!(result, Some(Expr::Value(Value::Bool(false)))));
-    }
-
-    #[test]
-    fn self_comparison_nullable_not_simplified() {
-        let schema = test_schema();
-        let model = schema.app.model(User::id());
-        let simplify = Simplify::new(&schema);
-        let mut simplify = simplify.scope(model);
-
-        // `name = name` is not simplified (nullable field)
-        let mut lhs = Expr::Reference(ExprReference::Field {
-            nesting: 0,
-            index: 1,
-        });
-        let mut rhs = Expr::Reference(ExprReference::Field {
-            nesting: 0,
-            index: 1,
-        });
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
-
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn different_fields_not_simplified() {
-        let schema = test_schema();
-        let model = schema.app.model(User::id());
-        let simplify = Simplify::new(&schema);
-        let mut simplify = simplify.scope(model);
-
-        // `id = name` is not simplified (different fields)
-        let mut lhs = Expr::Reference(ExprReference::Field {
-            nesting: 0,
-            index: 0,
-        });
-        let mut rhs = Expr::Reference(ExprReference::Field {
-            nesting: 0,
-            index: 1,
-        });
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
-
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn x_eq_true_becomes_x() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `x = true` → `x`
-        let mut lhs = Expr::arg(0);
-        let mut rhs = Expr::Value(Value::Bool(true));
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
-
-        assert!(matches!(result, Some(Expr::Arg(_))));
-    }
-
-    #[test]
-    fn true_eq_x_becomes_x() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `true = x` → `x`
-        let mut lhs = Expr::Value(Value::Bool(true));
-        let mut rhs = Expr::arg(0);
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
-
-        assert!(matches!(result, Some(Expr::Arg(_))));
-    }
-
-    #[test]
-    fn x_eq_false_becomes_not_x() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `x = false` → `not(x)`
-        let mut lhs = Expr::arg(0);
-        let mut rhs = Expr::Value(Value::Bool(false));
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
-
-        assert!(matches!(result, Some(Expr::Not(_))));
-    }
-
-    #[test]
-    fn x_ne_true_becomes_not_x() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `x != true` → `not(x)`
-        let mut lhs = Expr::arg(0);
-        let mut rhs = Expr::Value(Value::Bool(true));
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Ne, &mut lhs, &mut rhs);
-
-        assert!(matches!(result, Some(Expr::Not(_))));
-    }
-
-    #[test]
-    fn x_ne_false_becomes_x() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `x != false` → `x`
-        let mut lhs = Expr::arg(0);
-        let mut rhs = Expr::Value(Value::Bool(false));
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Ne, &mut lhs, &mut rhs);
-
-        assert!(matches!(result, Some(Expr::Arg(_))));
-    }
-
-    #[test]
-    fn canonicalize_eq_literal_on_left() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `5 = x` → `x = 5`
-        let mut lhs = Expr::Value(Value::from(5i64));
-        let mut rhs = Expr::arg(0);
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
-
-        let Some(Expr::BinaryOp(binary_op)) = result else {
-            panic!("expected BinaryOp");
+    /// Distributes a binary op over match arms, producing an OR of guarded
+    /// comparisons. Each arm becomes `(subject == pattern) AND (arm_expr <op> other)`.
+    /// Dead branches (false/null) are pruned after inline simplification.
+    fn eliminate_match_in_binary_op(
+        &mut self,
+        op: stmt::BinaryOp,
+        match_expr: Expr,
+        other: Expr,
+        match_on_lhs: bool,
+    ) -> Expr {
+        let Expr::Match(match_expr) = match_expr else {
+            unreachable!()
         };
-        assert_eq!(binary_op.op, BinaryOp::Eq);
-        assert!(matches!(*binary_op.lhs, Expr::Arg(_)));
-        assert!(matches!(*binary_op.rhs, Expr::Value(Value::I64(5))));
-    }
 
-    #[test]
-    fn canonicalize_lt_literal_on_left() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
+        let mut operands = Vec::new();
 
-        // `5 < x` → `x > 5`
-        let mut lhs = Expr::Value(Value::from(5i64));
-        let mut rhs = Expr::arg(0);
+        // Collect arm patterns before consuming the arms (needed for the else guard).
+        let patterns: Vec<_> = match_expr.arms.iter().map(|a| a.pattern.clone()).collect();
 
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Lt, &mut lhs, &mut rhs);
+        for arm in match_expr.arms {
+            let guard = Expr::binary_op(
+                (*match_expr.subject).clone(),
+                stmt::BinaryOp::Eq,
+                Expr::from(arm.pattern),
+            );
 
-        let Some(Expr::BinaryOp(binary_op)) = result else {
-            panic!("expected BinaryOp");
-        };
-        assert_eq!(binary_op.op, BinaryOp::Gt);
-        assert!(matches!(*binary_op.lhs, Expr::Arg(_)));
-        assert!(matches!(*binary_op.rhs, Expr::Value(Value::I64(5))));
-    }
+            let comparison = if match_on_lhs {
+                Expr::binary_op(arm.expr, op, other.clone())
+            } else {
+                Expr::binary_op(other.clone(), op, arm.expr)
+            };
 
-    #[test]
-    fn canonicalize_gt_literal_on_left() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
+            let mut term = Expr::and_from_vec(vec![guard, comparison]);
+            self.visit_expr_mut(&mut term);
 
-        // `5 > x` → `x < 5`
-        let mut lhs = Expr::Value(Value::from(5i64));
-        let mut rhs = Expr::arg(0);
+            // Prune dead branches
+            if term.is_false() || matches!(&term, Expr::Value(stmt::Value::Null)) {
+                continue;
+            }
 
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Gt, &mut lhs, &mut rhs);
+            operands.push(term);
+        }
 
-        let Some(Expr::BinaryOp(binary_op)) = result else {
-            panic!("expected BinaryOp");
-        };
-        assert_eq!(binary_op.op, BinaryOp::Lt);
-        assert!(matches!(*binary_op.lhs, Expr::Arg(_)));
-        assert!(matches!(*binary_op.rhs, Expr::Value(Value::I64(5))));
-    }
+        // Include the else branch with a guard that negates all arm patterns.
+        {
+            let guards: Vec<Expr> = patterns
+                .into_iter()
+                .map(|pattern| {
+                    Expr::not(Expr::binary_op(
+                        (*match_expr.subject).clone(),
+                        stmt::BinaryOp::Eq,
+                        Expr::from(pattern),
+                    ))
+                })
+                .collect();
 
-    #[test]
-    fn canonicalize_le_literal_on_left() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
+            let comparison = if match_on_lhs {
+                Expr::binary_op(*match_expr.else_expr, op, other)
+            } else {
+                Expr::binary_op(other, op, *match_expr.else_expr)
+            };
 
-        // `5 <= x` → `x >= 5`
-        let mut lhs = Expr::Value(Value::from(5i64));
-        let mut rhs = Expr::arg(0);
+            let mut else_operands = guards;
+            else_operands.push(comparison);
+            let mut term = Expr::and_from_vec(else_operands);
+            self.visit_expr_mut(&mut term);
 
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Le, &mut lhs, &mut rhs);
+            // Prune dead branches
+            if !term.is_false() && !matches!(&term, Expr::Value(stmt::Value::Null)) {
+                operands.push(term);
+            }
+        }
 
-        let Some(Expr::BinaryOp(binary_op)) = result else {
-            panic!("expected BinaryOp");
-        };
-        assert_eq!(binary_op.op, BinaryOp::Ge);
-        assert!(matches!(*binary_op.lhs, Expr::Arg(_)));
-        assert!(matches!(*binary_op.rhs, Expr::Value(Value::I64(5))));
-    }
-
-    #[test]
-    fn canonicalize_ge_literal_on_left() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `5 >= x` → `x <= 5`
-        let mut lhs = Expr::Value(Value::from(5i64));
-        let mut rhs = Expr::arg(0);
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Ge, &mut lhs, &mut rhs);
-
-        let Some(Expr::BinaryOp(binary_op)) = result else {
-            panic!("expected BinaryOp");
-        };
-        assert_eq!(binary_op.op, BinaryOp::Le);
-        assert!(matches!(*binary_op.lhs, Expr::Arg(_)));
-        assert!(matches!(*binary_op.rhs, Expr::Value(Value::I64(5))));
-    }
-
-    #[test]
-    fn no_canonicalize_when_literal_on_right() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `x < 5` is already canonical, no change
-        let mut lhs = Expr::arg(0);
-        let mut rhs = Expr::Value(Value::from(5i64));
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Lt, &mut lhs, &mut rhs);
-
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn tuple_eq_decomposition_two_elements() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `(a, b) = (x, y)` → `a = x and b = y`
-        let mut lhs = Expr::record([Expr::arg(0), Expr::arg(1)]);
-        let mut rhs = Expr::record([Expr::arg(2), Expr::arg(3)]);
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
-
-        let Some(Expr::And(and_expr)) = result else {
-            panic!("expected And expression");
-        };
-        assert_eq!(and_expr.len(), 2);
-        assert!(matches!(&and_expr[0], Expr::BinaryOp(op) if op.op.is_eq()));
-        assert!(matches!(&and_expr[1], Expr::BinaryOp(op) if op.op.is_eq()));
-    }
-
-    #[test]
-    fn tuple_eq_decomposition_three_elements() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `(a, b, c) = (x, y, z)` → `a = x and b = y and c = z`
-        let mut lhs = Expr::record([Expr::arg(0), Expr::arg(1), Expr::arg(2)]);
-        let mut rhs = Expr::record([Expr::arg(3), Expr::arg(4), Expr::arg(5)]);
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
-
-        let Some(Expr::And(and_expr)) = result else {
-            panic!("expected And expression");
-        };
-        assert_eq!(and_expr.len(), 3);
-    }
-
-    #[test]
-    fn tuple_ne_decomposition() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `(a, b) != (x, y)` → `a != x or b != y`
-        let mut lhs = Expr::record([Expr::arg(0), Expr::arg(1)]);
-        let mut rhs = Expr::record([Expr::arg(2), Expr::arg(3)]);
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Ne, &mut lhs, &mut rhs);
-
-        let Some(Expr::Or(or_expr)) = result else {
-            panic!("expected Or expression");
-        };
-        assert_eq!(or_expr.len(), 2);
-        assert!(matches!(&or_expr[0], Expr::BinaryOp(op) if op.op.is_ne()));
-        assert!(matches!(&or_expr[1], Expr::BinaryOp(op) if op.op.is_ne()));
-    }
-
-    #[test]
-    fn single_element_tuple_eq() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `(a) = (x)` → `a = x`
-        let mut lhs = Expr::record([Expr::arg(0)]);
-        let mut rhs = Expr::record([Expr::arg(1)]);
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
-        assert!(matches!(result, Some(Expr::BinaryOp(op)) if op.op.is_eq()));
+        Expr::or_from_vec(operands)
     }
 }

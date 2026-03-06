@@ -12,7 +12,7 @@ impl<M: Model> Update<M> {
     pub fn new(mut selection: Select<M>) -> Self {
         if let stmt::ExprSet::Values(values) = &mut selection.untyped.body {
             let rows = std::mem::take(&mut values.rows);
-            let filter = stmt::Expr::in_list(stmt::Expr::key(M::id()), rows);
+            let filter = stmt::Expr::in_list(stmt::Expr::ref_ancestor_model(0), rows);
             selection.untyped.body =
                 stmt::ExprSet::Select(Box::new(stmt::Select::new(M::id(), filter)));
         }
@@ -33,15 +33,19 @@ impl<M: Model> Update<M> {
         }
     }
 
-    pub fn set(&mut self, field: usize, expr: impl Into<stmt::Expr>) {
+    pub fn as_untyped_mut(&mut self) -> &mut stmt::Update {
+        &mut self.untyped
+    }
+
+    pub fn set(&mut self, field: impl Into<stmt::Projection>, expr: impl Into<stmt::Expr>) {
         self.untyped.assignments.set(field, expr);
     }
 
-    pub fn insert(&mut self, field: usize, expr: impl Into<stmt::Expr>) {
+    pub fn insert(&mut self, field: impl Into<stmt::Projection>, expr: impl Into<stmt::Expr>) {
         self.untyped.assignments.insert(field, expr);
     }
 
-    pub fn remove(&mut self, field: usize, expr: impl Into<stmt::Expr>) {
+    pub fn remove(&mut self, field: impl Into<stmt::Projection>, expr: impl Into<stmt::Expr>) {
         self.untyped.assignments.remove(field, expr);
     }
 

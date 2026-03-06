@@ -1,7 +1,6 @@
 /// How toasty should populate the field
 #[derive(Debug, Clone)]
 pub enum AutoStrategy {
-    Id,
     Uuid(UuidVersion),
     Increment,
 }

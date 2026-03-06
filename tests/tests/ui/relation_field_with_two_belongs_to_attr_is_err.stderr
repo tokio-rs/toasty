@@ -1,5 +1,5 @@
 error: field has more than one relation attribute
-  --> tests/ui/relation_field_with_two_belongs_to_attr_is_err.rs:20:5
+  --> tests/ui/relation_field_with_two_belongs_to_attr_is_err.rs:18:5
    |
-20 |     #[belongs_to(key = user_id, references = id)]
+18 |     #[belongs_to(key = user_id, references = id)]
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

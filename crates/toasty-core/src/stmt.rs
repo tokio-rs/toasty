@@ -11,7 +11,7 @@ mod cte;
 pub use cte::Cte;
 
 mod cx;
-pub use cx::{ExprContext, ExprTarget, IntoExprTarget, Resolve, ResolvedRef};
+pub use cx::{DerivedRef, ExprContext, ExprTarget, IntoExprTarget, Resolve, ResolvedRef};
 
 mod delete;
 pub use delete::Delete;
@@ -42,23 +42,14 @@ pub use expr_any::ExprAny;
 mod expr_arg;
 pub use expr_arg::ExprArg;
 
-mod expr_begins_with;
-pub use expr_begins_with::ExprBeginsWith;
-
 mod expr_binary_op;
 pub use expr_binary_op::ExprBinaryOp;
 
 mod expr_cast;
 pub use expr_cast::ExprCast;
 
-mod expr_concat;
-pub use expr_concat::ExprConcat;
-
-mod expr_concat_str;
-pub use expr_concat_str::ExprConcatStr;
-
-mod expr_enum;
-pub use expr_enum::ExprEnum;
+mod expr_error;
+pub use expr_error::ExprError;
 
 mod expr_exists;
 pub use expr_exists::ExprExists;
@@ -75,11 +66,11 @@ pub use expr_in_subquery::ExprInSubquery;
 mod expr_is_null;
 pub use expr_is_null::ExprIsNull;
 
-mod expr_key;
-pub use expr_key::ExprKey;
+mod expr_is_variant;
+pub use expr_is_variant::ExprIsVariant;
 
-mod expr_like;
-pub use expr_like::ExprLike;
+mod expr_let;
+pub use expr_let::ExprLet;
 
 mod expr_list;
 pub use expr_list::ExprList;
@@ -87,14 +78,14 @@ pub use expr_list::ExprList;
 mod expr_map;
 pub use expr_map::ExprMap;
 
+mod expr_match;
+pub use expr_match::{ExprMatch, MatchArm};
+
 mod expr_not;
 pub use expr_not::ExprNot;
 
 mod expr_or;
 pub use expr_or::ExprOr;
-
-mod expr_pattern;
-pub use expr_pattern::ExprPattern;
 
 mod expr_project;
 pub use expr_project::ExprProject;
@@ -114,20 +105,20 @@ pub use expr_set_op::ExprSetOp;
 mod expr_stmt;
 pub use expr_stmt::ExprStmt;
 
-mod expr_ty;
-pub use expr_ty::ExprTy;
-
 mod filter;
 pub use filter::Filter;
+
+mod hash_index;
+pub use hash_index::HashIndex;
+
+mod sorted_index;
+pub use sorted_index::SortedIndex;
 
 mod func_count;
 pub use func_count::FuncCount;
 
 mod func_last_insert_id;
 pub use func_last_insert_id::FuncLastInsertId;
-
-mod id;
-pub use id::Id;
 
 mod insert;
 pub use insert::Insert;
@@ -171,7 +162,7 @@ mod op_set;
 pub use op_set::SetOp;
 
 mod path;
-pub use path::Path;
+pub use path::{Path, PathRoot};
 
 mod path_field_set;
 pub use path_field_set::PathFieldSet;
@@ -218,8 +209,8 @@ pub use table_with_joins::TableWithJoins;
 mod ty;
 pub use ty::Type;
 
-mod ty_enum;
-pub use ty_enum::{EnumVariant, TypeEnum};
+mod ty_union;
+pub use ty_union::TypeUnion;
 
 #[cfg(feature = "jiff")]
 mod ty_jiff;
@@ -235,9 +226,6 @@ mod value_cmp;
 mod values;
 pub use values::Values;
 
-mod value_enum;
-pub use value_enum::ValueEnum;
-
 #[cfg(feature = "jiff")]
 mod value_jiff;
 
@@ -246,6 +234,8 @@ pub use value_record::ValueRecord;
 
 pub mod visit_mut;
 pub use visit_mut::VisitMut;
+
+mod value_list;
 
 mod value_stream;
 pub use value_stream::ValueStream;

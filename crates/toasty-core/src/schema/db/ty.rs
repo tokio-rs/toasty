@@ -59,6 +59,7 @@ use crate::{driver, stmt, Result};
 /// - [`Type::from_app`] - Mapping logic from statement types to database types
 /// - [`Column`](crate::schema::db::Column) - Schema representation with both type systems
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Type {
     /// A boolean value
     Boolean,
@@ -127,6 +128,7 @@ impl Type {
                 stmt::Type::U64 => Ok(Type::UnsignedInteger(8)),
                 stmt::Type::String => Ok(db.default_string_type.clone()),
                 stmt::Type::Uuid => Ok(db.default_uuid_type.clone()),
+                stmt::Type::Bytes => Ok(db.default_bytes_type.clone()),
                 // Decimal type
                 #[cfg(feature = "rust_decimal")]
                 stmt::Type::Decimal => Ok(db.default_decimal_type.clone()),
@@ -144,13 +146,6 @@ impl Type {
                 stmt::Type::Time => Ok(db.default_time_type.clone()),
                 #[cfg(feature = "jiff")]
                 stmt::Type::DateTime => Ok(db.default_datetime_type.clone()),
-                // Gotta support some app-level types as well for now.
-                //
-                // TODO: not really correct, but we are getting rid of ID types
-                // most likely.
-                stmt::Type::Id(_) => Ok(db.default_string_type.clone()),
-                // Enum types are stored as strings in the database
-                stmt::Type::Enum(_) => Ok(db.default_string_type.clone()),
                 _ => Err(crate::Error::unsupported_feature(format!(
                     "type {:?} is not supported by this database",
                     ty

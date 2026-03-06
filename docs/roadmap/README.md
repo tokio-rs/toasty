@@ -10,6 +10,16 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 
 ## Feature Areas
 
+### Composite Keys
+
+**[Composite Key Support](./composite-keys.md)** (partial implementation)
+- Composite foreign key optimization in query simplification
+- Composite PK handling in expression rewriting and IN-list operations
+- HasMany/BelongsTo relationships with composite foreign keys referencing composite primary keys
+- Junction table / many-to-many patterns with composite keys
+- DynamoDB driver: batch delete/update with composite keys, composite unique indexes
+- Comprehensive test coverage for all composite key combinations
+
 ### Query Capabilities
 
 **[Query Ordering, Limits & Pagination](./order_limit_pagination.md)** | [User Guide](../guide/pagination.md)
@@ -18,7 +28,6 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 - `.last()` convenience method
 
 **[Query Constraints & Filtering](./query-constraints.md)**
-- OR, NOT, IS NULL (core AST exists, needs user API)
 - String operations: contains, starts with, ends with, LIKE (partial AST support)
 - NOT IN
 - Case-insensitive matching
@@ -37,6 +46,31 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 
 ### Relationships & Loading
 
+**Partial Model Loading**
+- Allow models to have fields that are not loaded by default (e.g. a large `body` column on an `Article` model)
+- Fields opt-in via a `#[deferred]` attribute and must be wrapped in a `Deferred<T>` type
+- By default, queries skip deferred fields; callers opt-in with `.include(Article::body)` (same API as relation preloading)
+- Accessing a `Deferred<T>` that was not loaded either returns an error or panics with a clear message
+- Works with primitive types, embedded structs, and embedded enums — just a subset of columns in the same table
+  ```rust
+  #[toasty::model]
+  struct Article {
+      #[key]
+      #[auto]
+      id: u64,
+      title: String,
+      author: BelongsTo<User>,
+      #[deferred]
+      body: Deferred<String>,   // not loaded unless explicitly included
+  }
+
+  // Load metadata only (no body column fetched)
+  let articles = Article::all().collect(&db).await?;
+
+  // Load with body
+  let articles = Article::all().include(Article::body).collect(&db).await?;
+  ```
+
 **Relationships**
 - Many-to-many relationships
 - Polymorphic associations
@@ -48,10 +82,49 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 - Subquery improvements
 - Better conditional/dynamic query building ergonomics
 
+**Database Function Expressions**
+- Allow database-side functions (e.g. `NOW()`, `CURRENT_TIMESTAMP`) as expressions in create and update operations
+- User API: field setters accept `toasty::stmt` helpers like `toasty::stmt::now()` that resolve to `core::stmt::ExprFunc` variants
+  ```rust
+  // Set updated_at to the database's current time instead of a Rust-side value
+  user.update()
+      .updated_at(toasty::stmt::now())
+      .exec(&db)
+      .await?;
+
+  // Also usable in create operations
+  User::create()
+      .name("Alice")
+      .created_at(toasty::stmt::now())
+      .exec(&db)
+      .await?;
+  ```
+- Extend `ExprFunc` enum in `toasty-core` with new function variants (e.g. `Now`)
+- SQL serialization for each function across supported databases (`NOW()` for PostgreSQL/MySQL, `datetime('now')` for SQLite)
+- Codegen: update field setter generation to accept both value types and function expressions
+- Future: support additional scalar functions (e.g. `COALESCE`, `LOWER`, `UPPER`, `LENGTH`)
+
 **Raw SQL Support**
 - Execute arbitrary SQL statements directly
 - Parameterized queries with type-safe bindings
 - Raw SQL fragments within typed queries (escape hatch for complex expressions)
+
+### Data Modification
+
+**Upsert**
+- Insert-or-update: atomic `INSERT ... ON CONFLICT DO UPDATE` (PostgreSQL/SQLite), `ON DUPLICATE KEY UPDATE` (MySQL), `MERGE` (SQL Server/Oracle)
+- Insert-or-ignore (`DO NOTHING` / `INSERT IGNORE`)
+- Conflict target: by column(s), by constraint name, partial indexes (PostgreSQL)
+- Column update control: update all non-key columns, named subset, or raw SQL expression
+- Access to the proposed row via `EXCLUDED` pseudo-table in the update expression
+- Bulk upsert (multi-row `VALUES`)
+- DynamoDB: `PutItem` (unconditional replace) vs. `UpdateItem` with condition expression
+
+**Mutation Result Information**
+- Return affected row counts from update operations (how many records were updated)
+- Return affected row counts from delete operations (how many records were deleted)
+- Better result types that provide operation metadata
+- Distinguish between "no rows matched" vs "rows matched but no changes needed"
 
 ### Transactions
 
@@ -76,7 +149,36 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 - Schema versioning
 - CLI tools for schema management
 
+### Toasty Runtime Improvements
+
+**Concurrent Task Execution**
+- Replace the current ad-hoc background task with a proper in-flight task manager
+- Execute independent parts of an execution plan concurrently
+- Track and coordinate multiple in-flight tasks within a single query execution
+
+**Cancellation & Cleanup**
+- Detect when the caller drops the future representing query completion
+- Perform clean cancellation on drop (rollback any incomplete transactions)
+- Ensure no resource leaks or orphaned database state on cancellation
+
+**Internal Instrumentation & Metrics**
+- Instrument time spent in each execution phase (planning, simplification, execution, serialization)
+- Track CPU time consumed by query planning to detect expensive plans
+- Provide internal metrics for diagnosing performance bottlenecks
+
 ### Performance
+
+**[Query Engine Optimization](./query-engine.md)**
+- Dedicated post-lowering optimization pass for expensive predicate analysis (run once, not per-node)
+- Equivalence classes for transitive constraint reasoning (`a = b AND b = 5` implies `a = 5`)
+- Structured constraint representation (constant bindings, range bounds, exclusion sets)
+- Targeted predicate normalization without full DNF conversion
+
+**Stored Procedures (Pre-Compiled Query Plans)**
+- Compile query plans once and execute them many times with different parameter values
+- Skip the full compilation pipeline (simplification, lowering, HIR/MIR planning) on repeated calls
+- Parameterized statement AST with `Param` slots for value substitution at execution time
+- Pairs with database-level prepared statements for end-to-end optimization
 
 **Optimization Features**
 - Bulk inserts/updates
@@ -104,6 +206,20 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 
 **Tooling & Debugging**
 - Query logging
+
+### Safety & Security
+
+**Sensitive Value Flagging**
+- Flag sensitive fields (e.g. passwords, tokens, secrets) so they are automatically redacted in logs and debug output
+- Attribute-based opt-in: `#[sensitive]` on model fields marks values that must never appear in plaintext outside the database
+- All logging, query tracing, and error messages strip or mask flagged values
+- Prevents accidental credential leakage in application logs, query dumps, and diagnostics
+
+**Trusted vs Untrusted Input**
+- Distinguish between values originating from untrusted user input and values produced internally by the query engine (e.g. literal numbers, generated keys)
+- Engine-produced values can skip escaping/parameterization since they are known-safe, reducing unnecessary overhead
+- Untrusted input continues to be parameterized or escaped to prevent SQL injection
+- Enables more efficient SQL generation without weakening safety guarantees for external data
 
 ## Notes
 

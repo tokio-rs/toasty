@@ -35,17 +35,40 @@ impl Exec<'_> {
     pub(super) async fn action_find_pk_by_index(&mut self, action: &FindPkByIndex) -> Result<()> {
         let mut filter = action.filter.clone();
 
-        // Collect input values and substitute into the statement
         if !action.input.is_empty() {
             assert!(action.input.len() == 1);
             let input = self.collect_input(&action.input).await?;
-
             filter.substitute(&input);
-
-            simplify::simplify_expr(self.engine.expr_cx(), &mut filter);
         }
 
-        if filter.is_false() {
+        // Fan-out for ANY(MAP(Value::List([...]), pred)) — one driver call per element.
+        // Must be checked BEFORE simplify_expr, which would re-expand the list to Expr::Or.
+        // Handles both constant lists (plan-time OR rewrite) and post-input-substitution lists.
+        if let Some(all_rows) = self
+            .try_fan_out(&filter, action.table, |per_call_filter| {
+                operation::FindPkByIndex {
+                    table: action.table,
+                    index: action.index,
+                    filter: per_call_filter,
+                }
+                .into()
+            })
+            .await?
+        {
+            self.vars.store(
+                action.output.var,
+                action.output.num_uses,
+                Rows::Stream(stmt::ValueStream::from_vec(all_rows)),
+            );
+            return Ok(());
+        }
+
+        {
+            let table = self.engine.schema.db.table(action.table);
+            simplify::simplify_expr(self.engine.expr_cx_for(table), &mut filter);
+        }
+
+        if filter.is_unsatisfiable() {
             let rows = Rows::Stream(stmt::ValueStream::default());
             self.vars
                 .store(action.output.var, action.output.num_uses, rows);
@@ -55,7 +78,7 @@ impl Exec<'_> {
         let res = self
             .connection
             .exec(
-                &self.engine.schema.db,
+                &self.engine.schema,
                 operation::FindPkByIndex {
                     table: action.table,
                     index: action.index,

@@ -1,9 +1,19 @@
-use super::{Field, FieldId, FieldPrimitive, FieldTy, Index, Name, PrimaryKey};
+use super::{Field, FieldId, FieldPrimitive, Index, Name, PrimaryKey};
 use crate::{driver, stmt, Result};
 use std::fmt;
 
 #[derive(Debug, Clone)]
-pub struct Model {
+pub enum Model {
+    /// Root model that maps to a database table and can be queried directly
+    Root(ModelRoot),
+    /// Embedded struct model that is flattened into its parent model's table
+    EmbeddedStruct(EmbeddedStruct),
+    /// Embedded enum model stored as a discriminant integer column
+    EmbeddedEnum(EmbeddedEnum),
+}
+
+#[derive(Debug, Clone)]
+pub struct ModelRoot {
     /// Uniquely identifies the model within the schema
     pub id: ModelId,
 
@@ -13,87 +23,19 @@ pub struct Model {
     /// Fields contained by the model
     pub fields: Vec<Field>,
 
-    /// Distinguishes root models (with tables and primary keys) from embedded models
-    pub kind: ModelKind,
-
-    pub indices: Vec<Index>,
-}
-
-#[derive(Debug, Clone)]
-pub enum ModelKind {
-    /// Root model that maps to a database table and can be queried directly
-    Root(ModelRoot),
-    /// Embedded model that is flattened into its parent model's table
-    Embedded,
-}
-
-#[derive(Debug, Clone)]
-pub struct ModelRoot {
     /// The primary key for this model. Root models must have a primary key.
     pub primary_key: PrimaryKey,
 
     /// If the schema specifies a table to map the model to, this is set.
     pub table_name: Option<String>,
+
+    /// Indices defined on this model.
+    pub indices: Vec<Index>,
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Hash)]
-pub struct ModelId(pub usize);
-
-impl Model {
-    /// Returns true if this is a root model (has a table and primary key)
-    pub fn is_root(&self) -> bool {
-        matches!(self.kind, ModelKind::Root(_))
-    }
-
-    /// Returns true if this is an embedded model (flattened into parent)
-    pub fn is_embedded(&self) -> bool {
-        matches!(self.kind, ModelKind::Embedded)
-    }
-
-    /// Returns the primary key if this is a root model, None if embedded
-    pub fn primary_key(&self) -> Option<&PrimaryKey> {
-        match &self.kind {
-            ModelKind::Root(root) => Some(&root.primary_key),
-            ModelKind::Embedded => None,
-        }
-    }
-
-    /// Returns true if this model can be the target of a relation
-    pub fn can_be_relation_target(&self) -> bool {
-        self.is_root()
-    }
-
-    pub fn primitives_mut(&mut self) -> impl Iterator<Item = &mut FieldPrimitive> + '_ {
-        self.fields
-            .iter_mut()
-            .flat_map(|field| match &mut field.ty {
-                FieldTy::Primitive(primitive) => Some(primitive),
-                _ => None,
-            })
-    }
-
-    pub fn field(&self, field: impl Into<FieldId>) -> &Field {
-        let field_id = field.into();
-        assert_eq!(self.id, field_id.model);
-        &self.fields[field_id.index]
-    }
-
-    pub fn field_by_name(&self, name: &str) -> Option<&Field> {
-        self.fields.iter().find(|field| field.name.app_name == name)
-    }
-
-    pub fn field_by_name_mut(&mut self, name: &str) -> Option<&mut Field> {
-        self.fields
-            .iter_mut()
-            .find(|field| field.name.app_name == name)
-    }
-
+impl ModelRoot {
     pub fn find_by_id(&self, mut input: impl stmt::Input) -> stmt::Query {
-        let primary_key = self
-            .primary_key()
-            .expect("find_by_id requires a root model with primary key");
-
-        let filter = match &primary_key.fields[..] {
+        let filter = match &self.primary_key.fields[..] {
             [pk_field] => stmt::Expr::eq(
                 stmt::Expr::ref_self_field(pk_field),
                 input
@@ -120,22 +62,213 @@ impl Model {
     }
 
     /// Iterate over the fields used for the model's primary key.
-    /// Returns None if this is an embedded model.
-    /// TODO: extract type?
-    pub fn primary_key_fields(&self) -> Option<impl ExactSizeIterator<Item = &'_ Field>> {
-        self.primary_key().map(|pk| {
-            pk.fields
-                .iter()
-                .map(|pk_field| &self.fields[pk_field.index])
-        })
+    pub fn primary_key_fields(&self) -> impl ExactSizeIterator<Item = &'_ Field> {
+        self.primary_key
+            .fields
+            .iter()
+            .map(|pk_field| &self.fields[pk_field.index])
+    }
+
+    pub fn field_by_name(&self, name: &str) -> Option<&Field> {
+        self.fields.iter().find(|field| field.name.app_name == name)
     }
 
     pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
         for field in &self.fields {
             field.verify(db)?;
         }
-
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct EmbeddedStruct {
+    /// Uniquely identifies the model within the schema
+    pub id: ModelId,
+
+    /// Name of the model
+    pub name: Name,
+
+    /// Fields contained by the embedded struct
+    pub fields: Vec<Field>,
+
+    /// Indices defined on this embedded struct's fields.
+    ///
+    /// These reference fields within this embedded struct (not the parent model).
+    /// The schema builder propagates them to physical DB indexes on the parent
+    /// table's flattened columns.
+    pub indices: Vec<Index>,
+}
+
+impl EmbeddedStruct {
+    pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
+        for field in &self.fields {
+            field.verify(db)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct EmbeddedEnum {
+    /// Uniquely identifies the model within the schema
+    pub id: ModelId,
+
+    /// Name of the model
+    pub name: Name,
+
+    /// The primitive type used for the discriminant column
+    pub discriminant: FieldPrimitive,
+
+    /// The enum's variants
+    pub variants: Vec<EnumVariant>,
+
+    /// All fields across all variants, with global indices. Each field's
+    /// `variant` field identifies which variant it belongs to.
+    pub fields: Vec<Field>,
+
+    /// Indices defined on this embedded enum's variant fields.
+    ///
+    /// These reference fields within this embedded enum (not the parent model).
+    /// The schema builder propagates them to physical DB indexes on the parent
+    /// table's flattened columns.
+    pub indices: Vec<Index>,
+}
+
+#[derive(Debug, Clone)]
+pub struct EnumVariant {
+    /// The Rust variant name
+    pub name: Name,
+
+    /// The discriminant value stored in the database column
+    pub discriminant: i64,
+}
+
+impl EmbeddedEnum {
+    /// Returns true if at least one variant carries data fields.
+    pub fn has_data_variants(&self) -> bool {
+        !self.fields.is_empty()
+    }
+
+    /// Returns fields belonging to a specific variant.
+    pub fn variant_fields(&self, variant_index: usize) -> impl Iterator<Item = &Field> {
+        let variant_id = VariantId {
+            model: self.id,
+            index: variant_index,
+        };
+        self.fields
+            .iter()
+            .filter(move |f| f.variant == Some(variant_id))
+    }
+
+    pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
+        for field in &self.fields {
+            field.verify(db)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ModelId(pub usize);
+
+impl Model {
+    pub fn id(&self) -> ModelId {
+        match self {
+            Model::Root(root) => root.id,
+            Model::EmbeddedStruct(embedded) => embedded.id,
+            Model::EmbeddedEnum(e) => e.id,
+        }
+    }
+
+    pub fn name(&self) -> &Name {
+        match self {
+            Model::Root(root) => &root.name,
+            Model::EmbeddedStruct(embedded) => &embedded.name,
+            Model::EmbeddedEnum(e) => &e.name,
+        }
+    }
+
+    /// Returns true if this is a root model (has a table and primary key)
+    pub fn is_root(&self) -> bool {
+        matches!(self, Model::Root(_))
+    }
+
+    /// Returns true if this is an embedded model (flattened into parent)
+    pub fn is_embedded(&self) -> bool {
+        matches!(self, Model::EmbeddedStruct(_) | Model::EmbeddedEnum(_))
+    }
+
+    /// Returns true if this model can be the target of a relation
+    pub fn can_be_relation_target(&self) -> bool {
+        self.is_root()
+    }
+
+    pub fn as_root(&self) -> Option<&ModelRoot> {
+        match self {
+            Model::Root(root) => Some(root),
+            _ => None,
+        }
+    }
+
+    /// Returns a reference to the root model data, panicking if this is not a root model.
+    pub fn expect_root(&self) -> &ModelRoot {
+        match self {
+            Model::Root(root) => root,
+            Model::EmbeddedStruct(_) => panic!("expected root model, found embedded struct"),
+            Model::EmbeddedEnum(_) => panic!("expected root model, found embedded enum"),
+        }
+    }
+
+    /// Returns a mutable reference to the root model data, panicking if this is not a root model.
+    pub fn expect_root_mut(&mut self) -> &mut ModelRoot {
+        match self {
+            Model::Root(root) => root,
+            Model::EmbeddedStruct(_) => panic!("expected root model, found embedded struct"),
+            Model::EmbeddedEnum(_) => panic!("expected root model, found embedded enum"),
+        }
+    }
+
+    /// Returns a reference to the embedded struct data, panicking if this is not an embedded struct.
+    pub fn expect_embedded_struct(&self) -> &EmbeddedStruct {
+        match self {
+            Model::EmbeddedStruct(embedded) => embedded,
+            Model::Root(_) => panic!("expected embedded struct, found root model"),
+            Model::EmbeddedEnum(_) => panic!("expected embedded struct, found embedded enum"),
+        }
+    }
+
+    /// Returns a reference to the embedded enum data, panicking if this is not an embedded enum.
+    pub fn expect_embedded_enum(&self) -> &EmbeddedEnum {
+        match self {
+            Model::EmbeddedEnum(e) => e,
+            Model::Root(_) => panic!("expected embedded enum, found root model"),
+            Model::EmbeddedStruct(_) => panic!("expected embedded enum, found embedded struct"),
+        }
+    }
+
+    pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
+        match self {
+            Model::Root(root) => root.verify(db),
+            Model::EmbeddedStruct(embedded) => embedded.verify(db),
+            Model::EmbeddedEnum(e) => e.verify(db),
+        }
+    }
+}
+
+/// Identifies a specific variant within an embedded enum model.
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub struct VariantId {
+    /// The enum model this variant belongs to.
+    pub model: ModelId,
+    /// Index of the variant within `EmbeddedEnum::variants`.
+    pub index: usize,
+}
+
+impl fmt::Debug for VariantId {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(fmt, "VariantId({}/{})", self.model.0, self.index)
     }
 }
 
@@ -144,6 +277,12 @@ impl ModelId {
     /// `index`.
     pub const fn field(self, index: usize) -> FieldId {
         FieldId { model: self, index }
+    }
+
+    /// Create a `VariantId` representing the current model's variant at
+    /// `index`.
+    pub const fn variant(self, index: usize) -> VariantId {
+        VariantId { model: self, index }
     }
 
     pub(crate) const fn placeholder() -> Self {
@@ -165,6 +304,12 @@ impl From<&mut Self> for ModelId {
 
 impl From<&Model> for ModelId {
     fn from(value: &Model) -> Self {
+        value.id()
+    }
+}
+
+impl From<&ModelRoot> for ModelId {
+    fn from(value: &ModelRoot) -> Self {
         value.id
     }
 }

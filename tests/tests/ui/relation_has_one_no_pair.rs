@@ -1,10 +1,8 @@
-use toasty::stmt::Id;
-
 #[derive(toasty::Model)]
 struct User {
     #[key]
     #[auto]
-    id: Id<Self>,
+    id: uuid::Uuid,
 
     #[has_one]
     profile: toasty::HasOne<Option<Profile>>,
@@ -14,7 +12,7 @@ struct User {
 struct Profile {
     #[key]
     #[auto]
-    id: Id<Self>,
+    id: uuid::Uuid,
 }
 
 fn main() {}

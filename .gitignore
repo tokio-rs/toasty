@@ -1,3 +1,4 @@
 .cargo
-/target
+.claude/worktrees/
+**/target
 /Cargo.lock

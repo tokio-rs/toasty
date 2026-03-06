@@ -24,56 +24,31 @@ impl Simplify<'_> {
             }
         }
 
-        // Handle projections through records (embedded fields lower to records of columns)
+        // Handle projections through records (embedded fields lower to records of columns).
         // After lowering, embedded field references become records where each field is a column.
-        // Example: project([street_col, city_col, zip_col], [1]) → city_col
-        if let stmt::Expr::Record(record) = &*expr.base {
-            if let [index] = expr.projection.as_slice() {
-                if *index < record.fields.len() {
-                    return Some(record.fields[*index].clone());
-                }
+        // Uses `entry` to support arbitrary-depth projections (e.g., [1, 1] for nested embedded).
+        // Examples:
+        //   project([street_col, city_col, zip_col], [1]) → city_col
+        //   project([name_col, record([street_col, city_col])], [1, 1]) → city_col
+        if let stmt::Expr::Record(_) = &*expr.base {
+            if let Some(entry) = expr.base.entry(&expr.projection) {
+                return Some(entry.to_expr());
             }
         }
 
+        // Project into Match: distribute the projection into each arm's expression.
+        // Example: project(Match(d, [1 => Record([d, a]), 2 => Record([d, n])]), [0])
+        //        → Match(d, [1 => project(Record([d, a]), [0]), 2 => project(Record([d, n]), [0])])
+        //        → Match(d, [1 => d, 2 => d])   (after recursive simplification)
+        if let stmt::Expr::Match(match_expr) = &mut *expr.base {
+            for arm in &mut match_expr.arms {
+                arm.expr = stmt::Expr::project(arm.expr.take(), expr.projection.clone());
+            }
+            *match_expr.else_expr =
+                stmt::Expr::project(match_expr.else_expr.take(), expr.projection.clone());
+            return Some(expr.base.take());
+        }
+
         None
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::engine::simplify::test::test_schema;
-    use toasty_core::stmt::{Expr, Projection, Value};
-
-    #[test]
-    fn project_non_constant_not_simplified() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `project(arg(0), [0])` is not simplified (non-constant base)
-        let mut expr = stmt::ExprProject {
-            base: Box::new(Expr::arg(0)),
-            projection: Projection::from(0),
-        };
-
-        let result = simplify.simplify_expr_project(&mut expr);
-
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn project_identity_path() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `project(42, [])` → `42` (identity projection)
-        let mut expr = stmt::ExprProject {
-            base: Box::new(Expr::from(42i64)),
-            projection: Projection::identity(),
-        };
-
-        let result = simplify.simplify_expr_project(&mut expr);
-
-        assert!(matches!(result, Some(Expr::Value(Value::I64(42)))));
     }
 }

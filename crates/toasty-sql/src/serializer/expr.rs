@@ -85,17 +85,6 @@ impl ToSql for &stmt::Expr {
             Or(expr) => {
                 fmt!(cx, f, Delimited(&expr.operands, " OR "));
             }
-            Pattern(stmt::ExprPattern::BeginsWith(expr)) => {
-                let stmt::Expr::Value(pattern) = &*expr.pattern else {
-                    todo!()
-                };
-
-                let pattern = pattern.expect_string();
-                let pattern = format!("{pattern}%");
-                let pattern = stmt::Expr::Value(pattern.into());
-
-                fmt!(cx, f, expr.expr " LIKE " pattern);
-            }
             Record(expr) => {
                 // Use TypeHintedField wrapper to provide type hints from INSERT context
                 let fields =
@@ -119,7 +108,7 @@ impl ToSql for &stmt::Expr {
                             let name = Ident(&column.name);
                             fmt!(cx, f, "tbl_" depth "_" expr_column.table "." name)
                         }
-                        ResolvedRef::Cte { .. } | ResolvedRef::Derived { .. } => {
+                        ResolvedRef::Cte { .. } | ResolvedRef::Derived(_) => {
                             fmt!(cx, f, "tbl_" depth "_" expr_column.table "." ColumnAlias(expr_column.column))
                         }
                         ResolvedRef::Model(model) => {
@@ -158,7 +147,6 @@ impl ToSql for &stmt::BinaryOp {
             stmt::BinaryOp::Lt => "<",
             stmt::BinaryOp::Le => "<=",
             stmt::BinaryOp::Ne => "<>",
-            _ => todo!(),
         })
     }
 }

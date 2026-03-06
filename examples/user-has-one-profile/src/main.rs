@@ -1,10 +1,8 @@
-use toasty::stmt::Id;
-
 #[derive(Debug, toasty::Model)]
 struct User {
     #[key]
     #[auto]
-    id: Id<Self>,
+    id: uuid::Uuid,
 
     name: String,
 
@@ -16,18 +14,18 @@ struct User {
 struct Profile {
     #[key]
     #[auto]
-    id: Id<Self>,
+    id: uuid::Uuid,
 
     #[belongs_to(key = user_id, references = id)]
     user: toasty::BelongsTo<Option<User>>,
 
     #[unique]
-    user_id: Option<Id<User>>,
+    user_id: Option<uuid::Uuid>,
 }
 
 #[tokio::main]
 async fn main() -> toasty::Result<()> {
-    let db = toasty::Db::builder()
+    let mut db = toasty::Db::builder()
         .register::<User>()
         .register::<Profile>()
         .connect(
@@ -38,14 +36,14 @@ async fn main() -> toasty::Result<()> {
         .await?;
 
     // For now, reset!s
-    db.reset_db().await?;
+    db.push_schema().await?;
 
     // Create a user without a profile
-    let user = User::create().name("John Doe").exec(&db).await?;
+    let user = User::create().name("John Doe").exec(&mut db).await?;
 
     println!("created user; name={:?}", user.name);
 
-    if let Some(profile) = user.profile().get(&db).await? {
+    if let Some(profile) = user.profile().get(&mut db).await? {
         println!("profile: {profile:#?}");
         println!("profile.user_id: {:#?}", profile.user_id);
     } else {

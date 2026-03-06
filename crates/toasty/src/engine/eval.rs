@@ -78,10 +78,14 @@ fn verify_expr(expr: &stmt::Expr) -> bool {
         And(expr_and) => expr_and.operands.iter().all(verify_expr),
         BinaryOp(expr) => verify_expr(&expr.lhs) && verify_expr(&expr.rhs),
         Cast(expr) => verify_expr(&expr.expr),
-        DecodeEnum(expr, _, _) => verify_expr(expr),
         IsNull(expr) => verify_expr(&expr.expr),
+        Let(expr) => expr.bindings.iter().all(verify_expr) && verify_expr(&expr.body),
         List(expr) => expr.items.iter().all(verify_expr),
         Map(expr) => verify_expr(&expr.base) && verify_expr(&expr.map),
+        Match(expr_match) => {
+            verify_expr(&expr_match.subject)
+                && expr_match.arms.iter().all(|arm| verify_expr(&arm.expr))
+        }
         Project(expr) => verify_expr(&expr.base),
         Record(expr) => expr.fields.iter().all(verify_expr),
         Reference(_) => false,

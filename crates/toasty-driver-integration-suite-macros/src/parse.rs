@@ -253,6 +253,7 @@ pub struct DriverTestAttr {
     pub id_ident: Option<String>,
     pub matrix: Vec<String>,
     pub requires: Option<BoolExpr>,
+    pub serial: bool,
     /// The original syn::Attribute
     pub ast: syn::Attribute,
 }
@@ -266,6 +267,7 @@ impl DriverTestAttr {
                 id_ident: None,
                 matrix: Vec::new(),
                 requires: None,
+                serial: false,
                 ast: attr.clone(),
             })
         } else {
@@ -285,6 +287,7 @@ impl Parse for DriverTestAttr {
         let mut id_ident = None;
         let mut matrix = Vec::new();
         let mut requires = None;
+        let mut serial = false;
 
         // Parse comma-separated list of attributes
         let attrs = Punctuated::<DriverTestAttrItem, Comma>::parse_terminated(input)?;
@@ -300,6 +303,9 @@ impl Parse for DriverTestAttr {
                 DriverTestAttrItem::Requires(expr) => {
                     requires = Some(expr);
                 }
+                DriverTestAttrItem::Serial => {
+                    serial = true;
+                }
             }
         }
 
@@ -310,6 +316,7 @@ impl Parse for DriverTestAttr {
             id_ident,
             matrix,
             requires,
+            serial,
             ast,
         })
     }
@@ -324,6 +331,8 @@ enum DriverTestAttrItem {
     Matrix(Vec<String>),
     /// requires(expr) - specifies boolean expression for filtering expansions
     Requires(BoolExpr),
+    /// serial - marks test as requiring exclusive (serial) execution
+    Serial,
 }
 
 impl Parse for DriverTestAttrItem {
@@ -354,9 +363,13 @@ impl Parse for DriverTestAttrItem {
                 let expr = BoolExpr::parse(&content)?;
                 Ok(DriverTestAttrItem::Requires(expr))
             }
+            "serial" => {
+                // Bare keyword, no parentheses
+                Ok(DriverTestAttrItem::Serial)
+            }
             _ => Err(syn::Error::new_spanned(
                 name,
-                "unknown attribute, expected `id`, `matrix`, or `requires`",
+                "unknown attribute, expected `id`, `matrix`, `requires`, or `serial`",
             )),
         }
     }
