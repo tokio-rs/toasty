@@ -627,6 +627,17 @@ pub async fn preload_has_many_with_optional_belongs_to(test: &mut Test) -> Resul
 
     assert_eq!(user.id, todo.user.get().as_ref().unwrap().id);
 
+    // Create an orphan todo (no user)
+    let orphan = Todo::create().title("Orphan").exec(&mut db).await?;
+
+    // Preload BelongsTo<Option<User>> on orphan — should be None
+    let orphan = Todo::filter_by_id(orphan.id)
+        .include(Todo::fields().user())
+        .get(&mut db)
+        .await?;
+
+    assert!(orphan.user.get().is_none());
+
     Ok(())
 }
 
