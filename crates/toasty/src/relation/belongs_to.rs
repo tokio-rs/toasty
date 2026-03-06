@@ -1,5 +1,5 @@
-use crate::Load;
 use crate::relation::Relation;
+use crate::Load;
 
 use toasty_core::stmt::Value;
 

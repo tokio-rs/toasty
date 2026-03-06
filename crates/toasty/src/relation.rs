@@ -10,8 +10,8 @@ pub use has_one::HasOne;
 pub mod option;
 
 use super::Model;
-use crate::Load;
 use crate::stmt::{IntoExpr, IntoInsert};
+use crate::Load;
 
 use toasty_core::schema::app::FieldId;
 
