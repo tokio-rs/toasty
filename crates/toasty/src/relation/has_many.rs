@@ -31,7 +31,6 @@ impl<T: Relation> Load for HasMany<T> {
 }
 
 impl<T: Relation> HasMany<T> {
-
     #[track_caller]
     pub fn get(&self) -> &[T] {
         self.values

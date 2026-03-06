@@ -22,7 +22,6 @@ impl<T: Relation> Load for BelongsTo<T> {
 }
 
 impl<T: Relation> BelongsTo<T> {
-
     #[track_caller]
     pub fn get(&self) -> &T {
         self.value.as_ref().expect("association not loaded")

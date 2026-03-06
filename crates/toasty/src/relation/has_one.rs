@@ -22,7 +22,6 @@ impl<T: Relation> Load for HasOne<T> {
 }
 
 impl<T: Relation> HasOne<T> {
-
     #[track_caller]
     pub fn get(&self) -> &T {
         self.value.as_ref().expect("association not loaded")
