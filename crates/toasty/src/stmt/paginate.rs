@@ -123,9 +123,7 @@ impl<M: Model> Paginate<M> {
         };
 
         Ok(crate::Page::new(
-            Cursor::new(executor.schema().clone(), items.into())
-                .collect()
-                .await?,
+            Cursor::new(items.into()).collect().await?,
             self.query,
             next_cursor,
             prev_cursor,

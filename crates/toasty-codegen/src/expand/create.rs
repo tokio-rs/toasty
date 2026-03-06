@@ -125,7 +125,7 @@ impl Expand<'_> {
                             #vis fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
                                 // Silences unused field warning when the field is set on creation.
                                 if false {
-                                    let m = <#model_ident as #toasty::Model>::load(Default::default()).unwrap();
+                                    let m = <#model_ident as #toasty::Load>::load(Default::default()).unwrap();
                                     let _ = &m.#name;
                                 }
 
