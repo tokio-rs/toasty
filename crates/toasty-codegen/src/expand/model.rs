@@ -110,10 +110,6 @@ impl Expand<'_> {
                 type OptionOne = OptionOne;
 
                 #field_name_to_id
-
-                fn load(value: #toasty::Value) -> #toasty::Result<Self> {
-                    <Self as #toasty::Load>::load(value)
-                }
             }
 
             impl #toasty::stmt::IntoExpr<#model_ident> for #model_ident {
