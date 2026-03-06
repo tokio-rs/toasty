@@ -1005,8 +1005,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
             if stmt.is_query() {
                 // Extract pagination fields from the query statement.
-                let (limit, order, cursor) =
-                    Self::extract_query_pk_pagination(&stmt);
+                let (limit, order, cursor) = Self::extract_query_pk_pagination(&stmt);
 
                 // For queries, stream all matching records with the requested columns.
                 self.insert_mir_with_deps(mir::QueryPk {
