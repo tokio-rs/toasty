@@ -88,11 +88,6 @@ impl Engine {
         self.exec_plan(connection, plan, in_transaction).await
     }
 
-    /// Returns a new [`ExprContext`](stmt::ExprContext) for this engine's schema.
-    fn expr_cx(&self) -> stmt::ExprContext<'_> {
-        stmt::ExprContext::new(&self.schema)
-    }
-
     /// Returns a new [`ExprContext`](stmt::ExprContext) for a specific target.
     fn expr_cx_for<'a>(&'a self, target: impl stmt::IntoExprTarget<'a>) -> stmt::ExprContext<'a> {
         stmt::ExprContext::new_with_target(&self.schema, target)

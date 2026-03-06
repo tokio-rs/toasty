@@ -47,60 +47,19 @@ impl Exec<'_> {
         // Fan-out for ANY(MAP(Value::List([...]), pred)) — one driver call per element.
         // Must be checked BEFORE simplify_expr, which would re-expand the list to Expr::Or.
         // Handles both constant lists (plan-time OR rewrite) and post-input-substitution lists.
-        if let Some((items, pred_template)) = super::try_extract_any_map_list(&pk_filter) {
-            let items = items.to_vec();
-            let pred_template = pred_template.clone();
-
-            let mut all_rows: Vec<stmt::Value> = Vec::new();
-
-            for item in items {
-                // Null FK values (e.g. from optional belongs_to) can never match
-                // a primary key — skip them to avoid sending invalid queries.
-                if item.is_null() {
-                    continue;
+        if let Some(all_rows) = self
+            .try_fan_out(&pk_filter, action.table, |per_call_filter| {
+                operation::QueryPk {
+                    table: action.table,
+                    index: action.index,
+                    select: action.columns.clone(),
+                    pk_filter: per_call_filter,
+                    filter: action.row_filter.clone(),
                 }
-
-                let mut per_call_filter = pred_template.clone();
-                // Mirror simplify_expr_any: unpack Record fields so arg(i) binds to field i.
-                match item {
-                    stmt::Value::Record(r) => per_call_filter.substitute(&r.fields[..]),
-                    item => per_call_filter.substitute([item]),
-                }
-
-                // Simplify after substitution to fold null propagation
-                // (e.g. Record with a null field → `col = null` → `null`).
-                let table = self.engine.schema.db.table(action.table);
-                simplify::simplify_expr(self.engine.expr_cx_for(table), &mut per_call_filter);
-                if per_call_filter.is_unsatisfiable() {
-                    continue;
-                }
-
-                let res = self
-                    .connection
-                    .exec(
-                        &self.engine.schema,
-                        operation::QueryPk {
-                            table: action.table,
-                            index: action.index,
-                            select: action.columns.clone(),
-                            pk_filter: per_call_filter,
-                            filter: action.row_filter.clone(),
-                        }
-                        .into(),
-                    )
-                    .await?;
-
-                all_rows.extend(res.rows.into_value_stream().collect().await?);
-            }
-
-            debug_assert!(
-                {
-                    let mut seen = std::collections::HashSet::new();
-                    all_rows.iter().all(|row| seen.insert(row))
-                },
-                "fan-out produced duplicate rows in QueryPk"
-            );
-
+                .into()
+            })
+            .await?
+        {
             self.vars.store(
                 action.output.var,
                 action.output.num_uses,
