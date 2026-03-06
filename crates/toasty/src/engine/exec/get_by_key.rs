@@ -26,13 +26,16 @@ pub(crate) struct GetByKey {
 
 impl Exec<'_> {
     pub(super) async fn action_get_by_key(&mut self, action: &GetByKey) -> Result<()> {
-        let keys = self
+        let keys: Vec<_> = self
             .vars
             .load(action.input)
             .await?
             .collect_as_value()
             .await?
-            .unwrap_list();
+            .unwrap_list()
+            .into_iter()
+            .filter(|k| !k.is_null())
+            .collect();
 
         let res = if keys.is_empty() {
             Rows::value_stream(ValueStream::default())

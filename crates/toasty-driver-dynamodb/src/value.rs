@@ -64,6 +64,7 @@ impl Value {
                     .collect::<Vec<_>>();
                 AV::L(items)
             }
+            stmt::Value::Null => AV::Null(true),
             _ => todo!("{:#?}", self.0),
         }
     }

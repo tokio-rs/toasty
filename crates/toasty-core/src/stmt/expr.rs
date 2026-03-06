@@ -112,6 +112,14 @@ impl Expr {
         matches!(self, Self::Value(Value::Bool(false)))
     }
 
+    /// Returns `true` if the expression can never evaluate to `true`.
+    ///
+    /// In SQL's three-valued logic, both `false` and `null` are unsatisfiable:
+    /// a filter producing either value will never match any rows.
+    pub fn is_unsatisfiable(&self) -> bool {
+        self.is_false() || self.is_value_null()
+    }
+
     /// Returns `true` if the expression is the default expression
     pub fn is_default(&self) -> bool {
         matches!(self, Self::Default)

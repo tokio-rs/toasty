@@ -188,6 +188,14 @@ impl Simplify<'_> {
                 let match_expr = rhs.take();
                 Some(self.eliminate_match_in_binary_op(op, match_expr, other, false))
             }
+            // Null propagation: `expr <op> null` → `null` (and symmetric)
+            //
+            // Any comparison with NULL yields NULL (SQL three-valued logic).
+            // This catches cases like `column = null` after input substitution
+            // provides a null FK value.
+            (_, Expr::Value(stmt::Value::Null)) | (Expr::Value(stmt::Value::Null), _) => {
+                return Some(Expr::null());
+            }
             // Canonicalization, `literal <op> col` → `col <op_commuted> literal`
             (Expr::Value(_), rhs) if !rhs.is_value() => {
                 std::mem::swap(lhs, rhs);

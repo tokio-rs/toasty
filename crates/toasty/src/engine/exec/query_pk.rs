@@ -54,11 +54,25 @@ impl Exec<'_> {
             let mut all_rows: Vec<stmt::Value> = Vec::new();
 
             for item in items {
+                // Null FK values (e.g. from optional belongs_to) can never match
+                // a primary key — skip them to avoid sending invalid queries.
+                if item.is_null() {
+                    continue;
+                }
+
                 let mut per_call_filter = pred_template.clone();
                 // Mirror simplify_expr_any: unpack Record fields so arg(i) binds to field i.
                 match item {
                     stmt::Value::Record(r) => per_call_filter.substitute(&r.fields[..]),
                     item => per_call_filter.substitute([item]),
+                }
+
+                // Simplify after substitution to fold null propagation
+                // (e.g. Record with a null field → `col = null` → `null`).
+                let table = self.engine.schema.db.table(action.table);
+                simplify::simplify_expr(self.engine.expr_cx_for(table), &mut per_call_filter);
+                if per_call_filter.is_unsatisfiable() {
+                    continue;
                 }
 
                 let res = self
@@ -95,8 +109,20 @@ impl Exec<'_> {
             return Ok(());
         }
 
-        if action.input.is_some() {
-            simplify::simplify_expr(self.engine.expr_cx(), &mut pk_filter);
+        {
+            let table = self.engine.schema.db.table(action.table);
+            simplify::simplify_expr(self.engine.expr_cx_for(table), &mut pk_filter);
+        }
+
+        // An unsatisfiable filter (null or false) means no rows can match
+        // (e.g. null FK from optional belongs_to).
+        if pk_filter.is_unsatisfiable() {
+            self.vars.store(
+                action.output.var,
+                action.output.num_uses,
+                Rows::Stream(stmt::ValueStream::default()),
+            );
+            return Ok(());
         }
 
         let res = self
