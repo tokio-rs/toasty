@@ -1,8 +1,10 @@
 use super::Relation;
 use toasty_core::schema::app::FieldId;
+use toasty_core::stmt::Value;
 
 impl<T: Relation> Relation for Option<T> {
     type Model = T::Model;
+    type Create = T::Create;
     type Expr = Option<T::Model>;
     type Query = T::Query;
     type Many = T::Many;
@@ -17,5 +19,18 @@ impl<T: Relation> Relation for Option<T> {
 
     fn nullable() -> bool {
         true
+    }
+
+    fn load(value: Value) -> Result<Self, crate::Error> {
+        match value {
+            // Encoded "loaded as None" from SELECT+include path.
+            // The nested merge's Match expression transforms Value::Null
+            // (no matching row) into I64(0) to distinguish from
+            // Value::Null (unloaded), which HasOne::load handles.
+            Value::I64(0) => Ok(None),
+            // Any other value is the raw model record (from INSERT or
+            // SELECT+include when a matching row exists).
+            v => Ok(Some(T::load(v)?)),
+        }
     }
 }

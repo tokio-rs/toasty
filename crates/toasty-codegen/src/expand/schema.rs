@@ -1,5 +1,5 @@
 use super::{util, Expand};
-use crate::schema::{AutoStrategy, Column, FieldTy, ModelKind, Name, UuidVersion};
+use crate::schema::{AutoStrategy, Column, FieldTy, ModelKind, Name, SerializeFormat, UuidVersion};
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -36,6 +36,7 @@ impl Expand<'_> {
                             id,
                             name: #name,
                             fields: #fields,
+                            indices: #indices,
                         }
                     )
                 }
@@ -87,8 +88,15 @@ impl Expand<'_> {
                         _ => quote!(None),
                     };
 
+                    let serialize = match &field.attrs.serialize {
+                        Some(SerializeFormat::Json) => {
+                            quote!(Some(#toasty::schema::app::SerializeFormat::Json))
+                        }
+                        None => quote!(None),
+                    };
+
                     nullable = quote!(<#ty as #toasty::stmt::Primitive>::NULLABLE);
-                    field_ty = quote!(<#ty as #toasty::stmt::Primitive>::field_ty(#storage_ty));
+                    field_ty = quote!(<#ty as #toasty::stmt::Primitive>::field_ty(#storage_ty, #serialize));
                 }
                 FieldTy::BelongsTo(rel) => {
                     let ty = &rel.ty;
@@ -184,6 +192,7 @@ impl Expand<'_> {
                     primary_key: #primary_key,
                     auto: #auto,
                     constraints: vec![],
+                    variant: None,
                 }
             }
         });
@@ -227,7 +236,7 @@ impl Expand<'_> {
         }
     }
 
-    fn expand_model_indices(&self) -> TokenStream {
+    pub(super) fn expand_model_indices(&self) -> TokenStream {
         use crate::schema::IndexScope;
 
         let toasty = &self.toasty;

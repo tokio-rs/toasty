@@ -11,7 +11,7 @@ mod cte;
 pub use cte::Cte;
 
 mod cx;
-pub use cx::{ExprContext, ExprTarget, IntoExprTarget, Resolve, ResolvedRef};
+pub use cx::{DerivedRef, ExprContext, ExprTarget, IntoExprTarget, Resolve, ResolvedRef};
 
 mod delete;
 pub use delete::Delete;
@@ -65,6 +65,12 @@ pub use expr_in_subquery::ExprInSubquery;
 
 mod expr_is_null;
 pub use expr_is_null::ExprIsNull;
+
+mod expr_is_variant;
+pub use expr_is_variant::ExprIsVariant;
+
+mod expr_let;
+pub use expr_let::ExprLet;
 
 mod expr_list;
 pub use expr_list::ExprList;
@@ -156,7 +162,7 @@ mod op_set;
 pub use op_set::SetOp;
 
 mod path;
-pub use path::Path;
+pub use path::{Path, PathRoot};
 
 mod path_field_set;
 pub use path_field_set::PathFieldSet;

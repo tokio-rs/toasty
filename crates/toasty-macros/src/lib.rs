@@ -1,5 +1,7 @@
 extern crate proc_macro;
 
+mod create;
+
 use proc_macro::TokenStream;
 use quote::quote;
 
@@ -16,7 +18,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
     }
 }
 
-#[proc_macro_derive(Embed, attributes(column))]
+#[proc_macro_derive(Embed, attributes(column, index, unique))]
 pub fn derive_embed(input: TokenStream) -> TokenStream {
     match toasty_codegen::generate_embed(input.into()) {
         Ok(output) => output.into(),
@@ -35,6 +37,9 @@ pub fn query(_input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro]
-pub fn create(_input: TokenStream) -> TokenStream {
-    quote!(println!("TODO")).into()
+pub fn create(input: TokenStream) -> TokenStream {
+    match create::generate(input.into()) {
+        Ok(output) => output.into(),
+        Err(e) => e.to_compile_error().into(),
+    }
 }

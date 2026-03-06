@@ -1,8 +1,9 @@
 mod primitive;
-pub use primitive::FieldPrimitive;
+pub use primitive::{FieldPrimitive, SerializeFormat};
 
 use super::{
     AutoStrategy, BelongsTo, Constraint, Embedded, HasMany, HasOne, Model, ModelId, Schema,
+    VariantId,
 };
 use crate::{driver, stmt, Result};
 use std::fmt;
@@ -29,6 +30,10 @@ pub struct Field {
 
     /// Any additional field constraints
     pub constraints: Vec<Constraint>,
+
+    /// If this field belongs to an enum variant, identifies that variant.
+    /// `None` for fields on root models and embedded structs.
+    pub variant: Option<VariantId>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]

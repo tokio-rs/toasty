@@ -1,4 +1,6 @@
-use crate::stmt::{visit_mut, ExprSet, Input, Projection, Query, TableDerived, TableRef, Values};
+use crate::stmt::{
+    visit, visit_mut, ExprSet, Input, Projection, Query, TableDerived, TableRef, Values,
+};
 
 use super::{Expr, Value};
 
@@ -10,6 +12,25 @@ impl<I> Substitute<I> {
     pub(crate) fn new(input: I) -> Substitute<I> {
         Substitute { input }
     }
+}
+
+/// Assert that `expr` only contains `Arg` nodes with `nesting == 0`.
+fn assert_only_local_args(expr: &Expr, msg: &str) {
+    debug_assert!(
+        {
+            let mut ok = true;
+            visit::for_each_expr(expr, |e| {
+                if let Expr::Arg(a) = e {
+                    if a.nesting != 0 {
+                        ok = false;
+                    }
+                }
+            });
+            ok
+        },
+        "{}",
+        msg
+    );
 }
 
 impl<I> visit_mut::VisitMut for Substitute<I>
@@ -38,9 +59,26 @@ where
         } else {
             // Recurse into child expressions
             match expr {
+                Expr::Let(expr_let) => {
+                    // Substitute only recurses into the bindings. The body
+                    // references the binding results via Arg(nesting=0), so
+                    // we must not substitute those.
+                    assert_only_local_args(
+                        &expr_let.body,
+                        "Let body contains args with nesting > 0",
+                    );
+                    for binding in &mut expr_let.bindings {
+                        self.visit_expr_mut(binding);
+                    }
+                }
                 Expr::Map(expr_map) => {
-                    // Only recurse into the base expression as arguments
-                    // reference the base.
+                    // Substitute only recurses into the base. The map body
+                    // references the base elements via Arg(nesting=0), so
+                    // we must not substitute those.
+                    assert_only_local_args(
+                        &expr_map.map,
+                        "Map body contains args with nesting > 0",
+                    );
                     self.visit_expr_mut(&mut expr_map.base);
                 }
                 _ => {

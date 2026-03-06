@@ -64,6 +64,7 @@ impl Engine {
         &self,
         connection: &mut PoolConnection,
         stmt: Statement,
+        in_transaction: bool,
     ) -> Result<ValueStream> {
         if cfg!(debug_assertions) {
             self.verify(&stmt);
@@ -84,12 +85,7 @@ impl Engine {
 
         // The plan is called once (single entry record stream) with no arguments
         // (empty record).
-        self.exec_plan(connection, plan).await
-    }
-
-    /// Returns a new [`ExprContext`](stmt::ExprContext) for this engine's schema.
-    fn expr_cx(&self) -> stmt::ExprContext<'_> {
-        stmt::ExprContext::new(&self.schema)
+        self.exec_plan(connection, plan, in_transaction).await
     }
 
     /// Returns a new [`ExprContext`](stmt::ExprContext) for a specific target.

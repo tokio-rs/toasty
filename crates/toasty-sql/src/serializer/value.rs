@@ -21,8 +21,11 @@ impl<'a> ToSql for TypeHintedValue<'a> {
             }
         });
 
-        // For nested records/lists, recurse normally (they handle their own fields)
-        if matches!(self.value, stmt::Value::Record(_) | stmt::Value::List(_)) {
+        if matches!(self.value, stmt::Value::Null) {
+            // Write NULL as a literal — see ToSql for &stmt::Value
+            f.dst.push_str("NULL");
+        } else if matches!(self.value, stmt::Value::Record(_) | stmt::Value::List(_)) {
+            // For nested records/lists, recurse normally (they handle their own fields)
             self.value.to_sql(cx, f);
         } else {
             // For scalar values, use the type hint
@@ -61,6 +64,12 @@ impl ToSql for &stmt::Value {
                     value.to_sql(cx, f);
                 }
                 f.dst.push(')');
+            }
+            Null => {
+                // Write NULL as a literal rather than a bind parameter.
+                // A bound NULL with no type hint causes PostgreSQL to fail
+                // type inference (e.g. in VALUES-based derived tables).
+                f.dst.push_str("NULL");
             }
             value => {
                 let placeholder = f.params.push(value, None);

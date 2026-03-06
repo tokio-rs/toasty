@@ -91,6 +91,13 @@ pub struct EmbeddedStruct {
 
     /// Fields contained by the embedded struct
     pub fields: Vec<Field>,
+
+    /// Indices defined on this embedded struct's fields.
+    ///
+    /// These reference fields within this embedded struct (not the parent model).
+    /// The schema builder propagates them to physical DB indexes on the parent
+    /// table's flattened columns.
+    pub indices: Vec<Index>,
 }
 
 impl EmbeddedStruct {
@@ -115,6 +122,17 @@ pub struct EmbeddedEnum {
 
     /// The enum's variants
     pub variants: Vec<EnumVariant>,
+
+    /// All fields across all variants, with global indices. Each field's
+    /// `variant` field identifies which variant it belongs to.
+    pub fields: Vec<Field>,
+
+    /// Indices defined on this embedded enum's variant fields.
+    ///
+    /// These reference fields within this embedded enum (not the parent model).
+    /// The schema builder propagates them to physical DB indexes on the parent
+    /// table's flattened columns.
+    pub indices: Vec<Index>,
 }
 
 #[derive(Debug, Clone)]
@@ -124,22 +142,28 @@ pub struct EnumVariant {
 
     /// The discriminant value stored in the database column
     pub discriminant: i64,
-
-    /// Fields carried by this variant (empty for unit variants)
-    pub fields: Vec<Field>,
 }
 
 impl EmbeddedEnum {
     /// Returns true if at least one variant carries data fields.
     pub fn has_data_variants(&self) -> bool {
-        self.variants.iter().any(|v| !v.fields.is_empty())
+        !self.fields.is_empty()
+    }
+
+    /// Returns fields belonging to a specific variant.
+    pub fn variant_fields(&self, variant_index: usize) -> impl Iterator<Item = &Field> {
+        let variant_id = VariantId {
+            model: self.id,
+            index: variant_index,
+        };
+        self.fields
+            .iter()
+            .filter(move |f| f.variant == Some(variant_id))
     }
 
     pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
-        for variant in &self.variants {
-            for field in &variant.fields {
-                field.verify(db)?;
-            }
+        for field in &self.fields {
+            field.verify(db)?;
         }
         Ok(())
     }
@@ -233,11 +257,32 @@ impl Model {
     }
 }
 
+/// Identifies a specific variant within an embedded enum model.
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub struct VariantId {
+    /// The enum model this variant belongs to.
+    pub model: ModelId,
+    /// Index of the variant within `EmbeddedEnum::variants`.
+    pub index: usize,
+}
+
+impl fmt::Debug for VariantId {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(fmt, "VariantId({}/{})", self.model.0, self.index)
+    }
+}
+
 impl ModelId {
     /// Create a `FieldId` representing the current model's field at index
     /// `index`.
     pub const fn field(self, index: usize) -> FieldId {
         FieldId { model: self, index }
+    }
+
+    /// Create a `VariantId` representing the current model's variant at
+    /// `index`.
+    pub const fn variant(self, index: usize) -> VariantId {
+        VariantId { model: self, index }
     }
 
     pub(crate) const fn placeholder() -> Self {
