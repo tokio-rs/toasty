@@ -48,7 +48,10 @@ pub mod codegen_support {
         stmt::{self, IntoExpr, IntoInsert, IntoSelect, Path},
         Db, Embed, Error, Executor, ExecutorExt, Model, Register, Result, Statement,
     };
+    #[cfg(feature = "serde")]
+    pub use serde_json;
     pub use std::{convert::Into, default::Default, option::Option};
+
     pub use toasty_core as core;
     pub use toasty_core::{
         driver,

@@ -113,6 +113,45 @@ impl Expand<'_> {
                     }
                 }
             }
+            FieldTy::Primitive(ty) if field.attrs.serialize.is_some() => {
+                let serialize_attr = field.attrs.serialize.as_ref().unwrap();
+                if serialize_attr.nullable {
+                    quote! {
+                        #vis fn #field_ident(mut self, #field_ident: #ty) -> Self {
+                            self.#set_field_ident(#field_ident);
+                            self
+                        }
+
+                        #vis fn #set_field_ident(&mut self, #field_ident: #ty) -> &mut Self {
+                            let projection = #projection;
+                            match &#field_ident {
+                                Some(v) => {
+                                    let json = #toasty::serde_json::to_string(v).expect("failed to serialize");
+                                    #stmt_method.set(projection, <String as #toasty::IntoExpr<String>>::into_expr(json));
+                                }
+                                None => {
+                                    #stmt_method.set(projection, #toasty::stmt::Expr::<String>::from_untyped(#toasty::core::stmt::Expr::Value(#toasty::Value::Null)));
+                                }
+                            }
+                            self
+                        }
+                    }
+                } else {
+                    quote! {
+                        #vis fn #field_ident(mut self, #field_ident: #ty) -> Self {
+                            self.#set_field_ident(#field_ident);
+                            self
+                        }
+
+                        #vis fn #set_field_ident(&mut self, #field_ident: #ty) -> &mut Self {
+                            let projection = #projection;
+                            let json = #toasty::serde_json::to_string(&#field_ident).expect("failed to serialize");
+                            #stmt_method.set(projection, <String as #toasty::IntoExpr<String>>::into_expr(json));
+                            self
+                        }
+                    }
+                }
+            }
             FieldTy::Primitive(ty) => {
                 quote! {
                     #vis fn #field_ident(mut self, #field_ident: impl #toasty::IntoExpr<#ty>) -> Self {
@@ -242,8 +281,34 @@ impl Expand<'_> {
         self.model.fields.iter().enumerate().map(|(offset, field)| {
             let i = util::int(offset);
             let field_ident = &field.name.ident;
+            let field_name_str = field.name.ident.to_string();
 
             match &field.ty {
+                FieldTy::Primitive(_ty) if field.attrs.serialize.is_some() => {
+                    let serialize_attr = field.attrs.serialize.as_ref().unwrap();
+
+                    let json_deserialize = quote! {
+                        let json_str = <String as #toasty::stmt::Primitive>::load(value)?;
+                        #toasty::serde_json::from_str(&json_str)
+                            .map_err(|e| #toasty::Error::from_args(
+                                format_args!("failed to deserialize field '{}': {}", #field_name_str, e)
+                            ))?
+                    };
+
+                    let assign = if serialize_attr.nullable {
+                        quote! {
+                            if value.is_null() { None } else { Some({ #json_deserialize }) }
+                        }
+                    } else {
+                        quote! { { #json_deserialize } }
+                    };
+
+                    quote! {
+                        #i => {
+                            self.#field_ident = #assign;
+                        }
+                    }
+                }
                 FieldTy::Primitive(ty) => {
                     quote!(#i => <#ty as #toasty::stmt::Primitive>::reload(&mut self.#field_ident, value)?,)
                 }
