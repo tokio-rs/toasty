@@ -34,6 +34,7 @@ pub mod one_model_query;
 pub mod one_model_sort_limit;
 pub mod preload;
 pub mod reset_db;
+pub mod serialize;
 pub mod sync_send;
 pub mod tx_atomic_stmt;
 pub mod tx_interactive;

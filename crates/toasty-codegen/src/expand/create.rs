@@ -186,6 +186,36 @@ impl Expand<'_> {
                             }
                         }
                     }
+                    FieldTy::Primitive(ty) if field.attrs.serialize.is_some() => {
+                        let serialize_attr = field.attrs.serialize.as_ref().unwrap();
+                        if serialize_attr.nullable {
+                            // For nullable serialized fields, extract the inner type from Option<T>
+                            // Accept Option<InnerType>, serialize Some(v) as JSON, None as NULL
+                            quote! {
+                                #vis fn #name(mut self, #name: #ty) -> Self {
+                                    match &#name {
+                                        Some(v) => {
+                                            let json = #toasty::serde_json::to_string(v).expect("failed to serialize");
+                                            self.stmt.set(#index_tokenized, <String as #toasty::IntoExpr<String>>::into_expr(json));
+                                        }
+                                        None => {
+                                            self.stmt.set(#index_tokenized, #toasty::stmt::Expr::<String>::from_untyped(#toasty::core::stmt::Expr::Value(#toasty::Value::Null)));
+                                        }
+                                    }
+                                    self
+                                }
+                            }
+                        } else {
+                            // Non-nullable serialized field: accept T directly, serialize to JSON
+                            quote! {
+                                #vis fn #name(mut self, #name: #ty) -> Self {
+                                    let json = #toasty::serde_json::to_string(&#name).expect("failed to serialize");
+                                    self.stmt.set(#index_tokenized, <String as #toasty::IntoExpr<String>>::into_expr(json));
+                                    self
+                                }
+                            }
+                        }
+                    }
                     FieldTy::Primitive(ty) => {
                         quote! {
                             #vis fn #name(mut self, #name: impl #toasty::IntoExpr<#ty>) -> Self {

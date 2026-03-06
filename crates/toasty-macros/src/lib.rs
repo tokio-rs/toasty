@@ -8,7 +8,8 @@ use quote::quote;
 #[proc_macro_derive(
     Model,
     attributes(
-        key, auto, default, update, column, index, unique, table, has_many, has_one, belongs_to
+        key, auto, default, update, column, index, unique, table, has_many, has_one, belongs_to,
+        serialize
     )
 )]
 pub fn derive_model(input: TokenStream) -> TokenStream {
