@@ -255,6 +255,13 @@ impl NestedMergePlanner<'_> {
         stmt::Type::Record(fields)
     }
 
+    /// Rewrites a projection expression, replacing statement-level `Arg` and
+    /// `Reference` nodes with nested merge arg references.
+    ///
+    /// Uses `walk_expr_scoped_mut` to automatically track scope depth through
+    /// Let/Map scopes so that only statement-level args (where
+    /// `nesting == scope_depth`) are rewritten — inner Let/Map bindings are
+    /// left alone.
     fn build_projection_from_expr(
         &mut self,
         stmt_id: hir::StmtId,
@@ -262,65 +269,75 @@ impl NestedMergePlanner<'_> {
         depth: usize,
         nested: &mut Vec<NestedChild>,
     ) -> eval::Func {
-        let stmt_state = &self.hir[stmt_id];
-        let selection = stmt_state.load_data_columns.get().unwrap();
+        // Copy the shared hir reference out of self so the closure can access
+        // hir data without conflicting with the &mut self capture.
+        let hir = self.hir;
+        let selection = hir[stmt_id].load_data_columns.get().unwrap().clone();
         let mut projection = expr.clone();
 
-        visit_mut::for_each_expr_mut(&mut projection, |expr| match expr {
-            stmt::Expr::Arg(expr_arg) => match &stmt_state.args[expr_arg.position] {
-                hir::Arg::Sub { stmt_id, .. } => {
-                    let child_stmt_state = &self.hir[stmt_id];
-                    let child_stmt = child_stmt_state.stmt.as_deref().unwrap();
-                    let child_returning = child_stmt.returning_unwrap();
+        visit_mut::walk_expr_scoped_mut(&mut projection, 0, &mut |expr, scope_depth| match expr {
+            stmt::Expr::Arg(expr_arg) if expr_arg.nesting == scope_depth => {
+                let position = expr_arg.position;
+                let stmt_state = &hir[stmt_id];
 
-                    // If the child statement has a constant returning clause,
-                    // then the nested merge can inline the returning directly
-                    // instead of having to get the values from the expression.
-                    match child_returning {
-                        stmt::Returning::Value(returning_expr) if returning_expr.is_const() => {
-                            match child_stmt {
-                                stmt::Statement::Query(query) => {
-                                    if query.single {
-                                        let stmt::Expr::Value(v) = returning_expr else {
-                                            todo!()
-                                        };
-                                        assert!(!v.is_list());
+                match &stmt_state.args[position] {
+                    hir::Arg::Sub {
+                        stmt_id: child_stmt_id,
+                        ..
+                    } => {
+                        let child_stmt_id = *child_stmt_id;
+                        let child_stmt_state = &hir[child_stmt_id];
+                        let child_stmt = child_stmt_state.stmt.as_deref().unwrap();
+                        let child_returning = child_stmt.returning_unwrap();
+
+                        match child_returning {
+                            stmt::Returning::Value(returning_expr) if returning_expr.is_const() => {
+                                match child_stmt {
+                                    stmt::Statement::Query(query) => {
+                                        if query.single {
+                                            let stmt::Expr::Value(v) = returning_expr else {
+                                                todo!()
+                                            };
+                                            assert!(!v.is_list());
+                                        }
                                     }
-                                }
-                                stmt::Statement::Insert(insert) => {
-                                    if insert.source.single {
-                                        let stmt::Expr::Value(v) = returning_expr else {
-                                            todo!()
-                                        };
-                                        assert!(!v.is_list());
+                                    stmt::Statement::Insert(insert) => {
+                                        if insert.source.single {
+                                            let stmt::Expr::Value(v) = returning_expr else {
+                                                todo!()
+                                            };
+                                            assert!(!v.is_list());
+                                        }
                                     }
+                                    _ => {}
                                 }
-                                _ => {}
+
+                                self.deps
+                                    .insert(child_stmt_state.load_data_statement.get().unwrap());
+                                *expr = returning_expr.clone();
                             }
+                            _ => {
+                                let nested_child = self.plan_nested_child(child_stmt_id, depth + 1);
+                                nested.push(nested_child);
 
-                            // For consistency, make sure the child statement's execution happens before this one.
-                            self.deps
-                                .insert(child_stmt_state.load_data_statement.get().unwrap());
-                            *expr = returning_expr.clone();
-                        }
-                        _ => {
-                            let nested_child = self.plan_nested_child(*stmt_id, depth + 1);
-                            nested.push(nested_child);
-
-                            // Taking the
-                            *expr = stmt::Expr::arg(nested.len());
+                                *expr = stmt::Expr::arg(nested.len());
+                            }
                         }
                     }
+                    hir::Arg::Ref { .. } => todo!(),
                 }
-                hir::Arg::Ref { .. } => todo!(),
-            },
+                false
+            }
             stmt::Expr::Reference(expr_reference) => {
                 let expr_column = expr_reference.as_expr_column_unwrap();
                 debug_assert_eq!(0, expr_column.nesting);
-                let index = selection.get_index_of(expr_reference).unwrap();
+                let index = selection
+                    .get_index_of(&stmt::ExprReference::from(*expr_column))
+                    .unwrap();
                 *expr = stmt::Expr::arg_project(0, [index]);
+                false
             }
-            _ => {}
+            _ => true,
         });
 
         let projection_arg_tys = self.build_projection_arg_tys(nested);

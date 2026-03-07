@@ -1152,3 +1152,60 @@ where
 
     node.visit_mut(ForEach { f });
 }
+
+/// Walk an expression tree in pre-order, tracking scope depth through
+/// Let/Map scopes.
+///
+/// For each node, calls `f(expr, scope_depth)`:
+/// - If `f` returns `true`, recursion into children continues.
+/// - If `f` returns `false`, children are skipped (e.g., when the callback
+///   has replaced the expression and doesn't want to recurse into the
+///   replacement).
+///
+/// Scope depth rules:
+/// - `Let` bindings are visited at the current depth; the body at `depth + 1`
+/// - `Map` base is visited at the current depth; the map function at `depth + 1`
+/// - All other compound expressions: children at the same depth
+///
+/// This matches the semantics of `ExprArg.nesting`: an arg with
+/// `nesting == scope_depth` references the outermost (statement-level) scope,
+/// while `nesting < scope_depth` references a Let/Map binding.
+pub fn walk_expr_scoped_mut<F>(expr: &mut Expr, scope_depth: usize, f: &mut F)
+where
+    F: FnMut(&mut Expr, usize) -> bool,
+{
+    struct ScopedWalk<'a, F> {
+        f: &'a mut F,
+        scope_depth: usize,
+    }
+
+    impl<F> VisitMut for ScopedWalk<'_, F>
+    where
+        F: FnMut(&mut Expr, usize) -> bool,
+    {
+        fn visit_expr_mut(&mut self, node: &mut Expr) {
+            if !(self.f)(node, self.scope_depth) {
+                return;
+            }
+            visit_expr_mut(self, node);
+        }
+
+        fn visit_expr_let_mut(&mut self, node: &mut ExprLet) {
+            for binding in &mut node.bindings {
+                self.visit_expr_mut(binding);
+            }
+            self.scope_depth += 1;
+            self.visit_expr_mut(&mut node.body);
+            self.scope_depth -= 1;
+        }
+
+        fn visit_expr_map_mut(&mut self, node: &mut ExprMap) {
+            self.visit_expr_mut(&mut node.base);
+            self.scope_depth += 1;
+            self.visit_expr_mut(&mut node.map);
+            self.scope_depth -= 1;
+        }
+    }
+
+    ScopedWalk { f, scope_depth }.visit_expr_mut(expr);
+}
