@@ -1,5 +1,5 @@
 use super::{
-    ddb_expression, item_to_record, operation, stmt, Connection, ExprAttrs, Result, Schema,
+    ddb_expression, ddb_key, item_to_record, operation, stmt, Connection, ExprAttrs, Result, Schema,
 };
 use std::sync::Arc;
 use toasty_core::{driver::Response, stmt::ExprContext};
@@ -29,7 +29,6 @@ impl Connection {
             let index = schema.db.index(index_id);
 
             if index.unique {
-                // assert!(!index.unique, "Index needs all fields");
                 use toasty_core::Error;
                 let err = Error::from_args(format_args!(
                     "Unique index {} doesn't have fields.",
@@ -38,27 +37,55 @@ impl Connection {
                 Err(err)
             } else {
                 tracing::trace!(table_name = %table.name, index_name = %index.name, "querying secondary index");
-                self.client
+                let mut query = self
+                    .client
                     .query()
                     .table_name(&table.name)
                     .index_name(&index.name)
                     .key_condition_expression(key_expression)
                     .set_filter_expression(filter_expression)
                     .set_expression_attribute_names(Some(expr_attrs.attr_names))
-                    .set_expression_attribute_values(Some(expr_attrs.attr_values))
+                    .set_expression_attribute_values(Some(expr_attrs.attr_values));
+
+                // Apply pagination parameters when present.
+                if let Some(limit) = op.limit {
+                    query = query.limit(limit as i32);
+                }
+                if let Some(ref direction) = op.order {
+                    query = query.scan_index_forward(*direction == stmt::Direction::Asc);
+                }
+                if let Some(ref start_key) = op.cursor {
+                    query = query.set_exclusive_start_key(Some(ddb_key(table, start_key)));
+                }
+
+                query
                     .send()
                     .await
                     .map_err(toasty_core::Error::driver_operation_failed)
             }
         } else {
             tracing::trace!(table_name = %table.name, "querying primary key");
-            self.client
+            let mut query = self
+                .client
                 .query()
                 .table_name(&table.name)
                 .key_condition_expression(key_expression)
                 .set_filter_expression(filter_expression)
                 .set_expression_attribute_names(Some(expr_attrs.attr_names))
-                .set_expression_attribute_values(Some(expr_attrs.attr_values))
+                .set_expression_attribute_values(Some(expr_attrs.attr_values));
+
+            // Apply pagination parameters when present.
+            if let Some(limit) = op.limit {
+                query = query.limit(limit as i32);
+            }
+            if let Some(ref direction) = op.order {
+                query = query.scan_index_forward(*direction == stmt::Direction::Asc);
+            }
+            if let Some(ref start_key) = op.cursor {
+                query = query.set_exclusive_start_key(Some(ddb_key(table, start_key)));
+            }
+
+            query
                 .send()
                 .await
                 .map_err(toasty_core::Error::driver_operation_failed)
