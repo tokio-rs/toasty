@@ -275,74 +275,69 @@ impl NestedMergePlanner<'_> {
         let selection = hir[stmt_id].load_data_columns.get().unwrap().clone();
         let mut projection = expr.clone();
 
-        visit_mut::walk_expr_scoped_mut(&mut projection, 0, &mut |expr, scope_depth| {
-            match expr {
-                stmt::Expr::Arg(expr_arg) if expr_arg.nesting == scope_depth => {
-                    let position = expr_arg.position;
-                    let stmt_state = &hir[stmt_id];
+        visit_mut::walk_expr_scoped_mut(&mut projection, 0, &mut |expr, scope_depth| match expr {
+            stmt::Expr::Arg(expr_arg) if expr_arg.nesting == scope_depth => {
+                let position = expr_arg.position;
+                let stmt_state = &hir[stmt_id];
 
-                    match &stmt_state.args[position] {
-                        hir::Arg::Sub {
-                            stmt_id: child_stmt_id,
-                            ..
-                        } => {
-                            let child_stmt_id = *child_stmt_id;
-                            let child_stmt_state = &hir[child_stmt_id];
-                            let child_stmt = child_stmt_state.stmt.as_deref().unwrap();
-                            let child_returning = child_stmt.returning_unwrap();
+                match &stmt_state.args[position] {
+                    hir::Arg::Sub {
+                        stmt_id: child_stmt_id,
+                        ..
+                    } => {
+                        let child_stmt_id = *child_stmt_id;
+                        let child_stmt_state = &hir[child_stmt_id];
+                        let child_stmt = child_stmt_state.stmt.as_deref().unwrap();
+                        let child_returning = child_stmt.returning_unwrap();
 
-                            match child_returning {
-                                stmt::Returning::Value(returning_expr)
-                                    if returning_expr.is_const() =>
-                                {
-                                    match child_stmt {
-                                        stmt::Statement::Query(query) => {
-                                            if query.single {
-                                                let stmt::Expr::Value(v) = returning_expr else {
-                                                    todo!()
-                                                };
-                                                assert!(!v.is_list());
-                                            }
+                        match child_returning {
+                            stmt::Returning::Value(returning_expr) if returning_expr.is_const() => {
+                                match child_stmt {
+                                    stmt::Statement::Query(query) => {
+                                        if query.single {
+                                            let stmt::Expr::Value(v) = returning_expr else {
+                                                todo!()
+                                            };
+                                            assert!(!v.is_list());
                                         }
-                                        stmt::Statement::Insert(insert) => {
-                                            if insert.source.single {
-                                                let stmt::Expr::Value(v) = returning_expr else {
-                                                    todo!()
-                                                };
-                                                assert!(!v.is_list());
-                                            }
-                                        }
-                                        _ => {}
                                     }
-
-                                    self.deps
-                                        .insert(child_stmt_state.load_data_statement.get().unwrap());
-                                    *expr = returning_expr.clone();
+                                    stmt::Statement::Insert(insert) => {
+                                        if insert.source.single {
+                                            let stmt::Expr::Value(v) = returning_expr else {
+                                                todo!()
+                                            };
+                                            assert!(!v.is_list());
+                                        }
+                                    }
+                                    _ => {}
                                 }
-                                _ => {
-                                    let nested_child =
-                                        self.plan_nested_child(child_stmt_id, depth + 1);
-                                    nested.push(nested_child);
 
-                                    *expr = stmt::Expr::arg(nested.len());
-                                }
+                                self.deps
+                                    .insert(child_stmt_state.load_data_statement.get().unwrap());
+                                *expr = returning_expr.clone();
+                            }
+                            _ => {
+                                let nested_child = self.plan_nested_child(child_stmt_id, depth + 1);
+                                nested.push(nested_child);
+
+                                *expr = stmt::Expr::arg(nested.len());
                             }
                         }
-                        hir::Arg::Ref { .. } => todo!(),
                     }
-                    false
+                    hir::Arg::Ref { .. } => todo!(),
                 }
-                stmt::Expr::Reference(expr_reference) => {
-                    let expr_column = expr_reference.as_expr_column_unwrap();
-                    debug_assert_eq!(0, expr_column.nesting);
-                    let index = selection
-                        .get_index_of(&stmt::ExprReference::from(*expr_column))
-                        .unwrap();
-                    *expr = stmt::Expr::arg_project(0, [index]);
-                    false
-                }
-                _ => true,
+                false
             }
+            stmt::Expr::Reference(expr_reference) => {
+                let expr_column = expr_reference.as_expr_column_unwrap();
+                debug_assert_eq!(0, expr_column.nesting);
+                let index = selection
+                    .get_index_of(&stmt::ExprReference::from(*expr_column))
+                    .unwrap();
+                *expr = stmt::Expr::arg_project(0, [index]);
+                false
+            }
+            _ => true,
         });
 
         let projection_arg_tys = self.build_projection_arg_tys(nested);
