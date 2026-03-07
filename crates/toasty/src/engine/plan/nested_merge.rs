@@ -255,6 +255,13 @@ impl NestedMergePlanner<'_> {
         stmt::Type::Record(fields)
     }
 
+    /// Rewrites a projection expression, replacing statement-level `Arg` and
+    /// `Reference` nodes with nested merge arg references.
+    ///
+    /// Uses `walk_expr_scoped_mut` to automatically track scope depth through
+    /// Let/Map scopes so that only statement-level args (where
+    /// `nesting == scope_depth`) are rewritten — inner Let/Map bindings are
+    /// left alone.
     fn build_projection_from_expr(
         &mut self,
         stmt_id: hir::StmtId,
@@ -262,197 +269,84 @@ impl NestedMergePlanner<'_> {
         depth: usize,
         nested: &mut Vec<NestedChild>,
     ) -> eval::Func {
-        let stmt_state = &self.hir[stmt_id];
-        let selection = stmt_state.load_data_columns.get().unwrap();
+        // Copy the shared hir reference out of self so the closure can access
+        // hir data without conflicting with the &mut self capture.
+        let hir = self.hir;
+        let selection = hir[stmt_id].load_data_columns.get().unwrap().clone();
         let mut projection = expr.clone();
 
-        self.rewrite_projection_expr(&mut projection, stmt_id, selection, depth, nested, 0);
+        visit_mut::walk_expr_scoped_mut(&mut projection, 0, &mut |expr, scope_depth| {
+            match expr {
+                stmt::Expr::Arg(expr_arg) if expr_arg.nesting == scope_depth => {
+                    let position = expr_arg.position;
+                    let stmt_state = &hir[stmt_id];
+
+                    match &stmt_state.args[position] {
+                        hir::Arg::Sub {
+                            stmt_id: child_stmt_id,
+                            ..
+                        } => {
+                            let child_stmt_id = *child_stmt_id;
+                            let child_stmt_state = &hir[child_stmt_id];
+                            let child_stmt = child_stmt_state.stmt.as_deref().unwrap();
+                            let child_returning = child_stmt.returning_unwrap();
+
+                            match child_returning {
+                                stmt::Returning::Value(returning_expr)
+                                    if returning_expr.is_const() =>
+                                {
+                                    match child_stmt {
+                                        stmt::Statement::Query(query) => {
+                                            if query.single {
+                                                let stmt::Expr::Value(v) = returning_expr else {
+                                                    todo!()
+                                                };
+                                                assert!(!v.is_list());
+                                            }
+                                        }
+                                        stmt::Statement::Insert(insert) => {
+                                            if insert.source.single {
+                                                let stmt::Expr::Value(v) = returning_expr else {
+                                                    todo!()
+                                                };
+                                                assert!(!v.is_list());
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+
+                                    self.deps
+                                        .insert(child_stmt_state.load_data_statement.get().unwrap());
+                                    *expr = returning_expr.clone();
+                                }
+                                _ => {
+                                    let nested_child =
+                                        self.plan_nested_child(child_stmt_id, depth + 1);
+                                    nested.push(nested_child);
+
+                                    *expr = stmt::Expr::arg(nested.len());
+                                }
+                            }
+                        }
+                        hir::Arg::Ref { .. } => todo!(),
+                    }
+                    false
+                }
+                stmt::Expr::Reference(expr_reference) => {
+                    let expr_column = expr_reference.as_expr_column_unwrap();
+                    debug_assert_eq!(0, expr_column.nesting);
+                    let index = selection
+                        .get_index_of(&stmt::ExprReference::from(*expr_column))
+                        .unwrap();
+                    *expr = stmt::Expr::arg_project(0, [index]);
+                    false
+                }
+                _ => true,
+            }
+        });
 
         let projection_arg_tys = self.build_projection_arg_tys(nested);
         eval::Func::from_stmt(projection, projection_arg_tys)
-    }
-
-    /// Recursively rewrites a projection expression, replacing statement-level
-    /// `Arg` and `Reference` nodes with nested merge arg references, while
-    /// correctly tracking expression nesting depth through Let/Map scopes.
-    ///
-    /// `scope_depth` counts how many Let/Map scopes we are inside. Statement-level
-    /// args have `nesting == scope_depth`; args with smaller `nesting` reference
-    /// inner scopes (Let bindings, Map iteration variables) and must be left alone.
-    fn rewrite_projection_expr(
-        &mut self,
-        expr: &mut stmt::Expr,
-        stmt_id: hir::StmtId,
-        selection: &IndexSet<stmt::ExprReference>,
-        depth: usize,
-        nested: &mut Vec<NestedChild>,
-        scope_depth: usize,
-    ) {
-        match expr {
-            stmt::Expr::Arg(expr_arg) => {
-                // Only process args that reference the statement scope.
-                // Args with nesting < scope_depth reference Let/Map bindings.
-                if expr_arg.nesting != scope_depth {
-                    return;
-                }
-
-                let stmt_state = &self.hir[stmt_id];
-                match &stmt_state.args[expr_arg.position] {
-                    hir::Arg::Sub { stmt_id, .. } => {
-                        let child_stmt_state = &self.hir[stmt_id];
-                        let child_stmt = child_stmt_state.stmt.as_deref().unwrap();
-                        let child_returning = child_stmt.returning_unwrap();
-
-                        match child_returning {
-                            stmt::Returning::Value(returning_expr)
-                                if returning_expr.is_const() =>
-                            {
-                                match child_stmt {
-                                    stmt::Statement::Query(query) => {
-                                        if query.single {
-                                            let stmt::Expr::Value(v) = returning_expr else {
-                                                todo!()
-                                            };
-                                            assert!(!v.is_list());
-                                        }
-                                    }
-                                    stmt::Statement::Insert(insert) => {
-                                        if insert.source.single {
-                                            let stmt::Expr::Value(v) = returning_expr else {
-                                                todo!()
-                                            };
-                                            assert!(!v.is_list());
-                                        }
-                                    }
-                                    _ => {}
-                                }
-
-                                self.deps
-                                    .insert(child_stmt_state.load_data_statement.get().unwrap());
-                                *expr = returning_expr.clone();
-                            }
-                            _ => {
-                                let nested_child =
-                                    self.plan_nested_child(*stmt_id, depth + 1);
-                                nested.push(nested_child);
-
-                                *expr = stmt::Expr::arg(nested.len());
-                            }
-                        }
-                    }
-                    hir::Arg::Ref { .. } => todo!(),
-                }
-            }
-            stmt::Expr::Reference(expr_reference) => {
-                let expr_column = expr_reference.as_expr_column_unwrap();
-                debug_assert_eq!(0, expr_column.nesting);
-                let index = selection.get_index_of(&stmt::ExprReference::from(expr_column.clone()))
-                    .unwrap();
-                *expr = stmt::Expr::arg_project(0, [index]);
-            }
-            // Scoping expressions: recurse with incremented depth
-            stmt::Expr::Let(expr_let) => {
-                for binding in &mut expr_let.bindings {
-                    self.rewrite_projection_expr(
-                        binding, stmt_id, selection, depth, nested, scope_depth,
-                    );
-                }
-                // Inside the Let body, args with nesting=0 refer to Let bindings,
-                // so statement-level args would have nesting=scope_depth+1.
-                self.rewrite_projection_expr(
-                    &mut expr_let.body, stmt_id, selection, depth, nested, scope_depth + 1,
-                );
-            }
-            stmt::Expr::Map(expr_map) => {
-                self.rewrite_projection_expr(
-                    &mut expr_map.base, stmt_id, selection, depth, nested, scope_depth,
-                );
-                self.rewrite_projection_expr(
-                    &mut expr_map.map, stmt_id, selection, depth, nested, scope_depth + 1,
-                );
-            }
-            // All other expressions: recurse into children
-            stmt::Expr::Record(expr_record) => {
-                for field in &mut expr_record.fields {
-                    self.rewrite_projection_expr(
-                        field, stmt_id, selection, depth, nested, scope_depth,
-                    );
-                }
-            }
-            stmt::Expr::List(expr_list) => {
-                for item in &mut expr_list.items {
-                    self.rewrite_projection_expr(
-                        item, stmt_id, selection, depth, nested, scope_depth,
-                    );
-                }
-            }
-            stmt::Expr::Project(expr_project) => {
-                self.rewrite_projection_expr(
-                    &mut expr_project.base, stmt_id, selection, depth, nested, scope_depth,
-                );
-            }
-            stmt::Expr::BinaryOp(expr_binary) => {
-                self.rewrite_projection_expr(
-                    &mut expr_binary.lhs, stmt_id, selection, depth, nested, scope_depth,
-                );
-                self.rewrite_projection_expr(
-                    &mut expr_binary.rhs, stmt_id, selection, depth, nested, scope_depth,
-                );
-            }
-            stmt::Expr::And(expr_and) => {
-                for operand in &mut expr_and.operands {
-                    self.rewrite_projection_expr(
-                        operand, stmt_id, selection, depth, nested, scope_depth,
-                    );
-                }
-            }
-            stmt::Expr::Or(expr_or) => {
-                for operand in &mut expr_or.operands {
-                    self.rewrite_projection_expr(
-                        operand, stmt_id, selection, depth, nested, scope_depth,
-                    );
-                }
-            }
-            stmt::Expr::Match(expr_match) => {
-                self.rewrite_projection_expr(
-                    &mut expr_match.subject, stmt_id, selection, depth, nested, scope_depth,
-                );
-                for arm in &mut expr_match.arms {
-                    self.rewrite_projection_expr(
-                        &mut arm.expr, stmt_id, selection, depth, nested, scope_depth,
-                    );
-                }
-                self.rewrite_projection_expr(
-                    &mut expr_match.else_expr, stmt_id, selection, depth, nested, scope_depth,
-                );
-            }
-            stmt::Expr::Cast(expr_cast) => {
-                self.rewrite_projection_expr(
-                    &mut expr_cast.expr, stmt_id, selection, depth, nested, scope_depth,
-                );
-            }
-            stmt::Expr::IsNull(expr_is_null) => {
-                self.rewrite_projection_expr(
-                    &mut expr_is_null.expr, stmt_id, selection, depth, nested, scope_depth,
-                );
-            }
-            stmt::Expr::IsVariant(expr_is_variant) => {
-                self.rewrite_projection_expr(
-                    &mut expr_is_variant.expr, stmt_id, selection, depth, nested, scope_depth,
-                );
-            }
-            stmt::Expr::Not(expr_not) => {
-                self.rewrite_projection_expr(
-                    &mut expr_not.expr, stmt_id, selection, depth, nested, scope_depth,
-                );
-            }
-            // Leaf nodes and other expressions that don't need rewriting
-            stmt::Expr::Value(_) | stmt::Expr::Error(_) => {}
-            // Stmt should have been lowered already
-            stmt::Expr::Stmt(_) => unreachable!("Expr::Stmt should be lowered before planning"),
-            // Other leaf/uncommon variants that shouldn't appear in projections
-            _ => {}
-        }
     }
 
     fn build_filter_for_nested_child(
