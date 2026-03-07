@@ -385,7 +385,13 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     panic!()
                 };
 
-                assert!(self.cx.is_returning(), "cx={:#?}", self.cx);
+                // Expr::Stmt subqueries are valid in returning expressions (e.g.,
+                // INCLUDE preloading) and in VALUES bodies of batch queries.
+                debug_assert!(
+                    self.cx.is_returning() || matches!(self.cx, LoweringContext::Statement),
+                    "cx={:#?}",
+                    self.cx,
+                );
 
                 // For now, we assume nested sub-statements cannot be executed on the
                 // target database. Eventually, we will need to make this smarter.
