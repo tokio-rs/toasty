@@ -1170,7 +1170,14 @@ where
 /// This matches the semantics of `ExprArg.nesting`: an arg with
 /// `nesting == scope_depth` references the outermost (statement-level) scope,
 /// while `nesting < scope_depth` references a Let/Map binding.
-pub fn walk_expr_scoped_mut<F>(expr: &mut Expr, scope_depth: usize, f: &mut F)
+pub fn walk_expr_scoped_mut<F>(expr: &mut Expr, scope_depth: usize, mut f: F)
+where
+    F: FnMut(&mut Expr, usize) -> bool,
+{
+    walk_expr_scoped_mut_ref(expr, scope_depth, &mut f);
+}
+
+fn walk_expr_scoped_mut_ref<F>(expr: &mut Expr, scope_depth: usize, f: &mut F)
 where
     F: FnMut(&mut Expr, usize) -> bool,
 {

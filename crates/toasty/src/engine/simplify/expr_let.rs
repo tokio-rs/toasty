@@ -30,7 +30,7 @@ impl Simplify<'_> {
 /// Uses `walk_expr_scoped_mut` to automatically track scope depth through
 /// Let/Map scopes.
 fn substitute_let_bindings(expr: &mut stmt::Expr, bindings: &[stmt::Expr]) {
-    visit_mut::walk_expr_scoped_mut(expr, 0, &mut |expr, scope_depth| match expr {
+    visit_mut::walk_expr_scoped_mut(expr, 0, |expr, scope_depth| match expr {
         stmt::Expr::Arg(arg) if arg.nesting == scope_depth && arg.position < bindings.len() => {
             *expr = bindings[arg.position].clone();
             false

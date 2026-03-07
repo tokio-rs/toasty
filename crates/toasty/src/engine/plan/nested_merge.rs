@@ -272,10 +272,10 @@ impl NestedMergePlanner<'_> {
         // Copy the shared hir reference out of self so the closure can access
         // hir data without conflicting with the &mut self capture.
         let hir = self.hir;
-        let selection = hir[stmt_id].load_data_columns.get().unwrap().clone();
+        let selection = hir[stmt_id].load_data_columns.get().unwrap();
         let mut projection = expr.clone();
 
-        visit_mut::walk_expr_scoped_mut(&mut projection, 0, &mut |expr, scope_depth| match expr {
+        visit_mut::walk_expr_scoped_mut(&mut projection, 0, |expr, scope_depth| match expr {
             stmt::Expr::Arg(expr_arg) if expr_arg.nesting == scope_depth => {
                 let position = expr_arg.position;
                 let stmt_state = &hir[stmt_id];
