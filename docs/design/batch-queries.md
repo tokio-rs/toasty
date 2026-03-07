@@ -16,277 +16,250 @@ let (active_users, recent_posts) = toasty::batch((
 // recent_posts: Vec<Post>
 ```
 
-Without batching, each query requires its own trip through the engine and driver.
-Batching amortizes the connection overhead and, for SQL databases, sends all
-queries in a single protocol exchange.
+The batch composes all queries into a single `Statement` whose returning
+expression is a record of subqueries. This means batch execution flows through
+the existing `exec` path — no new executor methods, no new driver operations.
 
 This design covers SQL databases only. DynamoDB support is out of scope.
 
+## New Trait: `IntoStatement<T>`
+
+A single new trait bridges query builders to `Statement<T>`:
+
+```rust
+pub trait IntoStatement<T> {
+    fn into_statement(self) -> Statement<T>;
+}
+```
+
+Query builders implement this for their model type. For example, `UserQuery`
+implements `IntoStatement<User>`:
+
+```rust
+impl IntoStatement<User> for UserQuery {
+    fn into_statement(self) -> Statement<User> {
+        self.stmt.into()
+    }
+}
+```
+
+The codegen already produces `IntoSelect` impls for query builders.
+`IntoStatement` can be blanket-implemented for anything that implements
+`IntoSelect`:
+
+```rust
+impl<T: IntoSelect> IntoStatement<T::Model> for T {
+    fn into_statement(self) -> Statement<T::Model> {
+        self.into_select().into()
+    }
+}
+```
+
+### Tuple implementations
+
+Tuples of `IntoStatement` types implement `IntoStatement` by composing their
+inner statements into a single select whose returning expression is a record of
+subqueries:
+
+```rust
+impl<T1, T2, A, B> IntoStatement<(Vec<T1>, Vec<T2>)> for (A, B)
+where
+    A: IntoStatement<T1>,
+    B: IntoStatement<T2>,
+{
+    fn into_statement(self) -> Statement<(Vec<T1>, Vec<T2>)> {
+        let stmt_a = self.0.into_statement().untyped;
+        let stmt_b = self.1.into_statement().untyped;
+
+        // Build: SELECT (stmt_a), (stmt_b)
+        let query = stmt::Query::values(stmt::Expr::record([
+            stmt::Expr::subquery(stmt_a),
+            stmt::Expr::subquery(stmt_b),
+        ]));
+
+        Statement::from_raw(query.into())
+    }
+}
+```
+
+The resulting statement is equivalent to `SELECT (subquery_1), (subquery_2)`.
+At the Toasty AST level this is a `Query` whose returning body is a
+`Record([Expr::Stmt, Expr::Stmt])`. The engine handles each subquery
+independently during execution and packs the results into a single
+`Value::Record`.
+
+Tuple impls for arities 2 through 8 are generated with a macro.
+
+## `Load` for Tuples and `Vec<T>`
+
+To deserialize the composed result, `Load` is implemented for `Vec<T>` and
+for tuples:
+
+```rust
+impl<T: Load> Load for Vec<T> {
+    fn load(value: stmt::Value) -> Result<Self> {
+        match value {
+            Value::List(items) => items
+                .into_iter()
+                .map(T::load)
+                .collect(),
+            _ => Err(Error::type_conversion(value, "Vec<T>")),
+        }
+    }
+}
+
+impl<A: Load, B: Load> Load for (A, B) {
+    fn load(value: stmt::Value) -> Result<Self> {
+        match value {
+            Value::Record(mut record) => Ok((
+                A::load(record[0].take())?,
+                B::load(record[1].take())?,
+            )),
+            _ => Err(Error::type_conversion(value, "(A, B)")),
+        }
+    }
+}
+```
+
+With these impls, `Load for (Vec<User>, Vec<Post>)` works automatically:
+the outer tuple impl splits the record, then each `Vec<T>` impl iterates
+the list and loads individual model instances.
+
 ## User-Facing API
 
-### `toasty::batch()`
-
 ```rust
-pub fn batch<Q: BatchQuery>(queries: Q) -> Batch<Q> {
-    Batch { queries }
-}
-
-pub struct Batch<Q> {
-    queries: Q,
-}
-
-impl<Q: BatchQuery> Batch<Q> {
-    pub async fn exec(
-        self,
-        executor: &mut dyn Executor,
-    ) -> Result<Q::Output> {
-        // ...
-    }
-}
-```
-
-`batch()` accepts any tuple of query builders (anything that implements
-`IntoSelect`). It returns a `Batch` handle whose `exec` method runs all queries
-and returns the results as a typed tuple.
-
-### `BatchQuery` trait
-
-```rust
-pub trait BatchQuery {
-    /// The result type. For a 2-tuple of queries, this is
-    /// `(Vec<A>, Vec<B>)`.
-    type Output;
-
-    /// Collect the untyped statements from each query.
-    fn into_statements(self) -> Vec<stmt::Statement>;
-
-    /// Reconstruct the typed output from a vec of value streams,
-    /// one per statement in the same order as `into_statements`.
-    fn from_streams(streams: Vec<ValueStream>) -> impl Future<Output = Result<Self::Output>>;
-}
-```
-
-Tuple implementations connect the typed world to the untyped engine:
-
-```rust
-impl<A, B> BatchQuery for (A, B)
+pub fn batch<T, Q: IntoStatement<T>>(queries: Q) -> Batch<T>
 where
-    A: IntoSelect,
-    A::Model: Load,
-    B: IntoSelect,
-    B::Model: Load,
+    T: Load,
 {
-    type Output = (Vec<A::Model>, Vec<B::Model>);
-
-    fn into_statements(self) -> Vec<stmt::Statement> {
-        vec![
-            self.0.into_select().untyped.into(),
-            self.1.into_select().untyped.into(),
-        ]
-    }
-
-    async fn from_streams(streams: Vec<ValueStream>) -> Result<Self::Output> {
-        let mut iter = streams.into_iter();
-        let a: Vec<A::Model> = Cursor::new(iter.next().unwrap()).collect().await?;
-        let b: Vec<B::Model> = Cursor::new(iter.next().unwrap()).collect().await?;
-        Ok((a, b))
+    Batch {
+        stmt: queries.into_statement(),
     }
 }
-```
 
-Implementations for tuples of arity 2 through 8 (or some reasonable upper bound)
-are generated with a macro.
-
-## Execution Path
-
-### 1. Application layer
-
-`Batch::exec` calls `BatchQuery::into_statements()` to collect the untyped
-statements, then passes them to a new `Executor` method.
-
-### 2. Executor
-
-Add a new method to `Executor`:
-
-```rust
-#[async_trait]
-pub trait Executor: Send + Sync {
-    // ... existing methods ...
-
-    /// Execute multiple statements and return one value stream per statement.
-    async fn exec_batch(
-        &mut self,
-        stmts: Vec<toasty_core::stmt::Statement>,
-    ) -> Result<Vec<ValueStream>>;
+pub struct Batch<T> {
+    stmt: Statement<T>,
 }
-```
 
-The default implementation runs each statement sequentially through
-`exec_untyped`. SQL drivers can override this to concatenate the queries into
-a single protocol round-trip.
-
-### 3. Engine
-
-Each statement in the batch is compiled independently through the existing
-pipeline (lower → plan → exec). The statements are unrelated, so no
-cross-statement optimization is needed.
-
-A new `Engine::exec_batch` method handles this:
-
-```rust
-pub(crate) async fn exec_batch(
-    &self,
-    connection: &mut PoolConnection,
-    stmts: Vec<Statement>,
-    in_transaction: bool,
-) -> Result<Vec<ValueStream>> {
-    let mut results = Vec::with_capacity(stmts.len());
-    for stmt in stmts {
-        results.push(self.exec(connection, stmt, in_transaction).await?);
+impl<T: Load> Batch<T> {
+    pub async fn exec(self, executor: &mut dyn Executor) -> Result<T> {
+        use ExecutorExt;
+        let stream = executor.exec(self.stmt).await?;
+        let value = stream.next().await
+            .ok_or_else(|| Error::record_not_found("batch returned no results"))??;
+        T::load(value)
     }
-    Ok(results)
 }
 ```
 
-This initial implementation compiles and runs statements one at a time. It still
-reduces round-trips at the driver level because all compiled operations share the
-same connection and can be sent together.
+`Batch::exec` calls the regular `ExecutorExt::exec` method. The composed
+statement flows through the standard engine pipeline. The result is a single
+value (a record of lists) that `T::load` deserializes into the typed tuple.
 
-### 4. Db / ConnectionOperation
+## Execution Flow
 
-Add a new `ConnectionOperation` variant:
+```
+User code:
+    toasty::batch((UserQuery, PostQuery)).exec(&db)
+
+IntoStatement for (A, B):
+    SELECT (SELECT ... FROM users WHERE ...), (SELECT ... FROM posts ...)
+
+Engine pipeline (standard exec path):
+    lower → plan → exec
+
+    The engine recognizes Expr::Stmt subqueries in the returning
+    expression and executes each independently.
+
+Result:
+    Value::Record([
+        Value::List([user1, user2, ...]),
+        Value::List([post1, post2, ...]),
+    ])
+
+Load for (Vec<User>, Vec<Post>):
+    (A::load(record[0]), B::load(record[1]))
+    → (Vec<User>::load(list), Vec<Post>::load(list))
+    → (vec![User::load(v1), ...], vec![Post::load(v1), ...])
+```
+
+## `Statement` Changes
+
+`Statement<M>` needs a way to construct from a raw `stmt::Statement` without
+requiring `M: Model`:
 
 ```rust
-pub(crate) enum ConnectionOperation {
-    // ... existing variants ...
-    ExecBatch {
-        stmts: Vec<Box<toasty_core::stmt::Statement>>,
-        in_transaction: bool,
-        tx: oneshot::Sender<Result<Vec<ValueStream>>>,
-    },
+impl<M> Statement<M> {
+    /// Build a statement from a raw untyped statement.
+    ///
+    /// Used by batch composition where M may be a tuple, not a model.
+    pub(crate) fn from_raw(untyped: stmt::Statement) -> Self {
+        Self {
+            untyped,
+            _p: PhantomData,
+        }
+    }
 }
 ```
 
-The background connection task handles this by calling `engine.exec_batch`.
+The existing `Statement::from_untyped` requires `M: Model` (via `IntoSelect`).
+`from_raw` has no bound on `M` and is `pub(crate)` so only internal code uses
+it.
 
-### 5. SQL driver batching
+## Engine Support
 
-For SQL databases, the driver can concatenate multiple queries separated by
-semicolons and execute them in a single `Connection::exec` call. This requires a
-new `Operation` variant:
+The engine needs to handle a `Query` whose returning expression is a record
+of `Expr::Stmt` subqueries where each subquery returns multiple rows.
 
-```rust
-pub enum Operation {
-    // ... existing variants ...
-    BatchQuerySql(BatchQuerySql),
-}
+The lowerer already handles `Expr::Stmt` for association preloading (`INCLUDE`),
+where subqueries get added to the dependency graph and executed as part of the
+plan. Batch queries follow the same pattern: each `Expr::Stmt` in the returning
+record becomes an independent subquery in the plan, and the exec phase collects
+results into a `Value::Record` of `Value::List`s.
 
-pub struct BatchQuerySql {
-    pub queries: Vec<QuerySql>,
-}
-```
-
-The planner detects when it is producing a batch and emits `BatchQuerySql`
-instead of individual `QuerySql` operations. The SQL driver serializes all
-queries into one SQL string (semicolon-separated), executes them, and splits the
-result sets back into separate `ValueStream`s.
-
-Whether the driver supports this depends on the database client library:
-
-| Driver | Multi-statement support |
-|--------|----------------------|
-| SQLite (rusqlite) | `execute_batch` or multiple `prepare`/`query` calls |
-| PostgreSQL (tokio-postgres) | `simple_query` supports multi-statement |
-| MySQL (mysql_async) | Needs `CLIENT_MULTI_STATEMENTS` flag |
-
-If a driver does not support multi-statement execution, it falls back to
-sequential execution (one query at a time on the same connection).
+If the existing lowerer does not handle bare subqueries in a returning record
+(outside of an `INCLUDE` context), a small extension is needed to recognize this
+pattern and plan it the same way.
 
 ## Implementation Plan
 
-### Phase 1: Foundation
+### Phase 1: `IntoStatement` trait and `Load` impls
 
-Introduce the public API types and sequential execution. No driver-level
-batching.
+1. Add `IntoStatement<T>` trait to `crates/toasty/src/stmt/`
+2. Add blanket impl `IntoStatement<T::Model> for T: IntoSelect`
+3. Add `Load for Vec<T>` and `Load for (A, B)` (and higher arities via macro)
+4. Add `Statement::from_raw`
+5. Export `IntoStatement` from `lib.rs` and `codegen_support`
 
-1. Add `BatchQuery` trait with tuple impls (2- through 8-tuples via macro)
-2. Add `toasty::batch()` function and `Batch` struct
-3. Add `Executor::exec_batch` with a default sequential implementation
-4. Add `ConnectionOperation::ExecBatch` variant and handle it in `Db`
-5. Wire `Batch::exec` → `Executor::exec_batch` → `Engine::exec` (called in a
-   loop)
+### Phase 2: Batch API
 
-After this phase, the API works and all queries execute on the same connection
-sequentially. The round-trip savings come from reusing one connection instead
-of acquiring N connections.
+1. Add `toasty::batch()` function and `Batch<T>` struct
+2. Add tuple impls of `IntoStatement<(Vec<T1>, Vec<T2>, ...)>` (via macro)
+3. Wire `Batch::exec` through the standard `ExecutorExt::exec` path
 
-### Phase 2: SQL multi-statement
+### Phase 3: Engine support
 
-Send all queries to the database in a single protocol exchange.
+1. Verify that the lowerer handles `Expr::Stmt` subqueries in a returning
+   record correctly (it may already work via the `INCLUDE` path)
+2. If not, extend the lowerer to plan bare record-of-subqueries statements
+3. Verify the exec phase packs subquery results into `Value::Record` of
+   `Value::List`s
 
-1. Add `Operation::BatchQuerySql` to the driver interface
-2. Update the SQLite driver to handle `BatchQuerySql`
-3. Update the PostgreSQL driver
-4. Update the MySQL driver
-5. Update the engine planner to emit `BatchQuerySql` when executing a batch
+### Phase 4: Integration tests
 
-### Phase 3: Polish
-
-1. Add `first` / `get` variants (return `Option<M>` / `M` instead of `Vec<M>`)
-2. Support mixing select, insert, update, and delete in a batch
-3. Error handling: decide whether a single failure aborts the whole batch or
-   returns partial results
-
-## Design Decisions
-
-### Why a trait instead of a method per arity?
-
-A `BatchQuery` trait with tuple impls keeps the public API to a single function
-(`toasty::batch(queries).exec(&db)`) regardless of how many queries are batched.
-Adding new arities is a macro expansion, not new API surface.
-
-### Why `IntoSelect` instead of a new `IntoStatement` trait?
-
-Query builders already implement `IntoSelect`. Using it avoids introducing a new
-trait and changing codegen. If batch support expands to inserts and updates later,
-an `IntoStatement` trait can be added at that point and `BatchQuery` impls can
-accept it.
-
-### Why sequential engine compilation?
-
-Statements in a batch are independent — they query different models with
-different filters. There is no cross-statement optimization opportunity.
-Compiling them sequentially through the existing pipeline is simple and correct.
-The performance win comes from the driver sending them together, not from
-compile-time merging.
-
-### Why not wrap in an implicit transaction?
-
-Batch queries are read-only selects in the common case. Wrapping them in a
-transaction adds overhead and changes isolation semantics. Users who need
-transactional consistency can combine batching with `db.transaction()`.
+1. Batch two selects on different models
+2. Batch a select that returns rows with a select that returns empty
+3. Batch with filters, ordering, and limits
+4. Batch inside a transaction
+5. Batch of a single query (degenerates to normal execution)
 
 ## Files Modified
 
 | File | Change |
 |------|--------|
-| `crates/toasty/src/batch.rs` | Add `batch()`, `Batch`, `BatchQuery` trait, tuple impls |
-| `crates/toasty/src/lib.rs` | Re-export `batch`, `Batch`, `BatchQuery` |
-| `crates/toasty/src/executor.rs` | Add `exec_batch` method |
-| `crates/toasty/src/db.rs` | Add `ExecBatch` variant, implement `exec_batch` |
-| `crates/toasty/src/engine.rs` | Add `exec_batch` method |
-| `crates/toasty/src/transaction.rs` | Implement `exec_batch` (delegates to sequential) |
-| `crates/toasty-core/src/driver/operation.rs` | Add `BatchQuerySql` (phase 2) |
-| `crates/toasty-driver-sqlite/src/lib.rs` | Handle `BatchQuerySql` (phase 2) |
-| `crates/toasty-driver-postgresql/src/lib.rs` | Handle `BatchQuerySql` (phase 2) |
-| `crates/toasty-driver-mysql/src/lib.rs` | Handle `BatchQuerySql` (phase 2) |
-
-## Integration Tests
-
-Test cases for the driver integration suite:
-
-- Batch two selects on different models, verify both return correct results
-- Batch a select that returns rows with a select that returns empty
-- Batch with filters, ordering, and limits
-- Batch inside a transaction
-- Batch of a single query (degenerates to normal execution)
+| `crates/toasty/src/stmt/into_statement.rs` | New: `IntoStatement<T>` trait, blanket impl |
+| `crates/toasty/src/stmt.rs` | Add `Statement::from_raw`, re-export `IntoStatement` |
+| `crates/toasty/src/load.rs` | Add `Load` impls for `Vec<T>` and tuples |
+| `crates/toasty/src/batch.rs` | Add `batch()`, `Batch<T>`, tuple `IntoStatement` impls |
+| `crates/toasty/src/lib.rs` | Re-export `batch`, `Batch`, `IntoStatement` |
+| `crates/toasty/src/engine/lower.rs` | Handle record-of-subqueries in returning (if needed) |
