@@ -1,8 +1,7 @@
 use std::ops::Deref;
 
 use crate::stmt::{Paginate, Select};
-use crate::Model;
-use crate::{Executor, Result};
+use crate::{Executor, Load, Result};
 use toasty_core::stmt;
 
 /// A page of results from a paginated query.
@@ -21,7 +20,7 @@ pub struct Page<M> {
     pub prev_cursor: Option<stmt::Expr>,
 }
 
-impl<M: Model> Page<M> {
+impl<M: Load> Page<M> {
     pub(crate) fn new(
         items: Vec<M>,
         query: Select<M>,

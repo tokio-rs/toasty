@@ -1,4 +1,4 @@
-use crate::{stmt, Cursor, Executor, Model, Result, Statement};
+use crate::{stmt, Cursor, Executor, Load, Model, Result, Statement};
 
 use std::future::Future;
 use toasty_core::stmt::ValueStream;
@@ -10,7 +10,7 @@ use toasty_core::stmt::ValueStream;
 /// the dyn-compatible `Executor` trait.
 pub trait ExecutorExt: Executor {
     /// Execute a query, returning all matching records.
-    fn all<M: Model>(&mut self, query: stmt::Select<M>) -> impl Future<Output = Result<Cursor<M>>> {
+    fn all<M: Load>(&mut self, query: stmt::Select<M>) -> impl Future<Output = Result<Cursor<M>>> {
         async move {
             let records = self.exec(query.into()).await?;
             Ok(Cursor::new(records))
@@ -18,7 +18,7 @@ pub trait ExecutorExt: Executor {
     }
 
     /// Execute a query, returning the first matching record or `None`.
-    fn first<M: Model>(
+    fn first<M: Load>(
         &mut self,
         query: stmt::Select<M>,
     ) -> impl Future<Output = Result<Option<M>>> {
@@ -33,7 +33,7 @@ pub trait ExecutorExt: Executor {
     }
 
     /// Execute a query, returning exactly one record or an error.
-    fn get<M: Model>(&mut self, query: stmt::Select<M>) -> impl Future<Output = Result<M>> {
+    fn get<M: Load>(&mut self, query: stmt::Select<M>) -> impl Future<Output = Result<M>> {
         async move {
             let mut res = self.all(query).await?;
 
@@ -48,7 +48,7 @@ pub trait ExecutorExt: Executor {
     }
 
     /// Delete all records matching the query.
-    fn delete<M: Model>(&mut self, query: stmt::Select<M>) -> impl Future<Output = Result<()>> {
+    fn delete<M>(&mut self, query: stmt::Select<M>) -> impl Future<Output = Result<()>> {
         async move {
             self.exec(query.delete()).await?;
             Ok(())
@@ -56,10 +56,7 @@ pub trait ExecutorExt: Executor {
     }
 
     /// Execute a statement, returning a raw value stream.
-    fn exec<M: Model>(
-        &mut self,
-        statement: Statement<M>,
-    ) -> impl Future<Output = Result<ValueStream>> {
+    fn exec<M>(&mut self, statement: Statement<M>) -> impl Future<Output = Result<ValueStream>> {
         async move {
             let untyped = statement.untyped;
             self.exec_untyped(untyped).await
@@ -68,7 +65,7 @@ pub trait ExecutorExt: Executor {
 
     /// Execute a statement, expecting exactly one record.
     #[doc(hidden)]
-    fn exec_one<M: Model>(
+    fn exec_one<M>(
         &mut self,
         statement: Statement<M>,
     ) -> impl Future<Output = Result<stmt::Value>> {

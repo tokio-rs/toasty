@@ -1,5 +1,4 @@
 use super::Statement;
-use crate::Model;
 use std::marker::PhantomData;
 use toasty_core::stmt;
 
@@ -8,7 +7,7 @@ pub struct Delete<M: ?Sized> {
     _p: PhantomData<M>,
 }
 
-impl<M: Model> Delete<M> {
+impl<M> Delete<M> {
     pub const fn from_untyped(untyped: stmt::Delete) -> Self {
         Self {
             untyped,
