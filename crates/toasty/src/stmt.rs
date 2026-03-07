@@ -19,6 +19,9 @@ pub use into_insert::IntoInsert;
 mod into_select;
 pub use into_select::IntoSelect;
 
+mod into_statement;
+pub use into_statement::IntoStatement;
+
 mod paginate;
 pub use paginate::Paginate;
 

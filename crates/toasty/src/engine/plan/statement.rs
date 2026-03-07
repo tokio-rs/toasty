@@ -93,6 +93,22 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     fn plan(&mut self, mut stmt: stmt::Statement) -> Result<()> {
         let mut returning = stmt.take_returning();
 
+        // For single VALUES queries (e.g., batch queries), the VALUES body is
+        // the output expression. Extract it as a returning value so the planner
+        // can wire up sub-statement dependencies.
+        if returning.is_none() {
+            if let stmt::Statement::Query(query) = &mut stmt {
+                if let stmt::ExprSet::Values(values) = &mut query.body {
+                    returning = Some(stmt::Returning::Value(if query.single {
+                        assert_eq!(1, values.rows.len());
+                        values.rows.drain(..).next().unwrap()
+                    } else {
+                        stmt::Expr::list(std::mem::take(&mut values.rows))
+                    }));
+                }
+            }
+        }
+
         // No queries are single at this point.
         match &mut stmt {
             stmt::Statement::Query(stmt) => stmt.single = false,
