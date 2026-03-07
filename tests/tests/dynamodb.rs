@@ -1,46 +1,61 @@
 #![cfg(feature = "dynamodb")]
 
 use aws_config::BehaviorVersion;
-use aws_sdk_dynamodb::{config::Credentials, Client};
-use tokio::sync::OnceCell;
+use aws_sdk_dynamodb::Client;
+use std::sync::OnceLock;
+use toasty_driver_dynamodb::DynamoDb;
 
 struct DynamoDbSetup {
-    client: OnceCell<Client>,
+    client: OnceLock<Client>,
 }
 
 impl DynamoDbSetup {
     fn new() -> Self {
         Self {
-            client: OnceCell::new(),
+            client: OnceLock::new(),
         }
     }
 
-    async fn get_client(&self) -> &Client {
-        self.client
-            .get_or_init(|| async {
-                let config = aws_config::defaults(BehaviorVersion::latest())
-                    .region("us-east-1")
-                    .credentials_provider(Credentials::for_tests())
-                    .endpoint_url("http://localhost:8000")
-                    .load()
-                    .await;
+    fn get_client(&self) -> &Client {
+        self.client.get_or_init(|| {
+            // Set default AWS environment variables if not already set
+            if std::env::var("AWS_REGION").is_err() {
+                std::env::set_var("AWS_REGION", "us-east-1");
+            }
+            if std::env::var("AWS_ENDPOINT_URL_DYNAMODB").is_err() {
+                std::env::set_var("AWS_ENDPOINT_URL_DYNAMODB", "http://localhost:8000");
+            }
+            if std::env::var("AWS_ACCESS_KEY_ID").is_err() {
+                std::env::set_var("AWS_ACCESS_KEY_ID", "test");
+            }
+            if std::env::var("AWS_SECRET_ACCESS_KEY").is_err() {
+                std::env::set_var("AWS_SECRET_ACCESS_KEY", "test");
+            }
 
-                Client::new(&config)
+            // Spawn a thread to handle async AWS SDK initialization
+            std::thread::spawn(|| {
+                tokio::runtime::Runtime::new()
+                    .expect("Failed to create tokio runtime")
+                    .block_on(async {
+                        let config = aws_config::defaults(BehaviorVersion::latest()).load().await;
+                        Client::new(&config)
+                    })
             })
-            .await
+            .join()
+            .expect("Failed to join client initialization thread")
+        })
     }
 }
 
 #[async_trait::async_trait]
 impl toasty_driver_integration_suite::Setup for DynamoDbSetup {
     fn driver(&self) -> Box<dyn toasty::driver::Driver> {
-        let url =
-            std::env::var("TOASTY_TEST_DYNAMODB_URL").unwrap_or_else(|_| "dynamodb://".to_string());
-        Box::new(toasty::db::Connect::new(&url).expect("Failed to create DynamoDB driver"))
+        let client = self.get_client();
+        Box::new(DynamoDb::new("dynamodb://".to_string(), client.clone()))
     }
 
     async fn delete_table(&self, name: &str) {
-        let client = self.get_client().await;
+        let client = self.get_client();
 
         // Delete the table - ignore errors if it doesn't exist
         let _ = client.delete_table().table_name(name).send().await;
