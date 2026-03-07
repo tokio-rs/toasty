@@ -170,3 +170,35 @@ pub async fn batch_both_empty(t: &mut Test) -> Result<()> {
 
     Ok(())
 }
+
+#[driver_test(id(ID), requires(sql))]
+pub async fn batch_select_and_create(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+        #[index]
+        name: String,
+    }
+
+    let mut db = t.setup_db(models!(User)).await;
+
+    User::create().name("Alice").exec(&mut db).await?;
+
+    let (users, created): (Vec<User>, User) = toasty::batch((
+        User::filter_by_name("Alice"),
+        User::create().name("Bob"),
+    ))
+    .exec(&mut db)
+    .await?;
+
+    assert_struct!(users, [_ { name: "Alice" }]);
+    assert_eq!(created.name, "Bob");
+
+    // Verify Bob was actually persisted
+    let bob = User::filter_by_name("Bob").first(&mut db).await?;
+    assert!(bob.is_some());
+
+    Ok(())
+}

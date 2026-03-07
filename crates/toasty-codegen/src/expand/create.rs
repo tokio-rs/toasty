@@ -35,6 +35,14 @@ impl Expand<'_> {
                 }
             }
 
+            impl #toasty::IntoStatement for #create_struct_ident {
+                type Output = #model_ident;
+
+                fn into_statement(self) -> #toasty::Statement<#model_ident> {
+                    self.stmt.into()
+                }
+            }
+
             impl #toasty::IntoExpr<#model_ident> for #create_struct_ident {
                 fn into_expr(self) -> #toasty::stmt::Expr<#model_ident> {
                     self.stmt.into()
