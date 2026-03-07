@@ -22,9 +22,9 @@ pub struct Batch<T> {
 ///     Post::find_recent(100),
 /// )).exec(&mut db).await?;
 /// ```
-pub fn batch<T, Q: IntoStatement<T>>(queries: Q) -> Batch<T>
+pub fn batch<Q: IntoStatement>(queries: Q) -> Batch<Q::Output>
 where
-    T: Load,
+    Q::Output: Load,
 {
     Batch {
         stmt: queries.into_statement(),
