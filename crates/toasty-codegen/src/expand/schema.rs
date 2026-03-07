@@ -108,8 +108,8 @@ impl Expand<'_> {
                             ));
                         }
                         None => {
-                            nullable = quote!(<#ty as #toasty::stmt::Primitive>::NULLABLE);
-                            field_ty = quote!(<#ty as #toasty::stmt::Primitive>::field_ty(#storage_ty));
+                            nullable = quote!(<#ty as #toasty::Field>::NULLABLE);
+                            field_ty = quote!(<#ty as #toasty::Field>::field_ty(#storage_ty));
                         }
                     }
                 }
@@ -186,7 +186,7 @@ impl Expand<'_> {
                         AutoStrategy::Unspecified => {
                             assert!(primary_key, "TODO: better error handling");
 
-                            quote! { Some(<#ty as #toasty::stmt::Auto>::STRATEGY) }
+                            quote! { Some(<#ty as #toasty::Auto>::STRATEGY) }
                          }
                         AutoStrategy::Uuid(UuidVersion::V4) => quote! { Some(#toasty::schema::app::AutoStrategy::Uuid(#toasty::schema::app::UuidVersion::V4)) },
                         AutoStrategy::Uuid(UuidVersion::V7) => quote! { Some(#toasty::schema::app::AutoStrategy::Uuid(#toasty::schema::app::UuidVersion::V4)) },

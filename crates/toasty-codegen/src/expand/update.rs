@@ -167,10 +167,10 @@ impl Expand<'_> {
 
                     #vis fn #with_field_ident(
                         mut self,
-                        f: impl FnOnce(<#ty as #toasty::stmt::Primitive>::UpdateBuilder<'_>)
+                        f: impl FnOnce(<#ty as #toasty::Field>::UpdateBuilder<'_>)
                     ) -> Self {
                         let projection = #projection;
-                        let builder = <#ty as #toasty::stmt::Primitive>::make_update_builder(#stmt_for_builder, projection);
+                        let builder = <#ty as #toasty::Field>::make_update_builder(#stmt_for_builder, projection);
                         f(builder);
                         self
                     }
@@ -288,7 +288,7 @@ impl Expand<'_> {
                     let serialize_attr = field.attrs.serialize.as_ref().unwrap();
 
                     let json_deserialize = quote! {
-                        let json_str = <String as #toasty::stmt::Primitive>::load(value)?;
+                        let json_str = <String as #toasty::Field>::load(value)?;
                         #toasty::serde_json::from_str(&json_str)
                             .map_err(|e| #toasty::Error::from_args(
                                 format_args!("failed to deserialize field '{}': {}", #field_name_str, e)
@@ -310,7 +310,7 @@ impl Expand<'_> {
                     }
                 }
                 FieldTy::Primitive(ty) => {
-                    quote!(#i => <#ty as #toasty::stmt::Primitive>::reload(&mut self.#field_ident, value)?,)
+                    quote!(#i => <#ty as #toasty::Field>::reload(&mut self.#field_ident, value)?,)
                 }
                 _ => {
                     // Relation fields (BelongsTo, HasMany, HasOne) are unloaded on update.
@@ -330,7 +330,7 @@ impl Expand<'_> {
 
         quote! {
             #vis fn reload(&mut self, value: #toasty::Value) -> #toasty::Result<()> {
-                use #toasty::stmt::Primitive;
+                use #toasty::Field;
                 for (field, value) in value.into_sparse_record().into_iter() {
                     match field {
                         #reload_arms

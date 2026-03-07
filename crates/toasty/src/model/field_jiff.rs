@@ -1,12 +1,13 @@
-use crate::stmt::{Path, Primitive};
+use crate::stmt::Path;
+use super::Field;
 use toasty_core::{
     stmt::{Type, Value},
     Result,
 };
 
-macro_rules! impl_jiff_primitive {
+macro_rules! impl_jiff_field {
     ($ty:ty, $name:ident, $lit:literal) => {
-        impl Primitive for $ty {
+        impl Field for $ty {
             type FieldAccessor = Path<Self>;
             type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
@@ -28,8 +29,8 @@ macro_rules! impl_jiff_primitive {
     };
 }
 
-impl_jiff_primitive!(jiff::Timestamp, Timestamp, "jiff::Timestamp");
-impl_jiff_primitive!(jiff::Zoned, Zoned, "jiff::Zoned");
-impl_jiff_primitive!(jiff::civil::Date, Date, "jiff::civil::Date");
-impl_jiff_primitive!(jiff::civil::Time, Time, "jiff::civil::Time");
-impl_jiff_primitive!(jiff::civil::DateTime, DateTime, "jiff::civil::DateTime");
+impl_jiff_field!(jiff::Timestamp, Timestamp, "jiff::Timestamp");
+impl_jiff_field!(jiff::Zoned, Zoned, "jiff::Zoned");
+impl_jiff_field!(jiff::civil::Date, Date, "jiff::civil::Date");
+impl_jiff_field!(jiff::civil::Time, Time, "jiff::civil::Time");
+impl_jiff_field!(jiff::civil::DateTime, DateTime, "jiff::civil::DateTime");
