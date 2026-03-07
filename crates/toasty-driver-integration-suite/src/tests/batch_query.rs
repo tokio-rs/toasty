@@ -186,12 +186,10 @@ pub async fn batch_select_and_create(t: &mut Test) -> Result<()> {
 
     User::create().name("Alice").exec(&mut db).await?;
 
-    let (users, created): (Vec<User>, User) = toasty::batch((
-        User::filter_by_name("Alice"),
-        User::create().name("Bob"),
-    ))
-    .exec(&mut db)
-    .await?;
+    let (users, created): (Vec<User>, User) =
+        toasty::batch((User::filter_by_name("Alice"), User::create().name("Bob")))
+            .exec(&mut db)
+            .await?;
 
     assert_struct!(users, [_ { name: "Alice" }]);
     assert_eq!(created.name, "Bob");
