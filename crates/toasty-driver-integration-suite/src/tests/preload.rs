@@ -878,7 +878,6 @@ pub async fn nested_has_many_preload(test: &mut Test) {
 
 // ===== HasMany -> HasOne<Option<T>> =====
 // User has_many Posts, each Post has_one optional Detail
-#[ignore] // TODO: nested preload panics with type mismatch for HasMany -> HasOne<Option<T>>
 #[driver_test(id(ID))]
 pub async fn nested_has_many_then_has_one_optional(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]

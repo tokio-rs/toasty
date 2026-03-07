@@ -418,6 +418,14 @@ impl Type {
             // Two unions are equivalent if they contain the same set of member types
             (Type::Union(a), Type::Union(b)) => a == b,
 
+            // A concrete type is equivalent to a Union if it matches any member.
+            // This handles the case where a runtime value has a specific type that
+            // is one variant of a Union (e.g., a Record value matching
+            // Union(I64, Record) from an optional association encoding).
+            (ty, Type::Union(u)) | (Type::Union(u), ty) => {
+                u.iter().any(|member| ty.is_equivalent(member))
+            }
+
             // Different type variants are not equivalent
             _ => false,
         }
