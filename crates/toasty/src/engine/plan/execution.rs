@@ -15,7 +15,7 @@ impl ExecPlanner<'_> {
 
         let needs_transaction = self.use_transactions
             && (self.actions.iter().filter(|a| a.is_db_op()).count() > 1
-                || self.actions.iter().any(|a| a.is_batch_insert()));
+                || self.actions.iter().any(|a| a.is_multi_row_insert()));
 
         ExecPlan {
             vars: VarStore::new(self.var_decls),
