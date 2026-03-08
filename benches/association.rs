@@ -44,7 +44,7 @@ struct Comment {
 }
 
 async fn setup_test_data(
-    db: &toasty::Db,
+    db: &mut toasty::Db,
     num_users: usize,
     posts_per_user: usize,
     comments_per_user: usize,
