@@ -317,7 +317,7 @@ pub async fn root_model_with_embedded_enum_field(test: &mut Test) {
                         ..
                     }),
                     ..
-                }
+                },
             ],
             ..
         }),
@@ -332,7 +332,7 @@ pub async fn root_model_with_embedded_enum_field(test: &mut Test) {
                 _ { name: "status", .. },
             ],
             ..
-        }
+        },
     ]);
 
     let user = &schema.app.models[&User::id()];

@@ -121,7 +121,7 @@ pub async fn data_carrying_enum_db_schema(test: &mut Test) {
                 _ { name: "contact_number", nullable: true, .. },
             ],
             ..
-        }
+        },
     ]);
 }
 

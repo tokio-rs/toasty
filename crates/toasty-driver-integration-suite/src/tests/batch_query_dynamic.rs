@@ -46,12 +46,10 @@ pub async fn batch_array_of_queries(t: &mut Test) -> Result<()> {
     User::create().name("Alice").exec(&mut db).await?;
     User::create().name("Bob").exec(&mut db).await?;
 
-    let results: Vec<Vec<User>> = toasty::batch([
-        User::filter_by_name("Alice"),
-        User::filter_by_name("Bob"),
-    ])
-    .exec(&mut db)
-    .await?;
+    let results: Vec<Vec<User>> =
+        toasty::batch([User::filter_by_name("Alice"), User::filter_by_name("Bob")])
+            .exec(&mut db)
+            .await?;
 
     assert_struct!(results, [[_ { name: "Alice" }], [_ { name: "Bob" }]]);
 
@@ -114,10 +112,7 @@ pub async fn batch_nested_tuple_with_vec(t: &mut Test) -> Result<()> {
 
     // Tuple of (Vec-batch of user queries, Vec-batch of post queries)
     let (users, posts): (Vec<Vec<User>>, Vec<Vec<Post>>) = toasty::batch((
-        vec![
-            User::filter_by_name("Alice"),
-            User::filter_by_name("Bob"),
-        ],
+        vec![User::filter_by_name("Alice"), User::filter_by_name("Bob")],
         vec![
             Post::filter_by_title("Hello"),
             Post::filter_by_title("World"),

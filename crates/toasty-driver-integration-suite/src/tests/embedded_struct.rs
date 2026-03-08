@@ -26,7 +26,7 @@ pub async fn basic_embedded_struct(test: &mut Test) {
             name.upper_camel_case(): "Address",
             fields: [
                 _ { name.app_name: "street", .. },
-                _ { name.app_name: "city", .. }
+                _ { name.app_name: "city", .. },
             ],
             ..
         }),
@@ -65,7 +65,7 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
             name.upper_camel_case(): "Address",
             fields: [
                 _ { name.app_name: "street", .. },
-                _ { name.app_name: "city", .. }
+                _ { name.app_name: "city", .. },
             ],
             ..
         }),
@@ -80,7 +80,7 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
                         ..
                     }),
                     ..
-                }
+                },
             ],
             ..
         }),
@@ -97,7 +97,7 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
                 _ { name: "address_city", .. },
             ],
             ..
-        }
+        },
     ]);
 
     let user = &schema.app.models[&User::id()];
@@ -126,15 +126,21 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
                         column: == user_table.columns[2].id,
                         lowering: 2,
                         ..
-                    })
+                    }),
                 ],
                 ..
             }),
         ],
         model_to_table.fields: [
             _,
-            == stmt::Expr::project(stmt::Expr::ref_self_field(user.expect_root().fields[1].id), [0]),
-            == stmt::Expr::project(stmt::Expr::ref_self_field(user.expect_root().fields[1].id), [1])
+            == stmt::Expr::project(
+                stmt::Expr::ref_self_field(user.expect_root().fields[1].id),
+                [0],
+            ),
+            == stmt::Expr::project(
+                stmt::Expr::ref_self_field(user.expect_root().fields[1].id),
+                [1],
+            ),
         ],
         ..
     });
@@ -150,10 +156,12 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
         table_to_model.fields,
         [
             _,
-            stmt::Expr::Record(stmt::ExprRecord { fields: [
-                == stmt::Expr::column(user_table.columns[1].id),
-                == stmt::Expr::column(user_table.columns[2].id),
-            ]}),
+            stmt::Expr::Record(stmt::ExprRecord {
+                fields: [
+                    == stmt::Expr::column(user_table.columns[1].id),
+                    == stmt::Expr::column(user_table.columns[2].id),
+                ],
+            }),
         ]
     );
 }
@@ -760,7 +768,7 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
                         ..
                     }),
                     ..
-                }
+                },
             ],
             ..
         }),
@@ -775,7 +783,7 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
                         ..
                     }),
                     ..
-                }
+                },
             ],
             ..
         }),
@@ -790,7 +798,7 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
                         ..
                     }),
                     ..
-                }
+                },
             ],
             ..
         }),
@@ -814,7 +822,7 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
                 _ { name: "address_city_location_lon", .. },
             ],
             ..
-        }
+        },
     ]);
 
     let user = &schema.app.models[&User::id()];
@@ -989,25 +997,37 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
     // Expression for address.street should be: project(ref(address_field), [0])
     assert_struct!(
         user_mapping.model_to_table[1],
-        == stmt::Expr::project(stmt::Expr::ref_self_field(user.expect_root().fields[1].id), [0])
+        == stmt::Expr::project(
+            stmt::Expr::ref_self_field(user.expect_root().fields[1].id),
+            [0],
+        )
     );
 
     // Expression for address.city.name should be: project(ref(address_field), [1, 0])
     assert_struct!(
         user_mapping.model_to_table[2],
-        == stmt::Expr::project(stmt::Expr::ref_self_field(user.expect_root().fields[1].id), [1, 0])
+        == stmt::Expr::project(
+            stmt::Expr::ref_self_field(user.expect_root().fields[1].id),
+            [1, 0],
+        )
     );
 
     // Expression for address.city.location.lat should be: project(ref(address_field), [1, 1, 0])
     assert_struct!(
         user_mapping.model_to_table[3],
-        == stmt::Expr::project(stmt::Expr::ref_self_field(user.expect_root().fields[1].id), [1, 1, 0])
+        == stmt::Expr::project(
+            stmt::Expr::ref_self_field(user.expect_root().fields[1].id),
+            [1, 1, 0],
+        )
     );
 
     // Expression for address.city.location.lon should be: project(ref(address_field), [1, 1, 1])
     assert_struct!(
         user_mapping.model_to_table[4],
-        == stmt::Expr::project(stmt::Expr::ref_self_field(user.expect_root().fields[1].id), [1, 1, 1])
+        == stmt::Expr::project(
+            stmt::Expr::ref_self_field(user.expect_root().fields[1].id),
+            [1, 1, 1],
+        )
     );
 }
 
