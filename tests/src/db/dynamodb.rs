@@ -41,7 +41,7 @@ impl Default for SetupDynamoDb {
 
 #[async_trait::async_trait]
 impl Setup for SetupDynamoDb {
-    fn driver(&self) -> Box<dyn Driver> {
+    async fn driver(&self) -> Box<dyn Driver> {
         let rt = Runtime::new().unwrap();
 
         // Block the current thread to run the async function

@@ -57,10 +57,10 @@ impl Default for SetupPostgreSQL {
 
 #[async_trait::async_trait]
 impl Setup for SetupPostgreSQL {
-    fn driver(&self) -> Box<dyn Driver> {
+    async fn driver(&self) -> Box<dyn Driver> {
         let url = std::env::var("TOASTY_TEST_POSTGRES_URL")
             .unwrap_or_else(|_| "postgresql://localhost:5432/toasty_test".to_string());
-        Box::new(Connect::new(&url).unwrap())
+        Box::new(Connect::new(&url).await.unwrap())
     }
 
     fn configure_builder(&self, builder: &mut toasty::db::Builder) {

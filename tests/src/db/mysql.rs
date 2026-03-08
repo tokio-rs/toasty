@@ -41,10 +41,10 @@ impl Default for SetupMySQL {
 
 #[async_trait::async_trait]
 impl Setup for SetupMySQL {
-    fn driver(&self) -> Box<dyn Driver> {
+    async fn driver(&self) -> Box<dyn Driver> {
         let url = std::env::var("TOASTY_TEST_MYSQL_URL")
             .unwrap_or_else(|_| "mysql://localhost:3306/toasty_test".to_string());
-        Box::new(Connect::new(&url).unwrap())
+        Box::new(Connect::new(&url).await.unwrap())
     }
 
     fn configure_builder(&self, builder: &mut toasty::db::Builder) {

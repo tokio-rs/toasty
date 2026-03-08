@@ -2,10 +2,7 @@
 
 use aws_config::meta::region::RegionProviderChain;
 use aws_config::BehaviorVersion;
-<<<<<<< HEAD
-=======
 use aws_sdk_dynamodb::config::Credentials;
->>>>>>> 8747309 (Simplify DynamoDB Client creation)
 use aws_sdk_dynamodb::Client;
 use std::sync::OnceLock;
 use toasty_driver_dynamodb::DynamoDb;

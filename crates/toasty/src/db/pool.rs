@@ -66,8 +66,8 @@ impl Pool {
     }
 
     /// Creates a new connection pool from a connection URL.
-    pub fn connect(url: &str) -> crate::Result<Self> {
-        Self::new(Connect::new(url)?)
+    pub async fn connect(url: &str) -> crate::Result<Self> {
+        Self::new(Connect::new(url).await?)
     }
 
     /// Retrieves a connection from the pool.

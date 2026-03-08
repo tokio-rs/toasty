@@ -24,7 +24,7 @@ impl std::fmt::Debug for Connect {
 }
 
 impl Connect {
-    pub fn new(url: &str) -> Result<Self> {
+    pub async fn new(url: &str) -> Result<Self> {
         #![cfg_attr(
             not(any(
                 feature = "dynamodb",
@@ -42,17 +42,8 @@ impl Connect {
             "dynamodb" => {
                 // DynamoDB driver requires async initialization to load AWS config from environment
                 // Spawn a new thread to avoid runtime context issues
-                let driver = std::thread::spawn({
-                    let url = url.to_string();
-                    move || {
-                        tokio::runtime::Runtime::new()
-                            .expect("Failed to create tokio runtime")
-                            .block_on(toasty_driver_dynamodb::DynamoDb::from_env(url))
-                    }
-                })
-                .join()
-                .expect("Failed to join driver initialization thread")
-                .map_err(toasty_core::Error::driver_operation_failed)?;
+                let url = url.to_string();
+                let driver = toasty_driver_dynamodb::DynamoDb::from_env(url).await?;
                 Box::new(driver)
             }
             #[cfg(not(feature = "dynamodb"))]
