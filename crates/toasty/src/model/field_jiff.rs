@@ -1,5 +1,5 @@
-use crate::stmt::Path;
 use super::Field;
+use crate::stmt::Path;
 use toasty_core::{
     stmt::{Type, Value},
     Result,

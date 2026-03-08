@@ -302,17 +302,22 @@ impl Expand<'_> {
                 let discriminant = variant.attrs.discriminant;
                 let fields = self.variant_fields(variant_index);
 
-                let field_loads: Vec<_> = fields.iter().enumerate().map(|(i, field)| {
-                    let field_ident = &field.name.ident;
-                    let ty = expect_primitive_ty(field);
-                    let record_pos = util::int(i + 1);
-                    let load = quote! { <#ty as #toasty::Field>::load(record[#record_pos].take())? };
-                    if variant.fields_named {
-                        quote! { #field_ident: #load, }
-                    } else {
-                        quote! { #load, }
-                    }
-                }).collect();
+                let field_loads: Vec<_> = fields
+                    .iter()
+                    .enumerate()
+                    .map(|(i, field)| {
+                        let field_ident = &field.name.ident;
+                        let ty = expect_primitive_ty(field);
+                        let record_pos = util::int(i + 1);
+                        let load =
+                            quote! { <#ty as #toasty::Field>::load(record[#record_pos].take())? };
+                        if variant.fields_named {
+                            quote! { #field_ident: #load, }
+                        } else {
+                            quote! { #load, }
+                        }
+                    })
+                    .collect();
 
                 let construction = if variant.fields_named {
                     quote! { #model_ident::#ident { #( #field_loads )* } }
