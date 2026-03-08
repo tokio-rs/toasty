@@ -1,3 +1,4 @@
+pub mod batch_create_statements;
 pub mod batch_query;
 pub mod batch_query_dynamic;
 pub mod belongs_to_configured;
