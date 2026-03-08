@@ -196,6 +196,15 @@ impl LowerStatement<'_, '_> {
 }
 
 impl visit_mut::VisitMut for LowerStatement<'_, '_> {
+    fn visit_order_by_expr_mut(&mut self, node: &mut stmt::OrderByExpr) {
+        self.visit_expr_mut(&mut node.expr);
+
+        // Strip any Cast wrapper — ORDER BY should use the raw column reference.
+        if let stmt::Expr::Cast(expr_cast) = &mut node.expr {
+            node.expr = expr_cast.expr.take();
+        }
+    }
+
     fn visit_assignments_mut(&mut self, i: &mut stmt::Assignments) {
         let mut assignments = stmt::Assignments::default();
         let mapping = self.mapping_unwrap();
