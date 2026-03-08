@@ -13,12 +13,10 @@ pub async fn batch_two_creates_same_model(t: &mut Test) -> Result<()> {
 
     let mut db = t.setup_db(models!(User)).await;
 
-    let (alice, bob): (User, User) = toasty::batch((
-        User::create().name("Alice"),
-        User::create().name("Bob"),
-    ))
-    .exec(&mut db)
-    .await?;
+    let (alice, bob): (User, User) =
+        toasty::batch((User::create().name("Alice"), User::create().name("Bob")))
+            .exec(&mut db)
+            .await?;
 
     assert_eq!(alice.name, "Alice");
     assert_eq!(bob.name, "Bob");
@@ -87,12 +85,10 @@ pub async fn batch_query_then_create(t: &mut Test) -> Result<()> {
     let mut db = t.setup_db(models!(User)).await;
     User::create().name("Alice").exec(&mut db).await?;
 
-    let (existing, created): (Vec<User>, User) = toasty::batch((
-        User::filter_by_name("Alice"),
-        User::create().name("Bob"),
-    ))
-    .exec(&mut db)
-    .await?;
+    let (existing, created): (Vec<User>, User) =
+        toasty::batch((User::filter_by_name("Alice"), User::create().name("Bob")))
+            .exec(&mut db)
+            .await?;
 
     assert_struct!(existing, [_ { name: "Alice" }]);
     assert_eq!(created.name, "Bob");
@@ -115,12 +111,10 @@ pub async fn batch_create_then_query(t: &mut Test) -> Result<()> {
     let mut db = t.setup_db(models!(User)).await;
     User::create().name("Alice").exec(&mut db).await?;
 
-    let (created, existing): (User, Vec<User>) = toasty::batch((
-        User::create().name("Bob"),
-        User::filter_by_name("Alice"),
-    ))
-    .exec(&mut db)
-    .await?;
+    let (created, existing): (User, Vec<User>) =
+        toasty::batch((User::create().name("Bob"), User::filter_by_name("Alice")))
+            .exec(&mut db)
+            .await?;
 
     assert_eq!(created.name, "Bob");
     assert_struct!(existing, [_ { name: "Alice" }]);
