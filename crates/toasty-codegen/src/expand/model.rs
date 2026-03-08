@@ -273,7 +273,7 @@ impl Expand<'_> {
     ///
     /// This method is used by both:
     /// - Root models (in `Model::load`) - supports all field types
-    /// - Embedded types (in `Primitive::load`) - only primitive fields
+    /// - Embedded types (in `Field::load`) - only primitive fields
     ///
     /// The generated code pattern matches on `Value::Record`, extracts fields,
     /// and constructs the struct.
@@ -292,7 +292,7 @@ impl Expand<'_> {
                     let serialize_attr = field.attrs.serialize.as_ref().unwrap();
 
                     let json_deserialize = quote! {
-                        let json_str = <String as #toasty::stmt::Primitive>::load(value)?;
+                        let json_str = <String as #toasty::Field>::load(value)?;
                         #toasty::serde_json::from_str(&json_str)
                             .map_err(|e| #toasty::Error::from_args(
                                 format_args!("failed to deserialize field '{}': {}", #field_name_str, e)
@@ -315,7 +315,7 @@ impl Expand<'_> {
                     }
                 }
                 FieldTy::Primitive(ty) => {
-                    quote!(#field_ident: <#ty as #toasty::stmt::Primitive>::load(record[#index_tokenized].take())?,)
+                    quote!(#field_ident: <#ty as #toasty::Field>::load(record[#index_tokenized].take())?,)
                 }
                 FieldTy::BelongsTo(_) => {
                     quote!(#field_ident: #toasty::BelongsTo::load(record[#index].take())?,)
@@ -358,7 +358,7 @@ impl Expand<'_> {
                     let serialize_attr = field.attrs.serialize.as_ref().unwrap();
 
                     let json_deserialize = quote! {
-                        let json_str = <String as #toasty::stmt::Primitive>::load(value)?;
+                        let json_str = <String as #toasty::Field>::load(value)?;
                         #toasty::serde_json::from_str(&json_str)
                             .map_err(|e| #toasty::Error::from_args(
                                 format_args!("failed to deserialize field '{}': {}", #field_name_str, e)
@@ -380,7 +380,7 @@ impl Expand<'_> {
                     }
                 }
                 FieldTy::Primitive(ty) => {
-                    quote!(#i => <#ty as #toasty::stmt::Primitive>::reload(&mut self.#field_ident, value)?,)
+                    quote!(#i => <#ty as #toasty::Field>::reload(&mut self.#field_ident, value)?,)
                 }
                 _ => {
                     quote!(#i => self.#field_ident.unload(),)

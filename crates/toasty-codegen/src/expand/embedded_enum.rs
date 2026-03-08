@@ -15,7 +15,7 @@ impl Expand<'_> {
     }
 
     /// True when at least one variant carries data fields, which changes
-    /// what `Primitive::ty()` returns.
+    /// what `Field::ty()` returns.
     pub(super) fn expand_enum_has_data_variants(&self) -> bool {
         !self.model.fields.is_empty()
     }
@@ -249,8 +249,8 @@ impl Expand<'_> {
                             app_name: #app_name.to_string(),
                             storage_name: None,
                         },
-                        ty: <#ty as #toasty::stmt::Primitive>::field_ty(None),
-                        nullable: <#ty as #toasty::stmt::Primitive>::NULLABLE,
+                        ty: <#ty as #toasty::Field>::field_ty(None),
+                        nullable: <#ty as #toasty::Field>::NULLABLE,
                         primary_key: false,
                         auto: None,
                         constraints: vec![],
@@ -264,7 +264,7 @@ impl Expand<'_> {
             .collect()
     }
 
-    /// Generates match arms for the `Value::I64(d)` branch of `Primitive::load`.
+    /// Generates match arms for the `Value::I64(d)` branch of `Field::load`.
     /// Only unit variants are emitted here; data variants appear in `expand_enum_data_load_arms`.
     pub(super) fn expand_enum_unit_load_arms(&self) -> Vec<TokenStream> {
         let model_ident = &self.model.ident;
@@ -283,7 +283,7 @@ impl Expand<'_> {
             .collect()
     }
 
-    /// Generates match arms for the `Value::Record` branch of `Primitive::load`.
+    /// Generates match arms for the `Value::Record` branch of `Field::load`.
     /// Only data variants are emitted; unit variants appear in `expand_enum_unit_load_arms`.
     /// Record layout: `record[0]` is the discriminant, `record[1..]` are the variant's fields
     /// in declaration order (local indices, not global).
@@ -302,17 +302,22 @@ impl Expand<'_> {
                 let discriminant = variant.attrs.discriminant;
                 let fields = self.variant_fields(variant_index);
 
-                let field_loads: Vec<_> = fields.iter().enumerate().map(|(i, field)| {
-                    let field_ident = &field.name.ident;
-                    let ty = expect_primitive_ty(field);
-                    let record_pos = util::int(i + 1);
-                    let load = quote! { <#ty as #toasty::stmt::Primitive>::load(record[#record_pos].take())? };
-                    if variant.fields_named {
-                        quote! { #field_ident: #load, }
-                    } else {
-                        quote! { #load, }
-                    }
-                }).collect();
+                let field_loads: Vec<_> = fields
+                    .iter()
+                    .enumerate()
+                    .map(|(i, field)| {
+                        let field_ident = &field.name.ident;
+                        let ty = expect_primitive_ty(field);
+                        let record_pos = util::int(i + 1);
+                        let load =
+                            quote! { <#ty as #toasty::Field>::load(record[#record_pos].take())? };
+                        if variant.fields_named {
+                            quote! { #field_ident: #load, }
+                        } else {
+                            quote! { #load, }
+                        }
+                    })
+                    .collect();
 
                 let construction = if variant.fields_named {
                     quote! { #model_ident::#ident { #( #field_loads )* } }
@@ -397,7 +402,7 @@ impl Expand<'_> {
             .collect()
     }
 
-    /// Generates the `Primitive::ty()` return expression. Unit-only enums map to
+    /// Generates the `Field::ty()` return expression. Unit-only enums map to
     /// `Type::I64`; enums with at least one data variant map to `Type::Model`.
     pub(super) fn expand_enum_primitive_ty(&self) -> TokenStream {
         let toasty = &self.toasty;

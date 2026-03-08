@@ -3,12 +3,9 @@ use std::{rc::Rc, sync::Arc};
 use crate::{stmt::Path, Result};
 
 use std::borrow::Cow;
-use toasty_core::{
-    schema::app::{AutoStrategy, UuidVersion},
-    stmt,
-};
+use toasty_core::stmt;
 
-pub trait Primitive: Sized {
+pub trait Field: Sized {
     /// Whether or not the type is nullable
     const NULLABLE: bool = false;
 
@@ -71,20 +68,11 @@ pub trait Primitive: Sized {
     }
 }
 
-#[diagnostic::on_unimplemented(
-    message = "Toasty cannot automatically set values for type `{Self}`",
-    label = "Toasty cannot automatically set values for this field",
-    note = "Is the field annotated with #[auto]?"
-)]
-pub trait Auto: Primitive {
-    const STRATEGY: AutoStrategy;
-}
-
-/// Macro to generate Primitive implementations for numeric types that use `try_into()`
-macro_rules! impl_primitive_numeric {
+/// Macro to generate Field implementations for numeric types that use `try_into()`
+macro_rules! impl_field_numeric {
     ($($ty:ty => $stmt_ty:ident),* $(,)?) => {
         $(
-            impl Primitive for $ty {
+            impl Field for $ty {
                 type FieldAccessor = Path<Self>;
                 type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
@@ -100,16 +88,12 @@ macro_rules! impl_primitive_numeric {
                     path
                 }
             }
-
-            impl Auto for $ty {
-                const STRATEGY: AutoStrategy = AutoStrategy::Increment;
-            }
         )*
     };
 }
 
 // Generate implementations for all numeric types
-impl_primitive_numeric! {
+impl_field_numeric! {
     i8 => I8,
     i16 => I16,
     i32 => I32,
@@ -121,7 +105,7 @@ impl_primitive_numeric! {
 }
 
 // Pointer-sized integers map to fixed-size types internally
-impl Primitive for isize {
+impl Field for isize {
     type FieldAccessor = Path<Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
@@ -138,11 +122,7 @@ impl Primitive for isize {
     }
 }
 
-impl Auto for isize {
-    const STRATEGY: AutoStrategy = AutoStrategy::Increment;
-}
-
-impl Primitive for usize {
+impl Field for usize {
     type FieldAccessor = Path<Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
@@ -159,11 +139,7 @@ impl Primitive for usize {
     }
 }
 
-impl Auto for usize {
-    const STRATEGY: AutoStrategy = AutoStrategy::Increment;
-}
-
-impl Primitive for String {
+impl Field for String {
     type FieldAccessor = Path<Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
@@ -183,7 +159,7 @@ impl Primitive for String {
     }
 }
 
-impl Primitive for Vec<u8> {
+impl Field for Vec<u8> {
     type FieldAccessor = Path<Self>;
     type UpdateBuilder<'a> = ();
 
@@ -200,7 +176,7 @@ impl Primitive for Vec<u8> {
     }
 }
 
-impl<T: Primitive> Primitive for Option<T> {
+impl<T: Field> Field for Option<T> {
     type FieldAccessor = Path<Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
@@ -222,20 +198,20 @@ impl<T: Primitive> Primitive for Option<T> {
     }
 }
 
-impl<T> Primitive for Cow<'_, T>
+impl<T> Field for Cow<'_, T>
 where
     T: ToOwned + ?Sized,
-    T::Owned: Primitive,
+    T::Owned: Field,
 {
     type FieldAccessor = Path<Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
     fn ty() -> stmt::Type {
-        <T::Owned as Primitive>::ty()
+        <T::Owned as Field>::ty()
     }
 
     fn load(value: stmt::Value) -> Result<Self> {
-        <T::Owned as Primitive>::load(value).map(Cow::Owned)
+        <T::Owned as Field>::load(value).map(Cow::Owned)
     }
 
     fn make_field_accessor(path: Path<Self>) -> Self::FieldAccessor {
@@ -243,7 +219,7 @@ where
     }
 }
 
-impl Primitive for uuid::Uuid {
+impl Field for uuid::Uuid {
     type FieldAccessor = Path<Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
@@ -263,11 +239,7 @@ impl Primitive for uuid::Uuid {
     }
 }
 
-impl Auto for uuid::Uuid {
-    const STRATEGY: AutoStrategy = AutoStrategy::Uuid(UuidVersion::V7);
-}
-
-impl Primitive for bool {
+impl Field for bool {
     type FieldAccessor = Path<Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
@@ -287,7 +259,7 @@ impl Primitive for bool {
     }
 }
 
-impl<T: Primitive> Primitive for Arc<T> {
+impl<T: Field> Field for Arc<T> {
     type FieldAccessor = Path<Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
@@ -296,7 +268,7 @@ impl<T: Primitive> Primitive for Arc<T> {
     }
 
     fn load(value: stmt::Value) -> Result<Self> {
-        <T as Primitive>::load(value).map(Arc::new)
+        <T as Field>::load(value).map(Arc::new)
     }
 
     fn make_field_accessor(path: Path<Self>) -> Self::FieldAccessor {
@@ -304,7 +276,7 @@ impl<T: Primitive> Primitive for Arc<T> {
     }
 }
 
-impl<T: Primitive> Primitive for Rc<T> {
+impl<T: Field> Field for Rc<T> {
     type FieldAccessor = Path<Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
@@ -313,7 +285,7 @@ impl<T: Primitive> Primitive for Rc<T> {
     }
 
     fn load(value: stmt::Value) -> Result<Self> {
-        <T as Primitive>::load(value).map(Rc::new)
+        <T as Field>::load(value).map(Rc::new)
     }
 
     fn make_field_accessor(path: Path<Self>) -> Self::FieldAccessor {
@@ -321,7 +293,7 @@ impl<T: Primitive> Primitive for Rc<T> {
     }
 }
 
-impl<T: Primitive> Primitive for Box<T> {
+impl<T: Field> Field for Box<T> {
     type FieldAccessor = Path<Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
@@ -330,7 +302,7 @@ impl<T: Primitive> Primitive for Box<T> {
     }
 
     fn load(value: stmt::Value) -> Result<Self> {
-        <T as Primitive>::load(value).map(Box::new)
+        <T as Field>::load(value).map(Box::new)
     }
 
     fn make_field_accessor(path: Path<Self>) -> Self::FieldAccessor {
@@ -339,7 +311,7 @@ impl<T: Primitive> Primitive for Box<T> {
 }
 
 #[cfg(feature = "rust_decimal")]
-impl Primitive for rust_decimal::Decimal {
+impl Field for rust_decimal::Decimal {
     type FieldAccessor = Path<Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
@@ -363,7 +335,7 @@ impl Primitive for rust_decimal::Decimal {
 }
 
 #[cfg(feature = "bigdecimal")]
-impl Primitive for bigdecimal::BigDecimal {
+impl Field for bigdecimal::BigDecimal {
     type FieldAccessor = Path<Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
