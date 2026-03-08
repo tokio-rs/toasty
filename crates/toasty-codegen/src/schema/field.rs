@@ -10,6 +10,13 @@ pub(crate) enum SerializeFormat {
     Json,
 }
 
+/// Parsed `#[serialize(...)]` attribute data.
+#[derive(Debug, Clone)]
+pub(crate) struct SerializeAttr {
+    pub(crate) format: SerializeFormat,
+    pub(crate) nullable: bool,
+}
+
 #[derive(Debug)]
 pub(crate) struct Field {
     /// Index of field in the containing model
@@ -58,8 +65,8 @@ pub(crate) struct FieldAttr {
     /// Expression to apply on create and update: `#[update(<expr>)]`
     pub(crate) update_expr: Option<syn::Expr>,
 
-    /// Serialization format for the field: `#[serialize(json)]`
-    pub(crate) serialize: Option<SerializeFormat>,
+    /// Serialization info for the field: `#[serialize(json)]` or `#[serialize(json, nullable)]`
+    pub(crate) serialize: Option<SerializeAttr>,
 }
 
 #[derive(Debug)]
@@ -178,15 +185,44 @@ impl FieldAttr {
                         "duplicate #[serialize] attribute",
                     ));
                 } else {
-                    match attr.parse_args::<syn::Ident>() {
-                        Ok(format) if format == "json" => {
-                            field_attr.serialize = Some(SerializeFormat::Json);
-                        }
-                        Ok(format) => {
-                            errs.push(syn::Error::new_spanned(
-                                &format,
-                                "unsupported serialization format; expected `json`",
-                            ));
+                    match attr.parse_args_with(
+                        syn::punctuated::Punctuated::<syn::Ident, syn::Token![,]>::parse_terminated,
+                    ) {
+                        Ok(args) => {
+                            let mut format = None;
+                            let mut nullable = false;
+
+                            for arg in &args {
+                                if arg == "json" {
+                                    if format.is_some() {
+                                        errs.push(syn::Error::new_spanned(
+                                            arg,
+                                            "duplicate format specifier",
+                                        ));
+                                    } else {
+                                        format = Some(SerializeFormat::Json);
+                                    }
+                                } else if arg == "nullable" {
+                                    nullable = true;
+                                } else {
+                                    errs.push(syn::Error::new_spanned(
+                                        arg,
+                                        "unsupported serialize argument; expected `json` or `nullable`",
+                                    ));
+                                }
+                            }
+
+                            match format {
+                                Some(format) => {
+                                    field_attr.serialize = Some(SerializeAttr { format, nullable });
+                                }
+                                None => {
+                                    errs.push(syn::Error::new_spanned(
+                                        attr,
+                                        "missing serialization format; expected `json`",
+                                    ));
+                                }
+                            }
                         }
                         Err(e) => errs.push(e),
                     }

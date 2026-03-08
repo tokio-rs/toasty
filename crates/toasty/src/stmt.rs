@@ -19,6 +19,9 @@ pub use into_insert::IntoInsert;
 mod into_select;
 pub use into_select::IntoSelect;
 
+mod into_statement;
+pub use into_statement::IntoStatement;
+
 mod paginate;
 pub use paginate::Paginate;
 
@@ -33,9 +36,6 @@ mod primitive_jiff;
 
 mod select;
 pub use select::Select;
-
-mod to_statement;
-pub use to_statement::ToStatement;
 
 mod update;
 pub use update::Update;

@@ -1,4 +1,5 @@
 use super::{util, Expand};
+use crate::schema::SerializeAttr;
 use crate::schema::{AutoStrategy, Column, FieldTy, ModelKind, Name, SerializeFormat, UuidVersion};
 
 use proc_macro2::TokenStream;
@@ -88,15 +89,29 @@ impl Expand<'_> {
                         _ => quote!(None),
                     };
 
-                    let serialize = match &field.attrs.serialize {
-                        Some(SerializeFormat::Json) => {
-                            quote!(Some(#toasty::schema::app::SerializeFormat::Json))
-                        }
-                        None => quote!(None),
-                    };
+                    match &field.attrs.serialize {
+                        Some(SerializeAttr { format, nullable: serialize_nullable }) => {
+                            let serialize_format = match format {
+                                SerializeFormat::Json => {
+                                    quote!(Some(#toasty::schema::app::SerializeFormat::Json))
+                                }
+                            };
+                            let nullable_lit = *serialize_nullable;
 
-                    nullable = quote!(<#ty as #toasty::stmt::Primitive>::NULLABLE);
-                    field_ty = quote!(<#ty as #toasty::stmt::Primitive>::field_ty(#storage_ty, #serialize));
+                            nullable = quote!(#nullable_lit);
+                            field_ty = quote!(#toasty::schema::app::FieldTy::Primitive(
+                                #toasty::schema::app::FieldPrimitive {
+                                    ty: #toasty::Type::String,
+                                    storage_ty: #storage_ty,
+                                    serialize: #serialize_format,
+                                }
+                            ));
+                        }
+                        None => {
+                            nullable = quote!(<#ty as #toasty::stmt::Primitive>::NULLABLE);
+                            field_ty = quote!(<#ty as #toasty::stmt::Primitive>::field_ty(#storage_ty));
+                        }
+                    }
                 }
                 FieldTy::BelongsTo(rel) => {
                     let ty = &rel.ty;

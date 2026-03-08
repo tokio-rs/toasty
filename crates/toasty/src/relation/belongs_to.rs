@@ -1,4 +1,5 @@
 use crate::relation::Relation;
+use crate::Load;
 
 use toasty_core::stmt::Value;
 
@@ -9,8 +10,8 @@ pub struct BelongsTo<T> {
     value: Option<Box<T>>,
 }
 
-impl<T: Relation> BelongsTo<T> {
-    pub fn load(input: Value) -> crate::Result<Self> {
+impl<T: Relation> Load for BelongsTo<T> {
+    fn load(input: Value) -> crate::Result<Self> {
         Ok(match input {
             Value::Null => Self::default(),
             value => Self {
@@ -18,7 +19,9 @@ impl<T: Relation> BelongsTo<T> {
             },
         })
     }
+}
 
+impl<T: Relation> BelongsTo<T> {
     #[track_caller]
     pub fn get(&self) -> &T {
         self.value.as_ref().expect("association not loaded")
@@ -50,10 +53,6 @@ impl<T: Relation> Relation for BelongsTo<T> {
 
     fn nullable() -> bool {
         T::nullable()
-    }
-
-    fn load(value: Value) -> Result<Self, crate::Error> {
-        Self::load(value)
     }
 }
 

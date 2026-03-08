@@ -10,7 +10,9 @@ async-trait.workspace = true
 bigdecimal.workspace = true
 jiff.workspace = true
 rust_decimal.workspace = true
-toasty = { workspace = true, features = ["rust_decimal", "bigdecimal", "jiff"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json.workspace = true
+toasty = { workspace = true, features = ["rust_decimal", "bigdecimal", "jiff", "serde"] }
 toasty-core = { workspace = true, features = ["assert-struct"] }
 toasty-macros.workspace = true
 toasty-driver-integration-suite-macros.workspace = true

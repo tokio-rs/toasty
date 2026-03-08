@@ -129,7 +129,6 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
 
             fn field_ty(
                 _storage_ty: Option<#toasty::schema::db::Type>,
-                _serialize: Option<#toasty::schema::app::SerializeFormat>,
             ) -> #toasty::schema::app::FieldTy {
                 #toasty::schema::app::FieldTy::Embedded(
                     #toasty::schema::app::Embedded {
@@ -245,7 +244,6 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
 
             fn field_ty(
                 _storage_ty: Option<#toasty::schema::db::Type>,
-                _serialize: Option<#toasty::schema::app::SerializeFormat>,
             ) -> #toasty::schema::app::FieldTy {
                 #toasty::schema::app::FieldTy::Embedded(
                     #toasty::schema::app::Embedded {

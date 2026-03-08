@@ -10,7 +10,7 @@ pub struct Select<M> {
     _p: PhantomData<M>,
 }
 
-impl<M: Model> Select<M> {
+impl<M> Select<M> {
     pub fn unit() -> Self {
         Self {
             untyped: stmt::Query::unit(),
@@ -34,10 +34,6 @@ impl<M: Model> Select<M> {
             },
             expr => Self::from_untyped(stmt::Query::values(expr)),
         }
-    }
-
-    pub fn filter(expr: Expr<bool>) -> Self {
-        Self::from_untyped(stmt::Query::new_select(M::id(), expr.untyped))
     }
 
     // TODO: why are these by value?
@@ -76,6 +72,10 @@ impl<M: Model> Select<M> {
 }
 
 impl<M: Model> Select<M> {
+    pub fn filter(expr: Expr<bool>) -> Self {
+        Self::from_untyped(stmt::Query::new_select(M::id(), expr.untyped))
+    }
+
     pub fn all() -> Self {
         let filter = stmt::Expr::Value(Value::from_bool(true));
         Self::from_untyped(stmt::Query::new_select(M::id(), filter))

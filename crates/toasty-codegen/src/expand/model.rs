@@ -85,15 +85,17 @@ impl Expand<'_> {
                 #model_schema
             }
 
+            impl #toasty::Load for #model_ident {
+                fn load(value: #toasty::Value) -> #toasty::Result<Self> {
+                    #load_body
+                }
+            }
+
             impl #toasty::Model for #model_ident {
                 type Query = #query_struct_ident;
                 type Create = #create_struct_ident;
                 type Update<'a> = #update_struct_ident<&'a mut Self>;
                 type UpdateQuery = #update_struct_ident;
-
-                fn load(value: #toasty::Value) -> #toasty::Result<Self> {
-                    #load_body
-                }
             }
 
             impl #toasty::Relation for #model_ident {
@@ -108,10 +110,6 @@ impl Expand<'_> {
                 type OptionOne = OptionOne;
 
                 #field_name_to_id
-
-                fn load(value: #toasty::Value) -> #toasty::Result<Self> {
-                    <Self as #toasty::Model>::load(value)
-                }
             }
 
             impl #toasty::stmt::IntoExpr<#model_ident> for #model_ident {
@@ -287,8 +285,35 @@ impl Expand<'_> {
         let field_loads = self.model.fields.iter().enumerate().map(|(index, field)| {
             let field_ident = &field.name.ident;
             let index_tokenized = util::int(index);
+            let field_name_str = field.name.ident.to_string();
 
             match &field.ty {
+                FieldTy::Primitive(_ty) if field.attrs.serialize.is_some() => {
+                    let serialize_attr = field.attrs.serialize.as_ref().unwrap();
+
+                    let json_deserialize = quote! {
+                        let json_str = <String as #toasty::stmt::Primitive>::load(value)?;
+                        #toasty::serde_json::from_str(&json_str)
+                            .map_err(|e| #toasty::Error::from_args(
+                                format_args!("failed to deserialize field '{}': {}", #field_name_str, e)
+                            ))?
+                    };
+
+                    let field_value = if serialize_attr.nullable {
+                        quote! {
+                            if value.is_null() { None } else { Some({ #json_deserialize }) }
+                        }
+                    } else {
+                        json_deserialize
+                    };
+
+                    quote! {
+                        #field_ident: {
+                            let value = record[#index_tokenized].take();
+                            #field_value
+                        },
+                    }
+                }
                 FieldTy::Primitive(ty) => {
                     quote!(#field_ident: <#ty as #toasty::stmt::Primitive>::load(record[#index_tokenized].take())?,)
                 }
@@ -326,8 +351,34 @@ impl Expand<'_> {
         let reload_arms = self.model.fields.iter().enumerate().map(|(index, field)| {
             let field_ident = &field.name.ident;
             let i = util::int(index);
+            let field_name_str = field.name.ident.to_string();
 
             match &field.ty {
+                FieldTy::Primitive(_ty) if field.attrs.serialize.is_some() => {
+                    let serialize_attr = field.attrs.serialize.as_ref().unwrap();
+
+                    let json_deserialize = quote! {
+                        let json_str = <String as #toasty::stmt::Primitive>::load(value)?;
+                        #toasty::serde_json::from_str(&json_str)
+                            .map_err(|e| #toasty::Error::from_args(
+                                format_args!("failed to deserialize field '{}': {}", #field_name_str, e)
+                            ))?
+                    };
+
+                    let assign = if serialize_attr.nullable {
+                        quote! {
+                            if value.is_null() { None } else { Some({ #json_deserialize }) }
+                        }
+                    } else {
+                        quote! { { #json_deserialize } }
+                    };
+
+                    quote! {
+                        #i => {
+                            self.#field_ident = #assign;
+                        }
+                    }
+                }
                 FieldTy::Primitive(ty) => {
                     quote!(#i => <#ty as #toasty::stmt::Primitive>::reload(&mut self.#field_ident, value)?,)
                 }
