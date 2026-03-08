@@ -48,6 +48,24 @@ pub(crate) enum Action {
 }
 
 impl Action {
+    /// Returns true if this action is a multi-row batch insert.
+    ///
+    /// Batch inserts should be wrapped in a transaction even though they are a
+    /// single database operation, so that a partial failure rolls back all rows.
+    pub(crate) fn is_batch_insert(&self) -> bool {
+        match self {
+            Action::ExecStatement(exec_stmt) => {
+                if let toasty_core::stmt::Statement::Insert(insert) = &exec_stmt.stmt {
+                    if let toasty_core::stmt::ExprSet::Values(values) = &insert.source.body {
+                        return values.rows.len() > 1;
+                    }
+                }
+                false
+            }
+            _ => false,
+        }
+    }
+
     /// Returns true if this action issues a database operation.
     ///
     /// Used to determine whether a plan needs to be wrapped in a transaction.
