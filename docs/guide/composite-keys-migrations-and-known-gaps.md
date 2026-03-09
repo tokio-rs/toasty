@@ -45,7 +45,7 @@ let foos: Vec<_> = Foo::filter_by_one_and_two_batch([
     (&"foo-1".to_string(), &"bar-1".to_string()),
     (&"foo-2".to_string(), &"bar-2".to_string()),
 ])
-.collect(&db)
+.collect(&mut db)
 .await?;
 ```
 
@@ -135,7 +135,7 @@ let order = OrderBy::from([
 let page = Post::all()
     .order_by(order)
     .paginate(10)
-    .collect(&db)
+    .collect(&mut db)
     .await?;
 ```
 

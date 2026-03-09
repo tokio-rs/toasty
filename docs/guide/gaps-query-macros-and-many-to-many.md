@@ -35,7 +35,7 @@ Current workaround: use the builder DSL directly.
 let users = User::all()
     .filter(User::fields().name().eq("Alice"))
     .order_by(User::fields().id().asc())
-    .collect::<Vec<_>>(&db)
+    .collect::<Vec<_>>(&mut db)
     .await?;
 ```
 
@@ -58,13 +58,13 @@ Current workaround: use generated update builders.
 ```rust
 user.update()
     .name("Bob")
-    .exec(&db)
+    .exec(&mut db)
     .await?;
 
 User::filter_by_id(user.id)
     .update()
     .name("Bob")
-    .exec(&db)
+    .exec(&mut db)
     .await?;
 ```
 

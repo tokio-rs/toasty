@@ -27,7 +27,7 @@ struct Post {
 // view_count defaults to 0, created_at defaults to now()
 let post = Post::create()
     .title("Hello")
-    .exec(&db)
+    .exec(&mut db)
     .await?;
 
 assert_eq!(post.view_count, 0);
@@ -37,7 +37,7 @@ let post = Post::create()
     .title("Hello")
     .view_count(42)
     .created_at(some_past_timestamp)
-    .exec(&db)
+    .exec(&mut db)
     .await?;
 ```
 
@@ -65,20 +65,20 @@ struct Post {
 // On create: updated_at is set to now()
 let mut post = Post::create()
     .title("Hello")
-    .exec(&db)
+    .exec(&mut db)
     .await?;
 
 // On update: updated_at is automatically refreshed
 post.update()
     .title("Updated")
-    .exec(&db)
+    .exec(&mut db)
     .await?;
 
 // Explicit values still override the automatic value
 post.update()
     .title("Backdated")
     .updated_at(some_past_timestamp)
-    .exec(&db)
+    .exec(&mut db)
     .await?;
 ```
 
@@ -107,14 +107,14 @@ struct Post {
 ```rust
 let mut post = Post::create()
     .title("Hello")
-    .exec(&db)
+    .exec(&mut db)
     .await?;
 
 assert_eq!(post.status, "draft");  // #[default] applied on create
 
 post.update()
     .title("Updated")
-    .exec(&db)
+    .exec(&mut db)
     .await?;
 
 assert_eq!(post.status, "edited"); // #[update] applied on update

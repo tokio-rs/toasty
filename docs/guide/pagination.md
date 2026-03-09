@@ -15,14 +15,14 @@ use toasty::{Model, Page};
 let page: Page<Post> = Post::all()
     .order_by(Post::fields().created_at().desc())
     .paginate(10)
-    .collect(&db)
+    .collect(&mut db)
     .await?;
 
 // The page contains items and navigation cursors
 println!("Found {} posts", page.len());
 
 // Navigate to next page using convenience method
-if let Some(next_page) = page.next(&db).await? {
+if let Some(next_page) = page.next(&mut db).await? {
     process_posts(&next_page.items);
 }
 ```
@@ -32,6 +32,8 @@ if let Some(next_page) = page.next(&db).await? {
 Paginated queries return a `Page<T>` struct containing the results and navigation cursors:
 
 ```rust
+use toasty::Executor;
+
 pub struct Page<T> {
     pub items: Vec<T>,                     // The page results
     pub next_cursor: Option<stmt::Expr>,   // Navigate forward (None = last page)
@@ -39,8 +41,8 @@ pub struct Page<T> {
 }
 
 impl<T> Page<T> {
-    pub async fn next(&self, db: &Db) -> Result<Option<Page<T>>>;
-    pub async fn prev(&self, db: &Db) -> Result<Option<Page<T>>>;
+    pub async fn next(&self, executor: &mut dyn Executor) -> Result<Option<Page<T>>>;
+    pub async fn prev(&self, executor: &mut dyn Executor) -> Result<Option<Page<T>>>;
     pub fn has_next(&self) -> bool;
     pub fn has_prev(&self) -> bool;
 }
@@ -62,11 +64,11 @@ The most common pagination pattern - moving forward through results:
 let mut current_page = Post::all()
     .order_by(Post::fields().created_at().desc())
     .paginate(10)
-    .collect(&db)
+    .collect(&mut db)
     .await?;
 
 // Continue through pages
-while let Some(next_page) = current_page.next(&db).await? {
+while let Some(next_page) = current_page.next(&mut db).await? {
     process_posts(&next_page.items);
     current_page = next_page;
 }
@@ -75,7 +77,7 @@ while let Some(next_page) = current_page.next(&db).await? {
 let page = Post::all()
     .order_by(Post::fields().created_at().desc())
     .paginate(10)
-    .collect(&db)
+    .collect(&mut db)
     .await?;
 
 if let Some(next_cursor) = page.next_cursor {
@@ -83,7 +85,7 @@ if let Some(next_cursor) = page.next_cursor {
         .order_by(Post::fields().created_at().desc())
         .paginate(10)
         .after(next_cursor)
-        .collect(&db)
+        .collect(&mut db)
         .await?;
 }
 ```
@@ -94,7 +96,7 @@ Moving backward through pages (useful for "Previous Page" functionality):
 
 ```rust
 // Navigate backward using Page's convenience method
-if let Some(prev_page) = page.prev(&db).await? {
+if let Some(prev_page) = page.prev(&mut db).await? {
     process_posts(&prev_page.items);
 }
 
@@ -104,7 +106,7 @@ if let Some(prev_cursor) = page.prev_cursor {
         .order_by(Post::fields().created_at().desc())
         .paginate(10)
         .before(prev_cursor)
-        .collect(&db)
+        .collect(&mut db)
         .await?;
 }
 ```
@@ -127,7 +129,7 @@ struct PostsResponse {
 
 #[get("/posts?<cursor>&<limit>")]
 async fn list_posts(
-    db: &Db,
+    db: &mut Db,
     cursor: Option<String>,
     limit: Option<usize>
 ) -> Result<Json<PostsResponse>> {
@@ -143,7 +145,7 @@ async fn list_posts(
         query = query.after(cursor);
     }
 
-    let page = query.collect(&db).await?;
+    let page = query.collect(db).await?;
 
     Ok(Json(PostsResponse {
         posts: page.items,
@@ -174,13 +176,13 @@ Pagination requires an explicit `ORDER BY` clause to ensure consistent results:
 let page = Post::all()
     .order_by(Post::fields().created_at().desc())
     .paginate(10)
-    .collect(&db)
+    .collect(&mut db)
     .await?;
 
 // ❌ Will panic - no ordering specified
 let page = Post::all()
     .paginate(10)  // Error: pagination requires ordering
-    .collect(&db)
+    .collect(&mut db)
     .await?;
 ```
 
@@ -202,7 +204,7 @@ let order = OrderBy::from([
 let page = Post::all()
     .order_by(order)
     .paginate(10)
-    .collect(&db)
+    .collect(&mut db)
     .await?;
 
 // Future: Chain multiple order_by calls
@@ -210,7 +212,7 @@ let page = Post::all()
     .order_by(Post::fields().status().asc())
     .then_by(Post::fields().created_at().desc())  // ⚠️ Not yet implemented
     .paginate(10)
-    .collect(&db)
+    .collect(&mut db)
     .await?;
 ```
 
@@ -258,7 +260,7 @@ let page = User::all()
     .order_by(User::fields().created_at().desc())  // Uses GSI if needed
     .paginate(10)
     .after(cursor)  // Becomes ExclusiveStartKey internally
-    .collect(&db)
+    .collect(&mut db)
     .await?;
 ```
 
@@ -272,7 +274,7 @@ Common pattern for web applications:
 use toasty::stmt;
 
 async fn load_more_posts(
-    db: &Db,
+    db: &mut Db,
     last_cursor: Option<stmt::Expr>
 ) -> Result<Page<Post>> {
     let mut query = Post::all()
@@ -301,7 +303,7 @@ struct PageNavigator {
 }
 
 impl PageNavigator {
-    pub async fn goto_page(&mut self, page_num: usize, db: &Db) -> Result<Page<Post>> {
+    pub async fn goto_page(&mut self, page_num: usize, db: &mut Db) -> Result<Page<Post>> {
         // Implementation would maintain cursor history
         // and navigate to requested page
         todo!()
@@ -332,7 +334,7 @@ let page = Post::all()
         Post::fields().id().asc(),  // Tie-breaker
     ])
     .paginate(10)
-    .collect(&db)
+    .collect(&mut db)
     .await?;
 ```
 

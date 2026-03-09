@@ -16,7 +16,7 @@ Simple model create:
 
 ```rust
 let user = toasty::create!(User, { name: "Carl", email: "carl@example.com" })
-    .exec(&db)
+    .exec(&mut db)
     .await?;
 ```
 
@@ -24,7 +24,7 @@ Scoped create through an association:
 
 ```rust
 let todo = toasty::create!(user.todos(), { title: "get something done" })
-    .exec(&db)
+    .exec(&mut db)
     .await?;
 ```
 
@@ -32,7 +32,7 @@ Batch create form:
 
 ```rust
 let users = toasty::create!(User, [{ name: "Alice" }, { name: "Bob" }])
-    .exec(&db)
+    .exec(&mut db)
     .await?;
 ```
 
@@ -43,7 +43,7 @@ let user = toasty::create!(User, {
     name: "Carl",
     todos: [{ title: "first" }, { title: "second" }]
 })
-.exec(&db)
+.exec(&mut db)
 .await?;
 ```
 

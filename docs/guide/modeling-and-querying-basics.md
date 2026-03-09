@@ -63,17 +63,17 @@ struct Post {
 ```
 
 ```rust
-let mut post = Post::create().title("hello").exec(&db).await?;
+let mut post = Post::create().title("hello").exec(&mut db).await?;
 
 // updated_at refreshed automatically
-post.update().title("hello again").exec(&db).await?;
+post.update().title("hello again").exec(&mut db).await?;
 ```
 
 ## 3) CRUD and Generated Query Methods
 
 Toasty generates create/read/update/delete flows from your model schema.
 
-- Create: `Model::create()...exec(&db).await?`
+- Create: `Model::create()...exec(&mut db).await?`
 - Read by key: `Model::get_by_<key>(...)`
 - Indexed queries: `Model::filter_by_<indexed_field>(...)`
 - Update: instance update or query update builder
@@ -83,13 +83,13 @@ Toasty generates create/read/update/delete flows from your model schema.
 let user = User::create()
     .name("Alice")
     .email("alice@example.com")
-    .exec(&db)
+    .exec(&mut db)
     .await?;
 
-let user = User::get_by_id(&db, &user.id).await?;
+let user = User::get_by_id(&mut db, &user.id).await?;
 
 let users = User::filter_by_name("Alice")
-    .collect::<Vec<_>>(&db)
+    .collect::<Vec<_>>(&mut db)
     .await?;
 ```
 
@@ -110,7 +110,7 @@ let named_users = User::filter(
         .eq("Alice")
         .or(User::fields().nickname().eq("Ali"))
 )
-.collect::<Vec<_>>(&db)
+.collect::<Vec<_>>(&mut db)
 .await?;
 ```
 
@@ -129,13 +129,13 @@ use toasty::Page;
 let page: Page<Post> = Post::all()
     .order_by(Post::fields().created_at().desc())
     .paginate(20)
-    .collect(&db)
+    .collect(&mut db)
     .await?;
 
 let top_five: Vec<Post> = Post::all()
     .order_by(Post::fields().score().desc())
     .limit(5)
-    .collect(&db)
+    .collect(&mut db)
     .await?;
 ```
 

@@ -86,8 +86,8 @@ struct ArticleBody {
 ```
 
 ```rust
-let articles = Article::all().collect::<Vec<_>>(&db).await?;
-let body = ArticleBody::get_by_article_id(&db, &articles[0].id).await?;
+let articles = Article::all().collect::<Vec<_>>(&mut db).await?;
+let body = ArticleBody::get_by_article_id(&mut db, &articles[0].id).await?;
 ```
 
 ## 28) Upsert API (Not Implemented)

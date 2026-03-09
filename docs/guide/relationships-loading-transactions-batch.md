@@ -42,16 +42,16 @@ struct Todo {
 Create and read through relationships:
 
 ```rust
-let user = User::create().exec(&db).await?;
+let user = User::create().exec(&mut db).await?;
 
 let todo = user
     .todos()
     .create()
     .title("write docs")
-    .exec(&db)
+    .exec(&mut db)
     .await?;
 
-let owner = todo.user().get(&db).await?;
+let owner = todo.user().get(&mut db).await?;
 assert_eq!(owner.id, user.id);
 ```
 
@@ -64,13 +64,13 @@ For existing records, you can explicitly link and unlink associations.
 
 ```rust
 // Link an existing todo to the user
-user.todos().insert(&db, &todo).await?;
+user.todos().insert(&mut db, &todo).await?;
 
 // Scoped query: only searches within user.todos()
-let same_todo = user.todos().get_by_id(&db, &todo.id).await?;
+let same_todo = user.todos().get_by_id(&mut db, &todo.id).await?;
 
 // Unlink/remove association
-user.todos().remove(&db, &todo).await?;
+user.todos().remove(&mut db, &todo).await?;
 ```
 
 Notes:
@@ -88,7 +88,7 @@ Basic include:
 ```rust
 let user = User::filter_by_id(user_id)
     .include(User::fields().todos())
-    .get(&db)
+    .get(&mut db)
     .await?;
 ```
 
@@ -98,7 +98,7 @@ Multiple includes:
 let todos = Todo::all()
     .include(Todo::fields().user())
     .include(Todo::fields().user().todos())
-    .collect::<Vec<_>>(&db)
+    .collect::<Vec<_>>(&mut db)
     .await?;
 ```
 
@@ -107,7 +107,7 @@ Nested include:
 ```rust
 let user = User::filter_by_id(user_id)
     .include(User::fields().todos().user())
-    .get(&db)
+    .get(&mut db)
     .await?;
 ```
 
@@ -164,7 +164,7 @@ let (users, posts): (Vec<User>, Vec<Post>) = toasty::batch((
     User::filter_by_name("Alice"),
     Post::filter_by_title("Hello"),
 ))
-.exec(&db)
+.exec(&mut db)
 .await?;
 ```
 
@@ -175,7 +175,7 @@ let (alices, bobs): (Vec<User>, Vec<User>) = toasty::batch((
     User::filter_by_name("Alice"),
     User::filter_by_name("Bob"),
 ))
-.exec(&db)
+.exec(&mut db)
 .await?;
 ```
 
