@@ -48,4 +48,3 @@ pub enum Operation {
     /// Update a record by the primary key
     UpdateByKey(UpdateByKey),
 }
-
