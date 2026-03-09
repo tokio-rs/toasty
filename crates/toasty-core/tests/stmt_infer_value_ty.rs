@@ -1,4 +1,4 @@
-use toasty_core::stmt::{Type, Value, ValueRecord};
+use toasty_core::stmt::{Type, TypeUnion, Value, ValueRecord};
 
 // ---------------------------------------------------------------------------
 // Scalar primitives
@@ -109,8 +109,8 @@ fn infer_list_string() {
 }
 
 #[test]
-fn infer_list_uses_first_element() {
-    // Type is inferred from the first element only.
+fn infer_list_homogeneous() {
+    // All elements are the same type, so the result is that single type.
     let v = Value::List(vec![Value::I64(10), Value::I64(20)]);
     assert_eq!(v.infer_ty(), Type::list(Type::I64));
 }
@@ -120,6 +120,34 @@ fn infer_list_of_lists() {
     let inner = Value::List(vec![Value::Bool(true)]);
     let v = Value::List(vec![inner]);
     assert_eq!(v.infer_ty(), Type::list(Type::list(Type::Bool)));
+}
+
+#[test]
+fn infer_list_single_element() {
+    let v = Value::List(vec![Value::Bool(true)]);
+    assert_eq!(v.infer_ty(), Type::list(Type::Bool));
+}
+
+#[test]
+fn infer_list_heterogeneous_yields_union() {
+    let v = Value::List(vec![Value::I64(1), Value::String("hello".into())]);
+    let mut expected = TypeUnion::new();
+    expected.insert(Type::I64);
+    expected.insert(Type::String);
+    assert_eq!(v.infer_ty(), Type::list(Type::Union(expected)));
+}
+
+#[test]
+fn infer_list_record_and_i64_yields_union() {
+    let record = Value::Record(ValueRecord::from_vec(vec![
+        Value::U64(1),
+        Value::String("a".into()),
+    ]));
+    let v = Value::List(vec![Value::I64(42), record]);
+    let mut expected = TypeUnion::new();
+    expected.insert(Type::I64);
+    expected.insert(Type::Record(vec![Type::U64, Type::String]));
+    assert_eq!(v.infer_ty(), Type::list(Type::Union(expected)));
 }
 
 // ---------------------------------------------------------------------------
