@@ -14,6 +14,9 @@ impl<T: Load> Load for Vec<T> {
     fn load(value: stmt::Value) -> Result<Self, Error> {
         match value {
             stmt::Value::List(items) => items.into_iter().map(T::load).collect(),
+            // Records are produced by dynamic batch queries (Vec/array inputs)
+            // where each field in the record is one query's result.
+            stmt::Value::Record(record) => record.into_iter().map(T::load).collect(),
             _ => Err(Error::type_conversion(value, "Vec<T>")),
         }
     }

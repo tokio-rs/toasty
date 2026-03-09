@@ -28,11 +28,7 @@ pub use paginate::Paginate;
 mod path;
 pub use path::Path;
 
-mod primitive;
-pub use primitive::{Auto, Primitive};
-
-#[cfg(feature = "jiff")]
-mod primitive_jiff;
+pub use crate::model::{Auto, Field};
 
 mod select;
 pub use select::Select;

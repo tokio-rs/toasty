@@ -24,7 +24,7 @@ mod engine;
 mod load;
 pub use load::Load;
 
-mod model;
+pub mod model;
 pub use model::Model;
 
 mod register;
@@ -54,6 +54,7 @@ pub mod codegen_support {
         apply_update::{ApplyUpdate, Query},
         batch::CreateMany,
         cursor::{Cursor, FromCursor},
+        model::{Auto, Field},
         register::generate_unique_id,
         relation::Relation,
         relation::{BelongsTo, HasMany, HasOne},
