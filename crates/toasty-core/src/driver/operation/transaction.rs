@@ -49,6 +49,13 @@ impl Transaction {
     }
 }
 
+impl Operation {
+    /// Returns `true` if this is a [`Transaction::Commit`] operation.
+    pub fn is_transaction_commit(&self) -> bool {
+        matches!(self, Operation::Transaction(Transaction::Commit))
+    }
+}
+
 impl From<Transaction> for Operation {
     fn from(value: Transaction) -> Self {
         Self::Transaction(value)

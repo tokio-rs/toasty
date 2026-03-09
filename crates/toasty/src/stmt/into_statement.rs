@@ -6,27 +6,35 @@ use toasty_core::stmt;
 
 /// Convert a value into a [`Statement`].
 ///
-/// This trait bridges query builders to `Statement<T>`. It is blanket-
-/// implemented for anything that implements [`IntoSelect`].
-pub trait IntoStatement<T> {
-    fn into_statement(self) -> Statement<T>;
+/// This trait bridges query builders to `Statement<T>`. The associated
+/// `Output` type encodes what the statement returns when executed:
+/// - Select queries: `Output = Vec<M>` (returns a list)
+/// - Create builders: `Output = M` (returns a single item)
+/// - Tuples: `Output = (Q1::Output, Q2::Output, ...)` (composed naturally)
+pub trait IntoStatement {
+    type Output;
+    fn into_statement(self) -> Statement<Self::Output>;
 }
 
-/// Blanket implementation: any `IntoSelect` type can produce a `Statement`
-/// for its model type.
-impl<T: IntoSelect> IntoStatement<T::Model> for T {
-    fn into_statement(self) -> Statement<T::Model> {
-        self.into_select().into()
+/// Blanket implementation: any `IntoSelect` type produces a `Statement`
+/// whose output is `Vec<Model>` — select queries return lists.
+impl<T: IntoSelect> IntoStatement for T {
+    type Output = Vec<T::Model>;
+
+    fn into_statement(self) -> Statement<Vec<T::Model>> {
+        Statement {
+            untyped: self.into_select().untyped.into(),
+            _p: PhantomData,
+        }
     }
 }
 
 macro_rules! impl_into_statement_for_tuple {
-    ( $( $T:ident : $Q:ident ),+ ; $n:tt ; $( $idx:tt ),+ ) => {
-        impl< $( $T, $Q ),+ > IntoStatement<( $( Vec<$T>, )+ )> for ( $( $Q, )+ )
-        where
-            $( $Q: IntoStatement<$T>, )+
-        {
-            fn into_statement(self) -> Statement<( $( Vec<$T>, )+ )> {
+    ( $( $Q:ident ),+ ; $n:tt ; $( $idx:tt ),+ ) => {
+        impl< $( $Q: IntoStatement ),+ > IntoStatement for ( $( $Q, )+ ) {
+            type Output = ( $( $Q::Output, )+ );
+
+            fn into_statement(self) -> Statement<Self::Output> {
                 let exprs: Vec<stmt::Expr> = vec![
                     $( stmt::Expr::stmt(self.$idx.into_statement().untyped), )+
                 ];
@@ -44,10 +52,42 @@ macro_rules! impl_into_statement_for_tuple {
     };
 }
 
-impl_into_statement_for_tuple!(T1: Q1, T2: Q2; 2; 0, 1);
-impl_into_statement_for_tuple!(T1: Q1, T2: Q2, T3: Q3; 3; 0, 1, 2);
-impl_into_statement_for_tuple!(T1: Q1, T2: Q2, T3: Q3, T4: Q4; 4; 0, 1, 2, 3);
-impl_into_statement_for_tuple!(T1: Q1, T2: Q2, T3: Q3, T4: Q4, T5: Q5; 5; 0, 1, 2, 3, 4);
-impl_into_statement_for_tuple!(T1: Q1, T2: Q2, T3: Q3, T4: Q4, T5: Q5, T6: Q6; 6; 0, 1, 2, 3, 4, 5);
-impl_into_statement_for_tuple!(T1: Q1, T2: Q2, T3: Q3, T4: Q4, T5: Q5, T6: Q6, T7: Q7; 7; 0, 1, 2, 3, 4, 5, 6);
-impl_into_statement_for_tuple!(T1: Q1, T2: Q2, T3: Q3, T4: Q4, T5: Q5, T6: Q6, T7: Q7, T8: Q8; 8; 0, 1, 2, 3, 4, 5, 6, 7);
+impl_into_statement_for_tuple!(Q1, Q2; 2; 0, 1);
+impl_into_statement_for_tuple!(Q1, Q2, Q3; 3; 0, 1, 2);
+impl_into_statement_for_tuple!(Q1, Q2, Q3, Q4; 4; 0, 1, 2, 3);
+impl_into_statement_for_tuple!(Q1, Q2, Q3, Q4, Q5; 5; 0, 1, 2, 3, 4);
+impl_into_statement_for_tuple!(Q1, Q2, Q3, Q4, Q5, Q6; 6; 0, 1, 2, 3, 4, 5);
+impl_into_statement_for_tuple!(Q1, Q2, Q3, Q4, Q5, Q6, Q7; 7; 0, 1, 2, 3, 4, 5, 6);
+impl_into_statement_for_tuple!(Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q8; 8; 0, 1, 2, 3, 4, 5, 6, 7);
+
+/// Helper to build a batched statement from an iterator of queries.
+fn batch_from_iter<Q: IntoStatement>(iter: impl Iterator<Item = Q>) -> Statement<Vec<Q::Output>> {
+    let exprs: Vec<stmt::Expr> = iter
+        .map(|q| stmt::Expr::stmt(q.into_statement().untyped))
+        .collect();
+
+    let query = stmt::Query::new_single(stmt::Values::from(stmt::Expr::record(exprs)));
+
+    Statement {
+        untyped: query.into(),
+        _p: PhantomData,
+    }
+}
+
+/// Dynamic batch via `Vec<Q>`: all queries have the same type, returns `Vec<Q::Output>`.
+impl<Q: IntoStatement> IntoStatement for Vec<Q> {
+    type Output = Vec<Q::Output>;
+
+    fn into_statement(self) -> Statement<Self::Output> {
+        batch_from_iter(self.into_iter())
+    }
+}
+
+/// Dynamic batch via `[Q; N]`: fixed-size array of homogeneous queries, returns `Vec<Q::Output>`.
+impl<Q: IntoStatement, const N: usize> IntoStatement for [Q; N] {
+    type Output = Vec<Q::Output>;
+
+    fn into_statement(self) -> Statement<Self::Output> {
+        batch_from_iter(self.into_iter())
+    }
+}
