@@ -1,6 +1,9 @@
 use crate::prelude::*;
 
-use toasty_core::driver::{operation::Transaction, Operation};
+use toasty_core::{
+    driver::{operation::Transaction, Operation},
+    stmt::Statement,
+};
 
 /// Batch two creates of the same model.
 #[driver_test(id(ID), requires(sql))]
@@ -32,8 +35,14 @@ pub async fn batch_two_creates_same_model(t: &mut Test) -> Result<()> {
             read_only: false
         })
     );
-    assert!(t.log().pop_op().is_query_sql()); // INSERT alice
-    assert!(t.log().pop_op().is_query_sql()); // INSERT bob
+    assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
+        stmt: Statement::Insert(_),
+        ..
+    })); // INSERT alice
+    assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
+        stmt: Statement::Insert(_),
+        ..
+    })); // INSERT bob
     assert!(t.log().pop_op().is_transaction_commit());
     assert!(t.log().is_empty());
 
