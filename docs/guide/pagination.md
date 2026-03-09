@@ -13,7 +13,7 @@ use toasty::{Model, Page};
 
 // Get the first page of posts
 let page: Page<Post> = Post::all()
-    .order_by(Post::FIELDS.created_at().desc())
+    .order_by(Post::fields().created_at().desc())
     .paginate(10)
     .collect(&db)
     .await?;
@@ -60,7 +60,7 @@ The most common pagination pattern - moving forward through results:
 ```rust
 // Using Page's convenience method
 let mut current_page = Post::all()
-    .order_by(Post::FIELDS.created_at().desc())
+    .order_by(Post::fields().created_at().desc())
     .paginate(10)
     .collect(&db)
     .await?;
@@ -73,14 +73,14 @@ while let Some(next_page) = current_page.next(&db).await? {
 
 // Or manually using .after()
 let page = Post::all()
-    .order_by(Post::FIELDS.created_at().desc())
+    .order_by(Post::fields().created_at().desc())
     .paginate(10)
     .collect(&db)
     .await?;
 
 if let Some(next_cursor) = page.next_cursor {
     let next_page = Post::all()
-        .order_by(Post::FIELDS.created_at().desc())
+        .order_by(Post::fields().created_at().desc())
         .paginate(10)
         .after(next_cursor)
         .collect(&db)
@@ -101,7 +101,7 @@ if let Some(prev_page) = page.prev(&db).await? {
 // Or manually using .before()
 if let Some(prev_cursor) = page.prev_cursor {
     let prev_page = Post::all()
-        .order_by(Post::FIELDS.created_at().desc())
+        .order_by(Post::fields().created_at().desc())
         .paginate(10)
         .before(prev_cursor)
         .collect(&db)
@@ -134,7 +134,7 @@ async fn list_posts(
     let page_size = limit.unwrap_or(10).min(100); // Cap at 100
 
     let mut query = Post::all()
-        .order_by(Post::FIELDS.created_at().desc())
+        .order_by(Post::fields().created_at().desc())
         .paginate(page_size);
 
     // Deserialize cursor at application level
@@ -172,7 +172,7 @@ Pagination requires an explicit `ORDER BY` clause to ensure consistent results:
 ```rust
 // ✅ Correct - explicit ordering
 let page = Post::all()
-    .order_by(Post::FIELDS.created_at().desc())
+    .order_by(Post::fields().created_at().desc())
     .paginate(10)
     .collect(&db)
     .await?;
@@ -195,8 +195,8 @@ For complex sorting, you can order by multiple columns:
 use toasty::stmt::OrderBy;
 
 let order = OrderBy::from([
-    Post::FIELDS.status().asc(),
-    Post::FIELDS.created_at().desc(),
+    Post::fields().status().asc(),
+    Post::fields().created_at().desc(),
 ]);
 
 let page = Post::all()
@@ -207,8 +207,8 @@ let page = Post::all()
 
 // Future: Chain multiple order_by calls
 let page = Post::all()
-    .order_by(Post::FIELDS.status().asc())
-    .then_by(Post::FIELDS.created_at().desc())  // ⚠️ Not yet implemented
+    .order_by(Post::fields().status().asc())
+    .then_by(Post::fields().created_at().desc())  // ⚠️ Not yet implemented
     .paginate(10)
     .collect(&db)
     .await?;
@@ -255,7 +255,7 @@ For DynamoDB, Toasty maps cursors to DynamoDB's native `LastEvaluatedKey` pagina
 ```rust
 // Toasty cursor seamlessly becomes DynamoDB ExclusiveStartKey
 let page = User::all()
-    .order_by(User::FIELDS.created_at().desc())  // Uses GSI if needed
+    .order_by(User::fields().created_at().desc())  // Uses GSI if needed
     .paginate(10)
     .after(cursor)  // Becomes ExclusiveStartKey internally
     .collect(&db)
@@ -276,7 +276,7 @@ async fn load_more_posts(
     last_cursor: Option<stmt::Expr>
 ) -> Result<Page<Post>> {
     let mut query = Post::all()
-        .order_by(Post::FIELDS.created_at().desc())
+        .order_by(Post::fields().created_at().desc())
         .paginate(20);
 
     if let Some(cursor) = last_cursor {
@@ -314,7 +314,6 @@ impl PageNavigator {
 See [roadmap/order_limit_pagination.md](../roadmap/order_limit_pagination.md) for the complete list of remaining features:
 
 - **Multi-column ordering** (`.then_by()` chaining) - workaround exists using `OrderBy::from([...])`
-- **Direct `.limit()` method** - for non-paginated queries
 - **`.last()` convenience method**
 
 **Note:** Cursor serialization is intentionally left to the application level, allowing flexibility in how cursors are encoded/transmitted.
@@ -329,8 +328,8 @@ Ensure deterministic ordering by including a unique field (usually ID) as a tie-
 // ✅ Good - includes unique ID for tie-breaking
 let page = Post::all()
     .order_by([
-        Post::FIELDS.score().desc(),
-        Post::FIELDS.id().asc(),  // Tie-breaker
+        Post::fields().score().desc(),
+        Post::fields().id().asc(),  // Tie-breaker
     ])
     .paginate(10)
     .collect(&db)
