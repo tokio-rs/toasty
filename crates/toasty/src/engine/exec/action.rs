@@ -48,24 +48,6 @@ pub(crate) enum Action {
 }
 
 impl Action {
-    /// Returns `true` when this action is an INSERT with more than one row in
-    /// its VALUES clause. A multi-row INSERT is still a single database
-    /// operation, but wrapping it in a transaction ensures that a constraint
-    /// violation on any row rolls back the entire batch.
-    pub(crate) fn is_multi_row_insert(&self) -> bool {
-        match self {
-            Action::ExecStatement(exec_stmt) => {
-                if let toasty_core::stmt::Statement::Insert(insert) = &exec_stmt.stmt {
-                    if let toasty_core::stmt::ExprSet::Values(values) = &insert.source.body {
-                        return values.rows.len() > 1;
-                    }
-                }
-                false
-            }
-            _ => false,
-        }
-    }
-
     /// Returns true if this action issues a database operation.
     ///
     /// Used to determine whether a plan needs to be wrapped in a transaction.

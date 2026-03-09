@@ -82,20 +82,10 @@ pub async fn batch_create_many(test: &mut Test) -> Result<()> {
     assert_eq!(res[0].title, "todo 1");
     assert_eq!(res[1].title, "todo 2");
 
-    // Multi-row batch: wrapped in a transaction
+    // Multi-row batch in a single INSERT statement: no transaction wrapping
+    // needed because single SQL statements are inherently atomic.
     if test.capability().sql {
-        assert_struct!(
-            test.log().pop_op(),
-            Operation::Transaction(Transaction::Start {
-                isolation: None,
-                read_only: false
-            })
-        );
         assert_struct!(test.log().pop_op(), Operation::QuerySql(_));
-        assert_struct!(
-            test.log().pop_op(),
-            Operation::Transaction(Transaction::Commit)
-        );
         assert!(test.log().is_empty());
     }
 
@@ -202,7 +192,8 @@ pub async fn batch_create_model_with_unique_field_index_all_dups(test: &mut Test
     Ok(())
 }
 
-/// Unique constraint violation on a multi-row batch rolls back the transaction.
+/// Unique constraint violation on a multi-row batch is atomic because a single
+/// INSERT statement is inherently atomic in SQL databases.
 #[driver_test(id(ID), requires(sql))]
 pub async fn batch_create_unique_violation_rolls_back(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -232,17 +223,7 @@ pub async fn batch_create_unique_violation_rolls_back(t: &mut Test) -> Result<()
             .await
     );
 
-    assert_struct!(
-        t.log().pop_op(),
-        Operation::Transaction(Transaction::Start {
-            isolation: None,
-            read_only: false
-        })
-    );
-    assert_struct!(
-        t.log().pop_op(),
-        Operation::Transaction(Transaction::Rollback)
-    );
+    // No transaction wrapper — the single INSERT fails atomically
     assert!(t.log().is_empty());
 
     // Only the seeded user remains
@@ -252,7 +233,8 @@ pub async fn batch_create_unique_violation_rolls_back(t: &mut Test) -> Result<()
     Ok(())
 }
 
-/// Multi-row batch inside an explicit transaction uses savepoints.
+/// Multi-row batch inside an explicit transaction executes as a single INSERT
+/// without extra savepoint wrapping (the statement is inherently atomic).
 #[driver_test(id(ID), requires(sql))]
 pub async fn batch_create_inside_transaction_uses_savepoints(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -282,15 +264,8 @@ pub async fn batch_create_inside_transaction_uses_savepoints(t: &mut Test) -> Re
         .exec(&mut tx)
         .await?;
 
-    assert_struct!(
-        t.log().pop_op(),
-        Operation::Transaction(Transaction::Savepoint(_))
-    );
+    // Single INSERT statement — no savepoint needed
     assert_struct!(t.log().pop_op(), Operation::QuerySql(_));
-    assert_struct!(
-        t.log().pop_op(),
-        Operation::Transaction(Transaction::ReleaseSavepoint(_))
-    );
 
     tx.commit().await?;
 
