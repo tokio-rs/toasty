@@ -8,67 +8,8 @@ It currently supports SQL databases (SQLite, PostgreSQL, MySQL) and DynamoDB.
 Note that Toasty does not hide database capabilities. Instead, Toasty exposes
 features based on the target database.
 
-## Documentation Map
-
-If you are evaluating Toasty, start here:
-
-- Full feature matrix (implemented, partial, missing):
-  [docs/feature-status.md](docs/feature-status.md)
-
-Implemented feature guides:
-
-- [modeling-and-querying-basics.md](docs/guide/modeling-and-querying-basics.md)
-- [relationships-loading-transactions-batch.md](docs/guide/relationships-loading-transactions-batch.md)
-- [macros-embedded-serialized-and-numeric-types.md](docs/guide/macros-embedded-serialized-and-numeric-types.md)
-- [implemented-advanced-patterns.md](docs/guide/implemented-advanced-patterns.md)
-- [composite-keys-migrations-and-known-gaps.md](docs/guide/composite-keys-migrations-and-known-gaps.md)
-
-Known-gap guides:
-
-- [gaps-query-macros-and-many-to-many.md](docs/guide/gaps-query-macros-and-many-to-many.md)
-- [gaps-polymorphic-deferred-upsert-raw-sql-and-dynamodb-migrations.md](docs/guide/gaps-polymorphic-deferred-upsert-raw-sql-and-dynamodb-migrations.md)
-- [gaps-cassandra-driver.md](docs/guide/gaps-cassandra-driver.md)
-
-## Feature Snapshot
-
-### What Works Today (Implemented and Well-Exercised)
-
-- Modeling and schema attributes: `#[derive(toasty::Model)]`, `#[key]`,
-  `#[index]`, `#[unique]`, `#[column(...)]`, `#[auto]`, `#[default]`,
-  `#[update]`. (confidence: 94%)
-- Querying: generated `filter_by_*` methods, field DSL filters, logical
-  composition (`and`, `or`, `not`), nullable filters (`is_some`, `is_none`),
-  sorting, `.limit()`, and cursor pagination. (confidence: 90%)
-- Relationships: `HasMany`, `BelongsTo`, and `HasOne` CRUD flows, scoped
-  queries, link/unlink operations, and eager loading with `.include(...)`
-  including nested preloads. (confidence: 90%)
-- Transactions (SQL): interactive transactions, nested savepoints, rollback on
-  drop, and transaction builder controls (isolation level and read-only mode).
-  (confidence: 97%)
-- Data types and field encodings: primitive types, UUIDs, jiff time types,
-  `rust_decimal::Decimal`, `bigdecimal::BigDecimal`, embedded structs/enums, and
-  `#[serialize(json)]` fields. (confidence: 88%)
-- Composite-key workflows: tested paths for batch get by composite key, and
-  partition/local key update/delete/query behavior. (confidence: 80%)
-- Batch and macros: `toasty::batch(...)` and `toasty::create!(...)`.
-  (confidence: 93%)
-- Schema management: migration CLI commands (`generate`, `apply`, `snapshot`,
-  `drop`, `reset`) for SQL backends. (confidence: 90%)
-
-### What's Partial or Missing
-
-- Composite-key parity is still partial in some engine and DynamoDB paths.
-  (confidence: 95%)
-- `toasty::query!` and `include_schema!` macros are currently stubs.
-  (confidence: 99%)
-- `toasty::update!` macro is not implemented. (confidence: 96%)
-- `.then_by()` convenience ordering is not implemented (manual multi-column
-  ordering works via `OrderBy::from([...])`). (confidence: 95%)
-- Many-to-many relations, polymorphic associations, deferred fields, upsert,
-  and raw SQL escape-hatch APIs are still roadmap items. (confidence: 82%)
-- DynamoDB migration generation/apply support is not implemented.
-  (confidence: 99%)
-- Cassandra driver support is not implemented. (confidence: 96%)
+For the detailed feature map and status matrix, see
+[docs/feature-overview.md](docs/feature-overview.md).
 
 ## Using Toasty
 
@@ -194,6 +135,8 @@ if let Some(next_page) = page.next(&mut db).await? {
 Interactive transactions support rollback and nested savepoints:
 
 ```rust
+use toasty::Executor;
+
 let mut tx = db.transaction().await?;
 
 User::create().name("Alice").email("alice@example.com").exec(&mut tx).await?;
@@ -208,7 +151,7 @@ Batch reads:
 
 ```rust
 let (users, todos): (Vec<User>, Vec<Todo>) = toasty::batch((
-    User::filter_by_name("John Doe"),
+    User::filter(User::fields().name().eq("John Doe")),
     Todo::all(),
 ))
 .exec(&mut db)
@@ -282,7 +225,7 @@ db.push_schema().await?;
 ```
 
 For deeper coverage and backend caveats, use the guide set in
-[Documentation Map](#documentation-map).
+[docs/feature-overview.md](docs/feature-overview.md).
 
 ## SQL and NoSQL
 
