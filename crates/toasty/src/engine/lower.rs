@@ -442,7 +442,9 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     }
 
     fn visit_expr_stmt_mut(&mut self, i: &mut stmt::ExprStmt) {
-        todo!("expr={i:#?}");
+        // Delegate to the default visitor which dispatches to
+        // visit_stmt_insert_mut, visit_stmt_query_mut, etc.
+        stmt::visit_mut::visit_expr_stmt_mut(self, i);
     }
 
     fn visit_returning_mut(&mut self, i: &mut stmt::Returning) {

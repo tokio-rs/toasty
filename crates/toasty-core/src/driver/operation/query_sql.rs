@@ -21,6 +21,13 @@ pub struct QuerySql {
     pub last_insert_id_hack: Option<u64>,
 }
 
+impl Operation {
+    /// Returns `true` if this is a [`QuerySql`](Operation::QuerySql) operation.
+    pub fn is_query_sql(&self) -> bool {
+        matches!(self, Operation::QuerySql(_))
+    }
+}
+
 impl From<QuerySql> for Operation {
     fn from(value: QuerySql) -> Self {
         Self::QuerySql(value)
