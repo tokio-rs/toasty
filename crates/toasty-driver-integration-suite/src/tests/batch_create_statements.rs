@@ -95,8 +95,14 @@ pub async fn batch_two_creates_different_models(t: &mut Test) -> Result<()> {
             read_only: false
         })
     );
-    assert!(t.log().pop_op().is_query_sql()); // INSERT user
-    assert!(t.log().pop_op().is_query_sql()); // INSERT post
+    assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
+        stmt: Statement::Insert(_),
+        ..
+    })); // INSERT user
+    assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
+        stmt: Statement::Insert(_),
+        ..
+    })); // INSERT post
     assert!(t.log().pop_op().is_transaction_commit());
     assert!(t.log().is_empty());
 
@@ -141,8 +147,14 @@ pub async fn batch_query_then_create(t: &mut Test) -> Result<()> {
             read_only: false
         })
     );
-    assert!(t.log().pop_op().is_query_sql()); // SELECT
-    assert!(t.log().pop_op().is_query_sql()); // INSERT
+    assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
+        stmt: Statement::Query(_),
+        ..
+    })); // SELECT
+    assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
+        stmt: Statement::Insert(_),
+        ..
+    })); // INSERT
     assert!(t.log().pop_op().is_transaction_commit());
     assert!(t.log().is_empty());
 
@@ -181,8 +193,14 @@ pub async fn batch_create_then_query(t: &mut Test) -> Result<()> {
             read_only: false
         })
     );
-    assert!(t.log().pop_op().is_query_sql()); // INSERT
-    assert!(t.log().pop_op().is_query_sql()); // SELECT
+    assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
+        stmt: Statement::Insert(_),
+        ..
+    })); // INSERT
+    assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
+        stmt: Statement::Query(_),
+        ..
+    })); // SELECT
     assert!(t.log().pop_op().is_transaction_commit());
     assert!(t.log().is_empty());
 
@@ -225,9 +243,18 @@ pub async fn batch_create_query_create(t: &mut Test) -> Result<()> {
             read_only: false
         })
     );
-    assert!(t.log().pop_op().is_query_sql()); // INSERT bob
-    assert!(t.log().pop_op().is_query_sql()); // SELECT alice
-    assert!(t.log().pop_op().is_query_sql()); // INSERT carol
+    assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
+        stmt: Statement::Insert(_),
+        ..
+    })); // INSERT bob
+    assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
+        stmt: Statement::Query(_),
+        ..
+    })); // SELECT alice
+    assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
+        stmt: Statement::Insert(_),
+        ..
+    })); // INSERT carol
     assert!(t.log().pop_op().is_transaction_commit());
     assert!(t.log().is_empty());
 
