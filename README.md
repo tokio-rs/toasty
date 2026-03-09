@@ -8,44 +8,28 @@ It currently supports SQL databases (SQLite, PostgreSQL, MySQL) and DynamoDB.
 Note that Toasty does not hide database capabilities. Instead, Toasty exposes
 features based on the target database.
 
-## Feature Status
+## Documentation Map
 
-The project has more implemented functionality than the high-level docs currently
-describe. This README summarizes tested capabilities.
+If you are evaluating Toasty, start here:
 
-For a detailed matrix of implemented, partial, and missing features, see
-[docs/feature-status.md](docs/feature-status.md).
+- Full feature matrix (implemented, partial, missing):
+  [docs/feature-status.md](docs/feature-status.md)
 
-For practical docs on the first five core implemented areas, see
-[docs/guide/modeling-and-querying-basics.md](docs/guide/modeling-and-querying-basics.md).
+Implemented feature guides:
 
-For the next five implemented areas (relationships, loading, transactions, and
-batch execution), see
-[docs/guide/relationships-loading-transactions-batch.md](docs/guide/relationships-loading-transactions-batch.md).
+- [modeling-and-querying-basics.md](docs/guide/modeling-and-querying-basics.md)
+- [relationships-loading-transactions-batch.md](docs/guide/relationships-loading-transactions-batch.md)
+- [macros-embedded-serialized-and-numeric-types.md](docs/guide/macros-embedded-serialized-and-numeric-types.md)
+- [implemented-advanced-patterns.md](docs/guide/implemented-advanced-patterns.md)
+- [composite-keys-migrations-and-known-gaps.md](docs/guide/composite-keys-migrations-and-known-gaps.md)
 
-For the next five implemented areas after that (create macro, embedded and
-serialized fields, and numeric/time type support), see
-[docs/guide/macros-embedded-serialized-and-numeric-types.md](docs/guide/macros-embedded-serialized-and-numeric-types.md).
+Known-gap guides:
 
-For additional implemented advanced patterns (batch create builders, embedded
-enum filters, embedded-field indexes, and self-referential relation patterns),
-see
-[docs/guide/implemented-advanced-patterns.md](docs/guide/implemented-advanced-patterns.md).
+- [gaps-query-macros-and-many-to-many.md](docs/guide/gaps-query-macros-and-many-to-many.md)
+- [gaps-polymorphic-deferred-upsert-raw-sql-and-dynamodb-migrations.md](docs/guide/gaps-polymorphic-deferred-upsert-raw-sql-and-dynamodb-migrations.md)
+- [gaps-cassandra-driver.md](docs/guide/gaps-cassandra-driver.md)
 
-For the next five areas (composite-key workflows, migrations, reset, and two
-current partial gaps), see
-[docs/guide/composite-keys-migrations-and-known-gaps.md](docs/guide/composite-keys-migrations-and-known-gaps.md).
-
-For the next five gaps (DynamoDB edge-case rewriting, missing macros, and
-many-to-many), see
-[docs/guide/gaps-query-macros-and-many-to-many.md](docs/guide/gaps-query-macros-and-many-to-many.md).
-
-For the next five gaps after that (polymorphic associations, deferred fields,
-upsert, raw SQL escape hatch, and DynamoDB migrations), see
-[docs/guide/gaps-polymorphic-deferred-upsert-raw-sql-and-dynamodb-migrations.md](docs/guide/gaps-polymorphic-deferred-upsert-raw-sql-and-dynamodb-migrations.md).
-
-For the final remaining documented gap (Cassandra driver support), see
-[docs/guide/gaps-cassandra-driver.md](docs/guide/gaps-cassandra-driver.md).
+## Feature Snapshot
 
 ### What Works Today (Implemented and Well-Exercised)
 
@@ -97,7 +81,7 @@ You will define your data model using Rust structs annotated with the
 struct User {
     #[key]
     #[auto]
-    id: u64,
+    id: uuid::Uuid,
 
     name: String,
 
@@ -106,18 +90,16 @@ struct User {
 
     #[has_many]
     todos: toasty::HasMany<Todo>,
-
-    moto: Option<String>,
 }
 
 #[derive(Debug, toasty::Model)]
 struct Todo {
     #[key]
     #[auto]
-    id: u64,
+    id: uuid::Uuid,
 
     #[index]
-    user_id: u64,
+    user_id: uuid::Uuid,
 
     #[belongs_to(key = user_id, references = id)]
     user: toasty::BelongsTo<User>,
@@ -136,17 +118,17 @@ let user = User::create()
     .todo(Todo::create().title("Make pizza"))
     .todo(Todo::create().title("Finish Toasty"))
     .todo(Todo::create().title("Sleep"))
-    .exec(&db)
+    .exec(&mut db)
     .await?;
 
 // Load the user from the database
-let user = User::get_by_id(&db, &user.id).await?
+let user = User::get_by_id(&mut db, &user.id).await?;
 
 // Load and iterate the user's todos
-let mut todos = user.todos().all(&db).await.unwrap();
+let mut todos = user.todos().all(&mut db).await?;
 
 while let Some(todo) = todos.next().await {
-    let todo = todo.unwrap();
+    let todo = todo?;
     println!("{:#?}", todo);
 }
 ```
