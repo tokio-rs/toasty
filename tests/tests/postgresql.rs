@@ -1,9 +1,9 @@
 #![cfg(feature = "postgresql")]
 
 use std::sync::Arc;
+use toasty_driver_postgresql::PostgreSQL;
 use tokio::sync::OnceCell;
 use tokio_postgres::NoTls;
-use toasty_driver_postgresql::PostgreSQL;
 
 struct PostgreSqlSetup {
     client: OnceCell<Arc<tokio_postgres::Client>>,

@@ -1,8 +1,8 @@
 #![cfg(feature = "mysql")]
 
 use mysql_async::prelude::Queryable;
-use tokio::sync::OnceCell;
 use toasty_driver_mysql::MySQL;
+use tokio::sync::OnceCell;
 
 struct MySqlSetup {
     pool: OnceCell<mysql_async::Pool>,
