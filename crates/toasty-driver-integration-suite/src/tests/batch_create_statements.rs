@@ -1,5 +1,7 @@
 use crate::prelude::*;
 
+use toasty_core::driver::{operation::Transaction, Operation};
+
 /// Batch two creates of the same model.
 #[driver_test(id(ID), requires(sql))]
 pub async fn batch_two_creates_same_model(t: &mut Test) -> Result<()> {
@@ -13,6 +15,7 @@ pub async fn batch_two_creates_same_model(t: &mut Test) -> Result<()> {
 
     let mut db = t.setup_db(models!(User)).await;
 
+    t.log().clear();
     let (alice, bob): (User, User) =
         toasty::batch((User::create().name("Alice"), User::create().name("Bob")))
             .exec(&mut db)
@@ -20,6 +23,22 @@ pub async fn batch_two_creates_same_model(t: &mut Test) -> Result<()> {
 
     assert_eq!(alice.name, "Alice");
     assert_eq!(bob.name, "Bob");
+
+    // Two independent creates → transaction-wrapped
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Start {
+            isolation: None,
+            read_only: false
+        })
+    );
+    assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT alice
+    assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT bob
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Commit)
+    );
+    assert!(t.log().is_empty());
 
     // Verify both were persisted
     let all: Vec<_> = User::filter_by_id(alice.id).collect(&mut db).await?;
@@ -51,6 +70,7 @@ pub async fn batch_two_creates_different_models(t: &mut Test) -> Result<()> {
 
     let mut db = t.setup_db(models!(User, Post)).await;
 
+    t.log().clear();
     let (user, post): (User, Post) = toasty::batch((
         User::create().name("Alice"),
         Post::create().title("Hello World"),
@@ -60,6 +80,22 @@ pub async fn batch_two_creates_different_models(t: &mut Test) -> Result<()> {
 
     assert_eq!(user.name, "Alice");
     assert_eq!(post.title, "Hello World");
+
+    // Two independent creates → transaction-wrapped
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Start {
+            isolation: None,
+            read_only: false
+        })
+    );
+    assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT user
+    assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT post
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Commit)
+    );
+    assert!(t.log().is_empty());
 
     // Verify persistence
     let found = User::get_by_id(&mut db, user.id).await?;
@@ -85,6 +121,7 @@ pub async fn batch_query_then_create(t: &mut Test) -> Result<()> {
     let mut db = t.setup_db(models!(User)).await;
     User::create().name("Alice").exec(&mut db).await?;
 
+    t.log().clear();
     let (existing, created): (Vec<User>, User) =
         toasty::batch((User::filter_by_name("Alice"), User::create().name("Bob")))
             .exec(&mut db)
@@ -92,6 +129,22 @@ pub async fn batch_query_then_create(t: &mut Test) -> Result<()> {
 
     assert_struct!(existing, [_ { name: "Alice" }]);
     assert_eq!(created.name, "Bob");
+
+    // Two operations (query + create) → transaction-wrapped
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Start {
+            isolation: None,
+            read_only: false
+        })
+    );
+    assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // SELECT
+    assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Commit)
+    );
+    assert!(t.log().is_empty());
 
     Ok(())
 }
@@ -111,6 +164,7 @@ pub async fn batch_create_then_query(t: &mut Test) -> Result<()> {
     let mut db = t.setup_db(models!(User)).await;
     User::create().name("Alice").exec(&mut db).await?;
 
+    t.log().clear();
     let (created, existing): (User, Vec<User>) =
         toasty::batch((User::create().name("Bob"), User::filter_by_name("Alice")))
             .exec(&mut db)
@@ -118,6 +172,22 @@ pub async fn batch_create_then_query(t: &mut Test) -> Result<()> {
 
     assert_eq!(created.name, "Bob");
     assert_struct!(existing, [_ { name: "Alice" }]);
+
+    // Two operations (create + query) → transaction-wrapped
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Start {
+            isolation: None,
+            read_only: false
+        })
+    );
+    assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT
+    assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // SELECT
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Commit)
+    );
+    assert!(t.log().is_empty());
 
     Ok(())
 }
@@ -137,6 +207,7 @@ pub async fn batch_create_query_create(t: &mut Test) -> Result<()> {
     let mut db = t.setup_db(models!(User)).await;
     User::create().name("Alice").exec(&mut db).await?;
 
+    t.log().clear();
     let (bob, existing, carol): (User, Vec<User>, User) = toasty::batch((
         User::create().name("Bob"),
         User::filter_by_name("Alice"),
@@ -148,6 +219,23 @@ pub async fn batch_create_query_create(t: &mut Test) -> Result<()> {
     assert_eq!(bob.name, "Bob");
     assert_struct!(existing, [_ { name: "Alice" }]);
     assert_eq!(carol.name, "Carol");
+
+    // Three operations → transaction-wrapped
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Start {
+            isolation: None,
+            read_only: false
+        })
+    );
+    assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT bob
+    assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // SELECT alice
+    assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT carol
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Commit)
+    );
+    assert!(t.log().is_empty());
 
     Ok(())
 }
