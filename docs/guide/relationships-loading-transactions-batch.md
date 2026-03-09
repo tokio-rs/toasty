@@ -95,10 +95,10 @@ let user = User::filter_by_id(user_id)
 Multiple includes:
 
 ```rust
-let user = User::filter_by_id(user_id)
-    .include(User::fields().todos())
-    .include(User::fields().profile())
-    .get(&db)
+let todos = Todo::all()
+    .include(Todo::fields().user())
+    .include(Todo::fields().user().todos())
+    .collect::<Vec<_>>(&db)
     .await?;
 ```
 
@@ -106,7 +106,7 @@ Nested include:
 
 ```rust
 let user = User::filter_by_id(user_id)
-    .include(User::fields().todos().steps())
+    .include(User::fields().todos().user())
     .get(&db)
     .await?;
 ```

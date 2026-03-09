@@ -104,11 +104,11 @@ Supported patterns include:
 - Nullable checks: `.is_some()`, `.is_none()`
 
 ```rust
-let adults_with_bio = User::filter(
+let named_users = User::filter(
     User::fields()
-        .age()
-        .ge(18)
-        .and(User::fields().bio().is_some())
+        .name()
+        .eq("Alice")
+        .or(User::fields().nickname().eq("Ali"))
 )
 .collect::<Vec<_>>(&db)
 .await?;

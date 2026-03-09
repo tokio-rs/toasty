@@ -39,7 +39,6 @@ Evidence:
 `has_many` create builders support all of the following:
 
 - Singular inserts: `.todo(Todo::create()...)`
-- Plural inserts: `.todos([Todo::create()..., ...])`
 - Closure-based bulk builder: `.with_todos(|many| many.with_item(...))`
 
 ```rust
@@ -68,11 +67,20 @@ struct Todo {
 let user = User::create()
     .name("Ann")
     .todo(Todo::create().title("one"))
-    .todos([Todo::create().title("two"), Todo::create().title("three")])
-    .with_todos(|many| many.with_item(|c| c.title("four")))
+    .with_todos(|many| {
+        many.with_item(|c| c.title("two"))
+            .with_item(|c| c.title("three"))
+            .with_item(|c| c.title("four"))
+    })
     .exec(&mut db)
     .await?;
 ```
+
+Notes:
+
+- Prefer `.todo(...)` and `.with_todos(...)` for relation batch create flows.
+- Array-style `.todos([Todo::create()..., ...])` currently routes through an
+  unimplemented by-ref create path and is treated as a known gap.
 
 Evidence:
 

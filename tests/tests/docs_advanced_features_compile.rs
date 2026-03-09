@@ -120,11 +120,11 @@ fn relation_batch_create_api_compiles() {
             country: "US".to_string(),
         })
         .todo(Todo::create().title("first"))
-        .todos([
-            Todo::create().title("second"),
-            Todo::create().title("third"),
-        ])
-        .with_todos(|many| many.with_item(|c| c.title("fourth")));
+        .with_todos(|many| {
+            many.with_item(|c| c.title("second"))
+                .with_item(|c| c.title("third"))
+                .with_item(|c| c.title("fourth"))
+        });
 }
 
 #[test]
@@ -139,6 +139,17 @@ fn embedded_enum_filter_api_compiles() {
                 .matches(|e| e.address().eq("alice@example.com")),
         ),
     );
+}
+
+#[test]
+fn include_chain_snippets_compile() {
+    let _basic = User::all().include(User::fields().todos());
+
+    let _multiple = Todo::all()
+        .include(Todo::fields().user())
+        .include(Todo::fields().user().todos());
+
+    let _nested = User::all().include(User::fields().todos().user());
 }
 
 #[test]

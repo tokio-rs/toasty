@@ -158,6 +158,8 @@ let (users, todos): (Vec<User>, Vec<Todo>) = toasty::batch((
 .await?;
 ```
 
+Current status: `toasty::batch(...)` is integration-tested on SQL backends.
+
 Batch create builder:
 
 ```rust
@@ -235,7 +237,7 @@ database. Instead, Toasty leans into the target database's capabilities and
 aims to help the user avoid issuing inefficient queries for that database.
 
 When targeting both SQL and NoSQL databases, Toasty generates query methods
-(e.g. `find_by_id` only for access patterns that are indexed). When targeting a
+(e.g. `get_by_id` only for access patterns that are indexed). When targeting a
 SQL database, Toasty might allow arbitrary additional query constraints. When
 targeting a NoSQL database, Toasty will only allow constraints that the
 specific target database can execute. For example, with DynamoDB, query methods
