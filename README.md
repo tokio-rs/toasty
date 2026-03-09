@@ -133,6 +133,157 @@ while let Some(todo) = todos.next().await {
 }
 ```
 
+## Quick Feature Guides
+
+These are short, copyable patterns for the main implemented features.
+
+### Querying and Filtering
+
+Generated methods and the field DSL can be used together:
+
+```rust
+let john = User::filter_by_email("john@example.com")
+    .get(&mut db)
+    .await?;
+
+let users: Vec<User> = User::filter(
+    User::fields()
+        .name()
+        .eq("John Doe")
+        .or(User::fields().name().eq("Jane Doe"))
+)
+.order_by(User::fields().name().asc())
+.limit(20)
+.collect(&mut db)
+.await?;
+```
+
+### Eager Loading (`.include(...)`)
+
+Preload relations to avoid N+1 query patterns:
+
+```rust
+let user = User::filter_by_id(user.id)
+    .include(User::fields().todos())
+    .get(&mut db)
+    .await?;
+
+for todo in user.todos.get() {
+    println!("preloaded todo: {}", todo.title);
+}
+```
+
+### Cursor Pagination
+
+Use `.paginate(n)` and navigate with `next()` / `prev()`:
+
+```rust
+let page = Todo::all()
+    .order_by(Todo::fields().title().asc())
+    .paginate(10)
+    .collect(&mut db)
+    .await?;
+
+if let Some(next_page) = page.next(&mut db).await? {
+    println!("next page size = {}", next_page.len());
+}
+```
+
+### Transactions (SQL Backends)
+
+Interactive transactions support rollback and nested savepoints:
+
+```rust
+let mut tx = db.transaction().await?;
+
+User::create().name("Alice").email("alice@example.com").exec(&mut tx).await?;
+User::create().name("Bob").email("bob@example.com").exec(&mut tx).await?;
+
+tx.commit().await?;
+```
+
+### Batch APIs and Create Macros
+
+Batch reads:
+
+```rust
+let (users, todos): (Vec<User>, Vec<Todo>) = toasty::batch((
+    User::filter_by_name("John Doe"),
+    Todo::all(),
+))
+.exec(&mut db)
+.await?;
+```
+
+Batch create builder:
+
+```rust
+let todos = Todo::create_many()
+    .item(Todo::create().title("one"))
+    .item(Todo::create().title("two"))
+    .exec(&mut db)
+    .await?;
+```
+
+Create macro:
+
+```rust
+let user = toasty::create!(User, {
+    name: "Carl",
+    email: "carl@example.com",
+    todos: [{ title: "first" }, { title: "second" }]
+})
+.exec(&mut db)
+.await?;
+```
+
+### Embedded and Serialized Fields
+
+Model rich fields with `Embed` and JSON serialization:
+
+```rust
+#[derive(Debug, toasty::Embed)]
+struct Address {
+    street: String,
+    city: String,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct Meta {
+    tags: Vec<String>,
+}
+
+#[derive(Debug, toasty::Model)]
+struct Profile {
+    #[key]
+    #[auto]
+    id: uuid::Uuid,
+    address: Address,
+    #[serialize(json)]
+    meta: Meta,
+}
+```
+
+### Migrations and Reset (SQL)
+
+Migration CLI commands:
+
+```bash
+my-app-cli migration generate --name add_todo_status
+my-app-cli migration apply
+my-app-cli migration snapshot
+```
+
+Reset helpers:
+
+```rust
+db.reset_db().await?;
+db.push_schema().await?;
+```
+
+For deeper coverage and backend caveats, use the guide set in
+[Documentation Map](#documentation-map).
+
 ## SQL and NoSQL
 
 Toasty supports both SQL and NoSQL databases. Current drivers are SQLite,
