@@ -48,3 +48,15 @@ pub enum Operation {
     /// Update a record by the primary key
     UpdateByKey(UpdateByKey),
 }
+
+impl Operation {
+    /// Returns `true` if this is a [`QuerySql`](Operation::QuerySql) operation.
+    pub fn is_query_sql(&self) -> bool {
+        matches!(self, Operation::QuerySql(_))
+    }
+
+    /// Returns `true` if this is a [`Transaction::Commit`] operation.
+    pub fn is_transaction_commit(&self) -> bool {
+        matches!(self, Operation::Transaction(Transaction::Commit))
+    }
+}
