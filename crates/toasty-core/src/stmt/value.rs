@@ -1,4 +1,4 @@
-use super::{sparse_record::SparseRecord, Entry, EntryPath, Type, ValueRecord};
+use super::{sparse_record::SparseRecord, Entry, EntryPath, Type, TypeUnion, ValueRecord};
 use std::cmp::Ordering;
 use std::hash::Hash;
 
@@ -224,7 +224,13 @@ impl Value {
             Value::Record(v) => Type::Record(v.fields.iter().map(Self::infer_ty).collect()),
             Value::String(_) => Type::String,
             Value::List(items) if items.is_empty() => Type::list(Type::Null),
-            Value::List(items) => Type::list(items[0].infer_ty()),
+            Value::List(items) => {
+                let mut union = TypeUnion::new();
+                for item in items {
+                    union.insert(item.infer_ty());
+                }
+                Type::list(union.simplify())
+            }
             Value::U8(_) => Type::U8,
             Value::U16(_) => Type::U16,
             Value::U32(_) => Type::U32,
