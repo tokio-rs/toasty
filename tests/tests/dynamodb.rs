@@ -25,7 +25,6 @@ impl DynamoDbSetup {
                 tokio::runtime::Runtime::new()
                     .expect("Failed to create tokio runtime")
                     .block_on(async {
-                        let config = aws_config::defaults(BehaviorVersion::latest()).load().await;
                         // Configure for DDB Local, if configs are not already provided.
                         // We can point tests to real DDB with a couple of environment variables.
                         let region_provider =
