@@ -2,6 +2,7 @@
 
 use mysql_async::prelude::Queryable;
 use tokio::sync::OnceCell;
+use toasty_driver_mysql::MySQL;
 
 struct MySqlSetup {
     pool: OnceCell<mysql_async::Pool>,
@@ -18,7 +19,7 @@ impl MySqlSetup {
         self.pool
             .get_or_init(|| async {
                 let url = std::env::var("TOASTY_TEST_MYSQL_URL")
-                    .unwrap_or_else(|_| "mysql://localhost:3306/toasty_test".to_string());
+                    .unwrap_or_else(|_| "mysql://toasty:toasty@localhost/toasty".to_string());
                 mysql_async::Pool::new(url.as_str())
             })
             .await
@@ -29,8 +30,8 @@ impl MySqlSetup {
 impl toasty_driver_integration_suite::Setup for MySqlSetup {
     fn driver(&self) -> Box<dyn toasty::driver::Driver> {
         let url = std::env::var("TOASTY_TEST_MYSQL_URL")
-            .unwrap_or_else(|_| "mysql://localhost:3306/toasty_test".to_string());
-        Box::new(toasty::db::Connect::new(&url).expect("Failed to create MySQL driver"))
+            .unwrap_or_else(|_| "mysql://toasty:toasty@localhost/toasty".to_string());
+        Box::new(MySQL::new(url.as_str()).expect("Failed to create MySQL driver"))
     }
 
     async fn delete_table(&self, name: &str) {
