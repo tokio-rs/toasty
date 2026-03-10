@@ -1,4 +1,4 @@
-use super::{Delete, Expr, IntoSelect, Statement, Value};
+use super::{Delete, Expr, IntoSelect, Value};
 use crate::Model;
 use std::{fmt, marker::PhantomData};
 use toasty_core::stmt;
@@ -65,9 +65,8 @@ impl<M> Select<M> {
         self
     }
 
-    // TODO: not quite right
-    pub fn delete(self) -> Statement<M> {
-        Delete::from_untyped(self.untyped.delete()).into()
+    pub fn delete(self) -> Delete<M> {
+        Delete::from_untyped(self.untyped.delete())
     }
 }
 

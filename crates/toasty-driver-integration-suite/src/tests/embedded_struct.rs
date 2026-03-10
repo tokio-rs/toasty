@@ -228,7 +228,7 @@ pub async fn create_and_query_embedded(t: &mut Test) -> Result<()> {
 
     // Delete: cleanup
     let id = user.id;
-    user.delete(&mut db).await?;
+    user.delete().exec(&mut db).await?;
     assert_err!(User::get_by_id(&mut db, &id).await);
     Ok(())
 }
@@ -1144,7 +1144,7 @@ pub async fn crud_nested_embedded(t: &mut Test) -> Result<()> {
 
     // Delete: cleanup
     let id = company.id;
-    company.delete(&mut db).await?;
+    company.delete().exec(&mut db).await?;
     assert_err!(Company::get_by_id(&mut db, &id).await);
     Ok(())
 }

@@ -36,7 +36,11 @@ macro_rules! impl_into_statement_for_tuple {
 
             fn into_statement(self) -> Statement<Self::Output> {
                 let exprs: Vec<stmt::Expr> = vec![
-                    $( stmt::Expr::stmt(self.$idx.into_statement().untyped), )+
+                    $( {
+                        let mut untyped = self.$idx.into_statement().untyped;
+                        ensure_batch_returning(&mut untyped);
+                        stmt::Expr::stmt(untyped)
+                    }, )+
                 ];
 
                 let query = stmt::Query::new_single(
@@ -60,10 +64,26 @@ impl_into_statement_for_tuple!(Q1, Q2, Q3, Q4, Q5, Q6; 6; 0, 1, 2, 3, 4, 5);
 impl_into_statement_for_tuple!(Q1, Q2, Q3, Q4, Q5, Q6, Q7; 7; 0, 1, 2, 3, 4, 5, 6);
 impl_into_statement_for_tuple!(Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q8; 8; 0, 1, 2, 3, 4, 5, 6, 7);
 
+/// Ensure a sub-statement has a returning clause for batch composition.
+///
+/// Mutation statements (delete, update) without a returning clause default to
+/// returning a count. In a batch, every sub-statement must produce a value, so
+/// we set an empty record returning (`Returning::Value(Expr::record([]))`)
+/// which represents unit.
+fn ensure_batch_returning(stmt: &mut stmt::Statement) {
+    if !stmt.is_query() && stmt.returning().is_none() {
+        stmt.set_returning(stmt::Returning::Value(stmt::Expr::record::<stmt::Expr>([])));
+    }
+}
+
 /// Helper to build a batched statement from an iterator of queries.
 fn batch_from_iter<Q: IntoStatement>(iter: impl Iterator<Item = Q>) -> Statement<Vec<Q::Output>> {
     let exprs: Vec<stmt::Expr> = iter
-        .map(|q| stmt::Expr::stmt(q.into_statement().untyped))
+        .map(|q| {
+            let mut untyped = q.into_statement().untyped;
+            ensure_batch_returning(&mut untyped);
+            stmt::Expr::stmt(untyped)
+        })
         .collect();
 
     let query = stmt::Query::new_single(stmt::Values::from(stmt::Expr::record(exprs)));

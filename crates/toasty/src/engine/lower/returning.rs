@@ -307,7 +307,9 @@ impl LowerStatement<'_, '_> {
         };
 
         let stmt::Returning::Expr(project) = returning else {
-            todo!("returning={returning:#?}")
+            // Already a constant value (e.g., empty record for batch
+            // unit-returning); nothing to constantize.
+            return;
         };
 
         project.substitute(input);

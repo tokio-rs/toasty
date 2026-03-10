@@ -95,7 +95,7 @@ pub async fn crud_has_one_bi_direction_optional(test: &mut Test) -> Result<()> {
     assert_eq!(&user.id, profile_reloaded.user_id.as_ref().unwrap());
 
     // Deleting the profile will nullify the profile field for the user
-    profile_reloaded.delete(&mut db).await?;
+    profile_reloaded.delete().exec(&mut db).await?;
 
     let mut user_reloaded = User::get_by_id(&mut db, &user.id).await?;
     assert_none!(user_reloaded.profile().get(&mut db).await?);
@@ -110,7 +110,7 @@ pub async fn crud_has_one_bi_direction_optional(test: &mut Test) -> Result<()> {
     let profile_id = user_reloaded.profile().get(&mut db).await?.unwrap().id;
 
     // Delete the user
-    user_reloaded.delete(&mut db).await?;
+    user_reloaded.delete().exec(&mut db).await?;
 
     let profile_reloaded = Profile::get_by_id(&mut db, &profile_id).await?;
     assert_none!(profile_reloaded.user_id);
@@ -160,7 +160,7 @@ pub async fn crud_has_one_required_belongs_to_optional(test: &mut Test) -> Resul
     assert_eq!(user.id, profile.user().get(&mut db).await?.unwrap().id);
 
     // Deleting the user leaves the profile in place.
-    user.delete(&mut db).await?;
+    user.delete().exec(&mut db).await?;
     let profile_reloaded = Profile::get_by_id(&mut db, &profile.id).await?;
     assert_none!(profile_reloaded.user_id);
 
@@ -317,7 +317,7 @@ pub async fn crud_has_one_optional_belongs_to_required(test: &mut Test) -> Resul
     assert_eq!(user.id, profile.user().get(&mut db).await?.id);
 
     // Deleting the user also deletes the profile
-    user.delete(&mut db).await?;
+    user.delete().exec(&mut db).await?;
     assert_err!(Profile::get_by_id(&mut db, &profile.id).await);
     Ok(())
 }

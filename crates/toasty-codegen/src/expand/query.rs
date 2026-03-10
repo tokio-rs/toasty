@@ -48,10 +48,8 @@ impl Expand<'_> {
                     #update_struct_ident::from(self)
                 }
 
-                #vis async fn delete(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<()> {
-                    use #toasty::ExecutorExt;
-                    executor.exec(self.stmt.delete()).await?;
-                    Ok(())
+                #vis fn delete(self) -> #toasty::stmt::Delete<#model_ident> {
+                    self.stmt.delete()
                 }
 
                 #vis async fn collect<#collect_ty>(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#collect_ty>

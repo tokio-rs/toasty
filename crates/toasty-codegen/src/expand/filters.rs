@@ -98,7 +98,8 @@ impl Expand<'_> {
 
             #vis async fn #delete_method_ident(#self_arg executor: &mut dyn #toasty::Executor, #( #args ),* ) -> #toasty::Result<()> {
                 #base #filter_method_ident( #( #arg_idents ),* )
-                    .delete(executor)
+                    .delete()
+                    .exec(executor)
                     .await
             }
         }

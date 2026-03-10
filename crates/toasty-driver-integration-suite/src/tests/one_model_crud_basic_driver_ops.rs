@@ -181,7 +181,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
     });
 
     // ========== DELETE ==========
-    User::filter_by_id(user_id).delete(&mut db).await?;
+    User::filter_by_id(user_id).delete().exec(&mut db).await?;
 
     // Check the DELETE operation
     let (op, resp) = test.log().pop();

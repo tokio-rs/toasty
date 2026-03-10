@@ -182,8 +182,8 @@ pub async fn data_variant_roundtrip(test: &mut Test) -> Result<()> {
     );
 
     // Clean up.
-    alice.delete(&mut db).await?;
-    bob.delete(&mut db).await?;
+    alice.delete().exec(&mut db).await?;
+    bob.delete().exec(&mut db).await?;
     Ok(())
 }
 

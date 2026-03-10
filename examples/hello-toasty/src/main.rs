@@ -105,7 +105,7 @@ async fn main() -> toasty::Result<()> {
 
     // Delete user
     let user = User::get_by_id(&mut db, &u2.id).await?;
-    user.delete(&mut db).await?;
+    user.delete().exec(&mut db).await?;
     assert!(User::get_by_id(&mut db, &u2.id).await.is_err());
 
     // Create a batch of users

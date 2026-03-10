@@ -162,7 +162,8 @@ pub async fn delete_by_partition_key(test: &mut Test) {
 
     // Delete all todos for "alice" using only the partition key filter.
     Todo::filter_by_user_id("alice")
-        .delete(&mut db)
+        .delete()
+        .exec(&mut db)
         .await
         .unwrap();
 

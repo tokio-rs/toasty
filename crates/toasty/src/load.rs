@@ -10,6 +10,12 @@ pub trait Load: Sized {
     fn load(value: stmt::Value) -> Result<Self, Error>;
 }
 
+impl Load for () {
+    fn load(_value: stmt::Value) -> Result<Self, Error> {
+        Ok(())
+    }
+}
+
 impl<T: Load> Load for Vec<T> {
     fn load(value: stmt::Value) -> Result<Self, Error> {
         match value {

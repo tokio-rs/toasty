@@ -466,8 +466,6 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     }
 
     fn visit_stmt_delete_mut(&mut self, stmt: &mut stmt::Delete) {
-        assert!(stmt.returning.is_none(), "TODO; stmt={stmt:#?}");
-
         // Create a new expr scope for the statement, and lower all parts
         // *except* the source field (since it is borrowed).
         let mut lower = self.scope_expr(&stmt.from);
