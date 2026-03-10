@@ -36,9 +36,11 @@ pub async fn filter_timestamp_stored_as_text(test: &mut Test) -> Result<(), BoxE
     let results = Foo::filter_by_val(ts).collect::<Vec<_>>(&mut db).await?;
 
     // Behavioral: correct record returned
-    assert_eq!(results.len(), 1);
-    assert_eq!(results[0].val, ts);
-    assert_eq!(results[0].id, created.id);
+    assert_struct!(results, [_ {
+        val: == ts,
+        id: == created.id,
+        ..
+    }]);
 
     // Structural: the filter sent to the driver uses the text-encoded value.
     // The bijection (Cast { from: Timestamp, to: String }) should encode the
@@ -91,9 +93,11 @@ pub async fn filter_uuid_stored_as_text(test: &mut Test) -> Result<()> {
 
     let results = Foo::filter_by_val(val).collect::<Vec<_>>(&mut db).await?;
 
-    assert_eq!(results.len(), 1);
-    assert_eq!(results[0].val, val);
-    assert_eq!(results[0].id, created.id);
+    assert_struct!(results, [_ {
+        val: == val,
+        id: == created.id,
+        ..
+    }]);
 
     // The bijection should encode the UUID as a String in the filter
     let (op, _) = test.log().pop();
