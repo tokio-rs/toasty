@@ -48,16 +48,17 @@ pub(crate) use update_by_key::UpdateByKey;
 mod var;
 pub(crate) use var::{VarDecls, VarId, VarStore};
 
-use crate::{db::PoolConnection, engine::simplify, engine::Engine, Result};
+use crate::{engine::simplify, engine::Engine, Result};
 use toasty_core::{
     driver::{operation::Transaction, Rows},
     schema::db::TableId,
     stmt::{self, ValueStream},
+    Connection,
 };
 
 struct Exec<'a> {
     engine: &'a Engine,
-    connection: &'a mut PoolConnection,
+    connection: &'a mut dyn Connection,
     vars: VarStore,
     /// True when an outer transaction is active on this connection. Used by
     /// ReadModifyWrite to decide between savepoints (nested) and its own
@@ -68,7 +69,7 @@ struct Exec<'a> {
 impl Engine {
     pub(crate) async fn exec_plan(
         &self,
-        connection: &mut PoolConnection,
+        connection: &mut dyn Connection,
         plan: ExecPlan,
         in_transaction: bool,
     ) -> Result<ValueStream> {

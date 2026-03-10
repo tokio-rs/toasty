@@ -44,12 +44,11 @@ impl Builder {
     }
 
     pub async fn build(&mut self, driver: impl Driver) -> Result<Db> {
-        let pool = Pool::new(driver)?;
-        let capability = pool.capability();
-        // Validate capability consistency
+        let capability = driver.capability();
         capability.validate()?;
         let schema = self.core.build(self.build_app_schema()?, capability)?;
         let engine = Engine::new(Arc::new(schema), capability);
+        let pool = Pool::new(driver, engine.clone())?;
 
         Ok(Db {
             shared: Arc::new(Shared { engine, pool }),

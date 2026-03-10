@@ -134,15 +134,18 @@ impl Drop for Transaction<'_> {
             };
 
             // Fire-and-forget rollback: send the operation to the background
-            // connection task without awaiting the response. We access the
-            // channel directly because `exec_operation` is async and futures
-            // are lazy — calling it in Drop would never actually send.
-            if let Ok(conn) = self.db.connection() {
+            // connection task without awaiting the response. By the time a
+            // transaction exists, `begin` already acquired the connection, so
+            // it is always cached.
+            if let Some(conn) = self.db.connection.as_ref() {
                 let (tx, _rx) = oneshot::channel();
-                let _ = conn.in_tx.send(ConnectionOperation::ExecOperation {
-                    operation: Box::new(op.into()),
-                    tx,
-                });
+                let _ = conn
+                    .handle()
+                    .in_tx
+                    .send(ConnectionOperation::ExecOperation {
+                        operation: Box::new(op.into()),
+                        tx,
+                    });
             }
         }
     }
@@ -171,7 +174,7 @@ impl<'a> Executor for Transaction<'a> {
     async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> Result<ValueStream> {
         let (tx, rx) = oneshot::channel();
 
-        let conn = self.db.connection()?;
+        let conn = self.db.connection().await?;
         conn.in_tx
             .send(ConnectionOperation::ExecStatement {
                 stmt: Box::new(stmt),
