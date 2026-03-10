@@ -31,6 +31,10 @@ cargo clippy
 cargo fmt
 ```
 
+## Workflow
+
+Always run `cargo fmt` after finishing work on a change.
+
 ## Architecture
 
 Toasty is a Rust ORM supporting SQL (SQLite, PostgreSQL, MySQL) and NoSQL (DynamoDB) databases. It is a Cargo workspace.
