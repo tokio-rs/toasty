@@ -74,20 +74,25 @@ impl<'db> Transaction<'db> {
         isolation: Option<IsolationLevel>,
         read_only: bool,
     ) -> Result<Transaction<'db>> {
-        db.exec_operation(
-            operation::Transaction::Start {
-                isolation,
-                read_only,
-            }
-            .into(),
-        )
-        .await?;
-
-        Ok(Transaction {
+        // We're creating the Transaction before actually starting the transaction. If the
+        // future is cancelled while waiting on the response of the `Transaction::Start` the
+        // transaction is still rolled back.
+        let tx = Transaction {
             db,
             finalized: false,
             savepoint: None,
-        })
+        };
+
+        tx.db
+            .exec_operation(
+                operation::Transaction::Start {
+                    isolation,
+                    read_only,
+                }
+                .into(),
+            )
+            .await?;
+        Ok(tx)
     }
 
     /// Commit the transaction.
