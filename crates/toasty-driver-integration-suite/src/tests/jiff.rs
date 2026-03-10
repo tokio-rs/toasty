@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 use toasty_core::{
     driver::Operation,
-    stmt::{ExprSet, InsertTarget, Statement},
+    stmt::{ExprSet, InsertTarget, Statement, Value},
 };
 
 #[driver_test(id(ID))]
@@ -27,49 +27,44 @@ pub async fn ty_timestamp(test: &mut Test) -> Result<(), BoxError> {
     let created = Foo::create().val(ts).exec(&mut db).await?;
 
     // Verify the INSERT encodes the timestamp correctly for the driver.
+    // Native timestamp drivers send the value as-is; non-native drivers
+    // (SQLite, DynamoDB) encode it as a fixed-precision ISO 8601 text string.
     let (op, _) = test.log().pop();
 
+    let expected_val = if test.capability().native_timestamp {
+        Value::Timestamp(ts)
+    } else {
+        Value::String(format!("{ts:.9}"))
+    };
+
     if test.capability().sql {
-        if test.capability().native_timestamp {
-            // SQL + native timestamp: the value is sent as-is (not text-encoded)
-            assert_struct!(op, Operation::QuerySql(_ {
-                stmt: Statement::Insert(_ {
-                    target: InsertTarget::Table(_ {
-                        table: == table_id(&db, "foos"),
-                        columns: == columns(&db, "foos", &["id", "val"]),
-                        ..
-                    }),
-                    source.body: ExprSet::Values(_ {
-                        rows.len(): 1,
-                        ..
-                    }),
+        assert_struct!(op, Operation::QuerySql(_ {
+            stmt: Statement::Insert(_ {
+                target: InsertTarget::Table(_ {
+                    table: == table_id(&db, "foos"),
+                    columns: == columns(&db, "foos", &["id", "val"]),
+                    ..
+                }),
+                source.body: ExprSet::Values(_ {
+                    rows: [=~ (Any, expected_val)],
                     ..
                 }),
                 ..
-            }));
-        } else {
-            // SQL + no native timestamp (SQLite): the value is stored as a
-            // fixed-precision ISO 8601 text string.
-            let ts_text = format!("{ts:.9}");
-            assert_struct!(op, Operation::QuerySql(_ {
-                stmt: Statement::Insert(_ {
-                    target: InsertTarget::Table(_ {
-                        table: == table_id(&db, "foos"),
-                        columns: == columns(&db, "foos", &["id", "val"]),
-                        ..
-                    }),
-                    source.body: ExprSet::Values(_ {
-                        rows: [=~ (Any, ts_text)],
-                        ..
-                    }),
-                    ..
-                }),
-                ..
-            }));
-        }
+            }),
+            ..
+        }));
     } else {
         // KV driver (DynamoDB): uses Insert operation
-        assert_struct!(op, Operation::Insert(_));
+        assert_struct!(op, Operation::Insert(_ {
+            stmt: Statement::Insert(_ {
+                source.body: ExprSet::Values(_ {
+                    rows: [=~ (Any, expected_val)],
+                    ..
+                }),
+                ..
+            }),
+            ..
+        }));
     }
 
     // Verify round-trip with more values
