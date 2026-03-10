@@ -74,9 +74,9 @@ impl<'db> Transaction<'db> {
         isolation: Option<IsolationLevel>,
         read_only: bool,
     ) -> Result<Transaction<'db>> {
-        // We're creating the Transaction before actually starting the transaction. If the
-        // future is cancelled while waiting on the response of the `Transaction::Start` the
-        // transaction is still rolled back.
+        // We're creating the Transaction struct before actually starting the transaction. If the
+        // future is cancelled while waiting on the response of the start command, the transaction
+        // is still rolled back.
         let tx = Transaction {
             db,
             finalized: false,
@@ -97,7 +97,7 @@ impl<'db> Transaction<'db> {
 
     /// Commit the transaction.
     pub async fn commit(mut self) -> Result<()> {
-        // Because driver operations are done in a background task, all the operations can't be
+        // Because driver operations are done in a background task, all the operations aren't
         // cancelled and will continue even if this future is dropped. Setting the finalized flag
         // to true early here makes sure that if the future is dropped we don't queue a rollback
         // command.
