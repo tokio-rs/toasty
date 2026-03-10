@@ -80,10 +80,9 @@ pub async fn batch_two_scoped_queries_same_relation(t: &mut Test) -> Result<()> 
     u1.todos().create().title("u1 todo").exec(&mut db).await?;
     u2.todos().create().title("u2 todo").exec(&mut db).await?;
 
-    let (u1_todos, u2_todos): (Vec<Todo>, Vec<Todo>) =
-        toasty::batch((u1.todos(), u2.todos()))
-            .exec(&mut db)
-            .await?;
+    let (u1_todos, u2_todos): (Vec<Todo>, Vec<Todo>) = toasty::batch((u1.todos(), u2.todos()))
+        .exec(&mut db)
+        .await?;
 
     assert_struct!(u1_todos, [_ { title: "u1 todo" }]);
     assert_struct!(u2_todos, [_ { title: "u2 todo" }]);
@@ -121,7 +120,10 @@ pub async fn batch_scoped_update_and_delete_same_relation(t: &mut Test) -> Resul
     let todo_drop = user.todos().create().title("drop").exec(&mut db).await?;
 
     let ((), ()): ((), ()) = toasty::batch((
-        user.todos().filter_by_id(todo_keep.id).update().title("kept"),
+        user.todos()
+            .filter_by_id(todo_keep.id)
+            .update()
+            .title("kept"),
         user.todos().filter_by_id(todo_drop.id).delete(),
     ))
     .exec(&mut db)
@@ -160,13 +162,21 @@ pub async fn batch_scoped_all_four_crud(t: &mut Test) -> Result<()> {
 
     let mut db = t.setup_db(models!(User, Todo)).await;
     let user = User::create().exec(&mut db).await?;
-    let existing = user.todos().create().title("existing").exec(&mut db).await?;
+    let existing = user
+        .todos()
+        .create()
+        .title("existing")
+        .exec(&mut db)
+        .await?;
     let doomed = user.todos().create().title("doomed").exec(&mut db).await?;
 
     let (queried, created, (), ()): (Vec<Todo>, Todo, (), ()) = toasty::batch((
         user.todos(),
         user.todos().create().title("new"),
-        user.todos().filter_by_id(existing.id).update().title("updated"),
+        user.todos()
+            .filter_by_id(existing.id)
+            .update()
+            .title("updated"),
         user.todos().filter_by_id(doomed.id).delete(),
     ))
     .exec(&mut db)
@@ -334,10 +344,9 @@ pub async fn batch_query_across_relations(t: &mut Test) -> Result<()> {
     user.todos().create().title("t2").exec(&mut db).await?;
     user.posts().create().body("p1").exec(&mut db).await?;
 
-    let (todos, posts): (Vec<Todo>, Vec<Post>) =
-        toasty::batch((user.todos(), user.posts()))
-            .exec(&mut db)
-            .await?;
+    let (todos, posts): (Vec<Todo>, Vec<Post>) = toasty::batch((user.todos(), user.posts()))
+        .exec(&mut db)
+        .await?;
 
     assert_eq!(todos.len(), 2);
     assert_eq!(posts.len(), 1);
