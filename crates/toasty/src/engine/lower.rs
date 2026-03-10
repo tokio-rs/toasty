@@ -242,6 +242,41 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         todo!("stmt={i:#?}");
     }
 
+    fn visit_order_by_expr_mut(&mut self, node: &mut stmt::OrderByExpr) {
+        // Before lowering, check if this is a field reference so we can use
+        // the bijection to encode it directly to a storage-level column.
+        if let stmt::Expr::Reference(stmt::ExprReference::Field { nesting, index }) = &node.expr {
+            let nesting = *nesting;
+            let field_index = *index;
+
+            let mapping = self.mapping_at_unwrap(nesting);
+            let field_mapping = &mapping.fields[field_index];
+
+            if let Some(primitive) = field_mapping.as_primitive() {
+                let bijection = &primitive.bijection;
+
+                // The bijection must preserve ordering for ORDER BY to work
+                // in storage space.
+                assert!(
+                    bijection.can_distribute(stmt::BinaryOp::Lt).is_some(),
+                    "cannot ORDER BY this field: ordering is not preserved \
+                     through the storage encoding"
+                );
+
+                // Ordering distributes — use the raw storage column directly.
+                node.expr = stmt::Expr::column(stmt::ExprColumn {
+                    nesting,
+                    table: 0,
+                    column: primitive.column.index,
+                });
+                return;
+            }
+        }
+
+        // Not a simple field reference — lower normally.
+        self.visit_expr_mut(&mut node.expr);
+    }
+
     fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
         match expr {
             stmt::Expr::BinaryOp(e) => {

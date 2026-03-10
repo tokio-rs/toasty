@@ -353,6 +353,53 @@ pub async fn ty_timestamp_as_text(test: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
+#[driver_test(id(ID), requires(sql))]
+pub async fn order_by_timestamp(test: &mut Test) -> Result<(), BoxError> {
+    use jiff::Timestamp;
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Foo {
+        #[key]
+        #[auto]
+        id: ID,
+        #[column(type = varchar(255))]
+        val: Timestamp,
+    }
+
+    let mut db = test.setup_db(models!(Foo)).await;
+
+    let timestamps = vec![
+        Timestamp::from_second(1609459200)?, // 2021-01-01
+        Timestamp::from_second(946684800)?,  // 2000-01-01
+        Timestamp::from_second(1735689600)?, // 2025-01-01
+    ];
+
+    for val in &timestamps {
+        Foo::create().val(*val).exec(&mut db).await?;
+    }
+
+    let asc: Vec<_> = Foo::all()
+        .order_by(Foo::fields().val().asc())
+        .collect(&mut db)
+        .await?;
+
+    assert_eq!(asc.len(), 3);
+    assert!(asc[0].val < asc[1].val);
+    assert!(asc[1].val < asc[2].val);
+
+    let desc: Vec<_> = Foo::all()
+        .order_by(Foo::fields().val().desc())
+        .collect(&mut db)
+        .await?;
+
+    assert_eq!(desc.len(), 3);
+    assert!(desc[0].val > desc[1].val);
+    assert!(desc[1].val > desc[2].val);
+
+    Ok(())
+}
+
 #[driver_test(id(ID))]
 pub async fn ty_date_as_text(test: &mut Test) -> Result<()> {
     use jiff::civil::Date;
