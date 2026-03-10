@@ -163,7 +163,7 @@ pub async fn crud_user_todos(test: &mut Test) -> Result<()> {
 
     // Delete a TODO by value
     let todo = Todo::get_by_id(&mut db, &ids[0]).await?;
-    todo.delete(&mut db).await?;
+    todo.delete().exec(&mut db).await?;
 
     // Can no longer get the todo via id
     assert_err!(Todo::get_by_id(&mut db, &ids[0]).await);
@@ -172,7 +172,11 @@ pub async fn crud_user_todos(test: &mut Test) -> Result<()> {
     assert_err!(user.todos().get_by_id(&mut db, &ids[0]).await);
 
     // Delete a TODO by scope
-    user.todos().filter_by_id(ids[1]).delete(&mut db).await?;
+    user.todos()
+        .filter_by_id(ids[1])
+        .delete()
+        .exec(&mut db)
+        .await?;
 
     // Can no longer get the todo via id
     assert_err!(Todo::get_by_id(&mut db, &ids[1]).await);
@@ -206,7 +210,7 @@ pub async fn crud_user_todos(test: &mut Test) -> Result<()> {
     let id = user.id;
 
     // Delete the user and associated TODOs are deleted
-    user.delete(&mut db).await?;
+    user.delete().exec(&mut db).await?;
     assert_err!(User::get_by_id(&mut db, &id).await);
     assert_err!(Todo::get_by_id(&mut db, &ids[2]).await);
     Ok(())
@@ -319,7 +323,12 @@ pub async fn scoped_find_by_id(test: &mut Test) -> Result<()> {
     assert_eq!(reloaded.title, todo.title);
 
     // Deleting the TODO from the user 2 scope fails
-    user2.todos().filter_by_id(todo.id).delete(&mut db).await?;
+    user2
+        .todos()
+        .filter_by_id(todo.id)
+        .delete()
+        .exec(&mut db)
+        .await?;
     let reloaded = user1.todos().get_by_id(&mut db, &todo.id).await?;
     assert_eq!(reloaded.id, todo.id);
     Ok(())
@@ -488,7 +497,7 @@ pub async fn has_many_when_fk_is_composite(test: &mut Test) -> Result<()> {
 
     // Delete a TODO by value
     let todo = Todo::get_by_user_id_and_id(&mut db, &user.id, &ids[0]).await?;
-    todo.delete(&mut db).await?;
+    todo.delete().exec(&mut db).await?;
 
     // Can no longer get the todo via id
     assert_err!(Todo::get_by_user_id_and_id(&mut db, &user.id, &ids[0]).await);
@@ -497,7 +506,11 @@ pub async fn has_many_when_fk_is_composite(test: &mut Test) -> Result<()> {
     assert_err!(user.todos().get_by_id(&mut db, &ids[0]).await);
 
     // Delete a TODO by scope
-    user.todos().filter_by_id(ids[1]).delete(&mut db).await?;
+    user.todos()
+        .filter_by_id(ids[1])
+        .delete()
+        .exec(&mut db)
+        .await?;
 
     // Can no longer get the todo via id
     assert_err!(Todo::get_by_user_id_and_id(&mut db, &user.id, &ids[1]).await);
@@ -605,7 +618,7 @@ pub async fn delete_when_belongs_to_optional(test: &mut Test) -> Result<()> {
     }
 
     // Delete the user
-    user.delete(&mut db).await?;
+    user.delete().exec(&mut db).await?;
 
     // All the todos still exist and `user` is set to `None`.
     for id in ids {

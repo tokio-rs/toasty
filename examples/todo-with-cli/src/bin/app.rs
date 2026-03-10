@@ -68,7 +68,7 @@ async fn main() -> toasty::Result<()> {
     println!("\n==> Deleting a todo...");
     let todo = Todo::get_by_id(&mut db, &todo2.id).await?;
     println!("Deleting '{}'", todo.title);
-    todo.delete(&mut db).await?;
+    todo.delete().exec(&mut db).await?;
 
     println!("\n==> Final count...");
     let todos = Todo::all().collect::<Vec<_>>(&mut db).await?;

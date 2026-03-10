@@ -53,6 +53,11 @@ impl<M: Model> Update<M> {
     pub fn set_returning_none(&mut self) {
         self.untyped.returning = None;
     }
+
+    /// Consume this typed update and return the untyped core statement.
+    pub fn into_untyped_stmt(self) -> stmt::Statement {
+        self.untyped.into()
+    }
 }
 
 impl<M> Clone for Update<M> {

@@ -50,7 +50,7 @@ pub trait ExecutorExt: Executor {
     /// Delete all records matching the query.
     fn delete<M>(&mut self, query: stmt::Select<M>) -> impl Future<Output = Result<()>> {
         async move {
-            self.exec(query.delete()).await?;
+            self.exec(query.delete().into()).await?;
             Ok(())
         }
     }

@@ -49,6 +49,16 @@ pub struct Statement<M> {
     _p: PhantomData<M>,
 }
 
+impl<M> Statement<M> {
+    /// Wrap a raw untyped statement.
+    pub fn from_untyped_stmt(untyped: stmt::Statement) -> Self {
+        Self {
+            untyped,
+            _p: PhantomData,
+        }
+    }
+}
+
 impl<M: Model> Statement<M> {
     pub fn from_untyped(query: impl IntoSelect<Model = M>) -> Self {
         Self {

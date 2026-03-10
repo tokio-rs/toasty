@@ -110,7 +110,7 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
 
     // Delete: cleanup
     let id = user.id;
-    user.delete(&mut db).await?;
+    user.delete().exec(&mut db).await?;
     assert_err!(User::get_by_id(&mut db, &id).await);
     Ok(())
 }

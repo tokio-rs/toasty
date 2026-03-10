@@ -63,10 +63,10 @@ pub async fn crud_no_fields(t: &mut Test) -> Result<()> {
         if i.is_even() {
             // Delete by object
             let val = Foo::get_by_id(&mut db, &id).await?;
-            val.delete(&mut db).await?;
+            val.delete().exec(&mut db).await?;
         } else {
             // Delete by ID
-            Foo::filter_by_id(id).delete(&mut db).await?;
+            Foo::filter_by_id(id).delete().exec(&mut db).await?;
         }
 
         // Assert deleted
@@ -183,7 +183,7 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
 
     // Delete the record (instance method — generates full-key filter).
     test.log().clear();
-    reload.delete(&mut db).await?;
+    reload.delete().exec(&mut db).await?;
 
     let (op, resp) = test.log().pop();
     if is_sql {
@@ -212,7 +212,7 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
     assert_err!(Foo::get_by_id(&mut db, &created.id).await);
 
     // Delete by ID
-    Foo::filter_by_id(ids[0]).delete(&mut db).await?;
+    Foo::filter_by_id(ids[0]).delete().exec(&mut db).await?;
 
     // It is gone
     assert_err!(Foo::get_by_id(&mut db, &ids[0]).await);
@@ -274,7 +274,7 @@ pub async fn unique_index_required_field_update(test: &mut Test) -> Result<()> {
     assert_ne!(user.id, user_alt_email.id);
 
     // Deleting the user then reuse the email address
-    user.delete(&mut db).await?;
+    user.delete().exec(&mut db).await?;
 
     // Finding by the email returns None
     assert_none!(User::filter_by_email(email).first(&mut db).await?);

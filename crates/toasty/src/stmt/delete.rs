@@ -1,4 +1,5 @@
-use super::Statement;
+use super::{IntoStatement, Statement};
+use crate::{Executor, ExecutorExt, Model, Result};
 use std::marker::PhantomData;
 use toasty_core::stmt;
 
@@ -11,6 +12,23 @@ impl<M> Delete<M> {
     pub const fn from_untyped(untyped: stmt::Delete) -> Self {
         Self {
             untyped,
+            _p: PhantomData,
+        }
+    }
+
+    pub async fn exec(self, executor: &mut dyn Executor) -> Result<()> {
+        let stmt: Statement<M> = self.into();
+        executor.exec(stmt).await?;
+        Ok(())
+    }
+}
+
+impl<M: Model> IntoStatement for Delete<M> {
+    type Output = ();
+
+    fn into_statement(self) -> Statement<()> {
+        Statement {
+            untyped: self.untyped.into(),
             _p: PhantomData,
         }
     }

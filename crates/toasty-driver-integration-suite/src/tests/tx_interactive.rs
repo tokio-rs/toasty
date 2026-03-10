@@ -194,7 +194,7 @@ pub async fn delete_rolled_back(t: &mut Test) -> Result<()> {
     let user = User::create().name("Alice").exec(&mut db).await?;
 
     let mut tx = db.transaction().await?;
-    User::filter_by_id(user.id).delete(&mut tx).await?;
+    User::filter_by_id(user.id).delete().exec(&mut tx).await?;
     tx.rollback().await?;
 
     let reloaded = User::get_by_id(&mut db, user.id).await?;
