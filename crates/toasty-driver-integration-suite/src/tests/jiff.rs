@@ -37,35 +37,21 @@ pub async fn ty_timestamp(test: &mut Test) -> Result<(), BoxError> {
         Value::String(format!("{ts:.9}"))
     };
 
-    if test.capability().sql {
-        assert_struct!(op, Operation::QuerySql(_ {
-            stmt: Statement::Insert(_ {
-                target: InsertTarget::Table(_ {
-                    table: == table_id(&db, "foos"),
-                    columns: == columns(&db, "foos", &["id", "val"]),
-                    ..
-                }),
-                source.body: ExprSet::Values(_ {
-                    rows: [=~ (Any, expected_val)],
-                    ..
-                }),
+    assert_struct!(op, Operation::QuerySql(_ {
+        stmt: Statement::Insert(_ {
+            target: InsertTarget::Table(_ {
+                table: == table_id(&db, "foos"),
+                columns: == columns(&db, "foos", &["id", "val"]),
+                ..
+            }),
+            source.body: ExprSet::Values(_ {
+                rows: [=~ (Any, expected_val)],
                 ..
             }),
             ..
-        }));
-    } else {
-        // KV driver (DynamoDB): uses Insert operation
-        assert_struct!(op, Operation::Insert(_ {
-            stmt: Statement::Insert(_ {
-                source.body: ExprSet::Values(_ {
-                    rows: [=~ (Any, expected_val)],
-                    ..
-                }),
-                ..
-            }),
-            ..
-        }));
-    }
+        }),
+        ..
+    }));
 
     // Verify round-trip with more values
     let read = Foo::get_by_id(&mut db, &created.id).await?;
@@ -344,35 +330,21 @@ pub async fn ty_timestamp_as_text(test: &mut Test) -> Result<(), BoxError> {
     // Verify the INSERT encodes the timestamp as a fixed-precision text string.
     // The #[column(type = text)] forces text encoding on all drivers.
     let (op, _) = test.log().pop();
-    if test.capability().sql {
-        assert_struct!(op, Operation::QuerySql(_ {
-            stmt: Statement::Insert(_ {
-                target: InsertTarget::Table(_ {
-                    table: == table_id(&db, "foos"),
-                    columns: == columns(&db, "foos", &["id", "val"]),
-                    ..
-                }),
-                source.body: ExprSet::Values(_ {
-                    rows: [=~ (Any, ts_text.clone())],
-                    ..
-                }),
+    assert_struct!(op, Operation::QuerySql(_ {
+        stmt: Statement::Insert(_ {
+            target: InsertTarget::Table(_ {
+                table: == table_id(&db, "foos"),
+                columns: == columns(&db, "foos", &["id", "val"]),
+                ..
+            }),
+            source.body: ExprSet::Values(_ {
+                rows: [=~ (Any, ts_text)],
                 ..
             }),
             ..
-        }));
-    } else {
-        // KV driver (DynamoDB): uses Insert operation, still text-encoded
-        assert_struct!(op, Operation::Insert(_ {
-            stmt: Statement::Insert(_ {
-                source.body: ExprSet::Values(_ {
-                    rows: [=~ (Any, ts_text.clone())],
-                    ..
-                }),
-                ..
-            }),
-            ..
-        }));
-    }
+        }),
+        ..
+    }));
 
     // Verify round-trip
     let read = Foo::get_by_id(&mut db, &created.id).await?;
