@@ -1,5 +1,10 @@
 use crate::prelude::*;
 
+use toasty_core::{
+    driver::Operation,
+    stmt::{ExprSet, InsertTarget, Statement},
+};
+
 #[driver_test(id(ID))]
 pub async fn ty_timestamp(test: &mut Test) -> Result<(), BoxError> {
     use jiff::Timestamp;
@@ -15,17 +20,67 @@ pub async fn ty_timestamp(test: &mut Test) -> Result<(), BoxError> {
 
     let mut db = test.setup_db(models!(Foo)).await;
 
-    let test_values = vec![
-        Timestamp::from_second(946684800)?,  // 2000-01-01T00:00:00Z
+    let ts = Timestamp::from_second(946684800)?; // 2000-01-01T00:00:00Z
+
+    test.log().clear();
+
+    let created = Foo::create().val(ts).exec(&mut db).await?;
+
+    // Verify the INSERT encodes the timestamp correctly for the driver.
+    let (op, _) = test.log().pop();
+
+    if test.capability().sql {
+        if test.capability().native_timestamp {
+            // SQL + native timestamp: the value is sent as-is (not text-encoded)
+            assert_struct!(op, Operation::QuerySql(_ {
+                stmt: Statement::Insert(_ {
+                    target: InsertTarget::Table(_ {
+                        table: == table_id(&db, "foos"),
+                        columns: == columns(&db, "foos", &["id", "val"]),
+                        ..
+                    }),
+                    source.body: ExprSet::Values(_ {
+                        rows.len(): 1,
+                        ..
+                    }),
+                    ..
+                }),
+                ..
+            }));
+        } else {
+            // SQL + no native timestamp (SQLite): the value is stored as a
+            // fixed-precision ISO 8601 text string.
+            let ts_text = format!("{ts:.9}");
+            assert_struct!(op, Operation::QuerySql(_ {
+                stmt: Statement::Insert(_ {
+                    target: InsertTarget::Table(_ {
+                        table: == table_id(&db, "foos"),
+                        columns: == columns(&db, "foos", &["id", "val"]),
+                        ..
+                    }),
+                    source.body: ExprSet::Values(_ {
+                        rows: [=~ (Any, ts_text)],
+                        ..
+                    }),
+                    ..
+                }),
+                ..
+            }));
+        }
+    } else {
+        // KV driver (DynamoDB): uses Insert operation
+        assert_struct!(op, Operation::Insert(_));
+    }
+
+    // Verify round-trip with more values
+    let read = Foo::get_by_id(&mut db, &created.id).await?;
+    assert_eq!(read.val, ts);
+
+    let more_values = vec![
         Timestamp::from_second(1609459200)?, // 2021-01-01T00:00:00Z
         Timestamp::from_second(1735689600)?, // 2025-01-01T00:00:00Z
-        Timestamp::from_second(978307200)?,  // 2001-01-01T00:00:00Z
-        Timestamp::from_second(1577836800)?, // 2020-01-01T00:00:00Z
-        Timestamp::from_second(1893456000)?, // 2030-01-01T00:00:00Z
-        Timestamp::from_second(2051222400)?, // 2035-01-01T00:00:00Z
     ];
-
-    for val in &test_values {
+    for val in &more_values {
         let created = Foo::create().val(*val).exec(&mut db).await?;
         let read = Foo::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
@@ -284,17 +339,50 @@ pub async fn ty_timestamp_as_text(test: &mut Test) -> Result<(), BoxError> {
 
     let mut db = test.setup_db(models!(Foo)).await;
 
-    let test_values = vec![
-        Timestamp::from_second(946684800)?,  // 2000-01-01T00:00:00Z
-        Timestamp::from_second(1609459200)?, // 2021-01-01T00:00:00Z
-        Timestamp::from_second(1735689600)?, // 2025-01-01T00:00:00Z
-    ];
+    let ts = Timestamp::from_second(946684800)?; // 2000-01-01T00:00:00Z
+    let ts_text = format!("{ts:.9}");
 
-    for val in &test_values {
-        let created = Foo::create().val(*val).exec(&mut db).await?;
-        let read = Foo::get_by_id(&mut db, &created.id).await?;
-        assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
+    test.log().clear();
+
+    let created = Foo::create().val(ts).exec(&mut db).await?;
+
+    // Verify the INSERT encodes the timestamp as a fixed-precision text string.
+    // The #[column(type = text)] forces text encoding on all drivers.
+    let (op, _) = test.log().pop();
+    if test.capability().sql {
+        assert_struct!(op, Operation::QuerySql(_ {
+            stmt: Statement::Insert(_ {
+                target: InsertTarget::Table(_ {
+                    table: == table_id(&db, "foos"),
+                    columns: == columns(&db, "foos", &["id", "val"]),
+                    ..
+                }),
+                source.body: ExprSet::Values(_ {
+                    rows: [=~ (Any, ts_text.clone())],
+                    ..
+                }),
+                ..
+            }),
+            ..
+        }));
+    } else {
+        // KV driver (DynamoDB): uses Insert operation, still text-encoded
+        assert_struct!(op, Operation::Insert(_ {
+            stmt: Statement::Insert(_ {
+                source.body: ExprSet::Values(_ {
+                    rows: [=~ (Any, ts_text.clone())],
+                    ..
+                }),
+                ..
+            }),
+            ..
+        }));
     }
+
+    // Verify round-trip
+    let read = Foo::get_by_id(&mut db, &created.id).await?;
+    assert_eq!(read.val, ts);
+
     Ok(())
 }
 

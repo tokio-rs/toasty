@@ -47,7 +47,7 @@ pub async fn filter_timestamp_stored_as_text(test: &mut Test) -> Result<(), BoxE
     // Timestamp to its string representation and compare directly against the
     // TEXT column.
     let (op, _) = test.log().pop();
-    let ts_text = ts.to_string();
+    let ts_text = format!("{ts:.9}");
     let val_column = column(&db, "foos", "val");
 
     assert_struct!(&op, Operation::QuerySql(_ {

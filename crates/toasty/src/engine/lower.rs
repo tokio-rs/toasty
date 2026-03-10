@@ -254,9 +254,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     // to column expressions, so field identity is lost.
                     self.visit_expr_binary_op_mut(e);
 
-                    if let Some(lowered) =
-                        self.lower_expr_binary_op(e.op, &mut e.lhs, &mut e.rhs)
-                    {
+                    if let Some(lowered) = self.lower_expr_binary_op(e.op, &mut e.lhs, &mut e.rhs) {
                         *expr = lowered;
                     }
                 }
@@ -1342,9 +1340,7 @@ fn build_update_returning(
 
 /// Extract a `(nesting, field_index, value)` triple from a binary op where one
 /// operand is a field reference and the other is a literal value.
-fn extract_field_ref_and_value(
-    e: &stmt::ExprBinaryOp,
-) -> Option<(usize, usize, stmt::Value)> {
+fn extract_field_ref_and_value(e: &stmt::ExprBinaryOp) -> Option<(usize, usize, stmt::Value)> {
     match (&*e.lhs, &*e.rhs) {
         (
             stmt::Expr::Reference(stmt::ExprReference::Field { nesting, index }),
