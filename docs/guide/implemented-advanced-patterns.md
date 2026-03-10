@@ -1,8 +1,7 @@
 # Implemented Advanced Patterns
 
-This guide documents implemented, user-facing patterns that are exercised by
-integration tests but were not previously covered in the main walkthrough
-guides.
+This guide highlights implemented, user-facing patterns that are exercised by
+integration tests but are not front-and-center in the main walkthrough guides.
 
 ## 1) Model Batch Create with `create_many()`
 

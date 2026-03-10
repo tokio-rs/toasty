@@ -1,6 +1,7 @@
 # Modeling and Querying Basics
 
-This guide documents the first five implemented feature areas in Toasty:
+This guide covers core modeling and query workflows that are implemented and
+actively exercised in Toasty:
 
 1. Core model derive and schema attributes
 2. Auto/default/update field behavior

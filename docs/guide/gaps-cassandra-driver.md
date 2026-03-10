@@ -1,6 +1,7 @@
 # Final Gap: Cassandra Driver
 
-This guide documents feature item 31:
+This guide explains the current Cassandra-driver gap and how teams usually
+handle Cassandra workloads alongside Toasty.
 
 31. Cassandra driver support (not implemented)
 
@@ -16,12 +17,12 @@ Toasty currently ships drivers for:
 There is no built-in Cassandra (or ScyllaDB) driver crate in the current
 workspace.
 
-Practical impact:
+Impact today:
 
 - Toasty model/query APIs cannot target Cassandra directly today.
 - Migration and schema-management workflows in Toasty do not cover Cassandra.
 
-Current workaround:
+Typical approach today:
 
 - Use Toasty for supported backends.
 - For Cassandra-backed workloads, use a dedicated Cassandra client in a
@@ -37,7 +38,7 @@ let sql_db = toasty::Db::builder()
     .await?;
 
 // Use Cassandra client separately for Cassandra-specific operations.
-// (Pseudo-code: depends on the chosen Cassandra crate.)
+// Illustrative sketch only; choose any supported Cassandra crate.
 // let cassandra = scylla::SessionBuilder::new().known_node("127.0.0.1:9042").build().await?;
 // cassandra.query_unpaged("SELECT id, name FROM users WHERE id = ?", (id,)).await?;
 ```

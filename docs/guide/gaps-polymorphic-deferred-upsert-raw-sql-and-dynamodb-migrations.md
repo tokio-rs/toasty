@@ -1,6 +1,7 @@
 # Gaps: Polymorphism, Deferred Fields, Upsert, Raw SQL, and DynamoDB Migrations
 
-This guide documents feature items 26 through 30:
+This guide summarizes major unimplemented data-model and query capabilities,
+plus the current DynamoDB migration limitation.
 
 26. Polymorphic associations (not implemented)
 27. Deferred field loading (`#[deferred]`, `Deferred<T>`) (not implemented)
@@ -13,7 +14,7 @@ This guide documents feature items 26 through 30:
 There is no built-in polymorphic relation API yet (for example, one model
 belonging to either `Post` or `Photo` through a single typed relation field).
 
-Current workaround: model explicit join tables per target type.
+Use explicit join tables per target type today.
 
 ```rust
 #[derive(Debug, toasty::Model)]
@@ -61,8 +62,7 @@ This keeps relations explicit and works with current typed relation APIs.
 
 `#[deferred]` and `Deferred<T>` are planned but not implemented.
 
-Current workaround: split large columns into a separate model/table and load on
-demand.
+Split large columns into a separate model/table and load on demand.
 
 ```rust
 #[derive(Debug, toasty::Model)]
@@ -94,7 +94,7 @@ let body = ArticleBody::get_by_article_id(&mut db, &articles[0].id).await?;
 
 There is no first-class Toasty upsert API yet.
 
-Current workaround: transaction + lookup + update-or-create flow.
+Use a transaction + lookup + update-or-create flow.
 
 ```rust
 let mut tx = db.transaction().await?;
@@ -123,7 +123,7 @@ retry on unique-violation errors.
 There is currently no official Toasty API for embedding raw SQL fragments in
 typed queries.
 
-Current workaround:
+Use this split approach:
 
 - Use Toasty query/update builders for expressible operations.
 - For unsupported query shapes, call your backend client directly for that
@@ -142,7 +142,7 @@ sqlx::query("UPDATE users SET score = score + 1 WHERE id = ?")
 
 Migration generation/apply tracking is not implemented for the DynamoDB driver.
 
-Current workaround:
+Use this operational approach:
 
 - Use `db.push_schema().await?` for initial table/index creation in controlled
   environments.

@@ -1,6 +1,7 @@
 # Gaps: Query Index Edge Cases, Macros, and Many-to-Many
 
-This guide documents feature items 21 through 25:
+This guide captures key query/macro/relationship gaps and practical paths to
+ship with current APIs.
 
 21. DynamoDB query/index rewrite edge cases (partial)
 22. `toasty::query!` macro (not implemented)
@@ -14,12 +15,12 @@ Toasty supports many indexed query paths on DynamoDB, including OR rewriting in
 some cases. However, a subset of branch-shape combinations is still marked TODO
 in the index rewrite/match pipeline.
 
-Practical impact:
+Impact today:
 
 - Common key-based predicates work.
 - Some complex OR forms on key predicates may fail or be unsupported.
 
-Practical guidance:
+Recommended approach:
 
 - Prefer simple, uniform branch shapes in OR predicates on key fields.
 - If a specific query shape fails, split it into separate queries at the
@@ -29,7 +30,7 @@ Practical guidance:
 
 `toasty::query!` exists as a proc-macro entry point but is currently a stub.
 
-Current workaround: use the builder DSL directly.
+Use the builder DSL directly today.
 
 ```rust
 let users = User::all()
@@ -44,7 +45,7 @@ let users = User::all()
 `include_schema!` is currently a placeholder and not available for production
 use.
 
-Current workaround:
+Use this instead:
 
 - Use normal `#[derive(toasty::Model)]` / `#[derive(toasty::Embed)]` definitions.
 - Initialize schema through your usual app startup flow and migrations.
@@ -53,7 +54,7 @@ Current workaround:
 
 `toasty::update!` is a roadmap item and is not currently implemented.
 
-Current workaround: use generated update builders.
+Use generated update builders for now.
 
 ```rust
 user.update()
@@ -72,7 +73,7 @@ User::filter_by_id(user.id)
 
 Direct many-to-many relation syntax is not yet available.
 
-Current workaround: model an explicit junction table.
+Use an explicit junction table model for now.
 
 ```rust
 #[derive(Debug, toasty::Model)]

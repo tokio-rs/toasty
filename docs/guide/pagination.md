@@ -155,13 +155,13 @@ async fn list_posts(
 
 // Application-level serialization helpers (implement as needed)
 fn serialize_cursor(expr: &stmt::Expr) -> String {
-    // Serialize stmt::Expr to base64 or other format
-    todo!()
+    // Example placeholder: use your app's encoding format (base64, signed token, etc.).
+    unimplemented!("application-specific cursor serialization")
 }
 
 fn deserialize_cursor(token: &str) -> Result<stmt::Expr> {
-    // Deserialize from base64 or other format
-    todo!()
+    // Example placeholder: decode token format used by serialize_cursor.
+    unimplemented!("application-specific cursor deserialization")
 }
 ```
 
@@ -188,7 +188,8 @@ let page = Post::all()
 
 ### Multi-Column Ordering
 
-**⚠️ Work in Progress** - Referenced in [roadmap/order_limit_pagination.md](../roadmap/order_limit_pagination.md)
+Open gap tracked in
+[roadmap/order_limit_pagination.md](../roadmap/order_limit_pagination.md).
 
 For complex sorting, you can order by multiple columns:
 
@@ -250,7 +251,8 @@ For SQL databases (PostgreSQL, MySQL, SQLite), Toasty generates efficient keyset
 
 ### DynamoDB
 
-**⚠️ Work in Progress** - Referenced in [roadmap/order_limit_pagination.md](../roadmap/order_limit_pagination.md)
+Open gap tracked in
+[roadmap/order_limit_pagination.md](../roadmap/order_limit_pagination.md).
 
 For DynamoDB, Toasty maps cursors to DynamoDB's native `LastEvaluatedKey` pagination:
 
@@ -306,7 +308,7 @@ impl PageNavigator {
     pub async fn goto_page(&mut self, page_num: usize, db: &mut Db) -> Result<Page<Post>> {
         // Implementation would maintain cursor history
         // and navigate to requested page
-        todo!()
+        unimplemented!("application-specific cursor bookkeeping")
     }
 }
 ```

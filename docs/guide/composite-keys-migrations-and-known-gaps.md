@@ -1,6 +1,7 @@
 # Composite Keys, Migrations, and Known Gaps
 
-This guide documents the next five feature areas in Toasty:
+This guide summarizes current composite-key behavior, migration tooling, and the
+highest-impact known gaps around those areas.
 
 16. Composite-key tested workflows (implemented paths)
 17. Migration CLI (`generate`, `apply`, `snapshot`, `drop`, `reset`)
@@ -110,7 +111,7 @@ Known examples of remaining gaps:
   DynamoDB edge operations.
 - Stubbed integration test cases for some relation+composite combinations.
 
-Practical guidance:
+Recommended approach:
 
 - Prefer currently tested patterns (composite lookup/batch lookup,
   partition/local query/update/delete).
@@ -122,7 +123,7 @@ Practical guidance:
 
 Convenience chaining with `.then_by()` is still pending.
 
-Current workaround: build a multi-column `OrderBy` explicitly.
+Use a manually constructed multi-column `OrderBy` for now.
 
 ```rust
 use toasty::stmt::OrderBy;

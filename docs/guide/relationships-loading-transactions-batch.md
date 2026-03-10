@@ -1,6 +1,7 @@
 # Relationships, Loading, Transactions, and Batch Queries
 
-This guide documents the next five implemented feature areas in Toasty:
+This guide focuses on relation-heavy read/write flows, eager loading, SQL
+transactions, and batch query execution.
 
 6. Relationship CRUD (`HasMany`, `BelongsTo`, `HasOne`)
 7. Association link/unlink and scoped relation operations

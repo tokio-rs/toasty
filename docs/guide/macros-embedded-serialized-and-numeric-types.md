@@ -1,6 +1,7 @@
 # Macros, Embedded Types, Serialized Fields, and Numeric/Time Types
 
-This guide documents the next five implemented feature areas in Toasty:
+This guide covers the macro and type-system features that are implemented today,
+including embedded values, serialized fields, and numeric/time support.
 
 11. `toasty::create!` macro
 12. Embedded structs and enums (`#[derive(toasty::Embed)]`)
