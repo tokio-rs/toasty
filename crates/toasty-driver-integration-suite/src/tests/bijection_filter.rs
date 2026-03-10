@@ -6,10 +6,10 @@ use toasty_core::{
     stmt::{self, ExprSet, Statement},
 };
 
-/// Verify that filtering a Timestamp field stored as TEXT correctly encodes the
-/// filter value via the Cast bijection. The WHERE clause should compare the raw
-/// TEXT column against the string-encoded timestamp — not wrap the column in a
-/// Cast and compare against a native Timestamp value.
+/// Verify that filtering a Timestamp field stored as a string column correctly
+/// encodes the filter value via the Cast bijection. The WHERE clause should
+/// compare the raw string column against the string-encoded timestamp — not
+/// wrap the column in a Cast and compare against a native Timestamp value.
 #[driver_test(id(ID), requires(sql))]
 pub async fn filter_timestamp_stored_as_text(test: &mut Test) -> Result<(), BoxError> {
     use jiff::Timestamp;
@@ -21,7 +21,7 @@ pub async fn filter_timestamp_stored_as_text(test: &mut Test) -> Result<(), BoxE
         #[auto]
         id: ID,
         #[index]
-        #[column(type = text)]
+        #[column(type = varchar(255))]
         val: Timestamp,
     }
 
@@ -69,8 +69,8 @@ pub async fn filter_timestamp_stored_as_text(test: &mut Test) -> Result<(), BoxE
     Ok(())
 }
 
-/// Same test but with a UUID field stored as TEXT — verifies the bijection path
-/// handles the common UUID-as-text encoding pattern.
+/// Same test but with a UUID field stored as a string column — verifies the
+/// bijection path handles the common UUID-as-string encoding pattern.
 #[driver_test(id(ID), requires(sql))]
 pub async fn filter_uuid_stored_as_text(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -80,7 +80,7 @@ pub async fn filter_uuid_stored_as_text(test: &mut Test) -> Result<()> {
         #[auto]
         id: ID,
         #[index]
-        #[column(type = text)]
+        #[column(type = varchar(255))]
         val: uuid::Uuid,
     }
 
