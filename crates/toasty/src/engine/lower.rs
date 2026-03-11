@@ -196,6 +196,18 @@ impl LowerStatement<'_, '_> {
 }
 
 impl visit_mut::VisitMut for LowerStatement<'_, '_> {
+    fn visit_order_by_expr_mut(&mut self, node: &mut stmt::OrderByExpr) {
+        // First, run the default visitor to lower sub-expressions
+        self.visit_expr_mut(&mut node.expr);
+
+        // Reuse binary-op lowering: synthesize `expr == expr` so that
+        // cast conversions are applied, then keep the LHS result.
+        let mut lhs = node.expr.clone();
+        let mut rhs = node.expr.take();
+        self.lower_expr_binary_op(stmt::BinaryOp::Eq, &mut lhs, &mut rhs);
+        node.expr = lhs;
+    }
+
     fn visit_assignments_mut(&mut self, i: &mut stmt::Assignments) {
         let mut assignments = stmt::Assignments::default();
         let mapping = self.mapping_unwrap();
