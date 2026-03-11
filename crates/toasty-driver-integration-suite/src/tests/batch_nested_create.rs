@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-/// Try to use `toasty::batch` to create multiple nested HasMany records
+/// Use a tuple of create builders to create multiple nested HasMany records
 /// in a single parent create statement.
 #[driver_test(id(ID))]
 pub async fn batch_as_nested_has_many_create(test: &mut Test) -> Result<()> {
@@ -33,14 +33,14 @@ pub async fn batch_as_nested_has_many_create(test: &mut Test) -> Result<()> {
 
     let mut db = test.setup_db(models!(User, Todo)).await;
 
-    // Use batch to compose two todo creates, then pass the batch expression
-    // as the nested HasMany value on User::create().
+    // Pass a tuple of create builders directly — tuples implement
+    // `IntoExpr<[Model]>` so they work as nested HasMany values.
     let user = User::create()
         .name("Ann Chovey")
-        .todos(toasty::batch((
+        .todos((
             Todo::create().title("Make pizza"),
             Todo::create().title("Sleep"),
-        )))
+        ))
         .exec(&mut db)
         .await?;
 

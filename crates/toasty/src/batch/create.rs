@@ -1,5 +1,5 @@
 use crate::{
-    stmt::{self, IntoInsert},
+    stmt::{self, IntoExpr, IntoInsert},
     Cursor, Executor, ExecutorExt, Model, Result,
 };
 use toasty_core::stmt as core_stmt;
@@ -78,6 +78,16 @@ impl<M: Model> CreateMany<M> {
         let records = executor.exec(merged.into()).await?;
         let cursor = Cursor::new(records);
         cursor.collect().await
+    }
+}
+
+impl<M: Model> IntoExpr<[M]> for CreateMany<M> {
+    fn into_expr(self) -> stmt::Expr<[M]> {
+        self.into_expr()
+    }
+
+    fn by_ref(&self) -> stmt::Expr<[M]> {
+        todo!()
     }
 }
 
