@@ -1,3 +1,5 @@
+#![allow(clippy::disallowed_names)]
+
 use crate::prelude::*;
 
 #[driver_test(id(ID))]
