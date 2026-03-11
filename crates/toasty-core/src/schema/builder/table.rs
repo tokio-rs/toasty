@@ -2,12 +2,12 @@ use super::BuildSchema;
 use crate::{
     driver,
     schema::{
-        app::{self, Model, ModelRoot},
+        app::{self, Model, ModelId, ModelRoot},
         db::{self, ColumnId, IndexId, Table, TableId},
         mapping::{self, Mapping, TableToModel},
         Name,
     },
-    stmt,
+    stmt, Error, Result,
 };
 
 struct BuildTableFromModels<'a> {
@@ -111,7 +111,11 @@ impl BuildSchema<'_> {
         }
     }
 
-    pub(super) fn build_tables_from_models(&mut self, app: &app::Schema, db: &driver::Capability) {
+    pub(super) fn build_tables_from_models(
+        &mut self,
+        app: &app::Schema,
+        db: &driver::Capability,
+    ) -> Result<()> {
         for table in &mut self.tables {
             let models = app
                 .models()
@@ -131,8 +135,10 @@ impl BuildSchema<'_> {
                 mapping: &mut self.mapping,
                 prefix_table_names: models.len() > 1,
             }
-            .build(models[0]);
+            .build(models[0])?;
         }
+
+        Ok(())
     }
 
     pub(super) fn register_table(&mut self, name: impl AsRef<str>) -> TableId {
@@ -157,12 +163,13 @@ impl BuildSchema<'_> {
 }
 
 impl BuildTableFromModels<'_> {
-    fn build(&mut self, model: &Model) {
-        self.map_model_fields(model);
+    fn build(&mut self, model: &Model) -> Result<()> {
+        self.map_model_fields(model)?;
         self.update_index_names();
+        Ok(())
     }
 
-    fn map_model_fields(&mut self, model: &Model) {
+    fn map_model_fields(&mut self, model: &Model) -> Result<()> {
         let root = model.expect_root();
         let schema_prefix = if self.prefix_table_names {
             Some(model.name().snake_case())
@@ -181,11 +188,11 @@ impl BuildTableFromModels<'_> {
             model_to_table: vec![],
             table_to_model: vec![],
         }
-        .build_mapping(root);
+        .build_mapping(root)?;
 
         let model_fields = &self.mapping.model(model.id()).fields;
         let mut indices = Vec::new();
-        self.collect_indices(&root.fields, model_fields, &root.indices, &mut indices);
+        self.collect_indices(&root.fields, model_fields, &root.indices, &mut indices)?;
 
         for index in indices {
             if index.primary_key {
@@ -194,6 +201,8 @@ impl BuildTableFromModels<'_> {
 
             self.table.indices.push(index);
         }
+
+        Ok(())
     }
 
     /// Collects DB-level indices from app-level index definitions, then recurses
@@ -204,7 +213,7 @@ impl BuildTableFromModels<'_> {
         field_mappings: &[mapping::Field],
         indices: &[app::Index],
         out: &mut Vec<db::Index>,
-    ) {
+    ) -> Result<()> {
         for app_index in indices {
             let mut index = db::Index {
                 id: IndexId {
@@ -239,7 +248,9 @@ impl BuildTableFromModels<'_> {
                 continue;
             };
 
-            match self.app.model(embedded.target) {
+            let target = lookup_embedded_model(self.app, embedded.target, field)?;
+
+            match target {
                 app::Model::EmbeddedStruct(embedded_struct) => {
                     let field_mapping = field_mappings[field_index]
                         .as_struct()
@@ -250,7 +261,7 @@ impl BuildTableFromModels<'_> {
                         &field_mapping.fields,
                         &embedded_struct.indices,
                         out,
-                    );
+                    )?;
                 }
                 app::Model::EmbeddedEnum(embedded_enum) => {
                     if embedded_enum.indices.is_empty() {
@@ -292,11 +303,13 @@ impl BuildTableFromModels<'_> {
                         &flat_mappings,
                         &embedded_enum.indices,
                         out,
-                    );
+                    )?;
                 }
                 _ => continue,
             }
         }
+
+        Ok(())
     }
 
     fn update_index_names(&mut self) {
@@ -318,19 +331,21 @@ impl BuildTableFromModels<'_> {
 }
 
 impl BuildMapping<'_> {
-    fn build_mapping(mut self, model: &ModelRoot) {
-        let fields = MapField::new(&mut self).map_fields(&model.fields);
+    fn build_mapping(mut self, model: &ModelRoot) -> Result<()> {
+        let fields = MapField::new(&mut self).map_fields(&model.fields)?;
 
         assert!(!self.model_to_table.is_empty());
         assert_eq!(self.model_to_table.len(), self.lowering_columns.len());
 
-        self.build_table_to_model(model, &fields);
+        self.build_table_to_model(model, &fields)?;
 
         self.mapping.fields = fields;
         self.mapping.columns = self.lowering_columns;
         self.mapping.model_to_table = stmt::ExprRecord::from_vec(self.model_to_table);
         self.mapping.table_to_model =
             TableToModel::new(stmt::ExprRecord::from_vec(self.table_to_model));
+
+        Ok(())
     }
 
     fn next_bit(&mut self) -> usize {
@@ -339,11 +354,16 @@ impl BuildMapping<'_> {
         bit
     }
 
-    fn build_table_to_model(&mut self, model: &ModelRoot, mapping: &[mapping::Field]) {
+    fn build_table_to_model(
+        &mut self,
+        model: &ModelRoot,
+        mapping: &[mapping::Field],
+    ) -> Result<()> {
         for (index, field) in model.fields.iter().enumerate() {
-            let expr = self.build_table_to_model_field(field, &mapping[index]);
+            let expr = self.build_table_to_model_field(field, &mapping[index])?;
             self.table_to_model.push(expr);
         }
+        Ok(())
     }
 
     /// Builds the `table_to_model` expression for an embedded enum field.
@@ -357,7 +377,7 @@ impl BuildMapping<'_> {
         &self,
         model: &app::EmbeddedEnum,
         mapping: &mapping::FieldEnum,
-    ) -> stmt::Expr {
+    ) -> Result<stmt::Expr> {
         let disc_col_ref = stmt::Expr::column(stmt::ExprColumn {
             nesting: 0,
             table: 0,
@@ -365,7 +385,7 @@ impl BuildMapping<'_> {
         });
 
         if !model.has_data_variants() {
-            return disc_col_ref;
+            return Ok(disc_col_ref);
         }
 
         let mut arms = Vec::new();
@@ -380,7 +400,8 @@ impl BuildMapping<'_> {
                 let mut record_elems = vec![disc_col_ref.clone()];
 
                 for (local_idx, field) in variant_fields.iter().enumerate() {
-                    let expr = self.build_table_to_model_field(field, &mapping.fields[local_idx]);
+                    let expr =
+                        self.build_table_to_model_field(field, &mapping.fields[local_idx])?;
                     record_elems.push(expr);
                 }
                 stmt::Expr::record(record_elems)
@@ -411,7 +432,7 @@ impl BuildMapping<'_> {
             stmt::Expr::record(elems)
         };
 
-        stmt::Expr::match_expr(disc_col_ref, arms, else_expr)
+        Ok(stmt::Expr::match_expr(disc_col_ref, arms, else_expr))
     }
 
     /// Encodes `expr` for `column_id`, appends the result to `model_to_table`,
@@ -478,43 +499,47 @@ impl BuildMapping<'_> {
         &self,
         model: &app::EmbeddedStruct,
         mapping: &mapping::FieldStruct,
-    ) -> stmt::Expr {
-        let exprs: Vec<_> = model
+    ) -> Result<stmt::Expr> {
+        let exprs: Vec<stmt::Expr> = model
             .fields
             .iter()
             .enumerate()
             .map(|(index, field)| self.build_table_to_model_field(field, &mapping.fields[index]))
-            .collect();
-        stmt::Expr::record(exprs)
+            .collect::<Result<_>>()?;
+        Ok(stmt::Expr::record(exprs))
     }
 
     fn build_table_to_model_field(
         &self,
         field: &app::Field,
         mapping: &mapping::Field,
-    ) -> stmt::Expr {
+    ) -> Result<stmt::Expr> {
         match &field.ty {
             app::FieldTy::Primitive(primitive) => {
                 let column_id = mapping.as_primitive().unwrap().column;
-                self.map_table_column_to_model(column_id, primitive)
+                Ok(self.map_table_column_to_model(column_id, primitive))
             }
-            app::FieldTy::Embedded(embedded) => match self.app.model(embedded.target) {
-                app::Model::EmbeddedEnum(embedded) => {
-                    let mapping = mapping
-                        .as_enum()
-                        .expect("embedded enum field should have enum mapping");
-                    self.build_table_to_model_field_enum(embedded, mapping)
+            app::FieldTy::Embedded(embedded) => {
+                let target = lookup_embedded_model(self.app, embedded.target, field)?;
+
+                match target {
+                    app::Model::EmbeddedEnum(embedded) => {
+                        let mapping = mapping
+                            .as_enum()
+                            .expect("embedded enum field should have enum mapping");
+                        self.build_table_to_model_field_enum(embedded, mapping)
+                    }
+                    app::Model::EmbeddedStruct(embedded) => {
+                        let mapping = mapping
+                            .as_struct()
+                            .expect("embedded struct field should have struct mapping");
+                        self.build_table_to_model_field_struct(embedded, mapping)
+                    }
+                    _ => unreachable!("invalid schema"),
                 }
-                app::Model::EmbeddedStruct(embedded) => {
-                    let mapping = mapping
-                        .as_struct()
-                        .expect("embedded struct field should have struct mapping");
-                    self.build_table_to_model_field_struct(embedded, mapping)
-                }
-                _ => unreachable!("invalid schema"),
-            },
+            }
             app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
-                stmt::Value::Null.into()
+                Ok(stmt::Value::Null.into())
             }
         }
     }
@@ -531,7 +556,7 @@ impl<'a, 'b> MapField<'a, 'b> {
         }
     }
 
-    fn map_fields(&mut self, fields: &[app::Field]) -> Vec<mapping::Field> {
+    fn map_fields(&mut self, fields: &[app::Field]) -> Result<Vec<mapping::Field>> {
         fields
             .iter()
             .enumerate()
@@ -539,24 +564,30 @@ impl<'a, 'b> MapField<'a, 'b> {
             .collect()
     }
 
-    fn map_field(&mut self, index: usize, field: &app::Field) -> mapping::Field {
+    fn map_field(&mut self, index: usize, field: &app::Field) -> Result<mapping::Field> {
         match &field.ty {
-            app::FieldTy::Primitive(primitive) => self.map_field_primitive(index, field, primitive),
-            app::FieldTy::Embedded(embedded) => match self.build.app.model(embedded.target) {
-                app::Model::EmbeddedEnum(embedded_enum) => {
-                    self.map_field_enum(index, field, embedded_enum)
+            app::FieldTy::Primitive(primitive) => {
+                Ok(self.map_field_primitive(index, field, primitive))
+            }
+            app::FieldTy::Embedded(embedded) => {
+                let target = lookup_embedded_model(self.build.app, embedded.target, field)?;
+
+                match target {
+                    app::Model::EmbeddedEnum(embedded_enum) => {
+                        self.map_field_enum(index, field, embedded_enum)
+                    }
+                    app::Model::EmbeddedStruct(embedded_struct) => {
+                        self.map_field_struct(index, field, embedded_struct)
+                    }
+                    _ => unreachable!(),
                 }
-                app::Model::EmbeddedStruct(embedded_struct) => {
-                    self.map_field_struct(index, field, embedded_struct)
-                }
-                _ => unreachable!(),
-            },
+            }
             app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
                 assert!(!self.in_enum_variant);
                 let bit = self.build.next_bit();
-                mapping::Field::Relation(mapping::FieldRelation {
+                Ok(mapping::Field::Relation(mapping::FieldRelation {
                     field_mask: stmt::PathFieldSet::from_iter([bit]),
-                })
+                }))
             }
         }
     }
@@ -606,7 +637,7 @@ impl<'a, 'b> MapField<'a, 'b> {
         field_index: usize,
         field: &app::Field,
         embedded_enum: &app::EmbeddedEnum,
-    ) -> mapping::Field {
+    ) -> Result<mapping::Field> {
         // Create the discriminant column. It inherits nullability from the enum field.
         let column_id = self.create_column(field, &embedded_enum.discriminant);
         let field_expr = self.field_expr(field, field_index);
@@ -654,7 +685,7 @@ impl<'a, 'b> MapField<'a, 'b> {
                 let mut mapper =
                     self.for_variant(field, field_index, disc_proj.clone(), variant.discriminant);
 
-                let fields = embedded_enum
+                let fields: Vec<mapping::Field> = embedded_enum
                     .variant_fields(variant_index)
                     .enumerate()
                     .map(|(index, field)| {
@@ -662,14 +693,14 @@ impl<'a, 'b> MapField<'a, 'b> {
                         // (position 0 is the discriminant), so adjust the index.
                         mapper.map_field(index + 1, field)
                     })
-                    .collect();
+                    .collect::<Result<_>>()?;
 
-                mapping::EnumVariant {
+                Ok(mapping::EnumVariant {
                     discriminant: variant.discriminant,
                     fields,
-                }
+                })
             })
-            .collect();
+            .collect::<Result<_>>()?;
 
         let field_mask = stmt::PathFieldSet::from_iter([bit]);
 
@@ -699,7 +730,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             enum_bijection
         };
 
-        mapping::Field::Enum(mapping::FieldEnum {
+        Ok(mapping::Field::Enum(mapping::FieldEnum {
             discriminant: mapping::FieldPrimitive {
                 column: column_id,
                 lowering: lowering_index,
@@ -711,7 +742,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             bijection: enum_bijection,
             field_mask,
             sub_projection,
-        })
+        }))
     }
 
     fn map_field_struct(
@@ -719,12 +750,12 @@ impl<'a, 'b> MapField<'a, 'b> {
         field_index: usize,
         field: &app::Field,
         embedded_struct: &app::EmbeddedStruct,
-    ) -> mapping::Field {
+    ) -> Result<mapping::Field> {
         let sub_projection = self.sub_projection(field_index);
 
         let nested_fields = self
             .for_struct(field, field_index)
-            .map_fields(&embedded_struct.fields);
+            .map_fields(&embedded_struct.fields)?;
 
         let columns: indexmap::IndexMap<ColumnId, usize> =
             nested_fields.iter().flat_map(|f| f.columns()).collect();
@@ -739,13 +770,13 @@ impl<'a, 'b> MapField<'a, 'b> {
                 .collect(),
         );
 
-        mapping::Field::Struct(mapping::FieldStruct {
+        Ok(mapping::Field::Struct(mapping::FieldStruct {
             fields: nested_fields,
             columns,
             bijection,
             field_mask,
             sub_projection,
-        })
+        }))
     }
 
     /// Builds the final database column name for `field` at the current nesting level.
@@ -916,4 +947,25 @@ impl<'a, 'b> MapField<'a, 'b> {
         child.field_base = Some(field_base);
         child
     }
+}
+
+/// Look up an embedded model by ID, returning a descriptive error if not found.
+fn lookup_embedded_model<'a>(
+    app: &'a app::Schema,
+    target: ModelId,
+    field: &app::Field,
+) -> Result<&'a Model> {
+    app.get_model(target).ok_or_else(|| {
+        let parent_name = app
+            .get_model(field.id.model)
+            .map(|m| m.name().upper_camel_case())
+            .unwrap_or_else(|| "?".to_string());
+
+        Error::invalid_schema(format!(
+            "field `{parent_name}::{}` references an embedded type that is not registered \
+             in the schema; did you forget to call `Db::builder().register::<T>()` for \
+             the embedded type?",
+            field.name.app_name,
+        ))
+    })
 }
