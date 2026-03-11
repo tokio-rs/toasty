@@ -19,6 +19,11 @@ impl LowerStatement<'_, '_> {
 
         let offset = match limit.offset.take() {
             Some(Offset::After(expr)) => expr,
+            Some(Offset::Count(expr)) => {
+                // Leave count-based offset intact.
+                limit.offset = Some(Offset::Count(expr));
+                return;
+            }
             _ => return,
         };
 

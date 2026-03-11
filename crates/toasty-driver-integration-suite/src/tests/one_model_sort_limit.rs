@@ -107,7 +107,7 @@ pub async fn paginate(test: &mut Test) -> Result<()> {
 }
 
 #[driver_test(id(ID), requires(sql))]
-pub async fn limit(t: &mut Test) -> Result<()> {
+pub async fn limit_offset(t: &mut Test) -> Result<()> {
     #[derive(toasty::Model)]
     struct Foo {
         #[key]
@@ -137,6 +137,18 @@ pub async fn limit(t: &mut Test) -> Result<()> {
     assert_eq!(foos.len(), 7);
     for i in 0..6 {
         assert!(foos[i].order > foos[i + 1].order);
+    }
+
+    // Limit combined with offset
+    let foos: Vec<_> = Foo::all()
+        .order_by(Foo::fields().order().asc())
+        .limit(7)
+        .offset(5)
+        .collect(&mut db)
+        .await?;
+    assert_eq!(foos.len(), 7);
+    for (i, f) in foos.iter().enumerate() {
+        assert_eq!(f.order, i as i64 + 5);
     }
 
     // Limit larger than the result set returns all results
