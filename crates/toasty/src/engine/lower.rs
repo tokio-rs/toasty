@@ -11,7 +11,7 @@ use toasty_core::{
     schema::{
         app::{self, FieldTy, ModelRoot},
         db::ColumnId,
-        mapping::{self, StorageOp},
+        mapping,
     },
     stmt::{self, visit_mut, IntoExprTarget, VisitMut},
     Result, Schema,
@@ -242,56 +242,13 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         todo!("stmt={i:#?}");
     }
 
-    fn visit_order_by_expr_mut(&mut self, node: &mut stmt::OrderByExpr) {
-        // Before lowering, check if this is a field reference so we can use
-        // the bijection to encode it directly to a storage-level column.
-        if let stmt::Expr::Reference(stmt::ExprReference::Field { nesting, index }) = &node.expr {
-            let nesting = *nesting;
-            let field_index = *index;
-
-            let mapping = self.mapping_at_unwrap(nesting);
-            let field_mapping = &mapping.fields[field_index];
-
-            if let Some(primitive) = field_mapping.as_primitive() {
-                let bijection = &primitive.bijection;
-
-                // The bijection must preserve ordering for ORDER BY to work
-                // in storage space.
-                assert!(
-                    bijection.can_distribute(stmt::BinaryOp::Lt).is_some(),
-                    "cannot ORDER BY this field: ordering is not preserved \
-                     through the storage encoding"
-                );
-
-                // Ordering distributes — use the raw storage column directly.
-                node.expr = stmt::Expr::column(stmt::ExprColumn {
-                    nesting,
-                    table: 0,
-                    column: primitive.column.index,
-                });
-                return;
-            }
-        }
-
-        // Not a simple field reference — lower normally.
-        self.visit_expr_mut(&mut node.expr);
-    }
-
     fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
         match expr {
             stmt::Expr::BinaryOp(e) => {
-                // Try bijection path first (while field refs are still intact)
-                if let Some(lowered) = self.try_lower_binary_op_via_bijection(e) {
-                    *expr = lowered;
-                } else {
-                    // TODO: legacy path — remove once all patterns are handled
-                    // via bijection. Runs after field refs are already lowered
-                    // to column expressions, so field identity is lost.
-                    self.visit_expr_binary_op_mut(e);
+                self.visit_expr_binary_op_mut(e);
 
-                    if let Some(lowered) = self.lower_expr_binary_op(e.op, &mut e.lhs, &mut e.rhs) {
-                        *expr = lowered;
-                    }
+                if let Some(lowered) = self.lower_expr_binary_op(e.op, &mut e.lhs, &mut e.rhs) {
+                    *expr = lowered;
                 }
             }
             stmt::Expr::InList(e) => {
@@ -684,51 +641,6 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 }
 
 impl<'a, 'b> LowerStatement<'a, 'b> {
-    /// Try to lower a binary op using bijection-based operator distribution.
-    ///
-    /// This runs BEFORE field references are lowered to column expressions, so
-    /// we still have the field identity and can look up the bijection. Handles
-    /// primitive field comparisons (`field == value`, `field < value`, etc.).
-    ///
-    /// Returns `Some(expr)` if handled, `None` to fall through to existing logic.
-    fn try_lower_binary_op_via_bijection(
-        &mut self,
-        e: &mut stmt::ExprBinaryOp,
-    ) -> Option<stmt::Expr> {
-        // 1. Match FieldRef op Value (or Value op FieldRef)
-        let (nesting, field_index, value) = extract_field_ref_and_value(e)?;
-
-        // 2. NULL handling (same as current logic)
-        if value.is_null() {
-            let field_expr = self.lower_expr_field(nesting, field_index);
-            return Some(match e.op {
-                stmt::BinaryOp::Eq => stmt::Expr::is_null(field_expr),
-                stmt::BinaryOp::Ne => stmt::Expr::is_not_null(field_expr),
-                _ => todo!(),
-            });
-        }
-
-        // 3. Get the field mapping and bijection (primitive fields only for now)
-        let mapping = self.mapping_at_unwrap(nesting);
-        let field_mapping = &mapping.fields[field_index];
-        let primitive = field_mapping.as_primitive()?;
-        let bijection = &primitive.bijection;
-
-        // 4. Consult can_distribute
-        let storage_op = bijection.can_distribute(e.op)?;
-
-        // 5. Build storage-space comparison
-        let encoded_value = bijection.encode(value);
-        let column_expr = stmt::Expr::column(stmt::ExprColumn {
-            nesting,
-            table: 0,
-            column: primitive.column.index,
-        });
-
-        // 6. Convert StorageOp to Expr
-        Some(storage_op_to_expr(storage_op, column_expr, encoded_value))
-    }
-
     fn lower_expr_binary_op(
         &mut self,
         op: stmt::BinaryOp,
@@ -1369,43 +1281,4 @@ fn build_update_returning(
         stmt::ExprRecord::from_vec(exprs),
         stmt::Type::SparseRecord(field_set),
     )
-}
-
-/// Extract a `(nesting, field_index, value)` triple from a binary op where one
-/// operand is a field reference and the other is a literal value.
-fn extract_field_ref_and_value(e: &stmt::ExprBinaryOp) -> Option<(usize, usize, stmt::Value)> {
-    match (&*e.lhs, &*e.rhs) {
-        (
-            stmt::Expr::Reference(stmt::ExprReference::Field { nesting, index }),
-            stmt::Expr::Value(v),
-        ) => Some((*nesting, *index, v.clone())),
-        (
-            stmt::Expr::Value(v),
-            stmt::Expr::Reference(stmt::ExprReference::Field { nesting, index }),
-        ) => Some((*nesting, *index, v.clone())),
-        _ => None,
-    }
-}
-
-/// Convert a `StorageOp` and operands into an `stmt::Expr`.
-fn storage_op_to_expr(
-    storage_op: StorageOp,
-    column_expr: stmt::Expr,
-    encoded_value: stmt::Value,
-) -> stmt::Expr {
-    match storage_op {
-        StorageOp::Eq | StorageOp::IsNullSafe => {
-            // IsNullSafe with a non-null literal safely degrades to standard Eq:
-            // if column is NULL, `NULL = val` → NULL/false (correct);
-            // if column is non-NULL, standard equality (correct).
-            stmt::Expr::eq(column_expr, encoded_value)
-        }
-        StorageOp::Ne => stmt::Expr::ne(column_expr, encoded_value),
-        StorageOp::Lt => stmt::Expr::lt(column_expr, encoded_value),
-        StorageOp::Le => stmt::Expr::le(column_expr, encoded_value),
-        StorageOp::Gt => stmt::Expr::gt(column_expr, encoded_value),
-        StorageOp::Ge => stmt::Expr::ge(column_expr, encoded_value),
-        StorageOp::IsNull => stmt::Expr::is_null(column_expr),
-        StorageOp::IsNotNull => stmt::Expr::is_not_null(column_expr),
-    }
 }

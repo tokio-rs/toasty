@@ -1,10 +1,5 @@
 use crate::prelude::*;
 
-use toasty_core::{
-    driver::Operation,
-    stmt::{ExprSet, InsertTarget, Statement, Value},
-};
-
 #[driver_test(id(ID))]
 pub async fn ty_timestamp(test: &mut Test) -> Result<(), BoxError> {
     use jiff::Timestamp;
@@ -20,48 +15,17 @@ pub async fn ty_timestamp(test: &mut Test) -> Result<(), BoxError> {
 
     let mut db = test.setup_db(models!(Foo)).await;
 
-    let ts = Timestamp::from_second(946684800)?; // 2000-01-01T00:00:00Z
-
-    test.log().clear();
-
-    let created = Foo::create().val(ts).exec(&mut db).await?;
-
-    // Verify the INSERT encodes the timestamp correctly for the driver.
-    // Native timestamp drivers send the value as-is; non-native drivers
-    // (SQLite, DynamoDB) encode it as a fixed-precision ISO 8601 text string.
-    let (op, _) = test.log().pop();
-
-    let expected_val = if test.capability().native_timestamp {
-        Value::Timestamp(ts)
-    } else {
-        Value::String(format!("{ts:.9}"))
-    };
-
-    assert_struct!(op, Operation::QuerySql(_ {
-        stmt: Statement::Insert(_ {
-            target: InsertTarget::Table(_ {
-                table: == table_id(&db, "foos"),
-                columns: == columns(&db, "foos", &["id", "val"]),
-                ..
-            }),
-            source.body: ExprSet::Values(_ {
-                rows: [=~ (Any, expected_val)],
-                ..
-            }),
-            ..
-        }),
-        ..
-    }));
-
-    // Verify round-trip with more values
-    let read = Foo::get_by_id(&mut db, &created.id).await?;
-    assert_eq!(read.val, ts);
-
-    let more_values = vec![
+    let test_values = vec![
+        Timestamp::from_second(946684800)?,  // 2000-01-01T00:00:00Z
         Timestamp::from_second(1609459200)?, // 2021-01-01T00:00:00Z
         Timestamp::from_second(1735689600)?, // 2025-01-01T00:00:00Z
+        Timestamp::from_second(978307200)?,  // 2001-01-01T00:00:00Z
+        Timestamp::from_second(1577836800)?, // 2020-01-01T00:00:00Z
+        Timestamp::from_second(1893456000)?, // 2030-01-01T00:00:00Z
+        Timestamp::from_second(2051222400)?, // 2035-01-01T00:00:00Z
     ];
-    for val in &more_values {
+
+    for val in &test_values {
         let created = Foo::create().val(*val).exec(&mut db).await?;
         let read = Foo::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
@@ -320,83 +284,17 @@ pub async fn ty_timestamp_as_text(test: &mut Test) -> Result<(), BoxError> {
 
     let mut db = test.setup_db(models!(Foo)).await;
 
-    let ts = Timestamp::from_second(946684800)?; // 2000-01-01T00:00:00Z
-    let ts_text = format!("{ts:.9}");
-
-    test.log().clear();
-
-    let created = Foo::create().val(ts).exec(&mut db).await?;
-
-    // Verify the INSERT encodes the timestamp as a fixed-precision text string.
-    // The #[column(type = text)] forces text encoding on all drivers.
-    let (op, _) = test.log().pop();
-    assert_struct!(op, Operation::QuerySql(_ {
-        stmt: Statement::Insert(_ {
-            target: InsertTarget::Table(_ {
-                table: == table_id(&db, "foos"),
-                columns: == columns(&db, "foos", &["id", "val"]),
-                ..
-            }),
-            source.body: ExprSet::Values(_ {
-                rows: [=~ (Any, ts_text)],
-                ..
-            }),
-            ..
-        }),
-        ..
-    }));
-
-    // Verify round-trip
-    let read = Foo::get_by_id(&mut db, &created.id).await?;
-    assert_eq!(read.val, ts);
-
-    Ok(())
-}
-
-#[driver_test(id(ID), requires(sql))]
-pub async fn order_by_timestamp(test: &mut Test) -> Result<(), BoxError> {
-    use jiff::Timestamp;
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Foo {
-        #[key]
-        #[auto]
-        id: ID,
-        #[column(type = varchar(255))]
-        val: Timestamp,
-    }
-
-    let mut db = test.setup_db(models!(Foo)).await;
-
-    let timestamps = vec![
-        Timestamp::from_second(1609459200)?, // 2021-01-01
-        Timestamp::from_second(946684800)?,  // 2000-01-01
-        Timestamp::from_second(1735689600)?, // 2025-01-01
+    let test_values = vec![
+        Timestamp::from_second(946684800)?,  // 2000-01-01T00:00:00Z
+        Timestamp::from_second(1609459200)?, // 2021-01-01T00:00:00Z
+        Timestamp::from_second(1735689600)?, // 2025-01-01T00:00:00Z
     ];
 
-    for val in &timestamps {
-        Foo::create().val(*val).exec(&mut db).await?;
+    for val in &test_values {
+        let created = Foo::create().val(*val).exec(&mut db).await?;
+        let read = Foo::get_by_id(&mut db, &created.id).await?;
+        assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
     }
-
-    let asc: Vec<_> = Foo::all()
-        .order_by(Foo::fields().val().asc())
-        .collect(&mut db)
-        .await?;
-
-    assert_eq!(asc.len(), 3);
-    assert!(asc[0].val < asc[1].val);
-    assert!(asc[1].val < asc[2].val);
-
-    let desc: Vec<_> = Foo::all()
-        .order_by(Foo::fields().val().desc())
-        .collect(&mut db)
-        .await?;
-
-    assert_eq!(desc.len(), 3);
-    assert!(desc[0].val > desc[1].val);
-    assert!(desc[1].val > desc[2].val);
-
     Ok(())
 }
 

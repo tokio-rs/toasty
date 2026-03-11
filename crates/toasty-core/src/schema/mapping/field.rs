@@ -1,5 +1,5 @@
 use crate::{
-    schema::{db::ColumnId, mapping::Bijection},
+    schema::db::ColumnId,
     stmt::{PathFieldSet, Projection},
 };
 use indexmap::IndexMap;
@@ -61,18 +61,6 @@ impl Field {
             Field::Struct(s) => &s.sub_projection,
             Field::Enum(e) => &e.sub_projection,
             Field::Relation(_) => &IDENTITY,
-        }
-    }
-
-    /// Returns the bijection for this field, if it has one.
-    ///
-    /// Returns `None` for relation fields, which don't map to columns.
-    pub fn bijection(&self) -> Option<&Bijection> {
-        match self {
-            Field::Primitive(p) => Some(&p.bijection),
-            Field::Struct(s) => Some(&s.bijection),
-            Field::Enum(e) => Some(&e.bijection),
-            Field::Relation(_) => None,
         }
     }
 
@@ -143,9 +131,6 @@ pub struct FieldPrimitive {
     /// column value during `INSERT` and `UPDATE` operations.
     pub lowering: usize,
 
-    /// The bijection describing how this field's type maps to the column type.
-    pub bijection: Bijection,
-
     /// Update coverage mask for this primitive field.
     ///
     /// A singleton bitset containing the unique bit assigned to this primitive
@@ -183,9 +168,6 @@ pub struct FieldStruct {
     /// with their corresponding lowering expression index in `Model::model_to_table`.
     pub columns: IndexMap<ColumnId, usize>,
 
-    /// The bijection for this embedded struct (a `Product` of child bijections).
-    pub bijection: Bijection,
-
     /// Update coverage mask for this embedded field.
     ///
     /// The union of the `field_mask` bits of every primitive nested within this
@@ -209,9 +191,6 @@ pub struct FieldEnum {
 
     /// Per-variant mappings, in the same order as `app::EmbeddedEnum::variants`.
     pub variants: Vec<EnumVariant>,
-
-    /// The bijection for this enum (a `Coproduct` of the discriminant + variant bijections).
-    pub bijection: Bijection,
 
     /// Update coverage mask for the enum field (singleton: the whole enum changes atomically).
     pub field_mask: PathFieldSet,

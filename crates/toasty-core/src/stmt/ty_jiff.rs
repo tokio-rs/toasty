@@ -51,16 +51,11 @@ impl Type {
             }
 
             // jiff -> String
-            //
-            // Types with sub-second precision use fixed 9-digit nanosecond
-            // formatting so that the resulting strings sort lexicographically
-            // in chronological order (ISO 8601 guarantees this for
-            // uniform-precision representations).
-            (Value::Timestamp(value), Type::String) => Value::String(format!("{value:.9}")),
-            (Value::Zoned(value), Type::String) => Value::String(format!("{value:.9}")),
+            (Value::Timestamp(value), Type::String) => Value::String(value.to_string()),
+            (Value::Zoned(value), Type::String) => Value::String(value.to_string()),
             (Value::Date(value), Type::String) => Value::String(value.to_string()),
-            (Value::Time(value), Type::String) => Value::String(format!("{value:.9}")),
-            (Value::DateTime(value), Type::String) => Value::String(format!("{value:.9}")),
+            (Value::Time(value), Type::String) => Value::String(value.to_string()),
+            (Value::DateTime(value), Type::String) => Value::String(value.to_string()),
 
             // UTC <-> Zoned
             (Value::Timestamp(value), Type::Zoned) => Value::Zoned(value.to_zoned(TimeZone::UTC)),
@@ -189,7 +184,7 @@ mod tests {
         let value = Value::Time(time());
         let result = Type::String.cast_jiff(&value).unwrap();
         match result.unwrap() {
-            Value::String(s) => assert_eq!(s, "12:30:45.000000000"),
+            Value::String(s) => assert_eq!(s, "12:30:45"),
             _ => panic!("Expected String value"),
         }
     }
