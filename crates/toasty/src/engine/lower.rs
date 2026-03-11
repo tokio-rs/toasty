@@ -659,10 +659,10 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                     _ => todo!(),
                 })
             }
-            (stmt::Expr::Cast(expr_cast), other) => {
+            (stmt::Expr::Cast(expr_cast), _) | (_, stmt::Expr::Cast(expr_cast)) => {
                 let target_ty = self.capability().native_type_for(&expr_cast.ty);
                 self.cast_expr(lhs, &target_ty);
-                self.cast_expr(other, &target_ty);
+                self.cast_expr(rhs, &target_ty);
                 None
             }
             _ => None,

@@ -50,6 +50,13 @@ impl Type {
                 )
             }
 
+            // Identity
+            (value @ Value::Timestamp(_), Type::Timestamp) => value.clone(),
+            (value @ Value::Zoned(_), Type::Zoned) => value.clone(),
+            (value @ Value::Date(_), Type::Date) => value.clone(),
+            (value @ Value::Time(_), Type::Time) => value.clone(),
+            (value @ Value::DateTime(_), Type::DateTime) => value.clone(),
+
             // jiff -> String
             //
             // Types with sub-second precision use fixed 9-digit nanosecond
