@@ -40,7 +40,8 @@ impl Builder {
     }
 
     pub async fn connect(&mut self, url: &str) -> Result<Db> {
-        self.build(Connect::new(url)?).await
+        let con = Connect::new(url).await?;
+        self.build(con).await
     }
 
     pub async fn build(&mut self, driver: impl Driver) -> Result<Db> {
