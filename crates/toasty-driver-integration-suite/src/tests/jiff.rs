@@ -443,3 +443,88 @@ pub async fn ty_datetime_as_text(test: &mut Test) -> Result<()> {
     }
     Ok(())
 }
+
+#[driver_test(id(ID), requires(sql))]
+pub async fn order_by_timestamp(test: &mut Test) -> Result<(), BoxError> {
+    use jiff::Timestamp;
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Foo {
+        #[key]
+        #[auto]
+        id: ID,
+
+        #[column(type = text)]
+        val: Timestamp,
+    }
+
+    let mut db = test.setup_db(models!(Foo)).await;
+
+    let timestamps = vec![
+        Timestamp::from_second(1609459200)?, // 2021-01-01
+        Timestamp::from_second(946684800)?,  // 2000-01-01
+        Timestamp::from_second(1735689600)?, // 2025-01-01
+    ];
+
+    for val in &timestamps {
+        Foo::create().val(*val).exec(&mut db).await?;
+    }
+
+    let asc: Vec<_> = Foo::all()
+        .order_by(Foo::fields().val().asc())
+        .collect(&mut db)
+        .await?;
+
+    assert_eq!(asc.len(), 3);
+    assert!(asc[0].val < asc[1].val);
+    assert!(asc[1].val < asc[2].val);
+
+    let desc: Vec<_> = Foo::all()
+        .order_by(Foo::fields().val().desc())
+        .collect(&mut db)
+        .await?;
+
+    assert_eq!(desc.len(), 3);
+    assert!(desc[0].val > desc[1].val);
+    assert!(desc[1].val > desc[2].val);
+
+    Ok(())
+}
+
+#[driver_test(id(ID))]
+pub async fn filter_by_timestamp(test: &mut Test) -> Result<(), BoxError> {
+    use jiff::Timestamp;
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Event {
+        #[key]
+        #[auto]
+        id: ID,
+        #[index]
+        at: Timestamp,
+        name: String,
+    }
+
+    let mut db = test.setup_db(models!(Event)).await;
+
+    let ts1 = Timestamp::from_second(946684800)?; // 2000-01-01T00:00:00Z
+    let ts2 = Timestamp::from_second(1609459200)?; // 2021-01-01T00:00:00Z
+    let ts3 = Timestamp::from_second(1735689600)?; // 2025-01-01T00:00:00Z
+
+    Event::create().at(ts1).name("a").exec(&mut db).await?;
+    Event::create().at(ts2).name("b").exec(&mut db).await?;
+    Event::create().at(ts3).name("c").exec(&mut db).await?;
+
+    let results = Event::filter_by_at(ts2).collect::<Vec<_>>(&mut db).await?;
+    assert_struct!(results, [{ name: "b", at: == ts2 }]);
+
+    // No match
+    let results = Event::filter_by_at(Timestamp::from_second(0)?)
+        .collect::<Vec<_>>(&mut db)
+        .await?;
+    assert!(results.is_empty());
+
+    Ok(())
+}

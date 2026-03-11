@@ -164,6 +164,16 @@ impl Capability {
     pub fn native_type_for(&self, ty: &stmt::Type) -> stmt::Type {
         match ty {
             stmt::Type::Uuid => self.storage_types.default_uuid_type.bridge_type(ty),
+            #[cfg(feature = "jiff")]
+            stmt::Type::Timestamp => self.storage_types.default_timestamp_type.bridge_type(ty),
+            #[cfg(feature = "jiff")]
+            stmt::Type::Zoned => self.storage_types.default_zoned_type.bridge_type(ty),
+            #[cfg(feature = "jiff")]
+            stmt::Type::Date => self.storage_types.default_date_type.bridge_type(ty),
+            #[cfg(feature = "jiff")]
+            stmt::Type::Time => self.storage_types.default_time_type.bridge_type(ty),
+            #[cfg(feature = "jiff")]
+            stmt::Type::DateTime => self.storage_types.default_datetime_type.bridge_type(ty),
             _ => ty.clone(),
         }
     }
