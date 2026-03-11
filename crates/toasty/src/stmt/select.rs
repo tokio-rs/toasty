@@ -1,7 +1,7 @@
 use super::{Delete, Expr, IntoSelect, Value};
 use crate::Model;
 use std::{fmt, marker::PhantomData};
-use toasty_core::stmt;
+use toasty_core::stmt::{self, Offset};
 
 pub struct Select<M> {
     /// How to filter the data source
@@ -62,6 +62,17 @@ impl<M> Select<M> {
             limit: stmt::Value::from(n as i64).into(),
             offset: None,
         });
+        self
+    }
+
+    pub fn offset(&mut self, n: usize) -> &mut Self {
+        self.untyped.limit = match self.untyped.limit.take() {
+            Some(limit) => Some(stmt::Limit {
+                limit: limit.limit,
+                offset: Some(Offset::Count(stmt::Expr::Value(Value::from(n)))),
+            }),
+            None => panic!("limit required for offset"),
+        };
         self
     }
 

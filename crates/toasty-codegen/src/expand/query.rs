@@ -79,6 +79,11 @@ impl Expand<'_> {
                     self
                 }
 
+                #vis fn offset(mut self, n: usize) -> #query_struct_ident {
+                    self.stmt.offset(n);
+                    self
+                }
+
                 #include
                 #relation_methods
             }
