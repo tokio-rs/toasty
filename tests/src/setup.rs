@@ -3,7 +3,7 @@ use toasty::driver::{Capability, Driver};
 
 #[async_trait::async_trait]
 pub trait Setup: Send + Sync + 'static {
-    fn driver(&self) -> Box<dyn Driver>;
+    async fn driver(&self) -> Box<dyn Driver>;
 
     /// Configure the builder with database-specific settings (like table prefixes)
     fn configure_builder(&self, _builder: &mut toasty::db::Builder) {

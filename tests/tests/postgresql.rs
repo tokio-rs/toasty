@@ -1,6 +1,7 @@
 #![cfg(feature = "postgresql")]
 
 use std::sync::Arc;
+use toasty_driver_postgresql::PostgreSQL;
 use tokio::sync::OnceCell;
 use tokio_postgres::NoTls;
 
@@ -42,7 +43,7 @@ impl toasty_driver_integration_suite::Setup for PostgreSqlSetup {
     fn driver(&self) -> Box<dyn toasty::driver::Driver> {
         let url = std::env::var("TOASTY_TEST_POSTGRES_URL")
             .unwrap_or_else(|_| "postgresql://localhost:5432/toasty_test".to_string());
-        Box::new(toasty::db::Connect::new(&url).expect("Failed to create PostgreSQL driver"))
+        Box::new(PostgreSQL::new(&url).expect("Failed to create PostgreSQL driver"))
     }
 
     async fn delete_table(&self, name: &str) {

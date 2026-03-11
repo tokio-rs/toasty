@@ -6,7 +6,7 @@ publish = false
 
 [features]
 default = [ "sqlite" ]
-dynamodb = [ "toasty/dynamodb" ]
+dynamodb = [ "toasty/dynamodb", "dep:toasty-driver-dynamodb", "dep:aws-config", "dep:aws-sdk-dynamodb" ]
 mysql = [ "toasty/mysql" ]
 postgresql = [ "toasty/postgresql" ]
 sqlite = [ "toasty/sqlite" ]
@@ -15,3 +15,8 @@ sqlite = [ "toasty/sqlite" ]
 toasty.workspace = true
 tokio.workspace = true
 uuid.workspace = true
+
+# For direct DynamoDB driver construction
+toasty-driver-dynamodb = { path = "../../crates/toasty-driver-dynamodb", optional = true }
+aws-config = { workspace = true, optional = true }
+aws-sdk-dynamodb = { workspace = true, optional = true }

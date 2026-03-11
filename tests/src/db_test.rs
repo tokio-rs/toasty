@@ -42,7 +42,8 @@ impl DbTest {
         setup.configure_builder(&mut builder);
 
         // Always wrap with logging
-        let logging_driver = LoggingDriver::new(setup.driver());
+        let driver = setup.driver().await;
+        let logging_driver = LoggingDriver::new(driver);
         let ops_log = logging_driver.ops_log_handle();
         self.exec_log = ExecLog::new(ops_log);
 

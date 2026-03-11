@@ -1,3 +1,4 @@
+pub mod batch_associations;
 pub mod batch_create_statements;
 pub mod batch_query;
 pub mod batch_query_dynamic;
@@ -28,6 +29,7 @@ pub mod has_many_n_1;
 pub mod has_many_scoped_query;
 pub mod has_one_crud_basic;
 pub mod jiff;
+pub mod missing_registrations;
 pub mod one_model_batch_create;
 pub mod one_model_composite_key;
 pub mod one_model_crud;

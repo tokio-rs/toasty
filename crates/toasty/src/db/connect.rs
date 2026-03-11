@@ -24,7 +24,7 @@ impl std::fmt::Debug for Connect {
 }
 
 impl Connect {
-    pub fn new(url: &str) -> Result<Self> {
+    pub async fn new(url: &str) -> Result<Self> {
         #![cfg_attr(
             not(any(
                 feature = "dynamodb",
@@ -39,7 +39,13 @@ impl Connect {
 
         let driver: Box<dyn Driver> = match url.scheme() {
             #[cfg(feature = "dynamodb")]
-            "dynamodb" => Box::new(toasty_driver_dynamodb::DynamoDb::new(url.to_string())),
+            "dynamodb" => {
+                // DynamoDB driver requires async initialization to load AWS config from environment
+                // Spawn a new thread to avoid runtime context issues
+                let url = url.to_string();
+                let driver = toasty_driver_dynamodb::DynamoDb::from_env(url).await?;
+                Box::new(driver)
+            }
             #[cfg(not(feature = "dynamodb"))]
             "dynamodb" => {
                 return Err(toasty_core::Error::unsupported_feature(

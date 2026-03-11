@@ -74,24 +74,34 @@ impl<'db> Transaction<'db> {
         isolation: Option<IsolationLevel>,
         read_only: bool,
     ) -> Result<Transaction<'db>> {
-        db.exec_operation(
-            operation::Transaction::Start {
-                isolation,
-                read_only,
-            }
-            .into(),
-        )
-        .await?;
-
-        Ok(Transaction {
+        // We're creating the Transaction struct before actually starting the transaction. If the
+        // future is cancelled while waiting on the response of the start command, the transaction
+        // is still rolled back.
+        let tx = Transaction {
             db,
             finalized: false,
             savepoint: None,
-        })
+        };
+
+        tx.db
+            .exec_operation(
+                operation::Transaction::Start {
+                    isolation,
+                    read_only,
+                }
+                .into(),
+            )
+            .await?;
+        Ok(tx)
     }
 
     /// Commit the transaction.
     pub async fn commit(mut self) -> Result<()> {
+        // Because driver operations are done in a background task, all the operations aren't
+        // cancelled and will continue even if this future is dropped. Setting the finalized flag
+        // to true early here makes sure that if the future is dropped we don't queue a rollback
+        // command.
+        self.finalized = true;
         match self.savepoint {
             Some(_) => self
                 .db
@@ -101,12 +111,13 @@ impl<'db> Transaction<'db> {
                 .exec_operation(operation::Transaction::Commit.into()),
         }
         .await?;
-        self.finalized = true;
         Ok(())
     }
 
     /// Roll back the transaction.
     pub async fn rollback(mut self) -> Result<()> {
+        // See `commit` why we're setting the finalized flag to true early.
+        self.finalized = true;
         match self.savepoint {
             Some(_) => self.db.exec_operation(
                 operation::Transaction::RollbackToSavepoint(self.savepoint()).into(),
@@ -116,7 +127,6 @@ impl<'db> Transaction<'db> {
                 .exec_operation(operation::Transaction::Rollback.into()),
         }
         .await?;
-        self.finalized = true;
         Ok(())
     }
 
