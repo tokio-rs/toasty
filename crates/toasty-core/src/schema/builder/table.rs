@@ -605,26 +605,9 @@ impl<'a, 'b> MapField<'a, 'b> {
         let bit = self.build.next_bit();
         let sub_projection = self.sub_projection(field_index);
 
-        // Build the bijection for this primitive field
-        let column = self.build.table.column(column_id);
-        let bijection = if column.ty == primitive.ty {
-            mapping::Bijection::Identity
-        } else {
-            mapping::Bijection::Cast {
-                from: primitive.ty.clone(),
-                to: column.ty.clone(),
-            }
-        };
-        let bijection = if column.nullable {
-            mapping::Bijection::Nullable(Box::new(bijection))
-        } else {
-            bijection
-        };
-
         mapping::Field::Primitive(mapping::FieldPrimitive {
             column: column_id,
             lowering: lowering_index,
-            bijection,
             field_mask: stmt::PathFieldSet::from_iter([bit]),
             sub_projection,
         })
@@ -658,26 +641,9 @@ impl<'a, 'b> MapField<'a, 'b> {
         let bit = self.build.next_bit();
         let sub_projection = self.sub_projection(field_index);
 
-        // Build discriminant bijection
-        let disc_column = self.build.table.column(column_id);
-        let raw_disc_bijection = if disc_column.ty == embedded_enum.discriminant.ty {
-            mapping::Bijection::Identity
-        } else {
-            mapping::Bijection::Cast {
-                from: embedded_enum.discriminant.ty.clone(),
-                to: disc_column.ty.clone(),
-            }
-        };
-        let disc_nullable = disc_column.nullable;
-        let disc_field_bijection = if disc_nullable {
-            mapping::Bijection::Nullable(Box::new(raw_disc_bijection.clone()))
-        } else {
-            raw_disc_bijection.clone()
-        };
-
         let disc_proj = stmt::Expr::project(field_expr.clone(), stmt::Projection::single(0));
 
-        let variants: Vec<mapping::EnumVariant> = embedded_enum
+        let variants = embedded_enum
             .variants
             .iter()
             .enumerate()
@@ -704,42 +670,14 @@ impl<'a, 'b> MapField<'a, 'b> {
 
         let field_mask = stmt::PathFieldSet::from_iter([bit]);
 
-        // Build coproduct arms from the mapped variants
-        let coproduct_arms: Vec<mapping::CoproductArm> = variants
-            .iter()
-            .map(|v| {
-                let field_bijections: Vec<mapping::Bijection> = v
-                    .fields
-                    .iter()
-                    .filter_map(|f: &mapping::Field| f.bijection().cloned())
-                    .collect();
-                mapping::CoproductArm {
-                    discriminant_value: v.discriminant,
-                    body: mapping::Bijection::Product(field_bijections),
-                }
-            })
-            .collect();
-
-        let enum_bijection = mapping::Bijection::Coproduct {
-            discriminant: Box::new(raw_disc_bijection),
-            variants: coproduct_arms,
-        };
-        let enum_bijection = if disc_nullable {
-            mapping::Bijection::Nullable(Box::new(enum_bijection))
-        } else {
-            enum_bijection
-        };
-
         Ok(mapping::Field::Enum(mapping::FieldEnum {
             discriminant: mapping::FieldPrimitive {
                 column: column_id,
                 lowering: lowering_index,
-                bijection: disc_field_bijection,
                 field_mask: field_mask.clone(),
                 sub_projection: stmt::Projection::identity(),
             },
             variants,
-            bijection: enum_bijection,
             field_mask,
             sub_projection,
         }))
@@ -763,17 +701,9 @@ impl<'a, 'b> MapField<'a, 'b> {
             .iter()
             .fold(stmt::PathFieldSet::new(), |acc, f| acc | f.field_mask());
 
-        let bijection = mapping::Bijection::Product(
-            nested_fields
-                .iter()
-                .filter_map(|f| f.bijection().cloned())
-                .collect(),
-        );
-
         Ok(mapping::Field::Struct(mapping::FieldStruct {
             fields: nested_fields,
             columns,
-            bijection,
             field_mask,
             sub_projection,
         }))

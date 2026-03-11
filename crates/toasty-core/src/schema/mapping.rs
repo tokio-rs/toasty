@@ -1,6 +1,3 @@
-mod bijection;
-pub use bijection::{Bijection, CoproductArm, StorageOp};
-
 mod field;
 pub use field::{EnumVariant, Field, FieldEnum, FieldPrimitive, FieldRelation, FieldStruct};
 
