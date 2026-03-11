@@ -53,6 +53,11 @@ impl Schema {
         self.models.values()
     }
 
+    /// Try to get a model by ID, returning `None` if not found.
+    pub fn get_model(&self, id: impl Into<ModelId>) -> Option<&Model> {
+        self.models.get(&id.into())
+    }
+
     /// Get a model by ID
     pub fn model(&self, id: impl Into<ModelId>) -> &Model {
         self.models.get(&id.into()).expect("invalid model ID")
