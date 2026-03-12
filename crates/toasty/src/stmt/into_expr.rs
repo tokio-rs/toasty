@@ -354,6 +354,58 @@ impl_into_expr_for_tuple! {
     9 T9 E9
 }
 
+/// Implement `IntoExpr<[T]>` for homogeneous tuples so that e.g.
+/// `(Create, Create)` can be passed where `impl IntoExpr<[Model]>` is expected.
+macro_rules! impl_into_expr_list_for_tuple {
+    (! $( $n:tt $e:ident )* ) => {
+        impl<T, $( $e ),*> IntoExpr<[T]> for ($( $e, )*)
+        where
+            $( $e: IntoExpr<T>, )*
+        {
+            fn into_expr(self) -> Expr<[T]> {
+                Expr::from_untyped(stmt::Expr::list([
+                    $( self.$n.into_expr().untyped, )*
+                ]))
+            }
+
+            fn by_ref(&self) -> Expr<[T]> {
+                Expr::from_untyped(stmt::Expr::list([
+                    $( self.$n.by_ref().untyped, )*
+                ]))
+            }
+        }
+    };
+
+    (
+        ( $( $n_base:tt $e_base:ident )* )
+        $n:tt $e:ident
+        $( $rest:tt )*
+    ) => {
+        impl_into_expr_list_for_tuple!(! $( $n_base $e_base )* $n $e);
+
+        impl_into_expr_list_for_tuple!(
+            ( $( $n_base $e_base )* $n $e )
+            $( $rest )*
+        );
+    };
+
+    ( ( $( $n:tt $e:ident )* ) ) => {}
+}
+
+impl_into_expr_list_for_tuple! {
+    ()
+    0 E0
+    1 E1
+    2 E2
+    3 E3
+    4 E4
+    5 E5
+    6 E6
+    7 E7
+    8 E8
+    9 E9
+}
+
 #[test]
 fn assert_bounds() {
     fn assert_into_expr<T: ?Sized, E: IntoExpr<T>>() {}
@@ -363,4 +415,9 @@ fn assert_bounds() {
     assert_into_expr::<[(String, String)], &[(&String, &String)]>();
     assert_into_expr::<[(String, String)], [(&String, &String); 3]>();
     assert_into_expr::<[(String, String)], &[(&String, &String); 3]>();
+
+    // Tuples as batch expressions
+    assert_into_expr::<[i64], (i64,)>();
+    assert_into_expr::<[i64], (i64, i64)>();
+    assert_into_expr::<[i64], (i64, i64, i64)>();
 }
