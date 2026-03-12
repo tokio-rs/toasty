@@ -6,7 +6,7 @@ Toasty supports `#[default]` and `#[update]` field attributes for automatically 
 
 Provides a default value when creating a record. The field becomes optional in the create builder — if the user doesn't set it, the expression is used.
 
-```rust
+```rust,no_run
 #[derive(toasty::Model)]
 struct Post {
     #[key]
@@ -23,11 +23,11 @@ struct Post {
 }
 ```
 
-```rust
+```rust,ignore
 // view_count defaults to 0, created_at defaults to now()
 let post = Post::create()
     .title("Hello")
-    .exec(&db)
+    .exec(&mut db)
     .await?;
 
 assert_eq!(post.view_count, 0);
@@ -37,7 +37,7 @@ let post = Post::create()
     .title("Hello")
     .view_count(42)
     .created_at(some_past_timestamp)
-    .exec(&db)
+    .exec(&mut db)
     .await?;
 ```
 
@@ -47,7 +47,7 @@ The expression is evaluated at builder construction time (when `Model::create()`
 
 Automatically sets a value on every **create and update** operation. This is a superset of `#[default]` — a field with `#[update]` does not also need `#[default]`.
 
-```rust
+```rust,no_run
 #[derive(toasty::Model)]
 struct Post {
     #[key]
@@ -61,24 +61,24 @@ struct Post {
 }
 ```
 
-```rust
+```rust,ignore
 // On create: updated_at is set to now()
 let mut post = Post::create()
     .title("Hello")
-    .exec(&db)
+    .exec(&mut db)
     .await?;
 
 // On update: updated_at is automatically refreshed
 post.update()
     .title("Updated")
-    .exec(&db)
+    .exec(&mut db)
     .await?;
 
 // Explicit values still override the automatic value
 post.update()
     .title("Backdated")
     .updated_at(some_past_timestamp)
-    .exec(&db)
+    .exec(&mut db)
     .await?;
 ```
 
@@ -88,7 +88,7 @@ On create, the expression is evaluated at builder construction time. On update, 
 
 When both are present on the same field, `#[default]` controls the create-time value and `#[update]` controls the update-time value. On create, `#[default]` takes priority.
 
-```rust
+```rust,no_run
 #[derive(toasty::Model)]
 struct Post {
     #[key]
@@ -104,17 +104,17 @@ struct Post {
 }
 ```
 
-```rust
+```rust,ignore
 let mut post = Post::create()
     .title("Hello")
-    .exec(&db)
+    .exec(&mut db)
     .await?;
 
 assert_eq!(post.status, "draft");  // #[default] applied on create
 
 post.update()
     .title("Updated")
-    .exec(&db)
+    .exec(&mut db)
     .await?;
 
 assert_eq!(post.status, "edited"); // #[update] applied on update
@@ -127,7 +127,7 @@ As a shorthand, `#[auto]` is extended for well-known timestamp field names:
 - `created_at` with `#[auto]` is equivalent to `#[default(jiff::Timestamp::now())]`
 - `updated_at` with `#[auto]` is equivalent to `#[update(jiff::Timestamp::now())]`
 
-```rust
+```rust,no_run
 #[derive(toasty::Model)]
 struct Post {
     #[key]

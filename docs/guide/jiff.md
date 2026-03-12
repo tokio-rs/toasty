@@ -22,7 +22,7 @@ Toasty supports five jiff temporal types:
 
 `jiff::Timestamp` represents an instant in time (number of nanoseconds since the Unix epoch). This is the recommended type for storing UTC timestamps.
 
-```rust
+```rust,no_run
 use jiff::Timestamp;
 
 #[derive(toasty::Model)]
@@ -44,7 +44,7 @@ struct Event {
 
 `jiff::Zoned` represents a timezone-aware instant in time.
 
-```rust
+```rust,no_run
 use jiff::Zoned;
 
 #[derive(toasty::Model)]
@@ -66,7 +66,7 @@ struct Appointment {
 
 `jiff::civil::Date` represents a calendar date without time or timezone information.
 
-```rust
+```rust,no_run
 use jiff::civil::Date;
 
 #[derive(toasty::Model)]
@@ -88,7 +88,7 @@ struct Person {
 
 `jiff::civil::Time` represents a time of day without date or timezone information.
 
-```rust
+```rust,no_run
 use jiff::civil::Time;
 
 #[derive(toasty::Model)]
@@ -110,7 +110,7 @@ struct Schedule {
 
 `jiff::civil::DateTime` represents a calendar date and time without timezone information.
 
-```rust
+```rust,no_run
 use jiff::civil::DateTime;
 
 #[derive(toasty::Model)]
@@ -134,7 +134,7 @@ struct Meeting {
 
 PostgreSQL and MySQL support temporal types with a maximum precision of **6 decimal places (microseconds)**. When storing jiff values (which support nanosecond precision), the fractional seconds are truncated to microseconds:
 
-```rust
+```rust,no_run
 use jiff::civil::Time;
 
 // This value has nanosecond precision
@@ -149,7 +149,7 @@ let time = Time::constant(14, 30, 45, 123_456_789);
 
 You can specify a different precision using the `#[column]` attribute:
 
-```rust
+```rust,no_run
 use jiff::Timestamp;
 
 #[derive(toasty::Model)]
@@ -170,7 +170,7 @@ Valid precision values are 0-6 for PostgreSQL and MySQL. Higher precision values
 
 If you need to preserve full nanosecond precision on PostgreSQL or MySQL, you can override the storage type to use TEXT:
 
-```rust
+```rust,no_run
 use jiff::Timestamp;
 
 #[derive(toasty::Model)]
@@ -215,7 +215,7 @@ MySQL's `TIMESTAMP` type only supports dates from 1970-01-01 00:00:01 UTC to 203
 
 ## Example: Complete Model
 
-```rust
+```rust,no_run
 use jiff::{Timestamp, Zoned};
 use jiff::civil::{Date, Time, DateTime};
 
