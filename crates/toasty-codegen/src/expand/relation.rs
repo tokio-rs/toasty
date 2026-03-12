@@ -154,6 +154,18 @@ impl Expand<'_> {
                     ManyField { path }
                 }
 
+                /// Filter the parent model by a condition on the associated
+                /// (child) model. Returns `true` when **any** associated record
+                /// satisfies `filter`.
+                ///
+                /// ```ignore
+                /// // Find users who have at least one incomplete todo
+                /// User::filter(User::fields().todos().any(Todo::fields().complete().eq(false)))
+                /// ```
+                #vis fn any(self, filter: #toasty::stmt::Expr<bool>) -> #toasty::stmt::Expr<bool> {
+                    self.path.any(filter)
+                }
+
                 #many_field_association_methods
             }
 

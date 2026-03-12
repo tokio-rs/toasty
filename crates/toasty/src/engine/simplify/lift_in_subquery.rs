@@ -1,6 +1,6 @@
 use super::Simplify;
 use toasty_core::{
-    schema::app::{BelongsTo, FieldId, FieldTy, HasOne},
+    schema::app::{BelongsTo, FieldId, FieldTy, HasMany, HasOne},
     stmt::{self, Visit},
 };
 
@@ -33,10 +33,11 @@ impl Simplify<'_> {
             }
         };
 
-        // If the field is not a belongs_to relation, abort
+        // If the field is not a relation, abort
         let mut maybe_expr = match &field.ty {
             FieldTy::BelongsTo(belongs_to) => self.lift_belongs_to_in_subquery(belongs_to, query),
             FieldTy::HasOne(has_one) => self.lift_has_one_in_subquery(has_one, query),
+            FieldTy::HasMany(has_many) => self.lift_has_many_in_subquery(has_many, query),
             _ => {
                 return None;
             }
@@ -128,6 +129,51 @@ impl Simplify<'_> {
                 .into()
             })
         }
+    }
+
+    /// Rewrite a `HasMany` in-subquery into a foreign-key–based `IN` subquery.
+    ///
+    /// Transforms:
+    /// ```sql
+    /// -- Original (conceptual): parent's has_many path IN child query
+    /// User.todos IN (SELECT * FROM Todo WHERE complete = false)
+    ///
+    /// -- Rewritten:
+    /// User.id IN (SELECT Todo.user_id FROM Todo WHERE complete = false)
+    /// ```
+    fn lift_has_many_in_subquery(
+        &self,
+        has_many: &HasMany,
+        query: &stmt::Query,
+    ) -> Option<stmt::Expr> {
+        if has_many.target != query.body.as_select_unwrap().source.model_id_unwrap() {
+            return None;
+        }
+
+        let pair = has_many.pair(&self.schema().app);
+
+        // Build: `self.<pk_field> IN (SELECT child.<fk_field> FROM Child WHERE ...)`
+        let (self_field, child_field) = match &pair.foreign_key.fields[..] {
+            [fk_field] => (fk_field.target, fk_field.source),
+            _ => todo!("composite keys"),
+        };
+
+        let mut subquery = query.clone();
+
+        match &mut subquery.body {
+            stmt::ExprSet::Select(select) => {
+                select.returning = stmt::Returning::Expr(stmt::Expr::ref_self_field(child_field));
+            }
+            _ => todo!(),
+        }
+
+        Some(
+            stmt::ExprInSubquery {
+                expr: Box::new(stmt::Expr::ref_self_field(self_field)),
+                query: Box::new(subquery),
+            }
+            .into(),
+        )
     }
 
     /// Rewrite the `HasOne` in subquery expression to reference the foreign key.
