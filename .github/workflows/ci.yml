@@ -60,6 +60,8 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: cargo test
         run: cargo test --workspace --no-default-features --features sqlite
+      - name: doc-tests
+        run: cargo test -p tests --doc
 
     test-mysql:
         needs: check
