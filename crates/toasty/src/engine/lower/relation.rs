@@ -662,12 +662,7 @@ impl RelationSource for UpdateRelationSource<'_> {
             todo!()
         };
 
-        assert!(
-            record.fields[position].is_value_null(),
-            "TODO: probably need to merge instead of overwrite; field={field:#?}; expr={expr:#?}; self={self:#?}"
-        );
-
-        record.fields[position] = expr;
+        set_returning_slot(record, position, expr);
     }
 }
 
@@ -696,26 +691,24 @@ impl RelationSource for InsertRelationSource<'_> {
     }
 
     fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr) {
-        match self.returning {
-            Some(stmt::Returning::Expr(stmt::Expr::Record(record))) => {
-                assert!(
-                    record.fields[field.index].is_value_null(),
-                    "TODO: probably need to merge instead of overwrite; actual={:#?}",
-                    record.fields[field.index]
-                );
-                record.fields[field.index] = expr;
-            }
+        let record = match self.returning {
+            Some(stmt::Returning::Expr(stmt::Expr::Record(record))) => record,
             Some(stmt::Returning::Value(stmt::Expr::List(rows))) => {
-                let record = &mut rows.items[self.index].as_record_mut();
-
-                assert!(
-                    record.fields[field.index].is_value_null(),
-                    "TODO: probably need to merge instead of overwrite; actual={:#?}",
-                    record.fields[field.index]
-                );
-                record.fields[field.index] = expr;
+                rows.items[self.index].as_record_mut()
             }
+            Some(stmt::Returning::Value(stmt::Expr::Record(record))) => record,
             _ => todo!("InsertRelationSource={self:#?}"),
-        }
+        };
+
+        set_returning_slot(record, field.index, expr);
     }
+}
+
+fn set_returning_slot(record: &mut stmt::ExprRecord, index: usize, expr: stmt::Expr) {
+    assert!(
+        record.fields[index].is_value_null(),
+        "TODO: probably need to merge instead of overwrite; actual={:#?}",
+        record.fields[index]
+    );
+    record.fields[index] = expr;
 }
