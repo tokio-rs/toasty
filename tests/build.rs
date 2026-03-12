@@ -100,7 +100,7 @@ fn extract_testable_rust_blocks(content: &str) -> Vec<String> {
         match event {
             Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(info))) => {
                 let annotations: Vec<&str> = info.split(',').map(|s| s.trim()).collect();
-                let is_rust = annotations.first().map_or(false, |a| *a == "rust");
+                let is_rust = annotations.first().is_some_and(|a| *a == "rust");
                 let should_skip = annotations.iter().any(|a| skip.contains(a));
 
                 if is_rust && !should_skip {
