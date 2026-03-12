@@ -13,16 +13,16 @@ use toasty::{Model, Page};
 
 // Get the first page of posts
 let page: Page<Post> = Post::all()
-    .order_by(Post::FIELDS.created_at().desc())
+    .order_by(Post::fields().created_at().desc())
     .paginate(10)
-    .collect(&db)
+    .collect(&mut db)
     .await?;
 
 // The page contains items and navigation cursors
 println!("Found {} posts", page.len());
 
 // Navigate to next page using convenience method
-if let Some(next_page) = page.next(&db).await? {
+if let Some(next_page) = page.next(&mut db).await? {
     process_posts(&next_page.items);
 }
 ```
@@ -32,6 +32,8 @@ if let Some(next_page) = page.next(&db).await? {
 Paginated queries return a `Page<T>` struct containing the results and navigation cursors:
 
 ```rust
+use toasty::Executor;
+
 pub struct Page<T> {
     pub items: Vec<T>,                     // The page results
     pub next_cursor: Option<stmt::Expr>,   // Navigate forward (None = last page)
@@ -39,8 +41,8 @@ pub struct Page<T> {
 }
 
 impl<T> Page<T> {
-    pub async fn next(&self, db: &Db) -> Result<Option<Page<T>>>;
-    pub async fn prev(&self, db: &Db) -> Result<Option<Page<T>>>;
+    pub async fn next(&self, executor: &mut dyn Executor) -> Result<Option<Page<T>>>;
+    pub async fn prev(&self, executor: &mut dyn Executor) -> Result<Option<Page<T>>>;
     pub fn has_next(&self) -> bool;
     pub fn has_prev(&self) -> bool;
 }
@@ -60,30 +62,30 @@ The most common pagination pattern - moving forward through results:
 ```rust
 // Using Page's convenience method
 let mut current_page = Post::all()
-    .order_by(Post::FIELDS.created_at().desc())
+    .order_by(Post::fields().created_at().desc())
     .paginate(10)
-    .collect(&db)
+    .collect(&mut db)
     .await?;
 
 // Continue through pages
-while let Some(next_page) = current_page.next(&db).await? {
+while let Some(next_page) = current_page.next(&mut db).await? {
     process_posts(&next_page.items);
     current_page = next_page;
 }
 
 // Or manually using .after()
 let page = Post::all()
-    .order_by(Post::FIELDS.created_at().desc())
+    .order_by(Post::fields().created_at().desc())
     .paginate(10)
-    .collect(&db)
+    .collect(&mut db)
     .await?;
 
 if let Some(next_cursor) = page.next_cursor {
     let next_page = Post::all()
-        .order_by(Post::FIELDS.created_at().desc())
+        .order_by(Post::fields().created_at().desc())
         .paginate(10)
         .after(next_cursor)
-        .collect(&db)
+        .collect(&mut db)
         .await?;
 }
 ```
@@ -94,17 +96,17 @@ Moving backward through pages (useful for "Previous Page" functionality):
 
 ```rust
 // Navigate backward using Page's convenience method
-if let Some(prev_page) = page.prev(&db).await? {
+if let Some(prev_page) = page.prev(&mut db).await? {
     process_posts(&prev_page.items);
 }
 
 // Or manually using .before()
 if let Some(prev_cursor) = page.prev_cursor {
     let prev_page = Post::all()
-        .order_by(Post::FIELDS.created_at().desc())
+        .order_by(Post::fields().created_at().desc())
         .paginate(10)
         .before(prev_cursor)
-        .collect(&db)
+        .collect(&mut db)
         .await?;
 }
 ```
@@ -127,14 +129,14 @@ struct PostsResponse {
 
 #[get("/posts?<cursor>&<limit>")]
 async fn list_posts(
-    db: &Db,
+    db: &mut Db,
     cursor: Option<String>,
     limit: Option<usize>
 ) -> Result<Json<PostsResponse>> {
     let page_size = limit.unwrap_or(10).min(100); // Cap at 100
 
     let mut query = Post::all()
-        .order_by(Post::FIELDS.created_at().desc())
+        .order_by(Post::fields().created_at().desc())
         .paginate(page_size);
 
     // Deserialize cursor at application level
@@ -143,7 +145,7 @@ async fn list_posts(
         query = query.after(cursor);
     }
 
-    let page = query.collect(&db).await?;
+    let page = query.collect(db).await?;
 
     Ok(Json(PostsResponse {
         posts: page.items,
@@ -153,13 +155,13 @@ async fn list_posts(
 
 // Application-level serialization helpers (implement as needed)
 fn serialize_cursor(expr: &stmt::Expr) -> String {
-    // Serialize stmt::Expr to base64 or other format
-    todo!()
+    // Example placeholder: use your app's encoding format (base64, signed token, etc.).
+    unimplemented!("application-specific cursor serialization")
 }
 
 fn deserialize_cursor(token: &str) -> Result<stmt::Expr> {
-    // Deserialize from base64 or other format
-    todo!()
+    // Example placeholder: decode token format used by serialize_cursor.
+    unimplemented!("application-specific cursor deserialization")
 }
 ```
 
@@ -172,21 +174,22 @@ Pagination requires an explicit `ORDER BY` clause to ensure consistent results:
 ```rust
 // ✅ Correct - explicit ordering
 let page = Post::all()
-    .order_by(Post::FIELDS.created_at().desc())
+    .order_by(Post::fields().created_at().desc())
     .paginate(10)
-    .collect(&db)
+    .collect(&mut db)
     .await?;
 
 // ❌ Will panic - no ordering specified
 let page = Post::all()
     .paginate(10)  // Error: pagination requires ordering
-    .collect(&db)
+    .collect(&mut db)
     .await?;
 ```
 
 ### Multi-Column Ordering
 
-**⚠️ Work in Progress** - Referenced in [roadmap/order_limit_pagination.md](../roadmap/order_limit_pagination.md)
+Open gap tracked in
+[roadmap/order_limit_pagination.md](../roadmap/order_limit_pagination.md).
 
 For complex sorting, you can order by multiple columns:
 
@@ -195,22 +198,22 @@ For complex sorting, you can order by multiple columns:
 use toasty::stmt::OrderBy;
 
 let order = OrderBy::from([
-    Post::FIELDS.status().asc(),
-    Post::FIELDS.created_at().desc(),
+    Post::fields().status().asc(),
+    Post::fields().created_at().desc(),
 ]);
 
 let page = Post::all()
     .order_by(order)
     .paginate(10)
-    .collect(&db)
+    .collect(&mut db)
     .await?;
 
 // Future: Chain multiple order_by calls
 let page = Post::all()
-    .order_by(Post::FIELDS.status().asc())
-    .then_by(Post::FIELDS.created_at().desc())  // ⚠️ Not yet implemented
+    .order_by(Post::fields().status().asc())
+    .then_by(Post::fields().created_at().desc())  // ⚠️ Not yet implemented
     .paginate(10)
-    .collect(&db)
+    .collect(&mut db)
     .await?;
 ```
 
@@ -248,17 +251,18 @@ For SQL databases (PostgreSQL, MySQL, SQLite), Toasty generates efficient keyset
 
 ### DynamoDB
 
-**⚠️ Work in Progress** - Referenced in [roadmap/order_limit_pagination.md](../roadmap/order_limit_pagination.md)
+Open gap tracked in
+[roadmap/order_limit_pagination.md](../roadmap/order_limit_pagination.md).
 
 For DynamoDB, Toasty maps cursors to DynamoDB's native `LastEvaluatedKey` pagination:
 
 ```rust
 // Toasty cursor seamlessly becomes DynamoDB ExclusiveStartKey
 let page = User::all()
-    .order_by(User::FIELDS.created_at().desc())  // Uses GSI if needed
+    .order_by(User::fields().created_at().desc())  // Uses GSI if needed
     .paginate(10)
     .after(cursor)  // Becomes ExclusiveStartKey internally
-    .collect(&db)
+    .collect(&mut db)
     .await?;
 ```
 
@@ -272,11 +276,11 @@ Common pattern for web applications:
 use toasty::stmt;
 
 async fn load_more_posts(
-    db: &Db,
+    db: &mut Db,
     last_cursor: Option<stmt::Expr>
 ) -> Result<Page<Post>> {
     let mut query = Post::all()
-        .order_by(Post::FIELDS.created_at().desc())
+        .order_by(Post::fields().created_at().desc())
         .paginate(20);
 
     if let Some(cursor) = last_cursor {
@@ -301,10 +305,10 @@ struct PageNavigator {
 }
 
 impl PageNavigator {
-    pub async fn goto_page(&mut self, page_num: usize, db: &Db) -> Result<Page<Post>> {
+    pub async fn goto_page(&mut self, page_num: usize, db: &mut Db) -> Result<Page<Post>> {
         // Implementation would maintain cursor history
         // and navigate to requested page
-        todo!()
+        unimplemented!("application-specific cursor bookkeeping")
     }
 }
 ```
@@ -314,7 +318,6 @@ impl PageNavigator {
 See [roadmap/order_limit_pagination.md](../roadmap/order_limit_pagination.md) for the complete list of remaining features:
 
 - **Multi-column ordering** (`.then_by()` chaining) - workaround exists using `OrderBy::from([...])`
-- **Direct `.limit()` method** - for non-paginated queries
 - **`.last()` convenience method**
 
 **Note:** Cursor serialization is intentionally left to the application level, allowing flexibility in how cursors are encoded/transmitted.
@@ -329,11 +332,11 @@ Ensure deterministic ordering by including a unique field (usually ID) as a tie-
 // ✅ Good - includes unique ID for tie-breaking
 let page = Post::all()
     .order_by([
-        Post::FIELDS.score().desc(),
-        Post::FIELDS.id().asc(),  // Tie-breaker
+        Post::fields().score().desc(),
+        Post::fields().id().asc(),  // Tie-breaker
     ])
     .paginate(10)
-    .collect(&db)
+    .collect(&mut db)
     .await?;
 ```
 
