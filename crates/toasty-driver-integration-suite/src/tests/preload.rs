@@ -1131,7 +1131,6 @@ pub async fn nested_has_many_then_belongs_to_required(test: &mut Test) -> Result
 
 // ===== HasMany -> BelongsTo<Option<T>> =====
 // Team has_many Tasks, each Task optionally belongs_to an Assignee
-#[ignore] // TODO: nested preload panics with type mismatch for HasMany -> BelongsTo<Option<T>>
 #[driver_test(id(ID))]
 pub async fn nested_has_many_then_belongs_to_optional(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -1217,7 +1216,6 @@ pub async fn nested_has_many_then_belongs_to_optional(test: &mut Test) -> Result
 
 // ===== HasOne<Option<T>> -> HasMany =====
 // User has_one optional Profile, Profile has_many Badges
-#[ignore] // TODO: nested preload panics with type mismatch for HasOne<Option<T>> -> HasMany
 #[driver_test(id(ID))]
 pub async fn nested_has_one_optional_then_has_many(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -1313,7 +1311,6 @@ pub async fn nested_has_one_optional_then_has_many(test: &mut Test) -> Result<()
 
 // ===== HasOne<T> (required) -> HasMany =====
 // Order has_one required Invoice, Invoice has_many LineItems
-#[ignore] // TODO: nested preload panics with type mismatch for HasOne<T> -> HasMany
 #[driver_test(id(ID))]
 pub async fn nested_has_one_required_then_has_many(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -1398,7 +1395,6 @@ pub async fn nested_has_one_required_then_has_many(test: &mut Test) -> Result<()
 
 // ===== HasOne<Option<T>> -> HasOne<Option<T>> =====
 // User has_one optional Profile, Profile has_one optional Avatar
-#[ignore] // TODO: nested preload panics with type mismatch for HasOne<Option<T>> -> HasOne<Option<T>>
 #[driver_test(id(ID))]
 pub async fn nested_has_one_optional_then_has_one_optional(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -1503,7 +1499,6 @@ pub async fn nested_has_one_optional_then_has_one_optional(test: &mut Test) -> R
 
 // ===== HasOne<T> (required) -> HasOne<T> (required) =====
 // User has_one required Profile, Profile has_one required Avatar
-#[ignore] // TODO: nested preload panics with type mismatch for HasOne<T> -> HasOne<T>
 #[driver_test(id(ID))]
 pub async fn nested_has_one_required_then_has_one_required(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -1748,7 +1743,6 @@ pub async fn nested_belongs_to_required_then_has_many(test: &mut Test) -> Result
 
 // ===== BelongsTo<T> (required) -> HasOne<Option<T>> =====
 // Todo belongs_to a User, User has_one optional Profile
-#[ignore] // TODO: nested preload panics with type mismatch for BelongsTo<T> -> HasOne<Option<T>>
 #[driver_test(id(ID))]
 pub async fn nested_belongs_to_required_then_has_one_optional(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -2026,7 +2020,6 @@ pub async fn nested_belongs_to_optional_then_has_many(test: &mut Test) -> Result
 
 // ===== BelongsTo<Option<T>> -> BelongsTo<Option<T>> =====
 // Comment optionally belongs_to a Post, Post optionally belongs_to a Category
-#[ignore] // TODO: nested preload panics with type mismatch for BelongsTo<Option<T>> -> BelongsTo<Option<T>>
 #[driver_test(id(ID))]
 pub async fn nested_belongs_to_optional_then_belongs_to_optional(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
