@@ -275,7 +275,7 @@ pub async fn batch_creates_from_array(t: &mut Test) -> Result<()> {
     let mut db = t.setup_db(models!(User)).await;
 
     t.log().clear();
-    let users: Vec<User> = toasty::batch([
+    let users = toasty::batch([
         User::create().name("Alice"),
         User::create().name("Bob"),
         User::create().name("Carol"),
@@ -331,7 +331,7 @@ pub async fn batch_creates_from_vec(t: &mut Test) -> Result<()> {
     let builders: Vec<_> = names.iter().map(|n| User::create().name(*n)).collect();
 
     t.log().clear();
-    let users: Vec<User> = toasty::batch(builders).exec(&mut db).await?;
+    let users = toasty::batch(builders).exec(&mut db).await?;
 
     assert_eq!(users.len(), 3);
     for (user, expected) in users.iter().zip(&names) {
