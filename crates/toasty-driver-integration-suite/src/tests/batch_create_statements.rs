@@ -283,10 +283,7 @@ pub async fn batch_creates_from_array(t: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await?;
 
-    assert_eq!(users.len(), 3);
-    assert_eq!(users[0].name, "Alice");
-    assert_eq!(users[1].name, "Bob");
-    assert_eq!(users[2].name, "Carol");
+    assert_struct!(users, [_ { name: "Alice" }, _ { name: "Bob" }, _ { name: "Carol" }]);
 
     // Three independent creates → transaction-wrapped
     assert_struct!(
@@ -333,10 +330,7 @@ pub async fn batch_creates_from_vec(t: &mut Test) -> Result<()> {
     t.log().clear();
     let users = toasty::batch(builders).exec(&mut db).await?;
 
-    assert_eq!(users.len(), 3);
-    for (user, expected) in users.iter().zip(&names) {
-        assert_eq!(user.name, *expected);
-    }
+    assert_struct!(users, [_ { name: "Alice" }, _ { name: "Bob" }, _ { name: "Carol" }]);
 
     // Three independent creates → transaction-wrapped
     assert_struct!(
