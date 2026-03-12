@@ -968,7 +968,6 @@ pub async fn nested_has_many_then_has_one_optional(test: &mut Test) -> Result<()
 
 // ===== HasMany -> HasOne<T> (required) =====
 // User has_many Accounts, each Account has_one required Settings
-#[ignore] // TODO: nested preload panics with type mismatch for HasMany -> HasOne<T>
 #[driver_test(id(ID))]
 pub async fn nested_has_many_then_has_one_required(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
