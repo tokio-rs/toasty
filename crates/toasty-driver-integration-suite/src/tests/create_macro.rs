@@ -14,9 +14,7 @@ pub async fn create_macro_simple(test: &mut Test) -> Result<()> {
     let mut db = test.setup_db(models!(User)).await;
 
     // Create using the macro — translates to: User::create().name("Carl")
-    let user = toasty::create!(User, { name: "Carl" })
-        .exec(&mut db)
-        .await?;
+    let user = toasty::create!(User { name: "Carl" }).exec(&mut db).await?;
 
     assert_eq!(user.name, "Carl");
 
@@ -42,9 +40,12 @@ pub async fn create_macro_multiple_fields(test: &mut Test) -> Result<()> {
     let mut db = test.setup_db(models!(User)).await;
 
     // Create with multiple fields
-    let user = toasty::create!(User, { name: "Carl", email: "carl@example.com" })
-        .exec(&mut db)
-        .await?;
+    let user = toasty::create!(User {
+        name: "Carl",
+        email: "carl@example.com"
+    })
+    .exec(&mut db)
+    .await?;
 
     assert_eq!(user.name, "Carl");
     assert_eq!(user.email, "carl@example.com");
@@ -68,7 +69,7 @@ pub async fn create_macro_with_variable(test: &mut Test) -> Result<()> {
     let name = "Carl";
 
     // Value can be a variable expression
-    let user = toasty::create!(User, { name: name }).exec(&mut db).await?;
+    let user = toasty::create!(User { name: name }).exec(&mut db).await?;
 
     assert_eq!(user.name, "Carl");
 
@@ -107,7 +108,7 @@ pub async fn create_macro_scoped(test: &mut Test) -> Result<()> {
     let user = User::create().exec(&mut db).await?;
 
     // Scoped create — translates to: user.todos().create().title("get something done")
-    let todo = toasty::create!(user.todos(), { title: "get something done" })
+    let todo = toasty::create!(in user.todos() { title: "get something done" })
         .exec(&mut db)
         .await?;
 
@@ -130,19 +131,16 @@ pub async fn create_macro_batch(test: &mut Test) -> Result<()> {
 
     let mut db = test.setup_db(models!(User)).await;
 
-    // Batch create — translates to:
-    // User::create_many()
-    //     .item(User::create().name("Carl"))
-    //     .item(User::create().name("Bob"))
-    let users = toasty::create!(User, [{ name: "Carl" }, { name: "Bob" }])
-        .exec(&mut db)
-        .await?;
+    // Same-type batch — produces a tuple of builders, composed via toasty::batch()
+    let (carl, bob) = toasty::batch(toasty::create!(User::[
+        { name: "Carl" },
+        { name: "Bob" },
+    ]))
+    .exec(&mut db)
+    .await?;
 
-    assert_eq!(users.len(), 2);
-
-    let names: Vec<&str> = users.iter().map(|u| u.name.as_str()).collect();
-    assert!(names.contains(&"Carl"));
-    assert!(names.contains(&"Bob"));
+    assert_eq!(carl.name, "Carl");
+    assert_eq!(bob.name, "Bob");
 
     Ok(())
 }
@@ -179,8 +177,7 @@ pub async fn create_macro_nested_association(test: &mut Test) -> Result<()> {
     let mut db = test.setup_db(models!(User, Todo)).await;
 
     // Nested association — no type prefix needed; type inferred from field.
-    // Translates to: User::create().name("Carl").with_todos(|b| b.item(|b| b.title("...")))
-    let user = toasty::create!(User, {
+    let user = toasty::create!(User {
         name: "Carl",
         todos: [{ title: "get something done" }]
     })
@@ -227,9 +224,8 @@ pub async fn create_macro_nested_multiple(test: &mut Test) -> Result<()> {
 
     let mut db = test.setup_db(models!(User, Todo)).await;
 
-    // Multiple nested associations — no type prefix needed.
-    // Translates to: User::create().name("Carl").with_todos(|b| b.item(...).item(...))
-    let user = toasty::create!(User, {
+    // Multiple nested associations
+    let user = toasty::create!(User {
         name: "Carl",
         todos: [{ title: "first" }, { title: "second" }]
     })
@@ -279,9 +275,8 @@ pub async fn create_macro_with_belongs_to(test: &mut Test) -> Result<()> {
 
     let mut db = test.setup_db(models!(User, Todo)).await;
 
-    // Create a todo with an inline belongs_to user — no type prefix needed.
-    // Translates to: Todo::create().title("buy milk").with_user(|b| b.name("Carl"))
-    let todo = toasty::create!(Todo, {
+    // Create a todo with an inline belongs_to user
+    let todo = toasty::create!(Todo {
         title: "buy milk",
         user: { name: "Carl" }
     })
@@ -347,7 +342,7 @@ pub async fn create_macro_deeply_nested(test: &mut Test) -> Result<()> {
     let mut db = test.setup_db(models!(User, Todo, Tag)).await;
 
     // Three levels deep: User → Todo → Tag
-    let user = toasty::create!(User, {
+    let user = toasty::create!(User {
         name: "Carl",
         todos: [{
             title: "get something done",
