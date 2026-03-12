@@ -382,8 +382,13 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         batch_load_index.set(Some(batch_load_table_ref_index));
                     } else if let Some(row) = insert_row {
                         debug_assert!(target_stmt_info.stmt().is_insert());
-                        debug_assert!(batch_load_index.get().is_none());
-                        batch_load_index.set(Some(row));
+                        // batch_load_index may already be set during lowering
+                        // (when the parent INSERT's row index was captured via
+                        // scope_statement). In that case, the lowering value is
+                        // the correct parent row index; don't overwrite it.
+                        if batch_load_index.get().is_none() {
+                            batch_load_index.set(Some(row));
+                        }
                     } else {
                         debug_assert!(
                             batch_load_index.get().is_some(),
