@@ -5,7 +5,7 @@ pub(crate) use value::Value;
 
 use mysql_async::{
     prelude::{Queryable, ToValue},
-    Conn, OptsBuilder, Pool,
+    Conn, OptsBuilder,
 };
 use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
@@ -54,12 +54,7 @@ impl MySQL {
             .map_err(toasty_core::Error::driver_operation_failed)?;
         let opts = mysql_async::OptsBuilder::from_opts(opts).client_found_rows(true);
 
-        let pool = Pool::new(opts.clone());
-        Ok(Self {
-            url: url_str,
-            pool,
-            opts,
-        })
+        Ok(Self { url: url_str, opts })
     }
 }
 

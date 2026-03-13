@@ -132,6 +132,27 @@ impl<T: ?Sized> Path<T> {
     }
 }
 
+impl<T> Path<[T]> {
+    /// Build an `IN subquery` expression that tests whether **any** associated
+    /// record satisfies `filter`.
+    ///
+    /// The path must point to a `HasMany` (or similar collection) field on the
+    /// parent model. The returned expression can be used as a filter on the
+    /// parent query.
+    pub fn any(self, filter: Expr<bool>) -> Expr<bool>
+    where
+        T: super::Model,
+    {
+        // Build a query on the child model filtered by `filter`
+        let child_query = super::Select::<T>::filter(filter);
+
+        Expr {
+            untyped: stmt::Expr::in_subquery(self.untyped.into_stmt(), child_query.untyped),
+            _p: PhantomData,
+        }
+    }
+}
+
 impl<T> Path<Option<T>> {
     pub fn is_none(self) -> Expr<bool> {
         Expr {
