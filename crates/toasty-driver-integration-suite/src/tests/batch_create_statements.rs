@@ -260,3 +260,100 @@ pub async fn batch_create_query_create(t: &mut Test) -> Result<()> {
 
     Ok(())
 }
+
+/// Batch creates via an array of create builders.
+#[driver_test(id(ID), requires(sql))]
+pub async fn batch_creates_from_array(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+        name: String,
+    }
+
+    let mut db = t.setup_db(models!(User)).await;
+
+    t.log().clear();
+    let users = toasty::batch([
+        User::create().name("Alice"),
+        User::create().name("Bob"),
+        User::create().name("Carol"),
+    ])
+    .exec(&mut db)
+    .await?;
+
+    assert_struct!(users, [{ name: "Alice" }, { name: "Bob" }, { name: "Carol" }]);
+
+    // Three independent creates → transaction-wrapped
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Start {
+            isolation: None,
+            read_only: false
+        })
+    );
+    for _ in 0..3 {
+        assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
+            stmt: Statement::Insert(_),
+            ..
+        }));
+    }
+    assert!(t.log().pop_op().is_transaction_commit());
+    assert!(t.log().is_empty());
+
+    // Verify all were persisted
+    for user in &users {
+        let found = User::get_by_id(&mut db, user.id).await?;
+        assert_eq!(found.name, user.name);
+    }
+
+    Ok(())
+}
+
+/// Batch creates via a Vec of create builders.
+#[driver_test(id(ID), requires(sql))]
+pub async fn batch_creates_from_vec(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+        name: String,
+    }
+
+    let mut db = t.setup_db(models!(User)).await;
+
+    let names = ["Alice", "Bob", "Carol"];
+    let builders: Vec<_> = names.iter().map(|n| User::create().name(*n)).collect();
+
+    t.log().clear();
+    let users = toasty::batch(builders).exec(&mut db).await?;
+
+    assert_struct!(users, [{ name: "Alice" }, { name: "Bob" }, { name: "Carol" }]);
+
+    // Three independent creates → transaction-wrapped
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Start {
+            isolation: None,
+            read_only: false
+        })
+    );
+    for _ in 0..3 {
+        assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
+            stmt: Statement::Insert(_),
+            ..
+        }));
+    }
+    assert!(t.log().pop_op().is_transaction_commit());
+    assert!(t.log().is_empty());
+
+    // Verify all were persisted
+    for user in &users {
+        let found = User::get_by_id(&mut db, user.id).await?;
+        assert_eq!(found.name, user.name);
+    }
+
+    Ok(())
+}
