@@ -51,7 +51,7 @@ impl Builder {
         let engine = Engine::new(Arc::new(schema), capability);
         let pool = Pool::new(driver, engine.clone())?;
 
-        // see if we're able to get a valid connection
+        // see if we're able to acquire a valid connection
         let conn = pool.get().await?;
         std::mem::drop(conn);
 
