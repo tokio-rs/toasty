@@ -8,7 +8,7 @@ Transactions work with all SQL backends (SQLite, PostgreSQL, MySQL). They are no
 
 Start a transaction from a `Db` handle, perform operations, and then commit or roll back:
 
-```rust
+```rust,ignore
 let mut tx = db.transaction().await?;
 
 User::create().name("Alice").exec(&mut tx).await?;
@@ -19,7 +19,7 @@ tx.commit().await?;
 
 If something goes wrong, roll back explicitly:
 
-```rust
+```rust,ignore
 let mut tx = db.transaction().await?;
 
 User::create().name("Alice").exec(&mut tx).await?;
@@ -32,7 +32,7 @@ tx.rollback().await?;
 
 If a `Transaction` is dropped without calling `commit()` or `rollback()`, it automatically rolls back. This means you don't need to handle rollback manually in error paths:
 
-```rust
+```rust,ignore
 {
     let mut tx = db.transaction().await?;
     User::create().name("Alice").exec(&mut tx).await?;
@@ -42,7 +42,7 @@ If a `Transaction` is dropped without calling `commit()` or `rollback()`, it aut
 
 This is especially useful with the `?` operator. If any operation inside the transaction returns an error, the transaction goes out of scope and rolls back:
 
-```rust
+```rust,ignore
 async fn transfer(db: &mut Db) -> toasty::Result<()> {
     let mut tx = db.transaction().await?;
 
@@ -59,7 +59,7 @@ async fn transfer(db: &mut Db) -> toasty::Result<()> {
 
 If you want to create a function that is generic over whether `Db`s and `Transaction`s you can use the `toasty::Executor` trait which is implemented for both.
 
-```rust
+```rust,ignore
 async fn create_user(executor: &mut dyn toasty::Executor, name: &str) -> toasty::Result<User> {
     User::create().name(name).exec(executor).await
 }
@@ -77,7 +77,7 @@ tx.commit().await?;
 
 Calling `.transaction()` on an existing `Transaction` creates a nested transaction, implemented under the hood using database savepoints. Rolling back a nested transaction discards only its changes — the outer transaction can still commit its own work:
 
-```rust
+```rust,ignore
 let mut tx = db.transaction().await?;
 User::create().name("Alice").exec(&mut tx).await?;
 
@@ -96,7 +96,7 @@ Nested transactions also support automatic rollback on drop, just like top-level
 
 You can nest multiple levels deep, and you can create sequential nested transactions within the same parent:
 
-```rust
+```rust,ignore
 let mut tx = db.transaction().await?;
 
 // First nested transaction — committed
@@ -119,7 +119,7 @@ tx.commit().await?;
 
 Note that rolling back the outer transaction discards everything, including work from nested transactions that were already committed:
 
-```rust
+```rust,ignore
 let mut tx = db.transaction().await?;
 
 {
@@ -136,7 +136,7 @@ tx.rollback().await?;
 
 For advanced use cases, the `TransactionBuilder` lets you configure isolation level and read-only mode:
 
-```rust
+```rust,ignore
 use toasty::IsolationLevel;
 
 let mut tx = db
@@ -160,4 +160,3 @@ Available isolation levels:
 | `Serializable` | Strongest isolation; transactions appear to execute sequentially |
 
 Support for specific isolation levels depends on the database backend. SQLite effectively operates at `Serializable`. PostgreSQL and MySQL support all four levels.
-
