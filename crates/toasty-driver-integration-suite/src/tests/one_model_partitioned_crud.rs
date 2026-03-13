@@ -186,8 +186,8 @@ pub async fn delete_by_partition_key(test: &mut Test) {
             ..
         });
     } else {
-        // NoSQL: first a QueryPk to collect all matching PKs, then DeleteByKey
-        // for every matched record.
+        // NoSQL: first a QueryPk to collect all matching PKs, then one
+        // DeleteByKey per matched record (the engine fans out individually).
         let (op, _) = test.log().pop();
 
         assert_struct!(op, Operation::QueryPk(_ {
@@ -197,19 +197,21 @@ pub async fn delete_by_partition_key(test: &mut Test) {
             ..
         }));
 
-        let (op, resp) = test.log().pop();
+        for _ in 0..2 {
+            let (op, resp) = test.log().pop();
 
-        assert_struct!(op, Operation::DeleteByKey(_ {
-            table: == todo_table_id,
-            keys.len(): 2,
-            filter: None,
-            ..
-        }));
+            assert_struct!(op, Operation::DeleteByKey(_ {
+                table: == todo_table_id,
+                keys.len(): 1,
+                filter: None,
+                ..
+            }));
 
-        assert_struct!(resp, _ {
-            rows: Rows::Count(2),
-            ..
-        });
+            assert_struct!(resp, _ {
+                rows: Rows::Count(1),
+                ..
+            });
+        }
     }
 
     assert!(test.log().is_empty(), "log should be empty after delete");

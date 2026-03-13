@@ -1,0 +1,90 @@
+use toasty_core::{schema::db::TableId, stmt, stmt::ExprContext};
+
+use crate::engine::simplify;
+
+use super::Exec;
+
+impl Exec<'_> {
+    /// Split a composite filter into individual key predicates.
+    ///
+    /// Recognizes these forms and decomposes them:
+    /// - `ANY(MAP(Value::List([v1, v2, ...]), pred))` — substitutes each vi
+    ///   into pred
+    /// - `InList(expr, Value::List([v1, v2, ...]))` — produces `expr == vi`
+    ///   for each value
+    ///
+    /// For any other form (including a single equality), simplifies and returns
+    /// it as a single-element vec (or empty if unsatisfiable).
+    ///
+    /// Each returned predicate has been simplified and is guaranteed
+    /// satisfiable.
+    pub(super) fn split_filter(&self, filter: stmt::Expr, table: TableId) -> Vec<stmt::Expr> {
+        let db_table = self.engine.schema.db.table(table);
+        let cx = self.engine.expr_cx_for(db_table);
+
+        match filter {
+            filter @ stmt::Expr::Any(_) => Self::split_filter_any_map(filter, cx),
+            filter @ stmt::Expr::InList(_) => Self::split_filter_in_list(filter, cx),
+            mut other => {
+                simplify::simplify_expr(cx, &mut other);
+                if other.is_unsatisfiable() {
+                    vec![]
+                } else {
+                    vec![other]
+                }
+            }
+        }
+    }
+
+    /// `ANY(MAP(Value::List([v1, v2, ...]), pred))` — substitutes each value
+    /// into the predicate template.
+    fn split_filter_any_map(filter: stmt::Expr, cx: ExprContext<'_>) -> Vec<stmt::Expr> {
+        let stmt::Expr::Any(any) = filter else {
+            unreachable!()
+        };
+        let stmt::Expr::Map(map) = *any.expr else {
+            unreachable!()
+        };
+        let stmt::Expr::Value(stmt::Value::List(items)) = *map.base else {
+            unreachable!()
+        };
+
+        items
+            .into_iter()
+            .filter(|item| !item.is_null())
+            .filter_map(|item| {
+                let mut pred = *map.map.clone();
+                // Unpack Record fields so arg(i) binds to field i.
+                match item {
+                    stmt::Value::Record(r) => pred.substitute(&r.fields[..]),
+                    item => pred.substitute([item]),
+                }
+                simplify::simplify_expr(cx, &mut pred);
+                (!pred.is_unsatisfiable()).then_some(pred)
+            })
+            .collect()
+    }
+
+    /// `InList(expr, Value::List([v1, v2, ...]))` — produces `expr == vi` for
+    /// each value.
+    fn split_filter_in_list(filter: stmt::Expr, cx: ExprContext<'_>) -> Vec<stmt::Expr> {
+        let stmt::Expr::InList(in_list) = filter else {
+            unreachable!()
+        };
+        let stmt::Expr::Value(stmt::Value::List(values)) = *in_list.list else {
+            unreachable!()
+        };
+
+        let expr = *in_list.expr;
+
+        values
+            .into_iter()
+            .filter(|v| !v.is_null())
+            .filter_map(|v| {
+                let mut pred = stmt::Expr::binary_op(expr.clone(), stmt::BinaryOp::Eq, v);
+                simplify::simplify_expr(cx, &mut pred);
+                (!pred.is_unsatisfiable()).then_some(pred)
+            })
+            .collect()
+    }
+}
