@@ -1,7 +1,8 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, visit_mut::VisitMut, ItemFn, Type, TypePath};
+use syn::{parse_macro_input, visit_mut::VisitMut, ItemFn};
 
+use crate::id_rewriter::IdRewriter;
 use crate::parse::{BoolExpr, DriverTest, DriverTestAttr, Expansion, ExpansionList};
 
 pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -27,7 +28,13 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
             .expansions
             .iter()
             .map(|expansion| {
-                generate_variant(&driver_test.input, expansion, &driver_test.requires, true)
+                generate_variant(
+                    &driver_test.input,
+                    expansion,
+                    &driver_test.requires,
+                    driver_test.attr.scenario.as_ref(),
+                    true,
+                )
             })
             .collect();
 
@@ -45,6 +52,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
             &driver_test.input,
             &driver_test.expansions[0],
             &driver_test.requires,
+            driver_test.attr.scenario.as_ref(),
             false, // Don't use expansion name as function name
         );
         quote! {
@@ -59,6 +67,7 @@ fn generate_variant(
     input: &ItemFn,
     expansion: &Expansion,
     requires: &Option<BoolExpr>,
+    scenario: Option<&syn::Path>,
     use_expansion_name: bool,
 ) -> ItemFn {
     let mut variant = input.clone();
@@ -91,6 +100,21 @@ fn generate_variant(
         };
         let mut rewriter = IdRewriter::new(id_ident, target_type);
         rewriter.visit_item_fn_mut(&mut variant);
+    }
+
+    // Inject scenario use-import if specified
+    if let Some(scenario_path) = scenario {
+        let use_stmt: syn::Stmt = if let Some(ref id_variant) = expansion.id_variant {
+            let variant_ident = syn::Ident::new(id_variant.name(), proc_macro2::Span::call_site());
+            syn::parse_quote! {
+                use #scenario_path::#variant_ident::*;
+            }
+        } else {
+            syn::parse_quote! {
+                use #scenario_path::*;
+            }
+        };
+        variant.block.stmts.insert(0, use_stmt);
     }
 
     // Add capability checks at the beginning of the function if there are requires
@@ -328,37 +352,4 @@ fn rewrite_driver_test_cfg_macros(func: &mut ItemFn, expansion: &Expansion) {
 
     let mut rewriter = MacroRewriter { expansion };
     rewriter.visit_item_fn_mut(func);
-}
-
-/// Visitor that rewrites type references to a configurable target type
-struct IdRewriter {
-    /// The identifier to replace (e.g., "ID")
-    ident: String,
-    /// The target type to replace with
-    target_type: Type,
-}
-
-impl IdRewriter {
-    fn new(ident: &str, target_type: Type) -> Self {
-        Self {
-            ident: ident.to_string(),
-            target_type,
-        }
-    }
-}
-
-impl VisitMut for IdRewriter {
-    fn visit_type_mut(&mut self, ty: &mut Type) {
-        if let Type::Path(TypePath { qself: None, path }) = ty {
-            // Check if this matches the identifier we're looking for
-            if path.segments.len() == 1 && path.segments[0].ident == self.ident {
-                // Replace with target type
-                *ty = self.target_type.clone();
-                return;
-            }
-        }
-
-        // Continue visiting nested types
-        syn::visit_mut::visit_type_mut(self, ty);
-    }
 }

@@ -1,7 +1,9 @@
 extern crate proc_macro;
 
 mod driver_test;
+mod id_rewriter;
 mod parse;
+mod scenario;
 mod test_registry;
 mod test_variants;
 
@@ -20,6 +22,11 @@ pub fn generate_test_registry(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn generate_driver_test_variants(input: TokenStream) -> TokenStream {
     test_variants::expand(input)
+}
+
+#[proc_macro]
+pub fn scenario(input: TokenStream) -> TokenStream {
+    scenario::expand(input)
 }
 
 /// Expression macro that evaluates to true or false based on the current driver test expansion.
