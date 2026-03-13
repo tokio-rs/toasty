@@ -5,7 +5,7 @@ pub(crate) use value::Value;
 
 use mysql_async::{
     prelude::{Queryable, ToValue},
-    Conn, Pool,
+    Conn, OptsBuilder, Pool,
 };
 use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
@@ -21,7 +21,7 @@ use url::Url;
 #[derive(Debug)]
 pub struct MySQL {
     url: String,
-    pool: Pool,
+    opts: OptsBuilder,
 }
 
 impl MySQL {
@@ -54,8 +54,12 @@ impl MySQL {
             .map_err(toasty_core::Error::driver_operation_failed)?;
         let opts = mysql_async::OptsBuilder::from_opts(opts).client_found_rows(true);
 
-        let pool = Pool::new(opts);
-        Ok(Self { url: url_str, pool })
+        let pool = Pool::new(opts.clone());
+        Ok(Self {
+            url: url_str,
+            pool,
+            opts,
+        })
     }
 }
 
@@ -70,9 +74,7 @@ impl Driver for MySQL {
     }
 
     async fn connect(&self) -> Result<Box<dyn toasty_core::driver::Connection>> {
-        let conn = self
-            .pool
-            .get_conn()
+        let conn = Conn::new(self.opts.clone())
             .await
             .map_err(toasty_core::Error::driver_operation_failed)?;
         Ok(Box::new(Connection::new(conn)))
@@ -99,9 +101,7 @@ impl Driver for MySQL {
     }
 
     async fn reset_db(&self) -> toasty_core::Result<()> {
-        let mut conn = self
-            .pool
-            .get_conn()
+        let mut conn = Conn::new(self.opts.clone())
             .await
             .map_err(toasty_core::Error::driver_operation_failed)?;
 
