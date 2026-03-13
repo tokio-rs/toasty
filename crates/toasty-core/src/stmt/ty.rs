@@ -444,3 +444,87 @@ impl From<ModelId> for Type {
         Self::Model(value)
     }
 }
+
+// ---------------------------------------------------------------------------
+// Kani proof harnesses
+//
+// These verify properties of the type system using bounded model checking.
+// Run with: cargo kani -p toasty-core --harness <name>
+// ---------------------------------------------------------------------------
+
+#[cfg(kani)]
+mod proofs {
+    use super::*;
+
+    /// Helper: create a simple (non-recursive) Type for Kani exploration.
+    fn any_simple_type() -> Type {
+        let variant: u8 = kani::any();
+        kani::assume(variant < 13);
+        match variant {
+            0 => Type::Bool,
+            1 => Type::String,
+            2 => Type::I8,
+            3 => Type::I16,
+            4 => Type::I32,
+            5 => Type::I64,
+            6 => Type::U8,
+            7 => Type::U16,
+            8 => Type::U32,
+            9 => Type::U64,
+            10 => Type::Uuid,
+            11 => Type::Bytes,
+            12 => Type::Unit,
+            _ => unreachable!(),
+        }
+    }
+
+    /// is_subtype_of is reflexive for simple (non-recursive) types.
+    #[kani::proof]
+    fn is_subtype_of_reflexive() {
+        let ty = any_simple_type();
+        assert!(ty.is_subtype_of(&ty), "is_subtype_of must be reflexive");
+    }
+
+    /// Null is a subtype of every type (and every type is a subtype of Null).
+    #[kani::proof]
+    fn null_is_subtype_of_everything() {
+        let ty = any_simple_type();
+        assert!(Type::Null.is_subtype_of(&ty));
+        assert!(ty.is_subtype_of(&Type::Null));
+    }
+
+    /// Two distinct simple types (neither Null) are never subtypes of each other.
+    #[kani::proof]
+    fn distinct_simple_types_are_not_subtypes() {
+        let a = any_simple_type();
+        let b = any_simple_type();
+
+        // Skip Null (it's a wildcard) and skip equal types
+        kani::assume(!matches!(a, Type::Null));
+        kani::assume(!matches!(b, Type::Null));
+        kani::assume(a != b);
+
+        assert!(
+            !a.is_subtype_of(&b),
+            "distinct simple types must not be subtypes"
+        );
+    }
+
+    /// is_numeric returns true only for integer types.
+    #[kani::proof]
+    fn is_numeric_matches_integer_types() {
+        let ty = any_simple_type();
+        let expected = matches!(
+            ty,
+            Type::I8
+                | Type::I16
+                | Type::I32
+                | Type::I64
+                | Type::U8
+                | Type::U16
+                | Type::U32
+                | Type::U64
+        );
+        assert_eq!(ty.is_numeric(), expected);
+    }
+}

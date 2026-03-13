@@ -484,3 +484,117 @@ impl TryFrom<Value> for bigdecimal::BigDecimal {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Kani proof harnesses
+//
+// These verify properties of the Value type using bounded model checking.
+// Run with: cargo kani -p toasty-core --harness <name>
+// ---------------------------------------------------------------------------
+
+#[cfg(kani)]
+mod proofs {
+    use super::*;
+
+    /// Helper: create a simple (non-container) Value for Kani exploration.
+    fn any_simple_value() -> Value {
+        let variant: u8 = kani::any();
+        kani::assume(variant < 12);
+        match variant {
+            0 => Value::Bool(kani::any()),
+            1 => Value::I8(kani::any()),
+            2 => Value::I16(kani::any()),
+            3 => Value::I32(kani::any()),
+            4 => Value::I64(kani::any()),
+            5 => Value::U8(kani::any()),
+            6 => Value::U16(kani::any()),
+            7 => Value::U32(kani::any()),
+            8 => Value::U64(kani::any()),
+            9 => Value::Null,
+            // Use a fixed string/uuid to keep the state space bounded
+            10 => Value::String("test".to_string()),
+            11 => Value::Uuid(uuid::Uuid::nil()),
+            _ => unreachable!(),
+        }
+    }
+
+    /// For any simple value, `value.is_a(&value.infer_ty())` is always true.
+    ///
+    /// This is the fundamental roundtrip property: a value's inferred type
+    /// must always accept that value back.
+    #[kani::proof]
+    fn is_a_accepts_inferred_type() {
+        let value = any_simple_value();
+        let ty = value.infer_ty();
+        assert!(
+            value.is_a(&ty),
+            "value must be accepted by its own inferred type"
+        );
+    }
+
+    /// Null is accepted by every simple type.
+    #[kani::proof]
+    fn null_is_a_every_type() {
+        let tys = [
+            Type::Bool,
+            Type::I8,
+            Type::I16,
+            Type::I32,
+            Type::I64,
+            Type::U8,
+            Type::U16,
+            Type::U32,
+            Type::U64,
+            Type::String,
+            Type::Uuid,
+            Type::Bytes,
+            Type::Unit,
+        ];
+
+        let idx: usize = kani::any();
+        kani::assume(idx < tys.len());
+
+        assert!(
+            Value::Null.is_a(&tys[idx]),
+            "Null must be accepted by every type"
+        );
+    }
+
+    /// A non-null simple value is rejected by every type other than its own
+    /// inferred type (for non-compound types).
+    #[kani::proof]
+    fn is_a_rejects_wrong_type() {
+        let value = any_simple_value();
+        // Skip Null — it matches everything
+        kani::assume(!value.is_null());
+
+        let inferred = value.infer_ty();
+
+        let other_tys = [
+            Type::Bool,
+            Type::I8,
+            Type::I16,
+            Type::I32,
+            Type::I64,
+            Type::U8,
+            Type::U16,
+            Type::U32,
+            Type::U64,
+            Type::String,
+            Type::Uuid,
+            Type::Bytes,
+        ];
+
+        let idx: usize = kani::any();
+        kani::assume(idx < other_tys.len());
+        let other_ty = &other_tys[idx];
+
+        // If the type differs from the inferred type, is_a must return false
+        if *other_ty != inferred {
+            assert!(
+                !value.is_a(other_ty),
+                "non-null value must be rejected by a different type"
+            );
+        }
+    }
+}

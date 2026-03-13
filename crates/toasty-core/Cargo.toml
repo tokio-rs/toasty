@@ -25,6 +25,9 @@ bigdecimal = ["dep:bigdecimal"]
 jiff = ["dep:jiff"]
 serde = ["dep:serde", "bit-set/serde"]
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
+
 [dev-dependencies]
 jiff.workspace = true
 pretty_assertions.workspace = true
