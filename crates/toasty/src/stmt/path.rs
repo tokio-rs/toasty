@@ -130,7 +130,7 @@ impl<T> Path<T> {
     }
 }
 
-impl<T> Path<[T]> {
+impl<T> Path<List<T>> {
     /// Build an `IN subquery` expression that tests whether **any** associated
     /// record satisfies `filter`.
     ///
@@ -139,7 +139,7 @@ impl<T> Path<[T]> {
     /// parent query.
     pub fn any(self, filter: Expr<bool>) -> Expr<bool>
     where
-        T: super::Model,
+        T: crate::Model,
     {
         // Build a query on the child model filtered by `filter`
         let child_query = super::Select::<T>::filter(filter);
