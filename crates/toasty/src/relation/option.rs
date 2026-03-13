@@ -4,6 +4,7 @@ use toasty_core::schema::app::FieldId;
 use toasty_core::stmt::Value;
 
 impl<T: Relation> Load for Option<T> {
+    type Output = Self;
     fn load(value: Value) -> Result<Self, crate::Error> {
         match value {
             // Encoded "loaded as None" from SELECT+include path.

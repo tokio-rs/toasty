@@ -20,7 +20,7 @@ pub struct Page<M> {
     pub prev_cursor: Option<stmt::Expr>,
 }
 
-impl<M: Load> Page<M> {
+impl<M: Load<Output = M>> Page<M> {
     pub(crate) fn new(
         items: Vec<M>,
         query: Select<M>,

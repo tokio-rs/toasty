@@ -4,8 +4,7 @@ pub use apply_update::{ApplyUpdate, Query};
 mod batch;
 pub use batch::{batch, Batch, CreateMany};
 
-pub mod cursor;
-pub use cursor::Cursor;
+mod cursor;
 
 pub mod db;
 pub use db::Db;
@@ -53,7 +52,6 @@ pub mod codegen_support {
     pub use crate::{
         apply_update::{ApplyUpdate, Query},
         batch::CreateMany,
-        cursor::{Cursor, FromCursor},
         model::{Auto, Field},
         register::generate_unique_id,
         relation::Relation,

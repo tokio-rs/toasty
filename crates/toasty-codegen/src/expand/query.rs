@@ -29,7 +29,7 @@ impl Expand<'_> {
 
                 #filter_methods
 
-                #vis async fn all(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#toasty::Cursor<#model_ident>> {
+                #vis async fn all(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<Vec<#model_ident>> {
                     use #toasty::ExecutorExt;
                     executor.all(self.stmt).await
                 }
@@ -54,9 +54,12 @@ impl Expand<'_> {
 
                 #vis async fn collect<#collect_ty>(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#collect_ty>
                 where
-                    #collect_ty: #toasty::FromCursor<#model_ident>
+                    #collect_ty: Extend<#model_ident> + Default,
                 {
-                    self.all(executor).await?.collect().await
+                    let items = self.all(executor).await?;
+                    let mut out = #collect_ty::default();
+                    out.extend(items);
+                    Ok(out)
                 }
 
                 #vis fn paginate(self, per_page: usize) -> #toasty::stmt::Paginate<#model_ident> {

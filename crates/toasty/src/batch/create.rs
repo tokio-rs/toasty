@@ -1,6 +1,6 @@
 use crate::{
     stmt::{self, IntoExpr, IntoInsert},
-    Cursor, Executor, ExecutorExt, Model, Result,
+    Executor, ExecutorExt, Model, Result,
 };
 use toasty_core::stmt as core_stmt;
 
@@ -75,9 +75,12 @@ impl<M: Model> CreateMany<M> {
 
         merged.untyped.source.single = false;
 
-        let records = executor.exec(merged.into()).await?;
-        let cursor = Cursor::new(records);
-        cursor.collect().await
+        let mut records = executor.exec(merged.into()).await?;
+        let mut result = Vec::new();
+        while let Some(value) = records.next().await {
+            result.push(M::load(value?)?);
+        }
+        Ok(result)
     }
 }
 

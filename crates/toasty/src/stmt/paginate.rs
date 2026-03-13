@@ -1,6 +1,6 @@
 use super::Select;
 
-use crate::{engine::eval::Func, Cursor, Executor, ExecutorExt, Load, Result};
+use crate::{engine::eval::Func, Executor, ExecutorExt, Load, Result};
 
 use toasty_core::stmt::{self, visit_mut, Expr, ExprRecord, OrderBy, Projection, Value, VisitMut};
 
@@ -59,7 +59,7 @@ impl<M> Paginate<M> {
     }
 }
 
-impl<M: Load> Paginate<M> {
+impl<M: Load<Output = M>> Paginate<M> {
     pub async fn collect(mut self, executor: &mut dyn Executor) -> Result<crate::Page<M>> {
         // Extract the limit from the query to determine page size
         let page_size = match &self.query.untyped.limit {
@@ -68,15 +68,14 @@ impl<M: Load> Paginate<M> {
                     stmt::Expr::Value(stmt::Value::I64(n)) => *n as usize,
                     _ => {
                         // Fallback if we can't determine the limit
-                        let items: Vec<M> =
-                            executor.all(self.query.clone()).await?.collect().await?;
+                        let items: Vec<M> = executor.all(self.query.clone()).await?;
                         return Ok(crate::Page::new(items, self.query, None, None));
                     }
                 }
             }
             _ => {
                 // Not a paginated query, just collect all items
-                let items: Vec<M> = executor.all(self.query.clone()).await?.collect().await?;
+                let items: Vec<M> = executor.all(self.query.clone()).await?;
                 return Ok(crate::Page::new(items, self.query, None, None));
             }
         };
@@ -124,8 +123,14 @@ impl<M: Load> Paginate<M> {
             _ => None,
         };
 
+        // Load the raw values into model instances
+        let loaded_items: Vec<M> = items
+            .into_iter()
+            .map(|v| M::load(v))
+            .collect::<Result<Vec<M>>>()?;
+
         Ok(crate::Page::new(
-            Cursor::new(items.into()).collect().await?,
+            loaded_items,
             self.query,
             next_cursor,
             prev_cursor,

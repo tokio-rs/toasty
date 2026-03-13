@@ -83,6 +83,7 @@ impl Expand<'_> {
             }
 
             impl #toasty::Load for #model_ident {
+                type Output = Self;
                 fn load(value: #toasty::Value) -> #toasty::Result<Self> {
                     #load_body
                 }

@@ -11,6 +11,7 @@ pub struct HasMany<T> {
 }
 
 impl<T: Relation> Load for HasMany<T> {
+    type Output = Self;
     fn load(input: Value) -> crate::Result<Self> {
         match input {
             Value::List(items) => {

@@ -65,7 +65,6 @@ pub async fn hello_world(test: &mut Test) -> Result<()> {
 
     let todos = user.todos().all(&mut db).await?;
 
-    let todos: Vec<_> = todos.collect().await?;
     assert_eq!(3, todos.len());
     Ok(())
 }
