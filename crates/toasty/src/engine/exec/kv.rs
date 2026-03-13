@@ -23,8 +23,10 @@ impl Exec<'_> {
         let cx = self.engine.expr_cx_for(db_table);
 
         match filter {
-            filter @ stmt::Expr::Any(_) => Self::split_filter_any_map(filter, cx),
-            filter @ stmt::Expr::InList(_) => Self::split_filter_in_list(filter, cx),
+            stmt::Expr::Any(any) => Self::split_filter_any_map(*any.expr, cx),
+            stmt::Expr::InList(in_list) => {
+                Self::split_filter_in_list(*in_list.expr, *in_list.list, cx)
+            }
             mut other => {
                 simplify::simplify_expr(cx, &mut other);
                 if other.is_unsatisfiable() {
@@ -38,11 +40,8 @@ impl Exec<'_> {
 
     /// `ANY(MAP(Value::List([v1, v2, ...]), pred))` — substitutes each value
     /// into the predicate template.
-    fn split_filter_any_map(filter: stmt::Expr, cx: ExprContext<'_>) -> Vec<stmt::Expr> {
-        let stmt::Expr::Any(any) = filter else {
-            unreachable!()
-        };
-        let stmt::Expr::Map(map) = *any.expr else {
+    fn split_filter_any_map(map_expr: stmt::Expr, cx: ExprContext<'_>) -> Vec<stmt::Expr> {
+        let stmt::Expr::Map(map) = map_expr else {
             unreachable!()
         };
         let stmt::Expr::Value(stmt::Value::List(items)) = *map.base else {
@@ -67,15 +66,14 @@ impl Exec<'_> {
 
     /// `InList(expr, Value::List([v1, v2, ...]))` — produces `expr == vi` for
     /// each value.
-    fn split_filter_in_list(filter: stmt::Expr, cx: ExprContext<'_>) -> Vec<stmt::Expr> {
-        let stmt::Expr::InList(in_list) = filter else {
+    fn split_filter_in_list(
+        expr: stmt::Expr,
+        list: stmt::Expr,
+        cx: ExprContext<'_>,
+    ) -> Vec<stmt::Expr> {
+        let stmt::Expr::Value(stmt::Value::List(values)) = list else {
             unreachable!()
         };
-        let stmt::Expr::Value(stmt::Value::List(values)) = *in_list.list else {
-            unreachable!()
-        };
-
-        let expr = *in_list.expr;
 
         values
             .into_iter()
