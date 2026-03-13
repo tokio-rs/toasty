@@ -25,6 +25,7 @@ pub mod filter_data_enum_variant_field;
 pub mod has_many_batch_create;
 pub mod has_many_crud_basic;
 pub mod has_many_crud_multi_relations;
+pub mod has_many_filter_on_association;
 pub mod has_many_link_unlink;
 pub mod has_many_n_1;
 pub mod has_many_scoped_query;
