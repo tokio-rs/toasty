@@ -5,10 +5,7 @@ use toasty_core::{
 };
 
 use crate::{
-    engine::{
-        exec::{Action, Exec, Output, VarId},
-        simplify,
-    },
+    engine::exec::{Action, Exec, Output, VarId},
     Result,
 };
 
@@ -41,55 +38,31 @@ impl Exec<'_> {
             filter.substitute(&input);
         }
 
-        // Fan-out for ANY(MAP(Value::List([...]), pred)) — one driver call per element.
-        // Must be checked BEFORE simplify_expr, which would re-expand the list to Expr::Or.
-        // Handles both constant lists (plan-time OR rewrite) and post-input-substitution lists.
-        if let Some(all_rows) = self
-            .try_fan_out(&filter, action.table, |per_call_filter| {
-                operation::FindPkByIndex {
-                    table: action.table,
-                    index: action.index,
-                    filter: per_call_filter,
-                }
-                .into()
-            })
-            .await?
-        {
-            self.vars.store(
-                action.output.var,
-                action.output.num_uses,
-                Rows::Stream(stmt::ValueStream::from_vec(all_rows)),
-            );
-            return Ok(());
+        let filters = self.split_filter(filter, action.table);
+        let mut all_rows = Vec::new();
+
+        for f in filters {
+            let res = self
+                .connection
+                .exec(
+                    &self.engine.schema,
+                    operation::FindPkByIndex {
+                        table: action.table,
+                        index: action.index,
+                        filter: f,
+                    }
+                    .into(),
+                )
+                .await?;
+
+            all_rows.extend(res.rows.into_value_stream().collect().await?);
         }
 
-        {
-            let table = self.engine.schema.db.table(action.table);
-            simplify::simplify_expr(self.engine.expr_cx_for(table), &mut filter);
-        }
-
-        if filter.is_unsatisfiable() {
-            let rows = Rows::Stream(stmt::ValueStream::default());
-            self.vars
-                .store(action.output.var, action.output.num_uses, rows);
-            return Ok(());
-        }
-
-        let res = self
-            .connection
-            .exec(
-                &self.engine.schema,
-                operation::FindPkByIndex {
-                    table: action.table,
-                    index: action.index,
-                    filter,
-                }
-                .into(),
-            )
-            .await?;
-
-        self.vars
-            .store(action.output.var, action.output.num_uses, res.rows);
+        self.vars.store(
+            action.output.var,
+            action.output.num_uses,
+            Rows::Stream(stmt::ValueStream::from_vec(all_rows)),
+        );
 
         Ok(())
     }
