@@ -164,6 +164,61 @@ which demonstrates it can handle non-trivial programs. Active research in 2025
 Toasty's `Cell`-based mutation patterns better than Prusti, but this is
 speculative.
 
+### Miri (UB Detection)
+
+[Miri](https://github.com/rust-lang/miri) is an interpreter for Rust's MIR
+that tracks pointer provenance, type validity, and aliasing rules at runtime.
+It runs your existing test suite under interpretation with no code changes.
+
+**What it detects**: Out-of-bounds access, use-after-free, unaligned reads,
+aliasing violations (Stacked Borrows model), data races, invalid type
+invariants (e.g., `bool` that isn't 0 or 1).
+
+**Maturity**: Part of the official Rust toolchain. Published at POPL 2026.
+Integrated into Rust standard library CI. Install with
+`rustup component add miri`, run with `cargo +nightly miri test`.
+
+**Limitations**: 10-100x slower than normal execution. Only finds bugs on
+executed code paths (not exhaustive). Toasty's core has no `unsafe` code, so
+Miri's value here is moderate — it still catches issues in dependencies and
+driver crates.
+
+### cargo-careful (Extra Runtime Checks)
+
+[cargo-careful](https://github.com/RalfJung/cargo-careful) rebuilds the
+standard library with debug assertions enabled. It catches things that debug
+mode alone misses: `NonNull::new_unchecked` on null, `unreachable_unchecked`
+on reachable paths, collection internal consistency violations.
+
+**Maturity**: Stable, maintained by Ralf Jung. Install with
+`cargo install cargo-careful`, run with `cargo +nightly careful test`.
+
+**Effort**: Zero annotation. Faster than Miri.
+
+### Bolero (Unified Testing Frontend)
+
+[Bolero](https://github.com/camshaft/bolero) provides a single harness
+interface that dispatches to multiple backends: random testing (like proptest),
+coverage-guided fuzzing (libfuzzer, AFL), or Kani model checking.
+
+```rust
+#[test]
+fn check_type_roundtrip() {
+    bolero::check!().with_type::<SimpleValue>().for_each(|value| {
+        let ty = value.infer_ty();
+        assert!(value.is_a(&ty));
+    });
+}
+```
+
+Write the harness once, then run it as a random test in CI, under libfuzzer
+for deeper coverage, or under Kani for bounded proofs. The `proptest` crate
+(already a workspace dependency) provides similar random-testing capabilities
+without the multi-backend support.
+
+**Maturity**: Actively maintained. Works on stable Rust for random testing;
+nightly for fuzzing and Kani backends.
+
 ## Toasty Invariants and Tool Fit
 
 The table below maps each invariant to the tool best suited to verify it.
@@ -184,8 +239,19 @@ The table below maps each invariant to the tool best suited to verify it.
 
 ## Recommendation
 
-**Start with Kani.** It is the most mature tool, requires the least annotation
-overhead to get started, and covers the widest range of Toasty's invariants.
+Adopt tools in order of effort-to-value ratio:
+
+### Phase 1: Zero-effort runtime checks
+
+Add `cargo +nightly miri test` and `cargo +nightly careful test` to CI. These
+require no code changes and catch UB, aliasing violations, and standard library
+misuse in existing tests.
+
+### Phase 2: Kani proof harnesses
+
+**Kani is the best fit for Toasty's invariants.** It is the most mature
+verification tool, requires the least annotation overhead, and covers the
+widest range of properties.
 
 Kani proof harnesses live alongside tests — they use `#[cfg(kani)]` so they
 have zero impact on normal builds. The workflow is:
@@ -202,6 +268,17 @@ Start with these three harnesses (highest value, lowest effort):
    pairs does not panic
 3. **Schema verification coverage** — verify that `verify_ids_populated` catches
    all placeholder IDs
+
+### Phase 3: Property-based testing
+
+Use `proptest` (already a workspace dependency) or `bolero` to write strategies
+for schema types and AST nodes. Properties to test:
+
+- Simplify(expr) preserves semantics on concrete inputs
+- Lower → Plan never panics for valid HIR input
+- Schema serialization roundtrips losslessly
+
+### Phase 4: Refinement types (experimental)
 
 After building experience with Kani, consider adding Flux refinement types to
 `VarStore` for index bounds safety — this gives static (compile-time)
