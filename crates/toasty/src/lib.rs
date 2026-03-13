@@ -4,8 +4,6 @@ pub use apply_update::{ApplyUpdate, Query};
 mod batch;
 pub use batch::{batch, Batch, CreateMany};
 
-mod cursor;
-
 pub mod db;
 pub use db::Db;
 
@@ -56,7 +54,7 @@ pub mod codegen_support {
         register::generate_unique_id,
         relation::Relation,
         relation::{BelongsTo, HasMany, HasOne},
-        stmt::{self, IntoExpr, IntoInsert, IntoSelect, IntoStatement, Path},
+        stmt::{self, IntoExpr, IntoInsert, IntoStatement, List, Path},
         Db, Embed, Error, Executor, ExecutorExt, Load, Model, Register, Result, Statement,
     };
     #[cfg(feature = "serde")]

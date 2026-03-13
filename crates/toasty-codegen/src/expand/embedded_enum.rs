@@ -61,7 +61,7 @@ impl Expand<'_> {
         quote! {
             #( #methods )*
 
-            #vis fn in_set(&self, rhs: impl #toasty::stmt::IntoExpr<[#model_ident]>) -> #toasty::stmt::Expr<bool> {
+            #vis fn in_set(&self, rhs: impl #toasty::stmt::IntoExpr<#toasty::List<#model_ident>>) -> #toasty::stmt::Expr<bool> {
                 self.path().in_set(rhs)
             }
         }

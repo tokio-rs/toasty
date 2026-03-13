@@ -1,5 +1,5 @@
 use crate::{
-    stmt::{self, IntoExpr, IntoInsert},
+    stmt::{self, IntoExpr, IntoInsert, List},
     Executor, ExecutorExt, Model, Result,
 };
 use toasty_core::stmt as core_stmt;
@@ -43,7 +43,7 @@ impl<M: Model> CreateMany<M> {
     /// embedding in a parent insert statement (e.g., as a nested HasMany value).
     ///
     /// Unlike `exec`, this does not run any database query.
-    pub fn into_expr(self) -> stmt::Expr<[M]> {
+    pub fn into_expr(self) -> stmt::Expr<List<M>> {
         if self.stmts.is_empty() {
             return stmt::Expr::from_untyped(core_stmt::Expr::list(std::iter::empty::<
                 core_stmt::Expr,
@@ -84,12 +84,12 @@ impl<M: Model> CreateMany<M> {
     }
 }
 
-impl<M: Model> IntoExpr<[M]> for CreateMany<M> {
-    fn into_expr(self) -> stmt::Expr<[M]> {
+impl<M: Model> IntoExpr<List<M>> for CreateMany<M> {
+    fn into_expr(self) -> stmt::Expr<List<M>> {
         self.into_expr()
     }
 
-    fn by_ref(&self) -> stmt::Expr<[M]> {
+    fn by_ref(&self) -> stmt::Expr<List<M>> {
         todo!()
     }
 }

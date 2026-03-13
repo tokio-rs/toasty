@@ -1,4 +1,4 @@
-use super::{IntoSelect, List, Statement};
+use super::{List, Statement};
 
 use std::marker::PhantomData;
 
@@ -15,19 +15,6 @@ use toasty_core::stmt;
 pub trait IntoStatement {
     type Output;
     fn into_statement(self) -> Statement<Self::Output>;
-}
-
-/// Blanket implementation: any `IntoSelect` type produces a `Statement`
-/// whose output is `List<Model>` — select queries return lists.
-impl<T: IntoSelect> IntoStatement for T {
-    type Output = List<T::Model>;
-
-    fn into_statement(self) -> Statement<List<T::Model>> {
-        Statement {
-            untyped: self.into_select().untyped.into(),
-            _p: PhantomData,
-        }
-    }
 }
 
 macro_rules! impl_into_statement_for_tuple {

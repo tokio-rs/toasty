@@ -1,4 +1,4 @@
-use super::{Expr, IntoExpr, IntoSelect};
+use super::{Expr, IntoExpr, IntoStatement, List};
 use crate::Register;
 use std::{fmt, marker::PhantomData};
 use toasty_core::{
@@ -6,12 +6,12 @@ use toasty_core::{
     stmt::{self, Direction, OrderByExpr},
 };
 
-pub struct Path<T: ?Sized> {
+pub struct Path<T> {
     pub(super) untyped: stmt::Path,
     _p: PhantomData<T>,
 }
 
-impl<T: ?Sized> Path<T> {
+impl<T> Path<T> {
     pub const fn new(raw: stmt::Path) -> Self {
         Self {
             untyped: raw,
@@ -45,7 +45,7 @@ impl<T: ?Sized> Path<T> {
         }
     }
 
-    pub fn chain<U: ?Sized>(mut self, other: impl Into<Path<U>>) -> Path<U> {
+    pub fn chain<U>(mut self, other: impl Into<Path<U>>) -> Path<U> {
         let other = other.into();
         self.untyped.chain(&other.untyped);
 
@@ -97,22 +97,20 @@ impl<T: ?Sized> Path<T> {
         }
     }
 
-    pub fn in_set(self, rhs: impl IntoExpr<[T]>) -> Expr<bool>
-    where
-        T: Sized,
-    {
+    pub fn in_set(self, rhs: impl IntoExpr<List<T>>) -> Expr<bool> {
         Expr {
             untyped: stmt::Expr::in_list(self.untyped.into_stmt(), rhs.into_expr().untyped),
             _p: PhantomData,
         }
     }
 
-    pub fn in_query(self, rhs: impl IntoSelect<Model = T>) -> Expr<bool>
+    pub fn in_query<Q>(self, rhs: Q) -> Expr<bool>
     where
-        T: Sized,
+        Q: IntoStatement<Output = List<T>>,
     {
+        let query = rhs.into_statement().into_query();
         Expr {
-            untyped: stmt::Expr::in_subquery(self.untyped.into_stmt(), rhs.into_select().untyped),
+            untyped: stmt::Expr::in_subquery(self.untyped.into_stmt(), query),
             _p: PhantomData,
         }
     }
@@ -191,13 +189,13 @@ impl<T> IntoExpr<T> for Path<T> {
     }
 }
 
-impl<T: ?Sized> From<Path<T>> for stmt::Path {
+impl<T> From<Path<T>> for stmt::Path {
     fn from(value: Path<T>) -> Self {
         value.untyped
     }
 }
 
-impl<T: ?Sized> fmt::Debug for Path<T> {
+impl<T> fmt::Debug for Path<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self.untyped)
     }

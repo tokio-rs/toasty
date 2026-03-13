@@ -1,9 +1,9 @@
-use super::{Expr, IntoSelect};
+use super::{Expr, IntoStatement, List};
 use crate::Model;
 use std::{fmt, marker::PhantomData};
 use toasty_core::stmt;
 
-pub struct Insert<M: ?Sized> {
+pub struct Insert<M> {
     pub(crate) untyped: stmt::Insert,
     _p: PhantomData<M>,
 }
@@ -47,9 +47,10 @@ impl<M: Model> Insert<M> {
     /// Set the scope of the insert.
     pub fn set_scope<S>(&mut self, scope: S)
     where
-        S: IntoSelect<Model = M>,
+        S: IntoStatement<Output = List<M>>,
     {
-        self.untyped.target = stmt::InsertTarget::Scope(Box::new(scope.into_select().untyped));
+        self.untyped.target =
+            stmt::InsertTarget::Scope(Box::new(scope.into_statement().into_query()));
     }
 
     pub fn set(&mut self, field: usize, expr: impl Into<stmt::Expr>) {
@@ -106,7 +107,7 @@ impl<M: Model> Insert<M> {
         values.rows.last_mut().unwrap().as_record_mut()
     }
 
-    pub fn into_list_expr(self) -> Expr<[M]> {
+    pub fn into_list_expr(self) -> Expr<List<M>> {
         Expr::from_untyped(stmt::Expr::Stmt(self.untyped.into()))
     }
 }
@@ -122,12 +123,6 @@ impl<M> Clone for Insert<M> {
 
 impl<M> From<Insert<M>> for stmt::Expr {
     fn from(value: Insert<M>) -> Self {
-        Self::stmt(value.untyped)
-    }
-}
-
-impl<M> From<Insert<[M]>> for stmt::Expr {
-    fn from(value: Insert<[M]>) -> Self {
         Self::stmt(value.untyped)
     }
 }

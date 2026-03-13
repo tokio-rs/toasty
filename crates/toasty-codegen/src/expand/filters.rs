@@ -106,7 +106,6 @@ impl Expand<'_> {
     }
 
     fn expand_model_filter_method(&self, filter: &Filter, self_into_select: bool) -> TokenStream {
-        let toasty = &self.toasty;
         let vis = &self.model.vis;
         let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
         let filter_method_ident = &filter.filter_method_ident;
@@ -120,7 +119,6 @@ impl Expand<'_> {
 
             self_arg = quote!(self,);
             body = quote! {
-                use #toasty::IntoSelect;
                 #query_struct_ident::from_stmt(self.into_select()).filter( #expr )
             };
         } else {
@@ -160,8 +158,7 @@ impl Expand<'_> {
         }
 
         quote! {
-            #vis fn #filter_method_batch_ident(#self_arg keys: impl #toasty::IntoExpr<[#bound]>) -> #query_struct_ident {
-                use #toasty::IntoSelect;
+            #vis fn #filter_method_batch_ident(#self_arg keys: impl #toasty::IntoExpr<#toasty::List<#bound>>) -> #query_struct_ident {
                 #query.#filter_method_batch_ident( keys )
             }
         }
@@ -263,7 +260,7 @@ impl Expand<'_> {
         };
 
         quote! {
-            #vis fn #query_filter_batch_ident(self, keys: impl #toasty::IntoExpr<[#bound]> ) -> #query_struct_ident {
+            #vis fn #query_filter_batch_ident(self, keys: impl #toasty::IntoExpr<#toasty::List<#bound>> ) -> #query_struct_ident {
                 self.filter( #toasty::stmt::Expr::in_list( #lhs, keys ) )
             }
         }

@@ -1,4 +1,4 @@
-use super::{Delete, Expr, IntoSelect, Value};
+use super::{Delete, Expr, IntoStatement, List, Statement, Value};
 use crate::Model;
 use std::{fmt, marker::PhantomData};
 use toasty_core::stmt::{self, Offset};
@@ -92,11 +92,19 @@ impl<M: Model> Select<M> {
     }
 }
 
-impl<M: Model> IntoSelect for &Select<M> {
-    type Model = M;
+impl<M: Model> IntoStatement for Select<M> {
+    type Output = List<M>;
 
-    fn into_select(self) -> Select<M> {
-        self.clone()
+    fn into_statement(self) -> Statement<List<M>> {
+        Statement::from_untyped_stmt(self.untyped.into())
+    }
+}
+
+impl<M: Model> IntoStatement for &Select<M> {
+    type Output = List<M>;
+
+    fn into_statement(self) -> Statement<List<M>> {
+        Statement::from_untyped_stmt(self.clone().untyped.into())
     }
 }
 
