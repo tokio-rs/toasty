@@ -324,7 +324,7 @@ pub async fn batch_creates_from_vec(t: &mut Test) -> Result<()> {
 
     let mut db = t.setup_db(models!(User)).await;
 
-    let names = vec!["Alice", "Bob", "Carol"];
+    let names = ["Alice", "Bob", "Carol"];
     let builders: Vec<_> = names.iter().map(|n| User::create().name(*n)).collect();
 
     t.log().clear();
