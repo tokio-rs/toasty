@@ -108,7 +108,7 @@ impl<T> Path<T> {
     where
         Q: IntoStatement<Output = List<T>>,
     {
-        let query = rhs.into_statement().into_query();
+        let query = rhs.into_statement().into_untyped_query();
         Expr {
             untyped: stmt::Expr::in_subquery(self.untyped.into_stmt(), query),
             _p: PhantomData,

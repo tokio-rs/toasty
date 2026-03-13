@@ -56,10 +56,19 @@ impl<M> Statement<M> {
         }
     }
 
-    pub(crate) fn into_query(self) -> stmt::Query {
+    pub(crate) fn into_untyped_query(self) -> stmt::Query {
         match self.untyped {
             stmt::Statement::Query(q) => q,
             _ => panic!("expected query statement"),
+        }
+    }
+}
+
+impl<M> Statement<List<M>> {
+    pub fn into_select(self) -> Option<Select<M>> {
+        match self.untyped {
+            stmt::Statement::Query(q) => Some(Select::from_untyped(q)),
+            _ => None,
         }
     }
 }

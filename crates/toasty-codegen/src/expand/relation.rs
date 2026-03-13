@@ -44,16 +44,12 @@ impl Expand<'_> {
                     Many { stmt }
                 }
 
-                pub fn into_select(self) -> #toasty::stmt::Select<#model_ident> {
-                    self.stmt.into_select()
-                }
-
                 #filter_methods
 
                 /// Iterate all entries in the relation
                 #vis async fn all(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<Vec<#model_ident>> {
-                    use #toasty::ExecutorExt;
-                    executor.all(self.stmt.into_select()).await
+                    use #toasty::{ExecutorExt, IntoStatement};
+                    executor.all(self.into_statement().into_select().unwrap()).await
                 }
 
                 #vis async fn collect<#collect_ty>(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#collect_ty>
@@ -70,8 +66,9 @@ impl Expand<'_> {
                     self,
                     filter: #toasty::stmt::Expr<bool>
                 ) -> #query_ident {
-                    let query = self.stmt.into_select();
-                    #query_ident::from_stmt(query.and(filter))
+                    use #toasty::IntoStatement;
+                    let select = self.into_statement().into_select().unwrap();
+                    #query_ident::from_stmt(select.and(filter))
                 }
 
                 #vis fn create(self) -> #create_builder_ident {
@@ -324,9 +321,12 @@ impl Expand<'_> {
                     let _ = &self.#field_ident;
                 }
 
-                <#ty as #toasty::Relation>::One::from_stmt(
-                    <#ty as #toasty::Relation>::Model::filter(#filter).into_select()
-                )
+                {
+                    use #toasty::IntoStatement;
+                    <#ty as #toasty::Relation>::One::from_stmt(
+                        <#ty as #toasty::Relation>::Model::filter(#filter).into_statement().into_select().unwrap()
+                    )
+                }
             }
 
             #[doc(hidden)]
@@ -473,9 +473,12 @@ impl Expand<'_> {
 
                 #pair_check
 
-                <#ty as #toasty::Relation>::One::from_stmt(
-                    #toasty::stmt::Association::one(self.pk_select(), Self::fields().#field_ident().into()).into_select()
-                )
+                {
+                    use #toasty::IntoStatement;
+                    <#ty as #toasty::Relation>::One::from_stmt(
+                        #toasty::stmt::Association::one(self.pk_select(), Self::fields().#field_ident().into()).into_statement().into_select().unwrap()
+                    )
+                }
             }
         }
     }

@@ -106,6 +106,7 @@ impl Expand<'_> {
     }
 
     fn expand_model_filter_method(&self, filter: &Filter, self_into_select: bool) -> TokenStream {
+        let toasty = &self.toasty;
         let vis = &self.model.vis;
         let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
         let filter_method_ident = &filter.filter_method_ident;
@@ -119,7 +120,7 @@ impl Expand<'_> {
 
             self_arg = quote!(self,);
             body = quote! {
-                #query_struct_ident::from_stmt(self.into_select()).filter( #expr )
+                #query_struct_ident::from_stmt({ use #toasty::IntoStatement; self.into_statement().into_select().unwrap() }).filter( #expr )
             };
         } else {
             self_arg = quote!();
@@ -151,7 +152,7 @@ impl Expand<'_> {
 
         if self_into_select {
             self_arg = quote!(self,);
-            query = quote!(#query_struct_ident::from_stmt(self.into_select()));
+            query = quote!(#query_struct_ident::from_stmt({ use #toasty::IntoStatement; self.into_statement().into_select().unwrap() }));
         } else {
             self_arg = quote!();
             query = quote!(#query_struct_ident::default());

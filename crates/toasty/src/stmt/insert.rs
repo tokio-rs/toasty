@@ -50,7 +50,7 @@ impl<M: Model> Insert<M> {
         S: IntoStatement<Output = List<M>>,
     {
         self.untyped.target =
-            stmt::InsertTarget::Scope(Box::new(scope.into_statement().into_query()));
+            stmt::InsertTarget::Scope(Box::new(scope.into_statement().into_untyped_query()));
     }
 
     pub fn set(&mut self, field: usize, expr: impl Into<stmt::Expr>) {

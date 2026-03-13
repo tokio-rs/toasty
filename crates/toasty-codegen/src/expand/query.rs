@@ -91,12 +91,6 @@ impl Expand<'_> {
                 #relation_methods
             }
 
-            impl #query_struct_ident {
-                pub fn into_select(self) -> #toasty::stmt::Select<#model_ident> {
-                    self.stmt
-                }
-            }
-
             impl #toasty::IntoStatement for #query_struct_ident {
                 type Output = #toasty::List<#model_ident>;
 
@@ -145,10 +139,11 @@ impl Expand<'_> {
 
         quote! {
             #vis fn #field_ident(mut self) -> <#target as #toasty::Relation>::Query {
+                use #toasty::IntoStatement;
                 <#target as #toasty::Relation>::Query::from_stmt(
                     #toasty::stmt::Association::many_via_one(
                         self.stmt, #model_ident::fields().#field_ident().into()
-                    ).into_select()
+                    ).into_statement().into_select().unwrap()
                 )
             }
         }
@@ -163,10 +158,11 @@ impl Expand<'_> {
 
         quote! {
             #vis fn #field_ident(mut self) -> <#target as #toasty::Relation>::Query {
+                use #toasty::IntoStatement;
                 <#target as #toasty::Relation>::Query::from_stmt(
                     #toasty::stmt::Association::many(
                         self.stmt, #model_ident::fields().#field_ident().into()
-                    ).into_select()
+                    ).into_statement().into_select().unwrap()
                 )
             }
         }
@@ -181,10 +177,11 @@ impl Expand<'_> {
 
         quote! {
             #vis fn #field_ident(mut self) -> <#target as #toasty::Relation>::Query {
+                use #toasty::IntoStatement;
                 <#target as #toasty::Relation>::Query::from_stmt(
                     #toasty::stmt::Association::many_via_one(
                         self.stmt, #model_ident::fields().#field_ident().into()
-                    ).into_select()
+                    ).into_statement().into_select().unwrap()
                 )
             }
         }
