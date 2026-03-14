@@ -1,6 +1,6 @@
 # Query Ordering, Limits & Pagination
 
-> **User Guide:** See [guide/pagination.md](../guide/pagination.md) for complete usage examples and API documentation.
+> **User Guide:** See `docs/guide/src/sorting-limits-and-pagination.md` for usage examples and API documentation.
 
 ## Overview
 

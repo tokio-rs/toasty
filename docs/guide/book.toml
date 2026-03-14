@@ -4,3 +4,5 @@ authors = ["Toasty Contributors"]
 
 [build]
 build-dir = "book"
+
+[output.linkcheck2]
