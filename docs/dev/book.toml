@@ -4,3 +4,6 @@ authors = ["Toasty Contributors"]
 
 [build]
 build-dir = "book"
+
+[output.linkcheck2]
+warning-policy = "ignore"
