@@ -1,0 +1,5 @@
+error: cannot mix field names with `partition`/`local` syntax
+ --> tests/ui/key_mixed_simple_then_named.rs:2:11
+  |
+2 | #[key(id, partition = name)]
+  |           ^^^^^^^^^
