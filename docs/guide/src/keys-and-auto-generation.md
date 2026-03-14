@@ -209,8 +209,8 @@ support auto-incrementing columns. DynamoDB does not.
 
 ## Composite keys
 
-A composite key uses two or more fields as the primary key. Toasty supports two
-ways to define composite keys.
+A composite key uses two or more fields as the primary key. Toasty supports
+three ways to define composite keys.
 
 ### Multiple `#[key]` fields
 
@@ -249,6 +249,61 @@ let enrollment = Enrollment::get_by_student_id_and_course_id(
 # Ok(())
 # }
 ```
+
+### Model-level `#[key(...)]`
+
+Instead of annotating each field, you can list the key fields in a single
+`#[key(...)]` attribute on the struct:
+
+```rust
+# use toasty::Model;
+#[derive(Debug, toasty::Model)]
+#[key(student_id, course_id)]
+struct Enrollment {
+    student_id: u64,
+
+    course_id: u64,
+
+    grade: Option<String>,
+}
+```
+
+`#[key(student_id, course_id)]` on the struct is equivalent to putting `#[key]`
+on both `student_id` and `course_id`. It generates the same lookup methods:
+
+```rust
+# use toasty::Model;
+# #[derive(Debug, toasty::Model)]
+# #[key(student_id, course_id)]
+# struct Enrollment {
+#     student_id: u64,
+#     course_id: u64,
+#     grade: Option<String>,
+# }
+# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
+let enrollment = Enrollment::get_by_student_id_and_course_id(
+    &mut db, &1, &101
+).await?;
+# Ok(())
+# }
+```
+
+This also works for single-field keys — `#[key(code)]` on the struct is
+equivalent to `#[key]` on the `code` field:
+
+```rust
+# use toasty::Model;
+#[derive(Debug, toasty::Model)]
+#[key(code)]
+struct Country {
+    code: String,
+
+    name: String,
+}
+```
+
+You cannot mix plain field names with `partition`/`local` syntax in the same
+`#[key(...)]` attribute. Use one style or the other.
 
 ### Partition and local keys
 
@@ -307,4 +362,5 @@ For a model with `#[key]`, Toasty generates these methods:
 |---|---|
 | `#[key]` on single field | `get_by_<field>()`, `filter_by_<field>()`, `delete_by_<field>()` |
 | `#[key]` on multiple fields | `get_by_<a>_and_<b>()`, `filter_by_<a>_and_<b>()`, `delete_by_<a>_and_<b>()` |
+| `#[key(a, b)]` on struct | Same as `#[key]` on multiple fields |
 | `#[key(partition = a, local = b)]` | `get_by_<a>_and_<b>()`, `filter_by_<a>()`, `filter_by_<a>_and_<b>()`, `delete_by_<a>_and_<b>()` |
