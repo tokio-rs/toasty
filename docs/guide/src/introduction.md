@@ -4,10 +4,12 @@ Toasty is an async ORM for Rust. It supports both SQL databases (SQLite,
 PostgreSQL, MySQL) and NoSQL databases (DynamoDB).
 
 You define your models as Rust structs and annotate them with
-`#[derive(toasty::Model)]`. Toasty's derive macro generates query builders,
-create/update builders, and relationship accessors at compile time. There is no
-separate schema file and no code generation step — everything happens through
-Rust's macro system.
+`#[derive(toasty::Model)]`. Toasty infers the database schema from your
+annotated structs — field types map to column types, and attributes like
+`#[key]`, `#[unique]`, and `#[index]` control the schema. You can customize the
+mapping with attributes for table names, column names, and column types. Toasty's
+derive macro also generates query builders, create/update builders, and
+relationship accessors at compile time.
 
 ```rust
 # use toasty::Model;
