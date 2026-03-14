@@ -1,16 +1,16 @@
-use super::{IntoExpr, IntoSelect, Path, Select, Statement};
+use super::{IntoExpr, IntoStatement, List, Path, Statement};
 use crate::Model;
 use std::{fmt, marker::PhantomData};
 use toasty_core::stmt;
 
-pub struct Association<T: ?Sized> {
+pub struct Association<T> {
     pub(crate) untyped: stmt::Association,
     _p: PhantomData<T>,
 }
 
-impl<M: Model> Association<[M]> {
+impl<M: Model> Association<List<M>> {
     /// A basic has_many association
-    pub fn many<T: Model>(source: Select<T>, path: Path<[M]>) -> Self {
+    pub fn many<T: Model>(source: super::Select<T>, path: Path<List<M>>) -> Self {
         assert_eq!(path.untyped.root.expect_model(), T::id());
 
         Self {
@@ -24,7 +24,7 @@ impl<M: Model> Association<[M]> {
 
     /// A has_one or belongs_to association via a query, which implies there
     /// could be more than one result.
-    pub fn many_via_one<T: Model>(source: Select<T>, path: Path<M>) -> Self {
+    pub fn many_via_one<T: Model>(source: super::Select<T>, path: Path<M>) -> Self {
         assert_eq!(path.untyped.root.expect_model(), T::id());
 
         Self {
@@ -36,7 +36,7 @@ impl<M: Model> Association<[M]> {
         }
     }
 
-    pub fn insert(self, expr: impl IntoExpr<[M]>) -> Statement<M> {
+    pub fn insert(self, expr: impl IntoExpr<List<M>>) -> Statement<M> {
         let [index] = self.untyped.path.projection.as_slice() else {
             todo!()
         };
@@ -64,8 +64,21 @@ impl<M: Model> Association<[M]> {
     }
 }
 
+impl<T: Model> IntoStatement for Association<List<T>> {
+    type Output = List<T>;
+
+    fn into_statement(self) -> Statement<List<T>> {
+        let query = stmt::Query::builder(stmt::SourceModel {
+            model: T::id(),
+            via: Some(self.untyped),
+        })
+        .build();
+        Statement::from_untyped_stmt(query.into())
+    }
+}
+
 impl<M: Model> Association<M> {
-    pub fn one<T: Model>(source: Select<T>, path: Path<M>) -> Self {
+    pub fn one<T: Model>(source: super::Select<T>, path: Path<M>) -> Self {
         assert_eq!(path.untyped.root.expect_model(), T::id());
 
         Self {
@@ -78,36 +91,21 @@ impl<M: Model> Association<M> {
     }
 }
 
-impl<M: ?Sized> fmt::Debug for Association<M> {
+impl<T: Model> IntoStatement for Association<T> {
+    type Output = List<T>;
+
+    fn into_statement(self) -> Statement<List<T>> {
+        let query = stmt::Query::builder(stmt::SourceModel {
+            model: T::id(),
+            via: Some(self.untyped),
+        })
+        .build();
+        Statement::from_untyped_stmt(query.into())
+    }
+}
+
+impl<M> fmt::Debug for Association<M> {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.untyped.fmt(fmt)
-    }
-}
-
-impl<T: Model> IntoSelect for Association<[T]> {
-    type Model = T;
-
-    fn into_select(self) -> Select<T> {
-        Select::from_untyped(
-            stmt::Query::builder(stmt::SourceModel {
-                model: T::id(),
-                via: Some(self.untyped),
-            })
-            .build(),
-        )
-    }
-}
-
-impl<T: Model> IntoSelect for Association<T> {
-    type Model = T;
-
-    fn into_select(self) -> Select<T> {
-        Select::from_untyped(
-            stmt::Query::builder(stmt::SourceModel {
-                model: T::id(),
-                via: Some(self.untyped),
-            })
-            .build(),
-        )
     }
 }

@@ -52,9 +52,8 @@ async fn main() -> toasty::Result<()> {
     for user in users {
         println!("\nUser: {} ({})", user.name, user.email);
 
-        let mut todos = user.todos().all(&mut db).await?;
-        while let Some(todo) = todos.next().await {
-            let todo = todo?;
+        let todos = user.todos().all(&mut db).await?;
+        for todo in todos {
             let status = if todo.completed { "✓" } else { " " };
             println!("  [{}] {}", status, todo.title);
         }

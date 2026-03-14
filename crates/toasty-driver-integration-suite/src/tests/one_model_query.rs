@@ -46,11 +46,7 @@ pub async fn query_index_eq(test: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
 
-    let mut users = User::filter_by_name("one")
-        .all(&mut db)
-        .await?
-        .collect::<Vec<_>>()
-        .await?;
+    let mut users = User::filter_by_name("one").all(&mut db).await?;
 
     users.sort_by_key(|u| u.email.clone());
 
@@ -125,8 +121,6 @@ pub async fn query_partition_key_string_eq(test: &mut Test) -> Result<()> {
             .and(Team::fields().name().eq("Portland Timbers")),
     )
     .all(&mut db)
-    .await?
-    .collect::<Vec<_>>()
     .await?;
 
     let mut names = teams.iter().map(|team| &team.name).collect::<Vec<_>>();
@@ -142,8 +136,6 @@ pub async fn query_partition_key_string_eq(test: &mut Test) -> Result<()> {
             .and(Team::fields().founded().eq(2009)),
     )
     .all(&mut db)
-    .await?
-    .collect::<Vec<_>>()
     .await?;
 
     let mut names = teams.iter().map(|team| &team.name).collect::<Vec<_>>();
@@ -160,8 +152,6 @@ pub async fn query_partition_key_string_eq(test: &mut Test) -> Result<()> {
             .and(Team::fields().name().eq("Portland Timbers")),
     )
     .all(&mut db)
-    .await?
-    .collect::<Vec<_>>()
     .await?;
 
     assert_eq!(1, teams.len());
@@ -181,8 +171,6 @@ pub async fn query_partition_key_string_eq(test: &mut Test) -> Result<()> {
             .and(Team::fields().name().eq("LA Galaxy")),
     )
     .all(&mut db)
-    .await?
-    .collect::<Vec<_>>()
     .await?;
 
     assert!(teams.is_empty());
@@ -530,8 +518,6 @@ pub async fn query_or_with_index(test: &mut Test) -> Result<()> {
         ),
     )
     .all(&mut db)
-    .await?
-    .collect::<Vec<_>>()
     .await?;
 
     assert_eq!(2, players.len());
@@ -550,8 +536,6 @@ pub async fn query_or_with_index(test: &mut Test) -> Result<()> {
         ),
     )
     .all(&mut db)
-    .await?
-    .collect::<Vec<_>>()
     .await?;
 
     assert_eq!(3, players.len());
@@ -604,8 +588,6 @@ pub async fn query_or_on_partition_key(test: &mut Test) -> Result<()> {
             .or(Player::fields().team().eq("Sounders")),
     )
     .all(&mut db)
-    .await?
-    .collect::<Vec<_>>()
     .await?;
 
     assert_eq!(4, players.len());
@@ -669,8 +651,6 @@ pub async fn query_or_on_composite_pk(test: &mut Test) -> Result<()> {
                 .and(Player::fields().name().eq("Clint Dempsey"))),
     )
     .all(&mut db)
-    .await?
-    .collect::<Vec<_>>()
     .await?;
 
     assert_eq!(2, players.len());
@@ -730,8 +710,6 @@ pub async fn query_or_with_comparisons(test: &mut Test) -> Result<()> {
         ),
     )
     .all(&mut db)
-    .await?
-    .collect::<Vec<_>>()
     .await?;
 
     assert_eq!(2, players.len());
@@ -1084,8 +1062,6 @@ pub async fn query_not_with_index(test: &mut Test) -> Result<()> {
             .and(Player::fields().position().eq("Midfielder").not()),
     )
     .all(&mut db)
-    .await?
-    .collect::<Vec<_>>()
     .await?;
 
     assert_eq!(2, players.len());
@@ -1103,8 +1079,6 @@ pub async fn query_not_with_index(test: &mut Test) -> Result<()> {
             .and(Player::fields().number().gt(8).not()),
     )
     .all(&mut db)
-    .await?
-    .collect::<Vec<_>>()
     .await?;
 
     assert_eq!(3, players.len());
@@ -1157,8 +1131,6 @@ pub async fn query_not_operator_syntax(test: &mut Test) -> Result<()> {
             .and(!Player::fields().position().eq("Midfielder")),
     )
     .all(&mut db)
-    .await?
-    .collect::<Vec<_>>()
     .await?;
 
     assert_eq!(2, players.len());
@@ -1176,8 +1148,6 @@ pub async fn query_not_operator_syntax(test: &mut Test) -> Result<()> {
         ),
     )
     .all(&mut db)
-    .await?
-    .collect::<Vec<_>>()
     .await?;
 
     // Excludes Diego Chara (21), Fanendo Adi (9), Adam Kwarasey (Goalkeeper)

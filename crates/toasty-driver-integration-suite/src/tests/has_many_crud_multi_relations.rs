@@ -56,13 +56,7 @@ pub async fn crud_user_todos_categories(test: &mut Test) -> Result<()> {
     let user = User::create().name("Ann Chovey").exec(&mut db).await?;
 
     // No TODOs
-    assert!(user
-        .todos()
-        .all(&mut db)
-        .await?
-        .collect::<Vec<_>>()
-        .await?
-        .is_empty());
+    assert!(user.todos().all(&mut db).await?.is_empty());
 
     // Create a category
     let category = Category::create().name("Food").exec(&mut db).await?;

@@ -15,7 +15,7 @@ use crate::Load;
 
 use toasty_core::schema::app::FieldId;
 
-pub trait Relation: Load {
+pub trait Relation: Load<Output = Self> {
     /// The target model
     type Model: Model;
 
