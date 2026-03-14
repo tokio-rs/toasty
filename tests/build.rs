@@ -121,7 +121,7 @@ fn generate_guide_tests(base: &Path, out_dir: &str) {
         println!("cargo::rerun-if-changed={}", path.display());
         write!(
             output,
-            "#[doc = include_str!(\"{}\")]\nmod {} {{}}\n\n",
+            "#[doc = include_str!(r\"{}\")]\nmod {} {{}}\n\n",
             path.display(),
             mod_name
         )
