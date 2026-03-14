@@ -1,5 +1,6 @@
 use pulldown_cmark::{CodeBlockKind, Event, Parser, Tag, TagEnd};
 use std::env;
+use std::fmt::Write;
 use std::fs;
 use std::path::Path;
 
@@ -114,18 +115,17 @@ fn generate_guide_tests(base: &Path, out_dir: &str) {
 
     for entry in &entries {
         let path = entry.path();
-        let abs = path.canonicalize().unwrap();
         let stem = path.file_stem().unwrap().to_str().unwrap();
         let mod_name = stem.replace('-', "_");
 
-        // Use forward slashes so include_str! works on Windows
-        // (canonicalize produces \\?\ UNC paths on Windows).
-        let include_path = abs.to_str().unwrap().replace('\\', "/");
-
-        println!("cargo::rerun-if-changed={}", abs.display());
-        output.push_str(&format!(
-            "#[doc = include_str!(\"{include_path}\")]\nmod {mod_name} {{}}\n\n",
-        ));
+        println!("cargo::rerun-if-changed={}", path.display());
+        write!(
+            output,
+            "#[doc = include_str!(\"{}\")]\nmod {} {{}}\n\n",
+            path.display(),
+            mod_name
+        )
+        .unwrap();
     }
 
     let out_path = Path::new(out_dir).join("guide_doc_tests.rs");
