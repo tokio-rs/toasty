@@ -16,7 +16,6 @@ Add the following dependencies to `Cargo.toml`:
 [dependencies]
 toasty = { version = "0.1", features = ["sqlite"] }
 tokio = { version = "1", features = ["full"] }
-uuid = "1"
 ```
 
 The `sqlite` feature enables the SQLite driver. Toasty also supports
@@ -28,11 +27,12 @@ different database.
 Replace the contents of `src/main.rs` with:
 
 ```rust
+# use toasty::Model;
 #[derive(Debug, toasty::Model)]
 struct User {
     #[key]
     #[auto]
-    id: uuid::Uuid,
+    id: u64,
 
     name: String,
 
@@ -40,6 +40,7 @@ struct User {
     email: String,
 }
 
+# async fn __example() -> toasty::Result<()> {
 #[tokio::main]
 async fn main() -> toasty::Result<()> {
     // Build a Db handle, registering all models
@@ -66,6 +67,8 @@ async fn main() -> toasty::Result<()> {
 
     Ok(())
 }
+# Ok(())
+# }
 ```
 
 Run it:
@@ -90,7 +93,7 @@ several types and methods at compile time:
 |---|---|
 | `struct User` | `User::create()` — a builder to insert rows |
 | `#[key]` on `id` | `User::get_by_id()` — fetch by primary key |
-| `#[auto]` on `id` | Auto-generates a UUID when you create a user |
+| `#[auto]` on `id` | Auto-generates an ID when you create a user |
 | `#[unique]` on `email` | `User::get_by_email()` — fetch by email |
 
 You did not write any of these methods. They come from the derive macro. The
@@ -116,15 +119,5 @@ supported database.
 ## Creating tables
 
 `db.push_schema()` creates all tables and indexes defined by your registered
-models. Call it once when setting up a new database:
-
-```rust,ignore
-db.push_schema().await?;
-```
-
-For development, `db.reset_db()` drops the entire database and recreates it
-empty:
-
-```rust,ignore
-db.reset_db().await?;
-```
+models. See [Schema Management](./schema-management.md) for more on managing
+your database schema.

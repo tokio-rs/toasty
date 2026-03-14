@@ -10,11 +10,12 @@ separate schema file and no code generation step — everything happens through
 Rust's macro system.
 
 ```rust
+# use toasty::Model;
 #[derive(Debug, toasty::Model)]
 struct User {
     #[key]
     #[auto]
-    id: uuid::Uuid,
+    id: u64,
 
     name: String,
 
@@ -43,6 +44,7 @@ transactions.
 - **[Getting Started](./getting-started.md)** — set up a project and run your first query
 - **[Defining Models](./defining-models.md)** — struct fields, types, and table mapping
 - **[Keys and Auto-Generation](./keys-and-auto-generation.md)** — primary keys, auto-generated values, composite keys
+- **[Schema Management](./schema-management.md)** — create and reset database tables
 - **[Creating Records](./creating-records.md)** — insert one or many records
 - **[Querying Records](./querying-records.md)** — find, filter, and iterate over results
 - **[Updating Records](./updating-records.md)** — modify existing records
