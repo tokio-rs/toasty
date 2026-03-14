@@ -2,14 +2,14 @@
 
 ## Research Summary
 
-Studied Prisma, Drizzle, and Diesel documentation. Key patterns to adopt:
+Key patterns:
 
-1. **Consistent example domain** (Prisma) — use the same models across all pages so readers never re-orient
-2. **Progressive derive macro introduction** (Diesel) — introduce attributes one at a time, when they're needed
-3. **"What gets generated" sections** (Toasty-specific) — since `#[derive(Model)]` generates query builders, show users the API they get
-4. **One concept per page** (Drizzle) — focused examples, no concept bleed
-5. **Separate "define" from "use"** (Prisma) — teach model definition, then teach how to query it
-6. **SQL alongside ORM code** (Drizzle) — where helpful, show what SQL Toasty generates
+1. **Consistent example domain** — use the same models across all pages so readers never re-orient
+2. **Progressive derive macro introduction** — introduce attributes one at a time, when they're needed
+3. **"What gets generated" sections** — since `#[derive(Model)]` generates query builders, show users the API they get
+4. **One concept per page** — focused examples, no concept bleed
+5. **Separate "define" from "use"** — teach model definition, then teach how to query it
+6. **SQL alongside ORM code** — where helpful, show what SQL Toasty generates
 
 ## Example Domain
 
@@ -17,7 +17,7 @@ Use a **blog application** throughout (User, Post, Comment, Profile). This domai
 - Familiar to all developers
 - Exercises all relationship types (HasMany, BelongsTo, HasOne)
 - Has natural opportunities for indexes, unique constraints, embedded types
-- Matches what Prisma and Diesel use (reduces friction for developers coming from those ORMs)
+- Familiar to developers coming from other ORMs
 
 Each chapter introduces models incrementally. Chapter 1 starts with just `User`. Later chapters add `Post`, `Comment`, `Profile` as needed.
 
