@@ -8,14 +8,27 @@ maps to a database table and each field maps to a column.
 struct User {
     #[key]
     #[auto]
-    id: uuid::Uuid,
+    id: u64,
 
     name: String,
     email: String,
 }
 ```
 
-This creates a `users` table with three columns: `id`, `name`, and `email`.
+This defines a `User` model that maps to a `users` table with three columns.
+In SQLite, the generated table looks like:
+
+```sql
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL
+);
+```
+
+Each struct field becomes a column. Required fields (`String`, `u64`, etc.) map
+to `NOT NULL` columns. The `#[key]` attribute marks the primary key, and
+`#[auto]` tells Toasty to auto-generate the value on insert.
 
 ## Supported field types
 
@@ -51,24 +64,36 @@ toasty = { version = "0.1", features = ["sqlite", "jiff"] }
 
 ## Optional fields
 
-Wrap a field in `Option<T>` to make it nullable:
+Wrap a field in `Option<T>` to make it nullable. An `Option<T>` field maps to a
+nullable column in the database — the column allows `NULL` values instead of
+requiring `NOT NULL`.
 
 ```rust
 #[derive(Debug, toasty::Model)]
 struct User {
     #[key]
     #[auto]
-    id: uuid::Uuid,
+    id: u64,
 
     name: String,
     bio: Option<String>,
 }
 ```
 
-When creating a record, optional fields default to `None` if not set:
+The `bio` field produces a nullable column:
+
+```sql
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    bio TEXT          -- nullable, allows NULL
+);
+```
+
+When creating a record, optional fields default to `NULL` if not set:
 
 ```rust
-// bio will be None
+// bio will be NULL in the database, None in Rust
 let user = User::create()
     .name("Alice")
     .exec(&mut db)
@@ -88,11 +113,13 @@ Override the table name with `#[table]`:
 struct User {
     #[key]
     #[auto]
-    id: uuid::Uuid,
+    id: u64,
 
     name: String,
 }
 ```
+
+This maps to a table named `people` instead of the default `users`.
 
 ## What gets generated
 
@@ -102,40 +129,41 @@ generates:
 **Static methods on the model:**
 
 ```rust
-// Create a new record
-User::create() -> UserCreate
+// Returns a create builder
+User::create()
 
-// Create multiple records
-User::create_many() -> CreateMany<User>
+// Returns a builder for bulk inserts
+User::create_many()
 
-// Query all records
-User::all() -> UserQuery
+// Returns a query builder for all records
+User::all()
 
-// Filter records
-User::filter(expr) -> UserQuery
+// Returns a query builder with a filter applied
+User::filter(expr)
 
-// Get field accessors (for building filter expressions)
-User::fields() -> UserFields
+// Returns field accessors (for building filter expressions)
+User::fields()
 ```
 
 **Instance methods:**
 
 ```rust
-// Update this record
-user.update() -> UserUpdate
+// Returns an update builder for this record
+user.update()
 
-// Delete this record
-user.delete() -> Delete<User>
+// Returns a delete builder for this record
+user.delete()
 ```
 
-**Builder structs:**
+**Builders:**
 
-- `UserCreate` — has a setter method for each field. Call `.exec(&mut db)` to
-  insert.
-- `UserQuery` — has methods like `.all()`, `.first()`, `.get()`,
-  `.collect::<Vec<_>>()` to execute the query.
-- `UserUpdate` — has a setter method for each field. Call `.exec(&mut db)` to
-  apply changes.
+- The **create builder** returned by `User::create()` has a setter method for
+  each field. Call `.exec(&mut db)` to insert.
+- The **query builder** returned by `User::all()` or `User::filter()` has
+  methods like `.all()`, `.first()`, `.get()`, and `.collect::<Vec<_>>()` to
+  execute the query.
+- The **update builder** returned by `user.update()` has a setter method for
+  each field. Call `.exec(&mut db)` to apply changes.
 
 Additional methods are generated when you add attributes like `#[key]`,
 `#[unique]`, and `#[index]`. The next chapters cover these.

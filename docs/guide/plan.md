@@ -188,6 +188,9 @@ Per the write-docs skill:
 - Concrete examples over explanation
 - Every sentence conveys information
 - Start with what the thing is, then show how to use it
+- **Explain database schema mapping** — when introducing model concepts, also explain how they map to the database schema (e.g., struct → table, field → column, `Option<T>` → nullable column, `#[key]` → primary key constraint). Show the generated SQL/DDL where it aids understanding.
+- **Use auto-increment `u64` for examples** — keeps examples minimal (no `uuid` dependency). Assume SQLite. UUID examples can appear later in the Keys chapter.
+- **Don't expose non-nameable types** — when generated types (like `UserCreate`, `UserUpdate`, `UserQuery`) are not directly nameable by the user, show how they are used (method chains) rather than listing type names. Call these "builders", not "builder structs".
 
 ## Implementation Order
 
