@@ -118,11 +118,13 @@ fn generate_guide_tests(base: &Path, out_dir: &str) {
         let stem = path.file_stem().unwrap().to_str().unwrap();
         let mod_name = stem.replace('-', "_");
 
+        // Use forward slashes so include_str! works on Windows
+        // (canonicalize produces \\?\ UNC paths on Windows).
+        let include_path = abs.to_str().unwrap().replace('\\', "/");
+
         println!("cargo::rerun-if-changed={}", abs.display());
         output.push_str(&format!(
-            "#[doc = include_str!(\"{}\")]\nmod {} {{}}\n\n",
-            abs.display(),
-            mod_name
+            "#[doc = include_str!(\"{include_path}\")]\nmod {mod_name} {{}}\n\n",
         ));
     }
 
