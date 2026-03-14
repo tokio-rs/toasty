@@ -50,7 +50,7 @@ Each chapter introduces models incrementally. Chapter 1 starts with just `User`.
 #### 4. Keys and Auto-Generation
 - `#[key]` marks the primary key
 - `#[auto]` auto-generates values: `uuid(v4)`, `uuid(v7)`, `increment`
-- `#[auto]` with no argument on UUID fields defaults to v4
+- `#[auto]` with no argument on UUID fields defaults to v7
 - Composite keys: `#[key(partition = field1, local = field2)]`
 - **What gets generated**: `get_by_id()`, `get_by_pk()` methods
 
@@ -99,6 +99,7 @@ Each chapter introduces models incrementally. Chapter 1 starts with just `User`.
 - `#[update(expr)]` — expression applied on create and update
 - `#[serialize(json)]` — store complex types as JSON
 - Timestamps: `created_at` and `updated_at` auto-behavior
+- **Date and time fields** (section): enabling the `jiff` feature, supported types (`Timestamp`, `Date`, `Time`, `DateTime`), `#[auto]` shorthand for `created_at`/`updated_at` (expands to `#[default(jiff::Timestamp::now())]` and `#[update(jiff::Timestamp::now())]`)
 
 ### Part 4: Relationships
 
