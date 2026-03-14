@@ -29,6 +29,7 @@ members = [
 
     # Tests
     "tests",
+    "tests/guide-doctests",
 
     # Benchmarks
     "benches",

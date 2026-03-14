@@ -101,7 +101,7 @@ rest of this guide shows everything the macro can generate and how to use it.
 `Db::builder()` creates a builder where you register your models and then
 connect to a database. Every model must be registered before connecting.
 
-```rust
+```rust,ignore
 let mut db = toasty::Db::builder()
     .register::<User>()
     .register::<Post>()
@@ -118,13 +118,13 @@ supported database.
 `db.push_schema()` creates all tables and indexes defined by your registered
 models. Call it once when setting up a new database:
 
-```rust
+```rust,ignore
 db.push_schema().await?;
 ```
 
 For development, `db.reset_db()` drops the entire database and recreates it
 empty:
 
-```rust
+```rust,ignore
 db.reset_db().await?;
 ```

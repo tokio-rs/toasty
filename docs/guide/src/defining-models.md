@@ -92,7 +92,7 @@ CREATE TABLE users (
 
 When creating a record, optional fields default to `NULL` if not set:
 
-```rust
+```rust,ignore
 // bio will be NULL in the database, None in Rust
 let user = User::create()
     .name("Alice")
@@ -128,7 +128,7 @@ generates:
 
 **Static methods on the model:**
 
-```rust
+```rust,ignore
 // Returns a create builder
 User::create()
 
@@ -147,7 +147,7 @@ User::fields()
 
 **Instance methods:**
 
-```rust
+```rust,ignore
 // Returns an update builder for this record
 user.update()
 

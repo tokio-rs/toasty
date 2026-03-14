@@ -21,7 +21,7 @@ struct User {
 
 This generates `User::get_by_id()` to fetch a user by primary key:
 
-```rust
+```rust,ignore
 let user = User::get_by_id(&mut db, &some_id).await?;
 ```
 
@@ -31,7 +31,7 @@ The `#[auto]` attribute tells Toasty to generate the field's value
 automatically. You don't set auto fields when creating a record — Toasty fills
 them in.
 
-```rust
+```rust,ignore
 // No need to set `id` — it's auto-generated
 let user = User::create()
     .name("Alice")
@@ -53,7 +53,7 @@ The behavior of `#[auto]` depends on the field type:
 
 You can specify the strategy explicitly:
 
-```rust
+```rust,ignore
 // UUID v7 (time-ordered, the default for Uuid)
 #[auto(uuid(v7))]
 id: uuid::Uuid,
@@ -90,7 +90,7 @@ struct Post {
 }
 ```
 
-```rust
+```rust,ignore
 let post = Post::create()
     .title("Hello World")
     .exec(&mut db)
@@ -122,7 +122,7 @@ The `partition` field determines which partition the record is stored in. The
 
 With composite keys, Toasty generates lookup methods that take both fields:
 
-```rust
+```rust,ignore
 let todo = Todo::get_by_user_id_and_id(
     &mut db, &user_id, &todo_id
 ).await?;
@@ -130,7 +130,7 @@ let todo = Todo::get_by_user_id_and_id(
 
 You can also query by just the partition key to get all records in a partition:
 
-```rust
+```rust,ignore
 let todos = Todo::filter_by_user_id(&user_id)
     .all(&mut db)
     .await?;
