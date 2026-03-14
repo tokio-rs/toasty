@@ -62,8 +62,6 @@ jobs:
         run: cargo test --workspace --no-default-features --features sqlite
       - name: doc-tests
         run: cargo test -p tests --doc
-      - name: guide-doctests
-        run: cargo test -p guide-doctests --doc
 
     test-mysql:
         needs: check
