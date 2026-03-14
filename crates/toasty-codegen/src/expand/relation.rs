@@ -404,9 +404,12 @@ impl Expand<'_> {
 
                 #pair_check
 
-                <#ty as #toasty::Relation>::Many::from_stmt(
-                    #toasty::stmt::Association::many(self.pk_select(), Self::fields().#field_ident().into())
-                )
+                {
+                    use #toasty::IntoStatement;
+                    <#ty as #toasty::Relation>::Many::from_stmt(
+                        #toasty::stmt::Association::many(self.into_statement().into_select().unwrap(), Self::fields().#field_ident().into())
+                    )
+                }
             }
         }
     }
@@ -476,7 +479,7 @@ impl Expand<'_> {
                 {
                     use #toasty::IntoStatement;
                     <#ty as #toasty::Relation>::One::from_stmt(
-                        #toasty::stmt::Association::one(self.pk_select(), Self::fields().#field_ident().into()).into_statement().into_select().unwrap()
+                        #toasty::stmt::Association::one(self.into_statement().into_select().unwrap(), Self::fields().#field_ident().into()).into_statement().into_select().unwrap()
                     )
                 }
             }
