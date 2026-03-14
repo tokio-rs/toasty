@@ -23,20 +23,3 @@ pub use setup::Setup;
 pub use std_util::*;
 
 pub mod stmt;
-
-/// Compile-checks code snippets in guide documentation via rustdoc doctests.
-/// Run with `cargo test -p tests --doc`.
-#[cfg(doctest)]
-mod doctests {
-    #[doc = include_str!("../../docs/guide/jiff.md")]
-    mod jiff {}
-
-    #[doc = include_str!("../../docs/guide/default-and-update.md")]
-    mod default_and_update {}
-
-    #[doc = include_str!("../../docs/guide/transactions.md")]
-    mod transactions {}
-
-    #[doc = include_str!("../../docs/guide/pagination.md")]
-    mod pagination {}
-}

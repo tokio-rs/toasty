@@ -1,0 +1,6 @@
+[book]
+title = "Toasty Guide"
+authors = ["Toasty Contributors"]
+
+[build]
+build-dir = "book"
