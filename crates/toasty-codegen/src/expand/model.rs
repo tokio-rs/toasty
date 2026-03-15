@@ -130,7 +130,7 @@ impl Expand<'_> {
             }
 
             impl #toasty::IntoStatement for &#model_ident {
-                type Output = #toasty::List<#model_ident>;
+                type Returning = #toasty::List<#model_ident>;
 
                 fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
                     use #toasty::IntoStatement;
@@ -139,7 +139,7 @@ impl Expand<'_> {
             }
 
             impl #toasty::IntoStatement for &mut #model_ident {
-                type Output = #toasty::List<#model_ident>;
+                type Returning = #toasty::List<#model_ident>;
 
                 fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
                     (&*self).into_statement()
@@ -147,7 +147,7 @@ impl Expand<'_> {
             }
 
             impl #toasty::IntoStatement for #model_ident {
-                type Output = #toasty::List<#model_ident>;
+                type Returning = #toasty::List<#model_ident>;
 
                 fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
                     (&self).into_statement()

@@ -95,7 +95,7 @@ impl Expand<'_> {
             }
 
             impl #toasty::IntoStatement for Many {
-                type Output = #toasty::List<#model_ident>;
+                type Returning = #toasty::List<#model_ident>;
 
                 fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
                     use #toasty::IntoStatement;
@@ -122,7 +122,7 @@ impl Expand<'_> {
             }
 
             impl #toasty::IntoStatement for One {
-                type Output = #toasty::List<#model_ident>;
+                type Returning = #toasty::List<#model_ident>;
 
                 fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
                     use #toasty::IntoStatement;
@@ -189,7 +189,7 @@ impl Expand<'_> {
 
                 #vis fn in_query<#in_query_ty>(self, rhs: #in_query_ty) -> #toasty::stmt::Expr<bool>
                 where
-                    #in_query_ty: #toasty::IntoStatement<Output = #toasty::List<#model_ident>>,
+                    #in_query_ty: #toasty::IntoStatement<Returning = #toasty::List<#model_ident>>,
                 {
                     self.path.in_query(rhs)
                 }
