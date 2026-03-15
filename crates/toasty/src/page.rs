@@ -20,7 +20,7 @@ pub struct Page<M> {
     pub prev_cursor: Option<stmt::Expr>,
 }
 
-impl<M: Load<Output = M>> Page<M> {
+impl<M> Page<M> {
     pub(crate) fn new(
         items: Vec<M>,
         query: Select<M>,
@@ -44,7 +44,9 @@ impl<M: Load<Output = M>> Page<M> {
     pub fn has_prev(&self) -> bool {
         self.prev_cursor.is_some()
     }
+}
 
+impl<M: Load> Page<M> {
     /// Fetches the next page of results.
     ///
     /// Returns `None` if there are no more pages available. Uses the cursor from
@@ -61,7 +63,7 @@ impl<M: Load<Output = M>> Page<M> {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn next(&self, executor: &mut dyn Executor) -> Result<Option<Page<M>>> {
+    pub async fn next(&self, executor: &mut dyn Executor) -> Result<Option<Page<M::Output>>> {
         match &self.next_cursor {
             Some(cursor) => Ok(Some(
                 Paginate::from(self.query.clone())
@@ -89,7 +91,7 @@ impl<M: Load<Output = M>> Page<M> {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn prev(&self, executor: &mut dyn Executor) -> Result<Option<Page<M>>> {
+    pub async fn prev(&self, executor: &mut dyn Executor) -> Result<Option<Page<M::Output>>> {
         match &self.prev_cursor {
             Some(cursor) => Ok(Some(
                 Paginate::from(self.query.clone())

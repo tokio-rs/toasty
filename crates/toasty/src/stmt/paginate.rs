@@ -59,24 +59,28 @@ impl<M> Paginate<M> {
     }
 }
 
-impl<M: Load<Output = M>> Paginate<M> {
-    pub async fn collect(mut self, executor: &mut dyn Executor) -> Result<crate::Page<M>> {
+impl<M: Load> Paginate<M> {
+    pub async fn collect(mut self, executor: &mut dyn Executor) -> Result<crate::Page<M::Output>> {
         // Extract the limit from the query to determine page size
         let page_size = match &self.query.untyped.limit {
-            Some(stmt::Limit { limit, .. }) => {
-                match limit {
-                    stmt::Expr::Value(stmt::Value::I64(n)) => *n as usize,
-                    _ => {
-                        // Fallback if we can't determine the limit
-                        let items: Vec<M> = executor.all(self.query.clone()).await?;
-                        return Ok(crate::Page::new(items, self.query, None, None));
-                    }
-                }
-            }
+            Some(stmt::Limit {
+                limit: stmt::Expr::Value(stmt::Value::I64(n)),
+                ..
+            }) => *n as usize,
             _ => {
-                // Not a paginated query, just collect all items
-                let items: Vec<M> = executor.all(self.query.clone()).await?;
-                return Ok(crate::Page::new(items, self.query, None, None));
+                let values: Vec<Value> = executor
+                    .exec(self.query.clone().into())
+                    .await?
+                    .collect()
+                    .await?;
+                let items: Vec<M::Output> =
+                    values.into_iter().map(M::load).collect::<Result<_>>()?;
+                return Ok(crate::Page::new(
+                    items,
+                    Select::from_untyped(self.query.untyped),
+                    None,
+                    None,
+                ));
             }
         };
 
@@ -124,14 +128,11 @@ impl<M: Load<Output = M>> Paginate<M> {
         };
 
         // Load the raw values into model instances
-        let loaded_items: Vec<M> = items
-            .into_iter()
-            .map(|v| M::load(v))
-            .collect::<Result<Vec<M>>>()?;
+        let loaded_items: Vec<M::Output> = items.into_iter().map(M::load).collect::<Result<_>>()?;
 
         Ok(crate::Page::new(
             loaded_items,
-            self.query,
+            Select::from_untyped(self.query.untyped),
             next_cursor,
             prev_cursor,
         ))
