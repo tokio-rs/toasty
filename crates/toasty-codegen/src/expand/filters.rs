@@ -62,7 +62,7 @@ impl Expand<'_> {
             .collect()
     }
 
-    fn expand_model_get_method(&self, filter: &Filter, self_into_select: bool) -> TokenStream {
+    fn expand_model_get_method(&self, filter: &Filter, self_into_query: bool) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
@@ -77,7 +77,7 @@ impl Expand<'_> {
         let self_arg;
         let base;
 
-        if self_into_select {
+        if self_into_query {
             self_arg = quote!(self,);
             base = quote!(self.);
         } else {
@@ -105,7 +105,7 @@ impl Expand<'_> {
         }
     }
 
-    fn expand_model_filter_method(&self, filter: &Filter, self_into_select: bool) -> TokenStream {
+    fn expand_model_filter_method(&self, filter: &Filter, self_into_query: bool) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
@@ -115,12 +115,12 @@ impl Expand<'_> {
         let self_arg;
         let body;
 
-        if self_into_select {
+        if self_into_query {
             let expr = self.expand_query_filter_expr(filter);
 
             self_arg = quote!(self,);
             body = quote! {
-                #query_struct_ident::from_stmt({ use #toasty::IntoStatement; self.into_statement().into_select().unwrap() }).filter( #expr )
+                #query_struct_ident::from_stmt({ use #toasty::IntoStatement; self.into_statement().into_query().unwrap() }).filter( #expr )
             };
         } else {
             self_arg = quote!();
@@ -140,7 +140,7 @@ impl Expand<'_> {
     fn expand_model_filter_batch_method(
         &self,
         filter: &Filter,
-        self_into_select: bool,
+        self_into_query: bool,
     ) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
@@ -150,9 +150,9 @@ impl Expand<'_> {
         let self_arg;
         let query;
 
-        if self_into_select {
+        if self_into_query {
             self_arg = quote!(self,);
-            query = quote!(#query_struct_ident::from_stmt({ use #toasty::IntoStatement; self.into_statement().into_select().unwrap() }));
+            query = quote!(#query_struct_ident::from_stmt({ use #toasty::IntoStatement; self.into_statement().into_query().unwrap() }));
         } else {
             self_arg = quote!();
             query = quote!(#query_struct_ident::default());

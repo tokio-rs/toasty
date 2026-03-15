@@ -142,7 +142,7 @@ impl<T> Path<List<T>> {
         T: crate::Model,
     {
         // Build a query on the child model filtered by `filter`
-        let child_query = super::Select::<T>::filter(filter);
+        let child_query = super::Query::<T>::filter(filter);
 
         Expr {
             untyped: stmt::Expr::in_subquery(self.untyped.into_stmt(), child_query.untyped),

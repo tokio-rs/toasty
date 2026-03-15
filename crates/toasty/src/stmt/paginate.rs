@@ -1,4 +1,4 @@
-use super::Select;
+use super::Query;
 
 use crate::{engine::eval::Func, Executor, ExecutorExt, Load, Result};
 
@@ -7,7 +7,7 @@ use toasty_core::stmt::{self, visit_mut, Expr, ExprRecord, OrderBy, Projection, 
 #[derive(Debug)]
 pub struct Paginate<M> {
     /// How to query the data
-    query: Select<M>,
+    query: Query<M>,
 
     /// Whether we are currently paginating backwards.
     ///
@@ -17,7 +17,7 @@ pub struct Paginate<M> {
 }
 
 impl<M> Paginate<M> {
-    pub fn new(mut query: Select<M>, per_page: usize) -> Self {
+    pub fn new(mut query: Query<M>, per_page: usize) -> Self {
         assert!(
             query.untyped.limit.is_none(),
             "pagination requires no limit clause"
@@ -77,7 +77,7 @@ impl<M: Load> Paginate<M> {
                     values.into_iter().map(M::load).collect::<Result<_>>()?;
                 return Ok(crate::Page::new(
                     items,
-                    Select::from_untyped(self.query.untyped),
+                    Query::from_untyped(self.query.untyped),
                     None,
                     None,
                 ));
@@ -132,15 +132,15 @@ impl<M: Load> Paginate<M> {
 
         Ok(crate::Page::new(
             loaded_items,
-            Select::from_untyped(self.query.untyped),
+            Query::from_untyped(self.query.untyped),
             next_cursor,
             prev_cursor,
         ))
     }
 }
 
-impl<M> From<Select<M>> for Paginate<M> {
-    fn from(value: Select<M>) -> Self {
+impl<M> From<Query<M>> for Paginate<M> {
+    fn from(value: Query<M>) -> Self {
         assert!(
             value.untyped.limit.is_some(),
             "pagination requires a limit clause"

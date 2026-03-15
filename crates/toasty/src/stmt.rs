@@ -30,8 +30,8 @@ pub use path::Path;
 
 pub use crate::model::{Auto, Field};
 
-mod select;
-pub use select::Select;
+mod query;
+pub use query::Query;
 
 mod update;
 pub use update::Update;
@@ -65,16 +65,16 @@ impl<M> Statement<M> {
 }
 
 impl<M> Statement<List<M>> {
-    pub fn into_select(self) -> Option<Select<M>> {
+    pub fn into_query(self) -> Option<Query<M>> {
         match self.untyped {
-            stmt::Statement::Query(q) => Some(Select::from_untyped(q)),
+            stmt::Statement::Query(q) => Some(Query::from_untyped(q)),
             _ => None,
         }
     }
 }
 
-impl<M> From<Select<M>> for Statement<M> {
-    fn from(value: Select<M>) -> Self {
+impl<M> From<Query<M>> for Statement<M> {
+    fn from(value: Query<M>) -> Self {
         Self {
             untyped: value.untyped.into(),
             _p: PhantomData,

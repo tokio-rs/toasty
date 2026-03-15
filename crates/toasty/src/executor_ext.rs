@@ -12,7 +12,7 @@ pub trait ExecutorExt: Executor {
     /// Execute a query, returning all matching records.
     fn all<M: Load<Output = M>>(
         &mut self,
-        query: stmt::Select<M>,
+        query: stmt::Query<M>,
     ) -> impl Future<Output = Result<Vec<M>>> {
         async move {
             let mut records = self.exec(query.into()).await?;
@@ -27,7 +27,7 @@ pub trait ExecutorExt: Executor {
     /// Execute a query, returning the first matching record or `None`.
     fn first<M: Load<Output = M>>(
         &mut self,
-        query: stmt::Select<M>,
+        query: stmt::Query<M>,
     ) -> impl Future<Output = Result<Option<M>>> {
         async move {
             let mut records = self.exec(query.into()).await?;
@@ -42,7 +42,7 @@ pub trait ExecutorExt: Executor {
     /// Execute a query, returning exactly one record or an error.
     fn get<M: Load<Output = M>>(
         &mut self,
-        query: stmt::Select<M>,
+        query: stmt::Query<M>,
     ) -> impl Future<Output = Result<M>> {
         async move {
             let mut records = self.exec(query.into()).await?;
@@ -58,7 +58,7 @@ pub trait ExecutorExt: Executor {
     }
 
     /// Delete all records matching the query.
-    fn delete<M>(&mut self, query: stmt::Select<M>) -> impl Future<Output = Result<()>> {
+    fn delete<M>(&mut self, query: stmt::Query<M>) -> impl Future<Output = Result<()>> {
         async move {
             self.exec(query.delete().into()).await?;
             Ok(())

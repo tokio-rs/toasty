@@ -19,11 +19,11 @@ impl Expand<'_> {
 
         quote! {
             #vis struct #query_struct_ident {
-                stmt: #toasty::stmt::Select<#model_ident>,
+                stmt: #toasty::stmt::Query<#model_ident>,
             }
 
             impl #query_struct_ident {
-                #vis const fn from_stmt(stmt: #toasty::stmt::Select<#model_ident>) -> #query_struct_ident {
+                #vis const fn from_stmt(stmt: #toasty::stmt::Query<#model_ident>) -> #query_struct_ident {
                     #query_struct_ident { stmt }
                 }
 
@@ -111,7 +111,7 @@ impl Expand<'_> {
 
             impl #toasty::Default for #query_struct_ident {
                 fn default() -> #query_struct_ident {
-                    #query_struct_ident { stmt: #toasty::stmt::Select::all() }
+                    #query_struct_ident { stmt: #toasty::stmt::Query::all() }
                 }
             }
         }
@@ -143,7 +143,7 @@ impl Expand<'_> {
                 <#target as #toasty::Relation>::Query::from_stmt(
                     #toasty::stmt::Association::many_via_one(
                         self.stmt, #model_ident::fields().#field_ident().into()
-                    ).into_statement().into_select().unwrap()
+                    ).into_statement().into_query().unwrap()
                 )
             }
         }
@@ -162,7 +162,7 @@ impl Expand<'_> {
                 <#target as #toasty::Relation>::Query::from_stmt(
                     #toasty::stmt::Association::many(
                         self.stmt, #model_ident::fields().#field_ident().into()
-                    ).into_statement().into_select().unwrap()
+                    ).into_statement().into_query().unwrap()
                 )
             }
         }
@@ -181,7 +181,7 @@ impl Expand<'_> {
                 <#target as #toasty::Relation>::Query::from_stmt(
                     #toasty::stmt::Association::many_via_one(
                         self.stmt, #model_ident::fields().#field_ident().into()
-                    ).into_statement().into_select().unwrap()
+                    ).into_statement().into_query().unwrap()
                 )
             }
         }
