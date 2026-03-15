@@ -106,7 +106,7 @@ impl<T> Path<T> {
 
     pub fn in_query<Q>(self, rhs: Q) -> Expr<bool>
     where
-        Q: IntoStatement<Output = List<T>>,
+        Q: IntoStatement<Returning = List<T>>,
     {
         let query = rhs.into_statement().into_untyped_query();
         Expr {

@@ -47,7 +47,7 @@ impl<M: Model> Insert<M> {
     /// Set the scope of the insert.
     pub fn set_scope<S>(&mut self, scope: S)
     where
-        S: IntoStatement<Output = List<M>>,
+        S: IntoStatement<Returning = List<M>>,
     {
         self.untyped.target =
             stmt::InsertTarget::Scope(Box::new(scope.into_statement().into_untyped_query()));
