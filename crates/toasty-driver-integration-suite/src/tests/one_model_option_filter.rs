@@ -279,8 +279,6 @@ pub async fn filter_option_with_partition_key(test: &mut Test) -> Result<()> {
             .and(Product::fields().description().is_none()),
     )
     .all(&mut db)
-    .await?
-    .collect::<Vec<_>>()
     .await?;
 
     assert_eq!(1, products.len());
@@ -294,8 +292,6 @@ pub async fn filter_option_with_partition_key(test: &mut Test) -> Result<()> {
             .and(Product::fields().description().is_some()),
     )
     .all(&mut db)
-    .await?
-    .collect::<Vec<_>>()
     .await?;
 
     assert_eq!(2, products.len());
@@ -311,8 +307,6 @@ pub async fn filter_option_with_partition_key(test: &mut Test) -> Result<()> {
             .and(Product::fields().description().is_none()),
     )
     .all(&mut db)
-    .await?
-    .collect::<Vec<_>>()
     .await?;
 
     assert_eq!(1, products.len());

@@ -20,7 +20,7 @@ impl Expand<'_> {
 
         quote! {
             #vis struct Many {
-                stmt: #toasty::stmt::Association<[#model_ident]>,
+                stmt: #toasty::stmt::Association<#toasty::List<#model_ident>>,
             }
 
             #vis struct One {
@@ -32,7 +32,7 @@ impl Expand<'_> {
             }
 
             #vis struct ManyField {
-                path: #toasty::Path<[#model_ident]>,
+                path: #toasty::Path<#toasty::List<#model_ident>>,
             }
 
             #vis struct OneField {
@@ -40,44 +40,45 @@ impl Expand<'_> {
             }
 
             impl Many {
-                pub fn from_stmt(stmt: #toasty::stmt::Association<[#model_ident]>) -> Many {
+                pub fn from_stmt(stmt: #toasty::stmt::Association<#toasty::List<#model_ident>>) -> Many {
                     Many { stmt }
                 }
 
                 #filter_methods
 
                 /// Iterate all entries in the relation
-                #vis async fn all(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#toasty::Cursor<#model_ident>> {
-                    use #toasty::IntoSelect;
-                    use #toasty::ExecutorExt;
-                    executor.all(self.stmt.into_select()).await
+                #vis async fn all(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<Vec<#model_ident>> {
+                    use #toasty::{ExecutorExt, IntoStatement};
+                    executor.all(self.into_statement().into_select().unwrap()).await
                 }
 
                 #vis async fn collect<#collect_ty>(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#collect_ty>
                 where
-                    #collect_ty: #toasty::FromCursor<#model_ident>
+                    #collect_ty: Extend<#model_ident> + Default,
                 {
-                    self.all(executor).await?.collect().await
+                    let items = self.all(executor).await?;
+                    let mut out = #collect_ty::default();
+                    out.extend(items);
+                    Ok(out)
                 }
 
                 #vis fn query(
                     self,
                     filter: #toasty::stmt::Expr<bool>
                 ) -> #query_ident {
-                    use #toasty::IntoSelect;
-                    let query = self.into_select();
-                    #query_ident::from_stmt(query.and(filter))
+                    use #toasty::IntoStatement;
+                    let select = self.into_statement().into_select().unwrap();
+                    #query_ident::from_stmt(select.and(filter))
                 }
 
                 #vis fn create(self) -> #create_builder_ident {
-                    use #toasty::IntoSelect;
                     let mut builder = #create_builder_ident::default();
-                    builder.stmt.set_scope(self.stmt.into_select());
+                    builder.stmt.set_scope(self.stmt);
                     builder
                 }
 
                 /// Add an item to the association
-                #vis async fn insert(self, executor: &mut dyn #toasty::Executor, item: impl #toasty::IntoExpr<[#model_ident]>) -> #toasty::Result<()> {
+                #vis async fn insert(self, executor: &mut dyn #toasty::Executor, item: impl #toasty::IntoExpr<#toasty::List<#model_ident>>) -> #toasty::Result<()> {
                     use #toasty::ExecutorExt;
                     let stmt = self.stmt.insert(item);
                     executor.exec(stmt).await?;
@@ -93,11 +94,12 @@ impl Expand<'_> {
                 }
             }
 
-            impl #toasty::stmt::IntoSelect for Many {
-                type Model = #model_ident;
+            impl #toasty::IntoStatement for Many {
+                type Output = #toasty::List<#model_ident>;
 
-                fn into_select(self) -> #toasty::stmt::Select<Self::Model> {
-                    self.stmt.into_select()
+                fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
+                    use #toasty::IntoStatement;
+                    self.stmt.into_statement()
                 }
             }
 
@@ -108,24 +110,23 @@ impl Expand<'_> {
 
                 /// Create a new associated record
                 #vis fn create(self) -> #create_builder_ident {
-                    use #toasty::IntoSelect;
                     let mut builder = #create_builder_ident::default();
-                    builder.stmt.set_scope(self.stmt.into_select());
+                    builder.stmt.set_scope(self.stmt);
                     builder
                 }
 
                 #vis async fn get(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
-                    use #toasty::IntoSelect;
                     use #toasty::ExecutorExt;
-                    executor.get(self.stmt.into_select()).await
+                    executor.get(self.stmt).await
                 }
             }
 
-            impl #toasty::stmt::IntoSelect for One {
-                type Model = #model_ident;
+            impl #toasty::IntoStatement for One {
+                type Output = #toasty::List<#model_ident>;
 
-                fn into_select(self) -> #toasty::stmt::Select<Self::Model> {
-                    self.stmt.into_select()
+                fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
+                    use #toasty::IntoStatement;
+                    self.stmt.into_statement()
                 }
             }
 
@@ -136,21 +137,19 @@ impl Expand<'_> {
 
                 /// Create a new associated record
                 #vis fn create(self) -> #create_builder_ident {
-                    use #toasty::IntoSelect;
                     let mut builder = #create_builder_ident::default();
-                    builder.stmt.set_scope(self.stmt.into_select());
+                    builder.stmt.set_scope(self.stmt);
                     builder
                 }
 
                 #vis async fn get(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#toasty::Option<#model_ident>> {
-                    use #toasty::IntoSelect;
                     use #toasty::ExecutorExt;
-                    executor.first(self.stmt.into_select()).await
+                    executor.first(self.stmt).await
                 }
             }
 
             impl ManyField {
-                #vis const fn from_path(path: #toasty::Path<[#model_ident]>) -> ManyField {
+                #vis const fn from_path(path: #toasty::Path<#toasty::List<#model_ident>>) -> ManyField {
                     ManyField { path }
                 }
 
@@ -169,8 +168,8 @@ impl Expand<'_> {
                 #many_field_association_methods
             }
 
-            impl Into<#toasty::Path<[#model_ident]>> for ManyField {
-                fn into(self) -> #toasty::Path<[#model_ident]> {
+            impl Into<#toasty::Path<#toasty::List<#model_ident>>> for ManyField {
+                fn into(self) -> #toasty::Path<#toasty::List<#model_ident>> {
                     self.path
                 }
             }
@@ -190,7 +189,7 @@ impl Expand<'_> {
 
                 #vis fn in_query<#in_query_ty>(self, rhs: #in_query_ty) -> #toasty::stmt::Expr<bool>
                 where
-                    #in_query_ty: #toasty::IntoSelect<Model = #model_ident>,
+                    #in_query_ty: #toasty::IntoStatement<Output = #toasty::List<#model_ident>>,
                 {
                     self.path.in_query(rhs)
                 }
@@ -317,16 +316,17 @@ impl Expand<'_> {
 
         quote! {
             #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::One {
-                use #toasty::IntoSelect;
-
                 // Suppress the unused field warning
                 if false {
                     let _ = &self.#field_ident;
                 }
 
-                <#ty as #toasty::Relation>::One::from_stmt(
-                    <#ty as #toasty::Relation>::Model::filter(#filter).into_select()
-                )
+                {
+                    use #toasty::IntoStatement;
+                    <#ty as #toasty::Relation>::One::from_stmt(
+                        <#ty as #toasty::Relation>::Model::filter(#filter).into_statement().into_select().unwrap()
+                    )
+                }
             }
 
             #[doc(hidden)]
@@ -397,8 +397,6 @@ impl Expand<'_> {
 
         quote! {
             #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::Many {
-                use #toasty::IntoSelect;
-
                 // Suppress the unused field warning
                 if false {
                     let _ = &self.#field_ident;
@@ -406,9 +404,12 @@ impl Expand<'_> {
 
                 #pair_check
 
-                <#ty as #toasty::Relation>::Many::from_stmt(
-                    #toasty::stmt::Association::many(self.into_select(), Self::fields().#field_ident().into())
-                )
+                {
+                    use #toasty::IntoStatement;
+                    <#ty as #toasty::Relation>::Many::from_stmt(
+                        #toasty::stmt::Association::many(self.into_statement().into_select().unwrap(), Self::fields().#field_ident().into())
+                    )
+                }
             }
         }
     }
@@ -468,8 +469,6 @@ impl Expand<'_> {
 
         quote! {
             #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::One {
-                use #toasty::IntoSelect;
-
                 // Suppress the unused field warning
                 if false {
                     let _ = &self.#field_ident;
@@ -477,9 +476,12 @@ impl Expand<'_> {
 
                 #pair_check
 
-                <#ty as #toasty::Relation>::One::from_stmt(
-                    #toasty::stmt::Association::one(self.into_select(), Self::fields().#field_ident().into()).into_select()
-                )
+                {
+                    use #toasty::IntoStatement;
+                    <#ty as #toasty::Relation>::One::from_stmt(
+                        #toasty::stmt::Association::one(self.into_statement().into_select().unwrap(), Self::fields().#field_ident().into()).into_statement().into_select().unwrap()
+                    )
+                }
             }
         }
     }

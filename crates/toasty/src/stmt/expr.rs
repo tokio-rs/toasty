@@ -1,10 +1,10 @@
-use super::{Insert, IntoExpr};
+use super::{Insert, IntoExpr, List};
 use std::marker::PhantomData;
 use std::ops::Not;
 use toasty_core::stmt;
 
 #[derive(Debug)]
-pub struct Expr<T: ?Sized> {
+pub struct Expr<T> {
     /// The un-typed expression
     pub(crate) untyped: stmt::Expr,
 
@@ -12,7 +12,7 @@ pub struct Expr<T: ?Sized> {
     pub(crate) _p: PhantomData<T>,
 }
 
-impl<T: ?Sized> Expr<T> {
+impl<T> Expr<T> {
     /// Create an expression from the given value.
     pub(crate) fn from_value(value: stmt::Value) -> Self {
         Self {
@@ -28,7 +28,7 @@ impl<T: ?Sized> Expr<T> {
         }
     }
 
-    pub fn cast<U: ?Sized>(self) -> Expr<U> {
+    pub fn cast<U>(self) -> Expr<U> {
         Expr {
             untyped: self.untyped,
             _p: PhantomData,
@@ -36,7 +36,7 @@ impl<T: ?Sized> Expr<T> {
     }
 }
 
-impl<T> Expr<[T]> {
+impl<T> Expr<List<T>> {
     pub fn list<I>(items: impl IntoIterator<Item = I>) -> Self
     where
         I: IntoExpr<T>,
@@ -76,7 +76,7 @@ impl Expr<bool> {
     pub fn in_list<L, R, T>(lhs: L, rhs: R) -> Self
     where
         L: IntoExpr<T>,
-        R: IntoExpr<[T]>,
+        R: IntoExpr<List<T>>,
     {
         Self::from_untyped(stmt::Expr::in_list(
             lhs.into_expr().untyped,
@@ -103,7 +103,7 @@ impl<T> Expr<Option<T>> {
     }
 }
 
-impl<T: ?Sized> Clone for Expr<T> {
+impl<T> Clone for Expr<T> {
     fn clone(&self) -> Self {
         Self {
             untyped: self.untyped.clone(),
@@ -112,13 +112,13 @@ impl<T: ?Sized> Clone for Expr<T> {
     }
 }
 
-impl<T: ?Sized> From<Expr<T>> for stmt::Expr {
+impl<T> From<Expr<T>> for stmt::Expr {
     fn from(value: Expr<T>) -> Self {
         value.untyped
     }
 }
 
-impl<T: ?Sized> From<Insert<T>> for Expr<T> {
+impl<T> From<Insert<T>> for Expr<T> {
     fn from(value: Insert<T>) -> Self {
         Self::from_untyped(stmt::Expr::Stmt(value.untyped.into()))
     }
