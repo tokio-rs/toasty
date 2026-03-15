@@ -6,8 +6,6 @@ This roadmap outlines potential enhancements and missing features for the Toasty
 
 Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases. This roadmap documents potential future work and feature gaps.
 
-> **User Documentation:** See the `docs/guide/` directory for complete API documentation and usage examples.
-
 ## Feature Areas
 
 ### Composite Keys
