@@ -21,10 +21,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install mdBook
+      - name: Install mdBook and mdbook-linkcheck2
         uses: taiki-e/install-action@v2
         with:
-          tool: mdbook
+          tool: mdbook,mdbook-linkcheck2
 
       - name: Build guide
         run: mdbook build docs/guide

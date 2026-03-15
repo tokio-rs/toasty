@@ -3,7 +3,7 @@
 - [Architecture](./architecture.md)
   - [Query Engine](./architecture/query-engine.md)
   - [Type System](./architecture/type-system.md)
-- [Design](./design/batch-queries.md)
+- [Design](./design/README.md)
   - [Batch Queries](./design/batch-queries.md)
   - [Create Macro Required Field Verification](./design/create-macro-required-field-verification.md)
   - [Create Macro v2](./design/create-macro-v2.md)

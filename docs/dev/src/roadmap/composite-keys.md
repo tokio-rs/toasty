@@ -331,12 +331,6 @@ Fill in the stubbed tests and add new ones covering all composite key combinatio
 | `junction_table_pattern` | Many-to-many junction table with composite PK and extra attributes |
 | `multi_tenant_pattern` | Tenant-scoped models with `(tenant_id, entity_id)` composite PKs |
 
-### Phase 6: Documentation and Examples
-
-- Update the user guide with composite key patterns and best practices
-- Add examples for junction table, multi-tenant, and time-series patterns
-- Document the `#[key]` vs `#[key(partition = ..., local = ...)]` distinction and when to use each
-
 ## Design Decisions
 
 ### Tuple-Based Identity
