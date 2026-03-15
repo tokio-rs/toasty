@@ -51,7 +51,7 @@ impl Expand<'_> {
                 #vis fn update(&mut self) -> #update_struct_ident<&mut Self> {
                     use #toasty::IntoStatement;
                     let mut s = #update_struct_ident {
-                        stmt: #toasty::stmt::Update::new((&*self).into_statement().into_select().unwrap()),
+                        stmt: #toasty::stmt::Update::new((&*self).into_statement().into_query().unwrap()),
                         target: self,
                     };
                     s.apply_update_defaults();
@@ -63,12 +63,12 @@ impl Expand<'_> {
                 }
 
                 #vis fn filter(expr: #toasty::stmt::Expr<bool>) -> #query_struct_ident {
-                    #query_struct_ident::from_stmt(#toasty::stmt::Select::filter(expr))
+                    #query_struct_ident::from_stmt(#toasty::stmt::Query::filter(expr))
                 }
 
                 #vis fn delete(self) -> #toasty::stmt::Delete<#model_ident> {
                     use #toasty::IntoStatement;
-                    self.into_statement().into_select().unwrap().delete()
+                    self.into_statement().into_query().unwrap().delete()
                 }
             }
 

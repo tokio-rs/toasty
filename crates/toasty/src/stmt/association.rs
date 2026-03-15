@@ -10,7 +10,7 @@ pub struct Association<T> {
 
 impl<M: Model> Association<List<M>> {
     /// A basic has_many association
-    pub fn many<T: Model>(source: super::Select<T>, path: Path<List<M>>) -> Self {
+    pub fn many<T: Model>(source: super::Query<T>, path: Path<List<M>>) -> Self {
         assert_eq!(path.untyped.root.expect_model(), T::id());
 
         Self {
@@ -24,7 +24,7 @@ impl<M: Model> Association<List<M>> {
 
     /// A has_one or belongs_to association via a query, which implies there
     /// could be more than one result.
-    pub fn many_via_one<T: Model>(source: super::Select<T>, path: Path<M>) -> Self {
+    pub fn many_via_one<T: Model>(source: super::Query<T>, path: Path<M>) -> Self {
         assert_eq!(path.untyped.root.expect_model(), T::id());
 
         Self {
@@ -78,7 +78,7 @@ impl<T: Model> IntoStatement for Association<List<T>> {
 }
 
 impl<M: Model> Association<M> {
-    pub fn one<T: Model>(source: super::Select<T>, path: Path<M>) -> Self {
+    pub fn one<T: Model>(source: super::Query<T>, path: Path<M>) -> Self {
         assert_eq!(path.untyped.root.expect_model(), T::id());
 
         Self {

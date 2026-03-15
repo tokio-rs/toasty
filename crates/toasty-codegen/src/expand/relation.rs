@@ -24,11 +24,11 @@ impl Expand<'_> {
             }
 
             #vis struct One {
-                stmt: #toasty::stmt::Select<#model_ident>,
+                stmt: #toasty::stmt::Query<#model_ident>,
             }
 
             #vis struct OptionOne {
-                stmt: #toasty::stmt::Select<#model_ident>,
+                stmt: #toasty::stmt::Query<#model_ident>,
             }
 
             #vis struct ManyField {
@@ -49,7 +49,7 @@ impl Expand<'_> {
                 /// Iterate all entries in the relation
                 #vis async fn all(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<Vec<#model_ident>> {
                     use #toasty::{ExecutorExt, IntoStatement};
-                    executor.all(self.into_statement().into_select().unwrap()).await
+                    executor.all(self.into_statement().into_query().unwrap()).await
                 }
 
                 #vis async fn collect<#collect_ty>(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#collect_ty>
@@ -67,7 +67,7 @@ impl Expand<'_> {
                     filter: #toasty::stmt::Expr<bool>
                 ) -> #query_ident {
                     use #toasty::IntoStatement;
-                    let select = self.into_statement().into_select().unwrap();
+                    let select = self.into_statement().into_query().unwrap();
                     #query_ident::from_stmt(select.and(filter))
                 }
 
@@ -104,7 +104,7 @@ impl Expand<'_> {
             }
 
             impl One {
-                #vis fn from_stmt(stmt: #toasty::stmt::Select<#model_ident>) -> One {
+                #vis fn from_stmt(stmt: #toasty::stmt::Query<#model_ident>) -> One {
                     One { stmt }
                 }
 
@@ -131,7 +131,7 @@ impl Expand<'_> {
             }
 
             impl OptionOne {
-                pub fn from_stmt(stmt: #toasty::stmt::Select<#model_ident>) -> OptionOne {
+                pub fn from_stmt(stmt: #toasty::stmt::Query<#model_ident>) -> OptionOne {
                     OptionOne { stmt }
                 }
 
@@ -324,7 +324,7 @@ impl Expand<'_> {
                 {
                     use #toasty::IntoStatement;
                     <#ty as #toasty::Relation>::One::from_stmt(
-                        <#ty as #toasty::Relation>::Model::filter(#filter).into_statement().into_select().unwrap()
+                        <#ty as #toasty::Relation>::Model::filter(#filter).into_statement().into_query().unwrap()
                     )
                 }
             }
@@ -407,7 +407,7 @@ impl Expand<'_> {
                 {
                     use #toasty::IntoStatement;
                     <#ty as #toasty::Relation>::Many::from_stmt(
-                        #toasty::stmt::Association::many(self.into_statement().into_select().unwrap(), Self::fields().#field_ident().into())
+                        #toasty::stmt::Association::many(self.into_statement().into_query().unwrap(), Self::fields().#field_ident().into())
                     )
                 }
             }
@@ -479,7 +479,7 @@ impl Expand<'_> {
                 {
                     use #toasty::IntoStatement;
                     <#ty as #toasty::Relation>::One::from_stmt(
-                        #toasty::stmt::Association::one(self.into_statement().into_select().unwrap(), Self::fields().#field_ident().into()).into_statement().into_select().unwrap()
+                        #toasty::stmt::Association::one(self.into_statement().into_query().unwrap(), Self::fields().#field_ident().into()).into_statement().into_query().unwrap()
                     )
                 }
             }

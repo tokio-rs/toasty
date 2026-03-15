@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use crate::stmt::{Paginate, Select};
+use crate::stmt::{Paginate, Query};
 use crate::{Executor, Load, Result};
 use toasty_core::stmt;
 
@@ -11,7 +11,7 @@ pub struct Page<M> {
     pub items: Vec<M>,
 
     /// Base query (without cursors/offsets)
-    query: Select<M>,
+    query: Query<M>,
 
     /// Cursor for fetching next page (derived from last item)
     pub next_cursor: Option<stmt::Expr>,
@@ -23,7 +23,7 @@ pub struct Page<M> {
 impl<M> Page<M> {
     pub(crate) fn new(
         items: Vec<M>,
-        query: Select<M>,
+        query: Query<M>,
         next_cursor: Option<stmt::Expr>,
         prev_cursor: Option<stmt::Expr>,
     ) -> Self {
