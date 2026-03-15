@@ -5,5 +5,8 @@ authors = ["Toasty Contributors"]
 [build]
 build-dir = "book"
 
+[output.html]
+
 [output.linkcheck2]
+optional = true
 warning-policy = "ignore"
