@@ -28,8 +28,7 @@ impl Expand<'_> {
         let filter_methods = self.expand_model_filter_methods();
         let field_name_to_id = self.expand_field_name_to_id();
         let relation_methods = self.expand_model_relation_methods();
-        let into_select_body_ref = self.expand_model_into_select_body(true);
-        let into_select_body_value = self.expand_model_into_select_body(false);
+        let into_statement_body = self.expand_model_into_statement_body();
         let into_expr_body_ref = self.expand_model_into_expr_body(true);
         let into_expr_body_val = self.expand_model_into_expr_body(false);
         let reload_method = self.expand_reload_method();
@@ -50,9 +49,9 @@ impl Expand<'_> {
                 }
 
                 #vis fn update(&mut self) -> #update_struct_ident<&mut Self> {
-                    use #toasty::IntoSelect;
+                    use #toasty::IntoStatement;
                     let mut s = #update_struct_ident {
-                        stmt: #toasty::stmt::Update::new(self.into_select()),
+                        stmt: #toasty::stmt::Update::new((&*self).into_statement().into_select().unwrap()),
                         target: self,
                     };
                     s.apply_update_defaults();
@@ -68,8 +67,8 @@ impl Expand<'_> {
                 }
 
                 #vis fn delete(self) -> #toasty::stmt::Delete<#model_ident> {
-                    use #toasty::IntoSelect;
-                    self.into_select().delete()
+                    use #toasty::IntoStatement;
+                    self.into_statement().into_select().unwrap().delete()
                 }
             }
 
@@ -83,6 +82,7 @@ impl Expand<'_> {
             }
 
             impl #toasty::Load for #model_ident {
+                type Output = Self;
                 fn load(value: #toasty::Value) -> #toasty::Result<Self> {
                     #load_body
                 }
@@ -119,37 +119,38 @@ impl Expand<'_> {
                 }
             }
 
-            impl #toasty::stmt::IntoExpr<[#model_ident]> for #model_ident {
-                fn into_expr(self) -> #toasty::stmt::Expr<[#model_ident]> {
+            impl #toasty::stmt::IntoExpr<#toasty::List<#model_ident>> for #model_ident {
+                fn into_expr(self) -> #toasty::stmt::Expr<#toasty::List<#model_ident>> {
                     #toasty::stmt::Expr::list([self])
                 }
 
-                fn by_ref(&self) -> #toasty::stmt::Expr<[#model_ident]> {
+                fn by_ref(&self) -> #toasty::stmt::Expr<#toasty::List<#model_ident>> {
                     #toasty::stmt::Expr::list([self])
                 }
             }
 
-            impl #toasty::stmt::IntoSelect for &#model_ident {
-                type Model = #model_ident;
+            impl #toasty::IntoStatement for &#model_ident {
+                type Output = #toasty::List<#model_ident>;
 
-                fn into_select(self) -> #toasty::stmt::Select<Self::Model> {
-                    #into_select_body_ref
+                fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
+                    use #toasty::IntoStatement;
+                    #into_statement_body
                 }
             }
 
-            impl #toasty::stmt::IntoSelect for &mut #model_ident {
-                type Model = #model_ident;
+            impl #toasty::IntoStatement for &mut #model_ident {
+                type Output = #toasty::List<#model_ident>;
 
-                fn into_select(self) -> #toasty::stmt::Select<Self::Model> {
-                    (&*self).into_select()
+                fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
+                    (&*self).into_statement()
                 }
             }
 
-            impl #toasty::stmt::IntoSelect for #model_ident {
-                type Model = #model_ident;
+            impl #toasty::IntoStatement for #model_ident {
+                type Output = #toasty::List<#model_ident>;
 
-                fn into_select(self) -> #toasty::stmt::Select<Self::Model> {
-                    #into_select_body_value
+                fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
+                    (&self).into_statement()
                 }
             }
         }
@@ -166,17 +167,16 @@ impl Expand<'_> {
         }
     }
 
-    pub(super) fn expand_model_into_select_body(&self, by_ref: bool) -> TokenStream {
+    fn expand_model_into_statement_body(&self) -> TokenStream {
         let filter = self.primary_key_filter();
         let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
         let filter_method_ident = &filter.filter_method_ident;
         let arg_idents = self.expand_filter_arg_idents(filter);
-        let amp = if by_ref { quote!(&) } else { quote!() };
 
         quote! {
             #query_struct_ident::default()
-                .#filter_method_ident( #( #amp self.#arg_idents ),* )
-                .stmt
+                .#filter_method_ident( #( & self.#arg_idents ),* )
+                .into_statement()
         }
     }
 

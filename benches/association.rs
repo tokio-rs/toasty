@@ -85,7 +85,7 @@ async fn setup_database_and_data(
     let mut builder = models!(User, Post, Comment);
     setup.configure_builder(&mut builder);
 
-    let logging_driver = LoggingDriver::new(setup.driver());
+    let logging_driver = LoggingDriver::new(setup.driver().await);
     let mut db = builder.build(logging_driver).await.unwrap();
     db.push_schema().await.unwrap();
 

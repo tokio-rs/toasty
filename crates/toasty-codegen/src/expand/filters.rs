@@ -120,8 +120,7 @@ impl Expand<'_> {
 
             self_arg = quote!(self,);
             body = quote! {
-                use #toasty::IntoSelect;
-                #query_struct_ident::from_stmt(self.into_select()).filter( #expr )
+                #query_struct_ident::from_stmt({ use #toasty::IntoStatement; self.into_statement().into_select().unwrap() }).filter( #expr )
             };
         } else {
             self_arg = quote!();
@@ -153,15 +152,14 @@ impl Expand<'_> {
 
         if self_into_select {
             self_arg = quote!(self,);
-            query = quote!(#query_struct_ident::from_stmt(self.into_select()));
+            query = quote!(#query_struct_ident::from_stmt({ use #toasty::IntoStatement; self.into_statement().into_select().unwrap() }));
         } else {
             self_arg = quote!();
             query = quote!(#query_struct_ident::default());
         }
 
         quote! {
-            #vis fn #filter_method_batch_ident(#self_arg keys: impl #toasty::IntoExpr<[#bound]>) -> #query_struct_ident {
-                use #toasty::IntoSelect;
+            #vis fn #filter_method_batch_ident(#self_arg keys: impl #toasty::IntoExpr<#toasty::List<#bound>>) -> #query_struct_ident {
                 #query.#filter_method_batch_ident( keys )
             }
         }
@@ -263,7 +261,7 @@ impl Expand<'_> {
         };
 
         quote! {
-            #vis fn #query_filter_batch_ident(self, keys: impl #toasty::IntoExpr<[#bound]> ) -> #query_struct_ident {
+            #vis fn #query_filter_batch_ident(self, keys: impl #toasty::IntoExpr<#toasty::List<#bound>> ) -> #query_struct_ident {
                 self.filter( #toasty::stmt::Expr::in_list( #lhs, keys ) )
             }
         }

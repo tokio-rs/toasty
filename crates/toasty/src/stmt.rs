@@ -16,11 +16,11 @@ pub use into_expr::IntoExpr;
 mod into_insert;
 pub use into_insert::IntoInsert;
 
-mod into_select;
-pub use into_select::IntoSelect;
-
 mod into_statement;
 pub use into_statement::IntoStatement;
+
+mod list;
+pub use list::List;
 
 mod paginate;
 pub use paginate::Paginate;
@@ -37,8 +37,6 @@ mod update;
 pub use update::Update;
 
 pub use toasty_core::stmt::{OrderBy, Projection, Value};
-
-use crate::Model;
 
 use toasty_core::stmt;
 
@@ -57,13 +55,20 @@ impl<M> Statement<M> {
             _p: PhantomData,
         }
     }
+
+    pub(crate) fn into_untyped_query(self) -> stmt::Query {
+        match self.untyped {
+            stmt::Statement::Query(q) => q,
+            _ => panic!("expected query statement"),
+        }
+    }
 }
 
-impl<M: Model> Statement<M> {
-    pub fn from_untyped(query: impl IntoSelect<Model = M>) -> Self {
-        Self {
-            untyped: query.into_select().untyped.into(),
-            _p: PhantomData,
+impl<M> Statement<List<M>> {
+    pub fn into_select(self) -> Option<Select<M>> {
+        match self.untyped {
+            stmt::Statement::Query(q) => Some(Select::from_untyped(q)),
+            _ => None,
         }
     }
 }

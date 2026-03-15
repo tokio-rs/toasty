@@ -33,7 +33,7 @@ where
 
 impl<T: Load> Batch<T> {
     /// Execute the batched queries and return the deserialized results.
-    pub async fn exec(self, executor: &mut dyn Executor) -> Result<T> {
+    pub async fn exec(self, executor: &mut dyn Executor) -> Result<T::Output> {
         let value = executor.exec_one(self.stmt).await?;
         T::load(value)
     }

@@ -21,11 +21,7 @@ pub async fn crud_no_fields(t: &mut Test) -> Result<()> {
     let created = Foo::create().exec(&mut db).await?;
 
     // Find Foo
-    let read = Foo::filter_by_id(created.id)
-        .all(&mut db)
-        .await?
-        .collect::<Vec<_>>()
-        .await?;
+    let read = Foo::filter_by_id(created.id).all(&mut db).await?;
 
     assert_eq!(1, read.len());
     assert_eq!(created.id, read[0].id);
@@ -43,11 +39,7 @@ pub async fn crud_no_fields(t: &mut Test) -> Result<()> {
     assert_unique!(ids);
 
     for id in &ids {
-        let read = Foo::filter_by_id(id)
-            .all(&mut db)
-            .await?
-            .collect::<Vec<_>>()
-            .await?;
+        let read = Foo::filter_by_id(id).all(&mut db).await?;
 
         assert_eq!(1, read.len());
         assert_eq!(*id, read[0].id);
@@ -102,11 +94,7 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
     assert_eq!(created.val, "hello world");
 
     // Find Foo
-    let read = Foo::filter_by_id(created.id)
-        .all(&mut db)
-        .await?
-        .collect::<Vec<_>>()
-        .await?;
+    let read = Foo::filter_by_id(created.id).all(&mut db).await?;
 
     assert_eq!(1, read.len());
     assert_eq!(created.id, read[0].id);
@@ -127,11 +115,7 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
     assert_unique!(ids);
 
     for (i, id) in ids.iter().enumerate() {
-        let read = Foo::filter_by_id(id)
-            .all(&mut db)
-            .await?
-            .collect::<Vec<_>>()
-            .await?;
+        let read = Foo::filter_by_id(id).all(&mut db).await?;
 
         assert_eq!(1, read.len());
         assert_eq!(*id, read[0].id);
