@@ -1,7 +1,5 @@
 # Query Ordering, Limits & Pagination
 
-> **User Guide:** See `docs/guide/src/sorting-limits-and-pagination.md` for usage examples and API documentation.
-
 ## Overview
 
 Toasty provides cursor-based pagination using keyset pagination, which offers consistent performance and works well across both SQL and NoSQL databases. The implementation converts pagination cursors into WHERE clauses rather than using OFFSET, avoiding the performance issues of traditional offset-based pagination.
