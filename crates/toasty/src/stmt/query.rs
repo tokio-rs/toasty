@@ -93,7 +93,7 @@ impl<M: Model> Query<M> {
 }
 
 impl<M: Model> IntoStatement for Query<M> {
-    type Output = List<M>;
+    type Returning = List<M>;
 
     fn into_statement(self) -> Statement<List<M>> {
         Statement::from_untyped_stmt(self.untyped.into())
@@ -101,7 +101,7 @@ impl<M: Model> IntoStatement for Query<M> {
 }
 
 impl<M: Model> IntoStatement for &Query<M> {
-    type Output = List<M>;
+    type Returning = List<M>;
 
     fn into_statement(self) -> Statement<List<M>> {
         Statement::from_untyped_stmt(self.clone().untyped.into())

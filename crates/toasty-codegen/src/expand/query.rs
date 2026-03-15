@@ -92,7 +92,7 @@ impl Expand<'_> {
             }
 
             impl #toasty::IntoStatement for #query_struct_ident {
-                type Output = #toasty::List<#model_ident>;
+                type Returning = #toasty::List<#model_ident>;
 
                 fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
                     use #toasty::IntoStatement;
@@ -101,7 +101,7 @@ impl Expand<'_> {
             }
 
             impl #toasty::IntoStatement for &#query_struct_ident {
-                type Output = #toasty::List<#model_ident>;
+                type Returning = #toasty::List<#model_ident>;
 
                 fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
                     use #toasty::IntoStatement;

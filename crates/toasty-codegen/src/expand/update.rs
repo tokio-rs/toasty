@@ -273,7 +273,7 @@ impl Expand<'_> {
             }
 
             impl #toasty::IntoStatement for #update_struct_ident {
-                type Output = ();
+                type Returning = ();
 
                 fn into_statement(self) -> #toasty::Statement<()> {
                     #toasty::Statement::from_untyped_stmt(self.stmt.into_untyped_stmt())

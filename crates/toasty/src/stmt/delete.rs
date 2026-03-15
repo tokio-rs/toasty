@@ -24,7 +24,7 @@ impl<M> Delete<M> {
 }
 
 impl<M: Model> IntoStatement for Delete<M> {
-    type Output = ();
+    type Returning = ();
 
     fn into_statement(self) -> Statement<()> {
         Statement {

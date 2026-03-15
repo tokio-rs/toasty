@@ -65,7 +65,7 @@ impl<M: Model> Association<List<M>> {
 }
 
 impl<T: Model> IntoStatement for Association<List<T>> {
-    type Output = List<T>;
+    type Returning = List<T>;
 
     fn into_statement(self) -> Statement<List<T>> {
         let query = stmt::Query::builder(stmt::SourceModel {
@@ -92,7 +92,7 @@ impl<M: Model> Association<M> {
 }
 
 impl<T: Model> IntoStatement for Association<T> {
-    type Output = List<T>;
+    type Returning = List<T>;
 
     fn into_statement(self) -> Statement<List<T>> {
         let query = stmt::Query::builder(stmt::SourceModel {
