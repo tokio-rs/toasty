@@ -34,7 +34,7 @@ pub async fn batch_as_nested_has_many_create(test: &mut Test) -> Result<()> {
     let mut db = test.setup_db(models!(User, Todo)).await;
 
     // Pass a tuple of create builders directly — tuples implement
-    // `IntoExpr<[Model]>` so they work as nested HasMany values.
+    // `IntoExpr<List<Model>>` so they work as nested HasMany values.
     let user = User::create()
         .name("Ann Chovey")
         .todos((
