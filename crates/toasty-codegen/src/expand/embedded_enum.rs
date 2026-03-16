@@ -43,7 +43,7 @@ impl Expand<'_> {
     }
 
     /// Generates delegated comparison methods (`eq`, `ne`, `gt`, `ge`, `lt`,
-    /// `le`, `in_set`) that forward to `self.path()`.
+    /// `le`, `in_list`) that forward to `self.path()`.
     fn expand_comparison_methods(&self) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
@@ -61,8 +61,8 @@ impl Expand<'_> {
         quote! {
             #( #methods )*
 
-            #vis fn in_set(&self, rhs: impl #toasty::stmt::IntoExpr<#toasty::List<#model_ident>>) -> #toasty::stmt::Expr<bool> {
-                self.path().in_set(rhs)
+            #vis fn in_list(&self, rhs: impl #toasty::stmt::IntoExpr<#toasty::List<#model_ident>>) -> #toasty::stmt::Expr<bool> {
+                self.path().in_list(rhs)
             }
         }
     }
