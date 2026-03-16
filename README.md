@@ -8,6 +8,8 @@ It currently supports SQL databases (SQLite, PostgreSQL, MySQL) and DynamoDB.
 Note that Toasty does not hide database capabilities. Instead, Toasty exposes
 features based on the target database.
 
+Read the [nightly guide](https://tokio-rs.github.io/toasty/nightly/guide/) to learn more.
+
 ## Using Toasty
 
 You will define your data model using Rust structs annotated with the
@@ -91,11 +93,6 @@ Toasty decouples the application data model from the database's schema. By
 default, a toasty application schema will map 1-1 with a database schema.
 However, additional annotations may be specified to customize how the
 application data model maps to the database schema.
-
-## Guide
-
-For a more in-depth look at Toasty, check out the
-[nightly guide](https://tokio-rs.github.io/toasty/nightly/guide/).
 
 ## Current status and roadmap
 
