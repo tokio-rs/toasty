@@ -1,7 +1,8 @@
 # Updating Records
 
 Toasty generates an update builder for each model. You can update a record
-through an instance method or through a query.
+through an instance method, through a query, or with a generated convenience
+method.
 
 ## Updating an instance
 

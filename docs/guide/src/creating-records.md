@@ -1,7 +1,7 @@
 # Creating Records
 
-Toasty generates a create builder for each model. Call `Model::create()`, set
-fields with chained methods, and call `.exec(&mut db)` to insert the record.
+Toasty generates a create builder for each model. Call `<YourModel>::create()`,
+set fields with chained methods, and call `.exec(&mut db)` to insert the record.
 
 ## Creating a single record
 
@@ -30,8 +30,8 @@ println!("Created user with id: {}", user.id);
 
 `User::create()` returns a builder with a setter method for each non-auto field.
 Chain the setters to provide values, then call `.exec(&mut db)` to insert the
-row and return the created `User` instance. Auto-generated fields like `id` are
-populated on the returned value.
+row. The returned `User` instance has all fields set, including auto-generated
+ones like `id`.
 
 The generated SQL looks like:
 
@@ -79,9 +79,14 @@ assert_eq!(user.bio.as_deref(), Some("Likes Rust"));
 
 ## Creating many records
 
-`Model::create_many()` inserts multiple records at once. Add items with `.item()`
-or `.with_item()`, then call `.exec()` to insert them all. It returns a `Vec` of
-the created instances.
+Use `toasty::batch()` to insert multiple records at once. Pass an array of
+create builders for the same model, or a tuple for mixed models. Call `.exec()`
+to insert them all.
+
+### Array syntax (same model)
+
+When creating multiple records of the same model, pass an array. The return type
+is `Vec<User>`:
 
 ```rust
 # use toasty::Model;
@@ -95,41 +100,46 @@ the created instances.
 #     email: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let users = User::create_many()
-    .item(User::create().name("Alice").email("alice@example.com"))
-    .item(User::create().name("Bob").email("bob@example.com"))
-    .exec(&mut db)
-    .await?;
+let users = toasty::batch([
+    User::create().name("Alice").email("alice@example.com"),
+    User::create().name("Bob").email("bob@example.com"),
+    User::create().name("Carol").email("carol@example.com"),
+])
+.exec(&mut db)
+.await?;
 
-assert_eq!(users.len(), 2);
+assert_eq!(users.len(), 3);
 # Ok(())
 # }
 ```
 
-The `.with_item()` variant takes a closure that receives the create builder:
+This also works with a `Vec` of builders, which is useful when the number of
+records is determined at runtime:
 
-```rust
-# use toasty::Model;
-# #[derive(Debug, toasty::Model)]
-# struct User {
-#     #[key]
-#     #[auto]
-#     id: u64,
-#     name: String,
-#     #[unique]
-#     email: String,
-# }
-# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let users = User::create_many()
-    .with_item(|u| u.name("Alice").email("alice@example.com"))
-    .with_item(|u| u.name("Bob").email("bob@example.com"))
-    .exec(&mut db)
-    .await?;
-# Ok(())
-# }
+```rust,ignore
+let names = ["Alice", "Bob", "Carol"];
+let builders: Vec<_> = names
+    .iter()
+    .enumerate()
+    .map(|(i, n)| User::create().name(*n).email(format!("user{i}@example.com")))
+    .collect();
+
+let users = toasty::batch(builders).exec(&mut db).await?;
 ```
 
-Both forms are equivalent. Use whichever reads better for your use case.
+### Tuple syntax (mixed models)
+
+When creating records of different models, use a tuple. The return type matches
+the tuple structure:
+
+```rust,ignore
+let (user, post): (User, Post) = toasty::batch((
+    User::create().name("Alice"),
+    Post::create().title("Hello World"),
+))
+.exec(&mut db)
+.await?;
+```
 
 ## Nested creation
 
@@ -150,16 +160,16 @@ let user = User::create()
 ```
 
 Toasty creates the user first, then creates each todo with the user's ID
-automatically set as the foreign key. All records are created within the same
-operation.
+automatically set as the foreign key. Toasty makes a best effort to execute
+nested creation atomically — either all records are inserted or none are.
+Whether full atomicity is guaranteed depends on your database's capabilities, so
+check your database's transaction and consistency documentation.
 
 ## What gets generated
 
 For a model like `User`, `#[derive(Model)]` generates:
 
 - `User::create()` — returns a builder with a setter for each non-auto field
-- `User::create_many()` — returns a bulk-insert builder with `.item()` and
-  `.with_item()` methods
 
 The create builder's setter methods accept flexible input types through the
 `IntoExpr` trait. For a `String` field, you can pass `&str`, `String`, or

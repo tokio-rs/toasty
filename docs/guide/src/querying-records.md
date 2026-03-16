@@ -5,8 +5,8 @@ fields, or by building queries with filters.
 
 ## Get by primary key
 
-`Model::get_by_id()` fetches a single record by its primary key. It returns the
-record directly, or an error if no record exists with that key.
+`<YourModel>::get_by_id()` fetches a single record by its primary key. It
+returns the record directly, or an error if no record exists with that key.
 
 ```rust
 # use toasty::Model;
@@ -32,7 +32,7 @@ generates `get_by_code()`. Composite keys generate combined names like
 
 ## Get all records
 
-`Model::all()` returns a query for all records of that model.
+`<YourModel>::all()` returns a query for all records of that model.
 
 ```rust
 # use toasty::Model;
@@ -46,7 +46,7 @@ generates `get_by_code()`. Composite keys generate combined names like
 #     email: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let users = User::all().collect::<Vec<_>>(&mut db).await?;
+let users = User::all().all(&mut db).await?;
 
 for user in &users {
     println!("{}: {}", user.id, user.name);
@@ -58,7 +58,7 @@ for user in &users {
 ## Executing queries
 
 Queries returned by `all()`, `filter()`, and `filter_by_*()` are not executed
-until you call a terminal method. Toasty provides four terminal methods:
+until you call a terminal method. Toasty provides three terminal methods:
 
 ### `.all()` — collect all results
 
@@ -81,31 +81,9 @@ let users: Vec<User> = User::all().all(&mut db).await?;
 # }
 ```
 
-### `.collect::<Vec<_>>()` — collect into a collection
-
-Collects results into any type that implements `Extend` and `Default`. In
-practice, this means `Vec<Model>`:
-
-```rust
-# use toasty::Model;
-# #[derive(Debug, toasty::Model)]
-# struct User {
-#     #[key]
-#     #[auto]
-#     id: u64,
-#     name: String,
-#     #[unique]
-#     email: String,
-# }
-# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let users: Vec<User> = User::all().collect::<Vec<_>>(&mut db).await?;
-# Ok(())
-# }
-```
-
 ### `.first()` — get the first result or `None`
 
-Returns `Option<Model>` — `Some` if at least one record matches, `None` if the
+Returns `Option<User>` — `Some` if at least one record matches, `None` if the
 query returns no results:
 
 ```rust
@@ -186,7 +164,7 @@ that you can further customize before executing.
 
 ## Filtering with expressions
 
-For queries beyond simple field equality, use `Model::filter()` with field
+For queries beyond simple field equality, use `<YourModel>::filter()` with field
 expressions. The [Filtering with Expressions](./filtering-with-expressions.md)
 chapter covers this in detail. Here is a quick example:
 
@@ -240,7 +218,7 @@ fetches multiple records by key in a single query:
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
 let users = User::filter_by_id_batch([&1, &2, &3])
-    .collect::<Vec<_>>(&mut db)
+    .all(&mut db)
     .await?;
 # Ok(())
 # }
@@ -267,6 +245,5 @@ Query builders support these terminal methods:
 | Method | Returns |
 |---|---|
 | `.all(&mut db)` | `Result<Vec<User>>` |
-| `.collect::<Vec<_>>(&mut db)` | `Result<Vec<User>>` |
 | `.first(&mut db)` | `Result<Option<User>>` |
 | `.get(&mut db)` | `Result<User>` |
