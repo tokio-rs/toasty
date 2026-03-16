@@ -92,6 +92,11 @@ default, a toasty application schema will map 1-1 with a database schema.
 However, additional annotations may be specified to customize how the
 application data model maps to the database schema.
 
+## Developer guide
+
+If you are interested in contributing to Toasty or understanding its internals,
+check out the [nightly developer guide](https://tokio-rs.github.io/toasty/nightly/dev/).
+
 ## Current status and roadmap
 
 Toasty is still in the early development stages and is considered
