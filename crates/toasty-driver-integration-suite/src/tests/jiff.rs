@@ -473,7 +473,7 @@ pub async fn order_by_timestamp(test: &mut Test) -> Result<(), BoxError> {
 
     let asc: Vec<_> = Foo::all()
         .order_by(Foo::fields().val().asc())
-        .collect(&mut db)
+        .all(&mut db)
         .await?;
 
     assert_eq!(asc.len(), 3);
@@ -482,7 +482,7 @@ pub async fn order_by_timestamp(test: &mut Test) -> Result<(), BoxError> {
 
     let desc: Vec<_> = Foo::all()
         .order_by(Foo::fields().val().desc())
-        .collect(&mut db)
+        .all(&mut db)
         .await?;
 
     assert_eq!(desc.len(), 3);
@@ -517,12 +517,12 @@ pub async fn filter_by_timestamp(test: &mut Test) -> Result<(), BoxError> {
     Event::create().at(ts2).name("b").exec(&mut db).await?;
     Event::create().at(ts3).name("c").exec(&mut db).await?;
 
-    let results = Event::filter_by_at(ts2).collect::<Vec<_>>(&mut db).await?;
+    let results = Event::filter_by_at(ts2).all(&mut db).await?;
     assert_struct!(results, [{ name: "b", at: == ts2 }]);
 
     // No match
     let results = Event::filter_by_at(Timestamp::from_second(0)?)
-        .collect::<Vec<_>>(&mut db)
+        .all(&mut db)
         .await?;
     assert!(results.is_empty());
 

@@ -68,7 +68,7 @@ impl<M: Load> Page<M> {
             Some(cursor) => Ok(Some(
                 Paginate::from(self.query.clone())
                     .after(cursor.clone())
-                    .collect(executor)
+                    .all(executor)
                     .await?,
             )),
             None => Ok(None),
@@ -96,7 +96,7 @@ impl<M: Load> Page<M> {
             Some(cursor) => Ok(Some(
                 Paginate::from(self.query.clone())
                     .before(cursor.clone())
-                    .collect(executor)
+                    .all(executor)
                     .await?,
             )),
             None => Ok(None),

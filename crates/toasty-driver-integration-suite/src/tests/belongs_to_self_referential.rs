@@ -63,7 +63,7 @@ pub async fn crud_person_self_referential(t: &mut Test) -> Result<()> {
     };
 
     // Load children from parent
-    let children: Vec<_> = p1.children().collect(&mut db).await?;
+    let children: Vec<_> = p1.children().all(&mut db).await?;
     assert(&children);
 
     // Try preloading this time

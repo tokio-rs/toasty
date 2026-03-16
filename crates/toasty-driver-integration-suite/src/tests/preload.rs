@@ -516,7 +516,7 @@ pub async fn preload_on_empty_table(test: &mut Test) -> Result<()> {
     // Query with include on empty table - should return empty result, not SQL error
     let users: Vec<User> = User::all()
         .include(User::fields().todos())
-        .collect(&mut db)
+        .all(&mut db)
         .await?;
 
     assert_eq!(0, users.len());
@@ -560,7 +560,7 @@ pub async fn preload_on_empty_query(test: &mut Test) -> Result<()> {
     // Query with include on empty table - should return empty result, not SQL error
     let users: Vec<User> = User::filter_by_name("foo")
         .include(User::fields().todos())
-        .collect(&mut db)
+        .all(&mut db)
         .await?;
 
     assert_eq!(0, users.len());

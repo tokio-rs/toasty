@@ -121,7 +121,7 @@ pub async fn embedded_struct_unique_index_enforced(test: &mut Test) -> Result<()
 
     // Filter by the indexed embedded field
     let users = User::filter(User::fields().contact().email().eq("alice@example.com"))
-        .collect::<Vec<_>>(&mut db)
+        .all(&mut db)
         .await?;
 
     assert_eq!(users.len(), 1);
