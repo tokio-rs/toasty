@@ -6,8 +6,13 @@ generated.
 
 ## Unique fields
 
-Add `#[unique]` to a field to create a unique index. The database enforces that
-no two records can have the same value for this field.
+Add `#[unique]` to a field to create a unique index. On databases that support
+unique constraints (SQLite, PostgreSQL, MySQL), the database enforces that no
+two records can have the same value for this field. Toasty applies the
+constraint on a best-effort basis — if the underlying database does not support
+unique indexes (e.g., DynamoDB on non-key attributes), the `#[unique]` attribute
+still generates the same query methods but uniqueness is not enforced at the
+storage level.
 
 ```rust
 # use toasty::Model;
@@ -123,9 +128,13 @@ User::delete_by_email(&mut db, "alice@example.com").await?;
 
 ## Indexed fields
 
-Add `#[index]` to a field to create a non-unique index. This speeds up queries
-on the field but does not enforce uniqueness — multiple records can share the
-same value.
+Add `#[index]` to a field to tell Toasty that this field is a query target. On
+SQL databases, Toasty creates a database index on the column, which lets the
+database find matching rows without scanning the entire table. On DynamoDB, the
+attribute maps to a secondary index.
+
+Unlike `#[unique]`, `#[index]` does not enforce uniqueness — multiple records
+can share the same value.
 
 ```rust
 # use toasty::Model;
@@ -203,20 +212,21 @@ let user = User::get_by_country(&mut db, "US").await?;
 # }
 ```
 
-## `#[unique]` vs `#[index]`
+## Choosing between `#[unique]` and `#[index]`
 
-Both attributes create a database index and generate `get_by_*`, `filter_by_*`,
-`update_by_*`, and `delete_by_*` methods. The difference is in database
-enforcement:
+Both attributes tell Toasty that a field is a query target and generate the same
+set of methods: `get_by_*`, `filter_by_*`, `update_by_*`, and `delete_by_*`.
 
-| Attribute | Database constraint | Duplicate values |
+The difference is in the constraint they express:
+
+| Attribute | Meaning | Database effect (SQL) |
 |---|---|---|
-| `#[unique]` | Unique index | Rejected by the database |
-| `#[index]` | Non-unique index | Allowed |
+| `#[unique]` | Each record has a distinct value | `CREATE UNIQUE INDEX` — the database rejects duplicates |
+| `#[index]` | Multiple records may share a value | `CREATE INDEX` — no uniqueness enforcement |
 
-Use `#[unique]` when the field must be distinct across all records (emails,
-usernames, slugs). Use `#[index]` when you want fast lookups on a field that can
-repeat (country, status, category).
+Use `#[unique]` for fields that identify a single record — email addresses,
+usernames, slugs. Use `#[index]` for fields you query frequently but that
+naturally repeat — country, status, category.
 
 ## What gets generated
 

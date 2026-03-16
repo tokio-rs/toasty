@@ -84,8 +84,13 @@ Supported type values:
 | `time(P)` | Time with precision |
 | `datetime(P)` | Date and time with precision |
 
-Not all databases support all types. For example, `varchar` requires database
-support — SQLite and DynamoDB do not support it natively.
+Not all databases support all column types. Toasty validates explicit column
+types against the database's capabilities when you call `db.push_schema()`. If a
+type is not supported, schema creation fails with an error. For example,
+`varchar` is supported by PostgreSQL and MySQL but not by SQLite or DynamoDB —
+using `#[column(type = varchar(100))]` with SQLite produces an error like
+`"unsupported feature: VARCHAR type is not supported by this database"`. If the
+requested size exceeds the database's maximum, Toasty reports that as well.
 
 ## Default values
 
@@ -289,12 +294,17 @@ struct Post {
 }
 ```
 
-Toasty expands these based on the field name:
+When `#[auto]` appears without arguments on a non-key field, Toasty uses a
+heuristic based on the field name and type to determine the behavior:
 
-| Field name | `#[auto]` expands to |
-|---|---|
-| `created_at` | `#[default(jiff::Timestamp::now())]` — set once on create |
-| `updated_at` | `#[update(jiff::Timestamp::now())]` — refreshed on every update |
+| Field name | Field type | `#[auto]` expands to |
+|---|---|---|
+| `created_at` | `jiff::Timestamp` | `#[default(jiff::Timestamp::now())]` — set once on create |
+| `updated_at` | `jiff::Timestamp` | `#[update(jiff::Timestamp::now())]` — refreshed on every create and update |
+
+On key fields, bare `#[auto]` defers to the type's default auto-generation
+strategy (e.g., auto-increment for integers, UUID v4 for `uuid::Uuid`). See
+[Keys and Auto-Generation](./keys-and-auto-generation.md) for details.
 
 This is the recommended way to add timestamps to your models. The `created_at`
 field is set when the record is first inserted and never changes. The
@@ -371,7 +381,10 @@ struct Post {
 ```
 
 Toasty serializes the value to a JSON string on insert and update, and
-deserializes it back when reading. The database column type is `TEXT`.
+deserializes it back when reading. The default database column type is `TEXT`.
+You can override this with `#[column(type = ...)]` if needed — for example,
+`#[column(type = varchar(1000))]` to limit the stored JSON size on databases
+that support `varchar`.
 
 ```rust
 # use toasty::Model;
