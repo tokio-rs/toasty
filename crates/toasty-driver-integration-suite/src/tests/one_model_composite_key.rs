@@ -30,7 +30,7 @@ pub async fn batch_get_by_key(test: &mut Test) -> Result<()> {
         (&keys[1].0, &keys[1].1),
         (&keys[2].0, &keys[2].1),
     ])
-    .all(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert_eq!(3, foos.len());
