@@ -75,9 +75,7 @@ pub async fn crud_user_todos(test: &mut Test) -> Result<()> {
     }
 
     // Find all TODOs by user (using the belongs_to queries)
-    let list = Todo::filter_by_user_id(user.id)
-        .collect::<Vec<_>>(&mut db)
-        .await?;
+    let list = Todo::filter_by_user_id(user.id).all(&mut db).await?;
     assert_eq!(6, list.len());
 
     let by_id: HashMap<_, _> = list.into_iter().map(|todo| (todo.id, todo)).collect();
@@ -198,7 +196,7 @@ pub async fn has_many_insert_on_update(test: &mut Test) -> Result<()> {
 
     // Create a user, no TODOs
     let mut user = User::create().name("Alice").exec(&mut db).await?;
-    assert!(user.todos().collect::<Vec<_>>(&mut db).await?.is_empty());
+    assert!(user.todos().all(&mut db).await?.is_empty());
 
     // Update the user and create a todo in a batch
     user.update()
@@ -208,7 +206,7 @@ pub async fn has_many_insert_on_update(test: &mut Test) -> Result<()> {
         .await?;
 
     assert_eq!("Bob", user.name);
-    let todos: Vec<_> = user.todos().collect(&mut db).await?;
+    let todos: Vec<_> = user.todos().all(&mut db).await?;
     assert_eq!(1, todos.len());
     assert_eq!(todos[0].title, "change name");
     Ok(())
@@ -362,9 +360,7 @@ pub async fn has_many_when_fk_is_composite(test: &mut Test) -> Result<()> {
     }
 
     // Find all TODOs by user (using the belongs_to queries)
-    let list = Todo::filter_by_user_id(user.id)
-        .collect::<Vec<_>>(&mut db)
-        .await?;
+    let list = Todo::filter_by_user_id(user.id).all(&mut db).await?;
     assert_eq!(6, list.len());
 
     let by_id: HashMap<_, _> = list.into_iter().map(|todo| (todo.id, todo)).collect();
@@ -515,7 +511,7 @@ pub async fn associate_new_user_with_todo_on_update_via_creation(test: &mut Test
         .await?;
 
     // Get the todo
-    let todos: Vec<_> = u1.todos().collect(&mut db).await?;
+    let todos: Vec<_> = u1.todos().all(&mut db).await?;
     assert_eq!(1, todos.len());
     let mut todo = todos.into_iter().next().unwrap();
 
@@ -556,7 +552,7 @@ pub async fn associate_new_user_with_todo_on_update_query_via_creation(
     let u1 = User::create().todo(Todo::create()).exec(&mut db).await?;
 
     // Get the todo
-    let todos: Vec<_> = u1.todos().collect(&mut db).await?;
+    let todos: Vec<_> = u1.todos().all(&mut db).await?;
     assert_eq!(1, todos.len());
     let todo = todos.into_iter().next().unwrap();
 
@@ -602,7 +598,7 @@ pub async fn update_user_with_null_todo_is_err(test: &mut Test) -> Result<()> {
     let u1 = User::create().todo(Todo::create()).exec(&mut db).await?;
 
     // Get the todo
-    let todos: Vec<_> = u1.todos().collect(&mut db).await?;
+    let todos: Vec<_> = u1.todos().all(&mut db).await?;
     assert_eq!(1, todos.len());
     let todo = todos.into_iter().next().unwrap();
 
@@ -656,11 +652,11 @@ pub async fn assign_todo_that_already_has_user_on_create(test: &mut Test) -> Res
     assert_eq!(u2.id, todo_reload.user_id);
 
     // First user has no todos
-    let todos: Vec<_> = u1.todos().collect(&mut db).await?;
+    let todos: Vec<_> = u1.todos().all(&mut db).await?;
     assert_eq!(0, todos.len());
 
     // Second user has the todo
-    let todos: Vec<_> = u2.todos().collect(&mut db).await?;
+    let todos: Vec<_> = u2.todos().all(&mut db).await?;
     assert_eq!(1, todos.len());
     assert_eq!(todo.id, todos[0].id);
     Ok(())
@@ -707,11 +703,11 @@ pub async fn assign_todo_that_already_has_user_on_update(test: &mut Test) -> Res
     assert_eq!(u2.id, todo_reload.user_id);
 
     // First user has no todos
-    let todos: Vec<_> = u1.todos().collect(&mut db).await?;
+    let todos: Vec<_> = u1.todos().all(&mut db).await?;
     assert_eq!(0, todos.len());
 
     // Second user has the todo
-    let todos: Vec<_> = u2.todos().collect(&mut db).await?;
+    let todos: Vec<_> = u2.todos().all(&mut db).await?;
     assert_eq!(1, todos.len());
     assert_eq!(todo.id, todos[0].id);
     Ok(())
@@ -739,11 +735,11 @@ pub async fn assign_existing_user_to_todo(test: &mut Test) -> Result<()> {
     assert_eq!(u2.id, todo_reload.user_id);
 
     // First user has no todos
-    let todos: Vec<_> = u1.todos().collect(&mut db).await?;
+    let todos: Vec<_> = u1.todos().all(&mut db).await?;
     assert_eq!(0, todos.len());
 
     // Second user has the todo
-    let todos: Vec<_> = u2.todos().collect(&mut db).await?;
+    let todos: Vec<_> = u2.todos().all(&mut db).await?;
     assert_eq!(1, todos.len());
     assert_eq!(todo.id, todos[0].id);
     Ok(())
@@ -761,7 +757,7 @@ pub async fn assign_todo_to_user_on_update_query(test: &mut Test) -> Result<()> 
         .exec(&mut db)
         .await?;
 
-    let todos: Vec<_> = user.todos().collect(&mut db).await?;
+    let todos: Vec<_> = user.todos().all(&mut db).await?;
     assert_eq!(1, todos.len());
     assert_eq!("hello", todos[0].title);
     Ok(())

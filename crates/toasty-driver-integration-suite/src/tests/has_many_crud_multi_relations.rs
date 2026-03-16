@@ -95,11 +95,9 @@ pub async fn crud_user_todos_categories(test: &mut Test) -> Result<()> {
     let expect: HashMap<_, _> = todos.into_iter().map(|todo| (todo.id, todo)).collect();
 
     let lists = [
-        category.todos().collect::<Vec<_>>(&mut db).await?,
-        user.todos().collect::<Vec<_>>(&mut db).await?,
-        Todo::filter_by_user_id(user.id)
-            .collect::<Vec<_>>(&mut db)
-            .await?,
+        category.todos().all(&mut db).await?,
+        user.todos().all(&mut db).await?,
+        Todo::filter_by_user_id(user.id).all(&mut db).await?,
     ];
 
     for list in lists {
@@ -156,20 +154,20 @@ pub async fn crud_user_todos_categories(test: &mut Test) -> Result<()> {
     let list = category
         .todos()
         .query(Todo::fields().user().eq(&user))
-        .collect::<Vec<_>>(&mut db)
+        .all(&mut db)
         .await?;
     check_todo_list(&mut db, &expect, list).await?;
 
     let list = user
         .todos()
         .query(Todo::fields().category().eq(&category))
-        .collect::<Vec<_>>(&mut db)
+        .all(&mut db)
         .await?;
     check_todo_list(&mut db, &expect, list).await?;
 
     let list = Todo::filter_by_user_id(user.id)
         .filter(Todo::fields().category().eq(&category))
-        .collect::<Vec<_>>(&mut db)
+        .all(&mut db)
         .await?;
     check_todo_list(&mut db, &expect, list).await
 }

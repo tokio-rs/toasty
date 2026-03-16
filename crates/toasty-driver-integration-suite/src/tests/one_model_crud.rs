@@ -469,7 +469,7 @@ pub async fn batch_get_by_id(test: &mut Test) -> Result<()> {
     }
 
     let items: Vec<_> = Foo::filter_by_id_batch([&keys[0], &keys[1], &keys[2]])
-        .collect(&mut db)
+        .all(&mut db)
         .await?;
 
     assert_eq!(3, items.len());
@@ -497,9 +497,7 @@ pub async fn empty_batch_get_by_id(test: &mut Test) -> Result<()> {
         ids.push(item.id);
     }
 
-    let items: Vec<_> = Foo::filter_by_id_batch(&[] as &[ID])
-        .collect(&mut db)
-        .await?;
+    let items: Vec<_> = Foo::filter_by_id_batch(&[] as &[ID]).all(&mut db).await?;
 
     assert_eq!(0, items.len());
     Ok(())

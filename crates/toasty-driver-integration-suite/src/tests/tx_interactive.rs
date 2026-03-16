@@ -22,7 +22,7 @@ pub async fn commit_persists_data(t: &mut Test) -> Result<()> {
     User::create().name("Alice").exec(&mut tx).await?;
     tx.commit().await?;
 
-    let users = User::all().collect::<Vec<_>>(&mut db).await?;
+    let users = User::all().all(&mut db).await?;
     assert_eq!(users.len(), 1);
     assert_eq!(users[0].name, "Alice");
 
@@ -46,7 +46,7 @@ pub async fn rollback_discards_data(t: &mut Test) -> Result<()> {
     User::create().name("Ghost").exec(&mut tx).await?;
     tx.rollback().await?;
 
-    let users = User::all().collect::<Vec<_>>(&mut db).await?;
+    let users = User::all().all(&mut db).await?;
     assert!(users.is_empty());
 
     Ok(())
@@ -71,7 +71,7 @@ pub async fn drop_without_finalize_rolls_back(t: &mut Test) -> Result<()> {
         // tx is dropped here without commit/rollback
     }
 
-    let users = User::all().collect::<Vec<_>>(&mut db).await?;
+    let users = User::all().all(&mut db).await?;
     assert!(users.is_empty());
 
     Ok(())
@@ -96,7 +96,7 @@ pub async fn multiple_ops_in_transaction(t: &mut Test) -> Result<()> {
     User::create().name("Carol").exec(&mut tx).await?;
     tx.commit().await?;
 
-    let users = User::all().collect::<Vec<_>>(&mut db).await?;
+    let users = User::all().all(&mut db).await?;
     assert_eq!(users.len(), 3);
 
     Ok(())
@@ -119,7 +119,7 @@ pub async fn read_your_writes(t: &mut Test) -> Result<()> {
     let mut tx = db.transaction().await?;
     User::create().name("Alice").exec(&mut tx).await?;
 
-    let users = User::all().collect::<Vec<_>>(&mut tx).await?;
+    let users = User::all().all(&mut tx).await?;
     assert_eq!(users.len(), 1);
     assert_eq!(users[0].name, "Alice");
 
@@ -304,7 +304,7 @@ pub async fn nested_commit_both(t: &mut Test) -> Result<()> {
 
     tx.commit().await?;
 
-    let users = User::all().collect::<Vec<_>>(&mut db).await?;
+    let users = User::all().all(&mut db).await?;
     assert_eq!(users.len(), 2);
 
     Ok(())
@@ -335,7 +335,7 @@ pub async fn nested_rollback_inner(t: &mut Test) -> Result<()> {
 
     tx.commit().await?;
 
-    let users = User::all().collect::<Vec<_>>(&mut db).await?;
+    let users = User::all().all(&mut db).await?;
     assert_eq!(users.len(), 1);
     assert_eq!(users[0].name, "Alice");
 
@@ -367,7 +367,7 @@ pub async fn nested_rollback_outer(t: &mut Test) -> Result<()> {
 
     tx.rollback().await?;
 
-    let users = User::all().collect::<Vec<_>>(&mut db).await?;
+    let users = User::all().all(&mut db).await?;
     assert!(users.is_empty());
 
     Ok(())
@@ -398,7 +398,7 @@ pub async fn nested_drop_rolls_back_savepoint(t: &mut Test) -> Result<()> {
 
     tx.commit().await?;
 
-    let users = User::all().collect::<Vec<_>>(&mut db).await?;
+    let users = User::all().all(&mut db).await?;
     assert_eq!(users.len(), 1);
     assert_eq!(users[0].name, "Alice");
 
@@ -546,7 +546,7 @@ pub async fn two_sequential_nested_transactions(t: &mut Test) -> Result<()> {
 
     tx.commit().await?;
 
-    let users = User::all().collect::<Vec<_>>(&mut db).await?;
+    let users = User::all().all(&mut db).await?;
     assert_eq!(users.len(), 1);
     assert_eq!(users[0].name, "Alice");
 
@@ -626,7 +626,7 @@ pub async fn multi_op_inside_tx_uses_savepoints(t: &mut Test) -> Result<()> {
     assert!(t.log().is_empty());
 
     // Verify the data landed
-    let todos = user.todos().collect::<Vec<_>>(&mut db).await?;
+    let todos = user.todos().all(&mut db).await?;
     assert_eq!(todos.len(), 1);
     assert_eq!(todos[0].title, "task");
 

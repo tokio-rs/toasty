@@ -11,7 +11,6 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let query_ident = &self.model.kind.expect_root().query_struct_ident;
         let create_builder_ident = &self.model.kind.expect_root().create_struct_ident;
-        let collect_ty = util::ident("A");
         let eq_ty = util::ident("T");
         let in_query_ty = util::ident("Q");
         let filter_methods = self.expand_relation_filter_methods();
@@ -50,16 +49,6 @@ impl Expand<'_> {
                 #vis async fn all(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<Vec<#model_ident>> {
                     use #toasty::{ExecutorExt, IntoStatement};
                     executor.all(self.into_statement().into_query().unwrap()).await
-                }
-
-                #vis async fn collect<#collect_ty>(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#collect_ty>
-                where
-                    #collect_ty: Extend<#model_ident> + Default,
-                {
-                    let items = self.all(executor).await?;
-                    let mut out = #collect_ty::default();
-                    out.extend(items);
-                    Ok(out)
                 }
 
                 #vis fn query(

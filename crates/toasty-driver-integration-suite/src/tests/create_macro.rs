@@ -186,7 +186,7 @@ pub async fn create_macro_nested_association(test: &mut Test) -> Result<()> {
 
     assert_eq!(user.name, "Carl");
 
-    let todos: Vec<_> = user.todos().collect(&mut db).await?;
+    let todos: Vec<_> = user.todos().all(&mut db).await?;
     assert_eq!(todos.len(), 1);
     assert_eq!(todos[0].title, "get something done");
 
@@ -234,7 +234,7 @@ pub async fn create_macro_nested_multiple(test: &mut Test) -> Result<()> {
 
     assert_eq!(user.name, "Carl");
 
-    let mut todos: Vec<_> = user.todos().collect(&mut db).await?;
+    let mut todos: Vec<_> = user.todos().all(&mut db).await?;
     assert_eq!(todos.len(), 2);
 
     todos.sort_by(|a, b| a.title.cmp(&b.title));
@@ -354,11 +354,11 @@ pub async fn create_macro_deeply_nested(test: &mut Test) -> Result<()> {
 
     assert_eq!(user.name, "Carl");
 
-    let todos: Vec<_> = user.todos().collect(&mut db).await?;
+    let todos: Vec<_> = user.todos().all(&mut db).await?;
     assert_eq!(todos.len(), 1);
     assert_eq!(todos[0].title, "get something done");
 
-    let mut tags: Vec<_> = todos[0].tags().collect(&mut db).await?;
+    let mut tags: Vec<_> = todos[0].tags().all(&mut db).await?;
     tags.sort_by(|a, b| a.name.cmp(&b.name));
     assert_eq!(tags.len(), 2);
     assert_eq!(tags[0].name, "urgent");
