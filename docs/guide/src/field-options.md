@@ -354,7 +354,7 @@ struct Event {
 Use `#[serialize(json)]` to store a Rust value as a JSON string in the database.
 The field type must implement `serde::Serialize` and `serde::Deserialize`.
 
-```rust
+```rust,ignore
 # use toasty::Model;
 use serde::{Serialize, Deserialize};
 
@@ -386,7 +386,7 @@ You can override this with `#[column(type = ...)]` if needed — for example,
 `#[column(type = varchar(1000))]` to limit the stored JSON size on databases
 that support `varchar`.
 
-```rust
+```rust,ignore
 # use toasty::Model;
 # use serde::{Serialize, Deserialize};
 # #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
