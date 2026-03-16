@@ -26,7 +26,7 @@ pub async fn basic_embedded_struct(test: &mut Test) {
             name.upper_camel_case(): "Address",
             fields: [
                 _ { name.app_name: "street", .. },
-                _ { name.app_name: "city", .. }
+                _ { name.app_name: "city", .. },
             ],
             ..
         }),
@@ -65,7 +65,7 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
             name.upper_camel_case(): "Address",
             fields: [
                 _ { name.app_name: "street", .. },
-                _ { name.app_name: "city", .. }
+                _ { name.app_name: "city", .. },
             ],
             ..
         }),
@@ -80,7 +80,7 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
                         ..
                     }),
                     ..
-                }
+                },
             ],
             ..
         }),
@@ -97,7 +97,7 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
                 _ { name: "address_city", .. },
             ],
             ..
-        }
+        },
     ]);
 
     let user = &schema.app.models[&User::id()];
@@ -126,15 +126,21 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
                         column: == user_table.columns[2].id,
                         lowering: 2,
                         ..
-                    })
+                    }),
                 ],
                 ..
             }),
         ],
         model_to_table.fields: [
             _,
-            == stmt::Expr::project(stmt::Expr::ref_self_field(user.expect_root().fields[1].id), [0]),
-            == stmt::Expr::project(stmt::Expr::ref_self_field(user.expect_root().fields[1].id), [1])
+            == stmt::Expr::project(
+                stmt::Expr::ref_self_field(user.expect_root().fields[1].id),
+                [0],
+            ),
+            == stmt::Expr::project(
+                stmt::Expr::ref_self_field(user.expect_root().fields[1].id),
+                [1],
+            ),
         ],
         ..
     });
@@ -150,10 +156,12 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
         table_to_model.fields,
         [
             _,
-            stmt::Expr::Record(stmt::ExprRecord { fields: [
-                == stmt::Expr::column(user_table.columns[1].id),
-                == stmt::Expr::column(user_table.columns[2].id),
-            ]}),
+            stmt::Expr::Record(stmt::ExprRecord {
+                fields: [
+                    == stmt::Expr::column(user_table.columns[1].id),
+                    == stmt::Expr::column(user_table.columns[2].id),
+                ],
+            }),
         ]
     );
 }
@@ -220,7 +228,7 @@ pub async fn create_and_query_embedded(t: &mut Test) -> Result<()> {
 
     // Delete: cleanup
     let id = user.id;
-    user.delete(&mut db).await?;
+    user.delete().exec(&mut db).await?;
     assert_err!(User::get_by_id(&mut db, &id).await);
     Ok(())
 }
@@ -321,7 +329,7 @@ pub async fn query_embedded_struct_fields(t: &mut Test) -> Result<()> {
     let mut all_users = Vec::new();
     for country in ["USA", "CAN"] {
         let mut users = User::filter(User::fields().country().eq(country))
-            .collect::<Vec<_>>(&mut db)
+            .all(&mut db)
             .await?;
         all_users.append(&mut users);
     }
@@ -335,7 +343,7 @@ pub async fn query_embedded_struct_fields(t: &mut Test) -> Result<()> {
             .eq("USA")
             .and(User::fields().address().city().eq("Seattle")),
     )
-    .collect::<Vec<_>>(&mut db)
+    .all(&mut db)
     .await?;
 
     assert_eq!(seattle_users.len(), 2);
@@ -350,7 +358,7 @@ pub async fn query_embedded_struct_fields(t: &mut Test) -> Result<()> {
             .eq("CAN")
             .and(User::fields().address().city().eq("Vancouver")),
     )
-    .collect::<Vec<_>>(&mut db)
+    .all(&mut db)
     .await?;
 
     assert_eq!(vancouver_users.len(), 2);
@@ -362,7 +370,7 @@ pub async fn query_embedded_struct_fields(t: &mut Test) -> Result<()> {
             .eq("USA")
             .and(User::fields().address().zip().eq("98101")),
     )
-    .collect::<Vec<_>>(&mut db)
+    .all(&mut db)
     .await?;
 
     assert_eq!(user_98101.len(), 1);
@@ -409,25 +417,25 @@ pub async fn query_embedded_fields_comparison_ops(t: &mut Test) -> Result<()> {
 
     // Test gt: score > 80 should return Alice (100) and Bob (85)
     let high_scorers = Player::filter(Player::fields().stats().score().gt(80))
-        .collect::<Vec<_>>(&mut db)
+        .all(&mut db)
         .await?;
     assert_eq!(high_scorers.len(), 2);
 
     // Test le: score <= 55 should return Diana (55) and Eve (40)
     let low_scorers = Player::filter(Player::fields().stats().score().le(55))
-        .collect::<Vec<_>>(&mut db)
+        .all(&mut db)
         .await?;
     assert_eq!(low_scorers.len(), 2);
 
     // Test ne: score != 70 excludes only Charlie
     let not_charlie = Player::filter(Player::fields().stats().score().ne(70))
-        .collect::<Vec<_>>(&mut db)
+        .all(&mut db)
         .await?;
     assert_eq!(not_charlie.len(), 4);
 
     // Test ge: score >= 70 should return Alice, Bob, Charlie
     let mid_to_high = Player::filter(Player::fields().stats().score().ge(70))
-        .collect::<Vec<_>>(&mut db)
+        .all(&mut db)
         .await?;
     assert_eq!(mid_to_high.len(), 3);
     Ok(())
@@ -479,7 +487,7 @@ pub async fn query_embedded_multiple_fields(t: &mut Test) -> Result<()> {
             .eq(10)
             .and(Location::fields().coords().y().eq(20)),
     )
-    .collect::<Vec<_>>(&mut db)
+    .all(&mut db)
     .await?;
 
     assert_eq!(matching.len(), 2);
@@ -497,7 +505,7 @@ pub async fn query_embedded_multiple_fields(t: &mut Test) -> Result<()> {
             .and(Location::fields().coords().y().eq(20))
             .and(Location::fields().coords().z().eq(0)),
     )
-    .collect::<Vec<_>>(&mut db)
+    .all(&mut db)
     .await?;
 
     assert_eq!(exact_match.len(), 1);
@@ -563,19 +571,19 @@ pub async fn update_with_embedded_field_filter(t: &mut Test) -> Result<()> {
 
     // Doc A should be updated (was v1 draft, now v2 draft)
     let doc_a = Document::filter(Document::fields().title().eq("Doc A"))
-        .collect::<Vec<_>>(&mut db)
+        .all(&mut db)
         .await?;
     assert_eq!(doc_a[0].meta.version, 2);
 
     // Doc B should be unchanged (was v2 draft, still v2 draft)
     let doc_b = Document::filter(Document::fields().title().eq("Doc B"))
-        .collect::<Vec<_>>(&mut db)
+        .all(&mut db)
         .await?;
     assert_eq!(doc_b[0].meta.version, 2);
 
     // Doc C should be unchanged (was v1 published, still v1 published - wrong status)
     let doc_c = Document::filter(Document::fields().title().eq("Doc C"))
-        .collect::<Vec<_>>(&mut db)
+        .all(&mut db)
         .await?;
     assert_eq!(doc_c[0].meta.version, 1);
     Ok(())
@@ -760,7 +768,7 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
                         ..
                     }),
                     ..
-                }
+                },
             ],
             ..
         }),
@@ -775,7 +783,7 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
                         ..
                     }),
                     ..
-                }
+                },
             ],
             ..
         }),
@@ -790,7 +798,7 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
                         ..
                     }),
                     ..
-                }
+                },
             ],
             ..
         }),
@@ -814,7 +822,7 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
                 _ { name: "address_city_location_lon", .. },
             ],
             ..
-        }
+        },
     ]);
 
     let user = &schema.app.models[&User::id()];
@@ -989,25 +997,37 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
     // Expression for address.street should be: project(ref(address_field), [0])
     assert_struct!(
         user_mapping.model_to_table[1],
-        == stmt::Expr::project(stmt::Expr::ref_self_field(user.expect_root().fields[1].id), [0])
+        == stmt::Expr::project(
+            stmt::Expr::ref_self_field(user.expect_root().fields[1].id),
+            [0],
+        )
     );
 
     // Expression for address.city.name should be: project(ref(address_field), [1, 0])
     assert_struct!(
         user_mapping.model_to_table[2],
-        == stmt::Expr::project(stmt::Expr::ref_self_field(user.expect_root().fields[1].id), [1, 0])
+        == stmt::Expr::project(
+            stmt::Expr::ref_self_field(user.expect_root().fields[1].id),
+            [1, 0],
+        )
     );
 
     // Expression for address.city.location.lat should be: project(ref(address_field), [1, 1, 0])
     assert_struct!(
         user_mapping.model_to_table[3],
-        == stmt::Expr::project(stmt::Expr::ref_self_field(user.expect_root().fields[1].id), [1, 1, 0])
+        == stmt::Expr::project(
+            stmt::Expr::ref_self_field(user.expect_root().fields[1].id),
+            [1, 1, 0],
+        )
     );
 
     // Expression for address.city.location.lon should be: project(ref(address_field), [1, 1, 1])
     assert_struct!(
         user_mapping.model_to_table[4],
-        == stmt::Expr::project(stmt::Expr::ref_self_field(user.expect_root().fields[1].id), [1, 1, 1])
+        == stmt::Expr::project(
+            stmt::Expr::ref_self_field(user.expect_root().fields[1].id),
+            [1, 1, 1],
+        )
     );
 }
 
@@ -1124,7 +1144,7 @@ pub async fn crud_nested_embedded(t: &mut Test) -> Result<()> {
 
     // Delete: cleanup
     let id = company.id;
-    company.delete(&mut db).await?;
+    company.delete().exec(&mut db).await?;
     assert_err!(Company::get_by_id(&mut db, &id).await);
     Ok(())
 }

@@ -110,7 +110,7 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
 
     // Delete: cleanup
     let id = user.id;
-    user.delete(&mut db).await?;
+    user.delete().exec(&mut db).await?;
     assert_err!(User::get_by_id(&mut db, &id).await);
     Ok(())
 }
@@ -163,7 +163,7 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
 
     // Filter: only Active tasks (discriminant = 2)
     let active = Task::filter(Task::fields().status().eq(Status::Active))
-        .collect::<Vec<_>>(&mut db)
+        .all(&mut db)
         .await?;
     assert_eq!(active.len(), 2);
     {
@@ -187,7 +187,7 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
 
     // Filter: only Pending tasks (discriminant = 1)
     let pending = Task::filter(Task::fields().status().eq(Status::Pending))
-        .collect::<Vec<_>>(&mut db)
+        .all(&mut db)
         .await?;
     assert_eq!(pending.len(), 1);
     assert_eq!(pending[0].name, "Task A");
@@ -212,7 +212,7 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
 
     // Filter: only Done tasks (discriminant = 3)
     let done = Task::filter(Task::fields().status().eq(Status::Done))
-        .collect::<Vec<_>>(&mut db)
+        .all(&mut db)
         .await?;
     assert_eq!(done.len(), 1);
     assert_eq!(done[0].name, "Task D");
@@ -317,7 +317,7 @@ pub async fn root_model_with_embedded_enum_field(test: &mut Test) {
                         ..
                     }),
                     ..
-                }
+                },
             ],
             ..
         }),
@@ -332,7 +332,7 @@ pub async fn root_model_with_embedded_enum_field(test: &mut Test) {
                 _ { name: "status", .. },
             ],
             ..
-        }
+        },
     ]);
 
     let user = &schema.app.models[&User::id()];

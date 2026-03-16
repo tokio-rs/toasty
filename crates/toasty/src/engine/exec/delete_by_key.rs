@@ -37,16 +37,24 @@ impl Exec<'_> {
         let res = if keys.is_empty() {
             Rows::Count(0)
         } else {
-            let op = operation::DeleteByKey {
-                table: action.table,
-                keys,
-                filter: action.filter.clone(),
-            };
+            let mut total_count = 0u64;
 
-            let res = self.connection.exec(&self.engine.schema, op.into()).await?;
+            for key in keys {
+                let op = operation::DeleteByKey {
+                    table: action.table,
+                    keys: vec![key],
+                    filter: action.filter.clone(),
+                };
 
-            assert!(res.rows.is_count(), "TODO");
-            res.rows
+                let res = self.connection.exec(&self.engine.schema, op.into()).await?;
+
+                match res.rows {
+                    Rows::Count(n) => total_count += n,
+                    _ => panic!("expected Count from DeleteByKey"),
+                }
+            }
+
+            Rows::Count(total_count)
         };
 
         self.vars

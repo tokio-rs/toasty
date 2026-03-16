@@ -320,9 +320,19 @@ impl ToSql for &stmt::InsertTarget {
 
 impl ToSql for &stmt::Limit {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
-        assert!(self.offset.is_none(), "TODO; {:#?}", self);
-
         fmt!(cx, f, "LIMIT " self.limit);
+        if let Some(offset) = self.offset.as_ref() {
+            fmt!(cx, f, " " offset);
+        }
+    }
+}
+
+impl ToSql for &stmt::Offset {
+    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+        match self {
+            stmt::Offset::After(_) => panic!("Offset::After cannot be serialized to SQL, should already be lowered to a different representation"),
+            stmt::Offset::Count(count) => fmt!(cx, f, "OFFSET " count),
+        }
     }
 }
 

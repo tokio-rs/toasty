@@ -16,8 +16,11 @@ pub use into_expr::IntoExpr;
 mod into_insert;
 pub use into_insert::IntoInsert;
 
-mod into_select;
-pub use into_select::IntoSelect;
+mod into_statement;
+pub use into_statement::IntoStatement;
+
+mod list;
+pub use list::List;
 
 mod paginate;
 pub use paginate::Paginate;
@@ -25,24 +28,15 @@ pub use paginate::Paginate;
 mod path;
 pub use path::Path;
 
-mod primitive;
-pub use primitive::{Auto, Primitive};
+pub use crate::model::{Auto, Field};
 
-#[cfg(feature = "jiff")]
-mod primitive_jiff;
-
-mod select;
-pub use select::Select;
-
-mod to_statement;
-pub use to_statement::ToStatement;
+mod query;
+pub use query::Query;
 
 mod update;
 pub use update::Update;
 
 pub use toasty_core::stmt::{OrderBy, Projection, Value};
-
-use crate::Model;
 
 use toasty_core::stmt;
 
@@ -53,17 +47,34 @@ pub struct Statement<M> {
     _p: PhantomData<M>,
 }
 
-impl<M: Model> Statement<M> {
-    pub fn from_untyped(query: impl IntoSelect<Model = M>) -> Self {
+impl<M> Statement<M> {
+    /// Wrap a raw untyped statement.
+    pub fn from_untyped_stmt(untyped: stmt::Statement) -> Self {
         Self {
-            untyped: query.into_select().untyped.into(),
+            untyped,
             _p: PhantomData,
+        }
+    }
+
+    pub(crate) fn into_untyped_query(self) -> stmt::Query {
+        match self.untyped {
+            stmt::Statement::Query(q) => q,
+            _ => panic!("expected query statement"),
         }
     }
 }
 
-impl<M> From<Select<M>> for Statement<M> {
-    fn from(value: Select<M>) -> Self {
+impl<M> Statement<List<M>> {
+    pub fn into_query(self) -> Option<Query<M>> {
+        match self.untyped {
+            stmt::Statement::Query(q) => Some(Query::from_untyped(q)),
+            _ => None,
+        }
+    }
+}
+
+impl<M> From<Query<M>> for Statement<M> {
+    fn from(value: Query<M>) -> Self {
         Self {
             untyped: value.untyped.into(),
             _p: PhantomData,

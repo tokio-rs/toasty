@@ -128,8 +128,9 @@ enum LoweringContext<'a> {
     /// Lowering a value row being inserted
     InsertRow(&'a stmt::Expr),
 
-    /// Lowering the returning clause of a statement.
-    Returning,
+    /// Lowering the returning clause of a statement. Optionally carries the
+    /// parent INSERT's row index when visiting a per-row returning expression.
+    Returning(Option<usize>),
 
     /// All other lowering cases
     Statement,
@@ -151,10 +152,10 @@ index_vec::define_index_type! {
 
 impl LowerStatement<'_, '_> {
     fn new_dependency(&mut self, stmt: impl Into<stmt::Statement>) -> hir::StmtId {
-        let row_index = if let LoweringContext::Insert(_, row_index) = self.cx {
-            row_index
-        } else {
-            None
+        let row_index = match self.cx {
+            LoweringContext::Insert(_, row_index) => row_index,
+            LoweringContext::Returning(row_index) => row_index,
+            _ => None,
         };
 
         let stmt_id = self.state.lower_stmt(self.expr_cx, row_index, stmt.into());
@@ -196,6 +197,18 @@ impl LowerStatement<'_, '_> {
 }
 
 impl visit_mut::VisitMut for LowerStatement<'_, '_> {
+    fn visit_order_by_expr_mut(&mut self, node: &mut stmt::OrderByExpr) {
+        // First, run the default visitor to lower sub-expressions
+        self.visit_expr_mut(&mut node.expr);
+
+        // Reuse binary-op lowering: synthesize `expr == expr` so that
+        // cast conversions are applied, then keep the LHS result.
+        let mut lhs = node.expr.clone();
+        let mut rhs = node.expr.take();
+        self.lower_expr_binary_op(stmt::BinaryOp::Eq, &mut lhs, &mut rhs);
+        node.expr = lhs;
+    }
+
     fn visit_assignments_mut(&mut self, i: &mut stmt::Assignments) {
         let mut assignments = stmt::Assignments::default();
         let mapping = self.mapping_unwrap();
@@ -385,7 +398,13 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     panic!()
                 };
 
-                assert!(self.cx.is_returning(), "cx={:#?}", self.cx);
+                // Expr::Stmt subqueries are valid in returning expressions (e.g.,
+                // INCLUDE preloading) and in VALUES bodies of batch queries.
+                debug_assert!(
+                    self.cx.is_returning() || matches!(self.cx, LoweringContext::Statement),
+                    "cx={:#?}",
+                    self.cx,
+                );
 
                 // For now, we assume nested sub-statements cannot be executed on the
                 // target database. Eventually, we will need to make this smarter.
@@ -436,7 +455,9 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     }
 
     fn visit_expr_stmt_mut(&mut self, i: &mut stmt::ExprStmt) {
-        todo!("expr={i:#?}");
+        // Delegate to the default visitor which dispatches to
+        // visit_stmt_insert_mut, visit_stmt_query_mut, etc.
+        stmt::visit_mut::visit_expr_stmt_mut(self, i);
     }
 
     fn visit_returning_mut(&mut self, i: &mut stmt::Returning) {
@@ -454,12 +475,22 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             *i = stmt::Returning::Expr(returning);
         }
 
+        // For multi-row INSERT returning, visit each row with its row index so
+        // that sub-statements (e.g., child INSERTs for HasOne relations) capture
+        // the correct parent row index via scope_statement.
+        if matches!(&self.cx, LoweringContext::Insert(..)) {
+            if let stmt::Returning::Value(stmt::Expr::List(list)) = i {
+                for (index, item) in list.items.iter_mut().enumerate() {
+                    self.lower_returning_for_row(index).visit_expr_mut(item);
+                }
+                return;
+            }
+        }
+
         stmt::visit_mut::visit_returning_mut(&mut self.lower_returning(), i);
     }
 
     fn visit_stmt_delete_mut(&mut self, stmt: &mut stmt::Delete) {
-        assert!(stmt.returning.is_none(), "TODO; stmt={stmt:#?}");
-
         // Create a new expr scope for the statement, and lower all parts
         // *except* the source field (since it is borrowed).
         let mut lower = self.scope_expr(&stmt.from);
@@ -648,10 +679,10 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                     _ => todo!(),
                 })
             }
-            (stmt::Expr::Cast(expr_cast), other) => {
+            (stmt::Expr::Cast(expr_cast), _) | (_, stmt::Expr::Cast(expr_cast)) => {
                 let target_ty = self.capability().native_type_for(&expr_cast.ty);
                 self.cast_expr(lhs, &target_ty);
-                self.cast_expr(other, &target_ty);
+                self.cast_expr(rhs, &target_ty);
                 None
             }
             _ => None,
@@ -738,7 +769,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 
     fn lower_expr_field(&self, nesting: usize, index: usize) -> stmt::Expr {
         match self.cx {
-            LoweringContext::Statement | LoweringContext::Returning => {
+            LoweringContext::Statement | LoweringContext::Returning(_) => {
                 let mapping = self.mapping_at_unwrap(nesting);
                 mapping.table_to_model.lower_expr_reference(nesting, index)
             }
@@ -757,19 +788,24 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     }
 
     fn build_include_subquery(&mut self, returning: &mut stmt::Expr, path: &stmt::Path) {
-        let [field_index] = &path.projection[..] else {
-            todo!("Multi-step include paths not yet supported")
+        let projection = &path.projection[..];
+        let (field_index, rest) = match projection {
+            [] => panic!("Empty include path"),
+            [first, rest @ ..] => (first, rest),
         };
 
         let field = &self.model_unwrap().fields[*field_index];
 
-        let mut stmt = match &field.ty {
-            FieldTy::HasMany(rel) => stmt::Query::new_select(
-                rel.target,
-                stmt::Expr::eq(
-                    stmt::Expr::ref_parent_model(),
-                    stmt::Expr::ref_self_field(rel.pair),
+        let (mut stmt, target_model_id) = match &field.ty {
+            FieldTy::HasMany(rel) => (
+                stmt::Query::new_select(
+                    rel.target,
+                    stmt::Expr::eq(
+                        stmt::Expr::ref_parent_model(),
+                        stmt::Expr::ref_self_field(rel.pair),
+                    ),
                 ),
+                rel.target,
             ),
             // To handle single relations, we need a new query modifier that
             // returns a single record and not a list. This matters for the type
@@ -797,7 +833,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 let mut query =
                     stmt::Query::new_select(rel.target, stmt::Expr::eq(source_fk, target_pk));
                 query.single = true;
-                query
+                (query, rel.target)
             }
             FieldTy::HasOne(rel) => {
                 let mut query = stmt::Query::new_select(
@@ -808,10 +844,21 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                     ),
                 );
                 query.single = true;
-                query
+                (query, rel.target)
             }
             _ => todo!(),
         };
+
+        // If there are remaining steps in the path, add them as nested includes
+        // on the subquery. The lowering pipeline will recursively process them
+        // when it encounters the Returning::Model on this subquery.
+        if !rest.is_empty() {
+            let remaining_path = stmt::Path {
+                root: stmt::PathRoot::Model(target_model_id),
+                projection: stmt::Projection::from(rest),
+            };
+            stmt.include(remaining_path);
+        }
 
         // Simplify the new stmt to handle relations.
         Simplify::with_context(self.expr_cx).visit_stmt_query_mut(&mut stmt);
@@ -1012,10 +1059,10 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     /// Plan a sub-statement that is able to reference the parent statement
     fn scope_statement(&mut self, f: impl FnOnce(&mut LowerStatement<'_, '_>)) -> hir::StmtId {
         let stmt_id = self.new_statement_info();
-        let row_index = if let LoweringContext::Insert(_, row_index) = &self.cx {
-            *row_index
-        } else {
-            None
+        let row_index = match &self.cx {
+            LoweringContext::Insert(_, row_index) => *row_index,
+            LoweringContext::Returning(row_index) => *row_index,
+            _ => None,
         };
         let scope_id = self.state.scopes.push(Scope { stmt_id, row_index });
         let mut dependencies = None;
@@ -1102,7 +1149,20 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             state: self.state,
             expr_cx: self.expr_cx,
             scope_id: self.scope_id,
-            cx: LoweringContext::Returning,
+            cx: LoweringContext::Returning(None),
+            collect_dependencies: self.collect_dependencies,
+        }
+    }
+
+    fn lower_returning_for_row<'child>(
+        &'child mut self,
+        row_index: usize,
+    ) -> LowerStatement<'child, 'b> {
+        LowerStatement {
+            state: self.state,
+            expr_cx: self.expr_cx,
+            scope_id: self.scope_id,
+            cx: LoweringContext::Returning(Some(row_index)),
             collect_dependencies: self.collect_dependencies,
         }
     }
@@ -1141,7 +1201,7 @@ impl LoweringContext<'_> {
     }
 
     fn is_returning(&self) -> bool {
-        matches!(self, LoweringContext::Returning)
+        matches!(self, LoweringContext::Returning(_))
     }
 }
 

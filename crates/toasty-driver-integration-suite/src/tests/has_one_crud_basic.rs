@@ -95,7 +95,7 @@ pub async fn crud_has_one_bi_direction_optional(test: &mut Test) -> Result<()> {
     assert_eq!(&user.id, profile_reloaded.user_id.as_ref().unwrap());
 
     // Deleting the profile will nullify the profile field for the user
-    profile_reloaded.delete(&mut db).await?;
+    profile_reloaded.delete().exec(&mut db).await?;
 
     let mut user_reloaded = User::get_by_id(&mut db, &user.id).await?;
     assert_none!(user_reloaded.profile().get(&mut db).await?);
@@ -110,7 +110,7 @@ pub async fn crud_has_one_bi_direction_optional(test: &mut Test) -> Result<()> {
     let profile_id = user_reloaded.profile().get(&mut db).await?.unwrap().id;
 
     // Delete the user
-    user_reloaded.delete(&mut db).await?;
+    user_reloaded.delete().exec(&mut db).await?;
 
     let profile_reloaded = Profile::get_by_id(&mut db, &profile_id).await?;
     assert_none!(profile_reloaded.user_id);
@@ -160,7 +160,7 @@ pub async fn crud_has_one_required_belongs_to_optional(test: &mut Test) -> Resul
     assert_eq!(user.id, profile.user().get(&mut db).await?.unwrap().id);
 
     // Deleting the user leaves the profile in place.
-    user.delete(&mut db).await?;
+    user.delete().exec(&mut db).await?;
     let profile_reloaded = Profile::get_by_id(&mut db, &profile.id).await?;
     assert_none!(profile_reloaded.user_id);
 
@@ -317,7 +317,7 @@ pub async fn crud_has_one_optional_belongs_to_required(test: &mut Test) -> Resul
     assert_eq!(user.id, profile.user().get(&mut db).await?.id);
 
     // Deleting the user also deletes the profile
-    user.delete(&mut db).await?;
+    user.delete().exec(&mut db).await?;
     assert_err!(Profile::get_by_id(&mut db, &profile.id).await);
     Ok(())
 }
@@ -366,8 +366,74 @@ pub async fn set_has_one_by_value_in_update_query(test: &mut Test) -> Result<()>
 }
 
 #[driver_test(id(ID))]
-#[ignore]
-pub async fn unset_has_one_in_batch_update(_test: &mut Test) {}
+pub async fn unset_has_one_in_batch_update(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        #[index]
+        name: String,
+
+        #[has_one]
+        profile: toasty::HasOne<Option<Profile>>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Profile {
+        #[key]
+        #[auto]
+        id: ID,
+
+        #[unique]
+        user_id: ID,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::BelongsTo<User>,
+    }
+
+    let mut db = test.setup_db(models!(User, Profile)).await;
+
+    // Create two users with the same name, each with a profile
+    let u1 = User::create()
+        .name("alice")
+        .profile(Profile::create())
+        .exec(&mut db)
+        .await?;
+    let p1 = u1.profile().get(&mut db).await?.unwrap();
+
+    let u2 = User::create()
+        .name("alice")
+        .profile(Profile::create())
+        .exec(&mut db)
+        .await?;
+    let p2 = u2.profile().get(&mut db).await?.unwrap();
+
+    // A third user with a different name (should not be affected)
+    let u3 = User::create()
+        .name("bob")
+        .profile(Profile::create())
+        .exec(&mut db)
+        .await?;
+
+    // Batch update: unset profiles for all users named "alice"
+    User::filter_by_name("alice")
+        .update()
+        .profile(None)
+        .exec(&mut db)
+        .await?;
+
+    // Both profiles should be deleted (required belongs_to)
+    assert_err!(Profile::get_by_id(&mut db, &p1.id).await);
+    assert_err!(Profile::get_by_id(&mut db, &p2.id).await);
+
+    // Bob's profile should still exist
+    let p3 = u3.profile().get(&mut db).await?.unwrap();
+    assert_eq!(p3.user_id, u3.id);
+
+    Ok(())
+}
 
 #[driver_test(id(ID))]
 pub async fn unset_has_one_with_required_pair_in_pk_query_update(test: &mut Test) -> Result<()> {

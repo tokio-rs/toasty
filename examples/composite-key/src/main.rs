@@ -72,14 +72,13 @@ async fn main() -> toasty::Result<()> {
     println!("--- QUERY ---");
     println!("====================");
 
-    let mut todos = user
+    let todos = user
         .todos()
         .query(Todo::fields().order().eq(1))
         .all(&mut db)
         .await?;
 
-    while let Some(todo) = todos.next().await {
-        let todo = todo?;
+    for todo in todos {
         println!("TODO = {todo:#?}");
     }
 

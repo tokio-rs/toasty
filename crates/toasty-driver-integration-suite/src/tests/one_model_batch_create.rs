@@ -2,6 +2,9 @@
 
 use crate::prelude::*;
 
+use toasty::Executor;
+use toasty_core::driver::{operation::Transaction, Operation};
+
 #[driver_test(id(ID))]
 pub async fn batch_create_empty(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -34,16 +37,22 @@ pub async fn batch_create_one(test: &mut Test) -> Result<()> {
 
     let mut db = test.setup_db(models!(Todo)).await;
 
+    test.log().clear();
     let res = Todo::create_many()
         .item(Todo::create().title("hello"))
         .exec(&mut db)
         .await?;
 
     assert_eq!(1, res.len());
-
     assert_eq!(res[0].title, "hello");
 
-    let reloaded: Vec<_> = Todo::filter_by_id(res[0].id).collect(&mut db).await?;
+    // Single-row batch: no transaction wrapping needed
+    if test.capability().sql {
+        assert_struct!(test.log().pop_op(), Operation::QuerySql(_));
+        assert!(test.log().is_empty());
+    }
+
+    let reloaded: Vec<_> = Todo::filter_by_id(res[0].id).all(&mut db).await?;
     assert_eq!(1, reloaded.len());
     assert_eq!(reloaded[0].id, res[0].id);
     Ok(())
@@ -62,6 +71,7 @@ pub async fn batch_create_many(test: &mut Test) -> Result<()> {
 
     let mut db = test.setup_db(models!(Todo)).await;
 
+    test.log().clear();
     let res = Todo::create_many()
         .item(Todo::create().title("todo 1"))
         .item(Todo::create().title("todo 2"))
@@ -69,12 +79,18 @@ pub async fn batch_create_many(test: &mut Test) -> Result<()> {
         .await?;
 
     assert_eq!(2, res.len());
-
     assert_eq!(res[0].title, "todo 1");
     assert_eq!(res[1].title, "todo 2");
 
+    // Multi-row batch in a single INSERT statement: no transaction wrapping
+    // needed because single SQL statements are inherently atomic.
+    if test.capability().sql {
+        assert_struct!(test.log().pop_op(), Operation::QuerySql(_));
+        assert!(test.log().is_empty());
+    }
+
     for todo in &res {
-        let reloaded: Vec<_> = Todo::filter_by_id(todo.id).collect(&mut db).await?;
+        let reloaded: Vec<_> = Todo::filter_by_id(todo.id).all(&mut db).await?;
         assert_eq!(1, reloaded.len());
         assert_eq!(reloaded[0].id, todo.id);
     }
@@ -105,7 +121,7 @@ pub async fn batch_create_fails_if_any_record_missing_fields(test: &mut Test) ->
     assert!(res.is_empty());
 
     let users: Vec<_> = User::filter_by_email("me@carllerche.com")
-        .collect(&mut db)
+        .all(&mut db)
         .await?;
 
     assert!(users.is_empty());
@@ -173,5 +189,91 @@ pub async fn batch_create_model_with_unique_field_index_all_dups(test: &mut Test
         .item(User::create().email("user@example.com"))
         .exec(&mut db)
         .await?;
+    Ok(())
+}
+
+/// Unique constraint violation on a multi-row batch is atomic because a single
+/// INSERT statement is inherently atomic in SQL databases.
+#[driver_test(id(ID), requires(sql))]
+pub async fn batch_create_unique_violation_rolls_back(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        #[unique]
+        email: String,
+    }
+
+    let mut db = t.setup_db(models!(User)).await;
+
+    // Seed the duplicate
+    User::create()
+        .email("taken@example.com")
+        .exec(&mut db)
+        .await?;
+
+    t.log().clear();
+    assert_err!(
+        User::create_many()
+            .item(User::create().email("new@example.com"))
+            .item(User::create().email("taken@example.com"))
+            .exec(&mut db)
+            .await
+    );
+
+    // No transaction wrapper — the single INSERT fails atomically
+    assert!(t.log().is_empty());
+
+    // Only the seeded user remains
+    let users = User::all().all(&mut db).await?;
+    assert_eq!(1, users.len());
+
+    Ok(())
+}
+
+/// Multi-row batch inside an explicit transaction executes as a single INSERT
+/// without extra savepoint wrapping (the statement is inherently atomic).
+#[driver_test(id(ID), requires(sql))]
+pub async fn batch_create_inside_transaction_uses_savepoints(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: ID,
+        title: String,
+    }
+
+    let mut db = t.setup_db(models!(Todo)).await;
+
+    t.log().clear();
+    let mut tx = db.transaction().await?;
+
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Start {
+            isolation: None,
+            read_only: false
+        })
+    );
+
+    Todo::create_many()
+        .item(Todo::create().title("a"))
+        .item(Todo::create().title("b"))
+        .exec(&mut tx)
+        .await?;
+
+    // Single INSERT statement — no savepoint needed
+    assert_struct!(t.log().pop_op(), Operation::QuerySql(_));
+
+    tx.commit().await?;
+
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Commit)
+    );
+    assert!(t.log().is_empty());
+
     Ok(())
 }

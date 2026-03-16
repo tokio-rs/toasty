@@ -13,12 +13,12 @@ use simplify::Simplify;
 mod ty;
 mod verify;
 
-use crate::{db::PoolConnection, Result};
+use crate::Result;
 use std::sync::Arc;
 use toasty_core::{
     driver::Capability,
     stmt::{self, Statement, ValueStream},
-    Schema,
+    Connection, Schema,
 };
 
 /// The query execution engine.
@@ -62,7 +62,7 @@ impl Engine {
     /// before being sent to the database driver via the provided connection.
     pub(crate) async fn exec(
         &self,
-        connection: &mut PoolConnection,
+        connection: &mut dyn Connection,
         stmt: Statement,
         in_transaction: bool,
     ) -> Result<ValueStream> {

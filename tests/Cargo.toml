@@ -3,6 +3,10 @@ name = "tests"
 version = "0.1.0"
 edition = "2021"
 publish = false
+build = "build.rs"
+
+[build-dependencies]
+pulldown-cmark = { workspace = true }
 
 [features]
 default = ["sqlite"]

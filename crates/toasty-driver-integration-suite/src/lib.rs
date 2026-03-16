@@ -19,6 +19,8 @@ pub use setup::Setup;
 mod test;
 pub use test::{Test, TestResult};
 
+pub mod scenarios;
+
 pub mod stmt;
 
 /// Test implementations
@@ -41,5 +43,5 @@ mod prelude {
     pub(crate) use std_util::{
         assert_err, assert_none, assert_ok, assert_unique, num::NumUtil, slice::SliceUtil,
     };
-    pub(crate) use toasty_driver_integration_suite_macros::driver_test;
+    pub(crate) use toasty_driver_integration_suite_macros::{driver_test, scenario};
 }

@@ -254,6 +254,8 @@ pub struct DriverTestAttr {
     pub matrix: Vec<String>,
     pub requires: Option<BoolExpr>,
     pub serial: bool,
+    /// Path to the scenario module (e.g., `crate::scenarios::user_todos`)
+    pub scenario: Option<syn::Path>,
     /// The original syn::Attribute
     pub ast: syn::Attribute,
 }
@@ -268,6 +270,7 @@ impl DriverTestAttr {
                 matrix: Vec::new(),
                 requires: None,
                 serial: false,
+                scenario: None,
                 ast: attr.clone(),
             })
         } else {
@@ -288,6 +291,7 @@ impl Parse for DriverTestAttr {
         let mut matrix = Vec::new();
         let mut requires = None;
         let mut serial = false;
+        let mut scenario = None;
 
         // Parse comma-separated list of attributes
         let attrs = Punctuated::<DriverTestAttrItem, Comma>::parse_terminated(input)?;
@@ -306,6 +310,9 @@ impl Parse for DriverTestAttr {
                 DriverTestAttrItem::Serial => {
                     serial = true;
                 }
+                DriverTestAttrItem::Scenario(name) => {
+                    scenario = Some(name);
+                }
             }
         }
 
@@ -317,6 +324,7 @@ impl Parse for DriverTestAttr {
             matrix,
             requires,
             serial,
+            scenario,
             ast,
         })
     }
@@ -333,6 +341,8 @@ enum DriverTestAttrItem {
     Requires(BoolExpr),
     /// serial - marks test as requiring exclusive (serial) execution
     Serial,
+    /// scenario(path) - imports a scenario module into each test variant
+    Scenario(syn::Path),
 }
 
 impl Parse for DriverTestAttrItem {
@@ -367,9 +377,16 @@ impl Parse for DriverTestAttrItem {
                 // Bare keyword, no parentheses
                 Ok(DriverTestAttrItem::Serial)
             }
+            "scenario" => {
+                // Parse scenario(path::to::module)
+                let content;
+                syn::parenthesized!(content in input);
+                let path: syn::Path = content.parse()?;
+                Ok(DriverTestAttrItem::Scenario(path))
+            }
             _ => Err(syn::Error::new_spanned(
                 name,
-                "unknown attribute, expected `id`, `matrix`, `requires`, or `serial`",
+                "unknown attribute, expected `id`, `matrix`, `requires`, `serial`, or `scenario`",
             )),
         }
     }

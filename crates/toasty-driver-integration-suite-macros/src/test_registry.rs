@@ -222,6 +222,7 @@ fn generate_macro(structure: TestStructure) -> TokenStream {
 
     let expanded = quote! {
         #[macro_export]
+        #[allow(clippy::crate_in_macro_def)]
         macro_rules! generate_driver_tests {
             ($driver_expr:expr $(, $($t:tt)* )?) => {
                 #capability_validation

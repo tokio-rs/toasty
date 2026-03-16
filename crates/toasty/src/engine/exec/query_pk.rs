@@ -1,8 +1,5 @@
 use crate::{
-    engine::{
-        exec::{Action, Exec, Output, VarId},
-        simplify,
-    },
+    engine::exec::{Action, Exec, Output, VarId},
     Result,
 };
 use toasty_core::{
@@ -53,69 +50,37 @@ impl Exec<'_> {
             pk_filter.substitute(&input);
         }
 
-        // Fan-out for ANY(MAP(Value::List([...]), pred)) — one driver call per element.
-        // Must be checked BEFORE simplify_expr, which would re-expand the list to Expr::Or.
-        // Handles both constant lists (plan-time OR rewrite) and post-input-substitution lists.
-        if let Some(all_rows) = self
-            .try_fan_out(&pk_filter, action.table, |per_call_filter| {
-                operation::QueryPk {
-                    table: action.table,
-                    index: action.index,
-                    select: action.columns.clone(),
-                    pk_filter: per_call_filter,
-                    filter: action.row_filter.clone(),
-                    limit: action.limit,
-                    order: action.order,
-                    cursor: action.cursor.clone(),
-                }
-                .into()
-            })
-            .await?
-        {
-            self.vars.store(
-                action.output.var,
-                action.output.num_uses,
-                Rows::Stream(stmt::ValueStream::from_vec(all_rows)),
-            );
-            return Ok(());
+        let filters = self.split_filter(pk_filter, action.table);
+        let mut all_rows = Vec::new();
+
+        for f in filters {
+            let res = self
+                .connection
+                .exec(
+                    &self.engine.schema,
+                    operation::QueryPk {
+                        table: action.table,
+                        index: action.index,
+                        select: action.columns.clone(),
+                        pk_filter: f,
+                        filter: action.row_filter.clone(),
+                        limit: action.limit,
+                        order: action.order,
+                        cursor: action.cursor.clone(),
+                    }
+                    .into(),
+                )
+                .await?;
+
+            all_rows.extend(res.rows.into_value_stream().collect().await?);
         }
 
-        {
-            let table = self.engine.schema.db.table(action.table);
-            simplify::simplify_expr(self.engine.expr_cx_for(table), &mut pk_filter);
-        }
+        self.vars.store(
+            action.output.var,
+            action.output.num_uses,
+            Rows::Stream(stmt::ValueStream::from_vec(all_rows)),
+        );
 
-        // An unsatisfiable filter (null or false) means no rows can match
-        // (e.g. null FK from optional belongs_to).
-        if pk_filter.is_unsatisfiable() {
-            self.vars.store(
-                action.output.var,
-                action.output.num_uses,
-                Rows::Stream(stmt::ValueStream::default()),
-            );
-            return Ok(());
-        }
-
-        let res = self
-            .connection
-            .exec(
-                &self.engine.schema,
-                operation::QueryPk {
-                    table: action.table,
-                    index: action.index,
-                    select: action.columns.clone(),
-                    pk_filter,
-                    filter: action.row_filter.clone(),
-                    limit: action.limit,
-                    order: action.order,
-                    cursor: action.cursor.clone(),
-                }
-                .into(),
-            )
-            .await?;
-
-        self.vars
-            .store(action.output.var, action.output.num_uses, res.rows);
         Ok(())
     }
 }

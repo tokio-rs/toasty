@@ -29,7 +29,7 @@ pub async fn sort_asc(test: &mut Test) -> Result<()> {
 
     let foos_asc: Vec<_> = Foo::all()
         .order_by(Foo::fields().order().asc())
-        .collect(&mut db)
+        .all(&mut db)
         .await?;
 
     assert_eq!(foos_asc.len(), 100);
@@ -54,7 +54,7 @@ pub async fn sort_asc(test: &mut Test) -> Result<()> {
 
     let foos_desc: Vec<_> = Foo::all()
         .order_by(Foo::fields().order().desc())
-        .collect(&mut db)
+        .all(&mut db)
         .await?;
 
     assert_eq!(foos_desc.len(), 100);
@@ -100,7 +100,7 @@ pub async fn paginate(test: &mut Test) -> Result<()> {
     let foos: Page<_> = Foo::all()
         .order_by(Foo::fields().order().desc())
         .paginate(10)
-        .collect(&mut db)
+        .all(&mut db)
         .await?;
 
     assert_eq!(foos.len(), 10);
@@ -127,7 +127,7 @@ pub async fn paginate(test: &mut Test) -> Result<()> {
         .order_by(Foo::fields().order().desc())
         .paginate(10)
         .after(90)
-        .collect(&mut db)
+        .all(&mut db)
         .await?;
 
     assert_eq!(foos.len(), 10);
@@ -156,7 +156,7 @@ pub async fn paginate(test: &mut Test) -> Result<()> {
 }
 
 #[driver_test(id(ID), requires(sql))]
-pub async fn limit(t: &mut Test) -> Result<()> {
+pub async fn limit_offset(t: &mut Test) -> Result<()> {
     #[derive(toasty::Model)]
     struct Foo {
         #[key]
@@ -176,7 +176,7 @@ pub async fn limit(t: &mut Test) -> Result<()> {
     t.log().clear();
 
     // Basic limit without ordering
-    let foos: Vec<_> = Foo::all().limit(5).collect(&mut db).await?;
+    let foos: Vec<_> = Foo::all().limit(5).all(&mut db).await?;
     assert_eq!(foos.len(), 5);
 
     let (op, _) = t.log().pop();
@@ -195,7 +195,7 @@ pub async fn limit(t: &mut Test) -> Result<()> {
     let foos: Vec<_> = Foo::all()
         .order_by(Foo::fields().order().desc())
         .limit(7)
-        .collect(&mut db)
+        .all(&mut db)
         .await?;
     assert_eq!(foos.len(), 7);
     for i in 0..6 {
@@ -214,9 +214,21 @@ pub async fn limit(t: &mut Test) -> Result<()> {
     }));
 
     t.log().clear();
+    
+    // Limit combined with offset
+    let foos: Vec<_> = Foo::all()
+        .order_by(Foo::fields().order().asc())
+        .limit(7)
+        .offset(5)
+        .all(&mut db)
+        .await?;
+    assert_eq!(foos.len(), 7);
+    for (i, f) in foos.iter().enumerate() {
+        assert_eq!(f.order, i as i64 + 5);
+    }
 
     // Limit larger than the result set returns all results
-    let foos: Vec<_> = Foo::all().limit(100).collect(&mut db).await?;
+    let foos: Vec<_> = Foo::all().limit(100).all(&mut db).await?;
     assert_eq!(foos.len(), 20);
 
     Ok(())

@@ -40,16 +40,20 @@ impl Builder {
     }
 
     pub async fn connect(&mut self, url: &str) -> Result<Db> {
-        self.build(Connect::new(url)?).await
+        let con = Connect::new(url).await?;
+        self.build(con).await
     }
 
     pub async fn build(&mut self, driver: impl Driver) -> Result<Db> {
-        let pool = Pool::new(driver)?;
-        let capability = pool.capability();
-        // Validate capability consistency
+        let capability = driver.capability();
         capability.validate()?;
         let schema = self.core.build(self.build_app_schema()?, capability)?;
         let engine = Engine::new(Arc::new(schema), capability);
+        let pool = Pool::new(driver, engine.clone())?;
+
+        // see if we're able to acquire a valid connection
+        let conn = pool.get().await?;
+        std::mem::drop(conn);
 
         Ok(Db {
             shared: Arc::new(Shared { engine, pool }),

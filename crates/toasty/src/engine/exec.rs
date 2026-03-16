@@ -19,6 +19,8 @@ pub(crate) use find_pk_by_index::FindPkByIndex;
 mod get_by_key;
 pub(crate) use get_by_key::GetByKey;
 
+mod kv;
+
 mod nested_merge;
 pub(crate) use nested_merge::{
     MergeIndex, MergeQualification, NestedChild, NestedLevel, NestedMerge,
@@ -48,16 +50,16 @@ pub(crate) use update_by_key::UpdateByKey;
 mod var;
 pub(crate) use var::{VarDecls, VarId, VarStore};
 
-use crate::{db::PoolConnection, engine::simplify, engine::Engine, Result};
+use crate::{engine::Engine, Result};
 use toasty_core::{
     driver::{operation::Transaction, Rows},
-    schema::db::TableId,
     stmt::{self, ValueStream},
+    Connection,
 };
 
 struct Exec<'a> {
     engine: &'a Engine,
-    connection: &'a mut PoolConnection,
+    connection: &'a mut dyn Connection,
     vars: VarStore,
     /// True when an outer transaction is active on this connection. Used by
     /// ReadModifyWrite to decide between savepoints (nested) and its own
@@ -68,7 +70,7 @@ struct Exec<'a> {
 impl Engine {
     pub(crate) async fn exec_plan(
         &self,
-        connection: &mut PoolConnection,
+        connection: &mut dyn Connection,
         plan: ExecPlan,
         in_transaction: bool,
     ) -> Result<ValueStream> {
@@ -131,22 +133,6 @@ impl Engine {
     }
 }
 
-/// If `expr` is `ANY(MAP(Value::List([...]), pred))`, returns the list items and predicate
-/// template. Returns `None` for any other form, including the batch-load `ANY(MAP(arg[i], pred))`
-/// where the base has not yet been substituted.
-fn try_extract_any_map_list(expr: &stmt::Expr) -> Option<(&[stmt::Value], &stmt::Expr)> {
-    let stmt::Expr::Any(any) = expr else {
-        return None;
-    };
-    let stmt::Expr::Map(map) = &*any.expr else {
-        return None;
-    };
-    let stmt::Expr::Value(stmt::Value::List(items)) = &*map.base else {
-        return None;
-    };
-    Some((items, &map.map))
-}
-
 impl Exec<'_> {
     async fn exec_step(&mut self, action: &Action) -> Result<()> {
         match action {
@@ -163,67 +149,6 @@ impl Exec<'_> {
             Action::SetVar(action) => self.action_set_var(action),
             Action::UpdateByKey(action) => self.action_update_by_key(action).await,
         }
-    }
-
-    /// Fan-out for `ANY(MAP(Value::List([...]), pred))` filters.
-    ///
-    /// Iterates items from the list, substitutes each into the predicate
-    /// template, simplifies, skips unsatisfiable filters (null/false), then
-    /// calls the driver via the `make_op` closure. Returns the collected rows,
-    /// or `None` if the filter was not an `ANY(MAP(...))` form.
-    async fn try_fan_out(
-        &mut self,
-        filter: &stmt::Expr,
-        table: TableId,
-        make_op: impl Fn(stmt::Expr) -> toasty_core::driver::operation::Operation,
-    ) -> Result<Option<Vec<stmt::Value>>> {
-        let Some((items, pred_template)) = try_extract_any_map_list(filter) else {
-            return Ok(None);
-        };
-
-        let items = items.to_vec();
-        let pred_template = pred_template.clone();
-        let mut all_rows: Vec<stmt::Value> = Vec::new();
-
-        for item in items {
-            // Null FK values (e.g. from optional belongs_to) can never match
-            // a key — skip them to avoid sending invalid queries.
-            if item.is_null() {
-                continue;
-            }
-
-            let mut per_call_filter = pred_template.clone();
-            // Mirror simplify_expr_any: unpack Record fields so arg(i) binds to field i.
-            match item {
-                stmt::Value::Record(r) => per_call_filter.substitute(&r.fields[..]),
-                item => per_call_filter.substitute([item]),
-            }
-
-            // Simplify after substitution to fold null propagation
-            // (e.g. Record with a null field → `col = null` → `null`).
-            let db_table = self.engine.schema.db.table(table);
-            simplify::simplify_expr(self.engine.expr_cx_for(db_table), &mut per_call_filter);
-            if per_call_filter.is_unsatisfiable() {
-                continue;
-            }
-
-            let res = self
-                .connection
-                .exec(&self.engine.schema, make_op(per_call_filter))
-                .await?;
-
-            all_rows.extend(res.rows.into_value_stream().collect().await?);
-        }
-
-        debug_assert!(
-            {
-                let mut seen = std::collections::HashSet::new();
-                all_rows.iter().all(|row| seen.insert(row))
-            },
-            "fan-out produced duplicate rows"
-        );
-
-        Ok(Some(all_rows))
     }
 
     async fn collect_input(&mut self, input: &[VarId]) -> Result<Vec<stmt::Value>> {

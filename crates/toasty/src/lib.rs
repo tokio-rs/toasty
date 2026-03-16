@@ -2,21 +2,30 @@ mod apply_update;
 pub use apply_update::{ApplyUpdate, Query};
 
 mod batch;
-pub use batch::CreateMany;
-
-pub mod cursor;
-pub use cursor::Cursor;
+pub use batch::{batch, Batch, CreateMany};
 
 pub mod db;
 pub use db::Db;
 
+mod embed;
+pub use embed::Embed;
+
 mod executor;
-pub use executor::{Executor, ExecutorExt};
+pub use executor::Executor;
+
+mod executor_ext;
+pub use executor_ext::ExecutorExt;
 
 mod engine;
 
-mod model;
-pub use model::{Embed, Model, Register};
+mod load;
+pub use load::Load;
+
+pub mod model;
+pub use model::Model;
+
+mod register;
+pub use register::Register;
 
 mod page;
 pub use page::Page;
@@ -41,14 +50,17 @@ pub mod codegen_support {
     pub use crate::{
         apply_update::{ApplyUpdate, Query},
         batch::CreateMany,
-        cursor::{Cursor, FromCursor},
-        model::generate_unique_id,
+        model::{Auto, Field},
+        register::generate_unique_id,
         relation::Relation,
         relation::{BelongsTo, HasMany, HasOne},
-        stmt::{self, IntoExpr, IntoInsert, IntoSelect, Path},
-        Db, Embed, Error, Executor, ExecutorExt, Model, Register, Result, Statement,
+        stmt::{self, IntoExpr, IntoInsert, IntoStatement, List, Path},
+        Db, Embed, Error, Executor, ExecutorExt, Load, Model, Register, Result, Statement,
     };
+    #[cfg(feature = "serde")]
+    pub use serde_json;
     pub use std::{convert::Into, default::Default, option::Option};
+
     pub use toasty_core as core;
     pub use toasty_core::{
         driver,

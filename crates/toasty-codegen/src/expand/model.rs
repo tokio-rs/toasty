@@ -28,8 +28,7 @@ impl Expand<'_> {
         let filter_methods = self.expand_model_filter_methods();
         let field_name_to_id = self.expand_field_name_to_id();
         let relation_methods = self.expand_model_relation_methods();
-        let into_select_body_ref = self.expand_model_into_select_body(true);
-        let into_select_body_value = self.expand_model_into_select_body(false);
+        let into_statement_body = self.expand_model_into_statement_body();
         let into_expr_body_ref = self.expand_model_into_expr_body(true);
         let into_expr_body_val = self.expand_model_into_expr_body(false);
         let reload_method = self.expand_reload_method();
@@ -50,9 +49,9 @@ impl Expand<'_> {
                 }
 
                 #vis fn update(&mut self) -> #update_struct_ident<&mut Self> {
-                    use #toasty::IntoSelect;
+                    use #toasty::IntoStatement;
                     let mut s = #update_struct_ident {
-                        stmt: #toasty::stmt::Update::new(self.into_select()),
+                        stmt: #toasty::stmt::Update::new((&*self).into_statement().into_query().unwrap()),
                         target: self,
                     };
                     s.apply_update_defaults();
@@ -64,15 +63,12 @@ impl Expand<'_> {
                 }
 
                 #vis fn filter(expr: #toasty::stmt::Expr<bool>) -> #query_struct_ident {
-                    #query_struct_ident::from_stmt(#toasty::stmt::Select::filter(expr))
+                    #query_struct_ident::from_stmt(#toasty::stmt::Query::filter(expr))
                 }
 
-                #vis async fn delete(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<()> {
-                    use #toasty::IntoSelect;
-                    use #toasty::ExecutorExt;
-                    let stmt = self.into_select().delete();
-                    executor.exec(stmt).await?;
-                    Ok(())
+                #vis fn delete(self) -> #toasty::stmt::Delete<#model_ident> {
+                    use #toasty::IntoStatement;
+                    self.into_statement().into_query().unwrap().delete()
                 }
             }
 
@@ -85,15 +81,18 @@ impl Expand<'_> {
                 #model_schema
             }
 
+            impl #toasty::Load for #model_ident {
+                type Output = Self;
+                fn load(value: #toasty::Value) -> #toasty::Result<Self> {
+                    #load_body
+                }
+            }
+
             impl #toasty::Model for #model_ident {
                 type Query = #query_struct_ident;
                 type Create = #create_struct_ident;
                 type Update<'a> = #update_struct_ident<&'a mut Self>;
                 type UpdateQuery = #update_struct_ident;
-
-                fn load(value: #toasty::Value) -> #toasty::Result<Self> {
-                    #load_body
-                }
             }
 
             impl #toasty::Relation for #model_ident {
@@ -108,10 +107,6 @@ impl Expand<'_> {
                 type OptionOne = OptionOne;
 
                 #field_name_to_id
-
-                fn load(value: #toasty::Value) -> #toasty::Result<Self> {
-                    <Self as #toasty::Model>::load(value)
-                }
             }
 
             impl #toasty::stmt::IntoExpr<#model_ident> for #model_ident {
@@ -124,37 +119,38 @@ impl Expand<'_> {
                 }
             }
 
-            impl #toasty::stmt::IntoExpr<[#model_ident]> for #model_ident {
-                fn into_expr(self) -> #toasty::stmt::Expr<[#model_ident]> {
+            impl #toasty::stmt::IntoExpr<#toasty::List<#model_ident>> for #model_ident {
+                fn into_expr(self) -> #toasty::stmt::Expr<#toasty::List<#model_ident>> {
                     #toasty::stmt::Expr::list([self])
                 }
 
-                fn by_ref(&self) -> #toasty::stmt::Expr<[#model_ident]> {
+                fn by_ref(&self) -> #toasty::stmt::Expr<#toasty::List<#model_ident>> {
                     #toasty::stmt::Expr::list([self])
                 }
             }
 
-            impl #toasty::stmt::IntoSelect for &#model_ident {
-                type Model = #model_ident;
+            impl #toasty::IntoStatement for &#model_ident {
+                type Returning = #toasty::List<#model_ident>;
 
-                fn into_select(self) -> #toasty::stmt::Select<Self::Model> {
-                    #into_select_body_ref
+                fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
+                    use #toasty::IntoStatement;
+                    #into_statement_body
                 }
             }
 
-            impl #toasty::stmt::IntoSelect for &mut #model_ident {
-                type Model = #model_ident;
+            impl #toasty::IntoStatement for &mut #model_ident {
+                type Returning = #toasty::List<#model_ident>;
 
-                fn into_select(self) -> #toasty::stmt::Select<Self::Model> {
-                    (&*self).into_select()
+                fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
+                    (&*self).into_statement()
                 }
             }
 
-            impl #toasty::stmt::IntoSelect for #model_ident {
-                type Model = #model_ident;
+            impl #toasty::IntoStatement for #model_ident {
+                type Returning = #toasty::List<#model_ident>;
 
-                fn into_select(self) -> #toasty::stmt::Select<Self::Model> {
-                    #into_select_body_value
+                fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
+                    (&self).into_statement()
                 }
             }
         }
@@ -171,17 +167,16 @@ impl Expand<'_> {
         }
     }
 
-    pub(super) fn expand_model_into_select_body(&self, by_ref: bool) -> TokenStream {
+    fn expand_model_into_statement_body(&self) -> TokenStream {
         let filter = self.primary_key_filter();
         let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
         let filter_method_ident = &filter.filter_method_ident;
         let arg_idents = self.expand_filter_arg_idents(filter);
-        let amp = if by_ref { quote!(&) } else { quote!() };
 
         quote! {
             #query_struct_ident::default()
-                .#filter_method_ident( #( #amp self.#arg_idents ),* )
-                .stmt
+                .#filter_method_ident( #( & self.#arg_idents ),* )
+                .into_statement()
         }
     }
 
@@ -275,7 +270,7 @@ impl Expand<'_> {
     ///
     /// This method is used by both:
     /// - Root models (in `Model::load`) - supports all field types
-    /// - Embedded types (in `Primitive::load`) - only primitive fields
+    /// - Embedded types (in `Field::load`) - only primitive fields
     ///
     /// The generated code pattern matches on `Value::Record`, extracts fields,
     /// and constructs the struct.
@@ -287,10 +282,37 @@ impl Expand<'_> {
         let field_loads = self.model.fields.iter().enumerate().map(|(index, field)| {
             let field_ident = &field.name.ident;
             let index_tokenized = util::int(index);
+            let field_name_str = field.name.ident.to_string();
 
             match &field.ty {
+                FieldTy::Primitive(_ty) if field.attrs.serialize.is_some() => {
+                    let serialize_attr = field.attrs.serialize.as_ref().unwrap();
+
+                    let json_deserialize = quote! {
+                        let json_str = <String as #toasty::Field>::load(value)?;
+                        #toasty::serde_json::from_str(&json_str)
+                            .map_err(|e| #toasty::Error::from_args(
+                                format_args!("failed to deserialize field '{}': {}", #field_name_str, e)
+                            ))?
+                    };
+
+                    let field_value = if serialize_attr.nullable {
+                        quote! {
+                            if value.is_null() { None } else { Some({ #json_deserialize }) }
+                        }
+                    } else {
+                        json_deserialize
+                    };
+
+                    quote! {
+                        #field_ident: {
+                            let value = record[#index_tokenized].take();
+                            #field_value
+                        },
+                    }
+                }
                 FieldTy::Primitive(ty) => {
-                    quote!(#field_ident: <#ty as #toasty::stmt::Primitive>::load(record[#index_tokenized].take())?,)
+                    quote!(#field_ident: <#ty as #toasty::Field>::load(record[#index_tokenized].take())?,)
                 }
                 FieldTy::BelongsTo(_) => {
                     quote!(#field_ident: #toasty::BelongsTo::load(record[#index].take())?,)
@@ -326,10 +348,36 @@ impl Expand<'_> {
         let reload_arms = self.model.fields.iter().enumerate().map(|(index, field)| {
             let field_ident = &field.name.ident;
             let i = util::int(index);
+            let field_name_str = field.name.ident.to_string();
 
             match &field.ty {
+                FieldTy::Primitive(_ty) if field.attrs.serialize.is_some() => {
+                    let serialize_attr = field.attrs.serialize.as_ref().unwrap();
+
+                    let json_deserialize = quote! {
+                        let json_str = <String as #toasty::Field>::load(value)?;
+                        #toasty::serde_json::from_str(&json_str)
+                            .map_err(|e| #toasty::Error::from_args(
+                                format_args!("failed to deserialize field '{}': {}", #field_name_str, e)
+                            ))?
+                    };
+
+                    let assign = if serialize_attr.nullable {
+                        quote! {
+                            if value.is_null() { None } else { Some({ #json_deserialize }) }
+                        }
+                    } else {
+                        quote! { { #json_deserialize } }
+                    };
+
+                    quote! {
+                        #i => {
+                            self.#field_ident = #assign;
+                        }
+                    }
+                }
                 FieldTy::Primitive(ty) => {
-                    quote!(#i => <#ty as #toasty::stmt::Primitive>::reload(&mut self.#field_ident, value)?,)
+                    quote!(#i => <#ty as #toasty::Field>::reload(&mut self.#field_ident, value)?,)
                 }
                 _ => {
                     quote!(#i => self.#field_ident.unload(),)

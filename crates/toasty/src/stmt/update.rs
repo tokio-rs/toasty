@@ -1,4 +1,4 @@
-use super::Select;
+use super::Query;
 use crate::Model;
 use std::{fmt, marker::PhantomData};
 use toasty_core::stmt;
@@ -9,7 +9,7 @@ pub struct Update<M> {
 }
 
 impl<M: Model> Update<M> {
-    pub fn new(mut selection: Select<M>) -> Self {
+    pub fn new(mut selection: Query<M>) -> Self {
         if let stmt::ExprSet::Values(values) = &mut selection.untyped.body {
             let rows = std::mem::take(&mut values.rows);
             let filter = stmt::Expr::in_list(stmt::Expr::ref_ancestor_model(0), rows);
@@ -52,6 +52,11 @@ impl<M: Model> Update<M> {
     /// Don't return anything
     pub fn set_returning_none(&mut self) {
         self.untyped.returning = None;
+    }
+
+    /// Consume this typed update and return the untyped core statement.
+    pub fn into_untyped_stmt(self) -> stmt::Statement {
+        self.untyped.into()
     }
 }
 

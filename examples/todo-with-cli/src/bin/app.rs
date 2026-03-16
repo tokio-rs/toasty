@@ -47,14 +47,13 @@ async fn main() -> toasty::Result<()> {
     println!("Created {} todos", 3);
 
     println!("\n==> Listing all users and their todos...");
-    let users = User::all().collect::<Vec<_>>(&mut db).await?;
+    let users = User::all().all(&mut db).await?;
 
     for user in users {
         println!("\nUser: {} ({})", user.name, user.email);
 
-        let mut todos = user.todos().all(&mut db).await?;
-        while let Some(todo) = todos.next().await {
-            let todo = todo?;
+        let todos = user.todos().all(&mut db).await?;
+        for todo in todos {
             let status = if todo.completed { "✓" } else { " " };
             println!("  [{}] {}", status, todo.title);
         }
@@ -68,10 +67,10 @@ async fn main() -> toasty::Result<()> {
     println!("\n==> Deleting a todo...");
     let todo = Todo::get_by_id(&mut db, &todo2.id).await?;
     println!("Deleting '{}'", todo.title);
-    todo.delete(&mut db).await?;
+    todo.delete().exec(&mut db).await?;
 
     println!("\n==> Final count...");
-    let todos = Todo::all().collect::<Vec<_>>(&mut db).await?;
+    let todos = Todo::all().all(&mut db).await?;
     println!("Total todos remaining: {}", todos.len());
 
     println!("\n>>> Application completed successfully! <<<");

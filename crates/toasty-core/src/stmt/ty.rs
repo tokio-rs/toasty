@@ -339,31 +339,32 @@ impl Type {
         })
     }
 
-    /// Checks if two types are equivalent.
+    /// Checks whether `self` (the actual/inferred type) is assignable to `other`
+    /// (the expected type).
     ///
-    /// This is similar to equality, **except** [`Type::Null`] matches any type. `Null` represents
-    /// "we don't know what type this is", which makes it equivalent to anything.
-    ///
-    /// This method is commutative: `a.is_equivalent(b)` equals `b.is_equivalent(a)`.
+    /// This is a subtype check, NOT strict equality:
+    /// - [`Type::Null`] matches any type (in either direction), since it represents
+    ///   "we don't know what type this is"
+    /// - A concrete type is assignable to a [`Type::Union`] if it matches any member
+    /// - A [`Type::Union`] is assignable to another union if every member of `self`
+    ///   matches some member of `other`
+    /// - Container types ([`Type::List`], [`Type::Record`]) check element/field
+    ///   types recursively
     ///
     /// # Examples
     ///
-    /// Basic equivalence:
-    /// - `String` is equivalent to `String` ✓
-    /// - `String` is equivalent to `Null` ✓
-    /// - `String` is **not** equivalent to `Bytes` ✗
-    ///
-    /// Recursive equivalence for container types:
-    /// - `List<String>` is equivalent to `List<String>` ✓
-    /// - `List<String>` is equivalent to `List<Null>` ✓
-    /// - `List<String>` is **not** equivalent to `List<Bytes>` ✗
-    pub fn is_equivalent(&self, other: &Type) -> bool {
+    /// - `String.is_subtype_of(String)` -> true
+    /// - `String.is_subtype_of(Null)` -> true
+    /// - `String.is_subtype_of(Bytes)` -> false
+    /// - `Record([...]).is_subtype_of(Union([I64, Record([...])]))` -> true
+    /// - `I64.is_subtype_of(Union([I64, Record(...)]))` -> true
+    /// - `String.is_subtype_of(Union([I64, Record(...)]))` -> false
+    pub fn is_subtype_of(&self, other: &Type) -> bool {
         // Null matches anything (commutative)
         if matches!(self, Type::Null) || matches!(other, Type::Null) {
             return true;
         }
 
-        // For non-Null types, check structural equivalence
         match (self, other) {
             // Simple types must match exactly
             (Type::Bool, Type::Bool) => true,
@@ -404,21 +405,29 @@ impl Type {
             (Type::Model(a), Type::Model(b)) => a == b,
             (Type::ForeignKey(a), Type::ForeignKey(b)) => a == b,
 
-            // List types are equivalent if their item types are equivalent
-            (Type::List(a), Type::List(b)) => a.is_equivalent(b),
+            // List types: element type must be assignable
+            (Type::List(a), Type::List(b)) => a.is_subtype_of(b),
 
-            // Record types are equivalent if they have the same length and all fields are equivalent
+            // Record types: same length and all fields recursively assignable
             (Type::Record(a), Type::Record(b)) => {
-                a.len() == b.len() && a.iter().zip(b.iter()).all(|(a, b)| a.is_equivalent(b))
+                a.len() == b.len() && a.iter().zip(b.iter()).all(|(a, b)| a.is_subtype_of(b))
             }
 
             // Sparse records must have the same field set
             (Type::SparseRecord(a), Type::SparseRecord(b)) => a == b,
 
-            // Two unions are equivalent if they contain the same set of member types
-            (Type::Union(a), Type::Union(b)) => a == b,
+            // Union-to-Union: every member of self must be assignable to some member of other
+            (Type::Union(a), Type::Union(b)) => a
+                .iter()
+                .all(|a_ty| b.iter().any(|b_ty| a_ty.is_subtype_of(b_ty))),
 
-            // Different type variants are not equivalent
+            // Concrete type assignable to union if it matches any member
+            (ty, Type::Union(union)) => union.iter().any(|member| ty.is_subtype_of(member)),
+
+            // Union assignable to concrete type if every member is assignable
+            (Type::Union(union), other) => union.iter().all(|member| member.is_subtype_of(other)),
+
+            // Different type variants are not assignable
             _ => false,
         }
     }

@@ -88,7 +88,7 @@ impl Builder {
             );
         }
 
-        builder.build_tables_from_models(&app, db);
+        builder.build_tables_from_models(&app, db)?;
 
         let schema = Schema {
             app,

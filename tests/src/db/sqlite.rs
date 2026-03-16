@@ -115,8 +115,11 @@ impl Default for SetupSqlite {
 
 #[async_trait::async_trait]
 impl Setup for SetupSqlite {
-    fn driver(&self) -> Box<dyn Driver> {
-        Box::new(Connect::new(&format!("sqlite:{}", self.temp_db_path)).unwrap())
+    async fn driver(&self) -> Box<dyn Driver> {
+        let connect = Connect::new(&format!("sqlite:{}", self.temp_db_path))
+            .await
+            .unwrap();
+        Box::new(connect)
     }
 
     fn configure_builder(&self, _builder: &mut db::Builder) {

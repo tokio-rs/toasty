@@ -1,5 +1,5 @@
 use super::Simplify;
-use toasty_core::stmt;
+use toasty_core::stmt::{self, visit_mut};
 
 impl Simplify<'_> {
     /// Inline a stable `Let` expression by substituting its bindings into the
@@ -16,87 +16,29 @@ impl Simplify<'_> {
         }
 
         let mut body = *expr_let.body.clone();
-        substitute_let_bindings(&mut body, &expr_let.bindings, 0);
+        substitute_let_bindings(&mut body, &expr_let.bindings);
         Some(body)
     }
 }
 
-/// Substitute Let bindings into a body expression at a given nesting depth.
+/// Substitute Let bindings into a body expression.
 ///
 /// - `Arg(position=i, nesting==depth)` where `i < bindings.len()` is replaced
 ///   with `bindings[i].clone()`.
 /// - `Arg(nesting > depth)` gets `nesting -= 1` (the Let scope is removed).
-/// - Descending into `Map` or `Let` bodies increments `depth` because those
-///   introduce their own scope.
-fn substitute_let_bindings(expr: &mut stmt::Expr, bindings: &[stmt::Expr], depth: usize) {
-    match expr {
-        stmt::Expr::Arg(arg) if arg.nesting == depth && arg.position < bindings.len() => {
+///
+/// Uses `walk_expr_scoped_mut` to automatically track scope depth through
+/// Let/Map scopes.
+fn substitute_let_bindings(expr: &mut stmt::Expr, bindings: &[stmt::Expr]) {
+    visit_mut::walk_expr_scoped_mut(expr, 0, |expr, scope_depth| match expr {
+        stmt::Expr::Arg(arg) if arg.nesting == scope_depth && arg.position < bindings.len() => {
             *expr = bindings[arg.position].clone();
+            false
         }
-        stmt::Expr::Arg(arg) if arg.nesting > depth => {
+        stmt::Expr::Arg(arg) if arg.nesting > scope_depth => {
             arg.nesting -= 1;
+            false
         }
-        stmt::Expr::Map(map) => {
-            substitute_let_bindings(&mut map.base, bindings, depth);
-            substitute_let_bindings(&mut map.map, bindings, depth + 1);
-        }
-        stmt::Expr::Let(inner_let) => {
-            for binding in &mut inner_let.bindings {
-                substitute_let_bindings(binding, bindings, depth);
-            }
-            substitute_let_bindings(&mut inner_let.body, bindings, depth + 1);
-        }
-        // Recurse into children for all other compound expressions
-        stmt::Expr::And(e) => {
-            for op in e.operands.iter_mut() {
-                substitute_let_bindings(op, bindings, depth);
-            }
-        }
-        stmt::Expr::Any(e) => substitute_let_bindings(&mut e.expr, bindings, depth),
-        stmt::Expr::BinaryOp(e) => {
-            substitute_let_bindings(&mut e.lhs, bindings, depth);
-            substitute_let_bindings(&mut e.rhs, bindings, depth);
-        }
-        stmt::Expr::Cast(e) => substitute_let_bindings(&mut e.expr, bindings, depth),
-        stmt::Expr::IsNull(e) => substitute_let_bindings(&mut e.expr, bindings, depth),
-        stmt::Expr::IsVariant(e) => substitute_let_bindings(&mut e.expr, bindings, depth),
-        stmt::Expr::Not(e) => substitute_let_bindings(&mut e.expr, bindings, depth),
-        stmt::Expr::Or(e) => {
-            for op in e.operands.iter_mut() {
-                substitute_let_bindings(op, bindings, depth);
-            }
-        }
-        stmt::Expr::List(e) => {
-            for item in e.items.iter_mut() {
-                substitute_let_bindings(item, bindings, depth);
-            }
-        }
-        stmt::Expr::Record(e) => {
-            for field in e.fields.iter_mut() {
-                substitute_let_bindings(field, bindings, depth);
-            }
-        }
-        stmt::Expr::Project(e) => substitute_let_bindings(&mut e.base, bindings, depth),
-        stmt::Expr::InList(e) => {
-            substitute_let_bindings(&mut e.expr, bindings, depth);
-            substitute_let_bindings(&mut e.list, bindings, depth);
-        }
-        stmt::Expr::Match(e) => {
-            substitute_let_bindings(&mut e.subject, bindings, depth);
-            for arm in e.arms.iter_mut() {
-                substitute_let_bindings(&mut arm.expr, bindings, depth);
-            }
-            substitute_let_bindings(&mut e.else_expr, bindings, depth);
-        }
-        // Leaf nodes — nothing to recurse into
-        stmt::Expr::Arg(_)
-        | stmt::Expr::Value(_)
-        | stmt::Expr::Default
-        | stmt::Expr::Error(_)
-        | stmt::Expr::Reference(_)
-        | stmt::Expr::Func(_)
-        | stmt::Expr::Stmt(_)
-        | stmt::Expr::Exists(_)
-        | stmt::Expr::InSubquery(_) => {}
-    }
+        _ => true,
+    });
 }

@@ -4,48 +4,15 @@
 use crate::prelude::*;
 use std::collections::HashMap;
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_todos))]
 pub async fn crud_user_todos(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-
-        title: String,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     // Create a user
     let user = User::create().exec(&mut db).await?;
 
     // No TODOs
-    assert_eq!(
-        0,
-        user.todos()
-            .all(&mut db)
-            .await?
-            .collect::<Vec<_>>()
-            .await?
-            .len()
-    );
+    assert_eq!(0, user.todos().all(&mut db).await?.len());
 
     // Create a Todo associated with the user
     let todo = user
@@ -56,21 +23,13 @@ pub async fn crud_user_todos(test: &mut Test) -> Result<()> {
         .await?;
 
     // Find the todo by ID
-    let list = Todo::filter_by_id(todo.id)
-        .all(&mut db)
-        .await?
-        .collect::<Vec<_>>()
-        .await?;
+    let list = Todo::filter_by_id(todo.id).all(&mut db).await?;
 
     assert_eq!(1, list.len());
     assert_eq!(todo.id, list[0].id);
 
     // Find the TODO by user ID
-    let list = Todo::filter_by_user_id(user.id)
-        .all(&mut db)
-        .await?
-        .collect::<Vec<_>>()
-        .await?;
+    let list = Todo::filter_by_user_id(user.id).all(&mut db).await?;
 
     assert_eq!(1, list.len());
     assert_eq!(todo.id, list[0].id);
@@ -104,7 +63,7 @@ pub async fn crud_user_todos(test: &mut Test) -> Result<()> {
     }
 
     // Load all TODOs
-    let list = user.todos().all(&mut db).await?.collect::<Vec<_>>().await?;
+    let list = user.todos().all(&mut db).await?;
 
     assert_eq!(6, list.len());
 
@@ -116,9 +75,7 @@ pub async fn crud_user_todos(test: &mut Test) -> Result<()> {
     }
 
     // Find all TODOs by user (using the belongs_to queries)
-    let list = Todo::filter_by_user_id(user.id)
-        .collect::<Vec<_>>(&mut db)
-        .await?;
+    let list = Todo::filter_by_user_id(user.id).all(&mut db).await?;
     assert_eq!(6, list.len());
 
     let by_id: HashMap<_, _> = list.into_iter().map(|todo| (todo.id, todo)).collect();
@@ -133,16 +90,7 @@ pub async fn crud_user_todos(test: &mut Test) -> Result<()> {
     let user2 = User::create().exec(&mut db).await?;
 
     // No TODOs associated with `user2`
-    assert_eq!(
-        0,
-        user2
-            .todos()
-            .all(&mut db)
-            .await?
-            .collect::<Vec<_>>()
-            .await?
-            .len()
-    );
+    assert_eq!(0, user2.todos().all(&mut db).await?.len());
 
     // Create a TODO for user2
     let u2_todo = user2
@@ -153,17 +101,16 @@ pub async fn crud_user_todos(test: &mut Test) -> Result<()> {
         .await?;
 
     {
-        let mut u1_todos = user.todos().all(&mut db).await?;
+        let u1_todos = user.todos().all(&mut db).await?;
 
-        while let Some(todo) = u1_todos.next().await {
-            let todo = todo?;
+        for todo in u1_todos {
             assert_ne!(u2_todo.id, todo.id);
         }
     }
 
     // Delete a TODO by value
     let todo = Todo::get_by_id(&mut db, &ids[0]).await?;
-    todo.delete(&mut db).await?;
+    todo.delete().exec(&mut db).await?;
 
     // Can no longer get the todo via id
     assert_err!(Todo::get_by_id(&mut db, &ids[0]).await);
@@ -172,7 +119,11 @@ pub async fn crud_user_todos(test: &mut Test) -> Result<()> {
     assert_err!(user.todos().get_by_id(&mut db, &ids[0]).await);
 
     // Delete a TODO by scope
-    user.todos().filter_by_id(ids[1]).delete(&mut db).await?;
+    user.todos()
+        .filter_by_id(ids[1])
+        .delete()
+        .exec(&mut db)
+        .await?;
 
     // Can no longer get the todo via id
     assert_err!(Todo::get_by_id(&mut db, &ids[1]).await);
@@ -206,7 +157,7 @@ pub async fn crud_user_todos(test: &mut Test) -> Result<()> {
     let id = user.id;
 
     // Delete the user and associated TODOs are deleted
-    user.delete(&mut db).await?;
+    user.delete().exec(&mut db).await?;
     assert_err!(User::get_by_id(&mut db, &id).await);
     assert_err!(Todo::get_by_id(&mut db, &ids[2]).await);
     Ok(())
@@ -245,7 +196,7 @@ pub async fn has_many_insert_on_update(test: &mut Test) -> Result<()> {
 
     // Create a user, no TODOs
     let mut user = User::create().name("Alice").exec(&mut db).await?;
-    assert!(user.todos().collect::<Vec<_>>(&mut db).await?.is_empty());
+    assert!(user.todos().all(&mut db).await?.is_empty());
 
     // Update the user and create a todo in a batch
     user.update()
@@ -255,40 +206,15 @@ pub async fn has_many_insert_on_update(test: &mut Test) -> Result<()> {
         .await?;
 
     assert_eq!("Bob", user.name);
-    let todos: Vec<_> = user.todos().collect(&mut db).await?;
+    let todos: Vec<_> = user.todos().all(&mut db).await?;
     assert_eq!(1, todos.len());
     assert_eq!(todos[0].title, "change name");
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_todos))]
 pub async fn scoped_find_by_id(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-
-        title: String,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     // Create a couple of users
     let user1 = User::create().exec(&mut db).await?;
@@ -319,7 +245,12 @@ pub async fn scoped_find_by_id(test: &mut Test) -> Result<()> {
     assert_eq!(reloaded.title, todo.title);
 
     // Deleting the TODO from the user 2 scope fails
-    user2.todos().filter_by_id(todo.id).delete(&mut db).await?;
+    user2
+        .todos()
+        .filter_by_id(todo.id)
+        .delete()
+        .exec(&mut db)
+        .await?;
     let reloaded = user1.todos().get_by_id(&mut db, &todo.id).await?;
     assert_eq!(reloaded.id, todo.id);
     Ok(())
@@ -368,15 +299,7 @@ pub async fn has_many_when_fk_is_composite(test: &mut Test) -> Result<()> {
     let user = User::create().exec(&mut db).await?;
 
     // No TODOs
-    assert_eq!(
-        0,
-        user.todos()
-            .all(&mut db)
-            .await?
-            .collect::<Vec<_>>()
-            .await?
-            .len()
-    );
+    assert_eq!(0, user.todos().all(&mut db).await?.len());
 
     // Create a Todo associated with the user
     let todo = user
@@ -389,19 +312,13 @@ pub async fn has_many_when_fk_is_composite(test: &mut Test) -> Result<()> {
     // Find the todo by ID
     let list = Todo::filter_by_user_id_and_id(user.id, todo.id)
         .all(&mut db)
-        .await?
-        .collect::<Vec<_>>()
         .await?;
 
     assert_eq!(1, list.len());
     assert_eq!(todo.id, list[0].id);
 
     // Find the TODO by user ID
-    let list = Todo::filter_by_user_id(user.id)
-        .all(&mut db)
-        .await?
-        .collect::<Vec<_>>()
-        .await?;
+    let list = Todo::filter_by_user_id(user.id).all(&mut db).await?;
 
     assert_eq!(1, list.len());
     assert_eq!(todo.id, list[0].id);
@@ -431,7 +348,7 @@ pub async fn has_many_when_fk_is_composite(test: &mut Test) -> Result<()> {
     }
 
     // Load all TODOs
-    let list = user.todos().all(&mut db).await?.collect::<Vec<_>>().await?;
+    let list = user.todos().all(&mut db).await?;
 
     assert_eq!(6, list.len());
 
@@ -443,9 +360,7 @@ pub async fn has_many_when_fk_is_composite(test: &mut Test) -> Result<()> {
     }
 
     // Find all TODOs by user (using the belongs_to queries)
-    let list = Todo::filter_by_user_id(user.id)
-        .collect::<Vec<_>>(&mut db)
-        .await?;
+    let list = Todo::filter_by_user_id(user.id).all(&mut db).await?;
     assert_eq!(6, list.len());
 
     let by_id: HashMap<_, _> = list.into_iter().map(|todo| (todo.id, todo)).collect();
@@ -460,16 +375,7 @@ pub async fn has_many_when_fk_is_composite(test: &mut Test) -> Result<()> {
     let user2 = User::create().exec(&mut db).await?;
 
     // No TODOs associated with `user2`
-    assert_eq!(
-        0,
-        user2
-            .todos()
-            .all(&mut db)
-            .await?
-            .collect::<Vec<_>>()
-            .await?
-            .len()
-    );
+    assert_eq!(0, user2.todos().all(&mut db).await?.len());
 
     // Create a TODO for user2
     let u2_todo = user2
@@ -479,16 +385,15 @@ pub async fn has_many_when_fk_is_composite(test: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
 
-    let mut u1_todos = user.todos().all(&mut db).await?;
+    let u1_todos = user.todos().all(&mut db).await?;
 
-    while let Some(todo) = u1_todos.next().await {
-        let todo = todo?;
+    for todo in u1_todos {
         assert_ne!(u2_todo.id, todo.id);
     }
 
     // Delete a TODO by value
     let todo = Todo::get_by_user_id_and_id(&mut db, &user.id, &ids[0]).await?;
-    todo.delete(&mut db).await?;
+    todo.delete().exec(&mut db).await?;
 
     // Can no longer get the todo via id
     assert_err!(Todo::get_by_user_id_and_id(&mut db, &user.id, &ids[0]).await);
@@ -497,7 +402,11 @@ pub async fn has_many_when_fk_is_composite(test: &mut Test) -> Result<()> {
     assert_err!(user.todos().get_by_id(&mut db, &ids[0]).await);
 
     // Delete a TODO by scope
-    user.todos().filter_by_id(ids[1]).delete(&mut db).await?;
+    user.todos()
+        .filter_by_id(ids[1])
+        .delete()
+        .exec(&mut db)
+        .await?;
 
     // Can no longer get the todo via id
     assert_err!(Todo::get_by_user_id_and_id(&mut db, &user.id, &ids[1]).await);
@@ -536,35 +445,9 @@ pub async fn has_many_when_pk_is_composite(_test: &mut Test) {}
 #[driver_test(id(ID))]
 pub async fn has_many_when_fk_and_pk_are_composite(_test: &mut Test) {}
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_todos))]
 pub async fn belongs_to_required(test: &mut Test) {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[has_many]
-        #[allow(dead_code)]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        #[allow(dead_code)]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        #[allow(dead_code)]
-        user: toasty::BelongsTo<User>,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     assert_err!(Todo::create().exec(&mut db).await);
 }
@@ -605,7 +488,7 @@ pub async fn delete_when_belongs_to_optional(test: &mut Test) -> Result<()> {
     }
 
     // Delete the user
-    user.delete(&mut db).await?;
+    user.delete().exec(&mut db).await?;
 
     // All the todos still exist and `user` is set to `None`.
     for id in ids {
@@ -617,34 +500,9 @@ pub async fn delete_when_belongs_to_optional(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_todos))]
 pub async fn associate_new_user_with_todo_on_update_via_creation(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-
-        title: String,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     // Create a user with a todo
     let u1 = User::create()
@@ -653,7 +511,7 @@ pub async fn associate_new_user_with_todo_on_update_via_creation(test: &mut Test
         .await?;
 
     // Get the todo
-    let todos: Vec<_> = u1.todos().collect(&mut db).await?;
+    let todos: Vec<_> = u1.todos().all(&mut db).await?;
     assert_eq!(1, todos.len());
     let mut todo = todos.into_iter().next().unwrap();
 
@@ -694,7 +552,7 @@ pub async fn associate_new_user_with_todo_on_update_query_via_creation(
     let u1 = User::create().todo(Todo::create()).exec(&mut db).await?;
 
     // Get the todo
-    let todos: Vec<_> = u1.todos().collect(&mut db).await?;
+    let todos: Vec<_> = u1.todos().all(&mut db).await?;
     assert_eq!(1, todos.len());
     let todo = todos.into_iter().next().unwrap();
 
@@ -740,13 +598,13 @@ pub async fn update_user_with_null_todo_is_err(test: &mut Test) -> Result<()> {
     let u1 = User::create().todo(Todo::create()).exec(&mut db).await?;
 
     // Get the todo
-    let todos: Vec<_> = u1.todos().collect(&mut db).await?;
+    let todos: Vec<_> = u1.todos().all(&mut db).await?;
     assert_eq!(1, todos.len());
     let todo = todos.into_iter().next().unwrap();
 
     // Updating the todo w/ null is an error. Thus requires a bit of a hack to make work
     let mut stmt: stmt::Update<Todo> =
-        stmt::Update::new(stmt::Select::from_expr((&todo).into_expr()));
+        stmt::Update::new(stmt::Query::from_expr((&todo).into_expr()));
     stmt.set(2, toasty_core::stmt::Value::Null);
     let _ = db.exec(stmt.into()).await?;
 
@@ -794,11 +652,11 @@ pub async fn assign_todo_that_already_has_user_on_create(test: &mut Test) -> Res
     assert_eq!(u2.id, todo_reload.user_id);
 
     // First user has no todos
-    let todos: Vec<_> = u1.todos().collect(&mut db).await?;
+    let todos: Vec<_> = u1.todos().all(&mut db).await?;
     assert_eq!(0, todos.len());
 
     // Second user has the todo
-    let todos: Vec<_> = u2.todos().collect(&mut db).await?;
+    let todos: Vec<_> = u2.todos().all(&mut db).await?;
     assert_eq!(1, todos.len());
     assert_eq!(todo.id, todos[0].id);
     Ok(())
@@ -845,44 +703,19 @@ pub async fn assign_todo_that_already_has_user_on_update(test: &mut Test) -> Res
     assert_eq!(u2.id, todo_reload.user_id);
 
     // First user has no todos
-    let todos: Vec<_> = u1.todos().collect(&mut db).await?;
+    let todos: Vec<_> = u1.todos().all(&mut db).await?;
     assert_eq!(0, todos.len());
 
     // Second user has the todo
-    let todos: Vec<_> = u2.todos().collect(&mut db).await?;
+    let todos: Vec<_> = u2.todos().all(&mut db).await?;
     assert_eq!(1, todos.len());
     assert_eq!(todo.id, todos[0].id);
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_todos))]
 pub async fn assign_existing_user_to_todo(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-
-        title: String,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     let mut todo = Todo::create()
         .title("hello")
@@ -902,44 +735,19 @@ pub async fn assign_existing_user_to_todo(test: &mut Test) -> Result<()> {
     assert_eq!(u2.id, todo_reload.user_id);
 
     // First user has no todos
-    let todos: Vec<_> = u1.todos().collect(&mut db).await?;
+    let todos: Vec<_> = u1.todos().all(&mut db).await?;
     assert_eq!(0, todos.len());
 
     // Second user has the todo
-    let todos: Vec<_> = u2.todos().collect(&mut db).await?;
+    let todos: Vec<_> = u2.todos().all(&mut db).await?;
     assert_eq!(1, todos.len());
     assert_eq!(todo.id, todos[0].id);
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_todos))]
 pub async fn assign_todo_to_user_on_update_query(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-
-        title: String,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     let user = User::create().exec(&mut db).await?;
 
@@ -949,7 +757,7 @@ pub async fn assign_todo_to_user_on_update_query(test: &mut Test) -> Result<()> 
         .exec(&mut db)
         .await?;
 
-    let todos: Vec<_> = user.todos().collect(&mut db).await?;
+    let todos: Vec<_> = user.todos().all(&mut db).await?;
     assert_eq!(1, todos.len());
     assert_eq!("hello", todos[0].title);
     Ok(())

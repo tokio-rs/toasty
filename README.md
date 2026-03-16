@@ -4,18 +4,20 @@
 is still evolving and documentation is lacking.**
 
 Toasty is an ORM for the Rust programming language that prioritizes ease-of-use.
-It supports both SQL databases as well as some NoSQL databases, including DynamoDB
-and Cassandra. Note that Toasty does not hide the database capabilities.
-Instead, Toasty exposes features based on the target database.
+It currently supports SQL databases (SQLite, PostgreSQL, MySQL) and DynamoDB.
+Note that Toasty does not hide database capabilities. Instead, Toasty exposes
+features based on the target database.
+
+[User guide](https://tokio-rs.github.io/toasty/nightly/guide/): Explore Toasty in depth.
 
 ## Using Toasty
 
 You will define your data model using Rust structs annotated with the
-`#[toasty::model]` procedural macro. Here is the
+`#[derive(toasty::Model)]` derive macro. Here is the
 [hello-toasty](examples/hello-toasty/src/main.rs) example.
 
 ```rust
-#[derive(Debug, Model)]
+#[derive(Debug, toasty::Model)]
 struct User {
     #[key]
     #[auto]
@@ -28,11 +30,9 @@ struct User {
 
     #[has_many]
     todos: toasty::HasMany<Todo>,
-
-    moto: Option<String>,
 }
 
-#[derive(Debug, Model)]
+#[derive(Debug, toasty::Model)]
 struct Todo {
     #[key]
     #[auto]
@@ -58,39 +58,38 @@ let user = User::create()
     .todo(Todo::create().title("Make pizza"))
     .todo(Todo::create().title("Finish Toasty"))
     .todo(Todo::create().title("Sleep"))
-    .exec(&db)
+    .exec(&mut db)
     .await?;
 
 // Load the user from the database
-let user = User::get_by_id(&db, &user.id).await?
+let user = User::get_by_id(&mut db, &user.id).await?;
 
 // Load and iterate the user's todos
-let mut todos = user.todos().all(&db).await.unwrap();
+let todos = user.todos().all(&mut db).await?;
 
-while let Some(todo) = todos.next().await {
-    let todo = todo.unwrap();
+for todo in &todos {
     println!("{:#?}", todo);
 }
 ```
 
 ## SQL and NoSQL
 
-Toasty supports both SQL and NoSQL databases, including Cassandra and DynamoDB.
-However, it does not aim to abstract the database. Instead, Toasty leans into
-the target database's capabilities and aims to help the user avoid issuing
-innefficient queries for that database.
+Toasty supports both SQL and NoSQL databases. Current drivers are SQLite,
+PostgreSQL, MySQL, and DynamoDB. However, it does not aim to abstract the
+database. Instead, Toasty leans into the target database's capabilities and
+aims to help the user avoid issuing inefficient queries for that database.
 
-When targetting both SQL and NoSQL databases, Toasty generates query methods
-(e.g. `find_by_id` only for access patterns that are indexed). When targetting a
+When targeting both SQL and NoSQL databases, Toasty generates query methods
+(e.g. `get_by_id` only for access patterns that are indexed). When targeting a
 SQL database, Toasty might allow arbitrary additional query constraints. When
-targetting a NoSQL database, Toasty will only allow constraints that the
+targeting a NoSQL database, Toasty will only allow constraints that the
 specific target database can execute. For example, with DynamoDB, query methods
 might be generated based on the table's primary key, and additional constraints
 may be set for the sort key.
 
 ## Application data model vs. database schema
 
-Toasty decouples the application datamodel from the database's schema. By
+Toasty decouples the application data model from the database's schema. By
 default, a toasty application schema will map 1-1 with a database schema.
 However, additional annotations may be specified to customize how the
 application data model maps to the database schema.

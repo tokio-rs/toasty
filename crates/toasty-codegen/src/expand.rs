@@ -98,7 +98,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
 
         impl #toasty::Embed for #model_ident {}
 
-        impl #toasty::stmt::Primitive for #model_ident {
+        impl #toasty::Field for #model_ident {
             type FieldAccessor = #field_struct_ident;
             type UpdateBuilder<'a> = #update_struct_ident<'a>;
 
@@ -129,7 +129,6 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
 
             fn field_ty(
                 _storage_ty: Option<#toasty::schema::db::Type>,
-                _serialize: Option<#toasty::schema::app::SerializeFormat>,
             ) -> #toasty::schema::app::FieldTy {
                 #toasty::schema::app::FieldTy::Embedded(
                     #toasty::schema::app::Embedded {
@@ -205,7 +204,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
 
         impl #toasty::Embed for #model_ident {}
 
-        impl #toasty::stmt::Primitive for #model_ident {
+        impl #toasty::Field for #model_ident {
             type FieldAccessor = #field_struct_ident;
             type UpdateBuilder<'a> = ();
 
@@ -245,7 +244,6 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
 
             fn field_ty(
                 _storage_ty: Option<#toasty::schema::db::Type>,
-                _serialize: Option<#toasty::schema::app::SerializeFormat>,
             ) -> #toasty::schema::app::FieldTy {
                 #toasty::schema::app::FieldTy::Embedded(
                     #toasty::schema::app::Embedded {
@@ -322,7 +320,7 @@ impl Expand<'_> {
     }
 
     /// Generates a field accessor method for a primitive field using the
-    /// `Primitive::make_field_accessor` trait.
+    /// `Field::make_field_accessor` trait.
     fn expand_primitive_field_method(
         &self,
         field_ident: &syn::Ident,
@@ -334,8 +332,8 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
 
         quote! {
-            #vis fn #field_ident(&self) -> <#ty as #toasty::stmt::Primitive>::FieldAccessor {
-                <#ty as #toasty::stmt::Primitive>::make_field_accessor(
+            #vis fn #field_ident(&self) -> <#ty as #toasty::Field>::FieldAccessor {
+                <#ty as #toasty::Field>::make_field_accessor(
                     self.path().chain(
                         #toasty::Path::from_field_index::<#model_ident>(#field_offset)
                     )

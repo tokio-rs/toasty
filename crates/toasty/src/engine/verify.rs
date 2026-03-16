@@ -51,6 +51,21 @@ impl stmt::Visit for Verify<'_> {
         .verify_filter(&i.filter);
     }
 
+    fn visit_expr_stmt(&mut self, i: &stmt::ExprStmt) {
+        // Mutation sub-statements (delete, update, insert) embedded in
+        // expressions must have a returning clause so their result can be
+        // used as a value. Query sub-statements produce results implicitly.
+        if !i.stmt.is_query() {
+            assert!(
+                i.stmt.returning().is_some(),
+                "mutation sub-statement in expression must have a returning clause; stmt={:#?}",
+                i.stmt
+            );
+        }
+
+        stmt::visit::visit_expr_stmt(self, i);
+    }
+
     fn visit_stmt_update(&mut self, i: &stmt::Update) {
         stmt::visit::visit_stmt_update(self, i);
 

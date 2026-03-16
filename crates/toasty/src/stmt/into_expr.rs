@@ -1,9 +1,9 @@
 use std::{rc::Rc, sync::Arc};
 
-use super::{Expr, Value};
+use super::{Expr, List, Value};
 use toasty_core::stmt;
 
-pub trait IntoExpr<T: ?Sized> {
+pub trait IntoExpr<T> {
     fn into_expr(self) -> Expr<T>;
 
     fn by_ref(&self) -> Expr<T>;
@@ -68,7 +68,7 @@ impl IntoExpr<usize> for usize {
     }
 }
 
-impl<T: ?Sized> IntoExpr<T> for Expr<T> {
+impl<T> IntoExpr<T> for Expr<T> {
     fn into_expr(self) -> Self {
         self
     }
@@ -78,7 +78,7 @@ impl<T: ?Sized> IntoExpr<T> for Expr<T> {
     }
 }
 
-impl<T: IntoExpr<T> + ?Sized> IntoExpr<T> for &T {
+impl<T: IntoExpr<T>> IntoExpr<T> for &T {
     fn into_expr(self) -> Expr<T> {
         self.by_ref()
     }
@@ -88,12 +88,12 @@ impl<T: IntoExpr<T> + ?Sized> IntoExpr<T> for &T {
     }
 }
 
-impl<T: IntoExpr<T>> IntoExpr<[T]> for &T {
-    fn into_expr(self) -> Expr<[T]> {
+impl<T: IntoExpr<T>> IntoExpr<List<T>> for &T {
+    fn into_expr(self) -> Expr<List<T>> {
         self.by_ref().cast()
     }
 
-    fn by_ref(&self) -> Expr<[T]> {
+    fn by_ref(&self) -> Expr<List<T>> {
         (*self).by_ref().cast()
     }
 }
@@ -212,65 +212,65 @@ impl IntoExpr<Self> for bigdecimal::BigDecimal {
     }
 }
 
-impl<T, U, const N: usize> IntoExpr<[T]> for [U; N]
+impl<T, U, const N: usize> IntoExpr<List<T>> for [U; N]
 where
     U: IntoExpr<T>,
 {
-    fn into_expr(self) -> Expr<[T]> {
+    fn into_expr(self) -> Expr<List<T>> {
         Expr::from_untyped(stmt::Expr::list(
             self.iter().map(|item| U::by_ref(item).untyped),
         ))
     }
 
-    fn by_ref(&self) -> Expr<[T]> {
+    fn by_ref(&self) -> Expr<List<T>> {
         Expr::from_untyped(stmt::Expr::list(
             self.iter().map(|item| U::by_ref(item).untyped),
         ))
     }
 }
 
-impl<T, U, const N: usize> IntoExpr<[T]> for &[U; N]
+impl<T, U, const N: usize> IntoExpr<List<T>> for &[U; N]
 where
     U: IntoExpr<T>,
 {
-    fn into_expr(self) -> Expr<[T]> {
+    fn into_expr(self) -> Expr<List<T>> {
         Expr::from_untyped(stmt::Expr::list(
             self.iter().map(|item| U::by_ref(item).untyped),
         ))
     }
 
-    fn by_ref(&self) -> Expr<[T]> {
+    fn by_ref(&self) -> Expr<List<T>> {
         Expr::from_untyped(stmt::Expr::list(
             self.iter().map(|item| U::by_ref(item).untyped),
         ))
     }
 }
 
-impl<T, E: IntoExpr<T>> IntoExpr<[T]> for &[E] {
-    fn into_expr(self) -> Expr<[T]> {
+impl<T, E: IntoExpr<T>> IntoExpr<List<T>> for &[E] {
+    fn into_expr(self) -> Expr<List<T>> {
         Expr::from_untyped(stmt::Expr::list(
             self.iter().map(|item| E::by_ref(item).untyped),
         ))
     }
 
-    fn by_ref(&self) -> Expr<[T]> {
+    fn by_ref(&self) -> Expr<List<T>> {
         Expr::from_untyped(stmt::Expr::list(
             self.iter().map(|item| E::by_ref(item).untyped),
         ))
     }
 }
 
-impl<T, U> IntoExpr<[T]> for Vec<U>
+impl<T, U> IntoExpr<List<T>> for Vec<U>
 where
     U: IntoExpr<T>,
 {
-    fn into_expr(self) -> Expr<[T]> {
+    fn into_expr(self) -> Expr<List<T>> {
         Expr::from_untyped(stmt::Expr::list(
             self.into_iter().map(|item| item.into_expr().untyped),
         ))
     }
 
-    fn by_ref(&self) -> Expr<[T]> {
+    fn by_ref(&self) -> Expr<List<T>> {
         Expr::from_untyped(stmt::Expr::list(
             self.iter().map(|item| item.by_ref().untyped),
         ))
@@ -354,13 +354,70 @@ impl_into_expr_for_tuple! {
     9 T9 E9
 }
 
+/// Implement `IntoExpr<List<T>>` for homogeneous tuples so that e.g.
+/// `(Create, Create)` can be passed where `impl IntoExpr<List<Model>>` is expected.
+macro_rules! impl_into_expr_list_for_tuple {
+    (! $( $n:tt $e:ident )* ) => {
+        impl<T, $( $e ),*> IntoExpr<List<T>> for ($( $e, )*)
+        where
+            $( $e: IntoExpr<T>, )*
+        {
+            fn into_expr(self) -> Expr<List<T>> {
+                Expr::from_untyped(stmt::Expr::list([
+                    $( self.$n.into_expr().untyped, )*
+                ]))
+            }
+
+            fn by_ref(&self) -> Expr<List<T>> {
+                Expr::from_untyped(stmt::Expr::list([
+                    $( self.$n.by_ref().untyped, )*
+                ]))
+            }
+        }
+    };
+
+    (
+        ( $( $n_base:tt $e_base:ident )* )
+        $n:tt $e:ident
+        $( $rest:tt )*
+    ) => {
+        impl_into_expr_list_for_tuple!(! $( $n_base $e_base )* $n $e);
+
+        impl_into_expr_list_for_tuple!(
+            ( $( $n_base $e_base )* $n $e )
+            $( $rest )*
+        );
+    };
+
+    ( ( $( $n:tt $e:ident )* ) ) => {}
+}
+
+impl_into_expr_list_for_tuple! {
+    ()
+    0 E0
+    1 E1
+    2 E2
+    3 E3
+    4 E4
+    5 E5
+    6 E6
+    7 E7
+    8 E8
+    9 E9
+}
+
 #[test]
 fn assert_bounds() {
-    fn assert_into_expr<T: ?Sized, E: IntoExpr<T>>() {}
+    fn assert_into_expr<T, E: IntoExpr<T>>() {}
 
     assert_into_expr::<i64, i64>();
     assert_into_expr::<(String, String), (&String, &String)>();
-    assert_into_expr::<[(String, String)], &[(&String, &String)]>();
-    assert_into_expr::<[(String, String)], [(&String, &String); 3]>();
-    assert_into_expr::<[(String, String)], &[(&String, &String); 3]>();
+    assert_into_expr::<List<(String, String)>, &[(&String, &String)]>();
+    assert_into_expr::<List<(String, String)>, [(&String, &String); 3]>();
+    assert_into_expr::<List<(String, String)>, &[(&String, &String); 3]>();
+
+    // Tuples as batch expressions
+    assert_into_expr::<List<i64>, (i64,)>();
+    assert_into_expr::<List<i64>, (i64, i64)>();
+    assert_into_expr::<List<i64>, (i64, i64, i64)>();
 }
