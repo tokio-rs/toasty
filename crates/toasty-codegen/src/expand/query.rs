@@ -30,17 +30,14 @@ impl Expand<'_> {
                 #filter_methods
 
                 #vis async fn all(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<Vec<#model_ident>> {
-                    use #toasty::ExecutorExt;
                     executor.all(self.stmt).await
                 }
 
                 #vis async fn first(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#toasty::Option<#model_ident>> {
-                    use #toasty::ExecutorExt;
                     executor.first(self.stmt).await
                 }
 
                 #vis async fn get(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
-                    use #toasty::ExecutorExt;
                     executor.get(self.stmt).await
                 }
 

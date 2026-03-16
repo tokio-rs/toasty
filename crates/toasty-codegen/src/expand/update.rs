@@ -231,7 +231,6 @@ impl Expand<'_> {
                 #builder_methods
 
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<()> {
-                    use #toasty::ExecutorExt;
                     let stream = executor.exec(self.stmt.into()).await?;
                     let values = stream.collect().await?;
                     self.target.apply_result(values)?;
