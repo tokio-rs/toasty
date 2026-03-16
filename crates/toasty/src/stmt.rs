@@ -105,3 +105,24 @@ impl<M> fmt::Debug for Statement<M> {
         self.untyped.fmt(fmt)
     }
 }
+
+/// Returns an expression that tests whether `lhs` is contained in `rhs`.
+///
+/// This works for both single fields and tuples of fields (composite keys):
+///
+/// ```ignore
+/// // Single field
+/// toasty::stmt::in_list(User::fields().id(), &ids)
+///
+/// // Composite key
+/// toasty::stmt::in_list(
+///     (Foo::fields().one(), Foo::fields().two()),
+///     [("a", "b"), ("c", "d")],
+/// )
+/// ```
+pub fn in_list<T>(lhs: impl IntoExpr<T>, rhs: impl IntoExpr<List<T>>) -> Expr<bool> {
+    Expr::from_untyped(stmt::Expr::in_list(
+        lhs.into_expr().untyped,
+        rhs.into_expr().untyped,
+    ))
+}
