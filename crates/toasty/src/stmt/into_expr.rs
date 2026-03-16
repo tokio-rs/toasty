@@ -218,7 +218,7 @@ where
 {
     fn into_expr(self) -> Expr<List<T>> {
         Expr::from_untyped(stmt::Expr::list(
-            self.iter().map(|item| U::by_ref(item).untyped),
+            self.into_iter().map(|item| item.into_expr().untyped),
         ))
     }
 
@@ -352,58 +352,6 @@ impl_into_expr_for_tuple! {
     7 T7 E7
     8 T8 E8
     9 T9 E9
-}
-
-/// Implement `IntoExpr<List<T>>` for homogeneous tuples so that e.g.
-/// `(Create, Create)` can be passed where `impl IntoExpr<List<Model>>` is expected.
-macro_rules! impl_into_expr_list_for_tuple {
-    (! $( $n:tt $e:ident )* ) => {
-        impl<T, $( $e ),*> IntoExpr<List<T>> for ($( $e, )*)
-        where
-            $( $e: IntoExpr<T>, )*
-        {
-            fn into_expr(self) -> Expr<List<T>> {
-                Expr::from_untyped(stmt::Expr::list([
-                    $( self.$n.into_expr().untyped, )*
-                ]))
-            }
-
-            fn by_ref(&self) -> Expr<List<T>> {
-                Expr::from_untyped(stmt::Expr::list([
-                    $( self.$n.by_ref().untyped, )*
-                ]))
-            }
-        }
-    };
-
-    (
-        ( $( $n_base:tt $e_base:ident )* )
-        $n:tt $e:ident
-        $( $rest:tt )*
-    ) => {
-        impl_into_expr_list_for_tuple!(! $( $n_base $e_base )* $n $e);
-
-        impl_into_expr_list_for_tuple!(
-            ( $( $n_base $e_base )* $n $e )
-            $( $rest )*
-        );
-    };
-
-    ( ( $( $n:tt $e:ident )* ) ) => {}
-}
-
-impl_into_expr_list_for_tuple! {
-    ()
-    0 E0
-    1 E1
-    2 E2
-    3 E3
-    4 E4
-    5 E5
-    6 E6
-    7 E7
-    8 E8
-    9 E9
 }
 
 #[test]
