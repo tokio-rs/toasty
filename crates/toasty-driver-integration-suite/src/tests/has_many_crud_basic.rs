@@ -4,7 +4,7 @@
 use crate::prelude::*;
 use std::collections::HashMap;
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_todos))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn crud_user_todos(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -212,7 +212,7 @@ pub async fn has_many_insert_on_update(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_todos))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn scoped_find_by_id(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -445,7 +445,7 @@ pub async fn has_many_when_pk_is_composite(_test: &mut Test) {}
 #[driver_test(id(ID))]
 pub async fn has_many_when_fk_and_pk_are_composite(_test: &mut Test) {}
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_todos))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn belongs_to_required(test: &mut Test) {
     let mut db = setup(test).await;
 
@@ -500,7 +500,7 @@ pub async fn delete_when_belongs_to_optional(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_todos))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn associate_new_user_with_todo_on_update_via_creation(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -713,7 +713,7 @@ pub async fn assign_todo_that_already_has_user_on_update(test: &mut Test) -> Res
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_todos))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn assign_existing_user_to_todo(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -745,7 +745,7 @@ pub async fn assign_existing_user_to_todo(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_todos))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn assign_todo_to_user_on_update_query(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
