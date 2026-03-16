@@ -8,7 +8,7 @@ It currently supports SQL databases (SQLite, PostgreSQL, MySQL) and DynamoDB.
 Note that Toasty does not hide database capabilities. Instead, Toasty exposes
 features based on the target database.
 
-Read the [nightly guide](https://tokio-rs.github.io/toasty/nightly/guide/) to learn more.
+[User guide](https://tokio-rs.github.io/toasty/nightly/guide/): Explore Toasty in depth.
 
 ## Using Toasty
 
