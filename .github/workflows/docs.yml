@@ -16,10 +16,13 @@ concurrency:
 
 jobs:
   build:
-    name: Build mdBook docs
+    name: Build docs
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Install mdBook and mdbook-linkcheck2
         uses: taiki-e/install-action@v2
@@ -32,11 +35,16 @@ jobs:
       - name: Build dev docs
         run: mdbook build docs/dev
 
+      - name: Build Rust API docs
+        run: cargo doc --workspace --no-deps --document-private-items
+
       - name: Assemble site
         run: |
           mkdir -p _site/nightly
           cp -r docs/guide/book/html _site/nightly/guide
           cp -r docs/dev/book/html _site/nightly/dev
+          cp -r target/doc _site/nightly/api
+          cp docs/api-index.html _site/nightly/api/index.html
           cat > _site/index.html << 'HEREDOC'
           <!DOCTYPE html>
           <html>
