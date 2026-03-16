@@ -15,7 +15,7 @@ let users = User::all()
     .order_by(User::FIELDS.status().asc())
     .then_by(User::FIELDS.created_at().desc())
     .paginate(10)
-    .collect(&db)
+    .all(&db)
     .await?;
 ```
 
@@ -31,7 +31,7 @@ let order = OrderBy::from([
 
 let posts = Post::all()
     .order_by(order)
-    .collect(&db)
+    .all(&db)
     .await?;
 ```
 
@@ -48,7 +48,7 @@ Expose `.limit()` for non-paginated queries:
 let recent_posts: Vec<Post> = Post::all()
     .order_by(Post::FIELDS.created_at().desc())
     .limit(5)
-    .collect(&db)
+    .all(&db)
     .await?;
 ```
 

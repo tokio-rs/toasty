@@ -74,7 +74,6 @@ Each chapter introduces models incrementally. Chapter 1 starts with just `User`.
 - `Model::get_by_id(&mut db, &id)` — get one by primary key
 - `Model::all(&mut db)` — get a cursor over all records
 - Cursors: `while let Some(item) = cursor.next().await { ... }`
-- `.collect::<Vec<_>>(&mut db)` — collect to a Vec
 - `.first(&mut db)` — get first or None
 - `.get(&mut db)` — get exactly one (error if not found)
 - **What gets generated**: the `UserQuery` struct
@@ -124,7 +123,7 @@ Each chapter introduces models incrementally. Chapter 1 starts with just `User`.
 - Creating through the relation: `user.posts().create().title("...").exec(&mut db).await?`
 - Linking/unlinking: `.insert()` and `.remove()`
 - Scoped queries: `user.posts().query(filter)`
-- **What gets generated**: `Many` struct with `.all()`, `.create()`, `.insert()`, `.remove()`, `.query()`, `.collect()`
+- **What gets generated**: `Many` struct with `.all()`, `.create()`, `.insert()`, `.remove()`, `.query()`
 
 #### 14. Relationships: HasOne
 - `#[has_one]` for single-child relations

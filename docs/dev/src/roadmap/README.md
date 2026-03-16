@@ -63,10 +63,10 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
   }
 
   // Load metadata only (no body column fetched)
-  let articles = Article::all().collect(&db).await?;
+  let articles = Article::all().all(&db).await?;
 
   // Load with body
-  let articles = Article::all().include(Article::body).collect(&db).await?;
+  let articles = Article::all().include(Article::body).all(&db).await?;
   ```
 
 **Relationships**
@@ -188,8 +188,8 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 **Ergonomic Macros**
 - `toasty::query!()` - Succinct query syntax that translates to builder DSL
   ```rust
-  // Instead of: User::all().filter(...).order_by(...).collect(&db).await
-  toasty::query!(User, filter: ..., order_by: ...).collect(&db).await
+  // Instead of: User::all().filter(...).order_by(...).all(&db).await
+  toasty::query!(User, filter: ..., order_by: ...).all(&db).await
   ```
 - `toasty::create!()` - Concise record creation syntax
   ```rust
