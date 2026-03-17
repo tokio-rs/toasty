@@ -61,16 +61,16 @@ pub struct NotSet;
 // One trait per required field with a custom diagnostic
 #[doc(hidden)]
 #[diagnostic::on_unimplemented(
-    message = "cannot create `User`: required field `name` is not set",
-    label = "call `.name(...)` before `.exec()`"
+    message = "missing field `name` in create! for `User`",
+    label = "missing `name`"
 )]
 pub trait __user_create_has_name {}
 impl __user_create_has_name for Set {}
 
 #[doc(hidden)]
 #[diagnostic::on_unimplemented(
-    message = "cannot create `User`: required field `email` is not set",
-    label = "call `.email(...)` before `.exec()`"
+    message = "missing field `email` in create! for `User`",
+    label = "missing `email`"
 )]
 pub trait __user_create_has_email {}
 impl __user_create_has_email for Set {}
@@ -151,27 +151,27 @@ the type system to `User::__verify_create()` — no naming conventions needed.
 Missing one field:
 
 ```
-error[E0277]: cannot create `User`: required field `email` is not set
+error[E0277]: missing field `email` in create! for `User`
   --> src/main.rs:5:42
    |
 5  |     create!(User { name: "Carl" }).exec(&db).await;
-   |                                    ^^^^ call `.email(...)` before `.exec()`
+   |                                    ^^^^ missing `email`
 ```
 
 Missing multiple fields (Rust reports all unsatisfied bounds):
 
 ```
-error[E0277]: cannot create `User`: required field `name` is not set
+error[E0277]: missing field `name` in create! for `User`
   --> src/main.rs:5:24
    |
 5  |     create!(User {}).exec(&db).await;
-   |                      ^^^^ call `.name(...)` before `.exec()`
+   |                      ^^^^ missing `name`
 
-error[E0277]: cannot create `User`: required field `email` is not set
+error[E0277]: missing field `email` in create! for `User`
   --> src/main.rs:5:24
    |
 5  |     create!(User {}).exec(&db).await;
-   |                      ^^^^ call `.email(...)` before `.exec()`
+   |                      ^^^^ missing `email`
 ```
 
 ### Scoped and batch create

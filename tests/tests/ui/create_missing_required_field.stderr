@@ -1,8 +1,8 @@
-error[E0277]: cannot create `User`: required field `email` is not set
+error[E0277]: missing field `email` in create! for `User`
   --> tests/ui/create_missing_required_field.rs:14:13
    |
 14 |     let _ = toasty::create!(User { name: "Carl" });
-   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call `.email(...)` before `.exec()`
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `email`
    |
    = help: the trait `__user_create_has_email` is not implemented for `NotSet`
 note: required by a bound in `_::<impl User>::__check_create`

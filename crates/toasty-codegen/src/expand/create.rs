@@ -287,10 +287,8 @@ impl Expand<'_> {
                     field_name,
                     span = Span::mixed_site()
                 );
-                let msg = format!(
-                    "cannot create `{model_name}`: required field `{field_name}` is not set"
-                );
-                let label = format!("call `.{field_name}(...)` before `.exec()`");
+                let msg = format!("missing field `{field_name}` in create! for `{model_name}`");
+                let label = format!("missing `{field_name}`");
 
                 quote! {
                     #[doc(hidden)]
