@@ -176,7 +176,7 @@ with collections rather than single records:
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
 // filter_by_country returns a query builder (may match many records)
 let users = User::filter_by_country("US")
-    .all(&mut db)
+    .exec(&mut db)
     .await?;
 
 // Update all records matching the index
