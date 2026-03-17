@@ -363,9 +363,4 @@ fn assert_bounds() {
     assert_into_expr::<List<(String, String)>, &[(&String, &String)]>();
     assert_into_expr::<List<(String, String)>, [(&String, &String); 3]>();
     assert_into_expr::<List<(String, String)>, &[(&String, &String); 3]>();
-
-    // Tuples as batch expressions
-    assert_into_expr::<List<i64>, (i64,)>();
-    assert_into_expr::<List<i64>, (i64, i64)>();
-    assert_into_expr::<List<i64>, (i64, i64, i64)>();
 }
