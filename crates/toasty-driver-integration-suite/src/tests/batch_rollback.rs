@@ -66,7 +66,6 @@ pub async fn batch_create_and_update_rolls_back_on_update_failure(t: &mut Test) 
         id: ID,
 
         #[unique]
-        #[index]
         name: String,
     }
 
@@ -121,7 +120,6 @@ pub async fn batch_update_and_create_rolls_back_on_create_failure(t: &mut Test) 
         id: ID,
 
         #[unique]
-        #[index]
         name: String,
     }
 
