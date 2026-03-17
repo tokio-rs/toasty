@@ -15,3 +15,6 @@ sqlite = ["toasty/sqlite"]
 toasty.workspace = true
 tokio.workspace = true
 uuid.workspace = true
+
+[lints]
+workspace = true

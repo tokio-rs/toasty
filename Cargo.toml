@@ -34,6 +34,9 @@ members = [
     "benches",
 ]
 
+[workspace.lints.rust]
+unsafe_code = "deny"
+
 [workspace.dependencies]
 # Toasty crates
 toasty = { path = "crates/toasty" }

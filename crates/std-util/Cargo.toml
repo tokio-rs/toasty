@@ -9,3 +9,6 @@ edition = "2021"
 heck.workspace = true
 pluralizer.workspace = true
 rand.workspace = true
+
+[lints]
+workspace = true

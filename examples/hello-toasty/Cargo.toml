@@ -20,3 +20,6 @@ uuid.workspace = true
 toasty-driver-dynamodb = { path = "../../crates/toasty-driver-dynamodb", optional = true }
 aws-config = { workspace = true, optional = true }
 aws-sdk-dynamodb = { workspace = true, optional = true }
+
+[lints]
+workspace = true
