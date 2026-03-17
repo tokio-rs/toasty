@@ -34,3 +34,6 @@ tests = { version = "0.1.0", path = "../tests" }
 name = "association"
 path = "association.rs"
 harness = false
+
+[lints]
+workspace = true

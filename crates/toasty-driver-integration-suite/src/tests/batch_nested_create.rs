@@ -1,19 +1,19 @@
 use crate::prelude::*;
 
-/// Use a tuple of create builders to create multiple nested HasMany records
+/// Use an array of create builders to create multiple nested HasMany records
 /// in a single parent create statement.
 #[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn batch_as_nested_has_many_create(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
-    // Pass a tuple of create builders directly — tuples implement
+    // Pass an array of create builders — arrays and slices implement
     // `IntoExpr<List<Model>>` so they work as nested HasMany values.
     let user = User::create()
         .name("Ann Chovey")
-        .todos((
+        .todos([
             Todo::create().title("Make pizza"),
             Todo::create().title("Sleep"),
-        ))
+        ])
         .exec(&mut db)
         .await?;
 

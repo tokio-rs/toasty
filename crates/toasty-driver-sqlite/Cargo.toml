@@ -13,3 +13,5 @@ serde_json.workspace = true
 url.workspace = true
 uuid.workspace = true
 
+[lints]
+workspace = true

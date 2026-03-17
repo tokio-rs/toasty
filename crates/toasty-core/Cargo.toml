@@ -28,3 +28,6 @@ serde = ["dep:serde", "bit-set/serde"]
 [dev-dependencies]
 jiff.workspace = true
 pretty_assertions.workspace = true
+
+[lints]
+workspace = true

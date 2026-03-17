@@ -8,7 +8,7 @@ use toasty_core::{
 macro_rules! impl_jiff_field {
     ($ty:ty, $name:ident, $lit:literal) => {
         impl Field for $ty {
-            type FieldAccessor = Path<Self>;
+            type FieldAccessor<Origin> = Path<Origin, Self>;
             type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
             fn ty() -> Type {
@@ -22,7 +22,9 @@ macro_rules! impl_jiff_field {
                 }
             }
 
-            fn make_field_accessor(path: Path<Self>) -> Self::FieldAccessor {
+            fn make_field_accessor<Origin>(
+                path: Path<Origin, Self>,
+            ) -> Self::FieldAccessor<Origin> {
                 path
             }
         }

@@ -14,7 +14,7 @@ use toasty_core::stmt;
 /// 3. Keep the existing test API unchanged
 /// 4. Always log driver operations for debugging
 pub struct DbTest {
-    runtime: tokio::runtime::Runtime,
+    runtime: Option<tokio::runtime::Runtime>,
     setup: Option<Box<dyn Setup>>,
     exec_log: ExecLog,
 }
@@ -28,7 +28,7 @@ impl DbTest {
             .expect("Failed to create Tokio runtime");
 
         Self {
-            runtime,
+            runtime: Some(runtime),
             setup: Some(setup),
             exec_log: ExecLog::new(Arc::new(Mutex::new(Vec::new()))),
         }
@@ -99,14 +99,9 @@ impl DbTest {
             &'a mut DbTest,
         ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + 'a>>,
     {
-        // Use unsafe to get a mutable reference to self inside the closure
-        // This is safe because we control the runtime and know there's no aliasing
-        let self_ptr = self as *mut DbTest;
-
-        self.runtime.block_on(async {
-            let self_mut = unsafe { &mut *self_ptr };
-            test_fn(self_mut).await;
-        });
+        let rt = self.runtime.take().expect("runtime already taken");
+        rt.block_on(test_fn(self));
+        self.runtime = Some(rt);
     }
 }
 
@@ -114,7 +109,11 @@ impl Drop for DbTest {
     fn drop(&mut self) {
         // If setup is still present, clean it up
         if let Some(setup) = self.setup.take() {
-            self.runtime.block_on(async {
+            let rt = self
+                .runtime
+                .take()
+                .expect("runtime not available during cleanup");
+            rt.block_on(async {
                 let _ = setup.cleanup_my_tables().await;
             });
         }

@@ -99,7 +99,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
         impl #toasty::Embed for #model_ident {}
 
         impl #toasty::Field for #model_ident {
-            type FieldAccessor = #field_struct_ident;
+            type FieldAccessor<__Origin> = #field_struct_ident<__Origin>;
             type UpdateBuilder<'a> = #update_struct_ident<'a>;
 
             const NULLABLE: bool = false;
@@ -116,7 +116,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
                 #reload_body
             }
 
-            fn make_field_accessor(path: #toasty::Path<Self>) -> Self::FieldAccessor {
+            fn make_field_accessor<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::FieldAccessor<__Origin> {
                 #field_struct_ident { path }
             }
 
@@ -205,7 +205,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
         impl #toasty::Embed for #model_ident {}
 
         impl #toasty::Field for #model_ident {
-            type FieldAccessor = #field_struct_ident;
+            type FieldAccessor<__Origin> = #field_struct_ident<__Origin>;
             type UpdateBuilder<'a> = ();
 
             fn ty() -> #toasty::Type {
@@ -238,7 +238,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
                 }
             }
 
-            fn make_field_accessor(path: #toasty::Path<Self>) -> Self::FieldAccessor {
+            fn make_field_accessor<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::FieldAccessor<__Origin> {
                 #field_struct_ident { path }
             }
 
@@ -309,10 +309,10 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
 
         quote! {
-            #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::OneField {
+            #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::OneField<__Origin> {
                 <#ty as #toasty::Relation>::OneField::from_path(
                     self.path().chain(
-                        #toasty::Path::from_field_index::<#model_ident>(#field_offset)
+                        #toasty::Path::<#model_ident, _>::from_field_index(#field_offset)
                     )
                 )
             }
@@ -332,10 +332,10 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
 
         quote! {
-            #vis fn #field_ident(&self) -> <#ty as #toasty::Field>::FieldAccessor {
+            #vis fn #field_ident(&self) -> <#ty as #toasty::Field>::FieldAccessor<__Origin> {
                 <#ty as #toasty::Field>::make_field_accessor(
                     self.path().chain(
-                        #toasty::Path::from_field_index::<#model_ident>(#field_offset)
+                        #toasty::Path::<#model_ident, _>::from_field_index(#field_offset)
                     )
                 )
             }

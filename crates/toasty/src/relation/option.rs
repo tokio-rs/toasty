@@ -25,9 +25,9 @@ impl<T: Relation> Relation for Option<T> {
     type Expr = Option<T::Model>;
     type Query = T::Query;
     type Many = T::Many;
-    type ManyField = T::ManyField;
+    type ManyField<__Origin> = T::ManyField<__Origin>;
     type One = T::OptionOne;
-    type OneField = T::OneField;
+    type OneField<__Origin> = T::OneField<__Origin>;
     type OptionOne = T::OptionOne;
 
     fn field_name_to_id(name: &str) -> FieldId {
