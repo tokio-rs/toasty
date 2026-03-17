@@ -6,12 +6,21 @@ use toasty_core::{
     stmt::{self, Direction, OrderByExpr},
 };
 
-pub struct Path<T> {
+pub struct Path<T, U> {
     pub(super) untyped: stmt::Path,
-    _p: PhantomData<T>,
+    _p: PhantomData<(T, U)>,
 }
 
-impl<T> Path<T> {
+impl<T: Register> Path<T, T> {
+    pub fn root() -> Self {
+        Self {
+            untyped: stmt::Path::model(T::id()),
+            _p: PhantomData,
+        }
+    }
+}
+
+impl<T, U> Path<T, U> {
     pub const fn new(raw: stmt::Path) -> Self {
         Self {
             untyped: raw,
@@ -19,19 +28,12 @@ impl<T> Path<T> {
         }
     }
 
-    pub fn root() -> Self
+    pub fn from_field_index(index: usize) -> Self
     where
         T: Register,
     {
         Self {
-            untyped: stmt::Path::model(T::id()),
-            _p: PhantomData,
-        }
-    }
-
-    pub fn from_field_index<M: Register>(index: usize) -> Self {
-        Self {
-            untyped: stmt::Path::from_index(M::id(), index),
+            untyped: stmt::Path::from_index(T::id(), index),
             _p: PhantomData,
         }
     }
@@ -45,7 +47,7 @@ impl<T> Path<T> {
         }
     }
 
-    pub fn chain<U>(mut self, other: impl Into<Path<U>>) -> Path<U> {
+    pub fn chain<X, V>(mut self, other: impl Into<Path<X, V>>) -> Path<T, V> {
         let other = other.into();
         self.untyped.chain(&other.untyped);
 
@@ -55,49 +57,49 @@ impl<T> Path<T> {
         }
     }
 
-    pub fn eq(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
+    pub fn eq(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
         Expr {
             untyped: stmt::Expr::eq(self.untyped.into_stmt(), rhs.into_expr().untyped),
             _p: PhantomData,
         }
     }
 
-    pub fn ne(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
+    pub fn ne(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
         Expr {
             untyped: stmt::Expr::ne(self.untyped.into_stmt(), rhs.into_expr().untyped),
             _p: PhantomData,
         }
     }
 
-    pub fn gt(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
+    pub fn gt(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
         Expr {
             untyped: stmt::Expr::gt(self.untyped.into_stmt(), rhs.into_expr().untyped),
             _p: PhantomData,
         }
     }
 
-    pub fn ge(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
+    pub fn ge(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
         Expr {
             untyped: stmt::Expr::ge(self.untyped.into_stmt(), rhs.into_expr().untyped),
             _p: PhantomData,
         }
     }
 
-    pub fn lt(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
+    pub fn lt(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
         Expr {
             untyped: stmt::Expr::lt(self.untyped.into_stmt(), rhs.into_expr().untyped),
             _p: PhantomData,
         }
     }
 
-    pub fn le(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
+    pub fn le(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
         Expr {
             untyped: stmt::Expr::le(self.untyped.into_stmt(), rhs.into_expr().untyped),
             _p: PhantomData,
         }
     }
 
-    pub fn in_list(self, rhs: impl IntoExpr<List<T>>) -> Expr<bool> {
+    pub fn in_list(self, rhs: impl IntoExpr<List<U>>) -> Expr<bool> {
         Expr {
             untyped: stmt::Expr::in_list(self.untyped.into_stmt(), rhs.into_expr().untyped),
             _p: PhantomData,
@@ -106,7 +108,7 @@ impl<T> Path<T> {
 
     pub fn in_query<Q>(self, rhs: Q) -> Expr<bool>
     where
-        Q: IntoStatement<Returning = List<T>>,
+        Q: IntoStatement<Returning = List<U>>,
     {
         let query = rhs.into_statement().into_untyped_query();
         Expr {
@@ -130,7 +132,7 @@ impl<T> Path<T> {
     }
 }
 
-impl<T> Path<List<T>> {
+impl<T, U> Path<T, List<U>> {
     /// Build an `IN subquery` expression that tests whether **any** associated
     /// record satisfies `filter`.
     ///
@@ -139,10 +141,10 @@ impl<T> Path<List<T>> {
     /// parent query.
     pub fn any(self, filter: Expr<bool>) -> Expr<bool>
     where
-        T: crate::Model,
+        U: crate::Model,
     {
         // Build a query on the child model filtered by `filter`
-        let child_query = super::Query::<T>::filter(filter);
+        let child_query = super::Query::<U>::filter(filter);
 
         Expr {
             untyped: stmt::Expr::in_subquery(self.untyped.into_stmt(), child_query.untyped),
@@ -151,7 +153,7 @@ impl<T> Path<List<T>> {
     }
 }
 
-impl<T> Path<Option<T>> {
+impl<T, U> Path<T, Option<U>> {
     pub fn is_none(self) -> Expr<bool> {
         Expr {
             untyped: stmt::Expr::is_null(self.untyped.into_stmt()),
@@ -167,7 +169,7 @@ impl<T> Path<Option<T>> {
     }
 }
 
-impl<T> Clone for Path<T> {
+impl<T, U> Clone for Path<T, U> {
     fn clone(&self) -> Self {
         Self {
             untyped: self.untyped.clone(),
@@ -176,26 +178,26 @@ impl<T> Clone for Path<T> {
     }
 }
 
-impl<T> IntoExpr<T> for Path<T> {
-    fn into_expr(self) -> Expr<T> {
+impl<T, U> IntoExpr<U> for Path<T, U> {
+    fn into_expr(self) -> Expr<U> {
         Expr {
             untyped: self.untyped.into_stmt(),
             _p: PhantomData,
         }
     }
 
-    fn by_ref(&self) -> Expr<T> {
+    fn by_ref(&self) -> Expr<U> {
         Self::into_expr(self.clone())
     }
 }
 
-impl<T> From<Path<T>> for stmt::Path {
-    fn from(value: Path<T>) -> Self {
+impl<T, U> From<Path<T, U>> for stmt::Path {
+    fn from(value: Path<T, U>) -> Self {
         value.untyped
     }
 }
 
-impl<T> fmt::Debug for Path<T> {
+impl<T, U> fmt::Debug for Path<T, U> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self.untyped)
     }

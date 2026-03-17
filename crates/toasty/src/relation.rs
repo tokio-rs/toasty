@@ -30,11 +30,11 @@ pub trait Relation: Load<Output = Self> {
     /// HasMany relation type
     type Many;
 
-    type ManyField;
+    type ManyField<Origin>;
 
     type One;
 
-    type OneField;
+    type OneField<Origin>;
 
     /// Option fields
     type OptionOne;

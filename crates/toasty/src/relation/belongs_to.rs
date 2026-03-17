@@ -43,9 +43,9 @@ impl<T: Relation> Relation for BelongsTo<T> {
     type Expr = T::Expr;
     type Query = T::Query;
     type Many = T::Many;
-    type ManyField = T::ManyField;
+    type ManyField<__Origin> = T::ManyField<__Origin>;
     type One = T::One;
-    type OneField = T::OneField;
+    type OneField<__Origin> = T::OneField<__Origin>;
     type OptionOne = T::OptionOne;
 
     fn field_name_to_id(name: &str) -> toasty_core::schema::app::FieldId {

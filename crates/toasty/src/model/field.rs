@@ -10,9 +10,9 @@ pub trait Field: Sized {
     const NULLABLE: bool = false;
 
     /// The type returned when accessing this field from a Fields struct.
-    /// For primitives, this is Path<Self>.
-    /// For embedded types, this is {Type}Fields.
-    type FieldAccessor;
+    /// For primitives, this is Path<Origin, Self>.
+    /// For embedded types, this is {Type}Fields<Origin>.
+    type FieldAccessor<Origin>;
 
     /// The type of the update builder for this field.
     /// For embedded types, this is {Type}Update<'a>.
@@ -36,7 +36,7 @@ pub trait Field: Sized {
     /// Build a field accessor from a path.
     /// For primitives, returns the path as-is.
     /// For embedded types, wraps the path in a Fields struct.
-    fn make_field_accessor(path: Path<Self>) -> Self::FieldAccessor;
+    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin>;
 
     /// Build an update builder from a statement and projection.
     /// For primitives, this returns `()` (no builder).
@@ -69,7 +69,7 @@ macro_rules! impl_field_numeric {
     ($($ty:ty => $stmt_ty:ident),* $(,)?) => {
         $(
             impl Field for $ty {
-                type FieldAccessor = Path<Self>;
+                type FieldAccessor<Origin> = Path<Origin, Self>;
                 type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
                 fn ty() -> stmt::Type {
@@ -80,7 +80,7 @@ macro_rules! impl_field_numeric {
                     value.try_into()
                 }
 
-                fn make_field_accessor(path: Path<Self>) -> Self::FieldAccessor {
+                fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
                     path
                 }
             }
@@ -102,7 +102,7 @@ impl_field_numeric! {
 
 // Pointer-sized integers map to fixed-size types internally
 impl Field for isize {
-    type FieldAccessor = Path<Self>;
+    type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
     fn ty() -> stmt::Type {
@@ -113,13 +113,13 @@ impl Field for isize {
         value.try_into()
     }
 
-    fn make_field_accessor(path: Path<Self>) -> Self::FieldAccessor {
+    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
         path
     }
 }
 
 impl Field for usize {
-    type FieldAccessor = Path<Self>;
+    type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
     fn ty() -> stmt::Type {
@@ -130,13 +130,13 @@ impl Field for usize {
         value.try_into()
     }
 
-    fn make_field_accessor(path: Path<Self>) -> Self::FieldAccessor {
+    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
         path
     }
 }
 
 impl Field for String {
-    type FieldAccessor = Path<Self>;
+    type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
     fn ty() -> stmt::Type {
@@ -150,13 +150,13 @@ impl Field for String {
         }
     }
 
-    fn make_field_accessor(path: Path<Self>) -> Self::FieldAccessor {
+    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
         path
     }
 }
 
 impl Field for Vec<u8> {
-    type FieldAccessor = Path<Self>;
+    type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = ();
 
     fn ty() -> stmt::Type {
@@ -167,13 +167,13 @@ impl Field for Vec<u8> {
         value.try_into()
     }
 
-    fn make_field_accessor(path: Path<Self>) -> Self::FieldAccessor {
+    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
         path
     }
 }
 
 impl<T: Field> Field for Option<T> {
-    type FieldAccessor = Path<Self>;
+    type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
     fn ty() -> stmt::Type {
@@ -189,7 +189,7 @@ impl<T: Field> Field for Option<T> {
         }
     }
 
-    fn make_field_accessor(path: Path<Self>) -> Self::FieldAccessor {
+    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
         path
     }
 }
@@ -199,7 +199,7 @@ where
     T: ToOwned + ?Sized,
     T::Owned: Field,
 {
-    type FieldAccessor = Path<Self>;
+    type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
     fn ty() -> stmt::Type {
@@ -210,13 +210,13 @@ where
         <T::Owned as Field>::load(value).map(Cow::Owned)
     }
 
-    fn make_field_accessor(path: Path<Self>) -> Self::FieldAccessor {
+    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
         path
     }
 }
 
 impl Field for uuid::Uuid {
-    type FieldAccessor = Path<Self>;
+    type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
     fn ty() -> stmt::Type {
@@ -230,13 +230,13 @@ impl Field for uuid::Uuid {
         }
     }
 
-    fn make_field_accessor(path: Path<Self>) -> Self::FieldAccessor {
+    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
         path
     }
 }
 
 impl Field for bool {
-    type FieldAccessor = Path<Self>;
+    type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
     fn ty() -> stmt::Type {
@@ -250,13 +250,13 @@ impl Field for bool {
         }
     }
 
-    fn make_field_accessor(path: Path<Self>) -> Self::FieldAccessor {
+    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
         path
     }
 }
 
 impl<T: Field> Field for Arc<T> {
-    type FieldAccessor = Path<Self>;
+    type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
     fn ty() -> stmt::Type {
@@ -267,13 +267,13 @@ impl<T: Field> Field for Arc<T> {
         <T as Field>::load(value).map(Arc::new)
     }
 
-    fn make_field_accessor(path: Path<Self>) -> Self::FieldAccessor {
+    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
         path
     }
 }
 
 impl<T: Field> Field for Rc<T> {
-    type FieldAccessor = Path<Self>;
+    type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
     fn ty() -> stmt::Type {
@@ -284,13 +284,13 @@ impl<T: Field> Field for Rc<T> {
         <T as Field>::load(value).map(Rc::new)
     }
 
-    fn make_field_accessor(path: Path<Self>) -> Self::FieldAccessor {
+    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
         path
     }
 }
 
 impl<T: Field> Field for Box<T> {
-    type FieldAccessor = Path<Self>;
+    type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
     fn ty() -> stmt::Type {
@@ -301,14 +301,14 @@ impl<T: Field> Field for Box<T> {
         <T as Field>::load(value).map(Box::new)
     }
 
-    fn make_field_accessor(path: Path<Self>) -> Self::FieldAccessor {
+    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
         path
     }
 }
 
 #[cfg(feature = "rust_decimal")]
 impl Field for rust_decimal::Decimal {
-    type FieldAccessor = Path<Self>;
+    type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
     fn ty() -> stmt::Type {
@@ -325,14 +325,14 @@ impl Field for rust_decimal::Decimal {
         }
     }
 
-    fn make_field_accessor(path: Path<Self>) -> Self::FieldAccessor {
+    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
         path
     }
 }
 
 #[cfg(feature = "bigdecimal")]
 impl Field for bigdecimal::BigDecimal {
-    type FieldAccessor = Path<Self>;
+    type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
     fn ty() -> stmt::Type {
@@ -349,7 +349,7 @@ impl Field for bigdecimal::BigDecimal {
         }
     }
 
-    fn make_field_accessor(path: Path<Self>) -> Self::FieldAccessor {
+    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
         path
     }
 }
