@@ -10,7 +10,7 @@ use toasty_core::{
 #[driver_test(id(ID))]
 pub async fn serialize_vec_string(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
-    struct Foo {
+    struct Item {
         #[key]
         #[auto]
         id: ID,
@@ -18,13 +18,13 @@ pub async fn serialize_vec_string(t: &mut Test) -> Result<(), BoxError> {
         tags: Vec<String>,
     }
 
-    let mut db = t.setup_db(models!(Foo)).await;
+    let mut db = t.setup_db(models!(Item)).await;
 
     // Insert — driver receives JSON string
     t.log().clear();
     let tags = vec!["rust".to_string(), "toasty".to_string()];
     let expected_json = serde_json::to_string(&tags).unwrap();
-    let mut record = Foo::create().tags(tags.clone()).exec(&mut db).await?;
+    let mut record = Item::create().tags(tags.clone()).exec(&mut db).await?;
 
     let (op, _) = t.log().pop();
     assert_struct!(op, Operation::QuerySql(_ {
@@ -38,7 +38,7 @@ pub async fn serialize_vec_string(t: &mut Test) -> Result<(), BoxError> {
         ..
     }));
 
-    assert_eq!(Foo::get_by_id(&mut db, &record.id).await?.tags, tags);
+    assert_eq!(Item::get_by_id(&mut db, &record.id).await?.tags, tags);
 
     // Update — driver receives JSON string
     t.log().clear();
@@ -63,7 +63,7 @@ pub async fn serialize_vec_string(t: &mut Test) -> Result<(), BoxError> {
     }
     assert_struct!(resp, _ { rows: Rows::Count(1), .. });
 
-    assert_eq!(Foo::get_by_id(&mut db, &record.id).await?.tags, new_tags);
+    assert_eq!(Item::get_by_id(&mut db, &record.id).await?.tags, new_tags);
 
     Ok(())
 }
@@ -71,7 +71,7 @@ pub async fn serialize_vec_string(t: &mut Test) -> Result<(), BoxError> {
 #[driver_test(id(ID))]
 pub async fn serialize_nullable(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
-    struct Foo {
+    struct Item {
         #[key]
         #[auto]
         id: ID,
@@ -79,13 +79,13 @@ pub async fn serialize_nullable(t: &mut Test) -> Result<(), BoxError> {
         data: Option<HashMap<String, String>>,
     }
 
-    let mut db = t.setup_db(models!(Foo)).await;
+    let mut db = t.setup_db(models!(Item)).await;
 
     // Some — driver receives JSON string
     t.log().clear();
     let map = HashMap::from([("key".to_string(), "value".to_string())]);
     let expected_json = serde_json::to_string(&map).unwrap();
-    let record = Foo::create().data(Some(map.clone())).exec(&mut db).await?;
+    let record = Item::create().data(Some(map.clone())).exec(&mut db).await?;
 
     let (op, _) = t.log().pop();
     assert_struct!(op, Operation::QuerySql(_ {
@@ -99,11 +99,11 @@ pub async fn serialize_nullable(t: &mut Test) -> Result<(), BoxError> {
         ..
     }));
 
-    assert_eq!(Foo::get_by_id(&mut db, &record.id).await?.data, Some(map));
+    assert_eq!(Item::get_by_id(&mut db, &record.id).await?.data, Some(map));
 
     // None — driver receives SQL NULL
     t.log().clear();
-    let foo_none = Foo::create().data(None).exec(&mut db).await?;
+    let empty_record = Item::create().data(None).exec(&mut db).await?;
 
     let (op, _) = t.log().pop();
     assert_struct!(op, Operation::QuerySql(_ {
@@ -117,7 +117,7 @@ pub async fn serialize_nullable(t: &mut Test) -> Result<(), BoxError> {
         ..
     }));
 
-    assert_eq!(Foo::get_by_id(&mut db, &foo_none.id).await?.data, None);
+    assert_eq!(Item::get_by_id(&mut db, &empty_record.id).await?.data, None);
 
     Ok(())
 }
@@ -125,7 +125,7 @@ pub async fn serialize_nullable(t: &mut Test) -> Result<(), BoxError> {
 #[driver_test(id(ID))]
 pub async fn serialize_non_nullable_option(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
-    struct Foo {
+    struct Item {
         #[key]
         #[auto]
         id: ID,
@@ -133,11 +133,11 @@ pub async fn serialize_non_nullable_option(t: &mut Test) -> Result<(), BoxError>
         extra: Option<String>,
     }
 
-    let mut db = t.setup_db(models!(Foo)).await;
+    let mut db = t.setup_db(models!(Item)).await;
 
     // None → JSON text "null", not SQL NULL
     t.log().clear();
-    let foo_none = Foo::create().extra(None).exec(&mut db).await?;
+    let empty_record = Item::create().extra(None).exec(&mut db).await?;
 
     let (op, _) = t.log().pop();
     assert_struct!(op, Operation::QuerySql(_ {
@@ -151,12 +151,15 @@ pub async fn serialize_non_nullable_option(t: &mut Test) -> Result<(), BoxError>
         ..
     }));
 
-    assert_eq!(Foo::get_by_id(&mut db, &foo_none.id).await?.extra, None);
+    assert_eq!(
+        Item::get_by_id(&mut db, &empty_record.id).await?.extra,
+        None
+    );
 
     // Some → JSON string with quotes
     t.log().clear();
     let expected_json = serde_json::to_string(&Some("hello")).unwrap();
-    let record = Foo::create()
+    let record = Item::create()
         .extra(Some("hello".to_string()))
         .exec(&mut db)
         .await?;
@@ -174,7 +177,7 @@ pub async fn serialize_non_nullable_option(t: &mut Test) -> Result<(), BoxError>
     }));
 
     assert_eq!(
-        Foo::get_by_id(&mut db, &record.id).await?.extra,
+        Item::get_by_id(&mut db, &record.id).await?.extra,
         Some("hello".to_string())
     );
 
@@ -190,7 +193,7 @@ pub async fn serialize_custom_struct(t: &mut Test) -> Result<(), BoxError> {
     }
 
     #[derive(Debug, toasty::Model)]
-    struct Foo {
+    struct Item {
         #[key]
         #[auto]
         id: ID,
@@ -198,7 +201,7 @@ pub async fn serialize_custom_struct(t: &mut Test) -> Result<(), BoxError> {
         meta: Metadata,
     }
 
-    let mut db = t.setup_db(models!(Foo)).await;
+    let mut db = t.setup_db(models!(Item)).await;
     t.log().clear();
 
     let meta = Metadata {
@@ -206,7 +209,7 @@ pub async fn serialize_custom_struct(t: &mut Test) -> Result<(), BoxError> {
         labels: vec!["alpha".to_string(), "beta".to_string()],
     };
     let expected_json = serde_json::to_string(&meta).unwrap();
-    let record = Foo::create().meta(meta.clone()).exec(&mut db).await?;
+    let record = Item::create().meta(meta.clone()).exec(&mut db).await?;
 
     let (op, _) = t.log().pop();
     assert_struct!(op, Operation::QuerySql(_ {
@@ -220,7 +223,7 @@ pub async fn serialize_custom_struct(t: &mut Test) -> Result<(), BoxError> {
         ..
     }));
 
-    assert_eq!(Foo::get_by_id(&mut db, &record.id).await?.meta, meta);
+    assert_eq!(Item::get_by_id(&mut db, &record.id).await?.meta, meta);
 
     Ok(())
 }
