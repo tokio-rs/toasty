@@ -46,7 +46,7 @@ impl Expand<'_> {
                 #filter_methods
 
                 /// Iterate all entries in the relation
-                #vis async fn all(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<Vec<#model_ident>> {
+                #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<Vec<#model_ident>> {
                     use #toasty::{ExecutorExt, IntoStatement};
                     executor.all(self.into_statement().into_query().unwrap()).await
                 }

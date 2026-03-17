@@ -141,7 +141,7 @@ fn association_benchmarks(c: &mut Criterion) {
                             let users: Vec<User> = User::all()
                                 .include(User::fields().posts())
                                 .include(User::fields().comments())
-                                .all(&mut db)
+                                .exec(&mut db)
                                 .await
                                 .unwrap();
                             black_box(users)

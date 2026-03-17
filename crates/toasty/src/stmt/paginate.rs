@@ -60,7 +60,7 @@ impl<M> Paginate<M> {
 }
 
 impl<M: Load> Paginate<M> {
-    pub async fn all(mut self, executor: &mut dyn Executor) -> Result<crate::Page<M::Output>> {
+    pub async fn exec(mut self, executor: &mut dyn Executor) -> Result<crate::Page<M::Output>> {
         // Extract the limit from the query to determine page size
         let page_size = match &self.query.untyped.limit {
             Some(stmt::Limit {

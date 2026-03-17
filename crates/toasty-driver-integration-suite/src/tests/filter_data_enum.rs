@@ -43,7 +43,7 @@ pub async fn filter_data_enum(t: &mut Test) -> Result<()> {
     let emails = User::filter(User::fields().contact().eq(ContactInfo::Email {
         address: "alice@example.com".to_string(),
     }))
-    .all(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert_eq!(emails.len(), 1);
@@ -100,13 +100,13 @@ pub async fn filter_data_enum_by_variant(t: &mut Test) -> Result<()> {
         .await?;
 
     let emails = User::filter(User::fields().contact().is_email())
-        .all(&mut db)
+        .exec(&mut db)
         .await?;
 
     assert_eq!(emails.len(), 2);
 
     let phones = User::filter(User::fields().contact().is_phone())
-        .all(&mut db)
+        .exec(&mut db)
         .await?;
 
     assert_eq!(phones.len(), 1);
@@ -165,18 +165,18 @@ pub async fn filter_unit_enum_by_variant(t: &mut Test) -> Result<()> {
         .await?;
 
     let active = Task::filter(Task::fields().status().is_active())
-        .all(&mut db)
+        .exec(&mut db)
         .await?;
     assert_eq!(active.len(), 2);
 
     let pending = Task::filter(Task::fields().status().is_pending())
-        .all(&mut db)
+        .exec(&mut db)
         .await?;
     assert_eq!(pending.len(), 1);
     assert_eq!(pending[0].name, "A");
 
     let done = Task::filter(Task::fields().status().is_done())
-        .all(&mut db)
+        .exec(&mut db)
         .await?;
     assert_eq!(done.len(), 1);
     assert_eq!(done[0].name, "D");
@@ -234,7 +234,7 @@ pub async fn filter_enum_variant_with_partition_key(t: &mut Test) -> Result<()> 
             .eq("alice")
             .and(Task::fields().status().is_active()),
     )
-    .all(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert_eq!(active.len(), 2);
@@ -245,7 +245,7 @@ pub async fn filter_enum_variant_with_partition_key(t: &mut Test) -> Result<()> 
             .eq("alice")
             .and(Task::fields().status().is_done()),
     )
-    .all(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert_eq!(done.len(), 1);
@@ -258,7 +258,7 @@ pub async fn filter_enum_variant_with_partition_key(t: &mut Test) -> Result<()> 
             .eq("bob")
             .and(Task::fields().status().is_active()),
     )
-    .all(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert_eq!(bob_active.len(), 1);
