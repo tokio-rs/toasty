@@ -262,7 +262,7 @@ impl Expand<'_> {
 
         quote! {
             #vis fn #query_filter_batch_ident(self, keys: impl #toasty::IntoExpr<#toasty::List<#bound>> ) -> #query_struct_ident {
-                self.filter( #toasty::stmt::Expr::in_list::<_, _, #bound>( #lhs, keys ) )
+                self.filter( #toasty::stmt::Expr::in_list( #lhs, keys ) )
             }
         }
     }
