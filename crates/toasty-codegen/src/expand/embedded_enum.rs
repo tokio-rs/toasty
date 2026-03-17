@@ -42,14 +42,15 @@ impl Expand<'_> {
         }
     }
 
-    /// Generates delegated comparison methods (`eq`, `ne`, `gt`, `ge`, `lt`,
-    /// `le`, `in_list`) that forward to `self.path()`.
+    /// Generates delegated comparison methods (`eq`, `ne`, `in_list`) that
+    /// forward to `self.path()`. Ordered comparisons (`gt`, `ge`, `lt`, `le`)
+    /// are intentionally excluded because enums have no meaningful ordering.
     fn expand_comparison_methods(&self) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
 
-        let methods = ["eq", "ne", "gt", "ge", "lt", "le"].iter().map(|name| {
+        let methods = ["eq", "ne"].iter().map(|name| {
             let method_ident = syn::Ident::new(name, proc_macro2::Span::call_site());
             quote! {
                 #vis fn #method_ident(&self, rhs: impl #toasty::stmt::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
