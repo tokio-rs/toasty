@@ -47,6 +47,13 @@ impl<T, U> Path<T, U> {
         }
     }
 
+    /// Append `other` to this path, producing a new path from `T` to `V`.
+    ///
+    /// Ideally the origin of `other` would be constrained to `U` (the target
+    /// of `self`), but `ManyField` stores `Path<Origin, List<M>>` while its
+    /// association methods chain segments rooted at `M` (not `List<M>`).
+    /// Until `ManyField` is restructured, the origin of `other` is left
+    /// unconstrained.
     pub fn chain<X, V>(mut self, other: impl Into<Path<X, V>>) -> Path<T, V> {
         let other = other.into();
         self.untyped.chain(&other.untyped);
