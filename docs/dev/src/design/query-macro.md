@@ -234,7 +234,26 @@ query!(User FILTER ANY .todos(.complete == false))
 Inside the parentheses, dot paths are relative to the association target model.
 The macro resolves the target model type from the association field.
 
-Expansion:
+The macro expands `.todos` into `User::fields().todos()`, which returns a
+`ManyField<User>`. The inner filter needs field expressions rooted at the
+target model — but proc macros cannot resolve types. The macro only has tokens.
+
+The solution is to add a `with` method to `ManyField` that provides a new path
+scope via a closure. `with` accepts a closure whose parameter is the target
+model's fields struct; it delegates to `any` internally:
+
+```rust
+impl<Origin> ManyField<Origin> {
+    pub fn with<F>(self, f: F) -> Expr<bool>
+    where
+        F: FnOnce(TargetFields) -> Expr<bool>,
+    {
+        self.any(f(Target::fields()))
+    }
+}
+```
+
+The macro expands `ANY .todos(...)` into a `with` call:
 
 ```rust
 // Input:
@@ -242,67 +261,14 @@ query!(User FILTER ANY .todos(.complete == false))
 
 // Expands to:
 User::filter(
-    User::fields().todos().any(
-        <Todo as Relation>::Model::fields().complete().eq(false)
-    )
+    User::fields().todos().with(|__f| __f.complete().eq(false))
 )
 ```
 
-The macro does not hardcode `Todo` — it uses the `Relation` trait to resolve
-the associated model type from the path. In practice, since `User::fields()
-.todos()` returns `Todo::ManyField<User>`, and `ManyField::any()` already
-accepts `Expr<bool>`, the inner filter just needs field expressions rooted at
-the correct model. The macro can achieve this by threading the association's
-target type through the expansion.
-
-However, proc macros cannot resolve types. The macro only has tokens. Two
-approaches work:
-
-**Approach A: Require the user to name the model in nested filters.**
-
-```rust
-query!(User FILTER ANY .todos(Todo: .complete == false))
-```
-
-The `Model:` prefix tells the macro which type to use for `fields()` inside the
-nested filter. This is explicit but verbose.
-
-**Approach B: Use the association path to infer the model type.**
-
-The macro expands `.todos` into `User::fields().todos()`, which returns a
-`ManyField<User>`. `ManyField` has an associated type (via `Relation`) that
-identifies the target model. The macro can generate a helper that extracts this
-type:
-
-```rust
-// The macro generates:
-{
-    // A helper function that infers the target model type from ManyField
-    fn __query_any<__Origin, __Target: toasty::Model>(
-        field: <__Target as toasty::Relation>::ManyField<__Origin>,
-        filter: impl FnOnce(__Target::Fields) -> toasty::stmt::Expr<bool>,
-    ) -> toasty::stmt::Expr<bool> {
-        field.any(filter(__Target::fields()))
-    }
-
-    __query_any(
-        User::fields().todos(),
-        |f| f.complete().eq(false),
-    )
-}
-```
-
-This lets the macro stay at the token level — it does not need to know that
-`.todos` points to `Todo`. The Rust compiler infers `__Target = Todo` from the
-`ManyField` type.
-
-This is the preferred approach. The syntax stays clean:
-
-```rust
-query!(User FILTER ANY .todos(.complete == false))
-```
-
-And the expansion uses type inference, not macro-level type resolution.
+The macro stays at the token level — it does not need to know that `.todos`
+points to `Todo`. The Rust compiler infers the closure parameter type from
+`ManyField`, and field paths inside the `ANY` parentheses expand relative to
+that parameter. No helper functions, no explicit model naming.
 
 #### Nested association filters
 
@@ -311,16 +277,13 @@ And the expansion uses type inference, not macro-level type resolution.
 query!(User FILTER ANY .todos(ANY .tags(.name == "urgent")))
 ```
 
-Each `ANY` nests one level deeper. The expansion chains the type-inference
-helpers:
+Each `ANY` nests one level deeper. The expansion chains `with` calls:
 
 ```rust
-__query_any(
-    User::fields().todos(),
-    |f| __query_any(
-        f.tags(),
-        |f| f.name().eq("urgent"),
-    ),
+User::filter(
+    User::fields().todos().with(|__f|
+        __f.tags().with(|__f| __f.name().eq("urgent"))
+    )
 )
 ```
 
@@ -512,8 +475,8 @@ Expand to method chains on the existing query builder API. Generate
 
 #### Step 5: Add `ANY` parsing and expansion
 
-Parse `ANY .assoc(filter)` syntax. Expand using the type-inference helper
-pattern described above.
+Parse `ANY .assoc(filter)` syntax. Expand using `ManyField::with()` as
+described above. Add the `with` method to the generated `ManyField` structs.
 
 #### Step 6: Add primitive field accessors to `OneField`
 
