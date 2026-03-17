@@ -128,11 +128,6 @@ impl ToSql for &stmt::Expr {
                 fmt!(cx, f, "(" stmt ")");
             }
             Value(expr) => expr.to_sql(cx, f),
-            Cast(expr) => {
-                // Toasty-internal type casts on column references are no-ops in
-                // SQL — the database already knows the column's storage type.
-                expr.expr.as_ref().to_sql(cx, f);
-            }
             Default => match f.serializer.flavor {
                 Flavor::Postgresql | Flavor::Mysql => fmt!(cx, f, "DEFAULT"),
                 // SQLite does not support the DEFAULT keyword but NULL acts similarly.
