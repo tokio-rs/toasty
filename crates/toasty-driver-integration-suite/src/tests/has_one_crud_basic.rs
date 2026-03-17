@@ -574,7 +574,7 @@ pub async fn associate_has_one_by_val_on_insert(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::has_one_optional_belongs_to))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_one_optional_belongs_to))]
 pub async fn associate_has_one_by_val_on_update_query_with_filter(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
