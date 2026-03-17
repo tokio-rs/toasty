@@ -81,17 +81,14 @@ struct Post {
 }
 ```
 
-A simple rule: **the foreign key always lives on the "many" side** (or the
-"dependent" side in a one-to-one). If a post can only have one author, the FK
-goes on posts, not on users.
-
 ### Relationship pairs
 
 Most relationships are bidirectional — declared on both models. The `User` above
 has `#[has_many] posts` and the `Post` has `#[belongs_to] user`. Toasty matches
-these two sides into a **pair** automatically by looking at the model types. If
-the field names don't follow the default convention, use `pair` to link them
-explicitly:
+these two sides into a **pair** automatically by looking at the model types —
+field names do not factor into the matching. If there is ambiguity (for example,
+a model with two `BelongsTo` relations pointing to the same parent type), use
+`pair` to link them explicitly:
 
 ```rust,ignore
 // On User: the child's relation field is named "owner", not "user"
@@ -99,9 +96,12 @@ explicitly:
 posts: toasty::HasMany<Post>,
 ```
 
-You can also define one-sided relationships (only `#[belongs_to]` without a
-corresponding `#[has_many]` on the parent). This is useful when you need to
-navigate from child to parent but not the reverse.
+You can define one-sided relationships with only `#[belongs_to]` on the child
+and no corresponding `#[has_many]` or `#[has_one]` on the parent. This is useful
+when you need to navigate from child to parent but not the reverse. The opposite
+is not allowed — a `#[has_many]` or `#[has_one]` field always requires a
+matching `#[belongs_to]` on the target model, because Toasty needs the foreign
+key definition to know how the models connect.
 
 ## Required vs optional relationships
 
@@ -214,6 +214,61 @@ When deciding between `HasOne` and `BelongsTo` for a one-to-one relationship,
 ask: "Which model is the dependent one — the one that doesn't make sense without
 the other?" Put the FK on the dependent model with `BelongsTo`, and declare
 `HasOne` on the independent model.
+
+## Composite foreign keys
+
+When a parent model has a composite primary key, the `#[belongs_to]` attribute
+accepts multiple `key`/`references` pairs — one for each column in the composite
+key:
+
+```rust
+# use toasty::Model;
+#[derive(Debug, toasty::Model)]
+struct User {
+    #[key]
+    #[auto]
+    id: u64,
+
+    #[has_many]
+    todos: toasty::HasMany<Todo>,
+}
+
+#[derive(Debug, toasty::Model)]
+#[key(partition = user_id, local = id)]
+struct Todo {
+    #[auto]
+    id: uuid::Uuid,
+
+    user_id: u64,
+
+    #[belongs_to(key = user_id, references = id)]
+    user: toasty::BelongsTo<User>,
+
+    title: String,
+}
+```
+
+In this example, `Todo` uses a composite primary key (`user_id` + `id`). The
+`user_id` field serves double duty: it is part of the Todo's own primary key
+*and* the foreign key pointing to `User`.
+
+When the parent itself has a composite primary key, list each column pair:
+
+```rust,ignore
+#[belongs_to(key = org_id, references = org_id, key = team_id, references = id)]
+team: toasty::BelongsTo<Team>,
+```
+
+The number of `key` entries must match the number of `references` entries. Toasty
+pairs them positionally: the first `key` maps to the first `references`, the
+second to the second, and so on.
+
+Composite foreign key fields should be indexed together so that Toasty can query
+efficiently:
+
+```rust,ignore
+#[index(fields(org_id, team_id))]
+```
 
 ## What the following chapters cover
 
