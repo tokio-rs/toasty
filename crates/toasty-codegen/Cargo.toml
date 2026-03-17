@@ -10,3 +10,6 @@ proc-macro2.workspace = true
 quote.workspace = true
 std-util.workspace = true
 syn.workspace = true
+
+[lints]
+workspace = true

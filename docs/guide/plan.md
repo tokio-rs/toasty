@@ -120,11 +120,11 @@ Each chapter introduces models incrementally. Chapter 1 starts with just `User`.
 #### 13. Relationships: HasMany
 - `#[has_many]` on the parent model
 - The `HasMany<Post>` type
-- Querying children: `user.posts().all(&mut db).await?`
+- Querying children: `user.posts().exec(&mut db).await?`
 - Creating through the relation: `user.posts().create().title("...").exec(&mut db).await?`
 - Linking/unlinking: `.insert()` and `.remove()`
 - Scoped queries: `user.posts().query(filter)`
-- **What gets generated**: `Many` struct with `.all()`, `.create()`, `.insert()`, `.remove()`, `.query()`, `.collect()`
+- **What gets generated**: `Many` struct with `.exec()`, `.create()`, `.insert()`, `.remove()`, `.query()`, `.collect()`
 
 #### 14. Relationships: HasOne
 - `#[has_one]` for single-child relations

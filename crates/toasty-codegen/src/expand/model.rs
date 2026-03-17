@@ -101,9 +101,9 @@ impl Expand<'_> {
                 type Expr = #model_ident;
                 type Query = #query_struct_ident;
                 type Many = Many;
-                type ManyField = ManyField;
+                type ManyField<__Origin> = ManyField<__Origin>;
                 type One = One;
-                type OneField = OneField;
+                type OneField<__Origin> = OneField<__Origin>;
                 type OptionOne = OptionOne;
 
                 #field_name_to_id

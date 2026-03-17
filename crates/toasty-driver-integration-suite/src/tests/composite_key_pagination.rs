@@ -31,7 +31,7 @@ pub async fn paginate_composite_key(test: &mut Test) -> Result<()> {
     let page: Page<_> = Event::filter_by_kind("info")
         .order_by(Event::fields().seq().desc())
         .paginate(10)
-        .all(&mut db)
+        .exec(&mut db)
         .await?;
 
     assert_eq!(page.len(), 10);
@@ -86,7 +86,7 @@ pub async fn paginate_composite_key_asc(test: &mut Test) -> Result<()> {
     let page: Page<_> = Event::filter_by_kind("info")
         .order_by(Event::fields().seq().asc())
         .paginate(5)
-        .all(&mut db)
+        .exec(&mut db)
         .await?;
 
     assert_eq!(page.len(), 5);
@@ -134,7 +134,7 @@ pub async fn limit_composite_key(test: &mut Test) -> Result<()> {
     // Limit without explicit ordering
     let events: Vec<_> = Event::filter_by_kind("info")
         .limit(7)
-        .all(&mut db)
+        .exec(&mut db)
         .await?;
     assert_eq!(events.len(), 7);
 
@@ -151,7 +151,7 @@ pub async fn limit_composite_key(test: &mut Test) -> Result<()> {
     let events: Vec<_> = Event::filter_by_kind("info")
         .order_by(Event::fields().seq().desc())
         .limit(5)
-        .all(&mut db)
+        .exec(&mut db)
         .await?;
     assert_eq!(events.len(), 5);
     for i in 0..4 {
@@ -165,7 +165,7 @@ pub async fn limit_composite_key(test: &mut Test) -> Result<()> {
     // Limit larger than result set returns all results
     let events: Vec<_> = Event::filter_by_kind("info")
         .limit(100)
-        .all(&mut db)
+        .exec(&mut db)
         .await?;
     assert_eq!(events.len(), 20);
 
@@ -192,7 +192,7 @@ pub async fn sort_composite_key(test: &mut Test) -> Result<()> {
     // Ascending sort
     let events: Vec<_> = Event::filter_by_kind("info")
         .order_by(Event::fields().seq().asc())
-        .all(&mut db)
+        .exec(&mut db)
         .await?;
 
     assert_eq!(events.len(), 20);
@@ -213,7 +213,7 @@ pub async fn sort_composite_key(test: &mut Test) -> Result<()> {
     // Descending sort
     let events: Vec<_> = Event::filter_by_kind("info")
         .order_by(Event::fields().seq().desc())
-        .all(&mut db)
+        .exec(&mut db)
         .await?;
 
     assert_eq!(events.len(), 20);

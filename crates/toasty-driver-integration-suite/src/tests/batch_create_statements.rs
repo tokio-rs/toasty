@@ -47,9 +47,9 @@ pub async fn batch_two_creates_same_model(t: &mut Test) -> Result<()> {
     assert!(t.log().is_empty());
 
     // Verify both were persisted
-    let all: Vec<_> = User::filter_by_id(alice.id).all(&mut db).await?;
+    let all: Vec<_> = User::filter_by_id(alice.id).exec(&mut db).await?;
     assert_eq!(all.len(), 1);
-    let all: Vec<_> = User::filter_by_id(bob.id).all(&mut db).await?;
+    let all: Vec<_> = User::filter_by_id(bob.id).exec(&mut db).await?;
     assert_eq!(all.len(), 1);
 
     Ok(())

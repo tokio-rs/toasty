@@ -34,23 +34,27 @@ pub async fn model_level_single_key(test: &mut Test) -> Result<()> {
 pub async fn model_level_composite_key(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(one, two)]
-    struct Bar {
+    struct Pair {
         one: String,
 
         two: String,
     }
 
-    let mut db = test.setup_db(models!(Bar)).await;
+    let mut db = test.setup_db(models!(Pair)).await;
 
-    Bar::create()
+    Pair::create()
         .one("hello")
         .two("world")
         .exec(&mut db)
         .await?;
 
-    Bar::create().one("foo").two("bar").exec(&mut db).await?;
+    Pair::create()
+        .one("left")
+        .two("right")
+        .exec(&mut db)
+        .await?;
 
-    let found = Bar::filter_by_one_and_two("hello", "world")
+    let found = Pair::filter_by_one_and_two("hello", "world")
         .get(&mut db)
         .await?;
 

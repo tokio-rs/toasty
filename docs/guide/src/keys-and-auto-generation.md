@@ -348,7 +348,7 @@ let todo = Todo::get_by_user_id_and_id(
 
 // Get all todos for a user
 let todos = Todo::filter_by_user_id(&1)
-    .all(&mut db)
+    .exec(&mut db)
     .await?;
 # Ok(())
 # }

@@ -11,20 +11,20 @@ pub async fn ty_timestamp(test: &mut Test) -> Result<(), BoxError> {
 
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
-    struct Foo {
+    struct Item {
         #[key]
         #[auto]
         id: ID,
         val: Timestamp,
     }
 
-    let mut db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     let ts = Timestamp::from_second(946684800)?; // 2000-01-01T00:00:00Z
 
     test.log().clear();
 
-    let created = Foo::create().val(ts).exec(&mut db).await?;
+    let created = Item::create().val(ts).exec(&mut db).await?;
 
     // Verify the INSERT encodes the timestamp correctly for the driver.
     // Native timestamp drivers send the value as-is; non-native drivers
@@ -40,8 +40,8 @@ pub async fn ty_timestamp(test: &mut Test) -> Result<(), BoxError> {
     assert_struct!(op, Operation::QuerySql(_ {
         stmt: Statement::Insert(_ {
             target: InsertTarget::Table(_ {
-                table: == table_id(&db, "foos"),
-                columns: == columns(&db, "foos", &["id", "val"]),
+                table: == table_id(&db, "items"),
+                columns: == columns(&db, "items", &["id", "val"]),
                 ..
             }),
             source.body: ExprSet::Values(_ {
@@ -54,7 +54,7 @@ pub async fn ty_timestamp(test: &mut Test) -> Result<(), BoxError> {
     }));
 
     // Verify round-trip with more values
-    let read = Foo::get_by_id(&mut db, &created.id).await?;
+    let read = Item::get_by_id(&mut db, &created.id).await?;
     assert_eq!(read.val, ts);
 
     let more_values = vec![
@@ -62,8 +62,8 @@ pub async fn ty_timestamp(test: &mut Test) -> Result<(), BoxError> {
         Timestamp::from_second(1735689600)?, // 2025-01-01T00:00:00Z
     ];
     for val in &more_values {
-        let created = Foo::create().val(*val).exec(&mut db).await?;
-        let read = Foo::get_by_id(&mut db, &created.id).await?;
+        let created = Item::create().val(*val).exec(&mut db).await?;
+        let read = Item::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
     }
     Ok(())
@@ -75,14 +75,14 @@ pub async fn ty_zoned(test: &mut Test) -> Result<(), BoxError> {
 
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
-    struct Foo {
+    struct Item {
         #[key]
         #[auto]
         id: ID,
         val: Zoned,
     }
 
-    let mut db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     let test_values = vec![
         "2000-01-01T00:00:00+00:00[UTC]".parse::<Zoned>()?,
@@ -93,8 +93,8 @@ pub async fn ty_zoned(test: &mut Test) -> Result<(), BoxError> {
     ];
 
     for val in &test_values {
-        let created = Foo::create().val(val.clone()).exec(&mut db).await?;
-        let read = Foo::get_by_id(&mut db, &created.id).await?;
+        let created = Item::create().val(val.clone()).exec(&mut db).await?;
+        let read = Item::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
     }
     Ok(())
@@ -106,14 +106,14 @@ pub async fn ty_date(test: &mut Test) -> Result<()> {
 
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
-    struct Foo {
+    struct Item {
         #[key]
         #[auto]
         id: ID,
         val: Date,
     }
 
-    let mut db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     let test_values = vec![
         Date::constant(2000, 1, 1),
@@ -127,8 +127,8 @@ pub async fn ty_date(test: &mut Test) -> Result<()> {
     ];
 
     for val in &test_values {
-        let created = Foo::create().val(*val).exec(&mut db).await?;
-        let read = Foo::get_by_id(&mut db, &created.id).await?;
+        let created = Item::create().val(*val).exec(&mut db).await?;
+        let read = Item::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
     }
     Ok(())
@@ -140,14 +140,14 @@ pub async fn ty_time(test: &mut Test) -> Result<()> {
 
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
-    struct Foo {
+    struct Item {
         #[key]
         #[auto]
         id: ID,
         val: Time,
     }
 
-    let mut db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     let test_values = vec![
         Time::constant(0, 0, 0, 0),
@@ -159,8 +159,8 @@ pub async fn ty_time(test: &mut Test) -> Result<()> {
     ];
 
     for val in &test_values {
-        let created = Foo::create().val(*val).exec(&mut db).await?;
-        let read = Foo::get_by_id(&mut db, &created.id).await?;
+        let created = Item::create().val(*val).exec(&mut db).await?;
+        let read = Item::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
     }
     Ok(())
@@ -172,14 +172,14 @@ pub async fn ty_datetime(test: &mut Test) -> Result<()> {
 
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
-    struct Foo {
+    struct Item {
         #[key]
         #[auto]
         id: ID,
         val: DateTime,
     }
 
-    let mut db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     let test_values = vec![
         DateTime::constant(2000, 1, 1, 0, 0, 0, 0),
@@ -193,8 +193,8 @@ pub async fn ty_datetime(test: &mut Test) -> Result<()> {
     ];
 
     for val in &test_values {
-        let created = Foo::create().val(*val).exec(&mut db).await?;
-        let read = Foo::get_by_id(&mut db, &created.id).await?;
+        let created = Item::create().val(*val).exec(&mut db).await?;
+        let read = Item::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
     }
     Ok(())
@@ -206,7 +206,7 @@ pub async fn ty_timestamp_precision_2(test: &mut Test) -> Result<(), BoxError> {
 
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
-    struct Foo {
+    struct Item {
         #[key]
         #[auto]
         id: ID,
@@ -214,7 +214,7 @@ pub async fn ty_timestamp_precision_2(test: &mut Test) -> Result<(), BoxError> {
         val: Timestamp,
     }
 
-    let mut db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     // Test value with nanosecond precision
     let original = Timestamp::from_second(946684800)?
@@ -225,8 +225,8 @@ pub async fn ty_timestamp_precision_2(test: &mut Test) -> Result<(), BoxError> {
     let expected = Timestamp::from_second(946684800)?
         .checked_add(jiff::Span::new().nanoseconds(120_000_000))?;
 
-    let created = Foo::create().val(original).exec(&mut db).await?;
-    let read = Foo::get_by_id(&mut db, &created.id).await?;
+    let created = Item::create().val(original).exec(&mut db).await?;
+    let read = Item::get_by_id(&mut db, &created.id).await?;
 
     assert_eq!(
         read.val, expected,
@@ -242,7 +242,7 @@ pub async fn ty_time_precision_2(test: &mut Test) -> Result<()> {
 
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
-    struct Foo {
+    struct Item {
         #[key]
         #[auto]
         id: ID,
@@ -250,7 +250,7 @@ pub async fn ty_time_precision_2(test: &mut Test) -> Result<()> {
         val: Time,
     }
 
-    let mut db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     // Test value with nanosecond precision
     let original = Time::constant(14, 30, 45, 123_456_789);
@@ -259,8 +259,8 @@ pub async fn ty_time_precision_2(test: &mut Test) -> Result<()> {
     // 123_456_789 ns -> 120_000_000 ns
     let expected = Time::constant(14, 30, 45, 120_000_000);
 
-    let created = Foo::create().val(original).exec(&mut db).await?;
-    let read = Foo::get_by_id(&mut db, &created.id).await?;
+    let created = Item::create().val(original).exec(&mut db).await?;
+    let read = Item::get_by_id(&mut db, &created.id).await?;
 
     assert_eq!(
         read.val, expected,
@@ -276,7 +276,7 @@ pub async fn ty_datetime_precision_2(test: &mut Test) -> Result<()> {
 
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
-    struct Foo {
+    struct Item {
         #[key]
         #[auto]
         id: ID,
@@ -284,7 +284,7 @@ pub async fn ty_datetime_precision_2(test: &mut Test) -> Result<()> {
         val: DateTime,
     }
 
-    let mut db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     // Test value with nanosecond precision
     let original = DateTime::constant(2024, 6, 15, 14, 30, 45, 123_456_789);
@@ -293,8 +293,8 @@ pub async fn ty_datetime_precision_2(test: &mut Test) -> Result<()> {
     // 123_456_789 ns -> 120_000_000 ns
     let expected = DateTime::constant(2024, 6, 15, 14, 30, 45, 120_000_000);
 
-    let created = Foo::create().val(original).exec(&mut db).await?;
-    let read = Foo::get_by_id(&mut db, &created.id).await?;
+    let created = Item::create().val(original).exec(&mut db).await?;
+    let read = Item::get_by_id(&mut db, &created.id).await?;
 
     assert_eq!(
         read.val, expected,
@@ -310,7 +310,7 @@ pub async fn ty_timestamp_as_text(test: &mut Test) -> Result<(), BoxError> {
 
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
-    struct Foo {
+    struct Item {
         #[key]
         #[auto]
         id: ID,
@@ -318,14 +318,14 @@ pub async fn ty_timestamp_as_text(test: &mut Test) -> Result<(), BoxError> {
         val: Timestamp,
     }
 
-    let mut db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     let ts = Timestamp::from_second(946684800)?; // 2000-01-01T00:00:00Z
     let ts_text = format!("{ts:.9}");
 
     test.log().clear();
 
-    let created = Foo::create().val(ts).exec(&mut db).await?;
+    let created = Item::create().val(ts).exec(&mut db).await?;
 
     // Verify the INSERT encodes the timestamp as a fixed-precision text string.
     // The #[column(type = text)] forces text encoding on all drivers.
@@ -333,8 +333,8 @@ pub async fn ty_timestamp_as_text(test: &mut Test) -> Result<(), BoxError> {
     assert_struct!(op, Operation::QuerySql(_ {
         stmt: Statement::Insert(_ {
             target: InsertTarget::Table(_ {
-                table: == table_id(&db, "foos"),
-                columns: == columns(&db, "foos", &["id", "val"]),
+                table: == table_id(&db, "items"),
+                columns: == columns(&db, "items", &["id", "val"]),
                 ..
             }),
             source.body: ExprSet::Values(_ {
@@ -347,7 +347,7 @@ pub async fn ty_timestamp_as_text(test: &mut Test) -> Result<(), BoxError> {
     }));
 
     // Verify round-trip
-    let read = Foo::get_by_id(&mut db, &created.id).await?;
+    let read = Item::get_by_id(&mut db, &created.id).await?;
     assert_eq!(read.val, ts);
 
     Ok(())
@@ -359,7 +359,7 @@ pub async fn ty_date_as_text(test: &mut Test) -> Result<()> {
 
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
-    struct Foo {
+    struct Item {
         #[key]
         #[auto]
         id: ID,
@@ -367,7 +367,7 @@ pub async fn ty_date_as_text(test: &mut Test) -> Result<()> {
         val: Date,
     }
 
-    let mut db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     let test_values = vec![
         Date::constant(2000, 1, 1),
@@ -376,8 +376,8 @@ pub async fn ty_date_as_text(test: &mut Test) -> Result<()> {
     ];
 
     for val in &test_values {
-        let created = Foo::create().val(*val).exec(&mut db).await?;
-        let read = Foo::get_by_id(&mut db, &created.id).await?;
+        let created = Item::create().val(*val).exec(&mut db).await?;
+        let read = Item::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
     }
     Ok(())
@@ -389,7 +389,7 @@ pub async fn ty_time_as_text(test: &mut Test) -> Result<()> {
 
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
-    struct Foo {
+    struct Item {
         #[key]
         #[auto]
         id: ID,
@@ -397,7 +397,7 @@ pub async fn ty_time_as_text(test: &mut Test) -> Result<()> {
         val: Time,
     }
 
-    let mut db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     let test_values = vec![
         Time::constant(0, 0, 0, 0),
@@ -407,8 +407,8 @@ pub async fn ty_time_as_text(test: &mut Test) -> Result<()> {
     ];
 
     for val in &test_values {
-        let created = Foo::create().val(*val).exec(&mut db).await?;
-        let read = Foo::get_by_id(&mut db, &created.id).await?;
+        let created = Item::create().val(*val).exec(&mut db).await?;
+        let read = Item::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
     }
     Ok(())
@@ -420,7 +420,7 @@ pub async fn ty_datetime_as_text(test: &mut Test) -> Result<()> {
 
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
-    struct Foo {
+    struct Item {
         #[key]
         #[auto]
         id: ID,
@@ -428,7 +428,7 @@ pub async fn ty_datetime_as_text(test: &mut Test) -> Result<()> {
         val: DateTime,
     }
 
-    let mut db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     let test_values = vec![
         DateTime::constant(2000, 1, 1, 0, 0, 0, 0),
@@ -437,8 +437,8 @@ pub async fn ty_datetime_as_text(test: &mut Test) -> Result<()> {
     ];
 
     for val in &test_values {
-        let created = Foo::create().val(*val).exec(&mut db).await?;
-        let read = Foo::get_by_id(&mut db, &created.id).await?;
+        let created = Item::create().val(*val).exec(&mut db).await?;
+        let read = Item::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
     }
     Ok(())
@@ -450,7 +450,7 @@ pub async fn order_by_timestamp(test: &mut Test) -> Result<(), BoxError> {
 
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
-    struct Foo {
+    struct Item {
         #[key]
         #[auto]
         id: ID,
@@ -459,7 +459,7 @@ pub async fn order_by_timestamp(test: &mut Test) -> Result<(), BoxError> {
         val: Timestamp,
     }
 
-    let mut db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     let timestamps = vec![
         Timestamp::from_second(1609459200)?, // 2021-01-01
@@ -468,21 +468,21 @@ pub async fn order_by_timestamp(test: &mut Test) -> Result<(), BoxError> {
     ];
 
     for val in &timestamps {
-        Foo::create().val(*val).exec(&mut db).await?;
+        Item::create().val(*val).exec(&mut db).await?;
     }
 
-    let asc: Vec<_> = Foo::all()
-        .order_by(Foo::fields().val().asc())
-        .all(&mut db)
+    let asc: Vec<_> = Item::all()
+        .order_by(Item::fields().val().asc())
+        .exec(&mut db)
         .await?;
 
     assert_eq!(asc.len(), 3);
     assert!(asc[0].val < asc[1].val);
     assert!(asc[1].val < asc[2].val);
 
-    let desc: Vec<_> = Foo::all()
-        .order_by(Foo::fields().val().desc())
-        .all(&mut db)
+    let desc: Vec<_> = Item::all()
+        .order_by(Item::fields().val().desc())
+        .exec(&mut db)
         .await?;
 
     assert_eq!(desc.len(), 3);
@@ -517,12 +517,12 @@ pub async fn filter_by_timestamp(test: &mut Test) -> Result<(), BoxError> {
     Event::create().at(ts2).name("b").exec(&mut db).await?;
     Event::create().at(ts3).name("c").exec(&mut db).await?;
 
-    let results = Event::filter_by_at(ts2).all(&mut db).await?;
+    let results = Event::filter_by_at(ts2).exec(&mut db).await?;
     assert_struct!(results, [{ name: "b", at: == ts2 }]);
 
     // No match
     let results = Event::filter_by_at(Timestamp::from_second(0)?)
-        .all(&mut db)
+        .exec(&mut db)
         .await?;
     assert!(results.is_empty());
 

@@ -42,14 +42,15 @@ impl Expand<'_> {
         }
     }
 
-    /// Generates delegated comparison methods (`eq`, `ne`, `gt`, `ge`, `lt`,
-    /// `le`, `in_set`) that forward to `self.path()`.
+    /// Generates delegated comparison methods (`eq`, `ne`, `in_list`) that
+    /// forward to `self.path()`. Ordered comparisons (`gt`, `ge`, `lt`, `le`)
+    /// are intentionally excluded because enums have no meaningful ordering.
     fn expand_comparison_methods(&self) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
 
-        let methods = ["eq", "ne", "gt", "ge", "lt", "le"].iter().map(|name| {
+        let methods = ["eq", "ne"].iter().map(|name| {
             let method_ident = syn::Ident::new(name, proc_macro2::Span::call_site());
             quote! {
                 #vis fn #method_ident(&self, rhs: impl #toasty::stmt::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
@@ -61,8 +62,8 @@ impl Expand<'_> {
         quote! {
             #( #methods )*
 
-            #vis fn in_set(&self, rhs: impl #toasty::stmt::IntoExpr<#toasty::List<#model_ident>>) -> #toasty::stmt::Expr<bool> {
-                self.path().in_set(rhs)
+            #vis fn in_list(&self, rhs: impl #toasty::stmt::IntoExpr<#toasty::List<#model_ident>>) -> #toasty::stmt::Expr<bool> {
+                self.path().in_list(rhs)
             }
         }
     }
@@ -105,7 +106,7 @@ impl Expand<'_> {
                 let variant_handle_ident = variant.variant_handle_ident.as_ref().unwrap();
 
                 quote! {
-                    #vis fn #method_name(&self) -> #variant_handle_ident {
+                    #vis fn #method_name(&self) -> #variant_handle_ident<__Origin> {
                         #variant_handle_ident {
                             path: self.path()
                         }
@@ -139,18 +140,18 @@ impl Expand<'_> {
                     .collect();
 
                 quote! {
-                    #vis struct #variant_handle_ident {
-                        path: #toasty::Path<#model_ident>,
+                    #vis struct #variant_handle_ident<__Origin> {
+                        path: #toasty::Path<__Origin, #model_ident>,
                     }
 
-                    impl #variant_handle_ident {
-                        fn path(&self) -> #toasty::Path<#model_ident> {
+                    impl<__Origin> #variant_handle_ident<__Origin> {
+                        fn path(&self) -> #toasty::Path<__Origin, #model_ident> {
                             self.path.clone()
                         }
 
                         #vis fn matches(
                             &self,
-                            f: impl FnOnce(#variant_field_struct_ident) -> #toasty::stmt::Expr<bool>,
+                            f: impl FnOnce(#variant_field_struct_ident<__Origin>) -> #toasty::stmt::Expr<bool>,
                         ) -> #toasty::stmt::Expr<bool> {
                             let is_var: #toasty::stmt::Expr<bool> = #is_variant_check;
                             let variant_id = #toasty::core::schema::app::VariantId {
@@ -165,12 +166,12 @@ impl Expand<'_> {
                         }
                     }
 
-                    #vis struct #variant_field_struct_ident {
-                        path: #toasty::Path<#model_ident>,
+                    #vis struct #variant_field_struct_ident<__Origin> {
+                        path: #toasty::Path<__Origin, #model_ident>,
                     }
 
-                    impl #variant_field_struct_ident {
-                        fn path(&self) -> #toasty::Path<#model_ident> {
+                    impl<__Origin> #variant_field_struct_ident<__Origin> {
+                        fn path(&self) -> #toasty::Path<__Origin, #model_ident> {
                             self.path.clone()
                         }
 
@@ -183,12 +184,12 @@ impl Expand<'_> {
         let comparison_methods = self.expand_comparison_methods();
 
         quote! {
-            #vis struct #field_struct_ident {
-                path: #toasty::Path<#model_ident>,
+            #vis struct #field_struct_ident<__Origin> {
+                path: #toasty::Path<__Origin, #model_ident>,
             }
 
-            impl #field_struct_ident {
-                fn path(&self) -> #toasty::Path<#model_ident> {
+            impl<__Origin> #field_struct_ident<__Origin> {
+                fn path(&self) -> #toasty::Path<__Origin, #model_ident> {
                     self.path.clone()
                 }
 

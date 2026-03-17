@@ -30,12 +30,12 @@ impl Expand<'_> {
                 stmt: #toasty::stmt::Query<#model_ident>,
             }
 
-            #vis struct ManyField {
-                path: #toasty::Path<#toasty::List<#model_ident>>,
+            #vis struct ManyField<__Origin> {
+                path: #toasty::Path<__Origin, #toasty::List<#model_ident>>,
             }
 
-            #vis struct OneField {
-                path: #toasty::Path<#model_ident>,
+            #vis struct OneField<__Origin> {
+                path: #toasty::Path<__Origin, #model_ident>,
             }
 
             impl Many {
@@ -46,7 +46,7 @@ impl Expand<'_> {
                 #filter_methods
 
                 /// Iterate all entries in the relation
-                #vis async fn all(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<Vec<#model_ident>> {
+                #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<Vec<#model_ident>> {
                     use #toasty::{ExecutorExt, IntoStatement};
                     executor.all(self.into_statement().into_query().unwrap()).await
                 }
@@ -137,8 +137,8 @@ impl Expand<'_> {
                 }
             }
 
-            impl ManyField {
-                #vis const fn from_path(path: #toasty::Path<#toasty::List<#model_ident>>) -> ManyField {
+            impl<__Origin> ManyField<__Origin> {
+                #vis const fn from_path(path: #toasty::Path<__Origin, #toasty::List<#model_ident>>) -> ManyField<__Origin> {
                     ManyField { path }
                 }
 
@@ -157,14 +157,14 @@ impl Expand<'_> {
                 #many_field_association_methods
             }
 
-            impl Into<#toasty::Path<#toasty::List<#model_ident>>> for ManyField {
-                fn into(self) -> #toasty::Path<#toasty::List<#model_ident>> {
+            impl<__Origin> Into<#toasty::Path<__Origin, #toasty::List<#model_ident>>> for ManyField<__Origin> {
+                fn into(self) -> #toasty::Path<__Origin, #toasty::List<#model_ident>> {
                     self.path
                 }
             }
 
-            impl OneField {
-                #vis const fn from_path(path: #toasty::Path<#model_ident>) -> OneField {
+            impl<__Origin> OneField<__Origin> {
+                #vis const fn from_path(path: #toasty::Path<__Origin, #model_ident>) -> OneField<__Origin> {
                     OneField { path }
                 }
 
@@ -186,8 +186,8 @@ impl Expand<'_> {
                 #one_field_association_methods
             }
 
-            impl Into<#toasty::Path<#model_ident>> for OneField {
-                fn into(self) -> #toasty::Path<#model_ident> {
+            impl<__Origin> Into<#toasty::Path<__Origin, #model_ident>> for OneField<__Origin> {
+                fn into(self) -> #toasty::Path<__Origin, #model_ident> {
                     self.path
                 }
             }
@@ -213,9 +213,9 @@ impl Expand<'_> {
                     FieldTy::HasMany(rel) => {
                         let ty = &rel.ty;
                         Some(quote! {
-                            #vis fn #field_ident(self) -> <#ty as #toasty::Relation>::ManyField {
+                            #vis fn #field_ident(self) -> <#ty as #toasty::Relation>::ManyField<__Origin> {
                                 <#ty as #toasty::Relation>::ManyField::from_path(
-                                    self.path.chain(#toasty::Path::from_field_index::<#model_ident>(#field_offset))
+                                    self.path.chain(#toasty::Path::<#model_ident, _>::from_field_index(#field_offset))
                                 )
                             }
                         })
@@ -223,9 +223,9 @@ impl Expand<'_> {
                     FieldTy::BelongsTo(rel) => {
                         let ty = &rel.ty;
                         Some(quote! {
-                            #vis fn #field_ident(self) -> <#ty as #toasty::Relation>::OneField {
+                            #vis fn #field_ident(self) -> <#ty as #toasty::Relation>::OneField<__Origin> {
                                 <#ty as #toasty::Relation>::OneField::from_path(
-                                    self.path.chain(#toasty::Path::from_field_index::<#model_ident>(#field_offset))
+                                    self.path.chain(#toasty::Path::<#model_ident, _>::from_field_index(#field_offset))
                                 )
                             }
                         })
@@ -233,9 +233,9 @@ impl Expand<'_> {
                     FieldTy::HasOne(rel) => {
                         let ty = &rel.ty;
                         Some(quote! {
-                            #vis fn #field_ident(self) -> <#ty as #toasty::Relation>::OneField {
+                            #vis fn #field_ident(self) -> <#ty as #toasty::Relation>::OneField<__Origin> {
                                 <#ty as #toasty::Relation>::OneField::from_path(
-                                    self.path.chain(#toasty::Path::from_field_index::<#model_ident>(#field_offset))
+                                    self.path.chain(#toasty::Path::<#model_ident, _>::from_field_index(#field_offset))
                                 )
                             }
                         })

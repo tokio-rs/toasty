@@ -65,39 +65,16 @@ pub async fn preload_has_one_option_none_then_some(test: &mut Test) -> Result<()
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn basic_has_many_and_belongs_to_preload(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        #[allow(dead_code)]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     // Create a user with a few todos
     let user = User::create()
-        .todo(Todo::create())
-        .todo(Todo::create())
-        .todo(Todo::create())
+        .name("Alice")
+        .todo(Todo::create().title("todo 1"))
+        .todo(Todo::create().title("todo 2"))
+        .todo(Todo::create().title("todo 3"))
         .exec(&mut db)
         .await?;
 
@@ -483,40 +460,14 @@ pub async fn combined_has_many_and_has_one_preload(test: &mut Test) -> Result<()
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn preload_on_empty_table(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[has_many]
-        #[allow(dead_code)]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        #[allow(dead_code)]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        #[allow(dead_code)]
-        user: toasty::BelongsTo<User>,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     // Query with include on empty table - should return empty result, not SQL error
     let users: Vec<User> = User::all()
         .include(User::fields().todos())
-        .all(&mut db)
+        .exec(&mut db)
         .await?;
 
     assert_eq!(0, users.len());
@@ -560,7 +511,7 @@ pub async fn preload_on_empty_query(test: &mut Test) -> Result<()> {
     // Query with include on empty table - should return empty result, not SQL error
     let users: Vec<User> = User::filter_by_name("foo")
         .include(User::fields().todos())
-        .all(&mut db)
+        .exec(&mut db)
         .await?;
 
     assert_eq!(0, users.len());
