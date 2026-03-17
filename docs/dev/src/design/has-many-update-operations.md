@@ -223,25 +223,53 @@ user.update()
     .await?;
 ```
 
-For partial updates, a combinator returns `Assignment<Creature>` without needing
-a closure. Code generation produces an update builder for each embedded type.
-`Creature::update()` returns a builder whose setters record sub-path mutations
-and whose final value implements `IntoAssignment<Creature>`:
+For partial updates, `stmt::patch` takes a field path and a value, returning
+`Assignment<Creature>` without needing a closure or any generated builder type.
+The path reuses the existing `fields()` accessor chain:
+
+```rust
+fn patch<T, U>(path: Path<T, U>, value: impl IntoExpr<U>) -> Assignment<T>
+```
+
+`Path<T, U>` carries both the origin type `T` (the embedded type being patched)
+and the leaf type `U` (the field being set). The origin type is what makes
+`patch` return `Assignment<Creature>` — no extra type information needed at the
+call site.
 
 ```rust
 user.update()
-    .critter(Creature::update().profession("doctor"))
+    .critter(stmt::patch(Creature::fields().human().profession(), "doctor"))
     .exec(&mut db)
     .await?;
 ```
 
 This produces `assignments.set([critter, profession], "doctor")` — updating the
-profession column without touching the age column. The builder approach avoids
-the trait coherence problem that closures would cause (a closure impl of
-`IntoAssignment` would conflict with the blanket expr impl).
+profession column without touching the age column.
 
-The `.with_critter()` method remains as an alternative and may be removed in a
-future iteration once the combinator approach is proven out.
+Multiple sub-field mutations combine via the same array pattern used for
+has-many operations:
+
+```rust
+user.update()
+    .critter([
+        stmt::patch(Creature::fields().human().profession(), "doctor"),
+        stmt::patch(Creature::fields().human().age(), 35),
+    ])
+    .exec(&mut db)
+    .await?;
+```
+
+Each `stmt::patch` returns `Assignment<Creature>`, and `[Assignment<T>; N]`
+implements `IntoAssignment<T>`, so the array is accepted by `.critter()`.
+
+This approach avoids generating update builder types for embedded types
+entirely — the `fields()` path infrastructure already exists and provides full
+type safety. It also avoids the trait coherence problem that closures would
+cause (a closure impl of `IntoAssignment` would conflict with the blanket expr
+impl).
+
+The `.with_critter()` closure method remains for now but can be removed once
+`stmt::patch` is implemented.
 
 ### What `IntoAssignment` unifies
 
@@ -250,14 +278,14 @@ The same `.field(impl IntoAssignment<T>)` pattern covers every field type:
 | Field type | Plain value | `stmt::` combinator | Array |
 |---|---|---|---|
 | Scalar (`String`) | Set the field | `stmt::set` (explicit) | — |
-| Embedded (`Creature`) | Replace the whole value | `Creature::update()` builder | — |
+| Embedded (`Creature`) | Replace the whole value | `stmt::patch` (sub-field) | Multiple patches |
 | BelongsTo (`User`) | Set the association | — | — |
 | HasMany (`List<Todo>`) | — (ambiguous) | `stmt::insert`, `stmt::remove`, `stmt::set` | Multiple operations |
 
 Every setter method has the same signature. The argument type determines the
 behavior. No more `.todo()` vs `.remove_todo()` vs `.set_todos()` — each field
 gets one method named after the field. The `.with_` methods for embedded types
-remain for now alongside the new combinator approach.
+remain for now alongside `stmt::patch`.
 
 ### Summary
 
@@ -270,4 +298,4 @@ remain for now alongside the new combinator approach.
 | _not possible_ | `.todos(stmt::set([...]))` |
 | _not possible_ | `.todos([stmt::insert(a), stmt::remove(b)])` |
 | `.critter(value)` | `.critter(value)` (unchanged) |
-| `.with_critter(\|c\| c.profession("x"))` | `.critter(Creature::update().profession("x"))` or `.with_critter()` (kept) |
+| `.with_critter(\|c\| c.profession("x"))` | `.critter(stmt::patch(Creature::fields().human().profession(), "x"))` |
