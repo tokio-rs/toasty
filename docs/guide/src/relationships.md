@@ -15,7 +15,7 @@ Relationships are implemented through **foreign keys** — a column in one table
 that stores the primary key of a row in another table. For example, a `posts`
 table has a `user_id` column that references the `users` table:
 
-```
+```text
 users                    posts
 ┌────┬───────┐          ┌────┬──────────┬─────────┐
 │ id │ name  │          │ id │ title    │ user_id │
