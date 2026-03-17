@@ -177,3 +177,174 @@ gains these methods:
 
 The singular form (`.todo()`, `.remove_todo()`) comes from the relation's
 configured singular name. The plural form (`.set_todos()`) uses the field name.
+
+## Future direction: unified `.todos()` method
+
+The methods above (`.todo()`, `.remove_todo()`, `.set_todos()`) are a stepping
+stone. The long-term API consolidates everything into a single `.todos()` method
+that takes a mutation description. The singular `.todo()` method gets deprecated.
+
+### The `Patch` builder
+
+A generated `Patch` type describes what to do with the set. The `.todos()`
+method accepts a closure that receives a `Patch` builder:
+
+```rust
+user.update()
+    .name("Alice")
+    .todos(|t| {
+        t.insert(Todo::create().title("Buy groceries"));
+        t.insert(Todo::create().title("Walk the dog"));
+        t.remove(&old_todo);
+    })
+    .exec(&mut db)
+    .await?;
+```
+
+The closure runs synchronously at build time — it only records operations, it
+doesn't execute them. The update builder collects the patch and sends all
+operations to the database when `.exec()` is called.
+
+### Insert
+
+`Patch::insert()` adds a new or existing record to the set. Call it multiple
+times to add several:
+
+```rust
+user.update()
+    .todos(|t| {
+        t.insert(Todo::create().title("First"));
+        t.insert(Todo::create().title("Second"));
+        t.insert(&existing_todo);
+    })
+    .exec(&mut db)
+    .await?;
+```
+
+This keeps all current todos and adds the new ones.
+
+### Remove
+
+`Patch::remove()` detaches a specific record from the set:
+
+```rust
+user.update()
+    .todos(|t| {
+        t.remove(&todo_a);
+        t.remove(&todo_b);
+    })
+    .exec(&mut db)
+    .await?;
+```
+
+All other todos remain untouched.
+
+### Combined insert and remove
+
+A single patch can mix inserts and removes:
+
+```rust
+user.update()
+    .todos(|t| {
+        t.insert(Todo::create().title("New task"));
+        t.remove(&old_todo);
+    })
+    .exec(&mut db)
+    .await?;
+```
+
+### Replace
+
+`Patch::set()` replaces the entire set. It disassociates all current members,
+then associates the given records:
+
+```rust
+user.update()
+    .todos(|t| {
+        t.set([
+            Todo::create().title("Only todo"),
+        ]);
+    })
+    .exec(&mut db)
+    .await?;
+```
+
+Pass an empty slice to clear the set:
+
+```rust
+user.update()
+    .todos(|t| {
+        t.set([]);
+    })
+    .exec(&mut db)
+    .await?;
+```
+
+`set()` consumes the patch builder. It cannot be followed by `insert()` or
+`remove()` calls — these are conflicting intents and produce a compile-time
+error.
+
+### Shorthand for common cases
+
+When the patch is a single operation, passing just the value implies insert —
+preserving the feel of today's `.todo()` method:
+
+```rust
+// These are equivalent:
+user.update().todos(Todo::create().title("New")).exec(&mut db).await?;
+user.update().todos(|t| t.insert(Todo::create().title("New"))).exec(&mut db).await?;
+```
+
+This works because `.todos()` accepts `impl IntoTodosPatch`, and both closures
+and single create expressions implement this trait. The generated trait looks
+like:
+
+```rust
+// Generated per has-many relation
+trait IntoTodosPatch {
+    fn into_patch(self, patch: &mut TodosPatch);
+}
+
+// A closure that configures the patch
+impl<F: FnOnce(&mut TodosPatch)> IntoTodosPatch for F {
+    fn into_patch(self, patch: &mut TodosPatch) {
+        self(patch);
+    }
+}
+
+// A single create builder implies insert
+impl IntoTodosPatch for TodoCreateBuilder {
+    fn into_patch(self, patch: &mut TodosPatch) {
+        patch.insert(self);
+    }
+}
+
+// A reference to an existing record implies insert
+impl IntoTodosPatch for &Todo {
+    fn into_patch(self, patch: &mut TodosPatch) {
+        patch.insert(self);
+    }
+}
+```
+
+### Migration path
+
+1. Ship the `.todos(|t| ...)` method alongside the existing `.todo()` method.
+2. Deprecate `.todo()`, `.remove_todo()`, and `.set_todos()`.
+3. Remove the deprecated methods in a future release.
+
+The deprecation warnings guide users to the new form:
+
+```
+warning: `todo()` is deprecated, use `todos(|t| t.insert(...))` or `todos(...)` instead
+```
+
+### Summary
+
+| Old (deprecated) | New |
+|---|---|
+| `.todo(expr)` | `.todos(expr)` or `.todos(\|t\| t.insert(expr))` |
+| `.todo(a).todo(b)` | `.todos(\|t\| { t.insert(a); t.insert(b); })` |
+| `.remove_todo(expr)` | `.todos(\|t\| t.remove(expr))` |
+| `.set_todos(exprs)` | `.todos(\|t\| t.set(exprs))` |
+| `.todo(a).remove_todo(b)` | `.todos(\|t\| { t.insert(a); t.remove(b); })` |
