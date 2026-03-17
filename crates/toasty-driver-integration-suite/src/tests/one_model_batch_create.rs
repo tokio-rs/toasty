@@ -52,7 +52,7 @@ pub async fn batch_create_one(test: &mut Test) -> Result<()> {
         assert!(test.log().is_empty());
     }
 
-    let reloaded: Vec<_> = Todo::filter_by_id(res[0].id).collect(&mut db).await?;
+    let reloaded: Vec<_> = Todo::filter_by_id(res[0].id).exec(&mut db).await?;
     assert_eq!(1, reloaded.len());
     assert_eq!(reloaded[0].id, res[0].id);
     Ok(())
@@ -90,7 +90,7 @@ pub async fn batch_create_many(test: &mut Test) -> Result<()> {
     }
 
     for todo in &res {
-        let reloaded: Vec<_> = Todo::filter_by_id(todo.id).collect(&mut db).await?;
+        let reloaded: Vec<_> = Todo::filter_by_id(todo.id).exec(&mut db).await?;
         assert_eq!(1, reloaded.len());
         assert_eq!(reloaded[0].id, todo.id);
     }
@@ -121,7 +121,7 @@ pub async fn batch_create_fails_if_any_record_missing_fields(test: &mut Test) ->
     assert!(res.is_empty());
 
     let users: Vec<_> = User::filter_by_email("me@carllerche.com")
-        .collect(&mut db)
+        .exec(&mut db)
         .await?;
 
     assert!(users.is_empty());
@@ -227,7 +227,7 @@ pub async fn batch_create_unique_violation_rolls_back(t: &mut Test) -> Result<()
     assert!(t.log().is_empty());
 
     // Only the seeded user remains
-    let users = User::all().collect::<Vec<_>>(&mut db).await?;
+    let users = User::all().exec(&mut db).await?;
     assert_eq!(1, users.len());
 
     Ok(())

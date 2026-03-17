@@ -42,7 +42,7 @@ pub async fn batch_two_scoped_creates_same_relation(t: &mut Test) -> Result<()> 
     assert_eq!(t1.user_id, user.id);
     assert_eq!(t2.user_id, user.id);
 
-    let all: Vec<Todo> = user.todos().collect(&mut db).await?;
+    let all: Vec<Todo> = user.todos().exec(&mut db).await?;
     assert_eq!(all.len(), 2);
 
     Ok(())
@@ -129,7 +129,7 @@ pub async fn batch_scoped_update_and_delete_same_relation(t: &mut Test) -> Resul
     .exec(&mut db)
     .await?;
 
-    let remaining: Vec<Todo> = user.todos().collect(&mut db).await?;
+    let remaining: Vec<Todo> = user.todos().exec(&mut db).await?;
     assert_eq!(remaining.len(), 1);
     assert_eq!(remaining[0].title, "kept");
 
@@ -187,7 +187,7 @@ pub async fn batch_scoped_all_four_crud(t: &mut Test) -> Result<()> {
     assert_eq!(created.title, "new");
 
     // Verify final state
-    let final_todos: Vec<Todo> = user.todos().collect(&mut db).await?;
+    let final_todos: Vec<Todo> = user.todos().exec(&mut db).await?;
     assert_eq!(final_todos.len(), 2); // "updated" + "new", "doomed" deleted
 
     let titles: Vec<&str> = final_todos.iter().map(|t| t.title.as_str()).collect();
@@ -444,11 +444,11 @@ pub async fn batch_scoped_delete_with_root_update(t: &mut Test) -> Result<()> {
     .await?;
 
     // Todo deleted
-    let remaining: Vec<Todo> = user.todos().collect(&mut db).await?;
+    let remaining: Vec<Todo> = user.todos().exec(&mut db).await?;
     assert!(remaining.is_empty());
 
     // User updated
-    let updated: Vec<User> = User::filter_by_name("Alice2").collect(&mut db).await?;
+    let updated: Vec<User> = User::filter_by_name("Alice2").exec(&mut db).await?;
     assert_eq!(updated.len(), 1);
 
     Ok(())

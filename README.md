@@ -8,6 +8,10 @@ It currently supports SQL databases (SQLite, PostgreSQL, MySQL) and DynamoDB.
 Note that Toasty does not hide database capabilities. Instead, Toasty exposes
 features based on the target database.
 
+[User guide](https://tokio-rs.github.io/toasty/nightly/guide/): Explore Toasty in depth.
+
+[Nightly API docs](https://tokio-rs.github.io/toasty/nightly/api/): API reference built from the latest commit.
+
 ## Using Toasty
 
 You will define your data model using Rust structs annotated with the
@@ -63,7 +67,7 @@ let user = User::create()
 let user = User::get_by_id(&mut db, &user.id).await?;
 
 // Load and iterate the user's todos
-let todos = user.todos().all(&mut db).await?;
+let todos = user.todos().exec(&mut db).await?;
 
 for todo in &todos {
     println!("{:#?}", todo);

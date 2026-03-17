@@ -31,9 +31,7 @@ pub async fn query_index_eq(test: &mut Test) -> Result<()> {
         User::create().name(name).email(email).exec(&mut db).await?;
     }
 
-    let users = User::filter_by_name("one")
-        .collect::<Vec<_>>(&mut db)
-        .await?;
+    let users = User::filter_by_name("one").exec(&mut db).await?;
 
     assert_eq!(1, users.len());
     assert_eq!("one", users[0].name);
@@ -46,7 +44,7 @@ pub async fn query_index_eq(test: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
 
-    let mut users = User::filter_by_name("one").all(&mut db).await?;
+    let mut users = User::filter_by_name("one").exec(&mut db).await?;
 
     users.sort_by_key(|u| u.email.clone());
 
@@ -102,7 +100,7 @@ pub async fn query_partition_key_string_eq(test: &mut Test) -> Result<()> {
 
     // Query on the partition key only
     let teams = Team::filter(Team::fields().league().eq("EPL"))
-        .collect::<Vec<_>>(&mut db)
+        .exec(&mut db)
         .await?;
 
     let mut names = teams.iter().map(|team| &team.name).collect::<Vec<_>>();
@@ -120,7 +118,7 @@ pub async fn query_partition_key_string_eq(test: &mut Test) -> Result<()> {
             .eq("MLS")
             .and(Team::fields().name().eq("Portland Timbers")),
     )
-    .all(&mut db)
+    .exec(&mut db)
     .await?;
 
     let mut names = teams.iter().map(|team| &team.name).collect::<Vec<_>>();
@@ -135,7 +133,7 @@ pub async fn query_partition_key_string_eq(test: &mut Test) -> Result<()> {
             .eq("MLS")
             .and(Team::fields().founded().eq(2009)),
     )
-    .all(&mut db)
+    .exec(&mut db)
     .await?;
 
     let mut names = teams.iter().map(|team| &team.name).collect::<Vec<_>>();
@@ -151,7 +149,7 @@ pub async fn query_partition_key_string_eq(test: &mut Test) -> Result<()> {
             .and(Team::fields().founded().eq(2009))
             .and(Team::fields().name().eq("Portland Timbers")),
     )
-    .all(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert_eq!(1, teams.len());
@@ -170,7 +168,7 @@ pub async fn query_partition_key_string_eq(test: &mut Test) -> Result<()> {
             .and(Team::fields().founded().eq(2009))
             .and(Team::fields().name().eq("LA Galaxy")),
     )
-    .all(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert!(teams.is_empty());
@@ -221,7 +219,7 @@ pub async fn query_local_key_cmp(test: &mut Test) -> Result<()> {
 
     let events: Vec<_> = Event::filter_by_kind("info")
         .filter(Event::fields().timestamp().ne(10))
-        .collect(&mut db)
+        .exec(&mut db)
         .await?;
 
     assert_eq_unordered!(
@@ -231,7 +229,7 @@ pub async fn query_local_key_cmp(test: &mut Test) -> Result<()> {
 
     let events: Vec<_> = Event::filter_by_kind("info")
         .filter(Event::fields().timestamp().gt(10))
-        .collect(&mut db)
+        .exec(&mut db)
         .await?;
 
     assert_eq_unordered!(
@@ -241,7 +239,7 @@ pub async fn query_local_key_cmp(test: &mut Test) -> Result<()> {
 
     let events: Vec<_> = Event::filter_by_kind("info")
         .filter(Event::fields().timestamp().ge(10))
-        .collect(&mut db)
+        .exec(&mut db)
         .await?;
 
     assert_eq_unordered!(
@@ -251,7 +249,7 @@ pub async fn query_local_key_cmp(test: &mut Test) -> Result<()> {
 
     let events: Vec<_> = Event::filter_by_kind("info")
         .filter(Event::fields().timestamp().lt(10))
-        .collect(&mut db)
+        .exec(&mut db)
         .await?;
 
     assert_eq_unordered!(
@@ -261,7 +259,7 @@ pub async fn query_local_key_cmp(test: &mut Test) -> Result<()> {
 
     let events: Vec<_> = Event::filter_by_kind("info")
         .filter(Event::fields().timestamp().le(10))
-        .collect(&mut db)
+        .exec(&mut db)
         .await?;
 
     assert_eq_unordered!(
@@ -304,7 +302,7 @@ pub async fn query_or_basic(test: &mut Test) -> Result<()> {
             .eq("Alice")
             .or(User::fields().age().eq(35)),
     )
-    .collect::<Vec<_>>(&mut db)
+    .exec(&mut db)
     .await;
 
     if test.capability().sql {
@@ -386,7 +384,7 @@ pub async fn query_or_multiple(test: &mut Test) -> Result<()> {
             .or(User::fields().age().eq(35))
             .or(User::fields().age().eq(40)),
     )
-    .collect::<Vec<_>>(&mut db)
+    .exec(&mut db)
     .await;
 
     if test.capability().sql {
@@ -449,7 +447,7 @@ pub async fn query_or_and_combined(test: &mut Test) -> Result<()> {
             .or(User::fields().age().eq(35))
             .and(User::fields().active().eq(true)),
     )
-    .collect::<Vec<_>>(&mut db)
+    .exec(&mut db)
     .await;
 
     if test.capability().sql {
@@ -517,7 +515,7 @@ pub async fn query_or_with_index(test: &mut Test) -> Result<()> {
                 .or(Player::fields().position().eq("Goalkeeper")),
         ),
     )
-    .all(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert_eq!(2, players.len());
@@ -535,7 +533,7 @@ pub async fn query_or_with_index(test: &mut Test) -> Result<()> {
                 .or(Player::fields().number().eq(9)),
         ),
     )
-    .all(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert_eq!(3, players.len());
@@ -587,7 +585,7 @@ pub async fn query_or_on_partition_key(test: &mut Test) -> Result<()> {
             .eq("Timbers")
             .or(Player::fields().team().eq("Sounders")),
     )
-    .all(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert_eq!(4, players.len());
@@ -650,7 +648,7 @@ pub async fn query_or_on_composite_pk(test: &mut Test) -> Result<()> {
                 .eq("Sounders")
                 .and(Player::fields().name().eq("Clint Dempsey"))),
     )
-    .all(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert_eq!(2, players.len());
@@ -709,7 +707,7 @@ pub async fn query_or_with_comparisons(test: &mut Test) -> Result<()> {
                 .or(Player::fields().number().lt(2)),
         ),
     )
-    .all(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert_eq!(2, players.len());
@@ -765,7 +763,7 @@ pub async fn query_arbitrary_constraint(test: &mut Test) -> Result<()> {
     }
 
     let events: Vec<_> = Event::filter(Event::fields().timestamp().gt(12))
-        .collect(&mut db)
+        .exec(&mut db)
         .await?;
 
     assert_eq_unordered!(
@@ -779,7 +777,7 @@ pub async fn query_arbitrary_constraint(test: &mut Test) -> Result<()> {
             .gt(12)
             .and(Event::fields().kind().ne("info")),
     )
-    .collect(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert!(events.iter().all(|event| event.kind != "info"));
@@ -795,7 +793,7 @@ pub async fn query_arbitrary_constraint(test: &mut Test) -> Result<()> {
             .eq("info")
             .and(Event::fields().timestamp().ne(10)),
     )
-    .collect(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert_eq_unordered!(
@@ -809,7 +807,7 @@ pub async fn query_arbitrary_constraint(test: &mut Test) -> Result<()> {
             .eq("info")
             .and(Event::fields().timestamp().gt(10)),
     )
-    .collect(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert_eq_unordered!(
@@ -823,7 +821,7 @@ pub async fn query_arbitrary_constraint(test: &mut Test) -> Result<()> {
             .eq("info")
             .and(Event::fields().timestamp().ge(10)),
     )
-    .collect(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert_eq_unordered!(
@@ -837,7 +835,7 @@ pub async fn query_arbitrary_constraint(test: &mut Test) -> Result<()> {
             .eq("info")
             .and(Event::fields().timestamp().lt(10)),
     )
-    .collect(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert_eq_unordered!(
@@ -851,7 +849,7 @@ pub async fn query_arbitrary_constraint(test: &mut Test) -> Result<()> {
             .eq("info")
             .and(Event::fields().timestamp().le(10)),
     )
-    .collect(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert_eq_unordered!(
@@ -887,7 +885,7 @@ pub async fn query_not_basic(test: &mut Test) -> Result<()> {
 
     // Query with NOT condition: NOT (name = "Alice")
     let result = User::filter(User::fields().name().eq("Alice").not())
-        .collect::<Vec<_>>(&mut db)
+        .exec(&mut db)
         .await;
 
     if test.capability().sql {
@@ -950,7 +948,7 @@ pub async fn query_not_and_combined(test: &mut Test) -> Result<()> {
             .eq(true)
             .and(User::fields().age().eq(25).not()),
     )
-    .collect::<Vec<_>>(&mut db)
+    .exec(&mut db)
     .await;
 
     if test.capability().sql {
@@ -996,7 +994,7 @@ pub async fn query_not_or_combined(test: &mut Test) -> Result<()> {
             .or(User::fields().name().eq("Bob"))
             .not(),
     )
-    .collect::<Vec<_>>(&mut db)
+    .exec(&mut db)
     .await;
 
     if test.capability().sql {
@@ -1061,7 +1059,7 @@ pub async fn query_not_with_index(test: &mut Test) -> Result<()> {
             .eq("Timbers")
             .and(Player::fields().position().eq("Midfielder").not()),
     )
-    .all(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert_eq!(2, players.len());
@@ -1078,7 +1076,7 @@ pub async fn query_not_with_index(test: &mut Test) -> Result<()> {
             .eq("Timbers")
             .and(Player::fields().number().gt(8).not()),
     )
-    .all(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert_eq!(3, players.len());
@@ -1130,7 +1128,7 @@ pub async fn query_not_operator_syntax(test: &mut Test) -> Result<()> {
             .eq("Timbers")
             .and(!Player::fields().position().eq("Midfielder")),
     )
-    .all(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert_eq!(2, players.len());
@@ -1147,7 +1145,7 @@ pub async fn query_not_operator_syntax(test: &mut Test) -> Result<()> {
                 .or(Player::fields().position().eq("Goalkeeper"))),
         ),
     )
-    .all(&mut db)
+    .exec(&mut db)
     .await?;
 
     // Excludes Diego Chara (21), Fanendo Adi (9), Adam Kwarasey (Goalkeeper)

@@ -60,7 +60,7 @@ pub async fn clone_acquires_separate_connection(t: &mut Test) -> Result<()> {
 
     // The original handle still works fine.
     let item = Item::create().exec(&mut db).await?;
-    let found = Item::filter_by_id(item.id).all(&mut db).await?;
+    let found = Item::filter_by_id(item.id).exec(&mut db).await?;
     assert_eq!(found.len(), 1);
 
     Ok(())

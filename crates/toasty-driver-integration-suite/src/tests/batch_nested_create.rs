@@ -34,7 +34,7 @@ pub async fn batch_as_nested_has_many_create(test: &mut Test) -> Result<()> {
     let mut db = test.setup_db(models!(User, Todo)).await;
 
     // Pass a tuple of create builders directly — tuples implement
-    // `IntoExpr<[Model]>` so they work as nested HasMany values.
+    // `IntoExpr<List<Model>>` so they work as nested HasMany values.
     let user = User::create()
         .name("Ann Chovey")
         .todos((
@@ -47,7 +47,7 @@ pub async fn batch_as_nested_has_many_create(test: &mut Test) -> Result<()> {
     assert_eq!(user.name, "Ann Chovey");
 
     // Verify both todos were created and linked
-    let todos: Vec<_> = user.todos().collect(&mut db).await?;
+    let todos: Vec<_> = user.todos().exec(&mut db).await?;
     assert_eq_unordered!(todos.iter().map(|t| &t.title[..]), ["Make pizza", "Sleep"]);
 
     Ok(())
