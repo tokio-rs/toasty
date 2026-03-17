@@ -1,4 +1,4 @@
-use crate::{stmt, Cursor, Executor, Load, Model, Result, Statement};
+use crate::{stmt, Executor, Load, Model, Result, Statement};
 
 use std::future::Future;
 use toasty_core::stmt::ValueStream;
@@ -10,22 +10,29 @@ use toasty_core::stmt::ValueStream;
 /// the dyn-compatible `Executor` trait.
 pub trait ExecutorExt: Executor {
     /// Execute a query, returning all matching records.
-    fn all<M: Load>(&mut self, query: stmt::Select<M>) -> impl Future<Output = Result<Cursor<M>>> {
+    fn all<M: Load<Output = M>>(
+        &mut self,
+        query: stmt::Query<M>,
+    ) -> impl Future<Output = Result<Vec<M>>> {
         async move {
-            let records = self.exec(query.into()).await?;
-            Ok(Cursor::new(records))
+            let mut records = self.exec(query.into()).await?;
+            let mut result = Vec::new();
+            while let Some(value) = records.next().await {
+                result.push(M::load(value?)?);
+            }
+            Ok(result)
         }
     }
 
     /// Execute a query, returning the first matching record or `None`.
-    fn first<M: Load>(
+    fn first<M: Load<Output = M>>(
         &mut self,
-        query: stmt::Select<M>,
+        query: stmt::Query<M>,
     ) -> impl Future<Output = Result<Option<M>>> {
         async move {
-            let mut res = self.all(query).await?;
-            match res.next().await {
-                Some(Ok(value)) => Ok(Some(value)),
+            let mut records = self.exec(query.into()).await?;
+            match records.next().await {
+                Some(Ok(value)) => Ok(Some(M::load(value)?)),
                 Some(Err(err)) => Err(err),
                 None => Ok(None),
             }
@@ -33,12 +40,15 @@ pub trait ExecutorExt: Executor {
     }
 
     /// Execute a query, returning exactly one record or an error.
-    fn get<M: Load>(&mut self, query: stmt::Select<M>) -> impl Future<Output = Result<M>> {
+    fn get<M: Load<Output = M>>(
+        &mut self,
+        query: stmt::Query<M>,
+    ) -> impl Future<Output = Result<M>> {
         async move {
-            let mut res = self.all(query).await?;
+            let mut records = self.exec(query.into()).await?;
 
-            match res.next().await {
-                Some(Ok(value)) => Ok(value),
+            match records.next().await {
+                Some(Ok(value)) => Ok(M::load(value)?),
                 Some(Err(err)) => Err(err),
                 None => Err(toasty_core::Error::record_not_found(
                     "query returned no results",
@@ -48,7 +58,7 @@ pub trait ExecutorExt: Executor {
     }
 
     /// Delete all records matching the query.
-    fn delete<M>(&mut self, query: stmt::Select<M>) -> impl Future<Output = Result<()>> {
+    fn delete<M>(&mut self, query: stmt::Query<M>) -> impl Future<Output = Result<()>> {
         async move {
             self.exec(query.delete().into()).await?;
             Ok(())
@@ -97,10 +107,15 @@ pub trait ExecutorExt: Executor {
             // TODO: HAX
             stmt.untyped.source.single = false;
 
-            let records = self.exec(stmt.into()).await?;
-            let mut cursor = Cursor::new(records);
+            let mut records = self.exec(stmt.into()).await?;
 
-            cursor.next().await.unwrap()
+            match records.next().await {
+                Some(Ok(value)) => M::load(value),
+                Some(Err(err)) => Err(err),
+                None => Err(toasty_core::Error::record_not_found(
+                    "insert returned no results",
+                )),
+            }
         }
     }
 }

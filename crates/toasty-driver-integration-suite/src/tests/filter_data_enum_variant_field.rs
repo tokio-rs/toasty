@@ -55,7 +55,7 @@ pub async fn filter_by_variant_field(t: &mut Test) -> Result<()> {
             .email()
             .matches(|e| e.address().eq("alice@example.com")),
     )
-    .collect::<Vec<_>>(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert_eq!(results.len(), 1);
@@ -68,7 +68,7 @@ pub async fn filter_by_variant_field(t: &mut Test) -> Result<()> {
             .phone()
             .matches(|e| e.number().eq("555-1234")),
     )
-    .collect::<Vec<_>>(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert_eq!(results.len(), 1);
@@ -81,7 +81,7 @@ pub async fn filter_by_variant_field(t: &mut Test) -> Result<()> {
             .email()
             .matches(|e| e.address().eq("nobody@example.com")),
     )
-    .collect::<Vec<_>>(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert_eq!(results.len(), 0);
@@ -149,7 +149,7 @@ pub async fn filter_variant_field_with_partition_key(t: &mut Test) -> Result<()>
                 .matches(|e| e.address().eq("alice@example.com")),
         ),
     )
-    .collect::<Vec<_>>(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert_eq!(results.len(), 1);

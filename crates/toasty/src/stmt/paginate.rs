@@ -1,13 +1,13 @@
-use super::Select;
+use super::Query;
 
-use crate::{engine::eval::Func, Cursor, Executor, ExecutorExt, Load, Result};
+use crate::{engine::eval::Func, Executor, ExecutorExt, Load, Result};
 
 use toasty_core::stmt::{self, visit_mut, Expr, ExprRecord, OrderBy, Projection, Value, VisitMut};
 
 #[derive(Debug)]
 pub struct Paginate<M> {
     /// How to query the data
-    query: Select<M>,
+    query: Query<M>,
 
     /// Whether we are currently paginating backwards.
     ///
@@ -17,7 +17,7 @@ pub struct Paginate<M> {
 }
 
 impl<M> Paginate<M> {
-    pub fn new(mut query: Select<M>, per_page: usize) -> Self {
+    pub fn new(mut query: Query<M>, per_page: usize) -> Self {
         assert!(
             query.untyped.limit.is_none(),
             "pagination requires no limit clause"
@@ -60,24 +60,27 @@ impl<M> Paginate<M> {
 }
 
 impl<M: Load> Paginate<M> {
-    pub async fn collect(mut self, executor: &mut dyn Executor) -> Result<crate::Page<M>> {
+    pub async fn exec(mut self, executor: &mut dyn Executor) -> Result<crate::Page<M::Output>> {
         // Extract the limit from the query to determine page size
         let page_size = match &self.query.untyped.limit {
-            Some(stmt::Limit { limit, .. }) => {
-                match limit {
-                    stmt::Expr::Value(stmt::Value::I64(n)) => *n as usize,
-                    _ => {
-                        // Fallback if we can't determine the limit
-                        let items: Vec<M> =
-                            executor.all(self.query.clone()).await?.collect().await?;
-                        return Ok(crate::Page::new(items, self.query, None, None));
-                    }
-                }
-            }
+            Some(stmt::Limit {
+                limit: stmt::Expr::Value(stmt::Value::I64(n)),
+                ..
+            }) => *n as usize,
             _ => {
-                // Not a paginated query, just collect all items
-                let items: Vec<M> = executor.all(self.query.clone()).await?.collect().await?;
-                return Ok(crate::Page::new(items, self.query, None, None));
+                let values: Vec<Value> = executor
+                    .exec(self.query.clone().into())
+                    .await?
+                    .collect()
+                    .await?;
+                let items: Vec<M::Output> =
+                    values.into_iter().map(M::load).collect::<Result<_>>()?;
+                return Ok(crate::Page::new(
+                    items,
+                    Query::from_untyped(self.query.untyped),
+                    None,
+                    None,
+                ));
             }
         };
 
@@ -124,17 +127,20 @@ impl<M: Load> Paginate<M> {
             _ => None,
         };
 
+        // Load the raw values into model instances
+        let loaded_items: Vec<M::Output> = items.into_iter().map(M::load).collect::<Result<_>>()?;
+
         Ok(crate::Page::new(
-            Cursor::new(items.into()).collect().await?,
-            self.query,
+            loaded_items,
+            Query::from_untyped(self.query.untyped),
             next_cursor,
             prev_cursor,
         ))
     }
 }
 
-impl<M> From<Select<M>> for Paginate<M> {
-    fn from(value: Select<M>) -> Self {
+impl<M> From<Query<M>> for Paginate<M> {
+    fn from(value: Query<M>) -> Self {
         assert!(
             value.untyped.limit.is_some(),
             "pagination requires a limit clause"

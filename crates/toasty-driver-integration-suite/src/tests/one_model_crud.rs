@@ -21,11 +21,7 @@ pub async fn crud_no_fields(t: &mut Test) -> Result<()> {
     let created = Foo::create().exec(&mut db).await?;
 
     // Find Foo
-    let read = Foo::filter_by_id(created.id)
-        .all(&mut db)
-        .await?
-        .collect::<Vec<_>>()
-        .await?;
+    let read = Foo::filter_by_id(created.id).exec(&mut db).await?;
 
     assert_eq!(1, read.len());
     assert_eq!(created.id, read[0].id);
@@ -43,11 +39,7 @@ pub async fn crud_no_fields(t: &mut Test) -> Result<()> {
     assert_unique!(ids);
 
     for id in &ids {
-        let read = Foo::filter_by_id(id)
-            .all(&mut db)
-            .await?
-            .collect::<Vec<_>>()
-            .await?;
+        let read = Foo::filter_by_id(id).exec(&mut db).await?;
 
         assert_eq!(1, read.len());
         assert_eq!(*id, read[0].id);
@@ -102,11 +94,7 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
     assert_eq!(created.val, "hello world");
 
     // Find Foo
-    let read = Foo::filter_by_id(created.id)
-        .all(&mut db)
-        .await?
-        .collect::<Vec<_>>()
-        .await?;
+    let read = Foo::filter_by_id(created.id).exec(&mut db).await?;
 
     assert_eq!(1, read.len());
     assert_eq!(created.id, read[0].id);
@@ -127,11 +115,7 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
     assert_unique!(ids);
 
     for (i, id) in ids.iter().enumerate() {
-        let read = Foo::filter_by_id(id)
-            .all(&mut db)
-            .await?
-            .collect::<Vec<_>>()
-            .await?;
+        let read = Foo::filter_by_id(id).exec(&mut db).await?;
 
         assert_eq!(1, read.len());
         assert_eq!(*id, read[0].id);
@@ -237,19 +221,9 @@ pub async fn required_field_create_without_setting(test: &mut Test) {
     assert_err!(User::create().exec(&mut db).await);
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_unique_email))]
 pub async fn unique_index_required_field_update(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[unique]
-        email: String,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     let email = "user1@example.com";
 
@@ -485,7 +459,7 @@ pub async fn batch_get_by_id(test: &mut Test) -> Result<()> {
     }
 
     let items: Vec<_> = Foo::filter_by_id_batch([&keys[0], &keys[1], &keys[2]])
-        .collect(&mut db)
+        .exec(&mut db)
         .await?;
 
     assert_eq!(3, items.len());
@@ -513,9 +487,7 @@ pub async fn empty_batch_get_by_id(test: &mut Test) -> Result<()> {
         ids.push(item.id);
     }
 
-    let items: Vec<_> = Foo::filter_by_id_batch(&[] as &[ID])
-        .collect(&mut db)
-        .await?;
+    let items: Vec<_> = Foo::filter_by_id_batch(&[] as &[ID]).exec(&mut db).await?;
 
     assert_eq!(0, items.len());
     Ok(())

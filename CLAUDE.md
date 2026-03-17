@@ -111,6 +111,6 @@ To add a new integration test, add a file to `crates/toasty-driver-integration-s
 
 ### Further Reading
 
-- `docs/ARCHITECTURE.md` — architectural overview
-- `docs/architecture/query-engine.md` — detailed query engine documentation
-- `docs/architecture/type-system.md` — type system design
+- `docs/dev/src/architecture.md` — architectural overview
+- `docs/dev/src/architecture/query-engine.md` — detailed query engine documentation
+- `docs/dev/src/architecture/type-system.md` — type system design

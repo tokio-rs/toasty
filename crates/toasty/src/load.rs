@@ -1,3 +1,4 @@
+use crate::stmt::List;
 use crate::Error;
 use toasty_core::stmt;
 
@@ -6,18 +7,25 @@ use toasty_core::stmt;
 /// The value is expected to be a `Value::Record` containing the type's fields.
 /// This trait is implemented by both root models and any other types that can
 /// be deserialized from the database value representation.
-pub trait Load: Sized {
-    fn load(value: stmt::Value) -> Result<Self, Error>;
+///
+/// The associated `Output` type allows marker types (like `List<M>`) to
+/// specify a concrete return type. For sized types `Output = Self`; for
+/// `List<M>`, `Output = Vec<M>`.
+pub trait Load {
+    type Output;
+    fn load(value: stmt::Value) -> Result<Self::Output, Error>;
 }
 
 impl Load for () {
-    fn load(_value: stmt::Value) -> Result<Self, Error> {
+    type Output = ();
+    fn load(_value: stmt::Value) -> Result<Self::Output, Error> {
         Ok(())
     }
 }
 
-impl<T: Load> Load for Vec<T> {
-    fn load(value: stmt::Value) -> Result<Self, Error> {
+impl<T: Load<Output = T>> Load for Vec<T> {
+    type Output = Vec<T>;
+    fn load(value: stmt::Value) -> Result<Self::Output, Error> {
         match value {
             stmt::Value::List(items) => items.into_iter().map(T::load).collect(),
             // Records are produced by dynamic batch queries (Vec/array inputs)
@@ -28,10 +36,23 @@ impl<T: Load> Load for Vec<T> {
     }
 }
 
+/// List type encoding: `List<M>` loads as `Vec<M::Output>`.
+impl<M: Load> Load for List<M> {
+    type Output = Vec<M::Output>;
+    fn load(value: stmt::Value) -> Result<Self::Output, Error> {
+        match value {
+            stmt::Value::List(items) => items.into_iter().map(M::load).collect(),
+            stmt::Value::Record(record) => record.into_iter().map(M::load).collect(),
+            _ => Err(Error::type_conversion(value, "List<M>")),
+        }
+    }
+}
+
 macro_rules! impl_load_for_tuple {
     ( $( $T:ident ),+ ; $( $idx:tt ),+ ) => {
         impl< $( $T: Load ),+ > Load for ( $( $T, )+ ) {
-            fn load(value: stmt::Value) -> Result<Self, Error> {
+            type Output = ( $( $T::Output, )+ );
+            fn load(value: stmt::Value) -> Result<Self::Output, Error> {
                 match value {
                     stmt::Value::Record(mut record) => Ok((
                         $( $T::load(record[$idx].take())?, )+

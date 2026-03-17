@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use crate::stmt::{Paginate, Select};
+use crate::stmt::{Paginate, Query};
 use crate::{Executor, Load, Result};
 use toasty_core::stmt;
 
@@ -11,7 +11,7 @@ pub struct Page<M> {
     pub items: Vec<M>,
 
     /// Base query (without cursors/offsets)
-    query: Select<M>,
+    query: Query<M>,
 
     /// Cursor for fetching next page (derived from last item)
     pub next_cursor: Option<stmt::Expr>,
@@ -20,10 +20,10 @@ pub struct Page<M> {
     pub prev_cursor: Option<stmt::Expr>,
 }
 
-impl<M: Load> Page<M> {
+impl<M> Page<M> {
     pub(crate) fn new(
         items: Vec<M>,
-        query: Select<M>,
+        query: Query<M>,
         next_cursor: Option<stmt::Expr>,
         prev_cursor: Option<stmt::Expr>,
     ) -> Self {
@@ -44,7 +44,9 @@ impl<M: Load> Page<M> {
     pub fn has_prev(&self) -> bool {
         self.prev_cursor.is_some()
     }
+}
 
+impl<M: Load> Page<M> {
     /// Fetches the next page of results.
     ///
     /// Returns `None` if there are no more pages available. Uses the cursor from
@@ -61,12 +63,12 @@ impl<M: Load> Page<M> {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn next(&self, executor: &mut dyn Executor) -> Result<Option<Page<M>>> {
+    pub async fn next(&self, executor: &mut dyn Executor) -> Result<Option<Page<M::Output>>> {
         match &self.next_cursor {
             Some(cursor) => Ok(Some(
                 Paginate::from(self.query.clone())
                     .after(cursor.clone())
-                    .collect(executor)
+                    .exec(executor)
                     .await?,
             )),
             None => Ok(None),
@@ -89,12 +91,12 @@ impl<M: Load> Page<M> {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn prev(&self, executor: &mut dyn Executor) -> Result<Option<Page<M>>> {
+    pub async fn prev(&self, executor: &mut dyn Executor) -> Result<Option<Page<M::Output>>> {
         match &self.prev_cursor {
             Some(cursor) => Ok(Some(
                 Paginate::from(self.query.clone())
                     .before(cursor.clone())
-                    .collect(executor)
+                    .exec(executor)
                     .await?,
             )),
             None => Ok(None),

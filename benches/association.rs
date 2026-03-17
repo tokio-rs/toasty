@@ -85,7 +85,7 @@ async fn setup_database_and_data(
     let mut builder = models!(User, Post, Comment);
     setup.configure_builder(&mut builder);
 
-    let logging_driver = LoggingDriver::new(setup.driver());
+    let logging_driver = LoggingDriver::new(setup.driver().await);
     let mut db = builder.build(logging_driver).await.unwrap();
     db.push_schema().await.unwrap();
 
@@ -141,7 +141,7 @@ fn association_benchmarks(c: &mut Criterion) {
                             let users: Vec<User> = User::all()
                                 .include(User::fields().posts())
                                 .include(User::fields().comments())
-                                .collect(&mut db)
+                                .exec(&mut db)
                                 .await
                                 .unwrap();
                             black_box(users)

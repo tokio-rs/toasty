@@ -6,8 +6,7 @@
 // extracts the code blocks with pulldown-cmark and wraps each one with
 // hard-coded boilerplate to produce the generated file included below.
 //
-// Guide docs (docs/guide/*.md) use standard rustdoc doctests via
-// `#[doc = include_str!()]` in lib.rs — hidden boilerplate lines are acceptable
-// there because those docs are intended to be read in rendered form on a
-// documentation website.
+// Guide docs (docs/guide/src/*.md) are tested via `cargo test -p tests --doc`.
+// The build script auto-discovers markdown files and generates
+// `#[doc = include_str!(...)]` modules in lib.rs.
 include!(concat!(env!("OUT_DIR"), "/readme_doc_tests.rs"));

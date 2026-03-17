@@ -36,7 +36,7 @@ impl Expand<'_> {
             }
 
             impl #toasty::IntoStatement for #create_struct_ident {
-                type Output = #model_ident;
+                type Returning = #model_ident;
 
                 fn into_statement(self) -> #toasty::Statement<#model_ident> {
                     self.stmt.into()
@@ -63,12 +63,12 @@ impl Expand<'_> {
                 }
             }
 
-            impl #toasty::IntoExpr<[#model_ident]> for #create_struct_ident {
-                fn into_expr(self) -> #toasty::stmt::Expr<[#model_ident]> {
+            impl #toasty::IntoExpr<#toasty::List<#model_ident>> for #create_struct_ident {
+                fn into_expr(self) -> #toasty::stmt::Expr<#toasty::List<#model_ident>> {
                     self.stmt.into_list_expr()
                 }
 
-                fn by_ref(&self) -> #toasty::stmt::Expr<[#model_ident]> {
+                fn by_ref(&self) -> #toasty::stmt::Expr<#toasty::List<#model_ident>> {
                     todo!()
                 }
             }
@@ -162,7 +162,7 @@ impl Expand<'_> {
                                 self
                             }
 
-                            #vis fn #plural(mut self, #plural: impl #toasty::IntoExpr<[<#ty as #toasty::Relation>::Model]>) -> Self {
+                            #vis fn #plural(mut self, #plural: impl #toasty::IntoExpr<#toasty::List<<#ty as #toasty::Relation>::Model>>) -> Self {
                                 self.stmt.insert_all(#index_tokenized, #plural.into_expr());
                                 self
                             }

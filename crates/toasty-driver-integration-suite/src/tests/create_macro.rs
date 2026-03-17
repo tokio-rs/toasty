@@ -76,36 +76,11 @@ pub async fn create_macro_with_variable(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn create_macro_scoped(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
+    let mut db = setup(test).await;
 
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-
-        title: String,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
-
-    let user = User::create().exec(&mut db).await?;
+    let user = User::create().name("Alice").exec(&mut db).await?;
 
     // Scoped create — translates to: user.todos().create().title("get something done")
     let todo = toasty::create!(in user.todos() { title: "get something done" })
@@ -145,36 +120,9 @@ pub async fn create_macro_batch(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn create_macro_nested_association(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-
-        title: String,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     // Nested association — no type prefix needed; type inferred from field.
     let user = toasty::create!(User {
@@ -186,43 +134,16 @@ pub async fn create_macro_nested_association(test: &mut Test) -> Result<()> {
 
     assert_eq!(user.name, "Carl");
 
-    let todos: Vec<_> = user.todos().collect(&mut db).await?;
+    let todos: Vec<_> = user.todos().exec(&mut db).await?;
     assert_eq!(todos.len(), 1);
     assert_eq!(todos[0].title, "get something done");
 
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn create_macro_nested_multiple(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-
-        title: String,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     // Multiple nested associations
     let user = toasty::create!(User {
@@ -234,7 +155,7 @@ pub async fn create_macro_nested_multiple(test: &mut Test) -> Result<()> {
 
     assert_eq!(user.name, "Carl");
 
-    let mut todos: Vec<_> = user.todos().collect(&mut db).await?;
+    let mut todos: Vec<_> = user.todos().exec(&mut db).await?;
     assert_eq!(todos.len(), 2);
 
     todos.sort_by(|a, b| a.title.cmp(&b.title));
@@ -244,36 +165,9 @@ pub async fn create_macro_nested_multiple(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn create_macro_with_belongs_to(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-
-        title: String,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     // Create a todo with an inline belongs_to user
     let todo = toasty::create!(Todo {
@@ -354,11 +248,11 @@ pub async fn create_macro_deeply_nested(test: &mut Test) -> Result<()> {
 
     assert_eq!(user.name, "Carl");
 
-    let todos: Vec<_> = user.todos().collect(&mut db).await?;
+    let todos: Vec<_> = user.todos().exec(&mut db).await?;
     assert_eq!(todos.len(), 1);
     assert_eq!(todos[0].title, "get something done");
 
-    let mut tags: Vec<_> = todos[0].tags().collect(&mut db).await?;
+    let mut tags: Vec<_> = todos[0].tags().exec(&mut db).await?;
     tags.sort_by(|a, b| a.name.cmp(&b.name));
     assert_eq!(tags.len(), 2);
     assert_eq!(tags[0].name, "urgent");

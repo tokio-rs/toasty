@@ -6,8 +6,6 @@ This roadmap outlines potential enhancements and missing features for the Toasty
 
 Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases. This roadmap documents potential future work and feature gaps.
 
-> **User Documentation:** See the [`guide/`](../guide/) directory for complete API documentation and usage examples.
-
 ## Feature Areas
 
 ### Composite Keys
@@ -22,7 +20,7 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 
 ### Query Capabilities
 
-**[Query Ordering, Limits & Pagination](./order_limit_pagination.md)** | [User Guide](../guide/pagination.md)
+**[Query Ordering, Limits & Pagination](./order_limit_pagination.md)**
 - Multi-column ordering convenience method (`.then_by()`)
 - Direct `.limit()` method for non-paginated queries
 - `.last()` convenience method

@@ -1,0 +1,11 @@
+[book]
+title = "Toasty Guide"
+authors = ["Toasty Contributors"]
+
+[build]
+build-dir = "book"
+
+[output.html]
+
+[output.linkcheck2]
+optional = true

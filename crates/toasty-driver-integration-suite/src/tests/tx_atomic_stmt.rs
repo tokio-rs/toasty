@@ -6,37 +6,13 @@ use toasty_core::driver::{operation::Transaction, Operation};
 
 /// A multi-op create (user + associated todo) should be wrapped in
 /// BEGIN ... COMMIT so the driver sees all three transaction operations.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn multi_op_create_wraps_in_transaction(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-
-        title: String,
-    }
-
-    let mut db = t.setup_db(models!(User, Todo)).await;
+    let mut db = setup(t).await;
 
     t.log().clear();
     let user = User::create()
+        .name("Alice")
         .todo(Todo::create().title("task"))
         .exec(&mut db)
         .await?;
@@ -56,7 +32,7 @@ pub async fn multi_op_create_wraps_in_transaction(t: &mut Test) -> Result<()> {
     );
     assert!(t.log().is_empty());
 
-    let todos = user.todos().collect::<Vec<_>>(&mut db).await?;
+    let todos = user.todos().exec(&mut db).await?;
     assert_eq!(1, todos.len());
 
     Ok(())
@@ -157,7 +133,7 @@ pub async fn create_with_has_many_rolls_back_on_failure(t: &mut Test) -> Result<
     assert!(t.log().is_empty());
 
     // No orphaned user — count unchanged from pre-seed
-    let users = User::all().collect::<Vec<_>>(&mut db).await?;
+    let users = User::all().exec(&mut db).await?;
     assert_eq!(1, users.len());
 
     Ok(())
@@ -229,7 +205,7 @@ pub async fn create_with_has_one_rolls_back_on_failure(t: &mut Test) -> Result<(
     assert!(t.log().is_empty());
 
     // No orphaned user — count unchanged from pre-seed
-    let users = User::all().collect::<Vec<_>>(&mut db).await?;
+    let users = User::all().exec(&mut db).await?;
     assert_eq!(1, users.len());
 
     Ok(())
@@ -304,7 +280,7 @@ pub async fn update_with_new_association_rolls_back_on_failure(t: &mut Test) -> 
     assert!(t.log().is_empty());
 
     // INSERT was rolled back — no orphaned todo
-    let todos = user.todos().collect::<Vec<_>>(&mut db).await?;
+    let todos = user.todos().exec(&mut db).await?;
     assert!(todos.is_empty());
 
     Ok(())
@@ -344,7 +320,7 @@ pub async fn rmw_uses_savepoints(t: &mut Test) -> Result<()> {
     let mut db = t.setup_db(models!(User, Todo)).await;
 
     let user = User::create().todo(Todo::create()).exec(&mut db).await?;
-    let todos: Vec<_> = user.todos().collect(&mut db).await?;
+    let todos: Vec<_> = user.todos().exec(&mut db).await?;
 
     t.log().clear();
     user.todos().remove(&mut db, &todos[0]).await?;
@@ -405,7 +381,7 @@ pub async fn rmw_condition_failure_issues_rollback_to_savepoint(t: &mut Test) ->
 
     let user1 = User::create().exec(&mut db).await?;
     let user2 = User::create().todo(Todo::create()).exec(&mut db).await?;
-    let u2_todos: Vec<_> = user2.todos().collect(&mut db).await?;
+    let u2_todos: Vec<_> = user2.todos().exec(&mut db).await?;
 
     t.log().clear();
     // Remove u2's todo via user1 — condition (user_id = user1.id) won't match

@@ -11,7 +11,6 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
         let update_struct_ident = &self.model.kind.expect_root().update_struct_ident;
-        let collect_ty = util::ident("A");
         let include_ty = util::ident("T");
         let filter_methods = self.expand_query_filter_methods();
         let relation_methods = self.expand_relation_methods();
@@ -19,17 +18,17 @@ impl Expand<'_> {
 
         quote! {
             #vis struct #query_struct_ident {
-                stmt: #toasty::stmt::Select<#model_ident>,
+                stmt: #toasty::stmt::Query<#model_ident>,
             }
 
             impl #query_struct_ident {
-                #vis const fn from_stmt(stmt: #toasty::stmt::Select<#model_ident>) -> #query_struct_ident {
+                #vis const fn from_stmt(stmt: #toasty::stmt::Query<#model_ident>) -> #query_struct_ident {
                     #query_struct_ident { stmt }
                 }
 
                 #filter_methods
 
-                #vis async fn all(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#toasty::Cursor<#model_ident>> {
+                #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<Vec<#model_ident>> {
                     use #toasty::ExecutorExt;
                     executor.all(self.stmt).await
                 }
@@ -50,13 +49,6 @@ impl Expand<'_> {
 
                 #vis fn delete(self) -> #toasty::stmt::Delete<#model_ident> {
                     self.stmt.delete()
-                }
-
-                #vis async fn collect<#collect_ty>(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#collect_ty>
-                where
-                    #collect_ty: #toasty::FromCursor<#model_ident>
-                {
-                    self.all(executor).await?.collect().await
                 }
 
                 #vis fn paginate(self, per_page: usize) -> #toasty::stmt::Paginate<#model_ident> {
@@ -88,25 +80,27 @@ impl Expand<'_> {
                 #relation_methods
             }
 
-            impl #toasty::stmt::IntoSelect for #query_struct_ident {
-                type Model = #model_ident;
+            impl #toasty::IntoStatement for #query_struct_ident {
+                type Returning = #toasty::List<#model_ident>;
 
-                fn into_select(self) -> #toasty::stmt::Select<#model_ident> {
-                    self.stmt
+                fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
+                    use #toasty::IntoStatement;
+                    self.stmt.into_statement()
                 }
             }
 
-            impl #toasty::stmt::IntoSelect for &#query_struct_ident {
-                type Model = #model_ident;
+            impl #toasty::IntoStatement for &#query_struct_ident {
+                type Returning = #toasty::List<#model_ident>;
 
-                fn into_select(self) -> #toasty::stmt::Select<#model_ident> {
-                    self.stmt.clone()
+                fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
+                    use #toasty::IntoStatement;
+                    self.stmt.clone().into_statement()
                 }
             }
 
             impl #toasty::Default for #query_struct_ident {
                 fn default() -> #query_struct_ident {
-                    #query_struct_ident { stmt: #toasty::stmt::Select::all() }
+                    #query_struct_ident { stmt: #toasty::stmt::Query::all() }
                 }
             }
         }
@@ -134,11 +128,11 @@ impl Expand<'_> {
 
         quote! {
             #vis fn #field_ident(mut self) -> <#target as #toasty::Relation>::Query {
-                use #toasty::IntoSelect;
+                use #toasty::IntoStatement;
                 <#target as #toasty::Relation>::Query::from_stmt(
                     #toasty::stmt::Association::many_via_one(
                         self.stmt, #model_ident::fields().#field_ident().into()
-                    ).into_select()
+                    ).into_statement().into_query().unwrap()
                 )
             }
         }
@@ -153,11 +147,11 @@ impl Expand<'_> {
 
         quote! {
             #vis fn #field_ident(mut self) -> <#target as #toasty::Relation>::Query {
-                use #toasty::IntoSelect;
+                use #toasty::IntoStatement;
                 <#target as #toasty::Relation>::Query::from_stmt(
                     #toasty::stmt::Association::many(
                         self.stmt, #model_ident::fields().#field_ident().into()
-                    ).into_select()
+                    ).into_statement().into_query().unwrap()
                 )
             }
         }
@@ -172,11 +166,11 @@ impl Expand<'_> {
 
         quote! {
             #vis fn #field_ident(mut self) -> <#target as #toasty::Relation>::Query {
-                use #toasty::IntoSelect;
+                use #toasty::IntoStatement;
                 <#target as #toasty::Relation>::Query::from_stmt(
                     #toasty::stmt::Association::many_via_one(
                         self.stmt, #model_ident::fields().#field_ident().into()
-                    ).into_select()
+                    ).into_statement().into_query().unwrap()
                 )
             }
         }
@@ -189,7 +183,7 @@ impl Expand<'_> {
 
         if self.model.has_associations() {
             Some(quote! {
-                    #vis fn include<#include_ty: ?Sized>(mut self, path: impl #toasty::Into<#toasty::Path<#include_ty>>) -> #query_struct_ident {
+                    #vis fn include<#include_ty>(mut self, path: impl #toasty::Into<#toasty::Path<#include_ty>>) -> #query_struct_ident {
                         self.stmt.include(path.into());
                         self
                     }

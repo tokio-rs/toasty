@@ -95,10 +95,9 @@ async fn main() -> toasty::Result<()> {
 
     println!("CREATED = {todo:#?}");
 
-    let mut todos = u2.todos().all(&mut db).await?;
+    let todos = u2.todos().exec(&mut db).await?;
 
-    while let Some(todo) = todos.next().await {
-        let todo = todo?;
+    for todo in todos {
         println!("TODO; title={:?}", todo.title);
         println!("-> user {:?}", todo.user().get(&mut db).await?);
     }
@@ -131,15 +130,12 @@ async fn main() -> toasty::Result<()> {
         .await?;
 
     // Get the last todo so we can unlink it
-    let todos = user.todos().collect::<Vec<_>>(&mut db).await?;
+    let todos = user.todos().exec(&mut db).await?;
     let len = todos.len();
 
     user.todos().remove(&mut db, todos.last().unwrap()).await?;
 
-    assert_eq!(
-        len - 1,
-        user.todos().collect::<Vec<_>>(&mut db).await?.len()
-    );
+    assert_eq!(len - 1, user.todos().exec(&mut db).await?.len());
 
     println!(">>> DONE <<<");
 

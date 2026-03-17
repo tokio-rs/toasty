@@ -8,9 +8,19 @@ impl KeyAttr {
     pub(super) fn from_ast(attr: &syn::Attribute, names: &[syn::Ident]) -> syn::Result<Self> {
         let mut partition = vec![];
         let mut local = vec![];
+        let mut simple_fields = vec![];
+        let mut has_named = false;
 
         attr.parse_nested_meta(|meta| {
-            if meta.path.is_ident("partition") {
+            if meta.path.is_ident("partition") || meta.path.is_ident("local") {
+                if !simple_fields.is_empty() {
+                    return Err(syn::Error::new_spanned(
+                        &meta.path,
+                        "cannot mix field names with `partition`/`local` syntax",
+                    ));
+                }
+
+                has_named = true;
                 let value = meta.value()?;
                 let ident: syn::Ident = value.parse()?;
 
@@ -21,41 +31,55 @@ impl KeyAttr {
                     ));
                 }
 
-                partition.push(ident);
-            } else if meta.path.is_ident("local") {
-                let value = meta.value()?;
-                let ident = value.parse()?;
-
-                if !names.contains(&ident) {
+                if meta.path.is_ident("partition") {
+                    partition.push(ident);
+                } else {
+                    local.push(ident);
+                }
+            } else {
+                if has_named {
                     return Err(syn::Error::new_spanned(
-                        &ident,
+                        &meta.path,
+                        "cannot mix field names with `partition`/`local` syntax",
+                    ));
+                }
+
+                let ident = meta
+                    .path
+                    .get_ident()
+                    .ok_or_else(|| syn::Error::new_spanned(&meta.path, "expected a field name"))?;
+
+                if !names.contains(ident) {
+                    return Err(syn::Error::new_spanned(
+                        ident,
                         format!("unknown field `{ident}`"),
                     ));
                 }
 
-                local.push(ident);
-            } else {
-                return Err(syn::Error::new_spanned(
-                    &meta.path,
-                    "expected `partition` or `local`",
-                ));
+                simple_fields.push(ident.clone());
             }
 
             Ok(())
         })?;
 
-        if partition.is_empty() {
-            return Err(syn::Error::new_spanned(
-                attr,
-                "expected at least one `partition` attribute",
-            ));
-        }
+        if !simple_fields.is_empty() {
+            // Simple mode: all fields become partition keys
+            partition = simple_fields;
+        } else {
+            // Named mode: require both partition and local
+            if partition.is_empty() {
+                return Err(syn::Error::new_spanned(
+                    attr,
+                    "expected at least one `partition` attribute",
+                ));
+            }
 
-        if local.is_empty() {
-            return Err(syn::Error::new_spanned(
-                attr,
-                "expected at least one `local` attribute",
-            ));
+            if local.is_empty() {
+                return Err(syn::Error::new_spanned(
+                    attr,
+                    "expected at least one `local` attribute",
+                ));
+            }
         }
 
         Ok(Self { partition, local })

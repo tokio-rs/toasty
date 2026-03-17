@@ -1,35 +1,8 @@
 use crate::prelude::*;
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn user_batch_create_todos_one_level_basic_fk(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-
-        title: String,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     // Create a user with some todos
     let user = User::create()
@@ -41,7 +14,7 @@ pub async fn user_batch_create_todos_one_level_basic_fk(test: &mut Test) -> Resu
     assert_eq!(user.name, "Ann Chovey");
 
     // There are associated TODOs
-    let todos: Vec<_> = user.todos().collect(&mut db).await?;
+    let todos: Vec<_> = user.todos().exec(&mut db).await?;
     assert_eq!(1, todos.len());
     assert_eq!("Make pizza", todos[0].title);
 
@@ -113,7 +86,7 @@ pub async fn user_batch_create_todos_two_levels_basic_fk(test: &mut Test) -> Res
     assert_eq!(user.name, "Ann Chovey");
 
     // There are associated TODOs
-    let todos: Vec<_> = user.todos().collect(&mut db).await?;
+    let todos: Vec<_> = user.todos().exec(&mut db).await?;
     assert_eq!(1, todos.len());
     assert_eq!("Make pizza", todos[0].title);
 
@@ -142,7 +115,7 @@ pub async fn user_batch_create_todos_two_levels_basic_fk(test: &mut Test) -> Res
         .await?;
 
     // There are associated TODOs
-    let todos: Vec<_> = user.todos().collect(&mut db).await?;
+    let todos: Vec<_> = user.todos().exec(&mut db).await?;
     assert_eq_unordered!(
         todos.iter().map(|todo| &todo.title[..]),
         ["do something", "do something else"]
@@ -159,7 +132,7 @@ pub async fn user_batch_create_todos_two_levels_basic_fk(test: &mut Test) -> Res
         ["things", "other things"]
     );
 
-    let todos: Vec<_> = category.todos().collect(&mut db).await?;
+    let todos: Vec<_> = category.todos().exec(&mut db).await?;
     assert_eq!(1, todos.len());
     Ok(())
 }
@@ -226,7 +199,7 @@ pub async fn user_batch_create_todos_set_category_by_value(test: &mut Test) -> R
     assert_eq!(user.name, "John Doe");
 
     // There are associated TODOs
-    let todos: Vec<_> = user.todos().collect(&mut db).await?;
+    let todos: Vec<_> = user.todos().exec(&mut db).await?;
     assert_eq_unordered!(
         todos.iter().map(|todo| &todo.title[..]),
         ["Pizza", "Hamburger"]
@@ -236,7 +209,7 @@ pub async fn user_batch_create_todos_set_category_by_value(test: &mut Test) -> R
         assert_eq!(todo.category_id, category.id);
     }
 
-    let todos: Vec<_> = category.todos().collect(&mut db).await?;
+    let todos: Vec<_> = category.todos().exec(&mut db).await?;
     assert_eq_unordered!(
         todos.iter().map(|todo| &todo.title[..]),
         ["Pizza", "Hamburger"]
@@ -304,7 +277,7 @@ pub async fn user_batch_create_todos_with_optional_field(test: &mut Test) -> Res
     assert_eq!(user.name, "Ann Chovey");
 
     // Verify both todos were created
-    let todos: Vec<_> = user.todos().collect(&mut db).await?;
+    let todos: Vec<_> = user.todos().exec(&mut db).await?;
     assert_eq!(2, todos.len());
 
     let mut titles: Vec<_> = todos.iter().map(|t| &t.title[..]).collect();
@@ -360,7 +333,7 @@ pub async fn user_batch_create_two_todos_simple(test: &mut Test) -> Result<()> {
     assert_eq!(user.name, "Ann Chovey");
 
     // There should be 2 associated TODOs
-    let todos: Vec<_> = user.todos().collect(&mut db).await?;
+    let todos: Vec<_> = user.todos().exec(&mut db).await?;
     assert_eq!(2, todos.len());
 
     // Verify the titles

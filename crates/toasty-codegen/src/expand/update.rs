@@ -261,8 +261,8 @@ impl Expand<'_> {
                 }
             }
 
-            impl From<#toasty::stmt::Select<#model_ident>> for #update_struct_ident {
-                fn from(src: #toasty::stmt::Select<#model_ident>) -> #update_struct_ident {
+            impl From<#toasty::stmt::Query<#model_ident>> for #update_struct_ident {
+                fn from(src: #toasty::stmt::Query<#model_ident>) -> #update_struct_ident {
                     let mut s = #update_struct_ident {
                         stmt: #toasty::stmt::Update::new(src),
                         target: #toasty::Query,
@@ -273,7 +273,7 @@ impl Expand<'_> {
             }
 
             impl #toasty::IntoStatement for #update_struct_ident {
-                type Output = ();
+                type Returning = ();
 
                 fn into_statement(self) -> #toasty::Statement<()> {
                     #toasty::Statement::from_untyped_stmt(self.stmt.into_untyped_stmt())

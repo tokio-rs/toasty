@@ -1,16 +1,16 @@
-use super::{Delete, Expr, IntoSelect, Value};
+use super::{Delete, Expr, IntoStatement, List, Statement, Value};
 use crate::Model;
 use std::{fmt, marker::PhantomData};
 use toasty_core::stmt::{self, Offset};
 
-pub struct Select<M> {
+pub struct Query<M> {
     /// How to filter the data source
     pub(crate) untyped: stmt::Query,
 
     _p: PhantomData<M>,
 }
 
-impl<M> Select<M> {
+impl<M> Query<M> {
     pub fn unit() -> Self {
         Self {
             untyped: stmt::Query::unit(),
@@ -81,7 +81,7 @@ impl<M> Select<M> {
     }
 }
 
-impl<M: Model> Select<M> {
+impl<M: Model> Query<M> {
     pub fn filter(expr: Expr<bool>) -> Self {
         Self::from_untyped(stmt::Query::new_select(M::id(), expr.untyped))
     }
@@ -92,15 +92,23 @@ impl<M: Model> Select<M> {
     }
 }
 
-impl<M: Model> IntoSelect for &Select<M> {
-    type Model = M;
+impl<M: Model> IntoStatement for Query<M> {
+    type Returning = List<M>;
 
-    fn into_select(self) -> Select<M> {
-        self.clone()
+    fn into_statement(self) -> Statement<List<M>> {
+        Statement::from_untyped_stmt(self.untyped.into())
     }
 }
 
-impl<M> Clone for Select<M> {
+impl<M: Model> IntoStatement for &Query<M> {
+    type Returning = List<M>;
+
+    fn into_statement(self) -> Statement<List<M>> {
+        Statement::from_untyped_stmt(self.clone().untyped.into())
+    }
+}
+
+impl<M> Clone for Query<M> {
     fn clone(&self) -> Self {
         Self {
             untyped: self.untyped.clone(),
@@ -109,7 +117,7 @@ impl<M> Clone for Select<M> {
     }
 }
 
-impl<M> fmt::Debug for Select<M> {
+impl<M> fmt::Debug for Query<M> {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.untyped.fmt(fmt)
     }

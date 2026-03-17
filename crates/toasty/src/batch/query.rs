@@ -22,9 +22,9 @@ pub struct Batch<T> {
 ///     Post::find_recent(100),
 /// )).exec(&mut db).await?;
 /// ```
-pub fn batch<Q: IntoStatement>(queries: Q) -> Batch<Q::Output>
+pub fn batch<Q: IntoStatement>(queries: Q) -> Batch<Q::Returning>
 where
-    Q::Output: Load,
+    Q::Returning: Load,
 {
     Batch {
         stmt: queries.into_statement(),
@@ -33,7 +33,7 @@ where
 
 impl<T: Load> Batch<T> {
     /// Execute the batched queries and return the deserialized results.
-    pub async fn exec(self, executor: &mut dyn Executor) -> Result<T> {
+    pub async fn exec(self, executor: &mut dyn Executor) -> Result<T::Output> {
         let value = executor.exec_one(self.stmt).await?;
         T::load(value)
     }

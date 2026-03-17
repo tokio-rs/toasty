@@ -131,7 +131,7 @@ pub async fn embedded_enum_unique_index_enforced(test: &mut Test) -> Result<()> 
             .email()
             .matches(|e| e.address().eq("alice@example.com")),
     )
-    .collect::<Vec<_>>(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert_struct!(users, [_ { name: "Alice", .. }]);
