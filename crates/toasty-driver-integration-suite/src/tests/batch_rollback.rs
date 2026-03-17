@@ -14,19 +14,22 @@ pub async fn batch_two_creates_rolls_back_on_second_failure(t: &mut Test) -> Res
         id: ID,
 
         #[unique]
-        name: String,
+        email: String,
     }
 
     let mut db = t.setup_db(models!(User)).await;
 
-    // Seed the name that will cause the second create to fail.
-    User::create().name("taken").exec(&mut db).await?;
+    // Seed the email that will cause the second create to fail.
+    User::create()
+        .email("taken@example.com")
+        .exec(&mut db)
+        .await?;
 
     t.log().clear();
     assert_err!(
         toasty::batch((
-            User::create().name("new-user"),
-            User::create().name("taken"),
+            User::create().email("new@example.com"),
+            User::create().email("taken@example.com"),
         ))
         .exec(&mut db)
         .await
@@ -47,10 +50,10 @@ pub async fn batch_two_creates_rolls_back_on_second_failure(t: &mut Test) -> Res
     );
     assert!(t.log().is_empty());
 
-    // Only the seeded user remains — "new-user" was rolled back
-    let users = User::all().collect::<Vec<_>>(&mut db).await?;
+    // Only the seeded user remains — "new@example.com" was rolled back
+    let users: Vec<User> = User::all().exec(&mut db).await?;
     assert_eq!(1, users.len());
-    assert_eq!(users[0].name, "taken");
+    assert_eq!(users[0].email, "taken@example.com");
 
     Ok(())
 }
@@ -66,19 +69,27 @@ pub async fn batch_create_and_update_rolls_back_on_update_failure(t: &mut Test) 
         id: ID,
 
         #[unique]
-        name: String,
+        email: String,
     }
 
     let mut db = t.setup_db(models!(User)).await;
 
-    User::create().name("alice").exec(&mut db).await?;
-    User::create().name("taken").exec(&mut db).await?;
+    User::create()
+        .email("alice@example.com")
+        .exec(&mut db)
+        .await?;
+    User::create()
+        .email("taken@example.com")
+        .exec(&mut db)
+        .await?;
 
     t.log().clear();
     assert_err!(
         toasty::batch((
-            User::create().name("bob"),
-            User::filter_by_name("alice").update().name("taken"), // fails: unique
+            User::create().email("bob@example.com"),
+            User::filter_by_email("alice@example.com")
+                .update()
+                .email("taken@example.com"), // fails: unique
         ))
         .exec(&mut db)
         .await
@@ -100,11 +111,11 @@ pub async fn batch_create_and_update_rolls_back_on_update_failure(t: &mut Test) 
     assert!(t.log().is_empty());
 
     // "bob" was rolled back and "alice" was not renamed
-    let all = User::all().collect::<Vec<_>>(&mut db).await?;
+    let all: Vec<User> = User::all().exec(&mut db).await?;
     assert_eq!(2, all.len());
-    let names: std::collections::HashSet<_> = all.iter().map(|u| u.name.as_str()).collect();
-    assert!(names.contains("alice"));
-    assert!(names.contains("taken"));
+    let emails: std::collections::HashSet<_> = all.iter().map(|u| u.email.as_str()).collect();
+    assert!(emails.contains("alice@example.com"));
+    assert!(emails.contains("taken@example.com"));
 
     Ok(())
 }
@@ -120,19 +131,27 @@ pub async fn batch_update_and_create_rolls_back_on_create_failure(t: &mut Test) 
         id: ID,
 
         #[unique]
-        name: String,
+        email: String,
     }
 
     let mut db = t.setup_db(models!(User)).await;
 
-    User::create().name("alice").exec(&mut db).await?;
-    User::create().name("taken").exec(&mut db).await?;
+    User::create()
+        .email("alice@example.com")
+        .exec(&mut db)
+        .await?;
+    User::create()
+        .email("taken@example.com")
+        .exec(&mut db)
+        .await?;
 
     t.log().clear();
     assert_err!(
         toasty::batch((
-            User::filter_by_name("alice").update().name("alice2"),
-            User::create().name("taken"), // fails: unique
+            User::filter_by_email("alice@example.com")
+                .update()
+                .email("alice2@example.com"),
+            User::create().email("taken@example.com"), // fails: unique
         ))
         .exec(&mut db)
         .await
@@ -153,12 +172,16 @@ pub async fn batch_update_and_create_rolls_back_on_create_failure(t: &mut Test) 
     );
     assert!(t.log().is_empty());
 
-    // Update was rolled back — "alice" still has her original name
-    let alice: Vec<_> = User::filter_by_name("alice").collect(&mut db).await?;
+    // Update was rolled back — "alice" still has her original email
+    let alice: Vec<User> = User::filter_by_email("alice@example.com")
+        .exec(&mut db)
+        .await?;
     assert_eq!(1, alice.len());
 
-    // No "alice2" exists
-    let alice2: Vec<_> = User::filter_by_name("alice2").collect(&mut db).await?;
+    // No "alice2@example.com" exists
+    let alice2: Vec<User> = User::filter_by_email("alice2@example.com")
+        .exec(&mut db)
+        .await?;
     assert!(alice2.is_empty());
 
     Ok(())
@@ -175,20 +198,23 @@ pub async fn batch_array_creates_rolls_back_on_failure(t: &mut Test) -> Result<(
         id: ID,
 
         #[unique]
-        name: String,
+        email: String,
     }
 
     let mut db = t.setup_db(models!(User)).await;
 
     // Seed the collision
-    User::create().name("taken").exec(&mut db).await?;
+    User::create()
+        .email("taken@example.com")
+        .exec(&mut db)
+        .await?;
 
     t.log().clear();
     assert_err!(
         toasty::batch([
-            User::create().name("first"),
-            User::create().name("second"),
-            User::create().name("taken"), // fails: unique
+            User::create().email("first@example.com"),
+            User::create().email("second@example.com"),
+            User::create().email("taken@example.com"), // fails: unique
         ])
         .exec(&mut db)
         .await
@@ -211,9 +237,9 @@ pub async fn batch_array_creates_rolls_back_on_failure(t: &mut Test) -> Result<(
     assert!(t.log().is_empty());
 
     // Only the seeded user remains
-    let users = User::all().collect::<Vec<_>>(&mut db).await?;
+    let users: Vec<User> = User::all().exec(&mut db).await?;
     assert_eq!(1, users.len());
-    assert_eq!(users[0].name, "taken");
+    assert_eq!(users[0].email, "taken@example.com");
 
     Ok(())
 }
@@ -271,11 +297,11 @@ pub async fn batch_different_models_rolls_back_on_failure(t: &mut Test) -> Resul
     assert!(t.log().is_empty());
 
     // No user was persisted
-    let users = User::all().collect::<Vec<_>>(&mut db).await?;
+    let users: Vec<User> = User::all().exec(&mut db).await?;
     assert!(users.is_empty());
 
     // Only the seeded post remains
-    let posts = Post::all().collect::<Vec<_>>(&mut db).await?;
+    let posts: Vec<Post> = Post::all().exec(&mut db).await?;
     assert_eq!(1, posts.len());
 
     Ok(())
