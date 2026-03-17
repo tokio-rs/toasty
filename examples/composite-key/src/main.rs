@@ -75,7 +75,7 @@ async fn main() -> toasty::Result<()> {
     let todos = user
         .todos()
         .query(Todo::fields().order().eq(1))
-        .all(&mut db)
+        .exec(&mut db)
         .await?;
 
     for todo in todos {

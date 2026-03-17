@@ -46,7 +46,7 @@ generates `get_by_code()`. Composite keys generate combined names like
 #     email: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let users = User::all().all(&mut db).await?;
+let users = User::all().exec(&mut db).await?;
 
 for user in &users {
     println!("{}: {}", user.id, user.name);
@@ -60,7 +60,7 @@ for user in &users {
 Queries returned by `all()`, `filter()`, and `filter_by_*()` are not executed
 until you call a terminal method. Toasty provides three terminal methods:
 
-### `.all()` — collect all results
+### `.exec()` — collect all results
 
 Returns all matching records as a `Vec`:
 
@@ -76,7 +76,7 @@ Returns all matching records as a `Vec`:
 #     email: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let users: Vec<User> = User::all().all(&mut db).await?;
+let users: Vec<User> = User::all().exec(&mut db).await?;
 # Ok(())
 # }
 ```
@@ -181,7 +181,7 @@ chapter covers this in detail. Here is a quick example:
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
 let users = User::filter(User::fields().name().eq("Alice"))
-    .all(&mut db)
+    .exec(&mut db)
     .await?;
 # Ok(())
 # }
@@ -194,7 +194,7 @@ You can chain `.filter()` on an existing query to add more conditions:
 ```rust,ignore
 let users = User::filter_by_name("Alice")
     .filter(User::fields().age().gt(25))
-    .all(&mut db)
+    .exec(&mut db)
     .await?;
 ```
 
@@ -218,7 +218,7 @@ fetches multiple records by key in a single query:
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
 let users = User::filter_by_id_batch([&1, &2, &3])
-    .all(&mut db)
+    .exec(&mut db)
     .await?;
 # Ok(())
 # }
@@ -244,6 +244,6 @@ Query builders support these terminal methods:
 
 | Method | Returns |
 |---|---|
-| `.all(&mut db)` | `Result<Vec<User>>` |
+| `.exec(&mut db)` | `Result<Vec<User>>` |
 | `.first(&mut db)` | `Result<Option<User>>` |
 | `.get(&mut db)` | `Result<User>` |

@@ -163,7 +163,7 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
 
     // Filter: only Active tasks (discriminant = 2)
     let active = Task::filter(Task::fields().status().eq(Status::Active))
-        .all(&mut db)
+        .exec(&mut db)
         .await?;
     assert_eq!(active.len(), 2);
     {
@@ -187,7 +187,7 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
 
     // Filter: only Pending tasks (discriminant = 1)
     let pending = Task::filter(Task::fields().status().eq(Status::Pending))
-        .all(&mut db)
+        .exec(&mut db)
         .await?;
     assert_eq!(pending.len(), 1);
     assert_eq!(pending[0].name, "Task A");
@@ -212,7 +212,7 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
 
     // Filter: only Done tasks (discriminant = 3)
     let done = Task::filter(Task::fields().status().eq(Status::Done))
-        .all(&mut db)
+        .exec(&mut db)
         .await?;
     assert_eq!(done.len(), 1);
     assert_eq!(done[0].name, "Task D");

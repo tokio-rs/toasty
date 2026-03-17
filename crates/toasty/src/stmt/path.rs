@@ -97,7 +97,7 @@ impl<T> Path<T> {
         }
     }
 
-    pub fn in_set(self, rhs: impl IntoExpr<List<T>>) -> Expr<bool> {
+    pub fn in_list(self, rhs: impl IntoExpr<List<T>>) -> Expr<bool> {
         Expr {
             untyped: stmt::Expr::in_list(self.untyped.into_stmt(), rhs.into_expr().untyped),
             _p: PhantomData,
