@@ -16,12 +16,7 @@ impl<M: Model> CreateMany<M> {
     }
 
     pub fn item(mut self, item: impl stmt::IntoInsert<Model = M>) -> Self {
-        let stmt = item.into_insert();
-        assert!(
-            stmt.untyped.source.single,
-            "BUG: insert statement should have `single` flag set"
-        );
-        self.stmts.push(stmt);
+        self.stmts.push(item.into_insert());
         self
     }
 
@@ -30,12 +25,7 @@ impl<M: Model> CreateMany<M> {
     /// after setting the desired fields.
     pub fn with_item(mut self, f: impl FnOnce(M::Create) -> M::Create) -> Self {
         let create = f(M::Create::default());
-        let stmt = create.into_insert();
-        assert!(
-            stmt.untyped.source.single,
-            "BUG: insert statement should have `single` flag set"
-        );
-        self.stmts.push(stmt);
+        self.stmts.push(create.into_insert());
         self
     }
 
@@ -50,30 +40,24 @@ impl<M: Model> CreateMany<M> {
             >()));
         }
         let mut stmts = self.stmts.into_iter();
-        let mut merged = stmts.next().unwrap();
+        let mut merged = stmts.next().unwrap().into_list();
         for stmt in stmts {
             merged.merge(stmt);
         }
-        // Clear the single flag so the engine handles multi-row inserts correctly.
-        merged.untyped.source.single = false;
         merged.into_list_expr()
     }
 
     pub async fn exec(self, executor: &mut dyn Executor) -> Result<Vec<M>> {
-        // If there are no records to create, then return an empty vec
         if self.stmts.is_empty() {
             return Ok(vec![]);
         }
 
-        // TODO: improve
         let mut stmts = self.stmts.into_iter();
-        let mut merged = stmts.next().unwrap();
+        let mut merged = stmts.next().unwrap().into_list();
 
         for stmt in stmts {
             merged.merge(stmt);
         }
-
-        merged.untyped.source.single = false;
 
         let mut records = executor.exec(merged.into()).await?;
         let mut result = Vec::new();

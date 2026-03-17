@@ -8,6 +8,15 @@ pub struct Insert<M> {
     _p: PhantomData<M>,
 }
 
+impl<M> Insert<M> {
+    pub const fn from_untyped(untyped: stmt::Insert) -> Self {
+        Self {
+            untyped,
+            _p: PhantomData,
+        }
+    }
+}
+
 impl<M: Model> Insert<M> {
     /// Create an insertion statement that inserts an empty record
     /// (fields without #[auto] as `Expr::Value(Value::Null)`, #[auto] fields as `Expr::Default`).
@@ -37,13 +46,6 @@ impl<M: Model> Insert<M> {
         }
     }
 
-    pub const fn from_untyped(untyped: stmt::Insert) -> Self {
-        Self {
-            untyped,
-            _p: PhantomData,
-        }
-    }
-
     /// Set the scope of the insert.
     pub fn set_scope<S>(&mut self, scope: S)
     where
@@ -59,7 +61,6 @@ impl<M: Model> Insert<M> {
 
     /// Extend the expression for `field` with the given expression
     pub fn insert(&mut self, field: usize, expr: impl Into<stmt::Expr>) {
-        // self.expr_mut(field).push(expr);
         let target = self.expr_mut(field);
 
         match target {
@@ -93,8 +94,13 @@ impl<M: Model> Insert<M> {
         }
     }
 
-    pub(crate) fn merge(&mut self, stmt: Self) {
-        self.untyped.merge(stmt.untyped);
+    /// Convert this single-record insert into a batch insert.
+    pub fn into_list(mut self) -> Insert<List<M>> {
+        self.untyped.source.single = false;
+        Insert {
+            untyped: self.untyped,
+            _p: PhantomData,
+        }
     }
 
     fn expr_mut(&mut self, field: usize) -> &mut stmt::Expr {
@@ -105,6 +111,13 @@ impl<M: Model> Insert<M> {
     fn current_mut(&mut self) -> &mut stmt::ExprRecord {
         let values = self.untyped.source.body.as_values_mut();
         values.rows.last_mut().unwrap().as_record_mut()
+    }
+}
+
+impl<M: Model> Insert<List<M>> {
+    /// Merge another single insert into this batch.
+    pub(crate) fn merge(&mut self, stmt: Insert<M>) {
+        self.untyped.merge(stmt.untyped);
     }
 
     pub fn into_list_expr(self) -> Expr<List<M>> {
