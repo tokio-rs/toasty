@@ -128,19 +128,9 @@ pub async fn batch_create_fails_if_any_record_missing_fields(test: &mut Test) ->
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_unique_email))]
 pub async fn batch_create_model_with_unique_field_index_all_unique(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[unique]
-        email: String,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     let mut res = User::create_many()
         .item(User::create().email("user1@example.com"))
@@ -168,21 +158,10 @@ pub async fn batch_create_model_with_unique_field_index_all_unique(test: &mut Te
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_unique_email))]
 #[should_panic]
 pub async fn batch_create_model_with_unique_field_index_all_dups(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[unique]
-        #[allow(dead_code)]
-        email: String,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     let _res = User::create_many()
         .item(User::create().email("user@example.com"))
@@ -194,19 +173,9 @@ pub async fn batch_create_model_with_unique_field_index_all_dups(test: &mut Test
 
 /// Unique constraint violation on a multi-row batch is atomic because a single
 /// INSERT statement is inherently atomic in SQL databases.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::user_unique_email))]
 pub async fn batch_create_unique_violation_rolls_back(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[unique]
-        email: String,
-    }
-
-    let mut db = t.setup_db(models!(User)).await;
+    let mut db = setup(t).await;
 
     // Seed the duplicate
     User::create()
