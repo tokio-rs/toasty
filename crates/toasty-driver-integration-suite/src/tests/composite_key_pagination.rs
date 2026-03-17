@@ -132,10 +132,7 @@ pub async fn limit_composite_key(test: &mut Test) -> Result<()> {
     test.log().clear();
 
     // Limit without explicit ordering
-    let events: Vec<_> = Event::filter_by_kind("info")
-        .limit(7)
-        .exec(&mut db)
-        .await?;
+    let events: Vec<_> = Event::filter_by_kind("info").limit(7).exec(&mut db).await?;
     assert_eq!(events.len(), 7);
 
     let (op, _) = test.log().pop();

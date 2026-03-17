@@ -214,7 +214,7 @@ pub async fn limit_offset(t: &mut Test) -> Result<()> {
     }));
 
     t.log().clear();
-    
+
     // Limit combined with offset
     let items: Vec<_> = Item::all()
         .order_by(Item::fields().order().asc())
