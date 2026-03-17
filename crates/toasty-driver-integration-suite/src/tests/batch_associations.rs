@@ -4,31 +4,10 @@
 use crate::prelude::*;
 
 /// Batch two association-scoped creates on the same relation.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn batch_two_scoped_creates_same_relation(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        user_id: ID,
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-        title: String,
-    }
-
-    let mut db = t.setup_db(models!(User, Todo)).await;
-    let user = User::create().exec(&mut db).await?;
+    let mut db = setup(t).await;
+    let user = User::create().name("Alice").exec(&mut db).await?;
 
     let (t1, t2): (Todo, Todo) = toasty::batch((
         user.todos().create().title("first"),
@@ -91,31 +70,10 @@ pub async fn batch_two_scoped_queries_same_relation(t: &mut Test) -> Result<()> 
 }
 
 /// Batch association-scoped update and delete on the same relation.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn batch_scoped_update_and_delete_same_relation(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        user_id: ID,
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-        title: String,
-    }
-
-    let mut db = t.setup_db(models!(User, Todo)).await;
-    let user = User::create().exec(&mut db).await?;
+    let mut db = setup(t).await;
+    let user = User::create().name("Alice").exec(&mut db).await?;
     let todo_keep = user.todos().create().title("keep").exec(&mut db).await?;
     let todo_drop = user.todos().create().title("drop").exec(&mut db).await?;
 
@@ -137,31 +95,10 @@ pub async fn batch_scoped_update_and_delete_same_relation(t: &mut Test) -> Resul
 }
 
 /// Batch all four CRUD operations through association scope.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn batch_scoped_all_four_crud(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        user_id: ID,
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-        title: String,
-    }
-
-    let mut db = t.setup_db(models!(User, Todo)).await;
-    let user = User::create().exec(&mut db).await?;
+    let mut db = setup(t).await;
+    let user = User::create().name("Alice").exec(&mut db).await?;
     let existing = user
         .todos()
         .create()
@@ -356,32 +293,11 @@ pub async fn batch_query_across_relations(t: &mut Test) -> Result<()> {
 }
 
 /// Batch scoped operations from different parents.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn batch_scoped_different_parents(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        user_id: ID,
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-        title: String,
-    }
-
-    let mut db = t.setup_db(models!(User, Todo)).await;
-    let alice = User::create().exec(&mut db).await?;
-    let bob = User::create().exec(&mut db).await?;
+    let mut db = setup(t).await;
+    let alice = User::create().name("Alice").exec(&mut db).await?;
+    let bob = User::create().name("Bob").exec(&mut db).await?;
 
     // Create todos for different users in one batch
     let (alice_todo, bob_todo): (Todo, Todo) = toasty::batch((

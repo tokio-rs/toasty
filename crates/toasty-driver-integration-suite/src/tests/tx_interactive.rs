@@ -558,39 +558,15 @@ pub async fn two_sequential_nested_transactions(t: &mut Test) -> Result<()> {
 /// When a multi-op statement (e.g. create with association) runs inside an
 /// interactive transaction, the engine wraps it in SAVEPOINT/RELEASE instead
 /// of BEGIN/COMMIT.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn multi_op_inside_tx_uses_savepoints(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-
-        title: String,
-    }
-
-    let mut db = t.setup_db(models!(User, Todo)).await;
+    let mut db = setup(t).await;
 
     t.log().clear();
 
     let mut tx = db.transaction().await?;
     let user = User::create()
+        .name("Alice")
         .todo(Todo::create().title("task"))
         .exec(&mut tx)
         .await?;
