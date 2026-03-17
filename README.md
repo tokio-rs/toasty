@@ -10,7 +10,7 @@ features based on the target database.
 
 [User guide](https://tokio-rs.github.io/toasty/nightly/guide/): Explore Toasty in depth.
 
-[Nightly API docs](https://tokio-rs.github.io/toasty/nightly/toasty/): API reference built from the latest commit.
+[Nightly API docs](https://tokio-rs.github.io/toasty/nightly/api/): API reference built from the latest commit.
 
 ## Using Toasty
 
