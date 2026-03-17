@@ -202,7 +202,7 @@ User::filter_by_id(user_id)
     .await?;
 ```
 
-### Embedded types: partial updates without `.with_`
+### Embedded types
 
 Today, partially updating an embedded enum requires a separate `.with_` method:
 
@@ -213,33 +213,35 @@ user.update()
     .await?;
 ```
 
-With `IntoAssignment`, the regular setter handles both full replacement and
-partial updates. Passing a value replaces the whole field. Passing a closure
-patches it in place:
+The `.with_critter()` method stays for now. The `.critter()` setter accepts
+`impl IntoAssignment<Creature>`, which covers full replacement via a plain value:
 
 ```rust
-// Replace the entire enum value
 user.update()
     .critter(Creature::Human { profession: "doctor".into(), age: 30 })
     .exec(&mut db)
     .await?;
+```
 
-// Partial update: change just one variant field
+For partial updates, a combinator returns `Assignment<Creature>` without needing
+a closure. Code generation produces an update builder for each embedded type.
+`Creature::update()` returns a builder whose setters record sub-path mutations
+and whose final value implements `IntoAssignment<Creature>`:
+
+```rust
 user.update()
-    .critter(|c| {
-        c.profession("doctor");
-    })
+    .critter(Creature::update().profession("doctor"))
     .exec(&mut db)
     .await?;
 ```
 
-Both go through `.critter(impl IntoAssignment<Creature>)`. The plain value
-impl calls `assignments.set()`. The closure impl writes individual sub-path
-assignments, producing something like
-`assignments.set([critter, profession], "doctor")` — updating the profession
-column without touching the age column.
+This produces `assignments.set([critter, profession], "doctor")` — updating the
+profession column without touching the age column. The builder approach avoids
+the trait coherence problem that closures would cause (a closure impl of
+`IntoAssignment` would conflict with the blanket expr impl).
 
-This replaces the `.with_critter()` method entirely.
+The `.with_critter()` method remains as an alternative and may be removed in a
+future iteration once the combinator approach is proven out.
 
 ### What `IntoAssignment` unifies
 
@@ -248,13 +250,14 @@ The same `.field(impl IntoAssignment<T>)` pattern covers every field type:
 | Field type | Plain value | `stmt::` combinator | Array |
 |---|---|---|---|
 | Scalar (`String`) | Set the field | `stmt::set` (explicit) | — |
-| Embedded (`Creature`) | Replace the whole value | — | Patch specific sub-fields via closure |
+| Embedded (`Creature`) | Replace the whole value | `Creature::update()` builder | — |
 | BelongsTo (`User`) | Set the association | — | — |
 | HasMany (`List<Todo>`) | — (ambiguous) | `stmt::insert`, `stmt::remove`, `stmt::set` | Multiple operations |
 
 Every setter method has the same signature. The argument type determines the
-behavior. No more `.todo()` vs `.remove_todo()` vs `.set_todos()` vs
-`.with_critter()` — each field gets one method named after the field.
+behavior. No more `.todo()` vs `.remove_todo()` vs `.set_todos()` — each field
+gets one method named after the field. The `.with_` methods for embedded types
+remain for now alongside the new combinator approach.
 
 ### Summary
 
@@ -267,4 +270,4 @@ behavior. No more `.todo()` vs `.remove_todo()` vs `.set_todos()` vs
 | _not possible_ | `.todos(stmt::set([...]))` |
 | _not possible_ | `.todos([stmt::insert(a), stmt::remove(b)])` |
 | `.critter(value)` | `.critter(value)` (unchanged) |
-| `.with_critter(\|c\| c.profession("x"))` | `.critter(\|c\| c.profession("x"))` |
+| `.with_critter(\|c\| c.profession("x"))` | `.critter(Creature::update().profession("x"))` or `.with_critter()` (kept) |
