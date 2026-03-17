@@ -39,6 +39,13 @@ trait RelationSource: std::fmt::Debug {
 
     /// Update a returning field expression
     fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr);
+
+    /// Add an additional filter condition to the source statement.
+    /// Used to guard FK assignments when extra conditions were dropped
+    /// during key extraction from conjunctive filters.
+    fn add_filter(&mut self, _filter: stmt::Expr) {
+        // Default: no-op for sources that don't support filter modification
+    }
 }
 
 #[derive(Debug)]
@@ -53,7 +60,7 @@ struct InsertRelationSource<'a> {
 #[derive(Debug)]
 struct UpdateRelationSource<'a> {
     model: &'a app::ModelRoot,
-    filter: &'a stmt::Filter,
+    filter: &'a mut stmt::Filter,
     assignments: &'a mut stmt::Assignments,
     returning: &'a mut Option<stmt::Returning>,
     returning_changed: bool,
@@ -122,7 +129,7 @@ impl LowerStatement<'_, '_> {
     pub(super) fn plan_stmt_update_relations(
         &mut self,
         assignments: &mut stmt::Assignments,
-        filter: &stmt::Filter,
+        filter: &mut stmt::Filter,
         returning: &mut Option<stmt::Returning>,
         returning_changed: bool,
     ) {
@@ -548,12 +555,22 @@ impl LowerStatement<'_, '_> {
                     .map(|fk_field| fk_field.target)
                     .collect();
 
-                let Some(expr) = Simplify::new(self.schema()).extract_key_expr(&fields, &query)
+                let Some(extracted) =
+                    Simplify::new(self.schema()).extract_key_expr(&fields, &query)
                 else {
                     todo!("belongs_to={:#?}; stmt={:#?}", belongs_to, query);
                 };
 
-                self.plan_mut_belongs_to_associate(field, expr, source);
+                if extracted.has_extra_conditions {
+                    // The original query had additional filter conditions
+                    // beyond the key equality (e.g., `WHERE id = 1 AND name =
+                    // "foo"`). Add the full query as an EXISTS guard on the
+                    // parent update so the FK is only set when all conditions
+                    // match.
+                    source.add_filter(stmt::Expr::exists(query));
+                }
+
+                self.plan_mut_belongs_to_associate(field, extracted.expr, source);
             }
             _ => todo!("stmt={:#?}", stmt),
         }
@@ -640,6 +657,10 @@ impl RelationSource for UpdateRelationSource<'_> {
 
     fn set_source_field(&mut self, field: FieldId, expr: stmt::Expr) {
         self.assignments.set(field, expr);
+    }
+
+    fn add_filter(&mut self, filter: stmt::Expr) {
+        self.filter.add_filter(filter);
     }
 
     fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr) {

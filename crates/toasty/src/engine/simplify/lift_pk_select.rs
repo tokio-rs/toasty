@@ -2,6 +2,18 @@ use toasty_core::{schema::app::FieldId, stmt};
 
 use crate::engine::simplify::Simplify;
 
+/// Result of extracting a key expression from a subquery.
+pub(crate) struct ExtractedKey {
+    /// The extracted key expression (e.g., the constant `123`).
+    pub expr: stmt::Expr,
+
+    /// Whether additional filter conditions beyond the key equality were
+    /// present in the original query. When `true`, the caller must ensure
+    /// the additional conditions are preserved as a guard (e.g., by adding
+    /// the original query as an `IN` subquery filter on the parent update).
+    pub has_extra_conditions: bool,
+}
+
 impl Simplify<'_> {
     /// Extracts the constant value from a simple subquery that filters on a key field.
     ///
@@ -10,14 +22,9 @@ impl Simplify<'_> {
     /// extracted value to eliminate the subquery entirely. Primarily used during belongs-to
     /// relationship planning to extract foreign key values.
     ///
-    /// Example usage by caller:
-    /// ```sql
-    /// -- Subquery analyzed by this method
-    /// (SELECT id FROM users WHERE id = 123)
-    ///
-    /// -- If this method returns Some(123), caller replaces subquery with:
-    /// 123
-    /// ```
+    /// When the filter is a conjunction (e.g., `WHERE id = 123 AND name = "foo"`), the key
+    /// value is extracted but `has_extra_conditions` is set to `true` so the caller can
+    /// preserve the additional conditions.
     ///
     /// Returns `None` if the subquery pattern doesn't match (e.g., complex filters,
     /// composite keys, non-equality operators).
@@ -25,7 +32,7 @@ impl Simplify<'_> {
         &mut self,
         key: &[FieldId],
         stmt: &stmt::Query,
-    ) -> Option<stmt::Expr> {
+    ) -> Option<ExtractedKey> {
         let cx = self.cx.scope(stmt);
 
         let stmt::ExprSet::Select(select) = &stmt.body else {
@@ -33,52 +40,68 @@ impl Simplify<'_> {
         };
 
         match select.filter.as_expr() {
-            stmt::Expr::BinaryOp(expr_binary_op) => {
-                if !expr_binary_op.op.is_eq() {
-                    return None;
-                }
-
-                let [key_field] = key else {
-                    return None;
-                };
-
-                match (&*expr_binary_op.lhs, &*expr_binary_op.rhs) {
-                    (
-                        stmt::Expr::Reference(
-                            inner @ stmt::ExprReference::Field { nesting: 0, .. },
-                        ),
-                        stmt::Expr::Reference(outer @ stmt::ExprReference::Field { nesting, .. }),
-                    )
-                    | (
-                        stmt::Expr::Reference(outer @ stmt::ExprReference::Field { nesting, .. }),
-                        stmt::Expr::Reference(
-                            inner @ stmt::ExprReference::Field { nesting: 0, .. },
-                        ),
-                    ) if *nesting > 0 => {
-                        self.extract_key_expr_nested_ref(&cx, *key_field, inner, outer)
-                    }
-                    (stmt::Expr::Reference(_), stmt::Expr::Reference(_)) => {
-                        todo!("stmt={stmt:#?}");
-                    }
-                    (stmt::Expr::Reference(expr_ref), other)
-                    | (other, stmt::Expr::Reference(expr_ref)) => {
-                        let field_ref = cx.resolve_expr_reference(expr_ref).expect_field();
-
-                        if *key_field == field_ref.id {
-                            if let stmt::Expr::Value(value) = other {
-                                Some(value.clone().into())
-                            } else {
-                                todo!()
-                            }
-                        } else {
-                            None
+            stmt::Expr::BinaryOp(expr_binary_op) => self
+                .try_extract_key_from_binary_op(&cx, key, expr_binary_op)
+                .map(|expr| ExtractedKey {
+                    expr,
+                    has_extra_conditions: false,
+                }),
+            stmt::Expr::And(expr_and) => {
+                // Search each operand for the key equality condition.
+                for operand in &expr_and.operands {
+                    if let stmt::Expr::BinaryOp(expr_binary_op) = operand {
+                        if let Some(expr) =
+                            self.try_extract_key_from_binary_op(&cx, key, expr_binary_op)
+                        {
+                            return Some(ExtractedKey {
+                                expr,
+                                has_extra_conditions: true,
+                            });
                         }
                     }
-                    _ => None,
                 }
+                None
             }
-            stmt::Expr::And(_) => {
-                todo!("either support PKs or check each op for the key");
+            _ => None,
+        }
+    }
+
+    fn try_extract_key_from_binary_op(
+        &self,
+        cx: &stmt::ExprContext,
+        key: &[FieldId],
+        expr_binary_op: &stmt::ExprBinaryOp,
+    ) -> Option<stmt::Expr> {
+        if !expr_binary_op.op.is_eq() {
+            return None;
+        }
+
+        let [key_field] = key else {
+            return None;
+        };
+
+        match (&*expr_binary_op.lhs, &*expr_binary_op.rhs) {
+            (
+                stmt::Expr::Reference(inner @ stmt::ExprReference::Field { nesting: 0, .. }),
+                stmt::Expr::Reference(outer @ stmt::ExprReference::Field { nesting, .. }),
+            )
+            | (
+                stmt::Expr::Reference(outer @ stmt::ExprReference::Field { nesting, .. }),
+                stmt::Expr::Reference(inner @ stmt::ExprReference::Field { nesting: 0, .. }),
+            ) if *nesting > 0 => self.extract_key_expr_nested_ref(cx, *key_field, inner, outer),
+            (stmt::Expr::Reference(_), stmt::Expr::Reference(_)) => None,
+            (stmt::Expr::Reference(expr_ref), other) | (other, stmt::Expr::Reference(expr_ref)) => {
+                let field_ref = cx.resolve_expr_reference(expr_ref).expect_field();
+
+                if *key_field == field_ref.id {
+                    if let stmt::Expr::Value(value) = other {
+                        Some(value.clone().into())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
             }
             _ => None,
         }
