@@ -40,7 +40,7 @@ pub async fn filter_unit_enum_ne(t: &mut Test) -> Result<()> {
 
     // ne(Active) should return Pending and Done
     let not_active = Task::filter(Task::fields().status().ne(Status::Active))
-        .all(&mut db)
+        .exec(&mut db)
         .await?;
 
     assert_eq!(not_active.len(), 2);
@@ -93,7 +93,7 @@ pub async fn filter_unit_enum_in_list(t: &mut Test) -> Result<()> {
             .status()
             .in_list([Status::Pending, Status::Done]),
     )
-    .all(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert_eq!(pending_or_done.len(), 2);
@@ -145,7 +145,7 @@ pub async fn filter_data_enum_ne(t: &mut Test) -> Result<()> {
     let not_alice_email = User::filter(User::fields().contact().ne(ContactInfo::Email {
         address: "alice@example.com".to_string(),
     }))
-    .all(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert_eq!(not_alice_email.len(), 1);
