@@ -262,6 +262,33 @@ user.update()
 Each `stmt::patch` returns `Assignment<Creature>`, and `[Assignment<T>; N]`
 implements `IntoAssignment<T>`, so the array is accepted by `.critter()`.
 
+#### Nested patching
+
+Because `Assignment<T>` implements `IntoExpr<T>`, `stmt::patch` composes with
+itself. When an embedded type contains another embedded type, the inner patch
+becomes the value argument to the outer patch:
+
+```rust
+user.update()
+    .kind(
+        stmt::patch(
+            Kind::variants().admin().perm(),
+            stmt::patch(
+                Permission::fields().everything(),
+                true,
+            ),
+        ),
+    )
+    .exec(&mut db)
+    .await?;
+```
+
+Here `stmt::patch(Permission::fields().everything(), true)` returns
+`Assignment<Permission>`, which implements `IntoExpr<Permission>`. The outer
+`stmt::patch` accepts it as the value for the `perm` path, returning
+`Assignment<Kind>`. The nesting works to arbitrary depth — each layer resolves
+one level of the field path.
+
 This approach avoids generating update builder types for embedded types
 entirely — the `fields()` path infrastructure already exists and provides full
 type safety. It also avoids the trait coherence problem that closures would
@@ -299,3 +326,4 @@ remain for now alongside `stmt::patch`.
 | _not possible_ | `.todos([stmt::insert(a), stmt::remove(b)])` |
 | `.critter(value)` | `.critter(value)` (unchanged) |
 | `.with_critter(\|c\| c.profession("x"))` | `.critter(stmt::patch(Creature::fields().human().profession(), "x"))` |
+| _not possible_ | `.kind(stmt::patch(path, stmt::patch(inner_path, val)))` (nested) |
