@@ -178,16 +178,75 @@ gains these methods:
 The singular form (`.todo()`, `.remove_todo()`) comes from the relation's
 configured singular name. The plural form (`.set_todos()`) uses the field name.
 
-## Future direction: unified `.todos()` method
+## Future direction: `IntoAssignment<T>` and unified setter methods
 
 The methods above (`.todo()`, `.remove_todo()`, `.set_todos()`) are a stepping
-stone. The long-term API consolidates everything into a single `.todos()` method
-that takes a mutation description. The singular `.todo()` method gets deprecated.
+stone toward a unified update API. The long-term design replaces all
+per-operation methods with a single setter per field, where the argument itself
+carries the mutation semantics.
 
-### The `Patch` builder
+### The problem
 
-A generated `Patch` type describes what to do with the set. The `.todos()`
-method accepts a closure that receives a `Patch` builder:
+Today, update builder setters use three different patterns depending on field
+type:
+
+```rust
+// Scalar: .field(impl IntoExpr<T>) → calls assignments.set()
+user.update().name("Alice")
+
+// HasMany: .todo(impl IntoExpr<T>) → calls assignments.insert()
+user.update().todo(Todo::create().title("Buy groceries"))
+
+// Embedded partial: .with_field(|builder| ...) → closure modifies sub-paths
+user.update().with_critter(|c| c.profession("doctor"))
+```
+
+Each field type has its own method naming convention, its own argument type, and
+its own implied behavior. HasMany needs additional methods (`.remove_todo()`,
+`.set_todos()`) that don't exist for other field types. Embedded fields need a
+separate `.with_` method that takes a closure. There's no consistent pattern.
+
+### `IntoAssignment<T>`
+
+A single trait replaces all of these:
+
+```rust
+trait IntoAssignment<T> {
+    fn into_assignment(self, field: &mut Assignments, projection: Projection);
+}
+```
+
+Every update builder setter becomes `.field(impl IntoAssignment<T>)`. The
+argument decides what kind of mutation to record. For most uses, the call site
+looks the same as today because `IntoExpr<T>` gets a blanket impl of
+`IntoAssignment<T>` that defaults to the right operation for the field type.
+
+### Scalars: no visible change
+
+Passing a plain value to a scalar field still means "set":
+
+```rust
+user.update().name("Alice").exec(&mut db).await?;
+```
+
+`&str` implements `IntoExpr<String>`, which has a blanket `IntoAssignment`
+impl that calls `assignments.set()`. Nothing changes at the call site.
+
+### Has-many: the `todos()` method
+
+The update builder generates a single `.todos()` method (plural, matching the
+field name) instead of `.todo()` / `.remove_todo()` / `.set_todos()`:
+
+```rust
+// Passing a value implies insert (one todo)
+user.update()
+    .todos(Todo::create().title("Buy groceries"))
+    .exec(&mut db)
+    .await?;
+```
+
+For multiple operations, pass a closure. The closure receives a patch builder
+that records the full mutation:
 
 ```rust
 user.update()
@@ -201,14 +260,13 @@ user.update()
     .await?;
 ```
 
-The closure runs synchronously at build time — it only records operations, it
-doesn't execute them. The update builder collects the patch and sends all
-operations to the database when `.exec()` is called.
+The closure runs synchronously at build time — it records operations, it doesn't
+execute them. All operations run when `.exec()` is called.
 
-### Insert
+#### Insert
 
-`Patch::insert()` adds a new or existing record to the set. Call it multiple
-times to add several:
+`insert()` adds a new or existing record to the set. Call it multiple times to
+add several:
 
 ```rust
 user.update()
@@ -221,11 +279,11 @@ user.update()
     .await?;
 ```
 
-This keeps all current todos and adds the new ones.
+All current todos remain. The new ones are added.
 
-### Remove
+#### Remove
 
-`Patch::remove()` detaches a specific record from the set:
+`remove()` detaches a specific record:
 
 ```rust
 user.update()
@@ -239,31 +297,15 @@ user.update()
 
 All other todos remain untouched.
 
-### Combined insert and remove
+#### Replace
 
-A single patch can mix inserts and removes:
-
-```rust
-user.update()
-    .todos(|t| {
-        t.insert(Todo::create().title("New task"));
-        t.remove(&old_todo);
-    })
-    .exec(&mut db)
-    .await?;
-```
-
-### Replace
-
-`Patch::set()` replaces the entire set. It disassociates all current members,
-then associates the given records:
+`set()` replaces the entire set. It disassociates all current members, then
+associates the given records:
 
 ```rust
 user.update()
     .todos(|t| {
-        t.set([
-            Todo::create().title("Only todo"),
-        ]);
+        t.set([Todo::create().title("Only todo")]);
     })
     .exec(&mut db)
     .await?;
@@ -280,71 +322,94 @@ user.update()
     .await?;
 ```
 
-`set()` consumes the patch builder. It cannot be followed by `insert()` or
-`remove()` calls — these are conflicting intents and produce a compile-time
-error.
+`set()` consumes the patch builder. It cannot be combined with `insert()` or
+`remove()` — these are conflicting intents and produce a compile-time error.
 
-### Shorthand for common cases
+#### How it works
 
-When the patch is a single operation, passing just the value implies insert —
-preserving the feel of today's `.todo()` method:
-
-```rust
-// These are equivalent:
-user.update().todos(Todo::create().title("New")).exec(&mut db).await?;
-user.update().todos(|t| t.insert(Todo::create().title("New"))).exec(&mut db).await?;
-```
-
-This works because `.todos()` accepts `impl IntoTodosPatch`, and both closures
-and single create expressions implement this trait. The generated trait looks
-like:
+The `.todos()` method accepts `impl IntoAssignment<HasMany<Todo>>`. Multiple
+types implement this trait:
 
 ```rust
-// Generated per has-many relation
-trait IntoTodosPatch {
-    fn into_patch(self, patch: &mut TodosPatch);
-}
+// A closure that configures the patch builder
+impl<F: FnOnce(&mut TodosPatch)> IntoAssignment<HasMany<Todo>> for F { ... }
 
-// A closure that configures the patch
-impl<F: FnOnce(&mut TodosPatch)> IntoTodosPatch for F {
-    fn into_patch(self, patch: &mut TodosPatch) {
-        self(patch);
-    }
-}
+// A single create builder — shorthand for insert
+impl IntoAssignment<HasMany<Todo>> for TodoCreateBuilder { ... }
 
-// A single create builder implies insert
-impl IntoTodosPatch for TodoCreateBuilder {
-    fn into_patch(self, patch: &mut TodosPatch) {
-        patch.insert(self);
-    }
-}
-
-// A reference to an existing record implies insert
-impl IntoTodosPatch for &Todo {
-    fn into_patch(self, patch: &mut TodosPatch) {
-        patch.insert(self);
-    }
-}
+// A reference to an existing record — shorthand for insert
+impl IntoAssignment<HasMany<Todo>> for &Todo { ... }
 ```
+
+### Embedded types: partial updates without `.with_`
+
+Today, partially updating an embedded enum requires a separate `.with_` method:
+
+```rust
+user.update()
+    .with_critter(|c| c.profession("doctor"))
+    .exec(&mut db)
+    .await?;
+```
+
+With `IntoAssignment`, the regular setter handles both full replacement and
+partial updates. Passing a value replaces the whole field. Passing a closure
+patches it in place:
+
+```rust
+// Replace the entire enum value
+user.update()
+    .critter(Creature::Human { profession: "doctor".into(), age: 30 })
+    .exec(&mut db)
+    .await?;
+
+// Partial update: change just one variant field
+user.update()
+    .critter(|c| {
+        c.profession("doctor");
+    })
+    .exec(&mut db)
+    .await?;
+```
+
+Both go through `.critter(impl IntoAssignment<Creature>)`. The plain value
+impl calls `assignments.set()`. The closure impl writes individual sub-path
+assignments, producing something like
+`assignments.set([critter, profession], "doctor")` — updating the profession
+column without touching the age column.
+
+This replaces the `.with_critter()` method entirely.
+
+### What `IntoAssignment` unifies
+
+The same `.field(impl IntoAssignment<T>)` pattern covers every field type:
+
+| Field type | Plain value | Closure |
+|---|---|---|
+| Scalar (`String`) | Set the field | — |
+| Embedded (`Creature`) | Replace the whole value | Patch specific sub-fields |
+| BelongsTo (`User`) | Set the association | — |
+| HasMany (`Vec<Todo>`) | Insert one record | Insert, remove, replace via patch builder |
+
+Every setter method has the same signature. The argument type determines the
+behavior. No more `.todo()` vs `.remove_todo()` vs `.set_todos()` vs
+`.with_critter()` — each field gets one method named after the field.
 
 ### Migration path
 
-1. Ship the `.todos(|t| ...)` method alongside the existing `.todo()` method.
-2. Deprecate `.todo()`, `.remove_todo()`, and `.set_todos()`.
+1. Ship `.todos()` alongside the existing `.todo()` method. Ship
+   `IntoAssignment` alongside `IntoExpr` in setters.
+2. Deprecate `.todo()`, `.remove_todo()`, `.set_todos()`, and `.with_*()`.
 3. Remove the deprecated methods in a future release.
-
-The deprecation warnings guide users to the new form:
-
-```
-warning: `todo()` is deprecated, use `todos(|t| t.insert(...))` or `todos(...)` instead
-```
 
 ### Summary
 
-| Old (deprecated) | New |
+| Today | With `IntoAssignment` |
 |---|---|
-| `.todo(expr)` | `.todos(expr)` or `.todos(\|t\| t.insert(expr))` |
+| `.name("Alice")` | `.name("Alice")` (unchanged) |
+| `.todo(expr)` | `.todos(expr)` |
 | `.todo(a).todo(b)` | `.todos(\|t\| { t.insert(a); t.insert(b); })` |
 | `.remove_todo(expr)` | `.todos(\|t\| t.remove(expr))` |
 | `.set_todos(exprs)` | `.todos(\|t\| t.set(exprs))` |
-| `.todo(a).remove_todo(b)` | `.todos(\|t\| { t.insert(a); t.remove(b); })` |
+| `.critter(value)` | `.critter(value)` (unchanged) |
+| `.with_critter(\|c\| c.profession("x"))` | `.critter(\|c\| c.profession("x"))` |
