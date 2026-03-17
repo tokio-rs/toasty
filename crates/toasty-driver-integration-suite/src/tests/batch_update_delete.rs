@@ -25,9 +25,9 @@ pub async fn batch_two_updates_same_model(t: &mut Test) -> Result<()> {
     .await?;
 
     // Verify updates applied
-    let alice: Vec<User> = User::filter_by_name("Alice2").collect(&mut db).await?;
+    let alice: Vec<User> = User::filter_by_name("Alice2").exec(&mut db).await?;
     assert_eq!(alice.len(), 1);
-    let bob: Vec<User> = User::filter_by_name("Bob2").collect(&mut db).await?;
+    let bob: Vec<User> = User::filter_by_name("Bob2").exec(&mut db).await?;
     assert_eq!(bob.len(), 1);
 
     Ok(())
@@ -59,7 +59,7 @@ pub async fn batch_two_deletes_same_model(t: &mut Test) -> Result<()> {
     .await?;
 
     // Verify deletes applied, Carol remains
-    let all: Vec<User> = User::all().collect(&mut db).await?;
+    let all: Vec<User> = User::all().exec(&mut db).await?;
     assert_eq!(all.len(), 1);
     assert_eq!(all[0].name, "Carol");
 
@@ -100,11 +100,11 @@ pub async fn batch_update_and_delete(t: &mut Test) -> Result<()> {
     .await?;
 
     // User updated
-    let users: Vec<User> = User::filter_by_name("Alice2").collect(&mut db).await?;
+    let users: Vec<User> = User::filter_by_name("Alice2").exec(&mut db).await?;
     assert_eq!(users.len(), 1);
 
     // Post deleted
-    let posts: Vec<Post> = Post::all().collect(&mut db).await?;
+    let posts: Vec<Post> = Post::all().exec(&mut db).await?;
     assert_eq!(posts.len(), 0);
 
     Ok(())
@@ -140,15 +140,15 @@ pub async fn batch_all_four_statement_types(t: &mut Test) -> Result<()> {
     assert_eq!(created.name, "Carol");
 
     // Verify update applied
-    let alice: Vec<User> = User::filter_by_name("Alice2").collect(&mut db).await?;
+    let alice: Vec<User> = User::filter_by_name("Alice2").exec(&mut db).await?;
     assert_eq!(alice.len(), 1);
 
     // Verify delete applied
-    let bob: Vec<User> = User::filter_by_name("Bob").collect(&mut db).await?;
+    let bob: Vec<User> = User::filter_by_name("Bob").exec(&mut db).await?;
     assert_eq!(bob.len(), 0);
 
     // Carol was created
-    let carol: Vec<User> = User::filter_by_name("Carol").collect(&mut db).await?;
+    let carol: Vec<User> = User::filter_by_name("Carol").exec(&mut db).await?;
     assert_eq!(carol.len(), 1);
 
     Ok(())
@@ -174,7 +174,7 @@ pub async fn batch_instance_delete(t: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
 
-    let all: Vec<User> = User::all().collect(&mut db).await?;
+    let all: Vec<User> = User::all().exec(&mut db).await?;
     assert_eq!(all.len(), 0);
 
     Ok(())

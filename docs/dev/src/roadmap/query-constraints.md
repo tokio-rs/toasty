@@ -74,7 +74,7 @@ These features have core AST and SQL serialization but need user-facing APIs:
 
 **NOT IN**
 - Current: `IN` exists but no negated form
-- Needed: `ExprNotInList` or negate the `InList` expression, plus `.not_in_set()` user API
+- Needed: `ExprNotInList` or negate the `InList` expression, plus `.not_in_list()` user API
 - Files: `crates/toasty/src/stmt/path.rs`, `crates/toasty-core/src/stmt/expr.rs`
 - Use case: Exclusion lists (e.g., "exclude these IDs from results")
 
@@ -202,7 +202,7 @@ Based on the analysis above, the following groupings maximize user value:
 
 **Group 1: Expose Existing Internals**
 Items with core AST and SQL serialization that only need user-facing methods:
-- `.not_in_set()` on `Path<T>` (negate existing `InList`)
+- `.not_in_list()` on `Path<T>` (negate existing `InList`)
 
 Estimated scope: ~50 lines of user-facing API code + integration tests
 

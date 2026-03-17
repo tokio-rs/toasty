@@ -11,7 +11,6 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
         let update_struct_ident = &self.model.kind.expect_root().update_struct_ident;
-        let collect_ty = util::ident("A");
         let include_ty = util::ident("T");
         let filter_methods = self.expand_query_filter_methods();
         let relation_methods = self.expand_relation_methods();
@@ -29,7 +28,7 @@ impl Expand<'_> {
 
                 #filter_methods
 
-                #vis async fn all(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<Vec<#model_ident>> {
+                #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<Vec<#model_ident>> {
                     use #toasty::ExecutorExt;
                     executor.all(self.stmt).await
                 }
@@ -50,16 +49,6 @@ impl Expand<'_> {
 
                 #vis fn delete(self) -> #toasty::stmt::Delete<#model_ident> {
                     self.stmt.delete()
-                }
-
-                #vis async fn collect<#collect_ty>(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#collect_ty>
-                where
-                    #collect_ty: Extend<#model_ident> + Default,
-                {
-                    let items = self.all(executor).await?;
-                    let mut out = #collect_ty::default();
-                    out.extend(items);
-                    Ok(out)
                 }
 
                 #vis fn paginate(self, per_page: usize) -> #toasty::stmt::Paginate<#model_ident> {

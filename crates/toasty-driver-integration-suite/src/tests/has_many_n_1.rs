@@ -63,7 +63,7 @@ pub async fn hello_world(test: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
 
-    let todos = user.todos().all(&mut db).await?;
+    let todos = user.todos().exec(&mut db).await?;
 
     assert_eq!(3, todos.len());
     Ok(())
