@@ -22,7 +22,7 @@ pub async fn filter_composite_key_in_list(test: &mut Test) -> Result<()> {
     }
 
     // Use the free function form with a tuple of field paths
-    let foos: Vec<_> = Foo::filter(toasty::stmt::in_list::<(String, String)>(
+    let foos: Vec<_> = Foo::filter(toasty::stmt::in_list(
         (Foo::fields().one(), Foo::fields().two()),
         [("foo-1", "bar-1"), ("foo-3", "bar-3")],
     ))
@@ -58,7 +58,7 @@ pub async fn filter_composite_key_in_list_empty(test: &mut Test) -> Result<()> {
     Foo::create().one("a").two("b").exec(&mut db).await?;
 
     let empty: Vec<(String, String)> = vec![];
-    let foos: Vec<_> = Foo::filter(toasty::stmt::in_list::<(String, String)>(
+    let foos: Vec<_> = Foo::filter(toasty::stmt::in_list(
         (Foo::fields().one(), Foo::fields().two()),
         empty,
     ))
