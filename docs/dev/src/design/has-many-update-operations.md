@@ -44,9 +44,12 @@ trait IntoAssignment<T> {
 ```
 
 Every update builder setter becomes `.field(impl IntoAssignment<T>)`. The
-argument decides what kind of mutation to record. For most uses, the call site
-looks the same as today because `IntoExpr<T>` gets a blanket impl of
-`IntoAssignment<T>` that defaults to the right operation for the field type.
+argument decides what kind of mutation to record. For scalar fields, the call
+site looks the same as today because `IntoExpr<T>` gets a blanket impl of
+`IntoAssignment<T>` that defaults to set. For collection fields, callers must
+use an explicit combinator (`stmt::insert`, `stmt::remove`, `stmt::set`) — there
+is no blanket lift from `IntoAssignment<T>` to `IntoAssignment<List<T>>` because
+the intent (insert vs. replace) would be ambiguous.
 
 ### Assignment combinators
 
@@ -100,17 +103,7 @@ name) instead of today's singular `.todo()`. The method accepts
 
 #### Insert
 
-Pass a value directly to insert one todo. A bare `IntoExpr<Todo>` gets a
-blanket `IntoAssignment<List<Todo>>` impl that defaults to insert:
-
-```rust
-user.update()
-    .todos(Todo::create().title("Buy groceries"))
-    .exec(&mut db)
-    .await?;
-```
-
-Or be explicit with `stmt::insert`:
+Use `stmt::insert` to add a record to the collection:
 
 ```rust
 user.update()
@@ -119,8 +112,13 @@ user.update()
     .await?;
 ```
 
-Both produce the same assignment. `stmt::insert` takes an `impl IntoExpr<Todo>`
-and returns an `Assignment<List<Todo>>`, which `.todos()` accepts.
+`stmt::insert` takes an `impl IntoExpr<Todo>` and returns an
+`Assignment<List<Todo>>`, which `.todos()` accepts. The combinator is always
+required — passing a bare `Todo::create()` directly to `.todos()` won't compile
+because there is no implicit lift from `IntoAssignment<Todo>` to
+`IntoAssignment<List<Todo>>`. This is intentional: a bare value going into a
+collection field is ambiguous (insert? replace the whole set?) so the caller
+must be explicit.
 
 #### Remove
 
@@ -252,7 +250,7 @@ The same `.field(impl IntoAssignment<T>)` pattern covers every field type:
 | Scalar (`String`) | Set the field | `stmt::set` (explicit) | — |
 | Embedded (`Creature`) | Replace the whole value | — | Patch specific sub-fields via closure |
 | BelongsTo (`User`) | Set the association | — | — |
-| HasMany (`List<Todo>`) | Insert one record | `stmt::insert`, `stmt::remove`, `stmt::set` | Multiple operations |
+| HasMany (`List<Todo>`) | — (ambiguous) | `stmt::insert`, `stmt::remove`, `stmt::set` | Multiple operations |
 
 Every setter method has the same signature. The argument type determines the
 behavior. No more `.todo()` vs `.remove_todo()` vs `.set_todos()` vs
@@ -263,7 +261,7 @@ behavior. No more `.todo()` vs `.remove_todo()` vs `.set_todos()` vs
 | Today | With `IntoAssignment` |
 |---|---|
 | `.name("Alice")` | `.name("Alice")` (unchanged) |
-| `.todo(expr)` | `.todos(expr)` or `.todos(stmt::insert(expr))` |
+| `.todo(expr)` | `.todos(stmt::insert(expr))` |
 | `.todo(a).todo(b)` | `.todos([stmt::insert(a), stmt::insert(b)])` |
 | _not possible_ | `.todos(stmt::remove(&todo))` |
 | _not possible_ | `.todos(stmt::set([...]))` |
