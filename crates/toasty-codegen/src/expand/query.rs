@@ -28,7 +28,7 @@ impl Expand<'_> {
 
                 #filter_methods
 
-                #vis async fn all(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<Vec<#model_ident>> {
+                #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<Vec<#model_ident>> {
                     use #toasty::ExecutorExt;
                     executor.all(self.stmt).await
                 }
