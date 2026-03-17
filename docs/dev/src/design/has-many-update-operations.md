@@ -172,36 +172,34 @@ user.update()
 
 #### Multiple operations
 
-For combinations of insert and remove in a single update, pass a closure. The
-closure receives a patch builder that records the full mutation:
+Arrays of assignments implement `IntoAssignment<T>` when their elements do.
+This means `[Q; N]: IntoAssignment<T> where Q: IntoAssignment<T>`. Combine
+inserts, removes, and other operations by passing an array:
 
 ```rust
 user.update()
     .name("Alice")
-    .todos(|t| {
-        t.insert(Todo::create().title("Buy groceries"));
-        t.insert(Todo::create().title("Walk the dog"));
-        t.remove(&old_todo);
-    })
+    .todos([
+        stmt::insert(Todo::create().title("Buy groceries")),
+        stmt::insert(Todo::create().title("Walk the dog")),
+        stmt::remove(&old_todo),
+    ])
     .exec(&mut db)
     .await?;
 ```
 
-The closure runs synchronously at build time — it records operations, it doesn't
-execute them. All operations run when `.exec()` is called.
-
-The closure form is the escape hatch for expressing what the combinators cannot:
-multiple heterogeneous operations on the same field in one update.
+Each element is an `Assignment<List<Todo>>`. The array itself implements
+`IntoAssignment<List<Todo>>` by applying each assignment in order.
 
 This works from both instance updates and query updates:
 
 ```rust
 User::filter_by_id(user_id)
     .update()
-    .todos(|t| {
-        t.insert(Todo::create().title("New task"));
-        t.remove(&old_todo);
-    })
+    .todos([
+        stmt::insert(Todo::create().title("New task")),
+        stmt::remove(&old_todo),
+    ])
     .exec(&mut db)
     .await?;
 ```
@@ -249,10 +247,10 @@ This replaces the `.with_critter()` method entirely.
 
 The same `.field(impl IntoAssignment<T>)` pattern covers every field type:
 
-| Field type | Plain value | `stmt::` combinator | Closure |
+| Field type | Plain value | `stmt::` combinator | Array |
 |---|---|---|---|
 | Scalar (`String`) | Set the field | `stmt::set` (explicit) | — |
-| Embedded (`Creature`) | Replace the whole value | — | Patch specific sub-fields |
+| Embedded (`Creature`) | Replace the whole value | — | Patch specific sub-fields via closure |
 | BelongsTo (`User`) | Set the association | — | — |
 | HasMany (`List<Todo>`) | Insert one record | `stmt::insert`, `stmt::remove`, `stmt::set` | Multiple operations |
 
@@ -266,9 +264,9 @@ behavior. No more `.todo()` vs `.remove_todo()` vs `.set_todos()` vs
 |---|---|
 | `.name("Alice")` | `.name("Alice")` (unchanged) |
 | `.todo(expr)` | `.todos(expr)` or `.todos(stmt::insert(expr))` |
-| `.todo(a).todo(b)` | `.todos(\|t\| { t.insert(a); t.insert(b); })` |
+| `.todo(a).todo(b)` | `.todos([stmt::insert(a), stmt::insert(b)])` |
 | _not possible_ | `.todos(stmt::remove(&todo))` |
 | _not possible_ | `.todos(stmt::set([...]))` |
-| _not possible_ | `.todos(\|t\| { t.insert(a); t.remove(b); })` |
+| _not possible_ | `.todos([stmt::insert(a), stmt::remove(b)])` |
 | `.critter(value)` | `.critter(value)` (unchanged) |
 | `.with_critter(\|c\| c.profession("x"))` | `.critter(\|c\| c.profession("x"))` |
