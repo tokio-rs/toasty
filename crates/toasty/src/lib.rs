@@ -70,6 +70,12 @@ pub mod codegen_support {
         },
         stmt::{Type, Value, ValueRecord, ValueStream},
     };
+
+    /// Marker type for the create verification typestate: field has been set.
+    pub struct Set;
+
+    /// Marker type for the create verification typestate: field has not been set.
+    pub struct NotSet;
 }
 
 pub mod driver {

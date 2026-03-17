@@ -33,6 +33,7 @@ impl Expand<'_> {
         let model_field_struct = self.expand_field_struct();
         let query_struct = self.expand_query_struct();
         let create_builder = self.expand_create_builder();
+        let create_verifier = self.expand_create_verifier();
         let update_builder = self.expand_update_builder();
         let relation_structs = self.expand_relation_structs();
 
@@ -41,6 +42,7 @@ impl Expand<'_> {
             #model_field_struct
             #query_struct
             #create_builder
+            #create_verifier
             #update_builder
             #relation_structs
         })

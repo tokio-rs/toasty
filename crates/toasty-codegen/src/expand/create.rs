@@ -1,8 +1,8 @@
 use super::{util, Expand};
 use crate::schema::FieldTy;
 
-use proc_macro2::TokenStream;
-use quote::quote;
+use proc_macro2::{Span, TokenStream};
+use quote::{format_ident, quote};
 
 impl Expand<'_> {
     pub(super) fn expand_create_builder(&self) -> TokenStream {
@@ -235,5 +235,215 @@ impl Expand<'_> {
                 }
             })
             .collect()
+    }
+
+    /// Generate the compile-time create verification infrastructure:
+    ///
+    /// - One trait per required field with `#[diagnostic::on_unimplemented]`
+    /// - A ZST verifier struct with typestate type parameters
+    /// - Field methods that transition required fields from `NotSet` to `Set`
+    /// - A `check()` method gated on all required-field traits being satisfied
+    /// - A `__verify_create()` constructor on the model
+    pub(super) fn expand_create_verifier(&self) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let model_ident = &self.model.ident;
+        let model_name = model_ident.to_string();
+
+        // Collect FK source field indices — these are implicitly set when
+        // the corresponding BelongsTo relation is set, so they should not be
+        // required in the verifier.
+        let fk_source_ids: std::collections::HashSet<usize> = self
+            .model
+            .fields
+            .iter()
+            .filter_map(|f| match &f.ty {
+                FieldTy::BelongsTo(rel) => Some(rel.foreign_key.iter().map(|fk| fk.source)),
+                _ => None,
+            })
+            .flatten()
+            .collect();
+
+        // Collect required fields, excluding FK source fields
+        let required_fields: Vec<_> = self
+            .model
+            .fields
+            .iter()
+            .filter(|f| f.is_required_on_create() && !fk_source_ids.contains(&f.id))
+            .collect();
+
+        // Names for generated items
+        let verify_struct =
+            format_ident!("__{}CreateVerify", model_ident, span = Span::mixed_site());
+
+        // --- Per-required-field: trait + impl Set ---
+        let trait_defs: Vec<_> = required_fields
+            .iter()
+            .map(|field| {
+                let field_name = field.name.ident.to_string();
+                let trait_name = format_ident!(
+                    "__{}_create_has_{}",
+                    model_name.to_lowercase(),
+                    field_name,
+                    span = Span::mixed_site()
+                );
+                let msg = format!(
+                    "cannot create `{model_name}`: required field `{field_name}` is not set"
+                );
+                let label = format!("call `.{field_name}(...)` before `.exec()`");
+
+                quote! {
+                    #[doc(hidden)]
+                    #[diagnostic::on_unimplemented(
+                        message = #msg,
+                        label = #label
+                    )]
+                    #vis trait #trait_name {}
+                    impl #trait_name for #toasty::Set {}
+                }
+            })
+            .collect();
+
+        // --- Type parameter idents for the verifier struct ---
+        let type_params: Vec<_> = required_fields
+            .iter()
+            .map(|field| {
+                let name = field.name.ident.to_string();
+                let mut upper = String::with_capacity(name.len() + 2);
+                upper.push_str("__");
+                let mut chars = name.chars();
+                if let Some(c) = chars.next() {
+                    upper.extend(c.to_uppercase());
+                }
+                upper.extend(chars);
+                format_ident!("{}", upper, span = Span::mixed_site())
+            })
+            .collect();
+
+        // Trait names (same order as type_params)
+        let trait_names: Vec<_> = required_fields
+            .iter()
+            .map(|field| {
+                format_ident!(
+                    "__{}_create_has_{}",
+                    model_name.to_lowercase(),
+                    field.name.ident,
+                    span = Span::mixed_site()
+                )
+            })
+            .collect();
+
+        // --- Struct definition with defaults ---
+        let default_params: Vec<_> = type_params
+            .iter()
+            .map(|p| quote! { #p = #toasty::NotSet })
+            .collect();
+
+        let struct_def = quote! {
+            #[doc(hidden)]
+            #vis struct #verify_struct < #( #default_params ),* >(
+                ::std::marker::PhantomData<( #( #type_params ),* )>,
+            );
+        };
+
+        // --- new() ---
+        let new_impl = quote! {
+            impl #verify_struct {
+                #vis fn new() -> Self {
+                    #verify_struct(::std::marker::PhantomData)
+                }
+            }
+        };
+
+        // --- Field methods ---
+        let field_methods: Vec<_> = self
+            .model
+            .fields
+            .iter()
+            .map(|field| {
+                let method_name = &field.name.ident;
+                let with_method = &field.with_ident;
+
+                if let Some(req_idx) = required_fields.iter().position(|f| f.id == field.id) {
+                    // Required field: transition the corresponding type param to Set
+                    let mut result_params: Vec<TokenStream> =
+                        type_params.iter().map(|p| quote! { #p }).collect();
+                    result_params[req_idx] = quote! { #toasty::Set };
+
+                    let is_relation = field.ty.is_relation();
+                    let with_variant = if is_relation {
+                        // Relations also need with_ variant for nested struct syntax
+                        quote! {
+                            #vis fn #with_method(self) -> #verify_struct< #( #result_params ),* > {
+                                #verify_struct(::std::marker::PhantomData)
+                            }
+                        }
+                    } else {
+                        quote! {}
+                    };
+
+                    quote! {
+                        #vis fn #method_name(self) -> #verify_struct< #( #result_params ),* > {
+                            #verify_struct(::std::marker::PhantomData)
+                        }
+                        #with_variant
+                    }
+                } else {
+                    // Optional / auto / relation field: identity (no type transition)
+                    let is_relation = field.ty.is_relation();
+                    if is_relation {
+                        quote! {
+                            #vis fn #method_name(self) -> Self { self }
+                            #vis fn #with_method(self) -> Self { self }
+                        }
+                    } else {
+                        quote! {
+                            #vis fn #method_name(self) -> Self { self }
+                        }
+                    }
+                }
+            })
+            .collect();
+
+        let methods_impl = quote! {
+            impl< #( #type_params ),* > #verify_struct< #( #type_params ),* > {
+                #( #field_methods )*
+            }
+        };
+
+        // --- check() with trait bounds ---
+        let where_clauses: Vec<_> = type_params
+            .iter()
+            .zip(trait_names.iter())
+            .map(|(param, trait_name)| quote! { #param: #trait_name })
+            .collect();
+
+        let check_impl = quote! {
+            impl< #( #type_params ),* > #verify_struct< #( #type_params ),* >
+            where
+                #( #where_clauses ),*
+            {
+                #vis fn check(self) {}
+            }
+        };
+
+        // --- __verify_create() on the model ---
+        let model_method = quote! {
+            impl #model_ident {
+                #[doc(hidden)]
+                #vis fn __verify_create() -> #verify_struct {
+                    #verify_struct::new()
+                }
+            }
+        };
+
+        quote! {
+            #( #trait_defs )*
+            #struct_def
+            #new_impl
+            #methods_impl
+            #check_impl
+            #model_method
+        }
     }
 }

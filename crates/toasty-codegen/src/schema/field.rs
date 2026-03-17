@@ -86,6 +86,53 @@ impl FieldTy {
     }
 }
 
+impl Field {
+    /// Returns `true` if the field must be explicitly set by the user in a
+    /// `create!` invocation. A field is *not* required if any of the following
+    /// hold:
+    ///
+    /// - It is a `HasMany` or `HasOne` relation (populated separately)
+    /// - It has `#[auto]`, `#[default(...)]`, or `#[update(...)]`
+    /// - Its Rust type is `Option<T>`
+    ///
+    /// `BelongsTo` fields are required only when the field type is
+    /// non-`Option` (i.e., `BelongsTo<User>` is required, but
+    /// `BelongsTo<Option<User>>` is not).
+    pub(crate) fn is_required_on_create(&self) -> bool {
+        match &self.ty {
+            FieldTy::HasMany(_) | FieldTy::HasOne(_) => return false,
+            FieldTy::BelongsTo(rel) => return !is_option_type(&rel.ty),
+            FieldTy::Primitive(_) => {}
+        }
+
+        if self.attrs.auto.is_some() {
+            return false;
+        }
+        if self.attrs.default_expr.is_some() || self.attrs.update_expr.is_some() {
+            return false;
+        }
+
+        if let FieldTy::Primitive(ty) = &self.ty {
+            if is_option_type(ty) {
+                return false;
+            }
+        }
+
+        true
+    }
+}
+
+/// Check if a `syn::Type` is syntactically `Option<T>`.
+fn is_option_type(ty: &syn::Type) -> bool {
+    let syn::Type::Path(type_path) = ty else {
+        return false;
+    };
+    let Some(last) = type_path.path.segments.last() else {
+        return false;
+    };
+    last.ident == "Option"
+}
+
 impl FieldAttr {
     pub(crate) fn is_indexed(&self) -> bool {
         self.unique || self.index
