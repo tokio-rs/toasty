@@ -26,7 +26,7 @@ pub async fn filter_composite_key_in_list(test: &mut Test) -> Result<()> {
         (Foo::fields().one(), Foo::fields().two()),
         [("foo-1", "bar-1"), ("foo-3", "bar-3")],
     ))
-    .all(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert_eq!(foos.len(), 2);
@@ -62,7 +62,7 @@ pub async fn filter_composite_key_in_list_empty(test: &mut Test) -> Result<()> {
         (Foo::fields().one(), Foo::fields().two()),
         empty,
     ))
-    .all(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert_eq!(foos.len(), 0);
