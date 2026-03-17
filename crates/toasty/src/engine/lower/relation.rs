@@ -539,8 +539,9 @@ impl LowerStatement<'_, '_> {
 
                 self.set_relation_field(field, expr, source);
             }
-            stmt::Statement::Query(query) => {
-                // Try to extract the FK from the select without performing the query
+            stmt::Statement::Query(mut query) => {
+                // Try to extract the FK constant from an exact key lookup
+                // (e.g., `SELECT id FROM users WHERE id = 123` → `123`).
                 let fields: Vec<_> = belongs_to
                     .foreign_key
                     .fields
@@ -548,28 +549,41 @@ impl LowerStatement<'_, '_> {
                     .map(|fk_field| fk_field.target)
                     .collect();
 
-                let Some(extracted) =
-                    Simplify::new(self.schema()).extract_key_expr(&fields, &query)
-                else {
-                    todo!("belongs_to={:#?}; stmt={:#?}", belongs_to, query);
-                };
-
-                if extracted.has_extra_conditions {
-                    // The subquery has additional filter conditions beyond the key
-                    // equality (e.g., `WHERE id = 1 AND name = "foo"`). We can't
-                    // just use the extracted constant because the extra conditions
-                    // might not be satisfied.
-                    //
-                    // Register the query as a guard dependency: it must return
-                    // non-empty results for this statement to execute. Use the
-                    // extracted constant for the FK assignment (avoiding arg
-                    // substitution issues on DynamoDB).
-                    let guard_id = self.new_dependency(query);
-                    let scope_id = self.scope_stmt_id();
-                    self.state.hir[scope_id].guard = Some(guard_id);
-                    self.set_relation_field(field, extracted.expr, source);
+                if let Some(expr) = Simplify::new(self.schema()).extract_key_expr(&fields, &query) {
+                    // Exact key match — use the constant directly, no query needed.
+                    self.set_relation_field(field, expr, source);
                 } else {
-                    self.set_relation_field(field, extracted.expr, source);
+                    // The query has conditions beyond a simple key lookup (e.g.,
+                    // `WHERE id = 1 AND name = "foo"`). We must actually execute
+                    // the query and use its result for the FK assignment.
+                    query.single = true;
+                    query.body.as_select_mut_unwrap().returning =
+                        stmt::Returning::Expr(stmt::Expr::record(
+                            belongs_to
+                                .foreign_key
+                                .fields
+                                .iter()
+                                .map(|fk_field| stmt::Expr::ref_self_field(fk_field.target)),
+                        ));
+
+                    let target_id = self.new_dependency(query);
+                    let scope_id = self.scope_stmt_id();
+                    let arg = self.new_dependency_arg(scope_id, target_id);
+
+                    // Guard: if the query returns no rows (filter didn't
+                    // match), the parent update must be a no-op.
+                    self.state.hir[scope_id].guard = Some(target_id);
+
+                    // The dependency result is collected as List([Record([fk_val, ...])]).
+                    // Project through both the list (index 0) and the record to
+                    // extract each FK field value.
+                    let fk_fields = &belongs_to.foreign_key.fields;
+                    for (i, fk_field) in fk_fields.iter().enumerate() {
+                        source.set_source_field(
+                            fk_field.source,
+                            stmt::Expr::project(arg.clone(), [0, i]),
+                        );
+                    }
                 }
             }
             _ => todo!("stmt={:#?}", stmt),

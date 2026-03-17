@@ -2,18 +2,6 @@ use toasty_core::{schema::app::FieldId, stmt};
 
 use crate::engine::simplify::Simplify;
 
-/// Result of extracting a key expression from a subquery.
-pub(crate) struct ExtractedKey {
-    /// The extracted key expression (e.g., the constant `123`).
-    pub expr: stmt::Expr,
-
-    /// Whether additional filter conditions beyond the key equality were
-    /// present in the original query. When `true`, the caller must ensure
-    /// the additional conditions are preserved as a guard (e.g., by adding
-    /// the original query as an `IN` subquery filter on the parent update).
-    pub has_extra_conditions: bool,
-}
-
 impl Simplify<'_> {
     /// Extracts the constant value from a simple subquery that filters on a key field.
     ///
@@ -22,9 +10,14 @@ impl Simplify<'_> {
     /// extracted value to eliminate the subquery entirely. Primarily used during belongs-to
     /// relationship planning to extract foreign key values.
     ///
-    /// When the filter is a conjunction (e.g., `WHERE id = 123 AND name = "foo"`), the key
-    /// value is extracted but `has_extra_conditions` is set to `true` so the caller can
-    /// preserve the additional conditions.
+    /// Example usage by caller:
+    /// ```sql
+    /// -- Subquery analyzed by this method
+    /// (SELECT id FROM users WHERE id = 123)
+    ///
+    /// -- If this method returns Some(123), caller replaces subquery with:
+    /// 123
+    /// ```
     ///
     /// Returns `None` if the subquery pattern doesn't match (e.g., complex filters,
     /// composite keys, non-equality operators).
@@ -32,7 +25,7 @@ impl Simplify<'_> {
         &mut self,
         key: &[FieldId],
         stmt: &stmt::Query,
-    ) -> Option<ExtractedKey> {
+    ) -> Option<stmt::Expr> {
         let cx = self.cx.scope(stmt);
 
         let stmt::ExprSet::Select(select) = &stmt.body else {
@@ -40,26 +33,13 @@ impl Simplify<'_> {
         };
 
         match select.filter.as_expr() {
-            stmt::Expr::BinaryOp(expr_binary_op) => self
-                .try_extract_key_from_binary_op(&cx, key, expr_binary_op)
-                .map(|expr| ExtractedKey {
-                    expr,
-                    has_extra_conditions: false,
-                }),
-            stmt::Expr::And(expr_and) => {
-                // Search each operand for the key equality condition.
-                for operand in &expr_and.operands {
-                    if let stmt::Expr::BinaryOp(expr_binary_op) = operand {
-                        if let Some(expr) =
-                            self.try_extract_key_from_binary_op(&cx, key, expr_binary_op)
-                        {
-                            return Some(ExtractedKey {
-                                expr,
-                                has_extra_conditions: true,
-                            });
-                        }
-                    }
-                }
+            stmt::Expr::BinaryOp(expr_binary_op) => {
+                self.try_extract_key_from_binary_op(&cx, key, expr_binary_op)
+            }
+            stmt::Expr::And(_) => {
+                // Conjunctive filters (e.g., `WHERE id = 1 AND name = "foo"`)
+                // are not exact key lookups. Return None so the caller falls
+                // back to executing the query as a dependency.
                 None
             }
             _ => None,

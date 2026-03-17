@@ -16,6 +16,10 @@ pub(crate) struct UpdateByKey {
     /// The node producing the list of primary keys to update.
     pub(crate) input: mir::NodeId,
 
+    /// Nodes whose outputs are passed as arguments for substitution in
+    /// assignments and filter expressions.
+    pub(crate) arg_inputs: Vec<mir::NodeId>,
+
     /// The table to update records in.
     pub(crate) table: TableId,
 
@@ -51,8 +55,15 @@ impl UpdateByKey {
             .guard
             .map(|guard_id| logical_plan[guard_id].var.get().unwrap());
 
+        let arg_inputs = self
+            .arg_inputs
+            .iter()
+            .map(|node_id| logical_plan[node_id].var.get().unwrap())
+            .collect();
+
         exec::UpdateByKey {
             input,
+            arg_inputs,
             output: exec::Output {
                 var: output,
                 num_uses: node.num_uses.get(),

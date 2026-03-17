@@ -45,8 +45,7 @@ fn extracts_value_from_key_eq_filter() {
     let result = simplify.extract_key_expr(&[field_id], &query);
 
     let extracted = result.unwrap();
-    assert!(matches!(extracted.expr, Expr::Value(Value::I64(42))));
-    assert!(!extracted.has_extra_conditions);
+    assert!(matches!(extracted, Expr::Value(Value::I64(42))));
 }
 
 #[test]
@@ -63,8 +62,7 @@ fn extracts_value_with_reversed_operands() {
     let result = simplify.extract_key_expr(&[field_id], &query);
 
     let extracted = result.unwrap();
-    assert!(matches!(extracted.expr, Expr::Value(Value::I64(99))));
-    assert!(!extracted.has_extra_conditions);
+    assert!(matches!(extracted, Expr::Value(Value::I64(99))));
 }
 
 #[test]

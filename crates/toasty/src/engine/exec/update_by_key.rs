@@ -13,6 +13,9 @@ pub(crate) struct UpdateByKey {
     /// If specified, use the input to generate the list of keys to update
     pub input: VarId,
 
+    /// Arg inputs for substitution in assignments/filter expressions
+    pub arg_inputs: Vec<VarId>,
+
     /// Where to store the result of the update
     pub output: Output,
 
@@ -62,6 +65,32 @@ impl Exec<'_> {
             .await?
             .unwrap_list();
 
+        // Resolve arg inputs and substitute into assignments/filter
+        let mut assignments = action.assignments.clone();
+        let mut filter = action.filter.clone();
+        let mut condition = action.condition.clone();
+
+        if !action.arg_inputs.is_empty() {
+            let mut arg_values = Vec::new();
+            for var_id in &action.arg_inputs {
+                let values = self.vars.load(*var_id).await?.collect_as_value().await?;
+                arg_values.push(values);
+            }
+
+            for (_, assignment) in assignments.iter_mut() {
+                assignment.expr.substitute(&arg_values);
+                self.engine.simplify_stmt(&mut assignment.expr);
+            }
+            if let Some(f) = &mut filter {
+                f.substitute(&arg_values);
+                self.engine.simplify_stmt(f);
+            }
+            if let Some(c) = &mut condition {
+                c.substitute(&arg_values);
+                self.engine.simplify_stmt(c);
+            }
+        }
+
         let res = if keys.is_empty() {
             if action.returning {
                 Rows::value_stream(ValueStream::default())
@@ -72,9 +101,9 @@ impl Exec<'_> {
             let op = operation::UpdateByKey {
                 table: action.table,
                 keys,
-                assignments: action.assignments.clone(),
-                filter: action.filter.clone(),
-                condition: action.condition.clone(),
+                assignments,
+                filter,
+                condition,
                 returning: action.returning,
             };
 

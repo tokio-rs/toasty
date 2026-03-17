@@ -1005,12 +1005,28 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         ty: &stmt::Type,
     ) -> mir::NodeId {
         if let Some(key_expr) = index_plan.key_values.take() {
-            let args = self
-                .load_data
-                .inputs
-                .iter()
-                .map(|node_id| self.planner.mir[node_id].ty().clone())
-                .collect();
+            // Only include inputs that the key expression actually references
+            // via Arg nodes. Assignment-only args shouldn't affect key computation.
+            let has_arg_ref = {
+                let mut found = false;
+                stmt::visit::for_each_expr(&key_expr, |e| {
+                    if matches!(e, stmt::Expr::Arg(_)) {
+                        found = true;
+                    }
+                });
+                found
+            };
+
+            let args = if has_arg_ref {
+                self.load_data
+                    .inputs
+                    .iter()
+                    .map(|node_id| self.planner.mir[node_id].ty().clone())
+                    .collect()
+            } else {
+                vec![]
+            };
+
             let key_ty =
                 stmt::Type::list(self.planner.engine.index_key_record_ty(index_plan.index));
             let keys = eval::Func::from_stmt_typed(key_expr, args, key_ty);
@@ -1226,15 +1242,19 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 filter: index_plan.result_filter.take(),
                 ty: stmt::Type::Unit,
             }),
-            stmt::Statement::Update(update_stmt) => self.insert_mir_with_deps(mir::UpdateByKey {
-                input: get_by_key_input,
-                table: index_plan.table_id(),
-                assignments: update_stmt.assignments.clone(),
-                filter: index_plan.result_filter.take(),
-                condition: update_stmt.condition.expr.clone(),
-                ty: ty.clone(),
-                guard: self.resolve_guard(),
-            }),
+            stmt::Statement::Update(update_stmt) => {
+                let arg_inputs: Vec<_> = self.load_data.inputs.iter().copied().collect();
+                self.insert_mir_with_deps(mir::UpdateByKey {
+                    input: get_by_key_input,
+                    arg_inputs,
+                    table: index_plan.table_id(),
+                    assignments: update_stmt.assignments.clone(),
+                    filter: index_plan.result_filter.take(),
+                    condition: update_stmt.condition.expr.clone(),
+                    ty: ty.clone(),
+                    guard: self.resolve_guard(),
+                })
+            }
             _ => todo!("stmt={stmt:#?}"),
         }
     }
@@ -1398,10 +1418,16 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     }
 
     /// Resolves the HIR guard to a MIR node ID, if set.
+    ///
+    /// Increments the guard node's `num_uses` because the guard check is an
+    /// extra read on the guard's output beyond the normal dep reference.
     fn resolve_guard(&self) -> Option<mir::NodeId> {
-        self.stmt_info
-            .guard
-            .and_then(|guard_id| self.planner.hir[guard_id].output.get())
+        self.stmt_info.guard.and_then(|guard_id| {
+            let node_id = self.planner.hir[guard_id].output.get()?;
+            let node = &self.planner.mir[node_id];
+            node.num_uses.set(node.num_uses.get() + 1);
+            Some(node_id)
+        })
     }
 
     fn index_key_ty(&self, index_plan: &IndexPlan) -> stmt::Type {
