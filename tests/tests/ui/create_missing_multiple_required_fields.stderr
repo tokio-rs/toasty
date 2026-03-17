@@ -1,22 +1,27 @@
-error[E0599]: the method `check` exists for struct `__UserCreateVerify`, but its trait bounds were not satisfied
+error[E0277]: cannot create `User`: required field `name` is not set
   --> tests/ui/create_missing_multiple_required_fields.rs:13:13
    |
- 1 | #[derive(toasty::Model)]
-   |          ------------- method `check` not found for this struct
-...
 13 |     let _ = toasty::create!(User {});
-   |             ^^^^^^^^^^^^^^^^^^^^^^^^ method cannot be called on `__UserCreateVerify` due to unsatisfied trait bounds
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^ call `.name(...)` before `.exec()`
    |
-  ::: $WORKSPACE/crates/toasty/src/lib.rs
-   |
-   |     pub struct NotSet;
-   |     ----------------- doesn't satisfy `NotSet: __user_create_has_email` or `NotSet: __user_create_has_name`
-   |
-note: the following trait bounds were not satisfied:
-      `NotSet: __user_create_has_email`
-      `NotSet: __user_create_has_name`
+   = help: the trait `__user_create_has_name` is not implemented for `NotSet`
+note: required by a bound in `_::<impl User>::__check_create`
   --> tests/ui/create_missing_multiple_required_fields.rs:1:10
    |
  1 | #[derive(toasty::Model)]
-   |          ^^^^^^^^^^^^^ unsatisfied trait bound introduced in this `derive` macro
-   = note: this error originates in the macro `toasty::create` (in Nightly builds, run with -Z macro-backtrace for more info)
+   |          ^^^^^^^^^^^^^ required by this bound in `_::<impl User>::__check_create`
+   = note: this error originates in the macro `toasty::create` which comes from the expansion of the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: cannot create `User`: required field `email` is not set
+  --> tests/ui/create_missing_multiple_required_fields.rs:13:13
+   |
+13 |     let _ = toasty::create!(User {});
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^ call `.email(...)` before `.exec()`
+   |
+   = help: the trait `__user_create_has_email` is not implemented for `NotSet`
+note: required by a bound in `_::<impl User>::__check_create`
+  --> tests/ui/create_missing_multiple_required_fields.rs:1:10
+   |
+ 1 | #[derive(toasty::Model)]
+   |          ^^^^^^^^^^^^^ required by this bound in `_::<impl User>::__check_create`
+   = note: this error originates in the macro `toasty::create` which comes from the expansion of the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -91,7 +91,7 @@ fn expand_verify_chain(path: Option<&syn::Path>, fields: &FieldSet) -> TokenStre
         return quote! {};
     };
     let verify_calls = expand_verify_field_set(fields);
-    quote! { #path::__verify_create() #(#verify_calls)* .check(); }
+    quote! { #path::__check_create(#path::__verify_create() #(#verify_calls)*); }
 }
 
 /// Convert a field set into verification method calls (no arguments).

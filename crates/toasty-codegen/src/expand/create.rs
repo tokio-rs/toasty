@@ -411,29 +411,32 @@ impl Expand<'_> {
             }
         };
 
-        // --- check() with trait bounds ---
+        // --- Trait bounds for required fields ---
         let where_clauses: Vec<_> = type_params
             .iter()
             .zip(trait_names.iter())
             .map(|(param, trait_name)| quote! { #param: #trait_name })
             .collect();
 
-        let check_impl = quote! {
-            impl< #( #type_params ),* > #verify_struct< #( #type_params ),* >
-            where
-                #( #where_clauses ),*
-            {
-                #vis fn check(self) {}
-            }
-        };
-
-        // --- __verify_create() on the model ---
+        // --- __verify_create() and __check_create() on the model ---
+        //
+        // We use a free function (__check_create) whose type parameters carry
+        // the trait bounds instead of a bounded method on the verifier struct.
+        // This makes the compiler emit E0277 (trait bound not satisfied) rather
+        // than E0599 (method exists but bounds not satisfied), which is the
+        // error code that `#[diagnostic::on_unimplemented]` customizes.
         let model_method = quote! {
             impl #model_ident {
                 #[doc(hidden)]
                 #vis fn __verify_create() -> #verify_struct {
                     #verify_struct::new()
                 }
+
+                #[doc(hidden)]
+                #vis fn __check_create< #( #type_params ),* >(_: #verify_struct< #( #type_params ),* >)
+                where
+                    #( #where_clauses ),*
+                {}
             }
         };
 
@@ -442,7 +445,6 @@ impl Expand<'_> {
             #struct_def
             #new_impl
             #methods_impl
-            #check_impl
             #model_method
         }
     }

@@ -1,20 +1,13 @@
-error[E0599]: the method `check` exists for struct `__UserCreateVerify<toasty::codegen_support::Set>`, but its trait bounds were not satisfied
+error[E0277]: cannot create `User`: required field `email` is not set
   --> tests/ui/create_missing_required_field.rs:14:13
    |
- 1 | #[derive(toasty::Model)]
-   |          ------------- method `check` not found for this struct
-...
 14 |     let _ = toasty::create!(User { name: "Carl" });
-   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method cannot be called on `__UserCreateVerify<toasty::codegen_support::Set>` due to unsatisfied trait bounds
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call `.email(...)` before `.exec()`
    |
-  ::: $WORKSPACE/crates/toasty/src/lib.rs
-   |
-   |     pub struct NotSet;
-   |     ----------------- doesn't satisfy `NotSet: __user_create_has_email`
-   |
-note: trait bound `NotSet: __user_create_has_email` was not satisfied
+   = help: the trait `__user_create_has_email` is not implemented for `NotSet`
+note: required by a bound in `_::<impl User>::__check_create`
   --> tests/ui/create_missing_required_field.rs:1:10
    |
  1 | #[derive(toasty::Model)]
-   |          ^^^^^^^^^^^^^ unsatisfied trait bound introduced in this `derive` macro
-   = note: this error originates in the macro `toasty::create` (in Nightly builds, run with -Z macro-backtrace for more info)
+   |          ^^^^^^^^^^^^^ required by this bound in `_::<impl User>::__check_create`
+   = note: this error originates in the macro `toasty::create` which comes from the expansion of the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
