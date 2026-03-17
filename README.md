@@ -67,7 +67,7 @@ let user = User::create()
 let user = User::get_by_id(&mut db, &user.id).await?;
 
 // Load and iterate the user's todos
-let todos = user.todos().all(&mut db).await?;
+let todos = user.todos().exec(&mut db).await?;
 
 for todo in &todos {
     println!("{:#?}", todo);

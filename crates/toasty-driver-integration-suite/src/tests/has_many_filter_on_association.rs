@@ -79,7 +79,7 @@ pub async fn filter_parent_by_child_field(test: &mut Test) -> Result<()> {
             .todos()
             .any(Todo::fields().complete().eq(false)),
     )
-    .all(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert_eq_unordered!(users.iter().map(|u| &u.name[..]), ["Alice", "Carol"]);
@@ -90,7 +90,7 @@ pub async fn filter_parent_by_child_field(test: &mut Test) -> Result<()> {
             .todos()
             .any(Todo::fields().complete().eq(true)),
     )
-    .all(&mut db)
+    .exec(&mut db)
     .await?;
 
     assert_eq_unordered!(users.iter().map(|u| &u.name[..]), ["Bob", "Carol"]);
@@ -141,7 +141,7 @@ pub async fn filter_parent_no_matching_children(test: &mut Test) -> Result<()> {
 
     // No todos with priority > 5 exist
     let users: Vec<_> = User::filter(User::fields().todos().any(Todo::fields().priority().gt(5)))
-        .all(&mut db)
+        .exec(&mut db)
         .await?;
 
     assert!(users.is_empty());
