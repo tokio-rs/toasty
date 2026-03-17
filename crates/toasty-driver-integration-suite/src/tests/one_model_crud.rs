@@ -10,18 +10,18 @@ pub async fn crud_no_fields(t: &mut Test) -> Result<()> {
     const MORE: i32 = 10;
 
     #[derive(Debug, toasty::Model)]
-    struct Foo {
+    struct Item {
         #[key]
         #[auto]
         id: ID,
     }
 
-    let mut db = t.setup_db(models!(Foo)).await;
+    let mut db = t.setup_db(models!(Item)).await;
 
-    let created = Foo::create().exec(&mut db).await?;
+    let created = Item::create().exec(&mut db).await?;
 
-    // Find Foo
-    let read = Foo::filter_by_id(created.id).exec(&mut db).await?;
+    // Find Item
+    let read = Item::filter_by_id(created.id).exec(&mut db).await?;
 
     assert_eq!(1, read.len());
     assert_eq!(created.id, read[0].id);
@@ -31,7 +31,7 @@ pub async fn crud_no_fields(t: &mut Test) -> Result<()> {
     let mut ids = vec![];
 
     for _ in 0..MORE {
-        let item = Foo::create().exec(&mut db).await?;
+        let item = Item::create().exec(&mut db).await?;
         assert_ne!(item.id, created.id);
         ids.push(item.id);
     }
@@ -39,7 +39,7 @@ pub async fn crud_no_fields(t: &mut Test) -> Result<()> {
     assert_unique!(ids);
 
     for id in &ids {
-        let read = Foo::filter_by_id(id).exec(&mut db).await?;
+        let read = Item::filter_by_id(id).exec(&mut db).await?;
 
         assert_eq!(1, read.len());
         assert_eq!(*id, read[0].id);
@@ -54,19 +54,19 @@ pub async fn crud_no_fields(t: &mut Test) -> Result<()> {
 
         if i.is_even() {
             // Delete by object
-            let val = Foo::get_by_id(&mut db, &id).await?;
+            let val = Item::get_by_id(&mut db, &id).await?;
             val.delete().exec(&mut db).await?;
         } else {
             // Delete by ID
-            Foo::filter_by_id(id).delete().exec(&mut db).await?;
+            Item::filter_by_id(id).delete().exec(&mut db).await?;
         }
 
         // Assert deleted
-        assert_err!(Foo::get_by_id(&mut db, id).await);
+        assert_err!(Item::get_by_id(&mut db, id).await);
 
-        // Assert other foos remain
+        // Assert other items remain
         for id in &ids {
-            let item = Foo::get_by_id(&mut db, id).await?;
+            let item = Item::get_by_id(&mut db, id).await?;
             assert_eq!(*id, item.id);
         }
     }
@@ -76,7 +76,7 @@ pub async fn crud_no_fields(t: &mut Test) -> Result<()> {
 #[driver_test(id(ID))]
 pub async fn crud_one_string(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
-    struct Foo {
+    struct Item {
         #[key]
         #[auto]
         id: ID,
@@ -84,17 +84,17 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
         val: String,
     }
 
-    let mut db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
-    let foo_table_id = table_id(&db, "foos");
+    let item_table_id = table_id(&db, "items");
     let is_sql = test.capability().sql;
 
-    let mut created = Foo::create().val("hello world").exec(&mut db).await?;
+    let mut created = Item::create().val("hello world").exec(&mut db).await?;
 
     assert_eq!(created.val, "hello world");
 
-    // Find Foo
-    let read = Foo::filter_by_id(created.id).exec(&mut db).await?;
+    // Find Item
+    let read = Item::filter_by_id(created.id).exec(&mut db).await?;
 
     assert_eq!(1, read.len());
     assert_eq!(created.id, read[0].id);
@@ -103,7 +103,7 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
     let mut ids = vec![];
 
     for i in 0..10 {
-        let item = Foo::create()
+        let item = Item::create()
             .val(format!("hello {i}"))
             .exec(&mut db)
             .await?;
@@ -115,7 +115,7 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
     assert_unique!(ids);
 
     for (i, id) in ids.iter().enumerate() {
-        let read = Foo::filter_by_id(id).exec(&mut db).await?;
+        let read = Item::filter_by_id(id).exec(&mut db).await?;
 
         assert_eq!(1, read.len());
         assert_eq!(*id, read[0].id);
@@ -132,7 +132,7 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
     if is_sql {
         assert_struct!(op, Operation::QuerySql(_ {
             stmt: Statement::Update(_ {
-                target: UpdateTarget::Table(== foo_table_id),
+                target: UpdateTarget::Table(== item_table_id),
                 assignments: #{ 1: _ { expr: == "updated!", .. }},
                 ..
             }),
@@ -141,7 +141,7 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
         }));
     } else {
         assert_struct!(op, Operation::UpdateByKey(_ {
-            table: == foo_table_id,
+            table: == item_table_id,
             keys.len(): 1,
             assignments: #{ 1: _ { expr: == "updated!", .. }},
             filter: None,
@@ -153,16 +153,16 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
     assert!(test.log().is_empty());
 
     test.log().clear();
-    let reload = Foo::get_by_id(&mut db, &created.id).await?;
+    let reload = Item::get_by_id(&mut db, &created.id).await?;
     assert_eq!(reload.val, created.val);
 
     // Update by ID
-    Foo::filter_by_id(created.id)
+    Item::filter_by_id(created.id)
         .update()
         .val("updated again!")
         .exec(&mut db)
         .await?;
-    let reload = Foo::get_by_id(&mut db, &created.id).await?;
+    let reload = Item::get_by_id(&mut db, &created.id).await?;
     assert_eq!(reload.val, "updated again!");
 
     // Delete the record (instance method — generates full-key filter).
@@ -174,7 +174,7 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
         assert_struct!(op, Operation::QuerySql(_ {
             stmt: Statement::Delete(_ {
                 from: Source::Table(_ {
-                    tables: [== foo_table_id, ..],
+                    tables: [== item_table_id, ..],
                     ..
                 }),
                 ..
@@ -183,7 +183,7 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
         }));
     } else {
         assert_struct!(op, Operation::DeleteByKey(_ {
-            table: == foo_table_id,
+            table: == item_table_id,
             keys.len(): 1,
             filter: None,
             ..
@@ -193,13 +193,13 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
     assert!(test.log().is_empty());
 
     // It is gone
-    assert_err!(Foo::get_by_id(&mut db, &created.id).await);
+    assert_err!(Item::get_by_id(&mut db, &created.id).await);
 
     // Delete by ID
-    Foo::filter_by_id(ids[0]).delete().exec(&mut db).await?;
+    Item::filter_by_id(ids[0]).delete().exec(&mut db).await?;
 
     // It is gone
-    assert_err!(Foo::get_by_id(&mut db, &ids[0]).await);
+    assert_err!(Item::get_by_id(&mut db, &ids[0]).await);
     Ok(())
 }
 
@@ -349,7 +349,7 @@ pub async fn unique_index_nullable_field_update(test: &mut Test) -> Result<()> {
 
     // Finding by a bogus email finds nothing
     assert_none!(
-        User::filter_by_email("foo@example.com")
+        User::filter_by_email("nobody@example.com")
             .first(&mut db)
             .await?
     );
@@ -444,21 +444,21 @@ pub async fn unique_index_no_update(test: &mut Test) -> Result<()> {
 #[driver_test(id(ID))]
 pub async fn batch_get_by_id(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
-    struct Foo {
+    struct Item {
         #[key]
         #[auto]
         id: ID,
     }
 
-    let mut db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Item)).await;
     let mut keys = vec![];
 
     for _ in 0..5 {
-        let item = Foo::create().exec(&mut db).await?;
+        let item = Item::create().exec(&mut db).await?;
         keys.push(item.id);
     }
 
-    let items: Vec<_> = Foo::filter_by_id_batch([&keys[0], &keys[1], &keys[2]])
+    let items: Vec<_> = Item::filter_by_id_batch([&keys[0], &keys[1], &keys[2]])
         .exec(&mut db)
         .await?;
 
@@ -473,21 +473,21 @@ pub async fn batch_get_by_id(test: &mut Test) -> Result<()> {
 #[driver_test(id(ID))]
 pub async fn empty_batch_get_by_id(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
-    struct Foo {
+    struct Item {
         #[key]
         #[auto]
         id: ID,
     }
 
-    let mut db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Item)).await;
     let mut ids = vec![];
 
     for _ in 0..5 {
-        let item = Foo::create().exec(&mut db).await?;
+        let item = Item::create().exec(&mut db).await?;
         ids.push(item.id);
     }
 
-    let items: Vec<_> = Foo::filter_by_id_batch(&[] as &[ID]).exec(&mut db).await?;
+    let items: Vec<_> = Item::filter_by_id_batch(&[] as &[ID]).exec(&mut db).await?;
 
     assert_eq!(0, items.len());
     Ok(())

@@ -1,11 +1,9 @@
-#![allow(clippy::disallowed_names)]
-
 use crate::prelude::*;
 
 #[driver_test(id(ID))]
 pub async fn default_expr_on_create(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
-    struct Foo {
+    struct Item {
         #[key]
         #[auto]
         id: ID,
@@ -16,14 +14,14 @@ pub async fn default_expr_on_create(test: &mut Test) -> Result<()> {
         view_count: i64,
     }
 
-    let mut db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     // Create without setting view_count — should get the default
-    let created = Foo::create().title("hello").exec(&mut db).await?;
+    let created = Item::create().title("hello").exec(&mut db).await?;
     assert_eq!(created.view_count, 5);
 
     // Read back from DB
-    let read = Foo::get_by_id(&mut db, &created.id).await?;
+    let read = Item::get_by_id(&mut db, &created.id).await?;
     assert_eq!(read.view_count, 5);
 
     Ok(())
@@ -32,7 +30,7 @@ pub async fn default_expr_on_create(test: &mut Test) -> Result<()> {
 #[driver_test(id(ID))]
 pub async fn default_expr_override(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
-    struct Foo {
+    struct Item {
         #[key]
         #[auto]
         id: ID,
@@ -43,17 +41,17 @@ pub async fn default_expr_override(test: &mut Test) -> Result<()> {
         view_count: i64,
     }
 
-    let mut db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     // Override the default by explicitly setting view_count
-    let created = Foo::create()
+    let created = Item::create()
         .title("hello")
         .view_count(42)
         .exec(&mut db)
         .await?;
     assert_eq!(created.view_count, 42);
 
-    let read = Foo::get_by_id(&mut db, &created.id).await?;
+    let read = Item::get_by_id(&mut db, &created.id).await?;
     assert_eq!(read.view_count, 42);
 
     Ok(())
@@ -64,7 +62,7 @@ pub async fn update_expr_on_create(test: &mut Test) -> Result<()> {
     use jiff::Timestamp;
 
     #[derive(Debug, toasty::Model)]
-    struct Foo {
+    struct Item {
         #[key]
         #[auto]
         id: ID,
@@ -75,10 +73,10 @@ pub async fn update_expr_on_create(test: &mut Test) -> Result<()> {
         updated_at: Timestamp,
     }
 
-    let mut db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     let before = Timestamp::now();
-    let created = Foo::create().title("hello").exec(&mut db).await?;
+    let created = Item::create().title("hello").exec(&mut db).await?;
     let after = Timestamp::now();
 
     // updated_at should be auto-populated on create
@@ -93,7 +91,7 @@ pub async fn update_expr_on_update(test: &mut Test) -> Result<()> {
     use jiff::Timestamp;
 
     #[derive(Debug, toasty::Model)]
-    struct Foo {
+    struct Item {
         #[key]
         #[auto]
         id: ID,
@@ -104,22 +102,22 @@ pub async fn update_expr_on_update(test: &mut Test) -> Result<()> {
         updated_at: Timestamp,
     }
 
-    let mut db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
-    let mut foo = Foo::create().title("hello").exec(&mut db).await?;
-    let created_ts = foo.updated_at;
+    let mut item = Item::create().title("hello").exec(&mut db).await?;
+    let created_ts = item.updated_at;
 
     // Small delay to ensure timestamp changes
     tokio::time::sleep(std::time::Duration::from_millis(10)).await;
 
     let before = Timestamp::now();
-    foo.update().title("updated").exec(&mut db).await?;
+    item.update().title("updated").exec(&mut db).await?;
     let after = Timestamp::now();
 
     // updated_at should have been refreshed
-    assert!(foo.updated_at >= before);
-    assert!(foo.updated_at <= after);
-    assert!(foo.updated_at > created_ts);
+    assert!(item.updated_at >= before);
+    assert!(item.updated_at <= after);
+    assert!(item.updated_at > created_ts);
 
     Ok(())
 }
@@ -129,7 +127,7 @@ pub async fn update_expr_override_on_update(test: &mut Test) -> Result<()> {
     use jiff::Timestamp;
 
     #[derive(Debug, toasty::Model)]
-    struct Foo {
+    struct Item {
         #[key]
         #[auto]
         id: ID,
@@ -140,21 +138,21 @@ pub async fn update_expr_override_on_update(test: &mut Test) -> Result<()> {
         updated_at: Timestamp,
     }
 
-    let mut db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
-    let mut foo = Foo::create().title("hello").exec(&mut db).await?;
+    let mut item = Item::create().title("hello").exec(&mut db).await?;
 
     // Override the update expression with an explicit value
     let explicit_ts = Timestamp::from_second(946684800).unwrap(); // 2000-01-01
-    foo.update()
+    item.update()
         .title("updated")
         .updated_at(explicit_ts)
         .exec(&mut db)
         .await?;
 
-    assert_eq!(foo.updated_at, explicit_ts);
+    assert_eq!(item.updated_at, explicit_ts);
 
-    let read = Foo::get_by_id(&mut db, &foo.id).await?;
+    let read = Item::get_by_id(&mut db, &item.id).await?;
     assert_eq!(read.updated_at, explicit_ts);
 
     Ok(())
@@ -163,7 +161,7 @@ pub async fn update_expr_override_on_update(test: &mut Test) -> Result<()> {
 #[driver_test(id(ID))]
 pub async fn default_and_update_on_same_field(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
-    struct Foo {
+    struct Item {
         #[key]
         #[auto]
         id: ID,
@@ -176,31 +174,32 @@ pub async fn default_and_update_on_same_field(test: &mut Test) -> Result<()> {
         status: String,
     }
 
-    let mut db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     // On create, #[default] takes priority
-    let mut foo = Foo::create().title("hello").exec(&mut db).await?;
-    assert_eq!(foo.status, "draft");
+    let mut item = Item::create().title("hello").exec(&mut db).await?;
+    assert_eq!(item.status, "draft");
 
     // On update, #[update] applies
-    foo.update().title("updated").exec(&mut db).await?;
-    assert_eq!(foo.status, "edited");
+    item.update().title("updated").exec(&mut db).await?;
+    assert_eq!(item.status, "edited");
 
     // Explicit override on create
-    let mut foo2 = Foo::create()
+    let mut item2 = Item::create()
         .title("hello")
         .status("published".to_string())
         .exec(&mut db)
         .await?;
-    assert_eq!(foo2.status, "published");
+    assert_eq!(item2.status, "published");
 
     // Explicit override on update
-    foo2.update()
+    item2
+        .update()
         .title("updated")
         .status("archived".to_string())
         .exec(&mut db)
         .await?;
-    assert_eq!(foo2.status, "archived");
+    assert_eq!(item2.status, "archived");
 
     Ok(())
 }
@@ -210,7 +209,7 @@ pub async fn auto_on_timestamp_fields(test: &mut Test) -> Result<()> {
     use jiff::Timestamp;
 
     #[derive(Debug, toasty::Model)]
-    struct Foo {
+    struct Item {
         #[key]
         #[auto]
         id: ID,
@@ -224,27 +223,27 @@ pub async fn auto_on_timestamp_fields(test: &mut Test) -> Result<()> {
         updated_at: Timestamp,
     }
 
-    let mut db = test.setup_db(models!(Foo)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     let before = Timestamp::now();
-    let mut foo = Foo::create().title("hello").exec(&mut db).await?;
+    let mut item = Item::create().title("hello").exec(&mut db).await?;
     let after = Timestamp::now();
 
-    assert!(foo.created_at >= before);
-    assert!(foo.created_at <= after);
-    assert!(foo.updated_at >= before);
-    assert!(foo.updated_at <= after);
+    assert!(item.created_at >= before);
+    assert!(item.created_at <= after);
+    assert!(item.updated_at >= before);
+    assert!(item.updated_at <= after);
 
     tokio::time::sleep(std::time::Duration::from_millis(10)).await;
 
     let before_update = Timestamp::now();
-    foo.update().title("updated").exec(&mut db).await?;
+    item.update().title("updated").exec(&mut db).await?;
     let after_update = Timestamp::now();
 
     // created_at stays the same, updated_at is refreshed
-    assert!(foo.created_at <= after);
-    assert!(foo.updated_at >= before_update);
-    assert!(foo.updated_at <= after_update);
+    assert!(item.created_at <= after);
+    assert!(item.updated_at >= before_update);
+    assert!(item.updated_at <= after_update);
 
     Ok(())
 }

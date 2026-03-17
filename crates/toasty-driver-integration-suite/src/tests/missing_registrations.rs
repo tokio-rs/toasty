@@ -1,30 +1,28 @@
-#![allow(clippy::disallowed_names)]
-
 use crate::prelude::*;
 
 #[driver_test(id(ID))]
 pub async fn missing_registration_belongs_to(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
-    struct Foo {
+    struct Parent {
         #[key]
         #[auto]
         id: ID,
 
-        bar_id: ID,
-        #[belongs_to(key = bar_id, references = id)]
-        bar: toasty::BelongsTo<Bar>,
+        child_id: ID,
+        #[belongs_to(key = child_id, references = id)]
+        child: toasty::BelongsTo<Child>,
     }
 
     #[derive(Debug, toasty::Model)]
-    struct Bar {
+    struct Child {
         #[key]
         #[auto]
         id: ID,
     }
 
-    let error = t.try_setup_db(models!(Foo)).await.unwrap_err();
+    let error = t.try_setup_db(models!(Parent)).await.unwrap_err();
     assert!(error.is_invalid_schema());
-    assert!(format!("{error}").contains("Foo::bar"));
+    assert!(format!("{error}").contains("Parent::child"));
 
     Ok(())
 }
@@ -32,29 +30,29 @@ pub async fn missing_registration_belongs_to(t: &mut Test) -> Result<()> {
 #[driver_test(id(ID))]
 pub async fn missing_registration_has_one(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
-    struct Foo {
+    struct Parent {
         #[key]
         #[auto]
         id: ID,
 
         #[has_one]
-        bar: toasty::HasOne<Bar>,
+        child: toasty::HasOne<Child>,
     }
 
     #[derive(Debug, toasty::Model)]
-    struct Bar {
+    struct Child {
         #[key]
         #[auto]
         id: ID,
 
-        foo_id: ID,
-        #[belongs_to(key = foo_id, references = id)]
-        foo: toasty::BelongsTo<Foo>,
+        parent_id: ID,
+        #[belongs_to(key = parent_id, references = id)]
+        parent: toasty::BelongsTo<Parent>,
     }
 
-    let error = t.try_setup_db(models!(Foo)).await.unwrap_err();
+    let error = t.try_setup_db(models!(Parent)).await.unwrap_err();
     assert!(error.is_invalid_schema());
-    assert!(format!("{error}").contains("Foo::bar"));
+    assert!(format!("{error}").contains("Parent::child"));
 
     Ok(())
 }
@@ -62,30 +60,30 @@ pub async fn missing_registration_has_one(t: &mut Test) -> Result<()> {
 #[driver_test(id(ID))]
 pub async fn missing_registration_has_many(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
-    struct Foo {
+    struct Parent {
         #[key]
         #[auto]
         id: ID,
 
         #[has_many]
-        bars: toasty::HasMany<Bar>,
+        children: toasty::HasMany<Child>,
     }
 
     #[derive(Debug, toasty::Model)]
-    struct Bar {
+    struct Child {
         #[key]
         #[auto]
         id: ID,
 
         #[index]
-        foo_id: ID,
-        #[belongs_to(key = foo_id, references = id)]
-        foo: toasty::BelongsTo<Foo>,
+        parent_id: ID,
+        #[belongs_to(key = parent_id, references = id)]
+        parent: toasty::BelongsTo<Parent>,
     }
 
-    let error = t.try_setup_db(models!(Foo)).await.unwrap_err();
+    let error = t.try_setup_db(models!(Parent)).await.unwrap_err();
     assert!(error.is_invalid_schema());
-    assert!(format!("{error}").contains("Foo::bar"));
+    assert!(format!("{error}").contains("Parent::child"));
 
     Ok(())
 }
@@ -93,22 +91,22 @@ pub async fn missing_registration_has_many(t: &mut Test) -> Result<()> {
 #[driver_test(id(ID))]
 pub async fn missing_registration_embedded(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
-    struct Foo {
+    struct Parent {
         #[key]
         #[auto]
         id: ID,
 
-        bar: Bar,
+        detail: Detail,
     }
 
     #[derive(Debug, toasty::Embed)]
-    struct Bar {
+    struct Detail {
         x: i32,
     }
 
-    let error = t.try_setup_db(models!(Foo)).await.unwrap_err();
+    let error = t.try_setup_db(models!(Parent)).await.unwrap_err();
     assert!(error.is_invalid_schema());
-    assert!(format!("{error}").contains("Foo::bar"));
+    assert!(format!("{error}").contains("Parent::detail"));
 
     Ok(())
 }
