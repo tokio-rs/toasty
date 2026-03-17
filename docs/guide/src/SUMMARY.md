@@ -22,6 +22,7 @@
 
 # Relationships
 
+- [Relationships](./relationships.md)
 - [BelongsTo](./belongs-to.md)
 - [HasMany](./has-many.md)
 - [HasOne](./has-one.md)
