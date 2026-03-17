@@ -297,6 +297,7 @@ impl Expand<'_> {
                         label = #label
                     )]
                     #vis trait #trait_name {}
+                    #[diagnostic::do_not_recommend]
                     impl #trait_name for #toasty::Set {}
                 }
             })
