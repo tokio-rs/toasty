@@ -45,13 +45,9 @@ pub trait Field: Sized {
         _stmt: &'a mut stmt::Update,
         _projection: stmt::Projection,
     ) -> Self::UpdateBuilder<'a> {
-        // Default implementation assumes UpdateBuilder = ()
-        // Embedded types must override this method
-        unsafe {
-            // For (), this is safe. For other types, this would be UB,
-            // but those types must override this method.
-            std::mem::transmute_copy(&())
-        }
+        // Embedded types must override this method.
+        // For primitive types (where UpdateBuilder = ()), this is never called.
+        panic!("make_update_builder must be overridden")
     }
 
     /// Returns the app-level field type for this primitive.

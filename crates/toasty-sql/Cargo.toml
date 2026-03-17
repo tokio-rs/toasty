@@ -6,3 +6,6 @@ publish = false
 
 [dependencies]
 toasty-core.workspace = true
+
+[lints]
+workspace = true
