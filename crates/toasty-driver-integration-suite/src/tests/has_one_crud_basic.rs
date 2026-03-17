@@ -574,37 +574,9 @@ pub async fn associate_has_one_by_val_on_insert(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_one_optional_belongs_to))]
 pub async fn associate_has_one_by_val_on_update_query_with_filter(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        name: String,
-
-        #[has_one]
-        profile: toasty::HasOne<Option<Profile>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Profile {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[unique]
-        user_id: Option<ID>,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
-
-        bio: String,
-    }
-
-    let mut db = test.setup_db(models!(User, Profile)).await;
+    let mut db = setup(test).await;
 
     let u1 = User::create().name("user 1").exec(&mut db).await?;
     let p1 = Profile::create().bio("hello world").exec(&mut db).await?;
