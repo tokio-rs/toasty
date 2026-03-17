@@ -48,6 +48,33 @@ argument decides what kind of mutation to record. For most uses, the call site
 looks the same as today because `IntoExpr<T>` gets a blanket impl of
 `IntoAssignment<T>` that defaults to the right operation for the field type.
 
+### Assignment combinators
+
+Free functions in `toasty::stmt` wrap an expression to change its assignment
+semantics. Each function takes an `impl IntoExpr<T>` and returns an
+`Assignment<U>` where `U` reflects the target field type. The key idea: the
+generic parameters encode a type-level lift — `insert` takes an expression of
+`T` (a single item) and produces an assignment for `List<T>` (a collection).
+
+```rust
+// toasty::stmt
+
+/// Insert a value into a collection field.
+/// Takes an expression of T, produces an assignment to List<T>.
+fn insert<T>(expr: impl IntoExpr<T>) -> Assignment<List<T>>
+
+/// Remove a value from a collection field.
+/// Takes an expression of T, produces an assignment to List<T>.
+fn remove<T>(expr: impl IntoExpr<T>) -> Assignment<List<T>>
+
+/// Replace a field's value entirely.
+/// Takes an expression of T, produces an assignment to T.
+fn set<T>(expr: impl IntoExpr<T>) -> Assignment<T>
+```
+
+`Assignment<T>` implements `IntoAssignment<T>`, so these return values can be
+passed directly to any setter that accepts `impl IntoAssignment<T>`.
+
 ### Scalars: no visible change
 
 Passing a plain value to a scalar field still means "set":
@@ -59,21 +86,94 @@ user.update().name("Alice").exec(&mut db).await?;
 `&str` implements `IntoExpr<String>`, which has a blanket `IntoAssignment`
 impl that calls `assignments.set()`. Nothing changes at the call site.
 
-### Has-many: the `todos()` method
-
-The update builder generates a single `.todos()` method (plural, matching the
-field name) instead of today's singular `.todo()`:
+You can also be explicit, though there's no reason to:
 
 ```rust
-// Passing a value implies insert (one todo)
+user.update().name(stmt::set("Alice")).exec(&mut db).await?;
+```
+
+### Has-many
+
+The update builder generates a `.todos()` method (plural, matching the field
+name) instead of today's singular `.todo()`. The method accepts
+`impl IntoAssignment<List<Todo>>`.
+
+#### Insert
+
+Pass a value directly to insert one todo. A bare `IntoExpr<Todo>` gets a
+blanket `IntoAssignment<List<Todo>>` impl that defaults to insert:
+
+```rust
 user.update()
     .todos(Todo::create().title("Buy groceries"))
     .exec(&mut db)
     .await?;
 ```
 
-For multiple operations, pass a closure. The closure receives a patch builder
-that records the full mutation:
+Or be explicit with `stmt::insert`:
+
+```rust
+user.update()
+    .todos(stmt::insert(Todo::create().title("Buy groceries")))
+    .exec(&mut db)
+    .await?;
+```
+
+Both produce the same assignment. `stmt::insert` takes an `impl IntoExpr<Todo>`
+and returns an `Assignment<List<Todo>>`, which `.todos()` accepts.
+
+#### Remove
+
+Use `stmt::remove` to detach a record from the set:
+
+```rust
+user.update()
+    .todos(stmt::remove(&todo_a))
+    .exec(&mut db)
+    .await?;
+```
+
+`stmt::remove` takes an `impl IntoExpr<Todo>` (the item to remove) and returns
+an `Assignment<List<Todo>>` (a mutation on the collection).
+
+What "remove" means depends on the belongs-to side of the relationship:
+
+- **Optional foreign key** (`user_id: Option<Id>`): The todo's `user_id` is set
+  to `NULL`. The todo continues to exist.
+- **Required foreign key** (`user_id: Id`): The todo is deleted. It can't exist
+  without a user.
+
+#### Replace
+
+Use `stmt::set` with a list expression to replace the entire set:
+
+```rust
+user.update()
+    .todos(stmt::set([
+        Todo::create().title("Only todo"),
+    ]))
+    .exec(&mut db)
+    .await?;
+```
+
+Here `stmt::set` takes an `impl IntoExpr<List<Todo>>` (the new set) and returns
+an `Assignment<List<Todo>>`. This disassociates all current todos from the user
+(following the same optional/required foreign key rules as remove), then
+associates the new set.
+
+Pass an empty slice to clear the set:
+
+```rust
+user.update()
+    .todos(stmt::set([]))
+    .exec(&mut db)
+    .await?;
+```
+
+#### Multiple operations
+
+For combinations of insert and remove in a single update, pass a closure. The
+closure receives a patch builder that records the full mutation:
 
 ```rust
 user.update()
@@ -90,6 +190,9 @@ user.update()
 The closure runs synchronously at build time — it records operations, it doesn't
 execute them. All operations run when `.exec()` is called.
 
+The closure form is the escape hatch for expressing what the combinators cannot:
+multiple heterogeneous operations on the same field in one update.
+
 This works from both instance updates and query updates:
 
 ```rust
@@ -101,91 +204,6 @@ User::filter_by_id(user_id)
     })
     .exec(&mut db)
     .await?;
-```
-
-#### Insert
-
-`insert()` adds a new or existing record to the set. Call it multiple times to
-add several:
-
-```rust
-user.update()
-    .todos(|t| {
-        t.insert(Todo::create().title("First"));
-        t.insert(Todo::create().title("Second"));
-        t.insert(&existing_todo);
-    })
-    .exec(&mut db)
-    .await?;
-```
-
-All current todos remain. The new ones are added.
-
-#### Remove
-
-`remove()` detaches a specific record:
-
-```rust
-user.update()
-    .todos(|t| {
-        t.remove(&todo_a);
-        t.remove(&todo_b);
-    })
-    .exec(&mut db)
-    .await?;
-```
-
-All other todos remain untouched.
-
-What "remove" means depends on the belongs-to side of the relationship:
-
-- **Optional foreign key** (`user_id: Option<Id>`): The todo's `user_id` is set
-  to `NULL`. The todo continues to exist.
-- **Required foreign key** (`user_id: Id`): The todo is deleted. It can't exist
-  without a user.
-
-#### Replace
-
-`set()` replaces the entire set. It disassociates all current members, then
-associates the given records:
-
-```rust
-user.update()
-    .todos(|t| {
-        t.set([Todo::create().title("Only todo")]);
-    })
-    .exec(&mut db)
-    .await?;
-```
-
-Pass an empty slice to clear the set:
-
-```rust
-user.update()
-    .todos(|t| {
-        t.set([]);
-    })
-    .exec(&mut db)
-    .await?;
-```
-
-`set()` consumes the patch builder. It cannot be combined with `insert()` or
-`remove()` — these are conflicting intents and produce a compile-time error.
-
-#### How it works
-
-The `.todos()` method accepts `impl IntoAssignment<HasMany<Todo>>`. Multiple
-types implement this trait:
-
-```rust
-// A closure that configures the patch builder
-impl<F: FnOnce(&mut TodosPatch)> IntoAssignment<HasMany<Todo>> for F { ... }
-
-// A single create builder — shorthand for insert
-impl IntoAssignment<HasMany<Todo>> for TodoCreateBuilder { ... }
-
-// A reference to an existing record — shorthand for insert
-impl IntoAssignment<HasMany<Todo>> for &Todo { ... }
 ```
 
 ### Embedded types: partial updates without `.with_`
@@ -231,12 +249,12 @@ This replaces the `.with_critter()` method entirely.
 
 The same `.field(impl IntoAssignment<T>)` pattern covers every field type:
 
-| Field type | Plain value | Closure |
-|---|---|---|
-| Scalar (`String`) | Set the field | — |
-| Embedded (`Creature`) | Replace the whole value | Patch specific sub-fields |
-| BelongsTo (`User`) | Set the association | — |
-| HasMany (`HasMany<Todo>`) | Insert one record | Insert, remove, replace via patch builder |
+| Field type | Plain value | `stmt::` combinator | Closure |
+|---|---|---|---|
+| Scalar (`String`) | Set the field | `stmt::set` (explicit) | — |
+| Embedded (`Creature`) | Replace the whole value | — | Patch specific sub-fields |
+| BelongsTo (`User`) | Set the association | — | — |
+| HasMany (`List<Todo>`) | Insert one record | `stmt::insert`, `stmt::remove`, `stmt::set` | Multiple operations |
 
 Every setter method has the same signature. The argument type determines the
 behavior. No more `.todo()` vs `.remove_todo()` vs `.set_todos()` vs
@@ -247,10 +265,10 @@ behavior. No more `.todo()` vs `.remove_todo()` vs `.set_todos()` vs
 | Today | With `IntoAssignment` |
 |---|---|
 | `.name("Alice")` | `.name("Alice")` (unchanged) |
-| `.todo(expr)` | `.todos(expr)` |
+| `.todo(expr)` | `.todos(expr)` or `.todos(stmt::insert(expr))` |
 | `.todo(a).todo(b)` | `.todos(\|t\| { t.insert(a); t.insert(b); })` |
-| _not possible_ | `.todos(\|t\| t.remove(expr))` |
-| _not possible_ | `.todos(\|t\| t.set(exprs))` |
+| _not possible_ | `.todos(stmt::remove(&todo))` |
+| _not possible_ | `.todos(stmt::set([...]))` |
 | _not possible_ | `.todos(\|t\| { t.insert(a); t.remove(b); })` |
 | `.critter(value)` | `.critter(value)` (unchanged) |
 | `.with_critter(\|c\| c.profession("x"))` | `.critter(\|c\| c.profession("x"))` |
