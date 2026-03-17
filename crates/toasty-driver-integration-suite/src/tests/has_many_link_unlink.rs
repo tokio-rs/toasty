@@ -75,40 +75,17 @@ pub async fn remove_add_single_relation_option_belongs_to(test: &mut Test) -> Re
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn add_remove_single_relation_required_belongs_to(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     // Create a user with no todos
-    let user = User::create().exec(&mut db).await?;
+    let user = User::create().name("User 1").exec(&mut db).await?;
 
     // Create some TODOs
-    let t1 = user.todos().create().exec(&mut db).await?;
-    let t2 = user.todos().create().exec(&mut db).await?;
-    let t3 = user.todos().create().exec(&mut db).await?;
+    let t1 = user.todos().create().title("todo 1").exec(&mut db).await?;
+    let t2 = user.todos().create().title("todo 2").exec(&mut db).await?;
+    let t3 = user.todos().create().title("todo 3").exec(&mut db).await?;
 
     let ids = vec![t1.id, t2.id, t3.id];
 
@@ -131,39 +108,16 @@ pub async fn add_remove_single_relation_required_belongs_to(test: &mut Test) -> 
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn reassign_relation_required_belongs_to(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     // Create users with no todos
-    let u1 = User::create().exec(&mut db).await?;
-    let u2 = User::create().exec(&mut db).await?;
+    let u1 = User::create().name("User 1").exec(&mut db).await?;
+    let u2 = User::create().name("User 2").exec(&mut db).await?;
 
     // Create a TODO associated with user 1
-    let t1 = u1.todos().create().exec(&mut db).await?;
+    let t1 = u1.todos().create().title("a todo").exec(&mut db).await?;
 
     // Associate the todo with user 2
     u2.todos().insert(&mut db, &t1).await?;

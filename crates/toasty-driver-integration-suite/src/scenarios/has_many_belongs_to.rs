@@ -9,6 +9,8 @@ scenario! {
         #[auto]
         id: ID,
 
+        name: String,
+
         #[has_many]
         todos: toasty::HasMany<Todo>,
     }
