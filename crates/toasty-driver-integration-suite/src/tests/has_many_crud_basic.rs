@@ -9,7 +9,7 @@ pub async fn crud_user_todos(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
     // Create a user
-    let user = User::create().exec(&mut db).await?;
+    let user = User::create().name("User 1").exec(&mut db).await?;
 
     // No TODOs
     assert_eq!(0, user.todos().all(&mut db).await?.len());
@@ -87,7 +87,7 @@ pub async fn crud_user_todos(test: &mut Test) -> Result<()> {
     }
 
     // Create a second user
-    let user2 = User::create().exec(&mut db).await?;
+    let user2 = User::create().name("User 2").exec(&mut db).await?;
 
     // No TODOs associated with `user2`
     assert_eq!(0, user2.todos().all(&mut db).await?.len());
@@ -163,36 +163,9 @@ pub async fn crud_user_todos(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn has_many_insert_on_update(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-
-        name: String,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-
-        title: String,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     // Create a user, no TODOs
     let mut user = User::create().name("Alice").exec(&mut db).await?;
@@ -217,8 +190,8 @@ pub async fn scoped_find_by_id(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
     // Create a couple of users
-    let user1 = User::create().exec(&mut db).await?;
-    let user2 = User::create().exec(&mut db).await?;
+    let user1 = User::create().name("User 1").exec(&mut db).await?;
+    let user2 = User::create().name("User 2").exec(&mut db).await?;
 
     // Create a todo
     let todo = user1
@@ -506,6 +479,7 @@ pub async fn associate_new_user_with_todo_on_update_via_creation(test: &mut Test
 
     // Create a user with a todo
     let u1 = User::create()
+        .name("User 1")
         .todo(Todo::create().title("hello world"))
         .exec(&mut db)
         .await?;
@@ -515,41 +489,25 @@ pub async fn associate_new_user_with_todo_on_update_via_creation(test: &mut Test
     assert_eq!(1, todos.len());
     let mut todo = todos.into_iter().next().unwrap();
 
-    todo.update().user(User::create()).exec(&mut db).await?;
+    todo.update()
+        .user(User::create().name("User 2"))
+        .exec(&mut db)
+        .await?;
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn associate_new_user_with_todo_on_update_query_via_creation(
     test: &mut Test,
 ) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     // Create a user with a todo
-    let u1 = User::create().todo(Todo::create()).exec(&mut db).await?;
+    let u1 = User::create()
+        .name("User 1")
+        .todo(Todo::create().title("a todo"))
+        .exec(&mut db)
+        .await?;
 
     // Get the todo
     let todos: Vec<_> = u1.todos().all(&mut db).await?;
@@ -558,7 +516,7 @@ pub async fn associate_new_user_with_todo_on_update_query_via_creation(
 
     Todo::filter_by_id(todo.id)
         .update()
-        .user(User::create())
+        .user(User::create().name("User 2"))
         .exec(&mut db)
         .await?;
     Ok(())
@@ -614,38 +572,23 @@ pub async fn update_user_with_null_todo_is_err(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn assign_todo_that_already_has_user_on_create(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
+    let mut db = setup(test).await;
 
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
-
-    let todo = Todo::create().user(User::create()).exec(&mut db).await?;
+    let todo = Todo::create()
+        .title("a todo")
+        .user(User::create().name("User 1"))
+        .exec(&mut db)
+        .await?;
 
     let u1 = todo.user().get(&mut db).await?;
 
-    let u2 = User::create().todo(&todo).exec(&mut db).await?;
+    let u2 = User::create()
+        .name("User 2")
+        .todo(&todo)
+        .exec(&mut db)
+        .await?;
 
     let todo_reload = Todo::get_by_id(&mut db, &todo.id).await?;
 
@@ -662,38 +605,19 @@ pub async fn assign_todo_that_already_has_user_on_create(test: &mut Test) -> Res
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn assign_todo_that_already_has_user_on_update(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
+    let mut db = setup(test).await;
 
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
-
-    let todo = Todo::create().user(User::create()).exec(&mut db).await?;
+    let todo = Todo::create()
+        .title("a todo")
+        .user(User::create().name("User 1"))
+        .exec(&mut db)
+        .await?;
 
     let u1 = todo.user().get(&mut db).await?;
 
-    let mut u2 = User::create().exec(&mut db).await?;
+    let mut u2 = User::create().name("User 2").exec(&mut db).await?;
 
     // Update the user
     u2.update().todo(&todo).exec(&mut db).await?;
@@ -719,13 +643,13 @@ pub async fn assign_existing_user_to_todo(test: &mut Test) -> Result<()> {
 
     let mut todo = Todo::create()
         .title("hello")
-        .user(User::create())
+        .user(User::create().name("User 1"))
         .exec(&mut db)
         .await?;
 
     let u1 = todo.user().get(&mut db).await?;
 
-    let u2 = User::create().exec(&mut db).await?;
+    let u2 = User::create().name("User 2").exec(&mut db).await?;
 
     // Update the todo
     todo.update().user(&u2).exec(&mut db).await?;
@@ -749,7 +673,7 @@ pub async fn assign_existing_user_to_todo(test: &mut Test) -> Result<()> {
 pub async fn assign_todo_to_user_on_update_query(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
-    let user = User::create().exec(&mut db).await?;
+    let user = User::create().name("User 1").exec(&mut db).await?;
 
     User::filter_by_id(user.id)
         .update()

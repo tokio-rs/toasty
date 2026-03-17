@@ -6,37 +6,13 @@ use toasty_core::driver::{operation::Transaction, Operation};
 
 /// A multi-op create (user + associated todo) should be wrapped in
 /// BEGIN ... COMMIT so the driver sees all three transaction operations.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn multi_op_create_wraps_in_transaction(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-
-        title: String,
-    }
-
-    let mut db = t.setup_db(models!(User, Todo)).await;
+    let mut db = setup(t).await;
 
     t.log().clear();
     let user = User::create()
+        .name("Alice")
         .todo(Todo::create().title("task"))
         .exec(&mut db)
         .await?;

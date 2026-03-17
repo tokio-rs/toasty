@@ -1,35 +1,8 @@
 use crate::prelude::*;
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn user_batch_create_todos_one_level_basic_fk(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-
-        title: String,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     // Create a user with some todos
     let user = User::create()
