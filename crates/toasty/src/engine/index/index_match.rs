@@ -215,10 +215,7 @@ impl<'stmt> IndexMatch<'stmt> {
 
                 matched
             }
-            _ => {
-                // LHS is not a column reference or record — can't match an index
-                false
-            }
+            _ => todo!("expr={:#?}", expr),
         }
     }
 
