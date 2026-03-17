@@ -221,19 +221,9 @@ pub async fn required_field_create_without_setting(test: &mut Test) {
     assert_err!(User::create().exec(&mut db).await);
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_unique_email))]
 pub async fn unique_index_required_field_update(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[unique]
-        email: String,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     let email = "user1@example.com";
 

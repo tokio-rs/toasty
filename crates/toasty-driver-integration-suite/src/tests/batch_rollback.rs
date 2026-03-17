@@ -5,19 +5,9 @@ use toasty_core::driver::{operation::Transaction, Operation};
 /// When a batch of two creates fails on the second INSERT (unique constraint
 /// violation), the entire batch is rolled back — the first INSERT must not
 /// persist.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::user_unique_email))]
 pub async fn batch_two_creates_rolls_back_on_second_failure(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[unique]
-        email: String,
-    }
-
-    let mut db = t.setup_db(models!(User)).await;
+    let mut db = setup(t).await;
 
     // Seed the email that will cause the second create to fail.
     User::create()
@@ -60,19 +50,9 @@ pub async fn batch_two_creates_rolls_back_on_second_failure(t: &mut Test) -> Res
 
 /// When a batch of a create + update fails on the update (unique constraint),
 /// the successful create is rolled back.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::user_unique_email))]
 pub async fn batch_create_and_update_rolls_back_on_update_failure(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[unique]
-        email: String,
-    }
-
-    let mut db = t.setup_db(models!(User)).await;
+    let mut db = setup(t).await;
 
     User::create()
         .email("alice@example.com")
@@ -122,19 +102,9 @@ pub async fn batch_create_and_update_rolls_back_on_update_failure(t: &mut Test) 
 
 /// When a batch of an update + create fails on the create (unique constraint),
 /// the successful update is rolled back.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::user_unique_email))]
 pub async fn batch_update_and_create_rolls_back_on_create_failure(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[unique]
-        email: String,
-    }
-
-    let mut db = t.setup_db(models!(User)).await;
+    let mut db = setup(t).await;
 
     User::create()
         .email("alice@example.com")
@@ -189,19 +159,9 @@ pub async fn batch_update_and_create_rolls_back_on_create_failure(t: &mut Test) 
 
 /// When a batch of array creates fails on one element (unique constraint),
 /// all prior successful creates are rolled back.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::user_unique_email))]
 pub async fn batch_array_creates_rolls_back_on_failure(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[unique]
-        email: String,
-    }
-
-    let mut db = t.setup_db(models!(User)).await;
+    let mut db = setup(t).await;
 
     // Seed the collision
     User::create()
