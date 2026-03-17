@@ -1,5 +1,5 @@
 use crate::stmt::IntoStatement;
-use crate::{Executor, Load, Result, Statement};
+use crate::{Executor, ExecutorExt, Load, Result, Statement};
 
 /// A batch of queries composed into a single statement.
 ///

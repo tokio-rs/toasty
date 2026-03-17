@@ -143,6 +143,7 @@ pub struct Batch<T> {
 
 impl<T: Load> Batch<T> {
     pub async fn exec(self, executor: &mut dyn Executor) -> Result<T> {
+        use ExecutorExt;
         let stream = executor.exec(self.stmt).await?;
         let value = stream.next().await
             .ok_or_else(|| Error::record_not_found("batch returned no results"))??;
@@ -151,7 +152,7 @@ impl<T: Load> Batch<T> {
 }
 ```
 
-`Batch::exec` calls the regular `Executor::exec` method. The composed
+`Batch::exec` calls the regular `ExecutorExt::exec` method. The composed
 statement flows through the standard engine pipeline. The result is a single
 value (a record of lists) that `T::load` deserializes into the typed tuple.
 
@@ -234,7 +235,7 @@ pattern and plan it the same way.
 
 1. Add `toasty::batch()` function and `Batch<T>` struct
 2. Add tuple impls of `IntoStatement<(Vec<T1>, Vec<T2>, ...)>` (via macro)
-3. Wire `Batch::exec` through the standard `Executor::exec` path
+3. Wire `Batch::exec` through the standard `ExecutorExt::exec` path
 
 ### Phase 3: Engine support
 

@@ -22,6 +22,7 @@ impl Expand<'_> {
                 #create_methods
 
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
+                    use #toasty::ExecutorExt;
                     executor.exec_insert_one(self.stmt).await
                 }
             }
