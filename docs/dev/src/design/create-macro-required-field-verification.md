@@ -21,7 +21,7 @@ struct User {
 }
 
 // Should produce a compile error naming `email`
-toasty::create!(User, { name: "Carl" }).exec(&db).await;
+toasty::create!(User { name: "Carl" }).exec(&db).await;
 ```
 
 ## Design
@@ -131,7 +131,7 @@ verifier methods mirror the builder methods but take no arguments.
 
 ```rust
 // Input:
-toasty::create!(User, { name: "Carl", bio: "hello" })
+toasty::create!(User { name: "Carl", bio: "hello" })
 
 // Expands to:
 {
@@ -154,8 +154,8 @@ Missing one field:
 error[E0277]: cannot create `User`: required field `email` is not set
   --> src/main.rs:5:42
    |
-5  |     create!(User, { name: "Carl" }).exec(&db).await;
-   |                                     ^^^^ call `.email(...)` before `.exec()`
+5  |     create!(User { name: "Carl" }).exec(&db).await;
+   |                                    ^^^^ call `.email(...)` before `.exec()`
 ```
 
 Missing multiple fields (Rust reports all unsatisfied bounds):
@@ -164,37 +164,41 @@ Missing multiple fields (Rust reports all unsatisfied bounds):
 error[E0277]: cannot create `User`: required field `name` is not set
   --> src/main.rs:5:24
    |
-5  |     create!(User, {}).exec(&db).await;
-   |                       ^^^^ call `.name(...)` before `.exec()`
+5  |     create!(User {}).exec(&db).await;
+   |                      ^^^^ call `.name(...)` before `.exec()`
 
 error[E0277]: cannot create `User`: required field `email` is not set
   --> src/main.rs:5:24
    |
-5  |     create!(User, {}).exec(&db).await;
-   |                       ^^^^ call `.email(...)` before `.exec()`
+5  |     create!(User {}).exec(&db).await;
+   |                      ^^^^ call `.email(...)` before `.exec()`
 ```
 
 ### Scoped and batch create
 
-For scoped creation (`create!(user.todos(), { ... })`), the `create!` macro
+For scoped creation (`create!(in user.todos() { ... })`), the `create!` macro
 cannot call `__verify_create()` on the scope expression. Verification only
 applies to the type-target form. This is acceptable: scoped creation already
 implies certain fields are set by the relation.
 
-For batch creation (`create!(User, [{ ... }, { ... }])`), each item in the list
-gets its own verification chain.
+For same-type batch creation (`create!(User::[ { ... }, { ... } ])`), each item
+gets its own verification chain. The expansion produces a tuple of builders.
 
 ```rust
 // Input:
-toasty::create!(User, [{ name: "Carl", email: "a@b.com" }, { name: "Bob", email: "b@c.com" }])
+toasty::create!(User::[
+    { name: "Carl", email: "a@b.com" },
+    { name: "Bob", email: "b@c.com" },
+])
 
 // Expands to:
 {
     User::__verify_create().name().email().check();
     User::__verify_create().name().email().check();
-    User::create_many()
-        .with_item(|b| { let b = b.name("Carl").email("a@b.com"); b })
-        .with_item(|b| { let b = b.name("Bob").email("b@c.com"); b })
+    (
+        User::create().name("Carl").email("a@b.com"),
+        User::create().name("Bob").email("b@c.com"),
+    )
 }
 ```
 
@@ -206,15 +210,19 @@ returns `Self` (identity for relation fields).
 
 ```rust
 // Input:
-toasty::create!(User, { name: "Carl", email: "a@b.com", todos: [{ title: "buy milk" }] })
+toasty::create!(User {
+    name: "Carl",
+    email: "a@b.com",
+    todos: [{ title: "buy milk" }],
+})
 
 // Verification chain:
 User::__verify_create().name().email().with_todos().check();
 ```
 
 Nested model verification (e.g., verifying `Todo`'s required fields within the
-closure) is not covered in this design. The nested model's builder will catch
-missing fields at the database level as it does today.
+closure) is not covered in this design. The nested model's builder catches
+missing fields at the database level.
 
 ## Implementation Plan
 
@@ -284,21 +292,24 @@ Call `expand_create_verifier()` from the model's root expansion alongside
 In `crates/toasty-macros/src/create/expand.rs`, modify the `expand` function to
 emit the verification chain before the builder chain.
 
-For `Target::Type` with `CreateItem::Single`:
+For `CreateItem::Typed` (single creation):
 ```rust
 // Verification chain: Type::__verify_create().field1().field2().check();
 // Builder chain:      Type::create().field1(val1).field2(val2)
 ```
 
-For `Target::Type` with `CreateItem::List`, emit one verification chain per
+For `CreateItem::TypedBatch` (same-type batch), emit one verification chain per
 item.
 
-For `Target::Scope`, emit only the builder chain (no verification).
+For `CreateItem::Batch` (mixed-type batch), emit verification for each
+type-target item but not for scoped items.
+
+For `CreateItem::Scoped`, emit only the builder chain (no verification).
 
 The verification field calls mirror the builder field calls but drop the
-arguments. For `CreateItem::Single`, each field becomes `.field_name()`. For
-`CreateItem::List` and nested structs, the `with_*` closure is replaced by a
-simple `.with_field_name()` call.
+arguments. For single fields, each becomes `.field_name()`. For nested struct
+bodies, the `.with_field(|b| { ... })` closure is replaced by a simple
+`.with_field()` call on the verifier.
 
 ### Step 5: Tests
 
@@ -311,13 +322,13 @@ Add compile-fail tests that verify:
 - `#[default]` fields can be omitted without error
 - `#[update]` fields can be omitted without error
 - All fields provided → compiles successfully
-- Type aliases work (`type Foo = User; create!(Foo, { ... })`)
+- Type aliases work (`type Foo = User; create!(Foo { ... })`)
 
 ## Limitations
 
-- **Scope targets**: `create!(user.todos(), { ... })` does not get verification.
-  The scope expression is not a type path, so we cannot call `__verify_create()`
-  on it.
+- **Scope targets**: `create!(in user.todos() { ... })` does not get
+  verification. The scope expression is not a type path, so we cannot call
+  `__verify_create()` on it.
 
 - **Nested models**: Required fields on nested models (inside closures) are not
   verified by this mechanism. They continue to rely on database constraint
