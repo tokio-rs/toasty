@@ -30,6 +30,10 @@ pub(crate) struct UpdateByKey {
 
     /// The return type.
     pub(crate) ty: stmt::Type,
+
+    /// Optional guard node. If the guard's output is empty, this operation
+    /// produces empty results instead of executing.
+    pub(crate) guard: Option<mir::NodeId>,
 }
 
 impl UpdateByKey {
@@ -43,6 +47,10 @@ impl UpdateByKey {
         let output = var_table.register_var(node.ty().clone());
         node.var.set(Some(output));
 
+        let guard = self
+            .guard
+            .map(|guard_id| logical_plan[guard_id].var.get().unwrap());
+
         exec::UpdateByKey {
             input,
             output: exec::Output {
@@ -54,6 +62,7 @@ impl UpdateByKey {
             filter: self.filter.clone(),
             condition: self.condition.clone(),
             returning: !self.ty.is_unit(),
+            guard,
         }
     }
 }

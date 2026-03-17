@@ -37,6 +37,10 @@ pub(crate) struct ExecStatement {
 
     /// When true, the statement is a conditional update without any returning.
     pub conditional_update_with_no_returning: bool,
+
+    /// Optional guard input. If set and the guard's result is empty, this
+    /// statement is skipped (produces empty results).
+    pub guard: Option<VarId>,
 }
 
 #[derive(Debug)]
@@ -49,6 +53,24 @@ pub(crate) struct ExecStatementOutput {
 
 impl Exec<'_> {
     pub(super) async fn action_exec_statement(&mut self, action: &ExecStatement) -> Result<()> {
+        // If guarded and the guard returned empty results, skip execution
+        if let Some(guard_var) = action.guard {
+            let guard_value = self.vars.load(guard_var).await?.collect_as_value().await?;
+            if matches!(&guard_value, stmt::Value::List(items) if items.is_empty()) {
+                let rows = if action.output.ty.is_some() {
+                    Rows::Stream(stmt::ValueStream::default())
+                } else {
+                    Rows::Count(0)
+                };
+                self.vars.store(
+                    action.output.output.var,
+                    action.output.output.num_uses,
+                    rows,
+                );
+                return Ok(());
+            }
+        }
+
         let mut stmt = action.stmt.clone();
 
         // Collect input values and substitute into the statement

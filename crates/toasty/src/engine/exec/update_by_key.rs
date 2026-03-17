@@ -31,10 +31,29 @@ pub(crate) struct UpdateByKey {
     /// When `true` return the record being updated *after* the update. When
     /// `false`, just return the count of updated rows.
     pub returning: bool,
+
+    /// Optional guard input. If set and the guard's result is empty, this
+    /// operation is skipped (produces empty results).
+    pub guard: Option<VarId>,
 }
 
 impl Exec<'_> {
     pub(super) async fn action_update_by_key(&mut self, action: &UpdateByKey) -> Result<()> {
+        // If guarded and the guard returned empty results, skip execution
+        if let Some(guard_var) = action.guard {
+            let guard_value = self.vars.load(guard_var).await?.collect_as_value().await?;
+            if matches!(&guard_value, stmt::Value::List(items) if items.is_empty()) {
+                let res = if action.returning {
+                    Rows::value_stream(ValueStream::default())
+                } else {
+                    Rows::Count(0)
+                };
+                self.vars
+                    .store(action.output.var, action.output.num_uses, res);
+                return Ok(());
+            }
+        }
+
         let keys = self
             .vars
             .load(action.input)

@@ -23,6 +23,10 @@ pub(crate) struct ExecStatement {
 
     /// When `true`, this is a conditional update that returns status, not rows.
     pub(crate) conditional_update_with_no_returning: bool,
+
+    /// Optional guard node. If the guard's output is empty, this statement
+    /// produces empty results instead of executing.
+    pub(crate) guard: Option<mir::NodeId>,
 }
 
 impl ExecStatement {
@@ -64,6 +68,10 @@ impl ExecStatement {
             _ => todo!("ty={:#?}", self.ty),
         };
 
+        let guard = self
+            .guard
+            .map(|guard_id| logical_plan[guard_id].var.get().unwrap());
+
         exec::ExecStatement {
             input: input_vars,
             output: exec::ExecStatementOutput {
@@ -75,6 +83,7 @@ impl ExecStatement {
             },
             stmt: self.stmt.clone(),
             conditional_update_with_no_returning: self.conditional_update_with_no_returning,
+            guard,
         }
     }
 }

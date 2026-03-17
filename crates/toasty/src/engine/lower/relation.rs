@@ -39,13 +39,6 @@ trait RelationSource: std::fmt::Debug {
 
     /// Update a returning field expression
     fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr);
-
-    /// Add an additional filter condition to the source statement.
-    /// Used to guard FK assignments when extra conditions were dropped
-    /// during key extraction from conjunctive filters.
-    fn add_filter(&mut self, _filter: stmt::Expr) {
-        // Default: no-op for sources that don't support filter modification
-    }
 }
 
 #[derive(Debug)]
@@ -60,7 +53,7 @@ struct InsertRelationSource<'a> {
 #[derive(Debug)]
 struct UpdateRelationSource<'a> {
     model: &'a app::ModelRoot,
-    filter: &'a mut stmt::Filter,
+    filter: &'a stmt::Filter,
     assignments: &'a mut stmt::Assignments,
     returning: &'a mut Option<stmt::Returning>,
     returning_changed: bool,
@@ -129,7 +122,7 @@ impl LowerStatement<'_, '_> {
     pub(super) fn plan_stmt_update_relations(
         &mut self,
         assignments: &mut stmt::Assignments,
-        filter: &mut stmt::Filter,
+        filter: &stmt::Filter,
         returning: &mut Option<stmt::Returning>,
         returning_changed: bool,
     ) {
@@ -562,15 +555,22 @@ impl LowerStatement<'_, '_> {
                 };
 
                 if extracted.has_extra_conditions {
-                    // The original query had additional filter conditions
-                    // beyond the key equality (e.g., `WHERE id = 1 AND name =
-                    // "foo"`). Add the full query as an EXISTS guard on the
-                    // parent update so the FK is only set when all conditions
-                    // match.
-                    source.add_filter(stmt::Expr::exists(query));
+                    // The subquery has additional filter conditions beyond the key
+                    // equality (e.g., `WHERE id = 1 AND name = "foo"`). We can't
+                    // just use the extracted constant because the extra conditions
+                    // might not be satisfied.
+                    //
+                    // Register the query as a guard dependency: it must return
+                    // non-empty results for this statement to execute. Use the
+                    // extracted constant for the FK assignment (avoiding arg
+                    // substitution issues on DynamoDB).
+                    let guard_id = self.new_dependency(query);
+                    let scope_id = self.scope_stmt_id();
+                    self.state.hir[scope_id].guard = Some(guard_id);
+                    self.set_relation_field(field, extracted.expr, source);
+                } else {
+                    self.set_relation_field(field, extracted.expr, source);
                 }
-
-                self.plan_mut_belongs_to_associate(field, extracted.expr, source);
             }
             _ => todo!("stmt={:#?}", stmt),
         }
@@ -657,10 +657,6 @@ impl RelationSource for UpdateRelationSource<'_> {
 
     fn set_source_field(&mut self, field: FieldId, expr: stmt::Expr) {
         self.assignments.set(field, expr);
-    }
-
-    fn add_filter(&mut self, filter: stmt::Expr) {
-        self.filter.add_filter(filter);
     }
 
     fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr) {

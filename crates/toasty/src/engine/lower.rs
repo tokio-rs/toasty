@@ -616,7 +616,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         // Plan relations
         lower.plan_stmt_update_relations(
             &mut stmt.assignments,
-            &mut stmt.filter,
+            &stmt.filter,
             &mut stmt.returning,
             returning_changed,
         );

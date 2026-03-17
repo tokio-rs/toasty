@@ -685,6 +685,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 stmt,
                 ty,
                 conditional_update_with_no_returning: false,
+                guard: self.resolve_guard(),
             }))
         };
 
@@ -907,6 +908,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             stmt,
             ty,
             conditional_update_with_no_returning: true,
+            guard: self.resolve_guard(),
         }
     }
 
@@ -1231,6 +1233,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 filter: index_plan.result_filter.take(),
                 condition: update_stmt.condition.expr.clone(),
                 ty: ty.clone(),
+                guard: self.resolve_guard(),
             }),
             _ => todo!("stmt={stmt:#?}"),
         }
@@ -1392,6 +1395,13 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 true
             }
         });
+    }
+
+    /// Resolves the HIR guard to a MIR node ID, if set.
+    fn resolve_guard(&self) -> Option<mir::NodeId> {
+        self.stmt_info
+            .guard
+            .and_then(|guard_id| self.planner.hir[guard_id].output.get())
     }
 
     fn index_key_ty(&self, index_plan: &IndexPlan) -> stmt::Type {

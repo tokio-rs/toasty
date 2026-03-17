@@ -91,6 +91,11 @@ pub(super) struct StatementInfo {
     /// When true, the statement is independent. An independent statement does
     /// not depend on any anestors itself nor do any of its sub-dependencies.
     pub(super) independent: bool,
+
+    /// Optional guard dependency. If set, this statement should only produce
+    /// results when the guard statement returns non-empty results. This is used
+    /// for conditional relation updates where the parent filter may not match.
+    pub(super) guard: Option<StmtId>,
 }
 
 index_vec::define_index_type! {
@@ -112,6 +117,7 @@ impl StatementInfo {
             load_data_columns: OnceCell::new(),
             output: Cell::new(None),
             independent: true,
+            guard: None,
         }
     }
 
