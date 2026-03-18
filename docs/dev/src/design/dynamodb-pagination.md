@@ -78,6 +78,31 @@ pub struct Response {
 
 Cursors are `stmt::Value` everywhere. For SQL, the engine builds the cursor value by applying `extract_cursor` to the last row — the value is a record of the ORDER BY column values. For DynamoDB, the driver serializes `LastEvaluatedKey` into a `stmt::Value` (e.g., a record of the key attribute name/value pairs). The engine doesn't inspect the cursor's internal structure — it stores it, returns it in `ExecResponse`, and passes it back to the driver on the next page request.
 
+### Backward Pagination and Capability
+
+DynamoDB only supports forward pagination. Its `ExclusiveStartKey` / `LastEvaluatedKey` mechanism scans in one direction — there is no built-in "previous page" operation. SQL databases support backward pagination naturally by reversing the ORDER BY direction and the keyset comparison operators.
+
+This is expressed as a driver capability:
+
+```rust
+pub struct Capability {
+    // ... existing fields ...
+
+    /// Whether the driver supports backward (previous-page) pagination.
+    /// SQL: true. DynamoDB: false.
+    pub backward_pagination: bool,
+}
+```
+
+Set to `true` for all SQL drivers and `false` for `Capability::DYNAMODB`.
+
+The planner uses this capability to decide:
+
+- **If `backward_pagination` is true (SQL):** The engine can produce both `next_cursor` and `prev_cursor`. For a backward page request, it reverses ORDER BY, flips comparison operators in the WHERE clause, and reverses the result set before returning.
+- **If `backward_pagination` is false (DynamoDB):** `ExecResponse::prev_cursor` is always `None`. `Page::prev()` returns an error (or `None`). The user-facing `Page` type can expose `has_prev()` so callers know whether backward navigation is available.
+
+This keeps the pagination API uniform — `Page` always has `next_cursor` and `prev_cursor` fields — while letting drivers declare what they actually support. Application code can check `page.has_prev()` or `page.prev_cursor.is_some()` to decide whether to render a "Previous" button.
+
 ### SQL Path
 
 During planning:
