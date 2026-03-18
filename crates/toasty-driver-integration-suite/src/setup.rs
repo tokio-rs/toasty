@@ -1,4 +1,4 @@
-use toasty::driver::Driver;
+use toasty_core::driver::Driver;
 
 #[async_trait::async_trait]
 pub trait Setup: Send + Sync + 'static {

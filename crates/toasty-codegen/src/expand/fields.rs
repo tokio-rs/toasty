@@ -37,11 +37,11 @@ impl Expand<'_> {
                     HasMany(rel) => {
                         let ty = &rel.ty;
                         let path = quote! {
-                            self.path().chain(#toasty::Path::from_field_index::<#model_ident>(#field_offset))
+                            self.path().chain(#toasty::Path::<#model_ident, _>::from_field_index(#field_offset))
                         };
 
                         quote! {
-                            #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::ManyField {
+                            #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::ManyField<__Origin> {
                                 <#ty as #toasty::Relation>::ManyField::from_path(#path)
                             }
                         }
@@ -51,12 +51,12 @@ impl Expand<'_> {
 
         // Generate struct with path field
         quote!(
-            #vis struct #field_struct_ident {
-                path: #toasty::Path<#model_ident>,
+            #vis struct #field_struct_ident<__Origin> {
+                path: #toasty::Path<__Origin, #model_ident>,
             }
 
-            impl #field_struct_ident {
-                fn path(&self) -> #toasty::Path<#model_ident> {
+            impl<__Origin> #field_struct_ident<__Origin> {
+                fn path(&self) -> #toasty::Path<__Origin, #model_ident> {
                     self.path.clone()
                 }
 
@@ -69,11 +69,12 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let field_struct_ident = self.field_struct_ident();
+        let model_ident = &self.model.ident;
 
         // Generate fields() as a method instead of const to avoid const initialization issues
         // This will be placed inside the existing impl block for the model
         quote!(
-            #vis fn fields() -> #field_struct_ident {
+            #vis fn fields() -> #field_struct_ident<#model_ident> {
                 #field_struct_ident {
                     path: #toasty::Path::root(),
                 }
@@ -103,11 +104,11 @@ impl Expand<'_> {
                 let field_name = field.name.ident.to_string();
                 let field_offset = util::int(offset);
 
-                quote!( #field_name => #toasty::FieldId { model: Self::id(), index: #field_offset }, )
+                quote!( #field_name => #toasty::core::schema::app::FieldId { model: Self::id(), index: #field_offset }, )
             });
 
         quote! {
-            fn field_name_to_id(name: &str) -> #toasty::FieldId {
+            fn field_name_to_id(name: &str) -> #toasty::core::schema::app::FieldId {
                 use #toasty::{Model, Register};
 
                 match name {

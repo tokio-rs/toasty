@@ -130,7 +130,7 @@ impl Expand<'_> {
                                     #stmt_method.set(projection, <String as #toasty::IntoExpr<String>>::into_expr(json));
                                 }
                                 None => {
-                                    #stmt_method.set(projection, #toasty::stmt::Expr::<String>::from_untyped(#toasty::core::stmt::Expr::Value(#toasty::Value::Null)));
+                                    #stmt_method.set(projection, #toasty::stmt::Expr::<String>::from_untyped(#toasty::core::stmt::Expr::Value(#toasty::core::stmt::Value::Null)));
                                 }
                             }
                             self
@@ -241,7 +241,7 @@ impl Expand<'_> {
 
             // Implement ApplyUpdate for &mut Model to enable reloading
             impl #toasty::ApplyUpdate for &mut #model_ident {
-                fn apply_result(self, mut values: ::std::vec::Vec<#toasty::Value>) -> #toasty::Result<()> {
+                fn apply_result(self, mut values: ::std::vec::Vec<#toasty::core::stmt::Value>) -> #toasty::Result<()> {
                     let value = values.into_iter()
                         .next()
                         .ok_or_else(|| #toasty::Error::record_not_found("update returned no results"))?;
@@ -337,7 +337,7 @@ impl Expand<'_> {
         let reload_arms = self.expand_reload_match_arms();
 
         quote! {
-            #vis fn reload(&mut self, value: #toasty::Value) -> #toasty::Result<()> {
+            #vis fn reload(&mut self, value: #toasty::core::stmt::Value) -> #toasty::Result<()> {
                 use #toasty::Field;
                 for (field, value) in value.into_sparse_record().into_iter() {
                     match field {

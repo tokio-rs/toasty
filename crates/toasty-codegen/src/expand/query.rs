@@ -184,11 +184,12 @@ impl Expand<'_> {
     fn expand_include_method(&self, include_ty: &syn::Ident) -> Option<TokenStream> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
+        let model_ident = &self.model.ident;
         let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
 
         if self.model.has_associations() {
             Some(quote! {
-                    #vis fn include<#include_ty>(mut self, path: impl #toasty::Into<#toasty::Path<#include_ty>>) -> #query_struct_ident {
+                    #vis fn include<#include_ty>(mut self, path: impl #toasty::Into<#toasty::Path<#model_ident, #include_ty>>) -> #query_struct_ident {
                         self.stmt.include(path.into());
                         self
                     }

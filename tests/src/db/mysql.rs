@@ -1,8 +1,6 @@
 use std::collections::HashMap;
-use toasty::{
-    db::Connect,
-    driver::{Capability, Driver},
-};
+use toasty::db::Connect;
+use toasty_core::driver::{Capability, Driver};
 
 use crate::{isolation::TestIsolation, Setup};
 

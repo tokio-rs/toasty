@@ -65,7 +65,7 @@ impl DbTest {
     }
 
     /// Get capability information from the setup
-    pub fn capability(&self) -> &toasty::driver::Capability {
+    pub fn capability(&self) -> &toasty_core::driver::Capability {
         self.setup
             .as_ref()
             .expect("Setup already consumed")
