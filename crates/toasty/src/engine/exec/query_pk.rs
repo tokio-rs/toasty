@@ -30,6 +30,15 @@ pub(crate) struct QueryPk {
 
     /// Filter to pass to the database
     pub row_filter: Option<stmt::Expr>,
+
+    /// Maximum number of items to return.
+    pub limit: Option<i64>,
+
+    /// Sort key ordering direction.
+    pub order: Option<stmt::Direction>,
+
+    /// Cursor for resuming a paginated query.
+    pub cursor: Option<stmt::Value>,
 }
 
 impl Exec<'_> {
@@ -55,6 +64,9 @@ impl Exec<'_> {
                         select: action.columns.clone(),
                         pk_filter: f,
                         filter: action.row_filter.clone(),
+                        limit: action.limit,
+                        order: action.order,
+                        cursor: action.cursor.clone(),
                     }
                     .into(),
                 )
