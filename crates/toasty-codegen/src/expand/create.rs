@@ -207,7 +207,7 @@ impl Expand<'_> {
                                             self.stmt.set(#index_tokenized, <String as #toasty::IntoExpr<String>>::into_expr(json));
                                         }
                                         None => {
-                                            self.stmt.set(#index_tokenized, #toasty::stmt::Expr::<String>::from_untyped(#toasty::core::stmt::Expr::Value(#toasty::Value::Null)));
+                                            self.stmt.set(#index_tokenized, #toasty::stmt::Expr::<String>::from_untyped(#toasty::core::stmt::Expr::Value(#toasty::core::stmt::Value::Null)));
                                         }
                                     }
                                     self

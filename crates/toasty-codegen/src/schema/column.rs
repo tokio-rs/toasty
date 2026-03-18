@@ -191,32 +191,34 @@ impl syn::parse::Parse for ColumnType {
 }
 
 impl ColumnType {
-    /// Expand to a fully qualified `#toasty::schema::db::Type::...` token stream.
+    /// Expand to a fully qualified `#toasty::core::schema::db::Type::...` token stream.
     pub(crate) fn expand_with(
         &self,
         toasty: &proc_macro2::TokenStream,
     ) -> proc_macro2::TokenStream {
         match self {
-            Self::Boolean => quote! { #toasty::schema::db::Type::Boolean },
-            Self::Integer(size) => quote! { #toasty::schema::db::Type::Integer(#size) },
+            Self::Boolean => quote! { #toasty::core::schema::db::Type::Boolean },
+            Self::Integer(size) => quote! { #toasty::core::schema::db::Type::Integer(#size) },
             Self::UnsignedInteger(size) => {
-                quote! { #toasty::schema::db::Type::UnsignedInteger(#size) }
+                quote! { #toasty::core::schema::db::Type::UnsignedInteger(#size) }
             }
-            Self::Text => quote! { #toasty::schema::db::Type::Text },
-            Self::VarChar(size) => quote! { #toasty::schema::db::Type::VarChar(#size) },
-            Self::Numeric(None) => quote! { #toasty::schema::db::Type::Numeric(None) },
+            Self::Text => quote! { #toasty::core::schema::db::Type::Text },
+            Self::VarChar(size) => quote! { #toasty::core::schema::db::Type::VarChar(#size) },
+            Self::Numeric(None) => quote! { #toasty::core::schema::db::Type::Numeric(None) },
             Self::Numeric(Some((precision, scale))) => {
-                quote! { #toasty::schema::db::Type::Numeric(Some((#precision, #scale))) }
+                quote! { #toasty::core::schema::db::Type::Numeric(Some((#precision, #scale))) }
             }
-            Self::Binary(size) => quote! { #toasty::schema::db::Type::Binary(#size) },
-            Self::Blob => quote! { #toasty::schema::db::Type::Blob },
+            Self::Binary(size) => quote! { #toasty::core::schema::db::Type::Binary(#size) },
+            Self::Blob => quote! { #toasty::core::schema::db::Type::Blob },
             Self::Timestamp(precision) => {
-                quote! { #toasty::schema::db::Type::Timestamp(#precision) }
+                quote! { #toasty::core::schema::db::Type::Timestamp(#precision) }
             }
-            Self::Date => quote! { #toasty::schema::db::Type::Date },
-            Self::Time(precision) => quote! { #toasty::schema::db::Type::Time(#precision) },
-            Self::DateTime(precision) => quote! { #toasty::schema::db::Type::DateTime(#precision) },
-            Self::Custom(custom) => quote! { #toasty::schema::db::Type::Custom(#custom) },
+            Self::Date => quote! { #toasty::core::schema::db::Type::Date },
+            Self::Time(precision) => quote! { #toasty::core::schema::db::Type::Time(#precision) },
+            Self::DateTime(precision) => {
+                quote! { #toasty::core::schema::db::Type::DateTime(#precision) }
+            }
+            Self::Custom(custom) => quote! { #toasty::core::schema::db::Type::Custom(#custom) },
         }
     }
 }

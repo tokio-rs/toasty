@@ -73,8 +73,8 @@ impl Expand<'_> {
             }
 
             impl #toasty::Register for #model_ident {
-                fn id() -> #toasty::ModelId {
-                    static ID: std::sync::OnceLock<#toasty::ModelId> = std::sync::OnceLock::new();
+                fn id() -> #toasty::core::schema::app::ModelId {
+                    static ID: std::sync::OnceLock<#toasty::core::schema::app::ModelId> = std::sync::OnceLock::new();
                     *ID.get_or_init(|| #toasty::generate_unique_id())
                 }
 
@@ -83,7 +83,7 @@ impl Expand<'_> {
 
             impl #toasty::Load for #model_ident {
                 type Output = Self;
-                fn load(value: #toasty::Value) -> #toasty::Result<Self> {
+                fn load(value: #toasty::core::stmt::Value) -> #toasty::Result<Self> {
                     #load_body
                 }
             }
@@ -328,7 +328,7 @@ impl Expand<'_> {
 
         quote! {
             match value {
-                #toasty::Value::Record(mut record) => {
+                #toasty::core::stmt::Value::Record(mut record) => {
                     Ok(#model_ident {
                         #( #field_loads )*
                     })
@@ -387,7 +387,7 @@ impl Expand<'_> {
 
         quote! {
             match value {
-                #toasty::Value::SparseRecord(sparse) => {
+                #toasty::core::stmt::Value::SparseRecord(sparse) => {
                     for (field, value) in sparse.into_iter() {
                         match field {
                             #( #reload_arms )*

@@ -88,8 +88,8 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
         #embedded_model_impls
 
         impl #toasty::Register for #model_ident {
-            fn id() -> #toasty::ModelId {
-                static ID: std::sync::OnceLock<#toasty::ModelId> = std::sync::OnceLock::new();
+            fn id() -> #toasty::core::schema::app::ModelId {
+                static ID: std::sync::OnceLock<#toasty::core::schema::app::ModelId> = std::sync::OnceLock::new();
                 *ID.get_or_init(|| #toasty::generate_unique_id())
             }
 
@@ -104,15 +104,15 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
 
             const NULLABLE: bool = false;
 
-            fn ty() -> #toasty::Type {
-                #toasty::Type::Model(<Self as #toasty::Register>::id())
+            fn ty() -> #toasty::core::stmt::Type {
+                #toasty::core::stmt::Type::Model(<Self as #toasty::Register>::id())
             }
 
-            fn load(value: #toasty::Value) -> #toasty::Result<Self> {
+            fn load(value: #toasty::core::stmt::Value) -> #toasty::Result<Self> {
                 #load_body
             }
 
-            fn reload(&mut self, value: #toasty::Value) -> #toasty::Result<()> {
+            fn reload(&mut self, value: #toasty::core::stmt::Value) -> #toasty::Result<()> {
                 #reload_body
             }
 
@@ -128,10 +128,10 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
             }
 
             fn field_ty(
-                _storage_ty: Option<#toasty::schema::db::Type>,
-            ) -> #toasty::schema::app::FieldTy {
-                #toasty::schema::app::FieldTy::Embedded(
-                    #toasty::schema::app::Embedded {
+                _storage_ty: Option<#toasty::core::schema::db::Type>,
+            ) -> #toasty::core::schema::app::FieldTy {
+                #toasty::core::schema::app::FieldTy::Embedded(
+                    #toasty::core::schema::app::Embedded {
                         target: <Self as #toasty::Register>::id(),
                         expr_ty: Self::ty(),
                     }
@@ -178,19 +178,19 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
         #enum_field_struct
 
         impl #toasty::Register for #model_ident {
-            fn id() -> #toasty::ModelId {
-                static ID: std::sync::OnceLock<#toasty::ModelId> = std::sync::OnceLock::new();
+            fn id() -> #toasty::core::schema::app::ModelId {
+                static ID: std::sync::OnceLock<#toasty::core::schema::app::ModelId> = std::sync::OnceLock::new();
                 *ID.get_or_init(|| #toasty::generate_unique_id())
             }
 
-            fn schema() -> #toasty::schema::app::Model {
+            fn schema() -> #toasty::core::schema::app::Model {
                 let id = Self::id();
-                #toasty::schema::app::Model::EmbeddedEnum(
-                    #toasty::schema::app::EmbeddedEnum {
+                #toasty::core::schema::app::Model::EmbeddedEnum(
+                    #toasty::core::schema::app::EmbeddedEnum {
                         id,
                         name: #name,
-                        discriminant: #toasty::schema::app::FieldPrimitive {
-                            ty: #toasty::Type::I64,
+                        discriminant: #toasty::core::schema::app::FieldPrimitive {
+                            ty: #toasty::core::stmt::Type::I64,
                             storage_ty: ::std::option::Option::None,
                             serialize: ::std::option::Option::None,
                         },
@@ -208,24 +208,24 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
             type FieldAccessor<__Origin> = #field_struct_ident<__Origin>;
             type UpdateBuilder<'a> = ();
 
-            fn ty() -> #toasty::Type {
+            fn ty() -> #toasty::core::stmt::Type {
                 #ty_expr
             }
 
-            fn load(value: #toasty::Value) -> #toasty::Result<Self> {
+            fn load(value: #toasty::core::stmt::Value) -> #toasty::Result<Self> {
                 match value {
-                    #toasty::Value::I64(d) => match d {
+                    #toasty::core::stmt::Value::I64(d) => match d {
                         #( #unit_load_arms )*
                         _ => Err(#toasty::Error::type_conversion(
-                            #toasty::Value::I64(d),
+                            #toasty::core::stmt::Value::I64(d),
                             stringify!(#model_ident),
                         )),
                     },
-                    #toasty::Value::Record(mut record) => match record[0].take() {
-                        #toasty::Value::I64(d) => match d {
+                    #toasty::core::stmt::Value::Record(mut record) => match record[0].take() {
+                        #toasty::core::stmt::Value::I64(d) => match d {
                             #( #data_load_arms )*
                             _ => Err(#toasty::Error::type_conversion(
-                                #toasty::Value::I64(d),
+                                #toasty::core::stmt::Value::I64(d),
                                 stringify!(#model_ident),
                             )),
                         },
@@ -243,10 +243,10 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
             }
 
             fn field_ty(
-                _storage_ty: Option<#toasty::schema::db::Type>,
-            ) -> #toasty::schema::app::FieldTy {
-                #toasty::schema::app::FieldTy::Embedded(
-                    #toasty::schema::app::Embedded {
+                _storage_ty: Option<#toasty::core::schema::db::Type>,
+            ) -> #toasty::core::schema::app::FieldTy {
+                #toasty::core::schema::app::FieldTy::Embedded(
+                    #toasty::core::schema::app::Embedded {
                         target: <Self as #toasty::Register>::id(),
                         expr_ty: Self::ty(),
                     }

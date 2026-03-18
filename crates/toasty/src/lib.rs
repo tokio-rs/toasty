@@ -175,14 +175,6 @@ pub mod codegen_support {
     pub use std::{convert::Into, default::Default, option::Option};
 
     pub use toasty_core as core;
-    pub use toasty_core::{
-        driver,
-        schema::{
-            self,
-            app::{FieldId, ModelId},
-        },
-        stmt::{Type, Value, ValueRecord, ValueStream},
-    };
 }
 
 pub mod driver {
