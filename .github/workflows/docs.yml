@@ -16,6 +16,7 @@ concurrency:
 
 jobs:
   build:
+    if: github.repository == 'tokio-rs/toasty'
     name: Build docs
     runs-on: ubuntu-latest
     steps:
@@ -61,6 +62,7 @@ jobs:
           path: _site
 
   deploy:
+    if: github.repository == 'tokio-rs/toasty'
     name: Deploy to GitHub Pages
     needs: build
     runs-on: ubuntu-latest
