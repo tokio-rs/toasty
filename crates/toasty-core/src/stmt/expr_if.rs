@@ -14,6 +14,24 @@ pub struct IfBranch {
     pub then: Box<Expr>,
 }
 
+impl Expr {
+    pub fn r#if(cond: impl Into<Expr>, then: impl Into<Expr>, r#else: impl Into<Expr>) -> Expr {
+        Expr::If(ExprIf {
+            branches: vec![IfBranch {
+                cond: Box::new(cond.into()),
+                then: Box::new(then.into()),
+            }],
+            r#else: Box::new(r#else.into()),
+        })
+    }
+}
+
+impl From<ExprIf> for Expr {
+    fn from(value: ExprIf) -> Self {
+        Self::If(value)
+    }
+}
+
 impl std::fmt::Debug for ExprIf {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ExprIf")

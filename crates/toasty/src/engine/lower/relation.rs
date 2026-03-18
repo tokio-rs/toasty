@@ -275,16 +275,27 @@ impl LowerStatement<'_, '_> {
     ) {
         assert!(!value.is_list());
 
-        let mut stmt = stmt::Query::new_select(
+        let mut update = stmt::Query::new_select(
             pair.id.model,
             stmt::Expr::eq(stmt::Expr::ref_ancestor_model(0), value),
         )
         .update();
 
-        stmt.assignments
+        update
+            .assignments
             .set(pair.id, stmt::Expr::stmt(source.selection(2)));
 
-        self.new_dependency(stmt);
+        // Wrap in a conditional: only execute the update if the source query
+        // actually matches rows. This prevents FK mutations when the source
+        // filter doesn't match (e.g. `User::filter_by_id(id).filter(name.eq("x"))`
+        // where name doesn't match).
+        let cond = stmt::Expr::r#if(
+            stmt::Expr::exists(source.selection(1)),
+            stmt::Expr::stmt(update),
+            stmt::Expr::null(),
+        );
+
+        self.new_dependency(stmt::Query::values(cond));
     }
 
     fn plan_mut_has_many_disassociate_expr(

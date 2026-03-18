@@ -78,6 +78,7 @@ impl Engine {
 
         // Lower the statement to High-level intermediate representation
         let hir = self.lower_stmt(stmt)?;
+        println!("HIR = {hir:#?}");
 
         // Translate the optimized statement into a series of driver operations.
         let plan = self.plan_hir_statement(hir)?;
