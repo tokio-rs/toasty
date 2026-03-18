@@ -190,6 +190,25 @@ fn ddb_key(table: &Table, key: &stmt::Value) -> HashMap<String, AttributeValue> 
     ret
 }
 
+/// Convert a DynamoDB key (HashMap<String, AttributeValue>) back to a stmt::Value.
+/// For primary key queries, this extracts values for all primary key columns in order.
+fn ddb_key_to_value(table: &Table, key: &HashMap<String, AttributeValue>) -> stmt::Value {
+    let values: Vec<stmt::Value> = table
+        .primary_key_columns()
+        .map(|column| {
+            key.get(&column.name)
+                .map(|attr_val| Value::from_ddb(&column.ty, attr_val).into_inner())
+                .unwrap_or(stmt::Value::Null)
+        })
+        .collect();
+
+    if values.len() == 1 {
+        values[0].clone()
+    } else {
+        stmt::Value::Record(stmt::ValueRecord::from_vec(values))
+    }
+}
+
 fn ddb_key_schema(partition: &Column, range: Option<&Column>) -> Vec<KeySchemaElement> {
     let mut ks = vec![];
 
