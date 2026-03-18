@@ -37,7 +37,7 @@ jobs:
         run: mdbook build docs/dev
 
       - name: Build Rust API docs
-        run: cargo doc --workspace --no-deps --document-private-items
+        run: cargo doc --workspace --no-deps
         env:
           TOASTY_GUIDE_URL: ../../guide/
 
