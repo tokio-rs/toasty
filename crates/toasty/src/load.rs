@@ -23,6 +23,20 @@ impl Load for () {
     }
 }
 
+impl Load for i64 {
+    type Output = i64;
+    fn load(value: stmt::Value) -> Result<Self::Output, Error> {
+        match value {
+            stmt::Value::Record(mut record) => match record.fields.remove(0) {
+                stmt::Value::I64(n) => Ok(n),
+                other => Err(Error::type_conversion(other, "i64")),
+            },
+            stmt::Value::I64(n) => Ok(n),
+            _ => Err(Error::type_conversion(value, "i64")),
+        }
+    }
+}
+
 impl<T: Load<Output = T>> Load for Vec<T> {
     type Output = Vec<T>;
     fn load(value: stmt::Value) -> Result<Self::Output, Error> {

@@ -43,6 +43,11 @@ impl Expand<'_> {
                     executor.get(self.stmt).await
                 }
 
+                #vis async fn count(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<i64> {
+                    use #toasty::ExecutorExt;
+                    executor.get(self.stmt.count()).await
+                }
+
                 #vis fn update(self) -> #update_struct_ident {
                     #update_struct_ident::from(self)
                 }
