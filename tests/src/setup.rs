@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use toasty::driver::{Capability, Driver};
+use toasty_core::driver::{Capability, Driver};
 
 #[async_trait::async_trait]
 pub trait Setup: Send + Sync + 'static {

@@ -2,10 +2,9 @@ use std::{
     borrow::Cow,
     sync::{Arc, Mutex},
 };
-use toasty::driver::Driver;
 use toasty_core::{
     async_trait,
-    driver::{Capability, Connection, Operation, Response, Rows},
+    driver::{Capability, Connection, Driver, Operation, Response, Rows},
     schema::db::{AppliedMigration, Migration, SchemaDiff},
     Result, Schema,
 };

@@ -10,7 +10,7 @@ impl SqliteSetup {
 
 #[async_trait::async_trait]
 impl toasty_driver_integration_suite::Setup for SqliteSetup {
-    fn driver(&self) -> Box<dyn toasty::driver::Driver> {
+    fn driver(&self) -> Box<dyn toasty_core::driver::Driver> {
         Box::new(toasty_driver_sqlite::Sqlite::in_memory())
     }
 

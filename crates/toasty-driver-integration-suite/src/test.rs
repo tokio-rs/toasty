@@ -79,7 +79,7 @@ impl Test {
     }
 
     /// Get the driver capability
-    pub fn capability(&self) -> &'static toasty::driver::Capability {
+    pub fn capability(&self) -> &'static toasty_core::driver::Capability {
         self.setup.driver().capability()
     }
 

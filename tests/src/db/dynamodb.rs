@@ -1,6 +1,6 @@
 use crate::{isolation::TestIsolation, Setup};
 use std::collections::HashMap;
-use toasty::driver::{Capability, Driver};
+use toasty_core::driver::{Capability, Driver};
 use toasty_driver_dynamodb::DynamoDb;
 use tokio::runtime::Runtime;
 use tokio::sync::OnceCell;
