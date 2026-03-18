@@ -1,105 +1,115 @@
-//! The main Toasty crate. This is the user-facing API for defining models,
-//! querying the database, and managing connections.
+//! Toasty is an async ORM for Rust supporting both SQL (SQLite, PostgreSQL,
+//! MySQL) and NoSQL (DynamoDB) databases.
 //!
-//! For a guided introduction, see the [Toasty guide]. These API docs serve as a
-//! reference for the types and traits in this crate.
+//! This crate is the user-facing API. It contains the database handle,
+//! query execution traits, and the types that generated code builds on. For
+//! a tutorial-style introduction, see the [Toasty guide].
 //!
-//! [Toasty guide]: https://toasty-rs.github.io/toasty/guide/
+//! [Toasty guide]: ../../guide/
 //!
-//! # Defining models
+//! # Modules
 //!
-//! Models are Rust structs annotated with `#[derive(Model)]`. The derive macro
-//! generates query builders, create/update builders, relation accessors, and
-//! the runtime schema registration needed to interact with the database.
+//! ## [`db`] — database handle and connection pool
 //!
-//! ```ignore
-//! #[derive(Model)]
-//! struct User {
-//!     #[key]
-//!     #[auto]
-//!     id: Id<User>,
+//! The [`Db`] type is the entry point for all database interaction. It owns
+//! a connection pool and provides [`Db::builder`] for configuration. The
+//! module also contains [`Builder`](db::Builder) and the pool internals.
 //!
-//!     name: String,
+//! ## [`model`] — model trait and field helpers
 //!
-//!     #[has_many]
-//!     posts: HasMany<Post>,
-//! }
-//! ```
+//! The [`Model`] trait represents a root model that maps to a database table.
+//! It is implemented by `#[derive(Model)]` — users do not implement it
+//! manually. The module also contains [`Field`](model::Field), which
+//! describes a typed field accessor, and [`Auto`](model::Auto), a wrapper
+//! for auto-generated values such as database-assigned IDs.
 //!
-//! The [`Model`] trait is implemented by root models that map to database
-//! tables. The [`Embed`] trait is for embedded types whose fields are flattened
-//! into the parent model's table — they have no table or primary key of their
-//! own.
+//! ## [`stmt`] — typed statement and expression types
 //!
-//! # Connecting to a database
+//! Contains the typed wrappers around the statement AST:
+//! [`Query`](stmt::Query), [`Insert`](stmt::Insert),
+//! [`Update`](stmt::Update), [`Delete`](stmt::Delete), and
+//! [`Statement`]. Also includes expression helpers like [`Expr`](stmt::Expr),
+//! [`Path`](stmt::Path), and the [`in_list`](stmt::in_list) function.
+//! Generated query builders (e.g. `find_by_*`, `filter_by_*`) produce these
+//! types.
 //!
-//! Use [`Db`] to open a connection. Toasty ships optional, feature-gated
-//! driver crates for each supported database:
+//! ## [`relation`] — relation field types
 //!
-//! | Feature        | Driver crate                   |
-//! |----------------|--------------------------------|
-//! | `sqlite`       | `toasty-driver-sqlite`         |
-//! | `postgresql`   | `toasty-driver-postgresql`     |
-//! | `mysql`        | `toasty-driver-mysql`          |
-//! | `dynamodb`     | `toasty-driver-dynamodb`       |
+//! The types that represent associations between models: [`HasMany`],
+//! [`HasOne`], and [`BelongsTo`]. These appear as fields on model structs
+//! and are populated through the generated relation accessors.
 //!
-//! ```ignore
-//! let db = Db::builder()
-//!     .connect("sqlite::memory:")
-//!     .await?;
-//! ```
+//! ## [`schema`] — schema inspection
 //!
-//! The [`db`] module contains the connection [`Builder`](db::Builder), the
-//! connection pool, and the `connect` helpers.
+//! Re-exports from `toasty-core` for inspecting the app-level and db-level
+//! schema representations at runtime.
 //!
-//! # Executing queries
+//! ## [`driver`] — database driver interface
 //!
-//! Both [`Db`] and [`Transaction`] implement the [`Executor`] trait, which is
-//! the low-level, dyn-compatible interface for running statements. Generic
-//! convenience methods — [`all`](ExecutorExt::all),
-//! [`first`](ExecutorExt::first), [`get`](ExecutorExt::get),
-//! [`delete`](ExecutorExt::delete) — live on [`ExecutorExt`], which is
-//! blanket-implemented for every `Executor`.
+//! Re-exports from `toasty-core`. The [`Driver`](driver::Driver) and
+//! [`Connection`](driver::Connection) traits define the interface that each
+//! database backend implements. Users interact with drivers indirectly
+//! through [`Db`].
 //!
-//! In practice, most queries go through the generated query builders rather
-//! than calling `ExecutorExt` methods directly:
+//! # Key traits
 //!
-//! ```ignore
-//! // Generated `find_by_name` returns a query builder
-//! let user = User::find_by_name("Alice").get(&mut db).await?;
-//! ```
+//! - [`Model`] — a root model backed by a database table. Implemented by
+//!   `#[derive(Model)]`.
+//! - [`Embed`] — an embedded type whose fields are flattened into the parent
+//!   model's table. Implemented by `#[derive(Embed)]`.
+//! - [`Executor`] — the dyn-compatible interface for running statements.
+//!   [`Db`] and [`Transaction`] both implement it.
+//! - [`ExecutorExt`] — generic convenience methods ([`all`](ExecutorExt::all),
+//!   [`first`](ExecutorExt::first), [`get`](ExecutorExt::get),
+//!   [`delete`](ExecutorExt::delete)) blanket-implemented for every
+//!   `Executor`.
+//! - [`Load`] — deserializes a model instance from the database value
+//!   representation.
 //!
-//! # Transactions
+//! # Other key types
 //!
-//! Start a transaction with [`Executor::transaction`] or configure one with
-//! [`Db::transaction_builder`](Db::transaction_builder). Transactions
-//! auto-rollback on drop if neither
-//! [`commit`](Transaction::commit) nor [`rollback`](Transaction::rollback) is
-//! called. Nested transactions use savepoints.
+//! - [`Transaction`] / [`TransactionBuilder`] — transactions with
+//!   auto-rollback on drop and nested savepoint support.
+//! - [`Page`] — a page of results from a paginated query, with cursor-based
+//!   navigation.
+//! - [`Batch`] — groups multiple queries into a single round-trip.
+//! - [`Error`] / [`Result`] — re-exported from `toasty-core`.
 //!
-//! # Module overview
+//! # Derive macros
 //!
-//! | Module       | Contents |
-//! |--------------|----------|
-//! | [`db`]       | [`Db`] handle, connection [`Builder`](db::Builder), and pool |
-//! | [`model`]    | [`Model`] trait, [`Field`](model::Field) and [`Auto`](model::Auto) helpers |
-//! | [`stmt`]     | Typed statement types — [`Query`](stmt::Query), [`Insert`](stmt::Insert), [`Update`](stmt::Update), [`Delete`](stmt::Delete), expression helpers |
-//! | [`relation`] | Relation field types — [`HasMany`], [`HasOne`], [`BelongsTo`] |
-//! | [`schema`]   | Re-exports from `toasty-core` for schema inspection |
-//! | [`driver`]   | Re-exports from `toasty-core` for the database driver interface |
+//! - [`#[derive(Model)]`](derive@Model) — generates the [`Model`] impl,
+//!   query builders, create/update builders, relation accessors, and schema
+//!   registration for a struct.
+//! - [`#[derive(Embed)]`](derive@Embed) — generates the [`Embed`] impl for a
+//!   type whose fields are stored inline in a parent model's table.
 //!
-//! # Crate boundaries
+//! # Feature flags
 //!
-//! `toasty` is the user-facing crate. It depends on several internal crates
-//! that are not meant to be used directly:
+//! Each database driver is behind an optional feature flag:
 //!
-//! - **`toasty-core`** — shared types: schema representations, the statement
-//!   AST, the [`Driver`](driver::Driver) trait, [`Error`], and [`Result`].
-//! - **`toasty-macros`** / **`toasty-codegen`** — the `#[derive(Model)]` and
-//!   `#[derive(Embed)]` proc-macros and the code they generate.
-//! - **`toasty-sql`** — SQL serialization (statement AST to SQL string), used
-//!   by the SQL driver crates.
-//! - **`toasty-driver-*`** — database driver implementations, one per backend.
+//! | Feature        | Driver crate                 |
+//! |----------------|------------------------------|
+//! | `sqlite`       | `toasty-driver-sqlite`       |
+//! | `postgresql`   | `toasty-driver-postgresql`   |
+//! | `mysql`        | `toasty-driver-mysql`        |
+//! | `dynamodb`     | `toasty-driver-dynamodb`     |
+//!
+//! Additional feature flags: `rust_decimal`, `bigdecimal`, `jiff` (date/time
+//! via the `jiff` crate), and `serde` (JSON serialization support).
+//!
+//! # Other crates in the workspace
+//!
+//! `toasty` depends on several internal crates that most users do not need
+//! to use directly:
+//!
+//! - **`toasty-core`** — shared types used across the workspace: the schema
+//!   representations (app-level and db-level), the statement AST, the
+//!   [`Driver`](driver::Driver) trait, and [`Error`] / [`Result`].
+//! - **`toasty-macros`** / **`toasty-codegen`** — the proc-macro entry points
+//!   and the code generation logic they call.
+//! - **`toasty-sql`** — serializes the statement AST to SQL strings. Used by
+//!   the SQL driver crates.
+//! - **`toasty-driver-*`** — one crate per database backend.
 
 mod apply_update;
 pub use apply_update::{ApplyUpdate, Query};
