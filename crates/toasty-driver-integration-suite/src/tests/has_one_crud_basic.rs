@@ -574,74 +574,38 @@ pub async fn associate_has_one_by_val_on_insert(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
-#[ignore]
-pub async fn associate_has_one_by_val_on_update_query_with_filter(_test: &mut Test) {
-    /*
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[has_one]
-        profile: toasty::HasOne<Option<Profile>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Profile {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[unique]
-        user_id: Option<ID>,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
-
-        bio: String,
-    }
-
-    let mut db = test.setup_db(models!(User, Profile)).await;
-
-    let u1 = User::create().name("user 1").exec(&mut db).await.unwrap();
-    let p1 = Profile::create()
-        .bio("hello world")
-        .exec(&mut db)
-        .await
-        .unwrap();
-
-    User::filter_by_id(&u1.id)
+#[driver_test(id(ID), scenario(crate::scenarios::has_one_optional_belongs_to))]
+pub async fn associate_has_one_by_val_on_update_query_with_filter(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+    let u1 = User::create().name("user 1").exec(&mut db).await?;
+    let p1 = Profile::create().bio("hello world").exec(&mut db).await?;
+    // Associate the profile using a filtered update query
+    User::filter_by_id(u1.id)
+        .filter(User::fields().name().eq("user 1"))
         .update()
         .profile(&p1)
         .exec(&mut db)
-        .await
-        .unwrap();
-
-    let u1_reloaded = User::get_by_id(&mut db, &u1.id).await.unwrap();
-    let p1_reloaded = u1_reloaded.profile().get(&mut db).await.unwrap().unwrap();
+        .await?;
+    let u1_reloaded = User::get_by_id(&mut db, &u1.id).await?;
+    let p1_reloaded = u1_reloaded.profile().get(&mut db).await?.unwrap();
     assert_eq!(p1.id, p1_reloaded.id);
     assert_eq!(p1.bio, p1_reloaded.bio);
     assert_eq!(p1_reloaded.user_id.as_ref(), Some(&u1.id));
-
     // Unset
-    User::filter_by_id(&u1.id)
+    User::filter_by_id(u1.id)
         .update()
         .profile(None)
         .exec(&mut db)
-        .await
-        .unwrap();
-
-    // Getting this to work will require a big chunk of work in the planner.
-    User::filter_by_id(&u1.id)
+        .await?;
+    // Update with a filter that does NOT match — should be a no-op
+    User::filter_by_id(u1.id)
         .filter(User::fields().name().eq("anon"))
         .update()
         .profile(&p1)
         .exec(&mut db)
-        .await
-        .unwrap();
-    */
+        .await?;
+    // Profile should still be unassociated since the filter didn't match
+    let u1_reloaded = User::get_by_id(&mut db, &u1.id).await?;
+    assert_none!(u1_reloaded.profile().get(&mut db).await?);
+    Ok(())
 }
