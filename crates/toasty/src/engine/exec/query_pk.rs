@@ -46,65 +46,46 @@ impl Exec<'_> {
 
         let filters = self.split_filter(pk_filter, action.table);
 
-        if action.count_only {
-            let mut total: i64 = 0;
+        let mut all_rows = Vec::new();
+        let mut total: i64 = 0;
 
-            for f in filters {
-                let res = self
-                    .connection
-                    .exec(
-                        &self.engine.schema,
-                        operation::QueryPk {
-                            table: action.table,
-                            index: action.index,
-                            select: action.columns.clone(),
-                            pk_filter: f,
-                            filter: action.row_filter.clone(),
-                            count_only: true,
-                        }
-                        .into(),
-                    )
-                    .await?;
+        for f in filters {
+            let res = self
+                .connection
+                .exec(
+                    &self.engine.schema,
+                    operation::QueryPk {
+                        table: action.table,
+                        index: action.index,
+                        select: action.columns.clone(),
+                        pk_filter: f,
+                        filter: action.row_filter.clone(),
+                        count_only: action.count_only,
+                    }
+                    .into(),
+                )
+                .await?;
 
+            if action.count_only {
                 total += res.rows.into_count() as i64;
-            }
-
-            let record =
-                stmt::Value::Record(stmt::ValueRecord::from_vec(vec![stmt::Value::I64(total)]));
-            self.vars.store(
-                action.output.var,
-                action.output.num_uses,
-                Rows::Stream(stmt::ValueStream::from_vec(vec![record])),
-            );
-        } else {
-            let mut all_rows = Vec::new();
-
-            for f in filters {
-                let res = self
-                    .connection
-                    .exec(
-                        &self.engine.schema,
-                        operation::QueryPk {
-                            table: action.table,
-                            index: action.index,
-                            select: action.columns.clone(),
-                            pk_filter: f,
-                            filter: action.row_filter.clone(),
-                            count_only: false,
-                        }
-                        .into(),
-                    )
-                    .await?;
-
+            } else {
                 all_rows.extend(res.rows.into_value_stream().collect().await?);
             }
-
-            self.vars.store(
-                action.output.var,
-                action.output.num_uses,
-                Rows::Stream(stmt::ValueStream::from_vec(all_rows)),
-            );
         }
+
+        let rows = if action.count_only {
+            let record =
+                stmt::Value::Record(stmt::ValueRecord::from_vec(vec![stmt::Value::I64(total)]));
+            vec![record]
+        } else {
+            all_rows
+        };
+
+        self.vars.store(
+            action.output.var,
+            action.output.num_uses,
+            Rows::Stream(stmt::ValueStream::from_vec(rows)),
+        );
 
         Ok(())
     }
