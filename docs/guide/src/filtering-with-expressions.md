@@ -258,8 +258,8 @@ let users = User::filter(
 # }
 ```
 
-AND and OR follow standard precedence — AND binds tighter than OR. Use
-parentheses in your Rust code to control grouping:
+Expressions evaluate left to right through method chaining. Each method wraps
+everything before it. `a.or(b).and(c)` produces `(a OR b) AND c`:
 
 ```rust
 # use toasty::Model;
@@ -280,6 +280,34 @@ let users = User::filter(
         .eq("Alice")
         .or(User::fields().age().eq(35))
         .and(User::fields().active().eq(true)),
+)
+.exec(&mut db)
+.await?;
+# Ok(())
+# }
+```
+
+To group differently, build sub-expressions and pass them as arguments. Here,
+`a.or(b.and(c))` produces `a OR (b AND c)`:
+
+```rust
+# use toasty::Model;
+# #[derive(Debug, toasty::Model)]
+# struct User {
+#     #[key]
+#     #[auto]
+#     id: u64,
+#     name: String,
+#     age: i64,
+#     active: bool,
+# }
+# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
+// name = "Alice" OR (age = 35 AND active = true)
+let users = User::filter(
+    User::fields().name().eq("Alice").or(User::fields()
+        .age()
+        .eq(35)
+        .and(User::fields().active().eq(true))),
 )
 .exec(&mut db)
 .await?;
