@@ -2,7 +2,7 @@
 
 use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprAny, ExprArg,
-    ExprBinaryOp, ExprCast, ExprColumn, ExprError, ExprExists, ExprFunc, ExprInList,
+    ExprBinaryOp, ExprCast, ExprColumn, ExprError, ExprExists, ExprFunc, ExprIf, ExprInList,
     ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprList, ExprMap, ExprMatch, ExprNot,
     ExprOr, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, Filter,
     FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset, OrderBy,
@@ -77,6 +77,10 @@ pub trait Visit {
 
     fn visit_expr_func(&mut self, i: &ExprFunc) {
         visit_expr_func(self, i);
+    }
+
+    fn visit_expr_if(&mut self, i: &ExprIf) {
+        visit_expr_if(self, i);
     }
 
     fn visit_expr_func_count(&mut self, i: &FuncCount) {
@@ -333,6 +337,10 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_expr_func(&mut **self, i);
     }
 
+    fn visit_expr_if(&mut self, i: &ExprIf) {
+        Visit::visit_expr_if(&mut **self, i);
+    }
+
     fn visit_expr_func_count(&mut self, i: &FuncCount) {
         Visit::visit_expr_func_count(&mut **self, i);
     }
@@ -570,6 +578,7 @@ where
         Expr::Error(expr) => v.visit_expr_error(expr),
         Expr::Exists(expr) => v.visit_expr_exists(expr),
         Expr::Func(expr) => v.visit_expr_func(expr),
+        Expr::If(expr) => v.visit_expr_if(expr),
         Expr::InList(expr) => v.visit_expr_in_list(expr),
         Expr::InSubquery(expr) => v.visit_expr_in_subquery(expr),
         Expr::IsNull(expr) => v.visit_expr_is_null(expr),
@@ -650,6 +659,17 @@ where
     V: Visit + ?Sized,
 {
     v.visit_stmt_query(&node.subquery);
+}
+
+pub fn visit_expr_if<V>(v: &mut V, node: &ExprIf)
+where
+    V: Visit + ?Sized,
+{
+    for branch in &node.branches {
+        v.visit_expr(&branch.cond);
+        v.visit_expr(&branch.then);
+    }
+    v.visit_expr(&node.r#else);
 }
 
 pub fn visit_expr_func<V>(v: &mut V, node: &ExprFunc)

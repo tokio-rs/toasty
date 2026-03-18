@@ -57,6 +57,9 @@ pub use expr_exists::ExprExists;
 mod expr_func;
 pub use expr_func::ExprFunc;
 
+mod expr_if;
+pub use expr_if::{ExprIf, IfBranch};
+
 mod expr_in_list;
 pub use expr_in_list::ExprInList;
 

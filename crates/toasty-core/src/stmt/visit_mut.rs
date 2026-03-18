@@ -2,7 +2,7 @@
 
 use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprAny, ExprArg,
-    ExprBinaryOp, ExprCast, ExprColumn, ExprError, ExprExists, ExprFunc, ExprInList,
+    ExprBinaryOp, ExprCast, ExprColumn, ExprError, ExprExists, ExprFunc, ExprIf, ExprInList,
     ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprList, ExprMap, ExprMatch, ExprNot,
     ExprOr, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, Filter,
     FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset, OrderBy,
@@ -77,6 +77,10 @@ pub trait VisitMut {
 
     fn visit_expr_func_mut(&mut self, i: &mut ExprFunc) {
         visit_expr_func_mut(self, i);
+    }
+
+    fn visit_expr_if_mut(&mut self, i: &mut ExprIf) {
+        visit_expr_if_mut(self, i);
     }
 
     fn visit_expr_func_count_mut(&mut self, i: &mut FuncCount) {
@@ -333,6 +337,10 @@ impl<V: VisitMut> VisitMut for &mut V {
         VisitMut::visit_expr_func_mut(&mut **self, i);
     }
 
+    fn visit_expr_if_mut(&mut self, i: &mut ExprIf) {
+        VisitMut::visit_expr_if_mut(&mut **self, i);
+    }
+
     fn visit_expr_func_count_mut(&mut self, i: &mut FuncCount) {
         VisitMut::visit_expr_func_count_mut(&mut **self, i);
     }
@@ -570,6 +578,7 @@ where
         Expr::Error(expr) => v.visit_expr_error_mut(expr),
         Expr::Exists(expr) => v.visit_expr_exists_mut(expr),
         Expr::Func(expr) => v.visit_expr_func_mut(expr),
+        Expr::If(expr) => v.visit_expr_if_mut(expr),
         Expr::InList(expr) => v.visit_expr_in_list_mut(expr),
         Expr::InSubquery(expr) => v.visit_expr_in_subquery_mut(expr),
         Expr::IsNull(expr) => v.visit_expr_is_null_mut(expr),
@@ -650,6 +659,17 @@ where
     V: VisitMut + ?Sized,
 {
     v.visit_stmt_query_mut(&mut node.subquery);
+}
+
+pub fn visit_expr_if_mut<V>(v: &mut V, node: &mut ExprIf)
+where
+    V: VisitMut + ?Sized,
+{
+    for branch in &mut node.branches {
+        v.visit_expr_mut(&mut branch.cond);
+        v.visit_expr_mut(&mut branch.then);
+    }
+    v.visit_expr_mut(&mut node.r#else);
 }
 
 pub fn visit_expr_func_mut<V>(v: &mut V, node: &mut ExprFunc)

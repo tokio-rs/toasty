@@ -2,7 +2,7 @@ use crate::stmt::{ExprExists, Input};
 
 use super::{
     expr_reference::ExprReference, Entry, EntryMut, EntryPath, ExprAnd, ExprAny, ExprArg,
-    ExprBinaryOp, ExprCast, ExprError, ExprFunc, ExprInList, ExprInSubquery, ExprIsNull,
+    ExprBinaryOp, ExprCast, ExprError, ExprFunc, ExprIf, ExprInList, ExprInSubquery, ExprIsNull,
     ExprIsVariant, ExprLet, ExprList, ExprMap, ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord,
     ExprStmt, Node, Projection, Substitute, Value, Visit, VisitMut,
 };
@@ -39,6 +39,9 @@ pub enum Expr {
 
     /// Function call
     Func(ExprFunc),
+
+    /// Conditional expression
+    If(ExprIf),
 
     /// In list
     InList(ExprInList),
@@ -165,6 +168,8 @@ impl Expr {
             Self::Exists(_) => true,
             // IN expressions always evaluate to true or false.
             Self::InList(_) | Self::InSubquery(_) => true,
+            // If: we cannot prove non-nullability.
+            Self::If(_) => false,
             // For other expressions, we cannot prove non-nullability.
             _ => false,
         }
@@ -227,6 +232,15 @@ impl Expr {
             // References and statements - stable (they reference existing data)
             Self::Reference(_) | Self::Arg(_) => true,
 
+            // If: stable if all branches are stable
+            Self::If(expr_if) => {
+                expr_if
+                    .branches
+                    .iter()
+                    .all(|b| b.cond.is_stable() && b.then.is_stable())
+                    && expr_if.r#else.is_stable()
+            }
+
             // Subqueries and functions - could be unstable
             // For now, conservatively mark as unstable
             Self::Stmt(_) | Self::Func(_) | Self::InSubquery(_) | Self::Exists(_) => false,
@@ -259,6 +273,13 @@ impl Expr {
 
             // Error expressions are constant (no external data)
             Self::Error(_) => true,
+
+            // If: const if all branches are const
+            Self::If(expr_if) => {
+                expr_if.branches.iter().all(|b| {
+                    b.cond.is_const_at_depth(map_depth) && b.then.is_const_at_depth(map_depth)
+                }) && expr_if.r#else.is_const_at_depth(map_depth)
+            }
 
             // Never constant - references external data
             Self::Reference(_)
@@ -364,6 +385,13 @@ impl Expr {
             Self::Map(expr_map) => expr_map.base.is_eval() && expr_map.map.is_eval(),
             Self::Match(expr_match) => {
                 expr_match.subject.is_eval() && expr_match.arms.iter().all(|arm| arm.expr.is_eval())
+            }
+            Self::If(expr_if) => {
+                expr_if
+                    .branches
+                    .iter()
+                    .all(|b| b.cond.is_eval() && b.then.is_eval())
+                    && expr_if.r#else.is_eval()
             }
             Self::Func(_) => false,
         }
@@ -506,6 +534,7 @@ impl fmt::Debug for Expr {
             Self::Error(e) => e.fmt(f),
             Self::Exists(e) => e.fmt(f),
             Self::Func(e) => e.fmt(f),
+            Self::If(e) => e.fmt(f),
             Self::InList(e) => e.fmt(f),
             Self::InSubquery(e) => e.fmt(f),
             Self::IsNull(e) => e.fmt(f),
