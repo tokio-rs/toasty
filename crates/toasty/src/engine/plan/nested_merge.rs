@@ -5,7 +5,7 @@ use crate::engine::{
     eval,
     exec::{MergeIndex, MergeQualification, NestedChild, NestedLevel},
     hir, mir,
-    plan::HirPlanner,
+    plan::{select_items::SelectItems, HirPlanner},
     Engine, HirStatement,
 };
 
@@ -245,14 +245,7 @@ impl NestedMergePlanner<'_> {
         let stmt = stmt_state.stmt.as_deref().unwrap();
 
         let cx = stmt::ExprContext::new_with_target(&*self.engine.schema, stmt);
-
-        let mut fields = vec![];
-
-        for expr_reference in stmt_state.load_data_columns.get().unwrap() {
-            fields.push(cx.infer_expr_reference_ty(expr_reference));
-        }
-
-        stmt::Type::Record(fields)
+        stmt_state.load_data_columns.get().unwrap().infer_ty(&cx)
     }
 
     /// Rewrites a projection expression, replacing statement-level `Arg` and
@@ -332,7 +325,7 @@ impl NestedMergePlanner<'_> {
                 let expr_column = expr_reference.as_expr_column_unwrap();
                 debug_assert_eq!(0, expr_column.nesting);
                 let index = selection
-                    .get_index_of(&stmt::ExprReference::from(*expr_column))
+                    .get_column_index(&stmt::ExprReference::from(*expr_column))
                     .unwrap();
                 *expr = stmt::Expr::arg_project(0, [index]);
                 false
@@ -347,7 +340,7 @@ impl NestedMergePlanner<'_> {
     fn build_filter_for_nested_child(
         &self,
         stmt_id: hir::StmtId,
-        selection: &IndexSet<stmt::ExprReference>,
+        selection: &SelectItems,
         depth: usize,
     ) -> stmt::Expr {
         let stmt_state = &self.hir[stmt_id];
@@ -383,13 +376,13 @@ impl NestedMergePlanner<'_> {
                     .load_data_columns
                     .get()
                     .unwrap()
-                    .get_index_of(target_expr_ref)
+                    .get_column_index(target_expr_ref)
                     .unwrap();
 
                 *expr = stmt::Expr::arg_project(depth - *nesting, [target_exec_statement_index]);
             }
             stmt::Expr::Reference(expr_reference) => {
-                let index = selection.get_index_of(expr_reference).unwrap();
+                let index = selection.get_column_index(expr_reference).unwrap();
                 *expr = stmt::Expr::arg_project(depth, [index]);
             }
             _ => {}

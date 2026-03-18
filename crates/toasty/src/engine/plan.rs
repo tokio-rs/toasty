@@ -1,5 +1,6 @@
 mod execution;
 mod nested_merge;
+pub(crate) mod select_items;
 mod statement;
 
 use crate::{
