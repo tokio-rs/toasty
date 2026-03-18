@@ -4,9 +4,9 @@ use crate::{
         db::{self, Column, ColumnId, Table, TableId},
     },
     stmt::{
-        Delete, Expr, ExprArg, ExprColumn, ExprReference, ExprSet, Insert, InsertTarget, Query,
-        Returning, Select, Source, SourceTable, Statement, TableDerived, TableFactor, TableRef,
-        Type, TypeUnion, Update, UpdateTarget,
+        Delete, Expr, ExprArg, ExprColumn, ExprFunc, ExprReference, ExprSet, Insert, InsertTarget,
+        Query, Returning, Select, Source, SourceTable, Statement, TableDerived, TableFactor,
+        TableRef, Type, TypeUnion, Update, UpdateTarget,
     },
     Schema,
 };
@@ -503,6 +503,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                 union.insert(else_ty);
                 union.simplify()
             }
+            Expr::Func(ExprFunc::Count(_)) => Type::I64,
             // Error is a bottom type — it can never be evaluated, so it
             // could be any type. Return Unknown so it unifies with whatever
             // the other branches produce.

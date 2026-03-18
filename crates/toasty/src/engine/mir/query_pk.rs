@@ -35,6 +35,9 @@ pub(crate) struct QueryPk {
 
     /// The return type.
     pub(crate) ty: stmt::Type,
+
+    /// When true, return only the count of matching rows.
+    pub(crate) count_only: bool,
 }
 
 impl QueryPk {
@@ -78,6 +81,7 @@ impl QueryPk {
             columns,
             pk_filter: self.pk_filter.clone(),
             row_filter: self.row_filter.clone(),
+            count_only: self.count_only,
         }
     }
 }

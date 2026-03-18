@@ -1,6 +1,7 @@
 use super::{
     ddb_expression, item_to_record, operation, stmt, Connection, ExprAttrs, Result, Schema,
 };
+use aws_sdk_dynamodb::types::Select;
 use std::sync::Arc;
 use toasty_core::{driver::Response, stmt::ExprContext};
 
@@ -24,57 +25,57 @@ impl Connection {
             .as_ref()
             .map(|expr| ddb_expression(&cx, &mut expr_attrs, false, expr));
 
-        // Build the query based on whether we're querying primary key or an index
-        let result = if let Some(index_id) = op.index {
+        // Build the base query
+        let mut query = if let Some(index_id) = op.index {
             let index = schema.db.index(index_id);
 
             if index.unique {
-                // assert!(!index.unique, "Index needs all fields");
                 use toasty_core::Error;
-                let err = Error::from_args(format_args!(
+                return Err(Error::from_args(format_args!(
                     "Unique index {} doesn't have fields.",
                     index.name
-                ));
-                Err(err)
-            } else {
-                tracing::trace!(table_name = %table.name, index_name = %index.name, "querying secondary index");
-                self.client
-                    .query()
-                    .table_name(&table.name)
-                    .index_name(&index.name)
-                    .key_condition_expression(key_expression)
-                    .set_filter_expression(filter_expression)
-                    .set_expression_attribute_names(Some(expr_attrs.attr_names))
-                    .set_expression_attribute_values(Some(expr_attrs.attr_values))
-                    .send()
-                    .await
-                    .map_err(toasty_core::Error::driver_operation_failed)
+                )));
             }
-        } else {
-            tracing::trace!(table_name = %table.name, "querying primary key");
+
+            tracing::trace!(table_name = %table.name, index_name = %index.name, "querying secondary index");
             self.client
                 .query()
                 .table_name(&table.name)
-                .key_condition_expression(key_expression)
-                .set_filter_expression(filter_expression)
-                .set_expression_attribute_names(Some(expr_attrs.attr_names))
-                .set_expression_attribute_values(Some(expr_attrs.attr_values))
-                .send()
-                .await
-                .map_err(toasty_core::Error::driver_operation_failed)
+                .index_name(&index.name)
+        } else {
+            tracing::trace!(table_name = %table.name, "querying primary key");
+            self.client.query().table_name(&table.name)
         };
 
-        let schema = schema.clone();
-        let res = result?;
-        Ok(Response::value_stream(stmt::ValueStream::from_iter(
-            res.items.into_iter().flatten().map(move |item| {
-                item_to_record(
-                    &item,
-                    op.select
-                        .iter()
-                        .map(|column_id| schema.db.column(*column_id)),
-                )
-            }),
-        )))
+        query = query
+            .key_condition_expression(key_expression)
+            .set_filter_expression(filter_expression)
+            .set_expression_attribute_names(Some(expr_attrs.attr_names))
+            .set_expression_attribute_values(Some(expr_attrs.attr_values));
+
+        if op.count_only {
+            query = query.select(Select::Count);
+        }
+
+        let res = query
+            .send()
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        if op.count_only {
+            Ok(Response::count(res.count() as u64))
+        } else {
+            let schema = schema.clone();
+            Ok(Response::value_stream(stmt::ValueStream::from_iter(
+                res.items.into_iter().flatten().map(move |item| {
+                    item_to_record(
+                        &item,
+                        op.select
+                            .iter()
+                            .map(|column_id| schema.db.column(*column_id)),
+                    )
+                }),
+            )))
+        }
     }
 }

@@ -22,11 +22,26 @@ struct LoadData {
     /// Columns to load
     columns: IndexSet<stmt::ExprReference>,
 
+    /// Non-column expressions (e.g., `COUNT(*)`) that must appear in the SQL
+    /// SELECT list. These are collected from the returning clause alongside
+    /// column references.
+    exprs: Vec<stmt::Expr>,
+
     /// When the statement data is batch loaded (single database query to load
     /// data for multiple statements), arguments are passed in in batches as
     /// well. For SQL, this is done using derived tables. This maps "input" to
     /// the derived table index.
     batch_load_args: IndexSet<usize>,
+}
+
+impl LoadData {
+    /// True when the query should return only a count of matching rows:
+    /// no columns requested and the sole expression is `COUNT(*)`.
+    fn is_count_only(&self) -> bool {
+        self.columns.is_empty()
+            && self.exprs.len() == 1
+            && matches!(self.exprs[0], stmt::Expr::Func(stmt::ExprFunc::Count(_)))
+    }
 }
 
 type Returning = Option<stmt::Returning>;
@@ -77,6 +92,7 @@ impl HirPlanner<'_> {
             load_data: LoadData {
                 inputs: IndexSet::new(),
                 columns: IndexSet::new(),
+                exprs: Vec::new(),
                 batch_load_args: IndexSet::new(),
             },
             remaining_deps: stmt_info.deps.iter().cloned().collect(),
@@ -264,6 +280,13 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         *expr = stmt::Expr::arg_project(position, [column]);
                     }
                 }
+                stmt::Expr::Func(_) => {
+                    if let Some(expr_index) = self.load_data.exprs.iter().position(|e| e == expr) {
+                        let result_position = self.load_data.columns.len() + expr_index;
+                        let (position, _) = inputs.insert_full(load_data_node_id);
+                        *expr = stmt::Expr::arg_project(position, [result_position]);
+                    }
+                }
                 _ => {}
             }
         });
@@ -293,14 +316,18 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     }
 
     fn extract_columns_from_returning(&mut self, returning: &Returning) {
-        stmt::visit::for_each_expr(returning, |expr| {
-            if let stmt::Expr::Reference(expr_reference) = expr {
+        stmt::visit::for_each_expr(returning, |expr| match expr {
+            stmt::Expr::Reference(expr_reference) => {
                 assert!(
                     expr_reference.is_column(),
                     "TODO: expr_reference = {expr_reference:#?}"
                 );
                 self.load_data.columns.insert(*expr_reference);
             }
+            stmt::Expr::Func(_) => {
+                self.load_data.exprs.push(expr.clone());
+            }
+            _ => {}
         })
     }
 
@@ -633,16 +660,14 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     fn plan_data_loading_sql(&mut self, mut stmt: stmt::Statement) -> mir::NodeId {
         let const_returning = self.extract_insert_returning_as_const(&stmt);
 
-        if !self.load_data.columns.is_empty() {
-            stmt.set_returning(
-                stmt::Expr::record(
-                    self.load_data
-                        .columns
-                        .iter()
-                        .map(|expr_reference| stmt::Expr::from(*expr_reference)),
-                )
-                .into(),
-            );
+        if !self.load_data.columns.is_empty() || !self.load_data.exprs.is_empty() {
+            let column_exprs = self
+                .load_data
+                .columns
+                .iter()
+                .map(|expr_reference| stmt::Expr::from(*expr_reference));
+            let func_exprs = self.load_data.exprs.iter().cloned();
+            stmt.set_returning(stmt::Expr::record(column_exprs.chain(func_exprs)).into());
         }
 
         let input_args: Vec<_> = self
@@ -979,7 +1004,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         let post_filter = self.prepare_post_filter(&stmt, &mut index_plan);
 
         // Type of the final record.
-        let ty = if self.load_data.columns.is_empty() {
+        let ty = if self.load_data.is_count_only() {
+            stmt::Type::list(stmt::Type::Record(vec![stmt::Type::I64]))
+        } else if self.load_data.columns.is_empty() {
             stmt::Type::Unit
         } else {
             self.planner
@@ -1034,6 +1061,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     pk_filter: index_plan.index_filter.take(),
                     row_filter: index_plan.result_filter.take(),
                     ty: ty.clone(),
+                    count_only: self.load_data.is_count_only(),
                 })
             } else {
                 // For mutations (UPDATE/DELETE) with a partial primary-key filter,
@@ -1061,6 +1089,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     pk_filter: index_plan.index_filter.take(),
                     row_filter: index_plan.result_filter.take(),
                     ty: index_key_ty,
+                    count_only: false,
                 });
 
                 self.build_key_operation(&stmt, index_plan, query_pk_node, ty)
@@ -1102,6 +1131,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 pk_filter: index_plan.index_filter.take(),
                 row_filter: index_plan.result_filter.take(),
                 ty: ty.clone(), // Full record type, not just PKs
+                count_only: self.load_data.is_count_only(),
             });
         }
 

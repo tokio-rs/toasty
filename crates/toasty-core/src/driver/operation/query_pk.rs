@@ -21,6 +21,10 @@ pub struct QueryPk {
     /// Additional filtering done on the result before returning it to the
     /// caller.
     pub filter: Option<stmt::Expr>,
+
+    /// When true, return only the count of matching rows instead of the rows
+    /// themselves. Used to implement `COUNT(*)` on NoSQL backends.
+    pub count_only: bool,
 }
 
 impl From<QueryPk> for Operation {

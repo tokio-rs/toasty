@@ -30,6 +30,9 @@ pub(crate) struct QueryPk {
 
     /// Filter to pass to the database
     pub row_filter: Option<stmt::Expr>,
+
+    /// When true, return only the count of matching rows.
+    pub count_only: bool,
 }
 
 impl Exec<'_> {
@@ -42,32 +45,66 @@ impl Exec<'_> {
         }
 
         let filters = self.split_filter(pk_filter, action.table);
-        let mut all_rows = Vec::new();
 
-        for f in filters {
-            let res = self
-                .connection
-                .exec(
-                    &self.engine.schema,
-                    operation::QueryPk {
-                        table: action.table,
-                        index: action.index,
-                        select: action.columns.clone(),
-                        pk_filter: f,
-                        filter: action.row_filter.clone(),
-                    }
-                    .into(),
-                )
-                .await?;
+        if action.count_only {
+            let mut total: i64 = 0;
 
-            all_rows.extend(res.rows.into_value_stream().collect().await?);
+            for f in filters {
+                let res = self
+                    .connection
+                    .exec(
+                        &self.engine.schema,
+                        operation::QueryPk {
+                            table: action.table,
+                            index: action.index,
+                            select: action.columns.clone(),
+                            pk_filter: f,
+                            filter: action.row_filter.clone(),
+                            count_only: true,
+                        }
+                        .into(),
+                    )
+                    .await?;
+
+                total += res.rows.into_count() as i64;
+            }
+
+            let record =
+                stmt::Value::Record(stmt::ValueRecord::from_vec(vec![stmt::Value::I64(total)]));
+            self.vars.store(
+                action.output.var,
+                action.output.num_uses,
+                Rows::Stream(stmt::ValueStream::from_vec(vec![record])),
+            );
+        } else {
+            let mut all_rows = Vec::new();
+
+            for f in filters {
+                let res = self
+                    .connection
+                    .exec(
+                        &self.engine.schema,
+                        operation::QueryPk {
+                            table: action.table,
+                            index: action.index,
+                            select: action.columns.clone(),
+                            pk_filter: f,
+                            filter: action.row_filter.clone(),
+                            count_only: false,
+                        }
+                        .into(),
+                    )
+                    .await?;
+
+                all_rows.extend(res.rows.into_value_stream().collect().await?);
+            }
+
+            self.vars.store(
+                action.output.var,
+                action.output.num_uses,
+                Rows::Stream(stmt::ValueStream::from_vec(all_rows)),
+            );
         }
-
-        self.vars.store(
-            action.output.var,
-            action.output.num_uses,
-            Rows::Stream(stmt::ValueStream::from_vec(all_rows)),
-        );
 
         Ok(())
     }
