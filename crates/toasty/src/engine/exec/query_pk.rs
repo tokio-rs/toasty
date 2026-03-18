@@ -33,6 +33,15 @@ pub(crate) struct QueryPk {
 
     /// When true, return only the count of matching rows.
     pub count_only: bool,
+
+    /// Maximum number of items to return.
+    pub limit: Option<i64>,
+
+    /// Sort key ordering direction.
+    pub order: Option<stmt::Direction>,
+
+    /// Cursor for resuming a paginated query.
+    pub cursor: Option<stmt::Value>,
 }
 
 impl Exec<'_> {
@@ -61,6 +70,9 @@ impl Exec<'_> {
                         pk_filter: f,
                         filter: action.row_filter.clone(),
                         count_only: action.count_only,
+                        limit: action.limit,
+                        order: action.order,
+                        cursor: action.cursor.clone(),
                     }
                     .into(),
                 )

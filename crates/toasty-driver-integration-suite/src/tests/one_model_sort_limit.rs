@@ -2,6 +2,10 @@
 
 use crate::prelude::*;
 use toasty::Page;
+use toasty_core::{
+    driver::{Operation, Rows},
+    stmt::{ExprSet, Statement},
+};
 
 #[driver_test(id(ID), requires(sql))]
 pub async fn sort_asc(test: &mut Test) -> Result<()> {
@@ -21,6 +25,8 @@ pub async fn sort_asc(test: &mut Test) -> Result<()> {
         Item::create().order(i).exec(&mut db).await?;
     }
 
+    test.log().clear();
+
     let items_asc: Vec<_> = Item::all()
         .order_by(Item::fields().order().asc())
         .exec(&mut db)
@@ -32,6 +38,20 @@ pub async fn sort_asc(test: &mut Test) -> Result<()> {
         assert!(items_asc[i].order < items_asc[i + 1].order);
     }
 
+    // Verify the SQL query has an ORDER BY clause
+    let (op, resp) = test.log().pop();
+    assert_struct!(op, Operation::QuerySql(_ {
+        stmt: Statement::Query(_ {
+            body: ExprSet::Select(_ { .. }),
+            order_by: Some(_),
+            ..
+        }),
+        ..
+    }));
+    assert_struct!(resp.rows, Rows::Stream(_));
+
+    test.log().clear();
+
     let items_desc: Vec<_> = Item::all()
         .order_by(Item::fields().order().desc())
         .exec(&mut db)
@@ -42,6 +62,18 @@ pub async fn sort_asc(test: &mut Test) -> Result<()> {
     for i in 0..99 {
         assert!(items_desc[i].order > items_desc[i + 1].order);
     }
+
+    let (op, resp) = test.log().pop();
+    assert_struct!(op, Operation::QuerySql(_ {
+        stmt: Statement::Query(_ {
+            body: ExprSet::Select(_ { .. }),
+            order_by: Some(_),
+            ..
+        }),
+        ..
+    }));
+    assert_struct!(resp.rows, Rows::Stream(_));
+
     Ok(())
 }
 
@@ -63,6 +95,8 @@ pub async fn paginate(test: &mut Test) -> Result<()> {
         Item::create().order(i).exec(&mut db).await?;
     }
 
+    test.log().clear();
+
     let items: Page<_> = Item::all()
         .order_by(Item::fields().order().desc())
         .paginate(10)
@@ -73,6 +107,21 @@ pub async fn paginate(test: &mut Test) -> Result<()> {
     for (i, order) in (90..100).rev().enumerate() {
         assert_eq!(items[i].order, order);
     }
+
+    // First page: SQL query should have ORDER BY and LIMIT
+    let (op, resp) = test.log().pop();
+    assert_struct!(op, Operation::QuerySql(_ {
+        stmt: Statement::Query(_ {
+            body: ExprSet::Select(_ { .. }),
+            order_by: Some(_),
+            limit: Some(_),
+            ..
+        }),
+        ..
+    }));
+    assert_struct!(resp.rows, Rows::Stream(_));
+
+    test.log().clear();
 
     let items: Page<_> = Item::all()
         .order_by(Item::fields().order().desc())
@@ -124,9 +173,23 @@ pub async fn limit_offset(t: &mut Test) -> Result<()> {
         Item::create().order(i).exec(&mut db).await?;
     }
 
+    t.log().clear();
+
     // Basic limit without ordering
     let items: Vec<_> = Item::all().limit(5).exec(&mut db).await?;
     assert_eq!(items.len(), 5);
+
+    let (op, _) = t.log().pop();
+    assert_struct!(op, Operation::QuerySql(_ {
+        stmt: Statement::Query(_ {
+            body: ExprSet::Select(_ { .. }),
+            limit: Some(_),
+            ..
+        }),
+        ..
+    }));
+
+    t.log().clear();
 
     // Limit combined with ordering
     let items: Vec<_> = Item::all()
@@ -138,6 +201,19 @@ pub async fn limit_offset(t: &mut Test) -> Result<()> {
     for i in 0..6 {
         assert!(items[i].order > items[i + 1].order);
     }
+
+    let (op, _) = t.log().pop();
+    assert_struct!(op, Operation::QuerySql(_ {
+        stmt: Statement::Query(_ {
+            body: ExprSet::Select(_ { .. }),
+            order_by: Some(_),
+            limit: Some(_),
+            ..
+        }),
+        ..
+    }));
+
+    t.log().clear();
 
     // Limit combined with offset
     let items: Vec<_> = Item::all()

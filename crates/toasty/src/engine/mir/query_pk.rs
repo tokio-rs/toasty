@@ -38,6 +38,15 @@ pub(crate) struct QueryPk {
 
     /// When true, return only the count of matching rows.
     pub(crate) count_only: bool,
+
+    /// Maximum number of items to return.
+    pub(crate) limit: Option<i64>,
+
+    /// Sort key ordering direction.
+    pub(crate) order: Option<stmt::Direction>,
+
+    /// Cursor for resuming a paginated query.
+    pub(crate) cursor: Option<stmt::Value>,
 }
 
 impl QueryPk {
@@ -82,6 +91,9 @@ impl QueryPk {
             pk_filter: self.pk_filter.clone(),
             row_filter: self.row_filter.clone(),
             count_only: self.count_only,
+            limit: self.limit,
+            order: self.order,
+            cursor: self.cursor.clone(),
         }
     }
 }

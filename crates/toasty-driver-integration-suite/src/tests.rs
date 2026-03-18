@@ -9,6 +9,7 @@ pub mod belongs_to_configured;
 pub mod belongs_to_one_way;
 pub mod belongs_to_self_referential;
 pub mod bigdecimal;
+pub mod composite_key_pagination;
 pub mod connection_per_clone;
 pub mod count;
 pub mod create_macro;
