@@ -4,6 +4,22 @@ The `filter_by_*` methods generated for indexed fields cover simple equality
 lookups. For anything else — comparisons, combining conditions with AND/OR,
 checking for null — use `Model::filter()` with field expressions.
 
+| Expression | Description | SQL equivalent |
+|---|---|---|
+| [`.eq(value)`](#equality-and-inequality) | Equal | `= value` |
+| [`.ne(value)`](#equality-and-inequality) | Not equal | `!= value` |
+| [`.gt(value)`](#ordering-comparisons) | Greater than | `> value` |
+| [`.ge(value)`](#ordering-comparisons) | Greater than or equal | `>= value` |
+| [`.lt(value)`](#ordering-comparisons) | Less than | `< value` |
+| [`.le(value)`](#ordering-comparisons) | Less than or equal | `<= value` |
+| [`.in_list([...])`](#membership-with-in_list) | Value in list | `IN (...)` |
+| [`.is_none()`](#null-checks) | Null check (`Option` fields) | `IS NULL` |
+| [`.is_some()`](#null-checks) | Not-null check (`Option` fields) | `IS NOT NULL` |
+| [`.and(expr)`](#combining-with-and) | Both conditions true | `AND` |
+| [`.or(expr)`](#combining-with-or) | Either condition true | `OR` |
+| [`.not()` / `!expr`](#negation-with-not) | Negate condition | `NOT` |
+| [`.any(expr)`](#filtering-on-associations) | Any related record matches (`HasMany`) | `IN (SELECT ...)` |
+
 ## Field paths
 
 Every model has a `fields()` method that returns typed accessors for each field.
@@ -414,20 +430,3 @@ The path `User::fields().todos()` refers to the HasMany relation. Calling
 `.any()` on it takes a filter expression on the child model (`Todo`) and
 produces a filter expression on the parent (`User`).
 
-## Summary
-
-| Expression | Description | SQL equivalent |
-|---|---|---|
-| `.eq(value)` | Equal | `= value` |
-| `.ne(value)` | Not equal | `!= value` |
-| `.gt(value)` | Greater than | `> value` |
-| `.ge(value)` | Greater than or equal | `>= value` |
-| `.lt(value)` | Less than | `< value` |
-| `.le(value)` | Less than or equal | `<= value` |
-| `.in_list([...])` | Value in list | `IN (...)` |
-| `.is_none()` | Null check (`Option` fields) | `IS NULL` |
-| `.is_some()` | Not-null check (`Option` fields) | `IS NOT NULL` |
-| `.and(expr)` | Both conditions true | `AND` |
-| `.or(expr)` | Either condition true | `OR` |
-| `.not()` / `!expr` | Negate condition | `NOT` |
-| `.any(expr)` | Any related record matches (`HasMany`) | `IN (SELECT ...)` |
