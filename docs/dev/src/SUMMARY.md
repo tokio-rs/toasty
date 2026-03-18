@@ -12,6 +12,7 @@
   - [Enums and Embedded Structs](./design/enums-and-embedded-structs.md)
   - [Mapping Formalization](./design/mapping-formalization.md)
   - [Pagination](./design/pagination.md)
+  - [Refactor Create Macro: Replace with_field](./design/refactor-create-macro-with-field.md)
   - [Serialize Fields](./design/serialize-fields.md)
 - [Roadmap](./roadmap/README.md)
   - [Composite Keys](./roadmap/composite-keys.md)
