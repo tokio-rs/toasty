@@ -139,4 +139,8 @@ impl Executor for Db {
     fn schema(&mut self) -> &Arc<Schema> {
         Db::schema(self)
     }
+
+    fn capability(&mut self) -> &Capability {
+        Db::capability(self)
+    }
 }

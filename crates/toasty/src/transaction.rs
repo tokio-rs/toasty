@@ -4,7 +4,10 @@ use crate::{db::ConnectionOperation, Executor, Result};
 
 use toasty_core::{
     async_trait,
-    driver::operation::{self, IsolationLevel},
+    driver::{
+        operation::{self, IsolationLevel},
+        Capability,
+    },
     stmt::ValueStream,
     Schema,
 };
@@ -198,5 +201,9 @@ impl<'a> Executor for Transaction<'a> {
 
     fn schema(&mut self) -> &Arc<Schema> {
         self.db.schema()
+    }
+
+    fn capability(&mut self) -> &Capability {
+        self.db.capability()
     }
 }
