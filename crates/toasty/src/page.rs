@@ -65,12 +65,15 @@ impl<M: Load> Page<M> {
     /// ```
     pub async fn next(&self, executor: &mut dyn Executor) -> Result<Option<Page<M::Output>>> {
         match &self.next_cursor {
-            Some(cursor) => Ok(Some(
-                Paginate::from(self.query.clone())
-                    .after(cursor.clone())
-                    .exec(executor)
-                    .await?,
-            )),
+            Some(cursor) => {
+                eprintln!("Cursor: {:?}", cursor);
+                Ok(Some(
+                    Paginate::from(self.query.clone())
+                        .after(cursor.clone())
+                        .exec(executor)
+                        .await?,
+                ))
+            }
             None => Ok(None),
         }
     }

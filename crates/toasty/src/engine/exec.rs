@@ -106,6 +106,7 @@ impl Engine {
         }
 
         for step in &plan.actions {
+            eprintln!("Execute step: {:?}", step);
             if let Err(e) = exec.exec_step(step).await {
                 if plan.needs_transaction {
                     // Best effort: ignore rollback errors so the original error is returned
@@ -122,10 +123,19 @@ impl Engine {
         Ok(if let Some(returning) = plan.returning {
             match exec.vars.load(returning).await? {
                 Rows::Count(_) => ValueStream::default(),
-                Rows::Value(stmt::Value::List(items)) => ValueStream::from_vec(items),
+                Rows::Value(stmt::Value::List(items)) => {
+                    eprintln!("From a vec");
+                    ValueStream::from_vec(items)
+                }
                 // TODO have the public API be able to handle single rows
-                Rows::Value(value) => ValueStream::from_vec(vec![value]),
-                Rows::Stream(value_stream) => value_stream,
+                Rows::Value(value) => {
+                    eprintln!("Single value");
+                    ValueStream::from_vec(vec![value])
+                }
+                Rows::Stream(value_stream) => {
+                    eprintln!("Expected: {:?}", value_stream.cursor());
+                    value_stream
+                }
             }
         } else {
             ValueStream::default()

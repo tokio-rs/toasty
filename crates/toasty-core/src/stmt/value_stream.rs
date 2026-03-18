@@ -18,6 +18,10 @@ pub struct ValueStream {
 
     /// If set, check values to ensure they are the correct type.
     ty: Option<(Type, &'static Location<'static>)>,
+
+    /// Pagination cursor for fetching the next page of results.
+    /// Set by drivers that support native pagination (e.g., DynamoDB's last_evaluated_key).
+    cursor: Option<Value>,
 }
 
 #[derive(Debug)]
@@ -41,6 +45,7 @@ impl ValueStream {
             buffer: Buffer::One(value.into()),
             stream: None,
             ty: None,
+            cursor: None,
         }
     }
 
@@ -49,6 +54,7 @@ impl ValueStream {
             buffer: Buffer::Empty,
             stream: Some(Box::pin(stream)),
             ty: None,
+            cursor: None,
         }
     }
 
@@ -57,7 +63,24 @@ impl ValueStream {
             buffer: Buffer::Many(records.into()),
             stream: None,
             ty: None,
+            cursor: None,
         }
+    }
+
+    /// Get the pagination cursor, if present
+    pub fn cursor(&self) -> Option<&Value> {
+        self.cursor.as_ref()
+    }
+
+    /// Take the pagination cursor, leaving None in its place
+    pub fn take_cursor(&mut self) -> Option<Value> {
+        self.cursor.take()
+    }
+
+    /// Attach a pagination cursor to this stream
+    pub fn with_cursor(mut self, cursor: Option<Value>) -> Self {
+        self.cursor = cursor;
+        self
     }
 
     #[allow(clippy::should_implement_trait)]
@@ -120,6 +143,7 @@ impl ValueStream {
             buffer: self.buffer.clone(),
             stream: None,
             ty: self.ty.clone(),
+            cursor: self.cursor.clone(),
         })
     }
 
@@ -132,6 +156,7 @@ impl ValueStream {
             buffer: self.buffer.clone(),
             stream: None,
             ty: self.ty.clone(),
+            cursor: self.cursor.clone(),
         })
     }
 
@@ -257,6 +282,7 @@ impl From<Value> for ValueStream {
             buffer: Buffer::One(src),
             stream: None,
             ty: None,
+            cursor: None,
         }
     }
 }

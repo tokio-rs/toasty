@@ -1,5 +1,6 @@
 use super::{
-    ddb_expression, ddb_key, item_to_record, operation, stmt, Connection, ExprAttrs, Result, Schema,
+    ddb_expression, ddb_key, ddb_key_to_value, item_to_record, operation, stmt, Connection,
+    ExprAttrs, Result, Schema,
 };
 use std::sync::Arc;
 use toasty_core::{driver::Response, stmt::ExprContext};
@@ -55,6 +56,7 @@ impl Connection {
                     query = query.scan_index_forward(*direction == stmt::Direction::Asc);
                 }
                 if let Some(ref start_key) = op.cursor {
+                    eprintln!("Setting start_key: {:?}", start_key);
                     query = query.set_exclusive_start_key(Some(ddb_key(table, start_key)));
                 }
 
@@ -91,17 +93,26 @@ impl Connection {
                 .map_err(toasty_core::Error::driver_operation_failed)
         };
 
-        let schema = schema.clone();
         let res = result?;
-        Ok(Response::value_stream(stmt::ValueStream::from_iter(
-            res.items.into_iter().flatten().map(move |item| {
+        eprintln!("Count: {}, Scanned: {}", res.count, res.scanned_count);
+
+        // Extract pagination cursor from last_evaluated_key before consuming items
+        let cursor = res
+            .last_evaluated_key
+            .as_ref()
+            .map(|key| ddb_key_to_value(table, key));
+        eprintln!("Sending cursor back: {:?}", cursor);
+        let schema = schema.clone();
+        Ok(Response::value_stream(
+            stmt::ValueStream::from_iter(res.items.into_iter().flatten().map(move |item| {
                 item_to_record(
                     &item,
                     op.select
                         .iter()
                         .map(|column_id| schema.db.column(*column_id)),
                 )
-            }),
-        )))
+            }))
+            .with_cursor(cursor),
+        ))
     }
 }

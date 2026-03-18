@@ -9,7 +9,7 @@ use crate::prelude::*;
 use toasty::Page;
 use toasty_core::driver::{Operation, Rows};
 
-#[driver_test(requires(sql))]
+#[driver_test]
 pub async fn paginate_composite_key(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(partition = kind, local = seq)]
@@ -26,7 +26,7 @@ pub async fn paginate_composite_key(test: &mut Test) -> Result<()> {
     }
 
     test.log().clear();
-
+    eprintln!("Post create");
     // First page (descending): should return seq 19..10
     let page: Page<_> = Event::filter_by_kind("info")
         .order_by(Event::fields().seq().desc())
@@ -49,7 +49,9 @@ pub async fn paginate_composite_key(test: &mut Test) -> Result<()> {
     assert_struct!(resp.rows, Rows::Stream(_));
 
     // Second page via .next()
+    eprintln!("About to crash");
     let page: Page<_> = page.next(&mut db).await?.unwrap();
+    eprintln!("Should've crashed");
     assert_eq!(page.len(), 10);
     for (i, expected) in (0..10).rev().enumerate() {
         assert_eq!(page[i].seq, expected);

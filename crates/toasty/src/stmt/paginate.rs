@@ -68,6 +68,7 @@ impl<M: Load> Paginate<M> {
                 ..
             }) => *n as usize,
             _ => {
+                eprintln!("pagination requires a limit clause");
                 let values: Vec<Value> = executor
                     .exec(self.query.clone().into())
                     .await?
@@ -83,7 +84,7 @@ impl<M: Load> Paginate<M> {
                 ));
             }
         };
-
+        eprintln!("Pagination {:?}", page_size);
         // Query for one more item than requested to detect if there's a next page
         let mut query_with_extra = self.query.clone();
         if let Some(stmt::Limit { limit, .. }) = &mut query_with_extra.untyped.limit {
@@ -94,15 +95,19 @@ impl<M: Load> Paginate<M> {
             panic!("pagination requires order by clause");
         };
         if self.reverse {
+            // Check if the driver supports reverse pagination
+            if !executor.capability().sql {
+                todo!("Determine if nosql can support this");
+            }
             order_by.reverse();
         }
 
-        let mut items: Vec<_> = executor
-            .exec(query_with_extra.into())
-            .await?
-            .collect()
-            .await?;
-        let has_next = (items.len() > page_size) || self.reverse;
+        let mut stream = executor.exec(query_with_extra.into()).await?;
+
+        // Extract driver-provided cursor before consuming the stream
+        let driver_cursor = stream.take_cursor();
+        eprintln!("driver_cursor = {:?}", driver_cursor);
+        let mut items: Vec<_> = stream.collect().await?;
         let has_prev = (items.len() > page_size) || !self.reverse;
         items.truncate(page_size);
         if self.reverse {
@@ -112,6 +117,7 @@ impl<M: Load> Paginate<M> {
         let Some(order_by) = self.query.untyped.order_by.as_mut() else {
             panic!("pagination requires order by clause");
         };
+
         // Create cursor from the first item for backwards pagination.
         let prev_cursor = match items.first() {
             Some(first_item) if has_prev => {
@@ -119,14 +125,21 @@ impl<M: Load> Paginate<M> {
             }
             _ => None,
         };
-        // Create cursor from the last item if there's a next for forwards page.
-        let next_cursor = match items.last() {
-            Some(last_item) if has_next => {
-                extract_cursor(order_by, last_item).map(|cursor| cursor.into())
-            }
-            _ => None,
-        };
 
+        // For next cursor: prefer driver-provided cursor (e.g., DynamoDB's last_evaluated_key)
+        // over extracting from the last item. SQL drivers won't provide a cursor.
+        let next_cursor = driver_cursor.map(|cursor| cursor.into()).or_else(|| {
+            // TODO: DDB cursor will be none on terminate. Need a test here?
+            let has_next = (items.len() > page_size) || self.reverse;
+            if executor.capability().sql && has_next {
+                items.last().and_then(|last_item| {
+                    extract_cursor(order_by, last_item).map(|cursor| cursor.into())
+                })
+            } else {
+                None
+            }
+        });
+        eprintln!("Next cursor: {:?}", next_cursor);
         // Load the raw values into model instances
         let loaded_items: Vec<M::Output> = items.into_iter().map(M::load).collect::<Result<_>>()?;
 
