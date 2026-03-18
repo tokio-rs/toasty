@@ -37,6 +37,8 @@ jobs:
 
       - name: Build Rust API docs
         run: cargo doc --workspace --no-deps --document-private-items
+        env:
+          TOASTY_GUIDE_URL: ../../guide/
 
       - name: Assemble site
         run: |

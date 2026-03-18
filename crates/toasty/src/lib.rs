@@ -5,7 +5,7 @@
 //! query execution traits, and the types that generated code builds on. For
 //! a tutorial-style introduction, see the [Toasty guide].
 //!
-//! [Toasty guide]: ../../guide/
+#![doc = include_str!(concat!(env!("OUT_DIR"), "/guide_link.md"))]
 //!
 //! # Modules
 //!
