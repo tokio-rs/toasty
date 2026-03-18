@@ -47,6 +47,7 @@ impl Node {
             Operation::Filter(m) => &m.ty,
             Operation::FindPkByIndex(m) => &m.ty,
             Operation::GetByKey(m) => &m.ty,
+            Operation::IfNonEmpty(m) => &m.ty,
             Operation::QueryPk(m) => &m.ty,
             Operation::Project(m) => &m.ty,
             Operation::UpdateByKey(m) => &m.ty,
@@ -68,6 +69,9 @@ impl Node {
             Operation::Filter(op) => op.to_exec(logical_plan, self, var_table).into(),
             Operation::FindPkByIndex(op) => op.to_exec(logical_plan, self, var_table).into(),
             Operation::GetByKey(op) => op.to_exec(logical_plan, self, var_table).into(),
+            Operation::IfNonEmpty(_) => {
+                panic!("IfNonEmpty is handled specially by the execution planner")
+            }
             Operation::NestedMerge(op) => op.to_exec(logical_plan, self, var_table).into(),
             Operation::Project(op) => op.to_exec(logical_plan, self, var_table).into(),
             Operation::ReadModifyWrite(op) => op.to_exec(logical_plan, self, var_table).into(),

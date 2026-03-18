@@ -9,7 +9,6 @@ mod lower;
 mod mir;
 mod plan;
 mod simplify;
-use simplify::Simplify;
 mod ty;
 mod verify;
 

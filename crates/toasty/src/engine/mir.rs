@@ -19,6 +19,9 @@ pub(crate) use find_pk_by_index::FindPkByIndex;
 mod get_by_key;
 pub(crate) use get_by_key::GetByKey;
 
+mod if_non_empty;
+pub(crate) use if_non_empty::IfNonEmpty;
+
 mod logical_plan;
 pub(crate) use logical_plan::LogicalPlan;
 

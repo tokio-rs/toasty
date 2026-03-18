@@ -86,9 +86,13 @@ fn verify_expr(expr: &stmt::Expr) -> bool {
             verify_expr(&expr_match.subject)
                 && expr_match.arms.iter().all(|arm| verify_expr(&arm.expr))
         }
+        Not(expr) => verify_expr(&expr.expr),
+        Or(expr) => expr.operands.iter().all(verify_expr),
         Project(expr) => verify_expr(&expr.base),
         Record(expr) => expr.fields.iter().all(verify_expr),
         Reference(_) => false,
+        // Subquery-based expressions: cannot be evaluated in memory
+        Stmt(_) | InSubquery(_) | Exists(_) | Func(_) | If(_) => false,
         Value(_) => true,
         _ => todo!("expr={expr:#?}"),
     }

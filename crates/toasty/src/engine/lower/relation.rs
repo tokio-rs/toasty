@@ -3,7 +3,7 @@ use toasty_core::{
     stmt,
 };
 
-use crate::engine::{lower::LowerStatement, Simplify};
+use crate::engine::lower::LowerStatement;
 
 #[derive(Debug)]
 enum Mutation {
@@ -540,22 +540,92 @@ impl LowerStatement<'_, '_> {
                 self.set_relation_field(field, expr, source);
             }
             stmt::Statement::Query(query) => {
-                // Try to extract the FK from the select without performing the query
-                let fields: Vec<_> = belongs_to
+                // Try to extract the FK value from the query's filter
+                // for simple equality cases (e.g., WHERE id = 123).
+                let fk_fields: Vec<_> = belongs_to
                     .foreign_key
                     .fields
                     .iter()
                     .map(|fk_field| fk_field.target)
                     .collect();
 
-                let Some(expr) = Simplify::new(self.schema()).extract_key_expr(&fields, &query)
-                else {
-                    todo!("belongs_to={:#?}; stmt={:#?}", belongs_to, query);
-                };
+                let extracted = self.try_extract_key_expr(&fk_fields, &query);
 
-                self.plan_mut_belongs_to_associate(field, expr, source);
+                if let Some(expr) = extracted {
+                    self.plan_mut_belongs_to_associate(field, expr, source);
+                } else {
+                    // Complex query — execute it as a dependency to get FK
+                    // values at runtime.
+                    let mut query = query;
+                    query.single = true;
+
+                    let stmt::ExprSet::Select(ref mut select) = query.body else {
+                        todo!("belongs_to={:#?}; stmt={:#?}", belongs_to, query);
+                    };
+
+                    select.returning = stmt::Returning::Value(stmt::Expr::record(
+                        belongs_to
+                            .foreign_key
+                            .fields
+                            .iter()
+                            .map(|fk_field| stmt::Expr::ref_self_field(fk_field.target)),
+                    ));
+
+                    let target_id = self.new_dependency(stmt::Statement::Query(query));
+                    let expr = self.new_dependency_arg(self.scope_stmt_id(), target_id);
+                    self.set_relation_field(field, expr, source);
+                }
             }
             _ => todo!("stmt={:#?}", stmt),
+        }
+    }
+
+    /// Try to extract a constant FK value from a simple query filter.
+    ///
+    /// For queries like `SELECT * FROM users WHERE id = 123`, extracts `123`.
+    /// Returns `None` for complex filters (AND, OR, non-equality, etc.).
+    fn try_extract_key_expr(&mut self, key: &[FieldId], query: &stmt::Query) -> Option<stmt::Expr> {
+        let cx = self.expr_cx.scope(query);
+
+        let stmt::ExprSet::Select(select) = &query.body else {
+            return None;
+        };
+
+        let stmt::Expr::BinaryOp(ref expr_binary_op) = *select.filter.as_expr() else {
+            return None;
+        };
+
+        if !expr_binary_op.op.is_eq() {
+            return None;
+        }
+
+        let [key_field] = key else {
+            return None;
+        };
+
+        match (&*expr_binary_op.lhs, &*expr_binary_op.rhs) {
+            (stmt::Expr::Reference(expr_ref), other) | (other, stmt::Expr::Reference(expr_ref)) => {
+                let field_ref = cx.resolve_expr_reference(expr_ref).expect_field();
+
+                if *key_field == field_ref.id {
+                    match other {
+                        stmt::Expr::Value(value) => Some(value.clone().into()),
+                        stmt::Expr::Reference(
+                            outer @ stmt::ExprReference::Field { nesting, .. },
+                        ) if *nesting > 0 => {
+                            let mut ret = *outer;
+                            if let stmt::ExprReference::Field { nesting, .. } = &mut ret {
+                                *nesting -= 1;
+                            }
+                            Some(ret.into())
+                        }
+                        _ => None,
+                    }
+                } else {
+                    None
+                }
+            }
+            _ => None,
         }
     }
 

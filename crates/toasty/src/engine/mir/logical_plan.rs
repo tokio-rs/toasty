@@ -37,6 +37,12 @@ impl LogicalPlan {
             .map(|node_id| &self.store[node_id])
     }
 
+    pub(crate) fn operations_with_ids(&self) -> impl Iterator<Item = (NodeId, &Node)> {
+        self.execution_order
+            .iter()
+            .map(|&node_id| (node_id, &self.store[node_id]))
+    }
+
     pub(crate) fn completion(&self) -> &Node {
         &self.store[self.completion]
     }

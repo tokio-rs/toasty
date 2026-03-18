@@ -5,8 +5,8 @@ use indexmap::{indexset, IndexSet};
 use crate::engine::mir::Eval;
 
 use super::{
-    Const, DeleteByKey, ExecStatement, Filter, FindPkByIndex, GetByKey, NestedMerge, Node, Project,
-    QueryPk, ReadModifyWrite, UpdateByKey,
+    Const, DeleteByKey, ExecStatement, Filter, FindPkByIndex, GetByKey, IfNonEmpty, NestedMerge,
+    Node, Project, QueryPk, ReadModifyWrite, UpdateByKey,
 };
 
 /// A step in the query execution plan.
@@ -33,6 +33,9 @@ pub(crate) enum Operation {
 
     /// Get records by primary key
     GetByKey(GetByKey),
+
+    /// Conditionally execute an operation if a guard query returned rows.
+    IfNonEmpty(IfNonEmpty),
 
     /// Execute a nested merge
     NestedMerge(NestedMerge),
@@ -61,6 +64,7 @@ impl From<Operation> for Node {
             Operation::GetByKey(m) => {
                 indexset![m.input]
             }
+            Operation::IfNonEmpty(m) => indexset![m.guard, m.then_node],
             Operation::NestedMerge(m) => m.inputs.clone(),
             Operation::Project(m) => indexset![m.input],
             Operation::ReadModifyWrite(m) => m.inputs.clone(),

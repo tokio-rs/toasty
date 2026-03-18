@@ -55,6 +55,21 @@ impl VarStore {
         entry.rows.dup().await
     }
 
+    pub(crate) async fn is_non_empty(&mut self, var: VarId) -> crate::Result<bool> {
+        let entry = self.slots[var.0]
+            .as_mut()
+            .expect("no entry at slot for is_non_empty check");
+        let rows = std::mem::replace(&mut entry.rows, Rows::Count(0));
+        let value = rows.collect_as_value().await?;
+        let non_empty = match &value {
+            stmt::Value::Null => false,
+            stmt::Value::List(items) => !items.is_empty(),
+            _ => true,
+        };
+        entry.rows = Rows::Value(value);
+        Ok(non_empty)
+    }
+
     #[track_caller]
     pub(crate) fn store(&mut self, var: VarId, count: usize, rows: Rows) {
         while self.slots.len() <= var.0 {

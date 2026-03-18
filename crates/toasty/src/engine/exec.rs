@@ -30,7 +30,7 @@ mod output;
 pub(crate) use output::Output;
 
 mod plan;
-pub(crate) use plan::ExecPlan;
+pub(crate) use plan::{Block, ExecPlan, Terminator};
 
 mod project;
 pub(crate) use project::Project;
@@ -105,13 +105,27 @@ impl Engine {
             exec.in_transaction = true;
         }
 
-        for step in &plan.actions {
-            if let Err(e) = exec.exec_step(step).await {
-                if plan.needs_transaction {
-                    // Best effort: ignore rollback errors so the original error is returned
-                    let _ = exec.connection.exec(&self.schema, rollback.into()).await;
+        let mut current = plan.entry;
+        loop {
+            for step in &plan.blocks[current].actions {
+                if let Err(e) = exec.exec_step(step).await {
+                    if plan.needs_transaction {
+                        let _ = exec.connection.exec(&self.schema, rollback.into()).await;
+                    }
+                    return Err(e);
                 }
-                return Err(e);
+            }
+            match &plan.blocks[current].terminator {
+                Terminator::Return => break,
+                Terminator::Goto(next) => current = *next,
+                Terminator::IfNonEmpty {
+                    var,
+                    then_block,
+                    else_block,
+                } => {
+                    let non_empty = exec.vars.is_non_empty(*var).await?;
+                    current = if non_empty { *then_block } else { *else_block };
+                }
             }
         }
 

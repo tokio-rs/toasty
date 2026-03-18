@@ -654,6 +654,53 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         let ty = self.planner.engine.infer_ty(&stmt, &input_args[..]);
 
+        // For table-level UPDATE statements, guard subquery assignments with
+        // CASE WHEN (subquery) IS NOT NULL THEN (subquery) ELSE column END.
+        // This prevents setting FK columns to NULL when the source query
+        // returns no rows (e.g., filtered has_one association updates).
+        if let stmt::Statement::Update(ref mut update) = stmt {
+            if matches!(&update.target, stmt::UpdateTarget::Table(_)) {
+                // Collect projections that need guarding
+                let projections_to_guard: Vec<_> = update
+                    .assignments
+                    .iter()
+                    .filter(|(_, a)| matches!(&a.expr, stmt::Expr::Stmt(_)))
+                    .map(|(proj, _)| proj.clone())
+                    .collect();
+
+                for proj in projections_to_guard {
+                    let assignment = update.assignments.get_mut(&proj).unwrap();
+                    let subquery = assignment.expr.take();
+
+                    // Build a column reference for the ELSE branch.
+                    // At the table level, a projection with a single step
+                    // [n] refers to column n in table 0.
+                    let mut iter = proj.into_iter();
+                    let col_index = iter
+                        .next()
+                        .expect("subquery assignment projection should have at least one step");
+                    debug_assert!(
+                        iter.next().is_none(),
+                        "subquery assignment projection should be a single column index"
+                    );
+                    let col_ref =
+                        stmt::Expr::Reference(stmt::ExprReference::Column(stmt::ExprColumn {
+                            table: 0,
+                            column: col_index,
+                            nesting: 0,
+                        }));
+
+                    assignment.expr = stmt::Expr::If(stmt::ExprIf {
+                        branches: vec![stmt::IfBranch {
+                            cond: Box::new(stmt::Expr::is_not_null(subquery.clone())),
+                            then: Box::new(subquery),
+                        }],
+                        r#else: Box::new(col_ref),
+                    });
+                }
+            }
+        }
+
         let node = if stmt.condition().is_some() {
             if let stmt::Statement::Update(stmt) = stmt {
                 assert!(stmt.returning.is_none(), "TODO: stmt={stmt:#?}");

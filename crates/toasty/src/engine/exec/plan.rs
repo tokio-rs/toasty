@@ -2,17 +2,28 @@ use crate::engine::exec::{Action, VarId, VarStore};
 
 #[derive(Debug)]
 pub(crate) struct ExecPlan {
-    /// Arguments seeding the plan
     pub(crate) vars: VarStore,
-
-    /// Steps in the pipeline
-    pub(crate) actions: Vec<Action>,
-
-    /// Which record stream slot does the pipeline return
-    ///
-    /// When `None`, nothing is returned
+    pub(crate) blocks: Vec<Block>,
+    pub(crate) entry: BlockId,
     pub(crate) returning: Option<VarId>,
-
-    /// When true, the executor wraps the entire plan in a transaction.
     pub(crate) needs_transaction: bool,
+}
+
+pub(crate) type BlockId = usize;
+
+#[derive(Debug)]
+pub(crate) struct Block {
+    pub(crate) actions: Vec<Action>,
+    pub(crate) terminator: Terminator,
+}
+
+#[derive(Debug)]
+pub(crate) enum Terminator {
+    Goto(BlockId),
+    IfNonEmpty {
+        var: VarId,
+        then_block: BlockId,
+        else_block: BlockId,
+    },
+    Return,
 }
