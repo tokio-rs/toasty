@@ -12,6 +12,12 @@ This breaks for DynamoDB because:
 
 3. **The cursor is opaque to the application.** `LastEvaluatedKey` is a DynamoDB-internal structure. It cannot be derived from the result set; only DynamoDB can produce it.
 
+But this is not just a DynamoDB problem. SQL has a related issue:
+
+4. **ORDER BY columns may not be in the SELECT list.** Consider `SELECT name FROM users ORDER BY age, id`. The cursor needs `[age, id]` but neither is in the projection. Today, `extract_cursor` reads values from the returned row, so if the ORDER BY columns aren't there, cursor construction fails. The engine needs to load those extra columns from the database and strip them before returning results to the user.
+
+Both problems point to the same conclusion: **pagination must be an engine concern**, not application-layer logic in `Paginate::exec()`.
+
 ## Current Flow
 
 ```
@@ -26,6 +32,19 @@ Paginate::exec()
 ```
 
 The `LastEvaluatedKey` from the DynamoDB response is never captured (`query_pk.rs:96-105` builds a `ValueStream` from `res.items` only).
+
+For the SQL ORDER BY case, pagination also happens entirely in `Paginate::exec()`. The engine has no opportunity to add missing ORDER BY columns to the SELECT list, because it doesn't know a paginated query is happening — it just sees a regular query with a limit.
+
+### Existing Engine Pattern: Load Extra Columns, Project Away
+
+The engine already has the machinery for this. The back-ref projection flow (`plan/statement.rs:1287-1310`) does exactly what pagination needs:
+
+1. `load_data.columns` accumulates columns needed by child statements beyond what the user requested
+2. The database returns all of them
+3. `Project` nodes extract what's needed for internal use (child statement inputs)
+4. The final projection strips the extras before returning to the user
+
+Pagination can use the same pattern: during planning, add ORDER BY columns to `load_data.columns`, build an `extract_cursor` function targeting those column positions, and insert a `Project` to strip them from the output.
 
 ## Approaches
 
@@ -56,111 +75,124 @@ The DynamoDB driver would serialize `LastEvaluatedKey` into a `stmt::Value` and 
 - `Paginate::exec()` now needs two code paths: one for drivers that return cursors, one for drivers that don't. This splits the pagination logic between the engine (SQL keyset filtering) and the driver (DynamoDB `LastEvaluatedKey`).
 - Does not solve the N+1 detection problem. DynamoDB can return fewer items than requested due to its evaluation-based `Limit`. The engine still needs a way to know "there are more results" that isn't just `len > page_size`. This means `Response` probably also needs a `has_more: bool` or similar, adding more driver-specific surface.
 - The cursor value is opaque bytes from DynamoDB's perspective but a `stmt::Value` in Toasty's type system. Serializing `LastEvaluatedKey` (a `HashMap<String, AttributeValue>`) into a `stmt::Value` requires a convention that both the driver's write path and read path agree on. This is doable but brittle.
+- **Does not address the SQL ORDER BY problem.** If ORDER BY columns aren't in the SELECT list, `Paginate::exec()` still can't extract cursor values from the rows. This approach only fixes DynamoDB; the SQL cursor extraction issue remains.
 
-### B: Engine-aware pagination with structured return values
+### B: Engine-aware pagination
 
-The engine knows pagination is happening and structures the query so the driver returns cursors as part of the result set. The return value from the engine becomes something like `(Vec<Row>, prev_cursor, next_cursor)` — the cursors are first-class values in the engine's variable store, not metadata on `Response`.
+The engine owns pagination end-to-end. Pagination flows through lower → plan → exec as a first-class concept.
 
-For DynamoDB, the `QueryPk` operation would gain a `return_cursors: bool` flag. When set, the driver returns a structured value: the rows plus serialized `LastEvaluatedKey`. For SQL, the engine would ensure ORDER BY columns appear in the SELECT list, extract cursor values from the last row during execution, and strip the extra columns from the output via the existing `Project` mechanism.
+For SQL, the planner adds ORDER BY columns to `load_data.columns` if they aren't already present, builds an `extract_cursor` eval function targeting those column positions, and inserts a `Project` to strip them from the output. This follows the same pattern as back-ref projections.
+
+For DynamoDB, the `QueryPk` operation carries a `pagination: Option<PaginationRequest>` that tells the driver to return a cursor token. The driver sets `page_size` as `Limit`, passes back `LastEvaluatedKey` as the cursor, and the engine propagates it to `Page`.
 
 ```rust
-// MIR action
-pub struct QueryPk {
-    // ... existing fields ...
-    pub pagination: Option<PaginationConfig>,
-}
-
+// Pagination config attached to MIR actions
 pub struct PaginationConfig {
     pub page_size: i64,
-    pub extract_cursor: Option<eval::Func>,  // SQL: extract from rows
-    pub return_cursor_from_driver: bool,      // DynamoDB: driver returns it
+    /// SQL: extract cursor values from loaded columns (including non-projected ones)
+    pub extract_cursor: Option<eval::Func>,
 }
-```
 
-The engine's executor would handle both paths: for SQL, it applies `extract_cursor` to the last row; for DynamoDB, it reads the cursor from the driver's structured return.
+// Driver operation
+pub struct QueryPk {
+    // ... existing fields ...
+    pub pagination: Option<PaginationRequest>,
+}
 
-**Pros:**
+pub struct PaginationRequest {
+    pub page_size: i64,
+    pub resume_token: Option<CursorToken>,
+}
 
-- Pagination becomes an engine concern with a uniform output shape. `Page` always gets its cursors from the engine, regardless of backend.
-- Handles the SQL case where ORDER BY columns aren't in the SELECT list. The engine adds them to the query and strips them in projection, which the existing `pagination.md` design doc already describes.
-- Aligns with the existing `pagination.md` design (the `ExecResponse`/`Metadata` approach) and extends it for DynamoDB.
-- The N+1 strategy can be replaced entirely for DynamoDB. Instead of fetching N+1 and checking length, the engine checks whether the driver returned a cursor. `has_next = cursor.is_some()`.
-
-**Cons:**
-
-- Larger change. Pagination awareness must flow through lower → plan → exec phases. The existing `pagination.md` design doc describes 5 phases of work.
-- The `return_cursor_from_driver` flag means the engine still needs to know which kind of driver it's talking to, partially defeating the abstraction. The driver capability system (`capability()`) could gate this, but it's still a branch in the engine.
-- The structured return from the driver (rows + cursor as a single `Value`) requires a convention. The engine and driver must agree on the shape, e.g., `Value::Record([Value::List(rows), cursor_value])`. This is a new pattern in the codebase.
-- More complex to implement incrementally. The SQL path and DynamoDB path have different needs, and both must work before pagination is correct on either backend.
-
-### C: Opaque cursor tokens at the driver boundary
-
-Instead of representing cursors as `stmt::Value` (which implies the engine understands their structure), cursors become opaque byte blobs (`Vec<u8>`) that only the originating driver can interpret. The driver serializes its native pagination token (DynamoDB's `LastEvaluatedKey`, or SQL keyset values) into bytes, and the engine/`Page` store and pass them back without inspection.
-
-```rust
-// In driver
+// Driver response
 pub struct Response {
     pub rows: Rows,
     pub cursor_token: Option<CursorToken>,
 }
+```
 
+The engine's executor handles both paths uniformly:
+
+- **SQL path:** Executor collects rows, applies `extract_cursor` to the last row (which includes the extra ORDER BY columns), strips those columns via `Project`, and produces the cursor as `CursorToken` (serialized keyset values).
+- **DynamoDB path:** Executor reads `cursor_token` from `Response`. No N+1 needed — `has_next` is `cursor_token.is_some()`.
+
+**Pros:**
+
+- Solves both DynamoDB and SQL problems. DynamoDB gets `LastEvaluatedKey` support; SQL gets ORDER BY columns added to the load and projected away.
+- Uses existing engine machinery. The `load_data.columns` → `Project` pattern is already proven for back-ref projections.
+- Uniform output shape. `Page` gets cursors from the engine regardless of backend. `Paginate::exec()` becomes a thin wrapper that calls the engine and reads back metadata.
+- The N+1 strategy lives in the right place. For SQL, the engine adds +1 to the limit and checks overflow. For DynamoDB, the driver signals via `cursor_token` presence. Both happen inside the engine, not in application code.
+
+**Cons:**
+
+- Largest change surface. Pagination awareness must flow through the statement AST (or be derived during lowering), the planner, MIR, and executor. The existing `pagination.md` design doc describes 5 phases of work.
+- The planner must distinguish between SQL and DynamoDB paths to decide whether to use `extract_cursor` or `cursor_token`. This is gated by `driver.capability()`, which already exists, but it's still a branch.
+- The `CursorToken` type at the driver boundary is opaque bytes. DynamoDB's `LastEvaluatedKey` serialization format becomes a driver-internal concern, which is clean but harder to debug than typed `stmt::Value` cursors.
+
+### C: Opaque cursor tokens at the driver boundary
+
+Pagination stays in `Paginate::exec()` but cursors become opaque `Vec<u8>` blobs that only the originating driver can interpret. The engine is a pass-through: it receives a `CursorToken` from `Paginate`, forwards it to the driver, and passes the driver's response token back.
+
+```rust
 pub struct CursorToken(pub Vec<u8>);
 
-// In QueryPk operation
+// Driver operation
 pub struct QueryPk {
     // ... existing fields ...
     pub cursor_token: Option<CursorToken>,  // replaces cursor: Option<stmt::Value>
 }
+
+// Driver response
+pub struct Response {
+    pub rows: Rows,
+    pub cursor_token: Option<CursorToken>,
+}
 ```
 
-For DynamoDB, `CursorToken` is a serialized `LastEvaluatedKey` (e.g., JSON or bincode of the `HashMap<String, AttributeValue>`). For SQL drivers, it's serialized keyset values. Each driver owns its serialization format.
-
-`Page` stores `Option<CursorToken>` instead of `Option<stmt::Expr>`. The `Paginate` flow passes the token back to the engine, which passes it to the driver unchanged.
+For DynamoDB, `CursorToken` is a serialized `LastEvaluatedKey`. For SQL drivers, the driver itself adds ORDER BY columns to the query, extracts cursor values from the result, and serializes them into the token.
 
 **Pros:**
 
 - Clean abstraction boundary. The engine never inspects or constructs cursors. Drivers own the full lifecycle: produce token → store opaquely → receive token → resume query.
 - Handles DynamoDB GSI pagination correctly by definition — the token is the actual `LastEvaluatedKey`.
 - No `stmt::Value` serialization gymnastics. DynamoDB's `HashMap<String, AttributeValue>` maps naturally to bytes without fitting it into Toasty's value type system.
-- SQL drivers can encode keyset values however they want, including columns not in the SELECT list (they'd query for extra columns and encode them into the token).
-- The N+1 strategy moves into the driver for backends that need it (SQL) and is skipped for backends that don't (DynamoDB, which signals "more data" via `LastEvaluatedKey` presence).
 - Works for future backends (e.g., Cassandra paging state tokens) without changes to the engine.
 
 **Cons:**
 
-- Breaks the current design where `Paginate` can manipulate cursor values as expressions. Today, `extract_cursor` evaluates order-by expressions against row data to produce a `Value` that becomes an `Offset::After(Expr)`. With opaque tokens, this manipulation moves into the driver.
-- SQL drivers must now implement cursor extraction logic that currently lives in the engine (`lower/paginate.rs`). This duplicates the keyset pagination logic or requires the engine to delegate it. Either way, the SQL driver becomes more complex.
-- Opaque tokens are harder to debug. A `stmt::Value` cursor is inspectable; a `Vec<u8>` requires driver-specific deserialization to examine.
-- Cursor tokens are not stable across schema changes or driver versions. If the serialization format changes, outstanding tokens from previous pages become invalid. This is also true of the current approach but is more explicit with typed values.
-- `Page::next()` and `Page::prev()` currently construct new `Paginate` queries using cursor expressions. With opaque tokens, the flow changes: `Page` must store enough context to reconstruct the query *and* pass the token, rather than embedding the cursor into the statement AST.
+- **Pushes the SQL ORDER BY problem into the driver.** The SQL driver must now modify the query to add ORDER BY columns, execute it, extract cursor values, and strip the extra columns — all logic that the engine is better positioned to do (it already has `load_data.columns` and `Project` for this). This duplicates engine-level patterns inside each SQL driver.
+- Breaks the current design where `Paginate` manipulates cursor values as expressions. `Page::next()` and `Page::prev()` currently embed cursors into the statement AST via `Offset::After(Expr)`. With opaque tokens, the flow changes entirely.
+- Opaque tokens are harder to debug. A `stmt::Value` cursor is inspectable; a `Vec<u8>` requires driver-specific deserialization.
+- Each SQL driver (SQLite, PostgreSQL, MySQL) would independently implement keyset pagination logic. This is redundant — the `toasty-sql` crate exists precisely to share SQL generation, but cursor extraction happens after execution, outside SQL generation.
 
 ## Comparison
 
 | Concern | A: Response metadata | B: Engine-aware | C: Opaque tokens |
 |---|---|---|---|
-| DynamoDB GSI correctness | Yes (driver returns real key) | Yes (driver returns real key) | Yes (by definition) |
-| DynamoDB N+1 problem | Needs `has_more` flag too | Engine checks cursor presence | Driver signals via token presence |
-| SQL ORDER BY not in SELECT | Not addressed | Handled (add to SELECT, strip in projection) | Driver handles |
-| Change surface | Small (Response + DDB driver) | Large (lower/plan/exec + both drivers) | Medium (Response + both drivers + Page) |
-| Abstraction leakage | Driver concept in shared interface | Engine branches on driver type | Clean boundary |
-| Incremental delivery | Easy | Hard (both paths needed) | Medium |
-| Debugging | Good (typed values) | Good (typed values) | Harder (opaque bytes) |
-| Future backends | Needs per-backend fields or generic map | Needs per-backend branches in engine | Works naturally |
+| DynamoDB GSI correctness | Yes | Yes | Yes |
+| DynamoDB N+1 problem | Needs `has_more` flag | Engine checks cursor presence | Driver signals via token |
+| SQL ORDER BY not in SELECT | **Not addressed** | Handled (load_data + Project) | Driver handles (duplicated) |
+| Change surface | Small | Large | Medium |
+| Abstraction leakage | Driver concept in shared interface | Capability-gated branches | Clean boundary |
+| Reuses existing patterns | No | Yes (back-ref projection) | No |
+| Incremental delivery | Easy (DynamoDB only) | Harder (both paths needed) | Medium |
+| Debugging | Good (typed values) | Good (typed values in engine) | Harder (opaque bytes) |
+| Future backends | Needs per-backend fields | Capability-gated | Works naturally |
 
 ## Recommendation
 
-My suggestion would be a hybrid of B and C. The key insight: the engine should own the *decision* of whether pagination is happening (it already does via `Paginate`), but the *cursor production* should be delegated to the driver via a well-defined protocol.
+Approach B. Both DynamoDB and SQL pagination have the same structural need: the engine must manage cursor lifecycle because only the engine sits between the user's projection and the database's response. The engine already has the load-extra-columns-then-project-away pattern from back-ref handling. Pagination fits naturally into this.
 
-Concretely:
+The implementation path:
 
-1. Add a `pagination: Option<PaginationRequest>` field to `QueryPk` and `QuerySql` operations, replacing the current `cursor` field and the separate limit/offset handling. `PaginationRequest` contains `page_size` and an optional `resume_token: Option<CursorToken>`.
+1. Introduce a `Paginate` variant in the statement AST (or derive pagination intent during lowering from `Limit` + `OrderBy`).
+2. During planning, if pagination is active:
+   - **SQL:** Add ORDER BY columns to `load_data.columns`. Build `extract_cursor` as an `eval::Func` targeting those positions. Apply N+1 to the limit. Insert a `Project` to strip extra columns.
+   - **NoSQL:** Set `pagination: Some(PaginationRequest { page_size, resume_token })` on the `QueryPk` operation.
+3. During execution:
+   - **SQL:** Collect rows, check for N+1 overflow, apply `extract_cursor` to the last kept row, serialize as `CursorToken`, project away extra columns.
+   - **NoSQL:** Read `cursor_token` from `Response`. `has_next = cursor_token.is_some()`.
+4. The executor produces an `ExecResponse { values: ValueStream, cursor_token: Option<CursorToken> }` that propagates through `VarStore` to the final result.
+5. `Paginate::exec()` becomes a thin wrapper: call engine, read `cursor_token` from result, build `Page`.
 
-2. Add `cursor_token: Option<CursorToken>` to `Response`. Drivers set this when there are more results.
-
-3. For DynamoDB: the driver uses `page_size` as `Limit`, `resume_token` as `ExclusiveStartKey`, and returns `LastEvaluatedKey` as the `cursor_token`. No N+1 needed.
-
-4. For SQL: the lower phase continues to rewrite `Offset::After` into WHERE filters. The SQL driver applies the N+1 strategy itself (request `page_size + 1`, check overflow, extract keyset values from the last row, encode as `CursorToken`). Or, the engine does N+1 and cursor extraction as it does today for SQL, and only uses the `cursor_token` path for KV drivers.
-
-5. The engine propagates `cursor_token` through `VarStore` to the final result. `Page` stores `Option<CursorToken>` and passes it back on `.next()`/`.prev()`.
-
-This gives DynamoDB correct pagination with minimal engine changes, keeps the SQL path close to what it is today, and uses opaque tokens at the boundary so future backends work without engine modifications.
+The `CursorToken` at the boundary between engine and `Page` is opaque — the engine serializes SQL keyset values into it, and the DynamoDB driver serializes `LastEvaluatedKey` into it. When `Page::next()` is called, the token flows back into the engine, which either deserializes it into WHERE filters (SQL) or passes it through to the driver (DynamoDB).
