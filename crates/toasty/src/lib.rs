@@ -44,13 +44,6 @@
 //! Re-exports from `toasty-core` for inspecting the app-level and db-level
 //! schema representations at runtime.
 //!
-//! ## [`driver`] — database driver interface
-//!
-//! Re-exports from `toasty-core`. The [`Driver`](driver::Driver) and
-//! [`Connection`](driver::Connection) traits define the interface that each
-//! database backend implements. Users interact with drivers indirectly
-//! through [`Db`].
-//!
 //! # Key traits
 //!
 //! - [`Model`] — a root model backed by a database table. Implemented by
@@ -176,9 +169,3 @@ pub mod codegen_support {
 
     pub use toasty_core as core;
 }
-
-pub mod driver {
-    pub use toasty_core::driver::*;
-}
-
-pub use toasty_core::driver::IsolationLevel;

@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use toasty::{
-    db::Connect,
-    driver::{Capability, Driver},
-};
+use toasty::db::Connect;
+use toasty_core::driver::{Capability, Driver};
 use toasty_core::stmt;
 use tokio::sync::OnceCell;
 

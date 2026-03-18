@@ -40,7 +40,7 @@ impl PostgreSqlSetup {
 
 #[async_trait::async_trait]
 impl toasty_driver_integration_suite::Setup for PostgreSqlSetup {
-    fn driver(&self) -> Box<dyn toasty::driver::Driver> {
+    fn driver(&self) -> Box<dyn toasty_core::driver::Driver> {
         let url = std::env::var("TOASTY_TEST_POSTGRES_URL")
             .unwrap_or_else(|_| "postgresql://localhost:5432/toasty_test".to_string());
         Box::new(PostgreSQL::new(&url).expect("Failed to create PostgreSQL driver"))

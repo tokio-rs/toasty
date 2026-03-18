@@ -1,10 +1,8 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 use tempfile::NamedTempFile;
-use toasty::{
-    db::{self, Connect},
-    driver::{Capability, Driver},
-};
+use toasty::db::{self, Connect};
+use toasty_core::driver::{Capability, Driver};
 
 use crate::Setup;
 
