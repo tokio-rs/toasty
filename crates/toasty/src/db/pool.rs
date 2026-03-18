@@ -172,14 +172,16 @@ impl deadpool::managed::Manager for Manager {
                             let (row_tx, mut row_rx) = mpsc::unbounded_channel::<
                                 crate::Result<toasty_core::stmt::Value>,
                             >();
-
+                            let cursor = value_stream.take_cursor();
+                            eprintln!("Building ValueStream::from_stream: {:?}", cursor);
                             let _ = tx.send(Ok(toasty_core::stmt::ValueStream::from_stream(
                                 async_stream::stream! {
                                     while let Some(res) = row_rx.recv().await {
                                         yield res
                                     }
                                 },
-                            )));
+                            )
+                            .with_cursor(cursor)));
 
                             while let Some(res) = value_stream.next().await {
                                 let _ = row_tx.send(res);

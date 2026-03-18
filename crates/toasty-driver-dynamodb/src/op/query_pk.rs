@@ -56,6 +56,7 @@ impl Connection {
                     query = query.scan_index_forward(*direction == stmt::Direction::Asc);
                 }
                 if let Some(ref start_key) = op.cursor {
+                    eprintln!("Setting start_key: {:?}", start_key);
                     query = query.set_exclusive_start_key(Some(ddb_key(table, start_key)));
                 }
 
@@ -93,13 +94,14 @@ impl Connection {
         };
 
         let res = result?;
+        eprintln!("Count: {}, Scanned: {}", res.count, res.scanned_count);
 
         // Extract pagination cursor from last_evaluated_key before consuming items
         let cursor = res
             .last_evaluated_key
             .as_ref()
             .map(|key| ddb_key_to_value(table, key));
-
+        eprintln!("Sending cursor back: {:?}", cursor);
         let schema = schema.clone();
         Ok(Response::value_stream(
             stmt::ValueStream::from_iter(res.items.into_iter().flatten().map(move |item| {

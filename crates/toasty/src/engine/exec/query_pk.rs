@@ -52,6 +52,7 @@ impl Exec<'_> {
 
         let filters = self.split_filter(pk_filter, action.table);
         let mut all_rows = Vec::new();
+        let mut cursor = None;
 
         for f in filters {
             let res = self
@@ -72,13 +73,15 @@ impl Exec<'_> {
                 )
                 .await?;
 
-            all_rows.extend(res.rows.into_value_stream().collect().await?);
+            let mut stream = res.rows.into_value_stream();
+            cursor = stream.take_cursor();
+            all_rows.extend(stream.collect().await?);
         }
-
+        eprintln!("cursor: {:?}", cursor);
         self.vars.store(
             action.output.var,
             action.output.num_uses,
-            Rows::Stream(stmt::ValueStream::from_vec(all_rows)),
+            Rows::Stream(stmt::ValueStream::from_vec(all_rows).with_cursor(cursor)),
         );
 
         Ok(())

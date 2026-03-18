@@ -137,6 +137,7 @@ impl Expr {
     }
 
     fn eval_ref(&self, scope: &ScopeStack<'_>, input: &mut impl Input) -> Result<Value> {
+        eprintln!("eval_ref: {:?}", self);
         match self {
             Expr::And(expr_and) => {
                 debug_assert!(!expr_and.operands.is_empty());
