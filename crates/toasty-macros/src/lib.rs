@@ -5,6 +5,391 @@ mod create;
 use proc_macro::TokenStream;
 use quote::quote;
 
+/// Derive macro that turns a struct into a Toasty model backed by a database
+/// table.
+///
+/// For a tutorial-style introduction, see the [Toasty guide].
+///
+#[doc = include_str!(concat!(env!("OUT_DIR"), "/guide_link.md"))]
+///
+/// # Overview
+///
+/// Applying `#[derive(Model)]` to a named struct generates:
+///
+/// - A [`Model`] trait implementation, including the associated `Query`,
+///   `Create`, and `Update` builder types.
+/// - A [`Load`] implementation for deserializing rows from the database.
+/// - A [`Register`] implementation for schema registration at runtime.
+/// - Static query methods such as `all()`, `filter(expr)`,
+///   `filter_by_<field>()`, and `get_by_<key>()`.
+/// - Instance methods `update()` and `delete()`.
+/// - A `Fields` struct returned by `<Model>::fields()` for building typed
+///   filter expressions.
+///
+/// The struct must have named fields and no generic parameters.
+///
+/// [`Model`]: toasty::Model
+/// [`Load`]: toasty::Load
+/// [`Register`]: toasty::Register
+///
+/// # Struct-level attributes
+///
+/// ## `#[key(...)]` — primary key
+///
+/// Defines the primary key at the struct level. Mutually exclusive with
+/// field-level `#[key]`.
+///
+/// **Simple form** — every listed field becomes a partition key:
+///
+/// ```ignore
+/// #[derive(Model)]
+/// #[key(name)]
+/// struct Widget {
+///     name: String,
+///     value: i64,
+/// }
+/// ```
+///
+/// **Composite key with partition/local scoping:**
+///
+/// ```ignore
+/// #[derive(Model)]
+/// #[key(partition = user_id, local = id)]
+/// struct Todo {
+///     #[auto]
+///     id: uuid::Uuid,
+///     user_id: String,
+///     title: String,
+/// }
+/// ```
+///
+/// The `partition` fields determine data distribution (relevant for
+/// DynamoDB); `local` fields scope within a partition. For SQL databases
+/// both behave as a regular composite primary key.
+///
+/// Multiple `partition` and `local` entries are allowed:
+///
+/// ```ignore
+/// #[key(partition = tenant, partition = org, local = id)]
+/// ```
+///
+/// When using named `partition`/`local` syntax, at least one of each is
+/// required. You cannot mix the simple and named forms.
+///
+/// ## `#[table = "name"]` — custom table name
+///
+/// Overrides the default table name. Without this attribute the table name
+/// is the pluralized, snake_case form of the struct name (e.g. `User` →
+/// `users`).
+///
+/// ```ignore
+/// #[derive(Model)]
+/// #[table = "legacy_users"]
+/// struct User {
+///     #[key]
+///     #[auto]
+///     id: i64,
+///     name: String,
+/// }
+/// ```
+///
+/// # Field-level attributes
+///
+/// ## `#[key]` — mark a field as a primary key column
+///
+/// Marks one or more fields as the primary key. When used on multiple
+/// fields each becomes a partition key column (equivalent to listing them
+/// in `#[key(...)]` at the struct level).
+///
+/// Cannot be combined with a struct-level `#[key(...)]` attribute.
+///
+/// ```ignore
+/// #[derive(Model)]
+/// struct User {
+///     #[key]
+///     #[auto]
+///     id: i64,
+///     name: String,
+/// }
+/// ```
+///
+/// ## `#[auto]` — automatic value generation
+///
+/// Tells Toasty to generate this field's value automatically. The strategy
+/// depends on the field type and optional arguments:
+///
+/// | Syntax | Behavior |
+/// |--------|----------|
+/// | `#[auto]` on `uuid::Uuid` | UUID v7 (timestamp-sortable) |
+/// | `#[auto(uuid(v4))]` | UUID v4 (random) |
+/// | `#[auto(uuid(v7))]` | UUID v7 (explicit) |
+/// | `#[auto]` on integer types (`i8`–`i64`, `u8`–`u64`) | Auto-increment |
+/// | `#[auto(increment)]` | Auto-increment (explicit) |
+/// | `#[auto]` on a field named `created_at` | Expands to `#[default(jiff::Timestamp::now())]` |
+/// | `#[auto]` on a field named `updated_at` | Expands to `#[update(jiff::Timestamp::now())]` |
+///
+/// The `created_at`/`updated_at` expansion requires the `jiff` feature and
+/// a field type compatible with `jiff::Timestamp`.
+///
+/// Cannot be combined with `#[default]` or `#[update]` on the same field.
+///
+/// ## `#[default(expr)]` — default value on create
+///
+/// Sets a default value that is used when the field is not explicitly
+/// provided during creation. The expression is any valid Rust expression.
+///
+/// ```ignore
+/// #[default(0)]
+/// view_count: i64,
+///
+/// #[default("draft".to_string())]
+/// status: String,
+/// ```
+///
+/// The default can be overridden by calling the corresponding setter on the
+/// create builder.
+///
+/// Cannot be combined with `#[auto]` on the same field. Can be combined
+/// with `#[update]` (the default applies on create; the update expression
+/// applies on subsequent updates).
+///
+/// ## `#[update(expr)]` — value applied on create and update
+///
+/// Sets a value that Toasty applies every time a record is created or
+/// updated, unless the field is explicitly set on the builder.
+///
+/// ```ignore
+/// #[update(jiff::Timestamp::now())]
+/// updated_at: jiff::Timestamp,
+/// ```
+///
+/// Cannot be combined with `#[auto]` on the same field.
+///
+/// ## `#[index]` — add a database index
+///
+/// Creates a non-unique index on the field. Toasty generates a
+/// `filter_by_<field>` method for indexed fields.
+///
+/// ```ignore
+/// #[index]
+/// email: String,
+/// ```
+///
+/// ## `#[unique]` — add a unique constraint
+///
+/// Creates a unique index on the field. Like `#[index]`, this generates
+/// `filter_by_<field>`. The database enforces uniqueness.
+///
+/// ```ignore
+/// #[unique]
+/// email: String,
+/// ```
+///
+/// ## `#[column(...)]` — customize the database column
+///
+/// Overrides the column name and/or type for a field.
+///
+/// **Custom name:**
+///
+/// ```ignore
+/// #[column("user_email")]
+/// email: String,
+/// ```
+///
+/// **Custom type:**
+///
+/// ```ignore
+/// #[column(type = varchar(255))]
+/// email: String,
+/// ```
+///
+/// **Both:**
+///
+/// ```ignore
+/// #[column("user_email", type = varchar(255))]
+/// email: String,
+/// ```
+///
+/// ### Supported column types
+///
+/// | Syntax | Description |
+/// |--------|-------------|
+/// | `boolean` | Boolean |
+/// | `i8`, `i16`, `i32`, `i64` | Signed integer (1/2/4/8 bytes) |
+/// | `int(N)` | Signed integer with N-byte width |
+/// | `u8`, `u16`, `u32`, `u64` | Unsigned integer (1/2/4/8 bytes) |
+/// | `uint(N)` | Unsigned integer with N-byte width |
+/// | `text` | Unbounded text |
+/// | `varchar(N)` | Text with max length N |
+/// | `numeric` | Arbitrary-precision numeric |
+/// | `numeric(P, S)` | Numeric with precision P and scale S |
+/// | `binary(N)` | Fixed-size binary with N bytes |
+/// | `blob` | Variable-length binary |
+/// | `timestamp(P)` | Timestamp with P fractional-second digits |
+/// | `date` | Date without time |
+/// | `time(P)` | Time with P fractional-second digits |
+/// | `datetime(P)` | Date and time with P fractional-second digits |
+/// | `"custom"` | Arbitrary type string passed through to the driver |
+///
+/// Cannot be used on relation fields.
+///
+/// ## `#[serialize(json)]` — serialize complex types as JSON
+///
+/// Stores the field as a JSON string in the database. Requires the `serde`
+/// feature and that the field type implements `serde::Serialize` and
+/// `serde::Deserialize`.
+///
+/// ```ignore
+/// #[serialize(json)]
+/// tags: Vec<String>,
+/// ```
+///
+/// For `Option<T>` fields, add `nullable` so that `None` maps to SQL
+/// `NULL` rather than the JSON string `"null"`:
+///
+/// ```ignore
+/// #[serialize(json, nullable)]
+/// metadata: Option<HashMap<String, String>>,
+/// ```
+///
+/// Cannot be used on relation fields.
+///
+/// # Relation attributes
+///
+/// ## `#[belongs_to(...)]` — foreign-key reference
+///
+/// Declares a many-to-one (or one-to-one) association through a foreign
+/// key stored on this model.
+///
+/// ```ignore
+/// #[belongs_to(key = user_id, references = id)]
+/// user: toasty::BelongsTo<User>,
+/// ```
+///
+/// | Parameter | Meaning |
+/// |-----------|---------|
+/// | `key = <field>` | Local field holding the foreign key value |
+/// | `references = <field>` | Field on the target model being referenced |
+///
+/// For composite foreign keys, repeat `key`/`references` pairs:
+///
+/// ```ignore
+/// #[belongs_to(key = org_id, references = id, key = tenant_id, references = tenant_id)]
+/// org: toasty::BelongsTo<Org>,
+/// ```
+///
+/// The number of `key` entries must equal the number of `references`
+/// entries.
+///
+/// Wrap the target type in `Option` for an optional (nullable) foreign key:
+///
+/// ```ignore
+/// #[index]
+/// manager_id: Option<i64>,
+///
+/// #[belongs_to(key = manager_id, references = id)]
+/// manager: toasty::BelongsTo<Option<User>>,
+/// ```
+///
+/// ## `#[has_many]` — one-to-many association
+///
+/// Declares a collection of related models. The target model must have a
+/// `#[belongs_to]` field pointing back to this model.
+///
+/// ```ignore
+/// #[has_many]
+/// posts: toasty::HasMany<Post>,
+/// ```
+///
+/// Toasty generates an accessor method (e.g. `.posts()`) and an insert
+/// helper (e.g. `.insert_post()`), where the insert helper name is the
+/// auto-singularized field name.
+///
+/// ### `pair` — disambiguate self-referential or multiple relations
+///
+/// When the target model has more than one `#[belongs_to]` pointing to
+/// the same model (or points to itself), use `pair` to specify which
+/// `belongs_to` field this `has_many` corresponds to:
+///
+/// ```ignore
+/// #[has_many(pair = parent)]
+/// children: toasty::HasMany<Person>,
+/// ```
+///
+/// ## `#[has_one]` — one-to-one association
+///
+/// Declares a single related model. The target model must have a
+/// `#[belongs_to]` field pointing back to this model.
+///
+/// ```ignore
+/// #[has_one]
+/// profile: toasty::HasOne<Profile>,
+/// ```
+///
+/// Wrap in `Option` for an optional association:
+///
+/// ```ignore
+/// #[has_one]
+/// profile: toasty::HasOne<Option<Profile>>,
+/// ```
+///
+/// # Constraints
+///
+/// - The struct must have named fields (tuple structs are not supported).
+/// - Generic parameters are not supported.
+/// - Every root model must have a primary key, defined either by a
+///   struct-level `#[key(...)]` or by one or more field-level `#[key]`
+///   attributes, but not both.
+/// - `#[auto]` cannot be combined with `#[default]` or `#[update]` on the
+///   same field.
+/// - `#[column]`, `#[default]`, `#[update]`, and `#[serialize]` cannot be
+///   used on relation fields (`BelongsTo`, `HasMany`, `HasOne`).
+/// - A field can have at most one relation attribute.
+/// - `Self` can be used as a type in relation fields for self-referential
+///   models.
+///
+/// # Full example
+///
+/// ```ignore
+/// #[derive(Debug, toasty::Model)]
+/// struct User {
+///     #[key]
+///     #[auto]
+///     id: i64,
+///
+///     #[unique]
+///     email: String,
+///
+///     name: String,
+///
+///     #[default(jiff::Timestamp::now())]
+///     created_at: jiff::Timestamp,
+///
+///     #[update(jiff::Timestamp::now())]
+///     updated_at: jiff::Timestamp,
+///
+///     #[has_many]
+///     posts: toasty::HasMany<Post>,
+/// }
+///
+/// #[derive(Debug, toasty::Model)]
+/// struct Post {
+///     #[key]
+///     #[auto]
+///     id: i64,
+///
+///     title: String,
+///
+///     #[serialize(json)]
+///     tags: Vec<String>,
+///
+///     #[index]
+///     user_id: i64,
+///
+///     #[belongs_to(key = user_id, references = id)]
+///     user: toasty::BelongsTo<User>,
+/// }
+/// ```
 #[proc_macro_derive(
     Model,
     attributes(
