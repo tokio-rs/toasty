@@ -609,7 +609,7 @@ pub async fn associate_has_one_by_val_on_update_query_with_filter(test: &mut Tes
     let p1 = Profile::create().bio("hello world").exec(&mut db).await?;
 
     // Associate profile via filter_by_id update — should work
-    User::filter_by_id(&u1.id)
+    User::filter_by_id(u1.id)
         .update()
         .profile(&p1)
         .exec(&mut db)
@@ -622,14 +622,14 @@ pub async fn associate_has_one_by_val_on_update_query_with_filter(test: &mut Tes
     assert_eq!(p1_reloaded.user_id.as_ref(), Some(&u1.id));
 
     // Unset
-    User::filter_by_id(&u1.id)
+    User::filter_by_id(u1.id)
         .update()
         .profile(None)
         .exec(&mut db)
         .await?;
 
     // Filter that does NOT match — should be a no-op
-    User::filter_by_id(&u1.id)
+    User::filter_by_id(u1.id)
         .filter(User::fields().name().eq("anon"))
         .update()
         .profile(&p1)
