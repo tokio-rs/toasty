@@ -16,14 +16,9 @@ pub(crate) struct Branch {
     /// Node that produces a boolean condition value.
     pub(crate) cond: NodeId,
 
-    /// Nodes to execute when the condition is true.
+    /// Nodes to execute when the condition is true. The last node's
+    /// output is the then-branch result.
     pub(crate) then_body: Vec<NodeId>,
-
-    /// Which then_body node produces the then-branch result.
-    pub(crate) then_output: NodeId,
-
-    /// Nodes to execute when the condition is false.
-    pub(crate) else_body: Vec<NodeId>,
 
     /// The type of the Branch output.
     pub(crate) ty: stmt::Type,

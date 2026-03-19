@@ -1499,7 +1499,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         // Collect then_body nodes (the MIR nodes for then-only args).
         // These need to be in dependency order.
         let then_body: Vec<mir::NodeId> = then_only_args.iter().map(|&pos| inputs[pos]).collect();
-        let then_output = *then_body.last().unwrap();
 
         // Mark then_body nodes as visited so they're excluded from the
         // main topological execution order.
@@ -1509,10 +1508,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             self.planner.mir[node_id].num_uses.set(1);
         }
 
-        // Determine the Branch output type.
-        // Use the then output type (the else branch is typically null/unit).
-        let then_ty = self.planner.mir[then_output].ty().clone();
-        let branch_ty = then_ty;
+        // Determine the Branch output type from the last then_body node.
+        let then_output = *then_body.last().unwrap();
+        let branch_ty = self.planner.mir[then_output].ty().clone();
 
         // Collect extra deps: deps of body nodes that aren't body nodes themselves.
         let mut extra_deps = IndexSet::new();
@@ -1527,8 +1525,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         let branch_node = mir::Branch {
             cond: cond_node_id,
             then_body,
-            then_output,
-            else_body: vec![],
             ty: branch_ty,
         };
 

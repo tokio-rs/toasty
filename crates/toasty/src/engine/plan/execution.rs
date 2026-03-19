@@ -47,8 +47,9 @@ impl ExecPlanner<'_> {
                         bb.push_action(then_block, action);
                     }
 
-                    // Copy then_output result to the branch output var.
-                    let then_result_var = self.logical_plan[branch.then_output].var.get().unwrap();
+                    // Copy the last then_body node's result to the branch output var.
+                    let then_out = *branch.then_body.last().unwrap();
+                    let then_result_var = self.logical_plan[then_out].var.get().unwrap();
                     bb.push_action(
                         then_block,
                         exec::SetVar {
@@ -62,48 +63,23 @@ impl ExecPlanner<'_> {
                     );
                     bb.set_terminator(then_block, Terminator::Goto(merge_block));
 
-                    // Process else_body nodes into the else block.
-                    for &body_node_id in &branch.else_body {
-                        let body_node = &self.logical_plan[body_node_id];
-                        let action = body_node.to_exec(self.logical_plan, &mut self.var_decls);
-                        bb.push_action(else_block, action);
-                    }
-
-                    // When the else branch has no body nodes, produce a
-                    // default value matching the output type.
-                    if branch.else_body.is_empty() {
-                        let source = if branch.ty.is_unit() {
-                            VarSource::Count(0)
-                        } else {
-                            VarSource::Value(stmt::Value::Null)
-                        };
-                        bb.push_action(
-                            else_block,
-                            exec::SetVar {
-                                source,
-                                output: exec::Output {
-                                    var: output_var,
-                                    num_uses: output_num_uses,
-                                },
-                            }
-                            .into(),
-                        );
+                    // Else branch: produce a default value matching the output type.
+                    let source = if branch.ty.is_unit() {
+                        VarSource::Count(0)
                     } else {
-                        // Copy the last else_body node's result to the branch output var.
-                        let else_out = *branch.else_body.last().unwrap();
-                        let else_result_var = self.logical_plan[else_out].var.get().unwrap();
-                        bb.push_action(
-                            else_block,
-                            exec::SetVar {
-                                source: VarSource::Var(else_result_var),
-                                output: exec::Output {
-                                    var: output_var,
-                                    num_uses: output_num_uses,
-                                },
-                            }
-                            .into(),
-                        );
-                    }
+                        VarSource::Value(stmt::Value::Null)
+                    };
+                    bb.push_action(
+                        else_block,
+                        exec::SetVar {
+                            source,
+                            output: exec::Output {
+                                var: output_var,
+                                num_uses: output_num_uses,
+                            },
+                        }
+                        .into(),
+                    );
                     bb.set_terminator(else_block, Terminator::Goto(merge_block));
 
                     // Continue placing subsequent actions into the merge block.
@@ -130,13 +106,9 @@ impl ExecPlanner<'_> {
                 .count()
                 > 1;
 
-        // Entry is always the first block (index 0).
-        let entry = exec::BlockId::from_raw(0);
-
         ExecPlan {
             vars: VarStore::new(self.var_decls),
             blocks: bb.blocks,
-            entry,
             returning,
             needs_transaction,
         }

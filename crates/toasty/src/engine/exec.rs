@@ -108,7 +108,7 @@ impl Engine {
             exec.in_transaction = true;
         }
 
-        let mut current_block = plan.entry;
+        let mut current_block = BlockId::from_raw(0);
         'outer: loop {
             let block = &plan.blocks[current_block];
             for step in &block.actions {

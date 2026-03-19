@@ -7,11 +7,9 @@ pub(crate) struct ExecPlan {
     /// Arguments seeding the plan
     pub(crate) vars: VarStore,
 
-    /// Basic blocks forming the control flow graph
+    /// Basic blocks forming the control flow graph.
+    /// The entry block is always index 0.
     pub(crate) blocks: IndexVec<BlockId, Block>,
-
-    /// Entry block (always BlockId(0))
-    pub(crate) entry: BlockId,
 
     /// Which record stream slot does the pipeline return
     ///
