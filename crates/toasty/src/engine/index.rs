@@ -41,12 +41,11 @@ pub(crate) fn plan_index_path<'a>(
     // the database operation. The invariant is:
     //   filter == AND(pre_filter, remaining_filter)
     let (pre_filter, remaining_filter) = extract_pre_filter(filter);
-    let filter = remaining_filter.as_ref().unwrap_or(filter);
 
     let mut index_planner = IndexPlanner {
         cx,
         table,
-        filter,
+        filter: &remaining_filter,
         index_matches: vec![],
         index_paths: vec![],
     };
@@ -59,7 +58,8 @@ pub(crate) fn plan_index_path<'a>(
     };
 
     let index_match = &index_planner.index_matches[index_path.index_match];
-    let (index_filter, result_filter) = index_match.partition_filter(&mut partition_cx, filter);
+    let (index_filter, result_filter) =
+        index_match.partition_filter(&mut partition_cx, index_planner.filter);
 
     // Extract literal key values before OR rewrite, while index_filter is still
     // in Expr::Or form. After rewrite it becomes ANY(MAP(...)) and the Or arm
@@ -87,7 +87,7 @@ pub(crate) fn plan_index_path<'a>(
             Some(result_filter)
         },
         post_filter: if partition_cx.apply_result_filter_on_results {
-            Some(filter.clone())
+            Some(remaining_filter.clone())
         } else {
             None
         },
@@ -298,16 +298,14 @@ fn extract_key_record(
 /// Splits the filter into `(pre_filter, remaining_filter)` such that
 /// `filter == AND(pre_filter, remaining_filter)`. The `pre_filter` contains
 /// only sub-expressions that can be evaluated using args alone (no table
-/// column references). Returns `(None, None)` when the entire filter
-/// references columns, and `(Some(filter), None)` when the entire filter
-/// is args-only.
-fn extract_pre_filter(expr: &stmt::Expr) -> (Option<stmt::Expr>, Option<stmt::Expr>) {
+/// column references).
+fn extract_pre_filter(expr: &stmt::Expr) -> (Option<stmt::Expr>, stmt::Expr) {
     // Only AND nodes can be split into pre_filter and remaining components.
     let stmt::Expr::And(and) = expr else {
         if references_column(expr) {
-            return (None, None);
+            return (None, expr.clone());
         } else {
-            return (Some(expr.clone()), None);
+            return (Some(expr.clone()), true.into());
         }
     };
 
@@ -324,7 +322,7 @@ fn extract_pre_filter(expr: &stmt::Expr) -> (Option<stmt::Expr>, Option<stmt::Ex
 
     // If all operands are args-only, the entire AND is the pre_filter.
     if remaining.is_empty() {
-        return (Some(expr.clone()), None);
+        return (Some(expr.clone()), true.into());
     }
 
     let pre_filter = match pre.len() {
@@ -334,13 +332,11 @@ fn extract_pre_filter(expr: &stmt::Expr) -> (Option<stmt::Expr>, Option<stmt::Ex
     };
 
     let remaining_filter = match remaining.len() {
-        1 => Some(remaining.into_iter().next().unwrap()),
-        _ => Some(
-            stmt::ExprAnd {
-                operands: remaining,
-            }
-            .into(),
-        ),
+        1 => remaining.into_iter().next().unwrap(),
+        _ => stmt::ExprAnd {
+            operands: remaining,
+        }
+        .into(),
     };
 
     (pre_filter, remaining_filter)
