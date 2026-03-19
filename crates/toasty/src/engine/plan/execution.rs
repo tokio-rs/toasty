@@ -1,3 +1,5 @@
+use toasty_core::stmt;
+
 use crate::engine::{
     exec::{self, BlockBuilder, ExecPlan, Terminator, VarSource, VarStore},
     mir::Operation,
@@ -67,26 +69,18 @@ impl ExecPlanner<'_> {
                         bb.push_action(else_block, action);
                     }
 
-                    if let Some(else_out) = branch.else_output {
-                        // Copy else_output result to the branch output var.
-                        let else_result_var = self.logical_plan[else_out].var.get().unwrap();
+                    // When the else branch has no body nodes, produce a
+                    // default value matching the output type.
+                    if branch.else_body.is_empty() {
+                        let source = if branch.ty.is_unit() {
+                            VarSource::Count(0)
+                        } else {
+                            VarSource::Value(stmt::Value::Null)
+                        };
                         bb.push_action(
                             else_block,
                             exec::SetVar {
-                                source: VarSource::Var(else_result_var),
-                                output: exec::Output {
-                                    var: output_var,
-                                    num_uses: output_num_uses,
-                                },
-                            }
-                            .into(),
-                        );
-                    } else if branch.ty.is_unit() {
-                        // Unit-typed branches use Count(0) for the else case.
-                        bb.push_action(
-                            else_block,
-                            exec::SetVar {
-                                source: VarSource::Count(0),
+                                source,
                                 output: exec::Output {
                                     var: output_var,
                                     num_uses: output_num_uses,
@@ -95,11 +89,13 @@ impl ExecPlanner<'_> {
                             .into(),
                         );
                     } else {
-                        // Else branch produces a constant value.
+                        // Copy the last else_body node's result to the branch output var.
+                        let else_out = *branch.else_body.last().unwrap();
+                        let else_result_var = self.logical_plan[else_out].var.get().unwrap();
                         bb.push_action(
                             else_block,
                             exec::SetVar {
-                                source: VarSource::Value(branch.else_value.clone()),
+                                source: VarSource::Var(else_result_var),
                                 output: exec::Output {
                                     var: output_var,
                                     num_uses: output_num_uses,

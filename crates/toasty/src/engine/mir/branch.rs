@@ -25,13 +25,6 @@ pub(crate) struct Branch {
     /// Nodes to execute when the condition is false.
     pub(crate) else_body: Vec<NodeId>,
 
-    /// Which else_body node produces the else-branch result.
-    /// None means the else branch produces a constant (e.g., null/unit).
-    pub(crate) else_output: Option<NodeId>,
-
-    /// The constant value to use when else_output is None.
-    pub(crate) else_value: stmt::Value,
-
     /// The type of the Branch output.
     pub(crate) ty: stmt::Type,
 }

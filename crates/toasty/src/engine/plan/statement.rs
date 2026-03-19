@@ -1509,9 +1509,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             self.planner.mir[node_id].num_uses.set(1);
         }
 
-        // Determine the else value
-        let else_value = expr_if.r#else.eval_const().unwrap_or_default();
-
         // Determine the Branch output type.
         // Use the then output type (the else branch is typically null/unit).
         let then_ty = self.planner.mir[then_output].ty().clone();
@@ -1532,8 +1529,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             then_body,
             then_output,
             else_body: vec![],
-            else_output: None,
-            else_value,
             ty: branch_ty,
         };
 
