@@ -404,6 +404,285 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
     }
 }
 
+/// Derive macro that turns a struct or enum into an embedded type stored
+/// inline in a parent model's table.
+///
+/// Embedded types do not have their own tables or primary keys. Their
+/// fields are flattened into the parent model's columns. Use `Embed` for
+/// value objects (addresses, coordinates, metadata) and enums
+/// (status codes, contact info variants).
+///
+/// # Structs
+///
+/// An embedded struct's fields become columns in the parent table, prefixed
+/// with the field name. For example, an `address: Address` field with
+/// `street` and `city` produces columns `address_street` and
+/// `address_city`.
+///
+/// ```ignore
+/// #[derive(toasty::Embed)]
+/// struct Address {
+///     street: String,
+///     city: String,
+/// }
+///
+/// #[derive(toasty::Model)]
+/// struct User {
+///     #[key]
+///     #[auto]
+///     id: i64,
+///     name: String,
+///     address: Address,
+/// }
+/// ```
+///
+/// Applying `#[derive(Embed)]` to a struct generates:
+///
+/// - An [`Embed`] trait implementation (which extends [`Register`]).
+/// - A `Fields` struct returned by `<Type>::fields()` for building
+///   filter expressions on individual fields.
+/// - An `Update` struct used by the parent model's update builder for
+///   partial field updates.
+///
+/// ## Nesting
+///
+/// Embedded structs can contain other embedded types. Columns are
+/// flattened with chained prefixes:
+///
+/// ```ignore
+/// #[derive(toasty::Embed)]
+/// struct Location {
+///     lat: i64,
+///     lon: i64,
+/// }
+///
+/// #[derive(toasty::Embed)]
+/// struct Address {
+///     street: String,
+///     city: Location,
+/// }
+/// ```
+///
+/// When `Address` is embedded as `address` in a parent model, this
+/// produces columns `address_street`, `address_city_lat`, and
+/// `address_city_lon`.
+///
+/// # Enums
+///
+/// An embedded enum stores a discriminant value identifying the active
+/// variant. Each variant must have a `#[column(variant = N)]` attribute
+/// assigning a stable integer discriminant.
+///
+/// **Unit-only enum:**
+///
+/// ```ignore
+/// #[derive(toasty::Embed)]
+/// enum Status {
+///     #[column(variant = 1)]
+///     Pending,
+///     #[column(variant = 2)]
+///     Active,
+///     #[column(variant = 3)]
+///     Archived,
+/// }
+/// ```
+///
+/// A unit-only enum occupies a single column in the parent table. The
+/// column stores the discriminant as an integer.
+///
+/// **Data-carrying enum:**
+///
+/// ```ignore
+/// #[derive(toasty::Embed)]
+/// enum ContactInfo {
+///     #[column(variant = 1)]
+///     Email { address: String },
+///     #[column(variant = 2)]
+///     Phone { number: String },
+/// }
+/// ```
+///
+/// A data-carrying enum stores the discriminant column plus one nullable
+/// column per variant field. For example, a `contact: ContactInfo` field
+/// produces columns `contact` (discriminant), `contact_address`, and
+/// `contact_number`. Only the columns belonging to the active variant
+/// contain values; the rest are `NULL`.
+///
+/// **Mixed enum** (unit and data variants together):
+///
+/// ```ignore
+/// #[derive(toasty::Embed)]
+/// enum Status {
+///     #[column(variant = 1)]
+///     Pending,
+///     #[column(variant = 2)]
+///     Failed { reason: String },
+///     #[column(variant = 3)]
+///     Done,
+/// }
+/// ```
+///
+/// Applying `#[derive(Embed)]` to an enum generates:
+///
+/// - An [`Embed`] trait implementation (which extends [`Register`]).
+/// - A `Fields` struct with `is_<variant>()` methods and comparison
+///   methods (`eq`, `ne`, `in_list`).
+/// - For data-carrying variants, per-variant handle types with a
+///   `matches(closure)` method for pattern matching and field access.
+///
+/// # Field-level attributes
+///
+/// ## `#[column(...)]` — customize the database column
+///
+/// **On struct fields**, overrides the column name and/or type:
+///
+/// ```ignore
+/// #[derive(toasty::Embed)]
+/// struct Address {
+///     #[column("addr_street")]
+///     street: String,
+///
+///     #[column(type = varchar(255))]
+///     city: String,
+/// }
+/// ```
+///
+/// See [`Model`][`derive@Model`] for the full list of supported column
+/// types.
+///
+/// **On enum variants**, `#[column(variant = N)]` is **required** and
+/// assigns the integer discriminant stored in the database:
+///
+/// ```ignore
+/// #[column(variant = 1)]
+/// Pending,
+/// ```
+///
+/// Discriminant values must be unique across all variants of the enum.
+/// They are stored as `i64`.
+///
+/// ## `#[index]` — add a database index
+///
+/// Creates a non-unique index on the field's flattened column.
+///
+/// ```ignore
+/// #[derive(toasty::Embed)]
+/// struct Contact {
+///     #[index]
+///     country: String,
+/// }
+/// ```
+///
+/// ## `#[unique]` — add a unique constraint
+///
+/// Creates a unique index on the field's flattened column. The database
+/// enforces uniqueness.
+///
+/// ```ignore
+/// #[derive(toasty::Embed)]
+/// struct Contact {
+///     #[unique]
+///     email: String,
+/// }
+/// ```
+///
+/// # Using embedded types in a model
+///
+/// Reference an embedded type as a field on a [`Model`][`derive@Model`]
+/// struct. The parent model's create and update builders gain a setter for
+/// the embedded field. For embedded structs, a `with_<field>` method
+/// supports partial updates of individual sub-fields:
+///
+/// ```ignore
+/// // Full replacement
+/// user.update()
+///     .address(Address { street: "456 Oak Ave".into(), city: "Seattle".into() })
+///     .exec(&mut db).await?;
+///
+/// // Partial update (struct only) — updates city, leaves street unchanged
+/// user.update()
+///     .with_address(|a| { a.city("Portland"); })
+///     .exec(&mut db).await?;
+/// ```
+///
+/// Embedded struct fields are queryable through the parent model's
+/// `fields()` accessor:
+///
+/// ```ignore
+/// let users = User::filter(User::fields().address().city().eq("Seattle"))
+///     .exec(&mut db).await?;
+/// ```
+///
+/// # Constraints
+///
+/// - Embedded structs must have named fields (tuple structs are not
+///   supported).
+/// - Generic parameters are not supported.
+/// - Every enum variant must have a `#[column(variant = N)]` attribute
+///   with a unique discriminant value.
+/// - Enum variants may be unit variants or have named fields. Tuple
+///   variants are not supported.
+/// - Embedded types cannot have primary keys, relations, `#[auto]`,
+///   `#[default]`, `#[update]`, or `#[serialize]` attributes.
+///
+/// # Full example
+///
+/// ```ignore
+/// #[derive(Debug, PartialEq, toasty::Embed)]
+/// enum Priority {
+///     #[column(variant = 1)]
+///     Low,
+///     #[column(variant = 2)]
+///     Normal,
+///     #[column(variant = 3)]
+///     High,
+/// }
+///
+/// #[derive(Debug, toasty::Embed)]
+/// struct Metadata {
+///     version: i64,
+///     status: String,
+///     priority: Priority,
+/// }
+///
+/// #[derive(Debug, toasty::Model)]
+/// struct Document {
+///     #[key]
+///     #[auto]
+///     id: i64,
+///
+///     title: String,
+///
+///     #[unique]
+///     slug: String,
+///
+///     meta: Metadata,
+/// }
+///
+/// // Create
+/// let doc = Document::create()
+///     .title("Design doc")
+///     .slug("design-doc")
+///     .meta(Metadata {
+///         version: 1,
+///         status: "draft".to_string(),
+///         priority: Priority::Normal,
+///     })
+///     .exec(&mut db).await?;
+///
+/// // Query by embedded field
+/// let drafts = Document::filter(
+///     Document::fields().meta().status().eq("draft")
+/// ).exec(&mut db).await?;
+///
+/// // Partial update
+/// doc.update()
+///     .with_meta(|m| { m.version(2).status("published"); })
+///     .exec(&mut db).await?;
+/// ```
+///
+/// [`Embed`]: toasty::Embed
+/// [`Register`]: toasty::Register
 #[proc_macro_derive(Embed, attributes(column, index, unique))]
 pub fn derive_embed(input: TokenStream) -> TokenStream {
     match toasty_codegen::generate_embed(input.into()) {
