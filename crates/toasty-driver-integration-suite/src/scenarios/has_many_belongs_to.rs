@@ -12,7 +12,7 @@ scenario! {
         name: String,
 
         #[has_many]
-        todos: toasty::schema::HasMany<Todo>,
+        todos: toasty::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -25,7 +25,7 @@ scenario! {
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::schema::BelongsTo<User>,
+        user: toasty::BelongsTo<User>,
 
         title: String,
     }

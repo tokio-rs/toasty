@@ -21,7 +21,7 @@ struct User {
     name: String,
 
     #[has_one]
-    profile: toasty::schema::HasOne<Option<Profile>>,
+    profile: toasty::HasOne<Option<Profile>>,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -34,7 +34,7 @@ struct Profile {
     user_id: Option<u64>,
 
     #[belongs_to(key = user_id, references = id)]
-    user: toasty::schema::BelongsTo<Option<User>>,
+    user: toasty::BelongsTo<Option<User>>,
 
     bio: String,
 }
@@ -70,7 +70,7 @@ allowed:
 #     id: u64,
 #     name: String,
 #     #[has_one]
-#     profile: toasty::schema::HasOne<Option<Profile>>,
+#     profile: toasty::HasOne<Option<Profile>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Profile {
@@ -80,7 +80,7 @@ allowed:
 #     #[unique]
 #     user_id: Option<u64>,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::schema::BelongsTo<Option<User>>,
+#     user: toasty::BelongsTo<Option<User>>,
 #     bio: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -104,7 +104,7 @@ The parent must have a child. Creating a parent requires providing a child:
 #     #[auto]
 #     id: u64,
 #     #[has_one]
-#     profile: toasty::schema::HasOne<Profile>,
+#     profile: toasty::HasOne<Profile>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Profile {
@@ -114,7 +114,7 @@ The parent must have a child. Creating a parent requires providing a child:
 #     #[unique]
 #     user_id: Option<u64>,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::schema::BelongsTo<Option<User>>,
+#     user: toasty::BelongsTo<Option<User>>,
 #     bio: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -143,7 +143,7 @@ Call the relation method on the parent instance to load the child:
 #     id: u64,
 #     name: String,
 #     #[has_one]
-#     profile: toasty::schema::HasOne<Option<Profile>>,
+#     profile: toasty::HasOne<Option<Profile>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Profile {
@@ -153,7 +153,7 @@ Call the relation method on the parent instance to load the child:
 #     #[unique]
 #     user_id: Option<u64>,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::schema::BelongsTo<Option<User>>,
+#     user: toasty::BelongsTo<Option<User>>,
 #     bio: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -191,7 +191,7 @@ Create a child for an existing parent through the relation accessor:
 #     id: u64,
 #     name: String,
 #     #[has_one]
-#     profile: toasty::schema::HasOne<Option<Profile>>,
+#     profile: toasty::HasOne<Option<Profile>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Profile {
@@ -201,7 +201,7 @@ Create a child for an existing parent through the relation accessor:
 #     #[unique]
 #     user_id: Option<u64>,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::schema::BelongsTo<Option<User>>,
+#     user: toasty::BelongsTo<Option<User>>,
 #     bio: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -230,7 +230,7 @@ Or create the parent and child together:
 #     id: u64,
 #     name: String,
 #     #[has_one]
-#     profile: toasty::schema::HasOne<Option<Profile>>,
+#     profile: toasty::HasOne<Option<Profile>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Profile {
@@ -240,7 +240,7 @@ Or create the parent and child together:
 #     #[unique]
 #     user_id: Option<u64>,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::schema::BelongsTo<Option<User>>,
+#     user: toasty::BelongsTo<Option<User>>,
 #     bio: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -268,7 +268,7 @@ Create a new child and associate it with the parent in an update:
 #     id: u64,
 #     name: String,
 #     #[has_one]
-#     profile: toasty::schema::HasOne<Option<Profile>>,
+#     profile: toasty::HasOne<Option<Profile>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Profile {
@@ -278,7 +278,7 @@ Create a new child and associate it with the parent in an update:
 #     #[unique]
 #     user_id: Option<u64>,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::schema::BelongsTo<Option<User>>,
+#     user: toasty::BelongsTo<Option<User>>,
 #     bio: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -310,7 +310,7 @@ Pass a reference to an existing child record:
 #     #[auto]
 #     id: u64,
 #     #[has_one]
-#     profile: toasty::schema::HasOne<Option<Profile>>,
+#     profile: toasty::HasOne<Option<Profile>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Profile {
@@ -320,7 +320,7 @@ Pass a reference to an existing child record:
 #     #[unique]
 #     user_id: Option<u64>,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::schema::BelongsTo<Option<User>>,
+#     user: toasty::BelongsTo<Option<User>>,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
 let user = User::create().exec(&mut db).await?;

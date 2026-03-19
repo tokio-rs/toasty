@@ -10,7 +10,7 @@ pub struct User {
     pub email: String,
 
     #[has_many]
-    pub todos: toasty::schema::HasMany<Todo>,
+    pub todos: toasty::HasMany<Todo>,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -23,7 +23,7 @@ pub struct Todo {
     pub user_id: uuid::Uuid,
 
     #[belongs_to(key = user_id, references = id)]
-    pub user: toasty::schema::BelongsTo<User>,
+    pub user: toasty::BelongsTo<User>,
 
     #[index]
     pub title: String,

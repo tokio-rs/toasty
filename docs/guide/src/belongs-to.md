@@ -21,7 +21,7 @@ struct User {
     name: String,
 
     #[has_many]
-    posts: toasty::schema::HasMany<Post>,
+    posts: toasty::HasMany<Post>,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -34,7 +34,7 @@ struct Post {
     user_id: u64,
 
     #[belongs_to(key = user_id, references = id)]
-    user: toasty::schema::BelongsTo<User>,
+    user: toasty::BelongsTo<User>,
 
     title: String,
 }
@@ -83,7 +83,7 @@ struct Post {
     user_id: Option<u64>,
 
     #[belongs_to(key = user_id, references = id)]
-    user: toasty::schema::BelongsTo<Option<User>>,
+    user: toasty::BelongsTo<Option<User>>,
 
     title: String,
 }
@@ -105,7 +105,7 @@ name matches the relation field name.
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     posts: toasty::schema::HasMany<Post>,
+#     posts: toasty::HasMany<Post>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Post {
@@ -115,7 +115,7 @@ name matches the relation field name.
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::schema::BelongsTo<User>,
+#     user: toasty::BelongsTo<User>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -146,7 +146,7 @@ For an optional BelongsTo, `.get()` returns `Option<User>`:
 #     #[index]
 #     user_id: Option<u64>,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::schema::BelongsTo<Option<User>>,
+#     user: toasty::BelongsTo<Option<User>>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -180,7 +180,7 @@ Pass a reference to an existing parent record:
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     posts: toasty::schema::HasMany<Post>,
+#     posts: toasty::HasMany<Post>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Post {
@@ -190,7 +190,7 @@ Pass a reference to an existing parent record:
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::schema::BelongsTo<User>,
+#     user: toasty::BelongsTo<User>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -223,7 +223,7 @@ Set the foreign key field directly:
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     posts: toasty::schema::HasMany<Post>,
+#     posts: toasty::HasMany<Post>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Post {
@@ -233,7 +233,7 @@ Set the foreign key field directly:
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::schema::BelongsTo<User>,
+#     user: toasty::BelongsTo<User>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -265,7 +265,7 @@ struct User {
     id: u64,
 
     #[has_many(pair = owner)]
-    todos: toasty::schema::HasMany<Todo>,
+    todos: toasty::HasMany<Todo>,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -278,7 +278,7 @@ struct Todo {
     owner_id: u64,
 
     #[belongs_to(key = owner_id, references = id)]
-    owner: toasty::schema::BelongsTo<User>,
+    owner: toasty::BelongsTo<User>,
 
     title: String,
 }

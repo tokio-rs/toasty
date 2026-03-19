@@ -9,7 +9,7 @@ mod model_a {
         id: uuid::Uuid,
 
         #[has_one]
-        b: toasty::schema::HasOne<super::model_b::B>,
+        b: toasty::HasOne<super::model_b::B>,
     }
 }
 
@@ -20,7 +20,7 @@ mod model_b {
         id: uuid::Uuid,
 
         #[belongs_to(key = a_id, references = id)]
-        a: toasty::schema::BelongsTo<super::model_a::A>,
+        a: toasty::BelongsTo<super::model_a::A>,
         a_id: uuid::Uuid,
     }
 }

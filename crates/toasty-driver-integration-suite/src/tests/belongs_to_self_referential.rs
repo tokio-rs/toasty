@@ -15,10 +15,10 @@ pub async fn crud_person_self_referential(t: &mut Test) -> Result<()> {
         parent_id: Option<ID>,
 
         #[belongs_to(key = parent_id, references = id)]
-        parent: toasty::schema::BelongsTo<Option<Person>>,
+        parent: toasty::BelongsTo<Option<Person>>,
 
         #[has_many(pair = parent)]
-        children: toasty::schema::HasMany<Person>,
+        children: toasty::HasMany<Person>,
     }
 
     let mut db = t.setup_db(models!(Person)).await;

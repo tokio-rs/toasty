@@ -5,7 +5,7 @@ struct User {
     id: uuid::Uuid,
 
     #[has_one]
-    profile: toasty::schema::HasOne<Option<Profile>>,
+    profile: toasty::HasOne<Option<Profile>>,
 }
 
 #[derive(toasty::Model)]

@@ -12,7 +12,7 @@ pub async fn hello_world(test: &mut Test) -> Result<()> {
         id: ID,
 
         #[has_many]
-        todos: toasty::schema::HasMany<Todo>,
+        todos: toasty::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -25,13 +25,13 @@ pub async fn hello_world(test: &mut Test) -> Result<()> {
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::schema::BelongsTo<User>,
+        user: toasty::BelongsTo<User>,
 
         #[index]
         category_id: ID,
 
         #[belongs_to(key = category_id, references = id)]
-        category: toasty::schema::BelongsTo<Category>,
+        category: toasty::BelongsTo<Category>,
 
         title: String,
     }
@@ -44,7 +44,7 @@ pub async fn hello_world(test: &mut Test) -> Result<()> {
 
         #[has_many]
         #[allow(dead_code)]
-        todos: toasty::schema::HasMany<Todo>,
+        todos: toasty::HasMany<Todo>,
 
         #[allow(dead_code)]
         name: String,
@@ -80,7 +80,7 @@ pub async fn query_by_index_optimization(test: &mut Test) -> Result<()> {
         name: String,
 
         #[has_many]
-        users: toasty::schema::HasMany<User>,
+        users: toasty::HasMany<User>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -95,7 +95,7 @@ pub async fn query_by_index_optimization(test: &mut Test) -> Result<()> {
         board_id: ID,
 
         #[belongs_to(key = board_id, references = id)]
-        board: toasty::schema::BelongsTo<Board>,
+        board: toasty::BelongsTo<Board>,
     }
 
     let mut db = test.setup_db(models!(Board, User)).await;

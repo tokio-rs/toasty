@@ -120,6 +120,7 @@ pub use executor_ext::ExecutorExt;
 mod engine;
 
 pub mod schema;
+pub use schema::{BelongsTo, HasMany, HasOne};
 
 mod page;
 pub use page::Page;

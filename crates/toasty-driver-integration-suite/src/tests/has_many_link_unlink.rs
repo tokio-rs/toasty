@@ -11,7 +11,7 @@ pub async fn remove_add_single_relation_option_belongs_to(test: &mut Test) -> Re
         id: ID,
 
         #[has_many]
-        todos: toasty::schema::HasMany<Todo>,
+        todos: toasty::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -24,7 +24,7 @@ pub async fn remove_add_single_relation_option_belongs_to(test: &mut Test) -> Re
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::schema::BelongsTo<Option<User>>,
+        user: toasty::BelongsTo<Option<User>>,
     }
 
     let mut db = test.setup_db(models!(User, Todo)).await;
@@ -141,7 +141,7 @@ pub async fn add_remove_multiple_relation_option_belongs_to(test: &mut Test) -> 
         id: ID,
 
         #[has_many]
-        todos: toasty::schema::HasMany<Todo>,
+        todos: toasty::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -154,7 +154,7 @@ pub async fn add_remove_multiple_relation_option_belongs_to(test: &mut Test) -> 
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::schema::BelongsTo<Option<User>>,
+        user: toasty::BelongsTo<Option<User>>,
     }
 
     let mut db = test.setup_db(models!(User, Todo)).await;

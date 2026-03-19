@@ -263,7 +263,7 @@ use quote::quote;
 ///
 /// ```ignore
 /// #[belongs_to(key = user_id, references = id)]
-/// user: toasty::schema::BelongsTo<User>,
+/// user: toasty::BelongsTo<User>,
 /// ```
 ///
 /// | Parameter | Meaning |
@@ -275,7 +275,7 @@ use quote::quote;
 ///
 /// ```ignore
 /// #[belongs_to(key = org_id, references = id, key = tenant_id, references = tenant_id)]
-/// org: toasty::schema::BelongsTo<Org>,
+/// org: toasty::BelongsTo<Org>,
 /// ```
 ///
 /// The number of `key` entries must equal the number of `references`
@@ -288,7 +288,7 @@ use quote::quote;
 /// manager_id: Option<i64>,
 ///
 /// #[belongs_to(key = manager_id, references = id)]
-/// manager: toasty::schema::BelongsTo<Option<User>>,
+/// manager: toasty::BelongsTo<Option<User>>,
 /// ```
 ///
 /// ## `#[has_many]` — one-to-many association
@@ -298,7 +298,7 @@ use quote::quote;
 ///
 /// ```ignore
 /// #[has_many]
-/// posts: toasty::schema::HasMany<Post>,
+/// posts: toasty::HasMany<Post>,
 /// ```
 ///
 /// Toasty generates an accessor method (e.g. `.posts()`) and an insert
@@ -313,7 +313,7 @@ use quote::quote;
 ///
 /// ```ignore
 /// #[has_many(pair = parent)]
-/// children: toasty::schema::HasMany<Person>,
+/// children: toasty::HasMany<Person>,
 /// ```
 ///
 /// ## `#[has_one]` — one-to-one association
@@ -323,14 +323,14 @@ use quote::quote;
 ///
 /// ```ignore
 /// #[has_one]
-/// profile: toasty::schema::HasOne<Profile>,
+/// profile: toasty::HasOne<Profile>,
 /// ```
 ///
 /// Wrap in `Option` for an optional association:
 ///
 /// ```ignore
 /// #[has_one]
-/// profile: toasty::schema::HasOne<Option<Profile>>,
+/// profile: toasty::HasOne<Option<Profile>>,
 /// ```
 ///
 /// # Constraints
@@ -369,7 +369,7 @@ use quote::quote;
 ///     updated_at: jiff::Timestamp,
 ///
 ///     #[has_many]
-///     posts: toasty::schema::HasMany<Post>,
+///     posts: toasty::HasMany<Post>,
 /// }
 ///
 /// #[derive(Debug, toasty::Model)]
@@ -387,7 +387,7 @@ use quote::quote;
 ///     user_id: i64,
 ///
 ///     #[belongs_to(key = user_id, references = id)]
-///     user: toasty::schema::BelongsTo<User>,
+///     user: toasty::BelongsTo<User>,
 /// }
 /// ```
 #[proc_macro_derive(

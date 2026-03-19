@@ -20,7 +20,7 @@ struct User {
     name: String,
 
     #[has_many]
-    posts: toasty::schema::HasMany<Post>,
+    posts: toasty::HasMany<Post>,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -33,7 +33,7 @@ struct Post {
     user_id: u64,
 
     #[belongs_to(key = user_id, references = id)]
-    user: toasty::schema::BelongsTo<User>,
+    user: toasty::BelongsTo<User>,
 
     title: String,
 }
@@ -56,7 +56,7 @@ children:
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     posts: toasty::schema::HasMany<Post>,
+#     posts: toasty::HasMany<Post>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Post {
@@ -66,7 +66,7 @@ children:
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::schema::BelongsTo<User>,
+#     user: toasty::BelongsTo<User>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -103,7 +103,7 @@ automatically sets the foreign key:
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     posts: toasty::schema::HasMany<Post>,
+#     posts: toasty::HasMany<Post>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Post {
@@ -113,7 +113,7 @@ automatically sets the foreign key:
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::schema::BelongsTo<User>,
+#     user: toasty::BelongsTo<User>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -146,7 +146,7 @@ relation name on the create builder:
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     posts: toasty::schema::HasMany<Post>,
+#     posts: toasty::HasMany<Post>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Post {
@@ -156,7 +156,7 @@ relation name on the create builder:
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::schema::BelongsTo<User>,
+#     user: toasty::BelongsTo<User>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {

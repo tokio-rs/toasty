@@ -197,7 +197,7 @@ pub async fn create_macro_deeply_nested(test: &mut Test) -> Result<()> {
         name: String,
 
         #[has_many]
-        todos: toasty::schema::HasMany<Todo>,
+        todos: toasty::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -210,12 +210,12 @@ pub async fn create_macro_deeply_nested(test: &mut Test) -> Result<()> {
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::schema::BelongsTo<User>,
+        user: toasty::BelongsTo<User>,
 
         title: String,
 
         #[has_many]
-        tags: toasty::schema::HasMany<Tag>,
+        tags: toasty::HasMany<Tag>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -228,7 +228,7 @@ pub async fn create_macro_deeply_nested(test: &mut Test) -> Result<()> {
         todo_id: ID,
 
         #[belongs_to(key = todo_id, references = id)]
-        todo: toasty::schema::BelongsTo<Todo>,
+        todo: toasty::BelongsTo<Todo>,
 
         name: String,
     }

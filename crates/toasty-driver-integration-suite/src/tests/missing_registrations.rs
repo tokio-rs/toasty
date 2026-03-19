@@ -10,7 +10,7 @@ pub async fn missing_registration_belongs_to(t: &mut Test) -> Result<()> {
 
         child_id: ID,
         #[belongs_to(key = child_id, references = id)]
-        child: toasty::schema::BelongsTo<Child>,
+        child: toasty::BelongsTo<Child>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -36,7 +36,7 @@ pub async fn missing_registration_has_one(t: &mut Test) -> Result<()> {
         id: ID,
 
         #[has_one]
-        child: toasty::schema::HasOne<Child>,
+        child: toasty::HasOne<Child>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -47,7 +47,7 @@ pub async fn missing_registration_has_one(t: &mut Test) -> Result<()> {
 
         parent_id: ID,
         #[belongs_to(key = parent_id, references = id)]
-        parent: toasty::schema::BelongsTo<Parent>,
+        parent: toasty::BelongsTo<Parent>,
     }
 
     let error = t.try_setup_db(models!(Parent)).await.unwrap_err();
@@ -66,7 +66,7 @@ pub async fn missing_registration_has_many(t: &mut Test) -> Result<()> {
         id: ID,
 
         #[has_many]
-        children: toasty::schema::HasMany<Child>,
+        children: toasty::HasMany<Child>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -78,7 +78,7 @@ pub async fn missing_registration_has_many(t: &mut Test) -> Result<()> {
         #[index]
         parent_id: ID,
         #[belongs_to(key = parent_id, references = id)]
-        parent: toasty::schema::BelongsTo<Parent>,
+        parent: toasty::BelongsTo<Parent>,
     }
 
     let error = t.try_setup_db(models!(Parent)).await.unwrap_err();

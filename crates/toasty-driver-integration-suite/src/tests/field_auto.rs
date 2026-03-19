@@ -113,7 +113,7 @@ pub async fn auto_increment_with_associations(test: &mut Test) -> Result<()> {
         id: u32,
 
         #[has_many]
-        children: toasty::schema::HasMany<Child>,
+        children: toasty::HasMany<Child>,
     }
 
     #[derive(toasty::Model)]
@@ -127,7 +127,7 @@ pub async fn auto_increment_with_associations(test: &mut Test) -> Result<()> {
 
         #[belongs_to(key = parent_id, references = id)]
         #[allow(dead_code)]
-        parent: toasty::schema::BelongsTo<Parent>,
+        parent: toasty::BelongsTo<Parent>,
     }
 
     let mut db = test.setup_db(models!(Parent, Child)).await;

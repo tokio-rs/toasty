@@ -12,7 +12,7 @@ pub async fn crud_user_optional_profile_one_direction(test: &mut Test) -> Result
         profile_id: Option<ID>,
 
         #[belongs_to(key = profile_id, references = id)]
-        profile: toasty::schema::BelongsTo<Option<Profile>>,
+        profile: toasty::BelongsTo<Option<Profile>>,
     }
 
     #[derive(Debug, toasty::Model)]

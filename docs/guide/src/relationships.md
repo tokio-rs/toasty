@@ -61,7 +61,7 @@ struct User {
 
     // User's table has no FK — declares has_many
     #[has_many]
-    posts: toasty::schema::HasMany<Post>,
+    posts: toasty::HasMany<Post>,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -75,7 +75,7 @@ struct Post {
     user_id: u64,
 
     #[belongs_to(key = user_id, references = id)]
-    user: toasty::schema::BelongsTo<User>,
+    user: toasty::BelongsTo<User>,
 
     title: String,
 }
@@ -93,7 +93,7 @@ a model with two `BelongsTo` relations pointing to the same parent type), use
 ```rust,ignore
 // On User: the child's relation field is named "owner", not "user"
 #[has_many(pair = owner)]
-posts: toasty::schema::HasMany<Post>,
+posts: toasty::HasMany<Post>,
 ```
 
 You can define one-sided relationships with only `#[belongs_to]` on the child
@@ -115,7 +115,7 @@ required or optional.
 user_id: u64,
 
 #[belongs_to(key = user_id, references = id)]
-user: toasty::schema::BelongsTo<User>,
+user: toasty::BelongsTo<User>,
 ```
 
 Every post must have a user. The `user_id` column is `NOT NULL` in the database.
@@ -127,7 +127,7 @@ Every post must have a user. The `user_id` column is `NOT NULL` in the database.
 user_id: Option<u64>,
 
 #[belongs_to(key = user_id, references = id)]
-user: toasty::schema::BelongsTo<Option<User>>,
+user: toasty::BelongsTo<Option<User>>,
 ```
 
 A post can exist without a user. The `user_id` column allows `NULL`.
@@ -160,7 +160,7 @@ the child in place.
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     posts: toasty::schema::HasMany<Post>,
+#     posts: toasty::HasMany<Post>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Post {
@@ -170,7 +170,7 @@ the child in place.
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::schema::BelongsTo<User>,
+#     user: toasty::BelongsTo<User>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -230,7 +230,7 @@ struct User {
     id: u64,
 
     #[has_many]
-    todos: toasty::schema::HasMany<Todo>,
+    todos: toasty::HasMany<Todo>,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -242,7 +242,7 @@ struct Todo {
     user_id: u64,
 
     #[belongs_to(key = user_id, references = id)]
-    user: toasty::schema::BelongsTo<User>,
+    user: toasty::BelongsTo<User>,
 
     title: String,
 }
@@ -256,7 +256,7 @@ When the parent itself has a composite primary key, list each column pair:
 
 ```rust,ignore
 #[belongs_to(key = org_id, references = org_id, key = team_id, references = id)]
-team: toasty::schema::BelongsTo<Team>,
+team: toasty::BelongsTo<Team>,
 ```
 
 The number of `key` entries must match the number of `references` entries. Toasty

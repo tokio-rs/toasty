@@ -16,7 +16,7 @@ struct Profile {
 
     #[belongs_to(key = user_id, references = id)]
     #[belongs_to(key = user_id, references = id)]
-    user: toasty::schema::BelongsTo<User>,
+    user: toasty::BelongsTo<User>,
 }
 
 fn main() {}

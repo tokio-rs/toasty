@@ -14,7 +14,7 @@ pub async fn crud_user_todos_categories(test: &mut Test) -> Result<()> {
         name: String,
 
         #[has_many]
-        todos: toasty::schema::HasMany<Todo>,
+        todos: toasty::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -27,13 +27,13 @@ pub async fn crud_user_todos_categories(test: &mut Test) -> Result<()> {
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::schema::BelongsTo<User>,
+        user: toasty::BelongsTo<User>,
 
         #[index]
         category_id: ID,
 
         #[belongs_to(key = category_id, references = id)]
-        category: toasty::schema::BelongsTo<Category>,
+        category: toasty::BelongsTo<Category>,
 
         title: String,
     }
@@ -47,7 +47,7 @@ pub async fn crud_user_todos_categories(test: &mut Test) -> Result<()> {
         name: String,
 
         #[has_many]
-        todos: toasty::schema::HasMany<Todo>,
+        todos: toasty::HasMany<Todo>,
     }
 
     let mut db = test.setup_db(models!(User, Todo, Category)).await;
