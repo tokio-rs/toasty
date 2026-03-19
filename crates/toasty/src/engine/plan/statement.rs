@@ -1010,12 +1010,28 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         ty: &stmt::Type,
     ) -> mir::NodeId {
         if let Some(key_expr) = index_plan.key_values.take() {
-            let args = self
-                .load_data
-                .inputs
-                .iter()
-                .map(|node_id| self.planner.mir[node_id].ty().clone())
-                .collect();
+            // Only include arg types that the key expression actually
+            // references. The full `load_data.inputs` may contain entries
+            // used by other parts of the statement (e.g. pre_filter) that
+            // the key expression does not depend on.
+            let mut max_arg = 0usize;
+            let mut has_args = false;
+            stmt::visit::for_each_expr(&key_expr, |expr| {
+                if let stmt::Expr::Arg(arg) = expr {
+                    has_args = true;
+                    max_arg = max_arg.max(arg.position + 1);
+                }
+            });
+            let args: Vec<_> = if has_args {
+                self.load_data
+                    .inputs
+                    .iter()
+                    .take(max_arg)
+                    .map(|node_id| self.planner.mir[node_id].ty().clone())
+                    .collect()
+            } else {
+                vec![]
+            };
             let key_ty =
                 stmt::Type::list(self.planner.engine.index_key_record_ty(index_plan.index));
             let keys = eval::Func::from_stmt_typed(key_expr, args, key_ty);
