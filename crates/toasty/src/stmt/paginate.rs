@@ -1,6 +1,6 @@
 use super::Query;
 
-use crate::{engine::eval::Func, Executor, ExecutorExt, Load, Result};
+use crate::{engine::eval::Func, schema::Load, Executor, ExecutorExt, Result};
 
 use toasty_core::stmt::{self, visit_mut, Expr, ExprRecord, OrderBy, Projection, Value, VisitMut};
 

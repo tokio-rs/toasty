@@ -36,7 +36,7 @@ model's `fields()` accessor:
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     posts: toasty::HasMany<Post>,
+#     posts: toasty::schema::HasMany<Post>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Post {
@@ -46,7 +46,7 @@ model's `fields()` accessor:
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<User>,
+#     user: toasty::schema::BelongsTo<User>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -96,7 +96,7 @@ Preload a parent record from the child side:
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     posts: toasty::HasMany<Post>,
+#     posts: toasty::schema::HasMany<Post>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Post {
@@ -106,7 +106,7 @@ Preload a parent record from the child side:
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<User>,
+#     user: toasty::schema::BelongsTo<User>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -141,7 +141,7 @@ Preload a single child record from the parent side:
 #     id: u64,
 #     name: String,
 #     #[has_one]
-#     profile: toasty::HasOne<Option<Profile>>,
+#     profile: toasty::schema::HasOne<Option<Profile>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Profile {
@@ -152,7 +152,7 @@ Preload a single child record from the parent side:
 #     #[unique]
 #     user_id: Option<u64>,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<Option<User>>,
+#     user: toasty::schema::BelongsTo<Option<User>>,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
 # let user = User::create()
@@ -184,7 +184,7 @@ panic:
 #     id: u64,
 #     name: String,
 #     #[has_one]
-#     profile: toasty::HasOne<Option<Profile>>,
+#     profile: toasty::schema::HasOne<Option<Profile>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Profile {
@@ -195,7 +195,7 @@ panic:
 #     #[unique]
 #     user_id: Option<u64>,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<Option<User>>,
+#     user: toasty::schema::BelongsTo<Option<User>>,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
 let user = User::create().name("No Profile").exec(&mut db).await?;

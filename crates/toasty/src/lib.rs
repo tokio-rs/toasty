@@ -17,16 +17,16 @@
 //!
 //! ## [`schema`] — model, relation, and schema inspection
 //!
-//! The [`Model`] trait represents a root model that maps to a database table.
-//! It is implemented by `#[derive(Model)]` — users do not implement it
-//! manually. The module also contains [`Field`](schema::Field), which
-//! describes a typed field accessor, and [`Auto`](schema::Auto), a wrapper
-//! for auto-generated values such as database-assigned IDs.
+//! The [`Model`](schema::Model) trait represents a root model that maps to a
+//! database table. It is implemented by `#[derive(Model)]` — users do not
+//! implement it manually. The module also contains [`Field`](schema::Field),
+//! which describes a typed field accessor, and [`Auto`](schema::Auto), a
+//! wrapper for auto-generated values such as database-assigned IDs.
 //!
 //! The module also provides the types that represent associations between
-//! models: [`HasMany`], [`HasOne`], and [`BelongsTo`]. These appear as
-//! fields on model structs and are populated through the generated relation
-//! accessors.
+//! models: [`HasMany`](schema::HasMany), [`HasOne`](schema::HasOne), and
+//! [`BelongsTo`](schema::BelongsTo). These appear as fields on model structs
+//! and are populated through the generated relation accessors.
 //!
 //! The module also re-exports from `toasty-core` for inspecting the
 //! app-level and db-level schema representations at runtime.
@@ -43,18 +43,18 @@
 //!
 //! # Key traits
 //!
-//! - [`Model`] — a root model backed by a database table. Implemented by
-//!   `#[derive(Model)]`.
-//! - [`Embed`] — an embedded type whose fields are flattened into the parent
-//!   model's table. Implemented by `#[derive(Embed)]`.
+//! - [`Model`](schema::Model) — a root model backed by a database table.
+//!   Implemented by `#[derive(Model)]`.
+//! - [`Embed`](schema::Embed) — an embedded type whose fields are flattened
+//!   into the parent model's table. Implemented by `#[derive(Embed)]`.
 //! - [`Executor`] — the dyn-compatible interface for running statements.
 //!   [`Db`] and [`Transaction`] both implement it.
 //! - [`ExecutorExt`] — generic convenience methods ([`all`](ExecutorExt::all),
 //!   [`first`](ExecutorExt::first), [`get`](ExecutorExt::get),
 //!   [`delete`](ExecutorExt::delete)) blanket-implemented for every
 //!   `Executor`.
-//! - [`Load`] — deserializes a model instance from the database value
-//!   representation.
+//! - [`Load`](schema::Load) — deserializes a model instance from the database
+//!   value representation.
 //!
 //! # Other key types
 //!
@@ -67,11 +67,12 @@
 //!
 //! # Derive macros
 //!
-//! - [`#[derive(Model)]`](derive@Model) — generates the [`Model`] impl,
-//!   query builders, create/update builders, relation accessors, and schema
-//!   registration for a struct.
-//! - [`#[derive(Embed)]`](derive@Embed) — generates the [`Embed`] impl for a
-//!   type whose fields are stored inline in a parent model's table.
+//! - [`#[derive(Model)]`](derive@Model) — generates the
+//!   [`Model`](schema::Model) impl, query builders, create/update builders,
+//!   relation accessors, and schema registration for a struct.
+//! - [`#[derive(Embed)]`](derive@Embed) — generates the
+//!   [`Embed`](schema::Embed) impl for a type whose fields are stored inline
+//!   in a parent model's table.
 //!
 //! # Feature flags
 //!
@@ -110,9 +111,6 @@ pub use batch::{batch, Batch, CreateMany};
 pub mod db;
 pub use db::Db;
 
-mod embed;
-pub use embed::Embed;
-
 mod executor;
 pub use executor::Executor;
 
@@ -121,14 +119,7 @@ pub use executor_ext::ExecutorExt;
 
 mod engine;
 
-mod load;
-pub use load::Load;
-
 pub mod schema;
-pub use schema::{Auto, BelongsTo, Field, HasMany, HasOne, Model, Relation as _};
-
-mod register;
-pub use register::Register;
 
 mod page;
 pub use page::Page;
@@ -148,10 +139,12 @@ pub mod codegen_support {
     pub use crate::{
         apply_update::{ApplyUpdate, Query},
         batch::CreateMany,
-        register::generate_unique_id,
-        schema::{Auto, BelongsTo, Field, HasMany, HasOne, Relation},
+        schema::{
+            generate_unique_id, Auto, BelongsTo, Embed, Field, HasMany, HasOne, Load, Model,
+            Register, Relation,
+        },
         stmt::{self, IntoExpr, IntoInsert, IntoStatement, List, Path},
-        Db, Embed, Error, Executor, ExecutorExt, Load, Model, Register, Result, Statement,
+        Db, Error, Executor, ExecutorExt, Result, Statement,
     };
     #[cfg(feature = "serde")]
     pub use serde_json;

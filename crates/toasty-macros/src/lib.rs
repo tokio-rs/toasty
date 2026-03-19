@@ -28,9 +28,9 @@ use quote::quote;
 ///
 /// The struct must have named fields and no generic parameters.
 ///
-/// [`Model`]: toasty::Model
-/// [`Load`]: toasty::Load
-/// [`Register`]: toasty::Register
+/// [`Model`]: toasty::schema::Model
+/// [`Load`]: toasty::schema::Load
+/// [`Register`]: toasty::schema::Register
 ///
 /// # Struct-level attributes
 ///
@@ -263,7 +263,7 @@ use quote::quote;
 ///
 /// ```ignore
 /// #[belongs_to(key = user_id, references = id)]
-/// user: toasty::BelongsTo<User>,
+/// user: toasty::schema::BelongsTo<User>,
 /// ```
 ///
 /// | Parameter | Meaning |
@@ -275,7 +275,7 @@ use quote::quote;
 ///
 /// ```ignore
 /// #[belongs_to(key = org_id, references = id, key = tenant_id, references = tenant_id)]
-/// org: toasty::BelongsTo<Org>,
+/// org: toasty::schema::BelongsTo<Org>,
 /// ```
 ///
 /// The number of `key` entries must equal the number of `references`
@@ -288,7 +288,7 @@ use quote::quote;
 /// manager_id: Option<i64>,
 ///
 /// #[belongs_to(key = manager_id, references = id)]
-/// manager: toasty::BelongsTo<Option<User>>,
+/// manager: toasty::schema::BelongsTo<Option<User>>,
 /// ```
 ///
 /// ## `#[has_many]` — one-to-many association
@@ -298,7 +298,7 @@ use quote::quote;
 ///
 /// ```ignore
 /// #[has_many]
-/// posts: toasty::HasMany<Post>,
+/// posts: toasty::schema::HasMany<Post>,
 /// ```
 ///
 /// Toasty generates an accessor method (e.g. `.posts()`) and an insert
@@ -313,7 +313,7 @@ use quote::quote;
 ///
 /// ```ignore
 /// #[has_many(pair = parent)]
-/// children: toasty::HasMany<Person>,
+/// children: toasty::schema::HasMany<Person>,
 /// ```
 ///
 /// ## `#[has_one]` — one-to-one association
@@ -323,14 +323,14 @@ use quote::quote;
 ///
 /// ```ignore
 /// #[has_one]
-/// profile: toasty::HasOne<Profile>,
+/// profile: toasty::schema::HasOne<Profile>,
 /// ```
 ///
 /// Wrap in `Option` for an optional association:
 ///
 /// ```ignore
 /// #[has_one]
-/// profile: toasty::HasOne<Option<Profile>>,
+/// profile: toasty::schema::HasOne<Option<Profile>>,
 /// ```
 ///
 /// # Constraints
@@ -369,7 +369,7 @@ use quote::quote;
 ///     updated_at: jiff::Timestamp,
 ///
 ///     #[has_many]
-///     posts: toasty::HasMany<Post>,
+///     posts: toasty::schema::HasMany<Post>,
 /// }
 ///
 /// #[derive(Debug, toasty::Model)]
@@ -387,7 +387,7 @@ use quote::quote;
 ///     user_id: i64,
 ///
 ///     #[belongs_to(key = user_id, references = id)]
-///     user: toasty::BelongsTo<User>,
+///     user: toasty::schema::BelongsTo<User>,
 /// }
 /// ```
 #[proc_macro_derive(

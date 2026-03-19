@@ -46,7 +46,7 @@ fn non_cast_expr_not_simplified() {
 #[test]
 fn is_null_non_nullable_field() {
     use crate as toasty;
-    use crate::Register;
+    use crate::schema::Register;
 
     #[allow(dead_code)]
     #[derive(toasty::Model)]

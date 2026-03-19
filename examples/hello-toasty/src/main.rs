@@ -10,7 +10,7 @@ struct User {
     email: String,
 
     #[has_many]
-    todos: toasty::HasMany<Todo>,
+    todos: toasty::schema::HasMany<Todo>,
 
     moto: Option<String>,
 }
@@ -25,7 +25,7 @@ struct Todo {
     user_id: uuid::Uuid,
 
     #[belongs_to(key = user_id, references = id)]
-    user: toasty::BelongsTo<User>,
+    user: toasty::schema::BelongsTo<User>,
 
     title: String,
 }

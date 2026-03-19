@@ -35,7 +35,7 @@ pub async fn user_batch_create_todos_two_levels_basic_fk(test: &mut Test) -> Res
         name: String,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::schema::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -48,13 +48,13 @@ pub async fn user_batch_create_todos_two_levels_basic_fk(test: &mut Test) -> Res
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
 
         #[index]
         category_id: ID,
 
         #[belongs_to(key = category_id, references = id)]
-        category: toasty::BelongsTo<Category>,
+        category: toasty::schema::BelongsTo<Category>,
 
         title: String,
     }
@@ -68,7 +68,7 @@ pub async fn user_batch_create_todos_two_levels_basic_fk(test: &mut Test) -> Res
         name: String,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::schema::HasMany<Todo>,
     }
 
     let mut db = test.setup_db(models!(User, Todo, Category)).await;
@@ -148,7 +148,7 @@ pub async fn user_batch_create_todos_set_category_by_value(test: &mut Test) -> R
         name: String,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::schema::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -161,13 +161,13 @@ pub async fn user_batch_create_todos_set_category_by_value(test: &mut Test) -> R
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
 
         #[index]
         category_id: ID,
 
         #[belongs_to(key = category_id, references = id)]
-        category: toasty::BelongsTo<Category>,
+        category: toasty::schema::BelongsTo<Category>,
 
         title: String,
     }
@@ -181,7 +181,7 @@ pub async fn user_batch_create_todos_set_category_by_value(test: &mut Test) -> R
         name: String,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::schema::HasMany<Todo>,
     }
 
     let mut db = test.setup_db(models!(User, Todo, Category)).await;
@@ -241,7 +241,7 @@ pub async fn user_batch_create_todos_with_optional_field(test: &mut Test) -> Res
         name: String,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::schema::HasMany<Todo>,
 
         // This optional field triggers the unimplemented code path!
         // Without it, the batch create works fine.
@@ -259,7 +259,7 @@ pub async fn user_batch_create_todos_with_optional_field(test: &mut Test) -> Res
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
 
         title: String,
     }
@@ -301,7 +301,7 @@ pub async fn user_batch_create_two_todos_simple(test: &mut Test) -> Result<()> {
         email: String,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::schema::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -314,7 +314,7 @@ pub async fn user_batch_create_two_todos_simple(test: &mut Test) -> Result<()> {
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
 
         title: String,
     }

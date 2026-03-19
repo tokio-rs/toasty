@@ -11,7 +11,7 @@ pub async fn crud_has_one_bi_direction_optional(test: &mut Test) -> Result<()> {
         name: String,
 
         #[has_one]
-        profile: toasty::HasOne<Option<Profile>>,
+        profile: toasty::schema::HasOne<Option<Profile>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -24,7 +24,7 @@ pub async fn crud_has_one_bi_direction_optional(test: &mut Test) -> Result<()> {
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::schema::BelongsTo<Option<User>>,
 
         bio: String,
     }
@@ -127,7 +127,7 @@ pub async fn crud_has_one_required_belongs_to_optional(test: &mut Test) -> Resul
         id: ID,
 
         #[has_one]
-        profile: toasty::HasOne<Profile>,
+        profile: toasty::schema::HasOne<Profile>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -140,7 +140,7 @@ pub async fn crud_has_one_required_belongs_to_optional(test: &mut Test) -> Resul
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::schema::BelongsTo<Option<User>>,
 
         bio: String,
     }
@@ -178,7 +178,7 @@ pub async fn update_belongs_to_with_required_has_one_pair(test: &mut Test) -> Re
         id: ID,
 
         #[has_one]
-        profile: toasty::HasOne<Profile>,
+        profile: toasty::schema::HasOne<Profile>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -191,7 +191,7 @@ pub async fn update_belongs_to_with_required_has_one_pair(test: &mut Test) -> Re
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::schema::BelongsTo<Option<User>>,
 
         bio: String,
     }
@@ -284,7 +284,7 @@ pub async fn crud_has_one_optional_belongs_to_required(test: &mut Test) -> Resul
         id: ID,
 
         #[has_one]
-        profile: toasty::HasOne<Option<Profile>>,
+        profile: toasty::schema::HasOne<Option<Profile>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -297,7 +297,7 @@ pub async fn crud_has_one_optional_belongs_to_required(test: &mut Test) -> Resul
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
 
         bio: String,
     }
@@ -331,7 +331,7 @@ pub async fn set_has_one_by_value_in_update_query(test: &mut Test) -> Result<()>
         id: ID,
 
         #[has_one]
-        profile: toasty::HasOne<Option<Profile>>,
+        profile: toasty::schema::HasOne<Option<Profile>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -344,7 +344,7 @@ pub async fn set_has_one_by_value_in_update_query(test: &mut Test) -> Result<()>
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::schema::BelongsTo<Option<User>>,
     }
 
     let mut db = test.setup_db(models!(User, Profile)).await;
@@ -377,7 +377,7 @@ pub async fn unset_has_one_in_batch_update(test: &mut Test) -> Result<()> {
         name: String,
 
         #[has_one]
-        profile: toasty::HasOne<Option<Profile>>,
+        profile: toasty::schema::HasOne<Option<Profile>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -390,7 +390,7 @@ pub async fn unset_has_one_in_batch_update(test: &mut Test) -> Result<()> {
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
     }
 
     let mut db = test.setup_db(models!(User, Profile)).await;
@@ -444,7 +444,7 @@ pub async fn unset_has_one_with_required_pair_in_pk_query_update(test: &mut Test
         id: ID,
 
         #[has_one]
-        profile: toasty::HasOne<Option<Profile>>,
+        profile: toasty::schema::HasOne<Option<Profile>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -457,7 +457,7 @@ pub async fn unset_has_one_with_required_pair_in_pk_query_update(test: &mut Test
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
     }
 
     let mut db = test.setup_db(models!(User, Profile)).await;
@@ -495,7 +495,7 @@ pub async fn unset_has_one_with_required_pair_in_non_pk_query_update(
         email: String,
 
         #[has_one]
-        profile: toasty::HasOne<Option<Profile>>,
+        profile: toasty::schema::HasOne<Option<Profile>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -508,7 +508,7 @@ pub async fn unset_has_one_with_required_pair_in_non_pk_query_update(
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
     }
 
     let mut db = test.setup_db(models!(User, Profile)).await;
@@ -541,7 +541,7 @@ pub async fn associate_has_one_by_val_on_insert(test: &mut Test) -> Result<()> {
         id: ID,
 
         #[has_one]
-        profile: toasty::HasOne<Profile>,
+        profile: toasty::schema::HasOne<Profile>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -554,7 +554,7 @@ pub async fn associate_has_one_by_val_on_insert(test: &mut Test) -> Result<()> {
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::schema::BelongsTo<Option<User>>,
 
         bio: String,
     }
@@ -587,7 +587,7 @@ pub async fn associate_has_one_by_val_on_update_query_with_filter(_test: &mut Te
         name: String,
 
         #[has_one]
-        profile: toasty::HasOne<Option<Profile>>,
+        profile: toasty::schema::HasOne<Option<Profile>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -600,7 +600,7 @@ pub async fn associate_has_one_by_val_on_update_query_with_filter(_test: &mut Te
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::schema::BelongsTo<Option<User>>,
 
         bio: String,
     }

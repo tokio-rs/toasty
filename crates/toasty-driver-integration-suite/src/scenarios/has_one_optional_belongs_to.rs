@@ -12,7 +12,7 @@ scenario! {
         name: String,
 
         #[has_one]
-        profile: toasty::HasOne<Option<Profile>>,
+        profile: toasty::schema::HasOne<Option<Profile>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -25,7 +25,7 @@ scenario! {
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::schema::BelongsTo<Option<User>>,
 
         bio: String,
     }

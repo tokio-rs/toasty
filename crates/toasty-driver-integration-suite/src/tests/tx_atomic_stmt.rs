@@ -81,7 +81,7 @@ pub async fn create_with_has_many_rolls_back_on_failure(t: &mut Test) -> Result<
         id: u64,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::schema::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -94,7 +94,7 @@ pub async fn create_with_has_many_rolls_back_on_failure(t: &mut Test) -> Result<
         user_id: u64,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
 
         #[unique]
         title: String,
@@ -155,7 +155,7 @@ pub async fn create_with_has_one_rolls_back_on_failure(t: &mut Test) -> Result<(
         id: u64,
 
         #[has_one]
-        profile: toasty::HasOne<Option<Profile>>,
+        profile: toasty::schema::HasOne<Option<Profile>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -171,7 +171,7 @@ pub async fn create_with_has_one_rolls_back_on_failure(t: &mut Test) -> Result<(
         user_id: u64,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
     }
 
     let mut db = t.setup_db(models!(User, Profile)).await;
@@ -230,7 +230,7 @@ pub async fn update_with_new_association_rolls_back_on_failure(t: &mut Test) -> 
         name: String,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::schema::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -243,7 +243,7 @@ pub async fn update_with_new_association_rolls_back_on_failure(t: &mut Test) -> 
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
 
         title: String,
     }
@@ -301,7 +301,7 @@ pub async fn rmw_uses_savepoints(t: &mut Test) -> Result<()> {
         id: ID,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::schema::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -314,7 +314,7 @@ pub async fn rmw_uses_savepoints(t: &mut Test) -> Result<()> {
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::schema::BelongsTo<Option<User>>,
     }
 
     let mut db = t.setup_db(models!(User, Todo)).await;
@@ -361,7 +361,7 @@ pub async fn rmw_condition_failure_issues_rollback_to_savepoint(t: &mut Test) ->
         id: ID,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::schema::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -374,7 +374,7 @@ pub async fn rmw_condition_failure_issues_rollback_to_savepoint(t: &mut Test) ->
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::schema::BelongsTo<Option<User>>,
     }
 
     let mut db = t.setup_db(models!(User, Todo)).await;

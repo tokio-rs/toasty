@@ -4,6 +4,9 @@ pub use auto::Auto;
 mod belongs_to;
 pub use belongs_to::BelongsTo;
 
+mod embed;
+pub use embed::Embed;
+
 mod field;
 pub use field::Field;
 
@@ -16,10 +19,16 @@ pub use has_many::HasMany;
 mod has_one;
 pub use has_one::HasOne;
 
+mod load;
+pub use load::Load;
+
 mod model;
 pub use model::Model;
 
 pub mod option;
+
+mod register;
+pub use register::{generate_unique_id, Register};
 
 mod relation;
 pub use relation::Relation;

@@ -1,5 +1,5 @@
 use super::Insert;
-use crate::Model;
+use crate::schema::Model;
 
 pub trait IntoInsert {
     type Model: Model;

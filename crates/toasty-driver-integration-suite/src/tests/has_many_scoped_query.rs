@@ -12,7 +12,7 @@ pub async fn scoped_query_eq(test: &mut Test) -> Result<()> {
         id: ID,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::schema::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -26,7 +26,7 @@ pub async fn scoped_query_eq(test: &mut Test) -> Result<()> {
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
 
         title: String,
 
@@ -138,7 +138,7 @@ pub async fn scoped_query_gt(test: &mut Test) -> Result<()> {
         id: ID,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::schema::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -152,7 +152,7 @@ pub async fn scoped_query_gt(test: &mut Test) -> Result<()> {
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
 
         title: String,
 

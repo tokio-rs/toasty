@@ -1,5 +1,4 @@
-use super::Relation;
-use crate::Load;
+use super::{Load, Relation};
 
 use toasty_core::stmt::Value;
 

@@ -9,7 +9,7 @@ pub async fn different_field_name(test: &mut Test) -> Result<()> {
         id: ID,
 
         #[has_many(pair = owner)]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::schema::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -19,7 +19,7 @@ pub async fn different_field_name(test: &mut Test) -> Result<()> {
         id: ID,
 
         #[belongs_to(key = owner_id, references = id)]
-        owner: toasty::BelongsTo<User>,
+        owner: toasty::schema::BelongsTo<User>,
 
         #[index]
         owner_id: ID,

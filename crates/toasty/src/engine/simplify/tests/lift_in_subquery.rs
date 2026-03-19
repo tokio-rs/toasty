@@ -1,6 +1,6 @@
 use crate as toasty;
 use crate::engine::simplify::Simplify;
-use crate::Register;
+use crate::schema::Register;
 use toasty_core::{
     driver::Capability,
     schema::{
@@ -18,7 +18,7 @@ struct User {
     id: i64,
 
     #[has_many]
-    posts: toasty::HasMany<Post>,
+    posts: toasty::schema::HasMany<Post>,
 }
 
 #[allow(dead_code)]
@@ -31,7 +31,7 @@ struct Post {
     user_id: i64,
 
     #[belongs_to(key = user_id, references = id)]
-    user: toasty::BelongsTo<User>,
+    user: toasty::schema::BelongsTo<User>,
 }
 
 /// Schema with `User` and `Post` models in a `HasMany`/`BelongsTo`

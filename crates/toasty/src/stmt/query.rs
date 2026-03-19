@@ -1,5 +1,5 @@
 use super::{Delete, Expr, IntoStatement, List, Statement, Value};
-use crate::Model;
+use crate::schema::Model;
 use std::{fmt, marker::PhantomData};
 use toasty_core::stmt::{self, Offset};
 

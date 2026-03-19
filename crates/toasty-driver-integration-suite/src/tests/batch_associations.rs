@@ -36,7 +36,7 @@ pub async fn batch_two_scoped_queries_same_relation(t: &mut Test) -> Result<()> 
         #[auto]
         id: ID,
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::schema::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -47,7 +47,7 @@ pub async fn batch_two_scoped_queries_same_relation(t: &mut Test) -> Result<()> 
         #[index]
         user_id: ID,
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
         #[index]
         title: String,
     }
@@ -145,7 +145,7 @@ pub async fn batch_scoped_with_root_statements(t: &mut Test) -> Result<()> {
         #[index]
         name: String,
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::schema::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -156,7 +156,7 @@ pub async fn batch_scoped_with_root_statements(t: &mut Test) -> Result<()> {
         #[index]
         user_id: ID,
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
         title: String,
     }
 
@@ -189,9 +189,9 @@ pub async fn batch_scoped_across_relations(t: &mut Test) -> Result<()> {
         #[auto]
         id: ID,
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::schema::HasMany<Todo>,
         #[has_many]
-        posts: toasty::HasMany<Post>,
+        posts: toasty::schema::HasMany<Post>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -202,7 +202,7 @@ pub async fn batch_scoped_across_relations(t: &mut Test) -> Result<()> {
         #[index]
         user_id: ID,
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
         title: String,
     }
 
@@ -214,7 +214,7 @@ pub async fn batch_scoped_across_relations(t: &mut Test) -> Result<()> {
         #[index]
         user_id: ID,
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
         body: String,
     }
 
@@ -246,9 +246,9 @@ pub async fn batch_query_across_relations(t: &mut Test) -> Result<()> {
         #[auto]
         id: ID,
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::schema::HasMany<Todo>,
         #[has_many]
-        posts: toasty::HasMany<Post>,
+        posts: toasty::schema::HasMany<Post>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -259,7 +259,7 @@ pub async fn batch_query_across_relations(t: &mut Test) -> Result<()> {
         #[index]
         user_id: ID,
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
         title: String,
     }
 
@@ -271,7 +271,7 @@ pub async fn batch_query_across_relations(t: &mut Test) -> Result<()> {
         #[index]
         user_id: ID,
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
         body: String,
     }
 
@@ -333,7 +333,7 @@ pub async fn batch_scoped_delete_with_root_update(t: &mut Test) -> Result<()> {
         #[index]
         name: String,
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::schema::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -344,7 +344,7 @@ pub async fn batch_scoped_delete_with_root_update(t: &mut Test) -> Result<()> {
         #[index]
         user_id: ID,
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
         title: String,
     }
 

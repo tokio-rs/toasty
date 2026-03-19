@@ -1,7 +1,7 @@
 error[E0599]: no method named `verify_pair_belongs_to_exists_for_user` found for struct `Profile` in the current scope
   --> tests/ui/relation_has_one_invalid_pair_ty.rs:8:5
    |
- 8 |     profile: toasty::HasOne<Option<Profile>>,
+ 8 |     profile: toasty::schema::HasOne<Option<Profile>>,
    |     ^^^^^^^ method not found in `Profile`
 ...
 12 | struct Profile {

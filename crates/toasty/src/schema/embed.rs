@@ -1,4 +1,4 @@
-use crate::Register;
+use super::Register;
 
 /// Trait for embedded types that are flattened into their parent model's table.
 ///

@@ -1,6 +1,5 @@
-use super::Model;
+use super::{Load, Model};
 use crate::stmt::{IntoExpr, IntoInsert};
-use crate::Load;
 
 use toasty_core::schema::app::FieldId;
 

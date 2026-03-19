@@ -1,5 +1,5 @@
 use super::{Expr, IntoExpr, IntoStatement, List};
-use crate::Register;
+use crate::schema::Register;
 use std::{fmt, marker::PhantomData};
 use toasty_core::{
     schema::app::VariantId,
@@ -148,7 +148,7 @@ impl<T, U> Path<T, List<U>> {
     /// parent query.
     pub fn any(self, filter: Expr<bool>) -> Expr<bool>
     where
-        U: crate::Model,
+        U: crate::schema::Model,
     {
         // Build a query on the child model filtered by `filter`
         let child_query = super::Query::<U>::filter(filter);

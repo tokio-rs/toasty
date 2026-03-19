@@ -13,7 +13,7 @@ pub async fn preload_has_one_option_none_then_some(test: &mut Test) -> Result<()
         name: String,
 
         #[has_one]
-        profile: toasty::HasOne<Option<Profile>>,
+        profile: toasty::schema::HasOne<Option<Profile>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -28,7 +28,7 @@ pub async fn preload_has_one_option_none_then_some(test: &mut Test) -> Result<()
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::schema::BelongsTo<Option<User>>,
     }
 
     let mut db = test.setup_db(models!(User, Profile)).await;
@@ -111,10 +111,10 @@ pub async fn multiple_includes_same_model(test: &mut Test) -> Result<()> {
         name: String,
 
         #[has_many]
-        posts: toasty::HasMany<Post>,
+        posts: toasty::schema::HasMany<Post>,
 
         #[has_many]
-        comments: toasty::HasMany<Comment>,
+        comments: toasty::schema::HasMany<Comment>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -131,7 +131,7 @@ pub async fn multiple_includes_same_model(test: &mut Test) -> Result<()> {
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -148,7 +148,7 @@ pub async fn multiple_includes_same_model(test: &mut Test) -> Result<()> {
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
     }
 
     let mut db = test.setup_db(models!(User, Post, Comment)).await;
@@ -224,7 +224,7 @@ pub async fn basic_has_one_and_belongs_to_preload(test: &mut Test) -> Result<()>
         name: String,
 
         #[has_one]
-        profile: toasty::HasOne<Option<Profile>>,
+        profile: toasty::schema::HasOne<Option<Profile>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -239,7 +239,7 @@ pub async fn basic_has_one_and_belongs_to_preload(test: &mut Test) -> Result<()>
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::schema::BelongsTo<Option<User>>,
     }
 
     let mut db = test.setup_db(models!(User, Profile)).await;
@@ -287,10 +287,10 @@ pub async fn multiple_includes_with_has_one(test: &mut Test) -> Result<()> {
         name: String,
 
         #[has_one]
-        profile: toasty::HasOne<Option<Profile>>,
+        profile: toasty::schema::HasOne<Option<Profile>>,
 
         #[has_one]
-        settings: toasty::HasOne<Option<Settings>>,
+        settings: toasty::schema::HasOne<Option<Settings>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -306,7 +306,7 @@ pub async fn multiple_includes_with_has_one(test: &mut Test) -> Result<()> {
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::schema::BelongsTo<Option<User>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -322,7 +322,7 @@ pub async fn multiple_includes_with_has_one(test: &mut Test) -> Result<()> {
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::schema::BelongsTo<Option<User>>,
     }
 
     let mut db = test.setup_db(models!(User, Profile, Settings)).await;
@@ -385,10 +385,10 @@ pub async fn combined_has_many_and_has_one_preload(test: &mut Test) -> Result<()
         name: String,
 
         #[has_one]
-        profile: toasty::HasOne<Option<Profile>>,
+        profile: toasty::schema::HasOne<Option<Profile>>,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::schema::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -404,7 +404,7 @@ pub async fn combined_has_many_and_has_one_preload(test: &mut Test) -> Result<()
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::schema::BelongsTo<Option<User>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -420,7 +420,7 @@ pub async fn combined_has_many_and_has_one_preload(test: &mut Test) -> Result<()
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
     }
 
     let mut db = test.setup_db(models!(User, Profile, Todo)).await;
@@ -488,7 +488,7 @@ pub async fn preload_on_empty_query(test: &mut Test) -> Result<()> {
 
         #[has_many]
         #[allow(dead_code)]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::schema::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -503,7 +503,7 @@ pub async fn preload_on_empty_query(test: &mut Test) -> Result<()> {
 
         #[belongs_to(key = user_id, references = id)]
         #[allow(dead_code)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
     }
 
     let mut db = test.setup_db(models!(User, Todo)).await;
@@ -531,7 +531,7 @@ pub async fn preload_has_many_with_optional_belongs_to(test: &mut Test) -> Resul
         name: String,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::schema::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -547,7 +547,7 @@ pub async fn preload_has_many_with_optional_belongs_to(test: &mut Test) -> Resul
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::schema::BelongsTo<Option<User>>,
     }
 
     let mut db = test.setup_db(models!(User, Todo)).await;
@@ -606,7 +606,7 @@ pub async fn preload_has_one_optional_with_required_belongs_to(test: &mut Test) 
         name: String,
 
         #[has_one]
-        profile: toasty::HasOne<Option<Profile>>,
+        profile: toasty::schema::HasOne<Option<Profile>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -621,7 +621,7 @@ pub async fn preload_has_one_optional_with_required_belongs_to(test: &mut Test) 
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
     }
 
     let mut db = test.setup_db(models!(User, Profile)).await;
@@ -680,7 +680,7 @@ pub async fn preload_has_one_required_with_optional_belongs_to(test: &mut Test) 
         name: String,
 
         #[has_one]
-        profile: toasty::HasOne<Profile>,
+        profile: toasty::schema::HasOne<Profile>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -695,7 +695,7 @@ pub async fn preload_has_one_required_with_optional_belongs_to(test: &mut Test) 
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::schema::BelongsTo<Option<User>>,
     }
 
     let mut db = test.setup_db(models!(User, Profile)).await;
@@ -741,7 +741,7 @@ pub async fn nested_has_many_preload(test: &mut Test) {
         name: String,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::schema::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -757,10 +757,10 @@ pub async fn nested_has_many_preload(test: &mut Test) {
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
 
         #[has_many]
-        steps: toasty::HasMany<Step>,
+        steps: toasty::schema::HasMany<Step>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -776,7 +776,7 @@ pub async fn nested_has_many_preload(test: &mut Test) {
         todo_id: ID,
 
         #[belongs_to(key = todo_id, references = id)]
-        todo: toasty::BelongsTo<Todo>,
+        todo: toasty::schema::BelongsTo<Todo>,
     }
 
     let mut db = test.setup_db(models!(User, Todo, Step)).await;
@@ -841,7 +841,7 @@ pub async fn nested_has_many_then_has_one_optional(test: &mut Test) -> Result<()
         name: String,
 
         #[has_many]
-        posts: toasty::HasMany<Post>,
+        posts: toasty::schema::HasMany<Post>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -857,10 +857,10 @@ pub async fn nested_has_many_then_has_one_optional(test: &mut Test) -> Result<()
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
 
         #[has_one]
-        detail: toasty::HasOne<Option<Detail>>,
+        detail: toasty::schema::HasOne<Option<Detail>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -876,7 +876,7 @@ pub async fn nested_has_many_then_has_one_optional(test: &mut Test) -> Result<()
         post_id: Option<ID>,
 
         #[belongs_to(key = post_id, references = id)]
-        post: toasty::BelongsTo<Option<Post>>,
+        post: toasty::schema::BelongsTo<Option<Post>>,
     }
 
     let mut db = test.setup_db(models!(User, Post, Detail)).await;
@@ -931,7 +931,7 @@ pub async fn nested_has_many_then_has_one_required(test: &mut Test) -> Result<()
         name: String,
 
         #[has_many]
-        accounts: toasty::HasMany<Account>,
+        accounts: toasty::schema::HasMany<Account>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -947,10 +947,10 @@ pub async fn nested_has_many_then_has_one_required(test: &mut Test) -> Result<()
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
 
         #[has_one]
-        settings: toasty::HasOne<Settings>,
+        settings: toasty::schema::HasOne<Settings>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -966,7 +966,7 @@ pub async fn nested_has_many_then_has_one_required(test: &mut Test) -> Result<()
         account_id: Option<ID>,
 
         #[belongs_to(key = account_id, references = id)]
-        account: toasty::BelongsTo<Option<Account>>,
+        account: toasty::schema::BelongsTo<Option<Account>>,
     }
 
     let mut db = test.setup_db(models!(User, Account, Settings)).await;
@@ -1018,7 +1018,7 @@ pub async fn nested_has_many_then_belongs_to_required(test: &mut Test) -> Result
         name: String,
 
         #[has_many]
-        items: toasty::HasMany<Item>,
+        items: toasty::schema::HasMany<Item>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -1044,13 +1044,13 @@ pub async fn nested_has_many_then_belongs_to_required(test: &mut Test) -> Result
         category_id: ID,
 
         #[belongs_to(key = category_id, references = id)]
-        category: toasty::BelongsTo<Category>,
+        category: toasty::schema::BelongsTo<Category>,
 
         #[index]
         brand_id: ID,
 
         #[belongs_to(key = brand_id, references = id)]
-        brand: toasty::BelongsTo<Brand>,
+        brand: toasty::schema::BelongsTo<Brand>,
     }
 
     let mut db = test.setup_db(models!(Category, Brand, Item)).await;
@@ -1094,7 +1094,7 @@ pub async fn nested_has_many_then_belongs_to_optional(test: &mut Test) -> Result
         name: String,
 
         #[has_many]
-        tasks: toasty::HasMany<Task>,
+        tasks: toasty::schema::HasMany<Task>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -1120,13 +1120,13 @@ pub async fn nested_has_many_then_belongs_to_optional(test: &mut Test) -> Result
         team_id: ID,
 
         #[belongs_to(key = team_id, references = id)]
-        team: toasty::BelongsTo<Team>,
+        team: toasty::schema::BelongsTo<Team>,
 
         #[index]
         assignee_id: Option<ID>,
 
         #[belongs_to(key = assignee_id, references = id)]
-        assignee: toasty::BelongsTo<Option<Assignee>>,
+        assignee: toasty::schema::BelongsTo<Option<Assignee>>,
     }
 
     let mut db = test.setup_db(models!(Team, Assignee, Task)).await;
@@ -1179,7 +1179,7 @@ pub async fn nested_has_one_optional_then_has_many(test: &mut Test) -> Result<()
         name: String,
 
         #[has_one]
-        profile: toasty::HasOne<Option<Profile>>,
+        profile: toasty::schema::HasOne<Option<Profile>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -1195,10 +1195,10 @@ pub async fn nested_has_one_optional_then_has_many(test: &mut Test) -> Result<()
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::schema::BelongsTo<Option<User>>,
 
         #[has_many]
-        badges: toasty::HasMany<Badge>,
+        badges: toasty::schema::HasMany<Badge>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -1214,7 +1214,7 @@ pub async fn nested_has_one_optional_then_has_many(test: &mut Test) -> Result<()
         profile_id: ID,
 
         #[belongs_to(key = profile_id, references = id)]
-        profile: toasty::BelongsTo<Profile>,
+        profile: toasty::schema::BelongsTo<Profile>,
     }
 
     let mut db = test.setup_db(models!(User, Profile, Badge)).await;
@@ -1274,7 +1274,7 @@ pub async fn nested_has_one_required_then_has_many(test: &mut Test) -> Result<()
         label: String,
 
         #[has_one]
-        invoice: toasty::HasOne<Invoice>,
+        invoice: toasty::schema::HasOne<Invoice>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -1290,10 +1290,10 @@ pub async fn nested_has_one_required_then_has_many(test: &mut Test) -> Result<()
         order_id: Option<ID>,
 
         #[belongs_to(key = order_id, references = id)]
-        order: toasty::BelongsTo<Option<Order>>,
+        order: toasty::schema::BelongsTo<Option<Order>>,
 
         #[has_many]
-        line_items: toasty::HasMany<LineItem>,
+        line_items: toasty::schema::HasMany<LineItem>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -1309,7 +1309,7 @@ pub async fn nested_has_one_required_then_has_many(test: &mut Test) -> Result<()
         invoice_id: ID,
 
         #[belongs_to(key = invoice_id, references = id)]
-        invoice: toasty::BelongsTo<Invoice>,
+        invoice: toasty::schema::BelongsTo<Invoice>,
     }
 
     let mut db = test.setup_db(models!(Order, Invoice, LineItem)).await;
@@ -1358,7 +1358,7 @@ pub async fn nested_has_one_optional_then_has_one_optional(test: &mut Test) -> R
         name: String,
 
         #[has_one]
-        profile: toasty::HasOne<Option<Profile>>,
+        profile: toasty::schema::HasOne<Option<Profile>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -1374,10 +1374,10 @@ pub async fn nested_has_one_optional_then_has_one_optional(test: &mut Test) -> R
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::schema::BelongsTo<Option<User>>,
 
         #[has_one]
-        avatar: toasty::HasOne<Option<Avatar>>,
+        avatar: toasty::schema::HasOne<Option<Avatar>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -1393,7 +1393,7 @@ pub async fn nested_has_one_optional_then_has_one_optional(test: &mut Test) -> R
         profile_id: Option<ID>,
 
         #[belongs_to(key = profile_id, references = id)]
-        profile: toasty::BelongsTo<Option<Profile>>,
+        profile: toasty::schema::BelongsTo<Option<Profile>>,
     }
 
     let mut db = test.setup_db(models!(User, Profile, Avatar)).await;
@@ -1462,7 +1462,7 @@ pub async fn nested_has_one_required_then_has_one_required(test: &mut Test) -> R
         name: String,
 
         #[has_one]
-        profile: toasty::HasOne<Profile>,
+        profile: toasty::schema::HasOne<Profile>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -1478,10 +1478,10 @@ pub async fn nested_has_one_required_then_has_one_required(test: &mut Test) -> R
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::schema::BelongsTo<Option<User>>,
 
         #[has_one]
-        avatar: toasty::HasOne<Avatar>,
+        avatar: toasty::schema::HasOne<Avatar>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -1497,7 +1497,7 @@ pub async fn nested_has_one_required_then_has_one_required(test: &mut Test) -> R
         profile_id: Option<ID>,
 
         #[belongs_to(key = profile_id, references = id)]
-        profile: toasty::BelongsTo<Option<Profile>>,
+        profile: toasty::schema::BelongsTo<Option<Profile>>,
     }
 
     let mut db = test.setup_db(models!(User, Profile, Avatar)).await;
@@ -1539,7 +1539,7 @@ pub async fn nested_has_one_optional_then_belongs_to_required(test: &mut Test) -
         name: String,
 
         #[has_one]
-        review: toasty::HasOne<Option<Review>>,
+        review: toasty::schema::HasOne<Option<Review>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -1565,13 +1565,13 @@ pub async fn nested_has_one_optional_then_belongs_to_required(test: &mut Test) -
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::schema::BelongsTo<Option<User>>,
 
         #[index]
         product_id: ID,
 
         #[belongs_to(key = product_id, references = id)]
-        product: toasty::BelongsTo<Product>,
+        product: toasty::schema::BelongsTo<Product>,
     }
 
     let mut db = test.setup_db(models!(User, Product, Review)).await;
@@ -1621,7 +1621,7 @@ pub async fn nested_belongs_to_required_then_has_many(test: &mut Test) -> Result
         title: String,
 
         #[has_many]
-        tags: toasty::HasMany<Tag>,
+        tags: toasty::schema::HasMany<Tag>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -1637,7 +1637,7 @@ pub async fn nested_belongs_to_required_then_has_many(test: &mut Test) -> Result
         post_id: ID,
 
         #[belongs_to(key = post_id, references = id)]
-        post: toasty::BelongsTo<Post>,
+        post: toasty::schema::BelongsTo<Post>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -1653,7 +1653,7 @@ pub async fn nested_belongs_to_required_then_has_many(test: &mut Test) -> Result
         post_id: ID,
 
         #[belongs_to(key = post_id, references = id)]
-        post: toasty::BelongsTo<Post>,
+        post: toasty::schema::BelongsTo<Post>,
     }
 
     let mut db = test.setup_db(models!(Post, Tag, Comment)).await;
@@ -1706,10 +1706,10 @@ pub async fn nested_belongs_to_required_then_has_one_optional(test: &mut Test) -
         name: String,
 
         #[has_one]
-        profile: toasty::HasOne<Option<Profile>>,
+        profile: toasty::schema::HasOne<Option<Profile>>,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::schema::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -1725,7 +1725,7 @@ pub async fn nested_belongs_to_required_then_has_one_optional(test: &mut Test) -
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::schema::BelongsTo<Option<User>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -1741,7 +1741,7 @@ pub async fn nested_belongs_to_required_then_has_one_optional(test: &mut Test) -
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
     }
 
     let mut db = test.setup_db(models!(User, Profile, Todo)).await;
@@ -1807,7 +1807,7 @@ pub async fn nested_belongs_to_required_then_belongs_to_required(test: &mut Test
         name: String,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::schema::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -1823,10 +1823,10 @@ pub async fn nested_belongs_to_required_then_belongs_to_required(test: &mut Test
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
 
         #[has_many]
-        steps: toasty::HasMany<Step>,
+        steps: toasty::schema::HasMany<Step>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -1842,7 +1842,7 @@ pub async fn nested_belongs_to_required_then_belongs_to_required(test: &mut Test
         todo_id: ID,
 
         #[belongs_to(key = todo_id, references = id)]
-        todo: toasty::BelongsTo<Todo>,
+        todo: toasty::schema::BelongsTo<Todo>,
     }
 
     let mut db = test.setup_db(models!(User, Todo, Step)).await;
@@ -1894,7 +1894,7 @@ pub async fn nested_belongs_to_optional_then_has_many(test: &mut Test) -> Result
         name: String,
 
         #[has_many]
-        members: toasty::HasMany<Member>,
+        members: toasty::schema::HasMany<Member>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -1910,7 +1910,7 @@ pub async fn nested_belongs_to_optional_then_has_many(test: &mut Test) -> Result
         project_id: ID,
 
         #[belongs_to(key = project_id, references = id)]
-        project: toasty::BelongsTo<Project>,
+        project: toasty::schema::BelongsTo<Project>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -1926,7 +1926,7 @@ pub async fn nested_belongs_to_optional_then_has_many(test: &mut Test) -> Result
         project_id: Option<ID>,
 
         #[belongs_to(key = project_id, references = id)]
-        project: toasty::BelongsTo<Option<Project>>,
+        project: toasty::schema::BelongsTo<Option<Project>>,
     }
 
     let mut db = test.setup_db(models!(Project, Member, Task)).await;
@@ -1996,7 +1996,7 @@ pub async fn nested_belongs_to_optional_then_belongs_to_optional(test: &mut Test
         category_id: Option<ID>,
 
         #[belongs_to(key = category_id, references = id)]
-        category: toasty::BelongsTo<Option<Category>>,
+        category: toasty::schema::BelongsTo<Option<Category>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -2012,7 +2012,7 @@ pub async fn nested_belongs_to_optional_then_belongs_to_optional(test: &mut Test
         post_id: Option<ID>,
 
         #[belongs_to(key = post_id, references = id)]
-        post: toasty::BelongsTo<Option<Post>>,
+        post: toasty::schema::BelongsTo<Option<Post>>,
     }
 
     let mut db = test.setup_db(models!(Category, Post, Comment)).await;
@@ -2085,10 +2085,10 @@ pub async fn nested_belongs_to_required_then_has_one_required(test: &mut Test) -
         name: String,
 
         #[has_one]
-        config: toasty::HasOne<Config>,
+        config: toasty::schema::HasOne<Config>,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::schema::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -2104,7 +2104,7 @@ pub async fn nested_belongs_to_required_then_has_one_required(test: &mut Test) -
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::schema::BelongsTo<Option<User>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -2120,7 +2120,7 @@ pub async fn nested_belongs_to_required_then_has_one_required(test: &mut Test) -
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
     }
 
     let mut db = test.setup_db(models!(User, Config, Todo)).await;
@@ -2164,7 +2164,7 @@ pub async fn nested_has_many_then_has_many_with_empty_leaves(test: &mut Test) {
         name: String,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::schema::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -2180,10 +2180,10 @@ pub async fn nested_has_many_then_has_many_with_empty_leaves(test: &mut Test) {
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::schema::BelongsTo<User>,
 
         #[has_many]
-        steps: toasty::HasMany<Step>,
+        steps: toasty::schema::HasMany<Step>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -2199,7 +2199,7 @@ pub async fn nested_has_many_then_has_many_with_empty_leaves(test: &mut Test) {
         todo_id: ID,
 
         #[belongs_to(key = todo_id, references = id)]
-        todo: toasty::BelongsTo<Todo>,
+        todo: toasty::schema::BelongsTo<Todo>,
     }
 
     let mut db = test.setup_db(models!(User, Todo, Step)).await;

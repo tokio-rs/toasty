@@ -399,7 +399,7 @@ matches a condition. This generates a subquery:
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     todos: toasty::HasMany<Todo>,
+#     todos: toasty::schema::HasMany<Todo>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Todo {
@@ -409,7 +409,7 @@ matches a condition. This generates a subquery:
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<User>,
+#     user: toasty::schema::BelongsTo<User>,
 #     title: String,
 #     complete: bool,
 # }

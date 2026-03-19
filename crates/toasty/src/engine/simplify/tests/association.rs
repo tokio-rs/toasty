@@ -1,6 +1,6 @@
 use crate as toasty;
 use crate::engine::simplify::Simplify;
-use crate::Register;
+use crate::schema::Register;
 use toasty_core::{
     driver::Capability,
     schema::{app, app::FieldId, app::ModelId, Builder},
@@ -14,7 +14,7 @@ struct User {
     id: i64,
 
     #[has_many(pair = author)]
-    posts: toasty::HasMany<Post>,
+    posts: toasty::schema::HasMany<Post>,
 }
 
 #[allow(dead_code)]
@@ -27,7 +27,7 @@ struct Post {
     user_id: i64,
 
     #[belongs_to(key = user_id, references = id)]
-    author: toasty::BelongsTo<User>,
+    author: toasty::schema::BelongsTo<User>,
 }
 
 struct UserPostSchema {
