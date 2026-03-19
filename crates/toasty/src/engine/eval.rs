@@ -18,8 +18,9 @@ pub(crate) struct Func<T = stmt::Expr> {
 
 impl<T: AsExpr> Func<T> {
     pub(crate) fn from_stmt(expr: T, args: Vec<stmt::Type>) -> Self {
-        assert!(verify_expr(expr.as_expr()));
-        let ret = ExprContext::new_free().infer_expr_ty(expr.as_expr(), &args);
+        let e = expr.as_expr();
+        assert!(verify_expr(e), "expr={e:#?}");
+        let ret = ExprContext::new_free().infer_expr_ty(e, &args);
         Self { args, ret, expr }
     }
 
