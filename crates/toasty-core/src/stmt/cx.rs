@@ -507,6 +507,17 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             // could be any type. Return Unknown so it unifies with whatever
             // the other branches produce.
             Expr::Error(_) => Type::Unknown,
+            Expr::Exists(_) => Type::Bool,
+            Expr::If(expr_if) => {
+                let mut union = TypeUnion::new();
+                for branch in &expr_if.branches {
+                    let ty = self.infer_expr_ty2(args, &branch.then, returning_expr);
+                    union.insert(ty);
+                }
+                let else_ty = self.infer_expr_ty2(args, &expr_if.r#else, returning_expr);
+                union.insert(else_ty);
+                union.simplify()
+            }
             _ => todo!("{expr:#?}"),
         }
     }
