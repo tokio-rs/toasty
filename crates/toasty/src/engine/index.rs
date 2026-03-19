@@ -36,6 +36,13 @@ pub(crate) fn plan_index_path<'a>(
     // Get the statement filter
     let filter = stmt.filter_expr_unwrap();
 
+    // Extract the pre-filter: the part of the filter that depends only on
+    // args (no table column references) and can be evaluated before issuing
+    // the database operation. The invariant is:
+    //   filter == AND(pre_filter, remaining_filter)
+    let (pre_filter, remaining_filter) = extract_pre_filter(filter);
+    let filter = remaining_filter.as_ref().unwrap_or(filter);
+
     let mut index_planner = IndexPlanner {
         cx,
         table,
@@ -49,7 +56,6 @@ pub(crate) fn plan_index_path<'a>(
     let mut partition_cx = PartitionCtx {
         capability,
         apply_result_filter_on_results: false,
-        pre_filter_operands: vec![],
     };
 
     let index_match = &index_planner.index_matches[index_path.index_match];
@@ -85,16 +91,7 @@ pub(crate) fn plan_index_path<'a>(
         } else {
             None
         },
-        pre_filter: match partition_cx.pre_filter_operands.len() {
-            0 => None,
-            1 => Some(partition_cx.pre_filter_operands.into_iter().next().unwrap()),
-            _ => Some(
-                stmt::ExprAnd {
-                    operands: partition_cx.pre_filter_operands,
-                }
-                .into(),
-            ),
-        },
+        pre_filter,
         key_values,
         has_pk_keys,
     })
@@ -124,9 +121,6 @@ struct IndexPath {
 struct PartitionCtx<'a> {
     capability: &'a Capability,
     apply_result_filter_on_results: bool,
-    /// Expressions that depend only on args (not table columns) and must be
-    /// evaluated before issuing the database operation.
-    pre_filter_operands: Vec<stmt::Expr>,
 }
 
 impl IndexPlanner<'_> {
@@ -297,6 +291,68 @@ fn extract_key_record(
         }
         _ => None,
     }
+}
+
+/// Extract the args-only component of a filter expression.
+///
+/// Splits the filter into `(pre_filter, remaining_filter)` such that
+/// `filter == AND(pre_filter, remaining_filter)`. The `pre_filter` contains
+/// only sub-expressions that can be evaluated using args alone (no table
+/// column references). Returns `(None, None)` when the entire filter
+/// references columns, and `(Some(filter), None)` when the entire filter
+/// is args-only.
+fn extract_pre_filter(expr: &stmt::Expr) -> (Option<stmt::Expr>, Option<stmt::Expr>) {
+    if !references_column(expr) {
+        // Entire expression is args-only
+        return (Some(expr.clone()), None);
+    }
+
+    // Only AND nodes can be split — for other expressions the whole thing
+    // references columns, so there is nothing to extract.
+    let stmt::Expr::And(and) = expr else {
+        return (None, None);
+    };
+
+    let mut pre = vec![];
+    let mut remaining = vec![];
+
+    for operand in &and.operands {
+        if references_column(operand) {
+            remaining.push(operand.clone());
+        } else {
+            pre.push(operand.clone());
+        }
+    }
+
+    let pre_filter = match pre.len() {
+        0 => None,
+        1 => Some(pre.into_iter().next().unwrap()),
+        _ => Some(stmt::ExprAnd { operands: pre }.into()),
+    };
+
+    let remaining_filter = match remaining.len() {
+        0 => None,
+        1 => Some(remaining.into_iter().next().unwrap()),
+        _ => Some(
+            stmt::ExprAnd {
+                operands: remaining,
+            }
+            .into(),
+        ),
+    };
+
+    (pre_filter, remaining_filter)
+}
+
+/// Returns `true` if the expression references any table column.
+fn references_column(expr: &stmt::Expr) -> bool {
+    let mut found = false;
+    stmt::visit::for_each_expr(expr, |e| {
+        if matches!(e, stmt::Expr::Reference(stmt::ExprReference::Column(_))) {
+            found = true;
+        }
+    });
+    found
 }
 
 #[cfg(test)]
