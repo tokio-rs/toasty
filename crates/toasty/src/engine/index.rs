@@ -302,15 +302,13 @@ fn extract_key_record(
 /// references columns, and `(Some(filter), None)` when the entire filter
 /// is args-only.
 fn extract_pre_filter(expr: &stmt::Expr) -> (Option<stmt::Expr>, Option<stmt::Expr>) {
-    if !references_column(expr) {
-        // Entire expression is args-only
-        return (Some(expr.clone()), None);
-    }
-
-    // Only AND nodes can be split — for other expressions the whole thing
-    // references columns, so there is nothing to extract.
+    // Only AND nodes can be split into pre_filter and remaining components.
     let stmt::Expr::And(and) = expr else {
-        return (None, None);
+        if references_column(expr) {
+            return (None, None);
+        } else {
+            return (Some(expr.clone()), None);
+        }
     };
 
     let mut pre = vec![];
@@ -324,6 +322,11 @@ fn extract_pre_filter(expr: &stmt::Expr) -> (Option<stmt::Expr>, Option<stmt::Ex
         }
     }
 
+    // If all operands are args-only, the entire AND is the pre_filter.
+    if remaining.is_empty() {
+        return (Some(expr.clone()), None);
+    }
+
     let pre_filter = match pre.len() {
         0 => None,
         1 => Some(pre.into_iter().next().unwrap()),
@@ -331,7 +334,6 @@ fn extract_pre_filter(expr: &stmt::Expr) -> (Option<stmt::Expr>, Option<stmt::Ex
     };
 
     let remaining_filter = match remaining.len() {
-        0 => None,
         1 => Some(remaining.into_iter().next().unwrap()),
         _ => Some(
             stmt::ExprAnd {
