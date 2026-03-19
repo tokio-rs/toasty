@@ -279,7 +279,6 @@ impl LowerStatement<'_, '_> {
         source: &mut dyn RelationSource,
     ) {
         assert!(!value.is_list());
-        assert!(source.needs_existence_check(), "TODO: figure this out");
 
         let mut stmt = stmt::Query::new_select(
             pair.id.model,
@@ -292,14 +291,16 @@ impl LowerStatement<'_, '_> {
 
         // Needed for the existence check. Only update *if* the relation source
         // actually exists to be updated.
-        stmt.filter.set(stmt::Expr::exists({
-            let mut query = source.selection(2);
-            let stmt::ExprSet::Select(select) = &mut query.body else {
-                todo!()
-            };
-            select.returning = stmt::Expr::record([1]).into();
-            query
-        }));
+        if source.needs_existence_check() {
+            stmt.filter.set(stmt::Expr::exists({
+                let mut query = source.selection(2);
+                let stmt::ExprSet::Select(select) = &mut query.body else {
+                    todo!()
+                };
+                select.returning = stmt::Expr::record([1]).into();
+                query
+            }));
+        }
 
         self.new_dependency(stmt);
     }
