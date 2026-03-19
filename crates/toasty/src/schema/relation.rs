@@ -1,15 +1,4 @@
-mod belongs_to;
-pub use belongs_to::BelongsTo;
-
-mod has_many;
-pub use has_many::HasMany;
-
-mod has_one;
-pub use has_one::HasOne;
-
-pub mod option;
-
-use super::model::Model;
+use super::Model;
 use crate::stmt::{IntoExpr, IntoInsert};
 use crate::Load;
 

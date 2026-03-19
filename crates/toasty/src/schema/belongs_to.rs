@@ -1,4 +1,4 @@
-use crate::schema::relation::Relation;
+use super::Relation;
 use crate::Load;
 
 use toasty_core::stmt::Value;
@@ -6,11 +6,11 @@ use toasty_core::stmt::Value;
 use std::fmt;
 
 #[derive(Clone)]
-pub struct HasOne<T> {
+pub struct BelongsTo<T> {
     value: Option<Box<T>>,
 }
 
-impl<T: Relation> Load for HasOne<T> {
+impl<T: Relation> Load for BelongsTo<T> {
     type Output = Self;
     fn load(input: Value) -> crate::Result<Self> {
         Ok(match input {
@@ -22,7 +22,7 @@ impl<T: Relation> Load for HasOne<T> {
     }
 }
 
-impl<T: Relation> HasOne<T> {
+impl<T: Relation> BelongsTo<T> {
     #[track_caller]
     pub fn get(&self) -> &T {
         self.value.as_ref().expect("association not loaded")
@@ -37,7 +37,7 @@ impl<T: Relation> HasOne<T> {
     }
 }
 
-impl<T: Relation> Relation for HasOne<T> {
+impl<T: Relation> Relation for BelongsTo<T> {
     type Model = T::Model;
     type Create = T::Create;
     type Expr = T::Expr;
@@ -57,13 +57,13 @@ impl<T: Relation> Relation for HasOne<T> {
     }
 }
 
-impl<T> Default for HasOne<T> {
+impl<T> Default for BelongsTo<T> {
     fn default() -> Self {
         Self { value: None }
     }
 }
 
-impl<T: fmt::Debug> fmt::Debug for HasOne<T> {
+impl<T: fmt::Debug> fmt::Debug for BelongsTo<T> {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.value.as_ref() {
             Some(t) => t.fmt(fmt),
@@ -76,7 +76,7 @@ impl<T: fmt::Debug> fmt::Debug for HasOne<T> {
 }
 
 #[cfg(feature = "serde")]
-impl<T: serde_core::Serialize> serde_core::Serialize for HasOne<T> {
+impl<T: serde_core::Serialize> serde_core::Serialize for BelongsTo<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde_core::Serializer,

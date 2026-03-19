@@ -17,17 +17,16 @@
 //!
 //! ## [`schema`] — model, relation, and schema inspection
 //!
-//! The [`Model`] trait (in [`schema::model`]) represents a root model that
-//! maps to a database table. It is implemented by `#[derive(Model)]` — users
-//! do not implement it manually. The submodule also contains
-//! [`Field`](schema::model::Field), which describes a typed field accessor,
-//! and [`Auto`](schema::model::Auto), a wrapper for auto-generated values
-//! such as database-assigned IDs.
+//! The [`Model`] trait represents a root model that maps to a database table.
+//! It is implemented by `#[derive(Model)]` — users do not implement it
+//! manually. The module also contains [`Field`](schema::Field), which
+//! describes a typed field accessor, and [`Auto`](schema::Auto), a wrapper
+//! for auto-generated values such as database-assigned IDs.
 //!
-//! The [`schema::relation`] submodule provides the types that represent
-//! associations between models: [`HasMany`], [`HasOne`], and [`BelongsTo`].
-//! These appear as fields on model structs and are populated through the
-//! generated relation accessors.
+//! The module also provides the types that represent associations between
+//! models: [`HasMany`], [`HasOne`], and [`BelongsTo`]. These appear as
+//! fields on model structs and are populated through the generated relation
+//! accessors.
 //!
 //! The module also re-exports from `toasty-core` for inspecting the
 //! app-level and db-level schema representations at runtime.
@@ -126,8 +125,7 @@ mod load;
 pub use load::Load;
 
 pub mod schema;
-pub use schema::model::{self, Auto, Field, Model};
-pub use schema::relation::{self, BelongsTo, HasMany, HasOne, Relation as _};
+pub use schema::{Auto, BelongsTo, Field, HasMany, HasOne, Model, Relation as _};
 
 mod register;
 pub use register::Register;
@@ -151,9 +149,7 @@ pub mod codegen_support {
         apply_update::{ApplyUpdate, Query},
         batch::CreateMany,
         register::generate_unique_id,
-        schema::model::{Auto, Field},
-        schema::relation::Relation,
-        schema::relation::{BelongsTo, HasMany, HasOne},
+        schema::{Auto, BelongsTo, Field, HasMany, HasOne, Relation},
         stmt::{self, IntoExpr, IntoInsert, IntoStatement, List, Path},
         Db, Embed, Error, Executor, ExecutorExt, Load, Model, Register, Result, Statement,
     };
