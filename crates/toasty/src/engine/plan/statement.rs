@@ -1294,17 +1294,17 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 ty: stmt::Type::Unit,
             }),
             stmt::Statement::Update(update_stmt) => {
-                let (pre_filter, pre_filter_inputs) =
-                    self.compile_pre_filter(index_plan.pre_filter.take());
+                // If there is a pre-filter, wrap the key input in a Guard
+                // node that produces an empty list when the guard is false,
+                // causing UpdateByKey to naturally no-op.
+                let guarded_input = self.apply_guard(get_by_key_input, index_plan);
 
                 self.insert_mir_with_deps(mir::UpdateByKey {
-                    input: get_by_key_input,
+                    input: guarded_input,
                     table: index_plan.table_id(),
                     assignments: update_stmt.assignments.clone(),
                     filter: index_plan.result_filter.take(),
                     condition: update_stmt.condition.expr.clone(),
-                    pre_filter,
-                    pre_filter_inputs,
                     ty: ty.clone(),
                 })
             }
@@ -1312,34 +1312,22 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         }
     }
 
-    /// Compile a pre-filter expression into an `eval::Func` and collect the
-    /// MIR input nodes it depends on.
-    fn compile_pre_filter(
-        &self,
-        pre_filter: Option<stmt::Expr>,
-    ) -> (Option<eval::Func>, Vec<mir::NodeId>) {
-        let Some(mut expr) = pre_filter else {
-            return (None, vec![]);
+    /// If the index plan has a pre-filter, insert a `Guard` MIR node that
+    /// wraps the given input. When the guard expression evaluates to false,
+    /// the Guard produces an empty list, causing the downstream operation to
+    /// see no keys and become a no-op. Returns the (possibly wrapped) input
+    /// node ID.
+    fn apply_guard(
+        &mut self,
+        input: mir::NodeId,
+        index_plan: &mut index::IndexPlan,
+    ) -> mir::NodeId {
+        let Some(mut pre_filter_expr) = index_plan.pre_filter.take() else {
+            return input;
         };
 
         // Rewrite HIR arg positions to load_data input indices
-        self.rewrite_pre_filter_args(&mut expr);
-
-        // Collect the input types and node IDs
-        let args: Vec<stmt::Type> = self
-            .load_data
-            .inputs
-            .iter()
-            .map(|node_id| self.planner.mir[node_id].ty().clone())
-            .collect();
-
-        let input_nodes: Vec<mir::NodeId> = self.load_data.inputs.iter().copied().collect();
-
-        (Some(eval::Func::from_stmt(expr, args)), input_nodes)
-    }
-
-    fn rewrite_pre_filter_args(&self, expr: &mut stmt::Expr) {
-        visit_mut::for_each_expr_mut(expr, |expr| {
+        visit_mut::for_each_expr_mut(&mut pre_filter_expr, |expr| {
             if let stmt::Expr::Arg(expr_arg) = expr {
                 match &self.stmt_info.args[expr_arg.position] {
                     hir::Arg::Sub { input, .. } => {
@@ -1349,6 +1337,25 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 }
             }
         });
+
+        // Collect input types and node IDs for the guard
+        let args: Vec<stmt::Type> = self
+            .load_data
+            .inputs
+            .iter()
+            .map(|node_id| self.planner.mir[node_id].ty().clone())
+            .collect();
+
+        let guard_inputs = self.load_data.inputs.iter().copied().collect();
+        let guard = eval::Func::from_stmt(pre_filter_expr, args);
+        let ty = self.planner.mir[input].ty().clone();
+
+        self.planner.mir.insert(mir::Guard {
+            input,
+            guard_inputs,
+            guard,
+            ty,
+        })
     }
 
     // ===== Finalization helpers =====
