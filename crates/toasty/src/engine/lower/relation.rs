@@ -39,6 +39,11 @@ trait RelationSource: std::fmt::Debug {
 
     /// Update a returning field expression
     fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr);
+
+    /// Whether the source might produce zero rows. When true, relation
+    /// mutations must be wrapped in a conditional to avoid FK updates when
+    /// the source filter doesn't match.
+    fn needs_existence_check(&self) -> bool;
 }
 
 #[derive(Debug)]
@@ -285,19 +290,22 @@ impl LowerStatement<'_, '_> {
             .assignments
             .set(pair.id, stmt::Expr::stmt(source.selection(2)));
 
-        // Wrap in a conditional: only execute the update if the source query
-        // actually matches rows. This prevents FK mutations when the source
-        // filter doesn't match (e.g. `User::filter_by_id(id).filter(name.eq("x"))`
-        // where name doesn't match).
-        let cond = stmt::Expr::r#if(
-            stmt::Expr::exists(source.selection(1)),
-            stmt::Expr::stmt(update),
-            stmt::Expr::unit(),
-        );
+        if source.needs_existence_check() {
+            // Wrap in a conditional: only execute the update if the source
+            // query actually matches rows. This prevents FK mutations when
+            // the source filter doesn't match.
+            let cond = stmt::Expr::r#if(
+                stmt::Expr::exists(source.selection(1)),
+                stmt::Expr::stmt(update),
+                stmt::Expr::unit(),
+            );
 
-        let mut query = stmt::Query::values(cond);
-        query.single = true;
-        self.new_dependency(query);
+            let mut query = stmt::Query::values(cond);
+            query.single = true;
+            self.new_dependency(query);
+        } else {
+            self.new_dependency(update);
+        }
     }
 
     fn plan_mut_has_many_disassociate_expr(
@@ -766,6 +774,10 @@ impl RelationSource for &stmt::Delete {
     fn set_returning_field(&mut self, _field: FieldId, _expr: stmt::Expr) {
         unimplemented!("delete statements do not need to update field values");
     }
+
+    fn needs_existence_check(&self) -> bool {
+        false
+    }
 }
 
 impl RelationSource for UpdateRelationSource<'_> {
@@ -800,6 +812,10 @@ impl RelationSource for UpdateRelationSource<'_> {
         };
 
         set_returning_slot(record, position, expr);
+    }
+
+    fn needs_existence_check(&self) -> bool {
+        true
     }
 }
 
@@ -838,6 +854,10 @@ impl RelationSource for InsertRelationSource<'_> {
         };
 
         set_returning_slot(record, field.index, expr);
+    }
+
+    fn needs_existence_check(&self) -> bool {
+        false
     }
 }
 

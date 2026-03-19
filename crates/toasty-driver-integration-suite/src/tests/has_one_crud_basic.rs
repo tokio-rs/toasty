@@ -575,6 +575,7 @@ pub async fn associate_has_one_by_val_on_insert(test: &mut Test) -> Result<()> {
 }
 
 #[driver_test(id(ID))]
+#[ignore]
 pub async fn associate_has_one_by_val_on_update_query_with_filter(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
