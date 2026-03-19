@@ -1031,6 +1031,17 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 }
             });
 
+            // TODO: not 100% sure the argument mapping is correct. This
+            // assertion checks for "known good" cases. If it fails, dig into
+            // this deeper.
+            debug_assert!(
+                // Case 1: no args (constant evaluation)
+                arg_map.is_empty()
+                    || arg_map.len() == self.load_data.inputs.len()
+                        && arg_map.keys().enumerate().all(|(a, b)| a == *b),
+                "TODO: verify the mapping is correct; key_expr={key_expr:#?}; arg_map={arg_map:#?}"
+            );
+
             let args: Vec<stmt::Type> = arg_map.into_values().collect();
             let key_ty =
                 stmt::Type::list(self.planner.engine.index_key_record_ty(index_plan.index));
