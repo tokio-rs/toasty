@@ -37,13 +37,7 @@ impl Exec<'_> {
 
         let res = if pass {
             // Guard passed — forward the input unchanged.
-            let data = self
-                .vars
-                .load(action.input)
-                .await?
-                .collect_as_value()
-                .await?;
-            Rows::Value(data)
+            self.vars.load(action.input).await?
         } else {
             // Guard failed — produce an empty stream.
             Rows::value_stream(ValueStream::default())
