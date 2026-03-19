@@ -9,7 +9,7 @@ pub use has_one::HasOne;
 
 pub mod option;
 
-use super::Model;
+use super::model::Model;
 use crate::stmt::{IntoExpr, IntoInsert};
 use crate::Load;
 

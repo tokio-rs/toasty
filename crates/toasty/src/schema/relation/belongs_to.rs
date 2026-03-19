@@ -1,4 +1,4 @@
-use crate::relation::Relation;
+use crate::schema::relation::Relation;
 use crate::Load;
 
 use toasty_core::stmt::Value;

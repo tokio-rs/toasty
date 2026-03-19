@@ -1,3 +1,9 @@
+pub mod model;
+pub use model::{Auto, Field, Model};
+
+pub mod relation;
+pub use relation::{BelongsTo, HasMany, HasOne, Relation};
+
 use crate::Result;
 
 pub use toasty_core::schema::{app, db, mapping};

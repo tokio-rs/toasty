@@ -15,13 +15,22 @@
 //! a connection pool and provides [`Db::builder`] for configuration. The
 //! module also contains [`Builder`](db::Builder) and the pool internals.
 //!
-//! ## [`model`] — model trait and field helpers
+//! ## [`schema`] — model, relation, and schema inspection
 //!
-//! The [`Model`] trait represents a root model that maps to a database table.
-//! It is implemented by `#[derive(Model)]` — users do not implement it
-//! manually. The module also contains [`Field`](model::Field), which
-//! describes a typed field accessor, and [`Auto`](model::Auto), a wrapper
-//! for auto-generated values such as database-assigned IDs.
+//! The [`Model`] trait (in [`schema::model`]) represents a root model that
+//! maps to a database table. It is implemented by `#[derive(Model)]` — users
+//! do not implement it manually. The submodule also contains
+//! [`Field`](schema::model::Field), which describes a typed field accessor,
+//! and [`Auto`](schema::model::Auto), a wrapper for auto-generated values
+//! such as database-assigned IDs.
+//!
+//! The [`schema::relation`] submodule provides the types that represent
+//! associations between models: [`HasMany`], [`HasOne`], and [`BelongsTo`].
+//! These appear as fields on model structs and are populated through the
+//! generated relation accessors.
+//!
+//! The module also re-exports from `toasty-core` for inspecting the
+//! app-level and db-level schema representations at runtime.
 //!
 //! ## [`stmt`] — typed statement and expression types
 //!
@@ -32,17 +41,6 @@
 //! [`Path`](stmt::Path), and the [`in_list`](stmt::in_list) function.
 //! Generated query builders (e.g. `find_by_*`, `filter_by_*`) produce these
 //! types.
-//!
-//! ## [`relation`] — relation field types
-//!
-//! The types that represent associations between models: [`HasMany`],
-//! [`HasOne`], and [`BelongsTo`]. These appear as fields on model structs
-//! and are populated through the generated relation accessors.
-//!
-//! ## [`schema`] — schema inspection
-//!
-//! Re-exports from `toasty-core` for inspecting the app-level and db-level
-//! schema representations at runtime.
 //!
 //! # Key traits
 //!
@@ -127,19 +125,15 @@ mod engine;
 mod load;
 pub use load::Load;
 
-pub mod model;
-pub use model::Model;
+pub mod schema;
+pub use schema::model::{self, Auto, Field, Model};
+pub use schema::relation::{self, BelongsTo, HasMany, HasOne, Relation as _};
 
 mod register;
 pub use register::Register;
 
 mod page;
 pub use page::Page;
-
-pub mod relation;
-pub use relation::{BelongsTo, HasMany, HasOne};
-
-pub mod schema;
 
 pub mod stmt;
 pub use stmt::Statement;
@@ -156,10 +150,10 @@ pub mod codegen_support {
     pub use crate::{
         apply_update::{ApplyUpdate, Query},
         batch::CreateMany,
-        model::{Auto, Field},
         register::generate_unique_id,
-        relation::Relation,
-        relation::{BelongsTo, HasMany, HasOne},
+        schema::model::{Auto, Field},
+        schema::relation::Relation,
+        schema::relation::{BelongsTo, HasMany, HasOne},
         stmt::{self, IntoExpr, IntoInsert, IntoStatement, List, Path},
         Db, Embed, Error, Executor, ExecutorExt, Load, Model, Register, Result, Statement,
     };
