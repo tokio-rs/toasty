@@ -72,7 +72,7 @@ impl Rows {
 
     pub async fn collect_as_value(self) -> Result<stmt::Value> {
         match self {
-            Rows::Count(_) => Ok(stmt::Value::record_from_vec(vec![])),
+            Rows::Count(_) => Ok(stmt::Value::Null),
             Rows::Value(value) => Ok(value),
             Rows::Stream(stream) => Ok(stmt::Value::List(stream.collect().await?)),
         }
