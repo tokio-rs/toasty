@@ -322,6 +322,24 @@ impl Expr {
                 }
                 expr_match.else_expr.eval_ref(scope, input)
             }
+            Expr::Exists(expr_exists) => {
+                // SQL EXISTS semantics: true if the subquery returns any rows.
+                let value = expr_exists.subquery.body.eval_ref(scope, input)?;
+                let exists = match &value {
+                    Value::List(items) => !items.is_empty(),
+                    Value::Null => false,
+                    _ => true,
+                };
+                Ok(exists.into())
+            }
+            Expr::If(expr_if) => {
+                for branch in &expr_if.branches {
+                    if branch.cond.eval_ref_bool(scope, input)? {
+                        return branch.then.eval_ref(scope, input);
+                    }
+                }
+                expr_if.r#else.eval_ref(scope, input)
+            }
             Expr::Value(value) => Ok(value.clone()),
             Expr::Func(_) => Err(crate::Error::expression_evaluation_failed(
                 "database functions cannot be evaluated client-side",

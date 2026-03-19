@@ -295,7 +295,9 @@ impl LowerStatement<'_, '_> {
             stmt::Expr::null(),
         );
 
-        self.new_dependency(stmt::Query::values(cond));
+        let mut query = stmt::Query::values(cond);
+        query.single = true;
+        self.new_dependency(query);
     }
 
     fn plan_mut_has_many_disassociate_expr(

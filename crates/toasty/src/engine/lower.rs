@@ -61,6 +61,7 @@ impl LoweringState<'_> {
             expr_cx,
             scope_id,
             cx: LoweringContext::Statement,
+            in_memory: false,
             collect_dependencies: &mut collect_dependencies,
         }
         .visit_stmt_mut(&mut stmt);
@@ -91,6 +92,11 @@ struct LowerStatement<'a, 'b> {
 
     /// Current lowering context
     cx: LoweringContext<'a>,
+
+    /// When true, expressions are being lowered for in-memory evaluation
+    /// (e.g., inside an ExprIf). Sub-queries like Exists must be extracted
+    /// into sub-statements since they cannot be evaluated in memory.
+    in_memory: bool,
 
     /// Track dependencies here.
     collect_dependencies: &'a mut Option<HashSet<hir::StmtId>>,
@@ -420,6 +426,42 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 if self.state.hir[target_id].independent {
                     self.curr_stmt_info().deps.insert(target_id);
                 }
+            }
+            stmt::Expr::If(expr_if) => {
+                // ExprIf is always evaluated in memory. Set the in_memory
+                // flag so that sub-expressions like Exists get extracted
+                // into sub-statements.
+                let prev = self.in_memory;
+                self.in_memory = true;
+                stmt::visit_mut::visit_expr_if_mut(self, expr_if);
+                self.in_memory = prev;
+            }
+            stmt::Expr::Exists(_) if self.in_memory => {
+                let stmt::Expr::Exists(mut expr_exists) = expr.take() else {
+                    panic!()
+                };
+
+                // Extract the EXISTS subquery into a sub-statement so the
+                // executor can evaluate the condition in memory.
+                let source_id = self.scope_stmt_id();
+                let target_id = self.scope_statement(|child| {
+                    child.visit_stmt_query_mut(&mut expr_exists.subquery);
+                });
+
+                let mut stmt = stmt::Statement::Query(*expr_exists.subquery);
+                self.state.engine.simplify_stmt(&mut stmt);
+
+                let arg = self.new_sub_statement(source_id, target_id, Box::new(stmt));
+
+                if self.state.hir[target_id].independent {
+                    self.curr_stmt_info().deps.insert(target_id);
+                }
+
+                // Keep EXISTS wrapping the arg — the evaluator will check
+                // for non-empty list / non-null value (SQL EXISTS semantics).
+                *expr = stmt::Expr::Exists(stmt::ExprExists {
+                    subquery: Box::new(stmt::Query::values(arg)),
+                });
             }
             _ => {
                 // Recurse down the statement tree
@@ -1072,6 +1114,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             expr_cx: self.expr_cx,
             scope_id,
             cx: LoweringContext::Statement,
+            in_memory: false,
             collect_dependencies: &mut dependencies,
         };
 
@@ -1091,6 +1134,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             expr_cx: self.expr_cx.scope(target),
             scope_id: self.scope_id,
             cx: self.cx,
+            in_memory: self.in_memory,
             collect_dependencies: self.collect_dependencies,
         }
     }
@@ -1112,6 +1156,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             expr_cx: self.expr_cx.scope(target),
             scope_id: self.scope_id,
             cx: LoweringContext::Insert(columns, None),
+            in_memory: false,
             collect_dependencies: self.collect_dependencies,
         }
     }
@@ -1140,6 +1185,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             expr_cx: self.expr_cx,
             scope_id: self.scope_id,
             cx: LoweringContext::InsertRow(row),
+            in_memory: false,
             collect_dependencies: self.collect_dependencies,
         }
     }
@@ -1150,6 +1196,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             expr_cx: self.expr_cx,
             scope_id: self.scope_id,
             cx: LoweringContext::Returning(None),
+            in_memory: self.in_memory,
             collect_dependencies: self.collect_dependencies,
         }
     }
@@ -1163,6 +1210,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             expr_cx: self.expr_cx,
             scope_id: self.scope_id,
             cx: LoweringContext::Returning(Some(row_index)),
+            in_memory: self.in_memory,
             collect_dependencies: self.collect_dependencies,
         }
     }
