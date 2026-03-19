@@ -59,7 +59,6 @@ struct InsertRelationSource<'a> {
 struct UpdateRelationSource<'a> {
     model: &'a app::ModelRoot,
     filter: &'a stmt::Filter,
-    condition: &'a stmt::Condition,
     assignments: &'a mut stmt::Assignments,
     returning: &'a mut Option<stmt::Returning>,
     returning_changed: bool,
@@ -129,7 +128,6 @@ impl LowerStatement<'_, '_> {
         &mut self,
         assignments: &mut stmt::Assignments,
         filter: &stmt::Filter,
-        condition: &stmt::Condition,
         returning: &mut Option<stmt::Returning>,
         returning_changed: bool,
     ) {
@@ -175,7 +173,6 @@ impl LowerStatement<'_, '_> {
                 &mut UpdateRelationSource {
                     model,
                     filter,
-                    condition,
                     assignments: &mut *assignments,
                     returning,
                     returning_changed,
@@ -787,15 +784,7 @@ impl RelationSource for UpdateRelationSource<'_> {
     fn selection(&self, _nesting: usize) -> stmt::Query {
         // In this context, the nesting does not matter. The filter entirely
         // references the returned query.
-        let mut query = stmt::Query::new_select(self.model, self.filter.clone());
-
-        // Include the condition (e.g., additional user-supplied filters) in the
-        // selection so that the EXISTS check reflects the full predicate.
-        if let Some(cond_expr) = &self.condition.expr {
-            query.add_filter(cond_expr.clone());
-        }
-
-        query
+        stmt::Query::new_select(self.model, self.filter.clone())
     }
 
     fn set_source_field(&mut self, field: FieldId, expr: stmt::Expr) {

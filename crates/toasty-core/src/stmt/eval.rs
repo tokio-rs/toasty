@@ -330,20 +330,7 @@ impl Expr {
                 // SQL EXISTS semantics: true if the subquery returns any rows.
                 let value = expr_exists.subquery.eval_ref(scope, input)?;
                 let exists = match &value {
-                    Value::List(items) => {
-                        // When the subquery is VALUES(arg) and arg evaluates to
-                        // a list, we get List([List([...])]). Flatten one level
-                        // to check the inner list.
-                        if items.len() == 1 {
-                            match &items[0] {
-                                Value::List(inner) => !inner.is_empty(),
-                                Value::Null => false,
-                                _ => true,
-                            }
-                        } else {
-                            !items.is_empty()
-                        }
-                    }
+                    Value::List(items) => !items.is_empty(),
                     Value::Null => false,
                     _ => true,
                 };

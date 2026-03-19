@@ -458,10 +458,12 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 }
 
                 // The sub-statement result is a list of rows. Wrap it in
-                // Exists(Values(arg)) — the evaluator flattens nested lists
-                // so EXISTS checks the inner row count.
+                // a single-row VALUES query so the evaluator unwraps the
+                // outer list, letting EXISTS check the inner row count.
+                let mut subquery = stmt::Query::values(arg);
+                subquery.single = true;
                 *expr = stmt::Expr::Exists(stmt::ExprExists {
-                    subquery: Box::new(stmt::Query::values(arg)),
+                    subquery: Box::new(subquery),
                 });
             }
             _ => {
@@ -655,7 +657,6 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         lower.plan_stmt_update_relations(
             &mut stmt.assignments,
             &stmt.filter,
-            &stmt.condition,
             &mut stmt.returning,
             returning_changed,
         );
