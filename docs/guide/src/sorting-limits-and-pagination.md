@@ -137,7 +137,10 @@ let items = Item::all()
 Limit and offset work for simple cases, but cursor-based pagination (below) is a
 better fit for paging through large result sets. Offset-based pagination gets
 slower as the offset increases because the database still reads and discards the
-skipped rows.
+skipped rows. It can also produce inconsistent results when rows are inserted or
+deleted between page fetches. See Markus Winand's
+["No Offset"](https://use-the-index-luke.com/no-offset) for an in-depth
+explanation.
 
 ## Cursor-based pagination
 
