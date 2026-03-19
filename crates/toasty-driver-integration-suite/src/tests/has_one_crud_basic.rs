@@ -575,7 +575,7 @@ pub async fn associate_has_one_by_val_on_insert(test: &mut Test) -> Result<()> {
 }
 
 #[driver_test(id(ID), scenario(crate::scenarios::has_one_optional_belongs_to))]
-pub async fn associate_has_one_by_val_on_update_query_with_filter(test: &mut Test) -> Result<()> {
+pub async fn associate_has_one_by_val_on_update_query_with_filter_1(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
     let u1 = User::create().name("user 1").exec(&mut db).await?;
@@ -612,6 +612,41 @@ pub async fn associate_has_one_by_val_on_update_query_with_filter(test: &mut Tes
     // Verify profile's user_id is still None (update was a no-op)
     let p1_reloaded = Profile::get_by_id(&mut db, &p1.id).await?;
     assert!(p1_reloaded.user_id.is_none());
+
+    Ok(())
+}
+
+#[driver_test(id(ID), scenario(crate::scenarios::has_one_optional_belongs_to))]
+pub async fn associate_has_one_by_val_on_update_query_with_filter_2(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let u1 = toasty::create!(User {
+        name: "User 1",
+        profile: {
+            bio: "hello world"
+        }
+    })
+    .exec(&mut db)
+    .await?;
+
+    let u2 = toasty::create!(User { name: "User 2" })
+        .exec(&mut db)
+        .await?;
+
+    let p1 = u1.profile().get(&mut db).await?.unwrap();
+    assert_eq!(p1.user_id.as_ref(), Some(&u1.id));
+
+    // Filter does not match, should be a no-op
+    User::filter_by_id(&u2.id)
+        .filter(User::fields().name().eq("anon"))
+        .update()
+        .profile(&p1)
+        .exec(&mut db)
+        .await?;
+
+    // Verify profile's user_id is still None (update was a no-op)
+    let p1_reloaded = Profile::get_by_id(&mut db, &p1.id).await?;
+    assert_eq!(p1_reloaded.user_id.as_ref(), Some(&u1.id));
 
     Ok(())
 }
