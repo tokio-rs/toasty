@@ -380,6 +380,12 @@ impl Type {
             (Type::Uuid, Type::Uuid) => true,
             (Type::Bytes, Type::Bytes) => true,
             (Type::Unit, Type::Unit) => true,
+            // TODO: fix this. Decide what unit is
+            (Type::Unit, Type::Record(fields)) | (Type::Record(fields), Type::Unit)
+                if fields.is_empty() =>
+            {
+                true
+            }
             (Type::Unknown, Type::Unknown) => true,
 
             // Decimal types

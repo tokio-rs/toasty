@@ -32,6 +32,10 @@ impl Expr {
         Self::Record(ExprRecord::from_vec(fields))
     }
 
+    pub fn unit() -> Self {
+        Self::Record(ExprRecord { fields: vec![] })
+    }
+
     pub fn is_record(&self) -> bool {
         matches!(self, Self::Record(_))
     }

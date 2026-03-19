@@ -292,7 +292,7 @@ impl LowerStatement<'_, '_> {
         let cond = stmt::Expr::r#if(
             stmt::Expr::exists(source.selection(1)),
             stmt::Expr::stmt(update),
-            stmt::Expr::null(),
+            stmt::Expr::unit(),
         );
 
         let mut query = stmt::Query::values(cond);
