@@ -1338,7 +1338,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             return node_id;
         }
 
-        let returning_arg_tys = returning
+        let returning_arg_tys: Vec<stmt::Type> = returning
             .inputs
             .iter()
             .map(|input| self.planner.mir[input].ty().clone())
@@ -1355,6 +1355,13 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         self.planner
                             .mir
                             .insert_with_deps(mir::Const { value, ty }, [data_load_node_id])
+                    } else if let Some(node_id) =
+                        self.try_plan_branch(&expr, &returning.inputs, &returning_arg_tys)
+                    {
+                        if !self.stmt().is_query() {
+                            self.planner.mir[node_id].deps.insert(data_load_node_id);
+                        }
+                        node_id
                     } else {
                         let eval = eval::Func::from_stmt(expr, returning_arg_tys);
 
@@ -1400,6 +1407,142 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             self.apply_dependencies_to_node(data_load_node_id);
             data_load_node_id
         }
+    }
+
+    // ===== Branch planning for ExprIf =====
+
+    /// Try to plan an ExprIf as a Branch (conditional execution).
+    ///
+    /// Returns `Some(node_id)` if the expression is a single-branch ExprIf
+    /// with side-effectful then/else bodies that need conditional execution.
+    /// Returns `None` if the expression should be handled as a normal Eval.
+    fn try_plan_branch(
+        &mut self,
+        expr: &stmt::Expr,
+        inputs: &IndexSet<mir::NodeId>,
+        input_tys: &[stmt::Type],
+    ) -> Option<mir::NodeId> {
+        // Only handle single-branch ExprIf
+        let stmt::Expr::If(expr_if) = expr else {
+            return None;
+        };
+        if expr_if.branches.len() != 1 {
+            return None;
+        }
+
+        let branch = &expr_if.branches[0];
+
+        // Collect Arg positions used in the condition
+        let mut cond_args = IndexSet::new();
+        stmt::visit::for_each_expr(&*branch.cond, |e| {
+            if let stmt::Expr::Arg(a) = e {
+                cond_args.insert(a.position);
+            }
+        });
+
+        // Collect Arg positions used in the then expression
+        let mut then_args = IndexSet::new();
+        stmt::visit::for_each_expr(&*branch.then, |e| {
+            if let stmt::Expr::Arg(a) = e {
+                then_args.insert(a.position);
+            }
+        });
+
+        // Only create a Branch if there are then-specific args that aren't in the condition
+        let then_only_args: IndexSet<usize> = then_args.difference(&cond_args).cloned().collect();
+
+        if then_only_args.is_empty() {
+            return None;
+        }
+
+        // Check if any then-only arg references a node with side effects (db ops)
+        let has_side_effects = then_only_args.iter().any(|&pos| {
+            let node_id = inputs[pos];
+            let node = &self.planner.mir[node_id];
+            matches!(
+                node.op,
+                mir::Operation::ExecStatement(_)
+                    | mir::Operation::DeleteByKey(_)
+                    | mir::Operation::UpdateByKey(_)
+                    | mir::Operation::ReadModifyWrite(_)
+            )
+        });
+
+        if !has_side_effects {
+            return None;
+        }
+
+        // Build the condition Eval.
+        // The condition expression uses args from cond_args. We create a new
+        // Eval with only those inputs, remapping arg positions.
+        let cond_input_nodes: IndexSet<mir::NodeId> =
+            cond_args.iter().map(|&pos| inputs[pos]).collect();
+        let cond_input_tys: Vec<stmt::Type> = cond_args
+            .iter()
+            .map(|&pos| input_tys[pos].clone())
+            .collect();
+
+        // Remap arg positions in the condition expression
+        let mut cond_expr = (*branch.cond).clone();
+        stmt::visit_mut::for_each_expr_mut(&mut cond_expr, |e| {
+            if let stmt::Expr::Arg(a) = e {
+                a.position = cond_args.get_index_of(&a.position).unwrap();
+            }
+        });
+
+        let cond_eval = eval::Func::from_stmt(cond_expr, cond_input_tys);
+        let cond_node_id = self.planner.mir.insert(mir::Eval {
+            inputs: cond_input_nodes,
+            eval: cond_eval,
+        });
+
+        // Collect then_body nodes (the MIR nodes for then-only args).
+        // These need to be in dependency order.
+        let then_body: Vec<mir::NodeId> = then_only_args.iter().map(|&pos| inputs[pos]).collect();
+        let then_output = *then_body.last().unwrap();
+
+        // Mark then_body nodes as visited so they're excluded from the
+        // main topological execution order.
+        for &node_id in &then_body {
+            self.planner.mir[node_id].visited.set(true);
+            // Set num_uses to 1 — the Branch consumes the output.
+            self.planner.mir[node_id].num_uses.set(1);
+        }
+
+        // Determine the else value
+        let else_value = expr_if.r#else.eval_const().unwrap_or_default();
+
+        // Determine the Branch output type.
+        // Use the then output type (the else branch is typically null/unit).
+        let then_ty = self.planner.mir[then_output].ty().clone();
+        let branch_ty = then_ty;
+
+        // Collect extra deps: deps of body nodes that aren't body nodes themselves.
+        let mut extra_deps = IndexSet::new();
+        for &node_id in &then_body {
+            for dep_id in &self.planner.mir[node_id].deps {
+                if !then_body.contains(dep_id) {
+                    extra_deps.insert(*dep_id);
+                }
+            }
+        }
+
+        let branch_node = mir::Branch {
+            cond: cond_node_id,
+            then_body,
+            then_output,
+            else_body: vec![],
+            else_output: None,
+            else_value,
+            ty: branch_ty,
+        };
+
+        let branch_node_id = self.planner.mir.insert_with_deps(branch_node, extra_deps);
+
+        // Apply remaining statement deps to the branch node.
+        self.apply_dependencies_to_node(branch_node_id);
+
+        Some(branch_node_id)
     }
 
     // ===== MIR/utility helpers =====

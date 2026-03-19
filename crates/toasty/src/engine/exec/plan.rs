@@ -1,12 +1,17 @@
-use crate::engine::exec::{Action, VarId, VarStore};
+use index_vec::IndexVec;
+
+use crate::engine::exec::{Block, BlockId, VarId, VarStore};
 
 #[derive(Debug)]
 pub(crate) struct ExecPlan {
     /// Arguments seeding the plan
     pub(crate) vars: VarStore,
 
-    /// Steps in the pipeline
-    pub(crate) actions: Vec<Action>,
+    /// Basic blocks forming the control flow graph
+    pub(crate) blocks: IndexVec<BlockId, Block>,
+
+    /// Entry block (always BlockId(0))
+    pub(crate) entry: BlockId,
 
     /// Which record stream slot does the pipeline return
     ///

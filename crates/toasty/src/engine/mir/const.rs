@@ -25,7 +25,7 @@ impl Const {
                 var,
                 num_uses: node.num_uses.get(),
             },
-            value: self.value.clone(),
+            source: exec::VarSource::Value(self.value.clone()),
         }
     }
 }

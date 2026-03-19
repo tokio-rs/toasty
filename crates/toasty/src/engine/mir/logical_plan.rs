@@ -31,10 +31,8 @@ impl LogicalPlan {
         }
     }
 
-    pub(crate) fn operations(&self) -> impl Iterator<Item = &Node> {
-        self.execution_order
-            .iter()
-            .map(|node_id| &self.store[node_id])
+    pub(crate) fn execution_order(&self) -> &[NodeId] {
+        &self.execution_order
     }
 
     pub(crate) fn completion(&self) -> &Node {

@@ -99,6 +99,16 @@ impl Value {
         matches!(self, Self::Null)
     }
 
+    /// Returns true for non-null, non-false, non-empty-list values.
+    pub fn is_truthy(&self) -> bool {
+        match self {
+            Self::Null => false,
+            Self::Bool(b) => *b,
+            Self::List(items) => !items.is_empty(),
+            _ => true,
+        }
+    }
+
     pub const fn is_record(&self) -> bool {
         matches!(self, Self::Record(_))
     }

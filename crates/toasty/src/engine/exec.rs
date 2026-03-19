@@ -1,6 +1,9 @@
 mod action;
 pub(crate) use action::Action;
 
+mod block;
+pub(crate) use block::{Block, BlockBuilder, BlockId, Terminator};
+
 mod delete_by_key;
 pub(crate) use delete_by_key::DeleteByKey;
 
@@ -42,7 +45,7 @@ mod rmw;
 pub(crate) use rmw::ReadModifyWrite;
 
 mod set_var;
-pub(crate) use set_var::SetVar;
+pub(crate) use set_var::{SetVar, VarSource};
 
 mod update_by_key;
 pub(crate) use update_by_key::UpdateByKey;
@@ -105,13 +108,32 @@ impl Engine {
             exec.in_transaction = true;
         }
 
-        for step in &plan.actions {
-            if let Err(e) = exec.exec_step(step).await {
-                if plan.needs_transaction {
-                    // Best effort: ignore rollback errors so the original error is returned
-                    let _ = exec.connection.exec(&self.schema, rollback.into()).await;
+        let mut current_block = plan.entry;
+        'outer: loop {
+            let block = &plan.blocks[current_block];
+            for step in &block.actions {
+                if let Err(e) = exec.exec_step(step).await {
+                    if plan.needs_transaction {
+                        let _ = exec.connection.exec(&self.schema, rollback.into()).await;
+                    }
+                    return Err(e);
                 }
-                return Err(e);
+            }
+            match &block.terminator {
+                Terminator::Return => break 'outer,
+                Terminator::Goto(target) => current_block = *target,
+                Terminator::If {
+                    cond,
+                    then_block,
+                    else_block,
+                } => {
+                    let val = exec.vars.load(*cond).await?.collect_as_value().await?;
+                    current_block = if val.is_truthy() {
+                        *then_block
+                    } else {
+                        *else_block
+                    };
+                }
             }
         }
 
@@ -146,7 +168,7 @@ impl Exec<'_> {
             Action::QueryPk(action) => self.action_query_pk(action).await,
             Action::ReadModifyWrite(action) => self.action_read_modify_write(action).await,
             Action::Project(action) => self.action_project(action).await,
-            Action::SetVar(action) => self.action_set_var(action),
+            Action::SetVar(action) => self.action_set_var(action).await,
             Action::UpdateByKey(action) => self.action_update_by_key(action).await,
         }
     }

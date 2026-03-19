@@ -5,8 +5,8 @@ use indexmap::{indexset, IndexSet};
 use crate::engine::mir::Eval;
 
 use super::{
-    Const, DeleteByKey, ExecStatement, Filter, FindPkByIndex, GetByKey, NestedMerge, Node, Project,
-    QueryPk, ReadModifyWrite, UpdateByKey,
+    Branch, Const, DeleteByKey, ExecStatement, Filter, FindPkByIndex, GetByKey, NestedMerge, Node,
+    Project, QueryPk, ReadModifyWrite, UpdateByKey,
 };
 
 /// A step in the query execution plan.
@@ -15,6 +15,9 @@ use super::{
 /// filtering results, transforming records, or combining nested data.
 #[derive(Debug)]
 pub(crate) enum Operation {
+    /// Conditional branch: execute different nodes based on a boolean condition.
+    Branch(Branch),
+
     /// A constant value
     Const(Const),
 
@@ -52,6 +55,7 @@ pub(crate) enum Operation {
 impl From<Operation> for Node {
     fn from(value: Operation) -> Self {
         let deps = match &value {
+            Operation::Branch(m) => indexset![m.cond],
             Operation::Const(_m) => IndexSet::new(),
             Operation::DeleteByKey(m) => indexset![m.input],
             Operation::Eval(m) => m.inputs.clone(),

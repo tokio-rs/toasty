@@ -4,7 +4,7 @@ mod statement;
 
 use crate::{
     engine::{
-        exec::{self, ExecPlan, VarDecls},
+        exec::{ExecPlan, VarDecls},
         mir::{self, LogicalPlan},
         Engine, HirStatement,
     },
@@ -26,7 +26,6 @@ struct HirPlanner<'a> {
 struct ExecPlanner<'a> {
     logical_plan: &'a LogicalPlan,
     var_decls: VarDecls,
-    actions: Vec<exec::Action>,
     use_transactions: bool,
 }
 
@@ -48,7 +47,6 @@ impl Engine {
         ExecPlanner {
             logical_plan: &logical_plan,
             var_decls: VarDecls::default(),
-            actions: vec![],
             use_transactions: self.capability().sql,
         }
         .plan_execution()

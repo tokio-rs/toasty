@@ -1,3 +1,6 @@
+mod branch;
+pub(crate) use branch::Branch;
+
 mod r#const;
 pub(crate) use r#const::Const;
 

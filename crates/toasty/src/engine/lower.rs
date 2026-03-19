@@ -457,8 +457,9 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     self.curr_stmt_info().deps.insert(target_id);
                 }
 
-                // Keep EXISTS wrapping the arg — the evaluator will check
-                // for non-empty list / non-null value (SQL EXISTS semantics).
+                // The sub-statement result is a list of rows. Wrap it in
+                // Exists(Values(arg)) — the evaluator flattens nested lists
+                // so EXISTS checks the inner row count.
                 *expr = stmt::Expr::Exists(stmt::ExprExists {
                     subquery: Box::new(stmt::Query::values(arg)),
                 });
@@ -654,6 +655,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         lower.plan_stmt_update_relations(
             &mut stmt.assignments,
             &stmt.filter,
+            &stmt.condition,
             &mut stmt.returning,
             returning_changed,
         );

@@ -40,6 +40,7 @@ pub(crate) struct Node {
 impl Node {
     pub(crate) fn ty(&self) -> &stmt::Type {
         match &self.op {
+            Operation::Branch(m) => &m.ty,
             Operation::Const(m) => &m.ty,
             Operation::DeleteByKey(m) => &m.ty,
             Operation::Eval(m) => &m.eval.ret,
@@ -55,12 +56,17 @@ impl Node {
         }
     }
 
+    /// Convert this node to an exec action. Panics for Branch nodes, which
+    /// must be handled specially in plan_execution.
     pub(crate) fn to_exec(
         &self,
         logical_plan: &LogicalPlan,
         var_table: &mut exec::VarDecls,
     ) -> exec::Action {
         match &self.op {
+            Operation::Branch(_) => {
+                panic!("Branch nodes must be handled by plan_execution, not to_exec")
+            }
             Operation::Const(op) => op.to_exec(self, var_table).into(),
             Operation::DeleteByKey(op) => op.to_exec(logical_plan, self, var_table).into(),
             Operation::Eval(op) => op.to_exec(logical_plan, self, var_table).into(),
