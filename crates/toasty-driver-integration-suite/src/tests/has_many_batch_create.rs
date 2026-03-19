@@ -124,7 +124,7 @@ pub async fn user_batch_create_todos_two_levels_basic_fk(test: &mut Test) -> Res
     let mut categories = vec![];
 
     for todo in &todos {
-        categories.push(todo.category().get(&mut db).await?);
+        categories.push(todo.category().exec(&mut db).await?);
     }
 
     assert_eq_unordered!(

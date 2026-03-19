@@ -87,7 +87,7 @@ allowed:
 // A user without a profile — this is fine
 let user = User::create().name("Alice").exec(&mut db).await?;
 
-assert!(user.profile().get(&mut db).await?.is_none());
+assert!(user.profile().exec(&mut db).await?.is_none());
 # Ok(())
 # }
 ```
@@ -124,7 +124,7 @@ let user = User::create()
     .exec(&mut db)
     .await?;
 
-let profile = user.profile().get(&mut db).await?;
+let profile = user.profile().exec(&mut db).await?;
 assert_eq!(profile.bio, "Hello");
 # Ok(())
 # }
@@ -163,7 +163,7 @@ Call the relation method on the parent instance to load the child:
 #     .exec(&mut db)
 #     .await?;
 // For HasOne<Option<Profile>> — returns Option<Profile>
-let profile = user.profile().get(&mut db).await?;
+let profile = user.profile().exec(&mut db).await?;
 
 if let Some(profile) = profile {
     println!("Bio: {}", profile.bio);
@@ -175,7 +175,7 @@ if let Some(profile) = profile {
 For a required `HasOne<Profile>`, `.get()` returns `Profile` directly (not
 wrapped in `Option`).
 
-Each call to `.profile().get()` executes a database query. To avoid this, use
+Each call to `.profile().exec()` executes a database query. To avoid this, use
 [preloading](./preloading-associations.md).
 
 ## Creating through the relation
@@ -292,7 +292,7 @@ user.update()
     .exec(&mut db)
     .await?;
 
-let profile = user.profile().get(&mut db).await?.unwrap();
+let profile = user.profile().exec(&mut db).await?.unwrap();
 assert_eq!(profile.bio, "New bio");
 # Ok(())
 # }
@@ -343,7 +343,7 @@ For an optional HasOne, pass `None` to disassociate the child:
 user.update().profile(None).exec(&mut db).await?;
 
 // The profile no longer belongs to the user
-assert!(user.profile().get(&mut db).await?.is_none());
+assert!(user.profile().exec(&mut db).await?.is_none());
 ```
 
 What happens to the child when you unset the relation depends on the child's

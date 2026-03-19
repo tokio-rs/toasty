@@ -43,7 +43,7 @@ pub async fn different_field_name(test: &mut Test) -> Result<()> {
     assert_eq!(todo.title, "hello world");
 
     // Load the user
-    let user_reloaded = todo.owner().get(&mut db).await?;
+    let user_reloaded = todo.owner().exec(&mut db).await?;
 
     assert_eq!(user.id, user_reloaded.id);
     Ok(())

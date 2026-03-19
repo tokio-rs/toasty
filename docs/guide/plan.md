@@ -113,7 +113,7 @@ Each chapter introduces models incrementally. Chapter 1 starts with just `User`.
 - Add a foreign key field + `#[belongs_to]` relation field
 - `#[belongs_to(key = user_id, references = id)]`
 - The `BelongsTo<User>` type
-- Accessing the related record: `post.user().get(&mut db).await?`
+- Accessing the related record: `post.user().exec(&mut db).await?`
 - Setting on create: `Post::create().user(&user)`
 - **What gets generated**: relation accessor, `.get()` method
 
@@ -129,7 +129,7 @@ Each chapter introduces models incrementally. Chapter 1 starts with just `User`.
 #### 14. Relationships: HasOne
 - `#[has_one]` for single-child relations
 - `HasOne<Profile>` (required) vs `HasOne<Option<Profile>>` (optional)
-- Accessing: `user.profile().get(&mut db).await?`
+- Accessing: `user.profile().exec(&mut db).await?`
 - Creating: `user.profile().create().bio("...").exec(&mut db).await?`
 
 #### 15. Preloading Associations
