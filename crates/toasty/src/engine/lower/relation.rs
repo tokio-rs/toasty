@@ -3,7 +3,7 @@ use toasty_core::{
     stmt,
 };
 
-use crate::engine::{lower::LowerStatement, Simplify};
+use crate::engine::lower::LowerStatement;
 
 #[derive(Debug)]
 enum Mutation {

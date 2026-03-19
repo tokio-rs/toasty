@@ -1,7 +1,10 @@
+#[cfg(test)]
 use toasty_core::{schema::app::FieldId, stmt};
 
+#[cfg(test)]
 use crate::engine::simplify::Simplify;
 
+#[cfg(test)]
 impl Simplify<'_> {
     /// Extracts the constant value from a simple subquery that filters on a key field.
     ///
