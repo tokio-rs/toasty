@@ -1,6 +1,7 @@
 use crate::{
     stmt::{
-        BinaryOp, ConstInput, Expr, ExprArg, ExprSet, Input, Limit, Offset, Projection, Statement,
+        BinaryOp, ConstInput, Expr, ExprArg, ExprSet, Input, Limit, Offset, Projection, Query,
+        Statement,
         Value,
     },
     Result,
@@ -26,41 +27,7 @@ impl Statement {
 
     fn eval_ref(&self, scope: &ScopeStack<'_>, input: &mut impl Input) -> Result<Value> {
         match self {
-            Statement::Query(query) => {
-                if query.with.is_some() {
-                    return Err(crate::Error::expression_evaluation_failed(
-                        "cannot evaluate statement with WITH clause",
-                    ));
-                }
-
-                if query.order_by.is_some() {
-                    return Err(crate::Error::expression_evaluation_failed(
-                        "cannot evaluate statement with ORDER BY clause",
-                    ));
-                }
-
-                let mut result = query.body.eval_ref(scope, input)?;
-
-                if let Some(limit) = &query.limit {
-                    limit.eval_ref(&mut result, scope, input)?;
-                }
-
-                if query.single {
-                    let Value::List(mut items) = result else {
-                        return Err(crate::Error::expression_evaluation_failed(
-                            "single-row query requires body to evaluate to a list",
-                        ));
-                    };
-                    if items.len() != 1 {
-                        return Err(crate::Error::expression_evaluation_failed(
-                            "single-row query did not return exactly one row",
-                        ));
-                    }
-                    return Ok(items.remove(0));
-                }
-
-                Ok(result)
-            }
+            Statement::Query(query) => query.eval_ref(scope, input),
             _ => Err(crate::Error::expression_evaluation_failed(
                 "can only evaluate Query statements",
             )),
@@ -102,6 +69,44 @@ impl Limit {
         let n = self.limit.eval_ref_usize(scope, input)?;
         items.truncate(n);
         Ok(())
+    }
+}
+
+impl Query {
+    fn eval_ref(&self, scope: &ScopeStack<'_>, input: &mut impl Input) -> Result<Value> {
+        if self.with.is_some() {
+            return Err(crate::Error::expression_evaluation_failed(
+                "cannot evaluate statement with WITH clause",
+            ));
+        }
+
+        if self.order_by.is_some() {
+            return Err(crate::Error::expression_evaluation_failed(
+                "cannot evaluate statement with ORDER BY clause",
+            ));
+        }
+
+        let mut result = self.body.eval_ref(scope, input)?;
+
+        if let Some(limit) = &self.limit {
+            limit.eval_ref(&mut result, scope, input)?;
+        }
+
+        if self.single {
+            let Value::List(mut items) = result else {
+                return Err(crate::Error::expression_evaluation_failed(
+                    "single-row query requires body to evaluate to a list",
+                ));
+            };
+            if items.len() != 1 {
+                return Err(crate::Error::expression_evaluation_failed(
+                    "single-row query did not return exactly one row",
+                ));
+            }
+            return Ok(items.remove(0));
+        }
+
+        Ok(result)
     }
 }
 
@@ -324,7 +329,7 @@ impl Expr {
             }
             Expr::Exists(expr_exists) => {
                 // SQL EXISTS semantics: true if the subquery returns any rows.
-                let value = expr_exists.subquery.body.eval_ref(scope, input)?;
+                let value = expr_exists.subquery.eval_ref(scope, input)?;
                 let exists = match &value {
                     Value::List(items) => !items.is_empty(),
                     Value::Null => false,

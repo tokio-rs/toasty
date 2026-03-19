@@ -71,6 +71,17 @@ impl Func<&stmt::Expr> {
     }
 }
 
+fn verify_query(query: &stmt::Query) -> bool {
+    if query.with.is_some() || query.order_by.is_some() {
+        return false;
+    }
+
+    match &query.body {
+        stmt::ExprSet::Values(values) => values.rows.iter().all(verify_expr),
+        _ => false,
+    }
+}
+
 fn verify_expr(expr: &stmt::Expr) -> bool {
     use stmt::Expr::*;
 
@@ -99,8 +110,9 @@ fn verify_expr(expr: &stmt::Expr) -> bool {
                 .all(|b| verify_expr(&b.cond) && verify_expr(&b.then))
                 && verify_expr(&expr_if.r#else)
         }
+        Exists(expr_exists) => verify_query(&expr_exists.subquery),
         // Subquery-based expressions: cannot be evaluated in memory
-        Stmt(_) | InSubquery(_) | Exists(_) | Func(_) => false,
+        Stmt(_) | InSubquery(_) | Func(_) => false,
         Value(_) => true,
         _ => todo!("expr={expr:#?}"),
     }
