@@ -79,6 +79,18 @@ impl<M> Query<M> {
     pub fn delete(self) -> Delete<M> {
         Delete::from_untyped(self.untyped.delete())
     }
+
+    pub fn count(mut self) -> Query<i64> {
+        if let Some(returning) = self.untyped.returning_mut() {
+            *returning = stmt::Returning::Expr(stmt::Expr::record([stmt::Expr::count_star()]));
+        }
+        self.untyped.single = true;
+        self.untyped.order_by = None;
+        Query {
+            untyped: self.untyped,
+            _p: Default::default(),
+        }
+    }
 }
 
 impl<M: Model> Query<M> {

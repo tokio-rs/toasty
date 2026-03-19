@@ -1,6 +1,7 @@
 use super::{
     ddb_expression, ddb_key, item_to_record, operation, stmt, Connection, ExprAttrs, Result, Schema,
 };
+use aws_sdk_dynamodb::types::Select;
 use std::sync::Arc;
 use toasty_core::{driver::Response, stmt::ExprContext};
 
@@ -24,8 +25,7 @@ impl Connection {
             .as_ref()
             .map(|expr| ddb_expression(&cx, &mut expr_attrs, false, expr));
 
-        // Build the query based on whether we're querying primary key or an index
-        let result = if let Some(index_id) = op.index {
+        let res = if let Some(index_id) = op.index {
             let index = schema.db.index(index_id);
 
             if index.unique {
@@ -46,6 +46,10 @@ impl Connection {
                     .set_filter_expression(filter_expression)
                     .set_expression_attribute_names(Some(expr_attrs.attr_names))
                     .set_expression_attribute_values(Some(expr_attrs.attr_values));
+
+                if op.count_only {
+                    query = query.select(Select::Count);
+                }
 
                 // Apply pagination parameters when present.
                 if let Some(limit) = op.limit {
@@ -74,6 +78,10 @@ impl Connection {
                 .set_expression_attribute_names(Some(expr_attrs.attr_names))
                 .set_expression_attribute_values(Some(expr_attrs.attr_values));
 
+            if op.count_only {
+                query = query.select(Select::Count);
+            }
+
             // Apply pagination parameters when present.
             if let Some(limit) = op.limit {
                 query = query.limit(limit as i32);
@@ -91,17 +99,22 @@ impl Connection {
                 .map_err(toasty_core::Error::driver_operation_failed)
         };
 
-        let schema = schema.clone();
-        let res = result?;
-        Ok(Response::value_stream(stmt::ValueStream::from_iter(
-            res.items.into_iter().flatten().map(move |item| {
-                item_to_record(
-                    &item,
-                    op.select
-                        .iter()
-                        .map(|column_id| schema.db.column(*column_id)),
-                )
-            }),
-        )))
+        let res = res?;
+
+        if op.count_only {
+            Ok(Response::count(res.count() as u64))
+        } else {
+            let schema = schema.clone();
+            Ok(Response::value_stream(stmt::ValueStream::from_iter(
+                res.items.into_iter().flatten().map(move |item| {
+                    item_to_record(
+                        &item,
+                        op.select
+                            .iter()
+                            .map(|column_id| schema.db.column(*column_id)),
+                    )
+                }),
+            )))
+        }
     }
 }

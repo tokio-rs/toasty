@@ -36,6 +36,9 @@ pub(crate) struct QueryPk {
     /// The return type.
     pub(crate) ty: stmt::Type,
 
+    /// When true, return only the count of matching rows.
+    pub(crate) count_only: bool,
+
     /// Maximum number of items to return.
     pub(crate) limit: Option<i64>,
 
@@ -87,6 +90,7 @@ impl QueryPk {
             columns,
             pk_filter: self.pk_filter.clone(),
             row_filter: self.row_filter.clone(),
+            count_only: self.count_only,
             limit: self.limit,
             order: self.order,
             cursor: self.cursor.clone(),

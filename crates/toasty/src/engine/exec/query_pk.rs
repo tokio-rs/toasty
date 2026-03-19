@@ -31,6 +31,9 @@ pub(crate) struct QueryPk {
     /// Filter to pass to the database
     pub row_filter: Option<stmt::Expr>,
 
+    /// When true, return only the count of matching rows.
+    pub count_only: bool,
+
     /// Maximum number of items to return.
     pub limit: Option<i64>,
 
@@ -51,7 +54,9 @@ impl Exec<'_> {
         }
 
         let filters = self.split_filter(pk_filter, action.table);
+
         let mut all_rows = Vec::new();
+        let mut total: i64 = 0;
 
         for f in filters {
             let res = self
@@ -64,6 +69,7 @@ impl Exec<'_> {
                         select: action.columns.clone(),
                         pk_filter: f,
                         filter: action.row_filter.clone(),
+                        count_only: action.count_only,
                         limit: action.limit,
                         order: action.order,
                         cursor: action.cursor.clone(),
@@ -72,13 +78,25 @@ impl Exec<'_> {
                 )
                 .await?;
 
-            all_rows.extend(res.rows.into_value_stream().collect().await?);
+            if action.count_only {
+                total += res.rows.into_count() as i64;
+            } else {
+                all_rows.extend(res.rows.into_value_stream().collect().await?);
+            }
         }
+
+        let rows = if action.count_only {
+            let record =
+                stmt::Value::Record(stmt::ValueRecord::from_vec(vec![stmt::Value::I64(total)]));
+            vec![record]
+        } else {
+            all_rows
+        };
 
         self.vars.store(
             action.output.var,
             action.output.num_uses,
-            Rows::Stream(stmt::ValueStream::from_vec(all_rows)),
+            Rows::Stream(stmt::ValueStream::from_vec(rows)),
         );
 
         Ok(())

@@ -22,6 +22,10 @@ pub struct QueryPk {
     /// caller.
     pub filter: Option<stmt::Expr>,
 
+    /// When true, return only the count of matching rows instead of the rows
+    /// themselves. Used to implement `COUNT(*)` on NoSQL backends.
+    pub count_only: bool,
+
     /// Maximum number of items to return. `None` means no limit.
     pub limit: Option<i64>,
 

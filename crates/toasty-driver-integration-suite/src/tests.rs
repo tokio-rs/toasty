@@ -11,6 +11,7 @@ pub mod belongs_to_self_referential;
 pub mod bigdecimal;
 pub mod composite_key_pagination;
 pub mod connection_per_clone;
+pub mod count;
 pub mod create_macro;
 pub mod decimal;
 pub mod default_and_update;

@@ -8,7 +8,7 @@ use index_vec::IndexVec;
 use indexmap::IndexSet;
 use toasty_core::stmt::{self, ExprReference};
 
-use crate::engine::mir;
+use crate::engine::{mir, plan::select_items::SelectItems};
 
 /// High-level Intermediate Representation of a query.
 ///
@@ -75,11 +75,12 @@ pub(super) struct StatementInfo {
     /// Used to wire up dependencies between operations.
     pub(super) load_data_statement: Cell<Option<mir::NodeId>>,
 
-    /// Columns selected by the `exec_statement` operation.
+    /// Items (columns and computed expressions) selected by the
+    /// `exec_statement` operation.
     ///
-    /// Populated during planning to track which columns are fetched from the
-    /// database. Used to resolve column references in child statements.
-    pub(super) load_data_columns: OnceCell<IndexSet<stmt::ExprReference>>,
+    /// Populated during planning to track which items are fetched from the
+    /// database. Used to resolve column/expression references in child statements.
+    pub(super) load_data_columns: OnceCell<SelectItems>,
 
     /// MIR node representing this statement's final output.
     ///
