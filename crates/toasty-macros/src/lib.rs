@@ -409,8 +409,8 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 ///
 /// Embedded types do not have their own tables or primary keys. Their
 /// fields are flattened into the parent model's columns. Use `Embed` for
-/// value objects (addresses, coordinates, metadata) and discriminated
-/// unions (status codes, contact info variants).
+/// value objects (addresses, coordinates, metadata) and enums
+/// (status codes, contact info variants).
 ///
 /// # Structs
 ///
@@ -439,7 +439,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// Applying `#[derive(Embed)]` to a struct generates:
 ///
 /// - An [`Embed`] trait implementation (which extends [`Register`]).
-/// - A `Fields` struct returned by `<Type>::fields()` for building typed
+/// - A `Fields` struct returned by `<Type>::fields()` for building
 ///   filter expressions on individual fields.
 /// - An `Update` struct used by the parent model's update builder for
 ///   partial field updates.
@@ -547,8 +547,8 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// }
 /// ```
 ///
-/// See [`Model`](derive.Model.html#columncustomize-the-database-column)
-/// for the full list of supported column types.
+/// See [`Model`][`derive@Model`] for the full list of supported column
+/// types.
 ///
 /// **On enum variants**, `#[column(variant = N)]` is **required** and
 /// assigns the integer discriminant stored in the database:
@@ -588,7 +588,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 ///
 /// # Using embedded types in a model
 ///
-/// Reference an embedded type as a field on a [`Model`](derive.Model.html)
+/// Reference an embedded type as a field on a [`Model`][`derive@Model`]
 /// struct. The parent model's create and update builders gain a setter for
 /// the embedded field. For embedded structs, a `with_<field>` method
 /// supports partial updates of individual sub-fields:
