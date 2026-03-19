@@ -105,7 +105,8 @@ impl Engine {
             exec.in_transaction = true;
         }
 
-        for step in &plan.actions {
+        for (i, step) in plan.actions.iter().enumerate() {
+            tracing::debug!("Executing action {}: {:?}", i, action_name(step));
             if let Err(e) = exec.exec_step(step).await {
                 if plan.needs_transaction {
                     // Best effort: ignore rollback errors so the original error is returned
@@ -119,8 +120,11 @@ impl Engine {
             exec.connection.exec(&self.schema, commit.into()).await?;
         }
 
-        Ok(if let Some(returning) = plan.returning {
-            match exec.vars.load(returning).await? {
+        let result = if let Some(returning) = plan.returning {
+            let rows = exec.vars.load(returning).await?;
+            tracing::debug!("Final result from var {:?}:\n{:#?}", returning, rows);
+
+            match rows {
                 Rows::Count(_) => ValueStream::default(),
                 Rows::Value(stmt::Value::List(items)) => ValueStream::from_vec(items),
                 // TODO have the public API be able to handle single rows
@@ -129,7 +133,26 @@ impl Engine {
             }
         } else {
             ValueStream::default()
-        })
+        };
+
+        Ok(result)
+    }
+}
+
+fn action_name(action: &Action) -> &'static str {
+    match action {
+        Action::DeleteByKey(_) => "DeleteByKey",
+        Action::Eval(_) => "Eval",
+        Action::ExecStatement(_) => "ExecStatement",
+        Action::Filter(_) => "Filter",
+        Action::FindPkByIndex(_) => "FindPkByIndex",
+        Action::GetByKey(_) => "GetByKey",
+        Action::NestedMerge(_) => "NestedMerge",
+        Action::QueryPk(_) => "QueryPk",
+        Action::ReadModifyWrite(_) => "ReadModifyWrite",
+        Action::Project(_) => "Project",
+        Action::SetVar(_) => "SetVar",
+        Action::UpdateByKey(_) => "UpdateByKey",
     }
 }
 

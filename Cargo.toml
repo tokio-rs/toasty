@@ -24,6 +24,7 @@ members = [
     # Examples
     "examples/composite-key",
     "examples/hello-toasty",
+    "examples/todo-learning",
     "examples/todo-with-cli",
     "examples/user-has-one-profile",
 

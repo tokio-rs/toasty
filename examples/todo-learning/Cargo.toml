@@ -1,0 +1,26 @@
+[package]
+name = "example-todo-learning"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+default = [ "sqlite" ]
+dynamodb = [ "toasty/dynamodb" ]
+mysql = [ "toasty/mysql" ]
+postgresql = [ "toasty/postgresql" ]
+sqlite = [ "toasty/sqlite" ]
+
+[dependencies]
+toasty.workspace = true
+tokio.workspace = true
+uuid.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[[bin]]
+name = "auto-increment"
+path = "src/bin/auto_increment.rs"
+
+[lints]
+workspace = true

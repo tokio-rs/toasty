@@ -77,11 +77,16 @@ impl Engine {
             ));
         }
 
+        // Log the incoming statement
+        tracing::debug!("Incoming statement:\n{:#?}", stmt);
+
         // Lower the statement to High-level intermediate representation
         let hir = self.lower_stmt(stmt)?;
+        tracing::debug!("Lowered to HIR:\n{:#?}", hir);
 
         // Translate the optimized statement into a series of driver operations.
         let plan = self.plan_hir_statement(hir)?;
+        tracing::debug!("Planned to MIR:\n{:#?}", plan);
 
         // The plan is called once (single entry record stream) with no arguments
         // (empty record).

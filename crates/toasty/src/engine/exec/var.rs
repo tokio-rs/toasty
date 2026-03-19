@@ -47,6 +47,12 @@ impl VarStore {
             panic!("no stream at slot {}; store={:#?}", var.0, self)
         };
 
+        tracing::debug!(
+            "VarStore::load({:?}): remaining uses = {}",
+            var,
+            entry.count
+        );
+
         if entry.count == 1 {
             return Ok(self.slots[var.0].take().unwrap().rows);
         }
@@ -57,6 +63,13 @@ impl VarStore {
 
     #[track_caller]
     pub(crate) fn store(&mut self, var: VarId, count: usize, rows: Rows) {
+        tracing::debug!(
+            "VarStore::store({:?}): uses = {}, type = {:?}",
+            var,
+            count,
+            self.tys.get(var.0)
+        );
+
         while self.slots.len() <= var.0 {
             self.slots.push(None);
         }

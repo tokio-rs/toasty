@@ -6,7 +6,7 @@ use crate::{
 
 use toasty_core::{
     driver::Driver,
-    schema::{self, app},
+    schema::{self, app, Schema},
 };
 
 use std::sync::Arc;
@@ -48,6 +48,10 @@ impl Builder {
         let capability = driver.capability();
         capability.validate()?;
         let schema = self.core.build(self.build_app_schema()?, capability)?;
+
+        // Log the schema mapping for debugging
+        log_schema(&schema);
+
         let engine = Engine::new(Arc::new(schema), capability);
         let pool = Pool::new(driver, engine.clone())?;
 
@@ -60,4 +64,65 @@ impl Builder {
             connection: None,
         })
     }
+}
+
+fn log_schema(schema: &Schema) {
+    tracing::info!("=== Schema Mapping ===");
+
+    for model in schema.app.models() {
+        let model_id = model.id();
+        let model_name = model.name().upper_camel_case();
+
+        match model {
+            app::Model::Root(root) => {
+                let table = schema.table_for(model_id);
+                let table_id = schema.table_id_for(model_id);
+
+                tracing::info!(
+                    "Model: {} (ModelId({:?})) → Table: {} (TableId({:?}))",
+                    model_name,
+                    model_id,
+                    table.name,
+                    table_id,
+                );
+
+                let mapping = schema.mapping_for(model_id);
+
+                for (field_idx, field) in root.fields.iter().enumerate() {
+                    let field_name = &field.name.app_name;
+                    let field_id = field.id;
+
+                    tracing::info!(
+                        "  Field: {}.{} (FieldId({:?}/{:?})) → Type: {:?}",
+                        model_name,
+                        field_name,
+                        field_id.model,
+                        field_id.index,
+                        field.ty,
+                    );
+
+                    // Log column mappings
+                    let field_mapping = &mapping.fields[field_idx];
+                    for (column_id, _lowering_idx) in field_mapping.columns() {
+                        let column = &table.columns[column_id.index];
+                        tracing::info!(
+                            "    → Column: {} (ColumnId({:?}/{:?})) Type: {:?}",
+                            column.name,
+                            column_id.table,
+                            column_id.index,
+                            column.ty,
+                        );
+                    }
+                }
+            }
+            app::Model::EmbeddedStruct(_) => {
+                tracing::info!("Embedded Struct: {} (ModelId({:?}))", model_name, model_id);
+            }
+            app::Model::EmbeddedEnum(_) => {
+                tracing::info!("Embedded Enum: {} (ModelId({:?}))", model_name, model_id);
+            }
+        }
+    }
+
+    tracing::info!("======================");
 }
