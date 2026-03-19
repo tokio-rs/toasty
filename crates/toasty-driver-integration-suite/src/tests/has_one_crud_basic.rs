@@ -1,5 +1,10 @@
 use crate::prelude::*;
 
+use toasty_core::{
+    driver::Operation,
+    stmt::{Expr, Statement, UpdateTarget, Value},
+};
+
 #[driver_test(id(ID))]
 pub async fn crud_has_one_bi_direction_optional(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -602,12 +607,59 @@ pub async fn associate_has_one_by_val_on_update_query_with_filter_1(test: &mut T
         .await?;
 
     // Filter that does NOT match — should be a no-op
+    let profiles_table = table_id(&db, "profiles");
+
+    test.log().clear();
     User::filter_by_id(u1.id)
         .filter(User::fields().name().eq("anon"))
         .update()
         .profile(&p1)
         .exec(&mut db)
         .await?;
+
+    // Verify the driver operations:
+    // 1. Begin transaction
+    let op = test.log().pop_op();
+    assert_struct!(op, Operation::Transaction(_));
+
+    // 2. Disassociate: UPDATE profiles SET user_id = NULL
+    //    WHERE user_id IN (SELECT id FROM users WHERE id = ? AND name = 'anon')
+    //    The IN subquery makes this self-guarding — no rows match.
+    let op = test.log().pop_op();
+    assert_struct!(op, Operation::QuerySql(_ {
+        stmt: Statement::Update(_ {
+            target: UpdateTarget::Table(== profiles_table),
+            assignments: #{ 1: _ { expr: Expr::Value(Value::Null), .. } },
+            filter: _ {
+                expr: Some(Expr::InSubquery(_ {
+                    query.body.as_select().unwrap().filter.expr:
+                        Some(Expr::And(_ { operands.len(): 2, .. })),
+                    ..
+                })),
+            },
+            ..
+        }),
+        ..
+    }));
+
+    // 3. Source query: SELECT FROM users WHERE id = ? AND name = 'anon'
+    //    Returns no rows because name doesn't match.
+    let op = test.log().pop_op();
+    assert_struct!(op, Operation::QuerySql(_ {
+        stmt: Statement::Query(_ {
+            body.as_select().unwrap().filter.expr:
+                Some(Expr::And(_ { operands.len(): 2, .. })),
+            ..
+        }),
+        ..
+    }));
+
+    // 4. Commit transaction — NO associate UPDATE was executed
+    //    (the Branch skipped it because the source query returned no rows)
+    let op = test.log().pop_op();
+    assert_struct!(op, Operation::Transaction(_));
+
+    assert!(test.log().is_empty());
 
     // Verify profile's user_id is still None (update was a no-op)
     let p1_reloaded = Profile::get_by_id(&mut db, &p1.id).await?;
@@ -637,14 +689,60 @@ pub async fn associate_has_one_by_val_on_update_query_with_filter_2(test: &mut T
     assert_eq!(p1.user_id.as_ref(), Some(&u1.id));
 
     // Filter does not match, should be a no-op
-    User::filter_by_id(&u2.id)
+    let profiles_table = table_id(&db, "profiles");
+
+    test.log().clear();
+    User::filter_by_id(u2.id)
         .filter(User::fields().name().eq("anon"))
         .update()
         .profile(&p1)
         .exec(&mut db)
         .await?;
 
-    // Verify profile's user_id is still None (update was a no-op)
+    // Verify the driver operations:
+    // 1. Begin transaction
+    let op = test.log().pop_op();
+    assert_struct!(op, Operation::Transaction(_));
+
+    // 2. Disassociate: UPDATE profiles SET user_id = NULL
+    //    WHERE user_id IN (SELECT id FROM users WHERE id = ? AND name = 'anon')
+    //    Self-guarding — the subquery returns no rows, so nothing is disassociated.
+    let op = test.log().pop_op();
+    assert_struct!(op, Operation::QuerySql(_ {
+        stmt: Statement::Update(_ {
+            target: UpdateTarget::Table(== profiles_table),
+            assignments: #{ 1: _ { expr: Expr::Value(Value::Null), .. } },
+            filter: _ {
+                expr: Some(Expr::InSubquery(_ {
+                    query.body.as_select().unwrap().filter.expr:
+                        Some(Expr::And(_ { operands.len(): 2, .. })),
+                    ..
+                })),
+            },
+            ..
+        }),
+        ..
+    }));
+
+    // 3. Source query: SELECT FROM users WHERE id = ? AND name = 'anon'
+    //    Returns no rows — u2's name is "User 2", not "anon".
+    let op = test.log().pop_op();
+    assert_struct!(op, Operation::QuerySql(_ {
+        stmt: Statement::Query(_ {
+            body.as_select().unwrap().filter.expr:
+                Some(Expr::And(_ { operands.len(): 2, .. })),
+            ..
+        }),
+        ..
+    }));
+
+    // 4. Commit transaction — NO associate UPDATE was executed
+    let op = test.log().pop_op();
+    assert_struct!(op, Operation::Transaction(_));
+
+    assert!(test.log().is_empty());
+
+    // Verify profile's user_id still points to u1 (not changed)
     let p1_reloaded = Profile::get_by_id(&mut db, &p1.id).await?;
     assert_eq!(p1_reloaded.user_id.as_ref(), Some(&u1.id));
 
