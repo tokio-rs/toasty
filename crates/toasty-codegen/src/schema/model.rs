@@ -317,6 +317,24 @@ impl Model {
             }
         }
 
+        // Check for duplicate discriminant values
+        {
+            let mut seen = std::collections::HashMap::<i64, &syn::Ident>::new();
+            for v in &variants {
+                if let Some(prev) = seen.get(&v.attrs.discriminant) {
+                    errs.push(syn::Error::new_spanned(
+                        &v.ident,
+                        format!(
+                            "duplicate variant value `{}`; already used by `{}`",
+                            v.attrs.discriminant, prev
+                        ),
+                    ));
+                } else {
+                    seen.insert(v.attrs.discriminant, &v.ident);
+                }
+            }
+        }
+
         if let Some(err) = errs.collect() {
             return Err(err);
         }
