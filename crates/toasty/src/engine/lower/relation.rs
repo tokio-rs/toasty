@@ -292,7 +292,14 @@ impl LowerStatement<'_, '_> {
 
         // Needed for the existence check. Only update *if* the relation source
         // actually exists to be updated.
-        stmt.filter.set(stmt::Expr::exists(source.selection(2)));
+        stmt.filter.set(stmt::Expr::exists({
+            let mut query = source.selection(2);
+            let stmt::ExprSet::Select(select) = &mut query.body else {
+                todo!()
+            };
+            select.returning = stmt::Expr::record([1]).into();
+            query
+        }));
 
         self.new_dependency(stmt);
     }

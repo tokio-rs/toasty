@@ -1256,7 +1256,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     ) -> mir::NodeId {
         match stmt {
             stmt::Statement::Query(_) => {
-                debug_assert!(ty.is_list());
+                debug_assert!(ty.is_list(), "ty={ty:#?}");
                 self.insert_mir_with_deps(mir::GetByKey {
                     input: get_by_key_input,
                     table: index_plan.table_id(),
