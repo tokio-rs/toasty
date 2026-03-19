@@ -983,8 +983,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         let ty = if self.load_data.columns.is_empty() {
             if stmt.is_query() {
                 // Query with no columns selected is an existence check: return
-                // a unit record for every matching row.
-                stmt::Type::list(stmt::Type::Unit)
+                // an empty record for every matching row.
+                stmt::Type::list(stmt::Type::Record(vec![]))
             } else {
                 stmt::Type::Unit
             }
@@ -1277,16 +1277,62 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 filter: index_plan.result_filter.take(),
                 ty: stmt::Type::Unit,
             }),
-            stmt::Statement::Update(update_stmt) => self.insert_mir_with_deps(mir::UpdateByKey {
-                input: get_by_key_input,
-                table: index_plan.table_id(),
-                assignments: update_stmt.assignments.clone(),
-                filter: index_plan.result_filter.take(),
-                condition: update_stmt.condition.expr.clone(),
-                ty: ty.clone(),
-            }),
+            stmt::Statement::Update(update_stmt) => {
+                let (pre_filter, pre_filter_inputs) =
+                    self.compile_pre_filter(index_plan.pre_filter.take());
+
+                self.insert_mir_with_deps(mir::UpdateByKey {
+                    input: get_by_key_input,
+                    table: index_plan.table_id(),
+                    assignments: update_stmt.assignments.clone(),
+                    filter: index_plan.result_filter.take(),
+                    condition: update_stmt.condition.expr.clone(),
+                    pre_filter,
+                    pre_filter_inputs,
+                    ty: ty.clone(),
+                })
+            }
             _ => todo!("stmt={stmt:#?}"),
         }
+    }
+
+    /// Compile a pre-filter expression into an `eval::Func` and collect the
+    /// MIR input nodes it depends on.
+    fn compile_pre_filter(
+        &self,
+        pre_filter: Option<stmt::Expr>,
+    ) -> (Option<eval::Func>, Vec<mir::NodeId>) {
+        let Some(mut expr) = pre_filter else {
+            return (None, vec![]);
+        };
+
+        // Rewrite HIR arg positions to load_data input indices
+        self.rewrite_pre_filter_args(&mut expr);
+
+        // Collect the input types and node IDs
+        let args: Vec<stmt::Type> = self
+            .load_data
+            .inputs
+            .iter()
+            .map(|node_id| self.planner.mir[node_id].ty().clone())
+            .collect();
+
+        let input_nodes: Vec<mir::NodeId> = self.load_data.inputs.iter().copied().collect();
+
+        (Some(eval::Func::from_stmt(expr, args)), input_nodes)
+    }
+
+    fn rewrite_pre_filter_args(&self, expr: &mut stmt::Expr) {
+        visit_mut::for_each_expr_mut(expr, |expr| {
+            if let stmt::Expr::Arg(expr_arg) = expr {
+                match &self.stmt_info.args[expr_arg.position] {
+                    hir::Arg::Sub { input, .. } => {
+                        *expr = stmt::Expr::arg(input.get().unwrap());
+                    }
+                    _ => todo!("pre_filter with non-Sub arg"),
+                }
+            }
+        });
     }
 
     // ===== Finalization helpers =====

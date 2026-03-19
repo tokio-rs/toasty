@@ -49,6 +49,7 @@ pub(crate) fn plan_index_path<'a>(
     let mut partition_cx = PartitionCtx {
         capability,
         apply_result_filter_on_results: false,
+        pre_filter_operands: vec![],
     };
 
     let index_match = &index_planner.index_matches[index_path.index_match];
@@ -84,6 +85,16 @@ pub(crate) fn plan_index_path<'a>(
         } else {
             None
         },
+        pre_filter: match partition_cx.pre_filter_operands.len() {
+            0 => None,
+            1 => Some(partition_cx.pre_filter_operands.into_iter().next().unwrap()),
+            _ => Some(
+                stmt::ExprAnd {
+                    operands: partition_cx.pre_filter_operands,
+                }
+                .into(),
+            ),
+        },
         key_values,
         has_pk_keys,
     })
@@ -113,6 +124,9 @@ struct IndexPath {
 struct PartitionCtx<'a> {
     capability: &'a Capability,
     apply_result_filter_on_results: bool,
+    /// Expressions that depend only on args (not table columns) and must be
+    /// evaluated before issuing the database operation.
+    pre_filter_operands: Vec<stmt::Expr>,
 }
 
 impl IndexPlanner<'_> {

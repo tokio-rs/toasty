@@ -88,6 +88,10 @@ fn verify_expr(expr: &stmt::Expr) -> bool {
         }
         Project(expr) => verify_expr(&expr.base),
         Record(expr) => expr.fields.iter().all(verify_expr),
+        Exists(expr_exists) => match &expr_exists.subquery.body {
+            stmt::ExprSet::Values(values) => values.rows.iter().all(verify_expr),
+            _ => false,
+        },
         Reference(_) => false,
         Value(_) => true,
         _ => todo!("expr={expr:#?}"),

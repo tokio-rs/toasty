@@ -65,7 +65,11 @@ impl From<Operation> for Node {
             Operation::Project(m) => indexset![m.input],
             Operation::ReadModifyWrite(m) => m.inputs.clone(),
             Operation::QueryPk(m) => m.input.into_iter().collect(),
-            Operation::UpdateByKey(m) => indexset![m.input],
+            Operation::UpdateByKey(m) => {
+                let mut deps = indexset![m.input];
+                deps.extend(m.pre_filter_inputs.iter().copied());
+                deps
+            }
         };
 
         Node {

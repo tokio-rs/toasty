@@ -434,6 +434,13 @@ impl<'stmt> IndexMatch<'stmt> {
                     (true.into(), true.into())
                 }
             }
+            Exists(_) => {
+                // ExprExists depends only on args (not table columns). It
+                // cannot be part of an index or result filter — it is a
+                // pre-filter evaluated before the operation is issued.
+                ctx.pre_filter_operands.push(expr.clone());
+                (true.into(), true.into())
+            }
             _ => todo!("partition_filter={:#?}", expr),
         }
     }

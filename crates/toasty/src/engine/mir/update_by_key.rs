@@ -1,7 +1,7 @@
 use toasty_core::{schema::db::TableId, stmt};
 
 use crate::engine::{
-    exec,
+    eval, exec,
     mir::{self, LogicalPlan},
 };
 
@@ -28,6 +28,15 @@ pub(crate) struct UpdateByKey {
     /// Optional condition for optimistic locking.
     pub(crate) condition: Option<stmt::Expr>,
 
+    /// Optional guard evaluated before issuing the operation. When present and
+    /// the expression evaluates to false, the operation is skipped entirely and
+    /// an empty result is returned. The function's args correspond to the
+    /// `pre_filter_inputs` variable IDs at exec time.
+    pub(crate) pre_filter: Option<eval::Func>,
+
+    /// Input nodes whose outputs are passed to `pre_filter` for evaluation.
+    pub(crate) pre_filter_inputs: Vec<mir::NodeId>,
+
     /// The return type.
     pub(crate) ty: stmt::Type,
 }
@@ -43,6 +52,12 @@ impl UpdateByKey {
         let output = var_table.register_var(node.ty().clone());
         node.var.set(Some(output));
 
+        let pre_filter_inputs = self
+            .pre_filter_inputs
+            .iter()
+            .map(|id| logical_plan[id].var.get().unwrap())
+            .collect();
+
         exec::UpdateByKey {
             input,
             output: exec::Output {
@@ -53,6 +68,8 @@ impl UpdateByKey {
             assignments: self.assignments.clone(),
             filter: self.filter.clone(),
             condition: self.condition.clone(),
+            pre_filter: self.pre_filter.clone(),
+            pre_filter_inputs,
             returning: !self.ty.is_unit(),
         }
     }
