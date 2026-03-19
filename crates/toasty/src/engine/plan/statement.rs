@@ -1,6 +1,6 @@
 use std::mem;
 
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
 use toasty_core::stmt::{self, visit_mut, Condition};
 
 use crate::{
@@ -1009,29 +1009,29 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         index_plan: &mut index::IndexPlan,
         ty: &stmt::Type,
     ) -> mir::NodeId {
-        if let Some(key_expr) = index_plan.key_values.take() {
-            // Only include arg types that the key expression actually
-            // references. The full `load_data.inputs` may contain entries
-            // used by other parts of the statement (e.g. pre_filter) that
-            // the key expression does not depend on.
-            let mut max_arg = 0usize;
-            let mut has_args = false;
-            stmt::visit::for_each_expr(&key_expr, |expr| {
+        if let Some(mut key_expr) = index_plan.key_values.take() {
+            // The key expression may reference args from the full statement's
+            // load_data.inputs, but the MIR node we build only needs the
+            // subset actually used. Remap arg positions to a compact
+            // contiguous range and collect only the referenced input types.
+            let mut arg_map: IndexMap<usize, stmt::Type> = IndexMap::new();
+
+            visit_mut::for_each_expr_mut(&mut key_expr, |expr| {
                 if let stmt::Expr::Arg(arg) = expr {
-                    has_args = true;
-                    max_arg = max_arg.max(arg.position + 1);
+                    let new_pos = match arg_map.get_index_of(&arg.position) {
+                        Some(idx) => idx,
+                        None => {
+                            let node_id = self.load_data.inputs[arg.position];
+                            let ty = self.planner.mir[node_id].ty().clone();
+                            let (idx, _) = arg_map.insert_full(arg.position, ty);
+                            idx
+                        }
+                    };
+                    arg.position = new_pos;
                 }
             });
-            let args: Vec<_> = if has_args {
-                self.load_data
-                    .inputs
-                    .iter()
-                    .take(max_arg)
-                    .map(|node_id| self.planner.mir[node_id].ty().clone())
-                    .collect()
-            } else {
-                vec![]
-            };
+
+            let args: Vec<stmt::Type> = arg_map.into_values().collect();
             let key_ty =
                 stmt::Type::list(self.planner.engine.index_key_record_ty(index_plan.index));
             let keys = eval::Func::from_stmt_typed(key_expr, args, key_ty);
