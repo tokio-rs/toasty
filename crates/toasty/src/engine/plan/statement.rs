@@ -979,8 +979,15 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         let post_filter = self.prepare_post_filter(&stmt, &mut index_plan);
 
         // Type of the final record.
+        // TODO: Clean this up
         let ty = if self.load_data.columns.is_empty() {
-            stmt::Type::Unit
+            if stmt.is_query() {
+                // Query with no columns selected is an existence check: return
+                // a unit record for every matching row.
+                stmt::Type::list(stmt::Type::Unit)
+            } else {
+                stmt::Type::Unit
+            }
         } else {
             self.planner
                 .engine
