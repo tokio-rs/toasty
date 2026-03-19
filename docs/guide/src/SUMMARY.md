@@ -39,7 +39,3 @@
 - [Batch Operations](./batch-operations.md)
 - [Transactions](./transactions.md)
 - [Database Setup](./database-setup.md)
-
-# API Reference
-
-- [`create!` macro](./create-macro.md)
