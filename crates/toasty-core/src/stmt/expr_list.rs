@@ -59,11 +59,10 @@ impl Expr {
         }
     }
 
-    #[track_caller]
-    pub fn unwrap_list(self) -> ExprList {
+    pub fn into_list(self) -> Option<ExprList> {
         match self {
-            Self::List(list) => list,
-            _ => panic!("expected Expr::List(..) but was {self:#?}"),
+            Self::List(list) => Some(list),
+            _ => None,
         }
     }
 }

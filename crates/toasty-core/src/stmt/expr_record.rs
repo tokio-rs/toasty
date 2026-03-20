@@ -43,17 +43,24 @@ impl Expr {
         }
     }
 
-    pub fn as_record_unwrap(&self) -> &ExprRecord {
+    #[track_caller]
+    pub fn expect_record(&self) -> &ExprRecord {
+        self.as_record()
+            .unwrap_or_else(|| panic!("expected Expr::Record; actual={self:#?}"))
+    }
+
+    pub fn as_record_mut(&mut self) -> Option<&mut ExprRecord> {
         match self {
-            Self::Record(expr_record) => expr_record,
-            _ => panic!("self={self:#?}"),
+            Self::Record(expr_record) => Some(expr_record),
+            _ => None,
         }
     }
 
-    pub fn as_record_mut(&mut self) -> &mut ExprRecord {
+    #[track_caller]
+    pub fn expect_record_mut(&mut self) -> &mut ExprRecord {
         match self {
             Self::Record(expr_record) => expr_record,
-            _ => panic!(),
+            _ => panic!("expected Expr::Record"),
         }
     }
 

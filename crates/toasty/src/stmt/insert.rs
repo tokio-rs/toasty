@@ -229,8 +229,8 @@ impl<M: Model> Insert<M> {
 
     /// Returns the current record being updated
     fn current_mut(&mut self) -> &mut stmt::ExprRecord {
-        let values = self.untyped.source.body.as_values_mut();
-        values.rows.last_mut().unwrap().as_record_mut()
+        let values = self.untyped.source.body.expect_values_mut();
+        values.rows.last_mut().unwrap().expect_record_mut()
     }
 
     /// Convert this insert into a list expression.

@@ -278,12 +278,12 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     let maybe_res = self.lower_expr_binary_op(
                         stmt::BinaryOp::Eq,
                         &mut e.expr,
-                        e.query.returning_mut_unwrap().as_expr_mut_unwrap(),
+                        e.query.expect_returning_mut().expect_expr_mut(),
                     );
 
                     assert!(maybe_res.is_none(), "TODO");
 
-                    let returning = e.query.returning_mut_unwrap().as_expr_mut_unwrap();
+                    let returning = e.query.expect_returning_mut().expect_expr_mut();
 
                     if !returning.is_record() {
                         *returning = stmt::Expr::record([returning.take()]);
@@ -308,7 +308,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     let maybe_res = self.lower_expr_binary_op(
                         stmt::BinaryOp::Eq,
                         &mut e.expr,
-                        e.query.returning_mut_unwrap().as_expr_mut_unwrap(),
+                        e.query.expect_returning_mut().expect_expr_mut(),
                     );
 
                     assert!(maybe_res.is_none(), "TODO");
@@ -666,7 +666,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         if let stmt::Source::Model(source_model) = stmt {
             debug_assert!(source_model.via.is_none(), "TODO");
 
-            let table_id = self.schema().table_id_for(source_model.model);
+            let table_id = self.schema().table_id_for(source_model.id);
             *stmt = stmt::Source::table(table_id);
         }
     }
@@ -1047,7 +1047,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 
     #[track_caller]
     fn model_unwrap(&self) -> &'a ModelRoot {
-        self.expr_cx.target().as_model_unwrap()
+        self.expr_cx.target().expect_model()
     }
 
     fn mapping(&self) -> Option<&'b mapping::Model> {
@@ -1062,7 +1062,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 
     #[track_caller]
     fn mapping_at_unwrap(&self, nesting: usize) -> &'b mapping::Model {
-        let model = self.expr_cx.target_at(nesting).as_model_unwrap();
+        let model = self.expr_cx.target_at(nesting).expect_model();
         self.state.engine.schema.mapping_for(model)
     }
 

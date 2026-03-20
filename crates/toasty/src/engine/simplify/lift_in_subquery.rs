@@ -90,11 +90,11 @@ impl Simplify<'_> {
         belongs_to: &BelongsTo,
         query: &stmt::Query,
     ) -> Option<stmt::Expr> {
-        if belongs_to.target != query.body.as_select_unwrap().source.model_id_unwrap() {
+        if belongs_to.target != query.body.expect_select().source.model_id_unwrap() {
             return None;
         }
 
-        let select = query.body.as_select_unwrap();
+        let select = query.body.expect_select();
 
         assert_eq!(
             belongs_to.foreign_key.fields.len(),
@@ -118,7 +118,7 @@ impl Simplify<'_> {
             };
             let mut subquery = query.clone();
 
-            subquery.body.as_select_mut_unwrap().returning =
+            subquery.body.expect_select_mut().returning =
                 stmt::Returning::Expr(stmt::Expr::ref_self_field(fk_fields.target));
 
             Some(stmt::Expr::in_subquery(
@@ -153,7 +153,7 @@ impl Simplify<'_> {
         pair: &BelongsTo,
         query: &stmt::Query,
     ) -> Option<stmt::Expr> {
-        if target != query.body.as_select_unwrap().source.model_id_unwrap() {
+        if target != query.body.expect_select().source.model_id_unwrap() {
             return None;
         }
 

@@ -85,7 +85,7 @@ impl Statement {
     }
 
     #[track_caller]
-    pub fn filter_unwrap(&self) -> &Filter {
+    pub fn expect_filter(&self) -> &Filter {
         match self.filter() {
             Some(filter) => filter,
             _ => panic!("expected statement to have a filter; statement={self:#?}"),
@@ -115,16 +115,17 @@ impl Statement {
     ///
     /// Panics if the statement does not support filtering.
     #[track_caller]
-    pub fn filter_mut_unwrap(&mut self) -> &mut Filter {
+    pub fn expect_filter_mut(&mut self) -> &mut Filter {
         match self {
             Statement::Delete(delete) => &mut delete.filter,
             Statement::Insert(_) => panic!("expected Statement with filter"),
-            Statement::Query(query) => query.filter_mut_unwrap(),
+            Statement::Query(query) => query.expect_filter_mut(),
             Statement::Update(update) => &mut update.filter,
         }
     }
 
-    pub fn filter_expr_unwrap(&self) -> &Expr {
+    #[track_caller]
+    pub fn expect_filter_expr(&self) -> &Expr {
         self.filter()
             .and_then(|f| f.expr.as_ref())
             .expect("expected Statement with expression filter")
@@ -144,7 +145,7 @@ impl Query {
     }
 
     #[track_caller]
-    pub fn filter_unwrap(&self) -> &Filter {
+    pub fn expect_filter(&self) -> &Filter {
         self.filter()
             .unwrap_or_else(|| panic!("expected Query with filter; actual={self:#?}"))
     }
@@ -166,7 +167,7 @@ impl Query {
     ///
     /// Panics if the query body is not a `SELECT` statement.
     #[track_caller]
-    pub fn filter_mut_unwrap(&mut self) -> &mut Filter {
+    pub fn expect_filter_mut(&mut self) -> &mut Filter {
         match &mut self.body {
             ExprSet::Select(select) => &mut select.filter,
             _ => panic!("expected Query with filter"),

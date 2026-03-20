@@ -41,11 +41,17 @@ impl Expr {
         matches!(self, Self::Project(..))
     }
 
-    pub fn as_project(&self) -> &ExprProject {
+    pub fn as_project(&self) -> Option<&ExprProject> {
         match self {
-            Self::Project(expr_project) => expr_project,
-            _ => panic!(),
+            Self::Project(expr_project) => Some(expr_project),
+            _ => None,
         }
+    }
+
+    #[track_caller]
+    pub fn expect_project(&self) -> &ExprProject {
+        self.as_project()
+            .unwrap_or_else(|| panic!("expected Expr::Project; actual={self:#?}"))
     }
 }
 

@@ -201,7 +201,7 @@ impl<T: Model> IntoStatement for Association<List<T>> {
 
     fn into_statement(self) -> Statement<List<T>> {
         let query = stmt::Query::builder(stmt::SourceModel {
-            model: T::id(),
+            id: T::id(),
             via: Some(self.untyped),
         })
         .build();
@@ -257,7 +257,7 @@ impl<T: Model> IntoStatement for Association<T> {
 
     fn into_statement(self) -> Statement<List<T>> {
         let query = stmt::Query::builder(stmt::SourceModel {
-            model: T::id(),
+            id: T::id(),
             via: Some(self.untyped),
         })
         .build();

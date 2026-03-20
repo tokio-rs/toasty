@@ -115,18 +115,17 @@ impl Entry<'_> {
         )
     }
 
-    pub fn try_as_value(&self) -> Option<&Value> {
+    pub fn as_value(&self) -> Option<&Value> {
         match *self {
             Entry::Expr(Expr::Value(value)) | Entry::Value(value) => Some(value),
             _ => None,
         }
     }
 
-    pub fn as_value(&self) -> &Value {
-        match *self {
-            Entry::Expr(Expr::Value(value)) | Entry::Value(value) => value,
-            _ => todo!(),
-        }
+    #[track_caller]
+    pub fn expect_value(&self) -> &Value {
+        self.as_value()
+            .unwrap_or_else(|| panic!("expected Entry with value; actual={self:#?}"))
     }
 
     pub fn to_value(&self) -> Value {

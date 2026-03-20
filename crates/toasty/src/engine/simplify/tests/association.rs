@@ -142,6 +142,6 @@ fn has_many_via_becomes_in_subquery() {
     // Ensure the source of the subquery is the user model.
     assert!(matches!(
         &select.source,
-        stmt::Source::Model(SourceModel { model, .. }) if *model == s.user_model
+        stmt::Source::Model(SourceModel { id, .. }) if *id == s.user_model
     ));
 }

@@ -12,7 +12,7 @@ impl Connection {
     ) -> Result<Response> {
         assert!(insert.returning.is_none());
 
-        let insert_table = insert.target.as_table_unwrap();
+        let insert_table = insert.target.expect_table();
         let table = &schema.table(insert_table.table);
 
         let unique_indices = table
@@ -42,7 +42,7 @@ impl Connection {
             for (i, column_id) in insert_table.columns.iter().enumerate() {
                 let column = schema.column(*column_id);
                 let entry = row.entry(i).unwrap();
-                let value = entry.as_value();
+                let value = entry.expect_value();
 
                 if !value.is_null() {
                     items.insert(column.name.clone(), Value::from(value.clone()).to_ddb());

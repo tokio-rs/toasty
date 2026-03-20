@@ -177,23 +177,23 @@ impl toasty_core::driver::Connection for Connection {
         let width = match &sql {
             sql::Statement::Query(stmt) => match &stmt.body {
                 stmt::ExprSet::Select(stmt) => {
-                    Some(stmt.returning.as_expr_unwrap().as_record_unwrap().len())
+                    Some(stmt.returning.expect_expr().expect_record().len())
                 }
                 _ => todo!(),
             },
             sql::Statement::Insert(stmt) => stmt
                 .returning
                 .as_ref()
-                .map(|returning| returning.as_expr_unwrap().as_record_unwrap().len()),
+                .map(|returning| returning.expect_expr().expect_record().len()),
             sql::Statement::Delete(stmt) => stmt
                 .returning
                 .as_ref()
-                .map(|returning| returning.as_expr_unwrap().as_record_unwrap().len()),
+                .map(|returning| returning.expect_expr().expect_record().len()),
             sql::Statement::Update(stmt) => {
                 assert!(stmt.condition.is_none(), "stmt={stmt:#?}");
                 stmt.returning
                     .as_ref()
-                    .map(|returning| returning.as_expr_unwrap().as_record_unwrap().len())
+                    .map(|returning| returning.expect_expr().expect_record().len())
             }
             _ => None,
         };

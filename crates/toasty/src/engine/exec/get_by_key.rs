@@ -32,7 +32,7 @@ impl Exec<'_> {
             .await?
             .collect_as_value()
             .await?
-            .unwrap_list()
+            .expect_list()
             .into_iter()
             .filter(|k| !k.is_null())
             .collect();

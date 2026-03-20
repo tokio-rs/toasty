@@ -20,11 +20,12 @@ impl InsertTarget {
         matches!(self, InsertTarget::Model(..))
     }
 
-    pub fn as_model_unwrap(&self) -> ModelId {
+    #[track_caller]
+    pub fn expect_model(&self) -> ModelId {
         match self {
-            Self::Scope(query) => query.body.as_select_unwrap().source.model_id_unwrap(),
+            Self::Scope(query) => query.body.expect_select().source.model_id_unwrap(),
             Self::Model(model_id) => *model_id,
-            _ => todo!(),
+            _ => panic!("expected InsertTarget::Model; actual={self:#?}"),
         }
     }
 
@@ -32,11 +33,17 @@ impl InsertTarget {
         matches!(self, InsertTarget::Table(..))
     }
 
-    pub fn as_table_unwrap(&self) -> &InsertTable {
+    pub fn as_table(&self) -> Option<&InsertTable> {
         match self {
-            Self::Table(table) => table,
-            _ => todo!(),
+            Self::Table(table) => Some(table),
+            _ => None,
         }
+    }
+
+    #[track_caller]
+    pub fn expect_table(&self) -> &InsertTable {
+        self.as_table()
+            .unwrap_or_else(|| panic!("expected InsertTarget::Table; actual={self:#?}"))
     }
 
     pub fn add_constraint(&mut self, expr: impl Into<Expr>) {

@@ -62,7 +62,7 @@ impl UpdateTarget {
     pub fn model_id_unwrap(&self) -> ModelId {
         match self {
             Self::Model(model_id) => *model_id,
-            Self::Query(query) => query.body.as_select_unwrap().source.model_id_unwrap(),
+            Self::Query(query) => query.body.expect_select().source.model_id_unwrap(),
             _ => todo!("not a model"),
         }
     }
@@ -75,12 +75,17 @@ impl UpdateTarget {
         Self::Table(table.into())
     }
 
-    #[track_caller]
-    pub fn as_table_unwrap(&self) -> TableId {
+    pub fn as_table(&self) -> Option<TableId> {
         match self {
-            Self::Table(table) => *table,
-            _ => todo!(),
+            Self::Table(table) => Some(*table),
+            _ => None,
         }
+    }
+
+    #[track_caller]
+    pub fn expect_table(&self) -> TableId {
+        self.as_table()
+            .unwrap_or_else(|| panic!("expected UpdateTarget::Table; actual={self:#?}"))
     }
 }
 

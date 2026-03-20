@@ -87,7 +87,7 @@ impl LowerStatement<'_, '_> {
         returning: &mut Option<stmt::Returning>,
         index: usize,
     ) {
-        let model = self.expr_cx.target().as_model_unwrap();
+        let model = self.expr_cx.target().expect_model();
 
         for (i, field) in model.fields.iter().enumerate() {
             if field.is_relation() {
@@ -131,7 +131,7 @@ impl LowerStatement<'_, '_> {
         returning: &mut Option<stmt::Returning>,
         returning_changed: bool,
     ) {
-        let model = self.expr_cx.target().as_model_unwrap();
+        let model = self.expr_cx.target().expect_model();
 
         for (i, field) in model.fields.iter().enumerate() {
             if !field.is_relation() {
@@ -377,7 +377,7 @@ impl LowerStatement<'_, '_> {
         mut stmt: stmt::Insert,
         source: &mut dyn RelationSource,
     ) {
-        debug_assert_eq!(stmt.target.as_model_unwrap(), pair.id.model);
+        debug_assert_eq!(stmt.target.expect_model(), pair.id.model);
         debug_assert!(stmt.target.is_model());
 
         stmt.target = self.relation_pair_scope(pair.id, source).into();
@@ -837,14 +837,14 @@ impl RelationSource for InsertRelationSource<'_> {
 
     fn set_source_field(&mut self, field: FieldId, expr: stmt::Expr) {
         assert_eq!(self.model.id, field.model);
-        self.row.as_record_mut()[field.index] = expr;
+        self.row.expect_record_mut()[field.index] = expr;
     }
 
     fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr) {
         let record = match self.returning {
             Some(stmt::Returning::Expr(stmt::Expr::Record(record))) => record,
             Some(stmt::Returning::Value(stmt::Expr::List(rows))) => {
-                rows.items[self.index].as_record_mut()
+                rows.items[self.index].expect_record_mut()
             }
             Some(stmt::Returning::Value(stmt::Expr::Record(record))) => record,
             _ => todo!("InsertRelationSource={self:#?}"),

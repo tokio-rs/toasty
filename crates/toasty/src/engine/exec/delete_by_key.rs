@@ -32,7 +32,7 @@ impl Exec<'_> {
             .await?
             .collect_as_value()
             .await?
-            .unwrap_list();
+            .expect_list();
 
         let res = if keys.is_empty() {
             Rows::Count(0)

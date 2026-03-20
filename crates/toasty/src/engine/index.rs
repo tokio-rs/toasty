@@ -34,7 +34,7 @@ pub(crate) fn plan_index_path<'a>(
     };
 
     // Get the statement filter
-    let filter = stmt.filter_expr_unwrap();
+    let filter = stmt.expect_filter_expr();
 
     // Extract the pre-filter: the part of the filter that depends only on
     // args (no table column references) and can be evaluated before issuing

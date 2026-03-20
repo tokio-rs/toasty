@@ -10,7 +10,7 @@ impl Value {
     }
 
     #[track_caller]
-    pub fn unwrap_list(self) -> Vec<Value> {
+    pub fn expect_list(self) -> Vec<Value> {
         match self {
             Value::List(list) => list,
             _ => panic!("expected Value::List; actual={self:#?}"),

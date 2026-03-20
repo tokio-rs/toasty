@@ -24,7 +24,7 @@ impl LowerStatement<'_, '_> {
             todo!()
         };
 
-        let scope = &scope.body.as_select_unwrap();
+        let scope = &scope.body.expect_select();
 
         if let Some(filter) = &scope.filter.expr {
             for expr in &mut values.rows {

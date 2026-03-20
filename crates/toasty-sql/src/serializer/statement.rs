@@ -28,7 +28,7 @@ impl ToSql for ColumnsWithConstraints<'_> {
                         todo!("Toasty should catch this earlier")
                     };
 
-                    let pk = pk.as_expr_column_unwrap();
+                    let pk = pk.expect_column();
 
                     assert_eq!(0, pk.nesting);
                     assert!(
@@ -414,7 +414,7 @@ impl ToSql for &stmt::Returning {
 
 impl ToSql for &stmt::Select {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
-        let source_table = self.source.as_source_table();
+        let source_table = self.source.expect_table();
 
         if source_table.from.is_empty() {
             fmt!(cx, f, "SELECT " self.returning)
@@ -567,7 +567,7 @@ impl ToSql for &stmt::Update {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
         let prev = mem::replace(&mut f.alias, false);
 
-        let table = f.serializer.schema.table(self.target.as_table_unwrap());
+        let table = f.serializer.schema.table(self.target.expect_table());
         let assignments = (table, &self.assignments);
 
         // Create a new expression scope to serialize the statement

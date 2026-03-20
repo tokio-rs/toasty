@@ -98,13 +98,13 @@ impl Simplify<'_> {
         // All inserts are compatible, merge them into a single batch insert
         let mut items = expr.items.drain(..).collect::<Vec<_>>();
         let mut merged_insert = match items.remove(0) {
-            stmt::Expr::Stmt(s) => s.stmt.unwrap_insert(),
+            stmt::Expr::Stmt(s) => s.stmt.expect_insert(),
             _ => unreachable!(),
         };
 
         for item in items {
             let insert = match item {
-                stmt::Expr::Stmt(s) => s.stmt.unwrap_insert(),
+                stmt::Expr::Stmt(s) => s.stmt.expect_insert(),
                 _ => unreachable!(),
             };
             merged_insert.merge(insert);

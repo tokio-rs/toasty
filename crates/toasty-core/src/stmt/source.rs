@@ -19,7 +19,7 @@ pub enum Source {
 #[derive(Debug, Clone, PartialEq)]
 pub struct SourceModel {
     /// The source model
-    pub model: ModelId,
+    pub id: ModelId,
 
     /// Selecting via an association
     pub via: Option<Association>,
@@ -44,17 +44,17 @@ impl Source {
     }
 
     #[track_caller]
-    pub fn as_model_unwrap(&self) -> &SourceModel {
+    pub fn expect_model(&self) -> &SourceModel {
         self.as_model()
             .expect("expected SourceModel; actual={self:#?}")
     }
 
     pub fn model_id(&self) -> Option<ModelId> {
-        self.as_model().map(|source_model| source_model.model)
+        self.as_model().map(|source_model| source_model.id)
     }
 
     pub fn model_id_unwrap(&self) -> ModelId {
-        self.as_model_unwrap().model
+        self.expect_model().id
     }
 
     pub fn is_table(&self) -> bool {
@@ -73,11 +73,17 @@ impl Source {
         Self::Table(source_table)
     }
 
-    pub fn as_source_table(&self) -> &SourceTable {
+    pub fn as_table(&self) -> Option<&SourceTable> {
         match self {
-            Self::Table(source) => source,
-            _ => todo!(),
+            Self::Table(source) => Some(source),
+            _ => None,
         }
+    }
+
+    #[track_caller]
+    pub fn expect_table(&self) -> &SourceTable {
+        self.as_table()
+            .unwrap_or_else(|| panic!("expected SourceTable; actual={self:#?}"))
     }
 }
 
@@ -90,7 +96,7 @@ impl From<&ModelRoot> for Source {
 impl From<ModelId> for Source {
     fn from(value: ModelId) -> Self {
         Self::Model(SourceModel {
-            model: value,
+            id: value,
             via: None,
         })
     }

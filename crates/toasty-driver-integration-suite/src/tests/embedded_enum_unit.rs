@@ -172,7 +172,7 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
             stmt: Statement::Query(_ {
                 body: ExprSet::Select(_ {
                     filter.expr: Some(Expr::BinaryOp(_ {
-                        lhs.as_expr_column_unwrap().column: == status_col.index,
+                        lhs.expect_column().column: == status_col.index,
                         op: BinaryOp::Eq,
                         *rhs: == 2i64,
                         ..
@@ -197,7 +197,7 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
             stmt: Statement::Query(_ {
                 body: ExprSet::Select(_ {
                     filter.expr: Some(Expr::BinaryOp(_ {
-                        lhs.as_expr_column_unwrap().column: == status_col.index,
+                        lhs.expect_column().column: == status_col.index,
                         op: BinaryOp::Eq,
                         *rhs: == 1i64,
                         ..
@@ -222,7 +222,7 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
             stmt: Statement::Query(_ {
                 body: ExprSet::Select(_ {
                     filter.expr: Some(Expr::BinaryOp(_ {
-                        lhs.as_expr_column_unwrap().column: == status_col.index,
+                        lhs.expect_column().column: == status_col.index,
                         op: BinaryOp::Eq,
                         *rhs: == 3i64,
                         ..

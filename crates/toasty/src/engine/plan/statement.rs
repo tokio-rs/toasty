@@ -569,7 +569,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             filter,
         };
 
-        stmt.filter_mut_unwrap().set(stmt::Expr::exists(sub_query));
+        stmt.expect_filter_mut().set(stmt::Expr::exists(sub_query));
     }
 
     fn rewrite_stmt_query_for_batch_load_nosql(&mut self, stmt: &mut stmt::Statement) {
@@ -806,13 +806,13 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             return None;
         }
 
-        let target = insert.target.as_table_unwrap();
+        let target = insert.target.expect_table();
         let values = insert.source.body.as_values()?;
 
         let mut indices = vec![];
 
         for expr_ref in &self.load_data.columns {
-            let expr_col = expr_ref.as_expr_column_unwrap();
+            let expr_col = expr_ref.expect_column();
             debug_assert!(expr_col.nesting == 0, "expr_column={expr_col:#?}");
 
             let Some(index) = target
@@ -1306,7 +1306,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     ) -> mir::NodeId {
         // If there is a post filter, we need to apply a filter step on the returned rows.
         if let Some(post_filter) = post_filter {
-            let item_ty = ty.unwrap_list_ref();
+            let item_ty = ty.expect_list();
             node_id = self.planner.mir.insert(mir::Filter {
                 input: node_id,
                 filter: eval::Func::from_stmt(post_filter, vec![item_ty.clone()]),
