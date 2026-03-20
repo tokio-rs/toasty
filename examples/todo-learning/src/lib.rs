@@ -1,11 +1,9 @@
 #[derive(Debug, toasty::Model)]
-pub struct User {
+pub struct Item {
     #[key]
     #[auto]
     pub id: uuid::Uuid,
 
-    pub name: String,
-
-    #[unique]
-    pub email: String,
+    #[index]
+    pub order: i64,
 }

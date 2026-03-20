@@ -71,7 +71,8 @@ impl Exec<'_> {
         if !action.input.is_empty() {
             let mut input_values = Vec::new();
             for var_id in &action.input {
-                let values = self.vars.load(*var_id).await?.collect_as_value().await?;
+                let response = self.vars.load(*var_id).await?;
+                let values = response.values.collect_as_value().await?;
                 input_values.push(values);
             }
             stmt.substitute(&input_values);
@@ -225,7 +226,7 @@ impl Exec<'_> {
 
         let page_size = pagination.page_size as usize;
 
-        // If we got a full page, extract cursor for potential next page
+        // Extract cursors for potential next/prev pages
         let next_cursor = if row_vec.len() == page_size {
             let cursor_row = &row_vec[page_size - 1];
             let cursor_value = extract_cursor.eval(std::slice::from_ref(cursor_row))?;
@@ -235,10 +236,19 @@ impl Exec<'_> {
             None
         };
 
+        // Extract prev cursor from first row (for backward pagination)
+        let prev_cursor = if !row_vec.is_empty() {
+            let cursor_row = &row_vec[0];
+            let cursor_value = extract_cursor.eval(std::slice::from_ref(cursor_row))?;
+            Some(cursor_value)
+        } else {
+            None
+        };
+
         Ok(ExecResponse {
             values: Rows::Value(stmt::Value::List(row_vec)),
             next_cursor,
-            prev_cursor: None,
+            prev_cursor,
         })
     }
 }

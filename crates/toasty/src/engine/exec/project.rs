@@ -25,7 +25,10 @@ impl Exec<'_> {
         // having to eagerly buffer everything.
         let mut projected_rows = vec![];
 
-        match self.vars.load(action.input).await? {
+        // Load input with full metadata to preserve pagination cursors
+        let input_response = self.vars.load(action.input).await?;
+
+        match input_response.values {
             Rows::Value(value) => {
                 match value {
                     stmt::Value::List(items) => {
@@ -55,11 +58,15 @@ impl Exec<'_> {
             }
         }
 
-        // Store the projected stream to the output variable
+        // Store the projected stream with preserved pagination metadata
         self.vars.store(
             action.output.var,
             action.output.num_uses,
-            ExecResponse::from_rows(Rows::value_stream(projected_rows)),
+            ExecResponse {
+                values: Rows::value_stream(projected_rows),
+                next_cursor: input_response.next_cursor,
+                prev_cursor: input_response.prev_cursor,
+            },
         );
 
         Ok(())

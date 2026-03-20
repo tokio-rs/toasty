@@ -13,19 +13,19 @@ pub struct Page<M> {
     /// Base query (without cursors/offsets)
     query: Query<M>,
 
-    /// Cursor for fetching next page (derived from last item)
-    pub next_cursor: Option<stmt::Expr>,
+    /// Cursor for fetching next page (opaque value from driver)
+    pub next_cursor: Option<stmt::Value>,
 
-    /// Cursor for fetching previous page (derived from first item)
-    pub prev_cursor: Option<stmt::Expr>,
+    /// Cursor for fetching previous page (opaque value from driver)
+    pub prev_cursor: Option<stmt::Value>,
 }
 
 impl<M> Page<M> {
     pub(crate) fn new(
         items: Vec<M>,
         query: Query<M>,
-        next_cursor: Option<stmt::Expr>,
-        prev_cursor: Option<stmt::Expr>,
+        next_cursor: Option<stmt::Value>,
+        prev_cursor: Option<stmt::Value>,
     ) -> Self {
         Self {
             items,

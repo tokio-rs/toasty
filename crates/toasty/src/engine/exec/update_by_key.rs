@@ -39,6 +39,7 @@ impl Exec<'_> {
             .vars
             .load(action.input)
             .await?
+            .values
             .collect_as_value()
             .await?
             .unwrap_list();

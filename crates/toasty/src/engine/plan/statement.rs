@@ -630,29 +630,18 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     // ===== SQL execution =====
 
-    /// Detects pagination in a query and returns pagination config.
-    /// For SQL: builds extract_cursor and adds ORDER BY columns to load_data.
-    /// Returns (pagination_config, original_column_count) where original_column_count
-    /// is used to insert a Project later.
+    /// Phase 1: Detects pagination and adds ORDER BY columns to load_data.
+    /// Returns (page_size, original_column_count, cursor_column_indices) for use in phase 2.
     fn detect_pagination_sql(
         &mut self,
         stmt: &stmt::Statement,
-    ) -> Option<(exec::PaginationConfig, usize)> {
+    ) -> Option<(i64, usize, Vec<usize>)> {
         let stmt::Statement::Query(query) = stmt else {
             return None;
         };
 
-        // Check if there's a cursor (indicates pagination)
-        let has_cursor = query
-            .limit
-            .as_ref()
-            .and_then(|l| l.offset.as_ref())
-            .map(|offset| matches!(offset, stmt::Offset::After(_)))
-            .unwrap_or(false);
-
-        if !has_cursor {
-            return None;
-        }
+        // Detect pagination based on LIMIT + ORDER BY presence
+        // Cursor (Offset::After) is optional - only present on subsequent pages
 
         // Extract page_size from limit
         let page_size = query.limit.as_ref().and_then(|l| match &l.limit {
@@ -662,10 +651,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         let order_by = query.order_by.as_ref()?;
 
-        // Remember original column count
+        // Remember original column count before adding ORDER BY columns
         let original_column_count = self.load_data.columns.len();
 
-        // For SQL: build extract_cursor function and add ORDER BY columns
+        // Add ORDER BY columns to load_data so they're available for cursor extraction
         let mut cursor_column_indices = Vec::new();
 
         for order_expr in &order_by.exprs {
@@ -680,32 +669,35 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             }
         }
 
-        // Save the count before consuming cursor_column_indices
-        let cursor_field_count = cursor_column_indices.len();
+        Some((page_size, original_column_count, cursor_column_indices))
+    }
 
-        // Build extract_cursor function: projects ORDER BY column positions
+    /// Phase 2: Builds extract_cursor function using the inferred row type.
+    /// Called after type inference in plan_data_loading_sql.
+    fn build_extract_cursor(
+        &self,
+        page_size: i64,
+        original_column_count: usize,
+        cursor_column_indices: Vec<usize>,
+        row_ty: &stmt::Type,
+    ) -> (exec::PaginationConfig, usize) {
+        // Build extract_cursor expression: projects ORDER BY column positions from the row
         let extract_cursor = stmt::Expr::record(
             cursor_column_indices
                 .into_iter()
                 .map(|index| stmt::Expr::arg_project(0, [index])),
         );
 
-        // Build eval::Func from the extract expression
-        // The type will be a record of the ORDER BY column values
-        let cursor_ty = stmt::Type::Record(vec![stmt::Type::Unit; cursor_field_count]);
-        let extract_cursor_func = eval::Func::from_stmt_typed(
-            extract_cursor,
-            vec![], // No additional inputs needed
-            cursor_ty,
-        );
+        // Build eval::Func with the actual row type as input
+        let extract_cursor_func = eval::Func::from_stmt(extract_cursor, vec![row_ty.clone()]);
 
-        Some((
+        (
             exec::PaginationConfig {
                 page_size,
                 extract_cursor: Some(extract_cursor_func),
             },
             original_column_count,
-        ))
+        )
     }
 
     /// Converts an expression to an ExprReference if possible.
@@ -719,9 +711,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     fn plan_data_loading_sql(&mut self, mut stmt: stmt::Statement) -> mir::NodeId {
         let const_returning = self.extract_insert_returning_as_const(&stmt);
 
-        // Detect pagination and potentially add ORDER BY columns
+        // Phase 1: Detect pagination and add ORDER BY columns to load_data
         let pagination_info = self.detect_pagination_sql(&stmt);
 
+        // Set returning clause with all columns (including added ORDER BY columns)
         if !self.load_data.columns.is_empty() {
             stmt.set_returning(
                 stmt::Expr::record(
@@ -741,7 +734,26 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             .map(|input| self.planner.mir.ty(*input).clone())
             .collect();
 
+        // Infer type after adding all columns
         let ty = self.planner.engine.infer_ty(&stmt, &input_args[..]);
+
+        // Phase 2: Build extract_cursor function using the inferred type
+        let pagination_info = pagination_info.map(
+            |(page_size, original_column_count, cursor_column_indices)| {
+                // Extract row type from List<Row>
+                let row_ty = if let stmt::Type::List(item_ty) = &ty {
+                    (&**item_ty).clone()
+                } else {
+                    stmt::Type::Unit
+                };
+                self.build_extract_cursor(
+                    page_size,
+                    original_column_count,
+                    cursor_column_indices,
+                    &row_ty,
+                )
+            },
+        );
 
         let node = if stmt.condition().is_some() {
             if let stmt::Statement::Update(stmt) = stmt {

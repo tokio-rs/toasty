@@ -77,7 +77,7 @@ pub async fn sort_asc(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID))]
 pub async fn paginate(test: &mut Test) -> Result<()> {
     #[derive(toasty::Model)]
     struct Item {
@@ -155,7 +155,7 @@ pub async fn paginate(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID))]
 pub async fn limit_offset(t: &mut Test) -> Result<()> {
     #[derive(toasty::Model)]
     struct Item {
@@ -168,7 +168,6 @@ pub async fn limit_offset(t: &mut Test) -> Result<()> {
     }
 
     let mut db = t.setup_db(models!(Item)).await;
-
     for i in 0..20 {
         Item::create().order(i).exec(&mut db).await?;
     }
