@@ -3,7 +3,7 @@ use toasty_core::{
     stmt,
 };
 
-use crate::engine::{lower::LowerStatement, Simplify};
+use crate::engine::lower::LowerStatement;
 
 #[derive(Debug)]
 enum Mutation {
@@ -39,6 +39,11 @@ trait RelationSource: std::fmt::Debug {
 
     /// Update a returning field expression
     fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr);
+
+    /// Whether the source might produce zero rows. When true, relation
+    /// mutations must be wrapped in a conditional to avoid FK updates when
+    /// the source filter doesn't match.
+    fn needs_existence_check(&self) -> bool;
 }
 
 #[derive(Debug)]
@@ -283,6 +288,19 @@ impl LowerStatement<'_, '_> {
 
         stmt.assignments
             .set(pair.id, stmt::Expr::stmt(source.selection(2)));
+
+        // Needed for the existence check. Only update *if* the relation source
+        // actually exists to be updated.
+        if source.needs_existence_check() {
+            stmt.filter.set(stmt::Expr::exists({
+                let mut query = source.selection(2);
+                let stmt::ExprSet::Select(select) = &mut query.body else {
+                    todo!()
+                };
+                select.returning = stmt::Expr::record([1]).into();
+                query
+            }));
+        }
 
         self.new_dependency(stmt);
     }
@@ -548,14 +566,138 @@ impl LowerStatement<'_, '_> {
                     .map(|fk_field| fk_field.target)
                     .collect();
 
-                let Some(expr) = Simplify::new(self.schema()).extract_key_expr(&fields, &query)
-                else {
+                let Some(expr) = self.extract_key_expr(&fields, &query) else {
                     todo!("belongs_to={:#?}; stmt={:#?}", belongs_to, query);
                 };
 
                 self.plan_mut_belongs_to_associate(field, expr, source);
             }
             _ => todo!("stmt={:#?}", stmt),
+        }
+    }
+
+    /// Extract constant key values from a subquery filter so the subquery can
+    /// be eliminated.
+    ///
+    /// Given a query like `SELECT User WHERE id = 123 AND name = "foo"` and
+    /// key fields `[id]`, this extracts `123`. For composite keys
+    /// `[id, org_id]` it extracts a record `(123, 456)`.
+    ///
+    /// Recursively walks `And` nodes collecting equality constraints for each
+    /// key field. Does not descend into `Or` or other non-conjunctive nodes.
+    fn extract_key_expr(&self, key: &[FieldId], query: &stmt::Query) -> Option<stmt::Expr> {
+        let cx = self.expr_cx.scope(query);
+
+        let stmt::ExprSet::Select(select) = &query.body else {
+            return None;
+        };
+
+        let mut values: Vec<Option<stmt::Expr>> = vec![None; key.len()];
+        Self::collect_key_constraints(&cx, key, select.filter.as_expr(), &mut values);
+
+        // All key fields must have been matched
+        let values: Vec<stmt::Expr> = values.into_iter().collect::<Option<Vec<_>>>()?;
+
+        if values.len() == 1 {
+            Some(values.into_iter().next().unwrap())
+        } else {
+            Some(stmt::Expr::record(values))
+        }
+    }
+
+    /// Recursively walk a filter expression collecting equality constraints
+    /// for key fields. Only descends into conjunctive (`And`) nodes.
+    fn collect_key_constraints(
+        cx: &stmt::ExprContext,
+        key: &[FieldId],
+        filter: &stmt::Expr,
+        values: &mut [Option<stmt::Expr>],
+    ) {
+        match filter {
+            stmt::Expr::And(and) => {
+                for operand in &and.operands {
+                    Self::collect_key_constraints(cx, key, operand, values);
+                }
+            }
+            stmt::Expr::BinaryOp(binary) => {
+                Self::try_match_key_eq(cx, key, binary, values);
+            }
+            // Or, Not, etc. — don't walk into these; they don't guarantee
+            // a single constant value for the key field.
+            _ => {}
+        }
+    }
+
+    /// If `binary` is an equality involving one of the key fields, record
+    /// the matched value.
+    fn try_match_key_eq(
+        cx: &stmt::ExprContext,
+        key: &[FieldId],
+        binary: &stmt::ExprBinaryOp,
+        values: &mut [Option<stmt::Expr>],
+    ) {
+        if !binary.op.is_eq() {
+            return;
+        }
+
+        for (i, key_field) in key.iter().enumerate() {
+            if values[i].is_some() {
+                continue;
+            }
+            if let Some(expr) = Self::extract_eq_value(cx, *key_field, binary) {
+                values[i] = Some(expr);
+                return;
+            }
+        }
+    }
+
+    /// Extract the value for `key_field` from a single equality expression.
+    fn extract_eq_value(
+        cx: &stmt::ExprContext,
+        key_field: FieldId,
+        binary: &stmt::ExprBinaryOp,
+    ) -> Option<stmt::Expr> {
+        debug_assert!(binary.op.is_eq());
+
+        match (&*binary.lhs, &*binary.rhs) {
+            // Inner field ref (nesting=0) matched against outer field ref (nesting>0)
+            (
+                stmt::Expr::Reference(inner @ stmt::ExprReference::Field { nesting: 0, .. }),
+                stmt::Expr::Reference(outer @ stmt::ExprReference::Field { nesting, .. }),
+            )
+            | (
+                stmt::Expr::Reference(outer @ stmt::ExprReference::Field { nesting, .. }),
+                stmt::Expr::Reference(inner @ stmt::ExprReference::Field { nesting: 0, .. }),
+            ) if *nesting > 0 => {
+                let field_ref = cx.resolve_expr_reference(inner).expect_field();
+                if key_field == field_ref.id {
+                    let mut ret = *outer;
+                    let stmt::ExprReference::Field { nesting, .. } = &mut ret else {
+                        panic!()
+                    };
+                    debug_assert!(*nesting > 0);
+                    *nesting -= 1;
+                    Some(ret.into())
+                } else {
+                    None
+                }
+            }
+            // Both nesting=0 refs — not handled
+            (stmt::Expr::Reference(_), stmt::Expr::Reference(_)) => None,
+            // Field ref matched against a constant value
+            (stmt::Expr::Reference(expr_ref), other) | (other, stmt::Expr::Reference(expr_ref)) => {
+                let field_ref = cx.resolve_expr_reference(expr_ref).expect_field();
+                if key_field == field_ref.id {
+                    if let stmt::Expr::Value(value) = other {
+                        Some(value.clone().into())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            }
+            _ => None,
         }
     }
 
@@ -629,6 +771,10 @@ impl RelationSource for &stmt::Delete {
     fn set_returning_field(&mut self, _field: FieldId, _expr: stmt::Expr) {
         unimplemented!("delete statements do not need to update field values");
     }
+
+    fn needs_existence_check(&self) -> bool {
+        false
+    }
 }
 
 impl RelationSource for UpdateRelationSource<'_> {
@@ -663,6 +809,10 @@ impl RelationSource for UpdateRelationSource<'_> {
         };
 
         set_returning_slot(record, position, expr);
+    }
+
+    fn needs_existence_check(&self) -> bool {
+        true
     }
 }
 
@@ -701,6 +851,10 @@ impl RelationSource for InsertRelationSource<'_> {
         };
 
         set_returning_slot(record, field.index, expr);
+    }
+
+    fn needs_existence_check(&self) -> bool {
+        false
     }
 }
 
