@@ -42,8 +42,8 @@ impl<T> Expr<T> {
     /// Re-tag this expression with a different type `U`.
     ///
     /// This performs no runtime conversion — the underlying AST node is
-    /// unchanged. Use this when the type system needs a different phantom tag
-    /// but the expression itself is compatible (e.g., widening `Expr<T>` to
+    /// unchanged. Use this when the type system needs a different type tag but
+    /// the expression itself is compatible (e.g., widening `Expr<T>` to
     /// `Expr<Option<T>>`).
     pub fn cast<U>(self) -> Expr<U> {
         Expr {

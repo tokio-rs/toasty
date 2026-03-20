@@ -44,8 +44,8 @@ use std::{fmt, marker::PhantomData};
 
 /// A typed wrapper around an untyped [`stmt::Statement`](toasty_core::stmt::Statement).
 ///
-/// `Statement<M>` pairs a raw statement AST node with a phantom type `M` that
-/// tracks what the statement returns when executed. For example:
+/// `Statement<M>` pairs a raw statement AST node with a type `M` that tracks
+/// what the statement returns when executed. For example:
 ///
 /// - `Statement<List<User>>` — a query returning a collection of `User` records.
 /// - `Statement<User>` — an insert returning the newly created `User`.
@@ -61,7 +61,7 @@ pub struct Statement<M> {
 
 impl<M> Statement<M> {
     /// Wrap a raw untyped [`stmt::Statement`](toasty_core::stmt::Statement),
-    /// tagging it with the phantom type `M`.
+    /// tagging it with type `M`.
     pub fn from_untyped_stmt(untyped: stmt::Statement) -> Self {
         Self {
             untyped,

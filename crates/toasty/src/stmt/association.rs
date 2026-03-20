@@ -7,8 +7,8 @@ use toasty_core::stmt;
 ///
 /// `Association` represents a link between a source model and a target model,
 /// such as a has-many or belongs-to relation. It wraps an untyped
-/// [`stmt::Association`](toasty_core::stmt::Association) and carries a phantom
-/// type `T` that encodes the target:
+/// [`stmt::Association`](toasty_core::stmt::Association) and carries a type `T`
+/// that encodes the target:
 ///
 /// - `Association<List<M>>` — a has-many relation returning multiple `M` records.
 /// - `Association<M>` — a has-one or belongs-to relation returning a single `M`.
