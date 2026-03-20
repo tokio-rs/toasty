@@ -1,3 +1,92 @@
+//! Plans a single HIR statement into MIR operations.
+//!
+//! # Overview
+//!
+//! Each HIR statement produces one or more MIR nodes that form an execution
+//! graph. The planner splits work into two concerns:
+//!
+//! - **Data loading**: issuing the database operation (SQL query, GetByKey, etc.)
+//! - **Output processing**: projecting, filtering, or merging the loaded data
+//!   into the shape the caller expects
+//!
+//! The entry point is `PlanStatement::plan()`, which runs these phases in order:
+//!
+//! 1. Extract columns needed by the returning clause
+//! 2. Discover args (references to other statements) in the filter and
+//!    assignments, registering their MIR node outputs as inputs
+//! 3. Rewrite the statement's assignment/value expressions so their `Arg`
+//!    positions reference `load_data.inputs` indices
+//! 4. Plan the data-loading MIR node (SQL or NoSQL path)
+//! 5. Create projection nodes for back-references (so child statements can
+//!    read columns from this statement's results)
+//! 6. Plan child/dependent statements
+//! 7. Build the output node (projection, eval, or nested merge)
+//!
+//! # How `Expr::Arg` flows through the planner
+//!
+//! `Expr::Arg(n)` appears throughout the statement to reference data from
+//! other statements. The meaning of `n` changes as the expression moves
+//! through the pipeline:
+//!
+//! ## HIR level (statement enters the planner)
+//!
+//! `Arg(n)` indexes into `stmt_info.args`, a list of `hir::Arg` entries
+//! created during lowering. Each entry is either:
+//!
+//! - `Arg::Sub { stmt_id, input, .. }` — data from a child statement
+//!   (e.g., a subquery result used in an `IN` list)
+//! - `Arg::Ref { stmt_id, data_load_input, .. }` — a column from a
+//!   parent/sibling statement (back-reference for nested queries)
+//!
+//! At this point, `input` and `data_load_input` are unset `Cell`s.
+//!
+//! ## After `extract_data_load_args`
+//!
+//! This pass walks the filter and assignments, and for each `Arg(n)`:
+//!
+//! - Looks up `stmt_info.args[n]` to find the source MIR node
+//! - Adds that node to `load_data.inputs` (an `IndexSet<NodeId>`)
+//! - Records the index within `load_data.inputs` back into the `hir::Arg`
+//!   cell (`input.set(Some(index))` or `data_load_input.set(Some(index))`)
+//!
+//! The `Arg(n)` positions in the statement expressions are unchanged at
+//! this point — they still reference HIR arg positions.
+//!
+//! ## After `rewrite_stmt_*_arg_dependencies`
+//!
+//! These methods rewrite `Arg` nodes in **assignments and insert values
+//! only** (not the filter). They read the cells populated above:
+//!
+//! - `Arg::Sub { input }` → `Expr::arg(input.get())` — now indexes into
+//!   `load_data.inputs`
+//! - `Arg::Ref { data_load_input, batch_load_index }` →
+//!   `Expr::arg_project(data_load_input, [batch_load_index, column])`
+//!
+//! After this, assignment expressions have MIR-level arg positions. Filter
+//! expressions still have HIR-level positions.
+//!
+//! ## During MIR node construction (`rewrite_expr_for_mir`)
+//!
+//! When building MIR nodes that carry their own expressions (Guard, Project
+//! for key expressions), the expression may reference a subset of the
+//! statement's `load_data.inputs`. `rewrite_expr_for_mir` does two things:
+//!
+//! 1. Resolves each `Arg(hir_pos)` through `stmt_info.args[hir_pos]` to
+//!    find the `load_data.inputs` index and MIR node ID
+//! 2. Assigns a new compact position (0, 1, 2, ...) and rewrites the
+//!    `Arg` node in place
+//!
+//! It returns the arg types and input node IDs for constructing the MIR
+//! node. This is the same resolution as `rewrite_arg_dependencies` but
+//! builds a compact, node-specific input set rather than reusing the full
+//! `load_data.inputs` list.
+//!
+//! ## At execution time
+//!
+//! Each MIR node's `to_exec()` maps its input `NodeId`s to `VarId`s. The
+//! executor loads variables by `VarId` and passes them to `eval::Func`,
+//! which resolves `Arg(n)` against the provided input slice.
+
 use std::mem;
 
 use indexmap::{IndexMap, IndexSet};
