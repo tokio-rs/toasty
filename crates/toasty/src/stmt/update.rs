@@ -3,12 +3,27 @@ use crate::schema::Model;
 use std::{fmt, marker::PhantomData};
 use toasty_core::stmt;
 
+/// A typed update statement for model `M`.
+///
+/// `Update` modifies records matching a selection (typically derived from a
+/// [`Query`]). Field assignments are added with [`set`](Update::set),
+/// [`insert`](Update::insert), and [`remove`](Update::remove).
+///
+/// Generated update-builders wrap this type and expose typed setter methods.
+/// You rarely construct `Update` by hand.
+///
+/// By default, an update returns the changed records. Call
+/// [`set_returning_none`](Update::set_returning_none) to suppress this.
 pub struct Update<M> {
     pub(crate) untyped: stmt::Update,
     _p: PhantomData<M>,
 }
 
 impl<M: Model> Update<M> {
+    /// Create an update that targets the records matched by `selection`.
+    ///
+    /// The update is initially empty (no assignments). Add field assignments
+    /// with [`set`](Update::set) before executing.
     pub fn new(mut selection: Query<M>) -> Self {
         if let stmt::ExprSet::Values(values) = &mut selection.untyped.body {
             let rows = std::mem::take(&mut values.rows);
@@ -26,6 +41,7 @@ impl<M: Model> Update<M> {
         }
     }
 
+    /// Wrap a raw untyped [`stmt::Update`](toasty_core::stmt::Update).
     pub const fn from_untyped(untyped: stmt::Update) -> Self {
         Self {
             untyped,
@@ -33,18 +49,24 @@ impl<M: Model> Update<M> {
         }
     }
 
+    /// Get a mutable reference to the underlying untyped update.
     pub fn as_untyped_mut(&mut self) -> &mut stmt::Update {
         &mut self.untyped
     }
 
+    /// Assign a value to a field.
+    ///
+    /// `field` identifies which field to update and `expr` is the new value.
     pub fn set(&mut self, field: impl Into<stmt::Projection>, expr: impl Into<stmt::Expr>) {
         self.untyped.assignments.set(field, expr);
     }
 
+    /// Append a value to a collection field (e.g., a has-many relation).
     pub fn insert(&mut self, field: impl Into<stmt::Projection>, expr: impl Into<stmt::Expr>) {
         self.untyped.assignments.insert(field, expr);
     }
 
+    /// Remove a value from a collection field.
     pub fn remove(&mut self, field: impl Into<stmt::Projection>, expr: impl Into<stmt::Expr>) {
         self.untyped.assignments.remove(field, expr);
     }

@@ -42,13 +42,26 @@ use toasty_core::stmt;
 
 use std::{fmt, marker::PhantomData};
 
+/// A typed wrapper around an untyped [`stmt::Statement`](toasty_core::stmt::Statement).
+///
+/// `Statement<M>` pairs a raw statement AST node with a phantom type `M` that
+/// tracks what the statement returns when executed. For example:
+///
+/// - `Statement<List<User>>` — a query returning a collection of `User` records.
+/// - `Statement<User>` — an insert returning the newly created `User`.
+/// - `Statement<()>` — a delete returning nothing.
+///
+/// You rarely construct `Statement` directly. Instead, use the [`From`]
+/// implementations to convert from [`Query`], [`Insert`], [`Update`], or
+/// [`Delete`], or call [`IntoStatement::into_statement`] on a query builder.
 pub struct Statement<M> {
     pub(crate) untyped: stmt::Statement,
     _p: PhantomData<M>,
 }
 
 impl<M> Statement<M> {
-    /// Wrap a raw untyped statement.
+    /// Wrap a raw untyped [`stmt::Statement`](toasty_core::stmt::Statement),
+    /// tagging it with the phantom type `M`.
     pub fn from_untyped_stmt(untyped: stmt::Statement) -> Self {
         Self {
             untyped,
@@ -65,6 +78,10 @@ impl<M> Statement<M> {
 }
 
 impl<M> Statement<List<M>> {
+    /// Try to extract the inner [`Query`] from this statement.
+    ///
+    /// Returns `Some(query)` if the statement is a query, or `None` for
+    /// inserts, updates, and deletes.
     pub fn into_query(self) -> Option<Query<M>> {
         match self.untyped {
             stmt::Statement::Query(q) => Some(Query::from_untyped(q)),

@@ -3,13 +3,31 @@ use crate::schema::Model;
 use std::{fmt, marker::PhantomData};
 use toasty_core::stmt;
 
+/// A typed handle to a model association (relation).
+///
+/// `Association` represents a link between a source model and a target model,
+/// such as a has-many or belongs-to relation. It wraps an untyped
+/// [`stmt::Association`](toasty_core::stmt::Association) and carries a phantom
+/// type `T` that encodes the target:
+///
+/// - `Association<List<M>>` — a has-many relation returning multiple `M` records.
+/// - `Association<M>` — a has-one or belongs-to relation returning a single `M`.
+///
+/// Associations are constructed by generated code (see [`many`](Association::many),
+/// [`many_via_one`](Association::many_via_one), and [`one`](Association::one)).
+/// They implement [`IntoStatement`] so they can be passed directly to
+/// [`Db::exec`](crate::Db::exec).
 pub struct Association<T> {
     pub(crate) untyped: stmt::Association,
     _p: PhantomData<T>,
 }
 
 impl<M: Model> Association<List<M>> {
-    /// A basic has_many association
+    /// Create a has-many association from `source` following `path`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the root of `path` does not match the model id of `T`.
     pub fn many<T: Model>(source: super::Query<T>, path: Path<T, List<M>>) -> Self {
         assert_eq!(path.untyped.root.expect_model(), T::id());
 
@@ -22,8 +40,13 @@ impl<M: Model> Association<List<M>> {
         }
     }
 
-    /// A has_one or belongs_to association via a query, which implies there
-    /// could be more than one result.
+    /// Create a has-many association through a singular (has-one / belongs-to)
+    /// path. Because the source is a query that may match multiple rows, the
+    /// result is still a list.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the root of `path` does not match the model id of `T`.
     pub fn many_via_one<T: Model>(source: super::Query<T>, path: Path<T, M>) -> Self {
         assert_eq!(path.untyped.root.expect_model(), T::id());
 
@@ -36,6 +59,10 @@ impl<M: Model> Association<List<M>> {
         }
     }
 
+    /// Insert associated records into this has-many relation.
+    ///
+    /// Converts the association into an update statement that adds `expr` to
+    /// the relation's field on the source model.
     pub fn insert(self, expr: impl IntoExpr<List<M>>) -> Statement<M> {
         let [index] = self.untyped.path.projection.as_slice() else {
             todo!()
@@ -50,6 +77,10 @@ impl<M: Model> Association<List<M>> {
         }
     }
 
+    /// Remove an associated record from this has-many relation.
+    ///
+    /// Converts the association into an update statement that removes `expr`
+    /// from the relation's field on the source model.
     pub fn remove(self, expr: impl IntoExpr<M>) -> Statement<M> {
         let [index] = self.untyped.path.projection.as_slice() else {
             todo!()
@@ -78,6 +109,12 @@ impl<T: Model> IntoStatement for Association<List<T>> {
 }
 
 impl<M: Model> Association<M> {
+    /// Create a has-one or belongs-to association from `source` following
+    /// `path`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the root of `path` does not match the model id of `T`.
     pub fn one<T: Model>(source: super::Query<T>, path: Path<T, M>) -> Self {
         assert_eq!(path.untyped.root.expect_model(), T::id());
 

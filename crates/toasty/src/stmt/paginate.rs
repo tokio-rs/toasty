@@ -4,19 +4,45 @@ use crate::{engine::eval::Func, schema::Load, Executor, ExecutorExt, Result};
 
 use toasty_core::stmt::{self, visit_mut, Expr, ExprRecord, OrderBy, Projection, Value, VisitMut};
 
+/// Cursor-based pagination over a [`Query`].
+///
+/// `Paginate` wraps a query with a fixed page size and provides
+/// [`after`](Paginate::after) / [`before`](Paginate::before) methods for
+/// forward and backward navigation using opaque cursors.
+///
+/// # Construction
+///
+/// Create a `Paginate` from a query via [`Paginate::new`] or by calling
+/// `.into()` on a query that already has `limit` and `order_by` set.
+///
+/// ```ignore
+/// let page = User::all()
+///     .order_by(User::fields().name().asc())
+///     .paginate(20)
+///     .exec(&mut db)
+///     .await?;
+/// ```
+///
+/// # Requirements
+///
+/// The underlying query **must** have an `order_by` clause. [`Paginate::new`]
+/// sets the limit for you; [`From<Query<M>>`] requires both `limit` and
+/// `order_by` to be present already.
 #[derive(Debug)]
 pub struct Paginate<M> {
-    /// How to query the data
     query: Query<M>,
-
-    /// Whether we are currently paginating backwards.
-    ///
-    /// Because the sort order has to be reversed during backwards pagination,
-    /// we need to reverse the result set again to go back to the expected order.
     reverse: bool,
 }
 
 impl<M> Paginate<M> {
+    /// Create a paginator from `query` with the given page size.
+    ///
+    /// The query must **not** already have a `limit` clause (this method sets
+    /// it) and **must** have an `order_by` clause.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `query` already has a `limit` or is missing `order_by`.
     pub fn new(mut query: Query<M>, per_page: usize) -> Self {
         assert!(
             query.untyped.limit.is_none(),
@@ -38,7 +64,15 @@ impl<M> Paginate<M> {
         }
     }
 
-    /// Set the key-based offset for forwards pagination.
+    /// Set the cursor for forward pagination.
+    ///
+    /// Records returned will come **after** `key` in the current sort order.
+    /// Obtain `key` from [`Page::next_cursor`](crate::Page::next_cursor) of a
+    /// previous page.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the query has no `limit` clause.
     pub fn after(mut self, key: impl Into<stmt::Expr>) -> Self {
         let Some(limit) = self.query.untyped.limit.as_mut() else {
             panic!("pagination requires a limit clause");
@@ -48,7 +82,16 @@ impl<M> Paginate<M> {
         self
     }
 
-    /// Set the key-based offset for backwards pagination.
+    /// Set the cursor for backward pagination.
+    ///
+    /// Records returned will come **before** `key` in the current sort order.
+    /// The result set is still returned in the original sort order (not
+    /// reversed). Obtain `key` from
+    /// [`Page::prev_cursor`](crate::Page::prev_cursor) of a previous page.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the query has no `limit` clause.
     pub fn before(mut self, key: impl Into<stmt::Expr>) -> Self {
         let Some(limit) = self.query.untyped.limit.as_mut() else {
             panic!("pagination requires a limit clause");
@@ -60,6 +103,10 @@ impl<M> Paginate<M> {
 }
 
 impl<M: Load> Paginate<M> {
+    /// Execute the paginated query and return a [`Page`](crate::Page).
+    ///
+    /// The returned page contains up to `per_page` items along with optional
+    /// cursors for the next and previous pages.
     pub async fn exec(mut self, executor: &mut dyn Executor) -> Result<crate::Page<M::Output>> {
         // Extract the limit from the query to determine page size
         let page_size = match &self.query.untyped.limit {

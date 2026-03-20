@@ -3,18 +3,27 @@ use crate::schema::Model;
 use std::{fmt, marker::PhantomData};
 use toasty_core::stmt;
 
+/// A typed insert statement for model `M`.
+///
+/// `Insert` represents one or more records to be created. Generated
+/// create-builders (e.g., `User::create()`) produce `Insert` values under the
+/// hood.
+///
+/// Field values are set with [`set`](Insert::set). Collection fields can be
+/// extended with [`insert`](Insert::insert) and [`insert_all`](Insert::insert_all).
 pub struct Insert<M> {
     pub(crate) untyped: stmt::Insert,
     _p: PhantomData<M>,
 }
 
 impl<M: Model> Insert<M> {
-    /// Create an insertion statement that inserts an empty record
-    /// (fields without #[auto] as `Expr::Value(Value::Null)`, #[auto] fields as `Expr::Default`).
+    /// Create an insert statement with a single blank record.
     ///
-    /// This insertion statement is not guaranteed to be valid.
-    ///
-    /// TODO: rename `new`?
+    /// Fields marked `#[auto]` are set to [`Expr::Default`](toasty_core::stmt::Expr::Default)
+    /// (the database generates the value). All other fields are initialized to
+    /// `NULL`. The caller must fill in required fields with [`set`](Insert::set)
+    /// before executing; the blank record is not guaranteed to be valid on its
+    /// own.
     pub fn blank_single() -> Self {
         Self {
             untyped: stmt::Insert {
@@ -37,6 +46,7 @@ impl<M: Model> Insert<M> {
         }
     }
 
+    /// Wrap a raw untyped [`stmt::Insert`](toasty_core::stmt::Insert).
     pub const fn from_untyped(untyped: stmt::Insert) -> Self {
         Self {
             untyped,
@@ -53,11 +63,15 @@ impl<M: Model> Insert<M> {
             stmt::InsertTarget::Scope(Box::new(scope.into_statement().into_untyped_query()));
     }
 
+    /// Set the value of the field at `field` index in the current record.
     pub fn set(&mut self, field: usize, expr: impl Into<stmt::Expr>) {
         *self.expr_mut(field) = expr.into();
     }
 
-    /// Extend the expression for `field` with the given expression
+    /// Append a single value to the list field at `field` index.
+    ///
+    /// If the field is currently `NULL`, it is replaced with a new single-element
+    /// list. If it is already a list, `expr` is appended.
     pub fn insert(&mut self, field: usize, expr: impl Into<stmt::Expr>) {
         // self.expr_mut(field).push(expr);
         let target = self.expr_mut(field);
@@ -73,7 +87,11 @@ impl<M: Model> Insert<M> {
         }
     }
 
-    /// Merge a list expression into the field, extending any existing list.
+    /// Merge a list expression into the list field at `field` index,
+    /// extending any existing list.
+    ///
+    /// If the field is currently `NULL`, it is replaced with `expr`. If both
+    /// are lists, the items from `expr` are appended to the existing list.
     pub fn insert_all(&mut self, field: usize, expr: impl Into<stmt::Expr>) {
         let target = self.expr_mut(field);
         let incoming = expr.into();
@@ -107,6 +125,11 @@ impl<M: Model> Insert<M> {
         values.rows.last_mut().unwrap().as_record_mut()
     }
 
+    /// Convert this insert into a list expression.
+    ///
+    /// The resulting [`Expr<List<M>>`] wraps the insert as a sub-statement,
+    /// which can be used as the right-hand side of an association
+    /// [`insert`](Association::insert) call or embedded in other expressions.
     pub fn into_list_expr(self) -> Expr<List<M>> {
         Expr::from_untyped(stmt::Expr::Stmt(self.untyped.into()))
     }

@@ -3,9 +3,33 @@ use std::{rc::Rc, sync::Arc};
 use super::{Expr, List, Value};
 use toasty_core::stmt;
 
+/// Convert a value into an [`Expr<T>`].
+///
+/// This trait is the primary way Toasty coerces Rust values into query
+/// expressions. It is implemented for all scalar types (`i64`, `String`,
+/// `bool`, `uuid::Uuid`, …), `Option<T>`, tuples, slices, `Vec`, and arrays.
+///
+/// Generated code uses `IntoExpr` bounds on filter and setter methods so that
+/// callers can pass either a raw value or an already-constructed [`Expr`]:
+///
+/// ```ignore
+/// // Both work because &str and Expr<String> both implement IntoExpr<String>:
+/// User::find_by_name("Alice");
+/// User::find_by_name(some_expr);
+/// ```
+///
+/// # Implementing for custom types
+///
+/// If you have a newtype that wraps a supported scalar, implement `IntoExpr`
+/// by converting to the inner type first, then calling [`Expr::from_value`].
 pub trait IntoExpr<T> {
+    /// Consume `self` and produce an [`Expr<T>`].
     fn into_expr(self) -> Expr<T>;
 
+    /// Produce an [`Expr<T>`] from a reference without consuming `self`.
+    ///
+    /// For [`Copy`] types this clones the value. For non-`Copy` types like
+    /// `String` this clones the underlying data.
     fn by_ref(&self) -> Expr<T>;
 }
 
