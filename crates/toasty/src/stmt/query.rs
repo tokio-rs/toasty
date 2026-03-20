@@ -42,11 +42,6 @@ impl<M> Query<M> {
         self
     }
 
-    pub fn union(mut self, other: Self) -> Self {
-        self.untyped.add_union(other.untyped);
-        self
-    }
-
     pub fn include(&mut self, path: impl Into<stmt::Path>) -> &mut Self {
         self.untyped.include(path.into());
         self
