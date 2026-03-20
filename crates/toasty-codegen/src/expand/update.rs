@@ -213,27 +213,23 @@ impl Expand<'_> {
         let builder_methods = self.expand_update_field_methods(false);
         let update_default_stmts = self.expand_update_default_stmts();
 
-        let returning_ty = util::ident("R");
-
         quote! {
-            // Unified update builder generic over the target type and the
-            // statement return type.
+            // Unified update builder generic over the update target.
             //
-            // - `T = Query, R = List<Model>`: query-based update (multiple rows)
-            // - `T = &mut Model, R = Model`: instance update (single row)
-            #vis struct #update_struct_ident<#target_ty = #toasty::Query, #returning_ty = #toasty::List<#model_ident>> {
-                stmt: #toasty::stmt::Update<#returning_ty>,
+            // The target's `Returning` associated type determines the statement
+            // return type:
+            // - `T = Query<Model>`: query-based update, `Returning = List<Model>`
+            // - `T = &mut Model`: instance update, `Returning = Model`
+            #vis struct #update_struct_ident<#target_ty: #toasty::UpdateTarget = #toasty::Query<#model_ident>> {
+                stmt: #toasty::stmt::Update<<#target_ty as #toasty::UpdateTarget>::Returning>,
                 target: #target_ty,
             }
 
-            impl<#target_ty, #returning_ty> #update_struct_ident<#target_ty, #returning_ty> {
+            impl<#target_ty: #toasty::UpdateTarget> #update_struct_ident<#target_ty> {
                 fn apply_update_defaults(&mut self) {
                     #update_default_stmts
                 }
-            }
 
-            // Generic builder methods work for any target/returning type
-            impl<#target_ty: #toasty::ApplyUpdate, #returning_ty> #update_struct_ident<#target_ty, #returning_ty> {
                 #builder_methods
 
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<()> {
@@ -245,8 +241,10 @@ impl Expand<'_> {
                 }
             }
 
-            // Implement ApplyUpdate for &mut Model to enable reloading
-            impl #toasty::ApplyUpdate for &mut #model_ident {
+            // Implement UpdateTarget for &mut Model to enable reloading
+            impl #toasty::UpdateTarget for &mut #model_ident {
+                type Returning = #model_ident;
+
                 fn apply_result(self, mut values: ::std::vec::Vec<#toasty::core::stmt::Value>) -> #toasty::Result<()> {
                     let value = values.into_iter()
                         .next()
@@ -260,7 +258,7 @@ impl Expand<'_> {
                 fn from(value: #query_struct_ident) -> #update_struct_ident {
                     let mut s = #update_struct_ident {
                         stmt: #toasty::stmt::Update::new(value.stmt),
-                        target: #toasty::Query,
+                        target: #toasty::Query::new(),
                     };
                     s.apply_update_defaults();
                     s
@@ -271,7 +269,7 @@ impl Expand<'_> {
                 fn from(src: #toasty::stmt::Query<#model_ident>) -> #update_struct_ident {
                     let mut s = #update_struct_ident {
                         stmt: #toasty::stmt::Update::new(src),
-                        target: #toasty::Query,
+                        target: #toasty::Query::new(),
                     };
                     s.apply_update_defaults();
                     s

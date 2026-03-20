@@ -48,7 +48,7 @@ impl Expand<'_> {
                     #toasty::CreateMany::default()
                 }
 
-                #vis fn update(&mut self) -> #update_struct_ident<&mut Self, Self> {
+                #vis fn update(&mut self) -> #update_struct_ident<&mut Self> {
                     use #toasty::IntoStatement;
                     let mut s = #update_struct_ident {
                         stmt: #toasty::stmt::Update::new_single((&*self).into_statement().into_query().unwrap()),
@@ -91,7 +91,7 @@ impl Expand<'_> {
             impl #toasty::Model for #model_ident {
                 type Query = #query_struct_ident;
                 type Create = #create_struct_ident;
-                type Update<'a> = #update_struct_ident<&'a mut Self, Self>;
+                type Update<'a> = #update_struct_ident<&'a mut Self>;
                 type UpdateQuery = #update_struct_ident;
             }
 
