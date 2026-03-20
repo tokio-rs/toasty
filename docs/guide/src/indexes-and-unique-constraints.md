@@ -54,18 +54,20 @@ Attempting to insert a duplicate value returns an error:
 #     email: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-User::create()
-    .name("Alice")
-    .email("alice@example.com")
-    .exec(&mut db)
-    .await?;
+toasty::create!(User {
+    name: "Alice",
+    email: "alice@example.com",
+})
+.exec(&mut db)
+.await?;
 
 // This fails — email must be unique
-let result = User::create()
-    .name("Bob")
-    .email("alice@example.com")
-    .exec(&mut db)
-    .await;
+let result = toasty::create!(User {
+    name: "Bob",
+    email: "alice@example.com",
+})
+.exec(&mut db)
+.await;
 
 assert!(result.is_err());
 # Ok(())

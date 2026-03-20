@@ -124,19 +124,19 @@ view_count: i64,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
 // view_count defaults to 0
-let post = Post::create()
-    .title("Hello World")
+let post = toasty::create!(Post { title: "Hello World" })
     .exec(&mut db)
     .await?;
 
 assert_eq!(post.view_count, 0);
 
 // Override the default by setting it explicitly
-let post = Post::create()
-    .title("Popular Post")
-    .view_count(100)
-    .exec(&mut db)
-    .await?;
+let post = toasty::create!(Post {
+    title: "Popular Post",
+    view_count: 100,
+})
+.exec(&mut db)
+.await?;
 
 assert_eq!(post.view_count, 100);
 # Ok(())
@@ -180,8 +180,7 @@ updated_at: jiff::Timestamp,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
 // updated_at is set automatically on create
-let mut post = Post::create()
-    .title("Hello World")
+let mut post = toasty::create!(Post { title: "Hello World" })
     .exec(&mut db)
     .await?;
 
@@ -208,8 +207,7 @@ You can override the automatic value by setting the field explicitly:
 #     updated_at: jiff::Timestamp,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-# let mut post = Post::create()
-#     .title("Hello World")
+# let mut post = toasty::create!(Post { title: "Hello World" })
 #     .exec(&mut db)
 #     .await?;
 let explicit_ts = jiff::Timestamp::from_second(946684800).unwrap();
@@ -257,8 +255,7 @@ status: String,
 #     status: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let mut post = Post::create()
-    .title("Hello")
+let mut post = toasty::create!(Post { title: "Hello" })
     .exec(&mut db)
     .await?;
 
@@ -406,15 +403,16 @@ that support `varchar`.
 #     meta: Metadata,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let post = Post::create()
-    .title("Hello")
-    .tags(vec!["rust".to_string(), "toasty".to_string()])
-    .meta(Metadata {
+let post = toasty::create!(Post {
+    title: "Hello",
+    tags: vec!["rust".to_string(), "toasty".to_string()],
+    meta: Metadata {
         version: 1,
         labels: vec!["alpha".to_string()],
-    })
-    .exec(&mut db)
-    .await?;
+    },
+})
+.exec(&mut db)
+.await?;
 
 assert_eq!(post.tags, vec!["rust", "toasty"]);
 assert_eq!(post.meta.version, 1);

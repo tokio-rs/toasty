@@ -19,11 +19,12 @@ Call `.delete()` on a model instance, then `.exec(&mut db)`:
 #     email: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let user = User::create()
-    .name("Alice")
-    .email("alice@example.com")
-    .exec(&mut db)
-    .await?;
+let user = toasty::create!(User {
+    name: "Alice",
+    email: "alice@example.com",
+})
+.exec(&mut db)
+.await?;
 
 let user_id = user.id;
 
@@ -62,9 +63,7 @@ loading it first:
 #     email: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-# let user = User::create()
-#     .name("Alice")
-#     .email("alice@example.com")
+# let user = toasty::create!(User { name: "Alice", email: "alice@example.com" })
 #     .exec(&mut db)
 #     .await?;
 User::delete_by_id(&mut db, user.id).await?;
@@ -90,9 +89,7 @@ Build a query and call `.delete()` on it to delete all matching records:
 #     email: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-# User::create()
-#     .name("Alice")
-#     .email("alice@example.com")
+# toasty::create!(User { name: "Alice", email: "alice@example.com" })
 #     .exec(&mut db)
 #     .await?;
 User::filter_by_email("alice@example.com")

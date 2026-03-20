@@ -141,10 +141,10 @@ same batch using tuples:
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let (user, post): (User, Post) = toasty::batch((
-    User::create().name("Alice"),
-    Post::create().title("Hello World"),
-))
+let (user, post): (User, Post) = toasty::batch(toasty::create!([
+    User { name: "Alice" },
+    Post { title: "Hello World" },
+]))
 .exec(&mut db)
 .await?;
 # Ok(())
@@ -170,9 +170,9 @@ with `.item()` or `.with_item()`:
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
 let todos = Todo::create_many()
-    .item(Todo::create().title("Buy groceries"))
-    .item(Todo::create().title("Write docs"))
-    .item(Todo::create().title("Ship feature"))
+    .item(toasty::create!(Todo { title: "Buy groceries" }))
+    .item(toasty::create!(Todo { title: "Write docs" }))
+    .item(toasty::create!(Todo { title: "Ship feature" }))
     .exec(&mut db)
     .await?;
 
