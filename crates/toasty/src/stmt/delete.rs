@@ -67,6 +67,15 @@ impl<T> Delete<T> {
         }
     }
 
+    /// Change the type tag of this delete without altering the underlying
+    /// untyped representation.
+    pub fn cast<U>(self) -> Delete<U> {
+        Delete {
+            untyped: self.untyped,
+            _p: PhantomData,
+        }
+    }
+
     /// Execute this delete statement against the given executor.
     ///
     /// Returns `Ok(())` on success. Any matching records are removed from the

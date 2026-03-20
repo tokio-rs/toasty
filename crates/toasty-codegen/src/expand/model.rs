@@ -51,7 +51,7 @@ impl Expand<'_> {
                 #vis fn update(&mut self) -> #update_struct_ident<&mut Self> {
                     use #toasty::IntoStatement;
                     let mut s = #update_struct_ident {
-                        stmt: #toasty::stmt::Update::new_single((&*self).into_statement().into_query().unwrap()),
+                        stmt: #toasty::stmt::Update::new_single((&*self).into_statement().into_list_query().unwrap()),
                         target: self,
                     };
                     s.apply_update_defaults();
@@ -66,9 +66,9 @@ impl Expand<'_> {
                     #query_struct_ident::from_stmt(#toasty::stmt::Query::filter(expr))
                 }
 
-                #vis fn delete(self) -> #toasty::stmt::Delete<#toasty::List<#model_ident>> {
+                #vis fn delete(self) -> #toasty::stmt::Delete<#model_ident> {
                     use #toasty::IntoStatement;
-                    self.into_statement().into_query().unwrap().delete()
+                    self.into_statement().into_list_query().unwrap().delete().cast()
                 }
             }
 
@@ -130,26 +130,26 @@ impl Expand<'_> {
             }
 
             impl #toasty::IntoStatement for &#model_ident {
-                type Returning = #toasty::List<#model_ident>;
+                type Returning = #model_ident;
 
-                fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
+                fn into_statement(self) -> #toasty::Statement<#model_ident> {
                     use #toasty::IntoStatement;
                     #into_statement_body
                 }
             }
 
             impl #toasty::IntoStatement for &mut #model_ident {
-                type Returning = #toasty::List<#model_ident>;
+                type Returning = #model_ident;
 
-                fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
+                fn into_statement(self) -> #toasty::Statement<#model_ident> {
                     (&*self).into_statement()
                 }
             }
 
             impl #toasty::IntoStatement for #model_ident {
-                type Returning = #toasty::List<#model_ident>;
+                type Returning = #model_ident;
 
-                fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
+                fn into_statement(self) -> #toasty::Statement<#model_ident> {
                     (&self).into_statement()
                 }
             }
@@ -177,6 +177,7 @@ impl Expand<'_> {
             #query_struct_ident::default()
                 .#filter_method_ident( #( & self.#arg_idents ),* )
                 .into_statement()
+                .cast()
         }
     }
 
