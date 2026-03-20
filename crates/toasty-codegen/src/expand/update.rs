@@ -32,8 +32,6 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
 
-        let assignments_ref = quote!(self.assignments);
-
         // For root builders, self.assignments is Assignments (owned),
         // so &mut self.assignments gives &mut Assignments.
         // For embedded builders, self.assignments is &'a mut Assignments,
@@ -74,7 +72,7 @@ impl Expand<'_> {
 
                     #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> &mut Self {
                         let projection = #projection;
-                        #assignments_ref.set(projection, #field_ident.into_expr());
+                        self.assignments.set(projection, #field_ident.into_expr());
                         self
                     }
                 }
@@ -92,7 +90,7 @@ impl Expand<'_> {
 
                     #vis fn #insert_ident(&mut self, #singular: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> &mut Self {
                         let projection = #projection;
-                        #assignments_ref.insert(projection, #singular.into_expr());
+                        self.assignments.insert(projection, #singular.into_expr());
                         self
                     }
                 }
@@ -108,7 +106,7 @@ impl Expand<'_> {
 
                     #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> &mut Self {
                         let projection = #projection;
-                        #assignments_ref.set(projection, #field_ident.into_expr());
+                        self.assignments.set(projection, #field_ident.into_expr());
                         self
                     }
                 }
@@ -127,10 +125,10 @@ impl Expand<'_> {
                             match &#field_ident {
                                 Some(v) => {
                                     let json = #toasty::serde_json::to_string(v).expect("failed to serialize");
-                                    #assignments_ref.set(projection, <String as #toasty::IntoExpr<String>>::into_expr(json));
+                                    self.assignments.set(projection, <String as #toasty::IntoExpr<String>>::into_expr(json));
                                 }
                                 None => {
-                                    #assignments_ref.set(projection, #toasty::stmt::Expr::<String>::from_untyped(#toasty::core::stmt::Expr::Value(#toasty::core::stmt::Value::Null)));
+                                    self.assignments.set(projection, #toasty::stmt::Expr::<String>::from_untyped(#toasty::core::stmt::Expr::Value(#toasty::core::stmt::Value::Null)));
                                 }
                             }
                             self
@@ -146,7 +144,7 @@ impl Expand<'_> {
                         #vis fn #set_field_ident(&mut self, #field_ident: #ty) -> &mut Self {
                             let projection = #projection;
                             let json = #toasty::serde_json::to_string(&#field_ident).expect("failed to serialize");
-                            #assignments_ref.set(projection, <String as #toasty::IntoExpr<String>>::into_expr(json));
+                            self.assignments.set(projection, <String as #toasty::IntoExpr<String>>::into_expr(json));
                             self
                         }
                     }
@@ -161,7 +159,7 @@ impl Expand<'_> {
 
                     #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<#ty>) -> &mut Self {
                         let projection = #projection;
-                        #assignments_ref.set(projection, #field_ident.into_expr());
+                        self.assignments.set(projection, #field_ident.into_expr());
                         self
                     }
 
