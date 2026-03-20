@@ -67,6 +67,10 @@ impl<M> Update<M> {
         &mut self.untyped
     }
 
+    pub fn set_assignments(&mut self, assignments: stmt::Assignments) {
+        self.untyped.assignments = assignments;
+    }
+
     /// Assign a value to a field.
     ///
     /// `field` identifies which field to update and `expr` is the new value.

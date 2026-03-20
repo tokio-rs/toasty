@@ -271,7 +271,7 @@ fn extract_key_record(
                 let stmt::Expr::Reference(expr_ref) = &*b.lhs else {
                     return None;
                 };
-                let column = cx.resolve_expr_reference(expr_ref).expect_column();
+                let column = cx.resolve_expr_reference(expr_ref).as_column_unwrap();
                 let (idx, _) = index
                     .columns
                     .iter()

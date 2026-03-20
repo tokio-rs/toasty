@@ -1,49 +1,33 @@
-use crate::stmt::List;
 use crate::Result;
-use std::marker::PhantomData;
-use toasty_core::stmt::Value;
+use toasty_core::stmt::{self, Value};
 
-/// Trait for types that can handle the result of an update operation.
+/// Trait for types that can serve as the target of an update operation.
 ///
 /// This trait is implemented by types that represent different update targets:
-/// - [`Query`]: Discards the result values (for query-based updates)
-/// - `&mut Model`: Reads the first value and reloads the model (for instance updates)
+/// - Generated query struct: builds the update from its inner query, producing
+///   `Update<List<Model>>` for multi-row updates
+/// - `&mut Model`: builds the update from the model's primary key, producing
+///   `Update<Model>` for single-row updates
 ///
-/// The associated type `Returning` determines the statement return type:
-/// - `List<Model>` for query-based updates (multiple rows)
-/// - `Model` for instance updates (single row)
+/// The associated type `Returning` determines the statement return type.
 pub trait UpdateTarget {
     /// The type parameter for the typed `Update<R>` statement.
     type Returning;
+
+    /// Build the update statement by combining this target's selection with the
+    /// provided assignments.
+    ///
+    /// For query-based targets, this takes the inner query (replacing it with a
+    /// default) and wraps it in an `Update<List<Model>>`.
+    /// For `&mut Model`, this builds an `Update<Model>` from the model's PK.
+    fn to_update_stmt(
+        &mut self,
+        assignments: stmt::Assignments,
+    ) -> crate::stmt::Update<Self::Returning>;
 
     /// Apply the result of an update operation.
     ///
     /// For query-based updates, this discards the values.
     /// For instance updates, this reloads the model from the first value.
     fn apply_result(self, values: Vec<Value>) -> Result<()>;
-}
-
-/// Marker type for query-based updates that don't reload a model instance.
-#[derive(Debug, Clone, Copy)]
-pub struct Query<M>(PhantomData<M>);
-
-impl<M> Default for Query<M> {
-    fn default() -> Self {
-        Self(PhantomData)
-    }
-}
-
-impl<M> Query<M> {
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
-impl<M> UpdateTarget for Query<M> {
-    type Returning = List<M>;
-
-    fn apply_result(self, _values: Vec<Value>) -> Result<()> {
-        // Discard the values - we don't need to reload anything
-        Ok(())
-    }
 }

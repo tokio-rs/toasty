@@ -7,17 +7,31 @@ pub enum EntryMut<'a> {
 }
 
 impl EntryMut<'_> {
-    pub fn as_expr(&self) -> &Expr {
+    pub fn as_expr(&self) -> Option<&Expr> {
         match self {
-            EntryMut::Expr(e) => e,
-            _ => todo!(),
+            EntryMut::Expr(e) => Some(e),
+            _ => None,
         }
     }
 
-    pub fn as_expr_mut(&mut self) -> &mut Expr {
+    #[track_caller]
+    pub fn as_expr_unwrap(&self) -> &Expr {
+        self.as_expr()
+            .unwrap_or_else(|| panic!("expected EntryMut::Expr; actual={self:#?}"))
+    }
+
+    pub fn as_expr_mut(&mut self) -> Option<&mut Expr> {
+        match self {
+            EntryMut::Expr(e) => Some(e),
+            _ => None,
+        }
+    }
+
+    #[track_caller]
+    pub fn as_expr_mut_unwrap(&mut self) -> &mut Expr {
         match self {
             EntryMut::Expr(e) => e,
-            _ => todo!(),
+            _ => panic!("expected EntryMut::Expr"),
         }
     }
 

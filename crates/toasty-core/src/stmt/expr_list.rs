@@ -44,7 +44,7 @@ impl Expr {
     }
 
     #[track_caller]
-    pub fn expect_list(&self) -> &ExprList {
+    pub fn as_list_unwrap(&self) -> &ExprList {
         match self {
             Self::List(list) => list,
             _ => panic!("expected Expr::List(..) but was {self:#?}"),
@@ -52,18 +52,17 @@ impl Expr {
     }
 
     #[track_caller]
-    pub fn expect_list_mut(&mut self) -> &mut ExprList {
+    pub fn as_list_mut_unwrap(&mut self) -> &mut ExprList {
         match self {
             Self::List(list) => list,
             _ => panic!("expected Expr::List(..) but was {self:#?}"),
         }
     }
 
-    #[track_caller]
-    pub fn unwrap_list(self) -> ExprList {
+    pub fn into_list(self) -> Option<ExprList> {
         match self {
-            Self::List(list) => list,
-            _ => panic!("expected Expr::List(..) but was {self:#?}"),
+            Self::List(list) => Some(list),
+            _ => None,
         }
     }
 }

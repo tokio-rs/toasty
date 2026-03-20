@@ -12,7 +12,7 @@ impl Simplify<'_> {
                     let model = self
                         .cx
                         .resolve_expr_reference(expr_reference)
-                        .expect_model();
+                        .as_model_unwrap();
 
                     let [pk_field] = &model.primary_key.fields[..] else {
                         todo!("handle composite keys");
@@ -24,7 +24,7 @@ impl Simplify<'_> {
                     let field = self
                         .cx
                         .resolve_expr_reference(expr_reference)
-                        .expect_field();
+                        .as_field_unwrap();
 
                     match &field.ty {
                         FieldTy::Primitive(_) => {}
@@ -78,7 +78,7 @@ impl Simplify<'_> {
                 if lhs == rhs && (op.is_eq() || op.is_ne()) =>
             {
                 if lhs.is_field() {
-                    let field = self.cx.resolve_expr_reference(lhs).expect_field();
+                    let field = self.cx.resolve_expr_reference(lhs).as_field_unwrap();
                     if !field.nullable() {
                         return Some(op.is_eq().into());
                     }

@@ -53,7 +53,7 @@ impl Statement {
     /// # Panics
     ///
     /// If `self` is not a [`Statement::Delete`].
-    pub fn unwrap_delete(self) -> Delete {
+    pub fn into_delete_unwrap(self) -> Delete {
         match self {
             Self::Delete(delete) => delete,
             v => panic!("expected `Delete`, found {v:#?}"),

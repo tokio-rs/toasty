@@ -333,7 +333,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     .schema()
                     .app
                     .model(e.variant.model)
-                    .expect_embedded_enum();
+                    .as_embedded_enum_unwrap();
                 let has_data = enum_model.has_data_variants();
                 let discriminant = enum_model.variants[e.variant.index].discriminant;
 
@@ -666,7 +666,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         if let stmt::Source::Model(source_model) = stmt {
             debug_assert!(source_model.via.is_none(), "TODO");
 
-            let table_id = self.schema().table_id_for(source_model.model);
+            let table_id = self.schema().table_id_for(source_model.id);
             *stmt = stmt::Source::table(table_id);
         }
     }

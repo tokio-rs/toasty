@@ -172,7 +172,7 @@ impl FieldTy {
     }
 
     #[track_caller]
-    pub fn expect_primitive(&self) -> &FieldPrimitive {
+    pub fn as_primitive_unwrap(&self) -> &FieldPrimitive {
         match self {
             Self::Primitive(simple) => simple,
             _ => panic!("expected simple field, but was {self:?}"),
@@ -180,7 +180,7 @@ impl FieldTy {
     }
 
     #[track_caller]
-    pub fn expect_primitive_mut(&mut self) -> &mut FieldPrimitive {
+    pub fn as_primitive_mut_unwrap(&mut self) -> &mut FieldPrimitive {
         match self {
             Self::Primitive(simple) => simple,
             _ => panic!("expected simple field, but was {self:?}"),
@@ -199,7 +199,7 @@ impl FieldTy {
     }
 
     #[track_caller]
-    pub fn expect_embedded(&self) -> &Embedded {
+    pub fn as_embedded_unwrap(&self) -> &Embedded {
         match self {
             Self::Embedded(embedded) => embedded,
             _ => panic!("expected embedded field, but was {self:?}"),
@@ -207,7 +207,7 @@ impl FieldTy {
     }
 
     #[track_caller]
-    pub fn expect_embedded_mut(&mut self) -> &mut Embedded {
+    pub fn as_embedded_mut_unwrap(&mut self) -> &mut Embedded {
         match self {
             Self::Embedded(embedded) => embedded,
             _ => panic!("expected embedded field, but was {self:?}"),
@@ -237,7 +237,7 @@ impl FieldTy {
     }
 
     #[track_caller]
-    pub fn expect_has_many(&self) -> &HasMany {
+    pub fn as_has_many_unwrap(&self) -> &HasMany {
         match self {
             Self::HasMany(has_many) => has_many,
             _ => panic!("expected field to be `HasMany`, but was {self:?}"),
@@ -245,7 +245,7 @@ impl FieldTy {
     }
 
     #[track_caller]
-    pub fn expect_has_many_mut(&mut self) -> &mut HasMany {
+    pub fn as_has_many_mut_unwrap(&mut self) -> &mut HasMany {
         match self {
             Self::HasMany(has_many) => has_many,
             _ => panic!("expected field to be `HasMany`, but was {self:?}"),
@@ -264,7 +264,7 @@ impl FieldTy {
     }
 
     #[track_caller]
-    pub fn expect_has_one(&self) -> &HasOne {
+    pub fn as_has_one_unwrap(&self) -> &HasOne {
         match self {
             Self::HasOne(has_one) => has_one,
             _ => panic!("expected field to be `HasOne`, but it was {self:?}"),
@@ -272,7 +272,7 @@ impl FieldTy {
     }
 
     #[track_caller]
-    pub fn expect_has_one_mut(&mut self) -> &mut HasOne {
+    pub fn as_has_one_mut_unwrap(&mut self) -> &mut HasOne {
         match self {
             Self::HasOne(has_one) => has_one,
             _ => panic!("expected field to be `HasOne`, but it was {self:?}"),
@@ -291,7 +291,7 @@ impl FieldTy {
     }
 
     #[track_caller]
-    pub fn expect_belongs_to(&self) -> &BelongsTo {
+    pub fn as_belongs_to_unwrap(&self) -> &BelongsTo {
         match self {
             Self::BelongsTo(belongs_to) => belongs_to,
             _ => panic!("expected field to be `BelongsTo`, but was {self:?}"),
@@ -299,7 +299,7 @@ impl FieldTy {
     }
 
     #[track_caller]
-    pub fn expect_belongs_to_mut(&mut self) -> &mut BelongsTo {
+    pub fn as_belongs_to_mut_unwrap(&mut self) -> &mut BelongsTo {
         match self {
             Self::BelongsTo(belongs_to) => belongs_to,
             _ => panic!("expected field to be `BelongsTo`, but was {self:?}"),

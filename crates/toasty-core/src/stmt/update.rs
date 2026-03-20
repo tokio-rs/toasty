@@ -75,12 +75,17 @@ impl UpdateTarget {
         Self::Table(table.into())
     }
 
+    pub fn as_table(&self) -> Option<TableId> {
+        match self {
+            Self::Table(table) => Some(*table),
+            _ => None,
+        }
+    }
+
     #[track_caller]
     pub fn as_table_unwrap(&self) -> TableId {
-        match self {
-            Self::Table(table) => *table,
-            _ => todo!(),
-        }
+        self.as_table()
+            .unwrap_or_else(|| panic!("expected UpdateTarget::Table; actual={self:#?}"))
     }
 }
 

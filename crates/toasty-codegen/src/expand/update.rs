@@ -9,12 +9,12 @@ impl Expand<'_> {
     pub(super) fn expand_embedded_update_builder(&self) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
-        let update_struct_ident = &self.model.kind.expect_embedded().update_struct_ident;
+        let update_struct_ident = &self.model.kind.as_embedded_unwrap().update_struct_ident;
         let builder_methods = self.expand_update_field_methods(true);
 
         quote! {
             #vis struct #update_struct_ident<'a> {
-                stmt: &'a mut #toasty::core::stmt::Update,
+                assignments: &'a mut #toasty::core::stmt::Assignments,
                 projection: #toasty::stmt::Projection,
             }
 
@@ -26,22 +26,20 @@ impl Expand<'_> {
 
     /// Expand all update methods for all fields.
     /// Generates both the field setter methods and the .with_field() method for each field.
-    /// For embedded builders: uses self.projection.clone().push(index) and self.stmt.assignments
-    /// For root builders: uses Projection::from_index(index) and self.stmt
+    /// For embedded builders: uses self.projection.clone().push(index) and self.assignments
+    /// For root builders: uses Projection::from_index(index) and self.assignments
     fn expand_update_field_methods(&self, is_embedded: bool) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
 
-        let stmt_method = if is_embedded {
-            quote!(self.stmt.assignments)
+        // For root builders, self.assignments is Assignments (owned),
+        // so &mut self.assignments gives &mut Assignments.
+        // For embedded builders, self.assignments is &'a mut Assignments,
+        // so we need &mut *self.assignments to reborrow.
+        let assignments_for_builder = if is_embedded {
+            quote!(&mut *self.assignments)
         } else {
-            quote!(self.stmt)
-        };
-
-        let stmt_for_builder = if is_embedded {
-            quote!(self.stmt)
-        } else {
-            quote!(self.stmt.as_untyped_mut())
+            quote!(&mut self.assignments)
         };
 
         self.model.fields.iter().enumerate().map(|(field_index, field)| {
@@ -74,7 +72,7 @@ impl Expand<'_> {
 
                     #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> &mut Self {
                         let projection = #projection;
-                        #stmt_method.set(projection, #field_ident.into_expr());
+                        self.assignments.set(projection, #field_ident.into_expr());
                         self
                     }
                 }
@@ -92,7 +90,7 @@ impl Expand<'_> {
 
                     #vis fn #insert_ident(&mut self, #singular: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> &mut Self {
                         let projection = #projection;
-                        #stmt_method.insert(projection, #singular.into_expr());
+                        self.assignments.insert(projection, #singular.into_expr());
                         self
                     }
                 }
@@ -108,7 +106,7 @@ impl Expand<'_> {
 
                     #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> &mut Self {
                         let projection = #projection;
-                        #stmt_method.set(projection, #field_ident.into_expr());
+                        self.assignments.set(projection, #field_ident.into_expr());
                         self
                     }
                 }
@@ -127,10 +125,10 @@ impl Expand<'_> {
                             match &#field_ident {
                                 Some(v) => {
                                     let json = #toasty::serde_json::to_string(v).expect("failed to serialize");
-                                    #stmt_method.set(projection, <String as #toasty::IntoExpr<String>>::into_expr(json));
+                                    self.assignments.set(projection, <String as #toasty::IntoExpr<String>>::into_expr(json));
                                 }
                                 None => {
-                                    #stmt_method.set(projection, #toasty::stmt::Expr::<String>::from_untyped(#toasty::core::stmt::Expr::Value(#toasty::core::stmt::Value::Null)));
+                                    self.assignments.set(projection, #toasty::stmt::Expr::<String>::from_untyped(#toasty::core::stmt::Expr::Value(#toasty::core::stmt::Value::Null)));
                                 }
                             }
                             self
@@ -146,7 +144,7 @@ impl Expand<'_> {
                         #vis fn #set_field_ident(&mut self, #field_ident: #ty) -> &mut Self {
                             let projection = #projection;
                             let json = #toasty::serde_json::to_string(&#field_ident).expect("failed to serialize");
-                            #stmt_method.set(projection, <String as #toasty::IntoExpr<String>>::into_expr(json));
+                            self.assignments.set(projection, <String as #toasty::IntoExpr<String>>::into_expr(json));
                             self
                         }
                     }
@@ -161,7 +159,7 @@ impl Expand<'_> {
 
                     #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<#ty>) -> &mut Self {
                         let projection = #projection;
-                        #stmt_method.set(projection, #field_ident.into_expr());
+                        self.assignments.set(projection, #field_ident.into_expr());
                         self
                     }
 
@@ -170,7 +168,7 @@ impl Expand<'_> {
                         f: impl FnOnce(<#ty as #toasty::Field>::UpdateBuilder<'_>)
                     ) -> Self {
                         let projection = #projection;
-                        let builder = <#ty as #toasty::Field>::make_update_builder(#stmt_for_builder, projection);
+                        let builder = <#ty as #toasty::Field>::make_update_builder(#assignments_for_builder, projection);
                         f(builder);
                         self
                     }
@@ -194,7 +192,7 @@ impl Expand<'_> {
                 };
                 let index_tokenized = util::int(index);
                 Some(quote! {
-                    self.stmt.set(
+                    self.assignments.set(
                         #toasty::stmt::Projection::from_index(#index_tokenized),
                         <#ty as #toasty::IntoExpr<#ty>>::into_expr(#expr),
                     );
@@ -207,8 +205,8 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
-        let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
-        let update_struct_ident = &self.model.kind.expect_root().update_struct_ident;
+        let query_struct_ident = &self.model.kind.as_root_unwrap().query_struct_ident;
+        let update_struct_ident = &self.model.kind.as_root_unwrap().update_struct_ident;
         let target_ty = util::ident("T");
         let builder_methods = self.expand_update_field_methods(false);
         let update_default_stmts = self.expand_update_default_stmts();
@@ -216,12 +214,12 @@ impl Expand<'_> {
         quote! {
             // Unified update builder generic over the update target.
             //
-            // The target's `Returning` associated type determines the statement
-            // return type:
-            // - `T = Query<Model>`: query-based update, `Returning = List<Model>`
+            // The builder holds assignments and a target. The target knows how
+            // to build the final update statement:
+            // - `T = GeneratedQuery`: query-based update, `Returning = List<Model>`
             // - `T = &mut Model`: instance update, `Returning = Model`
-            #vis struct #update_struct_ident<#target_ty: #toasty::UpdateTarget = #toasty::Query<#model_ident>> {
-                stmt: #toasty::stmt::Update<<#target_ty as #toasty::UpdateTarget>::Returning>,
+            #vis struct #update_struct_ident<#target_ty: #toasty::UpdateTarget = #query_struct_ident> {
+                assignments: #toasty::core::stmt::Assignments,
                 target: #target_ty,
             }
 
@@ -232,9 +230,10 @@ impl Expand<'_> {
 
                 #builder_methods
 
-                #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<()> {
-                    use #toasty::ExecutorExt;
-                    let stream = executor.exec(self.stmt.into()).await?;
+                #vis async fn exec(mut self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<()> {
+                    use #toasty::{ExecutorExt, UpdateTarget as _};
+                    let stmt = self.target.to_update_stmt(self.assignments);
+                    let stream = executor.exec(stmt.into()).await?;
                     let values = stream.collect().await?;
                     self.target.apply_result(values)?;
                     Ok(())
@@ -245,6 +244,18 @@ impl Expand<'_> {
             impl #toasty::UpdateTarget for &mut #model_ident {
                 type Returning = #model_ident;
 
+                fn to_update_stmt(
+                    &mut self,
+                    assignments: #toasty::core::stmt::Assignments,
+                ) -> #toasty::stmt::Update<#model_ident> {
+                    use #toasty::IntoStatement;
+                    let mut stmt = #toasty::stmt::Update::new_single(
+                        (&**self).into_statement().into_list_query().unwrap()
+                    );
+                    stmt.set_assignments(assignments);
+                    stmt
+                }
+
                 fn apply_result(self, mut values: ::std::vec::Vec<#toasty::core::stmt::Value>) -> #toasty::Result<()> {
                     let value = values.into_iter()
                         .next()
@@ -253,12 +264,34 @@ impl Expand<'_> {
                 }
             }
 
-            // Convert from query to update builder (list return type)
+            // Implement UpdateTarget for the generated query struct
+            impl #toasty::UpdateTarget for #query_struct_ident {
+                type Returning = #toasty::List<#model_ident>;
+
+                fn to_update_stmt(
+                    &mut self,
+                    assignments: #toasty::core::stmt::Assignments,
+                ) -> #toasty::stmt::Update<#toasty::List<#model_ident>> {
+                    let query = ::std::mem::replace(
+                        &mut self.stmt,
+                        #toasty::stmt::Query::all(),
+                    );
+                    let mut stmt = #toasty::stmt::Update::new(query);
+                    stmt.set_assignments(assignments);
+                    stmt
+                }
+
+                fn apply_result(self, _values: ::std::vec::Vec<#toasty::core::stmt::Value>) -> #toasty::Result<()> {
+                    Ok(())
+                }
+            }
+
+            // Convert from query to update builder
             impl From<#query_struct_ident> for #update_struct_ident {
                 fn from(value: #query_struct_ident) -> #update_struct_ident {
                     let mut s = #update_struct_ident {
-                        stmt: #toasty::stmt::Update::new(value.stmt),
-                        target: #toasty::Query::new(),
+                        assignments: #toasty::core::stmt::Assignments::default(),
+                        target: value,
                     };
                     s.apply_update_defaults();
                     s
@@ -268,8 +301,8 @@ impl Expand<'_> {
             impl From<#toasty::stmt::Query<#toasty::List<#model_ident>>> for #update_struct_ident {
                 fn from(src: #toasty::stmt::Query<#toasty::List<#model_ident>>) -> #update_struct_ident {
                     let mut s = #update_struct_ident {
-                        stmt: #toasty::stmt::Update::new(src),
-                        target: #toasty::Query::new(),
+                        assignments: #toasty::core::stmt::Assignments::default(),
+                        target: #query_struct_ident::from_stmt(src),
                     };
                     s.apply_update_defaults();
                     s
@@ -279,8 +312,10 @@ impl Expand<'_> {
             impl #toasty::IntoStatement for #update_struct_ident {
                 type Returning = ();
 
-                fn into_statement(self) -> #toasty::Statement<()> {
-                    #toasty::Statement::from_untyped_stmt(self.stmt.into_untyped_stmt())
+                fn into_statement(mut self) -> #toasty::Statement<()> {
+                    use #toasty::UpdateTarget as _;
+                    let stmt = self.target.to_update_stmt(self.assignments);
+                    #toasty::Statement::from_untyped_stmt(stmt.into_untyped_stmt())
                 }
             }
         }

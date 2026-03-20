@@ -155,13 +155,23 @@ impl Statement {
         }
     }
 
+    /// Consumes `self` and attempts to return the inner [`Query`].
+    ///
+    /// Returns `None` if `self` is not a [`Statement::Query`].
+    pub fn into_query(self) -> Option<Query> {
+        match self {
+            Self::Query(query) => Some(query),
+            _ => None,
+        }
+    }
+
     /// Consumes `self` and returns the inner [`Query`].
     ///
     /// # Panics
     ///
     /// If `self` is not a [`Statement::Query`].
     #[track_caller]
-    pub fn into_query(self) -> Query {
+    pub fn into_query_unwrap(self) -> Query {
         match self {
             Self::Query(query) => query,
             v => panic!("expected `Query`, found {v:#?}"),

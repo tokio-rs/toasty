@@ -49,9 +49,8 @@ impl Expand<'_> {
                 }
 
                 #vis fn update(&mut self) -> #update_struct_ident<&mut Self> {
-                    use #toasty::IntoStatement;
                     let mut s = #update_struct_ident {
-                        stmt: #toasty::stmt::Update::new_single((&*self).into_statement().into_list_query().unwrap()),
+                        assignments: #toasty::core::stmt::Assignments::default(),
                         target: self,
                     };
                     s.apply_update_defaults();
@@ -169,7 +168,7 @@ impl Expand<'_> {
 
     fn expand_model_into_statement_body(&self) -> TokenStream {
         let filter = self.primary_key_filter();
-        let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
+        let query_struct_ident = &self.model.kind.as_root_unwrap().query_struct_ident;
         let filter_method_ident = &filter.filter_method_ident;
         let arg_idents = self.expand_filter_arg_idents(filter);
 

@@ -331,7 +331,7 @@ impl stmt::Input for ConstantizeReturning<'_> {
         let needle = self
             .cx
             .resolve_expr_reference(expr_reference)
-            .expect_column();
+            .as_column_unwrap();
 
         match self.source {
             ConstantizeSource::InsertValues { values, columns } => {

@@ -1306,7 +1306,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     ) -> mir::NodeId {
         // If there is a post filter, we need to apply a filter step on the returned rows.
         if let Some(post_filter) = post_filter {
-            let item_ty = ty.unwrap_list_ref();
+            let item_ty = ty.as_list_unwrap();
             node_id = self.planner.mir.insert(mir::Filter {
                 input: node_id,
                 filter: eval::Func::from_stmt(post_filter, vec![item_ty.clone()]),

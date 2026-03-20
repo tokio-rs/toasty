@@ -170,7 +170,7 @@ impl BuildTableFromModels<'_> {
     }
 
     fn map_model_fields(&mut self, model: &Model) -> Result<()> {
-        let root = model.expect_root();
+        let root = model.as_root_unwrap();
         let schema_prefix = if self.prefix_table_names {
             Some(model.name().snake_case())
         } else {

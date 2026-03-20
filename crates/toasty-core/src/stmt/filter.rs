@@ -124,6 +124,7 @@ impl Statement {
         }
     }
 
+    #[track_caller]
     pub fn filter_expr_unwrap(&self) -> &Expr {
         self.filter()
             .and_then(|f| f.expr.as_ref())
