@@ -190,6 +190,59 @@ fn ddb_key(table: &Table, key: &stmt::Value) -> HashMap<String, AttributeValue> 
     ret
 }
 
+/// Convert a DynamoDB AttributeValue to stmt::Value (type-inferred).
+fn attr_value_to_stmt_value(attr: &AttributeValue) -> stmt::Value {
+    use AttributeValue as AV;
+
+    match attr {
+        AV::S(s) => stmt::Value::String(s.clone()),
+        AV::N(n) => {
+            // Try to parse as i64 first (most common), fallback to string
+            n.parse::<i64>()
+                .map(stmt::Value::I64)
+                .unwrap_or_else(|_| stmt::Value::String(n.clone()))
+        }
+        AV::Bool(b) => stmt::Value::Bool(*b),
+        AV::B(bytes) => stmt::Value::Bytes(bytes.clone().into_inner()),
+        AV::Null(_) => stmt::Value::Null,
+        // For complex types, convert to string representation
+        _ => stmt::Value::String(format!("{:?}", attr)),
+    }
+}
+
+/// Serialize a DynamoDB LastEvaluatedKey (for pagination) into stmt::Value.
+/// Format: flat record [name1, value1, name2, value2, ...]
+/// Example: { "pk": S("abc"), "sk": N("42") } → Record([String("pk"), String("abc"), String("sk"), I64(42)])
+fn serialize_ddb_cursor(last_key: &HashMap<String, AttributeValue>) -> stmt::Value {
+    let mut fields = Vec::with_capacity(last_key.len() * 2);
+
+    for (name, attr_value) in last_key {
+        fields.push(stmt::Value::String(name.clone()));
+        fields.push(attr_value_to_stmt_value(attr_value));
+    }
+
+    stmt::Value::Record(stmt::ValueRecord::from_vec(fields))
+}
+
+/// Deserialize a stmt::Value cursor into a DynamoDB ExclusiveStartKey.
+/// Expects flat record format: [name1, value1, name2, value2, ...]
+fn deserialize_ddb_cursor(cursor: &stmt::Value) -> HashMap<String, AttributeValue> {
+    let mut ret = HashMap::new();
+
+    if let stmt::Value::Record(fields) = cursor {
+        // Process pairs: [name, value, name, value, ...]
+        for chunk in fields.chunks(2) {
+            if chunk.len() == 2 {
+                if let (stmt::Value::String(name), value) = (&chunk[0], &chunk[1]) {
+                    ret.insert(name.clone(), Value::from(value.clone()).to_ddb());
+                }
+            }
+        }
+    }
+
+    ret
+}
+
 fn ddb_key_schema(partition: &Column, range: Option<&Column>) -> Vec<KeySchemaElement> {
     let mut ks = vec![];
 

@@ -11,7 +11,7 @@ mod insert;
 pub use insert::Insert;
 
 mod query_pk;
-pub use query_pk::QueryPk;
+pub use query_pk::{PaginationRequest, QueryPk};
 
 mod query_sql;
 pub use query_sql::QuerySql;

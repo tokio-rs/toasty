@@ -55,6 +55,17 @@ impl Exec<'_> {
 
         let filters = self.split_filter(pk_filter, action.table);
         let mut all_rows = Vec::new();
+        let mut response_cursor = None;
+
+        // Build PaginationRequest from PaginationConfig if present
+        let pagination_request =
+            action
+                .pagination
+                .as_ref()
+                .map(|config| operation::PaginationRequest {
+                    page_size: config.page_size,
+                    cursor: action.cursor.clone(),
+                });
 
         for f in filters {
             let res = self
@@ -70,10 +81,16 @@ impl Exec<'_> {
                         limit: action.limit,
                         order: action.order,
                         cursor: action.cursor.clone(),
+                        pagination: pagination_request.clone(),
                     }
                     .into(),
                 )
                 .await?;
+
+            // Capture cursor from driver response (for DynamoDB)
+            if res.cursor.is_some() {
+                response_cursor = res.cursor;
+            }
 
             all_rows.extend(res.rows.into_value_stream().collect().await?);
         }
@@ -81,7 +98,11 @@ impl Exec<'_> {
         self.vars.store(
             action.output.var,
             action.output.num_uses,
-            ExecResponse::from_rows(Rows::Stream(stmt::ValueStream::from_vec(all_rows))),
+            ExecResponse {
+                values: Rows::Stream(stmt::ValueStream::from_vec(all_rows)),
+                next_cursor: response_cursor,
+                prev_cursor: None,
+            },
         );
 
         Ok(())
