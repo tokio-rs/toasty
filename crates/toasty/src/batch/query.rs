@@ -48,6 +48,6 @@ impl<T> IntoExpr<T> for Batch<T> {
     }
 
     fn by_ref(&self) -> Expr<T> {
-        todo!()
+        Expr::from_untyped(stmt::Expr::stmt(self.stmt.untyped.clone()))
     }
 }
