@@ -23,7 +23,6 @@ mod expr_or;
 mod expr_project;
 mod expr_record;
 mod lift_in_subquery;
-mod lift_pk_select;
 mod prop_const;
 mod stmt_query;
 
