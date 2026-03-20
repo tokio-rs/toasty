@@ -104,12 +104,9 @@ pub trait ExecutorExt: Executor {
     #[doc(hidden)]
     fn exec_insert_one<M: Model>(
         &mut self,
-        mut stmt: stmt::Insert<M>,
+        stmt: stmt::Insert<M>,
     ) -> impl Future<Output = Result<M>> {
         async move {
-            // TODO: HAX
-            stmt.untyped.source.single = false;
-
             let mut records = self.exec(stmt.into()).await?;
 
             match records.next().await {
