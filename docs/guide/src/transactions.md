@@ -9,7 +9,7 @@ PostgreSQL, MySQL).
 Call `db.transaction()` to begin a transaction:
 
 ```rust
-# use toasty::Model;
+# use toasty::{Model, Executor};
 # #[derive(Debug, toasty::Model)]
 # struct User {
 #     #[key]
