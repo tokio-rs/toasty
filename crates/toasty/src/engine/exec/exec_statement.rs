@@ -168,15 +168,82 @@ impl Exec<'_> {
             res.rows = mysql_info.reconstruct_returning(res.rows).await?;
         }
 
+        // Apply pagination if configured
+        let exec_response = if let Some(pagination) = &action.pagination {
+            apply_sql_pagination(res.rows, res.cursor, pagination).await?
+        } else {
+            ExecResponse {
+                values: res.rows,
+                next_cursor: res.cursor,
+                prev_cursor: None,
+            }
+        };
+
         self.vars.store(
             action.output.output.var,
             action.output.output.num_uses,
-            ExecResponse::from_rows(res.rows),
+            exec_response,
         );
 
         Ok(())
     }
+}
 
+/// Apply SQL pagination using N+1 detection and cursor extraction.
+async fn apply_sql_pagination(
+    rows: Rows,
+    driver_cursor: Option<stmt::Value>,
+    pagination: &PaginationConfig,
+) -> Result<ExecResponse> {
+    // If driver provided a cursor (shouldn't happen for SQL), use it
+    if driver_cursor.is_some() {
+        return Ok(ExecResponse {
+            values: rows,
+            next_cursor: driver_cursor,
+            prev_cursor: None,
+        });
+    }
+
+    // If no extract_cursor function, can't do SQL pagination
+    let Some(extract_cursor) = &pagination.extract_cursor else {
+        return Ok(ExecResponse::from_rows(rows));
+    };
+
+    // Convert rows to vector for N+1 detection
+    let mut row_vec = match rows {
+        Rows::Stream(stream) => stream.collect().await?,
+        Rows::Value(stmt::Value::List(items)) => items,
+        other => {
+            // Not a list of rows, can't paginate
+            return Ok(ExecResponse::from_rows(other));
+        }
+    };
+
+    let page_size = pagination.page_size as usize;
+
+    // N+1 detection: check if we got more rows than requested
+    let next_cursor = if row_vec.len() > page_size {
+        // Extract cursor from the last row we'll keep (at index page_size - 1)
+        let cursor_row = &row_vec[page_size - 1];
+        let cursor_value = extract_cursor.eval(std::slice::from_ref(cursor_row))?;
+
+        // Truncate to page_size
+        row_vec.truncate(page_size);
+
+        Some(cursor_value)
+    } else {
+        // No more pages
+        None
+    };
+
+    Ok(ExecResponse {
+        values: Rows::Value(stmt::Value::List(row_vec)),
+        next_cursor,
+        prev_cursor: None,
+    })
+}
+
+impl Exec<'_> {
     /// Processes INSERT statements with RETURNING on MySQL, which doesn't support RETURNING.
     ///
     /// Returns information needed to reconstruct the RETURNING results using LAST_INSERT_ID()

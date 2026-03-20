@@ -632,11 +632,12 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     /// Detects pagination in a query and returns pagination config.
     /// For SQL: builds extract_cursor and adds ORDER BY columns to load_data.
+    /// Also modifies the statement's LIMIT to page_size + 1 for N+1 detection.
     /// Returns (pagination_config, original_column_count) where original_column_count
     /// is used to insert a Project later.
     fn detect_pagination_sql(
         &mut self,
-        stmt: &stmt::Statement,
+        stmt: &mut stmt::Statement,
     ) -> Option<(exec::PaginationConfig, usize)> {
         let stmt::Statement::Query(query) = stmt else {
             return None;
@@ -699,6 +700,15 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             cursor_ty,
         );
 
+        // Modify the statement's LIMIT to page_size + 1 for N+1 detection
+        // This is safe because we have a mutable reference to stmt
+        let stmt::Statement::Query(query) = stmt else {
+            return None;
+        };
+        if let Some(limit) = &mut query.limit {
+            limit.limit = stmt::Expr::Value(stmt::Value::I64(page_size + 1));
+        }
+
         Some((
             exec::PaginationConfig {
                 page_size,
@@ -720,7 +730,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         let const_returning = self.extract_insert_returning_as_const(&stmt);
 
         // Detect pagination and potentially add ORDER BY columns
-        let pagination_info = self.detect_pagination_sql(&stmt);
+        // This also modifies stmt's LIMIT to page_size + 1 for N+1 detection
+        let pagination_info = self.detect_pagination_sql(&mut stmt);
 
         if !self.load_data.columns.is_empty() {
             stmt.set_returning(
