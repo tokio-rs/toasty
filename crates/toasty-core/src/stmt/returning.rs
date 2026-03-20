@@ -30,7 +30,7 @@ impl Returning {
         matches!(self, Self::Model { .. })
     }
 
-    pub fn as_model_includes(&self) -> &[Path] {
+    pub fn model_includes(&self) -> &[Path] {
         match self {
             Self::Model { include } => include,
             _ => &[],
@@ -38,7 +38,7 @@ impl Returning {
     }
 
     #[track_caller]
-    pub fn expect_model_includes_mut(&mut self) -> &mut Vec<Path> {
+    pub fn model_includes_mut_unwrap(&mut self) -> &mut Vec<Path> {
         match self {
             Self::Model { include } => include,
             _ => panic!("not a Model variant"),
@@ -61,7 +61,7 @@ impl Returning {
     }
 
     #[track_caller]
-    pub fn expect_expr(&self) -> &Expr {
+    pub fn as_expr_unwrap(&self) -> &Expr {
         self.as_expr()
             .unwrap_or_else(|| panic!("expected stmt::Returning::Expr; actual={self:#?}"))
     }
@@ -74,7 +74,7 @@ impl Returning {
     }
 
     #[track_caller]
-    pub fn expect_expr_mut(&mut self) -> &mut Expr {
+    pub fn as_expr_mut_unwrap(&mut self) -> &mut Expr {
         match self {
             Self::Expr(expr) => expr,
             _ => panic!("expected stmt::Returning::Expr; actual={self:#?}"),
@@ -128,7 +128,7 @@ impl Statement {
         match self {
             Statement::Delete(delete) => delete.returning = Some(returning),
             Statement::Insert(insert) => insert.returning = Some(returning),
-            Statement::Query(query) => *query.expect_returning_mut() = returning,
+            Statement::Query(query) => *query.returning_mut_unwrap() = returning,
             Statement::Update(update) => update.returning = Some(returning),
         }
     }
@@ -139,7 +139,7 @@ impl Statement {
     ///
     /// Panics if the statement does not have a `RETURNING` clause.
     #[track_caller]
-    pub fn expect_returning(&self) -> &Returning {
+    pub fn returning_unwrap(&self) -> &Returning {
         self.returning().unwrap_or_else(|| {
             panic!("expected statement to have RETURNING clause; actual={self:#?}")
         })
@@ -164,11 +164,11 @@ impl Statement {
     ///
     /// Panics if the statement does not have a `RETURNING` clause.
     #[track_caller]
-    pub fn expect_returning_mut(&mut self) -> &mut Returning {
+    pub fn returning_mut_unwrap(&mut self) -> &mut Returning {
         match self {
             Statement::Delete(delete) => delete.returning.as_mut().unwrap(),
             Statement::Insert(insert) => insert.returning.as_mut().unwrap(),
-            Statement::Query(query) => query.expect_returning_mut(),
+            Statement::Query(query) => query.returning_mut_unwrap(),
             Statement::Update(update) => update.returning.as_mut().unwrap(),
         }
     }
@@ -193,7 +193,7 @@ impl Query {
     /// Panics if the query does not have a `RETURNING` clause (i.e., the body
     /// is not a `SELECT`).
     #[track_caller]
-    pub fn expect_returning(&self) -> &Returning {
+    pub fn returning_unwrap(&self) -> &Returning {
         self.returning()
             .unwrap_or_else(|| panic!("expected query to have RETURNING clause; actual={self:#?}"))
     }
@@ -216,7 +216,7 @@ impl Query {
     /// Panics if the query does not have a `RETURNING` clause (i.e., the body
     /// is not a `SELECT`).
     #[track_caller]
-    pub fn expect_returning_mut(&mut self) -> &mut Returning {
+    pub fn returning_mut_unwrap(&mut self) -> &mut Returning {
         match &mut self.body {
             stmt::ExprSet::Select(select) => &mut select.returning,
             body => panic!("expected query to have RETURNING clause; actual={body:#?}"),

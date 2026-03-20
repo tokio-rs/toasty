@@ -107,7 +107,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
                         ..
                     }),
                     filter.expr: Some(Expr::BinaryOp(_ {
-                        lhs.expect_column(): ExprColumn {
+                        lhs.as_expr_column_unwrap(): ExprColumn {
                             nesting: 0,
                             table: 0,
                             column: == user_id_column.index,
@@ -150,7 +150,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
                 target: toasty_core::stmt::UpdateTarget::Table(== user_table_id),
                 assignments: #{ 2: _ { expr: == 31, .. }},
                 filter.expr: Some(Expr::BinaryOp(_ {
-                    lhs.expect_column(): ExprColumn {
+                    lhs.as_expr_column_unwrap(): ExprColumn {
                         nesting: 0,
                         table: 0,
                         column: == user_id_column.index,
@@ -194,7 +194,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
                     ..
                 }),
                 filter.expr: Some(Expr::BinaryOp(_ {
-                    lhs.expect_column(): ExprColumn {
+                    lhs.as_expr_column_unwrap(): ExprColumn {
                         nesting: 0,
                         table: 0,
                         column: == user_id_column.index,

@@ -14,7 +14,7 @@ pub(crate) enum ModelKind {
 }
 
 impl ModelKind {
-    pub(crate) fn expect_root(&self) -> &ModelRoot {
+    pub(crate) fn as_root_unwrap(&self) -> &ModelRoot {
         match self {
             ModelKind::Root(root) => root,
             ModelKind::EmbeddedStruct(_) => panic!("expected root model, found embedded struct"),
@@ -22,7 +22,7 @@ impl ModelKind {
         }
     }
 
-    pub(crate) fn expect_embedded(&self) -> &ModelEmbeddedStruct {
+    pub(crate) fn as_embedded_unwrap(&self) -> &ModelEmbeddedStruct {
         match self {
             ModelKind::EmbeddedStruct(embedded) => embedded,
             ModelKind::Root(_) => panic!("expected embedded struct, found root model"),
@@ -30,7 +30,7 @@ impl ModelKind {
         }
     }
 
-    pub(crate) fn expect_embedded_enum(&self) -> &ModelEmbeddedEnum {
+    pub(crate) fn as_embedded_enum_unwrap(&self) -> &ModelEmbeddedEnum {
         match self {
             ModelKind::EmbeddedEnum(e) => e,
             ModelKind::Root(_) => panic!("expected embedded enum, found root model"),

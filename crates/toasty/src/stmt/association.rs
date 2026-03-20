@@ -52,7 +52,7 @@ impl<M: Model> Association<List<M>> {
     /// let _assoc = Association::many(source, path);
     /// ```
     pub fn many<T: Model>(source: super::Query<T>, path: Path<T, List<M>>) -> Self {
-        assert_eq!(path.untyped.root.expect_model(), T::id());
+        assert_eq!(path.untyped.root.as_model_unwrap(), T::id());
 
         Self {
             untyped: stmt::Association {
@@ -94,7 +94,7 @@ impl<M: Model> Association<List<M>> {
     /// let _assoc: Association<List<User>> = Association::many_via_one(source, path);
     /// ```
     pub fn many_via_one<T: Model>(source: super::Query<T>, path: Path<T, M>) -> Self {
-        assert_eq!(path.untyped.root.expect_model(), T::id());
+        assert_eq!(path.untyped.root.as_model_unwrap(), T::id());
 
         Self {
             untyped: stmt::Association {
@@ -240,7 +240,7 @@ impl<M: Model> Association<M> {
     /// let _assoc = Association::one(source, path);
     /// ```
     pub fn one<T: Model>(source: super::Query<T>, path: Path<T, M>) -> Self {
-        assert_eq!(path.untyped.root.expect_model(), T::id());
+        assert_eq!(path.untyped.root.as_model_unwrap(), T::id());
 
         Self {
             untyped: stmt::Association {

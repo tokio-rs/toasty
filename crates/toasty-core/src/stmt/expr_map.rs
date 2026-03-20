@@ -54,7 +54,7 @@ impl Expr {
     }
 
     #[track_caller]
-    pub fn expect_map(&self) -> &ExprMap {
+    pub fn as_map_unwrap(&self) -> &ExprMap {
         self.as_map()
             .unwrap_or_else(|| panic!("expected Expr::Map; actual={self:#?}"))
     }

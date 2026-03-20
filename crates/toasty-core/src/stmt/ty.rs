@@ -182,7 +182,7 @@ impl Type {
     }
 
     #[track_caller]
-    pub fn expect_list(&self) -> &Type {
+    pub fn as_list_unwrap(&self) -> &Type {
         match self {
             stmt::Type::List(items) => items,
             _ => panic!("expected stmt::Type::List; actual={self:#?}"),

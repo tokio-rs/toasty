@@ -133,7 +133,7 @@ impl Expr {
     }
 
     #[track_caller]
-    pub fn expect_reference(&self) -> &ExprReference {
+    pub fn as_expr_reference_unwrap(&self) -> &ExprReference {
         self.as_expr_reference()
             .unwrap_or_else(|| panic!("expected ExprReference; actual={self:#?}"))
     }
@@ -146,7 +146,7 @@ impl Expr {
     }
 
     #[track_caller]
-    pub fn expect_column(&self) -> &ExprColumn {
+    pub fn as_expr_column_unwrap(&self) -> &ExprColumn {
         self.as_expr_column()
             .unwrap_or_else(|| panic!("expected ExprColumn; actual={self:#?}"))
     }
@@ -188,7 +188,7 @@ impl ExprReference {
     }
 
     #[track_caller]
-    pub fn expect_column(&self) -> &ExprColumn {
+    pub fn as_expr_column_unwrap(&self) -> &ExprColumn {
         self.as_expr_column()
             .unwrap_or_else(|| panic!("expected ExprColumn; actual={self:#?}"))
     }
@@ -201,7 +201,7 @@ impl ExprReference {
     }
 
     #[track_caller]
-    pub fn expect_column_mut(&mut self) -> &mut ExprColumn {
+    pub fn as_expr_column_mut_unwrap(&mut self) -> &mut ExprColumn {
         match self {
             ExprReference::Column(expr_column) => expr_column,
             _ => panic!("expected ExprColumn; actual={self:#?}"),

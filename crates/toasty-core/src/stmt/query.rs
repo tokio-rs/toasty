@@ -115,7 +115,7 @@ impl Query {
     }
 
     pub fn add_filter(&mut self, filter: impl Into<Filter>) {
-        self.body.expect_select_mut().add_filter(filter);
+        self.body.as_select_mut_unwrap().add_filter(filter);
     }
 
     pub fn include(&mut self, path: impl Into<Path>) {
@@ -171,7 +171,7 @@ impl Statement {
     ///
     /// If `self` is not a [`Statement::Query`].
     #[track_caller]
-    pub fn expect_query(self) -> Query {
+    pub fn into_query_unwrap(self) -> Query {
         match self {
             Self::Query(query) => query,
             v => panic!("expected `Query`, found {v:#?}"),

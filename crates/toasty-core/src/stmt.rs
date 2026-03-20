@@ -311,7 +311,7 @@ impl Statement {
     /// # Panics
     ///
     /// If `self` is not a [`Statement::Update`].
-    pub fn expect_update(self) -> Update {
+    pub fn into_update_unwrap(self) -> Update {
         match self {
             Self::Update(update) => update,
             v => panic!("expected `Update`, found {v:#?}"),

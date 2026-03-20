@@ -87,7 +87,7 @@ impl LowerStatement<'_, '_> {
         returning: &mut Option<stmt::Returning>,
         index: usize,
     ) {
-        let model = self.expr_cx.target().expect_model();
+        let model = self.expr_cx.target().as_model_unwrap();
 
         for (i, field) in model.fields.iter().enumerate() {
             if field.is_relation() {
@@ -131,7 +131,7 @@ impl LowerStatement<'_, '_> {
         returning: &mut Option<stmt::Returning>,
         returning_changed: bool,
     ) {
-        let model = self.expr_cx.target().expect_model();
+        let model = self.expr_cx.target().as_model_unwrap();
 
         for (i, field) in model.fields.iter().enumerate() {
             if !field.is_relation() {
@@ -202,14 +202,14 @@ impl LowerStatement<'_, '_> {
     }
 
     fn plan_mut_has_many(&mut self, field: &Field, op: Mutation, source: &mut dyn RelationSource) {
-        let has_many = field.ty.expect_has_many();
+        let has_many = field.ty.as_has_many_unwrap();
         let pair = self.field(has_many.pair);
 
         self.plan_mut_has_n(field, pair, op, source);
     }
 
     fn plan_mut_has_one(&mut self, field: &Field, op: Mutation, source: &mut dyn RelationSource) {
-        let has_one = field.ty.expect_has_one();
+        let has_one = field.ty.as_has_one_unwrap();
         let pair = self.field(has_one.pair);
 
         self.plan_mut_has_n(field, pair, op, source);
@@ -377,7 +377,7 @@ impl LowerStatement<'_, '_> {
         mut stmt: stmt::Insert,
         source: &mut dyn RelationSource,
     ) {
-        debug_assert_eq!(stmt.target.expect_model(), pair.id.model);
+        debug_assert_eq!(stmt.target.model_id_unwrap(), pair.id.model);
         debug_assert!(stmt.target.is_model());
 
         stmt.target = self.relation_pair_scope(pair.id, source).into();
@@ -424,7 +424,7 @@ impl LowerStatement<'_, '_> {
             todo!("invalid statement. handle this case");
         }
 
-        let belongs_to = field.ty.expect_belongs_to();
+        let belongs_to = field.ty.as_belongs_to_unwrap();
 
         if let Some(pair_id) = belongs_to.pair {
             let pair = self.field(pair_id);
@@ -505,7 +505,7 @@ impl LowerStatement<'_, '_> {
         stmt: stmt::Statement,
         source: &mut dyn RelationSource,
     ) {
-        let belongs_to = field.ty.expect_belongs_to();
+        let belongs_to = field.ty.as_belongs_to_unwrap();
 
         match stmt {
             stmt::Statement::Insert(mut insert) => {
@@ -669,7 +669,7 @@ impl LowerStatement<'_, '_> {
                 stmt::Expr::Reference(outer @ stmt::ExprReference::Field { nesting, .. }),
                 stmt::Expr::Reference(inner @ stmt::ExprReference::Field { nesting: 0, .. }),
             ) if *nesting > 0 => {
-                let field_ref = cx.resolve_expr_reference(inner).expect_field();
+                let field_ref = cx.resolve_expr_reference(inner).as_field_unwrap();
                 if key_field == field_ref.id {
                     let mut ret = *outer;
                     let stmt::ExprReference::Field { nesting, .. } = &mut ret else {
@@ -686,7 +686,7 @@ impl LowerStatement<'_, '_> {
             (stmt::Expr::Reference(_), stmt::Expr::Reference(_)) => None,
             // Field ref matched against a constant value
             (stmt::Expr::Reference(expr_ref), other) | (other, stmt::Expr::Reference(expr_ref)) => {
-                let field_ref = cx.resolve_expr_reference(expr_ref).expect_field();
+                let field_ref = cx.resolve_expr_reference(expr_ref).as_field_unwrap();
                 if key_field == field_ref.id {
                     if let stmt::Expr::Value(value) = other {
                         Some(value.clone().into())
@@ -837,14 +837,14 @@ impl RelationSource for InsertRelationSource<'_> {
 
     fn set_source_field(&mut self, field: FieldId, expr: stmt::Expr) {
         assert_eq!(self.model.id, field.model);
-        self.row.expect_record_mut()[field.index] = expr;
+        self.row.as_record_mut_unwrap()[field.index] = expr;
     }
 
     fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr) {
         let record = match self.returning {
             Some(stmt::Returning::Expr(stmt::Expr::Record(record))) => record,
             Some(stmt::Returning::Value(stmt::Expr::List(rows))) => {
-                rows.items[self.index].expect_record_mut()
+                rows.items[self.index].as_record_mut_unwrap()
             }
             Some(stmt::Returning::Value(stmt::Expr::Record(record))) => record,
             _ => todo!("InsertRelationSource={self:#?}"),

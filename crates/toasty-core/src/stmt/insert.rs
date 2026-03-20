@@ -65,7 +65,7 @@ impl Statement {
     /// # Panics
     ///
     /// If `self` is not a [`Statement::Insert`].
-    pub fn expect_insert(self) -> Insert {
+    pub fn into_insert_unwrap(self) -> Insert {
         match self {
             Self::Insert(insert) => insert,
             v => panic!("expected `Insert`, found {v:#?}"),

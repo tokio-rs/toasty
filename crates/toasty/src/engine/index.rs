@@ -34,7 +34,7 @@ pub(crate) fn plan_index_path<'a>(
     };
 
     // Get the statement filter
-    let filter = stmt.expect_filter_expr();
+    let filter = stmt.filter_expr_unwrap();
 
     // Extract the pre-filter: the part of the filter that depends only on
     // args (no table column references) and can be evaluated before issuing
@@ -271,7 +271,7 @@ fn extract_key_record(
                 let stmt::Expr::Reference(expr_ref) = &*b.lhs else {
                     return None;
                 };
-                let column = cx.resolve_expr_reference(expr_ref).expect_column();
+                let column = cx.resolve_expr_reference(expr_ref).as_column_unwrap();
                 let (idx, _) = index
                     .columns
                     .iter()

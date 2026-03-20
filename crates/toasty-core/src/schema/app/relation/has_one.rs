@@ -22,7 +22,7 @@ impl HasOne {
     }
 
     pub fn pair<'a>(&self, schema: &'a Schema) -> &'a BelongsTo {
-        schema.field(self.pair).ty.expect_belongs_to()
+        schema.field(self.pair).ty.as_belongs_to_unwrap()
     }
 }
 

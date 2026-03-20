@@ -27,7 +27,7 @@ impl Simplify<'_> {
             stmt::Expr::Reference(expr_reference @ stmt::ExprReference::Field { .. }) => self
                 .cx
                 .resolve_expr_reference(expr_reference)
-                .expect_field(),
+                .as_field_unwrap(),
             _ => {
                 return None;
             }
@@ -90,11 +90,11 @@ impl Simplify<'_> {
         belongs_to: &BelongsTo,
         query: &stmt::Query,
     ) -> Option<stmt::Expr> {
-        if belongs_to.target != query.body.expect_select().source.model_id_unwrap() {
+        if belongs_to.target != query.body.as_select_unwrap().source.model_id_unwrap() {
             return None;
         }
 
-        let select = query.body.expect_select();
+        let select = query.body.as_select_unwrap();
 
         assert_eq!(
             belongs_to.foreign_key.fields.len(),
@@ -118,7 +118,7 @@ impl Simplify<'_> {
             };
             let mut subquery = query.clone();
 
-            subquery.body.expect_select_mut().returning =
+            subquery.body.as_select_mut_unwrap().returning =
                 stmt::Returning::Expr(stmt::Expr::ref_self_field(fk_fields.target));
 
             Some(stmt::Expr::in_subquery(
@@ -153,7 +153,7 @@ impl Simplify<'_> {
         pair: &BelongsTo,
         query: &stmt::Query,
     ) -> Option<stmt::Expr> {
-        if target != query.body.expect_select().source.model_id_unwrap() {
+        if target != query.body.as_select_unwrap().source.model_id_unwrap() {
             return None;
         }
 
@@ -193,7 +193,7 @@ impl Visit for LiftBelongsTo<'_> {
                         .simplify
                         .cx
                         .resolve_expr_reference(expr_reference)
-                        .expect_field();
+                        .as_field_unwrap();
 
                     self.lift_fk_constraint(field.id, i.op, other);
                 } else {

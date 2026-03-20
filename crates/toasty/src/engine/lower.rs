@@ -278,12 +278,12 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     let maybe_res = self.lower_expr_binary_op(
                         stmt::BinaryOp::Eq,
                         &mut e.expr,
-                        e.query.expect_returning_mut().expect_expr_mut(),
+                        e.query.returning_mut_unwrap().as_expr_mut_unwrap(),
                     );
 
                     assert!(maybe_res.is_none(), "TODO");
 
-                    let returning = e.query.expect_returning_mut().expect_expr_mut();
+                    let returning = e.query.returning_mut_unwrap().as_expr_mut_unwrap();
 
                     if !returning.is_record() {
                         *returning = stmt::Expr::record([returning.take()]);
@@ -308,7 +308,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     let maybe_res = self.lower_expr_binary_op(
                         stmt::BinaryOp::Eq,
                         &mut e.expr,
-                        e.query.expect_returning_mut().expect_expr_mut(),
+                        e.query.returning_mut_unwrap().as_expr_mut_unwrap(),
                     );
 
                     assert!(maybe_res.is_none(), "TODO");
@@ -333,7 +333,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     .schema()
                     .app
                     .model(e.variant.model)
-                    .expect_embedded_enum();
+                    .as_embedded_enum_unwrap();
                 let has_data = enum_model.has_data_variants();
                 let discriminant = enum_model.variants[e.variant.index].discriminant;
 
@@ -1047,7 +1047,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 
     #[track_caller]
     fn model_unwrap(&self) -> &'a ModelRoot {
-        self.expr_cx.target().expect_model()
+        self.expr_cx.target().as_model_unwrap()
     }
 
     fn mapping(&self) -> Option<&'b mapping::Model> {
@@ -1062,7 +1062,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 
     #[track_caller]
     fn mapping_at_unwrap(&self, nesting: usize) -> &'b mapping::Model {
-        let model = self.expr_cx.target_at(nesting).expect_model();
+        let model = self.expr_cx.target_at(nesting).as_model_unwrap();
         self.state.engine.schema.mapping_for(model)
     }
 

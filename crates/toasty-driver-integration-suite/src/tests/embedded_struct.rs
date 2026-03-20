@@ -134,11 +134,11 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
         model_to_table.fields: [
             _,
             == stmt::Expr::project(
-                stmt::Expr::ref_self_field(user.expect_root().fields[1].id),
+                stmt::Expr::ref_self_field(user.as_root_unwrap().fields[1].id),
                 [0],
             ),
             == stmt::Expr::project(
-                stmt::Expr::ref_self_field(user.expect_root().fields[1].id),
+                stmt::Expr::ref_self_field(user.as_root_unwrap().fields[1].id),
                 [1],
             ),
         ],
@@ -998,7 +998,7 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
     assert_struct!(
         user_mapping.model_to_table[1],
         == stmt::Expr::project(
-            stmt::Expr::ref_self_field(user.expect_root().fields[1].id),
+            stmt::Expr::ref_self_field(user.as_root_unwrap().fields[1].id),
             [0],
         )
     );
@@ -1007,7 +1007,7 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
     assert_struct!(
         user_mapping.model_to_table[2],
         == stmt::Expr::project(
-            stmt::Expr::ref_self_field(user.expect_root().fields[1].id),
+            stmt::Expr::ref_self_field(user.as_root_unwrap().fields[1].id),
             [1, 0],
         )
     );
@@ -1016,7 +1016,7 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
     assert_struct!(
         user_mapping.model_to_table[3],
         == stmt::Expr::project(
-            stmt::Expr::ref_self_field(user.expect_root().fields[1].id),
+            stmt::Expr::ref_self_field(user.as_root_unwrap().fields[1].id),
             [1, 1, 0],
         )
     );
@@ -1025,7 +1025,7 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
     assert_struct!(
         user_mapping.model_to_table[4],
         == stmt::Expr::project(
-            stmt::Expr::ref_self_field(user.expect_root().fields[1].id),
+            stmt::Expr::ref_self_field(user.as_root_unwrap().fields[1].id),
             [1, 1, 1],
         )
     );

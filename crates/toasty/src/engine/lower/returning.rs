@@ -152,14 +152,14 @@ impl LowerStatement<'_, '_> {
                     .unwrap();
 
                 // Check the first row to see if this field is constant
-                let first = &values.rows[0].expect_record().fields[index];
+                let first = &values.rows[0].as_record_unwrap().fields[index];
                 all_const &= first.is_const();
 
                 // Check if this field has the same expression across all rows
                 let mut all_stable_and_equal = first.is_stable();
 
                 for row in &values.rows[1..] {
-                    let field = &row.expect_record().fields[index];
+                    let field = &row.as_record_unwrap().fields[index];
 
                     // Check if this row's field equals the first row's field
                     if all_stable_and_equal {
@@ -283,7 +283,7 @@ impl LowerStatement<'_, '_> {
                     .position(|column| column.index == expr_column.column)
                     .unwrap();
 
-                let field = &self.1.rows[*row].expect_record()[index];
+                let field = &self.1.rows[*row].as_record_unwrap()[index];
 
                 if field.is_eval() {
                     Some(field.clone())
@@ -326,12 +326,12 @@ impl stmt::Input for ConstantizeReturning<'_> {
         expr_reference: &stmt::ExprReference,
         projection: &stmt::Projection,
     ) -> Option<stmt::Expr> {
-        debug_assert_eq!(0, expr_reference.expect_column().nesting, "TODO");
+        debug_assert_eq!(0, expr_reference.as_expr_column_unwrap().nesting, "TODO");
 
         let needle = self
             .cx
             .resolve_expr_reference(expr_reference)
-            .expect_column();
+            .as_column_unwrap();
 
         match self.source {
             ConstantizeSource::InsertValues { values, columns } => {

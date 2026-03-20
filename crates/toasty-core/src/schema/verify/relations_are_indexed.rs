@@ -28,12 +28,12 @@ impl Verify<'_> {
     }
 
     fn verify_has_relation_is_indexed(&self, target: &Model, pair: FieldId) {
-        let belongs_to = self.schema.app.field(pair).ty.expect_belongs_to();
+        let belongs_to = self.schema.app.field(pair).ty.as_belongs_to_unwrap();
 
         // Find an index that starts with the relations pair field and either
         // has no more fields or the next field is of local scope. This ensures
         // the ability to query all associated models.
-        'outer: for index in &target.expect_root().indices {
+        'outer: for index in &target.as_root_unwrap().indices {
             assert!(!index.fields.is_empty());
 
             if index.fields.len() < belongs_to.foreign_key.fields.len() {

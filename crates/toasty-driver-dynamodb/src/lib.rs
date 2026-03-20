@@ -255,7 +255,7 @@ fn ddb_expression(
             }
         }
         stmt::Expr::Reference(expr_reference) => {
-            let column = cx.resolve_expr_reference(expr_reference).expect_column();
+            let column = cx.resolve_expr_reference(expr_reference).as_column_unwrap();
             attrs.column(column).to_string()
         }
         stmt::Expr::Value(val) => attrs.value(val),

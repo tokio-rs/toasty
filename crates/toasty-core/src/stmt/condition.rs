@@ -45,7 +45,7 @@ impl Statement {
     ///
     /// Panics if the statement does not support conditions.
     #[track_caller]
-    pub fn expect_condition_mut(&mut self) -> &mut Condition {
+    pub fn condition_mut_unwrap(&mut self) -> &mut Condition {
         match self {
             Statement::Update(update) => &mut update.condition,
             _ => panic!("expected Statement with condition"),

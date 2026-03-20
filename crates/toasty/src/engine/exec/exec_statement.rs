@@ -187,7 +187,7 @@ impl Exec<'_> {
         let mut auto_column_type = None;
         stmt::visit::for_each_expr(&returning, |expr| {
             if let stmt::Expr::Reference(expr_ref) = expr {
-                let column = cx.resolve_expr_reference(expr_ref).expect_column();
+                let column = cx.resolve_expr_reference(expr_ref).as_column_unwrap();
 
                 assert!(
                     column.auto_increment,

@@ -72,7 +72,7 @@ impl Expand<'_> {
         let filter_method_ident = &filter.filter_method_ident;
         let args: Vec<_> = self.expand_filter_args(filter).collect();
         let arg_idents: Vec<_> = self.expand_filter_arg_idents(filter).collect();
-        let update_query_struct_ident = &self.model.kind.expect_root().update_struct_ident;
+        let update_query_struct_ident = &self.model.kind.as_root_unwrap().update_struct_ident;
 
         let self_arg;
         let base;
@@ -108,7 +108,7 @@ impl Expand<'_> {
     fn expand_model_filter_method(&self, filter: &Filter, self_into_query: bool) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
-        let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
+        let query_struct_ident = &self.model.kind.as_root_unwrap().query_struct_ident;
         let filter_method_ident = &filter.filter_method_ident;
         let args = self.expand_filter_args(filter);
         let arg_idents = self.expand_filter_arg_idents(filter);
@@ -144,7 +144,7 @@ impl Expand<'_> {
     ) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
-        let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
+        let query_struct_ident = &self.model.kind.as_root_unwrap().query_struct_ident;
         let filter_method_batch_ident = &filter.filter_method_batch_ident;
         let bound = self.expand_filter_batch_arg_bound(filter);
         let self_arg;
@@ -211,7 +211,7 @@ impl Expand<'_> {
 
     fn expand_query_filter_method(&self, filter: &Filter) -> TokenStream {
         let vis = &self.model.vis;
-        let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
+        let query_struct_ident = &self.model.kind.as_root_unwrap().query_struct_ident;
         let filter_method_ident = &filter.filter_method_ident;
         let args = self.expand_filter_args(filter);
         let expr = self.expand_query_filter_expr(filter);
@@ -244,7 +244,7 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
-        let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
+        let query_struct_ident = &self.model.kind.as_root_unwrap().query_struct_ident;
         let query_filter_batch_ident = &filter.filter_method_batch_ident;
         let bound = self.expand_filter_batch_arg_bound(filter);
 

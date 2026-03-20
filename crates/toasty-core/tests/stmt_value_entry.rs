@@ -8,7 +8,7 @@ use toasty_core::stmt::{Project, Projection, Value};
 fn entry_identity_bool() {
     let v = Value::Bool(true);
     assert_eq!(
-        v.entry(&Projection::identity()).expect_value(),
+        v.entry(&Projection::identity()).as_value_unwrap(),
         &Value::Bool(true)
     );
 }
@@ -17,7 +17,7 @@ fn entry_identity_bool() {
 fn entry_identity_i8() {
     let v = Value::I8(42);
     assert_eq!(
-        v.entry(&Projection::identity()).expect_value(),
+        v.entry(&Projection::identity()).as_value_unwrap(),
         &Value::I8(42)
     );
 }
@@ -26,7 +26,7 @@ fn entry_identity_i8() {
 fn entry_identity_i16() {
     let v = Value::I16(-100);
     assert_eq!(
-        v.entry(&Projection::identity()).expect_value(),
+        v.entry(&Projection::identity()).as_value_unwrap(),
         &Value::I16(-100)
     );
 }
@@ -35,7 +35,7 @@ fn entry_identity_i16() {
 fn entry_identity_i32() {
     let v = Value::I32(1_000);
     assert_eq!(
-        v.entry(&Projection::identity()).expect_value(),
+        v.entry(&Projection::identity()).as_value_unwrap(),
         &Value::I32(1_000)
     );
 }
@@ -44,7 +44,7 @@ fn entry_identity_i32() {
 fn entry_identity_i64() {
     let v = Value::I64(i64::MAX);
     assert_eq!(
-        v.entry(&Projection::identity()).expect_value(),
+        v.entry(&Projection::identity()).as_value_unwrap(),
         &Value::I64(i64::MAX)
     );
 }
@@ -53,7 +53,7 @@ fn entry_identity_i64() {
 fn entry_identity_u8() {
     let v = Value::U8(255);
     assert_eq!(
-        v.entry(&Projection::identity()).expect_value(),
+        v.entry(&Projection::identity()).as_value_unwrap(),
         &Value::U8(255)
     );
 }
@@ -62,7 +62,7 @@ fn entry_identity_u8() {
 fn entry_identity_u16() {
     let v = Value::U16(1000);
     assert_eq!(
-        v.entry(&Projection::identity()).expect_value(),
+        v.entry(&Projection::identity()).as_value_unwrap(),
         &Value::U16(1000)
     );
 }
@@ -71,7 +71,7 @@ fn entry_identity_u16() {
 fn entry_identity_u32() {
     let v = Value::U32(u32::MAX);
     assert_eq!(
-        v.entry(&Projection::identity()).expect_value(),
+        v.entry(&Projection::identity()).as_value_unwrap(),
         &Value::U32(u32::MAX)
     );
 }
@@ -80,7 +80,7 @@ fn entry_identity_u32() {
 fn entry_identity_u64() {
     let v = Value::U64(u64::MAX);
     assert_eq!(
-        v.entry(&Projection::identity()).expect_value(),
+        v.entry(&Projection::identity()).as_value_unwrap(),
         &Value::U64(u64::MAX)
     );
 }
@@ -89,7 +89,7 @@ fn entry_identity_u64() {
 fn entry_identity_string() {
     let v = Value::from("hello");
     assert_eq!(
-        v.entry(&Projection::identity()).expect_value(),
+        v.entry(&Projection::identity()).as_value_unwrap(),
         &Value::from("hello")
     );
 }
@@ -98,7 +98,7 @@ fn entry_identity_string() {
 fn entry_identity_bytes() {
     let v = Value::Bytes(vec![1, 2, 3]);
     assert_eq!(
-        v.entry(&Projection::identity()).expect_value(),
+        v.entry(&Projection::identity()).as_value_unwrap(),
         &Value::Bytes(vec![1, 2, 3])
     );
 }
@@ -108,7 +108,7 @@ fn entry_identity_uuid() {
     let id = uuid::Uuid::nil();
     let v = Value::Uuid(id);
     assert_eq!(
-        v.entry(&Projection::identity()).expect_value(),
+        v.entry(&Projection::identity()).as_value_unwrap(),
         &Value::Uuid(id)
     );
 }
@@ -117,7 +117,7 @@ fn entry_identity_uuid() {
 fn entry_identity_null() {
     let v = Value::Null;
     assert_eq!(
-        v.entry(&Projection::identity()).expect_value(),
+        v.entry(&Projection::identity()).as_value_unwrap(),
         &Value::Null
     );
 }
@@ -130,7 +130,7 @@ fn entry_identity_null() {
 fn entry_record_field_bool() {
     let rec = Value::record_from_vec(vec![Value::Bool(false), Value::Bool(true)]);
     assert_eq!(
-        rec.entry(&Projection::single(1)).expect_value(),
+        rec.entry(&Projection::single(1)).as_value_unwrap(),
         &Value::Bool(true)
     );
 }
@@ -139,7 +139,7 @@ fn entry_record_field_bool() {
 fn entry_record_field_i8() {
     let rec = Value::record_from_vec(vec![Value::I8(10), Value::I8(20)]);
     assert_eq!(
-        rec.entry(&Projection::single(0)).expect_value(),
+        rec.entry(&Projection::single(0)).as_value_unwrap(),
         &Value::I8(10)
     );
 }
@@ -148,7 +148,7 @@ fn entry_record_field_i8() {
 fn entry_record_field_i16() {
     let rec = Value::record_from_vec(vec![Value::I16(300), Value::I16(400)]);
     assert_eq!(
-        rec.entry(&Projection::single(1)).expect_value(),
+        rec.entry(&Projection::single(1)).as_value_unwrap(),
         &Value::I16(400)
     );
 }
@@ -157,7 +157,7 @@ fn entry_record_field_i16() {
 fn entry_record_field_i32() {
     let rec = Value::record_from_vec(vec![Value::I32(-1), Value::I32(2)]);
     assert_eq!(
-        rec.entry(&Projection::single(0)).expect_value(),
+        rec.entry(&Projection::single(0)).as_value_unwrap(),
         &Value::I32(-1)
     );
 }
@@ -166,7 +166,7 @@ fn entry_record_field_i32() {
 fn entry_record_field_i64() {
     let rec = Value::record_from_vec(vec![Value::I64(100), Value::I64(200)]);
     assert_eq!(
-        rec.entry(&Projection::single(1)).expect_value(),
+        rec.entry(&Projection::single(1)).as_value_unwrap(),
         &Value::I64(200)
     );
 }
@@ -175,7 +175,7 @@ fn entry_record_field_i64() {
 fn entry_record_field_u8() {
     let rec = Value::record_from_vec(vec![Value::U8(1), Value::U8(2)]);
     assert_eq!(
-        rec.entry(&Projection::single(0)).expect_value(),
+        rec.entry(&Projection::single(0)).as_value_unwrap(),
         &Value::U8(1)
     );
 }
@@ -184,7 +184,7 @@ fn entry_record_field_u8() {
 fn entry_record_field_u16() {
     let rec = Value::record_from_vec(vec![Value::U16(500), Value::U16(600)]);
     assert_eq!(
-        rec.entry(&Projection::single(1)).expect_value(),
+        rec.entry(&Projection::single(1)).as_value_unwrap(),
         &Value::U16(600)
     );
 }
@@ -193,7 +193,7 @@ fn entry_record_field_u16() {
 fn entry_record_field_u32() {
     let rec = Value::record_from_vec(vec![Value::U32(999), Value::U32(0)]);
     assert_eq!(
-        rec.entry(&Projection::single(0)).expect_value(),
+        rec.entry(&Projection::single(0)).as_value_unwrap(),
         &Value::U32(999)
     );
 }
@@ -202,7 +202,7 @@ fn entry_record_field_u32() {
 fn entry_record_field_u64() {
     let rec = Value::record_from_vec(vec![Value::U64(u64::MAX), Value::U64(0)]);
     assert_eq!(
-        rec.entry(&Projection::single(0)).expect_value(),
+        rec.entry(&Projection::single(0)).as_value_unwrap(),
         &Value::U64(u64::MAX)
     );
 }
@@ -211,7 +211,7 @@ fn entry_record_field_u64() {
 fn entry_record_field_string() {
     let rec = Value::record_from_vec(vec![Value::from("first"), Value::from("second")]);
     assert_eq!(
-        rec.entry(&Projection::single(0)).expect_value(),
+        rec.entry(&Projection::single(0)).as_value_unwrap(),
         &Value::from("first")
     );
 }
@@ -220,7 +220,7 @@ fn entry_record_field_string() {
 fn entry_record_field_bytes() {
     let rec = Value::record_from_vec(vec![Value::Bytes(vec![0xDE, 0xAD]), Value::I64(0)]);
     assert_eq!(
-        rec.entry(&Projection::single(0)).expect_value(),
+        rec.entry(&Projection::single(0)).as_value_unwrap(),
         &Value::Bytes(vec![0xDE, 0xAD])
     );
 }
@@ -230,7 +230,7 @@ fn entry_record_field_uuid() {
     let id = uuid::Uuid::nil();
     let rec = Value::record_from_vec(vec![Value::Uuid(id), Value::I64(0)]);
     assert_eq!(
-        rec.entry(&Projection::single(0)).expect_value(),
+        rec.entry(&Projection::single(0)).as_value_unwrap(),
         &Value::Uuid(id)
     );
 }
@@ -239,7 +239,7 @@ fn entry_record_field_uuid() {
 fn entry_record_field_null() {
     let rec = Value::record_from_vec(vec![Value::I64(1), Value::Null]);
     assert_eq!(
-        rec.entry(&Projection::single(1)).expect_value(),
+        rec.entry(&Projection::single(1)).as_value_unwrap(),
         &Value::Null
     );
 }
@@ -252,7 +252,7 @@ fn entry_record_field_null() {
 fn entry_list_first_item() {
     let list = Value::List(vec![Value::I64(10), Value::I64(20), Value::I64(30)]);
     assert_eq!(
-        list.entry(&Projection::single(0)).expect_value(),
+        list.entry(&Projection::single(0)).as_value_unwrap(),
         &Value::I64(10)
     );
 }
@@ -261,7 +261,7 @@ fn entry_list_first_item() {
 fn entry_list_last_item() {
     let list = Value::List(vec![Value::I64(10), Value::I64(20), Value::I64(30)]);
     assert_eq!(
-        list.entry(&Projection::single(2)).expect_value(),
+        list.entry(&Projection::single(2)).as_value_unwrap(),
         &Value::I64(30)
     );
 }
@@ -270,7 +270,7 @@ fn entry_list_last_item() {
 fn entry_list_string_items() {
     let list = Value::List(vec![Value::from("a"), Value::from("b"), Value::from("c")]);
     assert_eq!(
-        list.entry(&Projection::single(1)).expect_value(),
+        list.entry(&Projection::single(1)).as_value_unwrap(),
         &Value::from("b")
     );
 }
@@ -285,7 +285,9 @@ fn entry_record_of_records_two_steps() {
     let inner = Value::record_from_vec(vec![Value::I64(10), Value::I64(20)]);
     let outer = Value::record_from_vec(vec![inner, Value::I64(99)]);
     assert_eq!(
-        outer.entry(&Projection::from([0usize, 1])).expect_value(),
+        outer
+            .entry(&Projection::from([0usize, 1]))
+            .as_value_unwrap(),
         &Value::I64(20)
     );
 }
@@ -296,7 +298,8 @@ fn entry_deeply_nested_three_levels() {
     let lvl2 = Value::record_from_vec(vec![lvl1]);
     let lvl3 = Value::record_from_vec(vec![lvl2]);
     assert_eq!(
-        lvl3.entry(&Projection::from([0usize, 0, 0])).expect_value(),
+        lvl3.entry(&Projection::from([0usize, 0, 0]))
+            .as_value_unwrap(),
         &Value::I64(42)
     );
 }
@@ -314,7 +317,7 @@ fn entry_list_of_records() {
     ]);
     let list = Value::List(vec![r0, r1]);
     assert_eq!(
-        list.entry(&Projection::from([1usize, 0])).expect_value(),
+        list.entry(&Projection::from([1usize, 0])).as_value_unwrap(),
         &Value::from("second-first")
     );
 }
@@ -325,7 +328,7 @@ fn entry_record_of_lists() {
     let inner_list = Value::List(vec![Value::I64(10), Value::I64(20), Value::I64(30)]);
     let rec = Value::record_from_vec(vec![inner_list, Value::I64(0)]);
     assert_eq!(
-        rec.entry(&Projection::from([0usize, 2])).expect_value(),
+        rec.entry(&Projection::from([0usize, 2])).as_value_unwrap(),
         &Value::I64(30)
     );
 }
@@ -398,7 +401,7 @@ fn entry_via_pushed_projection() {
     let mut proj = Projection::identity();
     proj.push(0);
     proj.push(1);
-    assert_eq!(outer.entry(&proj).expect_value(), &Value::I64(20));
+    assert_eq!(outer.entry(&proj).as_value_unwrap(), &Value::I64(20));
 }
 
 // ---------------------------------------------------------------------------

@@ -49,7 +49,7 @@ impl Expr {
     }
 
     #[track_caller]
-    pub fn expect_project(&self) -> &ExprProject {
+    pub fn as_project_unwrap(&self) -> &ExprProject {
         self.as_project()
             .unwrap_or_else(|| panic!("expected Expr::Project; actual={self:#?}"))
     }

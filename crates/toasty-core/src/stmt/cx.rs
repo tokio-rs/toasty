@@ -574,7 +574,7 @@ impl<'a, T> Copy for ExprContext<'a, T> {}
 
 impl<'a> ResolvedRef<'a> {
     #[track_caller]
-    pub fn expect_column(self) -> &'a Column {
+    pub fn as_column_unwrap(self) -> &'a Column {
         match self {
             ResolvedRef::Column(column) => column,
             _ => panic!("Expected ResolvedRef::Column, found {:?}", self),
@@ -582,7 +582,7 @@ impl<'a> ResolvedRef<'a> {
     }
 
     #[track_caller]
-    pub fn expect_field(self) -> &'a Field {
+    pub fn as_field_unwrap(self) -> &'a Field {
         match self {
             ResolvedRef::Field(field) => field,
             _ => panic!("Expected ResolvedRef::Field, found {:?}", self),
@@ -590,7 +590,7 @@ impl<'a> ResolvedRef<'a> {
     }
 
     #[track_caller]
-    pub fn expect_model(self) -> &'a ModelRoot {
+    pub fn as_model_unwrap(self) -> &'a ModelRoot {
         match self {
             ResolvedRef::Model(model) => model,
             _ => panic!("Expected ResolvedRef::Model, found {:?}", self),
@@ -649,7 +649,7 @@ impl<'a> ExprTarget<'a> {
     }
 
     #[track_caller]
-    pub fn expect_model(self) -> &'a ModelRoot {
+    pub fn as_model_unwrap(self) -> &'a ModelRoot {
         match self.as_model() {
             Some(model) => model,
             _ => panic!("expected ExprTarget::Model; was {self:#?}"),
@@ -671,7 +671,7 @@ impl<'a> ExprTarget<'a> {
     }
 
     #[track_caller]
-    pub fn expect_table(self) -> &'a Table {
+    pub fn as_table_unwrap(self) -> &'a Table {
         self.as_table()
             .unwrap_or_else(|| panic!("expected ExprTarget::Table; was {self:#?}"))
     }
@@ -767,7 +767,7 @@ impl<'a, T: Resolve> IntoExprTarget<'a, T> for &'a InsertTarget {
                 let Some(model) = schema.model(*model) else {
                     todo!()
                 };
-                ExprTarget::Model(model.expect_root())
+                ExprTarget::Model(model.as_root_unwrap())
             }
             InsertTarget::Table(insert_table) => {
                 let table = schema.table(insert_table.table).unwrap();
@@ -785,7 +785,7 @@ impl<'a, T: Resolve> IntoExprTarget<'a, T> for &'a UpdateTarget {
                 let Some(model) = schema.model(*model) else {
                     todo!()
                 };
-                ExprTarget::Model(model.expect_root())
+                ExprTarget::Model(model.as_root_unwrap())
             }
             UpdateTarget::Table(table_id) => {
                 let Some(table) = schema.table(*table_id) else {
@@ -804,7 +804,7 @@ impl<'a, T: Resolve> IntoExprTarget<'a, T> for &'a Source {
                 let Some(model) = schema.model(source_model.id) else {
                     todo!()
                 };
-                ExprTarget::Model(model.expect_root())
+                ExprTarget::Model(model.as_root_unwrap())
             }
             Source::Table(source_table) => {
                 ExprTarget::Source(source_table).into_expr_target(schema)

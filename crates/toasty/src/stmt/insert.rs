@@ -47,7 +47,7 @@ impl<M: Model> Insert<M> {
                 target: stmt::InsertTarget::Model(M::id()),
                 source: stmt::Query::new_single(vec![stmt::ExprRecord::from_vec(
                     M::schema()
-                        .expect_root()
+                        .as_root_unwrap()
                         .fields
                         .iter()
                         .map(|field| match field.auto() {
@@ -229,8 +229,8 @@ impl<M: Model> Insert<M> {
 
     /// Returns the current record being updated
     fn current_mut(&mut self) -> &mut stmt::ExprRecord {
-        let values = self.untyped.source.body.expect_values_mut();
-        values.rows.last_mut().unwrap().expect_record_mut()
+        let values = self.untyped.source.body.as_values_mut_unwrap();
+        values.rows.last_mut().unwrap().as_record_mut_unwrap()
     }
 
     /// Convert this insert into a list expression.

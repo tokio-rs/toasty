@@ -21,9 +21,9 @@ impl InsertTarget {
     }
 
     #[track_caller]
-    pub fn expect_model(&self) -> ModelId {
+    pub fn model_id_unwrap(&self) -> ModelId {
         match self {
-            Self::Scope(query) => query.body.expect_select().source.model_id_unwrap(),
+            Self::Scope(query) => query.body.as_select_unwrap().source.model_id_unwrap(),
             Self::Model(model_id) => *model_id,
             _ => panic!("expected InsertTarget::Model; actual={self:#?}"),
         }
@@ -41,7 +41,7 @@ impl InsertTarget {
     }
 
     #[track_caller]
-    pub fn expect_table(&self) -> &InsertTable {
+    pub fn as_table_unwrap(&self) -> &InsertTable {
         self.as_table()
             .unwrap_or_else(|| panic!("expected InsertTarget::Table; actual={self:#?}"))
     }

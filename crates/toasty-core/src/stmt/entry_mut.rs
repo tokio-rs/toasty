@@ -15,7 +15,7 @@ impl EntryMut<'_> {
     }
 
     #[track_caller]
-    pub fn expect_expr(&self) -> &Expr {
+    pub fn as_expr_unwrap(&self) -> &Expr {
         self.as_expr()
             .unwrap_or_else(|| panic!("expected EntryMut::Expr; actual={self:#?}"))
     }
@@ -28,7 +28,7 @@ impl EntryMut<'_> {
     }
 
     #[track_caller]
-    pub fn expect_expr_mut(&mut self) -> &mut Expr {
+    pub fn as_expr_mut_unwrap(&mut self) -> &mut Expr {
         match self {
             EntryMut::Expr(e) => e,
             _ => panic!("expected EntryMut::Expr"),

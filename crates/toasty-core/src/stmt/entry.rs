@@ -123,7 +123,7 @@ impl Entry<'_> {
     }
 
     #[track_caller]
-    pub fn expect_value(&self) -> &Value {
+    pub fn as_value_unwrap(&self) -> &Value {
         self.as_value()
             .unwrap_or_else(|| panic!("expected Entry with value; actual={self:#?}"))
     }

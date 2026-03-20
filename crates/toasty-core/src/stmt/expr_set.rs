@@ -70,7 +70,7 @@ impl ExprSet {
     ///
     /// Panics if `self` is not an [`ExprSet::Values`].
     #[track_caller]
-    pub fn expect_values(&self) -> &Values {
+    pub fn as_values_unwrap(&self) -> &Values {
         self.as_values()
             .unwrap_or_else(|| panic!("expected `Values`, found {self:#?}"))
     }
@@ -83,7 +83,7 @@ impl ExprSet {
     }
 
     #[track_caller]
-    pub fn expect_values_mut(&mut self) -> &mut Values {
+    pub fn as_values_mut_unwrap(&mut self) -> &mut Values {
         match self {
             Self::Values(expr) => expr,
             _ => panic!("expected `Values`; actual={self:#?}"),

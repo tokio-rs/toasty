@@ -180,7 +180,7 @@ impl NestedMergePlanner<'_> {
     fn plan_nested_level(&mut self, stmt_id: hir::StmtId, depth: usize) -> NestedLevel {
         let stmt_state = &self.hir[stmt_id];
         let stmt = stmt_state.stmt.as_deref().unwrap();
-        let returning = stmt.expect_returning();
+        let returning = stmt.returning_unwrap();
 
         let source;
         let mut nested = vec![];
@@ -288,7 +288,7 @@ impl NestedMergePlanner<'_> {
                         let child_stmt_id = *child_stmt_id;
                         let child_stmt_state = &hir[child_stmt_id];
                         let child_stmt = child_stmt_state.stmt.as_deref().unwrap();
-                        let child_returning = child_stmt.expect_returning();
+                        let child_returning = child_stmt.returning_unwrap();
 
                         match child_returning {
                             stmt::Returning::Value(returning_expr) if returning_expr.is_const() => {
@@ -329,7 +329,7 @@ impl NestedMergePlanner<'_> {
                 false
             }
             stmt::Expr::Reference(expr_reference) => {
-                let expr_column = expr_reference.expect_column();
+                let expr_column = expr_reference.as_expr_column_unwrap();
                 debug_assert_eq!(0, expr_column.nesting);
                 let index = selection
                     .get_index_of(&stmt::ExprReference::from(*expr_column))
@@ -354,7 +354,7 @@ impl NestedMergePlanner<'_> {
         let stmt::Statement::Query(query) = stmt_state.stmt.as_deref().unwrap() else {
             unreachable!()
         };
-        let select = query.body.expect_select();
+        let select = query.body.as_select_unwrap();
 
         // Extract the qualification. For now, we will just re-run the
         // entire where clause, but that can be improved later.

@@ -44,7 +44,7 @@ impl Source {
     }
 
     #[track_caller]
-    pub fn expect_model(&self) -> &SourceModel {
+    pub fn as_model_unwrap(&self) -> &SourceModel {
         self.as_model()
             .expect("expected SourceModel; actual={self:#?}")
     }
@@ -54,7 +54,7 @@ impl Source {
     }
 
     pub fn model_id_unwrap(&self) -> ModelId {
-        self.expect_model().id
+        self.as_model_unwrap().id
     }
 
     pub fn is_table(&self) -> bool {
@@ -81,7 +81,7 @@ impl Source {
     }
 
     #[track_caller]
-    pub fn expect_table(&self) -> &SourceTable {
+    pub fn as_table_unwrap(&self) -> &SourceTable {
         self.as_table()
             .unwrap_or_else(|| panic!("expected SourceTable; actual={self:#?}"))
     }

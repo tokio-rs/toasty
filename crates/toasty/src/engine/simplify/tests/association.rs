@@ -55,21 +55,21 @@ impl UserPostSchema {
         let user_id = schema
             .app
             .model(user_model)
-            .expect_root()
+            .as_root_unwrap()
             .field_by_name("id")
             .unwrap()
             .id;
         let user_posts = schema
             .app
             .model(user_model)
-            .expect_root()
+            .as_root_unwrap()
             .field_by_name("posts")
             .unwrap()
             .id;
         let post_author = schema
             .app
             .model(post_model)
-            .expect_root()
+            .as_root_unwrap()
             .field_by_name("author")
             .unwrap()
             .id;

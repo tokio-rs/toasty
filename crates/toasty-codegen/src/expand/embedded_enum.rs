@@ -76,7 +76,7 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
-        let embedded_enum = self.model.kind.expect_embedded_enum();
+        let embedded_enum = self.model.kind.as_embedded_enum_unwrap();
         let field_struct_ident = &embedded_enum.field_struct_ident;
 
         let is_variant_methods: Vec<_> = embedded_enum
@@ -133,7 +133,7 @@ impl Expand<'_> {
                     .enumerate()
                     .map(|(field_index, field)| {
                         let field_ident = &field.name.ident;
-                        let field_ty = expect_primitive_ty(field);
+                        let field_ty = primitive_ty_unwrap(field);
                         let field_offset = util::int(field_index);
                         self.expand_primitive_field_method(field_ident, field_ty, &field_offset)
                     })
@@ -208,7 +208,7 @@ impl Expand<'_> {
     /// stored at the `EmbeddedEnum` level).
     pub(super) fn expand_enum_variants(&self) -> Vec<TokenStream> {
         let toasty = &self.toasty;
-        let embedded_enum = self.model.kind.expect_embedded_enum();
+        let embedded_enum = self.model.kind.as_embedded_enum_unwrap();
 
         embedded_enum
             .variants
@@ -237,7 +237,7 @@ impl Expand<'_> {
             .map(|field| {
                 let index = util::int(field.id);
                 let app_name = field.name.ident.to_string();
-                let ty = expect_primitive_ty(field);
+                let ty = primitive_ty_unwrap(field);
                 let variant_index = field.variant.expect("enum field must have variant");
                 let variant_idx = util::int(variant_index);
                 quote! {
@@ -269,7 +269,7 @@ impl Expand<'_> {
     /// Only unit variants are emitted here; data variants appear in `expand_enum_data_load_arms`.
     pub(super) fn expand_enum_unit_load_arms(&self) -> Vec<TokenStream> {
         let model_ident = &self.model.ident;
-        let embedded_enum = self.model.kind.expect_embedded_enum();
+        let embedded_enum = self.model.kind.as_embedded_enum_unwrap();
 
         embedded_enum
             .variants
@@ -291,7 +291,7 @@ impl Expand<'_> {
     pub(super) fn expand_enum_data_load_arms(&self) -> Vec<TokenStream> {
         let toasty = &self.toasty;
         let model_ident = &self.model.ident;
-        let embedded_enum = self.model.kind.expect_embedded_enum();
+        let embedded_enum = self.model.kind.as_embedded_enum_unwrap();
 
         embedded_enum
             .variants
@@ -308,7 +308,7 @@ impl Expand<'_> {
                     .enumerate()
                     .map(|(i, field)| {
                         let field_ident = &field.name.ident;
-                        let ty = expect_primitive_ty(field);
+                        let ty = primitive_ty_unwrap(field);
                         let record_pos = util::int(i + 1);
                         let load =
                             quote! { <#ty as #toasty::Field>::load(record[#record_pos].take())? };
@@ -341,7 +341,7 @@ impl Expand<'_> {
     pub(super) fn expand_enum_into_expr_arms(&self) -> Vec<TokenStream> {
         let toasty = &self.toasty;
         let model_ident = &self.model.ident;
-        let embedded_enum = self.model.kind.expect_embedded_enum();
+        let embedded_enum = self.model.kind.as_embedded_enum_unwrap();
 
         embedded_enum
             .variants
@@ -385,7 +385,7 @@ impl Expand<'_> {
 
                     let field_exprs = fields.iter().map(|field| {
                         let field_ident = &field.name.ident;
-                        let ty = expect_primitive_ty(field);
+                        let ty = primitive_ty_unwrap(field);
                         self.expand_into_untyped_expr(ty, field_ident)
                     });
 
@@ -415,7 +415,7 @@ impl Expand<'_> {
     }
 }
 
-fn expect_primitive_ty(field: &crate::schema::Field) -> &syn::Type {
+fn primitive_ty_unwrap(field: &crate::schema::Field) -> &syn::Type {
     match &field.ty {
         FieldTy::Primitive(ty) => ty,
         _ => panic!("expected primitive field type for enum variant field"),

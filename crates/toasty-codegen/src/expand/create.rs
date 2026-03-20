@@ -9,7 +9,7 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
-        let create_struct_ident = &self.model.kind.expect_root().create_struct_ident;
+        let create_struct_ident = &self.model.kind.as_root_unwrap().create_struct_ident;
         let create_methods = self.expand_create_methods();
         let default_stmts = self.expand_create_default_stmts();
 
