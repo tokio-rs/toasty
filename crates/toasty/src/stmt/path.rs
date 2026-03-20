@@ -31,9 +31,9 @@ use toasty_core::{
 /// let filter = path.eq("Alice");
 /// ```
 ///
-/// Paths also support ordering via [`asc`](Path::asc) and
-/// [`desc`](Path::desc), and can be chained to navigate through relations
-/// with [`chain`](Path::chain).
+/// Paths can also be used to construct order-by clauses via
+/// [`asc`](Path::asc) and [`desc`](Path::desc), and can be chained to
+/// navigate through relations with [`chain`](Path::chain).
 pub struct Path<T, U> {
     pub(super) untyped: stmt::Path,
     _p: PhantomData<(T, U)>,
