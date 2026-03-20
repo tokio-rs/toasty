@@ -1010,39 +1010,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         ty: &stmt::Type,
     ) -> mir::NodeId {
         if let Some(mut key_expr) = index_plan.key_values.take() {
-            // The key expression may reference args from the full statement's
-            // load_data.inputs, but the MIR node we build only needs the
-            // subset actually used. Remap arg positions to a compact
-            // contiguous range and collect only the referenced input types.
-            let mut arg_map: IndexMap<usize, stmt::Type> = IndexMap::new();
-
-            visit_mut::for_each_expr_mut(&mut key_expr, |expr| {
-                if let stmt::Expr::Arg(arg) = expr {
-                    let new_pos = match arg_map.get_index_of(&arg.position) {
-                        Some(idx) => idx,
-                        None => {
-                            let node_id = self.load_data.inputs[arg.position];
-                            let ty = self.planner.mir[node_id].ty().clone();
-                            let (idx, _) = arg_map.insert_full(arg.position, ty);
-                            idx
-                        }
-                    };
-                    arg.position = new_pos;
-                }
-            });
-
-            // TODO: not 100% sure the argument mapping is correct. This
-            // assertion checks for "known good" cases. If it fails, dig into
-            // this deeper.
-            debug_assert!(
-                // Case 1: no args (constant evaluation)
-                arg_map.is_empty()
-                    || arg_map.len() == self.load_data.inputs.len()
-                        && arg_map.keys().enumerate().all(|(a, b)| a == *b),
-                "TODO: verify the mapping is correct; key_expr={key_expr:#?}; arg_map={arg_map:#?}"
-            );
-
-            let args: Vec<stmt::Type> = arg_map.into_values().collect();
+            let (args, _input_nodes) = self.rewrite_expr_for_mir(&mut key_expr);
             let key_ty =
                 stmt::Type::list(self.planner.engine.index_key_record_ty(index_plan.index));
             let keys = eval::Func::from_stmt_typed(key_expr, args, key_ty);
@@ -1337,27 +1305,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             return input;
         };
 
-        // Rewrite HIR arg positions to load_data input indices
-        visit_mut::for_each_expr_mut(&mut pre_filter_expr, |expr| {
-            if let stmt::Expr::Arg(expr_arg) = expr {
-                match &self.stmt_info.args[expr_arg.position] {
-                    hir::Arg::Sub { input, .. } => {
-                        *expr = stmt::Expr::arg(input.get().unwrap());
-                    }
-                    _ => todo!("pre_filter with non-Sub arg"),
-                }
-            }
-        });
-
-        // Collect input types and node IDs for the guard
-        let args: Vec<stmt::Type> = self
-            .load_data
-            .inputs
-            .iter()
-            .map(|node_id| self.planner.mir[node_id].ty().clone())
-            .collect();
-
-        let guard_inputs = self.load_data.inputs.iter().copied().collect();
+        let (args, guard_inputs) = self.rewrite_expr_for_mir(&mut pre_filter_expr);
         let guard = eval::Func::from_stmt(pre_filter_expr, args);
         let ty = self.planner.mir[input].ty().clone();
 
@@ -1367,6 +1315,54 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             guard,
             ty,
         })
+    }
+
+    /// Rewrite a statement-level expression for use in a MIR node.
+    ///
+    /// Statement-level expressions contain `Arg(n)` where `n` is a position in
+    /// `stmt_info.args` (the HIR arg list). Each HIR arg maps to an entry in
+    /// `load_data.inputs` via `hir::Arg::Sub { input, .. }`.
+    ///
+    /// MIR nodes have their own compact input lists. This method:
+    /// 1. Resolves each HIR arg to its `load_data.inputs` node ID
+    /// 2. Assigns a new compact position (index into the returned inputs)
+    /// 3. Rewrites the `Arg` position in the expression
+    ///
+    /// Returns `(arg_types, input_node_ids)` for constructing the MIR node.
+    fn rewrite_expr_for_mir(
+        &self,
+        expr: &mut stmt::Expr,
+    ) -> (Vec<stmt::Type>, IndexSet<mir::NodeId>) {
+        let mut arg_map: IndexMap<usize, (stmt::Type, mir::NodeId)> = IndexMap::new();
+
+        visit_mut::for_each_expr_mut(expr, |expr| {
+            if let stmt::Expr::Arg(expr_arg) = expr {
+                let hir_pos = expr_arg.position;
+                let new_pos = match arg_map.get_index_of(&hir_pos) {
+                    Some(idx) => idx,
+                    None => {
+                        // Resolve the HIR arg to its load_data input
+                        let input_idx = match &self.stmt_info.args[hir_pos] {
+                            hir::Arg::Sub { input, .. } => input.get().unwrap(),
+                            _ => todo!("rewrite_expr_for_mir with non-Sub arg"),
+                        };
+                        let node_id = self.load_data.inputs[input_idx];
+                        let ty = self.planner.mir[node_id].ty().clone();
+                        let (idx, _) = arg_map.insert_full(hir_pos, (ty, node_id));
+                        idx
+                    }
+                };
+                expr_arg.position = new_pos;
+            }
+        });
+
+        let mut types = Vec::with_capacity(arg_map.len());
+        let mut nodes = IndexSet::with_capacity(arg_map.len());
+        for (_, (ty, node_id)) in arg_map {
+            types.push(ty);
+            nodes.insert(node_id);
+        }
+        (types, nodes)
     }
 
     // ===== Finalization helpers =====
