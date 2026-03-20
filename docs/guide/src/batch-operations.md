@@ -4,6 +4,15 @@
 round-trip. Instead of sending each query separately, Toasty combines them into
 one composed statement.
 
+Batch operations are **atomic** — all operations in a batch either succeed
+together or fail together. When you need atomicity, prefer batch operations over
+[interactive transactions](./transactions.md). Batch operations are more
+efficient because they can be sent as a single statement to the database, while
+interactive transactions require separate round-trips to begin the transaction,
+execute each statement, and commit. In many cases, batch operations are
+sufficient. Reach for interactive transactions only when you need to read data
+and make decisions based on those reads within the same atomic scope.
+
 ## Batching queries with tuples
 
 Pass a tuple of queries to `toasty::batch()`. The return type matches the tuple

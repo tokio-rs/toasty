@@ -4,6 +4,13 @@ A transaction groups multiple database operations so they either all succeed or
 all fail. Toasty supports interactive transactions on SQL databases (SQLite,
 PostgreSQL, MySQL).
 
+> **Tip:** If you just need multiple operations to execute atomically, consider
+> using [batch operations](./batch-operations.md) first. Batch operations are
+> atomic and more efficient — they can be sent as a single statement, avoiding
+> the extra round-trips that interactive transactions require (begin, execute,
+> commit). Use interactive transactions when you need to read data and branch on
+> the results within the same atomic scope.
+
 ## Starting a transaction
 
 Call `db.transaction()` to begin a transaction:
