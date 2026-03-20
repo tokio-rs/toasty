@@ -63,16 +63,6 @@ impl Expand<'_> {
                 }
             }
 
-            impl #toasty::IntoExpr<#toasty::List<#model_ident>> for #create_struct_ident {
-                fn into_expr(self) -> #toasty::stmt::Expr<#toasty::List<#model_ident>> {
-                    self.stmt.into_list_expr()
-                }
-
-                fn by_ref(&self) -> #toasty::stmt::Expr<#toasty::List<#model_ident>> {
-                    todo!()
-                }
-            }
-
             impl Default for #create_struct_ident {
                 fn default() -> #create_struct_ident {
                     let mut s = #create_struct_ident {

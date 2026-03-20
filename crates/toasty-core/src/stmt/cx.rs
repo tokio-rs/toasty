@@ -507,6 +507,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             // could be any type. Return Unknown so it unifies with whatever
             // the other branches produce.
             Expr::Error(_) => Type::Unknown,
+            Expr::Exists(_) => Type::Bool,
             _ => todo!("{expr:#?}"),
         }
     }

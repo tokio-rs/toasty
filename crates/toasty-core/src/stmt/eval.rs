@@ -322,6 +322,28 @@ impl Expr {
                 }
                 expr_match.else_expr.eval_ref(scope, input)
             }
+            Expr::Exists(expr_exists) => {
+                // Evaluate the subquery body. For Values bodies the rows are
+                // evaluated and flattened; for other bodies we evaluate the
+                // query as an expression.
+                match &expr_exists.subquery.body {
+                    ExprSet::Values(values) => {
+                        for row in &values.rows {
+                            let val = row.eval_ref(scope, input)?;
+                            match val {
+                                // An empty list means no rows — keep checking
+                                Value::List(items) if items.is_empty() => {}
+                                // Null means the row doesn't exist
+                                Value::Null => {}
+                                // Any other value means at least one row exists
+                                _ => return Ok(true.into()),
+                            }
+                        }
+                        Ok(false.into())
+                    }
+                    _ => todo!("ExprExists with non-Values body"),
+                }
+            }
             Expr::Value(value) => Ok(value.clone()),
             Expr::Func(_) => Err(crate::Error::expression_evaluation_failed(
                 "database functions cannot be evaluated client-side",
