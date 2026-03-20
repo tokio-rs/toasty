@@ -19,7 +19,6 @@ mod stmt_query;
 // Simplifications
 // TODO: unify names
 mod lift_in_subquery;
-mod lift_pk_select;
 use toasty_core::{
     schema::{
         app::{Field, FieldId},

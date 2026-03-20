@@ -17,6 +17,11 @@ pub(crate) struct IndexPlan<'a> {
     /// True if we have to apply the result filter our self
     pub(crate) post_filter: Option<stmt::Expr>,
 
+    /// Filter that depends only on args (not on table columns). Evaluated
+    /// before issuing the database operation; when false the operation is
+    /// skipped entirely and an empty result is returned.
+    pub(crate) pre_filter: Option<stmt::Expr>,
+
     /// Key expression for direct `GetByKey` routing. Populated when every index
     /// key column has an exact predicate (equality or IN). Two forms:
     ///

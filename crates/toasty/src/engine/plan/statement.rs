@@ -1,6 +1,95 @@
+//! Plans a single HIR statement into MIR operations.
+//!
+//! # Overview
+//!
+//! Each HIR statement produces one or more MIR nodes that form an execution
+//! graph. The planner splits work into two concerns:
+//!
+//! - **Data loading**: issuing the database operation (SQL query, GetByKey, etc.)
+//! - **Output processing**: projecting, filtering, or merging the loaded data
+//!   into the shape the caller expects
+//!
+//! The entry point is `PlanStatement::plan()`, which runs these phases in order:
+//!
+//! 1. Extract columns needed by the returning clause
+//! 2. Discover args (references to other statements) in the filter and
+//!    assignments, registering their MIR node outputs as inputs
+//! 3. Rewrite the statement's assignment/value expressions so their `Arg`
+//!    positions reference `load_data.inputs` indices
+//! 4. Plan the data-loading MIR node (SQL or NoSQL path)
+//! 5. Create projection nodes for back-references (so child statements can
+//!    read columns from this statement's results)
+//! 6. Plan child/dependent statements
+//! 7. Build the output node (projection, eval, or nested merge)
+//!
+//! # How `Expr::Arg` flows through the planner
+//!
+//! `Expr::Arg(n)` appears throughout the statement to reference data from
+//! other statements. The meaning of `n` changes as the expression moves
+//! through the pipeline:
+//!
+//! ## HIR level (statement enters the planner)
+//!
+//! `Arg(n)` indexes into `stmt_info.args`, a list of `hir::Arg` entries
+//! created during lowering. Each entry is either:
+//!
+//! - `Arg::Sub { stmt_id, input, .. }` — data from a child statement
+//!   (e.g., a subquery result used in an `IN` list)
+//! - `Arg::Ref { stmt_id, data_load_input, .. }` — a column from a
+//!   parent/sibling statement (back-reference for nested queries)
+//!
+//! At this point, `input` and `data_load_input` are unset `Cell`s.
+//!
+//! ## After `extract_data_load_args`
+//!
+//! This pass walks the filter and assignments, and for each `Arg(n)`:
+//!
+//! - Looks up `stmt_info.args[n]` to find the source MIR node
+//! - Adds that node to `load_data.inputs` (an `IndexSet<NodeId>`)
+//! - Records the index within `load_data.inputs` back into the `hir::Arg`
+//!   cell (`input.set(Some(index))` or `data_load_input.set(Some(index))`)
+//!
+//! The `Arg(n)` positions in the statement expressions are unchanged at
+//! this point — they still reference HIR arg positions.
+//!
+//! ## After `rewrite_stmt_*_arg_dependencies`
+//!
+//! These methods rewrite `Arg` nodes in **assignments and insert values
+//! only** (not the filter). They read the cells populated above:
+//!
+//! - `Arg::Sub { input }` → `Expr::arg(input.get())` — now indexes into
+//!   `load_data.inputs`
+//! - `Arg::Ref { data_load_input, batch_load_index }` →
+//!   `Expr::arg_project(data_load_input, [batch_load_index, column])`
+//!
+//! After this, assignment expressions have MIR-level arg positions. Filter
+//! expressions still have HIR-level positions.
+//!
+//! ## During MIR node construction (`rewrite_expr_for_mir`)
+//!
+//! When building MIR nodes that carry their own expressions (Guard, Project
+//! for key expressions), the expression may reference a subset of the
+//! statement's `load_data.inputs`. `rewrite_expr_for_mir` does two things:
+//!
+//! 1. Resolves each `Arg(hir_pos)` through `stmt_info.args[hir_pos]` to
+//!    find the `load_data.inputs` index and MIR node ID
+//! 2. Assigns a new compact position (0, 1, 2, ...) and rewrites the
+//!    `Arg` node in place
+//!
+//! It returns the arg types and input node IDs for constructing the MIR
+//! node. This is the same resolution as `rewrite_arg_dependencies` but
+//! builds a compact, node-specific input set rather than reusing the full
+//! `load_data.inputs` list.
+//!
+//! ## At execution time
+//!
+//! Each MIR node's `to_exec()` maps its input `NodeId`s to `VarId`s. The
+//! executor loads variables by `VarId` and passes them to `eval::Func`,
+//! which resolves `Arg(n)` against the provided input slice.
+
 use std::mem;
 
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
 use toasty_core::stmt::{self, visit_mut, Condition};
 
 use crate::{
@@ -979,8 +1068,15 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         let post_filter = self.prepare_post_filter(&stmt, &mut index_plan);
 
         // Type of the final record.
+        // TODO: Clean this up
         let ty = if self.load_data.columns.is_empty() {
-            stmt::Type::Unit
+            if stmt.is_query() {
+                // Query with no columns selected is an existence check: return
+                // an empty record for every matching row.
+                stmt::Type::list(stmt::Type::Record(vec![]))
+            } else {
+                stmt::Type::Unit
+            }
         } else {
             self.planner
                 .engine
@@ -1002,13 +1098,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         index_plan: &mut index::IndexPlan,
         ty: &stmt::Type,
     ) -> mir::NodeId {
-        if let Some(key_expr) = index_plan.key_values.take() {
-            let args = self
-                .load_data
-                .inputs
-                .iter()
-                .map(|node_id| self.planner.mir[node_id].ty().clone())
-                .collect();
+        if let Some(mut key_expr) = index_plan.key_values.take() {
+            let (args, _input_nodes) = self.rewrite_expr_for_mir(&mut key_expr);
             let key_ty =
                 stmt::Type::list(self.planner.engine.index_key_record_ty(index_plan.index));
             let keys = eval::Func::from_stmt_typed(key_expr, args, key_ty);
@@ -1256,7 +1347,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     ) -> mir::NodeId {
         match stmt {
             stmt::Statement::Query(_) => {
-                debug_assert!(ty.is_list());
+                debug_assert!(ty.is_list(), "ty={ty:#?}");
                 self.insert_mir_with_deps(mir::GetByKey {
                     input: get_by_key_input,
                     table: index_plan.table_id(),
@@ -1270,16 +1361,97 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 filter: index_plan.result_filter.take(),
                 ty: stmt::Type::Unit,
             }),
-            stmt::Statement::Update(update_stmt) => self.insert_mir_with_deps(mir::UpdateByKey {
-                input: get_by_key_input,
-                table: index_plan.table_id(),
-                assignments: update_stmt.assignments.clone(),
-                filter: index_plan.result_filter.take(),
-                condition: update_stmt.condition.expr.clone(),
-                ty: ty.clone(),
-            }),
+            stmt::Statement::Update(update_stmt) => {
+                // If there is a pre-filter, wrap the key input in a Guard
+                // node that produces an empty list when the guard is false,
+                // causing UpdateByKey to naturally no-op.
+                let guarded_input = self.apply_guard(get_by_key_input, index_plan);
+
+                self.insert_mir_with_deps(mir::UpdateByKey {
+                    input: guarded_input,
+                    table: index_plan.table_id(),
+                    assignments: update_stmt.assignments.clone(),
+                    filter: index_plan.result_filter.take(),
+                    condition: update_stmt.condition.expr.clone(),
+                    ty: ty.clone(),
+                })
+            }
             _ => todo!("stmt={stmt:#?}"),
         }
+    }
+
+    /// If the index plan has a pre-filter, insert a `Guard` MIR node that
+    /// wraps the given input. When the guard expression evaluates to false,
+    /// the Guard produces an empty list, causing the downstream operation to
+    /// see no keys and become a no-op. Returns the (possibly wrapped) input
+    /// node ID.
+    fn apply_guard(
+        &mut self,
+        input: mir::NodeId,
+        index_plan: &mut index::IndexPlan,
+    ) -> mir::NodeId {
+        let Some(mut pre_filter_expr) = index_plan.pre_filter.take() else {
+            return input;
+        };
+
+        let (args, guard_inputs) = self.rewrite_expr_for_mir(&mut pre_filter_expr);
+        let guard = eval::Func::from_stmt(pre_filter_expr, args);
+        let ty = self.planner.mir[input].ty().clone();
+
+        self.planner.mir.insert(mir::Guard {
+            input,
+            guard_inputs,
+            guard,
+            ty,
+        })
+    }
+
+    /// Rewrite a statement-level expression for use in a MIR node.
+    ///
+    /// Statement-level expressions contain `Arg(n)` where `n` is a position in
+    /// `stmt_info.args` (the HIR arg list). Each HIR arg maps to an entry in
+    /// `load_data.inputs` via `hir::Arg::Sub { input, .. }`.
+    ///
+    /// MIR nodes have their own compact input lists. This method:
+    /// 1. Resolves each HIR arg to its `load_data.inputs` node ID
+    /// 2. Assigns a new compact position (index into the returned inputs)
+    /// 3. Rewrites the `Arg` position in the expression
+    ///
+    /// Returns `(arg_types, input_node_ids)` for constructing the MIR node.
+    fn rewrite_expr_for_mir(
+        &self,
+        expr: &mut stmt::Expr,
+    ) -> (Vec<stmt::Type>, IndexSet<mir::NodeId>) {
+        let mut arg_map: IndexMap<usize, (stmt::Type, mir::NodeId)> = IndexMap::new();
+
+        visit_mut::for_each_expr_mut(expr, |expr| {
+            if let stmt::Expr::Arg(expr_arg) = expr {
+                let hir_pos = expr_arg.position;
+                let new_pos = match arg_map.get_index_of(&hir_pos) {
+                    Some(idx) => idx,
+                    None => {
+                        // Resolve the HIR arg to its load_data input
+                        let input_idx = match &self.stmt_info.args[hir_pos] {
+                            hir::Arg::Sub { input, .. } => input.get().unwrap(),
+                            _ => todo!("rewrite_expr_for_mir with non-Sub arg"),
+                        };
+                        let node_id = self.load_data.inputs[input_idx];
+                        let ty = self.planner.mir[node_id].ty().clone();
+                        let (idx, _) = arg_map.insert_full(hir_pos, (ty, node_id));
+                        idx
+                    }
+                };
+                expr_arg.position = new_pos;
+            }
+        });
+
+        let mut types = Vec::with_capacity(arg_map.len());
+        let mut nodes = IndexSet::with_capacity(arg_map.len());
+        for (_, (ty, node_id)) in arg_map {
+            types.push(ty);
+            nodes.insert(node_id);
+        }
+        (types, nodes)
     }
 
     // ===== Finalization helpers =====
