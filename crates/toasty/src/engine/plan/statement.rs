@@ -5,7 +5,7 @@ use toasty_core::stmt::{self, visit_mut, Condition};
 
 use crate::{
     engine::{
-        eval,
+        eval, exec,
         hir::{self},
         index::{self, IndexPlan},
         mir,
@@ -630,8 +630,97 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     // ===== SQL execution =====
 
+    /// Detects pagination in a query and returns pagination config.
+    /// For SQL: builds extract_cursor and adds ORDER BY columns to load_data.
+    /// Returns (pagination_config, original_column_count) where original_column_count
+    /// is used to insert a Project later.
+    fn detect_pagination_sql(
+        &mut self,
+        stmt: &stmt::Statement,
+    ) -> Option<(exec::PaginationConfig, usize)> {
+        let stmt::Statement::Query(query) = stmt else {
+            return None;
+        };
+
+        // Check if there's a cursor (indicates pagination)
+        let has_cursor = query
+            .limit
+            .as_ref()
+            .and_then(|l| l.offset.as_ref())
+            .map(|offset| matches!(offset, stmt::Offset::After(_)))
+            .unwrap_or(false);
+
+        if !has_cursor {
+            return None;
+        }
+
+        // Extract page_size from limit
+        let page_size = query.limit.as_ref().and_then(|l| match &l.limit {
+            stmt::Expr::Value(stmt::Value::I64(n)) => Some(*n),
+            _ => None,
+        })?;
+
+        let order_by = query.order_by.as_ref()?;
+
+        // Remember original column count
+        let original_column_count = self.load_data.columns.len();
+
+        // For SQL: build extract_cursor function and add ORDER BY columns
+        let mut cursor_column_indices = Vec::new();
+
+        for order_expr in &order_by.exprs {
+            // Try to convert the ORDER BY expression to an ExprReference
+            if let Some(expr_ref) = self.expr_to_reference(&order_expr.expr) {
+                // Add to load_data if not already present
+                let (index, _) = self.load_data.columns.insert_full(expr_ref);
+                cursor_column_indices.push(index);
+            } else {
+                // Complex expression in ORDER BY - can't handle yet
+                return None;
+            }
+        }
+
+        // Save the count before consuming cursor_column_indices
+        let cursor_field_count = cursor_column_indices.len();
+
+        // Build extract_cursor function: projects ORDER BY column positions
+        let extract_cursor = stmt::Expr::record(
+            cursor_column_indices
+                .into_iter()
+                .map(|index| stmt::Expr::arg_project(0, [index])),
+        );
+
+        // Build eval::Func from the extract expression
+        // The type will be a record of the ORDER BY column values
+        let cursor_ty = stmt::Type::Record(vec![stmt::Type::Unit; cursor_field_count]);
+        let extract_cursor_func = eval::Func::from_stmt_typed(
+            extract_cursor,
+            vec![], // No additional inputs needed
+            cursor_ty,
+        );
+
+        Some((
+            exec::PaginationConfig {
+                page_size,
+                extract_cursor: Some(extract_cursor_func),
+            },
+            original_column_count,
+        ))
+    }
+
+    /// Converts an expression to an ExprReference if possible.
+    fn expr_to_reference(&self, expr: &stmt::Expr) -> Option<stmt::ExprReference> {
+        match expr {
+            stmt::Expr::Reference(expr_ref) => Some(*expr_ref),
+            _ => None,
+        }
+    }
+
     fn plan_data_loading_sql(&mut self, mut stmt: stmt::Statement) -> mir::NodeId {
         let const_returning = self.extract_insert_returning_as_const(&stmt);
+
+        // Detect pagination and potentially add ORDER BY columns
+        let pagination_info = self.detect_pagination_sql(&stmt);
 
         if !self.load_data.columns.is_empty() {
             stmt.set_returning(
@@ -685,6 +774,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 stmt,
                 ty,
                 conditional_update_with_no_returning: false,
+                pagination: pagination_info.as_ref().map(|(config, _)| config.clone()),
             }))
         };
 
@@ -700,6 +790,43 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 },
                 [exec_statement_node],
             );
+        }
+
+        // If we added extra ORDER BY columns for pagination, insert a Project
+        // to strip them from the output (keep only the original columns)
+        if let Some((_, original_column_count)) = pagination_info {
+            let total_columns = self.load_data.columns.len();
+            if original_column_count < total_columns {
+                // Build projection to keep only the first original_column_count columns
+                let projection_expr = stmt::Expr::record(
+                    (0..original_column_count).map(|index| stmt::Expr::arg_project(0, [index])),
+                );
+
+                // Get the type from the exec_statement_node and project it
+                let exec_ty = self.planner.mir[exec_statement_node].ty().clone();
+                let projected_ty = if let stmt::Type::List(item_ty) = &exec_ty {
+                    if let stmt::Type::Record(fields) = &**item_ty {
+                        // Keep only the first original_column_count fields
+                        let projected_fields: Vec<_> =
+                            fields.iter().take(original_column_count).cloned().collect();
+                        stmt::Type::list(stmt::Type::Record(projected_fields))
+                    } else {
+                        exec_ty.clone()
+                    }
+                } else {
+                    exec_ty.clone()
+                };
+
+                // Convert projection expression to eval::Func
+                let projection_func =
+                    eval::Func::from_stmt_typed(projection_expr, vec![], projected_ty.clone());
+
+                exec_statement_node = self.planner.mir.insert(mir::Project {
+                    input: exec_statement_node,
+                    projection: projection_func,
+                    ty: projected_ty,
+                });
+            }
         }
 
         exec_statement_node
@@ -907,6 +1034,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             stmt,
             ty,
             conditional_update_with_no_returning: true,
+            pagination: None,
         }
     }
 
@@ -1028,6 +1156,17 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 // Extract pagination fields from the query statement.
                 let (limit, order, cursor) = Self::extract_query_pk_pagination(&stmt);
 
+                // Build pagination config for NoSQL
+                // NoSQL drivers (DynamoDB) provide their own cursor, so extract_cursor is None
+                let pagination = if cursor.is_some() {
+                    limit.map(|page_size| exec::PaginationConfig {
+                        page_size,
+                        extract_cursor: None, // Driver provides cursor
+                    })
+                } else {
+                    None
+                };
+
                 // For queries, stream all matching records with the requested columns.
                 self.insert_mir_with_deps(mir::QueryPk {
                     input,
@@ -1040,6 +1179,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     limit,
                     order,
                     cursor,
+                    pagination,
                 })
             } else {
                 // For mutations (UPDATE/DELETE) with a partial primary-key filter,
@@ -1070,6 +1210,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     limit: None,
                     order: None,
                     cursor: None,
+                    pagination: None, // Not paginated
                 });
 
                 self.build_key_operation(&stmt, index_plan, query_pk_node, ty)
@@ -1135,6 +1276,19 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 Some(inputs[0])
             };
 
+            // Extract pagination fields from the query statement.
+            let (limit, order, cursor) = Self::extract_query_pk_pagination(&stmt);
+
+            // Build pagination config for NoSQL
+            let pagination = if cursor.is_some() {
+                limit.map(|page_size| exec::PaginationConfig {
+                    page_size,
+                    extract_cursor: None, // Driver provides cursor
+                })
+            } else {
+                None
+            };
+
             // Use QueryPk with index to query the secondary index and return full records
             // This eliminates the N+1 pattern of FindPkByIndex + GetByKey
             return self.insert_mir_with_deps(mir::QueryPk {
@@ -1145,9 +1299,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 pk_filter: index_plan.index_filter.take(),
                 row_filter: index_plan.result_filter.take(),
                 ty: ty.clone(), // Full record type, not just PKs
-                limit: None,
-                order: None,
-                cursor: None,
+                limit,
+                order,
+                cursor,
+                pagination,
             });
         }
 

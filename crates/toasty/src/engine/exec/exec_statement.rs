@@ -4,9 +4,22 @@ use toasty_core::{
 };
 
 use crate::{
-    engine::exec::{Action, Exec, ExecResponse, Output, VarId},
+    engine::{
+        eval,
+        exec::{Action, Exec, ExecResponse, Output, VarId},
+    },
     Result,
 };
+
+/// Configuration for pagination at the execution level.
+#[derive(Debug, Clone)]
+pub(crate) struct PaginationConfig {
+    /// Number of items per page
+    pub page_size: i64,
+    /// Function to extract cursor from a row (SQL only).
+    /// For NoSQL drivers, this is None (driver provides cursor).
+    pub extract_cursor: Option<eval::Func>,
+}
 
 /// Information about a MySQL INSERT with RETURNING that needs special handling.
 ///
@@ -37,6 +50,9 @@ pub(crate) struct ExecStatement {
 
     /// When true, the statement is a conditional update without any returning.
     pub conditional_update_with_no_returning: bool,
+
+    /// Pagination configuration (None if not paginated)
+    pub pagination: Option<PaginationConfig>,
 }
 
 #[derive(Debug)]
