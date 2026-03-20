@@ -113,29 +113,6 @@ impl<M> Query<M> {
         self
     }
 
-    /// Combine this query with `other` using UNION, returning records that
-    /// match either query.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[derive(Debug, toasty::Model)]
-    /// # struct User {
-    /// #     #[key]
-    /// #     id: i64,
-    /// #     name: String,
-    /// # }
-    /// use toasty::stmt::Query;
-    ///
-    /// let admins = Query::<User>::filter(User::fields().name().eq("Admin"));
-    /// let alice = Query::<User>::filter(User::fields().name().eq("Alice"));
-    /// let combined = admins.union(alice);
-    /// ```
-    pub fn union(mut self, other: Self) -> Self {
-        self.untyped.add_union(other.untyped);
-        self
-    }
-
     /// Eagerly load a related association when this query executes.
     ///
     /// `path` identifies the relation to include (e.g., a has-many or
