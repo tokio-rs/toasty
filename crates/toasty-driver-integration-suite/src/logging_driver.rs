@@ -132,5 +132,5 @@ async fn duplicate_response_mut(response: &mut Response) -> Result<Response> {
         }
     };
 
-    Ok(Response { rows })
+    Ok(Response { rows, cursor: None })
 }
