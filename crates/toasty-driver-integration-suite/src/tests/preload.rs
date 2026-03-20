@@ -2,36 +2,9 @@ use crate::prelude::*;
 
 /// Tests that preloading a `HasOne<Option<_>>` correctly distinguishes between
 /// "not loaded" and "loaded as None" when the relation does not exist.
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_one_optional_belongs_to))]
 pub async fn preload_has_one_option_none_then_some(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[has_one]
-        profile: toasty::HasOne<Option<Profile>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Profile {
-        #[key]
-        #[auto]
-        id: ID,
-
-        bio: String,
-
-        #[unique]
-        user_id: Option<ID>,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
-    }
-
-    let mut db = test.setup_db(models!(User, Profile)).await;
+    let mut db = setup(test).await;
 
     // Create a user WITHOUT a profile
     let user_no_profile = User::create().name("No Profile").exec(&mut db).await?;

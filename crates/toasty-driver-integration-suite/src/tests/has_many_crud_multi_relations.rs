@@ -3,54 +3,9 @@
 use crate::prelude::*;
 use std::collections::HashMap;
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_multi_relation))]
 pub async fn crud_user_todos_categories(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-
-        #[index]
-        category_id: ID,
-
-        #[belongs_to(key = category_id, references = id)]
-        category: toasty::BelongsTo<Category>,
-
-        title: String,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Category {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo, Category)).await;
+    let mut db = setup(test).await;
 
     // Create a user
     let user = User::create().name("Ann Chovey").exec(&mut db).await?;

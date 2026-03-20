@@ -28,34 +28,12 @@ pub async fn batch_two_scoped_creates_same_relation(t: &mut Test) -> Result<()> 
 }
 
 /// Batch two association-scoped queries on the same relation.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn batch_two_scoped_queries_same_relation(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
+    let mut db = setup(t).await;
 
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        user_id: ID,
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-        #[index]
-        title: String,
-    }
-
-    let mut db = t.setup_db(models!(User, Todo)).await;
-
-    let u1 = User::create().exec(&mut db).await?;
-    let u2 = User::create().exec(&mut db).await?;
+    let u1 = User::create().name("u1").exec(&mut db).await?;
+    let u2 = User::create().name("u2").exec(&mut db).await?;
     u1.todos().create().title("u1 todo").exec(&mut db).await?;
     u2.todos().create().title("u2 todo").exec(&mut db).await?;
 
@@ -135,32 +113,9 @@ pub async fn batch_scoped_all_four_crud(t: &mut Test) -> Result<()> {
 }
 
 /// Batch association-scoped statements mixed with root-level statements.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn batch_scoped_with_root_statements(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        name: String,
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        user_id: ID,
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-        title: String,
-    }
-
-    let mut db = t.setup_db(models!(User, Todo)).await;
+    let mut db = setup(t).await;
     let user = User::create().name("Alice").exec(&mut db).await?;
 
     // Mix: root-level query + scoped create + root-level create
@@ -323,32 +278,9 @@ pub async fn batch_scoped_different_parents(t: &mut Test) -> Result<()> {
 }
 
 /// Batch a scoped delete together with a root-level update.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn batch_scoped_delete_with_root_update(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        name: String,
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        user_id: ID,
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-        title: String,
-    }
-
-    let mut db = t.setup_db(models!(User, Todo)).await;
+    let mut db = setup(t).await;
     let user = User::create().name("Alice").exec(&mut db).await?;
     let todo = user.todos().create().title("done").exec(&mut db).await?;
 
