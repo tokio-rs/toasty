@@ -102,8 +102,8 @@
 //!   the SQL driver crates.
 //! - **`toasty-driver-*`** — one crate per database backend.
 
-mod apply_update;
-pub use apply_update::{ApplyUpdate, Query};
+mod update_target;
+pub use update_target::{Query, UpdateTarget};
 
 mod batch;
 pub use batch::{batch, Batch, CreateMany};
@@ -138,13 +138,13 @@ pub use toasty_core::{Error, Result};
 #[doc(hidden)]
 pub mod codegen_support {
     pub use crate::{
-        apply_update::{ApplyUpdate, Query},
         batch::CreateMany,
         schema::{
             generate_unique_id, Auto, BelongsTo, Embed, Field, HasMany, HasOne, Load, Model,
             Register, Relation,
         },
         stmt::{self, IntoExpr, IntoInsert, IntoStatement, List, Path},
+        update_target::{Query, UpdateTarget},
         Db, Error, Executor, ExecutorExt, Result, Statement,
     };
     #[cfg(feature = "serde")]

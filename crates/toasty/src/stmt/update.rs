@@ -1,4 +1,4 @@
-use super::Query;
+use super::{List, Query};
 use crate::schema::Model;
 use std::{fmt, marker::PhantomData};
 use toasty_core::stmt;
@@ -8,24 +8,8 @@ pub struct Update<M> {
     _p: PhantomData<M>,
 }
 
-impl<M: Model> Update<M> {
-    pub fn new(mut selection: Query<M>) -> Self {
-        if let stmt::ExprSet::Values(values) = &mut selection.untyped.body {
-            let rows = std::mem::take(&mut values.rows);
-            let filter = stmt::Expr::in_list(stmt::Expr::ref_ancestor_model(0), rows);
-            selection.untyped.body =
-                stmt::ExprSet::Select(Box::new(stmt::Select::new(M::id(), filter)));
-        }
-
-        let mut stmt = selection.untyped.update();
-        stmt.returning = Some(stmt::Returning::Changed);
-
-        Self {
-            untyped: stmt,
-            _p: PhantomData,
-        }
-    }
-
+// Methods available on all Update<M> regardless of M
+impl<M> Update<M> {
     pub const fn from_untyped(untyped: stmt::Update) -> Self {
         Self {
             untyped,
@@ -57,6 +41,48 @@ impl<M: Model> Update<M> {
     /// Consume this typed update and return the untyped core statement.
     pub fn into_untyped_stmt(self) -> stmt::Statement {
         self.untyped.into()
+    }
+}
+
+/// Construct an `Update<List<M>>` for query-based updates that can affect
+/// multiple rows.
+impl<M: Model> Update<List<M>> {
+    pub fn new(mut selection: Query<M>) -> Self {
+        if let stmt::ExprSet::Values(values) = &mut selection.untyped.body {
+            let rows = std::mem::take(&mut values.rows);
+            let filter = stmt::Expr::in_list(stmt::Expr::ref_ancestor_model(0), rows);
+            selection.untyped.body =
+                stmt::ExprSet::Select(Box::new(stmt::Select::new(M::id(), filter)));
+        }
+
+        let mut stmt = selection.untyped.update();
+        stmt.returning = Some(stmt::Returning::Changed);
+
+        Self {
+            untyped: stmt,
+            _p: PhantomData,
+        }
+    }
+}
+
+/// Construct an `Update<M>` for single-instance updates that return exactly
+/// one row.
+impl<M: Model> Update<M> {
+    pub fn new_single(mut selection: Query<M>) -> Self {
+        if let stmt::ExprSet::Values(values) = &mut selection.untyped.body {
+            let rows = std::mem::take(&mut values.rows);
+            let filter = stmt::Expr::in_list(stmt::Expr::ref_ancestor_model(0), rows);
+            selection.untyped.body =
+                stmt::ExprSet::Select(Box::new(stmt::Select::new(M::id(), filter)));
+        }
+
+        let mut stmt = selection.untyped.update();
+        stmt.returning = Some(stmt::Returning::Changed);
+
+        Self {
+            untyped: stmt,
+            _p: PhantomData,
+        }
     }
 }
 
