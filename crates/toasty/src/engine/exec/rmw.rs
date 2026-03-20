@@ -1,5 +1,5 @@
 use crate::{
-    engine::exec::{Action, Exec, Output, VarId},
+    engine::exec::{Action, Exec, ExecResponse, Output, VarId},
     Result,
 };
 use toasty_core::{
@@ -70,7 +70,8 @@ impl Exec<'_> {
 
         if let Some(output) = &action.output {
             let rows = Rows::value_stream(ValueStream::default());
-            self.vars.store(output.var, output.num_uses, rows);
+            self.vars
+                .store(output.var, output.num_uses, ExecResponse::from_rows(rows));
         }
 
         Ok(())

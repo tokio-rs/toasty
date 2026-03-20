@@ -1,7 +1,7 @@
 use crate::{
     engine::{
         eval,
-        exec::{Action, Exec, Output, VarId},
+        exec::{Action, Exec, ExecResponse, Output, VarId},
     },
     Result,
 };
@@ -39,7 +39,7 @@ impl Exec<'_> {
         self.vars.store(
             action.output.var,
             action.output.num_uses,
-            Rows::value_stream(filtered_rows),
+            ExecResponse::from_rows(Rows::value_stream(filtered_rows)),
         );
 
         Ok(())

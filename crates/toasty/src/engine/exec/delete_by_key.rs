@@ -4,7 +4,7 @@ use toasty_core::{
     stmt,
 };
 
-use crate::engine::exec::{Action, Output, VarId};
+use crate::engine::exec::{Action, ExecResponse, Output, VarId};
 
 use super::{Exec, Result};
 
@@ -57,8 +57,11 @@ impl Exec<'_> {
             Rows::Count(total_count)
         };
 
-        self.vars
-            .store(action.output.var, action.output.num_uses, res);
+        self.vars.store(
+            action.output.var,
+            action.output.num_uses,
+            ExecResponse::from_rows(res),
+        );
 
         Ok(())
     }

@@ -57,6 +57,34 @@ use toasty_core::{
     Connection,
 };
 
+/// Response from executing an action in the engine pipeline.
+/// Carries both the result values and optional pagination metadata.
+#[derive(Debug)]
+pub(crate) struct ExecResponse {
+    /// The result values (rows, count, or stream)
+    pub values: Rows,
+    /// Cursor to the next page (if paginated and more data exists)
+    pub next_cursor: Option<stmt::Value>,
+    /// Cursor to the previous page (if backward pagination is supported)
+    pub prev_cursor: Option<stmt::Value>,
+}
+
+impl ExecResponse {
+    /// Create a response from rows with no pagination cursors
+    pub fn from_rows(rows: Rows) -> Self {
+        Self {
+            values: rows,
+            next_cursor: None,
+            prev_cursor: None,
+        }
+    }
+
+    /// Convert back to just the rows (discarding cursor metadata)
+    pub fn into_rows(self) -> Rows {
+        self.values
+    }
+}
+
 struct Exec<'a> {
     engine: &'a Engine,
     connection: &'a mut dyn Connection,
@@ -73,7 +101,7 @@ impl Engine {
         connection: &mut dyn Connection,
         plan: ExecPlan,
         in_transaction: bool,
-    ) -> Result<ValueStream> {
+    ) -> Result<ExecResponse> {
         let mut exec = Exec {
             engine: self,
             connection,
@@ -124,15 +152,17 @@ impl Engine {
             let rows = exec.vars.load(returning).await?;
             tracing::debug!("Final result from var {:?}:\n{:#?}", returning, rows);
 
-            match rows {
+            let value_stream = match rows {
                 Rows::Count(_) => ValueStream::default(),
                 Rows::Value(stmt::Value::List(items)) => ValueStream::from_vec(items),
                 // TODO have the public API be able to handle single rows
                 Rows::Value(value) => ValueStream::from_vec(vec![value]),
                 Rows::Stream(value_stream) => value_stream,
-            }
+            };
+
+            ExecResponse::from_rows(Rows::Stream(value_stream))
         } else {
-            ValueStream::default()
+            ExecResponse::from_rows(Rows::Stream(ValueStream::default()))
         };
 
         Ok(result)

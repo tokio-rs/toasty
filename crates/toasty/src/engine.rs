@@ -90,7 +90,8 @@ impl Engine {
 
         // The plan is called once (single entry record stream) with no arguments
         // (empty record).
-        self.exec_plan(connection, plan, in_transaction).await
+        let response = self.exec_plan(connection, plan, in_transaction).await?;
+        Ok(response.values.into_value_stream())
     }
 
     /// Returns a new [`ExprContext`](stmt::ExprContext) for a specific target.

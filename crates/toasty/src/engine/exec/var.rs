@@ -1,5 +1,7 @@
 use toasty_core::{driver::Rows, stmt};
 
+use super::ExecResponse;
+
 /// Tracks variable declarations during planning. Each variable has a type and
 /// is assigned a unique VarId. This is converted into a VarStore for execution.
 #[derive(Debug, Default)]
@@ -30,7 +32,7 @@ pub(crate) struct VarId(pub(crate) usize);
 
 #[derive(Debug)]
 struct Entry {
-    rows: Rows,
+    response: ExecResponse,
     count: usize,
 }
 
@@ -54,15 +56,15 @@ impl VarStore {
         );
 
         if entry.count == 1 {
-            return Ok(self.slots[var.0].take().unwrap().rows);
+            return Ok(self.slots[var.0].take().unwrap().response.values);
         }
 
         entry.count -= 1;
-        entry.rows.dup().await
+        entry.response.values.dup().await
     }
 
     #[track_caller]
-    pub(crate) fn store(&mut self, var: VarId, count: usize, rows: Rows) {
+    pub(crate) fn store(&mut self, var: VarId, count: usize, response: ExecResponse) {
         tracing::debug!(
             "VarStore::store({:?}): uses = {}, type = {:?}",
             var,
@@ -74,10 +76,10 @@ impl VarStore {
             self.slots.push(None);
         }
 
-        let rows = match rows {
+        let values = match response.values {
             Rows::Count(_) => {
                 assert!(self.tys[var.0].is_unit());
-                rows
+                response.values
             }
             Rows::Value(value) => {
                 assert!(
@@ -96,6 +98,12 @@ impl VarStore {
             }
         };
 
-        self.slots[var.0] = Some(Entry { rows, count });
+        let response = ExecResponse {
+            values,
+            next_cursor: response.next_cursor,
+            prev_cursor: response.prev_cursor,
+        };
+
+        self.slots[var.0] = Some(Entry { response, count });
     }
 }

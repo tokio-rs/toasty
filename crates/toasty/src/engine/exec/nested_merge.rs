@@ -2,7 +2,7 @@ use toasty_core::driver::Rows;
 use toasty_core::stmt;
 
 use crate::engine::eval;
-use crate::engine::exec::{Action, Exec, Output, VarId};
+use crate::engine::exec::{Action, Exec, ExecResponse, Output, VarId};
 use crate::Result;
 
 /// Combines parent and child data into nested structures.
@@ -252,7 +252,7 @@ impl Exec<'_> {
         self.vars.store(
             action.output.var,
             action.output.num_uses,
-            Rows::value_stream(merged_rows),
+            ExecResponse::from_rows(Rows::value_stream(merged_rows)),
         );
 
         Ok(())
