@@ -36,10 +36,16 @@ pub(crate) fn plan_index_path<'a>(
     // Get the statement filter
     let filter = stmt.filter_expr_unwrap();
 
+    // Extract the pre-filter: the part of the filter that depends only on
+    // args (no table column references) and can be evaluated before issuing
+    // the database operation. The invariant is:
+    //   filter == AND(pre_filter, remaining_filter)
+    let (pre_filter, remaining_filter) = extract_pre_filter(filter);
+
     let mut index_planner = IndexPlanner {
         cx,
         table,
-        filter,
+        filter: &remaining_filter,
         index_matches: vec![],
         index_paths: vec![],
     };
@@ -52,7 +58,8 @@ pub(crate) fn plan_index_path<'a>(
     };
 
     let index_match = &index_planner.index_matches[index_path.index_match];
-    let (index_filter, result_filter) = index_match.partition_filter(&mut partition_cx, filter);
+    let (index_filter, result_filter) =
+        index_match.partition_filter(&mut partition_cx, index_planner.filter);
 
     // Extract literal key values before OR rewrite, while index_filter is still
     // in Expr::Or form. After rewrite it becomes ANY(MAP(...)) and the Or arm
@@ -80,10 +87,11 @@ pub(crate) fn plan_index_path<'a>(
             Some(result_filter)
         },
         post_filter: if partition_cx.apply_result_filter_on_results {
-            Some(filter.clone())
+            Some(remaining_filter.clone())
         } else {
             None
         },
+        pre_filter,
         key_values,
         has_pk_keys,
     })
@@ -283,6 +291,66 @@ fn extract_key_record(
         }
         _ => None,
     }
+}
+
+/// Extract the args-only component of a filter expression.
+///
+/// Splits the filter into `(pre_filter, remaining_filter)` such that
+/// `filter == AND(pre_filter, remaining_filter)`. The `pre_filter` contains
+/// only sub-expressions that can be evaluated using args alone (no table
+/// column references).
+fn extract_pre_filter(expr: &stmt::Expr) -> (Option<stmt::Expr>, stmt::Expr) {
+    // Only AND nodes can be split into pre_filter and remaining components.
+    let stmt::Expr::And(and) = expr else {
+        if references_column(expr) {
+            return (None, expr.clone());
+        } else {
+            return (Some(expr.clone()), true.into());
+        }
+    };
+
+    let mut pre = vec![];
+    let mut remaining = vec![];
+
+    for operand in &and.operands {
+        if references_column(operand) {
+            remaining.push(operand.clone());
+        } else {
+            pre.push(operand.clone());
+        }
+    }
+
+    // If all operands are args-only, the entire AND is the pre_filter.
+    if remaining.is_empty() {
+        return (Some(expr.clone()), true.into());
+    }
+
+    let pre_filter = match pre.len() {
+        0 => None,
+        1 => Some(pre.into_iter().next().unwrap()),
+        _ => Some(stmt::ExprAnd { operands: pre }.into()),
+    };
+
+    let remaining_filter = match remaining.len() {
+        1 => remaining.into_iter().next().unwrap(),
+        _ => stmt::ExprAnd {
+            operands: remaining,
+        }
+        .into(),
+    };
+
+    (pre_filter, remaining_filter)
+}
+
+/// Returns `true` if the expression references any table column.
+fn references_column(expr: &stmt::Expr) -> bool {
+    let mut found = false;
+    stmt::visit::for_each_expr(expr, |e| {
+        if matches!(e, stmt::Expr::Reference(stmt::ExprReference::Column(_))) {
+            found = true;
+        }
+    });
+    found
 }
 
 #[cfg(test)]
