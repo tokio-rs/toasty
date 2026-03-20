@@ -9,7 +9,7 @@ impl Expand<'_> {
     pub(super) fn expand_embedded_update_builder(&self) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
-        let update_struct_ident = &self.model.kind.expect_embedded().update_struct_ident;
+        let update_struct_ident = &self.model.kind.as_embedded_unwrap().update_struct_ident;
         let builder_methods = self.expand_update_field_methods(true);
 
         quote! {
@@ -205,8 +205,8 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
-        let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
-        let update_struct_ident = &self.model.kind.expect_root().update_struct_ident;
+        let query_struct_ident = &self.model.kind.as_root_unwrap().query_struct_ident;
+        let update_struct_ident = &self.model.kind.as_root_unwrap().update_struct_ident;
         let target_ty = util::ident("T");
         let builder_methods = self.expand_update_field_methods(false);
         let update_default_stmts = self.expand_update_default_stmts();

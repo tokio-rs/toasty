@@ -22,7 +22,7 @@ pub enum PathRoot {
 
 impl PathRoot {
     /// Returns the `ModelId`, panicking if this root is a `Variant` root.
-    pub fn expect_model(&self) -> ModelId {
+    pub fn as_model_unwrap(&self) -> ModelId {
         match self {
             PathRoot::Model(id) => *id,
             PathRoot::Variant { .. } => panic!("expected Model root, got Variant root"),

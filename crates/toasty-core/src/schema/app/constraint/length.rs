@@ -12,7 +12,7 @@ pub struct ConstraintLength {
 }
 impl ConstraintLength {
     pub(crate) fn check(&self, expr: &crate::stmt::Entry<'_>) -> Result<()> {
-        let Some(stmt::Value::String(value)) = expr.try_as_value() else {
+        let Some(stmt::Value::String(value)) = expr.as_value() else {
             return Ok(());
         };
 

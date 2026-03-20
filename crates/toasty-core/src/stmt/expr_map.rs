@@ -46,11 +46,17 @@ impl Expr {
         .into()
     }
 
-    pub fn as_map(&self) -> &ExprMap {
+    pub fn as_map(&self) -> Option<&ExprMap> {
         match self {
-            Self::Map(expr) => expr,
-            _ => todo!(),
+            Self::Map(expr) => Some(expr),
+            _ => None,
         }
+    }
+
+    #[track_caller]
+    pub fn as_map_unwrap(&self) -> &ExprMap {
+        self.as_map()
+            .unwrap_or_else(|| panic!("expected Expr::Map; actual={self:#?}"))
     }
 }
 

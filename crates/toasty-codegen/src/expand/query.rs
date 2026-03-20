@@ -9,8 +9,8 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
-        let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
-        let update_struct_ident = &self.model.kind.expect_root().update_struct_ident;
+        let query_struct_ident = &self.model.kind.as_root_unwrap().query_struct_ident;
+        let update_struct_ident = &self.model.kind.as_root_unwrap().update_struct_ident;
         let include_ty = util::ident("T");
         let filter_methods = self.expand_query_filter_methods();
         let relation_methods = self.expand_relation_methods();
@@ -180,7 +180,7 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
-        let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
+        let query_struct_ident = &self.model.kind.as_root_unwrap().query_struct_ident;
 
         if self.model.has_associations() {
             Some(quote! {

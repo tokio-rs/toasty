@@ -230,7 +230,7 @@ impl<'stmt> IndexMatch<'stmt> {
 
         for (i, index_column) in self.index.columns.iter().enumerate() {
             // Check that the path matches an index column
-            if cx.resolve_expr_reference(expr_ref).expect_column().id != index_column.column {
+            if cx.resolve_expr_reference(expr_ref).as_column_unwrap().id != index_column.column {
                 continue;
             }
 

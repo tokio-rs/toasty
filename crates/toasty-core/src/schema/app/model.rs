@@ -213,7 +213,7 @@ impl Model {
     }
 
     /// Returns a reference to the root model data, panicking if this is not a root model.
-    pub fn expect_root(&self) -> &ModelRoot {
+    pub fn as_root_unwrap(&self) -> &ModelRoot {
         match self {
             Model::Root(root) => root,
             Model::EmbeddedStruct(_) => panic!("expected root model, found embedded struct"),
@@ -222,7 +222,7 @@ impl Model {
     }
 
     /// Returns a mutable reference to the root model data, panicking if this is not a root model.
-    pub fn expect_root_mut(&mut self) -> &mut ModelRoot {
+    pub fn as_root_mut_unwrap(&mut self) -> &mut ModelRoot {
         match self {
             Model::Root(root) => root,
             Model::EmbeddedStruct(_) => panic!("expected root model, found embedded struct"),
@@ -231,7 +231,7 @@ impl Model {
     }
 
     /// Returns a reference to the embedded struct data, panicking if this is not an embedded struct.
-    pub fn expect_embedded_struct(&self) -> &EmbeddedStruct {
+    pub fn as_embedded_struct_unwrap(&self) -> &EmbeddedStruct {
         match self {
             Model::EmbeddedStruct(embedded) => embedded,
             Model::Root(_) => panic!("expected embedded struct, found root model"),
@@ -240,7 +240,7 @@ impl Model {
     }
 
     /// Returns a reference to the embedded enum data, panicking if this is not an embedded enum.
-    pub fn expect_embedded_enum(&self) -> &EmbeddedEnum {
+    pub fn as_embedded_enum_unwrap(&self) -> &EmbeddedEnum {
         match self {
             Model::EmbeddedEnum(e) => e,
             Model::Root(_) => panic!("expected embedded enum, found root model"),

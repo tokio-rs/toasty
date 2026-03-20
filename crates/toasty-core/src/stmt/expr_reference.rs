@@ -189,9 +189,14 @@ impl ExprReference {
 
     #[track_caller]
     pub fn as_expr_column_unwrap(&self) -> &ExprColumn {
+        self.as_expr_column()
+            .unwrap_or_else(|| panic!("expected ExprColumn; actual={self:#?}"))
+    }
+
+    pub fn as_expr_column_mut(&mut self) -> Option<&mut ExprColumn> {
         match self {
-            ExprReference::Column(expr_column) => expr_column,
-            _ => panic!("expected ExprColumn; actual={self:#?}"),
+            ExprReference::Column(expr_column) => Some(expr_column),
+            _ => None,
         }
     }
 

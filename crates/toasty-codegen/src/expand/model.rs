@@ -168,7 +168,7 @@ impl Expand<'_> {
 
     fn expand_model_into_statement_body(&self) -> TokenStream {
         let filter = self.primary_key_filter();
-        let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
+        let query_struct_ident = &self.model.kind.as_root_unwrap().query_struct_ident;
         let filter_method_ident = &filter.filter_method_ident;
         let arg_idents = self.expand_filter_arg_idents(filter);
 

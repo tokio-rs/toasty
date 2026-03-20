@@ -119,7 +119,7 @@ impl ToSql for &stmt::Expr {
                         }
                     }
                 } else {
-                    let column = cx.resolve_expr_reference(expr_reference).expect_column();
+                    let column = cx.resolve_expr_reference(expr_reference).as_column_unwrap();
                     fmt!(cx, f, Ident(&column.name))
                 }
             }

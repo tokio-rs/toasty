@@ -61,7 +61,7 @@ pub(super) fn root_model(model: &Model) -> TokenStream {
 pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let toasty = quote!(_toasty::codegen_support);
     let model_ident = &model.ident;
-    let embedded = model.kind.expect_embedded();
+    let embedded = model.kind.as_embedded_unwrap();
     let field_struct_ident = &embedded.field_struct_ident;
     let update_struct_ident = &embedded.update_struct_ident;
 
@@ -170,7 +170,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     let into_expr_arms = e.expand_enum_into_expr_arms();
     let ty_expr = e.expand_enum_primitive_ty();
 
-    let embedded_enum = model.kind.expect_embedded_enum();
+    let embedded_enum = model.kind.as_embedded_enum_unwrap();
     let field_struct_ident = &embedded_enum.field_struct_ident;
     let enum_field_struct = e.expand_enum_field_struct();
 

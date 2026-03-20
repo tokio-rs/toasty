@@ -119,7 +119,7 @@ impl Value {
         }
     }
 
-    pub fn expect_string(&self) -> &str {
+    pub fn as_string_unwrap(&self) -> &str {
         match self {
             Self::String(v) => v,
             _ => todo!(),
@@ -133,14 +133,14 @@ impl Value {
         }
     }
 
-    pub fn expect_record(&self) -> &ValueRecord {
+    pub fn as_record_unwrap(&self) -> &ValueRecord {
         match self {
             Self::Record(record) => record,
             _ => panic!("{self:#?}"),
         }
     }
 
-    pub fn expect_record_mut(&mut self) -> &mut ValueRecord {
+    pub fn as_record_mut_unwrap(&mut self) -> &mut ValueRecord {
         match self {
             Self::Record(record) => record,
             _ => panic!(),

@@ -59,7 +59,7 @@ fn is_null_non_nullable_field() {
     let schema = test_schema_with(&[User::schema()]);
     let model = schema.app.model(User::id());
     let simplify = Simplify::new(&schema);
-    let simplify = simplify.scope(model.expect_root());
+    let simplify = simplify.scope(model.as_root_unwrap());
 
     // `is_null(field)` → `false` (non-nullable field)
     let mut field = ExprIsNull {

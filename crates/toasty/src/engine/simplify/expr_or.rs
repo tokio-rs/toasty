@@ -209,7 +209,7 @@ impl Simplify<'_> {
             .schema()
             .app
             .model(model_id)
-            .expect_embedded_enum()
+            .as_embedded_enum_unwrap()
             .variants
             .len();
 

@@ -182,10 +182,10 @@ impl Type {
     }
 
     #[track_caller]
-    pub fn unwrap_list_ref(&self) -> &Type {
+    pub fn as_list_unwrap(&self) -> &Type {
         match self {
             stmt::Type::List(items) => items,
-            _ => todo!("expected stmt::Type::List; actual={self:#?}"),
+            _ => panic!("expected stmt::Type::List; actual={self:#?}"),
         }
     }
 

@@ -27,7 +27,7 @@ impl Simplify<'_> {
             stmt::Expr::Reference(expr_reference @ stmt::ExprReference::Field { .. }) => self
                 .cx
                 .resolve_expr_reference(expr_reference)
-                .expect_field(),
+                .as_field_unwrap(),
             _ => {
                 return None;
             }
@@ -193,7 +193,7 @@ impl Visit for LiftBelongsTo<'_> {
                         .simplify
                         .cx
                         .resolve_expr_reference(expr_reference)
-                        .expect_field();
+                        .as_field_unwrap();
 
                     self.lift_fk_constraint(field.id, i.op, other);
                 } else {

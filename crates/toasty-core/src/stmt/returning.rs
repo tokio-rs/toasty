@@ -30,14 +30,15 @@ impl Returning {
         matches!(self, Self::Model { .. })
     }
 
-    pub fn as_model_includes(&self) -> &[Path] {
+    pub fn model_includes(&self) -> &[Path] {
         match self {
             Self::Model { include } => include,
             _ => &[],
         }
     }
 
-    pub fn as_model_includes_mut(&mut self) -> &mut Vec<Path> {
+    #[track_caller]
+    pub fn model_includes_mut_unwrap(&mut self) -> &mut Vec<Path> {
         match self {
             Self::Model { include } => include,
             _ => panic!("not a Model variant"),
@@ -61,10 +62,8 @@ impl Returning {
 
     #[track_caller]
     pub fn as_expr_unwrap(&self) -> &Expr {
-        match self {
-            Self::Expr(expr) => expr,
-            _ => panic!("expected stmt::Returning::Expr; actual={self:#?}"),
-        }
+        self.as_expr()
+            .unwrap_or_else(|| panic!("expected stmt::Returning::Expr; actual={self:#?}"))
     }
 
     pub fn as_expr_mut(&mut self) -> Option<&mut Expr> {
@@ -78,7 +77,7 @@ impl Returning {
     pub fn as_expr_mut_unwrap(&mut self) -> &mut Expr {
         match self {
             Self::Expr(expr) => expr,
-            _ => panic!("expected stmt::Returningm::Expr; actual={self:#?}"),
+            _ => panic!("expected stmt::Returning::Expr; actual={self:#?}"),
         }
     }
 
@@ -163,23 +162,7 @@ impl Statement {
     ///
     /// # Panics
     ///
-    /// Panics if the statement does not have a `RETURNING` clause. This can occur when:
-    /// - A `DELETE`, `INSERT`, or `UPDATE` statement was created without specifying a
-    ///   `RETURNING` clause (the internal `Option<Returning>` is `None`)
-    /// - A `Query` statement contains a non-`SELECT` body (e.g., `VALUES`, `UNION`)
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// let mut stmt = Statement::Insert(insert_with_returning);
-    /// let returning = stmt.returning_mut_unwrap();
-    /// // Modify the returning clause...
-    /// ```
-    ///
-    /// # Notes
-    ///
-    /// This method uses `#[track_caller]` to report the panic location at the call site
-    /// rather than inside this method, making debugging easier.
+    /// Panics if the statement does not have a `RETURNING` clause.
     #[track_caller]
     pub fn returning_mut_unwrap(&mut self) -> &mut Returning {
         match self {
