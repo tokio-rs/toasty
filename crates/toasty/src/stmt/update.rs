@@ -24,6 +24,21 @@ impl<M: Model> Update<M> {
     ///
     /// The update is initially empty (no assignments). Add field assignments
     /// with [`set`](Update::set) before executing.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::{Query, Update};
+    ///
+    /// let selection = Query::<User>::filter(User::fields().id().eq(1));
+    /// let _update = Update::<User>::new(selection);
+    /// ```
     pub fn new(mut selection: Query<M>) -> Self {
         if let stmt::ExprSet::Values(values) = &mut selection.untyped.body {
             let rows = std::mem::take(&mut values.rows);
@@ -42,6 +57,22 @@ impl<M: Model> Update<M> {
     }
 
     /// Wrap a raw untyped [`stmt::Update`](toasty_core::stmt::Update).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::{Query, Update};
+    ///
+    /// // Round-trip through an untyped update
+    /// let update = Update::<User>::new(Query::<User>::all());
+    /// let raw = update.into_untyped_stmt();
+    /// ```
     pub const fn from_untyped(untyped: stmt::Update) -> Self {
         Self {
             untyped,
@@ -50,6 +81,23 @@ impl<M: Model> Update<M> {
     }
 
     /// Get a mutable reference to the underlying untyped update.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::{Query, Update};
+    ///
+    /// let mut update = Update::<User>::new(Query::<User>::all());
+    /// let raw = update.as_untyped_mut();
+    /// // Inspect or modify the raw update
+    /// assert!(raw.returning.is_some());
+    /// ```
     pub fn as_untyped_mut(&mut self) -> &mut stmt::Update {
         &mut self.untyped
     }
@@ -57,26 +105,102 @@ impl<M: Model> Update<M> {
     /// Assign a value to a field.
     ///
     /// `field` identifies which field to update and `expr` is the new value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::{Query, Update};
+    ///
+    /// let mut update = Update::<User>::new(Query::<User>::all());
+    /// // Set field at index 1 (name) to "Bob"
+    /// update.set(1, toasty_core::stmt::Value::from("Bob"));
+    /// ```
     pub fn set(&mut self, field: impl Into<stmt::Projection>, expr: impl Into<stmt::Expr>) {
         self.untyped.assignments.set(field, expr);
     }
 
     /// Append a value to a collection field (e.g., a has-many relation).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::{Query, Update};
+    ///
+    /// let mut update = Update::<User>::new(Query::<User>::all());
+    /// update.insert(1, toasty_core::stmt::Value::from("new_tag"));
+    /// ```
     pub fn insert(&mut self, field: impl Into<stmt::Projection>, expr: impl Into<stmt::Expr>) {
         self.untyped.assignments.insert(field, expr);
     }
 
     /// Remove a value from a collection field.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::{Query, Update};
+    ///
+    /// let mut update = Update::<User>::new(Query::<User>::all());
+    /// update.remove(1, toasty_core::stmt::Value::from("old_tag"));
+    /// ```
     pub fn remove(&mut self, field: impl Into<stmt::Projection>, expr: impl Into<stmt::Expr>) {
         self.untyped.assignments.remove(field, expr);
     }
 
-    /// Don't return anything
+    /// Don't return anything.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::{Query, Update};
+    ///
+    /// let mut update = Update::<User>::new(Query::<User>::all());
+    /// update.set_returning_none();
+    /// ```
     pub fn set_returning_none(&mut self) {
         self.untyped.returning = None;
     }
 
     /// Consume this typed update and return the untyped core statement.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::{Query, Update};
+    ///
+    /// let update = Update::<User>::new(Query::<User>::all());
+    /// let _raw = update.into_untyped_stmt();
+    /// ```
     pub fn into_untyped_stmt(self) -> stmt::Statement {
         self.untyped.into()
     }

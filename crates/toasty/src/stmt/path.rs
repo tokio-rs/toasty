@@ -17,7 +17,13 @@ use toasty_core::{
 /// paths, which you then use with comparison methods to build filter
 /// expressions:
 ///
-/// ```ignore
+/// ```
+/// # #[derive(Debug, toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     id: i64,
+/// #     name: String,
+/// # }
 /// // Path<User, String> — the "name" field on User
 /// let path = User::fields().name();
 ///
@@ -35,6 +41,20 @@ pub struct Path<T, U> {
 
 impl<T: Register> Path<T, T> {
     /// Create a path that points to the root model itself.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::Path;
+    ///
+    /// let root = Path::<User, User>::root();
+    /// ```
     pub fn root() -> Self {
         Self {
             untyped: stmt::Path::model(T::id()),
@@ -45,6 +65,16 @@ impl<T: Register> Path<T, T> {
 
 impl<T, U> Path<T, U> {
     /// Wrap a raw untyped [`stmt::Path`](toasty_core::stmt::Path).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use toasty::stmt::Path;
+    /// # use toasty_core::stmt as core_stmt;
+    /// # use toasty_core::schema::app::ModelId;
+    /// let raw = core_stmt::Path::model(ModelId(0));
+    /// let _typed = Path::<(), ()>::new(raw);
+    /// ```
     pub const fn new(raw: stmt::Path) -> Self {
         Self {
             untyped: raw,
@@ -53,6 +83,21 @@ impl<T, U> Path<T, U> {
     }
 
     /// Create a path to the field at `index` on model `T`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::Path;
+    ///
+    /// // Path to the second field (name, index 1)
+    /// let path = Path::<User, String>::from_field_index(1);
+    /// ```
     pub fn from_field_index(index: usize) -> Self
     where
         T: Register,
@@ -65,6 +110,22 @@ impl<T, U> Path<T, U> {
 
     /// Converts this path into a variant-rooted path for use in `.matches()`
     /// closures on embedded enum fields.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// # use toasty::stmt::Path;
+    /// # use toasty_core::schema::app::{ModelId, VariantId};
+    /// let path = Path::<User, String>::from_field_index(1);
+    /// let variant_id = VariantId { model: ModelId(0), index: 0 };
+    /// let _variant_path = path.into_variant(variant_id);
+    /// ```
     pub fn into_variant(self, variant_id: VariantId) -> Self {
         Self {
             untyped: stmt::Path::from_variant(self.untyped, variant_id),
@@ -79,6 +140,22 @@ impl<T, U> Path<T, U> {
     /// association methods chain segments rooted at `M` (not `List<M>`).
     /// Until `ManyField` is restructured, the origin of `other` is left
     /// unconstrained.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::Path;
+    ///
+    /// let user_path = Path::<User, User>::root();
+    /// let name_path = Path::<User, String>::from_field_index(1);
+    /// let _chained: Path<User, String> = user_path.chain(name_path);
+    /// ```
     pub fn chain<X, V>(mut self, other: impl Into<Path<X, V>>) -> Path<T, V> {
         let other = other.into();
         self.untyped.chain(&other.untyped);
@@ -90,6 +167,18 @@ impl<T, U> Path<T, U> {
     }
 
     /// Test whether this field equals `rhs`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// let filter = User::fields().name().eq("Alice");
+    /// ```
     pub fn eq(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
         Expr {
             untyped: stmt::Expr::eq(self.untyped.into_stmt(), rhs.into_expr().untyped),
@@ -98,6 +187,18 @@ impl<T, U> Path<T, U> {
     }
 
     /// Test whether this field does not equal `rhs`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// let filter = User::fields().name().ne("Alice");
+    /// ```
     pub fn ne(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
         Expr {
             untyped: stmt::Expr::ne(self.untyped.into_stmt(), rhs.into_expr().untyped),
@@ -106,6 +207,18 @@ impl<T, U> Path<T, U> {
     }
 
     /// Test whether this field is greater than `rhs`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// let filter = User::fields().id().gt(10);
+    /// ```
     pub fn gt(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
         Expr {
             untyped: stmt::Expr::gt(self.untyped.into_stmt(), rhs.into_expr().untyped),
@@ -114,6 +227,18 @@ impl<T, U> Path<T, U> {
     }
 
     /// Test whether this field is greater than or equal to `rhs`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// let filter = User::fields().id().ge(1);
+    /// ```
     pub fn ge(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
         Expr {
             untyped: stmt::Expr::ge(self.untyped.into_stmt(), rhs.into_expr().untyped),
@@ -122,6 +247,18 @@ impl<T, U> Path<T, U> {
     }
 
     /// Test whether this field is less than `rhs`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// let filter = User::fields().id().lt(100);
+    /// ```
     pub fn lt(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
         Expr {
             untyped: stmt::Expr::lt(self.untyped.into_stmt(), rhs.into_expr().untyped),
@@ -130,6 +267,18 @@ impl<T, U> Path<T, U> {
     }
 
     /// Test whether this field is less than or equal to `rhs`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// let filter = User::fields().id().le(100);
+    /// ```
     pub fn le(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
         Expr {
             untyped: stmt::Expr::le(self.untyped.into_stmt(), rhs.into_expr().untyped),
@@ -142,8 +291,16 @@ impl<T, U> Path<T, U> {
     /// `rhs` can be any collection that implements `IntoExpr<List<U>>`, such
     /// as a `Vec`, array, or slice.
     ///
-    /// ```ignore
-    /// User::fields().id().in_list(&[1, 2, 3])
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// let filter = User::fields().id().in_list([1_i64, 2, 3]);
     /// ```
     pub fn in_list(self, rhs: impl IntoExpr<List<U>>) -> Expr<bool> {
         Expr {
@@ -155,8 +312,22 @@ impl<T, U> Path<T, U> {
     /// Test whether this field's value appears in the result set of a
     /// subquery.
     ///
-    /// ```ignore
-    /// Todo::fields().user_id().in_query(User::find_by_name("Alice"))
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::{Path, Query};
+    ///
+    /// // A path targeting User values
+    /// let path = Path::<User, User>::root();
+    /// // A subquery returning List<User>
+    /// let subquery = Query::<User>::filter(User::fields().name().eq("Alice"));
+    /// let filter = path.in_query(subquery);
     /// ```
     pub fn in_query<Q>(self, rhs: Q) -> Expr<bool>
     where
@@ -170,6 +341,19 @@ impl<T, U> Path<T, U> {
     }
 
     /// Produce an ascending [`OrderByExpr`] for this path.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// let mut q = User::all();
+    /// q.order_by(User::fields().name().asc());
+    /// ```
     pub fn asc(self) -> OrderByExpr {
         OrderByExpr {
             expr: self.untyped.into_stmt(),
@@ -178,6 +362,19 @@ impl<T, U> Path<T, U> {
     }
 
     /// Produce a descending [`OrderByExpr`] for this path.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// let mut q = User::all();
+    /// q.order_by(User::fields().name().desc());
+    /// ```
     pub fn desc(self) -> OrderByExpr {
         OrderByExpr {
             expr: self.untyped.into_stmt(),
@@ -193,6 +390,28 @@ impl<T, U> Path<T, List<U>> {
     /// The path must point to a `HasMany` (or similar collection) field on the
     /// parent model. The returned expression can be used as a filter on the
     /// parent query.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct Todo {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     title: String,
+    /// # }
+    /// use toasty::stmt::{Path, List};
+    ///
+    /// // Find users that have at least one todo with "urgent" in the title
+    /// let todos_path = Path::<User, List<Todo>>::from_field_index(2);
+    /// let filter = todos_path.any(Todo::fields().title().eq("urgent"));
+    /// ```
     pub fn any(self, filter: Expr<bool>) -> Expr<bool>
     where
         U: crate::schema::Model,
@@ -209,6 +428,19 @@ impl<T, U> Path<T, List<U>> {
 
 impl<T, U> Path<T, Option<U>> {
     /// Test whether this optional field is `NULL`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// #     bio: Option<String>,
+    /// # }
+    /// let filter = User::fields().bio().is_none();
+    /// ```
     pub fn is_none(self) -> Expr<bool> {
         Expr {
             untyped: stmt::Expr::is_null(self.untyped.into_stmt()),
@@ -217,6 +449,19 @@ impl<T, U> Path<T, Option<U>> {
     }
 
     /// Test whether this optional field is not `NULL`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// #     bio: Option<String>,
+    /// # }
+    /// let filter = User::fields().bio().is_some();
+    /// ```
     pub fn is_some(self) -> Expr<bool> {
         Expr {
             untyped: stmt::Expr::is_not_null(self.untyped.into_stmt()),

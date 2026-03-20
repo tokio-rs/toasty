@@ -24,6 +24,23 @@ impl<M: Model> Insert<M> {
     /// `NULL`. The caller must fill in required fields with [`set`](Insert::set)
     /// before executing; the blank record is not guaranteed to be valid on its
     /// own.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::Insert;
+    ///
+    /// let mut insert = Insert::<User>::blank_single();
+    /// // Fill in the required fields
+    /// insert.set(0, toasty_core::stmt::Value::from(1_i64));
+    /// insert.set(1, toasty_core::stmt::Value::from("Alice"));
+    /// ```
     pub fn blank_single() -> Self {
         Self {
             untyped: stmt::Insert {
@@ -47,6 +64,29 @@ impl<M: Model> Insert<M> {
     }
 
     /// Wrap a raw untyped [`stmt::Insert`](toasty_core::stmt::Insert).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::Insert;
+    /// use toasty::schema::Register;
+    ///
+    /// // Construct from a raw untyped insert
+    /// let raw = toasty_core::stmt::Insert {
+    ///     target: toasty_core::stmt::InsertTarget::Model(
+    ///         <User as Register>::id(),
+    ///     ),
+    ///     source: toasty_core::stmt::Query::unit(),
+    ///     returning: None,
+    /// };
+    /// let _typed = Insert::<User>::from_untyped(raw);
+    /// ```
     pub const fn from_untyped(untyped: stmt::Insert) -> Self {
         Self {
             untyped,
@@ -55,6 +95,22 @@ impl<M: Model> Insert<M> {
     }
 
     /// Set the scope of the insert.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::Insert;
+    ///
+    /// let mut insert = Insert::<User>::blank_single();
+    /// // Scope the insert to all users (used by association inserts)
+    /// insert.set_scope(User::all());
+    /// ```
     pub fn set_scope<S>(&mut self, scope: S)
     where
         S: IntoStatement<Returning = List<M>>,
@@ -64,6 +120,22 @@ impl<M: Model> Insert<M> {
     }
 
     /// Set the value of the field at `field` index in the current record.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::Insert;
+    ///
+    /// let mut insert = Insert::<User>::blank_single();
+    /// insert.set(0, toasty_core::stmt::Value::from(1_i64));
+    /// insert.set(1, toasty_core::stmt::Value::from("Alice"));
+    /// ```
     pub fn set(&mut self, field: usize, expr: impl Into<stmt::Expr>) {
         *self.expr_mut(field) = expr.into();
     }
@@ -72,6 +144,23 @@ impl<M: Model> Insert<M> {
     ///
     /// If the field is currently `NULL`, it is replaced with a new single-element
     /// list. If it is already a list, `expr` is appended.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::Insert;
+    ///
+    /// let mut insert = Insert::<User>::blank_single();
+    /// // Append a value to a list field (field index 1 for illustration)
+    /// insert.insert(1, toasty_core::stmt::Value::from("tag1"));
+    /// insert.insert(1, toasty_core::stmt::Value::from("tag2"));
+    /// ```
     pub fn insert(&mut self, field: usize, expr: impl Into<stmt::Expr>) {
         // self.expr_mut(field).push(expr);
         let target = self.expr_mut(field);
@@ -92,6 +181,25 @@ impl<M: Model> Insert<M> {
     ///
     /// If the field is currently `NULL`, it is replaced with `expr`. If both
     /// are lists, the items from `expr` are appended to the existing list.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::Insert;
+    ///
+    /// let mut insert = Insert::<User>::blank_single();
+    /// let list = toasty_core::stmt::Expr::list([
+    ///     toasty_core::stmt::Expr::Value(toasty_core::stmt::Value::from("a")),
+    ///     toasty_core::stmt::Expr::Value(toasty_core::stmt::Value::from("b")),
+    /// ]);
+    /// insert.insert_all(1, list);
+    /// ```
     pub fn insert_all(&mut self, field: usize, expr: impl Into<stmt::Expr>) {
         let target = self.expr_mut(field);
         let incoming = expr.into();
@@ -130,6 +238,21 @@ impl<M: Model> Insert<M> {
     /// The resulting [`Expr<List<M>>`] wraps the insert as a sub-statement,
     /// which can be used as the right-hand side of an association
     /// [`insert`](Association::insert) call or embedded in other expressions.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::{Insert, Expr, List};
+    ///
+    /// let insert = Insert::<User>::blank_single();
+    /// let _expr: Expr<List<User>> = insert.into_list_expr();
+    /// ```
     pub fn into_list_expr(self) -> Expr<List<M>> {
         Expr::from_untyped(stmt::Expr::Stmt(self.untyped.into()))
     }

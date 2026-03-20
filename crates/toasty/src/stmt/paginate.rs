@@ -15,12 +15,26 @@ use toasty_core::stmt::{self, visit_mut, Expr, ExprRecord, OrderBy, Projection, 
 /// Create a `Paginate` from a query via [`Paginate::new`] or by calling
 /// `.into()` on a query that already has `limit` and `order_by` set.
 ///
-/// ```ignore
-/// let page = User::all()
-///     .order_by(User::fields().name().asc())
-///     .paginate(20)
+/// ```
+/// # tokio::runtime::Runtime::new().unwrap().block_on(async {
+/// # #[derive(Debug, toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     id: i64,
+/// #     name: String,
+/// # }
+/// # let driver = toasty_driver_sqlite::Sqlite::in_memory();
+/// # let mut db = toasty::Db::builder().register::<User>().build(driver).await.unwrap();
+/// # db.push_schema().await.unwrap();
+/// use toasty::stmt::{Paginate, Query};
+///
+/// let mut q = Query::<User>::all();
+/// q.order_by(User::fields().name().asc());
+/// let page = Paginate::new(q, 20)
 ///     .exec(&mut db)
-///     .await?;
+///     .await
+///     .unwrap();
+/// # });
 /// ```
 ///
 /// # Requirements
@@ -43,6 +57,22 @@ impl<M> Paginate<M> {
     /// # Panics
     ///
     /// Panics if `query` already has a `limit` or is missing `order_by`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::{Paginate, Query};
+    ///
+    /// let mut q = Query::<User>::all();
+    /// q.order_by(User::fields().name().asc());
+    /// let _paginator = Paginate::new(q, 20);
+    /// ```
     pub fn new(mut query: Query<M>, per_page: usize) -> Self {
         assert!(
             query.untyped.limit.is_none(),
@@ -73,6 +103,23 @@ impl<M> Paginate<M> {
     /// # Panics
     ///
     /// Panics if the query has no `limit` clause.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::{Paginate, Query};
+    ///
+    /// let mut q = Query::<User>::all();
+    /// q.order_by(User::fields().id().asc());
+    /// let paginator = Paginate::new(q, 10)
+    ///     .after(toasty_core::stmt::Value::from(42_i64));
+    /// ```
     pub fn after(mut self, key: impl Into<stmt::Expr>) -> Self {
         let Some(limit) = self.query.untyped.limit.as_mut() else {
             panic!("pagination requires a limit clause");
@@ -92,6 +139,23 @@ impl<M> Paginate<M> {
     /// # Panics
     ///
     /// Panics if the query has no `limit` clause.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::{Paginate, Query};
+    ///
+    /// let mut q = Query::<User>::all();
+    /// q.order_by(User::fields().id().asc());
+    /// let paginator = Paginate::new(q, 10)
+    ///     .before(toasty_core::stmt::Value::from(100_i64));
+    /// ```
     pub fn before(mut self, key: impl Into<stmt::Expr>) -> Self {
         let Some(limit) = self.query.untyped.limit.as_mut() else {
             panic!("pagination requires a limit clause");
@@ -107,6 +171,30 @@ impl<M: Load> Paginate<M> {
     ///
     /// The returned page contains up to `per_page` items along with optional
     /// cursors for the next and previous pages.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// # let driver = toasty_driver_sqlite::Sqlite::in_memory();
+    /// # let mut db = toasty::Db::builder().register::<User>().build(driver).await.unwrap();
+    /// # db.push_schema().await.unwrap();
+    /// use toasty::stmt::{Paginate, Query};
+    ///
+    /// let mut q = Query::<User>::all();
+    /// q.order_by(User::fields().name().asc());
+    /// let page = Paginate::new(q, 20)
+    ///     .exec(&mut db)
+    ///     .await
+    ///     .unwrap();
+    /// # });
+    /// ```
     pub async fn exec(mut self, executor: &mut dyn Executor) -> Result<crate::Page<M::Output>> {
         // Extract the limit from the query to determine page size
         let page_size = match &self.query.untyped.limit {

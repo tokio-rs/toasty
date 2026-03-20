@@ -62,6 +62,15 @@ pub struct Statement<M> {
 impl<M> Statement<M> {
     /// Wrap a raw untyped [`stmt::Statement`](toasty_core::stmt::Statement),
     /// tagging it with type `M`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use toasty::stmt::Statement;
+    /// # use toasty_core::stmt as core_stmt;
+    /// let raw: core_stmt::Statement = core_stmt::Query::unit().into();
+    /// let _typed: Statement<()> = Statement::from_untyped_stmt(raw);
+    /// ```
     pub fn from_untyped_stmt(untyped: stmt::Statement) -> Self {
         Self {
             untyped,
@@ -82,6 +91,17 @@ impl<M> Statement<List<M>> {
     ///
     /// Returns `Some(query)` if the statement is a query, or `None` for
     /// inserts, updates, and deletes.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use toasty::stmt::{Query, Statement, List};
+    /// # use toasty_core::stmt as core_stmt;
+    /// let query_stmt: Statement<List<()>> = Statement::from_untyped_stmt(
+    ///     core_stmt::Query::unit().into(),
+    /// );
+    /// assert!(query_stmt.into_query().is_some());
+    /// ```
     pub fn into_query(self) -> Option<Query<M>> {
         match self.untyped {
             stmt::Statement::Query(q) => Some(Query::from_untyped(q)),
@@ -127,15 +147,17 @@ impl<M> fmt::Debug for Statement<M> {
 ///
 /// This works for both single fields and tuples of fields (composite keys):
 ///
-/// ```ignore
-/// // Single field
-/// toasty::stmt::in_list(User::fields().id(), &ids)
+/// # Examples
 ///
-/// // Composite key
-/// toasty::stmt::in_list(
-///     (Foo::fields().one(), Foo::fields().two()),
-///     [("a", "b"), ("c", "d")],
-/// )
+/// ```
+/// # #[derive(Debug, toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     id: i64,
+/// #     name: String,
+/// # }
+/// // Single field — test if a user's id is in a list
+/// let filter = toasty::stmt::in_list(User::fields().id(), [1_i64, 2, 3]);
 /// ```
 pub fn in_list<T>(lhs: impl IntoExpr<T>, rhs: impl IntoExpr<List<T>>) -> Expr<bool> {
     Expr::from_untyped(stmt::Expr::in_list(
