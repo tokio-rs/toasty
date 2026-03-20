@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_name))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
 pub async fn create_macro_simple(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -44,7 +44,7 @@ pub async fn create_macro_multiple_fields(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_name))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
 pub async fn create_macro_with_variable(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -75,7 +75,7 @@ pub async fn create_macro_scoped(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_name))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
 pub async fn create_macro_batch(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
