@@ -203,43 +203,30 @@ more detail.
 
 ### Same-type batch
 
-Use the `::[ ... ]` syntax to create multiple records of the same model.
-Pass the result to `toasty::batch()`:
+Use the `::[ ... ]` syntax to create multiple records of the same model:
 
-```rust
-# use toasty::Model;
-# #[derive(Debug, toasty::Model)]
-# struct User {
-#     #[key]
-#     #[auto]
-#     id: u64,
-#     name: String,
-#     #[unique]
-#     email: String,
-# }
-# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let (alice, bob, carol) = toasty::batch(toasty::create!(User::[
+```rust,ignore
+let (alice, bob, carol) = toasty::create!(User::[
     { name: "Alice", email: "alice@example.com" },
     { name: "Bob", email: "bob@example.com" },
     { name: "Carol", email: "carol@example.com" },
-]))
+])
 .exec(&mut db)
 .await?;
-# Ok(())
-# }
 ```
 
-The same-type batch returns a tuple with one element per record.
+The same-type batch returns a tuple with one element per record. The batch
+is atomic — all records are inserted together or none are.
 
 ### Mixed-type batch
 
 Use `[ ... ]` to create records of different models in a single batch:
 
 ```rust,ignore
-let (user, post) = toasty::batch(toasty::create!([
+let (user, post) = toasty::create!([
     User { name: "Alice" },
     Post { title: "Hello World" },
-]))
+])
 .exec(&mut db)
 .await?;
 ```
@@ -247,10 +234,10 @@ let (user, post) = toasty::batch(toasty::create!([
 You can mix type-target and scoped forms in the same batch:
 
 ```rust,ignore
-let (user, todo) = toasty::batch(toasty::create!([
+let (user, todo) = toasty::create!([
     User { name: "Carl" },
     in user.todos() { title: "Buy milk" },
-]))
+])
 .exec(&mut db)
 .await?;
 ```
