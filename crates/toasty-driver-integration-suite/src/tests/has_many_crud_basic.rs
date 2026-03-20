@@ -582,7 +582,7 @@ pub async fn assign_todo_that_already_has_user_on_create(test: &mut Test) -> Res
         .exec(&mut db)
         .await?;
 
-    let u1 = todo.user().get(&mut db).await?;
+    let u1 = todo.user().exec(&mut db).await?;
 
     let u2 = User::create()
         .name("User 2")
@@ -615,7 +615,7 @@ pub async fn assign_todo_that_already_has_user_on_update(test: &mut Test) -> Res
         .exec(&mut db)
         .await?;
 
-    let u1 = todo.user().get(&mut db).await?;
+    let u1 = todo.user().exec(&mut db).await?;
 
     let mut u2 = User::create().name("User 2").exec(&mut db).await?;
 
@@ -647,7 +647,7 @@ pub async fn assign_existing_user_to_todo(test: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
 
-    let u1 = todo.user().get(&mut db).await?;
+    let u1 = todo.user().exec(&mut db).await?;
 
     let u2 = User::create().name("User 2").exec(&mut db).await?;
 

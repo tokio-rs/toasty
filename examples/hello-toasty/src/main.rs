@@ -99,7 +99,7 @@ async fn main() -> toasty::Result<()> {
 
     for todo in todos {
         println!("TODO; title={:?}", todo.title);
-        println!("-> user {:?}", todo.user().get(&mut db).await?);
+        println!("-> user {:?}", todo.user().exec(&mut db).await?);
     }
 
     // Delete user

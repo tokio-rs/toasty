@@ -109,7 +109,7 @@ pub async fn crud_user_todos_categories(test: &mut Test) -> Result<()> {
         for (id, actual) in actual {
             assert_eq!(expect[&id].title, actual.title);
 
-            let user = actual.user().get(&mut db).await?;
+            let user = actual.user().exec(&mut db).await?;
             assert_eq!(user.name, "Ann Chovey");
         }
     }
@@ -145,7 +145,7 @@ pub async fn crud_user_todos_categories(test: &mut Test) -> Result<()> {
 
         for (id, actual) in actual {
             assert_eq!(expect[&id].title, actual.title);
-            let category = actual.category().get(db).await?;
+            let category = actual.category().exec(db).await?;
             assert_eq!(category.name, "Food");
         }
         Ok(())

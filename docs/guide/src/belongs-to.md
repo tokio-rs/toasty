@@ -121,7 +121,7 @@ name matches the relation field name.
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
 # let post = Post::create().title("Hello").user_id(1).exec(&mut db).await?;
 // Load the associated user from the database
-let user = post.user().get(&mut db).await?;
+let user = post.user().exec(&mut db).await?;
 println!("Author: {}", user.name);
 # Ok(())
 # }
@@ -151,7 +151,7 @@ For an optional BelongsTo, `.get()` returns `Option<User>`:
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
 # let post = Post::create().title("Hello").exec(&mut db).await?;
-match post.user().get(&mut db).await? {
+match post.user().exec(&mut db).await? {
     Some(user) => println!("Author: {}", user.name),
     None => println!("No author"),
 }
@@ -159,7 +159,7 @@ match post.user().get(&mut db).await? {
 # }
 ```
 
-Each call to `.user().get()` executes a database query. To avoid repeated
+Each call to `.user().exec()` executes a database query. To avoid repeated
 queries, use [preloading](./preloading-associations.md).
 
 ## Setting the relation on create

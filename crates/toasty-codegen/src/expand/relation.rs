@@ -104,7 +104,7 @@ impl Expand<'_> {
                     builder
                 }
 
-                #vis async fn get(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
+                #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
                     use #toasty::ExecutorExt;
                     executor.get(self.stmt).await
                 }
@@ -131,7 +131,7 @@ impl Expand<'_> {
                     builder
                 }
 
-                #vis async fn get(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#toasty::Option<#model_ident>> {
+                #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#toasty::Option<#model_ident>> {
                     use #toasty::ExecutorExt;
                     executor.first(self.stmt).await
                 }
