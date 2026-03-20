@@ -1,5 +1,5 @@
 use super::{IntoExpr, IntoStatement, List, Path, Statement};
-use crate::Model;
+use crate::schema::Model;
 use std::{fmt, marker::PhantomData};
 use toasty_core::stmt;
 

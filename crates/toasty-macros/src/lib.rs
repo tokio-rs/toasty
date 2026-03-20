@@ -28,9 +28,9 @@ use quote::quote;
 ///
 /// The struct must have named fields and no generic parameters.
 ///
-/// [`Model`]: toasty::Model
-/// [`Load`]: toasty::Load
-/// [`Register`]: toasty::Register
+/// [`Model`]: toasty::schema::Model
+/// [`Load`]: toasty::schema::Load
+/// [`Register`]: toasty::schema::Register
 ///
 /// # Struct-level attributes
 ///

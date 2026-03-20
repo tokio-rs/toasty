@@ -1,5 +1,5 @@
 use super::{IntoStatement, Statement};
-use crate::{Executor, ExecutorExt, Model, Result};
+use crate::{schema::Model, Executor, ExecutorExt, Result};
 use std::marker::PhantomData;
 use toasty_core::stmt;
 

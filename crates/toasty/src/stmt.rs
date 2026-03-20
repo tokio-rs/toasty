@@ -28,7 +28,7 @@ pub use paginate::Paginate;
 mod path;
 pub use path::Path;
 
-pub use crate::model::{Auto, Field};
+pub use crate::schema::{Auto, Field};
 
 mod query;
 pub use query::Query;

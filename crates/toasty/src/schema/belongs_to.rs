@@ -1,55 +1,42 @@
-use crate::relation::Relation;
-use crate::Load;
+use super::{Load, Relation};
 
 use toasty_core::stmt::Value;
 
 use std::fmt;
 
 #[derive(Clone)]
-pub struct HasMany<T> {
-    values: Option<Vec<T>>,
+pub struct BelongsTo<T> {
+    value: Option<Box<T>>,
 }
 
-impl<T: Relation> Load for HasMany<T> {
+impl<T: Relation> Load for BelongsTo<T> {
     type Output = Self;
     fn load(input: Value) -> crate::Result<Self> {
-        match input {
-            Value::List(items) => {
-                let mut values = vec![];
-
-                for value in items {
-                    values.push(T::load(value)?);
-                }
-
-                Ok(Self {
-                    values: Some(values),
-                })
-            }
-            Value::Null => Ok(Self::default()),
-            _ => todo!("unexpected input: input={:#?}", input),
-        }
+        Ok(match input {
+            Value::Null => Self::default(),
+            value => Self {
+                value: Some(Box::new(T::load(value)?)),
+            },
+        })
     }
 }
 
-impl<T: Relation> HasMany<T> {
+impl<T: Relation> BelongsTo<T> {
     #[track_caller]
-    pub fn get(&self) -> &[T] {
-        self.values
-            .as_ref()
-            .expect("association not loaded")
-            .as_slice()
+    pub fn get(&self) -> &T {
+        self.value.as_ref().expect("association not loaded")
     }
 
     pub fn is_unloaded(&self) -> bool {
-        self.values.is_none()
+        self.value.is_none()
     }
 
     pub fn unload(&mut self) {
-        self.values = None;
+        self.value = None;
     }
 }
 
-impl<T: Relation> Relation for HasMany<T> {
+impl<T: Relation> Relation for BelongsTo<T> {
     type Model = T::Model;
     type Create = T::Create;
     type Expr = T::Expr;
@@ -69,15 +56,15 @@ impl<T: Relation> Relation for HasMany<T> {
     }
 }
 
-impl<T> Default for HasMany<T> {
+impl<T> Default for BelongsTo<T> {
     fn default() -> Self {
-        Self { values: None }
+        Self { value: None }
     }
 }
 
-impl<T: fmt::Debug> fmt::Debug for HasMany<T> {
+impl<T: fmt::Debug> fmt::Debug for BelongsTo<T> {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.values.as_ref() {
+        match self.value.as_ref() {
             Some(t) => t.fmt(fmt),
             None => {
                 write!(fmt, "<not loaded>")?;
@@ -88,11 +75,11 @@ impl<T: fmt::Debug> fmt::Debug for HasMany<T> {
 }
 
 #[cfg(feature = "serde")]
-impl<T: serde_core::Serialize> serde_core::Serialize for HasMany<T> {
+impl<T: serde_core::Serialize> serde_core::Serialize for BelongsTo<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde_core::Serializer,
     {
-        self.values.serialize(serializer)
+        self.value.serialize(serializer)
     }
 }

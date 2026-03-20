@@ -1,4 +1,7 @@
-use crate::{stmt, Executor, Load, Model, Result, Statement};
+use crate::{
+    schema::{Load, Model},
+    stmt, Executor, Result, Statement,
+};
 
 use std::future::Future;
 use toasty_core::stmt::ValueStream;

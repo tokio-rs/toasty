@@ -1,6 +1,6 @@
 use crate::stmt::List;
-use crate::Error;
 use toasty_core::stmt;
+use toasty_core::Error;
 
 /// Load an instance of a type from a [`Value`][stmt::Value].
 ///

@@ -1,5 +1,5 @@
 use super::Query;
-use crate::Model;
+use crate::schema::Model;
 use std::{fmt, marker::PhantomData};
 use toasty_core::stmt;
 

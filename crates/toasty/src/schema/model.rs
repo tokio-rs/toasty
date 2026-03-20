@@ -1,16 +1,5 @@
-mod auto;
-pub use auto::Auto;
-
-mod field;
-pub use field::Field;
-
-#[cfg(feature = "jiff")]
-mod field_jiff;
-
-use crate::{
-    stmt::{IntoExpr, IntoInsert},
-    Load, Register,
-};
+use super::{Load, Register};
+use crate::stmt::{IntoExpr, IntoInsert};
 
 /// Trait for root models that map to database tables and can be queried.
 ///
