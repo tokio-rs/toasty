@@ -24,54 +24,9 @@ pub async fn user_batch_create_todos_one_level_basic_fk(test: &mut Test) -> Resu
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_multi_relation))]
 pub async fn user_batch_create_todos_two_levels_basic_fk(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-
-        #[index]
-        category_id: ID,
-
-        #[belongs_to(key = category_id, references = id)]
-        category: toasty::BelongsTo<Category>,
-
-        title: String,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Category {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo, Category)).await;
+    let mut db = setup(test).await;
 
     // Create a user with some todos
     let user = User::create()
@@ -137,54 +92,9 @@ pub async fn user_batch_create_todos_two_levels_basic_fk(test: &mut Test) -> Res
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_multi_relation))]
 pub async fn user_batch_create_todos_set_category_by_value(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-
-        #[index]
-        category_id: ID,
-
-        #[belongs_to(key = category_id, references = id)]
-        category: toasty::BelongsTo<Category>,
-
-        title: String,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Category {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo, Category)).await;
+    let mut db = setup(test).await;
 
     let category = Category::create().name("Eating").exec(&mut db).await?;
     assert_eq!(category.name, "Eating");

@@ -1,26 +1,8 @@
 use crate::prelude::*;
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn batch_two_models(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        name: String,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Post {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        title: String,
-    }
-
-    let mut db = t.setup_db(models!(User, Post)).await;
+    let mut db = setup(t).await;
 
     User::create().name("Alice").exec(&mut db).await?;
     User::create().name("Bob").exec(&mut db).await?;
@@ -39,27 +21,9 @@ pub async fn batch_two_models(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn batch_one_empty(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        name: String,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Post {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        title: String,
-    }
-
-    let mut db = t.setup_db(models!(User, Post)).await;
+    let mut db = setup(t).await;
 
     User::create().name("Alice").exec(&mut db).await?;
 
@@ -76,18 +40,9 @@ pub async fn batch_one_empty(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn batch_same_model(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        name: String,
-    }
-
-    let mut db = t.setup_db(models!(User)).await;
+    let mut db = setup(t).await;
 
     User::create().name("Alice").exec(&mut db).await?;
     User::create().name("Bob").exec(&mut db).await?;
@@ -104,18 +59,9 @@ pub async fn batch_same_model(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn batch_three_queries(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        name: String,
-    }
-
-    let mut db = t.setup_db(models!(User)).await;
+    let mut db = setup(t).await;
 
     User::create().name("Alice").exec(&mut db).await?;
     User::create().name("Bob").exec(&mut db).await?;
@@ -136,27 +82,9 @@ pub async fn batch_three_queries(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn batch_both_empty(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        name: String,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Post {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        title: String,
-    }
-
-    let mut db = t.setup_db(models!(User, Post)).await;
+    let mut db = setup(t).await;
 
     let (users, posts): (Vec<User>, Vec<Post>) = toasty::batch((
         User::filter_by_name("nobody"),
@@ -171,18 +99,9 @@ pub async fn batch_both_empty(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn batch_select_and_create(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        name: String,
-    }
-
-    let mut db = t.setup_db(models!(User)).await;
+    let mut db = setup(t).await;
 
     User::create().name("Alice").exec(&mut db).await?;
 

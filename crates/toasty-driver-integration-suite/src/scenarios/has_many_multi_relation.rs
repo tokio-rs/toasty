@@ -9,7 +9,6 @@ scenario! {
         #[auto]
         id: ID,
 
-        #[index]
         name: String,
 
         #[has_many]
@@ -29,10 +28,27 @@ scenario! {
         user: toasty::BelongsTo<User>,
 
         #[index]
+        category_id: ID,
+
+        #[belongs_to(key = category_id, references = id)]
+        category: toasty::BelongsTo<Category>,
+
         title: String,
     }
 
+    #[derive(Debug, toasty::Model)]
+    struct Category {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        #[has_many]
+        todos: toasty::HasMany<Todo>,
+    }
+
     async fn setup(test: &mut Test) -> toasty::Db {
-        test.setup_db(models!(User, Todo)).await
+        test.setup_db(models!(User, Todo, Category)).await
     }
 }

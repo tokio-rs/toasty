@@ -4,19 +4,9 @@ fn assert_sync_send<T: Send>(val: T) -> T {
     val
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_unique_email))]
 pub async fn ensure_types_sync_send(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[unique]
-        email: String,
-    }
-
-    let mut db = t.setup_db(models!(User)).await;
+    let mut db = setup(t).await;
 
     let res = assert_sync_send(User::filter_by_email("hello@example.com").first(&mut db)).await?;
 

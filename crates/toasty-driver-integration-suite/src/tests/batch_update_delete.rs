@@ -1,18 +1,9 @@
 use crate::prelude::*;
 
 /// Batch two updates of the same model.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn batch_two_updates_same_model(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        name: String,
-    }
-
-    let mut db = t.setup_db(models!(User)).await;
+    let mut db = setup(t).await;
     User::create().name("Alice").exec(&mut db).await?;
     User::create().name("Bob").exec(&mut db).await?;
 
@@ -34,18 +25,9 @@ pub async fn batch_two_updates_same_model(t: &mut Test) -> Result<()> {
 }
 
 /// Batch two deletes of the same model.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn batch_two_deletes_same_model(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        name: String,
-    }
-
-    let mut db = t.setup_db(models!(User)).await;
+    let mut db = setup(t).await;
     User::create().name("Alice").exec(&mut db).await?;
     User::create().name("Bob").exec(&mut db).await?;
     User::create().name("Carol").exec(&mut db).await?;
@@ -67,31 +49,12 @@ pub async fn batch_two_deletes_same_model(t: &mut Test) -> Result<()> {
 }
 
 /// Batch mixing update and delete of different models.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn batch_update_and_delete(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        name: String,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Post {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        title: String,
-    }
-
-    let mut db = t.setup_db(models!(User, Post)).await;
+    let mut db = setup(t).await;
     User::create().name("Alice").exec(&mut db).await?;
     Post::create().title("Hello").exec(&mut db).await?;
 
-    t.log().clear();
     let ((), ()): ((), ()) = toasty::batch((
         User::filter_by_name("Alice").update().name("Alice2"),
         Post::filter_by_title("Hello").delete(),
@@ -111,18 +74,9 @@ pub async fn batch_update_and_delete(t: &mut Test) -> Result<()> {
 }
 
 /// Batch all four statement types: query, create, update, delete.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn batch_all_four_statement_types(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        name: String,
-    }
-
-    let mut db = t.setup_db(models!(User)).await;
+    let mut db = setup(t).await;
     User::create().name("Alice").exec(&mut db).await?;
     User::create().name("Bob").exec(&mut db).await?;
 
@@ -155,17 +109,9 @@ pub async fn batch_all_four_statement_types(t: &mut Test) -> Result<()> {
 }
 
 /// Batch a delete using the model instance builder.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn batch_instance_delete(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        name: String,
-    }
-
-    let mut db = t.setup_db(models!(User)).await;
+    let mut db = setup(t).await;
     let alice = User::create().name("Alice").exec(&mut db).await?;
     let bob = User::create().name("Bob").exec(&mut db).await?;
 

@@ -3,60 +3,16 @@
 use crate::prelude::*;
 use std::collections::HashSet;
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_multi_relation))]
 pub async fn hello_world(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-
-        #[index]
-        category_id: ID,
-
-        #[belongs_to(key = category_id, references = id)]
-        category: toasty::BelongsTo<Category>,
-
-        title: String,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Category {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[has_many]
-        #[allow(dead_code)]
-        todos: toasty::HasMany<Todo>,
-
-        #[allow(dead_code)]
-        name: String,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo, Category)).await;
+    let mut db = setup(test).await;
 
     let cat1 = Category::create().name("a").exec(&mut db).await?;
     let cat2 = Category::create().name("b").exec(&mut db).await?;
 
     // Create a user with a few todos
     let user = User::create()
+        .name("x")
         .todo(Todo::create().category(&cat1).title("one"))
         .todo(Todo::create().category(&cat2).title("two"))
         .todo(Todo::create().category(&cat2).title("three"))
