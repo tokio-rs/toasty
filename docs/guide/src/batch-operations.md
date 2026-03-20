@@ -4,8 +4,9 @@
 round-trip. Instead of sending each query separately, Toasty combines them into
 one composed statement.
 
-Batch operations are **atomic** — all operations in a batch either succeed
-together or fail together. When you need atomicity, prefer batch operations over
+Batch operations are **atomic**, database permitting — all operations in a batch
+either succeed together or fail together. When you need atomicity, prefer batch
+operations over
 [interactive transactions](./transactions.md). Batch operations are more
 efficient because they can be sent as a single statement to the database, while
 interactive transactions require separate round-trips to begin the transaction,
