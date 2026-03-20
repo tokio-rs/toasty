@@ -99,6 +99,11 @@ impl Db {
         self.shared.engine.capability()
     }
 
+    /// Releases the connection back to the pool.
+    pub fn release_connection(&mut self) {
+        self.connection = None;
+    }
+
     /// Returns a reference to the connection pool backing this handle.
     #[doc(hidden)]
     pub fn pool(&self) -> &Pool {
