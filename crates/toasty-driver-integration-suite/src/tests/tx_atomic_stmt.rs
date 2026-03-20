@@ -40,19 +40,12 @@ pub async fn multi_op_create_wraps_in_transaction(t: &mut Test) -> Result<()> {
 
 /// A single-op create (no associations) must NOT be wrapped in a transaction —
 /// the engine skips the overhead for plans with only one DB operation.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::user_name))]
 pub async fn single_op_skips_transaction(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-    }
-
-    let mut db = t.setup_db(models!(User)).await;
+    let mut db = setup(t).await;
 
     t.log().clear();
-    User::create().exec(&mut db).await?;
+    User::create().name("x").exec(&mut db).await?;
 
     // Only the INSERT — no Transaction::Start { isolation: None, read_only: false } bookending it
     assert_struct!(t.log().pop_op(), Operation::QuerySql(_));

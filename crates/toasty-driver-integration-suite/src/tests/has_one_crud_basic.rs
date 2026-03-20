@@ -1,35 +1,8 @@
 use crate::prelude::*;
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_one_optional_belongs_to))]
 pub async fn crud_has_one_bi_direction_optional(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[has_one]
-        profile: toasty::HasOne<Option<Profile>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Profile {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[unique]
-        user_id: Option<ID>,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
-
-        bio: String,
-    }
-
-    let mut db = test.setup_db(models!(User, Profile)).await;
+    let mut db = setup(test).await;
 
     // Create a user without a profile
     let user = User::create().name("Jane Doe").exec(&mut db).await?;

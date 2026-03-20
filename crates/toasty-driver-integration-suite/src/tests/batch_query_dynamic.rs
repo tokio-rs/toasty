@@ -1,17 +1,8 @@
 use crate::prelude::*;
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::user_name))]
 pub async fn batch_vec_of_queries(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        name: String,
-    }
-
-    let mut db = t.setup_db(models!(User)).await;
+    let mut db = setup(t).await;
 
     User::create().name("Alice").exec(&mut db).await?;
     User::create().name("Bob").exec(&mut db).await?;
@@ -30,18 +21,9 @@ pub async fn batch_vec_of_queries(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::user_name))]
 pub async fn batch_array_of_queries(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        name: String,
-    }
-
-    let mut db = t.setup_db(models!(User)).await;
+    let mut db = setup(t).await;
 
     User::create().name("Alice").exec(&mut db).await?;
     User::create().name("Bob").exec(&mut db).await?;
@@ -56,18 +38,9 @@ pub async fn batch_array_of_queries(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::user_name))]
 pub async fn batch_vec_some_empty(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        name: String,
-    }
-
-    let mut db = t.setup_db(models!(User)).await;
+    let mut db = setup(t).await;
 
     User::create().name("Alice").exec(&mut db).await?;
 
@@ -83,27 +56,9 @@ pub async fn batch_vec_some_empty(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn batch_nested_tuple_with_vec(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        name: String,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Post {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        title: String,
-    }
-
-    let mut db = t.setup_db(models!(User, Post)).await;
+    let mut db = setup(t).await;
 
     User::create().name("Alice").exec(&mut db).await?;
     User::create().name("Bob").exec(&mut db).await?;
@@ -127,18 +82,9 @@ pub async fn batch_nested_tuple_with_vec(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::user_name))]
 pub async fn batch_vec_all_empty(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        name: String,
-    }
-
-    let mut db = t.setup_db(models!(User)).await;
+    let mut db = setup(t).await;
 
     let results: Vec<Vec<User>> = toasty::batch(vec![
         User::filter_by_name("nobody"),

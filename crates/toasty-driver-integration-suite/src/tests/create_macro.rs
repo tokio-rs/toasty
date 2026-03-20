@@ -1,17 +1,8 @@
 use crate::prelude::*;
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_name))]
 pub async fn create_macro_simple(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     // Create using the macro — translates to: User::create().name("Carl")
     let user = toasty::create!(User { name: "Carl" }).exec(&mut db).await?;
@@ -53,18 +44,9 @@ pub async fn create_macro_multiple_fields(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_name))]
 pub async fn create_macro_with_variable(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     let name = "Carl";
 
@@ -93,18 +75,9 @@ pub async fn create_macro_scoped(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_name))]
 pub async fn create_macro_batch(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     // Same-type batch — produces a tuple of builders, composed via toasty::batch()
     let (carl, bob) = toasty::batch(toasty::create!(User::[
