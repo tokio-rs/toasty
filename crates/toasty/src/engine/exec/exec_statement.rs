@@ -170,7 +170,8 @@ impl Exec<'_> {
 
         // Apply pagination if configured
         let exec_response = if let Some(pagination) = &action.pagination {
-            apply_sql_pagination(res.rows, res.cursor, pagination).await?
+            self.apply_sql_pagination(res.rows, res.cursor, pagination, &action.stmt)
+                .await?
         } else {
             ExecResponse {
                 values: res.rows,
@@ -187,60 +188,94 @@ impl Exec<'_> {
 
         Ok(())
     }
-}
 
-/// Apply SQL pagination using N+1 detection and cursor extraction.
-async fn apply_sql_pagination(
-    rows: Rows,
-    driver_cursor: Option<stmt::Value>,
-    pagination: &PaginationConfig,
-) -> Result<ExecResponse> {
-    // If driver provided a cursor (shouldn't happen for SQL), use it
-    if driver_cursor.is_some() {
-        return Ok(ExecResponse {
-            values: rows,
-            next_cursor: driver_cursor,
-            prev_cursor: None,
-        });
-    }
-
-    // If no extract_cursor function, can't do SQL pagination
-    let Some(extract_cursor) = &pagination.extract_cursor else {
-        return Ok(ExecResponse::from_rows(rows));
-    };
-
-    // Convert rows to vector for N+1 detection
-    let mut row_vec = match rows {
-        Rows::Stream(stream) => stream.collect().await?,
-        Rows::Value(stmt::Value::List(items)) => items,
-        other => {
-            // Not a list of rows, can't paginate
-            return Ok(ExecResponse::from_rows(other));
+    /// Apply SQL pagination by checking if more data exists.
+    /// Fetches exactly page_size rows. If we got exactly page_size rows,
+    /// issues a check query to see if there's more data.
+    async fn apply_sql_pagination(
+        &mut self,
+        rows: Rows,
+        driver_cursor: Option<stmt::Value>,
+        pagination: &PaginationConfig,
+        original_stmt: &stmt::Statement,
+    ) -> Result<ExecResponse> {
+        // If driver provided a cursor (shouldn't happen for SQL), use it
+        if driver_cursor.is_some() {
+            return Ok(ExecResponse {
+                values: rows,
+                next_cursor: driver_cursor,
+                prev_cursor: None,
+            });
         }
-    };
 
-    let page_size = pagination.page_size as usize;
+        // If no extract_cursor function, can't do SQL pagination
+        let Some(extract_cursor) = &pagination.extract_cursor else {
+            return Ok(ExecResponse::from_rows(rows));
+        };
 
-    // N+1 detection: check if we got more rows than requested
-    let next_cursor = if row_vec.len() > page_size {
-        // Extract cursor from the last row we'll keep (at index page_size - 1)
-        let cursor_row = &row_vec[page_size - 1];
-        let cursor_value = extract_cursor.eval(std::slice::from_ref(cursor_row))?;
+        // Convert rows to vector
+        let row_vec = match rows {
+            Rows::Stream(stream) => stream.collect().await?,
+            Rows::Value(stmt::Value::List(items)) => items,
+            other => {
+                // Not a list of rows, can't paginate
+                return Ok(ExecResponse::from_rows(other));
+            }
+        };
 
-        // Truncate to page_size
-        row_vec.truncate(page_size);
+        let page_size = pagination.page_size as usize;
 
-        Some(cursor_value)
-    } else {
-        // No more pages
-        None
-    };
+        // Check if we need to probe for more data
+        let next_cursor = if row_vec.len() == page_size {
+            // Extract cursor from the last row
+            let cursor_row = &row_vec[page_size - 1];
+            let cursor_value = extract_cursor.eval(std::slice::from_ref(cursor_row))?;
 
-    Ok(ExecResponse {
-        values: Rows::Value(stmt::Value::List(row_vec)),
-        next_cursor,
-        prev_cursor: None,
-    })
+            // Clone the statement and modify it to check for more data
+            let mut check_stmt = original_stmt.clone();
+            if let stmt::Statement::Query(query) = &mut check_stmt {
+                // Set LIMIT 1 and OFFSET AFTER cursor
+                query.limit = Some(stmt::Limit {
+                    limit: stmt::Expr::Value(stmt::Value::I64(1)),
+                    offset: Some(stmt::Offset::After(stmt::Expr::Value(cursor_value.clone()))),
+                });
+            }
+
+            // Execute check query
+            let check_op = operation::QuerySql {
+                stmt: check_stmt,
+                ret: None, // We don't need the actual data
+                last_insert_id_hack: None,
+            };
+
+            let check_res = self
+                .connection
+                .exec(&self.engine.schema, check_op.into())
+                .await?;
+
+            // If we got any rows back, there's more data
+            let has_more = match check_res.rows {
+                Rows::Stream(mut stream) => stream.next().await.is_some(),
+                Rows::Value(stmt::Value::List(items)) => !items.is_empty(),
+                _ => false,
+            };
+
+            if has_more {
+                Some(cursor_value)
+            } else {
+                None
+            }
+        } else {
+            // Got fewer than page_size rows, no more data
+            None
+        };
+
+        Ok(ExecResponse {
+            values: Rows::Value(stmt::Value::List(row_vec)),
+            next_cursor,
+            prev_cursor: None,
+        })
+    }
 }
 
 impl Exec<'_> {
