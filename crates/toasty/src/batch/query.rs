@@ -1,6 +1,8 @@
 use crate::schema::Load;
-use crate::stmt::IntoStatement;
+use crate::stmt::{Expr, IntoExpr, IntoStatement};
 use crate::{Executor, ExecutorExt, Result, Statement};
+
+use toasty_core::stmt;
 
 /// A batch of queries composed into a single statement.
 ///
@@ -37,5 +39,15 @@ impl<T: Load> Batch<T> {
     pub async fn exec(self, executor: &mut dyn Executor) -> Result<T::Output> {
         let value = executor.exec_one(self.stmt).await?;
         T::load(value)
+    }
+}
+
+impl<T> IntoExpr<T> for Batch<T> {
+    fn into_expr(self) -> Expr<T> {
+        Expr::from_untyped(stmt::Expr::stmt(self.stmt.untyped))
+    }
+
+    fn by_ref(&self) -> Expr<T> {
+        todo!()
     }
 }
