@@ -26,9 +26,9 @@ use toasty_core::stmt::{self, visit_mut, Expr, ExprRecord, OrderBy, Projection, 
 /// # let driver = toasty_driver_sqlite::Sqlite::in_memory();
 /// # let mut db = toasty::Db::builder().register::<User>().build(driver).await.unwrap();
 /// # db.push_schema().await.unwrap();
-/// use toasty::stmt::{Paginate, Query};
+/// use toasty::stmt::{List, Paginate, Query};
 ///
-/// let mut q = Query::<User>::all();
+/// let mut q = Query::<List<User>>::all();
 /// q.order_by(User::fields().name().asc());
 /// let page = Paginate::new(q, 20)
 ///     .exec(&mut db)
@@ -67,9 +67,9 @@ impl<M> Paginate<M> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// use toasty::stmt::{Paginate, Query};
+    /// use toasty::stmt::{List, Paginate, Query};
     ///
-    /// let mut q = Query::<User>::all();
+    /// let mut q = Query::<List<User>>::all();
     /// q.order_by(User::fields().name().asc());
     /// let _paginator = Paginate::new(q, 20);
     /// ```
@@ -113,9 +113,9 @@ impl<M> Paginate<M> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// use toasty::stmt::{Paginate, Query};
+    /// use toasty::stmt::{List, Paginate, Query};
     ///
-    /// let mut q = Query::<User>::all();
+    /// let mut q = Query::<List<User>>::all();
     /// q.order_by(User::fields().id().asc());
     /// let paginator = Paginate::new(q, 10)
     ///     .after(toasty_core::stmt::Value::from(42_i64));
@@ -149,9 +149,9 @@ impl<M> Paginate<M> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// use toasty::stmt::{Paginate, Query};
+    /// use toasty::stmt::{List, Paginate, Query};
     ///
-    /// let mut q = Query::<User>::all();
+    /// let mut q = Query::<List<User>>::all();
     /// q.order_by(User::fields().id().asc());
     /// let paginator = Paginate::new(q, 10)
     ///     .before(toasty_core::stmt::Value::from(100_i64));
@@ -185,9 +185,9 @@ impl<M: Load> Paginate<M> {
     /// # let driver = toasty_driver_sqlite::Sqlite::in_memory();
     /// # let mut db = toasty::Db::builder().register::<User>().build(driver).await.unwrap();
     /// # db.push_schema().await.unwrap();
-    /// use toasty::stmt::{Paginate, Query};
+    /// use toasty::stmt::{List, Paginate, Query};
     ///
-    /// let mut q = Query::<User>::all();
+    /// let mut q = Query::<List<User>>::all();
     /// q.order_by(User::fields().name().asc());
     /// let page = Paginate::new(q, 20)
     ///     .exec(&mut db)

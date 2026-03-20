@@ -47,7 +47,7 @@ impl<M: Model> Association<List<M>> {
     /// # }
     /// use toasty::stmt::{Association, Path, List, Query};
     ///
-    /// let source = Query::<User>::filter(User::fields().id().eq(1));
+    /// let source = Query::<List<User>>::filter(User::fields().id().eq(1));
     /// let path = Path::<User, List<Todo>>::from_field_index(2);
     /// let _assoc = Association::many(source, path);
     /// ```
@@ -89,7 +89,7 @@ impl<M: Model> Association<List<M>> {
     /// # }
     /// use toasty::stmt::{Association, Path, List, Query};
     ///
-    /// let source = Query::<Todo>::all();
+    /// let source = Query::<List<Todo>>::all();
     /// let path = Path::<Todo, User>::from_field_index(1);
     /// let _assoc: Association<List<User>> = Association::many_via_one(source, path);
     /// ```
@@ -128,7 +128,7 @@ impl<M: Model> Association<List<M>> {
     /// # }
     /// use toasty::stmt::{Association, Insert, Path, List, Query};
     ///
-    /// let source = Query::<User>::filter(User::fields().id().eq(1));
+    /// let source = Query::<List<User>>::filter(User::fields().id().eq(1));
     /// let path = Path::<User, List<Todo>>::from_field_index(2);
     /// let assoc = Association::many(source, path);
     ///
@@ -172,7 +172,7 @@ impl<M: Model> Association<List<M>> {
     /// # }
     /// use toasty::stmt::{Association, Expr, Path, List, Query};
     ///
-    /// let source = Query::<User>::filter(User::fields().id().eq(1));
+    /// let source = Query::<List<User>>::filter(User::fields().id().eq(1));
     /// let path = Path::<User, List<Todo>>::from_field_index(2);
     /// let assoc = Association::many(source, path);
     ///
@@ -233,9 +233,9 @@ impl<M: Model> Association<M> {
     /// #     user_id: i64,
     /// #     title: String,
     /// # }
-    /// use toasty::stmt::{Association, Path, Query};
+    /// use toasty::stmt::{Association, List, Path, Query};
     ///
-    /// let source = Query::<Todo>::filter(Todo::fields().id().eq(1));
+    /// let source = Query::<List<Todo>>::filter(Todo::fields().id().eq(1));
     /// let path = Path::<Todo, User>::from_field_index(1);
     /// let _assoc = Association::one(source, path);
     /// ```

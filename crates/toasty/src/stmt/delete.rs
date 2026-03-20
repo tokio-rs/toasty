@@ -27,9 +27,9 @@ use toasty_core::stmt;
 /// # let driver = toasty_driver_sqlite::Sqlite::in_memory();
 /// # let mut db = toasty::Db::builder().register::<User>().build(driver).await.unwrap();
 /// # db.push_schema().await.unwrap();
-/// use toasty::stmt::Query;
+/// use toasty::stmt::{List, Query};
 ///
-/// Query::<User>::filter(User::fields().id().eq(1))
+/// Query::<List<User>>::filter(User::fields().id().eq(1))
 ///     .delete()
 ///     .exec(&mut db)
 ///     .await
@@ -53,10 +53,10 @@ impl<T> Delete<T> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// use toasty::stmt::{Delete, Query};
+    /// use toasty::stmt::{Delete, List, Query};
     ///
     /// // Build a delete from a query, then extract the raw form
-    /// let delete = Query::<User>::all().delete();
+    /// let delete = Query::<List<User>>::all().delete();
     /// // The typed Delete wraps an untyped core delete
     /// let _: Delete<toasty::stmt::List<User>> = delete;
     /// ```

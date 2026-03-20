@@ -35,7 +35,7 @@ impl<M> Update<M> {
     /// use toasty::stmt::{List, Query, Update};
     ///
     /// // Round-trip through an untyped update
-    /// let update = Update::<List<User>>::new(Query::<User>::all());
+    /// let update = Update::<List<User>>::new(Query::<List<User>>::all());
     /// let raw = update.into_untyped_stmt();
     /// ```
     pub const fn from_untyped(untyped: stmt::Update) -> Self {
@@ -58,7 +58,7 @@ impl<M> Update<M> {
     /// # }
     /// use toasty::stmt::{List, Query, Update};
     ///
-    /// let mut update = Update::<List<User>>::new(Query::<User>::all());
+    /// let mut update = Update::<List<User>>::new(Query::<List<User>>::all());
     /// let raw = update.as_untyped_mut();
     /// // Inspect or modify the raw update
     /// assert!(raw.returning.is_some());
@@ -82,7 +82,7 @@ impl<M> Update<M> {
     /// # }
     /// use toasty::stmt::{List, Query, Update};
     ///
-    /// let mut update = Update::<List<User>>::new(Query::<User>::all());
+    /// let mut update = Update::<List<User>>::new(Query::<List<User>>::all());
     /// // Set field at index 1 (name) to "Bob"
     /// update.set(1, toasty_core::stmt::Value::from("Bob"));
     /// ```
@@ -103,7 +103,7 @@ impl<M> Update<M> {
     /// # }
     /// use toasty::stmt::{List, Query, Update};
     ///
-    /// let mut update = Update::<List<User>>::new(Query::<User>::all());
+    /// let mut update = Update::<List<User>>::new(Query::<List<User>>::all());
     /// update.insert(1, toasty_core::stmt::Value::from("new_tag"));
     /// ```
     pub fn insert(&mut self, field: impl Into<stmt::Projection>, expr: impl Into<stmt::Expr>) {
@@ -123,7 +123,7 @@ impl<M> Update<M> {
     /// # }
     /// use toasty::stmt::{List, Query, Update};
     ///
-    /// let mut update = Update::<List<User>>::new(Query::<User>::all());
+    /// let mut update = Update::<List<User>>::new(Query::<List<User>>::all());
     /// update.remove(1, toasty_core::stmt::Value::from("old_tag"));
     /// ```
     pub fn remove(&mut self, field: impl Into<stmt::Projection>, expr: impl Into<stmt::Expr>) {
@@ -143,7 +143,7 @@ impl<M> Update<M> {
     /// # }
     /// use toasty::stmt::{List, Query, Update};
     ///
-    /// let mut update = Update::<List<User>>::new(Query::<User>::all());
+    /// let mut update = Update::<List<User>>::new(Query::<List<User>>::all());
     /// update.set_returning_none();
     /// ```
     pub fn set_returning_none(&mut self) {
@@ -163,7 +163,7 @@ impl<M> Update<M> {
     /// # }
     /// use toasty::stmt::{List, Query, Update};
     ///
-    /// let update = Update::<List<User>>::new(Query::<User>::all());
+    /// let update = Update::<List<User>>::new(Query::<List<User>>::all());
     /// let _raw = update.into_untyped_stmt();
     /// ```
     pub fn into_untyped_stmt(self) -> stmt::Statement {

@@ -25,16 +25,16 @@ use toasty_core::stmt::{self, Offset};
 /// #     name: String,
 /// #     age: i64,
 /// # }
-/// use toasty::stmt::Query;
+/// use toasty::stmt::{List, Query};
 ///
 /// // All users
-/// let q = Query::<User>::all();
+/// let q = Query::<List<User>>::all();
 ///
 /// // Filtered
-/// let q = Query::<User>::filter(User::fields().age().gt(18));
+/// let q = Query::<List<User>>::filter(User::fields().age().gt(18));
 ///
 /// // Chained
-/// let mut q = Query::<User>::all()
+/// let mut q = Query::<List<User>>::all()
 ///     .and(User::fields().name().eq("Alice"));
 /// q.limit(10);
 /// ```
@@ -107,9 +107,9 @@ impl<T> Query<T> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// use toasty::stmt::Query;
+    /// use toasty::stmt::{List, Query};
     ///
-    /// let q = Query::<User>::all()
+    /// let q = Query::<List<User>>::all()
     ///     .and(User::fields().name().eq("Alice"));
     /// ```
     pub fn and(mut self, filter: Expr<bool>) -> Self {
@@ -132,9 +132,9 @@ impl<T> Query<T> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// use toasty::stmt::{Path, Query};
+    /// use toasty::stmt::{List, Path, Query};
     ///
-    /// let mut q = Query::<User>::all();
+    /// let mut q = Query::<List<User>>::all();
     /// // Include the field at index 1 (name)
     /// q.include(Path::<User, String>::from_field_index(1));
     /// ```
@@ -157,9 +157,9 @@ impl<T> Query<T> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// use toasty::stmt::Query;
+    /// use toasty::stmt::{List, Query};
     ///
-    /// let mut q = Query::<User>::all();
+    /// let mut q = Query::<List<User>>::all();
     /// q.order_by(User::fields().name().desc());
     /// ```
     pub fn order_by(&mut self, order_by: impl Into<stmt::OrderBy>) -> &mut Self {
@@ -178,9 +178,9 @@ impl<T> Query<T> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// use toasty::stmt::Query;
+    /// use toasty::stmt::{List, Query};
     ///
-    /// let mut q = Query::<User>::all();
+    /// let mut q = Query::<List<User>>::all();
     /// q.limit(10);
     /// ```
     pub fn limit(&mut self, n: usize) -> &mut Self {
@@ -206,9 +206,9 @@ impl<T> Query<T> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// use toasty::stmt::Query;
+    /// use toasty::stmt::{List, Query};
     ///
-    /// let mut q = Query::<User>::all();
+    /// let mut q = Query::<List<User>>::all();
     /// q.limit(10);
     /// q.offset(20);
     /// ```
@@ -237,9 +237,9 @@ impl<M: Model> Query<List<M>> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// use toasty::stmt::Query;
+    /// use toasty::stmt::{List, Query};
     ///
-    /// let q = Query::<User>::filter(User::fields().name().eq("Alice"));
+    /// let q = Query::<List<User>>::filter(User::fields().name().eq("Alice"));
     /// ```
     pub fn filter(expr: Expr<bool>) -> Self {
         let mut query = stmt::Query::new_select(M::id(), expr.untyped);
@@ -258,9 +258,9 @@ impl<M: Model> Query<List<M>> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// use toasty::stmt::Query;
+    /// use toasty::stmt::{List, Query};
     ///
-    /// let q = Query::<User>::all();
+    /// let q = Query::<List<User>>::all();
     /// ```
     pub fn all() -> Self {
         let filter = stmt::Expr::Value(Value::from_bool(true));
