@@ -589,7 +589,7 @@ pub async fn associate_has_one_by_val_on_update_query_with_filter_1(test: &mut T
         .await?;
 
     let u1_reloaded = User::get_by_id(&mut db, &u1.id).await?;
-    let p1_reloaded = u1_reloaded.profile().get(&mut db).await?.unwrap();
+    let p1_reloaded = u1_reloaded.profile().exec(&mut db).await?.unwrap();
     assert_eq!(p1.id, p1_reloaded.id);
     assert_eq!(p1.bio, p1_reloaded.bio);
     assert_eq!(p1_reloaded.user_id.as_ref(), Some(&u1.id));
@@ -632,7 +632,7 @@ pub async fn associate_has_one_by_val_on_update_query_with_filter_2(test: &mut T
         .exec(&mut db)
         .await?;
 
-    let p1 = u1.profile().get(&mut db).await?.unwrap();
+    let p1 = u1.profile().exec(&mut db).await?.unwrap();
     assert_eq!(p1.user_id.as_ref(), Some(&u1.id));
 
     User::filter_by_id(u2.id)
