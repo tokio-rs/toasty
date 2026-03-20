@@ -42,6 +42,12 @@ impl<T: Load> Batch<T> {
     }
 }
 
+impl<T> From<Statement<T>> for Batch<T> {
+    fn from(stmt: Statement<T>) -> Self {
+        Batch { stmt }
+    }
+}
+
 impl<T> IntoExpr<T> for Batch<T> {
     fn into_expr(self) -> Expr<T> {
         Expr::from_untyped(stmt::Expr::stmt(self.stmt.untyped))
