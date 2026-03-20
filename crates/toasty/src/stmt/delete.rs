@@ -5,8 +5,11 @@ use toasty_core::stmt;
 
 /// A typed delete statement.
 ///
-/// `Delete<M>` removes records of model `M` that match the selection built by
+/// `Delete<T>` removes records that match the selection built by
 /// the originating [`Query`]. Obtain one by calling [`Query::delete`].
+///
+/// - `Delete<List<M>>` — deletes multiple records (from a list query).
+/// - `Delete<M>` — deletes a single record.
 ///
 /// # Execution
 ///
@@ -33,12 +36,12 @@ use toasty_core::stmt;
 ///     .unwrap();
 /// # });
 /// ```
-pub struct Delete<M: ?Sized> {
+pub struct Delete<T: ?Sized> {
     pub(crate) untyped: stmt::Delete,
-    _p: PhantomData<M>,
+    _p: PhantomData<T>,
 }
 
-impl<M> Delete<M> {
+impl<T> Delete<T> {
     /// Wrap a raw untyped [`stmt::Delete`](toasty_core::stmt::Delete).
     ///
     /// # Examples
@@ -55,7 +58,7 @@ impl<M> Delete<M> {
     /// // Build a delete from a query, then extract the raw form
     /// let delete = Query::<User>::all().delete();
     /// // The typed Delete wraps an untyped core delete
-    /// let _: Delete<User> = delete;
+    /// let _: Delete<toasty::stmt::List<User>> = delete;
     /// ```
     pub const fn from_untyped(untyped: stmt::Delete) -> Self {
         Self {
@@ -90,7 +93,7 @@ impl<M> Delete<M> {
     /// # });
     /// ```
     pub async fn exec(self, executor: &mut dyn Executor) -> Result<()> {
-        let stmt: Statement<M> = self.into();
+        let stmt: Statement<T> = self.into();
         executor.exec(stmt).await?;
         Ok(())
     }
@@ -107,8 +110,19 @@ impl<M: Model> IntoStatement for Delete<M> {
     }
 }
 
-impl<M> From<Delete<M>> for Statement<M> {
-    fn from(value: Delete<M>) -> Self {
+impl<M: Model> IntoStatement for Delete<super::List<M>> {
+    type Returning = ();
+
+    fn into_statement(self) -> Statement<()> {
+        Statement {
+            untyped: self.untyped.into(),
+            _p: PhantomData,
+        }
+    }
+}
+
+impl<T> From<Delete<T>> for Statement<T> {
+    fn from(value: Delete<T>) -> Self {
         Self {
             untyped: value.untyped.into(),
             _p: PhantomData,

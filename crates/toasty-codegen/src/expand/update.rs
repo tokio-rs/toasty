@@ -265,8 +265,8 @@ impl Expand<'_> {
                 }
             }
 
-            impl From<#toasty::stmt::Query<#model_ident>> for #update_struct_ident {
-                fn from(src: #toasty::stmt::Query<#model_ident>) -> #update_struct_ident {
+            impl From<#toasty::stmt::Query<#toasty::List<#model_ident>>> for #update_struct_ident {
+                fn from(src: #toasty::stmt::Query<#toasty::List<#model_ident>>) -> #update_struct_ident {
                     let mut s = #update_struct_ident {
                         stmt: #toasty::stmt::Update::new(src),
                         target: #toasty::Query::new(),

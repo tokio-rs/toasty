@@ -9,6 +9,9 @@ use toasty_core::stmt::{self, Offset};
 /// [`stmt::Query`](toasty_core::stmt::Query) and provides methods to add
 /// filters, ordering, limits, and includes.
 ///
+/// - `Query<List<M>>` — a list query returning multiple records (single: false).
+/// - `Query<M>` — a single-model query (single: true).
+///
 /// # Building queries
 ///
 /// Start with a generated finder (e.g., `User::find_by_name("Alice")`) or
@@ -40,12 +43,13 @@ use toasty_core::stmt::{self, Offset};
 ///
 /// Pass the query to [`Db::exec`](crate::Db::exec) or convert it with
 /// [`IntoStatement`] for batch use.
-pub struct Query<M> {
+pub struct Query<T> {
     pub(crate) untyped: stmt::Query,
-    _p: PhantomData<M>,
+    _p: PhantomData<T>,
 }
 
-impl<M> Query<M> {
+// Methods available on all Query<T>
+impl<T> Query<T> {
     /// Create an empty unit query that returns no records.
     ///
     /// # Examples
@@ -80,7 +84,7 @@ impl<M> Query<M> {
     /// ));
     /// let _q = Query::from_expr(expr);
     /// ```
-    pub fn from_expr(expr: Expr<M>) -> Self {
+    pub fn from_expr(expr: Expr<T>) -> Self {
         match expr.untyped {
             stmt::Expr::Stmt(expr) => match *expr.stmt {
                 stmt::Statement::Query(stmt) => Self::from_untyped(stmt),
@@ -218,29 +222,10 @@ impl<M> Query<M> {
         };
         self
     }
-
-    /// Convert this query into a [`Delete`] that removes all matching records.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[derive(Debug, toasty::Model)]
-    /// # struct User {
-    /// #     #[key]
-    /// #     id: i64,
-    /// #     name: String,
-    /// # }
-    /// use toasty::stmt::Query;
-    ///
-    /// let delete = Query::<User>::filter(User::fields().name().eq("Alice"))
-    ///     .delete();
-    /// ```
-    pub fn delete(self) -> Delete<M> {
-        Delete::from_untyped(self.untyped.delete())
-    }
 }
 
-impl<M: Model> Query<M> {
+/// Methods for list queries: `Query<List<M>>`
+impl<M: Model> Query<List<M>> {
     /// Create a query that selects records of `M` matching `expr`.
     ///
     /// # Examples
@@ -257,7 +242,9 @@ impl<M: Model> Query<M> {
     /// let q = Query::<User>::filter(User::fields().name().eq("Alice"));
     /// ```
     pub fn filter(expr: Expr<bool>) -> Self {
-        Self::from_untyped(stmt::Query::new_select(M::id(), expr.untyped))
+        let mut query = stmt::Query::new_select(M::id(), expr.untyped);
+        query.single = false;
+        Self::from_untyped(query)
     }
 
     /// Create a query that selects all records of `M`.
@@ -277,11 +264,17 @@ impl<M: Model> Query<M> {
     /// ```
     pub fn all() -> Self {
         let filter = stmt::Expr::Value(Value::from_bool(true));
-        Self::from_untyped(stmt::Query::new_select(M::id(), filter))
+        let mut query = stmt::Query::new_select(M::id(), filter);
+        query.single = false;
+        Self::from_untyped(query)
+    }
+
+    pub fn delete(self) -> Delete<List<M>> {
+        Delete::from_untyped(self.untyped.delete())
     }
 }
 
-impl<M: Model> IntoStatement for Query<M> {
+impl<M: Model> IntoStatement for Query<List<M>> {
     type Returning = List<M>;
 
     fn into_statement(self) -> Statement<List<M>> {
@@ -289,7 +282,7 @@ impl<M: Model> IntoStatement for Query<M> {
     }
 }
 
-impl<M: Model> IntoStatement for &Query<M> {
+impl<M: Model> IntoStatement for &Query<List<M>> {
     type Returning = List<M>;
 
     fn into_statement(self) -> Statement<List<M>> {
@@ -297,7 +290,7 @@ impl<M: Model> IntoStatement for &Query<M> {
     }
 }
 
-impl<M> Clone for Query<M> {
+impl<T> Clone for Query<T> {
     fn clone(&self) -> Self {
         Self {
             untyped: self.untyped.clone(),
@@ -306,7 +299,7 @@ impl<M> Clone for Query<M> {
     }
 }
 
-impl<M> fmt::Debug for Query<M> {
+impl<T> fmt::Debug for Query<T> {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.untyped.fmt(fmt)
     }

@@ -1,4 +1,4 @@
-use super::Query;
+use super::{List, Query};
 
 use crate::{engine::eval::Func, schema::Load, Executor, ExecutorExt, Result};
 
@@ -44,7 +44,7 @@ use toasty_core::stmt::{self, visit_mut, Expr, ExprRecord, OrderBy, Projection, 
 /// `order_by` to be present already.
 #[derive(Debug)]
 pub struct Paginate<M> {
-    query: Query<M>,
+    query: Query<List<M>>,
     reverse: bool,
 }
 
@@ -73,7 +73,7 @@ impl<M> Paginate<M> {
     /// q.order_by(User::fields().name().asc());
     /// let _paginator = Paginate::new(q, 20);
     /// ```
-    pub fn new(mut query: Query<M>, per_page: usize) -> Self {
+    pub fn new(mut query: Query<List<M>>, per_page: usize) -> Self {
         assert!(
             query.untyped.limit.is_none(),
             "pagination requires no limit clause"
@@ -274,8 +274,8 @@ impl<M: Load> Paginate<M> {
     }
 }
 
-impl<M> From<Query<M>> for Paginate<M> {
-    fn from(value: Query<M>) -> Self {
+impl<M> From<Query<List<M>>> for Paginate<M> {
+    fn from(value: Query<List<M>>) -> Self {
         assert!(
             value.untyped.limit.is_some(),
             "pagination requires a limit clause"

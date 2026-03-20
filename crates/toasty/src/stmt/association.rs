@@ -51,7 +51,7 @@ impl<M: Model> Association<List<M>> {
     /// let path = Path::<User, List<Todo>>::from_field_index(2);
     /// let _assoc = Association::many(source, path);
     /// ```
-    pub fn many<T: Model>(source: super::Query<T>, path: Path<T, List<M>>) -> Self {
+    pub fn many<T: Model>(source: super::Query<List<T>>, path: Path<T, List<M>>) -> Self {
         assert_eq!(path.untyped.root.expect_model(), T::id());
 
         Self {
@@ -93,7 +93,7 @@ impl<M: Model> Association<List<M>> {
     /// let path = Path::<Todo, User>::from_field_index(1);
     /// let _assoc: Association<List<User>> = Association::many_via_one(source, path);
     /// ```
-    pub fn many_via_one<T: Model>(source: super::Query<T>, path: Path<T, M>) -> Self {
+    pub fn many_via_one<T: Model>(source: super::Query<List<T>>, path: Path<T, M>) -> Self {
         assert_eq!(path.untyped.root.expect_model(), T::id());
 
         Self {
@@ -239,7 +239,7 @@ impl<M: Model> Association<M> {
     /// let path = Path::<Todo, User>::from_field_index(1);
     /// let _assoc = Association::one(source, path);
     /// ```
-    pub fn one<T: Model>(source: super::Query<T>, path: Path<T, M>) -> Self {
+    pub fn one<T: Model>(source: super::Query<List<T>>, path: Path<T, M>) -> Self {
         assert_eq!(path.untyped.root.expect_model(), T::id());
 
         Self {

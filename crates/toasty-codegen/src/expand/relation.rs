@@ -23,11 +23,11 @@ impl Expand<'_> {
             }
 
             #vis struct One {
-                stmt: #toasty::stmt::Query<#model_ident>,
+                stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>,
             }
 
             #vis struct OptionOne {
-                stmt: #toasty::stmt::Query<#model_ident>,
+                stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>,
             }
 
             #vis struct ManyField<__Origin> {
@@ -93,7 +93,7 @@ impl Expand<'_> {
             }
 
             impl One {
-                #vis fn from_stmt(stmt: #toasty::stmt::Query<#model_ident>) -> One {
+                #vis fn from_stmt(stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>) -> One {
                     One { stmt }
                 }
 
@@ -120,7 +120,7 @@ impl Expand<'_> {
             }
 
             impl OptionOne {
-                pub fn from_stmt(stmt: #toasty::stmt::Query<#model_ident>) -> OptionOne {
+                pub fn from_stmt(stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>) -> OptionOne {
                     OptionOne { stmt }
                 }
 

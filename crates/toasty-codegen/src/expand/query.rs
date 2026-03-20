@@ -18,11 +18,11 @@ impl Expand<'_> {
 
         quote! {
             #vis struct #query_struct_ident {
-                stmt: #toasty::stmt::Query<#model_ident>,
+                stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>,
             }
 
             impl #query_struct_ident {
-                #vis const fn from_stmt(stmt: #toasty::stmt::Query<#model_ident>) -> #query_struct_ident {
+                #vis const fn from_stmt(stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>) -> #query_struct_ident {
                     #query_struct_ident { stmt }
                 }
 
@@ -47,7 +47,7 @@ impl Expand<'_> {
                     #update_struct_ident::from(self)
                 }
 
-                #vis fn delete(self) -> #toasty::stmt::Delete<#model_ident> {
+                #vis fn delete(self) -> #toasty::stmt::Delete<#toasty::List<#model_ident>> {
                     self.stmt.delete()
                 }
 

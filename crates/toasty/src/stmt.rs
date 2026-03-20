@@ -102,7 +102,7 @@ impl<M> Statement<List<M>> {
     /// );
     /// assert!(query_stmt.into_query().is_some());
     /// ```
-    pub fn into_query(self) -> Option<Query<M>> {
+    pub fn into_query(self) -> Option<Query<List<M>>> {
         match self.untyped {
             stmt::Statement::Query(q) => Some(Query::from_untyped(q)),
             _ => None,
@@ -110,8 +110,8 @@ impl<M> Statement<List<M>> {
     }
 }
 
-impl<M> From<Query<M>> for Statement<M> {
-    fn from(value: Query<M>) -> Self {
+impl<M> From<Query<List<M>>> for Statement<List<M>> {
+    fn from(value: Query<List<M>>) -> Self {
         Self {
             untyped: value.untyped.into(),
             _p: PhantomData,
