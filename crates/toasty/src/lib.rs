@@ -103,7 +103,7 @@
 //! - **`toasty-driver-*`** — one crate per database backend.
 
 mod update_target;
-pub use update_target::{Query, UpdateTarget};
+pub use update_target::UpdateTarget;
 
 mod batch;
 pub use batch::{batch, Batch, CreateMany};
@@ -144,7 +144,7 @@ pub mod codegen_support {
             Register, Relation,
         },
         stmt::{self, IntoExpr, IntoInsert, IntoStatement, List, Path},
-        update_target::{Query, UpdateTarget},
+        update_target::UpdateTarget,
         Db, Error, Executor, ExecutorExt, Result, Statement,
     };
     #[cfg(feature = "serde")]

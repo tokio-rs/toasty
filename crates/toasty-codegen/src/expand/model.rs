@@ -49,9 +49,8 @@ impl Expand<'_> {
                 }
 
                 #vis fn update(&mut self) -> #update_struct_ident<&mut Self> {
-                    use #toasty::IntoStatement;
                     let mut s = #update_struct_ident {
-                        stmt: #toasty::stmt::Update::new_single((&*self).into_statement().into_query().unwrap()),
+                        assignments: #toasty::core::stmt::Assignments::default(),
                         target: self,
                     };
                     s.apply_update_defaults();

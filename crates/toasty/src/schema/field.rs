@@ -38,11 +38,11 @@ pub trait Field: Sized {
     /// For embedded types, wraps the path in a Fields struct.
     fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin>;
 
-    /// Build an update builder from a statement and projection.
+    /// Build an update builder from assignments and a projection.
     /// For primitives, this returns `()` (no builder).
     /// For embedded types, this is overridden to construct the {Type}Update builder.
     fn make_update_builder<'a>(
-        _stmt: &'a mut stmt::Update,
+        _assignments: &'a mut stmt::Assignments,
         _projection: stmt::Projection,
     ) -> Self::UpdateBuilder<'a> {
         // Embedded types must override this method.

@@ -21,6 +21,10 @@ impl<M> Update<M> {
         &mut self.untyped
     }
 
+    pub fn set_assignments(&mut self, assignments: stmt::Assignments) {
+        self.untyped.assignments = assignments;
+    }
+
     pub fn set(&mut self, field: impl Into<stmt::Projection>, expr: impl Into<stmt::Expr>) {
         self.untyped.assignments.set(field, expr);
     }

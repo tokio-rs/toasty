@@ -121,10 +121,10 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
             }
 
             fn make_update_builder<'a>(
-                stmt: &'a mut #toasty::core::stmt::Update,
+                assignments: &'a mut #toasty::core::stmt::Assignments,
                 projection: #toasty::core::stmt::Projection,
             ) -> Self::UpdateBuilder<'a> {
-                #update_struct_ident { stmt, projection }
+                #update_struct_ident { assignments, projection }
             }
 
             fn field_ty(
