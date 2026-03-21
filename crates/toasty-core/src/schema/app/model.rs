@@ -2,13 +2,36 @@ use super::{Field, FieldId, FieldPrimitive, Index, Name, PrimaryKey};
 use crate::{driver, stmt, Result};
 use std::fmt;
 
+/// A model in the application schema.
+///
+/// Models come in three flavors:
+///
+/// - [`Model::Root`] -- a top-level model backed by its own database table.
+/// - [`Model::EmbeddedStruct`] -- a struct whose fields are flattened into a
+///   parent model's table.
+/// - [`Model::EmbeddedEnum`] -- an enum stored via a discriminant column plus
+///   optional per-variant data columns in the parent table.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::schema::app::{Model, ModelId};
+///
+/// // Check whether a model is a root model:
+/// let model = Model::Root(Default::default());
+/// assert!(model.is_root());
+/// assert!(!model.is_embedded());
+/// ```
 #[derive(Debug, Clone)]
 pub enum Model {
-    /// Root model that maps to a database table and can be queried directly
+    /// A root model that maps to its own database table and can be queried
+    /// directly.
     Root(ModelRoot),
-    /// Embedded struct model that is flattened into its parent model's table
+    /// An embedded struct whose fields are flattened into its parent model's
+    /// table.
     EmbeddedStruct(EmbeddedStruct),
-    /// Embedded enum model stored as a discriminant integer column
+    /// An embedded enum stored as a discriminant integer column (plus optional
+    /// per-variant data columns) in the parent table.
     EmbeddedEnum(EmbeddedEnum),
 }
 

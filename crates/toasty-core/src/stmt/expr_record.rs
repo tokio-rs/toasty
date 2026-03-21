@@ -120,14 +120,17 @@ impl Expr {
 }
 
 impl ExprRecord {
+    /// Creates a record from a pre-built vector of field expressions.
     pub fn from_vec(fields: Vec<Expr>) -> Self {
         Self { fields }
     }
 
+    /// Appends an expression as a new field at the end of the record.
     pub fn push(&mut self, expr: Expr) {
         self.fields.push(expr)
     }
 
+    /// Resizes the record to `new_len` fields, filling new slots with `value`.
     pub fn resize(&mut self, new_len: usize, value: impl Into<stmt::Expr>) {
         self.fields.resize(new_len, value.into());
     }

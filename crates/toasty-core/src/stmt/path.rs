@@ -39,19 +39,33 @@ impl PathRoot {
     }
 }
 
-/// Describes a traversal through fields.
+/// A rooted field traversal path through the application schema.
 ///
-/// The root is not specified as part of the struct.
+/// A `Path` starts at a [`PathRoot`] (a model or an enum variant) and
+/// navigates through fields via a [`Projection`]. It is used by the query
+/// engine to identify which field or nested field is being referenced.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::stmt::Path;
+/// use toasty_core::schema::app::ModelId;
+///
+/// // Path pointing to the root of model 0
+/// let p = Path::model(ModelId::from_index(0));
+/// assert!(p.is_empty()); // no field steps
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct Path {
-    /// Where the path originates from
+    /// Where the path originates from.
     pub root: PathRoot,
 
-    /// Traversal through the fields
+    /// Traversal through the fields.
     pub projection: Projection,
 }
 
 impl Path {
+    /// Creates a path rooted at a model with an identity projection (no field steps).
     pub fn model(root: impl Into<ModelId>) -> Self {
         Self {
             root: PathRoot::Model(root.into()),

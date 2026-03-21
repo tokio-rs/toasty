@@ -406,6 +406,11 @@ impl FieldTy {
         matches!(self, Self::HasOne(..))
     }
 
+    /// Returns the inner [`HasOne`], panicking if this is not a has-one field.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not [`FieldTy::HasOne`].
     #[track_caller]
     pub fn as_has_one_unwrap(&self) -> &HasOne {
         match self {
@@ -414,6 +419,12 @@ impl FieldTy {
         }
     }
 
+    /// Returns a mutable reference to the inner [`HasOne`], panicking if
+    /// this is not a has-one field.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not [`FieldTy::HasOne`].
     #[track_caller]
     pub fn as_has_one_mut_unwrap(&mut self) -> &mut HasOne {
         match self {
@@ -422,10 +433,12 @@ impl FieldTy {
         }
     }
 
+    /// Returns `true` if this is a [`FieldTy::BelongsTo`].
     pub fn is_belongs_to(&self) -> bool {
         matches!(self, Self::BelongsTo(..))
     }
 
+    /// Returns the inner [`BelongsTo`] if this is a belongs-to field.
     pub fn as_belongs_to(&self) -> Option<&BelongsTo> {
         match self {
             Self::BelongsTo(belongs_to) => Some(belongs_to),
@@ -433,6 +446,12 @@ impl FieldTy {
         }
     }
 
+    /// Returns the inner [`BelongsTo`], panicking if this is not a belongs-to
+    /// field.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not [`FieldTy::BelongsTo`].
     #[track_caller]
     pub fn as_belongs_to_unwrap(&self) -> &BelongsTo {
         match self {
@@ -441,6 +460,12 @@ impl FieldTy {
         }
     }
 
+    /// Returns a mutable reference to the inner [`BelongsTo`], panicking if
+    /// this is not a belongs-to field.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not [`FieldTy::BelongsTo`].
     #[track_caller]
     pub fn as_belongs_to_mut_unwrap(&mut self) -> &mut BelongsTo {
         match self {

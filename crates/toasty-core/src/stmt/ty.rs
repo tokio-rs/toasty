@@ -159,6 +159,8 @@ pub enum Type {
     /// is not yet known.
     Null,
 
+    /// A record type where only a subset of fields are populated, identified
+    /// by a [`PathFieldSet`].
     SparseRecord(PathFieldSet),
 
     /// Unit type

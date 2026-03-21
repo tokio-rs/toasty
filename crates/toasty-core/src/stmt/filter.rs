@@ -1,20 +1,41 @@
 use crate::stmt::{Expr, ExprSet, Node, Query, Statement, Visit, VisitMut};
 
+/// A `WHERE` clause filter for statements.
+///
+/// Wraps an optional expression. When `expr` is `None`, the filter matches all
+/// rows (equivalent to `WHERE true`). Filters can be combined with
+/// [`add_filter`](Filter::add_filter), which AND-s the expressions together.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::stmt::Filter;
+///
+/// // An empty filter matches everything
+/// let filter = Filter::default();
+/// assert!(filter.expr.is_none());
+///
+/// // Filter::ALL is a const alias for the same thing
+/// assert!(Filter::ALL.expr.is_none());
+/// ```
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct Filter {
+    /// The filter expression, or `None` to match all rows.
     pub expr: Option<Expr>,
 }
 
 impl Filter {
-    /// Default filters selects everything (i.e. no filter)
+    /// A filter that matches all rows (no expression set).
     pub const ALL: Filter = Filter { expr: None };
 
+    /// Creates a filter from an expression.
     pub fn new(expr: impl Into<Expr>) -> Filter {
         Filter {
             expr: Some(expr.into()),
         }
     }
 
+    /// Creates a filter by AND-ing two filters together.
     pub fn and(lhs: impl Into<Filter>, rhs: impl Into<Filter>) -> Filter {
         let mut ret = lhs.into();
         ret.add_filter(rhs);
@@ -28,10 +49,12 @@ impl Filter {
         self.expr.as_ref().unwrap_or(&Expr::TRUE)
     }
 
+    /// Consumes the filter and returns the expression, defaulting to `true`.
     pub fn into_expr(self) -> Expr {
         self.expr.unwrap_or(Expr::TRUE)
     }
 
+    /// Returns `true` if the filter expression is the literal `false`.
     pub fn is_false(&self) -> bool {
         self.expr
             .as_ref()
@@ -39,10 +62,14 @@ impl Filter {
             .unwrap_or(false)
     }
 
+    /// Replaces the filter expression with the given expression.
     pub fn set(&mut self, expr: impl Into<Expr>) {
         self.expr = Some(expr.into());
     }
 
+    /// Adds a filter by AND-ing it with the current expression.
+    ///
+    /// If either filter is empty, the other is used directly.
     pub fn add_filter(&mut self, filter: impl Into<Filter>) {
         match (self.expr.take(), filter.into().expr) {
             (Some(expr), Some(other)) => {
@@ -75,6 +102,9 @@ impl Filter {
 }
 
 impl Statement {
+    /// Returns a reference to this statement's filter, if it has one.
+    ///
+    /// Returns `None` for `INSERT` statements.
     pub fn filter(&self) -> Option<&Filter> {
         match self {
             Statement::Delete(delete) => Some(&delete.filter),
