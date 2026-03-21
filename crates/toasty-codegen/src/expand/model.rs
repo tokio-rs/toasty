@@ -66,7 +66,7 @@ impl Expand<'_> {
                     #query_struct_ident::from_stmt(#toasty::stmt::Query::filter(expr))
                 }
 
-                #vis fn delete(self) -> #toasty::stmt::Delete<#model_ident> {
+                #vis fn delete(self) -> #toasty::stmt::Delete<()> {
                     #into_delete_body
                 }
             }

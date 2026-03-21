@@ -226,7 +226,7 @@ impl<T> Query<T> {
         self
     }
 
-    pub fn delete(self) -> Delete<T> {
+    pub fn delete(self) -> Delete<()> {
         Delete::from_untyped(self.untyped.delete())
     }
 

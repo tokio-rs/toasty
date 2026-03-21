@@ -1,6 +1,6 @@
 use crate::schema::Load;
 use crate::stmt::{Expr, IntoExpr, IntoStatement};
-use crate::{Executor, ExecutorExt, Result, Statement};
+use crate::{Executor, Result, Statement};
 
 use toasty_core::stmt;
 
@@ -37,8 +37,11 @@ where
 impl<T: Load> Batch<T> {
     /// Execute the batched queries and return the deserialized results.
     pub async fn exec(self, executor: &mut dyn Executor) -> Result<T::Output> {
+        /*
         let value = executor.exec_one(self.stmt).await?;
         T::load(value)
+        */
+        todo!()
     }
 }
 

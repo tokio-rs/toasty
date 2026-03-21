@@ -29,24 +29,23 @@ impl Expand<'_> {
                 #filter_methods
 
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<Vec<#model_ident>> {
-                    use #toasty::ExecutorExt;
-                    executor.all(self.stmt).await
+                    executor.exec(self.stmt.into()).await
                 }
 
-                #vis fn first(self) -> #toasty::stmt::Query<#model_ident> {
+                #vis fn first(self) -> #toasty::stmt::Query<Option<#model_ident>> {
                     self.stmt.first()
                 }
 
                 #vis async fn get(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
-                    use #toasty::ExecutorExt;
-                    executor.get(self.stmt).await
+                    // executor.get(self.stmt).await
+                    todo!()
                 }
 
                 #vis fn update(self) -> #update_struct_ident {
                     #update_struct_ident::from(self)
                 }
 
-                #vis fn delete(self) -> #toasty::stmt::Delete<#toasty::List<#model_ident>> {
+                #vis fn delete(self) -> #toasty::stmt::Delete<()> {
                     self.stmt.delete()
                 }
 

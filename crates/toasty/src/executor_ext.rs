@@ -12,6 +12,7 @@ use toasty_core::stmt::ValueStream;
 /// These methods are generic over the model type, so they cannot be part of
 /// the dyn-compatible `Executor` trait.
 pub trait ExecutorExt: Executor {
+    /*
     /// Execute a query, returning all matching records.
     fn all<M: Load<Output = M>>(
         &mut self,
@@ -121,6 +122,7 @@ pub trait ExecutorExt: Executor {
             }
         }
     }
+    */
 }
 
 impl<T: Executor + ?Sized> ExecutorExt for T {}

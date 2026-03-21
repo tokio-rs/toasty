@@ -1,4 +1,4 @@
-use crate::Result;
+use crate::{schema::Load, Result};
 use toasty_core::stmt::{self, Value};
 
 /// Trait for types that can serve as the target of an update operation.
@@ -12,7 +12,7 @@ use toasty_core::stmt::{self, Value};
 /// The associated type `Returning` determines the statement return type.
 pub trait UpdateTarget {
     /// The type parameter for the typed `Update<R>` statement.
-    type Returning;
+    type Returning: Load;
 
     /// Build the update statement by combining this target's selection with the
     /// provided assignments.

@@ -1,5 +1,8 @@
 use super::{IntoStatement, Statement};
-use crate::{schema::Model, Executor, ExecutorExt, Result};
+use crate::{
+    schema::{Load, Model},
+    Executor, ExecutorExt, Result,
+};
 use std::marker::PhantomData;
 use toasty_core::stmt;
 
@@ -36,7 +39,7 @@ use toasty_core::stmt;
 ///     .unwrap();
 /// # });
 /// ```
-pub struct Delete<T: ?Sized> {
+pub struct Delete<T> {
     pub(crate) untyped: stmt::Delete,
     _p: PhantomData<T>,
 }
@@ -66,7 +69,9 @@ impl<T> Delete<T> {
             _p: PhantomData,
         }
     }
+}
 
+impl<T: Load> Delete<T> {
     /// Execute this delete statement against the given executor.
     ///
     /// Returns `Ok(())` on success. Any matching records are removed from the
@@ -92,9 +97,19 @@ impl<T> Delete<T> {
     ///     .unwrap();
     /// # });
     /// ```
-    pub async fn exec(self, executor: &mut dyn Executor) -> Result<()> {
-        executor.exec_untyped(self.untyped.into()).await?;
-        Ok(())
+    pub async fn exec(self, executor: &mut dyn Executor) -> Result<T::Output> {
+        executor.exec(self.into()).await
+    }
+}
+
+impl<T> IntoStatement for Delete<T> {
+    type Returning = T;
+
+    fn into_statement(self) -> Statement<T> {
+        Statement {
+            untyped: self.untyped.into(),
+            _p: PhantomData,
+        }
     }
 }
 

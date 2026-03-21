@@ -61,6 +61,7 @@ impl<M: Model> CreateMany<M> {
     }
 
     pub async fn exec(self, executor: &mut dyn Executor) -> Result<Vec<M>> {
+        /*
         // If there are no records to create, then return an empty vec
         if self.stmts.is_empty() {
             return Ok(vec![]);
@@ -82,6 +83,8 @@ impl<M: Model> CreateMany<M> {
             result.push(M::load(value?)?);
         }
         Ok(result)
+        */
+        todo!()
     }
 }
 

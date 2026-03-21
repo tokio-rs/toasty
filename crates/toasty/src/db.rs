@@ -9,7 +9,12 @@ pub use pool::*;
 use crate::{engine::Engine, Executor, Result, Transaction, TransactionBuilder};
 pub(crate) use pool::{ConnectionHandle, ConnectionOperation};
 
-use toasty_core::{async_trait, driver::Driver, stmt::ValueStream, Schema};
+use toasty_core::{
+    async_trait,
+    driver::Driver,
+    stmt::{Value, ValueStream},
+    Schema,
+};
 
 use std::sync::Arc;
 use tokio::sync::oneshot;
@@ -121,7 +126,8 @@ impl Executor for Db {
         Transaction::begin(self).await
     }
 
-    async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> Result<ValueStream> {
+    async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> Result<Value> {
+        /*
         let (tx, rx) = oneshot::channel();
 
         let conn = self.connection().await?;
@@ -134,6 +140,8 @@ impl Executor for Db {
             .unwrap();
 
         rx.await.unwrap()
+        */
+        todo!()
     }
 
     fn schema(&mut self) -> &Arc<Schema> {
