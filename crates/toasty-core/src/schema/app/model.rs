@@ -14,13 +14,15 @@ use std::fmt;
 ///
 /// # Examples
 ///
-/// ```
-/// use toasty_core::schema::app::{Model, ModelId};
+/// ```ignore
+/// use toasty_core::schema::app::{Model, Schema};
 ///
-/// // Check whether a model is a root model:
-/// let model = Model::Root(Default::default());
-/// assert!(model.is_root());
-/// assert!(!model.is_embedded());
+/// let schema: Schema = /* built from derive macros */;
+/// for model in schema.models() {
+///     if model.is_root() {
+///         println!("Root model: {}", model.name().upper_camel_case());
+///     }
+/// }
 /// ```
 #[derive(Debug, Clone)]
 pub enum Model {
@@ -35,28 +37,43 @@ pub enum Model {
     EmbeddedEnum(EmbeddedEnum),
 }
 
+/// A root model backed by its own database table.
+///
+/// Root models have a primary key, may define indices, and are the only model
+/// kind that can be the target of relations. They are the main entities users
+/// interact with through Toasty's query API.
+///
+/// # Examples
+///
+/// ```ignore
+/// let root = model.as_root_unwrap();
+/// let pk_fields: Vec<_> = root.primary_key_fields().collect();
+/// ```
 #[derive(Debug, Clone)]
 pub struct ModelRoot {
-    /// Uniquely identifies the model within the schema
+    /// Uniquely identifies this model within the schema.
     pub id: ModelId,
 
-    /// Name of the model
+    /// The model's name.
     pub name: Name,
 
-    /// Fields contained by the model
+    /// All fields defined on this model.
     pub fields: Vec<Field>,
 
-    /// The primary key for this model. Root models must have a primary key.
+    /// The primary key definition. Root models always have a primary key.
     pub primary_key: PrimaryKey,
 
-    /// If the schema specifies a table to map the model to, this is set.
+    /// Optional explicit table name. When `None`, a name is derived from the
+    /// model name.
     pub table_name: Option<String>,
 
-    /// Indices defined on this model.
+    /// Secondary indices defined on this model.
     pub indices: Vec<Index>,
 }
 
 impl ModelRoot {
+    /// Builds a `SELECT` query that filters by this model's primary key using
+    /// the supplied `input` to resolve argument values.
     pub fn find_by_id(&self, mut input: impl stmt::Input) -> stmt::Query {
         let filter = match &self.primary_key.fields[..] {
             [pk_field] => stmt::Expr::eq(

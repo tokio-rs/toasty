@@ -179,14 +179,17 @@ impl ExprReference {
         }
     }
 
+    /// Returns `true` if this is a field reference.
     pub fn is_field(&self) -> bool {
         matches!(self, ExprReference::Field { .. })
     }
 
+    /// Returns `true` if this is a model reference.
     pub fn is_model(&self) -> bool {
         matches!(self, ExprReference::Model { .. })
     }
 
+    /// Creates a column reference in the current scope (nesting = 0).
     pub fn column(table: usize, column: usize) -> Self {
         ExprReference::Column(ExprColumn {
             nesting: 0,
@@ -195,10 +198,13 @@ impl ExprReference {
         })
     }
 
+    /// Returns `true` if this is a column reference.
     pub fn is_column(&self) -> bool {
         matches!(self, ExprReference::Column(..))
     }
 
+    /// Returns a reference to the inner [`ExprColumn`] if this is a column
+    /// reference, or `None` otherwise.
     pub fn as_expr_column(&self) -> Option<&ExprColumn> {
         match self {
             ExprReference::Column(expr_column) => Some(expr_column),
@@ -206,12 +212,19 @@ impl ExprReference {
         }
     }
 
+    /// Returns a reference to the inner [`ExprColumn`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not `ExprReference::Column`.
     #[track_caller]
     pub fn as_expr_column_unwrap(&self) -> &ExprColumn {
         self.as_expr_column()
             .unwrap_or_else(|| panic!("expected ExprColumn; actual={self:#?}"))
     }
 
+    /// Returns a mutable reference to the inner [`ExprColumn`] if this is a
+    /// column reference, or `None` otherwise.
     pub fn as_expr_column_mut(&mut self) -> Option<&mut ExprColumn> {
         match self {
             ExprReference::Column(expr_column) => Some(expr_column),
@@ -219,6 +232,11 @@ impl ExprReference {
         }
     }
 
+    /// Returns a mutable reference to the inner [`ExprColumn`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not `ExprReference::Column`.
     #[track_caller]
     pub fn as_expr_column_mut_unwrap(&mut self) -> &mut ExprColumn {
         match self {

@@ -73,6 +73,7 @@ impl Path {
         }
     }
 
+    /// Creates a path rooted at a model that navigates to a single field by index.
     pub fn field(root: impl Into<ModelId>, field: usize) -> Self {
         Self {
             root: PathRoot::Model(root.into()),
@@ -80,6 +81,7 @@ impl Path {
         }
     }
 
+    /// Creates a path rooted at a model with a single field step (const-compatible).
     pub const fn from_index(root: ModelId, index: usize) -> Self {
         Self {
             root: PathRoot::Model(root),
@@ -102,10 +104,12 @@ impl Path {
         }
     }
 
+    /// Returns `true` if the path has no field steps (identity projection).
     pub fn is_empty(&self) -> bool {
         self.projection.is_empty()
     }
 
+    /// Returns the number of field steps in the path.
     pub fn len(&self) -> usize {
         self.projection.len()
     }

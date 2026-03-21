@@ -114,6 +114,11 @@ impl Statement {
         }
     }
 
+    /// Returns a reference to this statement's filter.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the statement has no filter.
     #[track_caller]
     pub fn filter_unwrap(&self) -> &Filter {
         match self.filter() {
@@ -122,6 +127,7 @@ impl Statement {
         }
     }
 
+    /// Returns this statement's filter, or [`Filter::ALL`] if it has none.
     pub fn filter_or_default(&self) -> &Filter {
         self.filter().unwrap_or(&Filter::ALL)
     }
@@ -154,6 +160,11 @@ impl Statement {
         }
     }
 
+    /// Returns a reference to the filter's inner expression.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the statement has no filter or the filter has no expression.
     #[track_caller]
     pub fn filter_expr_unwrap(&self) -> &Expr {
         self.filter()
