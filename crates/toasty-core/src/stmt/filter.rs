@@ -172,12 +172,14 @@ impl Statement {
             .expect("expected Statement with expression filter")
     }
 
+    /// Returns a mutable reference to the filter's inner expression, if any.
     pub fn filter_expr_mut(&mut self) -> Option<&mut Expr> {
         self.filter_mut().and_then(|filter| filter.expr.as_mut())
     }
 }
 
 impl Query {
+    /// Returns a reference to this query's filter if the body is a `SELECT`.
     pub fn filter(&self) -> Option<&Filter> {
         match &self.body {
             ExprSet::Select(select) => Some(&select.filter),
@@ -185,6 +187,11 @@ impl Query {
         }
     }
 
+    /// Returns a reference to this query's filter.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the query body is not a `SELECT`.
     #[track_caller]
     pub fn filter_unwrap(&self) -> &Filter {
         self.filter()

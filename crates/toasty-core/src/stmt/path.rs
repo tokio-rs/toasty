@@ -114,12 +114,14 @@ impl Path {
         self.projection.len()
     }
 
+    /// Appends all field steps from `other` onto this path's projection.
     pub fn chain(&mut self, other: &Self) {
         for field in &other.projection[..] {
             self.projection.push(*field);
         }
     }
 
+    /// Converts this path into an [`Expr`] that references the path's field.
     pub fn into_stmt(self) -> Expr {
         match self.root {
             PathRoot::Model(model_id) => match self.projection.as_slice() {

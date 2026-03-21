@@ -1,11 +1,30 @@
 use crate::stmt::{Expr, Node, Statement, Visit, VisitMut};
 
+/// A guard condition on an [`Update`](super::Update) statement.
+///
+/// Unlike a [`Filter`](super::Filter), a condition does not select which rows
+/// to operate on. Instead, it is evaluated after the filter and determines
+/// whether the update should actually be applied. If the condition is not met,
+/// the update is silently skipped.
+///
+/// When `expr` is `None`, no condition is applied (the update always proceeds).
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::stmt::Condition;
+///
+/// let cond = Condition::default();
+/// assert!(cond.is_none());
+/// ```
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct Condition {
+    /// The condition expression, or `None` for unconditional updates.
     pub expr: Option<Expr>,
 }
 
 impl Condition {
+    /// Creates a condition from an expression.
     pub fn new(expr: impl Into<Expr>) -> Condition {
         Condition {
             expr: Some(expr.into()),

@@ -109,6 +109,9 @@ impl ModelRoot {
             .map(|pk_field| &self.fields[pk_field.index])
     }
 
+    /// Looks up a field by its application-level name.
+    ///
+    /// Returns `None` if no field with that name exists on this model.
     pub fn field_by_name(&self, name: &str) -> Option<&Field> {
         self.fields.iter().find(|field| field.name.app_name == name)
     }
@@ -121,22 +124,38 @@ impl ModelRoot {
     }
 }
 
+/// An embedded struct model whose fields are flattened into its parent model's
+/// database table.
+///
+/// Embedded structs do not have their own table or primary key. Their fields
+/// become additional columns in the parent table. Indices declared on an
+/// embedded struct's fields are propagated to physical DB indices on the parent
+/// table.
+///
+/// # Examples
+///
+/// ```ignore
+/// let embedded = model.as_embedded_struct_unwrap();
+/// for field in &embedded.fields {
+///     println!("  embedded field: {}", field.name.app_name);
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub struct EmbeddedStruct {
-    /// Uniquely identifies the model within the schema
+    /// Uniquely identifies this model within the schema.
     pub id: ModelId,
 
-    /// Name of the model
+    /// The model's name.
     pub name: Name,
 
-    /// Fields contained by the embedded struct
+    /// Fields contained by this embedded struct.
     pub fields: Vec<Field>,
 
     /// Indices defined on this embedded struct's fields.
     ///
-    /// These reference fields within this embedded struct (not the parent model).
-    /// The schema builder propagates them to physical DB indexes on the parent
-    /// table's flattened columns.
+    /// These reference fields within this embedded struct (not the parent
+    /// model). The schema builder propagates them to physical DB indices on
+    /// the parent table's flattened columns.
     pub indices: Vec<Index>,
 }
 
@@ -149,29 +168,44 @@ impl EmbeddedStruct {
     }
 }
 
+/// An embedded enum model stored in the parent table via a discriminant column
+/// and optional per-variant data columns.
+///
+/// The discriminant column holds an integer identifying the active variant.
+/// Variants may optionally carry data fields, which are stored as additional
+/// nullable columns in the parent table.
+///
+/// # Examples
+///
+/// ```ignore
+/// let ee = model.as_embedded_enum_unwrap();
+/// for variant in &ee.variants {
+///     println!("variant {} = {}", variant.name.upper_camel_case(), variant.discriminant);
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub struct EmbeddedEnum {
-    /// Uniquely identifies the model within the schema
+    /// Uniquely identifies this model within the schema.
     pub id: ModelId,
 
-    /// Name of the model
+    /// The model's name.
     pub name: Name,
 
-    /// The primitive type used for the discriminant column
+    /// The primitive type used for the discriminant column.
     pub discriminant: FieldPrimitive,
 
-    /// The enum's variants
+    /// The enum's variants.
     pub variants: Vec<EnumVariant>,
 
     /// All fields across all variants, with global indices. Each field's
-    /// `variant` field identifies which variant it belongs to.
+    /// [`variant`](Field::variant) identifies which variant it belongs to.
     pub fields: Vec<Field>,
 
     /// Indices defined on this embedded enum's variant fields.
     ///
-    /// These reference fields within this embedded enum (not the parent model).
-    /// The schema builder propagates them to physical DB indexes on the parent
-    /// table's flattened columns.
+    /// These reference fields within this embedded enum (not the parent
+    /// model). The schema builder propagates them to physical DB indices on
+    /// the parent table's flattened columns.
     pub indices: Vec<Index>,
 }
 
