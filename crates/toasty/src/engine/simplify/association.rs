@@ -71,6 +71,20 @@ impl Simplify<'_> {
         rel: &app::BelongsTo,
         association: stmt::Association,
     ) -> stmt::Filter {
-        todo!("rel={rel:#?}, association={association:#?}");
+        let (self_field, source_field) = match &rel.foreign_key.fields[..] {
+            [fk_field] => (fk_field.target, fk_field.source),
+            _ => todo!("composite keys"),
+        };
+
+        let mut subquery = *association.source;
+
+        match &mut subquery.body {
+            stmt::ExprSet::Select(select) => {
+                select.returning = stmt::Returning::Expr(stmt::Expr::ref_self_field(source_field));
+            }
+            _ => todo!(),
+        }
+
+        stmt::Expr::in_subquery(stmt::Expr::ref_self_field(self_field), subquery).into()
     }
 }

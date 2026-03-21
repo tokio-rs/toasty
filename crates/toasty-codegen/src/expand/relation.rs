@@ -23,11 +23,11 @@ impl Expand<'_> {
             }
 
             #vis struct One {
-                stmt: #toasty::stmt::Query<#model_ident>,
+                stmt: #toasty::stmt::Association<#model_ident>,
             }
 
             #vis struct OptionOne {
-                stmt: #toasty::stmt::Query<#model_ident>,
+                stmt: #toasty::stmt::Association<#model_ident>,
             }
 
             #vis struct ManyField<__Origin> {
@@ -93,7 +93,7 @@ impl Expand<'_> {
             }
 
             impl One {
-                #vis fn from_stmt(stmt: #toasty::stmt::Query<#model_ident>) -> One {
+                #vis fn from_stmt(stmt: #toasty::stmt::Association<#model_ident>) -> One {
                     One { stmt }
                 }
 
@@ -105,8 +105,8 @@ impl Expand<'_> {
                 }
 
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
-                    use #toasty::ExecutorExt;
-                    executor.get(self.stmt).await
+                    use #toasty::{ExecutorExt, IntoStatement};
+                    executor.get(self.into_statement().into_query().unwrap()).await
                 }
             }
 
@@ -120,7 +120,7 @@ impl Expand<'_> {
             }
 
             impl OptionOne {
-                pub fn from_stmt(stmt: #toasty::stmt::Query<#model_ident>) -> OptionOne {
+                pub fn from_stmt(stmt: #toasty::stmt::Association<#model_ident>) -> OptionOne {
                     OptionOne { stmt }
                 }
 
@@ -132,8 +132,8 @@ impl Expand<'_> {
                 }
 
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#toasty::Option<#model_ident>> {
-                    use #toasty::ExecutorExt;
-                    executor.first(self.stmt).await
+                    use #toasty::{ExecutorExt, IntoStatement};
+                    executor.first(self.stmt.into_statement().into_query().unwrap()).await
                 }
             }
 
@@ -273,16 +273,6 @@ impl Expand<'_> {
         let field_ident = &field.name.ident;
         let ty = &rel.ty;
 
-        let operands = rel.foreign_key.iter().map(|fk_field| {
-            let source = &self.model.fields[fk_field.source];
-            let source_field_ident = &source.name.ident;
-            let target = &fk_field.target;
-
-            quote! {
-                <#ty as #toasty::Relation>::Model::fields().#target().eq(&self.#source_field_ident)
-            }
-        });
-
         let suppress_unused_field_warnings = rel.foreign_key.iter().map(|fk_field| {
             let source = &self.model.fields[fk_field.source];
             let source_field_ident = &source.name.ident;
@@ -291,12 +281,6 @@ impl Expand<'_> {
                 let _ = &self.#source_field_ident;
             }
         });
-
-        let filter = if rel.foreign_key.len() == 1 {
-            quote!( #( #operands )* )
-        } else {
-            quote!( #toasty::stmt::Expr::and_all([ #(#operands),* ]) )
-        };
 
         let verify_pair_belongs_to_exists = syn::Ident::new(
             &format!("verify_pair_belongs_to_exists_for_{field_ident}"),
@@ -313,7 +297,7 @@ impl Expand<'_> {
                 {
                     use #toasty::IntoStatement;
                     <#ty as #toasty::Relation>::One::from_stmt(
-                        <#ty as #toasty::Relation>::Model::filter(#filter).into_statement().into_query().unwrap()
+                        #toasty::stmt::Association::one(self.into_statement().into_query().unwrap(), Self::fields().#field_ident().into())
                     )
                 }
             }
@@ -468,7 +452,7 @@ impl Expand<'_> {
                 {
                     use #toasty::IntoStatement;
                     <#ty as #toasty::Relation>::One::from_stmt(
-                        #toasty::stmt::Association::one(self.into_statement().into_query().unwrap(), Self::fields().#field_ident().into()).into_statement().into_query().unwrap()
+                        #toasty::stmt::Association::one(self.into_statement().into_query().unwrap(), Self::fields().#field_ident().into())
                     )
                 }
             }
