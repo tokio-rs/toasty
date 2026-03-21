@@ -37,15 +37,52 @@ use transaction_timeout::TransactionTimeout;
 use unsupported_feature::UnsupportedFeature;
 use validation::ValidationFailed;
 
-/// An error that can occur in Toasty.
+/// The error type used throughout Toasty.
+///
+/// `Error` is a thin wrapper around an `Arc`, making it cheap to clone. Errors
+/// form a chain: each error can optionally carry a *cause* that provides
+/// additional context.  When displayed, the chain is printed from outermost
+/// context to innermost root cause, separated by `: `.
+///
+/// Construct errors through the associated functions on this type
+/// (e.g., [`Error::record_not_found`], [`Error::from_args`]).
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::Error;
+///
+/// // Create an ad-hoc error
+/// let err = Error::from_args(format_args!("something went wrong"));
+/// assert_eq!(err.to_string(), "something went wrong");
+///
+/// // Wrap it with additional context
+/// let wrapped = err.context(Error::from_args(format_args!("while loading user")));
+/// assert_eq!(wrapped.to_string(), "while loading user: something went wrong");
+/// ```
 #[derive(Clone)]
 pub struct Error {
     inner: Arc<ErrorInner>,
 }
 
-/// Trait for types that can be converted into an Error.
+/// Trait for types that can be converted into an [`Error`].
+///
+/// This is used by [`Error::context`] to accept either an `Error` directly or
+/// any type that can be converted into one.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::Error;
+///
+/// // Error itself implements IntoError, so you can pass it directly:
+/// let cause = Error::from_args(format_args!("root cause"));
+/// let outer = Error::from_args(format_args!("outer"));
+/// let chained = cause.context(outer);
+/// assert_eq!(chained.to_string(), "outer: root cause");
+/// ```
 pub trait IntoError {
-    /// Converts this type into an Error.
+    /// Converts this type into an [`Error`].
     fn into_error(self) -> Error;
 }
 
@@ -78,10 +115,28 @@ enum ErrorKind {
 }
 
 impl Error {
-    /// Adds context to this error.
+    /// Wraps this error with additional context.
     ///
-    /// Context is displayed in reverse order: the most recently added context is shown first,
-    /// followed by earlier context, ending with the root cause.
+    /// The `consequent` becomes the new outermost error and `self` becomes its
+    /// cause. When displayed, the chain reads from outermost to innermost:
+    ///
+    /// ```text
+    /// consequent: self
+    /// ```
+    ///
+    /// # Panics
+    ///
+    /// Panics if `consequent` already has a cause attached.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use toasty_core::Error;
+    ///
+    /// let root = Error::from_args(format_args!("disk full"));
+    /// let err = root.context(Error::from_args(format_args!("failed to save")));
+    /// assert_eq!(err.to_string(), "failed to save: disk full");
+    /// ```
     pub fn context(self, consequent: impl IntoError) -> Error {
         self.context_impl(consequent.into_error())
     }
