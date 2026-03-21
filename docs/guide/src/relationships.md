@@ -174,11 +174,12 @@ the child in place.
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let user = User::create()
-    .name("Alice")
-    .post(Post::create().title("Hello"))
-    .exec(&mut db)
-    .await?;
+let user = toasty::create!(User {
+    name: "Alice",
+    posts: [{ title: "Hello" }],
+})
+.exec(&mut db)
+.await?;
 
 let posts = user.posts().exec(&mut db).await?;
 assert_eq!(1, posts.len());

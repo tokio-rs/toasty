@@ -51,14 +51,15 @@ Set the embedded field on the create builder by passing an instance of the
 struct:
 
 ```rust,ignore
-let user = User::create()
-    .name("Alice")
-    .address(Address {
+let user = toasty::create!(User {
+    name: "Alice",
+    address: Address {
         street: "123 Main St".to_string(),
         city: "Seattle".to_string(),
-    })
-    .exec(&mut db)
-    .await?;
+    },
+})
+.exec(&mut db)
+.await?;
 ```
 
 ### Updating embedded fields
@@ -156,11 +157,12 @@ CREATE TABLE tasks (
 Use it like any other field:
 
 ```rust,ignore
-let task = Task::create()
-    .title("Write docs")
-    .status(Status::Pending)
-    .exec(&mut db)
-    .await?;
+let task = toasty::create!(Task {
+    title: "Write docs",
+    status: Status::Pending,
+})
+.exec(&mut db)
+.await?;
 
 task.update().status(Status::Done).exec(&mut db).await?;
 ```
@@ -207,13 +209,14 @@ CREATE TABLE users (
 Create records by passing enum values:
 
 ```rust,ignore
-let user = User::create()
-    .name("Alice")
-    .contact(ContactInfo::Email {
+let user = toasty::create!(User {
+    name: "Alice",
+    contact: ContactInfo::Email {
         address: "alice@example.com".to_string(),
-    })
-    .exec(&mut db)
-    .await?;
+    },
+})
+.exec(&mut db)
+.await?;
 ```
 
 ### Mixed enums
