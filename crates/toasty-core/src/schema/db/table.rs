@@ -128,11 +128,34 @@ impl fmt::Debug for TableId {
     }
 }
 
+/// The set of differences between two table lists.
+///
+/// Computed by [`TablesDiff::from`] and dereferences to
+/// `Vec<TablesDiffItem>` for iteration.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::schema::db::{TablesDiff, DiffContext, RenameHints, Schema};
+///
+/// let previous = Schema::default();
+/// let next = Schema::default();
+/// let hints = RenameHints::new();
+/// let cx = DiffContext::new(&previous, &next, &hints);
+/// let diff = TablesDiff::from(&cx, &[], &[]);
+/// assert!(diff.is_empty());
+/// ```
 pub struct TablesDiff<'a> {
     items: Vec<TablesDiffItem<'a>>,
 }
 
 impl<'a> TablesDiff<'a> {
+    /// Computes the diff between two table slices.
+    ///
+    /// Uses [`DiffContext`] to resolve rename hints. Tables matched by name
+    /// (or by rename hint) are compared for column and index changes;
+    /// unmatched tables in `previous` become drops, and unmatched tables in
+    /// `next` become creates.
     pub fn from(cx: &DiffContext<'a>, previous: &'a [Table], next: &'a [Table]) -> Self {
         let mut items = vec![];
         let mut create_ids: HashSet<_> = next.iter().map(|next| next.id).collect();
@@ -181,13 +204,21 @@ impl<'a> Deref for TablesDiff<'a> {
     }
 }
 
+/// A single change detected between two table lists.
 pub enum TablesDiffItem<'a> {
+    /// A new table was created.
     CreateTable(&'a Table),
+    /// An existing table was dropped.
     DropTable(&'a Table),
+    /// A table was modified (name, columns, or indices changed).
     AlterTable {
+        /// The table definition before the change.
         previous: &'a Table,
+        /// The table definition after the change.
         next: &'a Table,
+        /// Column-level changes within this table.
         columns: ColumnsDiff<'a>,
+        /// Index-level changes within this table.
         indices: IndicesDiff<'a>,
     },
 }

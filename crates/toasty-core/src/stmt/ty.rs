@@ -251,6 +251,7 @@ impl Type {
         }
     }
 
+    /// Returns `true` if this is [`Type::BigDecimal`] (requires `bigdecimal` feature).
     pub fn is_big_decimal(&self) -> bool {
         #[cfg(feature = "bigdecimal")]
         {
@@ -262,10 +263,12 @@ impl Type {
         }
     }
 
+    /// Returns `true` if this is [`Type::Uuid`].
     pub fn is_uuid(&self) -> bool {
         matches!(self, Self::Uuid)
     }
 
+    /// Returns `true` if this is [`Type::SparseRecord`].
     pub fn is_sparse_record(&self) -> bool {
         matches!(self, Self::SparseRecord(..))
     }
@@ -300,6 +303,16 @@ impl Type {
         )
     }
 
+    /// Casts `value` to this type, returning the converted value.
+    ///
+    /// Null values pass through unchanged. Supported conversions include
+    /// identity casts, string/UUID interchange, string/decimal interchange,
+    /// record-to-sparse-record, and integer width conversions.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the conversion is not supported or if the value
+    /// is out of range for the target type.
     pub fn cast(&self, value: Value) -> Result<Value> {
         use stmt::Value;
 

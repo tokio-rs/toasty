@@ -59,6 +59,8 @@ impl Expr {
             .unwrap_or_else(|| panic!("expected Expr::Record; actual={self:#?}"))
     }
 
+    /// Returns a mutable reference to the inner [`ExprRecord`] if this is a
+    /// record, or `None` otherwise.
     pub fn as_record_mut(&mut self) -> Option<&mut ExprRecord> {
         match self {
             Self::Record(expr_record) => Some(expr_record),
@@ -66,6 +68,11 @@ impl Expr {
         }
     }
 
+    /// Returns a mutable reference to the inner [`ExprRecord`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not `Expr::Record`.
     #[track_caller]
     pub fn as_record_mut_unwrap(&mut self) -> &mut ExprRecord {
         match self {
@@ -74,6 +81,11 @@ impl Expr {
         }
     }
 
+    /// Consumes the expression and returns the inner [`ExprRecord`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not `Expr::Record`.
     pub fn into_record(self) -> ExprRecord {
         match self {
             Self::Record(expr_record) => expr_record,
@@ -81,6 +93,9 @@ impl Expr {
         }
     }
 
+    /// Returns the number of fields if this expression is a record (either
+    /// `Expr::Record` or `Expr::Value(Value::Record(...))`), or `None`
+    /// otherwise.
     pub fn record_len(&self) -> Option<usize> {
         match self {
             Expr::Record(expr_record) => Some(expr_record.len()),
@@ -89,6 +104,8 @@ impl Expr {
         }
     }
 
+    /// Consumes the expression and returns an iterator over the record's
+    /// fields if this is a record expression or value, or `None` otherwise.
     pub fn into_record_items(self) -> Option<impl Iterator<Item = Expr>> {
         let ret: Option<Box<dyn Iterator<Item = Expr>>> = match self {
             Expr::Record(expr_record) => Some(Box::new(expr_record.into_iter())),

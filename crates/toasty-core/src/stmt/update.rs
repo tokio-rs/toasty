@@ -110,14 +110,17 @@ impl UpdateTarget {
         }
     }
 
+    /// Returns `true` if this target is a `Table` variant.
     pub fn is_table(&self) -> bool {
         matches!(self, UpdateTarget::Table(..))
     }
 
+    /// Creates a `Table` target from a table ID.
     pub fn table(table: impl Into<TableId>) -> Self {
         Self::Table(table.into())
     }
 
+    /// Returns the table ID if this is a `Table` variant.
     pub fn as_table(&self) -> Option<TableId> {
         match self {
             Self::Table(table) => Some(*table),
@@ -125,6 +128,11 @@ impl UpdateTarget {
         }
     }
 
+    /// Returns the table ID, panicking if this is not a `Table` variant.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is not a `Table` variant.
     #[track_caller]
     pub fn as_table_unwrap(&self) -> TableId {
         self.as_table()

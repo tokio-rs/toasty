@@ -352,10 +352,12 @@ impl FieldTy {
         matches!(self, Self::HasMany(..) | Self::HasOne(..))
     }
 
+    /// Returns `true` if this is a [`FieldTy::HasMany`].
     pub fn is_has_many(&self) -> bool {
         matches!(self, Self::HasMany(..))
     }
 
+    /// Returns the inner [`HasMany`] if this is a has-many field.
     pub fn as_has_many(&self) -> Option<&HasMany> {
         match self {
             Self::HasMany(has_many) => Some(has_many),
@@ -363,6 +365,12 @@ impl FieldTy {
         }
     }
 
+    /// Returns the inner [`HasMany`], panicking if this is not a has-many
+    /// field.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not [`FieldTy::HasMany`].
     #[track_caller]
     pub fn as_has_many_unwrap(&self) -> &HasMany {
         match self {
@@ -371,6 +379,12 @@ impl FieldTy {
         }
     }
 
+    /// Returns a mutable reference to the inner [`HasMany`], panicking if
+    /// this is not a has-many field.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not [`FieldTy::HasMany`].
     #[track_caller]
     pub fn as_has_many_mut_unwrap(&mut self) -> &mut HasMany {
         match self {
@@ -379,6 +393,7 @@ impl FieldTy {
         }
     }
 
+    /// Returns the inner [`HasOne`] if this is a has-one field.
     pub fn as_has_one(&self) -> Option<&HasOne> {
         match self {
             Self::HasOne(has_one) => Some(has_one),
@@ -386,6 +401,7 @@ impl FieldTy {
         }
     }
 
+    /// Returns `true` if this is a [`FieldTy::HasOne`].
     pub fn is_has_one(&self) -> bool {
         matches!(self, Self::HasOne(..))
     }
