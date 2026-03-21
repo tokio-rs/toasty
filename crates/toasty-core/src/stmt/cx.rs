@@ -136,6 +136,10 @@ impl DerivedRef<'_> {
     }
 }
 
+/// What an expression in the current scope references.
+///
+/// Determines how column and field references are resolved within an
+/// [`ExprContext`].
 #[derive(Debug, Clone, Copy)]
 pub enum ExprTarget<'a> {
     /// Expression does *not* reference any model or table.
@@ -153,7 +157,13 @@ pub enum ExprTarget<'a> {
     Source(&'a SourceTable),
 }
 
+/// Schema resolution trait used by [`ExprContext`] to look up models,
+/// tables, and the model-to-table mapping.
+///
+/// Implemented for [`Schema`], [`db::Schema`](crate::schema::db::Schema),
+/// and `()` (which resolves nothing).
 pub trait Resolve {
+    /// Returns the database table that stores the given model, if any.
     fn table_for_model(&self, model: &ModelRoot) -> Option<&Table>;
 
     /// Returns a reference to the application Model with the specified ID.
@@ -171,7 +181,10 @@ pub trait Resolve {
     fn table(&self, id: TableId) -> Option<&Table>;
 }
 
+/// Conversion trait for producing an [`ExprTarget`] from a statement or
+/// schema element.
 pub trait IntoExprTarget<'a, T = Schema> {
+    /// Converts `self` into an [`ExprTarget`] using the provided schema.
     fn into_expr_target(self, schema: &'a T) -> ExprTarget<'a>;
 }
 

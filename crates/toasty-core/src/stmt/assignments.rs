@@ -95,14 +95,17 @@ impl Assignments {
         }
     }
 
+    /// Returns `true` if there are no assignments.
     pub fn is_empty(&self) -> bool {
         self.assignments.is_empty()
     }
 
+    /// Returns the number of assignments.
     pub fn len(&self) -> usize {
         self.assignments.len()
     }
 
+    /// Returns `true` if an assignment exists for the given projection.
     pub fn contains<Q>(&self, key: &Q) -> bool
     where
         Q: ?Sized + Hash + Equivalent<Projection>,
@@ -110,6 +113,7 @@ impl Assignments {
         self.assignments.contains_key(key)
     }
 
+    /// Returns a reference to the assignment for the given projection, if any.
     pub fn get<Q>(&self, key: &Q) -> Option<&Assignment>
     where
         Q: ?Sized + Hash + Equivalent<Projection>,
@@ -117,6 +121,7 @@ impl Assignments {
         self.assignments.get(key)
     }
 
+    /// Returns a mutable reference to the assignment for the given projection.
     pub fn get_mut<Q>(&mut self, key: &Q) -> Option<&mut Assignment>
     where
         Q: ?Sized + Hash + Equivalent<Projection>,
@@ -124,6 +129,8 @@ impl Assignments {
         self.assignments.get_mut(key)
     }
 
+    /// Sets a field to the given expression value, replacing any existing
+    /// assignment for that projection.
     pub fn set<Q>(&mut self, key: Q, expr: impl Into<Expr>)
     where
         Q: Into<Projection>,
