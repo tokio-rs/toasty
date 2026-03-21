@@ -2,30 +2,47 @@ use crate::stmt::{ExprArg, TableDerived};
 
 use super::TableId;
 
+/// A reference to a table within a [`SourceTable`](super::SourceTable).
+///
+/// Each entry in [`SourceTable::tables`](super::SourceTable) is a `TableRef`
+/// that identifies where data comes from: a schema table, a CTE, a derived
+/// subquery, or a placeholder argument.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::stmt::TableRef;
+/// use toasty_core::schema::db::TableId;
+///
+/// let table_ref = TableRef::Table(TableId(0));
+/// assert!(table_ref.references(TableId(0)));
+/// assert!(!table_ref.is_cte());
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub enum TableRef {
-    /// An aliased table (in a `FROM` statement or equivalent).
+    /// A reference to a CTE defined in a `WITH` clause.
     Cte {
-        /// What level of nesting the reference is compared to the CTE being
-        /// referenced.
+        /// How many nesting levels up the CTE is defined relative to this
+        /// reference.
         nesting: usize,
 
-        /// The index of the CTE in the `WITH` clause
+        /// The index of the CTE within the [`With::ctes`](super::With) vector.
         index: usize,
     },
 
-    /// A table derived from a query
+    /// A derived table (inline subquery).
     Derived(TableDerived),
 
-    /// A defined table from the schema
+    /// A schema-defined table.
     Table(TableId),
 
-    /// The table ref will be provided at a later time (and will become a
-    /// derived table)
+    /// A placeholder that will be replaced with a derived table at a later
+    /// compilation stage.
     Arg(ExprArg),
 }
 
 impl TableRef {
+    /// Returns `true` if this ref points to the given schema table.
     pub fn references(&self, table_id: TableId) -> bool {
         match self {
             Self::Cte { .. } => false,
@@ -35,6 +52,7 @@ impl TableRef {
         }
     }
 
+    /// Returns `true` if this is a `Cte` reference.
     pub fn is_cte(&self) -> bool {
         matches!(self, Self::Cte { .. })
     }

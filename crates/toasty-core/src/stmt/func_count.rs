@@ -1,16 +1,28 @@
 use super::{Expr, ExprFunc};
 
+/// The SQL `COUNT` aggregate function.
+///
+/// When `arg` is `None`, represents `COUNT(*)` (counts all rows). When `arg` is
+/// `Some`, counts the number of rows where the argument expression is non-null.
+///
+/// # Examples
+///
+/// ```text
+/// COUNT(*)                       // arg: None, filter: None
+/// COUNT(column)                  // arg: Some(column), filter: None
+/// COUNT(*) FILTER (WHERE cond)   // arg: None, filter: Some(cond)
+/// ```
 #[derive(Clone, Debug, PartialEq)]
 pub struct FuncCount {
-    /// When `None`, it means `count(*)` Otherwise, count the number of rows for
-    /// which the expression does not evaluate to `NULL`
+    /// The expression to count. `None` means `COUNT(*)`.
     pub arg: Option<Box<Expr>>,
 
-    /// Optional expression used to filter the rows before counting
+    /// Optional filter applied before counting.
     pub filter: Option<Box<Expr>>,
 }
 
 impl Expr {
+    /// Creates a `COUNT(*)` expression.
     pub fn count_star() -> Self {
         Self::Func(ExprFunc::Count(FuncCount {
             arg: None,

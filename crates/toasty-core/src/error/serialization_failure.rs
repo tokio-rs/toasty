@@ -1,5 +1,9 @@
 use super::Error;
 
+/// Error when a transaction is aborted due to a serialization conflict.
+///
+/// This maps to database-specific errors such as PostgreSQL SQLSTATE 40001
+/// or MySQL error 1213. The transaction must be retried.
 #[derive(Debug)]
 pub(super) struct SerializationFailure {
     message: Box<str>,
@@ -18,6 +22,15 @@ impl Error {
     ///
     /// Returned when the database aborts a transaction due to a serialization
     /// conflict (e.g. PostgreSQL SQLSTATE 40001, MySQL error 1213).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use toasty_core::Error;
+    ///
+    /// let err = Error::serialization_failure("concurrent update conflict");
+    /// assert!(err.is_serialization_failure());
+    /// ```
     pub fn serialization_failure(message: impl Into<String>) -> Error {
         Error::from(super::ErrorKind::SerializationFailure(
             SerializationFailure {

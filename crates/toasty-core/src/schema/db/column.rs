@@ -7,6 +7,30 @@ use std::{
     ops::Deref,
 };
 
+/// A column in a database table.
+///
+/// Each column has a logical type ([`stmt::Type`]) used by the query engine and
+/// a storage type ([`Type`]) representing how the value is stored in the database.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::schema::db::{Column, ColumnId, TableId, Type};
+/// use toasty_core::stmt;
+///
+/// let column = Column {
+///     id: ColumnId { table: TableId(0), index: 0 },
+///     name: "email".to_string(),
+///     ty: stmt::Type::String,
+///     storage_ty: Type::VarChar(255),
+///     nullable: false,
+///     primary_key: false,
+///     auto_increment: false,
+/// };
+///
+/// assert_eq!(column.name, "email");
+/// assert!(!column.nullable);
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Column {
@@ -34,10 +58,25 @@ pub struct Column {
     pub auto_increment: bool,
 }
 
+/// Uniquely identifies a column within a schema.
+///
+/// A `ColumnId` combines the [`TableId`] of the owning table with the column's
+/// positional index within that table's column list.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::schema::db::{ColumnId, TableId};
+///
+/// let id = ColumnId { table: TableId(0), index: 2 };
+/// assert_eq!(id.index, 2);
+/// ```
 #[derive(PartialEq, Eq, Clone, Copy, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ColumnId {
+    /// The table this column belongs to.
     pub table: TableId,
+    /// Zero-based position of this column in the table's column list.
     pub index: usize,
 }
 
@@ -62,11 +101,33 @@ impl fmt::Debug for ColumnId {
     }
 }
 
+/// The set of differences between two column lists.
+///
+/// Computed by [`ColumnsDiff::from`] and dereferences to
+/// `Vec<ColumnsDiffItem>` for iteration.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::schema::db::{ColumnsDiff, DiffContext, RenameHints, Schema};
+///
+/// let previous = Schema::default();
+/// let next = Schema::default();
+/// let hints = RenameHints::new();
+/// let cx = DiffContext::new(&previous, &next, &hints);
+/// let diff = ColumnsDiff::from(&cx, &[], &[]);
+/// assert!(diff.is_empty());
+/// ```
 pub struct ColumnsDiff<'a> {
     items: Vec<ColumnsDiffItem<'a>>,
 }
 
 impl<'a> ColumnsDiff<'a> {
+    /// Computes the diff between two column slices.
+    ///
+    /// Uses [`DiffContext`] to resolve rename hints. Columns matched by name
+    /// (or by rename hint) are compared field-by-field; unmatched columns in
+    /// `previous` become drops, and unmatched columns in `next` become adds.
     pub fn from(cx: &DiffContext<'a>, previous: &'a [Column], next: &'a [Column]) -> Self {
         fn has_diff(previous: &Column, next: &Column) -> bool {
             previous.name != next.name
@@ -106,6 +167,7 @@ impl<'a> ColumnsDiff<'a> {
         Self { items }
     }
 
+    /// Returns `true` if there are no column changes.
     pub const fn is_empty(&self) -> bool {
         self.items.is_empty()
     }
@@ -119,11 +181,17 @@ impl<'a> Deref for ColumnsDiff<'a> {
     }
 }
 
+/// A single change detected between two column lists.
 pub enum ColumnsDiffItem<'a> {
+    /// A new column was added.
     AddColumn(&'a Column),
+    /// An existing column was removed.
     DropColumn(&'a Column),
+    /// A column was modified (name, type, nullability, or other property changed).
     AlterColumn {
+        /// The column definition before the change.
         previous: &'a Column,
+        /// The column definition after the change.
         next: &'a Column,
     },
 }

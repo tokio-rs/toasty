@@ -11,6 +11,19 @@ use indexmap::IndexMap;
 /// - Struct fields flatten an embedded struct to multiple columns
 /// - Enum fields map to a discriminant column plus per-variant data columns
 /// - Relation fields (`BelongsTo`, `HasMany`, `HasOne`) don't have direct column storage
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::schema::mapping::Field;
+///
+/// match &field {
+///     Field::Primitive(p) => println!("column {:?}", p.column),
+///     Field::Struct(s) => println!("{} nested fields", s.fields.len()),
+///     Field::Enum(e) => println!("discriminant col {:?}", e.discriminant.column),
+///     Field::Relation(_) => println!("relation (no columns)"),
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub enum Field {
     /// A primitive field stored in a single column.
@@ -64,10 +77,13 @@ impl Field {
         }
     }
 
+    /// Returns `true` if this is a [`Field::Relation`].
     pub fn is_relation(&self) -> bool {
         matches!(self, Field::Relation(_))
     }
 
+    /// Returns the inner [`FieldPrimitive`] if this is a `Primitive` variant,
+    /// or `None` otherwise.
     pub fn as_primitive(&self) -> Option<&FieldPrimitive> {
         match self {
             Field::Primitive(p) => Some(p),
@@ -75,6 +91,8 @@ impl Field {
         }
     }
 
+    /// Returns a mutable reference to the inner [`FieldPrimitive`] if this is
+    /// a `Primitive` variant, or `None` otherwise.
     pub fn as_primitive_mut(&mut self) -> Option<&mut FieldPrimitive> {
         match self {
             Field::Primitive(p) => Some(p),
@@ -82,6 +100,8 @@ impl Field {
         }
     }
 
+    /// Returns the inner [`FieldStruct`] if this is a `Struct` variant, or
+    /// `None` otherwise.
     pub fn as_struct(&self) -> Option<&FieldStruct> {
         match self {
             Field::Struct(s) => Some(s),
@@ -89,6 +109,8 @@ impl Field {
         }
     }
 
+    /// Returns the inner [`FieldEnum`] if this is an `Enum` variant, or
+    /// `None` otherwise.
     pub fn as_enum(&self) -> Option<&FieldEnum> {
         match self {
             Field::Enum(e) => Some(e),
@@ -120,6 +142,15 @@ impl Field {
 }
 
 /// Maps a primitive field to its table column.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::schema::mapping::FieldPrimitive;
+///
+/// let prim: &FieldPrimitive = field.as_primitive().unwrap();
+/// println!("stored in column {:?}, lowering index {}", prim.column, prim.lowering);
+/// ```
 #[derive(Debug, Clone)]
 pub struct FieldPrimitive {
     /// The table column that stores this field's value.
@@ -155,6 +186,15 @@ pub struct FieldPrimitive {
 /// Embedded fields are stored by flattening their primitive fields into columns
 /// with names like `{field}_{embedded_field}`. This structure tracks the mapping
 /// for each field in the embedded struct.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::schema::mapping::FieldStruct;
+///
+/// let s: &FieldStruct = field.as_struct().unwrap();
+/// println!("{} nested fields, {} columns", s.fields.len(), s.columns.len());
+/// ```
 #[derive(Debug, Clone)]
 pub struct FieldStruct {
     /// Per-field mappings for the embedded struct's fields.
@@ -184,6 +224,16 @@ pub struct FieldStruct {
 /// The discriminant column always stores the active variant's integer discriminant.
 /// Each data variant additionally has nullable columns for its fields; unit variants
 /// have no extra columns (all variant-field columns are NULL for them).
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::schema::mapping::FieldEnum;
+///
+/// let e: &FieldEnum = field.as_enum().unwrap();
+/// println!("discriminant column: {:?}", e.discriminant.column);
+/// println!("{} variants", e.variants.len());
+/// ```
 #[derive(Debug, Clone)]
 pub struct FieldEnum {
     /// Mapping for the discriminant column.
@@ -200,6 +250,16 @@ pub struct FieldEnum {
 }
 
 /// Mapping for a single variant of an embedded enum.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::schema::mapping::EnumVariant;
+///
+/// for variant in &enum_mapping.variants {
+///     println!("discriminant={}, fields={}", variant.discriminant, variant.fields.len());
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub struct EnumVariant {
     /// The discriminant value for this variant.
@@ -212,10 +272,21 @@ pub struct EnumVariant {
 
 /// Maps a relation field (`BelongsTo`, `HasMany`, `HasOne`).
 ///
-/// Relations don't map to columns in this table — they are resolved through
+/// Relations don't map to columns in this table -- they are resolved through
 /// joins or foreign keys in other tables. A unique bit is assigned in the
 /// model's field mask space so that relation assignments are detected uniformly
 /// through the same mask intersection logic used for primitive and embedded fields.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::schema::mapping::FieldRelation;
+///
+/// if field.is_relation() {
+///     // No columns to iterate over
+///     assert_eq!(field.columns().count(), 0);
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub struct FieldRelation {
     /// Update coverage mask for this relation field.

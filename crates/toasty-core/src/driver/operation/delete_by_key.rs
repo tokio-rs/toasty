@@ -1,15 +1,33 @@
 use super::Operation;
 use crate::{schema::db::TableId, stmt};
 
+/// Deletes one or more records from a table by primary key.
+///
+/// Used by key-value drivers (e.g., DynamoDB). SQL drivers receive an
+/// equivalent `DELETE` statement via [`QuerySql`](super::QuerySql) instead.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::driver::operation::{DeleteByKey, Operation};
+///
+/// let op = DeleteByKey {
+///     table: table_id,
+///     keys: vec![key_value],
+///     filter: None,
+/// };
+/// let operation: Operation = op.into();
+/// ```
 #[derive(Debug, Clone)]
 pub struct DeleteByKey {
-    /// Which table to delete from
+    /// The table to delete from.
     pub table: TableId,
 
-    /// Which keys to delete
+    /// Primary key values identifying the records to delete.
     pub keys: Vec<stmt::Value>,
 
-    /// Only delete keys that match the filter
+    /// Optional filter expression. When set, only records whose key is in
+    /// `keys` *and* that match this filter are deleted.
     pub filter: Option<stmt::Expr>,
 }
 

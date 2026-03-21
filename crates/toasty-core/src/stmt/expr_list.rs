@@ -17,6 +17,7 @@ pub struct ExprList {
 }
 
 impl Expr {
+    /// Creates a list expression from an iterator of items convertible to [`Expr`].
     pub fn list<T>(items: impl IntoIterator<Item = T>) -> Self
     where
         T: Into<Self>,
@@ -27,14 +28,18 @@ impl Expr {
         .into()
     }
 
+    /// Creates a list expression from a pre-built vector of expressions.
     pub fn list_from_vec(items: Vec<Self>) -> Self {
         ExprList { items }.into()
     }
 
+    /// Returns `true` if this expression is a list (either `Expr::List` or
+    /// `Expr::Value(Value::List(...))`).
     pub fn is_list(&self) -> bool {
         matches!(self, Self::List(_) | Self::Value(Value::List(_)))
     }
 
+    /// Returns `true` if this expression is an empty list.
     pub fn is_list_empty(&self) -> bool {
         match self {
             Self::List(list) => list.items.is_empty(),
@@ -43,6 +48,11 @@ impl Expr {
         }
     }
 
+    /// Returns a reference to the inner [`ExprList`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not `Expr::List`.
     #[track_caller]
     pub fn as_list_unwrap(&self) -> &ExprList {
         match self {
@@ -51,6 +61,11 @@ impl Expr {
         }
     }
 
+    /// Returns a mutable reference to the inner [`ExprList`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not `Expr::List`.
     #[track_caller]
     pub fn as_list_mut_unwrap(&mut self) -> &mut ExprList {
         match self {
@@ -59,6 +74,8 @@ impl Expr {
         }
     }
 
+    /// Consumes the expression, returning `Some(ExprList)` if it is a list,
+    /// or `None` otherwise.
     pub fn into_list(self) -> Option<ExprList> {
         match self {
             Self::List(list) => Some(list),
@@ -68,10 +85,12 @@ impl Expr {
 }
 
 impl ExprList {
+    /// Returns `true` if the list contains no expressions.
     pub fn is_empty(&self) -> bool {
         self.items.is_empty()
     }
 
+    /// Returns the number of expressions in the list.
     pub fn len(&self) -> usize {
         self.items.len()
     }

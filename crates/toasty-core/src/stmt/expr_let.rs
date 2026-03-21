@@ -9,6 +9,14 @@ use super::Expr;
 /// `ExprLet` is transient scaffolding used during lowering. It is always
 /// inlined away (by substituting the bindings into the body) before the
 /// planner sees the expression tree.
+///
+/// # Examples
+///
+/// ```text
+/// let [x = 5, y = 10] in (arg(0) + arg(1))
+/// // bindings: [5, 10], body: arg(0) + arg(1)
+/// // after inlining: 5 + 10
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprLet {
     /// Expressions whose results are bound as `arg(0)`, `arg(1)`, etc. in a

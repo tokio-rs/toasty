@@ -26,6 +26,15 @@ impl Error {
     ///
     /// This is used when a driver's capability configuration is invalid or inconsistent.
     /// These errors indicate a bug in the driver implementation.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use toasty_core::Error;
+    ///
+    /// let err = Error::invalid_driver_configuration("inconsistent capability flags");
+    /// assert!(err.is_invalid_driver_configuration());
+    /// ```
     pub fn invalid_driver_configuration(message: impl Into<String>) -> Error {
         Error::from(super::ErrorKind::InvalidDriverConfiguration(
             InvalidDriverConfiguration {

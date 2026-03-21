@@ -27,6 +27,16 @@ impl Error {
     ///
     /// This is used when a query result has an unexpected structure - the database
     /// returned valid data, but its shape doesn't match what the operation expected.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use toasty_core::Error;
+    ///
+    /// let err = Error::invalid_result("expected Stream, got Count");
+    /// assert!(err.is_invalid_result());
+    /// assert_eq!(err.to_string(), "invalid result: expected Stream, got Count");
+    /// ```
     pub fn invalid_result(message: impl Into<String>) -> Error {
         Error::from(super::ErrorKind::InvalidResult(InvalidResult {
             message: message.into().into(),

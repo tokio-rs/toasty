@@ -11,7 +11,29 @@ use super::{
     UpdateTarget, Value, ValueRecord, Values, With,
 };
 
+/// Immutable visitor trait for the statement AST.
+///
+/// Implement this trait to walk the AST without modifying it. Each
+/// `visit_*` method has a default implementation that recurses into
+/// child nodes via the corresponding free function (e.g.,
+/// [`visit_expr`]). Override specific methods to inspect nodes of
+/// interest.
+///
+/// The companion [`for_each_expr`] helper visits every expression node
+/// in post-order.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::stmt::{visit, Expr, Value, Node};
+///
+/// let expr = Expr::from(Value::from(42_i64));
+/// let mut count = 0;
+/// visit::for_each_expr(&expr, |_| count += 1);
+/// assert_eq!(count, 1);
+/// ```
 pub trait Visit {
+    /// Dispatches to the appropriate `visit_*` method via [`Node::visit`].
     fn visit<N: Node>(&mut self, i: &N)
     where
         Self: Sized,
@@ -1130,6 +1152,10 @@ where
     }
 }
 
+/// Calls `f` for every [`Expr`] node reachable from `node`, in post-order.
+///
+/// This is a convenience wrapper that constructs a [`Visit`] implementation
+/// internally and walks the full AST rooted at `node`.
 pub fn for_each_expr<F>(node: &impl Node, f: F)
 where
     F: FnMut(&Expr),

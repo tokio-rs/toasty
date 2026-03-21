@@ -32,6 +32,16 @@ impl Error {
     /// - An optimistic lock version check that fails
     ///
     /// The context parameter provides information about what condition failed.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use toasty_core::Error;
+    ///
+    /// let err = Error::condition_failed("optimistic lock version mismatch");
+    /// assert!(err.is_condition_failed());
+    /// assert_eq!(err.to_string(), "condition failed: optimistic lock version mismatch");
+    /// ```
     pub fn condition_failed(context: impl Into<String>) -> Error {
         Error::from(super::ErrorKind::ConditionFailed(ConditionFailed {
             context: Some(context.into().into()),

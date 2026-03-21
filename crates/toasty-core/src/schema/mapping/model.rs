@@ -15,6 +15,16 @@ use crate::{
 /// references. The mapping supports scenarios where field names differ from
 /// column names, where type conversions are required (e.g., `Id<T>` to
 /// `String`), and where multiple models share a single table.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::schema::mapping::Model;
+///
+/// let model_mapping: &Model = schema.mapping_for(model_id);
+/// println!("model {:?} -> table {:?}", model_mapping.id, model_mapping.table);
+/// println!("{} columns, {} fields", model_mapping.columns.len(), model_mapping.fields.len());
+/// ```
 #[derive(Debug, Clone)]
 pub struct Model {
     /// The model this mapping applies to.
@@ -62,6 +72,16 @@ pub struct Model {
 /// Contains one expression per model field. Each expression references table
 /// columns and produces the corresponding model field value. During lowering,
 /// these expressions construct `SELECT` clauses that return model-shaped data.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::schema::mapping::TableToModel;
+///
+/// let t2m: &TableToModel = &model_mapping.table_to_model;
+/// // Get the full returning expression for SELECT
+/// let returning = t2m.lower_returning_model();
+/// ```
 #[derive(Debug, Default, Clone)]
 pub struct TableToModel {
     /// One expression per model field, indexed by field position.
@@ -70,11 +90,28 @@ pub struct TableToModel {
 
 impl TableToModel {
     /// Creates a new `TableToModel` from the given expression record.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use toasty_core::schema::mapping::TableToModel;
+    /// use toasty_core::stmt::ExprRecord;
+    ///
+    /// let record = ExprRecord::default();
+    /// let t2m = TableToModel::new(record);
+    /// ```
     pub fn new(expr: stmt::ExprRecord) -> TableToModel {
         TableToModel { expr }
     }
 
     /// Returns the complete expression record for use in a `RETURNING` clause.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// let expr = table_to_model.lower_returning_model();
+    /// // Use `expr` in a SELECT or RETURNING clause
+    /// ```
     pub fn lower_returning_model(&self) -> stmt::Expr {
         self.expr.clone().into()
     }
@@ -86,6 +123,13 @@ impl TableToModel {
     /// * `nesting` - The scope nesting level. Non-zero when the reference
     ///   appears in a subquery relative to the table source.
     /// * `index` - The field index within the model.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// // Get the expression for field 0 at the top-level scope
+    /// let expr = table_to_model.lower_expr_reference(0, 0);
+    /// ```
     pub fn lower_expr_reference(&self, nesting: usize, index: usize) -> stmt::Expr {
         let mut expr = self.expr[index].clone();
         let n = nesting;

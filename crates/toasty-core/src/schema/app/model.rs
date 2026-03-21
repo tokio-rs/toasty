@@ -2,38 +2,78 @@ use super::{Field, FieldId, FieldPrimitive, Index, Name, PrimaryKey};
 use crate::{driver, stmt, Result};
 use std::fmt;
 
+/// A model in the application schema.
+///
+/// Models come in three flavors:
+///
+/// - [`Model::Root`] -- a top-level model backed by its own database table.
+/// - [`Model::EmbeddedStruct`] -- a struct whose fields are flattened into a
+///   parent model's table.
+/// - [`Model::EmbeddedEnum`] -- an enum stored via a discriminant column plus
+///   optional per-variant data columns in the parent table.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::schema::app::{Model, Schema};
+///
+/// let schema: Schema = /* built from derive macros */;
+/// for model in schema.models() {
+///     if model.is_root() {
+///         println!("Root model: {}", model.name().upper_camel_case());
+///     }
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub enum Model {
-    /// Root model that maps to a database table and can be queried directly
+    /// A root model that maps to its own database table and can be queried
+    /// directly.
     Root(ModelRoot),
-    /// Embedded struct model that is flattened into its parent model's table
+    /// An embedded struct whose fields are flattened into its parent model's
+    /// table.
     EmbeddedStruct(EmbeddedStruct),
-    /// Embedded enum model stored as a discriminant integer column
+    /// An embedded enum stored as a discriminant integer column (plus optional
+    /// per-variant data columns) in the parent table.
     EmbeddedEnum(EmbeddedEnum),
 }
 
+/// A root model backed by its own database table.
+///
+/// Root models have a primary key, may define indices, and are the only model
+/// kind that can be the target of relations. They are the main entities users
+/// interact with through Toasty's query API.
+///
+/// # Examples
+///
+/// ```ignore
+/// let root = model.as_root_unwrap();
+/// let pk_fields: Vec<_> = root.primary_key_fields().collect();
+/// ```
 #[derive(Debug, Clone)]
 pub struct ModelRoot {
-    /// Uniquely identifies the model within the schema
+    /// Uniquely identifies this model within the schema.
     pub id: ModelId,
 
-    /// Name of the model
+    /// The model's name.
     pub name: Name,
 
-    /// Fields contained by the model
+    /// All fields defined on this model.
     pub fields: Vec<Field>,
 
-    /// The primary key for this model. Root models must have a primary key.
+    /// The primary key definition. Root models always have a primary key.
     pub primary_key: PrimaryKey,
 
-    /// If the schema specifies a table to map the model to, this is set.
+    /// Optional explicit table name. When `None`, a name is derived from the
+    /// model name.
     pub table_name: Option<String>,
 
-    /// Indices defined on this model.
+    /// Secondary indices defined on this model.
     pub indices: Vec<Index>,
 }
 
 impl ModelRoot {
+    /// Builds a `SELECT` query that filters by this model's primary key using
+    /// the supplied `input` to resolve argument values.
     pub fn find_by_id(&self, mut input: impl stmt::Input) -> stmt::Query {
         let filter = match &self.primary_key.fields[..] {
             [pk_field] => stmt::Expr::eq(
@@ -69,6 +109,9 @@ impl ModelRoot {
             .map(|pk_field| &self.fields[pk_field.index])
     }
 
+    /// Looks up a field by its application-level name.
+    ///
+    /// Returns `None` if no field with that name exists on this model.
     pub fn field_by_name(&self, name: &str) -> Option<&Field> {
         self.fields.iter().find(|field| field.name.app_name == name)
     }
@@ -81,22 +124,38 @@ impl ModelRoot {
     }
 }
 
+/// An embedded struct model whose fields are flattened into its parent model's
+/// database table.
+///
+/// Embedded structs do not have their own table or primary key. Their fields
+/// become additional columns in the parent table. Indices declared on an
+/// embedded struct's fields are propagated to physical DB indices on the parent
+/// table.
+///
+/// # Examples
+///
+/// ```ignore
+/// let embedded = model.as_embedded_struct_unwrap();
+/// for field in &embedded.fields {
+///     println!("  embedded field: {}", field.name.app_name);
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub struct EmbeddedStruct {
-    /// Uniquely identifies the model within the schema
+    /// Uniquely identifies this model within the schema.
     pub id: ModelId,
 
-    /// Name of the model
+    /// The model's name.
     pub name: Name,
 
-    /// Fields contained by the embedded struct
+    /// Fields contained by this embedded struct.
     pub fields: Vec<Field>,
 
     /// Indices defined on this embedded struct's fields.
     ///
-    /// These reference fields within this embedded struct (not the parent model).
-    /// The schema builder propagates them to physical DB indexes on the parent
-    /// table's flattened columns.
+    /// These reference fields within this embedded struct (not the parent
+    /// model). The schema builder propagates them to physical DB indices on
+    /// the parent table's flattened columns.
     pub indices: Vec<Index>,
 }
 
@@ -109,38 +168,64 @@ impl EmbeddedStruct {
     }
 }
 
+/// An embedded enum model stored in the parent table via a discriminant column
+/// and optional per-variant data columns.
+///
+/// The discriminant column holds an integer identifying the active variant.
+/// Variants may optionally carry data fields, which are stored as additional
+/// nullable columns in the parent table.
+///
+/// # Examples
+///
+/// ```ignore
+/// let ee = model.as_embedded_enum_unwrap();
+/// for variant in &ee.variants {
+///     println!("variant {} = {}", variant.name.upper_camel_case(), variant.discriminant);
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub struct EmbeddedEnum {
-    /// Uniquely identifies the model within the schema
+    /// Uniquely identifies this model within the schema.
     pub id: ModelId,
 
-    /// Name of the model
+    /// The model's name.
     pub name: Name,
 
-    /// The primitive type used for the discriminant column
+    /// The primitive type used for the discriminant column.
     pub discriminant: FieldPrimitive,
 
-    /// The enum's variants
+    /// The enum's variants.
     pub variants: Vec<EnumVariant>,
 
     /// All fields across all variants, with global indices. Each field's
-    /// `variant` field identifies which variant it belongs to.
+    /// [`variant`](Field::variant) identifies which variant it belongs to.
     pub fields: Vec<Field>,
 
     /// Indices defined on this embedded enum's variant fields.
     ///
-    /// These reference fields within this embedded enum (not the parent model).
-    /// The schema builder propagates them to physical DB indexes on the parent
-    /// table's flattened columns.
+    /// These reference fields within this embedded enum (not the parent
+    /// model). The schema builder propagates them to physical DB indices on
+    /// the parent table's flattened columns.
     pub indices: Vec<Index>,
 }
 
+/// One variant of an [`EmbeddedEnum`].
+///
+/// Each variant has a name and a discriminant integer that is stored in the
+/// database to identify which variant is active.
+///
+/// # Examples
+///
+/// ```ignore
+/// let variant = &embedded_enum.variants[0];
+/// println!("{}: discriminant = {}", variant.name.upper_camel_case(), variant.discriminant);
+/// ```
 #[derive(Debug, Clone)]
 pub struct EnumVariant {
-    /// The Rust variant name
+    /// The Rust variant name.
     pub name: Name,
 
-    /// The discriminant value stored in the database column
+    /// The integer discriminant value stored in the database column.
     pub discriminant: i64,
 }
 
@@ -169,11 +254,27 @@ impl EmbeddedEnum {
     }
 }
 
+/// Uniquely identifies a [`Model`] within a [`Schema`](super::Schema).
+///
+/// `ModelId` wraps a `usize` index into the schema's model map. It is `Copy`
+/// and can be used as a key for lookups.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::schema::app::ModelId;
+///
+/// let id = ModelId(0);
+/// let field_id = id.field(2);
+/// assert_eq!(field_id.model, id);
+/// assert_eq!(field_id.index, 2);
+/// ```
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ModelId(pub usize);
 
 impl Model {
+    /// Returns this model's [`ModelId`].
     pub fn id(&self) -> ModelId {
         match self {
             Model::Root(root) => root.id,
@@ -182,6 +283,7 @@ impl Model {
         }
     }
 
+    /// Returns a reference to this model's [`Name`].
     pub fn name(&self) -> &Name {
         match self {
             Model::Root(root) => &root.name,
@@ -205,6 +307,7 @@ impl Model {
         self.is_root()
     }
 
+    /// Returns the inner [`ModelRoot`] if this is a root model.
     pub fn as_root(&self) -> Option<&ModelRoot> {
         match self {
             Model::Root(root) => Some(root),
@@ -212,7 +315,11 @@ impl Model {
         }
     }
 
-    /// Returns a reference to the root model data, panicking if this is not a root model.
+    /// Returns a reference to the root model data.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is not a [`Model::Root`].
     pub fn as_root_unwrap(&self) -> &ModelRoot {
         match self {
             Model::Root(root) => root,
@@ -221,7 +328,11 @@ impl Model {
         }
     }
 
-    /// Returns a mutable reference to the root model data, panicking if this is not a root model.
+    /// Returns a mutable reference to the root model data.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is not a [`Model::Root`].
     pub fn as_root_mut_unwrap(&mut self) -> &mut ModelRoot {
         match self {
             Model::Root(root) => root,
@@ -230,7 +341,11 @@ impl Model {
         }
     }
 
-    /// Returns a reference to the embedded struct data, panicking if this is not an embedded struct.
+    /// Returns a reference to the embedded struct data.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is not a [`Model::EmbeddedStruct`].
     pub fn as_embedded_struct_unwrap(&self) -> &EmbeddedStruct {
         match self {
             Model::EmbeddedStruct(embedded) => embedded,
@@ -239,7 +354,11 @@ impl Model {
         }
     }
 
-    /// Returns a reference to the embedded enum data, panicking if this is not an embedded enum.
+    /// Returns a reference to the embedded enum data.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is not a [`Model::EmbeddedEnum`].
     pub fn as_embedded_enum_unwrap(&self) -> &EmbeddedEnum {
         match self {
             Model::EmbeddedEnum(e) => e,
@@ -257,7 +376,17 @@ impl Model {
     }
 }
 
-/// Identifies a specific variant within an embedded enum model.
+/// Identifies a specific variant within an [`EmbeddedEnum`] model.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::schema::app::ModelId;
+///
+/// let variant_id = ModelId(1).variant(0);
+/// assert_eq!(variant_id.model, ModelId(1));
+/// assert_eq!(variant_id.index, 0);
+/// ```
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct VariantId {
     /// The enum model this variant belongs to.

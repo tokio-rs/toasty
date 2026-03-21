@@ -1,9 +1,25 @@
 use std::fmt;
 
+/// A SQL set operation that combines result sets from multiple queries.
+///
+/// Used by [`ExprSetOp`](super::ExprSetOp) to specify how multiple query
+/// results are combined.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::stmt::SetOp;
+///
+/// let op = SetOp::Union;
+/// assert_eq!(op.to_string(), "UNION");
+/// ```
 #[derive(Copy, Clone, PartialEq)]
 pub enum SetOp {
+    /// Combines results from multiple queries, including duplicates.
     Union,
+    /// Returns rows from the first query that are not in the second.
     Except,
+    /// Returns only rows common to both queries.
     Intersect,
 }
 

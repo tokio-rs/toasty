@@ -25,6 +25,8 @@ pub struct ExprProject {
 }
 
 impl Expr {
+    /// Creates a projection expression that extracts a field from `base`
+    /// using the given projection path.
     pub fn project(base: impl Into<Self>, projection: impl Into<Projection>) -> Self {
         ExprProject {
             base: Box::new(base.into()),
@@ -33,14 +35,18 @@ impl Expr {
         .into()
     }
 
+    /// Shorthand for `Expr::project(Expr::arg(expr_arg), projection)`.
     pub fn arg_project(expr_arg: impl Into<ExprArg>, projection: impl Into<Projection>) -> Self {
         Self::project(Self::arg(expr_arg), projection)
     }
 
+    /// Returns `true` if this expression is a projection.
     pub fn is_project(&self) -> bool {
         matches!(self, Self::Project(..))
     }
 
+    /// Returns a reference to the inner [`ExprProject`] if this is a
+    /// projection, or `None` otherwise.
     pub fn as_project(&self) -> Option<&ExprProject> {
         match self {
             Self::Project(expr_project) => Some(expr_project),
@@ -48,6 +54,11 @@ impl Expr {
         }
     }
 
+    /// Returns a reference to the inner [`ExprProject`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not `Expr::Project`.
     #[track_caller]
     pub fn as_project_unwrap(&self) -> &ExprProject {
         self.as_project()

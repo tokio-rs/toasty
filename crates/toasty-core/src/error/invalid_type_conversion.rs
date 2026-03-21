@@ -25,6 +25,17 @@ impl Error {
     /// Creates a type conversion error.
     ///
     /// This is used when a value cannot be converted to the expected type.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use toasty_core::Error;
+    /// use toasty_core::stmt::Value;
+    ///
+    /// let err = Error::type_conversion(Value::I64(42), "String");
+    /// assert!(err.is_type_conversion());
+    /// assert_eq!(err.to_string(), "cannot convert I64 to String");
+    /// ```
     pub fn type_conversion(value: crate::stmt::Value, to_type: &'static str) -> Error {
         Error::from(super::ErrorKind::InvalidTypeConversion(
             InvalidTypeConversion { value, to_type },

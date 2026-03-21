@@ -1,3 +1,24 @@
+//! Numeric type support for [`Value`], [`Expr`], and [`Type`].
+//!
+//! This module uses the `impl_num!` macro to generate, for each integer type
+//! (`i8`..`u64`):
+//!
+//! - `Type::is_{ty}()` -- type predicate
+//! - `Value::to_{ty}()` / `Value::to_{ty}_unwrap()` -- cross-width conversion
+//! - `From<{ty}> for Value` / `TryFrom<Value> for {ty}`
+//! - `PartialEq<{ty}>` for both `Value` and `Expr`
+//!
+//! # Examples
+//!
+//! ```
+//! use toasty_core::stmt::{Value, Type};
+//!
+//! let v = Value::from(42_i64);
+//! assert_eq!(v, 42_i64);
+//! assert_eq!(v.to_i64(), Some(42));
+//! assert!(Type::I64.is_i64());
+//! ```
+
 use super::{Expr, Type, Value};
 
 macro_rules! try_from {

@@ -21,6 +21,7 @@ pub struct ExprRecord {
 }
 
 impl Expr {
+    /// Creates a record expression from an iterator of items convertible to [`Expr`].
     pub fn record<T>(items: impl IntoIterator<Item = T>) -> Self
     where
         T: Into<Self>,
@@ -28,14 +29,18 @@ impl Expr {
         Self::Record(ExprRecord::from_iter(items))
     }
 
+    /// Creates a record expression from a pre-built vector of field expressions.
     pub fn record_from_vec(fields: Vec<Self>) -> Self {
         Self::Record(ExprRecord::from_vec(fields))
     }
 
+    /// Returns `true` if this expression is a record.
     pub fn is_record(&self) -> bool {
         matches!(self, Self::Record(_))
     }
 
+    /// Returns a reference to the inner [`ExprRecord`] if this is a record,
+    /// or `None` otherwise.
     pub fn as_record(&self) -> Option<&ExprRecord> {
         match self {
             Self::Record(expr_record) => Some(expr_record),
@@ -43,12 +48,19 @@ impl Expr {
         }
     }
 
+    /// Returns a reference to the inner [`ExprRecord`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not `Expr::Record`.
     #[track_caller]
     pub fn as_record_unwrap(&self) -> &ExprRecord {
         self.as_record()
             .unwrap_or_else(|| panic!("expected Expr::Record; actual={self:#?}"))
     }
 
+    /// Returns a mutable reference to the inner [`ExprRecord`] if this is a
+    /// record, or `None` otherwise.
     pub fn as_record_mut(&mut self) -> Option<&mut ExprRecord> {
         match self {
             Self::Record(expr_record) => Some(expr_record),
@@ -56,6 +68,11 @@ impl Expr {
         }
     }
 
+    /// Returns a mutable reference to the inner [`ExprRecord`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not `Expr::Record`.
     #[track_caller]
     pub fn as_record_mut_unwrap(&mut self) -> &mut ExprRecord {
         match self {
@@ -64,6 +81,11 @@ impl Expr {
         }
     }
 
+    /// Consumes the expression and returns the inner [`ExprRecord`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not `Expr::Record`.
     pub fn into_record(self) -> ExprRecord {
         match self {
             Self::Record(expr_record) => expr_record,
@@ -71,6 +93,9 @@ impl Expr {
         }
     }
 
+    /// Returns the number of fields if this expression is a record (either
+    /// `Expr::Record` or `Expr::Value(Value::Record(...))`), or `None`
+    /// otherwise.
     pub fn record_len(&self) -> Option<usize> {
         match self {
             Expr::Record(expr_record) => Some(expr_record.len()),
@@ -79,6 +104,8 @@ impl Expr {
         }
     }
 
+    /// Consumes the expression and returns an iterator over the record's
+    /// fields if this is a record expression or value, or `None` otherwise.
     pub fn into_record_items(self) -> Option<impl Iterator<Item = Expr>> {
         let ret: Option<Box<dyn Iterator<Item = Expr>>> = match self {
             Expr::Record(expr_record) => Some(Box::new(expr_record.into_iter())),
@@ -93,14 +120,17 @@ impl Expr {
 }
 
 impl ExprRecord {
+    /// Creates a record from a pre-built vector of field expressions.
     pub fn from_vec(fields: Vec<Expr>) -> Self {
         Self { fields }
     }
 
+    /// Appends an expression as a new field at the end of the record.
     pub fn push(&mut self, expr: Expr) {
         self.fields.push(expr)
     }
 
+    /// Resizes the record to `new_len` fields, filling new slots with `value`.
     pub fn resize(&mut self, new_len: usize, value: impl Into<stmt::Expr>) {
         self.fields.resize(new_len, value.into());
     }

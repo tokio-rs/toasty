@@ -17,6 +17,7 @@ pub struct ExprIsNull {
 }
 
 impl Expr {
+    /// Creates an `IS NULL` expression.
     pub fn is_null(expr: impl Into<Self>) -> Self {
         ExprIsNull {
             expr: Box::new(expr.into()),
@@ -24,6 +25,7 @@ impl Expr {
         .into()
     }
 
+    /// Creates an `IS NOT NULL` expression (equivalent to `NOT(IS NULL(expr))`).
     pub fn is_not_null(expr: impl Into<Self>) -> Self {
         Self::not(Self::is_null(expr))
     }
