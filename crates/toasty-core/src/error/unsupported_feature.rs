@@ -27,6 +27,16 @@ impl Error {
     ///
     /// This is used when a database does not support a requested feature,
     /// such as a specific type, storage constraint, or capability.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use toasty_core::Error;
+    ///
+    /// let err = Error::unsupported_feature("ARRAY type not supported");
+    /// assert!(err.is_unsupported_feature());
+    /// assert_eq!(err.to_string(), "unsupported feature: ARRAY type not supported");
+    /// ```
     pub fn unsupported_feature(message: impl Into<String>) -> Error {
         Error::from(super::ErrorKind::UnsupportedFeature(UnsupportedFeature {
             message: message.into().into(),

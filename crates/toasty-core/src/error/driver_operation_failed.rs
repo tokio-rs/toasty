@@ -37,6 +37,16 @@ impl Error {
     ///
     /// This is the preferred way to convert driver-specific errors (rusqlite, tokio-postgres,
     /// mysql_async, AWS SDK errors, etc.) into toasty errors.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use toasty_core::Error;
+    ///
+    /// let io_err = std::io::Error::new(std::io::ErrorKind::ConnectionRefused, "refused");
+    /// let err = Error::driver_operation_failed(io_err);
+    /// assert!(err.is_driver_operation_failed());
+    /// ```
     pub fn driver_operation_failed(err: impl std::error::Error + Send + Sync + 'static) -> Error {
         Error::from(super::ErrorKind::DriverOperationFailed(
             DriverOperationFailed {

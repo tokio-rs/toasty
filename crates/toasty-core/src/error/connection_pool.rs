@@ -29,6 +29,16 @@ impl Error {
     /// Creates an error from a connection pool error.
     ///
     /// This is used for errors that occur when managing the connection pool (e.g., deadpool errors).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use toasty_core::Error;
+    ///
+    /// let io_err = std::io::Error::new(std::io::ErrorKind::TimedOut, "pool exhausted");
+    /// let err = Error::connection_pool(io_err);
+    /// assert!(err.is_connection_pool());
+    /// ```
     pub fn connection_pool(err: impl std::error::Error + Send + Sync + 'static) -> Error {
         Error::from(super::ErrorKind::ConnectionPool(ConnectionPool {
             inner: Box::new(err),

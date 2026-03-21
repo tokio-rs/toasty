@@ -68,7 +68,17 @@ impl core::fmt::Display for ValidationFailed {
 }
 
 impl Error {
-    /// Creates a general validation error.
+    /// Creates a general validation error with a custom message.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use toasty_core::Error;
+    ///
+    /// let err = Error::validation_failed("email format invalid");
+    /// assert!(err.is_validation());
+    /// assert_eq!(err.to_string(), "validation failed: email format invalid");
+    /// ```
     pub fn validation_failed(message: impl Into<String>) -> Error {
         Error::from(super::ErrorKind::ValidationFailed(ValidationFailed {
             kind: ValidationFailedKind::Message {
@@ -80,6 +90,20 @@ impl Error {
     /// Creates a validation error for a length constraint violation.
     ///
     /// This is used when a string value violates minimum or maximum length constraints.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use toasty_core::Error;
+    ///
+    /// // Value too short
+    /// let err = Error::validation_length(2, Some(5), Some(100));
+    /// assert_eq!(err.to_string(), "value length 2 is too short (minimum: 5)");
+    ///
+    /// // Value too long
+    /// let err = Error::validation_length(150, Some(5), Some(100));
+    /// assert_eq!(err.to_string(), "value length 150 is too long (maximum: 100)");
+    /// ```
     pub fn validation_length(value_len: usize, min: Option<usize>, max: Option<usize>) -> Error {
         Error::from(super::ErrorKind::ValidationFailed(ValidationFailed {
             kind: ValidationFailedKind::Length {

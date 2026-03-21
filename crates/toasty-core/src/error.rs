@@ -1,3 +1,11 @@
+//! Error types for Toasty operations.
+//!
+//! This module defines [`Error`], the unified error type used throughout
+//! Toasty. Errors are cheap to clone (backed by `Arc`) and support chaining
+//! via [`Error::context`]. Each error variant has a dedicated constructor
+//! (e.g., [`Error::record_not_found`]) and a corresponding predicate
+//! (e.g., [`Error::is_record_not_found`]).
+
 mod adhoc;
 mod condition_failed;
 mod connection_pool;
