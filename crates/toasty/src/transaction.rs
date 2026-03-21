@@ -182,9 +182,11 @@ impl<'a> Executor for Transaction<'a> {
     }
 
     async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> Result<Value> {
-        let returns_list = matches!(&stmt,
-            toasty_core::stmt::Statement::Query(q) if !q.single
-        );
+        let returns_list = match &stmt {
+            toasty_core::stmt::Statement::Query(q) => !q.single,
+            toasty_core::stmt::Statement::Insert(i) => !i.source.single,
+            _ => false,
+        };
 
         let (tx, rx) = oneshot::channel();
 

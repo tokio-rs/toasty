@@ -79,6 +79,14 @@ impl<T> Statement<T> {
         }
     }
 
+    /// Change the type tag without altering the underlying untyped statement.
+    pub fn cast<U>(self) -> Statement<U> {
+        Statement {
+            untyped: self.untyped,
+            _p: PhantomData,
+        }
+    }
+
     pub(crate) fn into_untyped_query(self) -> stmt::Query {
         match self.untyped {
             stmt::Statement::Query(q) => q,

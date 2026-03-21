@@ -122,9 +122,11 @@ impl Executor for Db {
     }
 
     async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> Result<Value> {
-        let returns_list = matches!(&stmt,
-            toasty_core::stmt::Statement::Query(q) if !q.single
-        );
+        let returns_list = match &stmt {
+            toasty_core::stmt::Statement::Query(q) => !q.single,
+            toasty_core::stmt::Statement::Insert(i) => !i.source.single,
+            _ => false,
+        };
 
         let (tx, rx) = oneshot::channel();
 
@@ -139,7 +141,7 @@ impl Executor for Db {
 
         let mut stream = rx.await.unwrap()?;
 
-        if returns_list {
+        let result = if returns_list {
             let values = stream.collect().await?;
             Ok(Value::List(values))
         } else {
@@ -147,7 +149,9 @@ impl Executor for Db {
                 Some(value) => value,
                 None => Ok(Value::Null),
             }
-        }
+        };
+
+        result
     }
 
     fn schema(&mut self) -> &Arc<Schema> {
