@@ -1,7 +1,7 @@
 use super::{Delete, Expr, IntoStatement, List, Statement, Value};
 use crate::{
     schema::{Load, Model},
-    Executor, ExecutorExt, Result,
+    Executor, Result,
 };
 use std::{fmt, marker::PhantomData};
 use toasty_core::stmt::{self, Offset};
@@ -241,16 +241,29 @@ impl<T> Query<T> {
     }
 }
 
-impl<M> Query<List<M>> {
-    pub fn first(mut self) -> Query<M> {
-        assert!(!self.untyped.single, "query is single");
-        self.untyped.single = true;
+impl<T> Query<List<T>> {
+    pub fn first(mut self) -> Query<Option<T>> {
+        set_first(&mut self.untyped);
 
         Query {
             untyped: self.untyped,
             _p: PhantomData,
         }
     }
+
+    pub fn one(mut self) -> Query<T> {
+        set_first(&mut self.untyped);
+
+        Query {
+            untyped: self.untyped,
+            _p: PhantomData,
+        }
+    }
+}
+
+fn set_first(query: &mut stmt::Query) {
+    assert!(!query.single, "query is single");
+    query.single = true;
 }
 
 impl<T: Load> Query<T> {

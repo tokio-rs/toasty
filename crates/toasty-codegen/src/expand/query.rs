@@ -36,6 +36,10 @@ impl Expand<'_> {
                     self.stmt.first()
                 }
 
+                #vis fn one(self) -> #toasty::stmt::Query<#model_ident> {
+                    self.stmt.one()
+                }
+
                 #vis async fn get(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
                     // executor.get(self.stmt).await
                     todo!()

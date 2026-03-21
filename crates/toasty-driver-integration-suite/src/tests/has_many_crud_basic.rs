@@ -207,7 +207,14 @@ pub async fn scoped_find_by_id(test: &mut Test) -> Result<()> {
     assert_eq!(reloaded.title, todo.title);
 
     // Trying to find the same todo scoped by user2 is missing
-    assert_none!(user2.todos().filter_by_id(todo.id).first(&mut db).await?);
+    assert_none!(
+        user2
+            .todos()
+            .filter_by_id(todo.id)
+            .first()
+            .exec(&mut db)
+            .await?
+    );
 
     let reloaded = User::filter_by_id(user1.id)
         .todos()
@@ -564,7 +571,7 @@ pub async fn update_user_with_null_todo_is_err(test: &mut Test) -> Result<()> {
     let mut stmt: stmt::Update<Todo> =
         stmt::Update::new_single(stmt::Query::from_expr((&todo).into_expr()));
     stmt.set(2, toasty_core::stmt::Value::Null);
-    let _ = db.exec(stmt.into()).await?;
+    stmt.exec(&mut db).await?;
 
     // User is not deleted
     let u1_reloaded = User::get_by_id(&mut db, &u1.id).await?;

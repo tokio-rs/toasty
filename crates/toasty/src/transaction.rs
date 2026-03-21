@@ -5,7 +5,7 @@ use crate::{db::ConnectionOperation, Executor, Result};
 use toasty_core::{
     async_trait,
     driver::operation::{self, IsolationLevel},
-    stmt::{Value, ValueStream},
+    stmt::Value,
     Schema,
 };
 use tokio::sync::oneshot;

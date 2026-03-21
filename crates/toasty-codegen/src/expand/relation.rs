@@ -478,7 +478,10 @@ impl Expand<'_> {
                 {
                     use #toasty::IntoStatement;
                     <#ty as #toasty::Relation>::One::from_stmt(
-                        #toasty::stmt::Association::one(self.into_statement().into_list_query().unwrap(), Self::fields().#field_ident().into()).into_statement().into_query().unwrap()
+                        #toasty::stmt::Association::one(
+                            self.into_statement().into_query().unwrap().to_list(),
+                            Self::fields().#field_ident().into()
+                        ).into_statement().into_query().unwrap()
                     )
                 }
             }

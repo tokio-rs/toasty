@@ -1,7 +1,7 @@
 use crate::{
     schema::Model,
     stmt::{self, IntoExpr, IntoInsert, List},
-    Executor, ExecutorExt, Result,
+    Executor, Result,
 };
 use toasty_core::stmt as core_stmt;
 
@@ -60,7 +60,7 @@ impl<M: Model> CreateMany<M> {
         merged.into_list_expr()
     }
 
-    pub async fn exec(self, executor: &mut dyn Executor) -> Result<Vec<M>> {
+    pub async fn exec(self, _executor: &mut dyn Executor) -> Result<Vec<M>> {
         /*
         // If there are no records to create, then return an empty vec
         if self.stmts.is_empty() {

@@ -37,7 +37,7 @@ toasty_driver_integration_suite_macros::generate_test_registry!("src/tests");
 mod prelude {
     pub(crate) use crate::{columns, stmt::Any, table_id, Test};
     pub(crate) use toasty::schema::Register;
-    pub(crate) use toasty::{ExecutorExt, Result};
+    pub(crate) use toasty::Result;
     pub(crate) type BoxError = Box<dyn std::error::Error + 'static>;
 
     pub(crate) use assert_struct::assert_struct;

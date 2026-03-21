@@ -9,12 +9,7 @@ pub use pool::*;
 use crate::{engine::Engine, Executor, Result, Transaction, TransactionBuilder};
 pub(crate) use pool::{ConnectionHandle, ConnectionOperation};
 
-use toasty_core::{
-    async_trait,
-    driver::Driver,
-    stmt::{Value, ValueStream},
-    Schema,
-};
+use toasty_core::{async_trait, driver::Driver, stmt::Value, Schema};
 
 use std::sync::Arc;
 use tokio::sync::oneshot;

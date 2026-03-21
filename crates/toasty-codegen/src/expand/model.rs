@@ -167,7 +167,7 @@ impl Expand<'_> {
             #toasty::IntoStatement::into_statement(
                 #query_struct_ident::default()
                     .#filter_method_ident( #( & self.#arg_idents ),* )
-                    .first()
+                    .one()
             )
         }
     }
@@ -181,7 +181,6 @@ impl Expand<'_> {
         quote! {
             #query_struct_ident::default()
                 .#filter_method_ident( #( & self.#arg_idents ),* )
-                .first()
                 .delete()
         }
     }

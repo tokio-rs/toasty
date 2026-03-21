@@ -1,5 +1,8 @@
 use super::{List, Query};
-use crate::schema::Model;
+use crate::{
+    schema::{Load, Model},
+    Executor, Result,
+};
 use std::{fmt, marker::PhantomData};
 use toasty_core::stmt;
 
@@ -14,13 +17,13 @@ use toasty_core::stmt;
 ///
 /// By default, an update returns the changed records. Call
 /// [`set_returning_none`](Update::set_returning_none) to suppress this.
-pub struct Update<M> {
+pub struct Update<T> {
     pub(crate) untyped: stmt::Update,
-    _p: PhantomData<M>,
+    _p: PhantomData<T>,
 }
 
 // Methods available on all Update<M> regardless of M
-impl<M> Update<M> {
+impl<T> Update<T> {
     /// Wrap a raw untyped [`stmt::Update`](toasty_core::stmt::Update).
     ///
     /// # Examples
@@ -172,6 +175,12 @@ impl<M> Update<M> {
     /// ```
     pub fn into_untyped_stmt(self) -> stmt::Statement {
         self.untyped.into()
+    }
+}
+
+impl<T: Load> Update<T> {
+    pub async fn exec(self, executor: &mut dyn Executor) -> Result<T::Output> {
+        executor.exec(self.into()).await
     }
 }
 

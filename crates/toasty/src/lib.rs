@@ -114,9 +114,6 @@ pub use db::Db;
 mod executor;
 pub use executor::Executor;
 
-mod executor_ext;
-pub use executor_ext::ExecutorExt;
-
 mod engine;
 
 pub mod schema;
@@ -145,7 +142,7 @@ pub mod codegen_support {
         },
         stmt::{self, IntoExpr, IntoInsert, IntoStatement, List, Path},
         update_target::UpdateTarget,
-        Db, Error, Executor, ExecutorExt, Result, Statement,
+        Db, Error, Executor, Result, Statement,
     };
     #[cfg(feature = "serde")]
     pub use serde_json;
