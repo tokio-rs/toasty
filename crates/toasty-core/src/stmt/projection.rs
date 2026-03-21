@@ -30,11 +30,11 @@ use std::{
 /// use toasty_core::stmt::Projection;
 ///
 /// let p = Projection::single(3);
-/// assert_eq!(p.as_slice(), &[3]);
+/// assert_eq!(p.as_slice(), &[3_usize]);
 ///
 /// let p = Projection::identity();
 /// assert!(p.is_identity());
-/// assert_eq!(p.as_slice(), &[]);
+/// assert!(p.as_slice().is_empty());
 /// ```
 #[derive(Clone, PartialEq, Eq)]
 pub struct Projection {

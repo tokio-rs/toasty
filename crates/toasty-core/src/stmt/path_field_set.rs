@@ -15,8 +15,8 @@ use std::ops::{BitAnd, BitOr, BitOrAssign};
 /// let mut set = PathFieldSet::new();
 /// set.insert(0);
 /// set.insert(2);
-/// assert!(set.contains(0));
-/// assert!(!set.contains(1));
+/// assert!(set.contains(0_usize));
+/// assert!(!set.contains(1_usize));
 /// assert_eq!(set.len(), 2);
 /// ```
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
