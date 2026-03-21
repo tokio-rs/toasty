@@ -45,6 +45,7 @@ pub struct Update {
 }
 
 impl Statement {
+    /// Returns `true` if this statement is an [`Update`].
     pub fn is_update(&self) -> bool {
         matches!(self, Self::Update(_))
     }

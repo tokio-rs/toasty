@@ -1,14 +1,24 @@
+//! Expression substitution via the [`VisitMut`](super::VisitMut) pattern.
+//!
+//! `Substitute` is a [`VisitMut`](super::VisitMut) implementation that
+//! replaces `Arg` and `Reference` nodes in an expression tree by resolving
+//! them through an [`Input`]. It respects scoping: `Let` bodies and `Map`
+//! functions are not recursed into (their local args must remain intact).
+
 use crate::stmt::{
     visit, visit_mut, ExprSet, Input, Projection, Query, TableDerived, TableRef, Values,
 };
 
 use super::{Expr, Value};
 
+/// A [`VisitMut`](super::VisitMut) that substitutes `Arg` and `Reference`
+/// nodes using an [`Input`].
 pub(crate) struct Substitute<I> {
     input: I,
 }
 
 impl<I> Substitute<I> {
+    /// Creates a new `Substitute` with the given input resolver.
     pub(crate) fn new(input: I) -> Substitute<I> {
         Substitute { input }
     }

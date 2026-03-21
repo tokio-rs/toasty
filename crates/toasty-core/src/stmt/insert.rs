@@ -54,6 +54,7 @@ impl Insert {
 }
 
 impl Statement {
+    /// Returns `true` if this statement is an [`Insert`].
     pub fn is_insert(&self) -> bool {
         matches!(self, Statement::Insert(..))
     }

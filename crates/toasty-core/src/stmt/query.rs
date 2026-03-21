@@ -189,6 +189,7 @@ impl Query {
 }
 
 impl Statement {
+    /// Returns `true` if this statement is a [`Query`].
     pub fn is_query(&self) -> bool {
         matches!(self, Statement::Query(_))
     }

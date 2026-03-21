@@ -38,6 +38,7 @@ impl Delete {
 }
 
 impl Statement {
+    /// Returns `true` if this statement is a [`Delete`].
     pub fn is_delete(&self) -> bool {
         matches!(self, Statement::Delete(..))
     }

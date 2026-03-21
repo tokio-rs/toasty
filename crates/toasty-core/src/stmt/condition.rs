@@ -43,6 +43,8 @@ impl Condition {
 }
 
 impl Statement {
+    /// Returns a reference to this statement's condition, if it has one and it
+    /// is set. Only `Update` statements support conditions.
     pub fn condition(&self) -> Option<&Condition> {
         match self {
             Statement::Update(update) if update.condition.is_some() => Some(&update.condition),

@@ -145,6 +145,7 @@ impl Assignments {
         );
     }
 
+    /// Removes the assignment for the given projection, if any.
     pub fn unset<Q>(&mut self, key: &Q)
     where
         Q: ?Sized + Hash + Equivalent<Projection>,
@@ -174,6 +175,7 @@ impl Assignments {
         }
     }
 
+    /// Adds a `Remove` assignment for the given projection.
     pub fn remove<Q>(&mut self, key: Q, expr: impl Into<Expr>)
     where
         Q: Into<Projection>,
@@ -194,6 +196,7 @@ impl Assignments {
         }
     }
 
+    /// Removes and returns the assignment for the given projection.
     pub fn take<Q>(&mut self, key: &Q) -> Option<Assignment>
     where
         Q: ?Sized + Hash + Equivalent<Projection>,
@@ -201,18 +204,22 @@ impl Assignments {
         self.assignments.swap_remove(key)
     }
 
+    /// Returns an iterator over the assignment projections (keys).
     pub fn keys(&self) -> impl Iterator<Item = &Projection> + '_ {
         self.assignments.keys()
     }
 
+    /// Returns an iterator over the assignment expressions (values).
     pub fn exprs(&self) -> impl Iterator<Item = &Expr> + '_ {
         self.assignments.values().map(|assignment| &assignment.expr)
     }
 
+    /// Returns an iterator over `(projection, assignment)` pairs.
     pub fn iter(&self) -> impl Iterator<Item = (&Projection, &Assignment)> + '_ {
         self.assignments.iter()
     }
 
+    /// Returns a mutable iterator over `(projection, assignment)` pairs.
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (&Projection, &mut Assignment)> + '_ {
         self.assignments.iter_mut()
     }
@@ -271,10 +278,12 @@ where
 }
 
 impl AssignmentOp {
+    /// Returns `true` if this is the `Set` operation.
     pub fn is_set(self) -> bool {
         matches!(self, Self::Set)
     }
 
+    /// Returns `true` if this is the `Remove` operation.
     pub fn is_remove(self) -> bool {
         matches!(self, Self::Remove)
     }
