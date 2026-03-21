@@ -1,24 +1,40 @@
 use super::{Expr, Path};
 use crate::stmt::{self, ExprSet, Node, Query, Statement, Value};
 
-/// TODO: rename since this is also used in `Select`?
+/// Specifies what data a statement returns.
+///
+/// Used both as the projection in `SELECT` queries and as the `RETURNING`
+/// clause in `INSERT`, `UPDATE`, and `DELETE` statements.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::stmt::Returning;
+///
+/// let ret = Returning::Model { include: vec![] };
+/// assert!(ret.is_model());
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub enum Returning {
-    /// Return the full model with specified includes
+    /// Return the full model with the specified association includes.
     Model {
+        /// Paths to associations that should be eagerly loaded.
         include: Vec<Path>,
     },
 
+    /// Return whether the operation changed any rows.
     Changed,
 
-    /// Return an expression.
+    /// Return the result of evaluating an expression against the source rows.
     Expr(Expr),
 
-    /// Return a value instead of a projection of the statement source.
+    /// Return a fixed value, independent of the statement source.
     Value(Expr),
 }
 
 impl Returning {
+    /// Creates a `Returning::Expr` from an iterator of expressions, combining
+    /// them into a record expression.
     pub fn from_expr_iter<T>(items: impl IntoIterator<Item = T>) -> Self
     where
         T: Into<Expr>,

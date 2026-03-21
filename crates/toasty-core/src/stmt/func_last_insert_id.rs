@@ -15,11 +15,18 @@ use crate::stmt::{Expr, ExprFunc};
 ///
 /// # MySQL Documentation
 ///
-/// See: https://dev.mysql.com/doc/refman/8.0/en/information-functions.html#function_last-insert-id
+/// See: <https://dev.mysql.com/doc/refman/8.0/en/information-functions.html#function_last-insert-id>
+///
+/// # Examples
+///
+/// ```text
+/// LAST_INSERT_ID()
+/// ```
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct FuncLastInsertId;
 
 impl Expr {
+    /// Creates a `LAST_INSERT_ID()` function expression.
     pub fn last_insert_id() -> Self {
         FuncLastInsertId.into()
     }

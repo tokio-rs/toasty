@@ -31,10 +31,12 @@ impl Condition {
         }
     }
 
+    /// Returns `true` if a condition expression is set.
     pub fn is_some(&self) -> bool {
         self.expr.is_some()
     }
 
+    /// Returns `true` if no condition expression is set.
     pub fn is_none(&self) -> bool {
         self.expr.is_none()
     }

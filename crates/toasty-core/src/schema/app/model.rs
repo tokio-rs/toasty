@@ -209,12 +209,23 @@ pub struct EmbeddedEnum {
     pub indices: Vec<Index>,
 }
 
+/// One variant of an [`EmbeddedEnum`].
+///
+/// Each variant has a name and a discriminant integer that is stored in the
+/// database to identify which variant is active.
+///
+/// # Examples
+///
+/// ```ignore
+/// let variant = &embedded_enum.variants[0];
+/// println!("{}: discriminant = {}", variant.name.upper_camel_case(), variant.discriminant);
+/// ```
 #[derive(Debug, Clone)]
 pub struct EnumVariant {
-    /// The Rust variant name
+    /// The Rust variant name.
     pub name: Name,
 
-    /// The discriminant value stored in the database column
+    /// The integer discriminant value stored in the database column.
     pub discriminant: i64,
 }
 
@@ -243,11 +254,27 @@ impl EmbeddedEnum {
     }
 }
 
+/// Uniquely identifies a [`Model`] within a [`Schema`](super::Schema).
+///
+/// `ModelId` wraps a `usize` index into the schema's model map. It is `Copy`
+/// and can be used as a key for lookups.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::schema::app::ModelId;
+///
+/// let id = ModelId(0);
+/// let field_id = id.field(2);
+/// assert_eq!(field_id.model, id);
+/// assert_eq!(field_id.index, 2);
+/// ```
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ModelId(pub usize);
 
 impl Model {
+    /// Returns this model's [`ModelId`].
     pub fn id(&self) -> ModelId {
         match self {
             Model::Root(root) => root.id,
@@ -256,6 +283,7 @@ impl Model {
         }
     }
 
+    /// Returns a reference to this model's [`Name`].
     pub fn name(&self) -> &Name {
         match self {
             Model::Root(root) => &root.name,

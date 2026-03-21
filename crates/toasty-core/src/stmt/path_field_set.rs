@@ -70,6 +70,7 @@ impl PathFieldSet {
         self.container.contains(val.into())
     }
 
+    /// Returns an iterator over the field indices in ascending order.
     pub fn iter(&self) -> PathFieldSetIter<'_> {
         PathFieldSetIter {
             inner: self.container.iter(),
@@ -77,14 +78,17 @@ impl PathFieldSet {
         }
     }
 
+    /// Returns `true` if the set contains no field indices.
     pub fn is_empty(&self) -> bool {
         self.container.is_empty()
     }
 
+    /// Returns the number of field indices in the set.
     pub fn len(&self) -> usize {
         self.container.len()
     }
 
+    /// Inserts a field index into the set.
     pub fn insert(&mut self, val: usize) {
         self.container.insert(val);
     }
