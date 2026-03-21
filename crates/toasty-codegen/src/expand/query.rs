@@ -41,8 +41,7 @@ impl Expand<'_> {
                 }
 
                 #vis async fn get(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
-                    // executor.get(self.stmt).await
-                    todo!()
+                    self.one().exec(executor).await
                 }
 
                 #vis fn update(self) -> #update_struct_ident {

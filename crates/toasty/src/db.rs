@@ -122,7 +122,10 @@ impl Executor for Db {
     }
 
     async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> Result<Value> {
-        /*
+        let returns_list = matches!(&stmt,
+            toasty_core::stmt::Statement::Query(q) if !q.single
+        );
+
         let (tx, rx) = oneshot::channel();
 
         let conn = self.connection().await?;
@@ -134,9 +137,17 @@ impl Executor for Db {
             })
             .unwrap();
 
-        rx.await.unwrap()
-        */
-        todo!()
+        let mut stream = rx.await.unwrap()?;
+
+        if returns_list {
+            let values = stream.collect().await?;
+            Ok(Value::List(values))
+        } else {
+            match stream.next().await {
+                Some(value) => value,
+                None => Ok(Value::Null),
+            }
+        }
     }
 
     fn schema(&mut self) -> &Arc<Schema> {

@@ -231,15 +231,11 @@ impl Expand<'_> {
                 #builder_methods
 
                 #vis async fn exec(mut self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<()> {
-                    use #toasty::{UpdateTarget as _};
-                    /*
+                    use #toasty::UpdateTarget as _;
                     let stmt = self.target.to_update_stmt(self.assignments);
-                    let stream = executor.exec(stmt.into()).await?;
-                    let values = stream.collect().await?;
-                    self.target.apply_result(values)?;
+                    let value = executor.exec_untyped(stmt.into_untyped_stmt()).await?;
+                    self.target.apply_result(vec![value])?;
                     Ok(())
-                    */
-                    todo!()
                 }
             }
 

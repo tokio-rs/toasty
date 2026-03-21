@@ -60,14 +60,11 @@ impl<M: Model> CreateMany<M> {
         merged.into_list_expr()
     }
 
-    pub async fn exec(self, _executor: &mut dyn Executor) -> Result<Vec<M>> {
-        /*
-        // If there are no records to create, then return an empty vec
+    pub async fn exec(self, executor: &mut dyn Executor) -> Result<Vec<M>> {
         if self.stmts.is_empty() {
             return Ok(vec![]);
         }
 
-        // TODO: improve
         let mut stmts = self.stmts.into_iter();
         let mut merged = stmts.next().unwrap();
 
@@ -77,14 +74,9 @@ impl<M: Model> CreateMany<M> {
 
         merged.untyped.source.single = false;
 
-        let mut records = executor.exec(merged.into()).await?;
-        let mut result = Vec::new();
-        while let Some(value) = records.next().await {
-            result.push(M::load(value?)?);
-        }
-        Ok(result)
-        */
-        todo!()
+        let stmt: crate::Statement<List<M>> =
+            crate::Statement::from_untyped_stmt(merged.untyped.into());
+        executor.exec(stmt).await
     }
 }
 

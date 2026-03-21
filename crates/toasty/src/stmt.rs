@@ -29,6 +29,7 @@ mod path;
 pub use path::Path;
 
 pub use crate::schema::{Auto, Field};
+use crate::{schema::Load, Executor};
 
 mod query;
 pub use query::Query;
@@ -59,7 +60,7 @@ pub struct Statement<M> {
     _p: PhantomData<M>,
 }
 
-impl<M> Statement<M> {
+impl<T> Statement<T> {
     /// Wrap a raw untyped [`stmt::Statement`](toasty_core::stmt::Statement),
     /// tagging it with type `M`.
     ///
@@ -100,11 +101,17 @@ impl<M> Statement<M> {
     /// );
     /// assert!(query_stmt.into_query().is_some());
     /// ```
-    pub fn into_query(self) -> Option<Query<M>> {
+    pub fn into_query(self) -> Option<Query<T>> {
         match self.untyped {
             stmt::Statement::Query(q) => Some(Query::from_untyped(q)),
             _ => None,
         }
+    }
+}
+
+impl<T: Load> Statement<T> {
+    pub async fn exec(self, executor: &mut dyn Executor) -> crate::Result<T::Output> {
+        executor.exec(self).await
     }
 }
 

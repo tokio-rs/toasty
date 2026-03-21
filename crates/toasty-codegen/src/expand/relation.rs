@@ -47,9 +47,8 @@ impl Expand<'_> {
 
                 /// Iterate all entries in the relation
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<Vec<#model_ident>> {
-                    // use #toasty::IntoStatement;
-                    // executor.all(self.into_statement().into_query().unwrap()).await
-                    todo!()
+                    use #toasty::IntoStatement;
+                    self.into_statement().exec(executor).await
                 }
 
                 #vis fn query(
@@ -69,22 +68,16 @@ impl Expand<'_> {
 
                 /// Add an item to the association
                 #vis async fn insert(self, executor: &mut dyn #toasty::Executor, item: impl #toasty::IntoExpr<#toasty::List<#model_ident>>) -> #toasty::Result<()> {
-                    /*
                     let stmt = self.stmt.insert(item);
                     executor.exec(stmt).await?;
                     Ok(())
-                    */
-                    todo!()
                 }
 
                 /// Remove items from the association
                 #vis async fn remove(self, executor: &mut dyn #toasty::Executor, item: impl #toasty::IntoExpr<#model_ident>) -> #toasty::Result<()> {
-                    /*
                     let stmt = self.stmt.remove(item);
                     executor.exec(stmt).await?;
                     Ok(())
-                    */
-                    todo!()
                 }
             }
 
@@ -110,10 +103,7 @@ impl Expand<'_> {
                 }
 
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
-                    /*
-                    executor.get(self.stmt).await
-                    */
-                    todo!()
+                    self.stmt.one().exec(executor).await
                 }
             }
 
@@ -139,8 +129,7 @@ impl Expand<'_> {
                 }
 
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#toasty::Option<#model_ident>> {
-                    // executor.first(self.stmt).await
-                    todo!()
+                    self.stmt.first().exec(executor).await
                 }
             }
 
