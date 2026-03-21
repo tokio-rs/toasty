@@ -11,6 +11,26 @@ use std::{
 };
 use tokio_stream::{Stream, StreamExt};
 
+/// An async stream of [`Value`]s with optional type checking.
+///
+/// `ValueStream` combines a buffered front-end with an optional async
+/// [`Stream`] back-end. Values can be pushed into the buffer or pulled
+/// from the underlying stream. When a [`Type`] is attached via
+/// [`typed`](ValueStream::typed), every yielded value is checked at
+/// runtime.
+///
+/// Implements [`Stream`] from `tokio_stream`, yielding
+/// `Result<Value>` items.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::stmt::{Value, ValueStream};
+///
+/// let mut stream = ValueStream::from_value(Value::from(42_i64));
+/// let val = stream.next().await.unwrap().unwrap();
+/// assert_eq!(val, Value::from(42_i64));
+/// ```
 #[derive(Default)]
 pub struct ValueStream {
     buffer: Buffer,
@@ -36,6 +56,7 @@ enum Buffer {
 type DynStream = Pin<Box<dyn Stream<Item = crate::Result<Value>> + Send + 'static>>;
 
 impl ValueStream {
+    /// Creates a stream containing a single value.
     pub fn from_value(value: impl Into<Value>) -> Self {
         Self {
             buffer: Buffer::One(value.into()),
@@ -44,6 +65,7 @@ impl ValueStream {
         }
     }
 
+    /// Creates a stream backed by an async [`Stream`] of `Result<Value>`.
     pub fn from_stream<T: Stream<Item = crate::Result<Value>> + Send + 'static>(stream: T) -> Self {
         Self {
             buffer: Buffer::Empty,
@@ -52,6 +74,7 @@ impl ValueStream {
         }
     }
 
+    /// Creates a fully-buffered stream from a vector of values.
     pub fn from_vec(records: Vec<Value>) -> Self {
         Self {
             buffer: Buffer::Many(records.into()),
@@ -60,6 +83,7 @@ impl ValueStream {
         }
     }
 
+    /// Creates a stream from a fallible iterator.
     #[allow(clippy::should_implement_trait)]
     pub fn from_iter<T, I>(iter: I) -> Self
     where
@@ -97,12 +121,16 @@ impl ValueStream {
         }
     }
 
-    /// The stream will contain at least this number of elements
+    /// Returns the minimum number of elements this stream will yield.
+    ///
+    /// This is derived from the stream's `size_hint` lower bound plus
+    /// the number of buffered elements.
     pub fn min_len(&self) -> usize {
         let (ret, _) = self.size_hint();
         ret
     }
 
+    /// Consumes the stream and collects all values into a `Vec`.
     pub async fn collect(mut self) -> crate::Result<Vec<Value>> {
         let mut ret = Vec::with_capacity(self.min_len());
 
@@ -113,6 +141,10 @@ impl ValueStream {
         Ok(ret)
     }
 
+    /// Fully buffers the stream and returns a clone of it.
+    ///
+    /// After this call, both the original and the returned stream are
+    /// fully buffered and contain the same values.
     pub async fn dup(&mut self) -> crate::Result<Self> {
         self.buffer().await?;
 
@@ -123,6 +155,8 @@ impl ValueStream {
         })
     }
 
+    /// Returns a clone if the stream is fully buffered, or `None` if
+    /// there is an unconsumed async stream that cannot be cloned.
     pub fn try_clone(&self) -> Option<Self> {
         if self.stream.is_some() {
             return None;
@@ -135,6 +169,10 @@ impl ValueStream {
         })
     }
 
+    /// Drains the underlying async stream into the buffer.
+    ///
+    /// After this call, all remaining values are buffered locally and
+    /// [`is_buffered`](ValueStream::is_buffered) returns `true`.
     pub async fn buffer(&mut self) -> crate::Result<()> {
         if let Some(stream) = &mut self.stream {
             while let Some(res) = stream.next().await {
@@ -169,6 +207,13 @@ impl ValueStream {
         }
     }
 
+    /// Returns a mutable iterator over the buffered values.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the stream has an unconsumed async back-end. Call
+    /// [`buffer`](ValueStream::buffer) first to ensure all values are
+    /// buffered.
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Value> {
         assert!(self.stream.is_none());
 
@@ -180,6 +225,16 @@ impl ValueStream {
         }
     }
 
+    /// Attaches a [`Type`] constraint to this stream.
+    ///
+    /// Every value yielded from the stream (both already-buffered and
+    /// future) will be checked against `ty` at runtime. If a value does
+    /// not match, the check panics with a diagnostic message.
+    ///
+    /// # Panics
+    ///
+    /// Panics if an already-buffered value is not compatible with `ty`,
+    /// or if a previously set type differs from `ty`.
     #[track_caller]
     pub fn typed(mut self, ty: Type) -> ValueStream {
         let location = Location::caller();

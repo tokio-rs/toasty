@@ -38,6 +38,7 @@ pub struct ExprMap {
 }
 
 impl Expr {
+    /// Creates a map expression that applies `map` to each element of `base`.
     pub fn map(base: impl Into<Self>, map: impl Into<Self>) -> Self {
         ExprMap {
             base: Box::new(base.into()),
@@ -46,6 +47,8 @@ impl Expr {
         .into()
     }
 
+    /// Returns a reference to the inner [`ExprMap`] if this is a map
+    /// expression, or `None` otherwise.
     pub fn as_map(&self) -> Option<&ExprMap> {
         match self {
             Self::Map(expr) => Some(expr),
@@ -53,6 +56,11 @@ impl Expr {
         }
     }
 
+    /// Returns a reference to the inner [`ExprMap`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not `Expr::Map`.
     #[track_caller]
     pub fn as_map_unwrap(&self) -> &ExprMap {
         self.as_map()

@@ -31,8 +31,8 @@ pub use operation::{IsolationLevel, Operation};
 use crate::{
     async_trait,
     schema::{
-        Schema,
         db::{AppliedMigration, Migration, SchemaDiff},
+        Schema,
     },
 };
 

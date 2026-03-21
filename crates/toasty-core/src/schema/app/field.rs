@@ -8,27 +8,45 @@ use super::{
 use crate::{driver, stmt, Result};
 use std::fmt;
 
+/// A single field within a model.
+///
+/// Fields are the building blocks of a model's data structure. Each field has a
+/// unique [`FieldId`], a name, a type (primitive, embedded, or relation), and
+/// metadata such as nullability, primary-key membership, auto-population
+/// strategy, and validation constraints.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::schema::app::{Field, Schema};
+///
+/// let schema: Schema = /* ... */;
+/// let model = schema.model(model_id).as_root_unwrap();
+/// for field in &model.fields {
+///     println!("{}: primary_key={}", field.name.app_name, field.primary_key);
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub struct Field {
-    /// Uniquely identifies the field within the containing model.
+    /// Uniquely identifies this field within its containing model.
     pub id: FieldId,
 
-    /// The field name
+    /// The field's application and storage names.
     pub name: FieldName,
 
-    /// Primitive, relation, composite, ...
+    /// The field's type: primitive, embedded, or a relation variant.
     pub ty: FieldTy,
 
-    /// True if the field can be nullable (`None` in Rust).
+    /// `true` if this field accepts `None` / `NULL` values.
     pub nullable: bool,
 
-    /// True if the field is part of the primary key
+    /// `true` if this field is part of the model's primary key.
     pub primary_key: bool,
 
-    /// Specified if and how Toasty should automatically populate this field for new values
+    /// If set, Toasty automatically populates this field on insert.
     pub auto: Option<AutoStrategy>,
 
-    /// Any additional field constraints
+    /// Validation constraints applied to this field's values.
     pub constraints: Vec<Constraint>,
 
     /// If this field belongs to an enum variant, identifies that variant.
@@ -36,69 +54,139 @@ pub struct Field {
     pub variant: Option<VariantId>,
 }
 
+/// Uniquely identifies a [`Field`] within a schema.
+///
+/// Composed of the owning model's [`ModelId`] and a positional index into that
+/// model's field list.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::schema::app::{FieldId, ModelId};
+///
+/// let id = FieldId { model: ModelId(0), index: 2 };
+/// assert_eq!(id.index, 2);
+/// ```
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FieldId {
+    /// The model this field belongs to.
     pub model: ModelId,
+    /// Positional index within the model's field list.
     pub index: usize,
 }
 
+/// The name of a field, with separate application and storage representations.
+///
+/// The `app_name` is the Rust-facing name (e.g., `user_name`). The optional
+/// `storage_name` overrides the column name used in the database; when `None`,
+/// the `app_name` is used as the storage name.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::schema::app::FieldName;
+///
+/// let name = FieldName {
+///     app_name: "user_name".to_string(),
+///     storage_name: Some("username".to_string()),
+/// };
+/// assert_eq!(name.storage_name(), "username");
+///
+/// let default_name = FieldName {
+///     app_name: "email".to_string(),
+///     storage_name: None,
+/// };
+/// assert_eq!(default_name.storage_name(), "email");
+/// ```
 #[derive(Debug, Clone)]
 pub struct FieldName {
+    /// The application-level (Rust) name of the field.
     pub app_name: String,
+    /// Optional override for the database column name. When `None`, `app_name`
+    /// is used.
     pub storage_name: Option<String>,
 }
 
 impl FieldName {
+    /// Returns the storage (database column) name for this field.
+    ///
+    /// Falls back to [`app_name`](FieldName::app_name) when no explicit
+    /// storage name is set.
     pub fn storage_name(&self) -> &str {
         self.storage_name.as_ref().unwrap_or(&self.app_name)
     }
 }
 
+/// The type of a [`Field`], distinguishing primitives, embedded types, and
+/// relation variants.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::schema::app::{FieldPrimitive, FieldTy};
+/// use toasty_core::stmt::Type;
+///
+/// let ty = FieldTy::Primitive(FieldPrimitive {
+///     ty: Type::String,
+///     storage_ty: None,
+///     serialize: None,
+/// });
+/// assert!(ty.is_primitive());
+/// assert!(!ty.is_relation());
+/// ```
 #[derive(Clone)]
 pub enum FieldTy {
+    /// A primitive (scalar) field backed by a single column.
     Primitive(FieldPrimitive),
+    /// An embedded struct or enum, flattened into the parent table.
     Embedded(Embedded),
+    /// The owning side of a relationship (stores the foreign key).
     BelongsTo(BelongsTo),
+    /// The inverse side of a one-to-many relationship.
     HasMany(HasMany),
+    /// The inverse side of a one-to-one relationship.
     HasOne(HasOne),
 }
 
 impl Field {
-    /// Gets the id.
+    /// Returns this field's [`FieldId`].
     pub fn id(&self) -> FieldId {
         self.id
     }
 
-    /// Gets the name.
+    /// Returns a reference to this field's [`FieldName`].
     pub fn name(&self) -> &FieldName {
         &self.name
     }
 
-    /// Gets the type.
+    /// Returns a reference to this field's [`FieldTy`].
     pub fn ty(&self) -> &FieldTy {
         &self.ty
     }
 
-    /// Gets whether the field is nullable.
+    /// Returns `true` if this field is nullable.
     pub fn nullable(&self) -> bool {
         self.nullable
     }
 
-    /// Gets the primary key.
+    /// Returns `true` if this field is part of the primary key.
     pub fn primary_key(&self) -> bool {
         self.primary_key
     }
 
-    /// Gets the [`Auto`].
+    /// Returns the auto-population strategy, if one is configured.
     pub fn auto(&self) -> Option<&AutoStrategy> {
         self.auto.as_ref()
     }
 
+    /// Returns `true` if this field uses auto-increment for value generation.
     pub fn is_auto_increment(&self) -> bool {
         self.auto().map(|auto| auto.is_increment()).unwrap_or(false)
     }
 
+    /// Returns `true` if this field is a relation (`BelongsTo`, `HasMany`, or
+    /// `HasOne`).
     pub fn is_relation(&self) -> bool {
         self.ty.is_relation()
     }
@@ -127,7 +215,10 @@ impl Field {
         self.relation_target_id().map(|id| schema.model(id))
     }
 
-    /// The type the field **evaluates** too. This is the "expression type".
+    /// Returns the expression type this field evaluates to.
+    ///
+    /// For primitives this is the scalar type; for relations and embedded types
+    /// it is the type visible to the application layer.
     pub fn expr_ty(&self) -> &stmt::Type {
         match &self.ty {
             FieldTy::Primitive(primitive) => &primitive.ty,
@@ -138,6 +229,11 @@ impl Field {
         }
     }
 
+    /// Returns the paired relation field, if this field is a relation.
+    ///
+    /// For `BelongsTo` this returns the inverse `HasMany`/`HasOne` (if linked).
+    /// For `HasMany` and `HasOne` this returns the paired `BelongsTo`.
+    /// Returns `None` for primitive and embedded fields.
     pub fn pair(&self) -> Option<FieldId> {
         match &self.ty {
             FieldTy::Primitive(_) => None,
@@ -160,10 +256,12 @@ impl Field {
 }
 
 impl FieldTy {
+    /// Returns `true` if this is a [`FieldTy::Primitive`].
     pub fn is_primitive(&self) -> bool {
         matches!(self, Self::Primitive(..))
     }
 
+    /// Returns the inner [`FieldPrimitive`] if this is a primitive field.
     pub fn as_primitive(&self) -> Option<&FieldPrimitive> {
         match self {
             Self::Primitive(primitive) => Some(primitive),
@@ -171,6 +269,12 @@ impl FieldTy {
         }
     }
 
+    /// Returns the inner [`FieldPrimitive`], panicking if this is not a
+    /// primitive field.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not [`FieldTy::Primitive`].
     #[track_caller]
     pub fn as_primitive_unwrap(&self) -> &FieldPrimitive {
         match self {

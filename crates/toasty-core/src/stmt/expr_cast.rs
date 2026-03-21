@@ -20,6 +20,7 @@ pub struct ExprCast {
 }
 
 impl Expr {
+    /// Creates a type cast expression that converts `expr` to the target type.
     pub fn cast(expr: impl Into<Self>, ty: impl Into<Type>) -> Self {
         ExprCast {
             expr: Box::new(expr.into()),
@@ -28,6 +29,7 @@ impl Expr {
         .into()
     }
 
+    /// Returns `true` if this expression is a type cast.
     pub fn is_cast(&self) -> bool {
         matches!(self, Self::Cast(_))
     }

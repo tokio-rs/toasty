@@ -1,7 +1,21 @@
-//! PartialEq implementations for Value with Rust primitive types
+//! [`PartialEq`] implementations for [`Value`] and [`Expr`] with Rust
+//! primitive types.
 //!
-//! This module enables direct comparison between Value enum variants and their
-//! corresponding Rust primitive types, making test assertions cleaner and more readable.
+//! This module enables direct comparison between `Value` / `Expr` enum
+//! variants and their corresponding Rust types (e.g., `bool`, `String`,
+//! `&str`), making assertions more ergonomic.
+//!
+//! # Examples
+//!
+//! ```
+//! use toasty_core::stmt::Value;
+//!
+//! let v = Value::from("hello");
+//! assert_eq!(v, "hello");
+//!
+//! let v = Value::from(true);
+//! assert_eq!(v, true);
+//! ```
 
 use super::{Expr, Value};
 

@@ -4,33 +4,58 @@ use crate::{
     stmt,
 };
 
+/// Queries a table by primary key (or secondary index) with optional filtering,
+/// ordering, and pagination.
+///
+/// This is the primary read operation for key-value drivers. The driver applies
+/// `pk_filter` against the index, then applies the optional post-`filter`, and
+/// returns up to `limit` rows in the requested `order`.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::driver::operation::{QueryPk, Operation};
+///
+/// let op = QueryPk {
+///     table: table_id,
+///     index: None, // query the primary key
+///     select: vec![col_a, col_b],
+///     pk_filter: pk_expr,
+///     filter: None,
+///     limit: Some(10),
+///     order: None,
+///     cursor: None,
+/// };
+/// let operation: Operation = op.into();
+/// ```
 #[derive(Debug, Clone)]
 pub struct QueryPk {
-    /// Table to query
+    /// The table to query.
     pub table: TableId,
 
-    /// Optional index to query. None = primary key, Some(id) = secondary index
+    /// Index to query. `None` means the primary key; `Some(id)` means a
+    /// secondary index.
     pub index: Option<IndexId>,
 
-    /// Which columns to get
+    /// Which columns to include in the returned rows.
     pub select: Vec<ColumnId>,
 
-    /// How to filter the index.
+    /// Filter expression applied against the index key columns.
     pub pk_filter: stmt::Expr,
 
-    /// Additional filtering done on the result before returning it to the
-    /// caller.
+    /// Optional post-filter applied to rows after the index scan, before
+    /// returning results to the caller.
     pub filter: Option<stmt::Expr>,
 
-    /// Maximum number of items to return. `None` means no limit.
+    /// Maximum number of rows to return. `None` means no limit.
     pub limit: Option<i64>,
 
-    /// Sort key ordering direction for queries on a table with a composite
-    /// primary key. `None` uses the driver's default ordering.
+    /// Sort key ordering direction for tables with a composite primary key.
+    /// `None` uses the driver's default ordering.
     pub order: Option<stmt::Direction>,
 
-    /// Cursor for resuming a paginated query. Contains the serialized key of
-    /// the last item from a previous page of results.
+    /// Pagination cursor. Contains the serialized key of the last item from a
+    /// previous page of results. When set, the query resumes after this key.
     pub cursor: Option<stmt::Value>,
 }
 

@@ -1,8 +1,30 @@
 use crate::{schema::db, stmt};
 
+/// Describes what a database driver supports.
+///
+/// The query planner reads these flags to decide which [`Operation`](super::Operation)
+/// variants to generate. For example, a SQL driver sets `sql: true` and
+/// receives `QuerySql` operations, while DynamoDB sets `sql: false` and
+/// receives key-value operations like `GetByKey` and `QueryPk`.
+///
+/// Pre-built configurations are available as associated constants:
+/// [`SQLITE`](Self::SQLITE), [`POSTGRESQL`](Self::POSTGRESQL),
+/// [`MYSQL`](Self::MYSQL), and [`DYNAMODB`](Self::DYNAMODB).
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::driver::Capability;
+///
+/// let cap = &Capability::SQLITE;
+/// assert!(cap.sql);
+/// assert!(cap.returning_from_mutation);
+/// assert!(!cap.select_for_update);
+/// ```
 #[derive(Debug)]
 pub struct Capability {
-    /// When true, the database uses a SQL-based query language.
+    /// When `true`, the database uses a SQL-based query language and the
+    /// planner will emit [`QuerySql`](super::operation::QuerySql) operations.
     pub sql: bool,
 
     /// Column storage types supported by the database.
@@ -27,6 +49,11 @@ pub struct Capability {
     /// Whether the database has an auto increment modifier for integer columns.
     pub auto_increment: bool,
 
+    /// Whether the database supports `VARCHAR(n)` column types natively.
+    ///
+    /// Must be consistent with [`StorageTypes::varchar`]: when `true`,
+    /// `varchar` must be `Some`; when `false`, `varchar` must be `None`.
+    /// Use [`Capability::validate`] to check this invariant.
     pub native_varchar: bool,
 
     /// Whether the database has native support for Timestamp types.
@@ -65,6 +92,27 @@ pub struct Capability {
     pub test_connection_pool: bool,
 }
 
+/// Maps application-level types to the concrete database column types used for
+/// storage.
+///
+/// Each database has different native type support. For example, PostgreSQL has
+/// a native `UUID` type while SQLite stores UUIDs as `BLOB`. This struct
+/// captures those mappings so the schema layer can generate correct DDL and the
+/// driver can encode/decode values appropriately.
+///
+/// Pre-built configurations: [`SQLITE`](Self::SQLITE),
+/// [`POSTGRESQL`](Self::POSTGRESQL), [`MYSQL`](Self::MYSQL),
+/// [`DYNAMODB`](Self::DYNAMODB).
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::driver::StorageTypes;
+///
+/// let st = &StorageTypes::POSTGRESQL;
+/// // PostgreSQL stores UUIDs natively
+/// assert!(matches!(st.default_uuid_type, toasty_core::schema::db::Type::Uuid));
+/// ```
 #[derive(Debug)]
 pub struct StorageTypes {
     /// The default storage type for a string.
@@ -107,6 +155,26 @@ pub struct StorageTypes {
 }
 
 /// The database's capabilities to mutate the schema (tables, columns, indices).
+///
+/// Used by the migration generator to decide how to express schema changes.
+/// For example, SQLite cannot alter column types so migrations must recreate
+/// the table instead.
+///
+/// Pre-built configurations: [`SQLITE`](Self::SQLITE),
+/// [`POSTGRESQL`](Self::POSTGRESQL), [`MYSQL`](Self::MYSQL),
+/// [`DYNAMODB`](Self::DYNAMODB).
+///
+/// # Examples
+///
+/// Access through [`Capability::schema_mutations`]:
+///
+/// ```
+/// use toasty_core::driver::Capability;
+///
+/// let cap = &Capability::POSTGRESQL;
+/// assert!(cap.schema_mutations.alter_column_type);
+/// assert!(!cap.schema_mutations.alter_column_properties_atomic);
+/// ```
 #[derive(Debug)]
 pub struct SchemaMutations {
     /// Whether the database can change the type of an existing column.
@@ -322,6 +390,7 @@ impl StorageTypes {
         max_unsigned_integer: Some(i64::MAX as u64),
     };
 
+    /// PostgreSQL storage types.
     pub const POSTGRESQL: StorageTypes = StorageTypes {
         default_string_type: db::Type::Text,
 
@@ -353,6 +422,7 @@ impl StorageTypes {
         max_unsigned_integer: Some(i64::MAX as u64),
     };
 
+    /// MySQL storage types.
     pub const MYSQL: StorageTypes = StorageTypes {
         default_string_type: db::Type::VarChar(191),
 
@@ -388,6 +458,7 @@ impl StorageTypes {
         max_unsigned_integer: None,
     };
 
+    /// DynamoDB storage types.
     pub const DYNAMODB: StorageTypes = StorageTypes {
         default_string_type: db::Type::Text,
 
@@ -415,22 +486,27 @@ impl StorageTypes {
 }
 
 impl SchemaMutations {
+    /// SQLite schema mutation capabilities. SQLite cannot alter column types.
     pub const SQLITE: Self = Self {
         alter_column_type: false,
         alter_column_properties_atomic: false,
     };
 
+    /// PostgreSQL schema mutation capabilities. Supports altering column types
+    /// but not atomically changing multiple column properties.
     pub const POSTGRESQL: Self = Self {
         alter_column_type: true,
         alter_column_properties_atomic: false,
     };
 
+    /// MySQL schema mutation capabilities. Supports altering column types and
+    /// atomically changing multiple column properties in a single statement.
     pub const MYSQL: Self = Self {
         alter_column_type: true,
         alter_column_properties_atomic: true,
     };
 
-    // DynamoDB migrations are currently not supported.
+    /// DynamoDB schema mutation capabilities. Migrations are not currently supported.
     pub const DYNAMODB: Self = Self {
         alter_column_type: false,
         alter_column_properties_atomic: false,

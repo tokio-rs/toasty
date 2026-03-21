@@ -21,6 +21,7 @@ pub struct ExprInList {
 }
 
 impl Expr {
+    /// Creates an `IN` list expression: `lhs IN rhs`.
     pub fn in_list(lhs: impl Into<Self>, rhs: impl Into<Self>) -> Self {
         ExprInList {
             expr: Box::new(lhs.into()),

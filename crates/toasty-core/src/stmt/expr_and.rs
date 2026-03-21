@@ -20,6 +20,10 @@ pub struct ExprAnd {
 }
 
 impl Expr {
+    /// Creates an AND expression from two operands.
+    ///
+    /// Flattens nested ANDs: `and(and(a, b), c)` produces `and(a, b, c)`.
+    /// Short-circuits on `true`: `and(true, x)` returns `x`.
     pub fn and(lhs: impl Into<Self>, rhs: impl Into<Self>) -> Self {
         let mut lhs = lhs.into();
         let rhs = rhs.into();
@@ -46,6 +50,10 @@ impl Expr {
         }
     }
 
+    /// Creates an AND expression from a vector of operands.
+    ///
+    /// Returns `Expr::Value(true)` for an empty vector and unwraps
+    /// single-element vectors into the element itself.
     pub fn and_from_vec(operands: Vec<Self>) -> Self {
         if operands.is_empty() {
             return true.into();
