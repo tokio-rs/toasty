@@ -307,6 +307,7 @@ impl Model {
         self.is_root()
     }
 
+    /// Returns the inner [`ModelRoot`] if this is a root model.
     pub fn as_root(&self) -> Option<&ModelRoot> {
         match self {
             Model::Root(root) => Some(root),
@@ -314,7 +315,11 @@ impl Model {
         }
     }
 
-    /// Returns a reference to the root model data, panicking if this is not a root model.
+    /// Returns a reference to the root model data.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is not a [`Model::Root`].
     pub fn as_root_unwrap(&self) -> &ModelRoot {
         match self {
             Model::Root(root) => root,
@@ -323,7 +328,11 @@ impl Model {
         }
     }
 
-    /// Returns a mutable reference to the root model data, panicking if this is not a root model.
+    /// Returns a mutable reference to the root model data.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is not a [`Model::Root`].
     pub fn as_root_mut_unwrap(&mut self) -> &mut ModelRoot {
         match self {
             Model::Root(root) => root,
@@ -332,7 +341,11 @@ impl Model {
         }
     }
 
-    /// Returns a reference to the embedded struct data, panicking if this is not an embedded struct.
+    /// Returns a reference to the embedded struct data.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is not a [`Model::EmbeddedStruct`].
     pub fn as_embedded_struct_unwrap(&self) -> &EmbeddedStruct {
         match self {
             Model::EmbeddedStruct(embedded) => embedded,
@@ -341,7 +354,11 @@ impl Model {
         }
     }
 
-    /// Returns a reference to the embedded enum data, panicking if this is not an embedded enum.
+    /// Returns a reference to the embedded enum data.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is not a [`Model::EmbeddedEnum`].
     pub fn as_embedded_enum_unwrap(&self) -> &EmbeddedEnum {
         match self {
             Model::EmbeddedEnum(e) => e,
@@ -359,7 +376,17 @@ impl Model {
     }
 }
 
-/// Identifies a specific variant within an embedded enum model.
+/// Identifies a specific variant within an [`EmbeddedEnum`] model.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::schema::app::ModelId;
+///
+/// let variant_id = ModelId(1).variant(0);
+/// assert_eq!(variant_id.model, ModelId(1));
+/// assert_eq!(variant_id.index, 0);
+/// ```
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct VariantId {
     /// The enum model this variant belongs to.

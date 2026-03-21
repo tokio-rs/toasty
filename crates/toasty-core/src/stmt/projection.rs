@@ -13,12 +13,40 @@ use std::{
     ops,
 };
 
+/// A sequence of field indices describing how to navigate into a nested
+/// value.
+///
+/// A `Projection` can be:
+/// - **Identity** (empty) -- refers to the base value itself
+/// - **Single-step** -- indexes one level deep (e.g., field 2 of a record)
+/// - **Multi-step** -- indexes through multiple levels (e.g., field 1, then
+///   field 0 of the nested record)
+///
+/// Dereferences to `[usize]`, so slice operations work directly.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::stmt::Projection;
+///
+/// let p = Projection::single(3);
+/// assert_eq!(p.as_slice(), &[3]);
+///
+/// let p = Projection::identity();
+/// assert!(p.is_identity());
+/// assert_eq!(p.as_slice(), &[]);
+/// ```
 #[derive(Clone, PartialEq, Eq)]
 pub struct Projection {
     steps: Steps,
 }
 
+/// Trait for types that can be projected through a [`Projection`].
+///
+/// Returns the projected expression, or `None` if the projection is not
+/// applicable.
 pub trait Project {
+    /// Applies the projection and returns the resulting expression.
     fn project(self, projection: &Projection) -> Option<Expr>;
 }
 
@@ -65,20 +93,23 @@ impl Hash for Steps {
     }
 }
 
+/// An iterator over the steps of a [`Projection`].
 pub struct Iter<'a>(std::slice::Iter<'a, usize>);
 
 impl Projection {
+    /// Creates an identity projection (zero steps, refers to the base itself).
     pub const fn identity() -> Self {
         Self {
             steps: Steps::Identity,
         }
     }
 
-    /// The path references the root (i.e. the projection base)
+    /// Returns `true` if this is an identity projection (no steps).
     pub const fn is_identity(&self) -> bool {
         matches!(self.steps, Steps::Identity)
     }
 
+    /// Creates a single-step projection indexing one field.
     pub fn single(step: usize) -> Self {
         Self {
             steps: Steps::Single([step]),
@@ -92,10 +123,12 @@ impl Projection {
         }
     }
 
+    /// Returns the projection steps as a slice.
     pub fn as_slice(&self) -> &[usize] {
         self.steps.as_slice()
     }
 
+    /// Appends a step to this projection.
     pub fn push(&mut self, step: usize) {
         match &mut self.steps {
             Steps::Identity => {
@@ -110,6 +143,7 @@ impl Projection {
         }
     }
 
+    /// Returns `true` if this projection is equal to `other`.
     pub fn resolves_to(&self, other: impl Into<Self>) -> bool {
         let other = other.into();
         *self == other
