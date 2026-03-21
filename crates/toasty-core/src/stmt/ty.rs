@@ -177,10 +177,25 @@ pub enum Type {
 }
 
 impl Type {
+    /// Creates a [`Type::List`] wrapping the given element type.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use toasty_core::stmt::Type;
+    /// let ty = Type::list(Type::String);
+    /// assert!(ty.is_list());
+    /// ```
     pub fn list(ty: impl Into<Self>) -> Self {
         Self::List(Box::new(ty.into()))
     }
 
+    /// Returns the element type of this list type, panicking if this is not
+    /// a [`Type::List`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the type is not a `List` variant.
     #[track_caller]
     pub fn as_list_unwrap(&self) -> &Type {
         match self {
@@ -189,34 +204,42 @@ impl Type {
         }
     }
 
+    /// Returns `true` if this is [`Type::Bool`].
     pub fn is_bool(&self) -> bool {
         matches!(self, Self::Bool)
     }
 
+    /// Returns `true` if this is [`Type::Model`].
     pub fn is_model(&self) -> bool {
         matches!(self, Self::Model(_))
     }
 
+    /// Returns `true` if this is [`Type::List`].
     pub fn is_list(&self) -> bool {
         matches!(self, Self::List(_))
     }
 
+    /// Returns `true` if this is [`Type::String`].
     pub fn is_string(&self) -> bool {
         matches!(self, Self::String)
     }
 
+    /// Returns `true` if this is [`Type::Unit`].
     pub fn is_unit(&self) -> bool {
         matches!(self, Self::Unit)
     }
 
+    /// Returns `true` if this is [`Type::Record`].
     pub fn is_record(&self) -> bool {
         matches!(self, Self::Record(..))
     }
 
+    /// Returns `true` if this is [`Type::Bytes`].
     pub fn is_bytes(&self) -> bool {
         matches!(self, Self::Bytes)
     }
 
+    /// Returns `true` if this is [`Type::Decimal`] (requires `rust_decimal` feature).
     pub fn is_decimal(&self) -> bool {
         #[cfg(feature = "rust_decimal")]
         {

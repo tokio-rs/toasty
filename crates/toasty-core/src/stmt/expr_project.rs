@@ -45,6 +45,8 @@ impl Expr {
         matches!(self, Self::Project(..))
     }
 
+    /// Returns a reference to the inner [`ExprProject`] if this is a
+    /// projection, or `None` otherwise.
     pub fn as_project(&self) -> Option<&ExprProject> {
         match self {
             Self::Project(expr_project) => Some(expr_project),
@@ -52,6 +54,11 @@ impl Expr {
         }
     }
 
+    /// Returns a reference to the inner [`ExprProject`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not `Expr::Project`.
     #[track_caller]
     pub fn as_project_unwrap(&self) -> &ExprProject {
         self.as_project()

@@ -283,6 +283,12 @@ impl FieldTy {
         }
     }
 
+    /// Returns a mutable reference to the inner [`FieldPrimitive`], panicking
+    /// if this is not a primitive field.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not [`FieldTy::Primitive`].
     #[track_caller]
     pub fn as_primitive_mut_unwrap(&mut self) -> &mut FieldPrimitive {
         match self {
@@ -291,10 +297,12 @@ impl FieldTy {
         }
     }
 
+    /// Returns `true` if this is a [`FieldTy::Embedded`].
     pub fn is_embedded(&self) -> bool {
         matches!(self, Self::Embedded(..))
     }
 
+    /// Returns the inner [`Embedded`] if this is an embedded field.
     pub fn as_embedded(&self) -> Option<&Embedded> {
         match self {
             Self::Embedded(embedded) => Some(embedded),
@@ -302,6 +310,12 @@ impl FieldTy {
         }
     }
 
+    /// Returns the inner [`Embedded`], panicking if this is not an embedded
+    /// field.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not [`FieldTy::Embedded`].
     #[track_caller]
     pub fn as_embedded_unwrap(&self) -> &Embedded {
         match self {
@@ -310,6 +324,12 @@ impl FieldTy {
         }
     }
 
+    /// Returns a mutable reference to the inner [`Embedded`], panicking if
+    /// this is not an embedded field.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not [`FieldTy::Embedded`].
     #[track_caller]
     pub fn as_embedded_mut_unwrap(&mut self) -> &mut Embedded {
         match self {
@@ -318,6 +338,8 @@ impl FieldTy {
         }
     }
 
+    /// Returns `true` if this is a relation type (`BelongsTo`, `HasMany`, or
+    /// `HasOne`).
     pub fn is_relation(&self) -> bool {
         matches!(
             self,
@@ -325,6 +347,7 @@ impl FieldTy {
         )
     }
 
+    /// Returns `true` if this is a `HasMany` or `HasOne` relation.
     pub fn is_has_n(&self) -> bool {
         matches!(self, Self::HasMany(..) | Self::HasOne(..))
     }

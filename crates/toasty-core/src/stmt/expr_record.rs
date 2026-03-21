@@ -21,6 +21,7 @@ pub struct ExprRecord {
 }
 
 impl Expr {
+    /// Creates a record expression from an iterator of items convertible to [`Expr`].
     pub fn record<T>(items: impl IntoIterator<Item = T>) -> Self
     where
         T: Into<Self>,
@@ -28,14 +29,18 @@ impl Expr {
         Self::Record(ExprRecord::from_iter(items))
     }
 
+    /// Creates a record expression from a pre-built vector of field expressions.
     pub fn record_from_vec(fields: Vec<Self>) -> Self {
         Self::Record(ExprRecord::from_vec(fields))
     }
 
+    /// Returns `true` if this expression is a record.
     pub fn is_record(&self) -> bool {
         matches!(self, Self::Record(_))
     }
 
+    /// Returns a reference to the inner [`ExprRecord`] if this is a record,
+    /// or `None` otherwise.
     pub fn as_record(&self) -> Option<&ExprRecord> {
         match self {
             Self::Record(expr_record) => Some(expr_record),
@@ -43,6 +48,11 @@ impl Expr {
         }
     }
 
+    /// Returns a reference to the inner [`ExprRecord`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not `Expr::Record`.
     #[track_caller]
     pub fn as_record_unwrap(&self) -> &ExprRecord {
         self.as_record()

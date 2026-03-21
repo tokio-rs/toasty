@@ -71,10 +71,12 @@ impl Value {
 }
 
 impl Type {
+    /// Creates a [`Type::SparseRecord`] type with the given field set.
     pub fn sparse_record(fields: impl Into<PathFieldSet>) -> Self {
         Self::SparseRecord(fields.into())
     }
 
+    /// Creates a [`Type::SparseRecord`] type with no fields.
     pub fn empty_sparse_record() -> Self {
         Self::SparseRecord(PathFieldSet::default())
     }
