@@ -73,6 +73,7 @@ pub struct TypedInput<'a, I, T = Schema> {
 }
 
 impl ConstInput {
+    /// Creates a new `ConstInput`.
     pub fn new() -> ConstInput {
         ConstInput {}
     }
@@ -81,6 +82,8 @@ impl ConstInput {
 impl Input for ConstInput {}
 
 impl<'a, I, T> TypedInput<'a, I, T> {
+    /// Creates a new `TypedInput` with the given expression context,
+    /// expected argument types, and inner input.
     pub fn new(cx: ExprContext<'a, T>, tys: &'a [Type], input: I) -> Self {
         TypedInput { cx, tys, input }
     }

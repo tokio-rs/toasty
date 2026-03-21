@@ -11,7 +11,22 @@ use crate::{
     Schema,
 };
 
-// TODO: we probably want two lifetimes here. One for &Schema and one for the stmt.
+/// Provides schema-aware context for expression type inference and reference
+/// resolution.
+///
+/// An `ExprContext` binds a schema reference, an optional parent scope (for
+/// nested queries), and a target indicating what the expressions reference
+/// (a model, table, or source). It is used by the query engine to infer
+/// expression types and resolve column/field references.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::stmt::{ExprContext, ExprTarget};
+///
+/// let cx = ExprContext::new(&schema);
+/// let ty = cx.infer_expr_ty(&expr, &[]);
+/// ```
 #[derive(Debug)]
 pub struct ExprContext<'a, T = Schema> {
     schema: &'a T,

@@ -5,37 +5,80 @@ use super::{Expr, Projection};
 use indexmap::{Equivalent, IndexMap};
 use std::{hash::Hash, ops};
 
+/// An ordered map of field assignments for an [`Update`](super::Update) statement.
+///
+/// Each entry maps a field projection (identifying which field to change) to an
+/// [`Assignment`] (how to change it). The insertion order is preserved.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::stmt::{Assignments, Expr, Projection};
+///
+/// let mut assignments = Assignments::default();
+/// assert!(assignments.is_empty());
+///
+/// assignments.set(Projection::single(0), Expr::null());
+/// assert_eq!(assignments.len(), 1);
+/// ```
 #[derive(Clone, Debug, PartialEq)]
 pub struct Assignments {
-    /// Map from UpdateTarget field projection to assignment for that field. The
-    /// projection may reference an application-level model field or a lowered
-    /// table column. Supports both single-step (e.g., [0]) and multi-step
-    /// projections (e.g., [0, 1] for nested fields).
+    /// Map from field projection to assignment. The projection may reference an
+    /// application-level model field or a lowered table column. Supports both
+    /// single-step (e.g., `[0]`) and multi-step projections (e.g., `[0, 1]`
+    /// for nested fields).
     assignments: IndexMap<Projection, Assignment>,
 }
 
+/// A single field assignment within an [`Update`](super::Update) statement.
+///
+/// Pairs an [`AssignmentOp`] (what kind of change) with an [`Expr`] (the
+/// value to use).
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::stmt::{Assignment, AssignmentOp, Expr};
+///
+/// let assignment = Assignment {
+///     op: AssignmentOp::Set,
+///     expr: Expr::null(),
+/// };
+/// assert!(assignment.op.is_set());
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct Assignment {
-    /// Assignment operation
+    /// The kind of assignment operation.
     pub op: AssignmentOp,
 
-    /// Expression use for assignment
+    /// The expression providing the value for this assignment.
     pub expr: Expr,
 }
 
+/// The kind of operation performed by an [`Assignment`].
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::stmt::AssignmentOp;
+///
+/// assert!(AssignmentOp::Set.is_set());
+/// assert!(!AssignmentOp::Insert.is_set());
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AssignmentOp {
     /// Set a field, replacing the current value.
     Set,
 
-    /// Insert one or more values into a set
+    /// Insert one or more values into a set field.
     Insert,
 
-    /// Remove one or more values from a set.
+    /// Remove one or more values from a set field.
     Remove,
 }
 
 impl Statement {
+    /// Returns this statement's assignments if it is an `Update`.
     pub fn assignments(&self) -> Option<&Assignments> {
         match self {
             Statement::Update(update) => Some(&update.assignments),
@@ -45,6 +88,7 @@ impl Statement {
 }
 
 impl Assignments {
+    /// Creates an empty `Assignments` with the specified capacity.
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             assignments: IndexMap::with_capacity(capacity),
