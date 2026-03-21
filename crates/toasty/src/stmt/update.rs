@@ -199,7 +199,7 @@ impl<M: Model> Update<List<M>> {
 /// Construct an `Update<M>` for single-instance updates that return exactly
 /// one row.
 impl<M: Model> Update<M> {
-    pub fn new_single(mut selection: Query<List<M>>) -> Self {
+    pub fn new_single(mut selection: Query<M>) -> Self {
         if let stmt::ExprSet::Values(values) = &mut selection.untyped.body {
             let rows = std::mem::take(&mut values.rows);
             let filter = stmt::Expr::in_list(stmt::Expr::ref_ancestor_model(0), rows);

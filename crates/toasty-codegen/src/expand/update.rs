@@ -250,7 +250,7 @@ impl Expand<'_> {
                 ) -> #toasty::stmt::Update<#model_ident> {
                     use #toasty::IntoStatement;
                     let mut stmt = #toasty::stmt::Update::new_single(
-                        (&**self).into_statement().into_list_query().unwrap()
+                        (&**self).into_statement().into_query().unwrap()
                     );
                     stmt.set_assignments(assignments);
                     stmt

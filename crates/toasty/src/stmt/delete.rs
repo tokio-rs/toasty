@@ -67,15 +67,6 @@ impl<T> Delete<T> {
         }
     }
 
-    /// Change the type tag of this delete without altering the underlying
-    /// untyped representation.
-    pub fn cast<U>(self) -> Delete<U> {
-        Delete {
-            untyped: self.untyped,
-            _p: PhantomData,
-        }
-    }
-
     /// Execute this delete statement against the given executor.
     ///
     /// Returns `Ok(())` on success. Any matching records are removed from the
@@ -102,31 +93,8 @@ impl<T> Delete<T> {
     /// # });
     /// ```
     pub async fn exec(self, executor: &mut dyn Executor) -> Result<()> {
-        let stmt: Statement<T> = self.into();
-        executor.exec(stmt).await?;
+        executor.exec_untyped(self.untyped.into()).await?;
         Ok(())
-    }
-}
-
-impl<M: Model> IntoStatement for Delete<M> {
-    type Returning = ();
-
-    fn into_statement(self) -> Statement<()> {
-        Statement {
-            untyped: self.untyped.into(),
-            _p: PhantomData,
-        }
-    }
-}
-
-impl<M: Model> IntoStatement for Delete<super::List<M>> {
-    type Returning = ();
-
-    fn into_statement(self) -> Statement<()> {
-        Statement {
-            untyped: self.untyped.into(),
-            _p: PhantomData,
-        }
     }
 }
 

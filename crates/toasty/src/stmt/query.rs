@@ -1,5 +1,8 @@
 use super::{Delete, Expr, IntoStatement, List, Statement, Value};
-use crate::schema::Model;
+use crate::{
+    schema::{Load, Model},
+    Executor, ExecutorExt, Result,
+};
 use std::{fmt, marker::PhantomData};
 use toasty_core::stmt::{self, Offset};
 
@@ -222,6 +225,38 @@ impl<T> Query<T> {
         };
         self
     }
+
+    pub fn delete(self) -> Delete<T> {
+        Delete::from_untyped(self.untyped.delete())
+    }
+
+    pub fn to_list(mut self) -> Query<List<T>> {
+        assert!(self.untyped.single, "not a single query");
+        self.untyped.single = false;
+
+        Query {
+            untyped: self.untyped,
+            _p: PhantomData,
+        }
+    }
+}
+
+impl<M> Query<List<M>> {
+    pub fn first(mut self) -> Query<M> {
+        assert!(!self.untyped.single, "query is single");
+        self.untyped.single = true;
+
+        Query {
+            untyped: self.untyped,
+            _p: PhantomData,
+        }
+    }
+}
+
+impl<T: Load> Query<T> {
+    pub async fn exec(self, executor: &mut dyn Executor) -> Result<T::Output> {
+        executor.exec(self.into_statement()).await
+    }
 }
 
 /// Methods for list queries: `Query<List<M>>`
@@ -268,24 +303,20 @@ impl<M: Model> Query<List<M>> {
         query.single = false;
         Self::from_untyped(query)
     }
-
-    pub fn delete(self) -> Delete<List<M>> {
-        Delete::from_untyped(self.untyped.delete())
-    }
 }
 
-impl<M: Model> IntoStatement for Query<List<M>> {
-    type Returning = List<M>;
+impl<T> IntoStatement for Query<T> {
+    type Returning = T;
 
-    fn into_statement(self) -> Statement<List<M>> {
+    fn into_statement(self) -> Statement<T> {
         Statement::from_untyped_stmt(self.untyped.into())
     }
 }
 
-impl<M: Model> IntoStatement for &Query<List<M>> {
-    type Returning = List<M>;
+impl<T> IntoStatement for &Query<T> {
+    type Returning = T;
 
-    fn into_statement(self) -> Statement<List<M>> {
+    fn into_statement(self) -> Statement<T> {
         Statement::from_untyped_stmt(self.clone().untyped.into())
     }
 }

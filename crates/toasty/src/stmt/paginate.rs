@@ -1,6 +1,6 @@
 use super::{List, Query};
 
-use crate::{engine::eval::Func, schema::Load, Executor, ExecutorExt, Result};
+use crate::{engine::eval::Func, schema::Load, stmt::IntoStatement, Executor, ExecutorExt, Result};
 
 use toasty_core::stmt::{self, visit_mut, Expr, ExprRecord, OrderBy, Projection, Value, VisitMut};
 
@@ -203,11 +203,12 @@ impl<M: Load> Paginate<M> {
                 ..
             }) => *n as usize,
             _ => {
-                let values: Vec<Value> = executor
-                    .exec(self.query.clone().into())
-                    .await?
-                    .collect()
+                let res = executor
+                    .exec_untyped(self.query.clone().into_statement().untyped)
                     .await?;
+                let stmt::Value::List(values) = res else {
+                    todo!()
+                };
                 let items: Vec<M::Output> =
                     values.into_iter().map(M::load).collect::<Result<_>>()?;
                 return Ok(crate::Page::new(
@@ -232,11 +233,13 @@ impl<M: Load> Paginate<M> {
             order_by.reverse();
         }
 
-        let mut items: Vec<_> = executor
-            .exec(query_with_extra.into())
-            .await?
-            .collect()
+        let res = executor
+            .exec_untyped(query_with_extra.into_statement().untyped)
             .await?;
+
+        let stmt::Value::List(mut items) = res else {
+            todo!()
+        };
         let has_next = (items.len() > page_size) || self.reverse;
         let has_prev = (items.len() > page_size) || !self.reverse;
         items.truncate(page_size);

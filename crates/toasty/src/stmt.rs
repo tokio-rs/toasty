@@ -78,24 +78,13 @@ impl<M> Statement<M> {
         }
     }
 
-    /// Change the type tag of this statement without altering the underlying
-    /// untyped representation.
-    pub fn cast<T>(self) -> Statement<T> {
-        Statement {
-            untyped: self.untyped,
-            _p: PhantomData,
-        }
-    }
-
     pub(crate) fn into_untyped_query(self) -> stmt::Query {
         match self.untyped {
             stmt::Statement::Query(q) => q,
             _ => panic!("expected query statement"),
         }
     }
-}
 
-impl<M> Statement<List<M>> {
     /// Try to extract the inner [`Query`] from this statement.
     ///
     /// Returns `Some(query)` if the statement is a query, or `None` for
@@ -111,7 +100,7 @@ impl<M> Statement<List<M>> {
     /// );
     /// assert!(query_stmt.into_query().is_some());
     /// ```
-    pub fn into_query(self) -> Option<Query<List<M>>> {
+    pub fn into_query(self) -> Option<Query<M>> {
         match self.untyped {
             stmt::Statement::Query(q) => Some(Query::from_untyped(q)),
             _ => None,
@@ -119,23 +108,8 @@ impl<M> Statement<List<M>> {
     }
 }
 
-impl<M> Statement<M> {
-    /// Try to extract the inner [`Query`] as a list query from this statement.
-    ///
-    /// This is useful when a `Statement<M>` (single-model) wraps an underlying
-    /// list query (e.g., a model instance filtered by primary key). The type
-    /// parameter is re-wrapped as `List<M>` since the underlying query is a
-    /// select.
-    pub fn into_list_query(self) -> Option<Query<List<M>>> {
-        match self.untyped {
-            stmt::Statement::Query(q) => Some(Query::from_untyped(q)),
-            _ => None,
-        }
-    }
-}
-
-impl<M> From<Query<List<M>>> for Statement<List<M>> {
-    fn from(value: Query<List<M>>) -> Self {
+impl<M> From<Query<M>> for Statement<M> {
+    fn from(value: Query<M>) -> Self {
         Self {
             untyped: value.untyped.into(),
             _p: PhantomData,
