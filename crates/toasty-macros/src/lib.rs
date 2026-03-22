@@ -742,25 +742,63 @@ pub fn query(_input: TokenStream) -> TokenStream {
 /// // todo.user_id == user.id
 /// ```
 ///
-/// ## Typed batch
+/// ## Homogeneous batch
 ///
 /// ```ignore
 /// toasty::create!(Type::[ { fields }, { fields }, ... ])
 /// ```
 ///
-/// Expands to a tuple of create builders. Pass the result to
-/// [`toasty::batch()`] to execute:
+/// Expands to `toasty::batch([builder1, builder2, ...])` and returns
+/// `Vec<Type>` when executed:
 ///
 /// ```ignore
-/// let (alice, bob) = toasty::batch(toasty::create!(User::[
+/// let users = toasty::create!(User::[
 ///     { name: "Alice" },
 ///     { name: "Bob" },
-/// ]))
+/// ])
 /// .exec(&mut db)
 /// .await?;
+/// // users: Vec<User>
 /// ```
 ///
-/// ## Mixed batch
+/// ## Heterogeneous tuple
+///
+/// ```ignore
+/// toasty::create!((
+///     Type1 { fields },
+///     Type2 { fields },
+///     ...
+/// ))
+/// ```
+///
+/// Expands to `toasty::batch((builder1, builder2, ...))` and returns a
+/// tuple matching the input types:
+///
+/// ```ignore
+/// let (user, post) = toasty::create!((
+///     User { name: "Alice" },
+///     Post { title: "Hello" },
+/// ))
+/// .exec(&mut db)
+/// .await?;
+/// // (User, Post)
+/// ```
+///
+/// ## Mixed tuple
+///
+/// Homogeneous batches and single creates can be mixed inside a tuple:
+///
+/// ```ignore
+/// let (users, post) = toasty::create!((
+///     User::[ { name: "Alice" }, { name: "Bob" } ],
+///     Post { title: "Hello" },
+/// ))
+/// .exec(&mut db)
+/// .await?;
+/// // (Vec<User>, Post)
+/// ```
+///
+/// ## Legacy mixed batch
 ///
 /// ```ignore
 /// toasty::create!([
@@ -894,12 +932,12 @@ pub fn query(_input: TokenStream) -> TokenStream {
 /// |---|---|
 /// | `Type { ... }` | `TypeCreate` (single builder) |
 /// | `in expr { ... }` | Builder for the relation's model |
-/// | `Type::[ ... ]` | Tuple of `TypeCreate` builders |
+/// | `Type::[ ... ]` | `Batch` — executes to `Vec<Type>` |
+/// | `( ... )` | `Batch` — executes to tuple of results |
 /// | `[ ... ]` | Tuple of builders (one per item) |
 ///
-/// None of the forms execute the insert on their own. Call
-/// `.exec(&mut db).await?` on a single builder, or pass batch tuples to
-/// [`toasty::batch()`].
+/// Single and scoped forms return a builder — call `.exec(&mut db).await?`.
+/// Batch and tuple forms return a `Batch` — also call `.exec(&mut db).await?`.
 #[proc_macro]
 pub fn create(input: TokenStream) -> TokenStream {
     match create::generate(input.into()) {

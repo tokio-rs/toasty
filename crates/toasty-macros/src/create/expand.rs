@@ -21,12 +21,38 @@ pub(crate) fn expand(item: &CreateItem) -> TokenStream {
                     quote! { #path::create() #(#field_calls)* }
                 })
                 .collect();
-            quote! { ( #( #builders, )* ) }
+            quote! { toasty::batch([ #( #builders, )* ]) }
         }
         CreateItem::Batch { items } => {
             let builders: Vec<_> = items.iter().map(expand).collect();
             quote! { ( #( #builders, )* ) }
         }
+        CreateItem::Tuple { items } => {
+            let elements: Vec<_> = items.iter().map(|item| expand_as_element(item)).collect();
+            quote! { toasty::batch(( #( #elements, )* )) }
+        }
+    }
+}
+
+/// Expand a `CreateItem` as an element inside a tuple batch.
+///
+/// For `TypedBatch`, this produces a plain array `[b1, b2, ...]` (which
+/// implements `IntoStatement` with `Returning = List<T>`) rather than
+/// wrapping in `toasty::batch()`.
+fn expand_as_element(item: &CreateItem) -> TokenStream {
+    match item {
+        CreateItem::TypedBatch { path, items } => {
+            let builders: Vec<_> = items
+                .iter()
+                .map(|fields| {
+                    let field_calls = expand_field_set(fields);
+                    quote! { #path::create() #(#field_calls)* }
+                })
+                .collect();
+            quote! { [ #( #builders, )* ] }
+        }
+        // All other forms expand identically to top-level.
+        other => expand(other),
     }
 }
 

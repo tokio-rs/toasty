@@ -1,7 +1,7 @@
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::token;
-use syn::{braced, bracketed};
+use syn::{braced, bracketed, parenthesized};
 
 /// A recursive create item. Represents both the top-level macro input and
 /// items nested inside a batch `[ ... ]`.
@@ -23,6 +23,8 @@ pub(crate) enum CreateItem {
     },
     /// `[ User { ... }, Article::[ {...}, {...} ], in scope { ... } ]`
     Batch { items: Vec<CreateItem> },
+    /// `( User { ... }, Article::[ {...}, {...} ] )`
+    Tuple { items: Vec<CreateItem> },
 }
 
 /// A set of `name: value` field entries (i.e., the contents of `{ ... }`).
@@ -64,7 +66,15 @@ fn peek_path_sep_bracket(input: ParseStream) -> bool {
 
 impl Parse for CreateItem {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        if input.peek(token::Bracket) {
+        if input.peek(token::Paren) {
+            // `( ... )` → tuple of items
+            let content;
+            parenthesized!(content in input);
+            let items = Punctuated::<CreateItem, syn::Token![,]>::parse_terminated(&content)?;
+            Ok(CreateItem::Tuple {
+                items: items.into_iter().collect(),
+            })
+        } else if input.peek(token::Bracket) {
             // `[ ... ]` → batch of items
             let content;
             bracketed!(content in input);
