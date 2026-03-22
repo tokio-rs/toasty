@@ -321,12 +321,12 @@ impl<T, U> Path<T, U> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// use toasty::stmt::{Path, Query};
+    /// use toasty::stmt::{List, Path, Query};
     ///
     /// // A path targeting User values
     /// let path = Path::<User, User>::root();
     /// // A subquery returning List<User>
-    /// let subquery = Query::<User>::filter(User::fields().name().eq("Alice"));
+    /// let subquery = Query::<List<User>>::filter(User::fields().name().eq("Alice"));
     /// let filter = path.in_query(subquery);
     /// ```
     pub fn in_query<Q>(self, rhs: Q) -> Expr<bool>
@@ -417,7 +417,7 @@ impl<T, U> Path<T, List<U>> {
         U: crate::schema::Model,
     {
         // Build a query on the child model filtered by `filter`
-        let child_query = super::Query::<U>::filter(filter);
+        let child_query = super::Query::<List<U>>::filter(filter);
 
         Expr {
             untyped: stmt::Expr::in_subquery(self.untyped.into_stmt(), child_query.untyped),

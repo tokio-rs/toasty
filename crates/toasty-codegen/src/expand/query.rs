@@ -18,36 +18,37 @@ impl Expand<'_> {
 
         quote! {
             #vis struct #query_struct_ident {
-                stmt: #toasty::stmt::Query<#model_ident>,
+                stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>,
             }
 
             impl #query_struct_ident {
-                #vis const fn from_stmt(stmt: #toasty::stmt::Query<#model_ident>) -> #query_struct_ident {
+                #vis const fn from_stmt(stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>) -> #query_struct_ident {
                     #query_struct_ident { stmt }
                 }
 
                 #filter_methods
 
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<Vec<#model_ident>> {
-                    use #toasty::ExecutorExt;
-                    executor.all(self.stmt).await
+                    executor.exec(self.stmt.into()).await
                 }
 
-                #vis async fn first(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#toasty::Option<#model_ident>> {
-                    use #toasty::ExecutorExt;
-                    executor.first(self.stmt).await
+                #vis fn first(self) -> #toasty::stmt::Query<Option<#model_ident>> {
+                    self.stmt.first()
+                }
+
+                #vis fn one(self) -> #toasty::stmt::Query<#model_ident> {
+                    self.stmt.one()
                 }
 
                 #vis async fn get(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
-                    use #toasty::ExecutorExt;
-                    executor.get(self.stmt).await
+                    self.one().exec(executor).await
                 }
 
                 #vis fn update(self) -> #update_struct_ident {
                     #update_struct_ident::from(self)
                 }
 
-                #vis fn delete(self) -> #toasty::stmt::Delete<#model_ident> {
+                #vis fn delete(self) -> #toasty::stmt::Delete<()> {
                     self.stmt.delete()
                 }
 

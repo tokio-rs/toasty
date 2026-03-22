@@ -9,7 +9,12 @@ pub use pool::*;
 use crate::{engine::Engine, Executor, Result, Transaction, TransactionBuilder};
 pub(crate) use pool::{ConnectionHandle, ConnectionOperation};
 
-use toasty_core::{async_trait, driver::Driver, stmt::ValueStream, Schema};
+use toasty_core::{
+    async_trait,
+    driver::Driver,
+    stmt::{self, Value},
+    Schema,
+};
 
 use std::sync::Arc;
 use tokio::sync::oneshot;
@@ -40,6 +45,26 @@ impl Clone for Db {
 }
 
 impl Db {
+    /// Create a new [`Builder`] for configuring and opening a database.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// let driver = toasty_driver_sqlite::Sqlite::in_memory();
+    /// let db = toasty::Db::builder()
+    ///     .register::<User>()
+    ///     .build(driver)
+    ///     .await
+    ///     .unwrap();
+    /// # });
+    /// ```
     pub fn builder() -> Builder {
         Builder::default()
     }
@@ -52,6 +77,46 @@ impl Db {
         };
 
         Ok(conn.handle())
+    }
+
+    pub(crate) async fn exec_stmt(
+        &mut self,
+        stmt: stmt::Statement,
+        in_transaction: bool,
+    ) -> Result<Value> {
+        let returns_list = match &stmt {
+            stmt::Statement::Query(q) => !q.single,
+            stmt::Statement::Insert(i) => !i.source.single,
+            stmt::Statement::Update(i) => match &i.target {
+                stmt::UpdateTarget::Query(q) => !q.single,
+                stmt::UpdateTarget::Model(_) => false,
+                _ => true,
+            },
+            stmt::Statement::Delete(d) => !d.selection().single,
+        };
+
+        let (tx, rx) = oneshot::channel();
+
+        let conn = self.connection().await?;
+        conn.in_tx
+            .send(ConnectionOperation::ExecStatement {
+                stmt: Box::new(stmt),
+                in_transaction,
+                tx,
+            })
+            .unwrap();
+
+        let mut stream = rx.await.unwrap()?;
+
+        if returns_list {
+            let values = stream.collect().await?;
+            Ok(Value::List(values))
+        } else {
+            match stream.next().await {
+                Some(value) => value,
+                None => Ok(Value::Null),
+            }
+        }
     }
 
     pub(crate) async fn exec_operation(&mut self, operation: Operation) -> Result<Response> {
@@ -68,6 +133,29 @@ impl Db {
         rx.await.unwrap()
     }
 
+    /// Create a [`TransactionBuilder`] for configuring transaction options
+    /// (isolation level, read-only) before starting it.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// # let driver = toasty_driver_sqlite::Sqlite::in_memory();
+    /// # let mut db = toasty::Db::builder().register::<User>().build(driver).await.unwrap();
+    /// let tx = db.transaction_builder()
+    ///     .read_only(true)
+    ///     .begin()
+    ///     .await
+    ///     .unwrap();
+    /// tx.commit().await.unwrap();
+    /// # });
+    /// ```
     pub fn transaction_builder(&mut self) -> TransactionBuilder<'_> {
         TransactionBuilder::new(self)
     }
@@ -87,14 +175,20 @@ impl Db {
         self.shared.pool.driver().reset_db().await
     }
 
+    /// Returns a reference to the underlying database driver.
     pub fn driver(&self) -> &dyn Driver {
         self.shared.pool.driver()
     }
 
+    /// Returns the compiled schema used by this database handle.
     pub fn schema(&self) -> &Arc<Schema> {
         &self.shared.engine.schema
     }
 
+    /// Returns the capability flags reported by the driver.
+    ///
+    /// The query engine uses these to decide which operation types to generate
+    /// (e.g., SQL vs. key-value).
     pub fn capability(&self) -> &Capability {
         self.shared.engine.capability()
     }
@@ -115,25 +209,16 @@ impl std::fmt::Debug for Db {
     }
 }
 
+impl Db {}
+
 #[async_trait]
 impl Executor for Db {
     async fn transaction(&mut self) -> Result<Transaction<'_>> {
         Transaction::begin(self).await
     }
 
-    async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> Result<ValueStream> {
-        let (tx, rx) = oneshot::channel();
-
-        let conn = self.connection().await?;
-        conn.in_tx
-            .send(ConnectionOperation::ExecStatement {
-                stmt: Box::new(stmt),
-                in_transaction: false,
-                tx,
-            })
-            .unwrap();
-
-        rx.await.unwrap()
+    async fn exec_untyped(&mut self, stmt: stmt::Statement) -> Result<Value> {
+        self.exec_stmt(stmt, false).await
     }
 
     fn schema(&mut self) -> &Arc<Schema> {

@@ -4,6 +4,13 @@ use toasty_core::stmt::Value;
 
 use std::fmt;
 
+/// A lazily-loaded belongs-to association.
+///
+/// `BelongsTo<T>` wraps an optional `T` that is populated when the association
+/// is eagerly loaded (via `include`) or accessed through a generated relation
+/// accessor. Before loading, calling [`get`](BelongsTo::get) panics.
+///
+/// This type appears as a field on model structs for belongs-to relations.
 #[derive(Clone)]
 pub struct BelongsTo<T> {
     value: Option<Box<T>>,
@@ -11,26 +18,35 @@ pub struct BelongsTo<T> {
 
 impl<T: Relation> Load for BelongsTo<T> {
     type Output = Self;
+
     fn load(input: Value) -> crate::Result<Self> {
         Ok(match input {
             Value::Null => Self::default(),
             value => Self {
-                value: Some(Box::new(T::load(value)?)),
+                value: Some(Box::new(T::load_relation(value)?)),
             },
         })
     }
 }
 
 impl<T: Relation> BelongsTo<T> {
+    /// Returns a reference to the loaded associated record.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the association has not been loaded.
     #[track_caller]
     pub fn get(&self) -> &T {
         self.value.as_ref().expect("association not loaded")
     }
 
+    /// Returns `true` if the association has not been loaded yet.
     pub fn is_unloaded(&self) -> bool {
         self.value.is_none()
     }
 
+    /// Clear the loaded value, returning this association to the unloaded
+    /// state.
     pub fn unload(&mut self) {
         self.value = None;
     }

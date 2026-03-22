@@ -1,17 +1,26 @@
 use super::{Delete, Expr, IntoStatement, List, Statement, Value};
-use crate::schema::Model;
+use crate::{
+    schema::{Load, Model},
+    Executor, Result,
+};
 use std::{fmt, marker::PhantomData};
 use toasty_core::stmt::{self, Offset};
 
-/// A typed query that selects records of model `M`.
+/// A typed query that selects records from the database.
 ///
-/// `Query` is the main builder for read operations. It wraps an untyped
-/// [`stmt::Query`](toasty_core::stmt::Query) and provides methods to add
-/// filters, ordering, limits, and includes.
+/// The type parameter `T` is the **returning type** — it encodes what
+/// `exec()` produces, not just which model is being queried. A `Query` starts
+/// as `Query<List<M>>` (returns `Vec<M>`) and can be narrowed:
+///
+/// | Type | `exec()` produces | Created by |
+/// |---|---|---|
+/// | `Query<List<M>>` | `Vec<M>` | [`Query::all`], [`Query::filter`] |
+/// | `Query<M>` | `M` (errors if missing) | [`.one()`](Query::one) |
+/// | `Query<Option<M>>` | `Option<M>` | [`.first()`](Query::first) |
 ///
 /// # Building queries
 ///
-/// Start with a generated finder (e.g., `User::find_by_name("Alice")`) or
+/// Start with a generated finder (e.g., `User::filter_by_name("Alice")`) or
 /// use [`Query::all`] / [`Query::filter`] directly:
 ///
 /// ```
@@ -22,16 +31,16 @@ use toasty_core::stmt::{self, Offset};
 /// #     name: String,
 /// #     age: i64,
 /// # }
-/// use toasty::stmt::Query;
+/// use toasty::stmt::{List, Query};
 ///
 /// // All users
-/// let q = Query::<User>::all();
+/// let q = Query::<List<User>>::all();
 ///
 /// // Filtered
-/// let q = Query::<User>::filter(User::fields().age().gt(18));
+/// let q = Query::<List<User>>::filter(User::fields().age().gt(18));
 ///
 /// // Chained
-/// let mut q = Query::<User>::all()
+/// let mut q = Query::<List<User>>::all()
 ///     .and(User::fields().name().eq("Alice"));
 /// q.limit(10);
 /// ```
@@ -40,12 +49,13 @@ use toasty_core::stmt::{self, Offset};
 ///
 /// Pass the query to [`Db::exec`](crate::Db::exec) or convert it with
 /// [`IntoStatement`] for batch use.
-pub struct Query<M> {
+pub struct Query<T> {
     pub(crate) untyped: stmt::Query,
-    _p: PhantomData<M>,
+    _p: PhantomData<T>,
 }
 
-impl<M> Query<M> {
+// Methods available on all Query<T>
+impl<T> Query<T> {
     /// Create an empty unit query that returns no records.
     ///
     /// # Examples
@@ -80,7 +90,7 @@ impl<M> Query<M> {
     /// ));
     /// let _q = Query::from_expr(expr);
     /// ```
-    pub fn from_expr(expr: Expr<M>) -> Self {
+    pub fn from_expr(expr: Expr<T>) -> Self {
         match expr.untyped {
             stmt::Expr::Stmt(expr) => match *expr.stmt {
                 stmt::Statement::Query(stmt) => Self::from_untyped(stmt),
@@ -103,9 +113,9 @@ impl<M> Query<M> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// use toasty::stmt::Query;
+    /// use toasty::stmt::{List, Query};
     ///
-    /// let q = Query::<User>::all()
+    /// let q = Query::<List<User>>::all()
     ///     .and(User::fields().name().eq("Alice"));
     /// ```
     pub fn and(mut self, filter: Expr<bool>) -> Self {
@@ -128,9 +138,9 @@ impl<M> Query<M> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// use toasty::stmt::{Path, Query};
+    /// use toasty::stmt::{List, Path, Query};
     ///
-    /// let mut q = Query::<User>::all();
+    /// let mut q = Query::<List<User>>::all();
     /// // Include the field at index 1 (name)
     /// q.include(Path::<User, String>::from_field_index(1));
     /// ```
@@ -153,9 +163,9 @@ impl<M> Query<M> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// use toasty::stmt::Query;
+    /// use toasty::stmt::{List, Query};
     ///
-    /// let mut q = Query::<User>::all();
+    /// let mut q = Query::<List<User>>::all();
     /// q.order_by(User::fields().name().desc());
     /// ```
     pub fn order_by(&mut self, order_by: impl Into<stmt::OrderBy>) -> &mut Self {
@@ -174,9 +184,9 @@ impl<M> Query<M> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// use toasty::stmt::Query;
+    /// use toasty::stmt::{List, Query};
     ///
-    /// let mut q = Query::<User>::all();
+    /// let mut q = Query::<List<User>>::all();
     /// q.limit(10);
     /// ```
     pub fn limit(&mut self, n: usize) -> &mut Self {
@@ -202,9 +212,9 @@ impl<M> Query<M> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// use toasty::stmt::Query;
+    /// use toasty::stmt::{List, Query};
     ///
-    /// let mut q = Query::<User>::all();
+    /// let mut q = Query::<List<User>>::all();
     /// q.limit(10);
     /// q.offset(20);
     /// ```
@@ -219,7 +229,10 @@ impl<M> Query<M> {
         self
     }
 
-    /// Convert this query into a [`Delete`] that removes all matching records.
+    /// Convert this query into a [`Delete`] statement that removes all matching
+    /// records.
+    ///
+    /// The returned `Delete<()>` does not return the removed records.
     ///
     /// # Examples
     ///
@@ -230,17 +243,147 @@ impl<M> Query<M> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// use toasty::stmt::Query;
+    /// use toasty::stmt::{List, Query};
     ///
-    /// let delete = Query::<User>::filter(User::fields().name().eq("Alice"))
+    /// let delete = Query::<List<User>>::filter(User::fields().name().eq("Alice"))
     ///     .delete();
     /// ```
-    pub fn delete(self) -> Delete<M> {
+    pub fn delete(self) -> Delete<()> {
         Delete::from_untyped(self.untyped.delete())
+    }
+
+    /// Widen a single-row query back into a list query.
+    ///
+    /// This is the inverse of [`first`](Query::first) or [`one`](Query::one).
+    /// Panics if the query is not currently in single-row mode.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this query is not a single-row query.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::{List, Query};
+    ///
+    /// let q: Query<User> = Query::<List<User>>::all().one();
+    /// let _list_q: Query<List<User>> = q.to_list();
+    /// ```
+    pub fn to_list(mut self) -> Query<List<T>> {
+        assert!(self.untyped.single, "not a single query");
+        self.untyped.single = false;
+
+        Query {
+            untyped: self.untyped,
+            _p: PhantomData,
+        }
     }
 }
 
-impl<M: Model> Query<M> {
+impl<T> Query<List<T>> {
+    /// Narrow this list query to return at most one record, wrapped in
+    /// `Option`.
+    ///
+    /// The resulting `Query<Option<T>>` returns `Some(record)` if at least one
+    /// row matches, or `None` if no rows match.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::{List, Query};
+    ///
+    /// let q: Query<Option<User>> = Query::<List<User>>::all().first();
+    /// ```
+    pub fn first(mut self) -> Query<Option<T>> {
+        set_first(&mut self.untyped);
+
+        Query {
+            untyped: self.untyped,
+            _p: PhantomData,
+        }
+    }
+
+    /// Narrow this list query to return exactly one record.
+    ///
+    /// The resulting `Query<T>` returns the record directly. If no rows match,
+    /// execution returns an error.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::{List, Query};
+    ///
+    /// let q: Query<User> = Query::<List<User>>::all().one();
+    /// ```
+    pub fn one(mut self) -> Query<T> {
+        set_first(&mut self.untyped);
+
+        Query {
+            untyped: self.untyped,
+            _p: PhantomData,
+        }
+    }
+}
+
+fn set_first(query: &mut stmt::Query) {
+    assert!(!query.single, "query is single");
+    query.single = true;
+}
+
+impl<T: Load> Query<T> {
+    /// Execute this query against the given executor and return the result.
+    ///
+    /// The return type depends on the query's type parameter `T`:
+    /// - `Query<List<M>>` returns `Vec<M>`.
+    /// - `Query<M>` returns `M` (errors if no row matches).
+    /// - `Query<Option<M>>` returns `Option<M>`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// # let driver = toasty_driver_sqlite::Sqlite::in_memory();
+    /// # let mut db = toasty::Db::builder().register::<User>().build(driver).await.unwrap();
+    /// # db.push_schema().await.unwrap();
+    /// use toasty::stmt::{List, Query};
+    ///
+    /// let users: Vec<User> = Query::<List<User>>::all()
+    ///     .exec(&mut db)
+    ///     .await
+    ///     .unwrap();
+    /// # });
+    /// ```
+    pub async fn exec(self, executor: &mut dyn Executor) -> Result<T::Output> {
+        executor.exec(self.into_statement()).await
+    }
+}
+
+/// Methods for list queries: `Query<List<M>>`
+impl<M: Model> Query<List<M>> {
     /// Create a query that selects records of `M` matching `expr`.
     ///
     /// # Examples
@@ -252,12 +395,14 @@ impl<M: Model> Query<M> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// use toasty::stmt::Query;
+    /// use toasty::stmt::{List, Query};
     ///
-    /// let q = Query::<User>::filter(User::fields().name().eq("Alice"));
+    /// let q = Query::<List<User>>::filter(User::fields().name().eq("Alice"));
     /// ```
     pub fn filter(expr: Expr<bool>) -> Self {
-        Self::from_untyped(stmt::Query::new_select(M::id(), expr.untyped))
+        let mut query = stmt::Query::new_select(M::id(), expr.untyped);
+        query.single = false;
+        Self::from_untyped(query)
     }
 
     /// Create a query that selects all records of `M`.
@@ -271,33 +416,35 @@ impl<M: Model> Query<M> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// use toasty::stmt::Query;
+    /// use toasty::stmt::{List, Query};
     ///
-    /// let q = Query::<User>::all();
+    /// let q = Query::<List<User>>::all();
     /// ```
     pub fn all() -> Self {
         let filter = stmt::Expr::Value(Value::from_bool(true));
-        Self::from_untyped(stmt::Query::new_select(M::id(), filter))
+        let mut query = stmt::Query::new_select(M::id(), filter);
+        query.single = false;
+        Self::from_untyped(query)
     }
 }
 
-impl<M: Model> IntoStatement for Query<M> {
-    type Returning = List<M>;
+impl<T> IntoStatement for Query<T> {
+    type Returning = T;
 
-    fn into_statement(self) -> Statement<List<M>> {
+    fn into_statement(self) -> Statement<T> {
         Statement::from_untyped_stmt(self.untyped.into())
     }
 }
 
-impl<M: Model> IntoStatement for &Query<M> {
-    type Returning = List<M>;
+impl<T> IntoStatement for &Query<T> {
+    type Returning = T;
 
-    fn into_statement(self) -> Statement<List<M>> {
+    fn into_statement(self) -> Statement<T> {
         Statement::from_untyped_stmt(self.clone().untyped.into())
     }
 }
 
-impl<M> Clone for Query<M> {
+impl<T> Clone for Query<T> {
     fn clone(&self) -> Self {
         Self {
             untyped: self.untyped.clone(),
@@ -306,7 +453,7 @@ impl<M> Clone for Query<M> {
     }
 }
 
-impl<M> fmt::Debug for Query<M> {
+impl<T> fmt::Debug for Query<T> {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.untyped.fmt(fmt)
     }

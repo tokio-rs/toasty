@@ -29,6 +29,7 @@ mod path;
 pub use path::Path;
 
 pub use crate::schema::{Auto, Field};
+use crate::{schema::Load, Executor};
 
 mod query;
 pub use query::Query;
@@ -44,24 +45,33 @@ use std::{fmt, marker::PhantomData};
 
 /// A typed wrapper around an untyped [`stmt::Statement`](toasty_core::stmt::Statement).
 ///
-/// `Statement<M>` pairs a raw statement AST node with a type `M` that tracks
-/// what the statement returns when executed. For example:
+/// The type parameter `T` is the **returning type** — the type produced when the
+/// statement is executed — not the model the statement operates on. For example,
+/// a query that selects `User` records returns `List<User>`, so its statement
+/// type is `Statement<List<User>>`, not `Statement<User>`.
 ///
-/// - `Statement<List<User>>` — a query returning a collection of `User` records.
-/// - `Statement<User>` — an insert returning the newly created `User`.
-/// - `Statement<()>` — a delete returning nothing.
+/// Common returning types:
+///
+/// | Statement kind | `T` | `exec()` produces |
+/// |---|---|---|
+/// | Multi-row query | [`List<M>`] | `Vec<M>` |
+/// | Single-row query (`.one()`) | `M` | `M` |
+/// | Optional query (`.first()`) | `Option<M>` | `Option<M>` |
+/// | Insert (create) | `M` | `M` |
+/// | Delete | `()` | `()` |
+/// | Update | `()` | `()` |
 ///
 /// You rarely construct `Statement` directly. Instead, use the [`From`]
 /// implementations to convert from [`Query`], [`Insert`], [`Update`], or
 /// [`Delete`], or call [`IntoStatement::into_statement`] on a query builder.
-pub struct Statement<M> {
+pub struct Statement<T> {
     pub(crate) untyped: stmt::Statement,
-    _p: PhantomData<M>,
+    _p: PhantomData<T>,
 }
 
-impl<M> Statement<M> {
+impl<T> Statement<T> {
     /// Wrap a raw untyped [`stmt::Statement`](toasty_core::stmt::Statement),
-    /// tagging it with type `M`.
+    /// tagging it with returning type `T`.
     ///
     /// # Examples
     ///
@@ -84,9 +94,7 @@ impl<M> Statement<M> {
             _ => panic!("expected query statement"),
         }
     }
-}
 
-impl<M> Statement<List<M>> {
     /// Try to extract the inner [`Query`] from this statement.
     ///
     /// Returns `Some(query)` if the statement is a query, or `None` for
@@ -102,11 +110,42 @@ impl<M> Statement<List<M>> {
     /// );
     /// assert!(query_stmt.into_query().is_some());
     /// ```
-    pub fn into_query(self) -> Option<Query<M>> {
+    pub fn into_query(self) -> Option<Query<T>> {
         match self.untyped {
             stmt::Statement::Query(q) => Some(Query::from_untyped(q)),
             _ => None,
         }
+    }
+}
+
+impl<T: Load> Statement<T> {
+    /// Execute this statement against the given executor and return the
+    /// deserialized result.
+    ///
+    /// This is a convenience wrapper around
+    /// [`Executor::exec`](crate::Executor::exec).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// # let driver = toasty_driver_sqlite::Sqlite::in_memory();
+    /// # let mut db = toasty::Db::builder().register::<User>().build(driver).await.unwrap();
+    /// # db.push_schema().await.unwrap();
+    /// use toasty::stmt::{IntoStatement, List, Query};
+    ///
+    /// let stmt = Query::<List<User>>::all().into_statement();
+    /// let users: Vec<User> = stmt.exec(&mut db).await.unwrap();
+    /// # });
+    /// ```
+    pub async fn exec(self, executor: &mut dyn Executor) -> crate::Result<T::Output> {
+        executor.exec(self).await
     }
 }
 

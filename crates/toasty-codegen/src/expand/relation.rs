@@ -23,11 +23,11 @@ impl Expand<'_> {
             }
 
             #vis struct One {
-                stmt: #toasty::stmt::Query<#model_ident>,
+                stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>,
             }
 
             #vis struct OptionOne {
-                stmt: #toasty::stmt::Query<#model_ident>,
+                stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>,
             }
 
             #vis struct ManyField<__Origin> {
@@ -47,8 +47,8 @@ impl Expand<'_> {
 
                 /// Iterate all entries in the relation
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<Vec<#model_ident>> {
-                    use #toasty::{ExecutorExt, IntoStatement};
-                    executor.all(self.into_statement().into_query().unwrap()).await
+                    use #toasty::IntoStatement;
+                    self.into_statement().exec(executor).await
                 }
 
                 #vis fn query(
@@ -68,18 +68,12 @@ impl Expand<'_> {
 
                 /// Add an item to the association
                 #vis async fn insert(self, executor: &mut dyn #toasty::Executor, item: impl #toasty::IntoExpr<#toasty::List<#model_ident>>) -> #toasty::Result<()> {
-                    use #toasty::ExecutorExt;
-                    let stmt = self.stmt.insert(item);
-                    executor.exec(stmt).await?;
-                    Ok(())
+                    executor.exec(self.stmt.insert(item)).await
                 }
 
                 /// Remove items from the association
                 #vis async fn remove(self, executor: &mut dyn #toasty::Executor, item: impl #toasty::IntoExpr<#model_ident>) -> #toasty::Result<()> {
-                    use #toasty::ExecutorExt;
-                    let stmt = self.stmt.remove(item);
-                    executor.exec(stmt).await?;
-                    Ok(())
+                    executor.exec(self.stmt.remove(item)).await
                 }
             }
 
@@ -93,7 +87,7 @@ impl Expand<'_> {
             }
 
             impl One {
-                #vis fn from_stmt(stmt: #toasty::stmt::Query<#model_ident>) -> One {
+                #vis fn from_stmt(stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>) -> One {
                     One { stmt }
                 }
 
@@ -105,8 +99,7 @@ impl Expand<'_> {
                 }
 
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
-                    use #toasty::ExecutorExt;
-                    executor.get(self.stmt).await
+                    self.stmt.one().exec(executor).await
                 }
             }
 
@@ -120,7 +113,7 @@ impl Expand<'_> {
             }
 
             impl OptionOne {
-                pub fn from_stmt(stmt: #toasty::stmt::Query<#model_ident>) -> OptionOne {
+                pub fn from_stmt(stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>) -> OptionOne {
                     OptionOne { stmt }
                 }
 
@@ -132,8 +125,7 @@ impl Expand<'_> {
                 }
 
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#toasty::Option<#model_ident>> {
-                    use #toasty::ExecutorExt;
-                    executor.first(self.stmt).await
+                    self.stmt.first().exec(executor).await
                 }
             }
 
@@ -396,7 +388,10 @@ impl Expand<'_> {
                 {
                     use #toasty::IntoStatement;
                     <#ty as #toasty::Relation>::Many::from_stmt(
-                        #toasty::stmt::Association::many(self.into_statement().into_query().unwrap(), Self::fields().#field_ident().into())
+                        #toasty::stmt::Association::many(
+                            self.into_statement().into_query().unwrap().to_list(),
+                            Self::fields().#field_ident().into()
+                        )
                     )
                 }
             }
@@ -468,7 +463,10 @@ impl Expand<'_> {
                 {
                     use #toasty::IntoStatement;
                     <#ty as #toasty::Relation>::One::from_stmt(
-                        #toasty::stmt::Association::one(self.into_statement().into_query().unwrap(), Self::fields().#field_ident().into()).into_statement().into_query().unwrap()
+                        #toasty::stmt::Association::one(
+                            self.into_statement().into_query().unwrap().to_list(),
+                            Self::fields().#field_ident().into()
+                        ).into_statement().into_query().unwrap()
                     )
                 }
             }

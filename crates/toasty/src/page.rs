@@ -1,30 +1,43 @@
 use std::ops::Deref;
 
 use crate::schema::Load;
-use crate::stmt::{Paginate, Query};
+use crate::stmt::{List, Paginate, Query};
 use crate::{Executor, Result};
 use toasty_core::stmt;
 
-/// A page of results from a paginated query.
+/// A page of results from a cursor-based paginated query.
+///
+/// Obtained by calling [`Paginate::exec`](crate::stmt::Paginate::exec). The
+/// page contains up to `per_page` items and optional cursors for fetching the
+/// next or previous page.
+///
+/// `Page<M>` dereferences to `[M]`, so it can be used anywhere a slice is
+/// expected.
+///
+/// # Navigation
+///
+/// Call [`next`](Page::next) or [`prev`](Page::prev) to fetch adjacent pages.
+/// Use [`has_next`](Page::has_next) and [`has_prev`](Page::has_prev) to check
+/// availability without fetching.
 #[derive(Debug)]
 pub struct Page<M> {
-    /// Items in this page
+    /// Items in this page.
     pub items: Vec<M>,
 
-    /// Base query (without cursors/offsets)
-    query: Query<M>,
+    /// Base query (without cursors/offsets).
+    query: Query<List<M>>,
 
-    /// Cursor for fetching next page (derived from last item)
+    /// Cursor for fetching the next page (derived from the last item).
     pub next_cursor: Option<stmt::Expr>,
 
-    /// Cursor for fetching previous page (derived from first item)
+    /// Cursor for fetching the previous page (derived from the first item).
     pub prev_cursor: Option<stmt::Expr>,
 }
 
 impl<M> Page<M> {
     pub(crate) fn new(
         items: Vec<M>,
-        query: Query<M>,
+        query: Query<List<M>>,
         next_cursor: Option<stmt::Expr>,
         prev_cursor: Option<stmt::Expr>,
     ) -> Self {

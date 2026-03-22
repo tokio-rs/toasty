@@ -2,9 +2,19 @@ use super::{Load, Relation};
 use toasty_core::schema::app::FieldId;
 use toasty_core::stmt::Value;
 
-impl<T: Relation> Load for Option<T> {
-    type Output = Self;
-    fn load(value: Value) -> Result<Self, crate::Error> {
+impl<T: Load> Load for Option<T> {
+    type Output = Option<T::Output>;
+
+    fn load(value: Value) -> Result<Self::Output, crate::Error> {
+        match value {
+            Value::Null => Ok(None),
+            // Any other value is the raw model record (from INSERT or
+            // SELECT+include when a matching row exists).
+            v => Ok(Some(T::load(v)?)),
+        }
+    }
+
+    fn load_relation(value: Value) -> Result<Self::Output, crate::Error> {
         match value {
             // Encoded "loaded as None" from SELECT+include path.
             // The nested merge's Match expression transforms Value::Null

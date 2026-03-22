@@ -1727,11 +1727,7 @@ pub async fn nested_belongs_to_required_then_has_one_optional(test: &mut Test) -
         .exec(&mut db)
         .await?;
 
-    let todo_id = Todo::filter_by_user_id(user.id)
-        .first(&mut db)
-        .await?
-        .unwrap()
-        .id;
+    let todo_id = Todo::get_by_user_id(&mut db, user.id).await?.id;
 
     let todo = Todo::filter_by_id(todo_id)
         .include(Todo::fields().user().profile())
@@ -1749,11 +1745,7 @@ pub async fn nested_belongs_to_required_then_has_one_optional(test: &mut Test) -
         .exec(&mut db)
         .await?;
 
-    let todo2_id = Todo::filter_by_user_id(user2.id)
-        .first(&mut db)
-        .await?
-        .unwrap()
-        .id;
+    let todo2_id = Todo::get_by_user_id(&mut db, user2.id).await?.id;
 
     let todo2 = Todo::filter_by_id(todo2_id)
         .include(Todo::fields().user().profile())
@@ -1830,16 +1822,8 @@ pub async fn nested_belongs_to_required_then_belongs_to_required(test: &mut Test
         .exec(&mut db)
         .await?;
 
-    let todo_id = Todo::filter_by_user_id(user.id)
-        .first(&mut db)
-        .await?
-        .unwrap()
-        .id;
-    let step_id = Step::filter_by_todo_id(todo_id)
-        .first(&mut db)
-        .await?
-        .unwrap()
-        .id;
+    let todo_id = Todo::get_by_user_id(&mut db, user.id).await?.id;
+    let step_id = Step::get_by_todo_id(&mut db, todo_id).await?.id;
 
     // From step, preload todo and then todo's user
     let step = Step::filter_by_id(step_id)
@@ -2105,11 +2089,7 @@ pub async fn nested_belongs_to_required_then_has_one_required(test: &mut Test) -
         .exec(&mut db)
         .await?;
 
-    let todo_id = Todo::filter_by_user_id(user.id)
-        .first(&mut db)
-        .await?
-        .unwrap()
-        .id;
+    let todo_id = Todo::get_by_user_id(&mut db, user.id).await?.id;
 
     let todo = Todo::filter_by_id(todo_id)
         .include(Todo::fields().user().config())

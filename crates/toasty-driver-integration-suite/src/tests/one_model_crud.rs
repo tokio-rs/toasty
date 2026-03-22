@@ -251,7 +251,7 @@ pub async fn unique_index_required_field_update(test: &mut Test) -> Result<()> {
     user.delete().exec(&mut db).await?;
 
     // Finding by the email returns None
-    assert_none!(User::filter_by_email(email).first(&mut db).await?);
+    assert_none!(User::filter_by_email(email).first().exec(&mut db).await?);
 
     let mut user2 = User::create().email(email).exec(&mut db).await?;
     assert_ne!(user2.id, user_reloaded.id);
@@ -272,7 +272,7 @@ pub async fn unique_index_required_field_update(test: &mut Test) -> Result<()> {
     assert_eq!(user_reloaded.email, "user2@example.com");
 
     // Finding by the email returns None
-    assert_none!(User::filter_by_email(email).first(&mut db).await?);
+    assert_none!(User::filter_by_email(email).first().exec(&mut db).await?);
 
     // Trying to create a user with the updated email address fails
     assert_err!(
@@ -295,7 +295,12 @@ pub async fn unique_index_required_field_update(test: &mut Test) -> Result<()> {
         .await?;
 
     // Finding by the email returns None
-    assert_none!(User::filter_by_email(&user2.email).first(&mut db).await?);
+    assert_none!(
+        User::filter_by_email(&user2.email)
+            .first()
+            .exec(&mut db)
+            .await?
+    );
 
     // Find the user by the new address.
     let u = User::filter_by_email("user3@example.com")
@@ -350,7 +355,8 @@ pub async fn unique_index_nullable_field_update(test: &mut Test) -> Result<()> {
     // Finding by a bogus email finds nothing
     assert_none!(
         User::filter_by_email("nobody@example.com")
-            .first(&mut db)
+            .first()
+            .exec(&mut db)
             .await?
     );
 

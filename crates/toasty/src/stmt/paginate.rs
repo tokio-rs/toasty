@@ -1,6 +1,6 @@
-use super::Query;
+use super::{List, Query};
 
-use crate::{engine::eval::Func, schema::Load, Executor, ExecutorExt, Result};
+use crate::{engine::eval::Func, schema::Load, stmt::IntoStatement, Executor, Result};
 
 use toasty_core::stmt::{self, visit_mut, Expr, ExprRecord, OrderBy, Projection, Value, VisitMut};
 
@@ -26,9 +26,9 @@ use toasty_core::stmt::{self, visit_mut, Expr, ExprRecord, OrderBy, Projection, 
 /// # let driver = toasty_driver_sqlite::Sqlite::in_memory();
 /// # let mut db = toasty::Db::builder().register::<User>().build(driver).await.unwrap();
 /// # db.push_schema().await.unwrap();
-/// use toasty::stmt::{Paginate, Query};
+/// use toasty::stmt::{List, Paginate, Query};
 ///
-/// let mut q = Query::<User>::all();
+/// let mut q = Query::<List<User>>::all();
 /// q.order_by(User::fields().name().asc());
 /// let page = Paginate::new(q, 20)
 ///     .exec(&mut db)
@@ -44,7 +44,7 @@ use toasty_core::stmt::{self, visit_mut, Expr, ExprRecord, OrderBy, Projection, 
 /// `order_by` to be present already.
 #[derive(Debug)]
 pub struct Paginate<M> {
-    query: Query<M>,
+    query: Query<List<M>>,
     reverse: bool,
 }
 
@@ -67,13 +67,13 @@ impl<M> Paginate<M> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// use toasty::stmt::{Paginate, Query};
+    /// use toasty::stmt::{List, Paginate, Query};
     ///
-    /// let mut q = Query::<User>::all();
+    /// let mut q = Query::<List<User>>::all();
     /// q.order_by(User::fields().name().asc());
     /// let _paginator = Paginate::new(q, 20);
     /// ```
-    pub fn new(mut query: Query<M>, per_page: usize) -> Self {
+    pub fn new(mut query: Query<List<M>>, per_page: usize) -> Self {
         assert!(
             query.untyped.limit.is_none(),
             "pagination requires no limit clause"
@@ -113,9 +113,9 @@ impl<M> Paginate<M> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// use toasty::stmt::{Paginate, Query};
+    /// use toasty::stmt::{List, Paginate, Query};
     ///
-    /// let mut q = Query::<User>::all();
+    /// let mut q = Query::<List<User>>::all();
     /// q.order_by(User::fields().id().asc());
     /// let paginator = Paginate::new(q, 10)
     ///     .after(toasty_core::stmt::Value::from(42_i64));
@@ -149,9 +149,9 @@ impl<M> Paginate<M> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// use toasty::stmt::{Paginate, Query};
+    /// use toasty::stmt::{List, Paginate, Query};
     ///
-    /// let mut q = Query::<User>::all();
+    /// let mut q = Query::<List<User>>::all();
     /// q.order_by(User::fields().id().asc());
     /// let paginator = Paginate::new(q, 10)
     ///     .before(toasty_core::stmt::Value::from(100_i64));
@@ -185,9 +185,9 @@ impl<M: Load> Paginate<M> {
     /// # let driver = toasty_driver_sqlite::Sqlite::in_memory();
     /// # let mut db = toasty::Db::builder().register::<User>().build(driver).await.unwrap();
     /// # db.push_schema().await.unwrap();
-    /// use toasty::stmt::{Paginate, Query};
+    /// use toasty::stmt::{List, Paginate, Query};
     ///
-    /// let mut q = Query::<User>::all();
+    /// let mut q = Query::<List<User>>::all();
     /// q.order_by(User::fields().name().asc());
     /// let page = Paginate::new(q, 20)
     ///     .exec(&mut db)
@@ -203,11 +203,12 @@ impl<M: Load> Paginate<M> {
                 ..
             }) => *n as usize,
             _ => {
-                let values: Vec<Value> = executor
-                    .exec(self.query.clone().into())
-                    .await?
-                    .collect()
+                let res = executor
+                    .exec_untyped(self.query.clone().into_statement().untyped)
                     .await?;
+                let stmt::Value::List(values) = res else {
+                    todo!()
+                };
                 let items: Vec<M::Output> =
                     values.into_iter().map(M::load).collect::<Result<_>>()?;
                 return Ok(crate::Page::new(
@@ -232,11 +233,13 @@ impl<M: Load> Paginate<M> {
             order_by.reverse();
         }
 
-        let mut items: Vec<_> = executor
-            .exec(query_with_extra.into())
-            .await?
-            .collect()
+        let res = executor
+            .exec_untyped(query_with_extra.into_statement().untyped)
             .await?;
+
+        let stmt::Value::List(mut items) = res else {
+            todo!()
+        };
         let has_next = (items.len() > page_size) || self.reverse;
         let has_prev = (items.len() > page_size) || !self.reverse;
         items.truncate(page_size);
@@ -274,8 +277,8 @@ impl<M: Load> Paginate<M> {
     }
 }
 
-impl<M> From<Query<M>> for Paginate<M> {
-    fn from(value: Query<M>) -> Self {
+impl<M> From<Query<List<M>>> for Paginate<M> {
+    fn from(value: Query<List<M>>) -> Self {
         assert!(
             value.untyped.limit.is_some(),
             "pagination requires a limit clause"

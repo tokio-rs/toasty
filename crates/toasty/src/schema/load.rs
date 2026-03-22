@@ -13,7 +13,12 @@ use toasty_core::Error;
 /// `List<M>`, `Output = Vec<M>`.
 pub trait Load {
     type Output;
+
     fn load(value: stmt::Value) -> Result<Self::Output, Error>;
+
+    fn load_relation(value: stmt::Value) -> Result<Self::Output, Error> {
+        Self::load(value)
+    }
 }
 
 impl Load for () {

@@ -9,6 +9,10 @@ use toasty_core::stmt;
 /// create-builders (e.g., `User::create()`) produce `Insert` values under the
 /// hood.
 ///
+/// The type parameter `M` is the **returning type** — `exec()` produces the
+/// newly created `M` instance(s). For inserts, the returning type always
+/// matches the model being inserted.
+///
 /// Field values are set with [`set`](Insert::set). Collection fields can be
 /// extended with [`insert`](Insert::insert) and [`insert_all`](Insert::insert_all).
 pub struct Insert<M> {

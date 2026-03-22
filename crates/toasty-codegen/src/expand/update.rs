@@ -231,11 +231,10 @@ impl Expand<'_> {
                 #builder_methods
 
                 #vis async fn exec(mut self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<()> {
-                    use #toasty::{ExecutorExt, UpdateTarget as _};
+                    use #toasty::UpdateTarget as _;
                     let stmt = self.target.to_update_stmt(self.assignments);
-                    let stream = executor.exec(stmt.into()).await?;
-                    let values = stream.collect().await?;
-                    self.target.apply_result(values)?;
+                    let value = executor.exec_untyped(stmt.into_untyped_stmt()).await?;
+                    self.target.apply_result(value)?;
                     Ok(())
                 }
             }
@@ -249,17 +248,14 @@ impl Expand<'_> {
                     assignments: #toasty::core::stmt::Assignments,
                 ) -> #toasty::stmt::Update<#model_ident> {
                     use #toasty::IntoStatement;
-                    let mut stmt = #toasty::stmt::Update::new_single(
+                    let mut stmt = #toasty::stmt::Update::new(
                         (&**self).into_statement().into_query().unwrap()
                     );
                     stmt.set_assignments(assignments);
                     stmt
                 }
 
-                fn apply_result(self, mut values: ::std::vec::Vec<#toasty::core::stmt::Value>) -> #toasty::Result<()> {
-                    let value = values.into_iter()
-                        .next()
-                        .ok_or_else(|| #toasty::Error::record_not_found("update returned no results"))?;
+                fn apply_result(self, value: #toasty::core::stmt::Value) -> #toasty::Result<()> {
                     self.reload(value)
                 }
             }
@@ -281,7 +277,7 @@ impl Expand<'_> {
                     stmt
                 }
 
-                fn apply_result(self, _values: ::std::vec::Vec<#toasty::core::stmt::Value>) -> #toasty::Result<()> {
+                fn apply_result(self, _values: #toasty::core::stmt::Value) -> #toasty::Result<()> {
                     Ok(())
                 }
             }
@@ -298,8 +294,8 @@ impl Expand<'_> {
                 }
             }
 
-            impl From<#toasty::stmt::Query<#model_ident>> for #update_struct_ident {
-                fn from(src: #toasty::stmt::Query<#model_ident>) -> #update_struct_ident {
+            impl From<#toasty::stmt::Query<#toasty::List<#model_ident>>> for #update_struct_ident {
+                fn from(src: #toasty::stmt::Query<#toasty::List<#model_ident>>) -> #update_struct_ident {
                     let mut s = #update_struct_ident {
                         assignments: #toasty::core::stmt::Assignments::default(),
                         target: #query_struct_ident::from_stmt(src),
