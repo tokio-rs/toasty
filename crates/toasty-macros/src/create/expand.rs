@@ -23,12 +23,8 @@ pub(crate) fn expand(item: &CreateItem) -> TokenStream {
                 .collect();
             quote! { toasty::batch([ #( #builders, )* ]) }
         }
-        CreateItem::Batch { items } => {
-            let builders: Vec<_> = items.iter().map(expand).collect();
-            quote! { ( #( #builders, )* ) }
-        }
         CreateItem::Tuple { items } => {
-            let elements: Vec<_> = items.iter().map(|item| expand_as_element(item)).collect();
+            let elements: Vec<_> = items.iter().map(expand_as_element).collect();
             quote! { toasty::batch(( #( #elements, )* )) }
         }
     }

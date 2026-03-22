@@ -87,9 +87,7 @@ pub async fn create_macro_batch(test: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await?;
 
-    assert_eq!(users.len(), 2);
-    assert_eq!(users[0].name, "Carl");
-    assert_eq!(users[1].name, "Bob");
+    assert_struct!(users, [_ { name: "Carl" }, _ { name: "Bob" }]);
 
     Ok(())
 }

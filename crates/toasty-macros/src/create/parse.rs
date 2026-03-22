@@ -4,13 +4,13 @@ use syn::token;
 use syn::{braced, bracketed, parenthesized};
 
 /// A recursive create item. Represents both the top-level macro input and
-/// items nested inside a batch `[ ... ]`.
+/// items nested inside a tuple `( ... )`.
 ///
 /// Four forms:
 /// - `Path { fields }`        — type-target creation
 /// - `in expr { fields }`     — scoped creation
 /// - `Path::[ {..}, {..} ]`   — typed batch
-/// - `[ Item, Item, ... ]`    — mixed batch (items are themselves `CreateItem`s)
+/// - `( Item, Item, ... )`    — heterogeneous tuple (items are themselves `CreateItem`s)
 pub(crate) enum CreateItem {
     /// `User { name: "Carl" }`
     Typed { path: syn::Path, fields: FieldSet },
@@ -21,8 +21,6 @@ pub(crate) enum CreateItem {
         path: syn::Path,
         items: Vec<FieldSet>,
     },
-    /// `[ User { ... }, Article::[ {...}, {...} ], in scope { ... } ]`
-    Batch { items: Vec<CreateItem> },
     /// `( User { ... }, Article::[ {...}, {...} ] )`
     Tuple { items: Vec<CreateItem> },
 }
@@ -75,13 +73,10 @@ impl Parse for CreateItem {
                 items: items.into_iter().collect(),
             })
         } else if input.peek(token::Bracket) {
-            // `[ ... ]` → batch of items
-            let content;
-            bracketed!(content in input);
-            let items = Punctuated::<CreateItem, syn::Token![,]>::parse_terminated(&content)?;
-            Ok(CreateItem::Batch {
-                items: items.into_iter().collect(),
-            })
+            Err(input.error(
+                "unexpected `[` — use tuple syntax `(...)` for heterogeneous creation, \
+                 or `Type::[...]` for same-type batch creation",
+            ))
         } else if input.peek(syn::Token![in]) {
             // `in expr { fields }` → scoped creation
             input.parse::<syn::Token![in]>()?;
