@@ -29,6 +29,24 @@ pub struct Update<T> {
 
 // Methods available on all Update<M> regardless of M
 impl<T> Update<T> {
+    /// Create a new update statement from the given query selection.
+    ///
+    /// All records matched by `selection` will be updated. By default the
+    /// update returns the changed records (`Returning::Changed`).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::{List, Query, Update};
+    ///
+    /// let update = Update::<List<User>>::new(Query::<List<User>>::all());
+    /// ```
     pub fn new(selection: Query<T>) -> Self {
         let mut stmt = selection.untyped.update();
         stmt.returning = Some(stmt::Returning::Changed);
@@ -85,6 +103,22 @@ impl<T> Update<T> {
         &mut self.untyped
     }
 
+    /// Replace all field assignments with `assignments`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::{List, Query, Update};
+    ///
+    /// let mut update = Update::<List<User>>::new(Query::<List<User>>::all());
+    /// update.set_assignments(toasty_core::stmt::Assignments::default());
+    /// ```
     pub fn set_assignments(&mut self, assignments: stmt::Assignments) {
         self.untyped.assignments = assignments;
     }
@@ -194,6 +228,31 @@ impl<T> Update<T> {
 }
 
 impl<T: Load> Update<T> {
+    /// Execute this update statement against the given executor.
+    ///
+    /// Returns the updated records unless
+    /// [`set_returning_none`](Update::set_returning_none) was called.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// # let driver = toasty_driver_sqlite::Sqlite::in_memory();
+    /// # let mut db = toasty::Db::builder().register::<User>().build(driver).await.unwrap();
+    /// # db.push_schema().await.unwrap();
+    /// use toasty::stmt::{List, Query, Update};
+    ///
+    /// let mut update = Update::<List<User>>::new(Query::<List<User>>::all());
+    /// update.set(1, toasty_core::stmt::Value::from("Bob"));
+    /// let _users: Vec<User> = update.exec(&mut db).await.unwrap();
+    /// # });
+    /// ```
     pub async fn exec(self, executor: &mut dyn Executor) -> Result<T::Output> {
         executor.exec(self.into()).await
     }

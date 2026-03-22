@@ -229,10 +229,52 @@ impl<T> Query<T> {
         self
     }
 
+    /// Convert this query into a [`Delete`] statement that removes all matching
+    /// records.
+    ///
+    /// The returned `Delete<()>` does not return the removed records.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::{List, Query};
+    ///
+    /// let delete = Query::<List<User>>::filter(User::fields().name().eq("Alice"))
+    ///     .delete();
+    /// ```
     pub fn delete(self) -> Delete<()> {
         Delete::from_untyped(self.untyped.delete())
     }
 
+    /// Widen a single-row query back into a list query.
+    ///
+    /// This is the inverse of [`first`](Query::first) or [`one`](Query::one).
+    /// Panics if the query is not currently in single-row mode.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this query is not a single-row query.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::{List, Query};
+    ///
+    /// let q: Query<User> = Query::<List<User>>::all().one();
+    /// let _list_q: Query<List<User>> = q.to_list();
+    /// ```
     pub fn to_list(mut self) -> Query<List<T>> {
         assert!(self.untyped.single, "not a single query");
         self.untyped.single = false;
@@ -245,6 +287,25 @@ impl<T> Query<T> {
 }
 
 impl<T> Query<List<T>> {
+    /// Narrow this list query to return at most one record, wrapped in
+    /// `Option`.
+    ///
+    /// The resulting `Query<Option<T>>` returns `Some(record)` if at least one
+    /// row matches, or `None` if no rows match.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::{List, Query};
+    ///
+    /// let q: Query<Option<User>> = Query::<List<User>>::all().first();
+    /// ```
     pub fn first(mut self) -> Query<Option<T>> {
         set_first(&mut self.untyped);
 
@@ -254,6 +315,24 @@ impl<T> Query<List<T>> {
         }
     }
 
+    /// Narrow this list query to return exactly one record.
+    ///
+    /// The resulting `Query<T>` returns the record directly. If no rows match,
+    /// execution returns an error.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::{List, Query};
+    ///
+    /// let q: Query<User> = Query::<List<User>>::all().one();
+    /// ```
     pub fn one(mut self) -> Query<T> {
         set_first(&mut self.untyped);
 
@@ -270,6 +349,34 @@ fn set_first(query: &mut stmt::Query) {
 }
 
 impl<T: Load> Query<T> {
+    /// Execute this query against the given executor and return the result.
+    ///
+    /// The return type depends on the query's type parameter `T`:
+    /// - `Query<List<M>>` returns `Vec<M>`.
+    /// - `Query<M>` returns `M` (errors if no row matches).
+    /// - `Query<Option<M>>` returns `Option<M>`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// # let driver = toasty_driver_sqlite::Sqlite::in_memory();
+    /// # let mut db = toasty::Db::builder().register::<User>().build(driver).await.unwrap();
+    /// # db.push_schema().await.unwrap();
+    /// use toasty::stmt::{List, Query};
+    ///
+    /// let users: Vec<User> = Query::<List<User>>::all()
+    ///     .exec(&mut db)
+    ///     .await
+    ///     .unwrap();
+    /// # });
+    /// ```
     pub async fn exec(self, executor: &mut dyn Executor) -> Result<T::Output> {
         executor.exec(self.into_statement()).await
     }

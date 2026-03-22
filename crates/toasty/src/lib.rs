@@ -48,11 +48,9 @@
 //! - [`Embed`](schema::Embed) — an embedded type whose fields are flattened
 //!   into the parent model's table. Implemented by `#[derive(Embed)]`.
 //! - [`Executor`] — the dyn-compatible interface for running statements.
-//!   [`Db`] and [`Transaction`] both implement it.
-//! - [`ExecutorExt`] — generic convenience methods ([`all`](ExecutorExt::all),
-//!   [`first`](ExecutorExt::first), [`get`](ExecutorExt::get),
-//!   [`delete`](ExecutorExt::delete)) blanket-implemented for every
-//!   `Executor`.
+//!   [`Db`] and [`Transaction`] both implement it. The generic
+//!   [`exec`](Executor::exec) method on `dyn Executor` accepts any typed
+//!   [`Statement<T>`].
 //! - [`Load`](schema::Load) — deserializes a model instance from the database
 //!   value representation.
 //!

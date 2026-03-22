@@ -5,17 +5,54 @@ use crate::{
 };
 use toasty_core::stmt as core_stmt;
 
+/// A builder for inserting multiple records of the same model in a single
+/// statement.
+///
+/// Records are accumulated with [`item`](CreateMany::item) or
+/// [`with_item`](CreateMany::with_item), then executed with
+/// [`exec`](CreateMany::exec). Alternatively, call
+/// [`into_expr`](CreateMany::into_expr) to embed the batch insert as an
+/// expression inside another statement (e.g., a has-many association insert).
+///
+/// # Examples
+///
+/// ```no_run
+/// # tokio::runtime::Runtime::new().unwrap().block_on(async {
+/// # #[derive(Debug, toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     name: String,
+/// # }
+/// # let driver = toasty_driver_sqlite::Sqlite::in_memory();
+/// # let mut db = toasty::Db::builder().register::<User>().build(driver).await.unwrap();
+/// # db.push_schema().await.unwrap();
+/// use toasty::CreateMany;
+///
+/// let users = CreateMany::<User>::new()
+///     .with_item(|u| u.name("Alice"))
+///     .with_item(|u| u.name("Bob"))
+///     .exec(&mut db)
+///     .await
+///     .unwrap();
+/// assert_eq!(users.len(), 2);
+/// # });
+/// ```
 pub struct CreateMany<M: Model> {
-    /// The builder holds an `Insert` statement which can create multiple
-    /// records for the same model.
     stmts: Vec<stmt::Insert<M>>,
 }
 
 impl<M: Model> CreateMany<M> {
+    /// Create an empty `CreateMany` builder with no records queued.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Append a record from any value that implements [`IntoInsert`](stmt::IntoInsert)
+    /// for model `M`.
+    ///
+    /// Returns `self` for method chaining.
     pub fn item(mut self, item: impl stmt::IntoInsert<Model = M>) -> Self {
         let stmt = item.into_insert();
         assert!(
@@ -26,9 +63,13 @@ impl<M: Model> CreateMany<M> {
         self
     }
 
-    /// Closure-based variant of `item`: builds a single record using the model's
-    /// create builder. `f` receives a default create builder and must return it
-    /// after setting the desired fields.
+    /// Append a record using a closure that configures the model's generated
+    /// create builder.
+    ///
+    /// `f` receives a default create builder and must return it after setting
+    /// the desired fields.
+    ///
+    /// Returns `self` for method chaining.
     pub fn with_item(mut self, f: impl FnOnce(M::Create) -> M::Create) -> Self {
         let create = f(M::Create::default());
         let stmt = create.into_insert();
@@ -60,6 +101,9 @@ impl<M: Model> CreateMany<M> {
         merged.into_list_expr()
     }
 
+    /// Execute the batch insert and return the created records.
+    ///
+    /// Returns an empty `Vec` if no records were queued.
     pub async fn exec(self, executor: &mut dyn Executor) -> Result<Vec<M>> {
         if self.stmts.is_empty() {
             return Ok(vec![]);

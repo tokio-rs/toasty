@@ -119,6 +119,31 @@ impl<T> Statement<T> {
 }
 
 impl<T: Load> Statement<T> {
+    /// Execute this statement against the given executor and return the
+    /// deserialized result.
+    ///
+    /// This is a convenience wrapper around
+    /// [`Executor::exec`](crate::Executor::exec).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// # let driver = toasty_driver_sqlite::Sqlite::in_memory();
+    /// # let mut db = toasty::Db::builder().register::<User>().build(driver).await.unwrap();
+    /// # db.push_schema().await.unwrap();
+    /// use toasty::stmt::{IntoStatement, List, Query};
+    ///
+    /// let stmt = Query::<List<User>>::all().into_statement();
+    /// let users: Vec<User> = stmt.exec(&mut db).await.unwrap();
+    /// # });
+    /// ```
     pub async fn exec(self, executor: &mut dyn Executor) -> crate::Result<T::Output> {
         executor.exec(self).await
     }

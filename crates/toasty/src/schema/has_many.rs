@@ -4,6 +4,14 @@ use toasty_core::stmt::Value;
 
 use std::fmt;
 
+/// A lazily-loaded has-many association.
+///
+/// `HasMany<T>` wraps an optional `Vec<T>` that is populated when the
+/// association is eagerly loaded (via `include`) or accessed through a
+/// generated relation accessor. Before loading, calling
+/// [`get`](HasMany::get) panics.
+///
+/// This type appears as a field on model structs for has-many relations.
 #[derive(Clone)]
 pub struct HasMany<T> {
     values: Option<Vec<T>>,
@@ -32,6 +40,11 @@ impl<T: Relation> Load for HasMany<T> {
 }
 
 impl<T: Relation> HasMany<T> {
+    /// Returns a slice of the loaded associated records.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the association has not been loaded.
     #[track_caller]
     pub fn get(&self) -> &[T] {
         self.values
@@ -40,10 +53,13 @@ impl<T: Relation> HasMany<T> {
             .as_slice()
     }
 
+    /// Returns `true` if the association has not been loaded yet.
     pub fn is_unloaded(&self) -> bool {
         self.values.is_none()
     }
 
+    /// Clear the loaded values, returning this association to the unloaded
+    /// state.
     pub fn unload(&mut self) {
         self.values = None;
     }

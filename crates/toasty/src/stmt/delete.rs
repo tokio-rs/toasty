@@ -56,10 +56,8 @@ impl<T> Delete<T> {
     /// # }
     /// use toasty::stmt::{Delete, List, Query};
     ///
-    /// // Build a delete from a query, then extract the raw form
-    /// let delete = Query::<List<User>>::all().delete();
-    /// // The typed Delete wraps an untyped core delete
-    /// let _: Delete<toasty::stmt::List<User>> = delete;
+    /// // Build a delete from a query
+    /// let delete: Delete<()> = Query::<List<User>>::all().delete();
     /// ```
     pub const fn from_untyped(untyped: stmt::Delete) -> Self {
         Self {
