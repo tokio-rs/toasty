@@ -448,58 +448,6 @@ pub async fn unique_index_no_update(test: &mut Test) -> Result<()> {
 }
 
 #[driver_test(id(ID))]
-pub async fn batch_get_by_id(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Item {
-        #[key]
-        #[auto]
-        id: ID,
-    }
-
-    let mut db = test.setup_db(models!(Item)).await;
-    let mut keys = vec![];
-
-    for _ in 0..5 {
-        let item = Item::create().exec(&mut db).await?;
-        keys.push(item.id);
-    }
-
-    let items: Vec<_> = Item::filter_by_id_batch([&keys[0], &keys[1], &keys[2]])
-        .exec(&mut db)
-        .await?;
-
-    assert_eq!(3, items.len());
-
-    for item in items {
-        assert!(keys.contains(&item.id));
-    }
-    Ok(())
-}
-
-#[driver_test(id(ID))]
-pub async fn empty_batch_get_by_id(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Item {
-        #[key]
-        #[auto]
-        id: ID,
-    }
-
-    let mut db = test.setup_db(models!(Item)).await;
-    let mut ids = vec![];
-
-    for _ in 0..5 {
-        let item = Item::create().exec(&mut db).await?;
-        ids.push(item.id);
-    }
-
-    let items: Vec<_> = Item::filter_by_id_batch(&[] as &[ID]).exec(&mut db).await?;
-
-    assert_eq!(0, items.len());
-    Ok(())
-}
-
-#[driver_test(id(ID))]
 pub async fn update_multiple_fields(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {

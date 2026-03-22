@@ -36,7 +36,6 @@ pub mod has_one_crud_basic;
 pub mod jiff;
 pub mod missing_registrations;
 pub mod one_model_batch_create;
-pub mod one_model_composite_key;
 pub mod one_model_composite_key_in_list;
 pub mod one_model_crud;
 pub mod one_model_crud_basic_driver_ops;

@@ -207,29 +207,3 @@ Both can insert multiple records, but they differ:
 
 Use `create_many()` when inserting multiple records of the same model. Use
 `batch()` when combining different operations or models.
-
-## Batch key lookups
-
-For primary key fields, Toasty generates a `filter_by_<key>_batch()` method that
-fetches multiple records by key in a single query. This translates to an SQL
-`IN` clause:
-
-```rust
-# use toasty::Model;
-# #[derive(Debug, toasty::Model)]
-# struct User {
-#     #[key]
-#     #[auto]
-#     id: u64,
-#     name: String,
-# }
-# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let users = User::filter_by_id_batch([&1, &2, &3])
-    .exec(&mut db)
-    .await?;
-# Ok(())
-# }
-```
-
-This is more efficient than calling `get_by_id()` in a loop. See
-[Querying Records](./querying-records.md#batch-key-lookups) for more details.

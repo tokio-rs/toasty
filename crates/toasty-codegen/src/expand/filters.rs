@@ -11,9 +11,6 @@ pub(super) struct Filter {
     /// Fields to filter by
     fields: Vec<usize>,
 
-    /// When true, include a batch filter method
-    batch: bool,
-
     /// When true, only include the filter on relation structs
     only_relation: bool,
 
@@ -22,9 +19,6 @@ pub(super) struct Filter {
 
     /// Filter method identifer
     pub(super) filter_method_ident: syn::Ident,
-
-    /// Filter method batch identifier
-    filter_method_batch_ident: syn::Ident,
 
     /// Update method identifier
     update_method_ident: syn::Ident,
@@ -47,16 +41,9 @@ impl Expand<'_> {
                 let get_method = self.expand_model_get_method(filter, false);
                 let filter_method = self.expand_model_filter_method(filter, false);
 
-                let filter_batch_method = if filter.batch {
-                    Some(self.expand_model_filter_batch_method(filter, false))
-                } else {
-                    None
-                };
-
                 quote!(
                     #get_method
                     #filter_method
-                    #filter_batch_method
                 )
             })
             .collect()
@@ -137,34 +124,6 @@ impl Expand<'_> {
         }
     }
 
-    fn expand_model_filter_batch_method(
-        &self,
-        filter: &Filter,
-        self_into_query: bool,
-    ) -> TokenStream {
-        let toasty = &self.toasty;
-        let vis = &self.model.vis;
-        let query_struct_ident = &self.model.kind.as_root_unwrap().query_struct_ident;
-        let filter_method_batch_ident = &filter.filter_method_batch_ident;
-        let bound = self.expand_filter_batch_arg_bound(filter);
-        let self_arg;
-        let query;
-
-        if self_into_query {
-            self_arg = quote!(self,);
-            query = quote!(#query_struct_ident::from_stmt({ use #toasty::IntoStatement; self.into_statement().into_query().unwrap() }));
-        } else {
-            self_arg = quote!();
-            query = quote!(#query_struct_ident::default());
-        }
-
-        quote! {
-            #vis fn #filter_method_batch_ident(#self_arg keys: impl #toasty::IntoExpr<#toasty::List<#bound>>) -> #query_struct_ident {
-                #query.#filter_method_batch_ident( keys )
-            }
-        }
-    }
-
     pub(super) fn expand_query_filter_methods(&self) -> TokenStream {
         self.filters
             .iter()
@@ -172,16 +131,10 @@ impl Expand<'_> {
             .map(|filter| {
                 let get_method = self.expand_model_get_method(filter, true);
                 let filter_method = self.expand_query_filter_method(filter);
-                let filter_batch_method = if filter.batch {
-                    Some(self.expand_query_filter_batch_method(filter))
-                } else {
-                    None
-                };
 
                 quote! {
                     #get_method
                     #filter_method
-                    #filter_batch_method
                 }
             })
             .collect()
@@ -194,16 +147,9 @@ impl Expand<'_> {
                 let get_method = self.expand_model_get_method(filter, true);
                 let filter_method = self.expand_model_filter_method(filter, true);
 
-                let filter_batch_method = if filter.batch {
-                    Some(self.expand_model_filter_batch_method(filter, true))
-                } else {
-                    None
-                };
-
                 quote!(
                     #get_method
                     #filter_method
-                    #filter_batch_method
                 )
             })
             .collect()
@@ -240,33 +186,6 @@ impl Expand<'_> {
         }
     }
 
-    fn expand_query_filter_batch_method(&self, filter: &Filter) -> TokenStream {
-        let toasty = &self.toasty;
-        let vis = &self.model.vis;
-        let model_ident = &self.model.ident;
-        let query_struct_ident = &self.model.kind.as_root_unwrap().query_struct_ident;
-        let query_filter_batch_ident = &filter.filter_method_batch_ident;
-        let bound = self.expand_filter_batch_arg_bound(filter);
-
-        let lhs = filter.fields.iter().map(|index| {
-            let field = &self.model.fields[*index];
-            let field_ident = &field.name.ident;
-            quote!(#model_ident::fields().#field_ident())
-        });
-
-        let lhs = if filter.fields.len() == 1 {
-            quote!(#( #lhs )*)
-        } else {
-            quote!( ( #( #lhs ),* ) )
-        };
-
-        quote! {
-            #vis fn #query_filter_batch_ident(self, keys: impl #toasty::IntoExpr<#toasty::List<#bound>> ) -> #query_struct_ident {
-                self.filter( #toasty::stmt::Expr::in_list( #lhs, keys ) )
-            }
-        }
-    }
-
     fn expand_filter_args<'b>(
         &'b self,
         filter: &'b Filter,
@@ -283,24 +202,6 @@ impl Expand<'_> {
 
             quote!(#name: impl #toasty::IntoExpr<#ty>)
         })
-    }
-
-    fn expand_filter_batch_arg_bound(&self, filter: &Filter) -> TokenStream {
-        let parts = filter.fields.iter().map(move |index| {
-            let field = &self.model.fields[*index];
-            let ty = match &field.ty {
-                FieldTy::Primitive(ty) => ty,
-                _ => todo!(),
-            };
-
-            quote!(#ty)
-        });
-
-        if filter.fields.len() == 1 {
-            quote!( #( #parts )* )
-        } else {
-            quote!( ( #( #parts ),* ) )
-        }
     }
 
     pub(super) fn expand_filter_arg_idents<'b>(
@@ -353,29 +254,22 @@ impl<'a> BuildModelFilters<'a> {
                 .copied()
                 .collect::<Vec<_>>();
 
-            let Some(index) = self.find_index(&fields) else {
+            let Some(_index) = self.find_index(&fields) else {
                 continue;
             };
 
             if let Some(filter) = self.filters.get_mut(&fields) {
-                filter.batch |= index.primary_key && index.fields.len() == fields.len();
                 filter.only_relation = false;
             } else {
                 self.filters.insert(
                     fields.clone(),
                     Filter {
                         fields: fields.clone(),
-                        batch: index.primary_key && index.fields.len() == fields.len(),
                         only_relation: false,
-                        get_method_ident: self.method_ident(&fields, "get", None),
-                        filter_method_ident: self.method_ident(&fields, "filter", None),
-                        filter_method_batch_ident: self.method_ident(
-                            &fields,
-                            "filter",
-                            Some("batch"),
-                        ),
-                        update_method_ident: self.method_ident(&fields, "update", None),
-                        delete_method_ident: self.method_ident(&fields, "delete", None),
+                        get_method_ident: self.method_ident(&fields, "get"),
+                        filter_method_ident: self.method_ident(&fields, "filter"),
+                        update_method_ident: self.method_ident(&fields, "update"),
+                        delete_method_ident: self.method_ident(&fields, "delete"),
                     },
                 );
             }
@@ -390,17 +284,11 @@ impl<'a> BuildModelFilters<'a> {
                         fields.clone(),
                         Filter {
                             fields: fields.clone(),
-                            batch: false,
                             only_relation: true,
-                            get_method_ident: self.method_ident(&fields, "get", None),
-                            filter_method_ident: self.method_ident(&fields, "filter", None),
-                            filter_method_batch_ident: self.method_ident(
-                                &fields,
-                                "filter",
-                                Some("batch"),
-                            ),
-                            update_method_ident: self.method_ident(&fields, "update", None),
-                            delete_method_ident: self.method_ident(&fields, "delete", None),
+                            get_method_ident: self.method_ident(&fields, "get"),
+                            filter_method_ident: self.method_ident(&fields, "filter"),
+                            update_method_ident: self.method_ident(&fields, "update"),
+                            delete_method_ident: self.method_ident(&fields, "delete"),
                         },
                     );
                 }
@@ -428,7 +316,7 @@ impl<'a> BuildModelFilters<'a> {
         None
     }
 
-    fn method_ident(&self, fields: &[usize], prefix: &str, suffix: Option<&str>) -> syn::Ident {
+    fn method_ident(&self, fields: &[usize], prefix: &str) -> syn::Ident {
         let mut name = prefix.to_string();
 
         let mut prefix = "_by_";
@@ -438,11 +326,6 @@ impl<'a> BuildModelFilters<'a> {
             name.push_str(&self.model.fields[*index].name.ident.to_string());
 
             prefix = "_and_";
-        }
-
-        if let Some(suffix) = suffix {
-            name.push('_');
-            name.push_str(suffix);
         }
 
         syn::Ident::new(&name, Span::call_site())
