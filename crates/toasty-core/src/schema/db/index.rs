@@ -50,10 +50,17 @@ pub struct Index {
     pub columns: Vec<IndexColumn>,
 
     /// When `true`, indexed entries are unique
+    #[cfg_attr(feature = "serde", serde(default, skip_serializing_if = "is_false"))]
     pub unique: bool,
 
     /// When `true`, the index indexes the model's primary key fields.
+    #[cfg_attr(feature = "serde", serde(default, skip_serializing_if = "is_false"))]
     pub primary_key: bool,
+}
+
+#[cfg(feature = "serde")]
+fn is_false(b: &bool) -> bool {
+    !*b
 }
 
 /// Uniquely identifies an index within a schema.
@@ -709,6 +716,82 @@ mod tests {
         let diff = IndicesDiff::from(&cx, &from_indices, &to_indices);
         // Index should remain unchanged when column is renamed with hint
         assert!(diff.is_empty());
+    }
+
+    #[cfg(feature = "serde")]
+    mod serde_tests {
+        use crate::schema::db::{
+            ColumnId, Index, IndexColumn, IndexId, IndexOp, IndexScope, TableId,
+        };
+
+        fn base_index() -> Index {
+            Index {
+                id: IndexId {
+                    table: TableId(0),
+                    index: 0,
+                },
+                name: "idx".to_string(),
+                on: TableId(0),
+                columns: vec![IndexColumn {
+                    column: ColumnId {
+                        table: TableId(0),
+                        index: 0,
+                    },
+                    op: IndexOp::Eq,
+                    scope: IndexScope::Local,
+                }],
+                unique: false,
+                primary_key: false,
+            }
+        }
+
+        #[test]
+        fn false_booleans_are_omitted() {
+            let toml = toml::to_string(&base_index()).unwrap();
+            assert!(!toml.contains("unique"), "toml: {toml}");
+            assert!(!toml.contains("primary_key"), "toml: {toml}");
+        }
+
+        #[test]
+        fn unique_true_is_included() {
+            let idx = Index {
+                unique: true,
+                ..base_index()
+            };
+            let toml = toml::to_string(&idx).unwrap();
+            assert!(toml.contains("unique = true"), "toml: {toml}");
+        }
+
+        #[test]
+        fn primary_key_true_is_included() {
+            let idx = Index {
+                primary_key: true,
+                ..base_index()
+            };
+            let toml = toml::to_string(&idx).unwrap();
+            assert!(toml.contains("primary_key = true"), "toml: {toml}");
+        }
+
+        #[test]
+        fn missing_bool_fields_deserialize_as_false() {
+            let toml = "name = \"idx\"\non = 0\n\n[id]\ntable = 0\nindex = 0\n\n[[columns]]\nop = \"Eq\"\nscope = \"Local\"\n\n[columns.column]\ntable = 0\nindex = 0\n";
+            let idx: Index = toml::from_str(toml).unwrap();
+            assert!(!idx.unique);
+            assert!(!idx.primary_key);
+        }
+
+        #[test]
+        fn round_trip_all_true() {
+            let original = Index {
+                unique: true,
+                primary_key: true,
+                ..base_index()
+            };
+            let decoded: Index = toml::from_str(&toml::to_string(&original).unwrap()).unwrap();
+            assert_eq!(decoded.unique, original.unique);
+            assert_eq!(decoded.primary_key, original.primary_key);
+            assert_eq!(decoded.name, original.name);
+        }
     }
 
     #[test]

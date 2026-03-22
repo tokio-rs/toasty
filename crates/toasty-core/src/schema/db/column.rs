@@ -47,15 +47,23 @@ pub struct Column {
     pub storage_ty: Type,
 
     /// Whether or not the column is nullable
+    #[cfg_attr(feature = "serde", serde(default, skip_serializing_if = "is_false"))]
     pub nullable: bool,
 
     /// True if the column is part of the table's primary key
+    #[cfg_attr(feature = "serde", serde(default, skip_serializing_if = "is_false"))]
     pub primary_key: bool,
 
     /// True if the column is an integer that should be auto-incremented
     /// with each insertion of a new row. This should be false if a `storage_ty`
     /// of type `Serial` is used.
+    #[cfg_attr(feature = "serde", serde(default, skip_serializing_if = "is_false"))]
     pub auto_increment: bool,
+}
+
+#[cfg(feature = "serde")]
+fn is_false(b: &bool) -> bool {
+    !*b
 }
 
 /// Uniquely identifies a column within a schema.
@@ -391,6 +399,86 @@ mod tests {
             .any(|item| matches!(item, ColumnsDiffItem::AddColumn(_)));
         assert!(has_drop);
         assert!(has_add);
+    }
+
+    #[cfg(feature = "serde")]
+    mod serde_tests {
+        use crate::schema::db::{Column, ColumnId, TableId, Type};
+        use crate::stmt;
+
+        fn base_column() -> Column {
+            Column {
+                id: ColumnId {
+                    table: TableId(0),
+                    index: 0,
+                },
+                name: "test".to_string(),
+                ty: stmt::Type::String,
+                storage_ty: Type::Text,
+                nullable: false,
+                primary_key: false,
+                auto_increment: false,
+            }
+        }
+
+        #[test]
+        fn false_booleans_are_omitted() {
+            let toml = toml::to_string(&base_column()).unwrap();
+            assert!(!toml.contains("nullable"), "toml: {toml}");
+            assert!(!toml.contains("primary_key"), "toml: {toml}");
+            assert!(!toml.contains("auto_increment"), "toml: {toml}");
+        }
+
+        #[test]
+        fn nullable_true_is_included() {
+            let col = Column {
+                nullable: true,
+                ..base_column()
+            };
+            let toml = toml::to_string(&col).unwrap();
+            assert!(toml.contains("nullable = true"), "toml: {toml}");
+        }
+
+        #[test]
+        fn primary_key_true_is_included() {
+            let col = Column {
+                primary_key: true,
+                ..base_column()
+            };
+            let toml = toml::to_string(&col).unwrap();
+            assert!(toml.contains("primary_key = true"), "toml: {toml}");
+        }
+
+        #[test]
+        fn auto_increment_true_is_included() {
+            let col = Column {
+                auto_increment: true,
+                ..base_column()
+            };
+            let toml = toml::to_string(&col).unwrap();
+            assert!(toml.contains("auto_increment = true"), "toml: {toml}");
+        }
+
+        #[test]
+        fn missing_bool_fields_deserialize_as_false() {
+            let toml = "name = \"test\"\nty = \"String\"\nstorage_ty = \"Text\"\n\n[id]\ntable = 0\nindex = 0\n";
+            let col: Column = toml::from_str(toml).unwrap();
+            assert!(!col.nullable);
+            assert!(!col.primary_key);
+            assert!(!col.auto_increment);
+        }
+
+        #[test]
+        fn round_trip_all_true() {
+            let original = Column {
+                nullable: true,
+                primary_key: true,
+                auto_increment: true,
+                ..base_column()
+            };
+            let decoded: Column = toml::from_str(&toml::to_string(&original).unwrap()).unwrap();
+            assert_eq!(original, decoded);
+        }
     }
 
     #[test]

@@ -12,27 +12,18 @@ id = { table = 0, index = 0 }
 name = "id"
 ty = "String"
 storage_ty = "Text"
-nullable = false
-primary_key = false
-auto_increment = false
 
 [[schema.tables.columns]]
 id = { table = 0, index = 1 }
 name = "name"
 ty = "String"
 storage_ty = "Text"
-nullable = false
-primary_key = false
-auto_increment = false
 
 [[schema.tables.columns]]
 id = { table = 0, index = 2 }
 name = "email"
 ty = "String"
 storage_ty = "Text"
-nullable = false
-primary_key = false
-auto_increment = false
 
 [[schema.tables.indices]]
 id = { table = 0, index = 0 }
@@ -48,7 +39,6 @@ name = "index_users_by_email"
 on = 0
 columns = [{ column = { table = 0, index = 2 }, op = "Eq", scope = "Partition" }]
 unique = true
-primary_key = false
 
 [[schema.tables]]
 id = 1
@@ -60,36 +50,24 @@ id = { table = 1, index = 0 }
 name = "id"
 ty = "String"
 storage_ty = "Text"
-nullable = false
-primary_key = false
-auto_increment = false
 
 [[schema.tables.columns]]
 id = { table = 1, index = 1 }
 name = "user_id"
 ty = "String"
 storage_ty = "Text"
-nullable = false
-primary_key = false
-auto_increment = false
 
 [[schema.tables.columns]]
 id = { table = 1, index = 2 }
 name = "title"
 ty = "String"
 storage_ty = "Text"
-nullable = false
-primary_key = false
-auto_increment = false
 
 [[schema.tables.columns]]
 id = { table = 1, index = 3 }
 name = "completed"
 ty = "Bool"
 storage_ty = "Boolean"
-nullable = false
-primary_key = false
-auto_increment = false
 
 [[schema.tables.indices]]
 id = { table = 1, index = 0 }
@@ -104,13 +82,9 @@ id = { table = 1, index = 1 }
 name = "index_todos_by_user_id"
 on = 1
 columns = [{ column = { table = 1, index = 1 }, op = "Eq", scope = "Partition" }]
-unique = false
-primary_key = false
 
 [[schema.tables.indices]]
 id = { table = 1, index = 2 }
 name = "index_todos_by_title"
 on = 1
 columns = [{ column = { table = 1, index = 2 }, op = "Eq", scope = "Partition" }]
-unique = false
-primary_key = false
