@@ -5,7 +5,7 @@ use crate::{db::ConnectionOperation, Executor, Result};
 use toasty_core::{
     async_trait,
     driver::operation::{self, IsolationLevel},
-    stmt::ValueStream,
+    stmt::Value,
     Schema,
 };
 use tokio::sync::oneshot;
@@ -181,19 +181,8 @@ impl<'a> Executor for Transaction<'a> {
         Ok(transaction)
     }
 
-    async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> Result<ValueStream> {
-        let (tx, rx) = oneshot::channel();
-
-        let conn = self.db.connection().await?;
-        conn.in_tx
-            .send(ConnectionOperation::ExecStatement {
-                stmt: Box::new(stmt),
-                in_transaction: true,
-                tx,
-            })
-            .unwrap();
-
-        rx.await.unwrap()
+    async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> Result<Value> {
+        self.db.exec_untyped(stmt).await
     }
 
     fn schema(&mut self) -> &Arc<Schema> {

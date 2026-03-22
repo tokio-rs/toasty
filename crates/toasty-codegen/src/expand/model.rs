@@ -29,6 +29,7 @@ impl Expand<'_> {
         let field_name_to_id = self.expand_field_name_to_id();
         let relation_methods = self.expand_model_relation_methods();
         let into_statement_body = self.expand_model_into_statement_body();
+        let into_delete_body = self.expand_model_into_delete_body();
         let into_expr_body_ref = self.expand_model_into_expr_body(true);
         let into_expr_body_val = self.expand_model_into_expr_body(false);
         let reload_method = self.expand_reload_method();
@@ -65,9 +66,8 @@ impl Expand<'_> {
                     #query_struct_ident::from_stmt(#toasty::stmt::Query::filter(expr))
                 }
 
-                #vis fn delete(self) -> #toasty::stmt::Delete<#model_ident> {
-                    use #toasty::IntoStatement;
-                    self.into_statement().into_query().unwrap().delete()
+                #vis fn delete(self) -> #toasty::stmt::Delete<()> {
+                    #into_delete_body
                 }
             }
 
@@ -118,37 +118,27 @@ impl Expand<'_> {
                 }
             }
 
-            impl #toasty::stmt::IntoExpr<#toasty::List<#model_ident>> for #model_ident {
-                fn into_expr(self) -> #toasty::stmt::Expr<#toasty::List<#model_ident>> {
-                    #toasty::stmt::Expr::list([self])
-                }
-
-                fn by_ref(&self) -> #toasty::stmt::Expr<#toasty::List<#model_ident>> {
-                    #toasty::stmt::Expr::list([self])
-                }
-            }
-
             impl #toasty::IntoStatement for &#model_ident {
-                type Returning = #toasty::List<#model_ident>;
+                type Returning = #model_ident;
 
-                fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
+                fn into_statement(self) -> #toasty::Statement<#model_ident> {
                     use #toasty::IntoStatement;
                     #into_statement_body
                 }
             }
 
             impl #toasty::IntoStatement for &mut #model_ident {
-                type Returning = #toasty::List<#model_ident>;
+                type Returning = #model_ident;
 
-                fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
+                fn into_statement(self) -> #toasty::Statement<#model_ident> {
                     (&*self).into_statement()
                 }
             }
 
             impl #toasty::IntoStatement for #model_ident {
-                type Returning = #toasty::List<#model_ident>;
+                type Returning = #model_ident;
 
-                fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
+                fn into_statement(self) -> #toasty::Statement<#model_ident> {
                     (&self).into_statement()
                 }
             }
@@ -167,6 +157,22 @@ impl Expand<'_> {
     }
 
     fn expand_model_into_statement_body(&self) -> TokenStream {
+        let toasty = &self.toasty;
+        let filter = self.primary_key_filter();
+        let query_struct_ident = &self.model.kind.as_root_unwrap().query_struct_ident;
+        let filter_method_ident = &filter.filter_method_ident;
+        let arg_idents = self.expand_filter_arg_idents(filter);
+
+        quote! {
+            #toasty::IntoStatement::into_statement(
+                #query_struct_ident::default()
+                    .#filter_method_ident( #( & self.#arg_idents ),* )
+                    .one()
+            )
+        }
+    }
+
+    fn expand_model_into_delete_body(&self) -> TokenStream {
         let filter = self.primary_key_filter();
         let query_struct_ident = &self.model.kind.as_root_unwrap().query_struct_ident;
         let filter_method_ident = &filter.filter_method_ident;
@@ -175,7 +181,7 @@ impl Expand<'_> {
         quote! {
             #query_struct_ident::default()
                 .#filter_method_ident( #( & self.#arg_idents ),* )
-                .into_statement()
+                .delete()
         }
     }
 

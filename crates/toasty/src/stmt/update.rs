@@ -1,5 +1,8 @@
 use super::{List, Query};
-use crate::schema::Model;
+use crate::{
+    schema::{Load, Model},
+    Executor, Result,
+};
 use std::{fmt, marker::PhantomData};
 use toasty_core::stmt;
 
@@ -14,13 +17,23 @@ use toasty_core::stmt;
 ///
 /// By default, an update returns the changed records. Call
 /// [`set_returning_none`](Update::set_returning_none) to suppress this.
-pub struct Update<M> {
+pub struct Update<T> {
     pub(crate) untyped: stmt::Update,
-    _p: PhantomData<M>,
+    _p: PhantomData<T>,
 }
 
 // Methods available on all Update<M> regardless of M
-impl<M> Update<M> {
+impl<T> Update<T> {
+    pub fn new(selection: Query<T>) -> Self {
+        let mut stmt = selection.untyped.update();
+        stmt.returning = Some(stmt::Returning::Changed);
+
+        Self {
+            untyped: stmt,
+            _p: PhantomData,
+        }
+    }
+
     /// Wrap a raw untyped [`stmt::Update`](toasty_core::stmt::Update).
     ///
     /// # Examples
@@ -35,7 +48,7 @@ impl<M> Update<M> {
     /// use toasty::stmt::{List, Query, Update};
     ///
     /// // Round-trip through an untyped update
-    /// let update = Update::<List<User>>::new(Query::<User>::all());
+    /// let update = Update::<List<User>>::new(Query::<List<User>>::all());
     /// let raw = update.into_untyped_stmt();
     /// ```
     pub const fn from_untyped(untyped: stmt::Update) -> Self {
@@ -58,7 +71,7 @@ impl<M> Update<M> {
     /// # }
     /// use toasty::stmt::{List, Query, Update};
     ///
-    /// let mut update = Update::<List<User>>::new(Query::<User>::all());
+    /// let mut update = Update::<List<User>>::new(Query::<List<User>>::all());
     /// let raw = update.as_untyped_mut();
     /// // Inspect or modify the raw update
     /// assert!(raw.returning.is_some());
@@ -86,7 +99,7 @@ impl<M> Update<M> {
     /// # }
     /// use toasty::stmt::{List, Query, Update};
     ///
-    /// let mut update = Update::<List<User>>::new(Query::<User>::all());
+    /// let mut update = Update::<List<User>>::new(Query::<List<User>>::all());
     /// // Set field at index 1 (name) to "Bob"
     /// update.set(1, toasty_core::stmt::Value::from("Bob"));
     /// ```
@@ -107,7 +120,7 @@ impl<M> Update<M> {
     /// # }
     /// use toasty::stmt::{List, Query, Update};
     ///
-    /// let mut update = Update::<List<User>>::new(Query::<User>::all());
+    /// let mut update = Update::<List<User>>::new(Query::<List<User>>::all());
     /// update.insert(1, toasty_core::stmt::Value::from("new_tag"));
     /// ```
     pub fn insert(&mut self, field: impl Into<stmt::Projection>, expr: impl Into<stmt::Expr>) {
@@ -127,7 +140,7 @@ impl<M> Update<M> {
     /// # }
     /// use toasty::stmt::{List, Query, Update};
     ///
-    /// let mut update = Update::<List<User>>::new(Query::<User>::all());
+    /// let mut update = Update::<List<User>>::new(Query::<List<User>>::all());
     /// update.remove(1, toasty_core::stmt::Value::from("old_tag"));
     /// ```
     pub fn remove(&mut self, field: impl Into<stmt::Projection>, expr: impl Into<stmt::Expr>) {
@@ -147,7 +160,7 @@ impl<M> Update<M> {
     /// # }
     /// use toasty::stmt::{List, Query, Update};
     ///
-    /// let mut update = Update::<List<User>>::new(Query::<User>::all());
+    /// let mut update = Update::<List<User>>::new(Query::<List<User>>::all());
     /// update.set_returning_none();
     /// ```
     pub fn set_returning_none(&mut self) {
@@ -167,7 +180,7 @@ impl<M> Update<M> {
     /// # }
     /// use toasty::stmt::{List, Query, Update};
     ///
-    /// let update = Update::<List<User>>::new(Query::<User>::all());
+    /// let update = Update::<List<User>>::new(Query::<List<User>>::all());
     /// let _raw = update.into_untyped_stmt();
     /// ```
     pub fn into_untyped_stmt(self) -> stmt::Statement {
@@ -175,45 +188,9 @@ impl<M> Update<M> {
     }
 }
 
-/// Construct an `Update<List<M>>` for query-based updates that can affect
-/// multiple rows.
-impl<M: Model> Update<List<M>> {
-    pub fn new(mut selection: Query<M>) -> Self {
-        if let stmt::ExprSet::Values(values) = &mut selection.untyped.body {
-            let rows = std::mem::take(&mut values.rows);
-            let filter = stmt::Expr::in_list(stmt::Expr::ref_ancestor_model(0), rows);
-            selection.untyped.body =
-                stmt::ExprSet::Select(Box::new(stmt::Select::new(M::id(), filter)));
-        }
-
-        let mut stmt = selection.untyped.update();
-        stmt.returning = Some(stmt::Returning::Changed);
-
-        Self {
-            untyped: stmt,
-            _p: PhantomData,
-        }
-    }
-}
-
-/// Construct an `Update<M>` for single-instance updates that return exactly
-/// one row.
-impl<M: Model> Update<M> {
-    pub fn new_single(mut selection: Query<M>) -> Self {
-        if let stmt::ExprSet::Values(values) = &mut selection.untyped.body {
-            let rows = std::mem::take(&mut values.rows);
-            let filter = stmt::Expr::in_list(stmt::Expr::ref_ancestor_model(0), rows);
-            selection.untyped.body =
-                stmt::ExprSet::Select(Box::new(stmt::Select::new(M::id(), filter)));
-        }
-
-        let mut stmt = selection.untyped.update();
-        stmt.returning = Some(stmt::Returning::Changed);
-
-        Self {
-            untyped: stmt,
-            _p: PhantomData,
-        }
+impl<T: Load> Update<T> {
+    pub async fn exec(self, executor: &mut dyn Executor) -> Result<T::Output> {
+        executor.exec(self.into()).await
     }
 }
 

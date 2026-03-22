@@ -1,12 +1,15 @@
 use super::{IntoStatement, Statement};
-use crate::{schema::Model, Executor, ExecutorExt, Result};
+use crate::{schema::Load, Executor, Result};
 use std::marker::PhantomData;
 use toasty_core::stmt;
 
 /// A typed delete statement.
 ///
-/// `Delete<M>` removes records of model `M` that match the selection built by
+/// `Delete<T>` removes records that match the selection built by
 /// the originating [`Query`]. Obtain one by calling [`Query::delete`].
+///
+/// - `Delete<List<M>>` — deletes multiple records (from a list query).
+/// - `Delete<M>` — deletes a single record.
 ///
 /// # Execution
 ///
@@ -24,21 +27,21 @@ use toasty_core::stmt;
 /// # let driver = toasty_driver_sqlite::Sqlite::in_memory();
 /// # let mut db = toasty::Db::builder().register::<User>().build(driver).await.unwrap();
 /// # db.push_schema().await.unwrap();
-/// use toasty::stmt::Query;
+/// use toasty::stmt::{List, Query};
 ///
-/// Query::<User>::filter(User::fields().id().eq(1))
+/// Query::<List<User>>::filter(User::fields().id().eq(1))
 ///     .delete()
 ///     .exec(&mut db)
 ///     .await
 ///     .unwrap();
 /// # });
 /// ```
-pub struct Delete<M: ?Sized> {
+pub struct Delete<T> {
     pub(crate) untyped: stmt::Delete,
-    _p: PhantomData<M>,
+    _p: PhantomData<T>,
 }
 
-impl<M> Delete<M> {
+impl<T> Delete<T> {
     /// Wrap a raw untyped [`stmt::Delete`](toasty_core::stmt::Delete).
     ///
     /// # Examples
@@ -50,12 +53,12 @@ impl<M> Delete<M> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// use toasty::stmt::{Delete, Query};
+    /// use toasty::stmt::{Delete, List, Query};
     ///
     /// // Build a delete from a query, then extract the raw form
-    /// let delete = Query::<User>::all().delete();
+    /// let delete = Query::<List<User>>::all().delete();
     /// // The typed Delete wraps an untyped core delete
-    /// let _: Delete<User> = delete;
+    /// let _: Delete<toasty::stmt::List<User>> = delete;
     /// ```
     pub const fn from_untyped(untyped: stmt::Delete) -> Self {
         Self {
@@ -63,7 +66,9 @@ impl<M> Delete<M> {
             _p: PhantomData,
         }
     }
+}
 
+impl<T: Load> Delete<T> {
     /// Execute this delete statement against the given executor.
     ///
     /// Returns `Ok(())` on success. Any matching records are removed from the
@@ -89,17 +94,15 @@ impl<M> Delete<M> {
     ///     .unwrap();
     /// # });
     /// ```
-    pub async fn exec(self, executor: &mut dyn Executor) -> Result<()> {
-        let stmt: Statement<M> = self.into();
-        executor.exec(stmt).await?;
-        Ok(())
+    pub async fn exec(self, executor: &mut dyn Executor) -> Result<T::Output> {
+        executor.exec(self.into()).await
     }
 }
 
-impl<M: Model> IntoStatement for Delete<M> {
-    type Returning = ();
+impl<T> IntoStatement for Delete<T> {
+    type Returning = T;
 
-    fn into_statement(self) -> Statement<()> {
+    fn into_statement(self) -> Statement<T> {
         Statement {
             untyped: self.untyped.into(),
             _p: PhantomData,
@@ -107,8 +110,8 @@ impl<M: Model> IntoStatement for Delete<M> {
     }
 }
 
-impl<M> From<Delete<M>> for Statement<M> {
-    fn from(value: Delete<M>) -> Self {
+impl<T> From<Delete<T>> for Statement<T> {
+    fn from(value: Delete<T>) -> Self {
         Self {
             untyped: value.untyped.into(),
             _p: PhantomData,

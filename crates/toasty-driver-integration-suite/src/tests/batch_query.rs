@@ -114,8 +114,8 @@ pub async fn batch_select_and_create(t: &mut Test) -> Result<()> {
     assert_eq!(created.name, "Bob");
 
     // Verify Bob was actually persisted
-    let bob = User::filter_by_name("Bob").first(&mut db).await?;
-    assert!(bob.is_some());
+    let res = User::filter_by_name("Bob").exec(&mut db).await?;
+    assert_struct!(res, [{ name: "Bob" }]);
 
     Ok(())
 }

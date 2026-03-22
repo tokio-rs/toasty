@@ -9,7 +9,12 @@ pub use pool::*;
 use crate::{engine::Engine, Executor, Result, Transaction, TransactionBuilder};
 pub(crate) use pool::{ConnectionHandle, ConnectionOperation};
 
-use toasty_core::{async_trait, driver::Driver, stmt::ValueStream, Schema};
+use toasty_core::{
+    async_trait,
+    driver::Driver,
+    stmt::{self, Value},
+    Schema,
+};
 
 use std::sync::Arc;
 use tokio::sync::oneshot;
@@ -121,7 +126,18 @@ impl Executor for Db {
         Transaction::begin(self).await
     }
 
-    async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> Result<ValueStream> {
+    async fn exec_untyped(&mut self, stmt: stmt::Statement) -> Result<Value> {
+        let returns_list = match &stmt {
+            stmt::Statement::Query(q) => !q.single,
+            stmt::Statement::Insert(i) => !i.source.single,
+            stmt::Statement::Update(i) => match &i.target {
+                stmt::UpdateTarget::Query(q) => !q.single,
+                stmt::UpdateTarget::Model(_) => false,
+                _ => true,
+            },
+            stmt::Statement::Delete(d) => !d.selection().single,
+        };
+
         let (tx, rx) = oneshot::channel();
 
         let conn = self.connection().await?;
@@ -133,7 +149,17 @@ impl Executor for Db {
             })
             .unwrap();
 
-        rx.await.unwrap()
+        let mut stream = rx.await.unwrap()?;
+
+        if returns_list {
+            let values = stream.collect().await?;
+            Ok(Value::List(values))
+        } else {
+            match stream.next().await {
+                Some(value) => value,
+                None => Ok(Value::Null),
+            }
+        }
     }
 
     fn schema(&mut self) -> &Arc<Schema> {
