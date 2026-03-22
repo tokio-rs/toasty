@@ -28,6 +28,8 @@ serde = ["dep:serde", "bit-set/serde"]
 [dev-dependencies]
 jiff.workspace = true
 pretty_assertions.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
 
 [lints]
 workspace = true

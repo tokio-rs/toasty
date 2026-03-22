@@ -401,6 +401,88 @@ mod tests {
         assert!(has_add);
     }
 
+    #[cfg(feature = "serde")]
+    mod serde_tests {
+        use crate::schema::db::{Column, ColumnId, TableId, Type};
+        use crate::stmt;
+
+        fn base_column() -> Column {
+            Column {
+                id: ColumnId {
+                    table: TableId(0),
+                    index: 0,
+                },
+                name: "test".to_string(),
+                ty: stmt::Type::String,
+                storage_ty: Type::Text,
+                nullable: false,
+                primary_key: false,
+                auto_increment: false,
+            }
+        }
+
+        #[test]
+        fn false_booleans_are_omitted() {
+            let json = serde_json::to_string(&base_column()).unwrap();
+            assert!(!json.contains("nullable"), "json: {json}");
+            assert!(!json.contains("primary_key"), "json: {json}");
+            assert!(!json.contains("auto_increment"), "json: {json}");
+        }
+
+        #[test]
+        fn nullable_true_is_included() {
+            let col = Column {
+                nullable: true,
+                ..base_column()
+            };
+            let json = serde_json::to_string(&col).unwrap();
+            assert!(json.contains("\"nullable\":true"), "json: {json}");
+        }
+
+        #[test]
+        fn primary_key_true_is_included() {
+            let col = Column {
+                primary_key: true,
+                ..base_column()
+            };
+            let json = serde_json::to_string(&col).unwrap();
+            assert!(json.contains("\"primary_key\":true"), "json: {json}");
+        }
+
+        #[test]
+        fn auto_increment_true_is_included() {
+            let col = Column {
+                auto_increment: true,
+                ..base_column()
+            };
+            let json = serde_json::to_string(&col).unwrap();
+            assert!(json.contains("\"auto_increment\":true"), "json: {json}");
+        }
+
+        #[test]
+        fn missing_bool_fields_deserialize_as_false() {
+            let json =
+                r#"{"id":{"table":0,"index":0},"name":"test","ty":"String","storage_ty":"Text"}"#;
+            let col: Column = serde_json::from_str(json).unwrap();
+            assert!(!col.nullable);
+            assert!(!col.primary_key);
+            assert!(!col.auto_increment);
+        }
+
+        #[test]
+        fn round_trip_all_true() {
+            let original = Column {
+                nullable: true,
+                primary_key: true,
+                auto_increment: true,
+                ..base_column()
+            };
+            let decoded: Column =
+                serde_json::from_str(&serde_json::to_string(&original).unwrap()).unwrap();
+            assert_eq!(original, decoded);
+        }
+    }
+
     #[test]
     fn test_multiple_operations() {
         let from_cols = vec![

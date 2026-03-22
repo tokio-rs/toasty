@@ -718,6 +718,83 @@ mod tests {
         assert!(diff.is_empty());
     }
 
+    #[cfg(feature = "serde")]
+    mod serde_tests {
+        use crate::schema::db::{
+            ColumnId, Index, IndexColumn, IndexId, IndexOp, IndexScope, TableId,
+        };
+
+        fn base_index() -> Index {
+            Index {
+                id: IndexId {
+                    table: TableId(0),
+                    index: 0,
+                },
+                name: "idx".to_string(),
+                on: TableId(0),
+                columns: vec![IndexColumn {
+                    column: ColumnId {
+                        table: TableId(0),
+                        index: 0,
+                    },
+                    op: IndexOp::Eq,
+                    scope: IndexScope::Local,
+                }],
+                unique: false,
+                primary_key: false,
+            }
+        }
+
+        #[test]
+        fn false_booleans_are_omitted() {
+            let json = serde_json::to_string(&base_index()).unwrap();
+            assert!(!json.contains("unique"), "json: {json}");
+            assert!(!json.contains("primary_key"), "json: {json}");
+        }
+
+        #[test]
+        fn unique_true_is_included() {
+            let idx = Index {
+                unique: true,
+                ..base_index()
+            };
+            let json = serde_json::to_string(&idx).unwrap();
+            assert!(json.contains("\"unique\":true"), "json: {json}");
+        }
+
+        #[test]
+        fn primary_key_true_is_included() {
+            let idx = Index {
+                primary_key: true,
+                ..base_index()
+            };
+            let json = serde_json::to_string(&idx).unwrap();
+            assert!(json.contains("\"primary_key\":true"), "json: {json}");
+        }
+
+        #[test]
+        fn missing_bool_fields_deserialize_as_false() {
+            let json = r#"{"id":{"table":0,"index":0},"name":"idx","on":0,"columns":[{"column":{"table":0,"index":0},"op":"Eq","scope":"Local"}]}"#;
+            let idx: Index = serde_json::from_str(json).unwrap();
+            assert!(!idx.unique);
+            assert!(!idx.primary_key);
+        }
+
+        #[test]
+        fn round_trip_all_true() {
+            let original = Index {
+                unique: true,
+                primary_key: true,
+                ..base_index()
+            };
+            let decoded: Index =
+                serde_json::from_str(&serde_json::to_string(&original).unwrap()).unwrap();
+            assert_eq!(decoded.unique, original.unique);
+            assert_eq!(decoded.primary_key, original.primary_key);
+            assert_eq!(decoded.name, original.name);
+        }
+    }
+
     #[test]
     fn test_multiple_operations() {
         let columns = vec![
