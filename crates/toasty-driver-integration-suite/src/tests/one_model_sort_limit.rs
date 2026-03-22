@@ -1,7 +1,7 @@
 //! Test sorting and pagination of query results
 
 use crate::prelude::*;
-use toasty::Page;
+use toasty::stmt::Page;
 use toasty_core::{
     driver::{Operation, Rows},
     stmt::{ExprSet, Statement},

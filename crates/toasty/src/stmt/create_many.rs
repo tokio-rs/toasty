@@ -1,6 +1,6 @@
 use crate::{
     schema::Model,
-    stmt::{self, IntoExpr, IntoInsert, List},
+    stmt::{Expr, Insert, IntoExpr, IntoInsert, List},
     Executor, Result,
 };
 use toasty_core::stmt as core_stmt;
@@ -28,7 +28,7 @@ use toasty_core::stmt as core_stmt;
 /// # let driver = toasty_driver_sqlite::Sqlite::in_memory();
 /// # let mut db = toasty::Db::builder().register::<User>().build(driver).await.unwrap();
 /// # db.push_schema().await.unwrap();
-/// use toasty::CreateMany;
+/// use toasty::stmt::CreateMany;
 ///
 /// let users = CreateMany::<User>::new()
 ///     .with_item(|u| u.name("Alice"))
@@ -40,7 +40,7 @@ use toasty_core::stmt as core_stmt;
 /// # });
 /// ```
 pub struct CreateMany<M: Model> {
-    stmts: Vec<stmt::Insert<M>>,
+    stmts: Vec<Insert<M>>,
 }
 
 impl<M: Model> CreateMany<M> {
@@ -49,11 +49,11 @@ impl<M: Model> CreateMany<M> {
         Self::default()
     }
 
-    /// Append a record from any value that implements [`IntoInsert`](stmt::IntoInsert)
+    /// Append a record from any value that implements [`IntoInsert`]
     /// for model `M`.
     ///
     /// Returns `self` for method chaining.
-    pub fn item(mut self, item: impl stmt::IntoInsert<Model = M>) -> Self {
+    pub fn item(mut self, item: impl IntoInsert<Model = M>) -> Self {
         let stmt = item.into_insert();
         assert!(
             stmt.untyped.source.single,
@@ -85,11 +85,11 @@ impl<M: Model> CreateMany<M> {
     /// embedding in a parent insert statement (e.g., as a nested HasMany value).
     ///
     /// Unlike `exec`, this does not run any database query.
-    pub fn into_expr(self) -> stmt::Expr<List<M>> {
+    pub fn into_expr(self) -> Expr<List<M>> {
         if self.stmts.is_empty() {
-            return stmt::Expr::from_untyped(core_stmt::Expr::list(std::iter::empty::<
-                core_stmt::Expr,
-            >()));
+            return Expr::from_untyped(
+                core_stmt::Expr::list(std::iter::empty::<core_stmt::Expr>()),
+            );
         }
         let mut stmts = self.stmts.into_iter();
         let mut merged = stmts.next().unwrap();
@@ -125,11 +125,11 @@ impl<M: Model> CreateMany<M> {
 }
 
 impl<M: Model> IntoExpr<List<M>> for CreateMany<M> {
-    fn into_expr(self) -> stmt::Expr<List<M>> {
+    fn into_expr(self) -> Expr<List<M>> {
         self.into_expr()
     }
 
-    fn by_ref(&self) -> stmt::Expr<List<M>> {
+    fn by_ref(&self) -> Expr<List<M>> {
         todo!()
     }
 }

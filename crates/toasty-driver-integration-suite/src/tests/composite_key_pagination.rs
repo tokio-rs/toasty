@@ -6,7 +6,7 @@
 //! on every driver, including DynamoDB.
 
 use crate::prelude::*;
-use toasty::Page;
+use toasty::stmt::Page;
 use toasty_core::driver::{Operation, Rows};
 
 #[driver_test(requires(sql))]

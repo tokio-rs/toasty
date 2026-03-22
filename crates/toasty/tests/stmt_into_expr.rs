@@ -362,7 +362,7 @@ fn batch_into_expr_wraps_statement() {
         core_stmt::Value::I64(1),
     )));
     let stmt = toasty::Statement::<i64>::from_untyped_stmt(query.into());
-    let batch = toasty::Batch::from(stmt);
+    let batch = toasty::stmt::Batch::from(stmt);
     let expr: Expr<i64> = batch.into_expr();
     let core_expr = untyped(expr);
 
@@ -376,7 +376,7 @@ fn batch_by_ref_wraps_statement() {
         core_stmt::Value::I64(1),
     )));
     let stmt = toasty::Statement::<i64>::from_untyped_stmt(query.into());
-    let batch = toasty::Batch::from(stmt);
+    let batch = toasty::stmt::Batch::from(stmt);
     let expr: Expr<i64> = batch.by_ref();
     let core_expr = untyped(expr);
 
@@ -389,7 +389,7 @@ fn batch_into_expr_and_by_ref_agree() {
         core_stmt::Value::Bool(true),
     )));
     let stmt = toasty::Statement::<bool>::from_untyped_stmt(query.into());
-    let batch = toasty::Batch::from(stmt);
+    let batch = toasty::stmt::Batch::from(stmt);
 
     let by_ref_expr: Expr<bool> = batch.by_ref();
     let owned_expr: Expr<bool> = batch.into_expr();

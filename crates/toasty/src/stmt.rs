@@ -1,6 +1,12 @@
 mod association;
 pub use association::Association;
 
+mod batch;
+pub use batch::{batch, Batch};
+
+mod create_many;
+pub use create_many::CreateMany;
+
 mod delete;
 pub use delete::Delete;
 
@@ -21,6 +27,9 @@ pub use into_statement::IntoStatement;
 
 mod list;
 pub use list::List;
+
+mod page;
+pub use page::Page;
 
 mod paginate;
 pub use paginate::Paginate;
