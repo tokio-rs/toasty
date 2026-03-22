@@ -98,7 +98,7 @@ query returns no results:
 #     email: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let maybe_user = User::all().first(&mut db).await?;
+let maybe_user = User::all().first().exec(&mut db).await?;
 
 match maybe_user {
     Some(user) => println!("Found: {}", user.name),
@@ -245,5 +245,5 @@ Query builders support these terminal methods:
 | Method | Returns |
 |---|---|
 | `.exec(&mut db)` | `Result<Vec<User>>` |
-| `.first(&mut db)` | `Result<Option<User>>` |
+| `.first().exec(&mut db)` | `Result<Option<User>>` |
 | `.get(&mut db)` | `Result<User>` |
