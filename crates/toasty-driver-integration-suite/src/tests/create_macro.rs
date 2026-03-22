@@ -87,7 +87,7 @@ pub async fn create_macro_batch(test: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await?;
 
-    assert_struct!(users, [_ { name: "Carl" }, _ { name: "Bob" }]);
+    assert_struct!(users, [{ name: "Carl" }, { name: "Bob" }]);
 
     Ok(())
 }
@@ -101,8 +101,8 @@ pub async fn create_macro_tuple(test: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
 
-    assert_struct!(user, _ { name: "Carl" });
-    assert_struct!(post, _ { title: "Hello" });
+    assert_struct!(user, { name: "Carl" });
+    assert_struct!(post, { title: "Hello" });
 
     Ok(())
 }
@@ -119,8 +119,8 @@ pub async fn create_macro_tuple_mixed(test: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await?;
 
-    assert_struct!(users, [_ { name: "Carl" }, _ { name: "Bob" }]);
-    assert_struct!(post, _ { title: "Hello" });
+    assert_struct!(users, [{ name: "Carl" }, { name: "Bob" }]);
+    assert_struct!(post, { title: "Hello" });
 
     Ok(())
 }
