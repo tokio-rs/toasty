@@ -119,10 +119,41 @@ let results: Vec<Vec<User>> = toasty::batch(queries)
     .await?;
 ```
 
-## Batching creates
+## Batching creates with `create!`
 
-`toasty::batch()` also accepts create builders. Mix creates and queries in the
-same batch using tuples:
+The `toasty::create!` macro's batch forms (`Type::[ ... ]` and `[ ... ]`)
+produce a batch of creates. The same atomicity guarantees apply — all records
+are inserted together or none are.
+
+```rust,ignore
+// Same-type batch
+let (alice, bob) = toasty::create!(User::[
+    { name: "Alice", email: "alice@example.com" },
+    { name: "Bob", email: "bob@example.com" },
+])
+.exec(&mut db)
+.await?;
+
+// Mixed-type batch
+let (user, post) = toasty::create!([
+    User { name: "Alice" },
+    Post { title: "Hello World" },
+])
+.exec(&mut db)
+.await?;
+```
+
+Each create returns a single record (not a `Vec`), since each item inserts
+exactly one row. The return type is a tuple matching the input.
+
+See [Creating Records](./creating-records.md) for the full `create!` macro
+syntax.
+
+## Batching creates with `toasty::batch()`
+
+`toasty::batch()` also accepts create builders directly. This is useful when
+you want to mix creates and queries in the same batch, or when building
+creates dynamically at runtime:
 
 ```rust
 # use toasty::Model;
@@ -142,17 +173,14 @@ same batch using tuples:
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
 let (user, post): (User, Post) = toasty::batch((
-    User::create().name("Alice"),
-    Post::create().title("Hello World"),
+    toasty::create!(User { name: "Alice" }),
+    toasty::create!(Post { title: "Hello World" }),
 ))
 .exec(&mut db)
 .await?;
 # Ok(())
 # }
 ```
-
-Each create returns a single record (not a `Vec`), since each create builder
-inserts exactly one row.
 
 ## Bulk creation with `create_many()`
 
@@ -170,9 +198,9 @@ with `.item()` or `.with_item()`:
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
 let todos = Todo::create_many()
-    .item(Todo::create().title("Buy groceries"))
-    .item(Todo::create().title("Write docs"))
-    .item(Todo::create().title("Ship feature"))
+    .item(toasty::create!(Todo { title: "Buy groceries" }))
+    .item(toasty::create!(Todo { title: "Write docs" }))
+    .item(toasty::create!(Todo { title: "Ship feature" }))
     .exec(&mut db)
     .await?;
 

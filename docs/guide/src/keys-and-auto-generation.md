@@ -62,11 +62,12 @@ struct Country {
 #     name: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let country = Country::create()
-    .code("US")
-    .name("United States")
-    .exec(&mut db)
-    .await?;
+let country = toasty::create!(Country {
+    code: "US",
+    name: "United States",
+})
+.exec(&mut db)
+.await?;
 # Ok(())
 # }
 ```
@@ -108,8 +109,7 @@ them in.
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
 // No need to set `id` — it's auto-generated
-let user = User::create()
-    .name("Alice")
+let user = toasty::create!(User { name: "Alice" })
     .exec(&mut db)
     .await?;
 
@@ -194,8 +194,7 @@ struct Post {
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let post = Post::create()
-    .title("Hello World")
+let post = toasty::create!(Post { title: "Hello World" })
     .exec(&mut db)
     .await?;
 

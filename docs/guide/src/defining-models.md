@@ -104,8 +104,7 @@ When creating a record, optional fields default to `NULL` if not set:
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
 // bio will be NULL in the database, None in Rust
-let user = User::create()
-    .name("Alice")
+let user = toasty::create!(User { name: "Alice" })
     .exec(&mut db)
     .await?;
 # Ok(())
@@ -150,7 +149,7 @@ generates:
 #     name: String,
 # }
 # fn __example() {
-// Returns a create builder
+// Returns a create builder (usually called via the toasty::create! macro)
 # let _ =
 User::create();
 
@@ -196,8 +195,8 @@ user.delete();
 
 **Builders:**
 
-- The **create builder** returned by `User::create()` has a setter method for
-  each non-auto field. Chain setters and call `.exec(&mut db)` to insert:
+- The **create builder** is typically used through the `toasty::create!` macro,
+  which provides struct-literal syntax:
 
   ```rust
   # use toasty::Model;
@@ -210,11 +209,12 @@ user.delete();
   #     email: String,
   # }
   # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-  let user = User::create()
-      .name("Alice")
-      .email("alice@example.com")
-      .exec(&mut db)
-      .await?;
+  let user = toasty::create!(User {
+      name: "Alice",
+      email: "alice@example.com",
+  })
+  .exec(&mut db)
+  .await?;
   # Ok(())
   # }
   ```
@@ -264,17 +264,17 @@ through Toasty's `IntoExpr` trait, which handles the conversion automatically.
 # fn __example() {
 // String literal (&str)
 # let _ =
-User::create().name("Alice");
+toasty::create!(User { name: "Alice" });
 
 // Owned String
 let name = "Bob".to_string();
 # let _ =
-User::create().name(name);
+toasty::create!(User { name: name });
 
 // Reference to a String
 let name = "Carol".to_string();
 # let _ =
-User::create().name(&name);
+toasty::create!(User { name: &name });
 # }
 ```
 

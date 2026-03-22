@@ -53,11 +53,12 @@ async fn main() -> toasty::Result<()> {
     db.push_schema().await?;
 
     // Create a user
-    let user = User::create()
-        .name("Alice")
-        .email("alice@example.com")
-        .exec(&mut db)
-        .await?;
+    let user = toasty::create!(User {
+        name: "Alice",
+        email: "alice@example.com",
+    })
+    .exec(&mut db)
+    .await?;
 
     println!("Created: {:?}", user.name);
 
@@ -91,7 +92,7 @@ several types and methods at compile time:
 
 | You wrote | Toasty generated |
 |---|---|
-| `struct User` | `User::create()` — a builder to insert rows |
+| `struct User` | `toasty::create!(User { ... })` — insert rows |
 | `#[key]` on `id` | `User::get_by_id()` — fetch by primary key |
 | `#[auto]` on `id` | Auto-generates an ID when you create a user |
 | `#[unique]` on `email` | `User::get_by_email()` — fetch by email |

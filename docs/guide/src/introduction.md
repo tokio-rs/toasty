@@ -28,7 +28,7 @@ struct User {
 
 From this definition, Toasty generates:
 
-- `User::create()` — a builder for inserting new users
+- `toasty::create!(User { ... })` — insert new users
 - `User::get_by_id()` — fetch a user by primary key
 - `User::get_by_email()` — fetch a user by the unique email field
 - `User::all()` — query all users

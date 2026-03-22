@@ -27,8 +27,8 @@ Call `db.transaction()` to begin a transaction:
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
 let mut tx = db.transaction().await?;
 
-User::create().name("Alice").exec(&mut tx).await?;
-User::create().name("Bob").exec(&mut tx).await?;
+toasty::create!(User { name: "Alice" }).exec(&mut tx).await?;
+toasty::create!(User { name: "Bob" }).exec(&mut tx).await?;
 
 tx.commit().await?;
 # Ok(())
@@ -48,7 +48,7 @@ and deletes:
 let mut tx = db.transaction().await?;
 
 // Create
-let user = User::create().name("Alice").exec(&mut tx).await?;
+let user = toasty::create!(User { name: "Alice" }).exec(&mut tx).await?;
 
 // Query
 let users = User::all().exec(&mut tx).await?;
@@ -68,7 +68,7 @@ even before commit:
 ```rust,ignore
 let mut tx = db.transaction().await?;
 
-User::create().name("Alice").exec(&mut tx).await?;
+toasty::create!(User { name: "Alice" }).exec(&mut tx).await?;
 
 // This sees the record we just created
 let users = User::all().exec(&mut tx).await?;
@@ -83,7 +83,7 @@ Call `.commit()` to save all changes made in the transaction:
 
 ```rust,ignore
 let mut tx = db.transaction().await?;
-User::create().name("Alice").exec(&mut tx).await?;
+toasty::create!(User { name: "Alice" }).exec(&mut tx).await?;
 tx.commit().await?;
 
 // The record is now visible outside the transaction
@@ -95,7 +95,7 @@ Call `.rollback()` to discard all changes:
 
 ```rust,ignore
 let mut tx = db.transaction().await?;
-User::create().name("Alice").exec(&mut tx).await?;
+toasty::create!(User { name: "Alice" }).exec(&mut tx).await?;
 tx.rollback().await?;
 
 // The record was never persisted
@@ -111,7 +111,7 @@ error occurs — just let the transaction go out of scope:
 
 ```rust,ignore
 let mut tx = db.transaction().await?;
-User::create().name("Alice").exec(&mut tx).await?;
+toasty::create!(User { name: "Alice" }).exec(&mut tx).await?;
 // tx is dropped here without commit — changes are rolled back
 ```
 
@@ -141,11 +141,11 @@ Nested transactions use database savepoints:
 
 ```rust,ignore
 let mut tx = db.transaction().await?;
-User::create().name("Alice").exec(&mut tx).await?;
+toasty::create!(User { name: "Alice" }).exec(&mut tx).await?;
 
 {
     let mut nested = tx.transaction().await?;
-    User::create().name("Bob").exec(&mut nested).await?;
+    toasty::create!(User { name: "Bob" }).exec(&mut nested).await?;
     nested.commit().await?; // releases the savepoint
 }
 
@@ -157,11 +157,11 @@ transaction continues:
 
 ```rust,ignore
 let mut tx = db.transaction().await?;
-User::create().name("Alice").exec(&mut tx).await?;
+toasty::create!(User { name: "Alice" }).exec(&mut tx).await?;
 
 {
     let mut nested = tx.transaction().await?;
-    User::create().name("Bob").exec(&mut nested).await?;
+    toasty::create!(User { name: "Bob" }).exec(&mut nested).await?;
     nested.rollback().await?; // rolls back to savepoint — Bob is discarded
 }
 

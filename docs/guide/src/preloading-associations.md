@@ -50,9 +50,7 @@ model's `fields()` accessor:
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-# let user = User::create()
-#     .name("Alice")
-#     .post(Post::create().title("Hello"))
+# let user = toasty::create!(User { name: "Alice", posts: [{ title: "Hello" }] })
 #     .exec(&mut db)
 #     .await?;
 let user = User::filter_by_id(user.id)
@@ -110,9 +108,7 @@ Preload a parent record from the child side:
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-# let user = User::create()
-#     .name("Alice")
-#     .post(Post::create().title("Hello"))
+# let user = toasty::create!(User { name: "Alice", posts: [{ title: "Hello" }] })
 #     .exec(&mut db)
 #     .await?;
 # let post_id = user.posts().exec(&mut db).await?[0].id;
@@ -155,9 +151,7 @@ Preload a single child record from the parent side:
 #     user: toasty::BelongsTo<Option<User>>,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-# let user = User::create()
-#     .name("Alice")
-#     .profile(Profile::create().bio("A person"))
+# let user = toasty::create!(User { name: "Alice", profile: { bio: "A person" } })
 #     .exec(&mut db)
 #     .await?;
 let user = User::filter_by_id(user.id)
@@ -198,7 +192,7 @@ panic:
 #     user: toasty::BelongsTo<Option<User>>,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let user = User::create().name("No Profile").exec(&mut db).await?;
+let user = toasty::create!(User { name: "No Profile" }).exec(&mut db).await?;
 
 let user = User::filter_by_id(user.id)
     .include(User::fields().profile())

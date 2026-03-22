@@ -21,11 +21,12 @@ and call `.exec(&mut db)`:
 #     email: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let mut user = User::create()
-    .name("Alice")
-    .email("alice@example.com")
-    .exec(&mut db)
-    .await?;
+let mut user = toasty::create!(User {
+    name: "Alice",
+    email: "alice@example.com",
+})
+.exec(&mut db)
+.await?;
 
 user.update()
     .name("Alice Smith")
@@ -64,9 +65,7 @@ Chain multiple setters to update several fields at once:
 #     email: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-# let mut user = User::create()
-#     .name("Alice")
-#     .email("alice@example.com")
+# let mut user = toasty::create!(User { name: "Alice", email: "alice@example.com" })
 #     .exec(&mut db)
 #     .await?;
 user.update()
@@ -150,9 +149,7 @@ To clear an optional field, pass `None` with the appropriate type annotation:
 #     bio: Option<String>,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-# let mut user = User::create()
-#     .name("Alice")
-#     .bio("Likes Rust")
+# let mut user = toasty::create!(User { name: "Alice", bio: "Likes Rust" })
 #     .exec(&mut db)
 #     .await?;
 user.update()
