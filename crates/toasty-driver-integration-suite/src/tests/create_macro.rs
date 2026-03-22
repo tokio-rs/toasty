@@ -101,8 +101,8 @@ pub async fn create_macro_tuple_heterogeneous(test: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
 
-    assert_eq!(user.name, "Carl");
-    assert_eq!(post.title, "Hello");
+    assert_struct!(user, _ { name: "Carl" });
+    assert_struct!(post, _ { title: "Hello" });
 
     Ok(())
 }
@@ -119,10 +119,8 @@ pub async fn create_macro_tuple_mixed(test: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await?;
 
-    assert_eq!(users.len(), 2);
-    assert_eq!(users[0].name, "Carl");
-    assert_eq!(users[1].name, "Bob");
-    assert_eq!(post.title, "Hello");
+    assert_struct!(users, [_ { name: "Carl" }, _ { name: "Bob" }]);
+    assert_struct!(post, _ { title: "Hello" });
 
     Ok(())
 }
