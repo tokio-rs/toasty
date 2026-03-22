@@ -79,8 +79,8 @@ pub async fn create_macro_scoped(test: &mut Test) -> Result<()> {
 pub async fn create_macro_batch(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
-    // Same-type batch — produces a tuple of builders, composed via toasty::stmt::batch()
-    let (carl, bob) = toasty::stmt::batch(toasty::create!(User::[
+    // Same-type batch — produces a tuple of builders, composed via toasty::batch()
+    let (carl, bob) = toasty::batch(toasty::create!(User::[
         { name: "Carl" },
         { name: "Bob" },
     ]))

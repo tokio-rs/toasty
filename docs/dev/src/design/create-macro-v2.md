@@ -144,7 +144,7 @@ toasty::create!(User::[
 
 Returns a tuple of create builders. Each item gets its own verification chain.
 All batch forms expand to tuples of builders, which compose with
-`toasty::stmt::batch()` for execution. `CreateMany` / `create_many()` are deprecated
+`toasty::batch()` for execution. `CreateMany` / `create_many()` are deprecated
 and not used in new expansions.
 
 ### Mixed-type batch
@@ -168,10 +168,10 @@ toasty::create!([
 ```
 
 Returns a tuple of create builders `(UserCreate, ArticleCreate)`. The caller
-passes the tuple to `toasty::stmt::batch()` for combined execution:
+passes the tuple to `toasty::batch()` for combined execution:
 
 ```rust
-let (user, article) = toasty::stmt::batch(
+let (user, article) = toasty::batch(
     toasty::create!([
         User { name: "Carl", email: "carl@example.com" },
         Article { title: "Hello World" },
@@ -202,9 +202,9 @@ Scoped items in a batch do not get verification chains (same as standalone
 scoped creation). Type-target items get verification as usual.
 
 All batch forms (same-type and mixed-type) produce tuples of builders. This
-composes naturally with `toasty::stmt::batch()`, which already accepts tuples via
+composes naturally with `toasty::batch()`, which already accepts tuples via
 `IntoStatement`. `CreateMany` / `create_many()` are not used — all batching
-goes through `toasty::stmt::batch()`.
+goes through `toasty::batch()`.
 
 ## Compile-Time Required Field Verification
 

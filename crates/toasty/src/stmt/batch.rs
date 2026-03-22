@@ -20,7 +20,7 @@ pub struct Batch<T> {
 /// # Examples
 ///
 /// ```ignore
-/// let (active_users, recent_posts) = toasty::stmt::batch((
+/// let (active_users, recent_posts) = toasty::batch((
 ///     User::find_by_active(true),
 ///     Post::find_recent(100),
 /// )).exec(&mut db).await?;

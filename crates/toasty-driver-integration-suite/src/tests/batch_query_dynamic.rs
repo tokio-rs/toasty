@@ -8,7 +8,7 @@ pub async fn batch_vec_of_queries(t: &mut Test) -> Result<()> {
     User::create().name("Bob").exec(&mut db).await?;
     User::create().name("Carol").exec(&mut db).await?;
 
-    let results: Vec<Vec<User>> = toasty::stmt::batch(vec![
+    let results: Vec<Vec<User>> = toasty::batch(vec![
         User::filter_by_name("Alice"),
         User::filter_by_name("Bob"),
         User::filter_by_name("Carol"),
@@ -29,7 +29,7 @@ pub async fn batch_array_of_queries(t: &mut Test) -> Result<()> {
     User::create().name("Bob").exec(&mut db).await?;
 
     let results: Vec<Vec<User>> =
-        toasty::stmt::batch([User::filter_by_name("Alice"), User::filter_by_name("Bob")])
+        toasty::batch([User::filter_by_name("Alice"), User::filter_by_name("Bob")])
             .exec(&mut db)
             .await?;
 
@@ -44,7 +44,7 @@ pub async fn batch_vec_some_empty(t: &mut Test) -> Result<()> {
 
     User::create().name("Alice").exec(&mut db).await?;
 
-    let results: Vec<Vec<User>> = toasty::stmt::batch(vec![
+    let results: Vec<Vec<User>> = toasty::batch(vec![
         User::filter_by_name("Alice"),
         User::filter_by_name("nobody"),
     ])
@@ -66,7 +66,7 @@ pub async fn batch_nested_tuple_with_vec(t: &mut Test) -> Result<()> {
     Post::create().title("World").exec(&mut db).await?;
 
     // Tuple of (Vec-batch of user queries, Vec-batch of post queries)
-    let (users, posts): (Vec<Vec<User>>, Vec<Vec<Post>>) = toasty::stmt::batch((
+    let (users, posts): (Vec<Vec<User>>, Vec<Vec<Post>>) = toasty::batch((
         vec![User::filter_by_name("Alice"), User::filter_by_name("Bob")],
         vec![
             Post::filter_by_title("Hello"),
@@ -86,7 +86,7 @@ pub async fn batch_nested_tuple_with_vec(t: &mut Test) -> Result<()> {
 pub async fn batch_vec_all_empty(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
-    let results: Vec<Vec<User>> = toasty::stmt::batch(vec![
+    let results: Vec<Vec<User>> = toasty::batch(vec![
         User::filter_by_name("nobody"),
         User::filter_by_name("ghost"),
     ])

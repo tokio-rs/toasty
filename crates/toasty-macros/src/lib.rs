@@ -749,10 +749,10 @@ pub fn query(_input: TokenStream) -> TokenStream {
 /// ```
 ///
 /// Expands to a tuple of create builders. Pass the result to
-/// [`toasty::stmt::batch()`] to execute:
+/// [`toasty::batch()`] to execute:
 ///
 /// ```ignore
-/// let (alice, bob) = toasty::stmt::batch(toasty::create!(User::[
+/// let (alice, bob) = toasty::batch(toasty::create!(User::[
 ///     { name: "Alice" },
 ///     { name: "Bob" },
 /// ]))
@@ -899,7 +899,7 @@ pub fn query(_input: TokenStream) -> TokenStream {
 ///
 /// None of the forms execute the insert on their own. Call
 /// `.exec(&mut db).await?` on a single builder, or pass batch tuples to
-/// [`toasty::stmt::batch()`].
+/// [`toasty::batch()`].
 #[proc_macro]
 pub fn create(input: TokenStream) -> TokenStream {
     match create::generate(input.into()) {

@@ -79,7 +79,7 @@ assert_eq!(user.bio.as_deref(), Some("Likes Rust"));
 
 ## Creating many records
 
-Use `toasty::stmt::batch()` to insert multiple records at once. Pass an array of
+Use `toasty::batch()` to insert multiple records at once. Pass an array of
 create builders for the same model, or a tuple for mixed models. Call `.exec()`
 to insert them all.
 
@@ -100,7 +100,7 @@ is `Vec<User>`:
 #     email: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let users = toasty::stmt::batch([
+let users = toasty::batch([
     User::create().name("Alice").email("alice@example.com"),
     User::create().name("Bob").email("bob@example.com"),
     User::create().name("Carol").email("carol@example.com"),
@@ -124,7 +124,7 @@ let builders: Vec<_> = names
     .map(|(i, n)| User::create().name(*n).email(format!("user{i}@example.com")))
     .collect();
 
-let users = toasty::stmt::batch(builders).exec(&mut db).await?;
+let users = toasty::batch(builders).exec(&mut db).await?;
 ```
 
 ### Tuple syntax (mixed models)
@@ -133,7 +133,7 @@ When creating records of different models, use a tuple. The return type matches
 the tuple structure:
 
 ```rust,ignore
-let (user, post): (User, Post) = toasty::stmt::batch((
+let (user, post): (User, Post) = toasty::batch((
     User::create().name("Alice"),
     Post::create().title("Hello World"),
 ))

@@ -104,6 +104,7 @@ mod update_target;
 pub use update_target::UpdateTarget;
 
 // `Batch`, `batch()`, and `CreateMany` live in `stmt`.
+pub use stmt::{batch, Batch};
 
 pub mod db;
 pub use db::Db;

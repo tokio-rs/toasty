@@ -8,7 +8,7 @@ pub async fn batch_two_updates_same_model(t: &mut Test) -> Result<()> {
     User::create().name("Bob").exec(&mut db).await?;
 
     t.log().clear();
-    let ((), ()): ((), ()) = toasty::stmt::batch((
+    let ((), ()): ((), ()) = toasty::batch((
         User::filter_by_name("Alice").update().name("Alice2"),
         User::filter_by_name("Bob").update().name("Bob2"),
     ))
@@ -33,7 +33,7 @@ pub async fn batch_two_deletes_same_model(t: &mut Test) -> Result<()> {
     User::create().name("Carol").exec(&mut db).await?;
 
     t.log().clear();
-    let ((), ()): ((), ()) = toasty::stmt::batch((
+    let ((), ()): ((), ()) = toasty::batch((
         User::filter_by_name("Alice").delete(),
         User::filter_by_name("Bob").delete(),
     ))
@@ -55,7 +55,7 @@ pub async fn batch_update_and_delete(t: &mut Test) -> Result<()> {
     User::create().name("Alice").exec(&mut db).await?;
     Post::create().title("Hello").exec(&mut db).await?;
 
-    let ((), ()): ((), ()) = toasty::stmt::batch((
+    let ((), ()): ((), ()) = toasty::batch((
         User::filter_by_name("Alice").update().name("Alice2"),
         Post::filter_by_title("Hello").delete(),
     ))
@@ -81,7 +81,7 @@ pub async fn batch_all_four_statement_types(t: &mut Test) -> Result<()> {
     User::create().name("Bob").exec(&mut db).await?;
 
     t.log().clear();
-    let (queried, created, (), ()): (Vec<User>, User, (), ()) = toasty::stmt::batch((
+    let (queried, created, (), ()): (Vec<User>, User, (), ()) = toasty::batch((
         User::filter_by_name("Alice"),
         User::create().name("Carol"),
         User::filter_by_name("Alice").update().name("Alice2"),
@@ -116,7 +116,7 @@ pub async fn batch_instance_delete(t: &mut Test) -> Result<()> {
     let bob = User::create().name("Bob").exec(&mut db).await?;
 
     t.log().clear();
-    let ((), ()): ((), ()) = toasty::stmt::batch((alice.delete(), bob.delete()))
+    let ((), ()): ((), ()) = toasty::batch((alice.delete(), bob.delete()))
         .exec(&mut db)
         .await?;
 
