@@ -47,15 +47,23 @@ pub struct Column {
     pub storage_ty: Type,
 
     /// Whether or not the column is nullable
+    #[cfg_attr(feature = "serde", serde(default, skip_serializing_if = "is_false"))]
     pub nullable: bool,
 
     /// True if the column is part of the table's primary key
+    #[cfg_attr(feature = "serde", serde(default, skip_serializing_if = "is_false"))]
     pub primary_key: bool,
 
     /// True if the column is an integer that should be auto-incremented
     /// with each insertion of a new row. This should be false if a `storage_ty`
     /// of type `Serial` is used.
+    #[cfg_attr(feature = "serde", serde(default, skip_serializing_if = "is_false"))]
     pub auto_increment: bool,
+}
+
+#[cfg(feature = "serde")]
+fn is_false(b: &bool) -> bool {
+    *b == false
 }
 
 /// Uniquely identifies a column within a schema.

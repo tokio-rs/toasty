@@ -50,10 +50,17 @@ pub struct Index {
     pub columns: Vec<IndexColumn>,
 
     /// When `true`, indexed entries are unique
+    #[cfg_attr(feature = "serde", serde(default, skip_serializing_if = "is_false"))]
     pub unique: bool,
 
     /// When `true`, the index indexes the model's primary key fields.
+    #[cfg_attr(feature = "serde", serde(default, skip_serializing_if = "is_false"))]
     pub primary_key: bool,
+}
+
+#[cfg(feature = "serde")]
+fn is_false(b: &bool) -> bool {
+    !*b
 }
 
 /// Uniquely identifies an index within a schema.
