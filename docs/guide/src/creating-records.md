@@ -1,7 +1,7 @@
 # Creating Records
 
 Toasty provides two ways to create records: the `toasty::create!` macro and
-the create builder. The macro uses struct-literal syntax and expands to builder
+the create builder. The macro uses a syntax inspired by struct literals and expands to builder
 calls under the hood. Most code uses the macro; the builder is there when you
 need programmatic control (e.g., conditional fields).
 
@@ -314,51 +314,23 @@ let (user, todo) = toasty::create!([
 .await?;
 ```
 
-### Array and Vec of builders
+### Dynamic batches with `toasty::batch()`
 
-When the number of records is determined at runtime, use an array or `Vec`
-of create builders with `toasty::batch()`:
-
-```rust
-# use toasty::Model;
-# #[derive(Debug, toasty::Model)]
-# struct User {
-#     #[key]
-#     #[auto]
-#     id: u64,
-#     name: String,
-#     #[unique]
-#     email: String,
-# }
-# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let users = toasty::batch([
-    toasty::create!(User { name: "Alice", email: "alice@example.com" }),
-    toasty::create!(User { name: "Bob", email: "bob@example.com" }),
-    toasty::create!(User { name: "Carol", email: "carol@example.com" }),
-])
-.exec(&mut db)
-.await?;
-
-assert_eq!(users.len(), 3);
-# Ok(())
-# }
-```
-
-This also works with a `Vec` of builders, which is useful when the number of
-records is determined at runtime:
+When the number of records is determined at runtime, collect create builders
+into a `Vec` and pass it to `toasty::batch()`:
 
 ```rust,ignore
-let names = ["Alice", "Bob", "Carol"];
-let builders: Vec<_> = names
-    .iter()
-    .enumerate()
-    .map(|(i, n)| toasty::create!(User {
-        name: *n,
-        email: format!("user{i}@example.com"),
-    }))
-    .collect();
+let names = get_names_from_csv();
 
-let users = toasty::batch(builders).exec(&mut db).await?;
+let mut insertions = vec![];
+for (i, name) in names.iter().enumerate() {
+    insertions.push(toasty::create!(User {
+        name: name,
+        email: format!("user{i}@example.com"),
+    }));
+}
+
+let users = toasty::batch(insertions).exec(&mut db).await?;
 ```
 
 ## When to use the builder directly
