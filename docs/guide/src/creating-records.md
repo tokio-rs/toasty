@@ -56,9 +56,11 @@ let user = User::create()
 # }
 ```
 
-Both return a create builder. Call `.exec(&mut db)` to insert the row. The
-returned `User` instance has all fields set, including auto-generated ones
-like `id`.
+The `create!` macro does not execute the query. It returns a create builder
+with all the specified values already applied. Call `.exec(&mut db)` on the
+builder to insert the row, or continue working with the builder value (for
+example, to conditionally set additional fields). The returned `User`
+instance has all fields set, including auto-generated ones like `id`.
 
 The generated SQL looks like:
 
@@ -132,8 +134,10 @@ assert_eq!(user.bio.as_deref(), Some("Likes Rust"));
 
 ## Creating through a relation
 
-Use the `in` keyword to create a record through a relation accessor. Toasty
-sets the foreign key automatically:
+Use the `in` keyword to create a record through a relation accessor. The `in`
+prefix tells the macro to call `.create()` on the scope expression — so
+`in user.todos() { ... }` expands to `user.todos().create().title(...)`.
+Toasty sets the foreign key automatically:
 
 ```rust
 # use toasty::Model;
@@ -168,8 +172,17 @@ assert_eq!(todo.user_id, user.id);
 # }
 ```
 
-You don't need to set `user_id` — Toasty fills it in from the parent. The
-macro expands to `user.todos().create().title("Buy groceries")`.
+This expands to the equivalent builder code:
+
+```rust,ignore
+let todo = user.todos().create()
+    .title("Buy groceries")
+    .exec(&mut db)
+    .await?;
+```
+
+You don't need to set `user_id` — Toasty fills it in from the parent
+because the create builder is scoped to `user.todos()`.
 
 ## Nested creation
 
@@ -255,6 +268,16 @@ let (alice, bob, carol) = toasty::create!(User::[
 .await?;
 ```
 
+This expands to a tuple of builders:
+
+```rust,ignore
+(
+    User::create().name("Alice").email("alice@example.com"),
+    User::create().name("Bob").email("bob@example.com"),
+    User::create().name("Carol").email("carol@example.com"),
+)
+```
+
 The same-type batch returns a tuple with one element per record. The batch
 is atomic — all records are inserted together or none are.
 
@@ -269,6 +292,15 @@ let (user, post) = toasty::create!([
 ])
 .exec(&mut db)
 .await?;
+```
+
+This expands to a tuple of builders of different types:
+
+```rust,ignore
+(
+    User::create().name("Alice"),
+    Post::create().title("Hello World"),
+)
 ```
 
 You can mix type-target and scoped forms in the same batch:
@@ -367,6 +399,8 @@ Each macro form has a direct builder equivalent:
 | `toasty::create!(in user.todos() { title: "Buy milk" })` | `user.todos().create().title("Buy milk")` |
 | Nested `{ ... }` for BelongsTo/HasOne | `.with_field(\|b\| b.field_calls)` |
 | Nested `[{ ... }]` for HasMany | `.with_field(\|b\| b.with_item(...))` |
+| `toasty::create!(User::[{ ... }, { ... }])` | Tuple of `User::create()` builders |
+| `toasty::create!([User { ... }, Post { ... }])` | Tuple of mixed-type builders |
 
 ## What gets generated
 
