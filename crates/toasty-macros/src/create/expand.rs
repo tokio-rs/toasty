@@ -14,14 +14,8 @@ pub(crate) fn expand(item: &CreateItem) -> TokenStream {
             quote! { #expr.create() #(#field_calls)* }
         }
         CreateItem::TypedBatch { path, items } => {
-            let builders: Vec<_> = items
-                .iter()
-                .map(|fields| {
-                    let field_calls = expand_field_set(fields);
-                    quote! { #path::create() #(#field_calls)* }
-                })
-                .collect();
-            quote! { toasty::batch([ #( #builders, )* ]) }
+            let batch = expand_typed_batch(path, items);
+            quote! { toasty::batch(#batch) }
         }
         CreateItem::Tuple { items } => {
             let elements: Vec<_> = items.iter().map(expand_as_element).collect();
@@ -37,19 +31,22 @@ pub(crate) fn expand(item: &CreateItem) -> TokenStream {
 /// wrapping in `toasty::batch()`.
 fn expand_as_element(item: &CreateItem) -> TokenStream {
     match item {
-        CreateItem::TypedBatch { path, items } => {
-            let builders: Vec<_> = items
-                .iter()
-                .map(|fields| {
-                    let field_calls = expand_field_set(fields);
-                    quote! { #path::create() #(#field_calls)* }
-                })
-                .collect();
-            quote! { [ #( #builders, )* ] }
-        }
+        CreateItem::TypedBatch { path, items } => expand_typed_batch(path, items),
         // All other forms expand identically to top-level.
         other => expand(other),
     }
+}
+
+/// Expand a `TypedBatch` into `[ builder1, builder2, ... ]`.
+fn expand_typed_batch(path: &syn::Path, items: &[FieldSet]) -> TokenStream {
+    let builders: Vec<_> = items
+        .iter()
+        .map(|fields| {
+            let field_calls = expand_field_set(fields);
+            quote! { #path::create() #(#field_calls)* }
+        })
+        .collect();
+    quote! { [ #( #builders, )* ] }
 }
 
 /// Expand a `FieldSet` into method calls.
