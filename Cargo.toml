@@ -106,3 +106,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 trybuild = { version = "1.0.89", features = ["diff"] }
 url = "2.5.4"
 uuid = { version = "1.11.0", features = ["v4", "v7", "fast-rng"] }
+
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.test]
+debug = "line-tables-only"

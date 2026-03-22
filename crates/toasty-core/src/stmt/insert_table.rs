@@ -1,12 +1,28 @@
 use super::InsertTarget;
 use crate::schema::db::{ColumnId, TableId};
 
+/// A lowered insert target specifying a database table and its columns.
+///
+/// Used as the `Table` variant of [`InsertTarget`] after the query engine
+/// lowers model-level inserts to table-level operations.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::stmt::InsertTable;
+/// use toasty_core::schema::db::{TableId, ColumnId};
+///
+/// let target = InsertTable {
+///     table: TableId(0),
+///     columns: vec![ColumnId { table: TableId(0), index: 0 }],
+/// };
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct InsertTable {
-    /// Table identifier to insert into
+    /// The database table to insert into.
     pub table: TableId,
 
-    /// Columns to insert into
+    /// The columns to populate, in order matching the value rows.
     pub columns: Vec<ColumnId>,
 }
 

@@ -3,12 +3,36 @@ use crate::{
     Schema,
 };
 
+/// Provides runtime argument and reference resolution for expression
+/// evaluation and substitution.
+///
+/// During expression evaluation, `Arg` and `Reference` nodes are resolved
+/// by calling methods on an `Input` implementation. The default methods
+/// return `None` (unresolved).
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::stmt::{ConstInput, Input};
+///
+/// // ConstInput resolves nothing -- suitable for expressions with no
+/// // external arguments.
+/// let mut input = ConstInput::new();
+/// ```
 pub trait Input {
+    /// Resolves an argument expression at the given projection.
+    ///
+    /// Returns `Some(expr)` if the argument can be resolved, or `None`
+    /// if it cannot.
     fn resolve_arg(&mut self, expr_arg: &ExprArg, projection: &Projection) -> Option<Expr> {
         let _ = (expr_arg, projection);
         None
     }
 
+    /// Resolves a reference expression at the given projection.
+    ///
+    /// Returns `Some(expr)` if the reference can be resolved, or `None`
+    /// if it cannot.
     fn resolve_ref(
         &mut self,
         expr_reference: &ExprReference,
@@ -19,9 +43,29 @@ pub trait Input {
     }
 }
 
+/// An [`Input`] implementation that resolves nothing.
+///
+/// Use `ConstInput` when evaluating expressions that contain no external
+/// arguments or references (i.e., constant expressions).
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::stmt::{ConstInput, Value, Expr};
+///
+/// let expr = Expr::from(Value::from(42_i64));
+/// let result = expr.eval(ConstInput::new()).unwrap();
+/// assert_eq!(result, Value::from(42_i64));
+/// ```
 #[derive(Debug, Default)]
 pub struct ConstInput {}
 
+/// An [`Input`] wrapper that validates resolved argument types against
+/// expected types at resolution time.
+///
+/// `TypedInput` delegates resolution to an inner `Input` and then checks
+/// that the resolved expression's inferred type is a subtype of the
+/// expected argument type from `tys`.
 pub struct TypedInput<'a, I, T = Schema> {
     cx: ExprContext<'a, T>,
     tys: &'a [Type],
@@ -29,6 +73,7 @@ pub struct TypedInput<'a, I, T = Schema> {
 }
 
 impl ConstInput {
+    /// Creates a new `ConstInput`.
     pub fn new() -> ConstInput {
         ConstInput {}
     }
@@ -37,6 +82,8 @@ impl ConstInput {
 impl Input for ConstInput {}
 
 impl<'a, I, T> TypedInput<'a, I, T> {
+    /// Creates a new `TypedInput` with the given expression context,
+    /// expected argument types, and inner input.
     pub fn new(cx: ExprContext<'a, T>, tys: &'a [Type], input: I) -> Self {
         TypedInput { cx, tys, input }
     }

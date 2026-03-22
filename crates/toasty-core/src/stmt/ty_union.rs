@@ -13,6 +13,15 @@ pub struct TypeUnion {
 }
 
 impl TypeUnion {
+    /// Creates an empty type union.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use toasty_core::stmt::TypeUnion;
+    /// let u = TypeUnion::new();
+    /// assert!(u.is_empty());
+    /// ```
     pub fn new() -> Self {
         Self { types: Vec::new() }
     }
@@ -32,18 +41,22 @@ impl TypeUnion {
         true
     }
 
+    /// Returns `true` if this union contains `ty`.
     pub fn contains(&self, ty: &Type) -> bool {
         self.types.contains(ty)
     }
 
+    /// Returns the number of types in the union.
     pub fn len(&self) -> usize {
         self.types.len()
     }
 
+    /// Returns `true` if the union contains no types.
     pub fn is_empty(&self) -> bool {
         self.types.is_empty()
     }
 
+    /// Returns an iterator over the types in the union.
     pub fn iter(&self) -> impl Iterator<Item = &Type> {
         self.types.iter()
     }

@@ -17,12 +17,14 @@ pub struct ExprExists {
 }
 
 impl Expr {
+    /// Creates an `EXISTS(subquery)` expression.
     pub fn exists(subquery: impl Into<Query>) -> Expr {
         Expr::Exists(ExprExists {
             subquery: Box::new(subquery.into()),
         })
     }
 
+    /// Creates a `NOT EXISTS(subquery)` expression.
     pub fn not_exists(subquery: impl Into<Query>) -> Expr {
         Expr::not(Expr::exists(subquery))
     }

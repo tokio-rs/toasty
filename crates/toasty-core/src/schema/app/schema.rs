@@ -3,11 +3,24 @@ use super::{EnumVariant, Field, FieldId, FieldTy, Model, ModelId, VariantId};
 use crate::{stmt, Result};
 use indexmap::IndexMap;
 
-/// Result of resolving a projection through the application schema.
+/// The result of resolving a [`stmt::Projection`] through the application
+/// schema.
 ///
-/// A projection can resolve to either a concrete field or an enum variant
-/// (when the projection stops at a variant discriminant without descending
-/// into a variant's fields).
+/// A projection can resolve to either a concrete [`Field`] or an
+/// [`EnumVariant`] (when the projection stops at a variant discriminant
+/// without descending into the variant's data fields).
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::schema::app::Resolved;
+///
+/// match schema.resolve(root_model, &projection) {
+///     Some(Resolved::Field(f)) => println!("field: {}", f.name.app_name),
+///     Some(Resolved::Variant(v)) => println!("variant: {}", v.discriminant),
+///     None => println!("could not resolve"),
+/// }
+/// ```
 #[derive(Debug)]
 pub enum Resolved<'a> {
     /// The projection resolved to a concrete field.
@@ -16,8 +29,25 @@ pub enum Resolved<'a> {
     Variant(&'a EnumVariant),
 }
 
+/// The top-level application schema, containing all registered models.
+///
+/// `Schema` is the entry point for looking up models, fields, and variants by
+/// their IDs, and for resolving projections through the model graph.
+///
+/// Schemas are typically constructed via `Schema::from_macro` (called by the
+/// `#[derive(Model)]` proc macro) or built manually for testing.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::schema::app::Schema;
+///
+/// let schema = Schema::default();
+/// assert_eq!(schema.models().count(), 0);
+/// ```
 #[derive(Debug, Default)]
 pub struct Schema {
+    /// All models in the schema, keyed by [`ModelId`].
     pub models: IndexMap<ModelId, Model>,
 }
 
@@ -27,11 +57,19 @@ struct Builder {
 }
 
 impl Schema {
+    /// Builds a `Schema` from a slice of models, linking relations and
+    /// validating consistency.
+    ///
+    /// This is the primary constructor used by the derive macro infrastructure.
     pub fn from_macro(models: &[Model]) -> Result<Self> {
         Builder::from_macro(models)
     }
 
-    /// Get a field by ID
+    /// Returns a reference to the [`Field`] identified by `id`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the model or field index is invalid.
     pub fn field(&self, id: FieldId) -> &Field {
         let fields = match self.model(id.model) {
             Model::Root(root) => &root.fields,
@@ -41,7 +79,12 @@ impl Schema {
         fields.get(id.index).expect("invalid field ID")
     }
 
-    /// Get a variant by ID
+    /// Returns a reference to the [`EnumVariant`] identified by `id`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the model is not an [`EmbeddedEnum`](super::EmbeddedEnum) or
+    /// the variant index is out of bounds.
     pub fn variant(&self, id: VariantId) -> &EnumVariant {
         let Model::EmbeddedEnum(e) = self.model(id.model) else {
             panic!("VariantId references a non-enum model");
@@ -49,6 +92,7 @@ impl Schema {
         e.variants.get(id.index).expect("invalid variant index")
     }
 
+    /// Returns an iterator over all models in the schema.
     pub fn models(&self) -> impl Iterator<Item = &Model> {
         self.models.values()
     }
@@ -58,7 +102,11 @@ impl Schema {
         self.models.get(&id.into())
     }
 
-    /// Get a model by ID
+    /// Returns a reference to the [`Model`] identified by `id`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if no model with the given ID exists in the schema.
     pub fn model(&self, id: impl Into<ModelId>) -> &Model {
         self.models.get(&id.into()).expect("invalid model ID")
     }
@@ -149,6 +197,8 @@ impl Schema {
         }
     }
 
+    /// Resolves a [`stmt::Path`] to a [`Field`] by extracting the root model
+    /// from the path and delegating to [`resolve_field`](Schema::resolve_field).
     pub fn resolve_field_path<'a>(&'a self, path: &stmt::Path) -> Option<&'a Field> {
         let model = self.model(path.root.as_model_unwrap());
         self.resolve_field(model, &path.projection)

@@ -1,24 +1,57 @@
 use std::fmt;
 
+/// A binary comparison operator.
+///
+/// Used by [`ExprBinaryOp`](super::ExprBinaryOp) to specify the comparison
+/// applied between two expressions.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::stmt::BinaryOp;
+///
+/// let op = BinaryOp::Eq;
+/// assert!(op.is_eq());
+/// assert_eq!(op.to_string(), "=");
+///
+/// // Negation
+/// assert_eq!(op.negate(), Some(BinaryOp::Ne));
+///
+/// // Commutation (swapping operands)
+/// assert_eq!(BinaryOp::Lt.commute(), BinaryOp::Gt);
+/// ```
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub enum BinaryOp {
+    /// Equality (`=`).
     Eq,
+    /// Inequality (`!=`).
     Ne,
+    /// Greater than or equal (`>=`).
     Ge,
+    /// Greater than (`>`).
     Gt,
+    /// Less than or equal (`<=`).
     Le,
+    /// Less than (`<`).
     Lt,
 }
 
 impl BinaryOp {
+    /// Returns `true` if this is the equality operator.
     pub fn is_eq(self) -> bool {
         matches!(self, Self::Eq)
     }
 
+    /// Returns `true` if this is the inequality operator.
     pub fn is_ne(self) -> bool {
         matches!(self, Self::Ne)
     }
 
+    /// Reverses the operator in place (currently only supports `Eq`).
+    ///
+    /// # Panics
+    ///
+    /// Panics (via `todo!()`) for operators other than `Eq`.
     pub fn reverse(&mut self) {
         match *self {
             Self::Eq => {}

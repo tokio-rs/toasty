@@ -2,9 +2,28 @@ use crate::Result;
 
 use super::{Expr, Input, Value};
 
+/// A borrowed reference to either an [`Expr`] or a [`Value`] within a
+/// composite structure.
+///
+/// `Entry` is returned by navigation methods (e.g., [`Value::entry`],
+/// [`Expr::entry`]) and provides a uniform way to inspect or evaluate the
+/// referenced data without cloning.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::stmt::{Entry, Value};
+///
+/// let value = Value::from(42_i64);
+/// let entry = Entry::from(&value);
+/// assert!(entry.is_value());
+/// assert!(!entry.is_expr());
+/// ```
 #[derive(Debug)]
 pub enum Entry<'a> {
+    /// A reference to an expression.
     Expr(&'a Expr),
+    /// A reference to a value.
     Value(&'a Value),
 }
 
@@ -89,10 +108,13 @@ impl Entry<'_> {
         }
     }
 
+    /// Returns `true` if this entry contains an expression.
     pub fn is_expr(&self) -> bool {
         matches!(self, Entry::Expr(_))
     }
 
+    /// Converts this entry to an owned [`Expr`] by cloning the contained
+    /// expression or wrapping the value.
     pub fn to_expr(&self) -> Expr {
         match *self {
             Entry::Expr(expr) => expr.clone(),
@@ -100,14 +122,18 @@ impl Entry<'_> {
         }
     }
 
+    /// Returns `true` if this entry is `Expr::Default`.
     pub fn is_expr_default(&self) -> bool {
         matches!(self, Entry::Expr(Expr::Default))
     }
 
+    /// Returns `true` if this entry holds a concrete value (either
+    /// `Entry::Value` or `Entry::Expr(Expr::Value(_))`).
     pub fn is_value(&self) -> bool {
         matches!(self, Entry::Value(_) | Entry::Expr(Expr::Value(_)))
     }
 
+    /// Returns `true` if this entry holds a null value.
     pub fn is_value_null(&self) -> bool {
         matches!(
             self,
@@ -115,6 +141,8 @@ impl Entry<'_> {
         )
     }
 
+    /// Returns a reference to the contained value, or `None` if this entry
+    /// holds a non-value expression.
     pub fn as_value(&self) -> Option<&Value> {
         match *self {
             Entry::Expr(Expr::Value(value)) | Entry::Value(value) => Some(value),
@@ -122,12 +150,24 @@ impl Entry<'_> {
         }
     }
 
+    /// Returns a reference to the contained value, panicking if this
+    /// entry does not hold a value.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the entry is not a value.
     #[track_caller]
     pub fn as_value_unwrap(&self) -> &Value {
         self.as_value()
             .unwrap_or_else(|| panic!("expected Entry with value; actual={self:#?}"))
     }
 
+    /// Extracts an owned [`Value`] from this entry, evaluating constant
+    /// expressions if needed.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the entry contains a non-constant expression.
     pub fn to_value(&self) -> Value {
         match *self {
             Entry::Expr(Expr::Value(value)) | Entry::Value(value) => value.clone(),

@@ -1,24 +1,40 @@
 use super::{Expr, Path};
 use crate::stmt::{self, ExprSet, Node, Query, Statement, Value};
 
-/// TODO: rename since this is also used in `Select`?
+/// Specifies what data a statement returns.
+///
+/// Used both as the projection in `SELECT` queries and as the `RETURNING`
+/// clause in `INSERT`, `UPDATE`, and `DELETE` statements.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::stmt::Returning;
+///
+/// let ret = Returning::Model { include: vec![] };
+/// assert!(ret.is_model());
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub enum Returning {
-    /// Return the full model with specified includes
+    /// Return the full model with the specified association includes.
     Model {
+        /// Paths to associations that should be eagerly loaded.
         include: Vec<Path>,
     },
 
+    /// Return whether the operation changed any rows.
     Changed,
 
-    /// Return an expression.
+    /// Return the result of evaluating an expression against the source rows.
     Expr(Expr),
 
-    /// Return a value instead of a projection of the statement source.
+    /// Return a fixed value, independent of the statement source.
     Value(Expr),
 }
 
 impl Returning {
+    /// Creates a `Returning::Expr` from an iterator of expressions, combining
+    /// them into a record expression.
     pub fn from_expr_iter<T>(items: impl IntoIterator<Item = T>) -> Self
     where
         T: Into<Expr>,
@@ -26,10 +42,13 @@ impl Returning {
         Returning::Expr(Expr::record(items))
     }
 
+    /// Returns `true` if this is the `Model` variant.
     pub fn is_model(&self) -> bool {
         matches!(self, Self::Model { .. })
     }
 
+    /// Returns the association include paths for a `Model` variant, or an
+    /// empty slice for other variants.
     pub fn model_includes(&self) -> &[Path] {
         match self {
             Self::Model { include } => include,
@@ -37,6 +56,11 @@ impl Returning {
         }
     }
 
+    /// Returns a mutable reference to the `Model` variant's include paths.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is not the `Model` variant.
     #[track_caller]
     pub fn model_includes_mut_unwrap(&mut self) -> &mut Vec<Path> {
         match self {
@@ -45,14 +69,18 @@ impl Returning {
         }
     }
 
+    /// Returns `true` if this is the `Changed` variant.
     pub fn is_changed(&self) -> bool {
         matches!(self, Self::Changed)
     }
 
+    /// Returns `true` if this is the `Expr` variant.
     pub fn is_expr(&self) -> bool {
         matches!(self, Self::Expr(_))
     }
 
+    /// Returns a reference to the inner expression if this is the `Expr`
+    /// variant.
     pub fn as_expr(&self) -> Option<&Expr> {
         match self {
             Self::Expr(expr) => Some(expr),
@@ -60,12 +88,19 @@ impl Returning {
         }
     }
 
+    /// Returns a reference to the inner expression.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is not the `Expr` variant.
     #[track_caller]
     pub fn as_expr_unwrap(&self) -> &Expr {
         self.as_expr()
             .unwrap_or_else(|| panic!("expected stmt::Returning::Expr; actual={self:#?}"))
     }
 
+    /// Returns a mutable reference to the inner expression if this is the
+    /// `Expr` variant.
     pub fn as_expr_mut(&mut self) -> Option<&mut Expr> {
         match self {
             Self::Expr(expr) => Some(expr),
@@ -73,6 +108,11 @@ impl Returning {
         }
     }
 
+    /// Returns a mutable reference to the inner expression.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is not the `Expr` variant.
     #[track_caller]
     pub fn as_expr_mut_unwrap(&mut self) -> &mut Expr {
         match self {
@@ -81,15 +121,19 @@ impl Returning {
         }
     }
 
+    /// Replaces this returning clause with `Returning::Expr` containing the
+    /// given expression.
     pub fn set_expr(&mut self, expr: impl Into<Expr>) {
         *self = Returning::Expr(expr.into());
     }
 
+    /// Returns `true` if this is the `Value` variant.
     pub fn is_value(&self) -> bool {
         matches!(self, Self::Value(..))
     }
 
-    /// Replaces this value with `Returning::Expr(null)` and returns the original value.
+    /// Takes this returning clause, replacing it with `Returning::Expr(null)`,
+    /// and returns the original value.
     pub fn take(&mut self) -> Returning {
         std::mem::replace(self, Returning::Expr(stmt::Expr::null()))
     }

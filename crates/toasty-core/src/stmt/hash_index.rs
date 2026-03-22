@@ -17,7 +17,21 @@ use std::collections::HashMap;
 /// # Cloning
 ///
 /// Key fields are cloned into owned [`Value`]s for use as map keys. Full records
-/// are never cloned — the map values are `&'a Value` references into the source slice.
+/// are never cloned -- the map values are `&'a Value` references into the source slice.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::stmt::{HashIndex, Projection, Value, ValueRecord};
+///
+/// let records = vec![
+///     Value::record_from_vec(vec![Value::from(1_i64), Value::from("a")]),
+///     Value::record_from_vec(vec![Value::from(2_i64), Value::from("b")]),
+/// ];
+/// let index = HashIndex::new(&records, &[Projection::single(0)]);
+/// let found = index.find(&[Value::from(2_i64)]);
+/// assert!(found.is_some());
+/// ```
 pub struct HashIndex<'a> {
     map: HashMap<Vec<Value>, &'a Value>,
 }

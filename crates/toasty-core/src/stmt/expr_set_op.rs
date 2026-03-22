@@ -22,6 +22,7 @@ pub struct ExprSetOp {
 }
 
 impl ExprSetOp {
+    /// Returns `true` if the set operation is a `UNION`.
     pub fn is_union(&self) -> bool {
         matches!(self.op, SetOp::Union)
     }

@@ -7,6 +7,33 @@ use std::{
     ops::Deref,
 };
 
+/// A database index over one or more columns of a table.
+///
+/// Indices can be unique or non-unique, and can cover the primary key.
+/// Each indexed column specifies an [`IndexOp`] (equality or sort) and an
+/// [`IndexScope`] (partition or local).
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::schema::db::{Index, IndexColumn, IndexId, IndexOp, IndexScope, ColumnId, TableId};
+///
+/// let index = Index {
+///     id: IndexId { table: TableId(0), index: 0 },
+///     name: "idx_users_email".to_string(),
+///     on: TableId(0),
+///     columns: vec![IndexColumn {
+///         column: ColumnId { table: TableId(0), index: 1 },
+///         op: IndexOp::Eq,
+///         scope: IndexScope::Local,
+///     }],
+///     unique: true,
+///     primary_key: false,
+/// };
+///
+/// assert!(index.unique);
+/// assert_eq!(index.columns.len(), 1);
+/// ```
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Index {
@@ -29,13 +56,46 @@ pub struct Index {
     pub primary_key: bool,
 }
 
+/// Uniquely identifies an index within a schema.
+///
+/// Combines the [`TableId`] of the owning table with the index's positional
+/// offset in that table's index list.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::schema::db::{IndexId, TableId};
+///
+/// let id = IndexId { table: TableId(0), index: 1 };
+/// assert_eq!(id.index, 1);
+/// ```
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct IndexId {
+    /// The table this index belongs to.
     pub table: TableId,
+    /// Zero-based position of this index in the table's index list.
     pub index: usize,
 }
 
+/// A single column entry within an [`Index`].
+///
+/// Specifies which column is indexed, the comparison operation, and the scope
+/// (partition vs. local).
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::schema::db::{IndexColumn, IndexOp, IndexScope, ColumnId, TableId};
+///
+/// let ic = IndexColumn {
+///     column: ColumnId { table: TableId(0), index: 0 },
+///     op: IndexOp::Eq,
+///     scope: IndexScope::Local,
+/// };
+///
+/// assert!(ic.scope.is_local());
+/// ```
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct IndexColumn {
@@ -49,13 +109,37 @@ pub struct IndexColumn {
     pub scope: IndexScope,
 }
 
+/// The comparison operation used by an index column.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::schema::db::IndexOp;
+/// use toasty_core::stmt::Direction;
+///
+/// let op = IndexOp::Sort(Direction::Asc);
+/// assert!(matches!(op, IndexOp::Sort(_)));
+/// ```
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum IndexOp {
+    /// Equality lookup.
     Eq,
+    /// Sorted scan in the given direction.
     Sort(stmt::Direction),
 }
 
+/// Scope of an index column, relevant for distributed databases.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::schema::db::IndexScope;
+///
+/// let scope = IndexScope::Partition;
+/// assert!(scope.is_partition());
+/// assert!(!scope.is_local());
+/// ```
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum IndexScope {
@@ -67,16 +151,19 @@ pub enum IndexScope {
 }
 
 impl IndexColumn {
+    /// Returns the [`Column`] referenced by this index column.
     pub fn table_column<'a>(&self, schema: &'a Schema) -> &'a Column {
         schema.column(self.column)
     }
 }
 
 impl IndexScope {
+    /// Returns `true` if this is the [`Partition`](IndexScope::Partition) scope.
     pub fn is_partition(self) -> bool {
         matches!(self, Self::Partition)
     }
 
+    /// Returns `true` if this is the [`Local`](IndexScope::Local) scope.
     pub fn is_local(self) -> bool {
         matches!(self, Self::Local)
     }
@@ -97,11 +184,34 @@ impl fmt::Debug for IndexId {
     }
 }
 
+/// The set of differences between two index lists.
+///
+/// Computed by [`IndicesDiff::from`] and dereferences to
+/// `Vec<IndicesDiffItem>` for iteration.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::schema::db::{IndicesDiff, DiffContext, RenameHints, Schema};
+///
+/// let previous = Schema::default();
+/// let next = Schema::default();
+/// let hints = RenameHints::new();
+/// let cx = DiffContext::new(&previous, &next, &hints);
+/// let diff = IndicesDiff::from(&cx, &[], &[]);
+/// assert!(diff.is_empty());
+/// ```
 pub struct IndicesDiff<'a> {
     items: Vec<IndicesDiffItem<'a>>,
 }
 
 impl<'a> IndicesDiff<'a> {
+    /// Computes the diff between two index slices.
+    ///
+    /// Uses [`DiffContext`] to resolve rename hints for both indices and columns.
+    /// Indices matched by name (or by rename hint) are compared; unmatched
+    /// indices in `previous` become drops, and unmatched indices in `next`
+    /// become creates.
     pub fn from(cx: &DiffContext<'a>, previous: &'a [Index], next: &'a [Index]) -> Self {
         fn has_diff(cx: &DiffContext<'_>, previous: &Index, next: &Index) -> bool {
             // Check basic properties
@@ -170,6 +280,7 @@ impl<'a> IndicesDiff<'a> {
         Self { items }
     }
 
+    /// Returns `true` if there are no index changes.
     pub const fn is_empty(&self) -> bool {
         self.items.is_empty()
     }
@@ -183,11 +294,17 @@ impl<'a> Deref for IndicesDiff<'a> {
     }
 }
 
+/// A single change detected between two index lists.
 pub enum IndicesDiffItem<'a> {
+    /// A new index was created.
     CreateIndex(&'a Index),
+    /// An existing index was dropped.
     DropIndex(&'a Index),
+    /// An index was modified (name, columns, uniqueness, or other property changed).
     AlterIndex {
+        /// The index definition before the change.
         previous: &'a Index,
+        /// The index definition after the change.
         next: &'a Index,
     },
 }

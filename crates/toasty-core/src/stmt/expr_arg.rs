@@ -23,12 +23,16 @@ pub struct ExprArg {
 }
 
 impl Expr {
+    /// Creates an argument expression from a value convertible to [`ExprArg`].
+    ///
+    /// A `usize` can be passed directly: `Expr::arg(0)` creates `arg(position=0, nesting=0)`.
     pub fn arg(expr_arg: impl Into<ExprArg>) -> Self {
         Self::Arg(expr_arg.into())
     }
 }
 
 impl ExprArg {
+    /// Creates a new argument at the given position with `nesting = 0`.
     pub fn new(position: usize) -> ExprArg {
         ExprArg {
             position,

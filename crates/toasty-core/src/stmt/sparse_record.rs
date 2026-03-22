@@ -1,18 +1,37 @@
 use super::{PathFieldSet, Type, Value, ValueRecord};
 use std::hash::Hash;
 
-/// A typed record, indicating the record represents a specific model (or a
-/// subset of its fields).
+/// A record where only a subset of fields are populated.
+///
+/// Unlike [`ValueRecord`] (which stores values for every field by position),
+/// `SparseRecord` tracks which field indices are present via a
+/// [`PathFieldSet`] and stores corresponding values. Fields not in the set
+/// are absent (not merely null).
+///
+/// Iterating over a `SparseRecord` yields `(usize, Value)` pairs of field
+/// index and value.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::stmt::{Value, PathFieldSet};
+///
+/// // Create a sparse record with field 0 populated
+/// let v = Value::empty_sparse_record();
+/// assert!(matches!(v, Value::SparseRecord(_)));
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SparseRecord {
-    /// Fields that are present
+    /// Bit set of field indices that are populated in this record.
     pub fields: PathFieldSet,
 
-    /// Values
+    /// Values indexed by field position. Indices not in `fields` contain
+    /// placeholder [`Value::Null`] entries.
     pub values: Vec<Value>,
 }
 
 impl Value {
+    /// Creates an empty [`Value::SparseRecord`] with no populated fields.
     pub fn empty_sparse_record() -> Self {
         SparseRecord {
             fields: PathFieldSet::new(),
@@ -21,6 +40,8 @@ impl Value {
         .into()
     }
 
+    /// Creates a [`Value::SparseRecord`] by distributing values from `record`
+    /// into the positions specified by `fields`.
     pub fn sparse_record(fields: PathFieldSet, record: ValueRecord) -> Self {
         let mut values = vec![];
 
@@ -35,6 +56,12 @@ impl Value {
         SparseRecord { fields, values }.into()
     }
 
+    /// Consumes this value and returns the contained [`SparseRecord`],
+    /// panicking if this is not a [`Value::SparseRecord`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the value is not a `SparseRecord` variant.
     pub fn into_sparse_record(self) -> SparseRecord {
         match self {
             Self::SparseRecord(value) => value,
@@ -44,10 +71,12 @@ impl Value {
 }
 
 impl Type {
+    /// Creates a [`Type::SparseRecord`] type with the given field set.
     pub fn sparse_record(fields: impl Into<PathFieldSet>) -> Self {
         Self::SparseRecord(fields.into())
     }
 
+    /// Creates a [`Type::SparseRecord`] type with no fields.
     pub fn empty_sparse_record() -> Self {
         Self::SparseRecord(PathFieldSet::default())
     }

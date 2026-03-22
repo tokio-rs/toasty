@@ -17,6 +17,8 @@ pub struct ExprStmt {
 }
 
 impl Expr {
+    /// Creates a sub-statement expression from any value convertible to
+    /// [`Statement`].
     pub fn stmt(stmt: impl Into<Statement>) -> Self {
         Self::Stmt(ExprStmt {
             stmt: Box::new(stmt.into()),

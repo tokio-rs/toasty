@@ -26,6 +26,7 @@ pub struct ExprBinaryOp {
 }
 
 impl Expr {
+    /// Creates a binary operation expression with the given operator.
     pub fn binary_op(lhs: impl Into<Self>, op: BinaryOp, rhs: impl Into<Self>) -> Self {
         ExprBinaryOp {
             op,
@@ -35,6 +36,7 @@ impl Expr {
         .into()
     }
 
+    /// Creates an equality (`==`) expression.
     pub fn eq(lhs: impl Into<Self>, rhs: impl Into<Self>) -> Self {
         Expr::binary_op(lhs, BinaryOp::Eq, rhs)
     }
@@ -50,22 +52,27 @@ impl Expr {
         )
     }
 
+    /// Creates a greater-than-or-equal (`>=`) expression.
     pub fn ge(lhs: impl Into<Self>, rhs: impl Into<Self>) -> Self {
         Expr::binary_op(lhs, BinaryOp::Ge, rhs)
     }
 
+    /// Creates a greater-than (`>`) expression.
     pub fn gt(lhs: impl Into<Self>, rhs: impl Into<Self>) -> Self {
         Expr::binary_op(lhs, BinaryOp::Gt, rhs)
     }
 
+    /// Creates a less-than-or-equal (`<=`) expression.
     pub fn le(lhs: impl Into<Self>, rhs: impl Into<Self>) -> Self {
         Expr::binary_op(lhs, BinaryOp::Le, rhs)
     }
 
+    /// Creates a less-than (`<`) expression.
     pub fn lt(lhs: impl Into<Self>, rhs: impl Into<Self>) -> Self {
         Expr::binary_op(lhs, BinaryOp::Lt, rhs)
     }
 
+    /// Creates a not-equal (`!=`) expression.
     pub fn ne(lhs: impl Into<Self>, rhs: impl Into<Self>) -> Self {
         Expr::binary_op(lhs, BinaryOp::Ne, rhs)
     }

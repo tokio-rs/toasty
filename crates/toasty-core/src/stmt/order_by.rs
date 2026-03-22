@@ -1,7 +1,22 @@
 use super::OrderByExpr;
 
+/// An `ORDER BY` clause containing one or more ordering expressions.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::stmt::{OrderBy, OrderByExpr, Direction, Expr};
+///
+/// let order = OrderBy {
+///     exprs: vec![OrderByExpr {
+///         expr: Expr::null(),
+///         order: Some(Direction::Asc),
+///     }],
+/// };
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct OrderBy {
+    /// The list of ordering expressions, applied in order.
     pub exprs: Vec<OrderByExpr>,
 }
 

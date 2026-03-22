@@ -11,7 +11,31 @@ use super::{
     UpdateTarget, Value, ValueRecord, Values, With,
 };
 
+/// Mutable visitor trait for the statement AST.
+///
+/// Implement this trait to walk and modify the AST in place. Each
+/// `visit_*_mut` method has a default implementation that recurses into
+/// child nodes via the corresponding free function (e.g.,
+/// [`visit_expr_mut`]). Override specific methods to transform nodes of
+/// interest.
+///
+/// Companion helpers:
+/// - [`for_each_expr_mut`] -- visits every expression node in post-order.
+/// - [`walk_expr_scoped_mut`] -- walks expressions while tracking
+///   `Let`/`Map` scope depth.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::stmt::{visit_mut, Expr, Value, Node};
+///
+/// let mut expr = Expr::from(Value::from(42_i64));
+/// visit_mut::for_each_expr_mut(&mut expr, |e| {
+///     // transform expressions in place
+/// });
+/// ```
 pub trait VisitMut {
+    /// Dispatches to the appropriate `visit_*_mut` method via [`Node::visit_mut`].
     fn visit_mut<N: Node>(&mut self, i: &mut N)
     where
         Self: Sized,
@@ -1132,6 +1156,8 @@ where
     }
 }
 
+/// Calls `f` for every [`Expr`] node reachable from `node`, in post-order,
+/// allowing mutation.
 pub fn for_each_expr_mut<F>(node: &mut impl Node, f: F)
 where
     F: FnMut(&mut Expr),

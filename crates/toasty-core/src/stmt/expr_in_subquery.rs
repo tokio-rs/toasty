@@ -21,6 +21,7 @@ pub struct ExprInSubquery {
 }
 
 impl Expr {
+    /// Creates an `IN (subquery)` expression: `lhs IN (SELECT ...)`.
     pub fn in_subquery(lhs: impl Into<Self>, rhs: impl Into<Query>) -> Self {
         ExprInSubquery {
             expr: Box::new(lhs.into()),
@@ -29,6 +30,7 @@ impl Expr {
         .into()
     }
 
+    /// Returns `true` if this expression is an `IN (subquery)` check.
     pub fn is_in_subquery(&self) -> bool {
         matches!(self, Self::InSubquery(_))
     }
