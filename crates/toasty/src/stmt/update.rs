@@ -1,4 +1,4 @@
-use super::{List, Query};
+use super::Query;
 use crate::{
     schema::{Load, Model},
     Executor, Result,

@@ -182,7 +182,7 @@ impl<'a> Executor for Transaction<'a> {
     }
 
     async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> Result<Value> {
-        self.db.exec_untyped(stmt).await
+        self.db.exec_stmt(stmt, true).await
     }
 
     fn schema(&mut self) -> &Arc<Schema> {

@@ -59,6 +59,46 @@ impl Db {
         Ok(conn.handle())
     }
 
+    pub(crate) async fn exec_stmt(
+        &mut self,
+        stmt: stmt::Statement,
+        in_transaction: bool,
+    ) -> Result<Value> {
+        let returns_list = match &stmt {
+            stmt::Statement::Query(q) => !q.single,
+            stmt::Statement::Insert(i) => !i.source.single,
+            stmt::Statement::Update(i) => match &i.target {
+                stmt::UpdateTarget::Query(q) => !q.single,
+                stmt::UpdateTarget::Model(_) => false,
+                _ => true,
+            },
+            stmt::Statement::Delete(d) => !d.selection().single,
+        };
+
+        let (tx, rx) = oneshot::channel();
+
+        let conn = self.connection().await?;
+        conn.in_tx
+            .send(ConnectionOperation::ExecStatement {
+                stmt: Box::new(stmt),
+                in_transaction,
+                tx,
+            })
+            .unwrap();
+
+        let mut stream = rx.await.unwrap()?;
+
+        if returns_list {
+            let values = stream.collect().await?;
+            Ok(Value::List(values))
+        } else {
+            match stream.next().await {
+                Some(value) => value,
+                None => Ok(Value::Null),
+            }
+        }
+    }
+
     pub(crate) async fn exec_operation(&mut self, operation: Operation) -> Result<Response> {
         let (tx, rx) = oneshot::channel();
 
@@ -120,6 +160,8 @@ impl std::fmt::Debug for Db {
     }
 }
 
+impl Db {}
+
 #[async_trait]
 impl Executor for Db {
     async fn transaction(&mut self) -> Result<Transaction<'_>> {
@@ -127,39 +169,7 @@ impl Executor for Db {
     }
 
     async fn exec_untyped(&mut self, stmt: stmt::Statement) -> Result<Value> {
-        let returns_list = match &stmt {
-            stmt::Statement::Query(q) => !q.single,
-            stmt::Statement::Insert(i) => !i.source.single,
-            stmt::Statement::Update(i) => match &i.target {
-                stmt::UpdateTarget::Query(q) => !q.single,
-                stmt::UpdateTarget::Model(_) => false,
-                _ => true,
-            },
-            stmt::Statement::Delete(d) => !d.selection().single,
-        };
-
-        let (tx, rx) = oneshot::channel();
-
-        let conn = self.connection().await?;
-        conn.in_tx
-            .send(ConnectionOperation::ExecStatement {
-                stmt: Box::new(stmt),
-                in_transaction: false,
-                tx,
-            })
-            .unwrap();
-
-        let mut stream = rx.await.unwrap()?;
-
-        if returns_list {
-            let values = stream.collect().await?;
-            Ok(Value::List(values))
-        } else {
-            match stream.next().await {
-                Some(value) => value,
-                None => Ok(Value::Null),
-            }
-        }
+        self.exec_stmt(stmt, false).await
     }
 
     fn schema(&mut self) -> &Arc<Schema> {
