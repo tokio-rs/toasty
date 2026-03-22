@@ -1,5 +1,5 @@
 //! Test batching association-scoped statements (create, query, update, delete)
-//! through `toasty::batch()`.
+//! through `toasty::stmt::batch()`.
 
 use crate::prelude::*;
 
@@ -9,7 +9,7 @@ pub async fn batch_two_scoped_creates_same_relation(t: &mut Test) -> Result<()> 
     let mut db = setup(t).await;
     let user = User::create().name("Alice").exec(&mut db).await?;
 
-    let (t1, t2): (Todo, Todo) = toasty::batch((
+    let (t1, t2): (Todo, Todo) = toasty::stmt::batch((
         user.todos().create().title("first"),
         user.todos().create().title("second"),
     ))
@@ -37,9 +37,10 @@ pub async fn batch_two_scoped_queries_same_relation(t: &mut Test) -> Result<()> 
     u1.todos().create().title("u1 todo").exec(&mut db).await?;
     u2.todos().create().title("u2 todo").exec(&mut db).await?;
 
-    let (u1_todos, u2_todos): (Vec<Todo>, Vec<Todo>) = toasty::batch((u1.todos(), u2.todos()))
-        .exec(&mut db)
-        .await?;
+    let (u1_todos, u2_todos): (Vec<Todo>, Vec<Todo>) =
+        toasty::stmt::batch((u1.todos(), u2.todos()))
+            .exec(&mut db)
+            .await?;
 
     assert_struct!(u1_todos, [_ { title: "u1 todo" }]);
     assert_struct!(u2_todos, [_ { title: "u2 todo" }]);
@@ -55,7 +56,7 @@ pub async fn batch_scoped_update_and_delete_same_relation(t: &mut Test) -> Resul
     let todo_keep = user.todos().create().title("keep").exec(&mut db).await?;
     let todo_drop = user.todos().create().title("drop").exec(&mut db).await?;
 
-    let ((), ()): ((), ()) = toasty::batch((
+    let ((), ()): ((), ()) = toasty::stmt::batch((
         user.todos()
             .filter_by_id(todo_keep.id)
             .update()
@@ -85,7 +86,7 @@ pub async fn batch_scoped_all_four_crud(t: &mut Test) -> Result<()> {
         .await?;
     let doomed = user.todos().create().title("doomed").exec(&mut db).await?;
 
-    let (queried, created, (), ()): (Vec<Todo>, Todo, (), ()) = toasty::batch((
+    let (queried, created, (), ()): (Vec<Todo>, Todo, (), ()) = toasty::stmt::batch((
         user.todos(),
         user.todos().create().title("new"),
         user.todos()
@@ -119,7 +120,7 @@ pub async fn batch_scoped_with_root_statements(t: &mut Test) -> Result<()> {
     let user = User::create().name("Alice").exec(&mut db).await?;
 
     // Mix: root-level query + scoped create + root-level create
-    let (users, todo, new_user): (Vec<User>, Todo, User) = toasty::batch((
+    let (users, todo, new_user): (Vec<User>, Todo, User) = toasty::stmt::batch((
         User::filter_by_name("Alice"),
         user.todos().create().title("from batch"),
         User::create().name("Bob"),
@@ -177,7 +178,7 @@ pub async fn batch_scoped_across_relations(t: &mut Test) -> Result<()> {
     let user = User::create().exec(&mut db).await?;
 
     // Create across two different relations in one batch
-    let (todo, post): (Todo, Post) = toasty::batch((
+    let (todo, post): (Todo, Post) = toasty::stmt::batch((
         user.todos().create().title("my todo"),
         user.posts().create().body("my post"),
     ))
@@ -236,7 +237,7 @@ pub async fn batch_query_across_relations(t: &mut Test) -> Result<()> {
     user.todos().create().title("t2").exec(&mut db).await?;
     user.posts().create().body("p1").exec(&mut db).await?;
 
-    let (todos, posts): (Vec<Todo>, Vec<Post>) = toasty::batch((user.todos(), user.posts()))
+    let (todos, posts): (Vec<Todo>, Vec<Post>) = toasty::stmt::batch((user.todos(), user.posts()))
         .exec(&mut db)
         .await?;
 
@@ -255,7 +256,7 @@ pub async fn batch_scoped_different_parents(t: &mut Test) -> Result<()> {
     let bob = User::create().name("Bob").exec(&mut db).await?;
 
     // Create todos for different users in one batch
-    let (alice_todo, bob_todo): (Todo, Todo) = toasty::batch((
+    let (alice_todo, bob_todo): (Todo, Todo) = toasty::stmt::batch((
         alice.todos().create().title("alice task"),
         bob.todos().create().title("bob task"),
     ))
@@ -267,7 +268,7 @@ pub async fn batch_scoped_different_parents(t: &mut Test) -> Result<()> {
 
     // Query both scopes in one batch
     let (alice_todos, bob_todos): (Vec<Todo>, Vec<Todo>) =
-        toasty::batch((alice.todos(), bob.todos()))
+        toasty::stmt::batch((alice.todos(), bob.todos()))
             .exec(&mut db)
             .await?;
 
@@ -284,7 +285,7 @@ pub async fn batch_scoped_delete_with_root_update(t: &mut Test) -> Result<()> {
     let user = User::create().name("Alice").exec(&mut db).await?;
     let todo = user.todos().create().title("done").exec(&mut db).await?;
 
-    let ((), ()): ((), ()) = toasty::batch((
+    let ((), ()): ((), ()) = toasty::stmt::batch((
         user.todos().filter_by_id(todo.id).delete(),
         User::filter_by_name("Alice").update().name("Alice2"),
     ))

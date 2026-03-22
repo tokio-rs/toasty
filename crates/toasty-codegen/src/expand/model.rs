@@ -45,8 +45,8 @@ impl Expand<'_> {
                     #create_struct_ident::default()
                 }
 
-                #vis fn create_many() -> #toasty::CreateMany<#model_ident> {
-                    #toasty::CreateMany::default()
+                #vis fn create_many() -> #toasty::stmt::CreateMany<#model_ident> {
+                    #toasty::stmt::CreateMany::default()
                 }
 
                 #vis fn update(&mut self) -> #update_struct_ident<&mut Self> {

@@ -7,7 +7,7 @@ single round-trip. The results come back as a typed tuple matching the input
 queries.
 
 ```rust
-let (active_users, recent_posts) = toasty::batch((
+let (active_users, recent_posts) = toasty::stmt::batch((
     User::find_by_active(true),
     Post::find_recent(100),
 )).exec(&db).await?;
@@ -160,7 +160,7 @@ value (a record of lists) that `T::load` deserializes into the typed tuple.
 
 ```
 User code:
-    toasty::batch((UserQuery, PostQuery)).exec(&db)
+    toasty::stmt::batch((UserQuery, PostQuery)).exec(&db)
 
 IntoStatement for (A, B):
     SELECT (SELECT ... FROM users WHERE ...), (SELECT ... FROM posts ...)
@@ -233,7 +233,7 @@ pattern and plan it the same way.
 
 ### Phase 2: Batch API
 
-1. Add `toasty::batch()` function and `Batch<T>` struct
+1. Add `toasty::stmt::batch()` function and `Batch<T>` struct
 2. Add tuple impls of `IntoStatement<(Vec<T1>, Vec<T2>, ...)>` (via macro)
 3. Wire `Batch::exec` through the standard `ExecutorExt::exec` path
 

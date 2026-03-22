@@ -97,7 +97,7 @@ impl<M> Paginate<M> {
     /// Set the cursor for forward pagination.
     ///
     /// Records returned will come **after** `key` in the current sort order.
-    /// Obtain `key` from [`Page::next_cursor`](crate::Page::next_cursor) of a
+    /// Obtain `key` from [`Page::next_cursor`](super::Page::next_cursor) of a
     /// previous page.
     ///
     /// # Panics
@@ -134,7 +134,7 @@ impl<M> Paginate<M> {
     /// Records returned will come **before** `key` in the current sort order.
     /// The result set is still returned in the original sort order (not
     /// reversed). Obtain `key` from
-    /// [`Page::prev_cursor`](crate::Page::prev_cursor) of a previous page.
+    /// [`Page::prev_cursor`](super::Page::prev_cursor) of a previous page.
     ///
     /// # Panics
     ///
@@ -167,7 +167,7 @@ impl<M> Paginate<M> {
 }
 
 impl<M: Load> Paginate<M> {
-    /// Execute the paginated query and return a [`Page`](crate::Page).
+    /// Execute the paginated query and return a [`Page`](super::Page).
     ///
     /// The returned page contains up to `per_page` items along with optional
     /// cursors for the next and previous pages.
@@ -195,7 +195,7 @@ impl<M: Load> Paginate<M> {
     ///     .unwrap();
     /// # });
     /// ```
-    pub async fn exec(mut self, executor: &mut dyn Executor) -> Result<crate::Page<M::Output>> {
+    pub async fn exec(mut self, executor: &mut dyn Executor) -> Result<super::Page<M::Output>> {
         // Extract the limit from the query to determine page size
         let page_size = match &self.query.untyped.limit {
             Some(stmt::Limit {
@@ -211,7 +211,7 @@ impl<M: Load> Paginate<M> {
                 };
                 let items: Vec<M::Output> =
                     values.into_iter().map(M::load).collect::<Result<_>>()?;
-                return Ok(crate::Page::new(
+                return Ok(super::Page::new(
                     items,
                     Query::from_untyped(self.query.untyped),
                     None,
@@ -268,7 +268,7 @@ impl<M: Load> Paginate<M> {
         // Load the raw values into model instances
         let loaded_items: Vec<M::Output> = items.into_iter().map(M::load).collect::<Result<_>>()?;
 
-        Ok(crate::Page::new(
+        Ok(super::Page::new(
             loaded_items,
             Query::from_untyped(self.query.untyped),
             next_cursor,

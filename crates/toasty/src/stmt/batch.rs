@@ -1,12 +1,12 @@
+use super::{Expr, IntoExpr, IntoStatement, Statement};
 use crate::schema::Load;
-use crate::stmt::{Expr, IntoExpr, IntoStatement};
-use crate::{Executor, Result, Statement};
+use crate::{Executor, Result};
 
 use toasty_core::stmt;
 
 /// A batch of queries composed into a single statement.
 ///
-/// Created by [`batch()`](crate::batch). The composed statement flows through
+/// Created by [`batch()`]. The composed statement flows through
 /// the standard engine pipeline and the result is deserialized via [`Load`].
 pub struct Batch<T> {
     stmt: Statement<T>,
@@ -20,7 +20,7 @@ pub struct Batch<T> {
 /// # Examples
 ///
 /// ```ignore
-/// let (active_users, recent_posts) = toasty::batch((
+/// let (active_users, recent_posts) = toasty::stmt::batch((
 ///     User::find_by_active(true),
 ///     Post::find_recent(100),
 /// )).exec(&mut db).await?;

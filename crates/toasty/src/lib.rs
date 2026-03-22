@@ -58,9 +58,9 @@
 //!
 //! - [`Transaction`] / [`TransactionBuilder`] — transactions with
 //!   auto-rollback on drop and nested savepoint support.
-//! - [`Page`] — a page of results from a paginated query, with cursor-based
+//! - [`Page`](stmt::Page) — a page of results from a paginated query, with cursor-based
 //!   navigation.
-//! - [`Batch`] — groups multiple queries into a single round-trip.
+//! - [`Batch`](stmt::Batch) — groups multiple queries into a single round-trip.
 //! - [`Error`] / [`Result`] — re-exported from `toasty-core`.
 //!
 //! # Derive macros
@@ -103,8 +103,7 @@
 mod update_target;
 pub use update_target::UpdateTarget;
 
-mod batch;
-pub use batch::{batch, Batch, CreateMany};
+// `Batch`, `batch()`, and `CreateMany` live in `stmt`.
 
 pub mod db;
 pub use db::Db;
@@ -117,8 +116,7 @@ mod engine;
 pub mod schema;
 pub use schema::{BelongsTo, HasMany, HasOne};
 
-mod page;
-pub use page::Page;
+// `Page` lives in `stmt`.
 
 pub mod stmt;
 pub use stmt::Statement;
@@ -133,11 +131,11 @@ pub use toasty_core::{Error, Result};
 #[doc(hidden)]
 pub mod codegen_support {
     pub use crate::{
-        batch::CreateMany,
         schema::{
             generate_unique_id, Auto, BelongsTo, Embed, Field, HasMany, HasOne, Load, Model,
             Register, Relation,
         },
+        stmt::CreateMany,
         stmt::{self, IntoExpr, IntoInsert, IntoStatement, List, Path},
         update_target::UpdateTarget,
         Db, Error, Executor, Result, Statement,

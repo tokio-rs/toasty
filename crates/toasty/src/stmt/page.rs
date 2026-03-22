@@ -1,13 +1,13 @@
 use std::ops::Deref;
 
+use super::{List, Paginate, Query};
 use crate::schema::Load;
-use crate::stmt::{List, Paginate, Query};
 use crate::{Executor, Result};
 use toasty_core::stmt;
 
 /// A page of results from a cursor-based paginated query.
 ///
-/// Obtained by calling [`Paginate::exec`](crate::stmt::Paginate::exec). The
+/// Obtained by calling [`Paginate::exec`]. The
 /// page contains up to `per_page` items and optional cursors for fetching the
 /// next or previous page.
 ///
@@ -70,7 +70,7 @@ impl<M: Load> Page<M> {
     ///
     /// ```no_run
     /// # use toasty::Db;
-    /// # async fn example<T: toasty::schema::Model>(db: &mut Db, page: toasty::Page<T>) -> toasty::Result<()> {
+    /// # async fn example<T: toasty::schema::Model>(db: &mut Db, page: toasty::stmt::Page<T>) -> toasty::Result<()> {
     /// if let Some(next_page) = page.next(db).await? {
     ///     println!("Found {} items in next page", next_page.items.len());
     /// }
@@ -98,7 +98,7 @@ impl<M: Load> Page<M> {
     ///
     /// ```no_run
     /// # use toasty::Db;
-    /// # async fn example<T: toasty::schema::Model>(db: &mut Db, page: toasty::Page<T>) -> toasty::Result<()> {
+    /// # async fn example<T: toasty::schema::Model>(db: &mut Db, page: toasty::stmt::Page<T>) -> toasty::Result<()> {
     /// if let Some(prev_page) = page.prev(db).await? {
     ///     println!("Found {} items in previous page", prev_page.items.len());
     /// }

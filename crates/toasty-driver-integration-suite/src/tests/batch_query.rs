@@ -8,7 +8,7 @@ pub async fn batch_two_models(t: &mut Test) -> Result<()> {
     User::create().name("Bob").exec(&mut db).await?;
     Post::create().title("Hello").exec(&mut db).await?;
 
-    let (users, posts): (Vec<User>, Vec<Post>) = toasty::batch((
+    let (users, posts): (Vec<User>, Vec<Post>) = toasty::stmt::batch((
         User::filter_by_name("Alice"),
         Post::filter_by_title("Hello"),
     ))
@@ -27,7 +27,7 @@ pub async fn batch_one_empty(t: &mut Test) -> Result<()> {
 
     User::create().name("Alice").exec(&mut db).await?;
 
-    let (users, posts): (Vec<User>, Vec<Post>) = toasty::batch((
+    let (users, posts): (Vec<User>, Vec<Post>) = toasty::stmt::batch((
         User::filter_by_name("Alice"),
         Post::filter_by_title("nonexistent"),
     ))
@@ -49,7 +49,7 @@ pub async fn batch_same_model(t: &mut Test) -> Result<()> {
     User::create().name("Carol").exec(&mut db).await?;
 
     let (alices, bobs): (Vec<User>, Vec<User>) =
-        toasty::batch((User::filter_by_name("Alice"), User::filter_by_name("Bob")))
+        toasty::stmt::batch((User::filter_by_name("Alice"), User::filter_by_name("Bob")))
             .exec(&mut db)
             .await?;
 
@@ -67,7 +67,7 @@ pub async fn batch_three_queries(t: &mut Test) -> Result<()> {
     User::create().name("Bob").exec(&mut db).await?;
     User::create().name("Carol").exec(&mut db).await?;
 
-    let (alices, bobs, carols): (Vec<User>, Vec<User>, Vec<User>) = toasty::batch((
+    let (alices, bobs, carols): (Vec<User>, Vec<User>, Vec<User>) = toasty::stmt::batch((
         User::filter_by_name("Alice"),
         User::filter_by_name("Bob"),
         User::filter_by_name("Carol"),
@@ -86,7 +86,7 @@ pub async fn batch_three_queries(t: &mut Test) -> Result<()> {
 pub async fn batch_both_empty(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
-    let (users, posts): (Vec<User>, Vec<Post>) = toasty::batch((
+    let (users, posts): (Vec<User>, Vec<Post>) = toasty::stmt::batch((
         User::filter_by_name("nobody"),
         Post::filter_by_title("nothing"),
     ))
@@ -106,7 +106,7 @@ pub async fn batch_select_and_create(t: &mut Test) -> Result<()> {
     User::create().name("Alice").exec(&mut db).await?;
 
     let (users, created): (Vec<User>, User) =
-        toasty::batch((User::filter_by_name("Alice"), User::create().name("Bob")))
+        toasty::stmt::batch((User::filter_by_name("Alice"), User::create().name("Bob")))
             .exec(&mut db)
             .await?;
 

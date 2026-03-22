@@ -1,6 +1,6 @@
 # Batch Operations
 
-`toasty::batch()` executes multiple queries or creates in a single database
+`toasty::stmt::batch()` executes multiple queries or creates in a single database
 round-trip. Instead of sending each query separately, Toasty combines them into
 one composed statement.
 
@@ -16,7 +16,7 @@ and make decisions based on those reads within the same atomic scope.
 
 ## Batching queries with tuples
 
-Pass a tuple of queries to `toasty::batch()`. The return type matches the tuple
+Pass a tuple of queries to `toasty::stmt::batch()`. The return type matches the tuple
 structure:
 
 ```rust
@@ -38,7 +38,7 @@ structure:
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let (users, posts): (Vec<User>, Vec<Post>) = toasty::batch((
+let (users, posts): (Vec<User>, Vec<Post>) = toasty::stmt::batch((
     User::filter_by_name("Alice"),
     Post::filter_by_title("Hello"),
 ))
@@ -65,7 +65,7 @@ You can batch queries for the same model too:
 #     name: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let (alices, bobs): (Vec<User>, Vec<User>) = toasty::batch((
+let (alices, bobs): (Vec<User>, Vec<User>) = toasty::stmt::batch((
     User::filter_by_name("Alice"),
     User::filter_by_name("Bob"),
 ))
@@ -91,7 +91,7 @@ The return type is `Vec<Vec<Model>>` — one inner `Vec` per query:
 #     name: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let results: Vec<Vec<User>> = toasty::batch([
+let results: Vec<Vec<User>> = toasty::stmt::batch([
     User::filter_by_name("Alice"),
     User::filter_by_name("Bob"),
     User::filter_by_name("Carol"),
@@ -114,14 +114,14 @@ let queries: Vec<_> = names
     .map(|n| User::filter_by_name(*n))
     .collect();
 
-let results: Vec<Vec<User>> = toasty::batch(queries)
+let results: Vec<Vec<User>> = toasty::stmt::batch(queries)
     .exec(&mut db)
     .await?;
 ```
 
 ## Batching creates
 
-`toasty::batch()` also accepts create builders. Mix creates and queries in the
+`toasty::stmt::batch()` also accepts create builders. Mix creates and queries in the
 same batch using tuples:
 
 ```rust
@@ -141,7 +141,7 @@ same batch using tuples:
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let (user, post): (User, Post) = toasty::batch((
+let (user, post): (User, Post) = toasty::stmt::batch((
     User::create().name("Alice"),
     Post::create().title("Hello World"),
 ))

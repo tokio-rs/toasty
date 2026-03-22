@@ -157,8 +157,8 @@ impl Expand<'_> {
                             }
 
                             /// Closure-based variant: build a collection of nested items using `CreateMany::with_item`.
-                            #vis fn #with_ident(mut self, f: impl ::std::ops::FnOnce(#toasty::CreateMany<#rel_model>) -> #toasty::CreateMany<#rel_model>) -> Self {
-                                let many = f(#toasty::CreateMany::new());
+                            #vis fn #with_ident(mut self, f: impl ::std::ops::FnOnce(#toasty::stmt::CreateMany<#rel_model>) -> #toasty::stmt::CreateMany<#rel_model>) -> Self {
+                                let many = f(#toasty::stmt::CreateMany::new());
                                 self.stmt.insert_all(#index_tokenized, many.into_expr());
                                 self
                             }
