@@ -6,18 +6,21 @@ use crate::{
 use std::{fmt, marker::PhantomData};
 use toasty_core::stmt::{self, Offset};
 
-/// A typed query that selects records of model `M`.
+/// A typed query that selects records from the database.
 ///
-/// `Query` is the main builder for read operations. It wraps an untyped
-/// [`stmt::Query`](toasty_core::stmt::Query) and provides methods to add
-/// filters, ordering, limits, and includes.
+/// The type parameter `T` is the **returning type** — it encodes what
+/// `exec()` produces, not just which model is being queried. A `Query` starts
+/// as `Query<List<M>>` (returns `Vec<M>`) and can be narrowed:
 ///
-/// - `Query<List<M>>` — a list query returning multiple records (single: false).
-/// - `Query<M>` — a single-model query (single: true).
+/// | Type | `exec()` produces | Created by |
+/// |---|---|---|
+/// | `Query<List<M>>` | `Vec<M>` | [`Query::all`], [`Query::filter`] |
+/// | `Query<M>` | `M` (errors if missing) | [`.one()`](Query::one) |
+/// | `Query<Option<M>>` | `Option<M>` | [`.first()`](Query::first) |
 ///
 /// # Building queries
 ///
-/// Start with a generated finder (e.g., `User::find_by_name("Alice")`) or
+/// Start with a generated finder (e.g., `User::filter_by_name("Alice")`) or
 /// use [`Query::all`] / [`Query::filter`] directly:
 ///
 /// ```

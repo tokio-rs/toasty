@@ -6,11 +6,16 @@ use crate::{
 use std::{fmt, marker::PhantomData};
 use toasty_core::stmt;
 
-/// A typed update statement for model `M`.
+/// A typed update statement.
 ///
 /// `Update` modifies records matching a selection (typically derived from a
 /// [`Query`]). Field assignments are added with [`set`](Update::set),
 /// [`insert`](Update::insert), and [`remove`](Update::remove).
+///
+/// The type parameter `T` is the **returning type** — it determines what
+/// `exec()` produces, not which model is being updated. For example,
+/// `Update<User>` returns the updated `User` (single-row update), while
+/// `Update<List<User>>` returns the updated records as `Vec<User>`.
 ///
 /// Generated update-builders wrap this type and expose typed setter methods.
 /// You rarely construct `Update` by hand.

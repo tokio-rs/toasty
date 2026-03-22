@@ -68,14 +68,12 @@ impl Expand<'_> {
 
                 /// Add an item to the association
                 #vis async fn insert(self, executor: &mut dyn #toasty::Executor, item: impl #toasty::IntoExpr<#toasty::List<#model_ident>>) -> #toasty::Result<()> {
-                    let _ = executor.exec(self.stmt.insert(item)).await?;
-                    Ok(())
+                    executor.exec(self.stmt.insert(item)).await
                 }
 
                 /// Remove items from the association
                 #vis async fn remove(self, executor: &mut dyn #toasty::Executor, item: impl #toasty::IntoExpr<#model_ident>) -> #toasty::Result<()> {
-                    let stmt: #toasty::Statement<()> = self.stmt.remove(item).cast();
-                    executor.exec(stmt).await
+                    executor.exec(self.stmt.remove(item)).await
                 }
             }
 

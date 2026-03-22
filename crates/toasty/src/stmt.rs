@@ -45,24 +45,33 @@ use std::{fmt, marker::PhantomData};
 
 /// A typed wrapper around an untyped [`stmt::Statement`](toasty_core::stmt::Statement).
 ///
-/// `Statement<M>` pairs a raw statement AST node with a type `M` that tracks
-/// what the statement returns when executed. For example:
+/// The type parameter `T` is the **returning type** — the type produced when the
+/// statement is executed — not the model the statement operates on. For example,
+/// a query that selects `User` records returns `List<User>`, so its statement
+/// type is `Statement<List<User>>`, not `Statement<User>`.
 ///
-/// - `Statement<List<User>>` — a query returning a collection of `User` records.
-/// - `Statement<User>` — an insert returning the newly created `User`.
-/// - `Statement<()>` — a delete returning nothing.
+/// Common returning types:
+///
+/// | Statement kind | `T` | `exec()` produces |
+/// |---|---|---|
+/// | Multi-row query | [`List<M>`] | `Vec<M>` |
+/// | Single-row query (`.one()`) | `M` | `M` |
+/// | Optional query (`.first()`) | `Option<M>` | `Option<M>` |
+/// | Insert (create) | `M` | `M` |
+/// | Delete | `()` | `()` |
+/// | Update | `()` | `()` |
 ///
 /// You rarely construct `Statement` directly. Instead, use the [`From`]
 /// implementations to convert from [`Query`], [`Insert`], [`Update`], or
 /// [`Delete`], or call [`IntoStatement::into_statement`] on a query builder.
-pub struct Statement<M> {
+pub struct Statement<T> {
     pub(crate) untyped: stmt::Statement,
-    _p: PhantomData<M>,
+    _p: PhantomData<T>,
 }
 
 impl<T> Statement<T> {
     /// Wrap a raw untyped [`stmt::Statement`](toasty_core::stmt::Statement),
-    /// tagging it with type `M`.
+    /// tagging it with returning type `T`.
     ///
     /// # Examples
     ///
@@ -75,14 +84,6 @@ impl<T> Statement<T> {
     pub fn from_untyped_stmt(untyped: stmt::Statement) -> Self {
         Self {
             untyped,
-            _p: PhantomData,
-        }
-    }
-
-    /// Change the type tag without altering the underlying untyped statement.
-    pub fn cast<U>(self) -> Statement<U> {
-        Statement {
-            untyped: self.untyped,
             _p: PhantomData,
         }
     }

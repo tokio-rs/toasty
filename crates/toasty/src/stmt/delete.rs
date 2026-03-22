@@ -5,11 +5,12 @@ use toasty_core::stmt;
 
 /// A typed delete statement.
 ///
-/// `Delete<T>` removes records that match the selection built by
-/// the originating [`Query`]. Obtain one by calling [`Query::delete`].
+/// `Delete<T>` removes records that match the selection built by the
+/// originating [`Query`]. Obtain one by calling [`Query::delete`].
 ///
-/// - `Delete<List<M>>` — deletes multiple records (from a list query).
-/// - `Delete<M>` — deletes a single record.
+/// The type parameter `T` is the **returning type**, not the model being
+/// deleted. Currently `Query::delete` always produces `Delete<()>` because
+/// deletes do not return the removed records.
 ///
 /// # Execution
 ///

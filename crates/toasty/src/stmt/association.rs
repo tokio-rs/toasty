@@ -8,10 +8,11 @@ use toasty_core::stmt;
 /// `Association` represents a link between a source model and a target model,
 /// such as a has-many or belongs-to relation. It wraps an untyped
 /// [`stmt::Association`](toasty_core::stmt::Association) and carries a type `T`
-/// that encodes the target:
+/// that encodes the **returning type** — what executing the association query
+/// produces:
 ///
-/// - `Association<List<M>>` — a has-many relation returning multiple `M` records.
-/// - `Association<M>` — a has-one or belongs-to relation returning a single `M`.
+/// - `Association<List<M>>` — a has-many relation, returns `Vec<M>`.
+/// - `Association<M>` — a has-one or belongs-to relation, returns `M`.
 ///
 /// Associations are constructed by generated code (see [`many`](Association::many),
 /// [`many_via_one`](Association::many_via_one), and [`one`](Association::one)).
@@ -135,7 +136,7 @@ impl<M: Model> Association<List<M>> {
     /// let new_todo = Insert::<Todo>::blank_single();
     /// let _stmt = assoc.insert(new_todo.into_list_expr());
     /// ```
-    pub fn insert(self, expr: impl IntoExpr<List<M>>) -> Statement<M> {
+    pub fn insert(self, expr: impl IntoExpr<List<M>>) -> Statement<()> {
         let [index] = self.untyped.path.projection.as_slice() else {
             todo!()
         };
@@ -182,7 +183,7 @@ impl<M: Model> Association<List<M>> {
     /// );
     /// let _stmt = assoc.remove(todo_expr);
     /// ```
-    pub fn remove(self, expr: impl IntoExpr<M>) -> Statement<M> {
+    pub fn remove(self, expr: impl IntoExpr<M>) -> Statement<()> {
         let [index] = self.untyped.path.projection.as_slice() else {
             todo!()
         };
