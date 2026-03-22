@@ -761,7 +761,7 @@ pub fn query(_input: TokenStream) -> TokenStream {
 /// // users: Vec<User>
 /// ```
 ///
-/// ## Heterogeneous tuple
+/// ## Tuple
 ///
 /// ```ignore
 /// toasty::create!((
@@ -797,19 +797,6 @@ pub fn query(_input: TokenStream) -> TokenStream {
 /// .await?;
 /// // (Vec<User>, Post)
 /// ```
-///
-/// ## Legacy mixed batch
-///
-/// ```ignore
-/// toasty::create!([
-///     Type { fields },
-///     in expr { fields },
-///     ...
-/// ])
-/// ```
-///
-/// Expands to a tuple of create builders, one per item. Each item can be a
-/// typed creation or a scoped creation.
 ///
 /// # Field values
 ///

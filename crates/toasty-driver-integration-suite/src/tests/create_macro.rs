@@ -93,10 +93,10 @@ pub async fn create_macro_batch(test: &mut Test) -> Result<()> {
 }
 
 #[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
-pub async fn create_macro_tuple_heterogeneous(test: &mut Test) -> Result<()> {
+pub async fn create_macro_tuple(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
-    // Tuple syntax for heterogeneous creation — returns (User, Post)
+    // Tuple syntax — returns (User, Post)
     let (user, post) = toasty::create!((User { name: "Carl" }, Post { title: "Hello" },))
         .exec(&mut db)
         .await?;

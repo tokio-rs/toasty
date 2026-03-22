@@ -10,7 +10,7 @@ use syn::{braced, bracketed, parenthesized};
 /// - `Path { fields }`        — type-target creation
 /// - `in expr { fields }`     — scoped creation
 /// - `Path::[ {..}, {..} ]`   — typed batch
-/// - `( Item, Item, ... )`    — heterogeneous tuple (items are themselves `CreateItem`s)
+/// - `( Item, Item, ... )`    — tuple (items are themselves `CreateItem`s)
 pub(crate) enum CreateItem {
     /// `User { name: "Carl" }`
     Typed { path: syn::Path, fields: FieldSet },
@@ -74,7 +74,7 @@ impl Parse for CreateItem {
             })
         } else if input.peek(token::Bracket) {
             Err(input.error(
-                "unexpected `[` — use tuple syntax `(...)` for heterogeneous creation, \
+                "unexpected `[` — use tuple syntax `(...)` for tuple creation, \
                  or `Type::[...]` for same-type batch creation",
             ))
         } else if input.peek(syn::Token![in]) {
