@@ -423,10 +423,10 @@ mod tests {
 
         #[test]
         fn false_booleans_are_omitted() {
-            let json = serde_json::to_string(&base_column()).unwrap();
-            assert!(!json.contains("nullable"), "json: {json}");
-            assert!(!json.contains("primary_key"), "json: {json}");
-            assert!(!json.contains("auto_increment"), "json: {json}");
+            let toml = toml::to_string(&base_column()).unwrap();
+            assert!(!toml.contains("nullable"), "toml: {toml}");
+            assert!(!toml.contains("primary_key"), "toml: {toml}");
+            assert!(!toml.contains("auto_increment"), "toml: {toml}");
         }
 
         #[test]
@@ -435,8 +435,8 @@ mod tests {
                 nullable: true,
                 ..base_column()
             };
-            let json = serde_json::to_string(&col).unwrap();
-            assert!(json.contains("\"nullable\":true"), "json: {json}");
+            let toml = toml::to_string(&col).unwrap();
+            assert!(toml.contains("nullable = true"), "toml: {toml}");
         }
 
         #[test]
@@ -445,8 +445,8 @@ mod tests {
                 primary_key: true,
                 ..base_column()
             };
-            let json = serde_json::to_string(&col).unwrap();
-            assert!(json.contains("\"primary_key\":true"), "json: {json}");
+            let toml = toml::to_string(&col).unwrap();
+            assert!(toml.contains("primary_key = true"), "toml: {toml}");
         }
 
         #[test]
@@ -455,15 +455,14 @@ mod tests {
                 auto_increment: true,
                 ..base_column()
             };
-            let json = serde_json::to_string(&col).unwrap();
-            assert!(json.contains("\"auto_increment\":true"), "json: {json}");
+            let toml = toml::to_string(&col).unwrap();
+            assert!(toml.contains("auto_increment = true"), "toml: {toml}");
         }
 
         #[test]
         fn missing_bool_fields_deserialize_as_false() {
-            let json =
-                r#"{"id":{"table":0,"index":0},"name":"test","ty":"String","storage_ty":"Text"}"#;
-            let col: Column = serde_json::from_str(json).unwrap();
+            let toml = "name = \"test\"\nty = \"String\"\nstorage_ty = \"Text\"\n\n[id]\ntable = 0\nindex = 0\n";
+            let col: Column = toml::from_str(toml).unwrap();
             assert!(!col.nullable);
             assert!(!col.primary_key);
             assert!(!col.auto_increment);
@@ -477,8 +476,7 @@ mod tests {
                 auto_increment: true,
                 ..base_column()
             };
-            let decoded: Column =
-                serde_json::from_str(&serde_json::to_string(&original).unwrap()).unwrap();
+            let decoded: Column = toml::from_str(&toml::to_string(&original).unwrap()).unwrap();
             assert_eq!(original, decoded);
         }
     }

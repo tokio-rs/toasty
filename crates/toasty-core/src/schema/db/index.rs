@@ -747,9 +747,9 @@ mod tests {
 
         #[test]
         fn false_booleans_are_omitted() {
-            let json = serde_json::to_string(&base_index()).unwrap();
-            assert!(!json.contains("unique"), "json: {json}");
-            assert!(!json.contains("primary_key"), "json: {json}");
+            let toml = toml::to_string(&base_index()).unwrap();
+            assert!(!toml.contains("unique"), "toml: {toml}");
+            assert!(!toml.contains("primary_key"), "toml: {toml}");
         }
 
         #[test]
@@ -758,8 +758,8 @@ mod tests {
                 unique: true,
                 ..base_index()
             };
-            let json = serde_json::to_string(&idx).unwrap();
-            assert!(json.contains("\"unique\":true"), "json: {json}");
+            let toml = toml::to_string(&idx).unwrap();
+            assert!(toml.contains("unique = true"), "toml: {toml}");
         }
 
         #[test]
@@ -768,14 +768,14 @@ mod tests {
                 primary_key: true,
                 ..base_index()
             };
-            let json = serde_json::to_string(&idx).unwrap();
-            assert!(json.contains("\"primary_key\":true"), "json: {json}");
+            let toml = toml::to_string(&idx).unwrap();
+            assert!(toml.contains("primary_key = true"), "toml: {toml}");
         }
 
         #[test]
         fn missing_bool_fields_deserialize_as_false() {
-            let json = r#"{"id":{"table":0,"index":0},"name":"idx","on":0,"columns":[{"column":{"table":0,"index":0},"op":"Eq","scope":"Local"}]}"#;
-            let idx: Index = serde_json::from_str(json).unwrap();
+            let toml = "name = \"idx\"\non = 0\n\n[id]\ntable = 0\nindex = 0\n\n[[columns]]\nop = \"Eq\"\nscope = \"Local\"\n\n[columns.column]\ntable = 0\nindex = 0\n";
+            let idx: Index = toml::from_str(toml).unwrap();
             assert!(!idx.unique);
             assert!(!idx.primary_key);
         }
@@ -787,8 +787,7 @@ mod tests {
                 primary_key: true,
                 ..base_index()
             };
-            let decoded: Index =
-                serde_json::from_str(&serde_json::to_string(&original).unwrap()).unwrap();
+            let decoded: Index = toml::from_str(&toml::to_string(&original).unwrap()).unwrap();
             assert_eq!(decoded.unique, original.unique);
             assert_eq!(decoded.primary_key, original.primary_key);
             assert_eq!(decoded.name, original.name);
