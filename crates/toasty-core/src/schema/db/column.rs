@@ -63,7 +63,7 @@ pub struct Column {
 
 #[cfg(feature = "serde")]
 fn is_false(b: &bool) -> bool {
-    *b == false
+    !*b
 }
 
 /// Uniquely identifies a column within a schema.
