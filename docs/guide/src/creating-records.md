@@ -1,10 +1,13 @@
 # Creating Records
 
-Toasty provides the `toasty::create!` macro for inserting records. The macro
-uses struct-literal syntax, so creating a record looks like constructing a
-struct.
+Toasty provides two ways to create records: the `toasty::create!` macro and
+the create builder. The macro uses struct-literal syntax and expands to builder
+calls under the hood. Most code uses the macro; the builder is there when you
+need programmatic control (e.g., conditional fields).
 
 ## Creating a single record
+
+With the macro:
 
 ```rust
 # use toasty::Model;
@@ -30,9 +33,32 @@ println!("Created user with id: {}", user.id);
 # }
 ```
 
-`toasty::create!` returns a create builder. Call `.exec(&mut db)` on it to
-insert the row. The returned `User` instance has all fields set, including
-auto-generated ones like `id`.
+This expands to the equivalent builder code:
+
+```rust
+# use toasty::Model;
+# #[derive(Debug, toasty::Model)]
+# struct User {
+#     #[key]
+#     #[auto]
+#     id: u64,
+#     name: String,
+#     #[unique]
+#     email: String,
+# }
+# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
+let user = User::create()
+    .name("Alice")
+    .email("alice@example.com")
+    .exec(&mut db)
+    .await?;
+# Ok(())
+# }
+```
+
+Both return a create builder. Call `.exec(&mut db)` to insert the row. The
+returned `User` instance has all fields set, including auto-generated ones
+like `id`.
 
 The generated SQL looks like:
 
@@ -40,8 +66,8 @@ The generated SQL looks like:
 INSERT INTO users (name, email) VALUES ('Alice', 'alice@example.com');
 ```
 
-Field values can be any Rust expression — literals, variables, or function
-calls:
+Field values in the macro can be any Rust expression — literals, variables, or
+function calls:
 
 ```rust
 # use toasty::Model;
@@ -142,7 +168,8 @@ assert_eq!(todo.user_id, user.id);
 # }
 ```
 
-You don't need to set `user_id` — Toasty fills it in from the parent.
+You don't need to set `user_id` — Toasty fills it in from the parent. The
+macro expands to `user.todos().create().title("Buy groceries")`.
 
 ## Nested creation
 
@@ -184,6 +211,19 @@ let todos = user.todos().exec(&mut db).await?;
 assert_eq!(2, todos.len());
 # Ok(())
 # }
+```
+
+This expands to:
+
+```rust,ignore
+User::create()
+    .name("Alice")
+    .with_todos(|b| {
+        b.with_item(|b| b.title("Buy groceries"))
+         .with_item(|b| b.title("Write docs"))
+    })
+    .exec(&mut db)
+    .await?;
 ```
 
 Toasty creates the user first, then creates each todo with the user's ID
@@ -289,65 +329,11 @@ let builders: Vec<_> = names
 let users = toasty::batch(builders).exec(&mut db).await?;
 ```
 
-## How the macro maps to the builder
+## When to use the builder directly
 
-The `toasty::create!` macro is syntactic sugar over the generated create
-builder API. Each form in the macro expands to builder method calls:
-
-| Macro syntax | Builder equivalent |
-|---|---|
-| `toasty::create!(User { name: "Alice" })` | `User::create().name("Alice")` |
-| `toasty::create!(in user.todos() { title: "Buy milk" })` | `user.todos().create().title("Buy milk")` |
-| Nested `{ ... }` for BelongsTo/HasOne | `.with_field(|b| b.field_calls)` |
-| Nested `[{ ... }]` for HasMany | `.with_field(|b| b.with_item(...))` |
-
-For example, this macro call:
-
-```rust,ignore
-toasty::create!(User {
-    name: "Alice",
-    todos: [{ title: "Buy groceries" }, { title: "Write docs" }],
-})
-```
-
-expands to:
-
-```rust,ignore
-User::create()
-    .name("Alice")
-    .with_todos(|b| {
-        b.with_item(|b| b.title("Buy groceries"))
-         .with_item(|b| b.title("Write docs"))
-    })
-```
-
-## Using the builder directly
-
-You can use the create builder without the macro. Call `Model::create()`,
-chain setter methods for each field, and call `.exec(&mut db)`:
-
-```rust
-# use toasty::Model;
-# #[derive(Debug, toasty::Model)]
-# struct User {
-#     #[key]
-#     #[auto]
-#     id: u64,
-#     name: String,
-#     #[unique]
-#     email: String,
-# }
-# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let user = User::create()
-    .name("Alice")
-    .email("alice@example.com")
-    .exec(&mut db)
-    .await?;
-# Ok(())
-# }
-```
-
-The builder is useful when you need to conditionally set fields:
+The macro covers the common case. Use the builder directly when you need to
+conditionally set fields, since the macro requires all fields to be specified
+in the struct literal:
 
 ```rust
 # use toasty::Model;
@@ -371,82 +357,16 @@ let user = builder.exec(&mut db).await?;
 # }
 ```
 
-The macro does not support conditional field assignment — use the builder
-directly for that.
+## Macro-to-builder reference
 
-### Nested creation with the builder
+Each macro form has a direct builder equivalent:
 
-Use the singular form of the relation name to add children:
-
-```rust
-# use toasty::Model;
-# #[derive(Debug, toasty::Model)]
-# struct User {
-#     #[key]
-#     #[auto]
-#     id: u64,
-#     name: String,
-#     #[has_many]
-#     todos: toasty::HasMany<Todo>,
-# }
-# #[derive(Debug, toasty::Model)]
-# struct Todo {
-#     #[key]
-#     #[auto]
-#     id: u64,
-#     #[index]
-#     user_id: u64,
-#     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<User>,
-#     title: String,
-# }
-# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let user = User::create()
-    .name("Alice")
-    .todo(Todo::create().title("Buy groceries"))
-    .todo(Todo::create().title("Write docs"))
-    .exec(&mut db)
-    .await?;
-# Ok(())
-# }
-```
-
-### Batch creation with the builder
-
-Pass an array of create builders to `toasty::batch()`:
-
-```rust
-# use toasty::Model;
-# #[derive(Debug, toasty::Model)]
-# struct User {
-#     #[key]
-#     #[auto]
-#     id: u64,
-#     name: String,
-#     #[unique]
-#     email: String,
-# }
-# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let users = toasty::batch([
-    User::create().name("Alice").email("alice@example.com"),
-    User::create().name("Bob").email("bob@example.com"),
-])
-.exec(&mut db)
-.await?;
-# Ok(())
-# }
-```
-
-Or use tuples for mixed models:
-
-```rust,ignore
-let (user, post): (User, Post) = toasty::batch((
-    User::create().name("Alice"),
-    Post::create().title("Hello World"),
-))
-.exec(&mut db)
-.await?;
-```
+| Macro syntax | Builder equivalent |
+|---|---|
+| `toasty::create!(User { name: "Alice" })` | `User::create().name("Alice")` |
+| `toasty::create!(in user.todos() { title: "Buy milk" })` | `user.todos().create().title("Buy milk")` |
+| Nested `{ ... }` for BelongsTo/HasOne | `.with_field(\|b\| b.field_calls)` |
+| Nested `[{ ... }]` for HasMany | `.with_field(\|b\| b.with_item(...))` |
 
 ## What gets generated
 
