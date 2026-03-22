@@ -24,6 +24,16 @@ pub struct Update<T> {
 
 // Methods available on all Update<M> regardless of M
 impl<T> Update<T> {
+    pub fn new(selection: Query<T>) -> Self {
+        let mut stmt = selection.untyped.update();
+        stmt.returning = Some(stmt::Returning::Changed);
+
+        Self {
+            untyped: stmt,
+            _p: PhantomData,
+        }
+    }
+
     /// Wrap a raw untyped [`stmt::Update`](toasty_core::stmt::Update).
     ///
     /// # Examples
@@ -181,48 +191,6 @@ impl<T> Update<T> {
 impl<T: Load> Update<T> {
     pub async fn exec(self, executor: &mut dyn Executor) -> Result<T::Output> {
         executor.exec(self.into()).await
-    }
-}
-
-/// Construct an `Update<List<M>>` for query-based updates that can affect
-/// multiple rows.
-impl<M: Model> Update<List<M>> {
-    pub fn new(mut selection: Query<List<M>>) -> Self {
-        if let stmt::ExprSet::Values(values) = &mut selection.untyped.body {
-            let rows = std::mem::take(&mut values.rows);
-            let filter = stmt::Expr::in_list(stmt::Expr::ref_ancestor_model(0), rows);
-            selection.untyped.body =
-                stmt::ExprSet::Select(Box::new(stmt::Select::new(M::id(), filter)));
-        }
-
-        let mut stmt = selection.untyped.update();
-        stmt.returning = Some(stmt::Returning::Changed);
-
-        Self {
-            untyped: stmt,
-            _p: PhantomData,
-        }
-    }
-}
-
-/// Construct an `Update<M>` for single-instance updates that return exactly
-/// one row.
-impl<M: Model> Update<M> {
-    pub fn new_single(mut selection: Query<M>) -> Self {
-        if let stmt::ExprSet::Values(values) = &mut selection.untyped.body {
-            let rows = std::mem::take(&mut values.rows);
-            let filter = stmt::Expr::in_list(stmt::Expr::ref_ancestor_model(0), rows);
-            selection.untyped.body =
-                stmt::ExprSet::Select(Box::new(stmt::Select::new(M::id(), filter)));
-        }
-
-        let mut stmt = selection.untyped.update();
-        stmt.returning = Some(stmt::Returning::Changed);
-
-        Self {
-            untyped: stmt,
-            _p: PhantomData,
-        }
     }
 }
 

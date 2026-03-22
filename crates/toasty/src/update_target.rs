@@ -28,6 +28,6 @@ pub trait UpdateTarget {
     /// Apply the result of an update operation.
     ///
     /// For query-based updates, this discards the values.
-    /// For instance updates, this reloads the model from the first value.
-    fn apply_result(self, values: Vec<Value>) -> Result<()>;
+    /// For instance updates, this reloads the model from the value.
+    fn apply_result(self, value: Value) -> Result<()>;
 }

@@ -182,34 +182,7 @@ impl<'a> Executor for Transaction<'a> {
     }
 
     async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> Result<Value> {
-        let returns_list = match &stmt {
-            toasty_core::stmt::Statement::Query(q) => !q.single,
-            toasty_core::stmt::Statement::Insert(i) => !i.source.single,
-            _ => false,
-        };
-
-        let (tx, rx) = oneshot::channel();
-
-        let conn = self.db.connection().await?;
-        conn.in_tx
-            .send(ConnectionOperation::ExecStatement {
-                stmt: Box::new(stmt),
-                in_transaction: true,
-                tx,
-            })
-            .unwrap();
-
-        let mut stream = rx.await.unwrap()?;
-
-        if returns_list {
-            let values = stream.collect().await?;
-            Ok(Value::List(values))
-        } else {
-            match stream.next().await {
-                Some(value) => value,
-                None => Ok(Value::Null),
-            }
-        }
+        self.db.exec_untyped(stmt).await
     }
 
     fn schema(&mut self) -> &Arc<Schema> {

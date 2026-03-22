@@ -234,7 +234,7 @@ impl Expand<'_> {
                     use #toasty::UpdateTarget as _;
                     let stmt = self.target.to_update_stmt(self.assignments);
                     let value = executor.exec_untyped(stmt.into_untyped_stmt()).await?;
-                    self.target.apply_result(vec![value])?;
+                    self.target.apply_result(value)?;
                     Ok(())
                 }
             }
@@ -248,17 +248,14 @@ impl Expand<'_> {
                     assignments: #toasty::core::stmt::Assignments,
                 ) -> #toasty::stmt::Update<#model_ident> {
                     use #toasty::IntoStatement;
-                    let mut stmt = #toasty::stmt::Update::new_single(
+                    let mut stmt = #toasty::stmt::Update::new(
                         (&**self).into_statement().into_query().unwrap()
                     );
                     stmt.set_assignments(assignments);
                     stmt
                 }
 
-                fn apply_result(self, mut values: ::std::vec::Vec<#toasty::core::stmt::Value>) -> #toasty::Result<()> {
-                    let value = values.into_iter()
-                        .next()
-                        .ok_or_else(|| #toasty::Error::record_not_found("update returned no results"))?;
+                fn apply_result(self, value: #toasty::core::stmt::Value) -> #toasty::Result<()> {
                     self.reload(value)
                 }
             }
@@ -280,7 +277,7 @@ impl Expand<'_> {
                     stmt
                 }
 
-                fn apply_result(self, _values: ::std::vec::Vec<#toasty::core::stmt::Value>) -> #toasty::Result<()> {
+                fn apply_result(self, _values: #toasty::core::stmt::Value) -> #toasty::Result<()> {
                     Ok(())
                 }
             }
