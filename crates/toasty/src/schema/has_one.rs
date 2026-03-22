@@ -11,11 +11,12 @@ pub struct HasOne<T> {
 
 impl<T: Relation> Load for HasOne<T> {
     type Output = Self;
+
     fn load(input: Value) -> crate::Result<Self> {
         Ok(match input {
             Value::Null => Self::default(),
             value => Self {
-                value: Some(Box::new(T::load(value)?)),
+                value: Some(Box::new(T::load_relation(value)?)),
             },
         })
     }

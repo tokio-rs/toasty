@@ -11,13 +11,14 @@ pub struct HasMany<T> {
 
 impl<T: Relation> Load for HasMany<T> {
     type Output = Self;
+
     fn load(input: Value) -> crate::Result<Self> {
         match input {
             Value::List(items) => {
                 let mut values = vec![];
 
                 for value in items {
-                    values.push(T::load(value)?);
+                    values.push(T::load_relation(value)?);
                 }
 
                 Ok(Self {
