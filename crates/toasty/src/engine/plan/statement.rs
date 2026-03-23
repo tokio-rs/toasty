@@ -719,9 +719,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             return Some(
                 self.insert_const(
                     rows,
-                    self.planner
-                        .engine
-                        .infer_record_list_ty(stmt, &self.load_data.select_items),
+                    self.load_data
+                        .select_items
+                        .infer_record_list_ty(&self.planner.engine.expr_cx_for(stmt)),
                 ),
             );
         }
@@ -873,9 +873,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         }
 
         let ty = self
-            .planner
-            .engine
-            .infer_record_list_ty(stmt, &self.load_data.select_items);
+            .load_data
+            .select_items
+            .infer_record_list_ty(&self.planner.engine.expr_cx_for(stmt));
 
         Some((stmt::Value::List(result), ty))
     }
@@ -1105,9 +1105,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 stmt::Type::Unit
             }
         } else {
-            self.planner
-                .engine
-                .infer_record_list_ty(&stmt, &self.load_data.select_items)
+            self.load_data
+                .select_items
+                .infer_record_list_ty(&self.planner.engine.expr_cx_for(&stmt))
         };
 
         let node_id = if index_plan.index.primary_key {

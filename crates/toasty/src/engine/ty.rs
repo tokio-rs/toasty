@@ -1,4 +1,4 @@
-use super::{Engine, SelectItem};
+use super::Engine;
 use toasty_core::{schema::db::Index, stmt};
 
 impl Engine {
@@ -13,16 +13,5 @@ impl Engine {
             .map(|id| self.schema.db.column(id.column).ty.clone())
             .collect();
         stmt::Type::Record(field_tys)
-    }
-
-    /// Returns `Type::List(Type::Record(field_tys))` where each `field_ty` is
-    /// inferred from the corresponding select item in `items`.
-    pub(crate) fn infer_record_list_ty<'a, T>(&self, cx: &stmt::Statement, items: T) -> stmt::Type
-    where
-        T: IntoIterator<Item = &'a SelectItem>,
-    {
-        let cx = self.expr_cx_for(cx);
-        let field_tys = items.into_iter().map(|item| item.infer_ty(&cx)).collect();
-        stmt::Type::list(stmt::Type::Record(field_tys))
     }
 }

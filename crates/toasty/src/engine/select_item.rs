@@ -84,6 +84,13 @@ impl SelectItems {
         self.0.get_index_of(&SelectItem::CountStar).unwrap()
     }
 
+    /// Returns `Type::List(Type::Record(field_tys))` where each `field_ty` is
+    /// inferred from the corresponding select item.
+    pub(crate) fn infer_record_list_ty(&self, cx: &stmt::ExprContext<'_>) -> stmt::Type {
+        let field_tys = self.0.iter().map(|item| item.infer_ty(cx)).collect();
+        stmt::Type::list(stmt::Type::Record(field_tys))
+    }
+
     /// Extract only the `ExprReference` items from this set.
     ///
     /// Used by the NoSQL path where only column references are valid.

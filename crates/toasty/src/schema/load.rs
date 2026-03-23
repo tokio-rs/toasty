@@ -33,7 +33,6 @@ impl Load for u64 {
     fn load(value: stmt::Value) -> Result<Self::Output, Error> {
         match value {
             stmt::Value::U64(n) => Ok(n),
-            stmt::Value::I64(n) => Ok(n as u64),
             _ => Err(Error::type_conversion(value, "u64")),
         }
     }
