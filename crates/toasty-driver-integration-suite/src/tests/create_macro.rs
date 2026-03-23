@@ -111,7 +111,7 @@ pub async fn create_macro_tuple(test: &mut Test) -> Result<()> {
 pub async fn create_macro_tuple_mixed(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
-    // Mixed tuple: homogeneous batch + single create — returns (Vec<User>, Post)
+    // Mixed tuple: typed batch + single create — returns (Vec<User>, Post)
     let (users, post) = toasty::create!((
         User::[ { name: "Carl" }, { name: "Bob" } ],
         Post { title: "Hello" },

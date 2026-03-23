@@ -742,7 +742,7 @@ pub fn query(_input: TokenStream) -> TokenStream {
 /// // todo.user_id == user.id
 /// ```
 ///
-/// ## Homogeneous batch
+/// ## Typed batch
 ///
 /// ```ignore
 /// toasty::create!(Type::[ { fields }, { fields }, ... ])
@@ -786,7 +786,7 @@ pub fn query(_input: TokenStream) -> TokenStream {
 ///
 /// ## Mixed tuple
 ///
-/// Homogeneous batches and single creates can be mixed inside a tuple:
+/// Typed batches and single creates can be mixed inside a tuple:
 ///
 /// ```ignore
 /// let (users, post) = toasty::create!((
