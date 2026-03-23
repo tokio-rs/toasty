@@ -41,258 +41,450 @@ pub trait Visit {
         i.visit(self);
     }
 
+    /// Visits an [`Assignment`] node.
+    ///
+    /// The default implementation delegates to [`visit_assignment`].
     fn visit_assignment(&mut self, i: &Assignment) {
         visit_assignment(self, i);
     }
 
+    /// Visits an [`Assignments`] node.
+    ///
+    /// The default implementation delegates to [`visit_assignments`].
     fn visit_assignments(&mut self, i: &Assignments) {
         visit_assignments(self, i);
     }
 
+    /// Visits an [`Association`] node.
+    ///
+    /// The default implementation delegates to [`visit_association`].
     fn visit_association(&mut self, i: &Association) {
         visit_association(self, i);
     }
 
+    /// Visits a [`Cte`] (common table expression) node.
+    ///
+    /// The default implementation delegates to [`visit_cte`].
     fn visit_cte(&mut self, i: &Cte) {
         visit_cte(self, i);
     }
 
+    /// Visits an [`Expr`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr`].
     fn visit_expr(&mut self, i: &Expr) {
         visit_expr(self, i);
     }
 
+    /// Visits an [`ExprAnd`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_and`].
     fn visit_expr_and(&mut self, i: &ExprAnd) {
         visit_expr_and(self, i);
     }
 
+    /// Visits an [`ExprAny`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_any`].
     fn visit_expr_any(&mut self, i: &ExprAny) {
         visit_expr_any(self, i);
     }
 
+    /// Visits an [`ExprArg`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_arg`].
     fn visit_expr_arg(&mut self, i: &ExprArg) {
         visit_expr_arg(self, i);
     }
 
+    /// Visits an [`ExprBinaryOp`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_binary_op`].
     fn visit_expr_binary_op(&mut self, i: &ExprBinaryOp) {
         visit_expr_binary_op(self, i);
     }
 
+    /// Visits an [`ExprCast`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_cast`].
     fn visit_expr_cast(&mut self, i: &ExprCast) {
         visit_expr_cast(self, i);
     }
 
+    /// Visits an [`ExprColumn`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_column`].
     fn visit_expr_column(&mut self, i: &ExprColumn) {
         visit_expr_column(self, i);
     }
 
+    /// Visits a default expression (no associated data).
+    ///
+    /// The default implementation delegates to [`visit_expr_default`].
     fn visit_expr_default(&mut self) {
         visit_expr_default(self);
     }
 
+    /// Visits an [`ExprError`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_error`].
     fn visit_expr_error(&mut self, i: &ExprError) {
         visit_expr_error(self, i);
     }
 
+    /// Visits an [`ExprExists`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_exists`].
     fn visit_expr_exists(&mut self, i: &ExprExists) {
         visit_expr_exists(self, i);
     }
 
+    /// Visits an [`ExprFunc`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_func`].
     fn visit_expr_func(&mut self, i: &ExprFunc) {
         visit_expr_func(self, i);
     }
 
+    /// Visits a [`FuncCount`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_func_count`].
     fn visit_expr_func_count(&mut self, i: &FuncCount) {
         visit_expr_func_count(self, i);
     }
 
+    /// Visits a [`FuncLastInsertId`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_func_last_insert_id`].
     fn visit_expr_func_last_insert_id(&mut self, i: &FuncLastInsertId) {
         visit_expr_func_last_insert_id(self, i);
     }
 
+    /// Visits an [`ExprInList`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_in_list`].
     fn visit_expr_in_list(&mut self, i: &ExprInList) {
         visit_expr_in_list(self, i);
     }
 
+    /// Visits an [`ExprInSubquery`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_in_subquery`].
     fn visit_expr_in_subquery(&mut self, i: &ExprInSubquery) {
         visit_expr_in_subquery(self, i);
     }
 
+    /// Visits an [`ExprIsNull`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_is_null`].
     fn visit_expr_is_null(&mut self, i: &ExprIsNull) {
         visit_expr_is_null(self, i);
     }
 
+    /// Visits an [`ExprIsVariant`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_is_variant`].
     fn visit_expr_is_variant(&mut self, i: &ExprIsVariant) {
         visit_expr_is_variant(self, i);
     }
 
+    /// Visits an [`ExprLet`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_let`].
     fn visit_expr_let(&mut self, i: &ExprLet) {
         visit_expr_let(self, i);
     }
 
+    /// Visits an [`ExprMap`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_map`].
     fn visit_expr_map(&mut self, i: &ExprMap) {
         visit_expr_map(self, i);
     }
 
+    /// Visits an [`ExprMatch`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_match`].
     fn visit_expr_match(&mut self, i: &ExprMatch) {
         visit_expr_match(self, i);
     }
 
+    /// Visits an [`ExprNot`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_not`].
     fn visit_expr_not(&mut self, i: &ExprNot) {
         visit_expr_not(self, i);
     }
 
+    /// Visits an [`ExprOr`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_or`].
     fn visit_expr_or(&mut self, i: &ExprOr) {
         visit_expr_or(self, i);
     }
 
+    /// Visits an [`ExprList`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_list`].
     fn visit_expr_list(&mut self, i: &ExprList) {
         visit_expr_list(self, i);
     }
 
+    /// Visits an [`ExprRecord`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_record`].
     fn visit_expr_record(&mut self, i: &ExprRecord) {
         visit_expr_record(self, i);
     }
 
+    /// Visits an [`ExprReference`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_reference`].
     fn visit_expr_reference(&mut self, i: &ExprReference) {
         visit_expr_reference(self, i);
     }
 
+    /// Visits an [`ExprSet`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_set`].
     fn visit_expr_set(&mut self, i: &ExprSet) {
         visit_expr_set(self, i);
     }
 
+    /// Visits an [`ExprSetOp`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_set_op`].
     fn visit_expr_set_op(&mut self, i: &ExprSetOp) {
         visit_expr_set_op(self, i);
     }
 
+    /// Visits an [`ExprStmt`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_stmt`].
     fn visit_expr_stmt(&mut self, i: &ExprStmt) {
         visit_expr_stmt(self, i);
     }
 
+    /// Visits a [`Filter`] node.
+    ///
+    /// The default implementation delegates to [`visit_filter`].
     fn visit_filter(&mut self, i: &Filter) {
         visit_filter(self, i);
     }
 
+    /// Visits a [`Condition`] node.
+    ///
+    /// The default implementation delegates to [`visit_condition`].
     fn visit_condition(&mut self, i: &Condition) {
         visit_condition(self, i);
     }
 
+    /// Visits an [`ExprProject`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_project`].
     fn visit_expr_project(&mut self, i: &ExprProject) {
         visit_expr_project(self, i);
     }
 
+    /// Visits an [`InsertTarget`] node.
+    ///
+    /// The default implementation delegates to [`visit_insert_target`].
     fn visit_insert_target(&mut self, i: &InsertTarget) {
         visit_insert_target(self, i);
     }
 
+    /// Visits a [`Join`] node.
+    ///
+    /// The default implementation delegates to [`visit_join`].
     fn visit_join(&mut self, i: &Join) {
         visit_join(self, i);
     }
 
+    /// Visits a [`Limit`] node.
+    ///
+    /// The default implementation delegates to [`visit_limit`].
     fn visit_limit(&mut self, i: &Limit) {
         visit_limit(self, i);
     }
 
+    /// Visits an [`Offset`] node.
+    ///
+    /// The default implementation delegates to [`visit_offset`].
     fn visit_offset(&mut self, i: &Offset) {
         visit_offset(self, i);
     }
 
+    /// Visits an [`OrderBy`] node.
+    ///
+    /// The default implementation delegates to [`visit_order_by`].
     fn visit_order_by(&mut self, i: &OrderBy) {
         visit_order_by(self, i);
     }
 
+    /// Visits an [`OrderByExpr`] node.
+    ///
+    /// The default implementation delegates to [`visit_order_by_expr`].
     fn visit_order_by_expr(&mut self, i: &OrderByExpr) {
         visit_order_by_expr(self, i);
     }
 
+    /// Visits a [`Path`] node.
+    ///
+    /// The default implementation delegates to [`visit_path`].
     fn visit_path(&mut self, i: &Path) {
         visit_path(self, i);
     }
 
+    /// Visits a [`Projection`] node.
+    ///
+    /// The default implementation delegates to [`visit_projection`].
     fn visit_projection(&mut self, i: &Projection) {
         visit_projection(self, i);
     }
 
+    /// Visits a [`Returning`] node.
+    ///
+    /// The default implementation delegates to [`visit_returning`].
     fn visit_returning(&mut self, i: &Returning) {
         visit_returning(self, i);
     }
 
+    /// Visits a [`Source`] node.
+    ///
+    /// The default implementation delegates to [`visit_source`].
     fn visit_source(&mut self, i: &Source) {
         visit_source(self, i);
     }
 
+    /// Visits a [`SourceModel`] node.
+    ///
+    /// The default implementation delegates to [`visit_source_model`].
     fn visit_source_model(&mut self, i: &SourceModel) {
         visit_source_model(self, i);
     }
 
+    /// Visits a [`SourceTable`] node.
+    ///
+    /// The default implementation delegates to [`visit_source_table`].
     fn visit_source_table(&mut self, i: &SourceTable) {
         visit_source_table(self, i);
     }
 
+    /// Visits a [`SourceTableId`] node.
+    ///
+    /// The default implementation delegates to [`visit_source_table_id`].
     fn visit_source_table_id(&mut self, i: &SourceTableId) {
         visit_source_table_id(self, i);
     }
 
+    /// Visits a [`Statement`] node.
+    ///
+    /// The default implementation delegates to [`visit_stmt`].
     fn visit_stmt(&mut self, i: &Statement) {
         visit_stmt(self, i);
     }
 
+    /// Visits a [`Delete`] statement node.
+    ///
+    /// The default implementation delegates to [`visit_stmt_delete`].
     fn visit_stmt_delete(&mut self, i: &Delete) {
         visit_stmt_delete(self, i);
     }
 
+    /// Visits an [`Insert`] statement node.
+    ///
+    /// The default implementation delegates to [`visit_stmt_insert`].
     fn visit_stmt_insert(&mut self, i: &Insert) {
         visit_stmt_insert(self, i);
     }
 
+    /// Visits a [`Query`] statement node.
+    ///
+    /// The default implementation delegates to [`visit_stmt_query`].
     fn visit_stmt_query(&mut self, i: &Query) {
         visit_stmt_query(self, i);
     }
 
+    /// Visits a [`Select`] statement node.
+    ///
+    /// The default implementation delegates to [`visit_stmt_select`].
     fn visit_stmt_select(&mut self, i: &Select) {
         visit_stmt_select(self, i);
     }
 
+    /// Visits an [`Update`] statement node.
+    ///
+    /// The default implementation delegates to [`visit_stmt_update`].
     fn visit_stmt_update(&mut self, i: &Update) {
         visit_stmt_update(self, i);
     }
 
+    /// Visits a [`TableDerived`] node.
+    ///
+    /// The default implementation delegates to [`visit_table_derived`].
     fn visit_table_derived(&mut self, i: &TableDerived) {
         visit_table_derived(self, i);
     }
 
+    /// Visits a [`TableRef`] node.
+    ///
+    /// The default implementation delegates to [`visit_table_ref`].
     fn visit_table_ref(&mut self, i: &TableRef) {
         visit_table_ref(self, i);
     }
 
+    /// Visits a [`TableFactor`] node.
+    ///
+    /// The default implementation delegates to [`visit_table_factor`].
     fn visit_table_factor(&mut self, i: &TableFactor) {
         visit_table_factor(self, i);
     }
 
+    /// Visits a [`TableWithJoins`] node.
+    ///
+    /// The default implementation delegates to [`visit_table_with_joins`].
     fn visit_table_with_joins(&mut self, i: &TableWithJoins) {
         visit_table_with_joins(self, i);
     }
 
+    /// Visits a [`Type`] node.
+    ///
+    /// The default implementation delegates to [`visit_type`].
     fn visit_type(&mut self, i: &Type) {
         visit_type(self, i);
     }
 
+    /// Visits an [`UpdateTarget`] node.
+    ///
+    /// The default implementation delegates to [`visit_update_target`].
     fn visit_update_target(&mut self, i: &UpdateTarget) {
         visit_update_target(self, i);
     }
 
+    /// Visits a [`Value`] node.
+    ///
+    /// The default implementation delegates to [`visit_value`].
     fn visit_value(&mut self, i: &Value) {
         visit_value(self, i);
     }
 
+    /// Visits a [`ValueRecord`] node.
+    ///
+    /// The default implementation delegates to [`visit_value_record`].
     fn visit_value_record(&mut self, i: &ValueRecord) {
         visit_value_record(self, i);
     }
 
+    /// Visits a [`Values`] node.
+    ///
+    /// The default implementation delegates to [`visit_values`].
     fn visit_values(&mut self, i: &Values) {
         visit_values(self, i);
     }
 
+    /// Visits a [`With`] node.
+    ///
+    /// The default implementation delegates to [`visit_with`].
     fn visit_with(&mut self, i: &With) {
         visit_with(self, i);
     }

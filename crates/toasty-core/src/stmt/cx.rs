@@ -80,7 +80,12 @@ pub enum ResolvedRef<'a> {
     ///
     /// Example: In a WITH clause, resolving a reference to the second column of a CTE
     /// defined 1 level up returns Cte { nesting: 1, index: 1 }.
-    Cte { nesting: usize, index: usize },
+    Cte {
+        /// How many query scopes up from the current scope.
+        nesting: usize,
+        /// Column index within the CTE's output.
+        index: usize,
+    },
 
     /// A resolved reference to a derived table (subquery in FROM clause) column.
     ///
