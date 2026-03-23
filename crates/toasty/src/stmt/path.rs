@@ -73,11 +73,11 @@ impl<T, U> Path<T, U> {
     /// # use toasty_core::stmt as core_stmt;
     /// # use toasty_core::schema::app::ModelId;
     /// let raw = core_stmt::Path::model(ModelId(0));
-    /// let _typed = Path::<(), ()>::new(raw);
+    /// let _typed = Path::<(), ()>::from_untyped(raw);
     /// ```
-    pub const fn new(raw: stmt::Path) -> Self {
+    pub const fn from_untyped(untyped: stmt::Path) -> Self {
         Self {
-            untyped: raw,
+            untyped,
             _p: PhantomData,
         }
     }
