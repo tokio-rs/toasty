@@ -15,7 +15,9 @@ pub enum PathRoot {
     /// `parent` navigates to the enum field; subsequent projection steps index
     /// into that variant's fields using 0-based local indices.
     Variant {
+        /// Path that navigates to the enum field containing this variant.
         parent: Box<Path>,
+        /// Identifies which variant of the enum this path targets.
         variant_id: VariantId,
     },
 }

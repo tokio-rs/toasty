@@ -153,7 +153,7 @@ pub enum ExprTarget<'a> {
     /// Used primarily by database drivers
     Table(&'a Table),
 
-    // Reference statement targets directly
+    /// Expression references a source table (a FROM clause with table references).
     Source(&'a SourceTable),
 }
 

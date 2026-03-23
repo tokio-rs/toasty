@@ -116,7 +116,7 @@ pub enum Type {
     /// A fixed-length tuple where each item can have a different type.
     Record(Vec<Type>),
 
-    // An array of bytes that is more efficient than List(u8)
+    /// A byte array, more efficient than `List(U8)`.
     Bytes,
 
     /// A fixed-precision decimal number.

@@ -49,7 +49,9 @@ pub enum Transaction {
     /// When `isolation` is `None` and `read_only` is `false`, the database's
     /// default isolation level and read-write mode are used.
     Start {
+        /// Optional isolation level. `None` uses the database default.
         isolation: Option<IsolationLevel>,
+        /// When `true`, the transaction is read-only.
         read_only: bool,
     },
 

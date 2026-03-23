@@ -262,6 +262,7 @@ mod value_jiff;
 mod value_record;
 pub use value_record::ValueRecord;
 
+/// Mutable AST visitor trait and helpers.
 pub mod visit_mut;
 pub use visit_mut::VisitMut;
 
@@ -270,6 +271,7 @@ mod value_list;
 mod value_stream;
 pub use value_stream::ValueStream;
 
+/// Read-only AST visitor trait and helpers.
 pub mod visit;
 pub use visit::Visit;
 
