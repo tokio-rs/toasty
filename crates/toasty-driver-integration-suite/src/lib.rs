@@ -1,7 +1,7 @@
 #[macro_use]
 mod macros;
 #[macro_use]
-mod test_util;
+mod util;
 
 mod exec_log;
 pub use exec_log::ExecLog;
@@ -42,7 +42,7 @@ mod prelude {
     pub(crate) use toasty::Result;
     pub(crate) type BoxError = Box<dyn std::error::Error + 'static>;
 
-    pub(crate) use crate::test_util::{NumUtil, SliceUtil};
+    pub(crate) use crate::util::{NumUtil, SliceUtil};
     pub(crate) use assert_struct::assert_struct;
     pub(crate) use toasty_driver_integration_suite_macros::{driver_test, scenario};
 }

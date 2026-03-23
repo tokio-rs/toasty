@@ -47,7 +47,7 @@ impl<T> SliceUtil for [T] {}
 
 macro_rules! assert_unique {
     ($slice:expr) => {{
-        use $crate::test_util::SliceUtil;
+        use $crate::util::SliceUtil;
         let slice = &$slice;
         assert!(
             slice.is_unique(),
