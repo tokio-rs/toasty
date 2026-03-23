@@ -48,23 +48,24 @@ syntactically distinct from both the struct-literal form and array indexing.
 ### Batch creation (mixed types)
 
 ```rust
-toasty::create!([
+toasty::create!((
     User { name: "Carl", email: "carl@example.com" },
     Article { title: "Hello World", author: &carl },
-])
+))
 ```
 
-A bare `[items]` where each item is a struct-literal form or a scoped `in`
-creation. This leverages the batch infrastructure (`IntoStatement` tuple/vec) to
+A `(items)` tuple where each item is a struct-literal form or a scoped `in`
+creation. This leverages the batch infrastructure (`IntoStatement` tuple) to
 compose multiple inserts of different types into a single batch operation.
+Brackets `[...]` are reserved for same-type batches (which return `Vec`).
 
 Scoped items can be mixed into the batch:
 
 ```rust
-toasty::create!([
+toasty::create!((
     User { name: "Carl", email: "carl@example.com" },
     in user.friends() { name: "Bob" },
-])
+))
 ```
 
 ## Parsing Strategy
@@ -77,19 +78,20 @@ tokens:
 | `Path {` | Single creation | Type |
 | `in` | Scoped creation | Scope |
 | `Path :: [` | Same-type batch | Type |
-| `[` | Mixed-type batch | Multiple types |
+| `(` | Mixed-type tuple | Multiple types |
 
 Parsing steps:
 
-1. If input starts with `[` → mixed-type batch
-2. If input starts with `in` → scoped creation: call
+1. If input starts with `(` → mixed-type tuple
+2. If input starts with `[` → error (use `(...)` for tuples or `Type::[...]` for same-type batch)
+3. If input starts with `in` → scoped creation: call
    `Expr::parse_without_eager_brace` for the scope expression, then parse
    `{ fields }`
-3. Otherwise, parse as `syn::Path`:
+4. Otherwise, parse as `syn::Path`:
    - If followed by `{` → single creation (struct-literal form)
    - If followed by `:: [` → same-type batch
 
-Inside a `[` batch list, each item is parsed with the same disambiguation: `in`
+Inside a `(` tuple, each item is parsed with the same disambiguation: `in`
 prefix → scoped item, `Path {` → type-target item.
 
 ## Expansion
@@ -135,76 +137,73 @@ toasty::create!(User::[
 {
     User::__verify_create().name().email().check();
     User::__verify_create().name().email().check();
-    (
+    toasty::batch([
         User::create().name("Carl").email("carl@example.com"),
         User::create().name("Alice").email("alice@example.com"),
-    )
+    ])
 }
 ```
 
-Returns a tuple of create builders. Each item gets its own verification chain.
-All batch forms expand to tuples of builders, which compose with
-`toasty::batch()` for execution. `CreateMany` / `create_many()` are deprecated
-and not used in new expansions.
+Returns `toasty::batch([...])` with an array of create builders. Since all items
+are the same type, this returns a `Vec<Model>`. Each item gets its own
+verification chain.
 
-### Mixed-type batch
+### Mixed-type tuple
 
 ```rust
 // Input:
-toasty::create!([
+toasty::create!((
     User { name: "Carl", email: "carl@example.com" },
     Article { title: "Hello World" },
-])
+))
 
 // Expands to:
 {
     User::__verify_create().name().email().check();
     Article::__verify_create().title().check();
-    (
+    toasty::batch((
         User::create().name("Carl").email("carl@example.com"),
         Article::create().title("Hello World"),
-    )
+    ))
 }
 ```
 
-Returns a tuple of create builders `(UserCreate, ArticleCreate)`. The caller
-passes the tuple to `toasty::batch()` for combined execution:
+Returns `toasty::batch(( ... ))` with a tuple of create builders. The result
+is a tuple `(User, Article)` matching the input structure:
 
 ```rust
-let (user, article) = toasty::batch(
-    toasty::create!([
-        User { name: "Carl", email: "carl@example.com" },
-        Article { title: "Hello World" },
-    ])
-).exec(&mut db).await?;
+let (user, article) = toasty::create!((
+    User { name: "Carl", email: "carl@example.com" },
+    Article { title: "Hello World" },
+))
+.exec(&mut db).await?;
 ```
 
-### Mixed batch with scoped items
+### Mixed tuple with scoped items
 
 ```rust
 // Input:
-toasty::create!([
+toasty::create!((
     User { name: "Carl", email: "carl@example.com" },
     in carl.todos() { title: "buy milk" },
-])
+))
 
 // Expands to:
 {
     User::__verify_create().name().email().check();
-    (
+    toasty::batch((
         User::create().name("Carl").email("carl@example.com"),
         carl.todos().create().title("buy milk"),
-    )
+    ))
 }
 ```
 
-Scoped items in a batch do not get verification chains (same as standalone
+Scoped items in a tuple do not get verification chains (same as standalone
 scoped creation). Type-target items get verification as usual.
 
-All batch forms (same-type and mixed-type) produce tuples of builders. This
-composes naturally with `toasty::batch()`, which already accepts tuples via
-`IntoStatement`. `CreateMany` / `create_many()` are not used — all batching
-goes through `toasty::batch()`.
+Same-type batches expand to `toasty::batch([...])` (array → `Vec`), while
+mixed-type tuples expand to `toasty::batch((...))` (tuple → tuple). Both
+compose with `toasty::batch()` via `IntoStatement`.
 
 ## Compile-Time Required Field Verification
 
@@ -267,7 +266,7 @@ comma separator.
 
 Rewrite `crates/toasty-macros/src/create/parse.rs` to handle the four forms:
 
-1. `[` → mixed-type batch
+1. `(` → mixed-type tuple
 2. `in expr { ... }` → scoped creation
 3. `Path {` → single creation
 4. `Path :: [` → same-type batch

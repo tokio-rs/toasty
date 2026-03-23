@@ -259,7 +259,7 @@ more detail.
 Use the `::[ ... ]` syntax to create multiple records of the same model:
 
 ```rust,ignore
-let (alice, bob, carol) = toasty::create!(User::[
+let users = toasty::create!(User::[
     { name: "Alice", email: "alice@example.com" },
     { name: "Bob", email: "bob@example.com" },
     { name: "Carol", email: "carol@example.com" },
@@ -268,48 +268,48 @@ let (alice, bob, carol) = toasty::create!(User::[
 .await?;
 ```
 
-This expands to a tuple of builders:
+This expands to `toasty::batch([ ... ])` with an array of builders:
 
 ```rust,ignore
-(
+toasty::batch([
     User::create().name("Alice").email("alice@example.com"),
     User::create().name("Bob").email("bob@example.com"),
     User::create().name("Carol").email("carol@example.com"),
-)
+])
 ```
 
-The same-type batch returns a tuple with one element per record. The batch
-is atomic — all records are inserted together or none are.
+The same-type batch returns a `Vec<User>`. The batch is atomic — all
+records are inserted together or none are.
 
 ### Mixed-type batch
 
-Use `[ ... ]` to create records of different models in a single batch:
+Use `( ... )` to create records of different models in a single batch:
 
 ```rust,ignore
-let (user, post) = toasty::create!([
+let (user, post) = toasty::create!((
     User { name: "Alice" },
     Post { title: "Hello World" },
-])
+))
 .exec(&mut db)
 .await?;
 ```
 
-This expands to a tuple of builders of different types:
+This expands to `toasty::batch(( ... ))` with a tuple of builders:
 
 ```rust,ignore
-(
+toasty::batch((
     User::create().name("Alice"),
     Post::create().title("Hello World"),
-)
+))
 ```
 
 You can mix type-target and scoped forms in the same batch:
 
 ```rust,ignore
-let (user, todo) = toasty::create!([
+let (user, todo) = toasty::create!((
     User { name: "Carl" },
     in user.todos() { title: "Buy milk" },
-])
+))
 .exec(&mut db)
 .await?;
 ```
@@ -371,8 +371,8 @@ Each macro form has a direct builder equivalent:
 | `toasty::create!(in user.todos() { title: "Buy milk" })` | `user.todos().create().title("Buy milk")` |
 | Nested `{ ... }` for BelongsTo/HasOne | `.with_field(\|b\| b.field_calls)` |
 | Nested `[{ ... }]` for HasMany | `.with_field(\|b\| b.with_item(...))` |
-| `toasty::create!(User::[{ ... }, { ... }])` | Tuple of `User::create()` builders |
-| `toasty::create!([User { ... }, Post { ... }])` | Tuple of mixed-type builders |
+| `toasty::create!(User::[{ ... }, { ... }])` | `toasty::batch([User::create()...])` → `Vec<User>` |
+| `toasty::create!((User { ... }, Post { ... }))` | `toasty::batch((User::create()..., Post::create()...))` → tuple |
 
 ## What gets generated
 

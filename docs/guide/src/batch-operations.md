@@ -121,30 +121,31 @@ let results: Vec<Vec<User>> = toasty::batch(queries)
 
 ## Batching creates with `create!`
 
-The `toasty::create!` macro's batch forms (`Type::[ ... ]` and `[ ... ]`)
+The `toasty::create!` macro's batch forms (`Type::[ ... ]` and `( ... )`)
 produce a batch of creates. The same atomicity guarantees apply — all records
 are inserted together or none are.
 
 ```rust,ignore
-// Same-type batch
-let (alice, bob) = toasty::create!(User::[
+// Same-type batch — returns Vec<User>
+let users = toasty::create!(User::[
     { name: "Alice", email: "alice@example.com" },
     { name: "Bob", email: "bob@example.com" },
 ])
 .exec(&mut db)
 .await?;
 
-// Mixed-type batch
-let (user, post) = toasty::create!([
+// Mixed-type batch — returns a tuple
+let (user, post) = toasty::create!((
     User { name: "Alice" },
     Post { title: "Hello World" },
-])
+))
 .exec(&mut db)
 .await?;
 ```
 
-Each create returns a single record (not a `Vec`), since each item inserts
-exactly one row. The return type is a tuple matching the input.
+The same-type batch (`Type::[...]`) returns a `Vec<Model>`. The mixed-type
+batch (`(...)`) returns a tuple matching the input, with one element per
+create.
 
 See [Creating Records](./creating-records.md) for the full `create!` macro
 syntax.

@@ -1,0 +1,5 @@
+error: expected `{` for single creation or `::[` for batch creation after type path
+  --> tests/ui/create_v1_comma_syntax.rs:12:33
+   |
+12 |     let _ = toasty::create!(User, { name: "Carl", email: "carl@example.com" });
+   |                                 ^
