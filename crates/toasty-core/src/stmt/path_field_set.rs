@@ -74,7 +74,7 @@ impl PathFieldSet {
     pub fn iter(&self) -> PathFieldSetIter<'_> {
         PathFieldSetIter {
             inner: self.container.iter(),
-            len: self.container.len(),
+            len: self.container.count(),
         }
     }
 
@@ -85,7 +85,7 @@ impl PathFieldSet {
 
     /// Returns the number of field indices in the set.
     pub fn len(&self) -> usize {
-        self.container.len()
+        self.container.count()
     }
 
     /// Inserts a field index into the set.

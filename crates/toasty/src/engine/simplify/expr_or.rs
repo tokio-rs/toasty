@@ -227,7 +227,7 @@ impl Simplify<'_> {
             seen.insert(iv.variant.index);
         }
 
-        seen.len() == num_variants
+        seen.count() == num_variants
     }
 
     /// Converts disjunctive equality chains to IN lists.
