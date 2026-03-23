@@ -99,6 +99,7 @@ use crate::{
         index::{self, IndexPlan},
         mir,
         plan::HirPlanner,
+        SelectItem, SelectItems,
     },
     Result,
 };
@@ -108,8 +109,8 @@ struct LoadData {
     /// MIR node inputs needed to load data associated with the statement
     inputs: IndexSet<mir::NodeId>,
 
-    /// Columns to load
-    columns: IndexSet<stmt::ExprReference>,
+    /// Items to select from the database (columns and aggregates like COUNT(*))
+    select_items: SelectItems,
 
     /// When the statement data is batch loaded (single database query to load
     /// data for multiple statements), arguments are passed in in batches as
@@ -165,7 +166,7 @@ impl HirPlanner<'_> {
             stmt_info,
             load_data: LoadData {
                 inputs: IndexSet::new(),
-                columns: IndexSet::new(),
+                select_items: SelectItems::new(),
                 batch_load_args: IndexSet::new(),
             },
             remaining_deps: stmt_info.deps.iter().cloned().collect(),
@@ -239,8 +240,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         // Track the selection for later use.
         // TODO: Do we actually need to track this on the statement?
         self.stmt_info
-            .load_data_columns
-            .set(mem::take(&mut self.load_data.columns))
+            .load_data_select_items
+            .set(mem::take(&mut self.load_data.select_items))
             .unwrap();
 
         // Plan each child
@@ -353,6 +354,18 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         *expr = stmt::Expr::arg_project(position, [column]);
                     }
                 }
+                stmt::Expr::Func(stmt::ExprFunc::Count(stmt::FuncCount { arg: None, .. })) => {
+                    if is_returning_projection {
+                        let index = self
+                            .stmt_info
+                            .load_data_select_items
+                            .get()
+                            .unwrap()
+                            .get_index_of_count_star();
+                        let (position, _) = inputs.insert_full(load_data_node_id);
+                        *expr = stmt::Expr::arg_project(position, [index]);
+                    }
+                }
                 _ => {}
             }
         });
@@ -368,28 +381,32 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         let Some(column) = self
             .stmt_info
-            .load_data_columns
+            .load_data_select_items
             .get()
             .unwrap()
-            .get_index_of(expr_reference)
+            .try_get_index_of_expr_reference(*expr_reference)
         else {
             panic!(
-                "expr_reference={expr_reference:#?}; data_load.columns={:#?}",
-                self.load_data.columns
+                "expr_reference={expr_reference:#?}; data_load.select_items={:#?}",
+                self.load_data.select_items
             )
         };
         column
     }
 
     fn extract_columns_from_returning(&mut self, returning: &Returning) {
-        stmt::visit::for_each_expr(returning, |expr| {
-            if let stmt::Expr::Reference(expr_reference) = expr {
+        stmt::visit::for_each_expr(returning, |expr| match expr {
+            stmt::Expr::Reference(expr_reference) => {
                 assert!(
                     expr_reference.is_column(),
                     "TODO: expr_reference = {expr_reference:#?}"
                 );
-                self.load_data.columns.insert(*expr_reference);
+                self.load_data.select_items.insert((*expr_reference).into());
             }
+            stmt::Expr::Func(stmt::ExprFunc::Count(stmt::FuncCount { arg: None, .. })) => {
+                self.load_data.select_items.insert(SelectItem::CountStar);
+            }
+            _ => {}
         })
     }
 
@@ -495,7 +512,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     fn collect_back_ref_columns(&mut self) {
         for back_ref in self.stmt_info.back_refs.values() {
             for expr in &back_ref.exprs {
-                self.load_data.columns.insert(*expr);
+                self.load_data.select_items.insert((*expr).into());
             }
         }
     }
@@ -666,6 +683,15 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         stmt: stmt::Statement,
         returning: &mut Returning,
     ) -> Result<mir::NodeId> {
+        // COUNT(*) is SQL-only
+        if self.load_data.select_items.contains(&SelectItem::CountStar)
+            && !self.planner.engine.capability().sql
+        {
+            return Err(toasty_core::Error::unsupported_feature(
+                "count() queries are only supported with SQL drivers",
+            ));
+        }
+
         if let Some(node_id) = self.plan_const_or_empty_statement(&stmt, returning) {
             debug_assert!(
                 stmt.is_query() || stmt.assignments().map(|a| a.is_empty()).unwrap_or(false),
@@ -693,9 +719,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             return Some(
                 self.insert_const(
                     rows,
-                    self.planner
-                        .engine
-                        .infer_record_list_ty(stmt, &self.load_data.columns),
+                    self.load_data
+                        .select_items
+                        .infer_record_list_ty(&self.planner.engine.expr_cx_for(stmt)),
                 ),
             );
         }
@@ -722,13 +748,13 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     fn plan_data_loading_sql(&mut self, mut stmt: stmt::Statement) -> mir::NodeId {
         let const_returning = self.extract_insert_returning_as_const(&stmt);
 
-        if !self.load_data.columns.is_empty() {
+        if !self.load_data.select_items.is_empty() {
             stmt.set_returning(
                 stmt::Expr::record(
                     self.load_data
-                        .columns
+                        .select_items
                         .iter()
-                        .map(|expr_reference| stmt::Expr::from(*expr_reference)),
+                        .map(|item| item.to_expr()),
                 )
                 .into(),
             );
@@ -802,7 +828,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             return None;
         };
 
-        if self.load_data.columns.is_empty() {
+        if self.load_data.select_items.is_empty() {
             return None;
         }
 
@@ -811,7 +837,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         let mut indices = vec![];
 
-        for expr_ref in &self.load_data.columns {
+        for select_item in &self.load_data.select_items {
+            let expr_ref = select_item.as_expr_reference_unwrap();
             let expr_col = expr_ref.as_expr_column_unwrap();
             debug_assert!(expr_col.nesting == 0, "expr_column={expr_col:#?}");
 
@@ -846,9 +873,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         }
 
         let ty = self
-            .planner
-            .engine
-            .infer_record_list_ty(stmt, &self.load_data.columns);
+            .load_data
+            .select_items
+            .infer_record_list_ty(&self.planner.engine.expr_cx_for(stmt));
 
         Some((stmt::Value::List(result), ty))
     }
@@ -1059,7 +1086,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     fn plan_data_loading_nosql(&mut self, stmt: stmt::Statement) -> Result<mir::NodeId> {
         if stmt.is_insert() {
-            debug_assert!(self.load_data.columns.is_empty());
+            debug_assert!(self.load_data.select_items.is_empty());
         }
 
         // Without SQL capability, we have to plan the execution of the
@@ -1069,7 +1096,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         // Type of the final record.
         // TODO: Clean this up
-        let ty = if self.load_data.columns.is_empty() {
+        let ty = if self.load_data.select_items.is_empty() {
             if stmt.is_query() {
                 // Query with no columns selected is an existence check: return
                 // an empty record for every matching row.
@@ -1078,9 +1105,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 stmt::Type::Unit
             }
         } else {
-            self.planner
-                .engine
-                .infer_record_list_ty(&stmt, &self.load_data.columns)
+            self.load_data
+                .select_items
+                .infer_record_list_ty(&self.planner.engine.expr_cx_for(&stmt))
         };
 
         let node_id = if index_plan.index.primary_key {
@@ -1124,7 +1151,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     input,
                     table: index_plan.table_id(),
                     index: None, // Querying primary key
-                    columns: self.load_data.columns.clone(),
+                    columns: self.load_data.select_items.extract_expr_references(),
                     pk_filter: index_plan.index_filter.take(),
                     row_filter: index_plan.result_filter.take(),
                     ty: ty.clone(),
@@ -1136,10 +1163,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 // For mutations (UPDATE/DELETE) with a partial primary-key filter,
                 // first collect the full primary keys of all matching records via
                 // QueryPk, then apply the mutation to each key. The index key columns
-                // were pre-populated into load_data.columns in plan_data_loading_nosql.
+                // were pre-populated into load_data.select_items in plan_data_loading_nosql.
                 let index_key_ty = self.index_key_ty(index_plan);
 
-                let mut columns = self.load_data.columns.clone();
+                let mut columns = self.load_data.select_items.extract_expr_references();
                 assert!(columns.is_empty());
 
                 for index_col in &index_plan.index.columns {
@@ -1232,7 +1259,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 input,
                 table: index_plan.index.on,
                 index: Some(index_plan.index.id), // Query the secondary index
-                columns: self.load_data.columns.clone(), // Return full records
+                columns: self.load_data.select_items.extract_expr_references(), // Return full records
                 pk_filter: index_plan.index_filter.take(),
                 row_filter: index_plan.result_filter.take(),
                 ty: ty.clone(), // Full record type, not just PKs
@@ -1287,7 +1314,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         if let Some(post_filter) = &mut post_filter {
             visit_mut::for_each_expr_mut(post_filter, |expr| match expr {
                 stmt::Expr::Reference(expr_reference) => {
-                    let (index, _) = self.load_data.columns.insert_full(*expr_reference);
+                    let (index, _) = self
+                        .load_data
+                        .select_items
+                        .insert_full((*expr_reference).into());
                     *expr = stmt::Expr::arg_project(0, [index]);
                 }
                 stmt::Expr::Arg(_) => todo!("expr={expr:#?}"),
@@ -1351,7 +1381,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 self.insert_mir_with_deps(mir::GetByKey {
                     input: get_by_key_input,
                     table: index_plan.table_id(),
-                    columns: self.load_data.columns.clone(),
+                    columns: self.load_data.select_items.extract_expr_references(),
                     ty: ty.clone(),
                 })
             }
@@ -1459,7 +1489,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     fn process_back_ref_projections(&mut self, exec_stmt_node_id: mir::NodeId) {
         for back_ref in self.stmt_info.back_refs.values() {
             let projection = stmt::Expr::record(back_ref.exprs.iter().map(|expr_reference| {
-                let index = self.load_data.columns.get_index_of(expr_reference).unwrap();
+                let index = self
+                    .load_data
+                    .select_items
+                    .get_index_of_expr_reference(*expr_reference);
                 stmt::Expr::arg_project(0, [index])
             }));
 

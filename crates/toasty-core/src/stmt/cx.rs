@@ -4,9 +4,9 @@ use crate::{
         db::{self, Column, ColumnId, Table, TableId},
     },
     stmt::{
-        Delete, Expr, ExprArg, ExprColumn, ExprReference, ExprSet, Insert, InsertTarget, Query,
-        Returning, Select, Source, SourceTable, Statement, TableDerived, TableFactor, TableRef,
-        Type, TypeUnion, Update, UpdateTarget,
+        Delete, Expr, ExprArg, ExprColumn, ExprFunc, ExprReference, ExprSet, Insert, InsertTarget,
+        Query, Returning, Select, Source, SourceTable, Statement, TableDerived, TableFactor,
+        TableRef, Type, TypeUnion, Update, UpdateTarget,
     },
     Schema,
 };
@@ -545,6 +545,8 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             // the other branches produce.
             Expr::Error(_) => Type::Unknown,
             Expr::Exists(_) => Type::Bool,
+            Expr::Func(ExprFunc::Count(_)) => Type::U64,
+            Expr::Func(ExprFunc::LastInsertId(_)) => Type::I64,
             _ => todo!("{expr:#?}"),
         }
     }

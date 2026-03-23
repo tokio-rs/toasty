@@ -28,6 +28,16 @@ impl Load for () {
     }
 }
 
+impl Load for u64 {
+    type Output = u64;
+    fn load(value: stmt::Value) -> Result<Self::Output, Error> {
+        match value {
+            stmt::Value::U64(n) => Ok(n),
+            _ => Err(Error::type_conversion(value, "u64")),
+        }
+    }
+}
+
 impl<T: Load<Output = T>> Load for Vec<T> {
     type Output = Vec<T>;
     fn load(value: stmt::Value) -> Result<Self::Output, Error> {
