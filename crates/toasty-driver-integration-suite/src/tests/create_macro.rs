@@ -79,16 +79,48 @@ pub async fn create_macro_scoped(test: &mut Test) -> Result<()> {
 pub async fn create_macro_batch(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
-    // Same-type batch — produces a tuple of builders, composed via toasty::batch()
-    let (carl, bob) = toasty::batch(toasty::create!(User::[
+    // Same-type batch — expands to toasty::batch([...]), returns Vec<User>
+    let users = toasty::create!(User::[
         { name: "Carl" },
         { name: "Bob" },
-    ]))
+    ])
     .exec(&mut db)
     .await?;
 
-    assert_eq!(carl.name, "Carl");
-    assert_eq!(bob.name, "Bob");
+    assert_struct!(users, [{ name: "Carl" }, { name: "Bob" }]);
+
+    Ok(())
+}
+
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+pub async fn create_macro_tuple(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    // Tuple syntax — returns (User, Post)
+    let (user, post) = toasty::create!((User { name: "Carl" }, Post { title: "Hello" },))
+        .exec(&mut db)
+        .await?;
+
+    assert_struct!(user, { name: "Carl" });
+    assert_struct!(post, { title: "Hello" });
+
+    Ok(())
+}
+
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+pub async fn create_macro_tuple_mixed(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    // Mixed tuple: typed batch + single create — returns (Vec<User>, Post)
+    let (users, post) = toasty::create!((
+        User::[ { name: "Carl" }, { name: "Bob" } ],
+        Post { title: "Hello" },
+    ))
+    .exec(&mut db)
+    .await?;
+
+    assert_struct!(users, [{ name: "Carl" }, { name: "Bob" }]);
+    assert_struct!(post, { title: "Hello" });
 
     Ok(())
 }

@@ -106,7 +106,7 @@ impl<Q: IntoStatement> IntoStatement for Vec<Q> {
     }
 }
 
-/// Dynamic batch via `[Q; N]`: fixed-size array of homogeneous queries, returns `List<Q::Output>`.
+/// Dynamic batch via `[Q; N]`: fixed-size array of typed queries, returns `List<Q::Output>`.
 impl<Q: IntoStatement, const N: usize> IntoStatement for [Q; N] {
     type Returning = List<Q::Returning>;
 
