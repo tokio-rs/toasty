@@ -208,7 +208,7 @@ User::filter(User::fields().name().eq("Carl"))
 The macro needs to express filters that cross association boundaries. There are
 several patterns to consider.
 
-### Filtering by has-many children (EXISTS / ANY)
+### Existence checks (`EXISTS`)
 
 "Find users who have at least one incomplete todo."
 
@@ -220,182 +220,145 @@ User::filter(
 )
 ```
 
-The challenge: `Todo::fields()` breaks the convention that all field paths in
-`query!` are relative to the source model. The macro user should not need to
-name the associated model type explicitly.
-
-#### Proposed syntax: `ANY` with nested dot paths
+In `query!`, this becomes:
 
 ```rust
-query!(User FILTER ANY .todos(.complete == false))
+query!(User FILTER EXISTS(.todos FILTER .complete == false))
 ```
 
-`ANY .assoc(filter)` means "at least one related record satisfies the filter."
-Inside the parentheses, dot paths are relative to the association target model.
-The macro resolves the target model type from the association field.
+The body of `EXISTS` is a sub-query. The first part — `.todos` — is the
+"select": it names what is being selected, relative to the outer query. Here,
+`.todos` selects the todos association of `User`. The rest of the sub-query
+(`FILTER`, `ORDER BY`, etc.) operates relative to that selection, so `.complete`
+refers to a field on `Todo`, not on `User`.
 
-The macro expands `.todos` into `User::fields().todos()`, which returns a
-`ManyField<User>`. The inner filter needs field expressions rooted at the
-target model — but proc macros cannot resolve types. The macro only has tokens.
-
-The solution is to add a `with` method to `ManyField` that provides a new path
-scope via a closure. `with` accepts a closure whose parameter is the target
-model's fields struct; it delegates to `any` internally:
+This expands to:
 
 ```rust
-impl<Origin> ManyField<Origin> {
-    pub fn with<F>(self, f: F) -> Expr<bool>
-    where
-        F: FnOnce(TargetFields) -> Expr<bool>,
-    {
-        self.any(f(Target::fields()))
-    }
-}
-```
-
-The macro expands `ANY .todos(...)` into a `with` call:
-
-```rust
-// Input:
-query!(User FILTER ANY .todos(.complete == false))
-
-// Expands to:
 User::filter(
-    User::fields().todos().with(|__f| __f.complete().eq(false))
+    User::fields().todos().any(
+        Todo::fields().complete().eq(false)
+    )
 )
 ```
 
-The macro stays at the token level — it does not need to know that `.todos`
-points to `Todo`. The Rust compiler infers the closure parameter type from
-`ManyField`, and field paths inside the `ANY` parentheses expand relative to
-that parameter. No helper functions, no explicit model naming.
+`EXISTS` expands to `.any()` because the select part of the sub-query is only
+used to define the scope — we statically know this is an existence check and
+can translate it directly to `.any()` at the macro level. There is no need to
+pass a full statement through.
 
-#### Nested association filters
+#### Multi-hop select paths
+
+The select path inside `EXISTS` is not limited to a single association. It can
+chain through multiple associations to reach deeper relations.
+
+"Find all users with at least one todo tagged 'important'."
+
+```rust
+query!(User FILTER EXISTS(.todos.tags FILTER .name == "important"))
+```
+
+Here `.todos.tags` traverses two associations — from `User` to `Todo` to
+`Tag`. The `FILTER` clause operates on `Tag` fields.
+
+#### Nested `EXISTS`
+
+When the sub-query itself needs an existence check, `EXISTS` can nest:
 
 ```rust
 // Users who have a todo with a tag named "urgent"
-query!(User FILTER ANY .todos(ANY .tags(.name == "urgent")))
+query!(User FILTER EXISTS(.todos FILTER EXISTS(.tags FILTER .name == "urgent")))
 ```
 
-Each `ANY` nests one level deeper. The expansion chains `with` calls:
+This expands to:
 
 ```rust
 User::filter(
-    User::fields().todos().with(|__f|
-        __f.tags().with(|__f| __f.name().eq("urgent"))
+    User::fields().todos().any(
+        Todo::fields().tags().any(
+            Tag::fields().name().eq("urgent")
+        )
     )
 )
 ```
 
-### Filtering by belongs-to parent
+The multi-hop form (`EXISTS(.todos.tags FILTER ...)`) and the nested form
+(`EXISTS(.todos FILTER EXISTS(.tags FILTER ...))`) express the same query. The
+multi-hop form is more concise when the intermediate model does not need its own
+filter. The nested form is required when it does:
+
+```rust
+// Users who have an *incomplete* todo with a tag named "urgent"
+query!(User FILTER EXISTS(.todos FILTER .complete == false AND EXISTS(.tags FILTER .name == "urgent")))
+```
+
+### Cardinality-one traversal
+
+When an association has a cardinality of one — `BelongsTo` or `HasOne` — the
+macro can traverse it with dot-path chaining, just like accessing a field.
 
 "Find todos whose user has name Carl."
 
-Today:
-
-```rust
-Todo::filter(Todo::fields().user().eq(&carl))
-```
-
-Or using a subquery:
-
-```rust
-Todo::filter(
-    Todo::fields().user().in_query(
-        User::filter(User::fields().name().eq("Carl"))
-    )
-)
-```
-
-#### Proposed syntax: dot-path traversal
-
-For direct equality against a model instance:
-
-```rust
-query!(Todo FILTER .user == #carl)
-```
-
-This works with no special syntax because `OneField` already implements `.eq()`.
-The expansion is:
-
-```rust
-Todo::filter(Todo::fields().user().eq(carl))
-```
-
-For filtering by a parent's fields, use dot-path chaining:
-
 ```rust
 query!(Todo FILTER .user.name == "Carl")
 ```
 
-This is more involved. `.user.name` would need to expand to something like
-`Todo::fields().user().name().eq("Carl")`. Today, `OneField` does not expose
-the target model's primitive fields directly — it only has `.eq()` and
-`.in_query()`.
-
-Two options:
-
-**Option 1: Expand to `in_query` with a subquery.**
+This expands to:
 
 ```rust
-// Input:
-query!(Todo FILTER .user.name == "Carl")
-
-// Expands to:
 Todo::filter(
-    Todo::fields().user().in_query(
-        User::filter(User::fields().name().eq("Carl"))
-    )
+    Todo::fields().user().name().eq("Carl")
 )
 ```
 
-This requires the macro to split the path at the association boundary, which
-means it needs to know that `.user` is an association and `.name` is a field on
-the target. A proc macro cannot determine this from tokens alone.
-
-**Option 2: Add field accessors to `OneField` so dot paths work directly.**
-
-If `OneField<__Origin>` exposes `.name()` (returning an `Expr` path that
-traverses the association), the macro can expand `.user.name` as a simple
-method chain:
-
-```rust
-Todo::fields().user().name().eq("Carl")
-```
-
-The codegen already generates association field accessors on `ManyField` and
-`OneField` (see `expand_field_association_methods` in `relation.rs`). These
-currently return nested `ManyField`/`OneField` types for association-to-
-association chaining. Extending this to also expose primitive field accessors
-on `OneField` would make dot-path traversal work for belongs-to filters.
-
-The query engine's simplification phase would then rewrite `user.name == "Carl"`
-into an EXISTS subquery during compilation — the same rewrite it already
-performs for association traversals.
-
-**Option 2 is preferred** because it keeps the macro simple (no path splitting)
-and pushes the complexity into the query engine where it belongs.
-
-### Filtering by has-one
-
-Has-one associations work the same as belongs-to for filtering purposes:
+This works because `.user` has a cardinality of one: there is exactly one user
+per todo, so `.user.name` unambiguously refers to a single value. The same
+pattern works for `HasOne` associations:
 
 ```rust
 // User has_one profile
 query!(User FILTER .profile.bio IS SOME)
 ```
 
-Expands using the same dot-path traversal mechanism as belongs-to.
+For direct equality against a model instance, no traversal is needed:
+
+```rust
+query!(Todo FILTER .user == #carl)
+```
+
+Expands to:
+
+```rust
+Todo::filter(Todo::fields().user().eq(carl))
+```
+
+### Referencing the parent scope
+
+Inside an `EXISTS` sub-query, dot-prefixed paths are relative to the sub-query's
+select. Sometimes the filter needs to reference a field from the outer query.
+The solution is to use an "absolute" path that names the root model type.
+
+"Find all users that have a todo assigned to themselves."
+
+```rust
+query!(User FILTER EXISTS(.todos FILTER .assignee == User.name))
+```
+
+Here, `.assignee` is relative to the sub-query scope (`Todo`), but `User.name`
+is an absolute path — it references the `name` field on the outer `User` query.
+The macro recognizes `User.name` as absolute because `User` matches the root
+select's model type.
 
 ### Summary of association filter syntax
 
 | Pattern | Syntax | Meaning |
 |---|---|---|
-| Has-many EXISTS | `ANY .assoc(filter)` | Parent has at least one child matching filter |
-| Belongs-to equality | `.assoc == #val` | Association equals a model instance |
-| Belongs-to field filter | `.assoc.field op val` | Filter by associated model's field |
-| Has-one field filter | `.assoc.field op val` | Same as belongs-to |
-| Nested has-many | `ANY .a(ANY .b(filter))` | Nested existence check |
+| Has-many EXISTS | `EXISTS(.assoc FILTER expr)` | At least one child matches |
+| Multi-hop EXISTS | `EXISTS(.a.b FILTER expr)` | Traverse multiple associations |
+| Nested EXISTS | `EXISTS(.a FILTER EXISTS(.b FILTER expr))` | Nested existence with intermediate filter |
+| Cardinality-one field | `.assoc.field op val` | Filter by belongs-to/has-one field |
+| Cardinality-one equality | `.assoc == #val` | Association equals a model instance |
+| Parent reference | `Root.field` | Absolute path to outer query field |
 
 ## Parsing strategy
 
@@ -415,16 +378,19 @@ Filter expressions are parsed with standard precedence:
 2. `AND`
 3. `NOT` (prefix unary)
 4. Comparison operators (`==`, `!=`, `>`, `>=`, `<`, `<=`, `IS NONE`, `IS SOME`)
-5. `ANY .assoc(filter)` and parenthesized groups `(expr)` (atoms)
+5. `EXISTS(sub-query)` and parenthesized groups `(expr)` (atoms)
 
 A dot-prefixed path (`.field` or `.field.subfield`) is parsed as a sequence of
-`.ident` tokens. On the right side of a comparison, the value is one of:
+`.ident` tokens. An absolute path (`Model.field`) is parsed as an `ident`
+followed by `.ident` tokens. On the right side of a comparison, the value is
+one of:
 
 - A string literal (`"Carl"`)
 - A numeric literal (`18`)
 - A boolean literal (`true`, `false`)
 - An external reference (`#ident` or `#(expr)`)
 - A dot-prefixed field path (for field-to-field comparisons)
+- An absolute path (`Model.field`, for parent scope references)
 
 ### Case-insensitive keywords
 
@@ -432,16 +398,19 @@ Keywords are matched case-insensitively by comparing the identifier's string
 representation. `FILTER`, `filter`, `Filter` all match. This is handled
 during parsing by lowercasing the identifier text before comparison.
 
-`AND`, `OR`, `NOT`, `ANY`, `IS`, `NONE`, `SOME`, `ORDER`, `BY`, `ASC`, `DESC`,
-`OFFSET`, `LIMIT` are all case-insensitive.
+`AND`, `OR`, `NOT`, `EXISTS`, `IS`, `NONE`, `SOME`, `ORDER`, `BY`, `ASC`,
+`DESC`, `OFFSET`, `LIMIT` are all case-insensitive.
 
 ### Disambiguation
 
-- `.` always starts a field path (no valid Rust expression starts with `.` in
-  this context).
+- `.` always starts a relative field path (no valid Rust expression starts with
+  `.` in this context).
 - `#` always starts an external reference.
-- `ANY` is a keyword when followed by `.` (a field path). If the user has a
-  variable named `any`, they use `#any`.
+- `EXISTS` is a keyword when followed by `(`. If the user has a variable named
+  `exists`, they use `#exists`.
+- An identifier followed by `.` on the right side of a comparison is an absolute
+  path (parent scope reference). This is unambiguous because relative paths
+  start with `.`, not an identifier.
 - `{` after the source type starts an include block, not a Rust block
   expression, because the source is always a type path.
 
@@ -473,24 +442,26 @@ Expand to method chains on the existing query builder API. Generate
 
 ### Phase 2: Association filters
 
-#### Step 5: Add `ANY` parsing and expansion
+#### Step 5: Add `EXISTS` parsing and expansion
 
-Parse `ANY .assoc(filter)` syntax. Expand using `ManyField::with()` as
-described above. Add the `with` method to the generated `ManyField` structs.
+Parse `EXISTS(.path FILTER expr)` syntax. Expand the select path to a
+`fields()` chain and the filter body to an `.any()` call. Handle multi-hop
+select paths and nested `EXISTS`.
 
-#### Step 6: Add primitive field accessors to `OneField`
+#### Step 6: Cardinality-one dot-path traversal
 
-Extend codegen to generate primitive field accessors on `OneField`, enabling
-dot-path traversal through belongs-to and has-one associations.
+Ensure dot-path chaining through `BelongsTo` and `HasOne` associations expands
+to the corresponding method chain (e.g., `.user().name().eq(...)`).
 
-#### Step 7: Extend query engine for dot-path traversal
+#### Step 7: Parent scope references
 
-Verify that the simplification phase correctly rewrites field paths that
-traverse associations into subqueries. Add support if missing.
+Parse absolute paths (`Model.field`) in sub-query filters. Expand to the
+appropriate field path rooted at the outer query's model.
 
 #### Step 8: Tests
 
-- Filter by has-many child fields
-- Filter by belongs-to parent fields
-- Filter by has-one fields
-- Nested association filters
+- Filter by has-many child fields (`EXISTS`)
+- Multi-hop `EXISTS`
+- Nested `EXISTS` with intermediate filters
+- Filter by belongs-to/has-one fields (cardinality-one traversal)
+- Parent scope references in sub-queries
