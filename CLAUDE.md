@@ -67,7 +67,6 @@ Toasty is a Rust ORM supporting SQL (SQLite, PostgreSQL, MySQL) and NoSQL (Dynam
 | `toasty-driver-integration-suite` | Shared integration test suite run against all drivers |
 | `toasty-driver-integration-suite-macros` | Proc-macros for the test suite (`#[driver_test]`, `generate_driver_tests!`) |
 | `tests` | Workspace-level integration tests (invokes the suite per driver) |
-| `std-util` | Internal utilities |
 
 ### Schema Layers
 
