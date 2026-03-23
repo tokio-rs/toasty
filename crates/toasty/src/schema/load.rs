@@ -28,6 +28,26 @@ impl Load for () {
     }
 }
 
+impl Load for u64 {
+    type Output = u64;
+    fn load(value: stmt::Value) -> Result<Self::Output, Error> {
+        match value {
+            // COUNT(*) returns a single record with one field
+            stmt::Value::Record(mut record) if record.len() == 1 => {
+                let field = record[0].take();
+                match field {
+                    stmt::Value::U64(n) => Ok(n),
+                    stmt::Value::I64(n) => Ok(n as u64),
+                    other => Err(Error::type_conversion(other, "u64")),
+                }
+            }
+            stmt::Value::U64(n) => Ok(n),
+            stmt::Value::I64(n) => Ok(n as u64),
+            _ => Err(Error::type_conversion(value, "u64")),
+        }
+    }
+}
+
 impl<T: Load<Output = T>> Load for Vec<T> {
     type Output = Vec<T>;
     fn load(value: stmt::Value) -> Result<Self::Output, Error> {

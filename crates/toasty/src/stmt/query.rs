@@ -4,7 +4,7 @@ use crate::{
     Executor, Result,
 };
 use std::{fmt, marker::PhantomData};
-use toasty_core::stmt::{self, Offset};
+use toasty_core::stmt::{self, Offset, Returning};
 
 /// A typed query that selects records from the database.
 ///
@@ -403,6 +403,33 @@ impl<M: Model> Query<List<M>> {
         let mut query = stmt::Query::new_select(M::id(), expr.untyped);
         query.single = false;
         Self::from_untyped(query)
+    }
+
+    /// Convert this list query into a count query that returns the number of
+    /// matching records as a `u64`.
+    ///
+    /// The returned `Query<u64>` wraps a `SELECT COUNT(*)` query.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::{List, Query};
+    ///
+    /// let q: Query<u64> = Query::<List<User>>::all().count();
+    /// ```
+    pub fn count(mut self) -> Query<u64> {
+        // Set the returning clause to COUNT(*)
+        *self.untyped.returning_mut_unwrap() =
+            Returning::Expr(stmt::Expr::record([stmt::Expr::count_star()]));
+        self.untyped.single = true;
+
+        Query::from_untyped(self.untyped)
     }
 
     /// Create a query that selects all records of `M`.

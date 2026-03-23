@@ -48,6 +48,10 @@ impl Expand<'_> {
                     #update_struct_ident::from(self)
                 }
 
+                #vis fn count(self) -> #toasty::stmt::Query<u64> {
+                    self.stmt.count()
+                }
+
                 #vis fn delete(self) -> #toasty::stmt::Delete<()> {
                     self.stmt.delete()
                 }

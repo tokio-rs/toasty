@@ -8,6 +8,8 @@ mod index;
 mod lower;
 mod mir;
 mod plan;
+mod select_item;
+pub(crate) use select_item::SelectItem;
 mod simplify;
 mod ty;
 mod verify;
