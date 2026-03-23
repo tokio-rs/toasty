@@ -249,12 +249,7 @@ impl NestedMergePlanner<'_> {
         let mut fields = vec![];
 
         for select_item in stmt_state.load_data_select_items.get().unwrap() {
-            fields.push(match select_item {
-                SelectItem::ExprReference(expr_reference) => {
-                    cx.infer_expr_reference_ty(expr_reference)
-                }
-                SelectItem::CountStar => stmt::Type::U64,
-            });
+            fields.push(select_item.infer_ty(&cx));
         }
 
         stmt::Type::Record(fields)

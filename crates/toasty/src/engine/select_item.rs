@@ -24,6 +24,14 @@ impl SelectItem {
             other => panic!("expected ExprReference, got {other:?}"),
         }
     }
+
+    /// Infer the type of this select item given the expression context.
+    pub(crate) fn infer_ty(&self, cx: &stmt::ExprContext<'_>) -> stmt::Type {
+        match self {
+            SelectItem::ExprReference(expr_reference) => cx.infer_expr_reference_ty(expr_reference),
+            SelectItem::CountStar => stmt::Type::U64,
+        }
+    }
 }
 
 impl SelectItem {
