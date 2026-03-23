@@ -6,6 +6,16 @@ use crate::{
 };
 
 impl Type {
+    /// Casts a [`Value`] to this jiff temporal type, returning the converted value.
+    ///
+    /// Supports conversions between:
+    /// - `String` and any jiff type (parsing ISO 8601 format)
+    /// - Any jiff type and `String` (formatting with fixed 9-digit nanosecond precision)
+    /// - `Timestamp` and `Zoned` (via UTC timezone)
+    /// - `Timestamp`/`Zoned` and `DateTime` (via UTC timezone)
+    ///
+    /// Returns `Ok(None)` if the conversion is not supported for this
+    /// value/type combination. Returns `Err` if parsing fails.
     pub fn cast_jiff(&self, value: &Value) -> Result<Option<Value>> {
         Ok(Some(match (value, self) {
             // String -> jiff

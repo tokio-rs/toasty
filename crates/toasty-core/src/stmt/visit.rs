@@ -548,6 +548,7 @@ impl<V: Visit> Visit for &mut V {
     }
 }
 
+/// Default traversal for [`Assignment`] nodes. Visits the assignment's expression.
 pub fn visit_assignment<V>(v: &mut V, node: &Assignment)
 where
     V: Visit + ?Sized,
@@ -555,6 +556,7 @@ where
     v.visit_expr(&node.expr);
 }
 
+/// Default traversal for [`Assignments`] nodes. Visits each assignment in the collection.
 pub fn visit_assignments<V>(v: &mut V, node: &Assignments)
 where
     V: Visit + ?Sized,
@@ -564,6 +566,7 @@ where
     }
 }
 
+/// Default traversal for [`Association`] nodes. Visits the association's source query.
 pub fn visit_association<V>(v: &mut V, node: &Association)
 where
     V: Visit + ?Sized,
@@ -571,6 +574,7 @@ where
     v.visit_stmt_query(&node.source);
 }
 
+/// Default traversal for [`Cte`] nodes. Visits the CTE's query.
 pub fn visit_cte<V>(v: &mut V, node: &Cte)
 where
     V: Visit + ?Sized,
@@ -578,6 +582,7 @@ where
     v.visit_stmt_query(&node.query);
 }
 
+/// Default traversal for [`Expr`] nodes. Dispatches to the appropriate expression visitor based on variant.
 pub fn visit_expr<V>(v: &mut V, node: &Expr)
 where
     V: Visit + ?Sized,
@@ -610,6 +615,7 @@ where
     }
 }
 
+/// Default traversal for [`ExprAnd`] nodes. Visits each operand expression.
 pub fn visit_expr_and<V>(v: &mut V, node: &ExprAnd)
 where
     V: Visit + ?Sized,
@@ -619,6 +625,7 @@ where
     }
 }
 
+/// Default traversal for [`ExprAny`] nodes. Visits the inner expression.
 pub fn visit_expr_any<V>(v: &mut V, node: &ExprAny)
 where
     V: Visit + ?Sized,
@@ -626,12 +633,14 @@ where
     v.visit_expr(&node.expr);
 }
 
+/// Default traversal for [`ExprArg`] nodes. This is a leaf node with no children to visit.
 pub fn visit_expr_arg<V>(v: &mut V, node: &ExprArg)
 where
     V: Visit + ?Sized,
 {
 }
 
+/// Default traversal for [`ExprBinaryOp`] nodes. Visits left and right operands.
 pub fn visit_expr_binary_op<V>(v: &mut V, node: &ExprBinaryOp)
 where
     V: Visit + ?Sized,
@@ -640,6 +649,7 @@ where
     v.visit_expr(&node.rhs);
 }
 
+/// Default traversal for [`ExprCast`] nodes. Visits the inner expression and target type.
 pub fn visit_expr_cast<V>(v: &mut V, node: &ExprCast)
 where
     V: Visit + ?Sized,
@@ -648,18 +658,21 @@ where
     v.visit_type(&node.ty);
 }
 
+/// Default traversal for [`ExprColumn`] nodes. This is a leaf node with no children to visit.
 pub fn visit_expr_column<V>(v: &mut V, node: &ExprColumn)
 where
     V: Visit + ?Sized,
 {
 }
 
+/// Default traversal for [`Expr::Default`] nodes. This is a leaf node with no children to visit.
 pub fn visit_expr_default<V>(v: &mut V)
 where
     V: Visit + ?Sized,
 {
 }
 
+/// Default traversal for [`ExprError`] nodes. This is a leaf node with no children to visit.
 pub fn visit_expr_error<V>(v: &mut V, node: &ExprError)
 where
     V: Visit + ?Sized,
@@ -667,6 +680,7 @@ where
     // ExprError has no child expressions to visit
 }
 
+/// Default traversal for [`ExprExists`] nodes. Visits the subquery.
 pub fn visit_expr_exists<V>(v: &mut V, node: &ExprExists)
 where
     V: Visit + ?Sized,
@@ -674,6 +688,7 @@ where
     v.visit_stmt_query(&node.subquery);
 }
 
+/// Default traversal for [`ExprFunc`] nodes. Dispatches to the specific function visitor.
 pub fn visit_expr_func<V>(v: &mut V, node: &ExprFunc)
 where
     V: Visit + ?Sized,
@@ -684,6 +699,7 @@ where
     }
 }
 
+/// Default traversal for [`FuncCount`] nodes. Visits the optional argument and filter expressions.
 pub fn visit_expr_func_count<V>(v: &mut V, node: &FuncCount)
 where
     V: Visit + ?Sized,
@@ -697,6 +713,7 @@ where
     }
 }
 
+/// Default traversal for [`FuncLastInsertId`] nodes. This is a leaf node with no children to visit.
 pub fn visit_expr_func_last_insert_id<V>(_v: &mut V, _node: &FuncLastInsertId)
 where
     V: Visit + ?Sized,
@@ -704,6 +721,7 @@ where
     // FuncLastInsertId has no fields to visit
 }
 
+/// Default traversal for [`ExprInList`] nodes. Visits the expression and list.
 pub fn visit_expr_in_list<V>(v: &mut V, node: &ExprInList)
 where
     V: Visit + ?Sized,
@@ -712,6 +730,7 @@ where
     v.visit_expr(&node.list);
 }
 
+/// Default traversal for [`ExprInSubquery`] nodes. Visits the expression and subquery.
 pub fn visit_expr_in_subquery<V>(v: &mut V, node: &ExprInSubquery)
 where
     V: Visit + ?Sized,
@@ -720,6 +739,7 @@ where
     v.visit_stmt_query(&node.query);
 }
 
+/// Default traversal for [`ExprIsNull`] nodes. Visits the inner expression.
 pub fn visit_expr_is_null<V>(v: &mut V, node: &ExprIsNull)
 where
     V: Visit + ?Sized,
@@ -727,6 +747,7 @@ where
     v.visit_expr(&node.expr);
 }
 
+/// Default traversal for [`ExprIsVariant`] nodes. Visits the inner expression.
 pub fn visit_expr_is_variant<V>(v: &mut V, node: &ExprIsVariant)
 where
     V: Visit + ?Sized,
@@ -734,6 +755,7 @@ where
     v.visit_expr(&node.expr);
 }
 
+/// Default traversal for [`ExprLet`] nodes. Visits bindings and body.
 pub fn visit_expr_let<V>(v: &mut V, node: &ExprLet)
 where
     V: Visit + ?Sized,
@@ -744,6 +766,7 @@ where
     v.visit_expr(&node.body);
 }
 
+/// Default traversal for [`ExprMap`] nodes. Visits base and map expressions.
 pub fn visit_expr_map<V>(v: &mut V, node: &ExprMap)
 where
     V: Visit + ?Sized,
@@ -752,6 +775,7 @@ where
     v.visit_expr(&node.map);
 }
 
+/// Default traversal for [`ExprMatch`] nodes. Visits subject, arms, and else expression.
 pub fn visit_expr_match<V>(v: &mut V, node: &ExprMatch)
 where
     V: Visit + ?Sized,
@@ -763,6 +787,7 @@ where
     v.visit_expr(&node.else_expr);
 }
 
+/// Default traversal for [`ExprNot`] nodes. Visits the inner expression.
 pub fn visit_expr_not<V>(v: &mut V, node: &ExprNot)
 where
     V: Visit + ?Sized,
@@ -770,6 +795,7 @@ where
     v.visit_expr(&node.expr);
 }
 
+/// Default traversal for [`ExprOr`] nodes. Visits each operand expression.
 pub fn visit_expr_or<V>(v: &mut V, node: &ExprOr)
 where
     V: Visit + ?Sized,
@@ -779,6 +805,7 @@ where
     }
 }
 
+/// Default traversal for [`ExprList`] nodes. Visits each item expression.
 pub fn visit_expr_list<V>(v: &mut V, node: &ExprList)
 where
     V: Visit + ?Sized,
@@ -788,6 +815,7 @@ where
     }
 }
 
+/// Default traversal for [`ExprRecord`] nodes. Visits each field expression.
 pub fn visit_expr_record<V>(v: &mut V, node: &ExprRecord)
 where
     V: Visit + ?Sized,
@@ -797,6 +825,7 @@ where
     }
 }
 
+/// Default traversal for [`ExprReference`] nodes. Dispatches based on reference kind.
 pub fn visit_expr_reference<V>(v: &mut V, node: &ExprReference)
 where
     V: Visit + ?Sized,
@@ -808,6 +837,7 @@ where
     }
 }
 
+/// Default traversal for [`ExprSet`] nodes. Dispatches to the appropriate set expression visitor.
 pub fn visit_expr_set<V>(v: &mut V, node: &ExprSet)
 where
     V: Visit + ?Sized,
@@ -821,6 +851,7 @@ where
     }
 }
 
+/// Default traversal for [`ExprSetOp`] nodes. Visits each operand.
 pub fn visit_expr_set_op<V>(v: &mut V, node: &ExprSetOp)
 where
     V: Visit + ?Sized,
@@ -830,6 +861,7 @@ where
     }
 }
 
+/// Default traversal for [`ExprStmt`] nodes. Visits the inner statement.
 pub fn visit_expr_stmt<V>(v: &mut V, node: &ExprStmt)
 where
     V: Visit + ?Sized,
@@ -837,6 +869,7 @@ where
     v.visit_stmt(&node.stmt);
 }
 
+/// Default traversal for [`ExprProject`] nodes. Visits the base expression and projection.
 pub fn visit_expr_project<V>(v: &mut V, node: &ExprProject)
 where
     V: Visit + ?Sized,
@@ -845,6 +878,7 @@ where
     v.visit_projection(&node.projection);
 }
 
+/// Default traversal for [`Filter`] nodes. Visits the optional filter expression.
 pub fn visit_filter<V>(v: &mut V, node: &Filter)
 where
     V: Visit + ?Sized,
@@ -854,6 +888,7 @@ where
     }
 }
 
+/// Default traversal for [`Condition`] nodes. Visits the optional condition expression.
 pub fn visit_condition<V>(v: &mut V, node: &Condition)
 where
     V: Visit + ?Sized,
@@ -863,6 +898,7 @@ where
     }
 }
 
+/// Default traversal for [`InsertTarget`] nodes. Visits the scope query if present.
 pub fn visit_insert_target<V>(v: &mut V, node: &InsertTarget)
 where
     V: Visit + ?Sized,
@@ -872,6 +908,7 @@ where
     }
 }
 
+/// Default traversal for [`Join`] nodes. Visits the table and join constraint.
 pub fn visit_join<V>(v: &mut V, node: &Join)
 where
     V: Visit + ?Sized,
@@ -882,6 +919,7 @@ where
     }
 }
 
+/// Default traversal for [`Limit`] nodes. Visits the limit expression and optional offset.
 pub fn visit_limit<V>(v: &mut V, node: &Limit)
 where
     V: Visit + ?Sized,
@@ -893,6 +931,7 @@ where
     }
 }
 
+/// Default traversal for [`Offset`] nodes. Visits the offset expression.
 pub fn visit_offset<V>(v: &mut V, node: &Offset)
 where
     V: Visit + ?Sized,
@@ -903,6 +942,7 @@ where
     }
 }
 
+/// Default traversal for [`OrderBy`] nodes. Visits each ordering expression.
 pub fn visit_order_by<V>(v: &mut V, node: &OrderBy)
 where
     V: Visit + ?Sized,
@@ -912,6 +952,7 @@ where
     }
 }
 
+/// Default traversal for [`OrderByExpr`] nodes. Visits the ordering expression.
 pub fn visit_order_by_expr<V>(v: &mut V, node: &OrderByExpr)
 where
     V: Visit + ?Sized,
@@ -919,6 +960,7 @@ where
     v.visit_expr(&node.expr);
 }
 
+/// Default traversal for [`Path`] nodes. Visits the path's projection.
 pub fn visit_path<V>(v: &mut V, node: &Path)
 where
     V: Visit + ?Sized,
@@ -926,12 +968,14 @@ where
     v.visit_projection(&node.projection);
 }
 
+/// Default traversal for [`Projection`] nodes. This is a leaf node with no children to visit.
 pub fn visit_projection<V>(v: &mut V, node: &Projection)
 where
     V: Visit + ?Sized,
 {
 }
 
+/// Default traversal for [`Returning`] nodes. Visits included paths or expressions based on variant.
 pub fn visit_returning<V>(v: &mut V, node: &Returning)
 where
     V: Visit + ?Sized,
@@ -948,6 +992,7 @@ where
     }
 }
 
+/// Default traversal for [`Source`] nodes. Dispatches to model or table source visitor.
 pub fn visit_source<V>(v: &mut V, node: &Source)
 where
     V: Visit + ?Sized,
@@ -958,6 +1003,7 @@ where
     }
 }
 
+/// Default traversal for [`SourceModel`] nodes. Visits the optional association.
 pub fn visit_source_model<V>(v: &mut V, node: &SourceModel)
 where
     V: Visit + ?Sized,
@@ -967,6 +1013,7 @@ where
     }
 }
 
+/// Default traversal for [`SourceTable`] nodes. Visits table references and FROM clauses.
 pub fn visit_source_table<V>(v: &mut V, node: &SourceTable)
 where
     V: Visit + ?Sized,
@@ -979,6 +1026,7 @@ where
     }
 }
 
+/// Default traversal for [`SourceTableId`] nodes. This is a leaf node with no children to visit.
 pub fn visit_source_table_id<V>(v: &mut V, node: &SourceTableId)
 where
     V: Visit + ?Sized,
@@ -986,6 +1034,7 @@ where
     // SourceTableId is just an index, nothing to visit
 }
 
+/// Default traversal for [`TableFactor`] nodes. Dispatches based on factor type.
 pub fn visit_table_factor<V>(v: &mut V, node: &TableFactor)
 where
     V: Visit + ?Sized,
@@ -995,6 +1044,7 @@ where
     }
 }
 
+/// Default traversal for [`Statement`] nodes. Dispatches to the appropriate statement visitor.
 pub fn visit_stmt<V>(v: &mut V, node: &Statement)
 where
     V: Visit + ?Sized,
@@ -1007,6 +1057,7 @@ where
     }
 }
 
+/// Default traversal for [`Delete`] nodes. Visits source, filter, and optional returning.
 pub fn visit_stmt_delete<V>(v: &mut V, node: &Delete)
 where
     V: Visit + ?Sized,
@@ -1019,6 +1070,7 @@ where
     }
 }
 
+/// Default traversal for [`Insert`] nodes. Visits target, source query, and optional returning.
 pub fn visit_stmt_insert<V>(v: &mut V, node: &Insert)
 where
     V: Visit + ?Sized,
@@ -1033,6 +1085,7 @@ where
     }
 }
 
+/// Default traversal for [`Query`] nodes. Visits optional WITH, body, order by, and limit.
 pub fn visit_stmt_query<V>(v: &mut V, node: &Query)
 where
     V: Visit + ?Sized,
@@ -1052,6 +1105,7 @@ where
     }
 }
 
+/// Default traversal for [`Select`] nodes. Visits source, filter, and returning.
 pub fn visit_stmt_select<V>(v: &mut V, node: &Select)
 where
     V: Visit + ?Sized,
@@ -1061,6 +1115,7 @@ where
     v.visit_returning(&node.returning);
 }
 
+/// Default traversal for [`Update`] nodes. Visits target, assignments, filter, and condition.
 pub fn visit_stmt_update<V>(v: &mut V, node: &Update)
 where
     V: Visit + ?Sized,
@@ -1071,6 +1126,7 @@ where
     v.visit_condition(&node.condition);
 }
 
+/// Default traversal for [`TableDerived`] nodes. Visits the subquery.
 pub fn visit_table_derived<V>(v: &mut V, node: &TableDerived)
 where
     V: Visit + ?Sized,
@@ -1078,6 +1134,7 @@ where
     v.visit_stmt_query(&node.subquery);
 }
 
+/// Default traversal for [`TableRef`] nodes. Dispatches based on reference kind.
 pub fn visit_table_ref<V>(v: &mut V, node: &TableRef)
 where
     V: Visit + ?Sized,
@@ -1090,6 +1147,7 @@ where
     }
 }
 
+/// Default traversal for [`TableWithJoins`] nodes. Visits the relation and each join.
 pub fn visit_table_with_joins<V>(v: &mut V, node: &TableWithJoins)
 where
     V: Visit + ?Sized,
@@ -1100,6 +1158,7 @@ where
     }
 }
 
+/// Default traversal for [`Type`] nodes. This is a leaf node with no children to visit.
 pub fn visit_type<V>(v: &mut V, node: &Type)
 where
     V: Visit + ?Sized,
@@ -1107,6 +1166,7 @@ where
     // Type is just type information, no traversal needed
 }
 
+/// Default traversal for [`UpdateTarget`] nodes. Visits the query if target is a query.
 pub fn visit_update_target<V>(v: &mut V, node: &UpdateTarget)
 where
     V: Visit + ?Sized,
@@ -1116,6 +1176,7 @@ where
     }
 }
 
+/// Default traversal for [`Value`] nodes. Visits inner record if value is a record.
 pub fn visit_value<V>(v: &mut V, node: &Value)
 where
     V: Visit + ?Sized,
@@ -1125,6 +1186,7 @@ where
     }
 }
 
+/// Default traversal for [`ValueRecord`] nodes. Visits each value in the record.
 pub fn visit_value_record<V>(v: &mut V, node: &ValueRecord)
 where
     V: Visit + ?Sized,
@@ -1134,6 +1196,7 @@ where
     }
 }
 
+/// Default traversal for [`Values`] nodes. Visits each row expression.
 pub fn visit_values<V>(v: &mut V, node: &Values)
 where
     V: Visit + ?Sized,
@@ -1143,6 +1206,7 @@ where
     }
 }
 
+/// Default traversal for [`With`] nodes. Visits each CTE.
 pub fn visit_with<V>(v: &mut V, node: &With)
 where
     V: Visit + ?Sized,

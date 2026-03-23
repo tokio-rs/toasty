@@ -564,10 +564,19 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
 }
 
 impl<'a> ExprContext<'a, Schema> {
+    /// Returns the context target as a `ModelRoot` reference, or `None` if the target is not a
+    /// model.
     pub fn target_as_model(&self) -> Option<&'a ModelRoot> {
         self.target.as_model()
     }
 
+    /// Creates an `ExprReference::Column` for the given column ID.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the context has no table target (`ExprTarget::Free`), if the column does not
+    /// belong to the table associated with the current target, or if the target's model has no
+    /// mapped database table.
     pub fn expr_ref_column(&self, column_id: impl Into<ColumnId>) -> ExprReference {
         let column_id = column_id.into();
 
@@ -611,6 +620,11 @@ impl<'a, T> Clone for ExprContext<'a, T> {
 impl<'a, T> Copy for ExprContext<'a, T> {}
 
 impl<'a> ResolvedRef<'a> {
+    /// Returns the inner `Column` reference.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is not `ResolvedRef::Column`.
     #[track_caller]
     pub fn as_column_unwrap(self) -> &'a Column {
         match self {
@@ -619,6 +633,11 @@ impl<'a> ResolvedRef<'a> {
         }
     }
 
+    /// Returns the inner `Field` reference.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is not `ResolvedRef::Field`.
     #[track_caller]
     pub fn as_field_unwrap(self) -> &'a Field {
         match self {
@@ -627,6 +646,11 @@ impl<'a> ResolvedRef<'a> {
         }
     }
 
+    /// Returns the inner `ModelRoot` reference.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is not `ResolvedRef::Model`.
     #[track_caller]
     pub fn as_model_unwrap(self) -> &'a ModelRoot {
         match self {
