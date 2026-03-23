@@ -58,8 +58,8 @@ pub(crate) struct ExprBinaryOp {
 /// A dot-prefixed field path: `.name`, `.profile.bio`, etc.
 #[derive(Debug)]
 pub(crate) struct FieldPath {
-    /// Span of the leading `.` — used for error reporting.
-    pub dot_span: Span,
+    /// Span of the leading `.` — reserved for future error reporting.
+    pub _dot_span: Span,
     pub segments: Vec<syn::Ident>,
 }
 
@@ -67,7 +67,8 @@ pub(crate) struct FieldPath {
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct CompareOp {
     pub kind: CompareOpKind,
-    pub span: Span,
+    /// Reserved for future error reporting.
+    pub _span: Span,
 }
 
 /// Comparison operator kinds.
@@ -225,7 +226,10 @@ fn parse_field_path(input: ParseStream) -> syn::Result<FieldPath> {
         segments.push(input.parse::<syn::Ident>()?);
     }
 
-    Ok(FieldPath { dot_span, segments })
+    Ok(FieldPath {
+        _dot_span: dot_span,
+        segments,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -247,37 +251,37 @@ fn parse_compare_op(input: ParseStream) -> syn::Result<CompareOp> {
         let tok = input.parse::<syn::Token![==]>()?;
         Ok(CompareOp {
             kind: CompareOpKind::Eq,
-            span: tok.spans[0],
+            _span: tok.spans[0],
         })
     } else if input.peek(syn::Token![!=]) {
         let tok = input.parse::<syn::Token![!=]>()?;
         Ok(CompareOp {
             kind: CompareOpKind::Ne,
-            span: tok.spans[0],
+            _span: tok.spans[0],
         })
     } else if input.peek(syn::Token![>=]) {
         let tok = input.parse::<syn::Token![>=]>()?;
         Ok(CompareOp {
             kind: CompareOpKind::Ge,
-            span: tok.spans[0],
+            _span: tok.spans[0],
         })
     } else if input.peek(syn::Token![<=]) {
         let tok = input.parse::<syn::Token![<=]>()?;
         Ok(CompareOp {
             kind: CompareOpKind::Le,
-            span: tok.spans[0],
+            _span: tok.spans[0],
         })
     } else if input.peek(syn::Token![>]) {
         let tok = input.parse::<syn::Token![>]>()?;
         Ok(CompareOp {
             kind: CompareOpKind::Gt,
-            span: tok.span,
+            _span: tok.span,
         })
     } else if input.peek(syn::Token![<]) {
         let tok = input.parse::<syn::Token![<]>()?;
         Ok(CompareOp {
             kind: CompareOpKind::Lt,
-            span: tok.span,
+            _span: tok.span,
         })
     } else {
         Err(input.error("expected comparison operator (==, !=, >, >=, <, <=)"))
