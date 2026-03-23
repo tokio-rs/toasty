@@ -41,7 +41,8 @@ use quote::quote;
 ///
 /// **Simple form** — every listed field becomes a partition key:
 ///
-/// ```ignore
+/// ```
+/// # use toasty::Model;
 /// #[derive(Model)]
 /// #[key(name)]
 /// struct Widget {
@@ -52,7 +53,8 @@ use quote::quote;
 ///
 /// **Composite key with partition/local scoping:**
 ///
-/// ```ignore
+/// ```
+/// # use toasty::Model;
 /// #[derive(Model)]
 /// #[key(partition = user_id, local = id)]
 /// struct Todo {
@@ -69,8 +71,11 @@ use quote::quote;
 ///
 /// Multiple `partition` and `local` entries are allowed:
 ///
-/// ```ignore
+/// ```
+/// # use toasty::Model;
+/// # #[derive(Model)]
 /// #[key(partition = tenant, partition = org, local = id)]
+/// # struct Example { tenant: String, org: String, id: String }
 /// ```
 ///
 /// When using named `partition`/`local` syntax, at least one of each is
@@ -82,7 +87,8 @@ use quote::quote;
 /// is the pluralized, snake_case form of the struct name (e.g. `User` →
 /// `users`).
 ///
-/// ```ignore
+/// ```
+/// # use toasty::Model;
 /// #[derive(Model)]
 /// #[table = "legacy_users"]
 /// struct User {
@@ -103,7 +109,8 @@ use quote::quote;
 ///
 /// Cannot be combined with a struct-level `#[key(...)]` attribute.
 ///
-/// ```ignore
+/// ```
+/// # use toasty::Model;
 /// #[derive(Model)]
 /// struct User {
 ///     #[key]
@@ -138,12 +145,19 @@ use quote::quote;
 /// Sets a default value that is used when the field is not explicitly
 /// provided during creation. The expression is any valid Rust expression.
 ///
-/// ```ignore
+/// ```
+/// # use toasty::Model;
+/// # #[derive(Model)]
+/// # struct Example {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
 /// #[default(0)]
 /// view_count: i64,
 ///
 /// #[default("draft".to_string())]
 /// status: String,
+/// # }
 /// ```
 ///
 /// The default can be overridden by calling the corresponding setter on the
@@ -158,9 +172,16 @@ use quote::quote;
 /// Sets a value that Toasty applies every time a record is created or
 /// updated, unless the field is explicitly set on the builder.
 ///
-/// ```ignore
+/// ```
+/// # use toasty::Model;
+/// # #[derive(Model)]
+/// # struct Example {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
 /// #[update(jiff::Timestamp::now())]
 /// updated_at: jiff::Timestamp,
+/// # }
 /// ```
 ///
 /// Cannot be combined with `#[auto]` on the same field.
@@ -170,9 +191,16 @@ use quote::quote;
 /// Creates a non-unique index on the field. Toasty generates a
 /// `filter_by_<field>` method for indexed fields.
 ///
-/// ```ignore
+/// ```
+/// # use toasty::Model;
+/// # #[derive(Model)]
+/// # struct Example {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
 /// #[index]
 /// email: String,
+/// # }
 /// ```
 ///
 /// ## `#[unique]` — add a unique constraint
@@ -180,9 +208,16 @@ use quote::quote;
 /// Creates a unique index on the field. Like `#[index]`, this generates
 /// `filter_by_<field>`. The database enforces uniqueness.
 ///
-/// ```ignore
+/// ```
+/// # use toasty::Model;
+/// # #[derive(Model)]
+/// # struct Example {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
 /// #[unique]
 /// email: String,
+/// # }
 /// ```
 ///
 /// ## `#[column(...)]` — customize the database column
@@ -191,23 +226,44 @@ use quote::quote;
 ///
 /// **Custom name:**
 ///
-/// ```ignore
+/// ```
+/// # use toasty::Model;
+/// # #[derive(Model)]
+/// # struct Example {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
 /// #[column("user_email")]
 /// email: String,
+/// # }
 /// ```
 ///
 /// **Custom type:**
 ///
-/// ```ignore
+/// ```
+/// # use toasty::Model;
+/// # #[derive(Model)]
+/// # struct Example {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
 /// #[column(type = varchar(255))]
 /// email: String,
+/// # }
 /// ```
 ///
 /// **Both:**
 ///
-/// ```ignore
+/// ```
+/// # use toasty::Model;
+/// # #[derive(Model)]
+/// # struct Example {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
 /// #[column("user_email", type = varchar(255))]
 /// email: String,
+/// # }
 /// ```
 ///
 /// ### Supported column types
@@ -239,17 +295,32 @@ use quote::quote;
 /// feature and that the field type implements `serde::Serialize` and
 /// `serde::Deserialize`.
 ///
-/// ```ignore
+/// ```
+/// # use toasty::Model;
+/// # #[derive(Model)]
+/// # struct Example {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
 /// #[serialize(json)]
 /// tags: Vec<String>,
+/// # }
 /// ```
 ///
 /// For `Option<T>` fields, add `nullable` so that `None` maps to SQL
 /// `NULL` rather than the JSON string `"null"`:
 ///
-/// ```ignore
+/// ```
+/// # use toasty::Model;
+/// # use std::collections::HashMap;
+/// # #[derive(Model)]
+/// # struct Example {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
 /// #[serialize(json, nullable)]
 /// metadata: Option<HashMap<String, String>>,
+/// # }
 /// ```
 ///
 /// Cannot be used on relation fields.
@@ -261,9 +332,23 @@ use quote::quote;
 /// Declares a many-to-one (or one-to-one) association through a foreign
 /// key stored on this model.
 ///
-/// ```ignore
+/// ```
+/// # use toasty::Model;
+/// # #[derive(Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// # }
+/// # #[derive(Model)]
+/// # struct Example {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     user_id: i64,
 /// #[belongs_to(key = user_id, references = id)]
 /// user: toasty::BelongsTo<User>,
+/// # }
 /// ```
 ///
 /// | Parameter | Meaning |
@@ -273,9 +358,25 @@ use quote::quote;
 ///
 /// For composite foreign keys, repeat `key`/`references` pairs:
 ///
-/// ```ignore
+/// ```
+/// # use toasty::Model;
+/// # #[derive(Model)]
+/// # struct Org {
+/// #     #[key]
+/// #     id: i64,
+/// #     #[key]
+/// #     tenant_id: i64,
+/// # }
+/// # #[derive(Model)]
+/// # struct Example {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     org_id: i64,
+/// #     tenant_id: i64,
 /// #[belongs_to(key = org_id, references = id, key = tenant_id, references = tenant_id)]
 /// org: toasty::BelongsTo<Org>,
+/// # }
 /// ```
 ///
 /// The number of `key` entries must equal the number of `references`
@@ -283,12 +384,25 @@ use quote::quote;
 ///
 /// Wrap the target type in `Option` for an optional (nullable) foreign key:
 ///
-/// ```ignore
+/// ```
+/// # use toasty::Model;
+/// # #[derive(Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// # }
+/// # #[derive(Model)]
+/// # struct Example {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
 /// #[index]
 /// manager_id: Option<i64>,
 ///
 /// #[belongs_to(key = manager_id, references = id)]
 /// manager: toasty::BelongsTo<Option<User>>,
+/// # }
 /// ```
 ///
 /// ## `#[has_many]` — one-to-many association
@@ -296,9 +410,26 @@ use quote::quote;
 /// Declares a collection of related models. The target model must have a
 /// `#[belongs_to]` field pointing back to this model.
 ///
-/// ```ignore
+/// ```
+/// # use toasty::Model;
+/// # #[derive(Model)]
+/// # struct Post {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     #[index]
+/// #     example_id: i64,
+/// #     #[belongs_to(key = example_id, references = id)]
+/// #     example: toasty::BelongsTo<Example>,
+/// # }
+/// # #[derive(Model)]
+/// # struct Example {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
 /// #[has_many]
 /// posts: toasty::HasMany<Post>,
+/// # }
 /// ```
 ///
 /// Toasty generates an accessor method (e.g. `.posts()`) and an insert
@@ -311,9 +442,20 @@ use quote::quote;
 /// the same model (or points to itself), use `pair` to specify which
 /// `belongs_to` field this `has_many` corresponds to:
 ///
-/// ```ignore
+/// ```
+/// # use toasty::Model;
+/// # #[derive(Model)]
+/// # struct Person {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     #[index]
+/// #     parent_id: Option<i64>,
+/// #     #[belongs_to(key = parent_id, references = id)]
+/// #     parent: toasty::BelongsTo<Option<Self>>,
 /// #[has_many(pair = parent)]
 /// children: toasty::HasMany<Person>,
+/// # }
 /// ```
 ///
 /// ## `#[has_one]` — one-to-one association
@@ -321,16 +463,50 @@ use quote::quote;
 /// Declares a single related model. The target model must have a
 /// `#[belongs_to]` field pointing back to this model.
 ///
-/// ```ignore
+/// ```
+/// # use toasty::Model;
+/// # #[derive(Model)]
+/// # struct Profile {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     #[index]
+/// #     example_id: i64,
+/// #     #[belongs_to(key = example_id, references = id)]
+/// #     example: toasty::BelongsTo<Example>,
+/// # }
+/// # #[derive(Model)]
+/// # struct Example {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
 /// #[has_one]
 /// profile: toasty::HasOne<Profile>,
+/// # }
 /// ```
 ///
 /// Wrap in `Option` for an optional association:
 ///
-/// ```ignore
+/// ```
+/// # use toasty::Model;
+/// # #[derive(Model)]
+/// # struct Profile {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     #[index]
+/// #     example_id: i64,
+/// #     #[belongs_to(key = example_id, references = id)]
+/// #     example: toasty::BelongsTo<Example>,
+/// # }
+/// # #[derive(Model)]
+/// # struct Example {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
 /// #[has_one]
 /// profile: toasty::HasOne<Option<Profile>>,
+/// # }
 /// ```
 ///
 /// # Constraints
@@ -350,7 +526,7 @@ use quote::quote;
 ///
 /// # Full example
 ///
-/// ```ignore
+/// ```
 /// #[derive(Debug, toasty::Model)]
 /// struct User {
 ///     #[key]
@@ -419,7 +595,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// `street` and `city` produces columns `address_street` and
 /// `address_city`.
 ///
-/// ```ignore
+/// ```
 /// #[derive(toasty::Embed)]
 /// struct Address {
 ///     street: String,
@@ -449,7 +625,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// Embedded structs can contain other embedded types. Columns are
 /// flattened with chained prefixes:
 ///
-/// ```ignore
+/// ```
 /// #[derive(toasty::Embed)]
 /// struct Location {
 ///     lat: i64,
@@ -475,7 +651,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 ///
 /// **Unit-only enum:**
 ///
-/// ```ignore
+/// ```
 /// #[derive(toasty::Embed)]
 /// enum Status {
 ///     #[column(variant = 1)]
@@ -492,7 +668,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 ///
 /// **Data-carrying enum:**
 ///
-/// ```ignore
+/// ```
 /// #[derive(toasty::Embed)]
 /// enum ContactInfo {
 ///     #[column(variant = 1)]
@@ -510,7 +686,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 ///
 /// **Mixed enum** (unit and data variants together):
 ///
-/// ```ignore
+/// ```
 /// #[derive(toasty::Embed)]
 /// enum Status {
 ///     #[column(variant = 1)]
@@ -536,7 +712,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 ///
 /// **On struct fields**, overrides the column name and/or type:
 ///
-/// ```ignore
+/// ```
 /// #[derive(toasty::Embed)]
 /// struct Address {
 ///     #[column("addr_street")]
@@ -553,9 +729,12 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// **On enum variants**, `#[column(variant = N)]` is **required** and
 /// assigns the integer discriminant stored in the database:
 ///
-/// ```ignore
+/// ```
+/// # #[derive(toasty::Embed)]
+/// # enum Example {
 /// #[column(variant = 1)]
 /// Pending,
+/// # }
 /// ```
 ///
 /// Discriminant values must be unique across all variants of the enum.
@@ -565,7 +744,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 ///
 /// Creates a non-unique index on the field's flattened column.
 ///
-/// ```ignore
+/// ```
 /// #[derive(toasty::Embed)]
 /// struct Contact {
 ///     #[index]
@@ -578,7 +757,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// Creates a unique index on the field's flattened column. The database
 /// enforces uniqueness.
 ///
-/// ```ignore
+/// ```
 /// #[derive(toasty::Embed)]
 /// struct Contact {
 ///     #[unique]
@@ -593,7 +772,18 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// the embedded field. For embedded structs, a `with_<field>` method
 /// supports partial updates of individual sub-fields:
 ///
-/// ```ignore
+/// ```no_run
+/// # #[derive(toasty::Embed)]
+/// # struct Address { street: String, city: String }
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     name: String,
+/// #     address: Address,
+/// # }
+/// # async fn example(mut db: toasty::Db, mut user: User) -> toasty::Result<()> {
 /// // Full replacement
 /// user.update()
 ///     .address(Address { street: "456 Oak Ave".into(), city: "Seattle".into() })
@@ -603,14 +793,29 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// user.update()
 ///     .with_address(|a| { a.city("Portland"); })
 ///     .exec(&mut db).await?;
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// Embedded struct fields are queryable through the parent model's
 /// `fields()` accessor:
 ///
-/// ```ignore
+/// ```no_run
+/// # #[derive(toasty::Embed)]
+/// # struct Address { street: String, city: String }
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     name: String,
+/// #     address: Address,
+/// # }
+/// # async fn example(mut db: toasty::Db) -> toasty::Result<()> {
 /// let users = User::filter(User::fields().address().city().eq("Seattle"))
 ///     .exec(&mut db).await?;
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// # Constraints
@@ -627,7 +832,8 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 ///
 /// # Full example
 ///
-/// ```ignore
+/// ```no_run
+/// # async fn example(mut db: toasty::Db) -> toasty::Result<()> {
 /// #[derive(Debug, PartialEq, toasty::Embed)]
 /// enum Priority {
 ///     #[column(variant = 1)]
@@ -660,7 +866,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// }
 ///
 /// // Create
-/// let doc = Document::create()
+/// let mut doc = Document::create()
 ///     .title("Design doc")
 ///     .slug("design-doc")
 ///     .meta(Metadata {
@@ -679,6 +885,8 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// doc.update()
 ///     .with_meta(|m| { m.version(2).status("published"); })
 ///     .exec(&mut db).await?;
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// [`Embed`]: toasty::Embed
@@ -716,13 +924,24 @@ pub fn query(_input: TokenStream) -> TokenStream {
 /// Expands to `Type::create().field(value)...` and returns the model's create
 /// builder (e.g., `UserCreate`).
 ///
-/// ```ignore
+/// ```no_run
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     name: String,
+/// #     email: String,
+/// # }
+/// # async fn example(mut db: toasty::Db) -> toasty::Result<()> {
 /// let user = toasty::create!(User {
 ///     name: "Alice",
 ///     email: "alice@example.com"
 /// })
 /// .exec(&mut db)
 /// .await?;
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// ## Scoped creation
@@ -734,12 +953,35 @@ pub fn query(_input: TokenStream) -> TokenStream {
 /// Expands to `expr.create().field(value)...`. Creates a record through a
 /// relation accessor. The foreign key is set automatically.
 ///
-/// ```ignore
+/// ```no_run
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     name: String,
+/// #     #[has_many]
+/// #     todos: toasty::HasMany<Todo>,
+/// # }
+/// # #[derive(toasty::Model)]
+/// # struct Todo {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     title: String,
+/// #     #[index]
+/// #     user_id: i64,
+/// #     #[belongs_to(key = user_id, references = id)]
+/// #     user: toasty::BelongsTo<User>,
+/// # }
+/// # async fn example(mut db: toasty::Db, user: User) -> toasty::Result<()> {
 /// let todo = toasty::create!(in user.todos() { title: "buy milk" })
 ///     .exec(&mut db)
 ///     .await?;
 ///
 /// // todo.user_id == user.id
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// ## Typed batch
@@ -751,7 +993,15 @@ pub fn query(_input: TokenStream) -> TokenStream {
 /// Expands to `toasty::batch([builder1, builder2, ...])` and returns
 /// `Vec<Type>` when executed:
 ///
-/// ```ignore
+/// ```no_run
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     name: String,
+/// # }
+/// # async fn example(mut db: toasty::Db) -> toasty::Result<()> {
 /// let users = toasty::create!(User::[
 ///     { name: "Alice" },
 ///     { name: "Bob" },
@@ -759,6 +1009,8 @@ pub fn query(_input: TokenStream) -> TokenStream {
 /// .exec(&mut db)
 /// .await?;
 /// // users: Vec<User>
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// ## Tuple
@@ -774,7 +1026,22 @@ pub fn query(_input: TokenStream) -> TokenStream {
 /// Expands to `toasty::batch((builder1, builder2, ...))` and returns a
 /// tuple matching the input types:
 ///
-/// ```ignore
+/// ```no_run
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     name: String,
+/// # }
+/// # #[derive(toasty::Model)]
+/// # struct Post {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     title: String,
+/// # }
+/// # async fn example(mut db: toasty::Db) -> toasty::Result<()> {
 /// let (user, post) = toasty::create!((
 ///     User { name: "Alice" },
 ///     Post { title: "Hello" },
@@ -782,13 +1049,30 @@ pub fn query(_input: TokenStream) -> TokenStream {
 /// .exec(&mut db)
 /// .await?;
 /// // (User, Post)
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// ## Mixed tuple
 ///
 /// Typed batches and single creates can be mixed inside a tuple:
 ///
-/// ```ignore
+/// ```no_run
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     name: String,
+/// # }
+/// # #[derive(toasty::Model)]
+/// # struct Post {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     title: String,
+/// # }
+/// # async fn example(mut db: toasty::Db) -> toasty::Result<()> {
 /// let (users, post) = toasty::create!((
 ///     User::[ { name: "Alice" }, { name: "Bob" } ],
 ///     Post { title: "Hello" },
@@ -796,6 +1080,8 @@ pub fn query(_input: TokenStream) -> TokenStream {
 /// .exec(&mut db)
 /// .await?;
 /// // (Vec<User>, Post)
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// # Field values
@@ -805,9 +1091,17 @@ pub fn query(_input: TokenStream) -> TokenStream {
 /// Any Rust expression is valid as a field value — literals, variables, and
 /// function calls all work.
 ///
-/// ```ignore
+/// ```
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     name: String,
+/// #     email: String,
+/// # }
 /// let name = "Alice";
-/// toasty::create!(User { name: name, email: format!("{}@example.com", name) })
+/// let _ = toasty::create!(User { name: name, email: format!("{}@example.com", name) });
 /// ```
 ///
 /// ## Nested struct (BelongsTo / HasOne)
@@ -815,11 +1109,29 @@ pub fn query(_input: TokenStream) -> TokenStream {
 /// Use `{ ... }` **without** a type prefix to create a related record inline.
 /// The macro calls the `with_<field>` closure setter on the builder.
 ///
-/// ```ignore
-/// toasty::create!(Todo {
+/// ```
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     name: String,
+/// # }
+/// # #[derive(toasty::Model)]
+/// # struct Todo {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     title: String,
+/// #     #[index]
+/// #     user_id: i64,
+/// #     #[belongs_to(key = user_id, references = id)]
+/// #     user: toasty::BelongsTo<User>,
+/// # }
+/// let _ = toasty::create!(Todo {
 ///     title: "buy milk",
 ///     user: { name: "Alice" }
-/// })
+/// });
 /// // Expands to:
 /// // Todo::create()
 /// //     .title("buy milk")
@@ -835,11 +1147,31 @@ pub fn query(_input: TokenStream) -> TokenStream {
 /// `with_<field>` with a `CreateMany` builder, invoking `.with_item()` for each
 /// entry.
 ///
-/// ```ignore
-/// toasty::create!(User {
+/// ```
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     name: String,
+/// #     #[has_many]
+/// #     todos: toasty::HasMany<Todo>,
+/// # }
+/// # #[derive(toasty::Model)]
+/// # struct Todo {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     title: String,
+/// #     #[index]
+/// #     user_id: i64,
+/// #     #[belongs_to(key = user_id, references = id)]
+/// #     user: toasty::BelongsTo<User>,
+/// # }
+/// let _ = toasty::create!(User {
 ///     name: "Alice",
 ///     todos: [{ title: "first" }, { title: "second" }]
-/// })
+/// });
 /// // Expands to:
 /// // User::create()
 /// //     .name("Alice")
@@ -856,14 +1188,47 @@ pub fn query(_input: TokenStream) -> TokenStream {
 ///
 /// Nesting composes to arbitrary depth:
 ///
-/// ```ignore
-/// toasty::create!(User {
+/// ```
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     name: String,
+/// #     #[has_many]
+/// #     todos: toasty::HasMany<Todo>,
+/// # }
+/// # #[derive(toasty::Model)]
+/// # struct Todo {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     title: String,
+/// #     #[index]
+/// #     user_id: i64,
+/// #     #[belongs_to(key = user_id, references = id)]
+/// #     user: toasty::BelongsTo<User>,
+/// #     #[has_many]
+/// #     tags: toasty::HasMany<Tag>,
+/// # }
+/// # #[derive(toasty::Model)]
+/// # struct Tag {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     name: String,
+/// #     #[index]
+/// #     todo_id: i64,
+/// #     #[belongs_to(key = todo_id, references = id)]
+/// #     todo: toasty::BelongsTo<Todo>,
+/// # }
+/// let _ = toasty::create!(User {
 ///     name: "Alice",
 ///     todos: [{
 ///         title: "task",
 ///         tags: [{ name: "urgent" }, { name: "work" }]
 ///     }]
-/// })
+/// });
 /// ```
 ///
 /// This creates a `User`, then a `Todo` linked to that user, then two `Tag`
@@ -889,26 +1254,76 @@ pub fn query(_input: TokenStream) -> TokenStream {
 ///
 /// **Type prefix on nested struct:**
 ///
-/// ```ignore
+/// ```compile_fail
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     name: String,
+/// # }
+/// # #[derive(toasty::Model)]
+/// # struct Todo {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     #[index]
+/// #     user_id: i64,
+/// #     #[belongs_to(key = user_id, references = id)]
+/// #     user: toasty::BelongsTo<User>,
+/// # }
 /// // Error: remove the type prefix `User` — use `{ ... }` without a type name
 /// toasty::create!(Todo { user: User { name: "Alice" } })
+/// ```
 ///
-/// // Correct:
-/// toasty::create!(Todo { user: { name: "Alice" } })
+/// Correct:
+///
+/// ```
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     name: String,
+/// # }
+/// # #[derive(toasty::Model)]
+/// # struct Todo {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     #[index]
+/// #     user_id: i64,
+/// #     #[belongs_to(key = user_id, references = id)]
+/// #     user: toasty::BelongsTo<User>,
+/// # }
+/// let _ = toasty::create!(Todo { user: { name: "Alice" } });
 /// ```
 ///
 /// Nested struct values infer their type from the field.
 ///
 /// **Nested lists:**
 ///
-/// ```ignore
+/// ```compile_fail
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     field: String,
+/// # }
 /// // Error: nested lists are not supported in create!
-/// toasty::create!(User { field: [[{ ... }]] })
+/// toasty::create!(User { field: [[{ }]] })
 /// ```
 ///
 /// **Missing braces or batch bracket:**
 ///
-/// ```ignore
+/// ```compile_fail
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// # }
 /// // Error: expected `{` for single creation or `::[` for batch creation after type path
 /// toasty::create!(User)
 /// ```
