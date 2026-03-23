@@ -97,6 +97,24 @@ impl<T> Statement<T> {
         }
     }
 
+    /// Consume this wrapper and return the underlying untyped statement.
+    ///
+    /// This is the inverse of [`from_untyped_stmt`](Self::from_untyped_stmt).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use toasty::stmt::Statement;
+    /// # use toasty_core::stmt as core_stmt;
+    /// let raw: core_stmt::Statement = core_stmt::Query::unit().into();
+    /// let typed: Statement<()> = Statement::from_untyped_stmt(raw.clone());
+    /// let back: core_stmt::Statement = typed.into_untyped_stmt();
+    /// assert_eq!(raw, back);
+    /// ```
+    pub fn into_untyped_stmt(self) -> stmt::Statement {
+        self.untyped
+    }
+
     pub(crate) fn into_untyped_query(self) -> stmt::Query {
         match self.untyped {
             stmt::Statement::Query(q) => q,
