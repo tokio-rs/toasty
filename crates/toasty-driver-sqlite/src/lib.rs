@@ -273,8 +273,8 @@ impl toasty_core::driver::Connection for Connection {
 
         let rows = stmt
             .query_map([], |row| {
-                let id: u64 = row.get(0)?;
-                Ok(toasty_core::schema::db::AppliedMigration::new(id))
+                let id: i64 = row.get(0)?;
+                Ok(toasty_core::schema::db::AppliedMigration::new(id as u64))
             })
             .map_err(toasty_core::Error::driver_operation_failed)?;
 
@@ -322,7 +322,7 @@ impl toasty_core::driver::Connection for Connection {
         // Record the migration
         if let Err(e) = self.connection.execute(
             "INSERT INTO __toasty_migrations (id, name, applied_at) VALUES (?1, ?2, datetime('now'))",
-            rusqlite::params![id, name],
+            rusqlite::params![id as i64, name],
         ).map_err(toasty_core::Error::driver_operation_failed) {
             self.connection.execute("ROLLBACK", []).map_err(toasty_core::Error::driver_operation_failed)?;
             return Err(e);
