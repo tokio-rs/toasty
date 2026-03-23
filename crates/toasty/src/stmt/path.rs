@@ -64,24 +64,6 @@ impl<T: Register> Path<T, T> {
 }
 
 impl<T, U> Path<T, U> {
-    /// Wrap a raw untyped [`stmt::Path`](toasty_core::stmt::Path).
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use toasty::stmt::Path;
-    /// # use toasty_core::stmt as core_stmt;
-    /// # use toasty_core::schema::app::ModelId;
-    /// let raw = core_stmt::Path::model(ModelId(0));
-    /// let _typed = Path::<(), ()>::new(raw);
-    /// ```
-    pub const fn new(raw: stmt::Path) -> Self {
-        Self {
-            untyped: raw,
-            _p: PhantomData,
-        }
-    }
-
     /// Create a path to the field at `index` on model `T`.
     ///
     /// # Examples
