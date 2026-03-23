@@ -356,13 +356,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 }
                 stmt::Expr::Func(stmt::ExprFunc::Count(stmt::FuncCount { arg: None, .. })) => {
                     if is_returning_projection {
-                        let index = self
-                            .stmt_info
-                            .load_data_select_items
-                            .get()
-                            .unwrap()
-                            .get_index_of(&SelectItem::CountStar)
-                            .unwrap();
+                        let index = SelectItem::get_index_of_count_star(
+                            self.stmt_info.load_data_select_items.get().unwrap(),
+                        );
                         let (position, _) = inputs.insert_full(load_data_node_id);
                         *expr = stmt::Expr::arg_project(position, [index]);
                     }

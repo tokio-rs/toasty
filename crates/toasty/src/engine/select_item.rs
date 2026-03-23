@@ -32,6 +32,20 @@ impl SelectItem {
             SelectItem::CountStar => stmt::Type::U64,
         }
     }
+
+    /// Find the index of an `ExprReference` item in a selection set.
+    pub(crate) fn get_index_of_expr_reference(
+        selection: &indexmap::IndexSet<SelectItem>,
+        expr_reference: impl Into<stmt::ExprReference>,
+    ) -> usize {
+        let item = SelectItem::ExprReference(expr_reference.into());
+        selection.get_index_of(&item).unwrap()
+    }
+
+    /// Find the index of the `CountStar` item in a selection set.
+    pub(crate) fn get_index_of_count_star(selection: &indexmap::IndexSet<SelectItem>) -> usize {
+        selection.get_index_of(&SelectItem::CountStar).unwrap()
+    }
 }
 
 impl SelectItem {

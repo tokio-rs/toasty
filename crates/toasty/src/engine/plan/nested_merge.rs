@@ -331,8 +331,7 @@ impl NestedMergePlanner<'_> {
             stmt::Expr::Reference(expr_reference) => {
                 let expr_column = expr_reference.as_expr_column_unwrap();
                 debug_assert_eq!(0, expr_column.nesting);
-                let item: SelectItem = stmt::ExprReference::from(*expr_column).into();
-                let index = selection.get_index_of(&item).unwrap();
+                let index = SelectItem::get_index_of_expr_reference(selection, *expr_column);
                 *expr = stmt::Expr::arg_project(0, [index]);
                 false
             }
@@ -389,8 +388,7 @@ impl NestedMergePlanner<'_> {
                 *expr = stmt::Expr::arg_project(depth - *nesting, [target_exec_statement_index]);
             }
             stmt::Expr::Reference(expr_reference) => {
-                let item: SelectItem = (*expr_reference).into();
-                let index = selection.get_index_of(&item).unwrap();
+                let index = SelectItem::get_index_of_expr_reference(selection, *expr_reference);
                 *expr = stmt::Expr::arg_project(depth, [index]);
             }
             _ => {}
