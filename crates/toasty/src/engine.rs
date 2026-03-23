@@ -9,7 +9,7 @@ mod lower;
 mod mir;
 mod plan;
 mod select_item;
-pub(crate) use select_item::SelectItem;
+pub(crate) use select_item::{SelectItem, SelectItems};
 mod simplify;
 mod ty;
 mod verify;

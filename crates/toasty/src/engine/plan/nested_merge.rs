@@ -6,7 +6,7 @@ use crate::engine::{
     exec::{MergeIndex, MergeQualification, NestedChild, NestedLevel},
     hir, mir,
     plan::HirPlanner,
-    Engine, HirStatement, SelectItem,
+    Engine, HirStatement, SelectItems,
 };
 
 #[derive(Debug)]
@@ -331,7 +331,7 @@ impl NestedMergePlanner<'_> {
             stmt::Expr::Reference(expr_reference) => {
                 let expr_column = expr_reference.as_expr_column_unwrap();
                 debug_assert_eq!(0, expr_column.nesting);
-                let index = SelectItem::get_index_of_expr_reference(selection, *expr_column);
+                let index = selection.get_index_of_expr_reference(*expr_column);
                 *expr = stmt::Expr::arg_project(0, [index]);
                 false
             }
@@ -345,7 +345,7 @@ impl NestedMergePlanner<'_> {
     fn build_filter_for_nested_child(
         &self,
         stmt_id: hir::StmtId,
-        selection: &IndexSet<SelectItem>,
+        selection: &SelectItems,
         depth: usize,
     ) -> stmt::Expr {
         let stmt_state = &self.hir[stmt_id];
@@ -377,18 +377,16 @@ impl NestedMergePlanner<'_> {
                 // access.
                 let target_stmt = &self.hir[target_id];
 
-                let target_item: SelectItem = (*target_expr_ref).into();
                 let target_exec_statement_index = target_stmt
                     .load_data_select_items
                     .get()
                     .unwrap()
-                    .get_index_of(&target_item)
-                    .unwrap();
+                    .get_index_of_expr_reference(*target_expr_ref);
 
                 *expr = stmt::Expr::arg_project(depth - *nesting, [target_exec_statement_index]);
             }
             stmt::Expr::Reference(expr_reference) => {
-                let index = SelectItem::get_index_of_expr_reference(selection, *expr_reference);
+                let index = selection.get_index_of_expr_reference(*expr_reference);
                 *expr = stmt::Expr::arg_project(depth, [index]);
             }
             _ => {}

@@ -8,7 +8,7 @@ use index_vec::IndexVec;
 use indexmap::IndexSet;
 use toasty_core::stmt;
 
-use crate::engine::{mir, SelectItem};
+use crate::engine::{mir, SelectItems};
 
 /// High-level Intermediate Representation of a query.
 ///
@@ -79,7 +79,7 @@ pub(super) struct StatementInfo {
     ///
     /// Populated during planning to track which items are fetched from the
     /// database. Used to resolve column references in child statements.
-    pub(super) load_data_select_items: OnceCell<IndexSet<SelectItem>>,
+    pub(super) load_data_select_items: OnceCell<SelectItems>,
 
     /// MIR node representing this statement's final output.
     ///

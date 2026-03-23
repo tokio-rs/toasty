@@ -22,15 +22,7 @@ impl Engine {
         T: IntoIterator<Item = &'a SelectItem>,
     {
         let cx = self.expr_cx_for(cx);
-        let field_tys = items
-            .into_iter()
-            .map(|item| match item {
-                SelectItem::ExprReference(expr_reference) => {
-                    cx.infer_expr_reference_ty(expr_reference)
-                }
-                SelectItem::CountStar => stmt::Type::U64,
-            })
-            .collect();
+        let field_tys = items.into_iter().map(|item| item.infer_ty(&cx)).collect();
         stmt::Type::list(stmt::Type::Record(field_tys))
     }
 }

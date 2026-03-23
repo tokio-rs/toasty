@@ -99,7 +99,7 @@ use crate::{
         index::{self, IndexPlan},
         mir,
         plan::HirPlanner,
-        SelectItem,
+        SelectItem, SelectItems,
     },
     Result,
 };
@@ -110,7 +110,7 @@ struct LoadData {
     inputs: IndexSet<mir::NodeId>,
 
     /// Items to select from the database (columns and aggregates like COUNT(*))
-    select_items: IndexSet<SelectItem>,
+    select_items: SelectItems,
 
     /// When the statement data is batch loaded (single database query to load
     /// data for multiple statements), arguments are passed in in batches as
@@ -166,7 +166,7 @@ impl HirPlanner<'_> {
             stmt_info,
             load_data: LoadData {
                 inputs: IndexSet::new(),
-                select_items: IndexSet::new(),
+                select_items: SelectItems::new(),
                 batch_load_args: IndexSet::new(),
             },
             remaining_deps: stmt_info.deps.iter().cloned().collect(),
@@ -356,9 +356,12 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 }
                 stmt::Expr::Func(stmt::ExprFunc::Count(stmt::FuncCount { arg: None, .. })) => {
                     if is_returning_projection {
-                        let index = SelectItem::get_index_of_count_star(
-                            self.stmt_info.load_data_select_items.get().unwrap(),
-                        );
+                        let index = self
+                            .stmt_info
+                            .load_data_select_items
+                            .get()
+                            .unwrap()
+                            .get_index_of_count_star();
                         let (position, _) = inputs.insert_full(load_data_node_id);
                         *expr = stmt::Expr::arg_project(position, [index]);
                     }
@@ -376,13 +379,12 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             "TODO: expr_reference = {expr_reference:#?}"
         );
 
-        let item: SelectItem = (*expr_reference).into();
         let Some(column) = self
             .stmt_info
             .load_data_select_items
             .get()
             .unwrap()
-            .get_index_of(&item)
+            .try_get_index_of_expr_reference(*expr_reference)
         else {
             panic!(
                 "expr_reference={expr_reference:#?}; data_load.select_items={:#?}",
@@ -748,10 +750,12 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         if !self.load_data.select_items.is_empty() {
             stmt.set_returning(
-                stmt::Expr::record(self.load_data.select_items.iter().map(|item| match item {
-                    SelectItem::ExprReference(expr_reference) => stmt::Expr::from(*expr_reference),
-                    SelectItem::CountStar => stmt::Expr::count_star(),
-                }))
+                stmt::Expr::record(
+                    self.load_data
+                        .select_items
+                        .iter()
+                        .map(|item| item.to_expr()),
+                )
                 .into(),
             );
         }
@@ -1147,7 +1151,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     input,
                     table: index_plan.table_id(),
                     index: None, // Querying primary key
-                    columns: SelectItem::extract_expr_references(&self.load_data.select_items),
+                    columns: self.load_data.select_items.extract_expr_references(),
                     pk_filter: index_plan.index_filter.take(),
                     row_filter: index_plan.result_filter.take(),
                     ty: ty.clone(),
@@ -1162,7 +1166,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 // were pre-populated into load_data.select_items in plan_data_loading_nosql.
                 let index_key_ty = self.index_key_ty(index_plan);
 
-                let mut columns = SelectItem::extract_expr_references(&self.load_data.select_items);
+                let mut columns = self.load_data.select_items.extract_expr_references();
                 assert!(columns.is_empty());
 
                 for index_col in &index_plan.index.columns {
@@ -1255,7 +1259,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 input,
                 table: index_plan.index.on,
                 index: Some(index_plan.index.id), // Query the secondary index
-                columns: SelectItem::extract_expr_references(&self.load_data.select_items), // Return full records
+                columns: self.load_data.select_items.extract_expr_references(), // Return full records
                 pk_filter: index_plan.index_filter.take(),
                 row_filter: index_plan.result_filter.take(),
                 ty: ty.clone(), // Full record type, not just PKs
@@ -1377,7 +1381,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 self.insert_mir_with_deps(mir::GetByKey {
                     input: get_by_key_input,
                     table: index_plan.table_id(),
-                    columns: SelectItem::extract_expr_references(&self.load_data.select_items),
+                    columns: self.load_data.select_items.extract_expr_references(),
                     ty: ty.clone(),
                 })
             }
@@ -1485,8 +1489,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     fn process_back_ref_projections(&mut self, exec_stmt_node_id: mir::NodeId) {
         for back_ref in self.stmt_info.back_refs.values() {
             let projection = stmt::Expr::record(back_ref.exprs.iter().map(|expr_reference| {
-                let item: SelectItem = (*expr_reference).into();
-                let index = self.load_data.select_items.get_index_of(&item).unwrap();
+                let index = self
+                    .load_data
+                    .select_items
+                    .get_index_of_expr_reference(*expr_reference);
                 stmt::Expr::arg_project(0, [index])
             }));
 
