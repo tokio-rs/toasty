@@ -425,8 +425,7 @@ impl<M: Model> Query<List<M>> {
     /// ```
     pub fn count(mut self) -> Query<u64> {
         // Set the returning clause to COUNT(*)
-        *self.untyped.returning_mut_unwrap() =
-            Returning::Expr(stmt::Expr::record([stmt::Expr::count_star()]));
+        *self.untyped.returning_mut_unwrap() = Returning::Expr(stmt::Expr::count_star());
         self.untyped.single = true;
 
         Query::from_untyped(self.untyped)
