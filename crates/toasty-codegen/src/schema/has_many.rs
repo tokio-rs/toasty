@@ -25,7 +25,10 @@ impl HasMany {
         span: proc_macro2::Span,
     ) -> syn::Result<Self> {
         let mut pair = None;
-        let singular = Name::from_str(&std_util::str::singularize(&name.to_string()), name.span());
+        let singular = Name::from_str(
+            &pluralizer::pluralize(&name.to_string(), 1, false),
+            name.span(),
+        );
         let insert_ident = syn::Ident::new(&format!("insert_{}", singular.ident), name.span());
 
         if let syn::Meta::List(_) = &attr.meta {

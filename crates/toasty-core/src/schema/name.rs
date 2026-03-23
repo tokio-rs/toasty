@@ -1,4 +1,4 @@
-use std_util::str;
+use heck::{ToLowerCamelCase, ToShoutySnakeCase, ToSnakeCase, ToUpperCamelCase};
 
 /// A multi-part identifier that can be rendered in various casing conventions.
 ///
@@ -38,7 +38,7 @@ impl Name {
     /// ```
     pub fn new(src: &str) -> Self {
         // TODO: make better
-        let snake = str::snake_case(src);
+        let snake = src.to_snake_case();
         let parts = snake.split("_").map(String::from).collect();
         Self { parts }
     }
@@ -53,7 +53,7 @@ impl Name {
     /// assert_eq!(Name::new("user_id").camel_case(), "userId");
     /// ```
     pub fn camel_case(&self) -> String {
-        str::camel_case(&self.snake_case())
+        self.snake_case().to_lower_camel_case()
     }
 
     /// Returns this name in `UpperCamelCase` (PascalCase).
@@ -66,7 +66,7 @@ impl Name {
     /// assert_eq!(Name::new("user_id").upper_camel_case(), "UserId");
     /// ```
     pub fn upper_camel_case(&self) -> String {
-        str::upper_camel_case(&self.snake_case())
+        self.snake_case().to_upper_camel_case()
     }
 
     /// Returns this name in `snake_case`.
@@ -92,6 +92,6 @@ impl Name {
     /// assert_eq!(Name::new("user_id").upper_snake_case(), "USER_ID");
     /// ```
     pub fn upper_snake_case(&self) -> String {
-        str::upper_snake_case(&self.snake_case())
+        self.snake_case().to_shouty_snake_case()
     }
 }

@@ -149,7 +149,7 @@ impl BuildSchema<'_> {
     }
 
     fn table_name_from_model(&self, model_name: &Name) -> String {
-        let base = std_util::str::pluralize(&model_name.snake_case());
+        let base = pluralizer::pluralize(&model_name.snake_case(), 2, false);
         self.prefix_table_name(&base)
     }
 
