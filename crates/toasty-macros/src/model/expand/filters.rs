@@ -1,5 +1,5 @@
 use super::Expand;
-use crate::schema::{FieldTy, Index, Model};
+use crate::model::schema::{FieldTy, Index, Model};
 
 use proc_macro2::{Span, TokenStream};
 use quote::quote;

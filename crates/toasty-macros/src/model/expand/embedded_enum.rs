@@ -1,12 +1,12 @@
 use super::{schema, util, Expand};
-use crate::schema::FieldTy;
+use crate::model::schema::FieldTy;
 
 use proc_macro2::TokenStream;
 use quote::quote;
 
 impl Expand<'_> {
     /// Returns fields belonging to a specific variant index.
-    fn variant_fields(&self, variant_index: usize) -> Vec<&crate::schema::Field> {
+    fn variant_fields(&self, variant_index: usize) -> Vec<&crate::model::schema::Field> {
         self.model
             .fields
             .iter()
@@ -415,7 +415,7 @@ impl Expand<'_> {
     }
 }
 
-fn primitive_ty_unwrap(field: &crate::schema::Field) -> &syn::Type {
+fn primitive_ty_unwrap(field: &crate::model::schema::Field) -> &syn::Type {
     match &field.ty {
         FieldTy::Primitive(ty) => ty,
         _ => panic!("expected primitive field type for enum variant field"),

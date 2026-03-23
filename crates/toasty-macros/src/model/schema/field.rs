@@ -1,4 +1,4 @@
-use crate::schema::AutoStrategy;
+use super::AutoStrategy;
 
 use super::{BelongsTo, Column, ErrorSet, HasMany, HasOne, Name};
 

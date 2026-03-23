@@ -1,6 +1,8 @@
 use super::{util, Expand};
-use crate::schema::SerializeAttr;
-use crate::schema::{AutoStrategy, Column, FieldTy, ModelKind, Name, SerializeFormat, UuidVersion};
+use crate::model::schema::SerializeAttr;
+use crate::model::schema::{
+    AutoStrategy, Column, FieldTy, ModelKind, Name, SerializeFormat, UuidVersion,
+};
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -252,7 +254,7 @@ impl Expand<'_> {
     }
 
     pub(super) fn expand_model_indices(&self) -> TokenStream {
-        use crate::schema::IndexScope;
+        use crate::model::schema::IndexScope;
 
         let toasty = &self.toasty;
 
