@@ -36,9 +36,9 @@ impl SelectItem {
     }
 
     /// Convert this select item into the corresponding expression.
-    pub(crate) fn to_expr(&self) -> stmt::Expr {
+    pub(crate) fn to_expr(self) -> stmt::Expr {
         match self {
-            SelectItem::ExprReference(expr_reference) => stmt::Expr::from(*expr_reference),
+            SelectItem::ExprReference(expr_reference) => stmt::Expr::from(expr_reference),
             SelectItem::CountStar => stmt::Expr::count_star(),
         }
     }
