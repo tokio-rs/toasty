@@ -10,7 +10,7 @@ pub async fn query_macro_all(test: &mut Test) -> Result<()> {
 
     // query!(User) expands to User::all()
     let users = toasty::query!(User).exec(&mut db).await?;
-    assert_struct!(users, #(_ { name: "Alice", .. }, _ { name: "Bob", .. }));
+    assert_struct!(users, #({ name: "Alice" }, { name: "Bob" }));
 
     Ok(())
 }
@@ -28,7 +28,7 @@ pub async fn query_macro_filter_eq(test: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
 
-    assert_struct!(users, [_ { name: "Alice", .. }]);
+    assert_struct!(users, [{ name: "Alice" }]);
 
     Ok(())
 }
@@ -45,7 +45,7 @@ pub async fn query_macro_filter_ne(test: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
 
-    assert_struct!(users, [_ { name: "Bob", .. }]);
+    assert_struct!(users, [{ name: "Bob" }]);
 
     Ok(())
 }
@@ -76,19 +76,19 @@ pub async fn query_macro_filter_numeric_comparisons(test: &mut Test) -> Result<(
 
     // Greater than
     let users = toasty::query!(User filter .age > 20).exec(&mut db).await?;
-    assert_struct!(users, #(_ { name: "Adult", .. }, _ { name: "Senior", .. }));
+    assert_struct!(users, #({ name: "Adult" }, { name: "Senior" }));
 
     // Greater than or equal
     let users = toasty::query!(User filter .age >= 25).exec(&mut db).await?;
-    assert_struct!(users, #(_ { name: "Adult", .. }, _ { name: "Senior", .. }));
+    assert_struct!(users, #({ name: "Adult" }, { name: "Senior" }));
 
     // Less than
     let users = toasty::query!(User filter .age < 25).exec(&mut db).await?;
-    assert_struct!(users, [_ { name: "Young", .. }]);
+    assert_struct!(users, [{ name: "Young" }]);
 
     // Less than or equal
     let users = toasty::query!(User filter .age <= 25).exec(&mut db).await?;
-    assert_struct!(users, #(_ { name: "Young", .. }, _ { name: "Adult", .. }));
+    assert_struct!(users, #({ name: "Young" }, { name: "Adult" }));
 
     Ok(())
 }
@@ -122,7 +122,7 @@ pub async fn query_macro_filter_and(test: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
 
-    assert_struct!(users, [_ { name: "Alice", age: 30, .. }]);
+    assert_struct!(users, [{ name: "Alice", age: 30 }]);
 
     Ok(())
 }
@@ -139,7 +139,7 @@ pub async fn query_macro_filter_or(test: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
 
-    assert_struct!(users, #(_ { name: "Alice", .. }, _ { name: "Bob", .. }));
+    assert_struct!(users, #({ name: "Alice" }, { name: "Bob" }));
 
     Ok(())
 }
@@ -156,7 +156,7 @@ pub async fn query_macro_filter_not(test: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
 
-    assert_struct!(users, [_ { name: "Bob", .. }]);
+    assert_struct!(users, [{ name: "Bob" }]);
 
     Ok(())
 }
@@ -192,7 +192,7 @@ pub async fn query_macro_filter_parens(test: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
 
-    assert_struct!(users, [_ { name: "Alice", .. }]);
+    assert_struct!(users, [{ name: "Alice" }]);
 
     Ok(())
 }
@@ -210,7 +210,7 @@ pub async fn query_macro_filter_external_ref(test: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
 
-    assert_struct!(users, [_ { name: "Alice", .. }]);
+    assert_struct!(users, [{ name: "Alice" }]);
 
     Ok(())
 }
@@ -231,7 +231,7 @@ pub async fn query_macro_filter_external_expr(test: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
 
-    assert_struct!(users, [_ { name: "Bob", .. }]);
+    assert_struct!(users, [{ name: "Bob" }]);
 
     Ok(())
 }
@@ -248,13 +248,13 @@ pub async fn query_macro_case_insensitive_keywords(test: &mut Test) -> Result<()
     let users = toasty::query!(User FILTER .name == "Alice")
         .exec(&mut db)
         .await?;
-    assert_struct!(users, [_ { name: "Alice", .. }]);
+    assert_struct!(users, [{ name: "Alice" }]);
 
     // Filter (mixed case), AND, OR
     let users = toasty::query!(User Filter .name == "Alice" AND .name == "Alice")
         .exec(&mut db)
         .await?;
-    assert_struct!(users, [_ { name: "Alice", .. }]);
+    assert_struct!(users, [{ name: "Alice" }]);
 
     Ok(())
 }
@@ -291,7 +291,7 @@ pub async fn query_macro_complex_boolean(test: &mut Test) -> Result<()> {
             .exec(&mut db)
             .await?;
 
-    assert_struct!(users, #(_ { name: "Alice", .. }, _ { name: "Carl", .. }));
+    assert_struct!(users, #({ name: "Alice" }, { name: "Carl" }));
 
     Ok(())
 }
@@ -323,7 +323,7 @@ pub async fn query_macro_filter_bool_literal(test: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
 
-    assert_struct!(items, [_ { name: "on", .. }]);
+    assert_struct!(items, [{ name: "on" }]);
 
     Ok(())
 }
@@ -366,7 +366,7 @@ pub async fn query_macro_partition_key_eq(test: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
 
-    assert_struct!(teams, #(_ { name: "Arsenal", .. }, _ { name: "Chelsea", .. }));
+    assert_struct!(teams, #({ name: "Arsenal" }, { name: "Chelsea" }));
 
     Ok(())
 }
@@ -405,7 +405,7 @@ pub async fn query_macro_partition_and_local_key(test: &mut Test) -> Result<()> 
         .exec(&mut db)
         .await?;
 
-    assert_struct!(teams, [_ { name: "Portland Timbers", founded: 2009, .. }]);
+    assert_struct!(teams, [{ name: "Portland Timbers", founded: 2009 }]);
 
     Ok(())
 }
@@ -446,14 +446,14 @@ pub async fn query_macro_local_key_comparison(test: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
 
-    assert_struct!(events, #(_ { timestamp: 8, .. }, _ { timestamp: 10, .. }));
+    assert_struct!(events, #({ timestamp: 8 }, { timestamp: 10 }));
 
     // Partition key + less-than-or-equal on local key
     let events = toasty::query!(Event filter .kind == "info" and .timestamp <= 4)
         .exec(&mut db)
         .await?;
 
-    assert_struct!(events, #(_ { timestamp: 0, .. }, _ { timestamp: 2, .. }, _ { timestamp: 4, .. }));
+    assert_struct!(events, #({ timestamp: 0 }, { timestamp: 2 }, { timestamp: 4 }));
 
     Ok(())
 }
@@ -492,7 +492,7 @@ pub async fn query_macro_partition_key_external_ref(test: &mut Test) -> Result<(
         .exec(&mut db)
         .await?;
 
-    assert_struct!(teams, #(_ { name: "Portland Timbers", .. }, _ { name: "Seattle Sounders FC", .. }));
+    assert_struct!(teams, #({ name: "Portland Timbers" }, { name: "Seattle Sounders FC" }));
 
     Ok(())
 }
@@ -532,7 +532,7 @@ pub async fn query_macro_partition_key_with_not(test: &mut Test) -> Result<()> {
             .exec(&mut db)
             .await?;
 
-    assert_struct!(players, #(_ { name: "Adam Kwarasey", .. }, _ { name: "Fanendo Adi", .. }));
+    assert_struct!(players, #({ name: "Adam Kwarasey" }, { name: "Fanendo Adi" }));
 
     Ok(())
 }
@@ -575,7 +575,7 @@ pub async fn query_macro_partition_key_with_or(test: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
 
-    assert_struct!(players, #(_ { name: "Adam Kwarasey", .. }, _ { name: "Fanendo Adi", .. }));
+    assert_struct!(players, #({ name: "Adam Kwarasey" }, { name: "Fanendo Adi" }));
 
     Ok(())
 }

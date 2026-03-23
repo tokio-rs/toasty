@@ -1,4 +1,4 @@
-use super::parse::{CompareExpr, CompareOp, FieldPath, FilterExpr, QueryInput, Value};
+use super::parse::{CompareOpKind, Expr, ExprBinaryOp, FieldPath, QueryInput};
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -18,37 +18,41 @@ pub(crate) fn expand(input: &QueryInput) -> TokenStream {
     }
 }
 
-/// Recursively expand a filter expression tree into token stream.
-fn expand_filter(source: &syn::Path, expr: &FilterExpr) -> TokenStream {
+/// Recursively expand an expression tree into token stream.
+fn expand_filter(source: &syn::Path, expr: &Expr) -> TokenStream {
     match expr {
-        FilterExpr::And(lhs, rhs) => {
+        Expr::And(lhs, rhs) => {
             let lhs = expand_filter(source, lhs);
             let rhs = expand_filter(source, rhs);
             quote! { #lhs.and(#rhs) }
         }
-        FilterExpr::Or(lhs, rhs) => {
+        Expr::Or(lhs, rhs) => {
             let lhs = expand_filter(source, lhs);
             let rhs = expand_filter(source, rhs);
             quote! { #lhs.or(#rhs) }
         }
-        FilterExpr::Not(inner) => {
+        Expr::Not(inner) => {
             let inner = expand_filter(source, inner);
             // Use .not() instead of `!` to avoid Rust precedence issues
             // where `!(expr).method()` binds as `!((expr).method())`.
             quote! { (#inner).not() }
         }
-        FilterExpr::Compare(cmp) => expand_compare(source, cmp),
-        FilterExpr::Paren(inner) => expand_filter(source, inner),
+        Expr::BinaryOp(cmp) => expand_binary_op(source, cmp),
+        Expr::Paren(inner) => expand_filter(source, inner),
+        Expr::Field(path) => expand_field_path(source, path),
+        Expr::Lit(lit) => quote! { #lit },
+        Expr::Var(ident) => quote! { #ident },
+        Expr::RustExpr(expr) => quote! { #expr },
     }
 }
 
-/// Expand a single comparison: `.field op value` → `Source::fields().field().method(value)`.
-fn expand_compare(source: &syn::Path, cmp: &CompareExpr) -> TokenStream {
-    let field_expr = expand_field_path(source, &cmp.lhs);
-    let value = expand_value(source, &cmp.rhs);
-    let method = compare_op_method(cmp.op);
+/// Expand a binary operation: `lhs op rhs` → `lhs_expanded.method(rhs_expanded)`.
+fn expand_binary_op(source: &syn::Path, cmp: &ExprBinaryOp) -> TokenStream {
+    let lhs = expand_filter(source, &cmp.lhs);
+    let rhs = expand_filter(source, &cmp.rhs);
+    let method = compare_op_method(cmp.op.kind);
 
-    quote! { #field_expr.#method(#value) }
+    quote! { #lhs.#method(#rhs) }
 }
 
 /// Expand a dot-prefixed field path into `Source::fields().seg1().seg2()...`.
@@ -60,25 +64,15 @@ fn expand_field_path(source: &syn::Path, path: &FieldPath) -> TokenStream {
     out
 }
 
-/// Expand a value (RHS of comparison).
-fn expand_value(source: &syn::Path, value: &Value) -> TokenStream {
-    match value {
-        Value::Lit(lit) => quote! { #lit },
-        Value::Var(ident) => quote! { #ident },
-        Value::Expr(expr) => quote! { #expr },
-        Value::Field(path) => expand_field_path(source, path),
-    }
-}
-
-/// Map a `CompareOp` to the corresponding method name identifier.
-fn compare_op_method(op: CompareOp) -> syn::Ident {
+/// Map a `CompareOpKind` to the corresponding method name identifier.
+fn compare_op_method(op: CompareOpKind) -> syn::Ident {
     let name = match op {
-        CompareOp::Eq => "eq",
-        CompareOp::Ne => "ne",
-        CompareOp::Gt => "gt",
-        CompareOp::Ge => "ge",
-        CompareOp::Lt => "lt",
-        CompareOp::Le => "le",
+        CompareOpKind::Eq => "eq",
+        CompareOpKind::Ne => "ne",
+        CompareOpKind::Gt => "gt",
+        CompareOpKind::Ge => "ge",
+        CompareOpKind::Lt => "lt",
+        CompareOpKind::Le => "le",
     };
     syn::Ident::new(name, proc_macro2::Span::call_site())
 }

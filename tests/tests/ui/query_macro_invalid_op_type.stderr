@@ -1,0 +1,24 @@
+error[E0277]: the trait bound `{integer}: IntoExpr<std::string::String>` is not satisfied
+  --> tests/ui/query_macro_invalid_op_type.rs:12:49
+   |
+12 |     let _ = toasty::query!(User filter .name == 42);
+   |             ------------------------------------^^-
+   |             |                                   |
+   |             |                                   the trait `IntoExpr<std::string::String>` is not implemented for `{integer}`
+   |             required by a bound introduced by this call
+   |
+   = help: the following other types implement trait `IntoExpr<T>`:
+             `i16` implements `IntoExpr<i16>`
+             `i32` implements `IntoExpr<i32>`
+             `i64` implements `IntoExpr<i64>`
+             `i8` implements `IntoExpr<i8>`
+             `isize` implements `IntoExpr<isize>`
+             `u16` implements `IntoExpr<u16>`
+             `u32` implements `IntoExpr<u32>`
+             `u64` implements `IntoExpr<u64>`
+           and $N others
+note: required by a bound in `toasty::stmt::Path::<T, U>::eq`
+  --> $WORKSPACE/crates/toasty/src/stmt/path.rs
+   |
+   |     pub fn eq(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
+   |                               ^^^^^^^^^^^ required by this bound in `Path::<T, U>::eq`

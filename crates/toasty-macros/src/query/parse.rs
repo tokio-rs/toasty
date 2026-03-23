@@ -1,3 +1,4 @@
+use proc_macro2::Span;
 use syn::parse::{Parse, ParseStream};
 use syn::token;
 
@@ -12,67 +13,72 @@ pub(crate) struct QueryInput {
     /// The model type path (e.g. `User`, `my_mod::User`).
     pub source: syn::Path,
     /// Optional filter expression.
-    pub filter: Option<FilterExpr>,
+    pub filter: Option<Expr>,
 }
 
-/// A filter expression — a tree of boolean operators, comparisons, NOT, and
+/// An expression — a tree of boolean operators, comparisons, NOT, and
 /// parenthesized sub-expressions. Parsed with standard precedence:
 ///
 /// 1. `OR` (lowest)
 /// 2. `AND`
 /// 3. `NOT` (prefix unary)
-/// 4. Atoms: comparisons, parenthesized groups
+/// 4. Atoms: comparisons, parenthesized groups, literals, variables, field paths
 #[derive(Debug)]
-pub(crate) enum FilterExpr {
+#[allow(clippy::enum_variant_names)]
+pub(crate) enum Expr {
     /// `lhs AND rhs`
-    And(Box<FilterExpr>, Box<FilterExpr>),
+    And(Box<Expr>, Box<Expr>),
     /// `lhs OR rhs`
-    Or(Box<FilterExpr>, Box<FilterExpr>),
+    Or(Box<Expr>, Box<Expr>),
     /// `NOT expr`
-    Not(Box<FilterExpr>),
-    /// `lhs op rhs` (comparison)
-    Compare(CompareExpr),
+    Not(Box<Expr>),
+    /// `lhs op rhs` (binary comparison)
+    BinaryOp(ExprBinaryOp),
     /// `( expr )` — already folded into the tree during parsing, but kept as a
     /// variant so expansion can distinguish if needed in the future.
-    Paren(Box<FilterExpr>),
+    Paren(Box<Expr>),
+    /// A dot-prefixed field path: `.name`, `.profile.bio`, etc.
+    Field(FieldPath),
+    /// A literal: string, integer, float, bool.
+    Lit(syn::Lit),
+    /// `#ident` — a variable from the surrounding scope.
+    Var(syn::Ident),
+    /// `#(expr)` — an arbitrary Rust expression.
+    RustExpr(Box<syn::Expr>),
 }
 
-/// A binary comparison: `.field op value`.
+/// A binary comparison: `lhs op rhs`.
 #[derive(Debug)]
-pub(crate) struct CompareExpr {
-    pub lhs: FieldPath,
+pub(crate) struct ExprBinaryOp {
+    pub lhs: Box<Expr>,
     pub op: CompareOp,
-    pub rhs: Value,
+    pub rhs: Box<Expr>,
 }
 
 /// A dot-prefixed field path: `.name`, `.profile.bio`, etc.
 #[derive(Debug)]
 pub(crate) struct FieldPath {
+    /// Span of the leading `.` — used for error reporting.
+    pub dot_span: Span,
     pub segments: Vec<syn::Ident>,
 }
 
-/// Comparison operators.
+/// Comparison operator with its source span.
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum CompareOp {
+pub(crate) struct CompareOp {
+    pub kind: CompareOpKind,
+    pub span: Span,
+}
+
+/// Comparison operator kinds.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum CompareOpKind {
     Eq,
     Ne,
     Gt,
     Ge,
     Lt,
     Le,
-}
-
-/// The right-hand side of a comparison.
-#[derive(Debug)]
-pub(crate) enum Value {
-    /// A literal: string, integer, float, bool.
-    Lit(syn::Lit),
-    /// `#ident` — a variable from the surrounding scope.
-    Var(syn::Ident),
-    /// `#(expr)` — an arbitrary Rust expression.
-    Expr(Box<syn::Expr>),
-    /// A dot-prefixed field path (field-to-field comparison).
-    Field(FieldPath),
 }
 
 // ---------------------------------------------------------------------------
@@ -103,40 +109,40 @@ impl Parse for QueryInput {
 // ---------------------------------------------------------------------------
 
 /// Parse an OR expression (lowest precedence).
-fn parse_or(input: ParseStream) -> syn::Result<FilterExpr> {
+fn parse_or(input: ParseStream) -> syn::Result<Expr> {
     let mut lhs = parse_and(input)?;
     while is_keyword(input, "or") {
         consume_ident(input)?;
         let rhs = parse_and(input)?;
-        lhs = FilterExpr::Or(Box::new(lhs), Box::new(rhs));
+        lhs = Expr::Or(Box::new(lhs), Box::new(rhs));
     }
     Ok(lhs)
 }
 
 /// Parse an AND expression.
-fn parse_and(input: ParseStream) -> syn::Result<FilterExpr> {
+fn parse_and(input: ParseStream) -> syn::Result<Expr> {
     let mut lhs = parse_unary(input)?;
     while is_keyword(input, "and") {
         consume_ident(input)?;
         let rhs = parse_unary(input)?;
-        lhs = FilterExpr::And(Box::new(lhs), Box::new(rhs));
+        lhs = Expr::And(Box::new(lhs), Box::new(rhs));
     }
     Ok(lhs)
 }
 
 /// Parse a NOT prefix or an atom.
-fn parse_unary(input: ParseStream) -> syn::Result<FilterExpr> {
+fn parse_unary(input: ParseStream) -> syn::Result<Expr> {
     if is_keyword(input, "not") {
         consume_ident(input)?;
         let expr = parse_unary(input)?;
-        Ok(FilterExpr::Not(Box::new(expr)))
+        Ok(Expr::Not(Box::new(expr)))
     } else {
         parse_atom(input)
     }
 }
 
 /// Parse an atom: parenthesized group or comparison.
-fn parse_atom(input: ParseStream) -> syn::Result<FilterExpr> {
+fn parse_atom(input: ParseStream) -> syn::Result<Expr> {
     if input.peek(token::Paren) {
         let content;
         syn::parenthesized!(content in input);
@@ -144,20 +150,60 @@ fn parse_atom(input: ParseStream) -> syn::Result<FilterExpr> {
         if !content.is_empty() {
             return Err(content.error("unexpected tokens inside parentheses"));
         }
-        Ok(FilterExpr::Paren(Box::new(inner)))
-    } else if input.peek(syn::Token![.]) {
-        parse_comparison(input)
+        Ok(Expr::Paren(Box::new(inner)))
     } else {
-        Err(input.error("expected `.field`, `NOT`, or `(` in filter expression"))
+        let lhs = parse_primary(input)?;
+
+        // If followed by a comparison operator, parse as binary op
+        if peek_compare_op(input) {
+            let op = parse_compare_op(input)?;
+            let rhs = parse_primary(input)?;
+            Ok(Expr::BinaryOp(ExprBinaryOp {
+                lhs: Box::new(lhs),
+                op,
+                rhs: Box::new(rhs),
+            }))
+        } else {
+            Ok(lhs)
+        }
     }
 }
 
-/// Parse a comparison: `.field op value`.
-fn parse_comparison(input: ParseStream) -> syn::Result<FilterExpr> {
-    let lhs = parse_field_path(input)?;
-    let op = parse_compare_op(input)?;
-    let rhs = parse_value(input)?;
-    Ok(FilterExpr::Compare(CompareExpr { lhs, op, rhs }))
+/// Parse a primary expression: field path, literal, variable, or Rust expression.
+fn parse_primary(input: ParseStream) -> syn::Result<Expr> {
+    if input.peek(syn::Token![.]) {
+        let path = parse_field_path(input)?;
+        Ok(Expr::Field(path))
+    } else if input.peek(syn::Token![#]) {
+        // External reference: `#ident` or `#(expr)`
+        input.parse::<syn::Token![#]>()?;
+        if input.peek(token::Paren) {
+            let content;
+            syn::parenthesized!(content in input);
+            let expr: syn::Expr = content.parse()?;
+            Ok(Expr::RustExpr(Box::new(expr)))
+        } else {
+            let ident: syn::Ident = input.parse()?;
+            Ok(Expr::Var(ident))
+        }
+    } else if input.peek(syn::Lit) {
+        let lit: syn::Lit = input.parse()?;
+        Ok(Expr::Lit(lit))
+    } else if is_keyword(input, "true") {
+        let ident: syn::Ident = input.parse()?;
+        Ok(Expr::Lit(syn::Lit::Bool(syn::LitBool {
+            value: true,
+            span: ident.span(),
+        })))
+    } else if is_keyword(input, "false") {
+        let ident: syn::Ident = input.parse()?;
+        Ok(Expr::Lit(syn::Lit::Bool(syn::LitBool {
+            value: false,
+            span: ident.span(),
+        })))
+    } else {
+        Err(input.error("expected `.field`, literal, `#variable`, `#(expression)`, `NOT`, or `(`"))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -169,7 +215,8 @@ fn parse_field_path(input: ParseStream) -> syn::Result<FieldPath> {
     let mut segments = Vec::new();
 
     // Consume the leading `.`
-    input.parse::<syn::Token![.]>()?;
+    let dot: syn::Token![.] = input.parse()?;
+    let dot_span = dot.span;
     segments.push(input.parse::<syn::Ident>()?);
 
     // Consume additional `.ident` segments
@@ -178,76 +225,62 @@ fn parse_field_path(input: ParseStream) -> syn::Result<FieldPath> {
         segments.push(input.parse::<syn::Ident>()?);
     }
 
-    Ok(FieldPath { segments })
+    Ok(FieldPath { dot_span, segments })
 }
 
 // ---------------------------------------------------------------------------
 // Comparison operators
 // ---------------------------------------------------------------------------
 
-fn parse_compare_op(input: ParseStream) -> syn::Result<CompareOp> {
-    if input.peek(syn::Token![==]) {
-        input.parse::<syn::Token![==]>()?;
-        Ok(CompareOp::Eq)
-    } else if input.peek(syn::Token![!=]) {
-        input.parse::<syn::Token![!=]>()?;
-        Ok(CompareOp::Ne)
-    } else if input.peek(syn::Token![>=]) {
-        input.parse::<syn::Token![>=]>()?;
-        Ok(CompareOp::Ge)
-    } else if input.peek(syn::Token![<=]) {
-        input.parse::<syn::Token![<=]>()?;
-        Ok(CompareOp::Le)
-    } else if input.peek(syn::Token![>]) {
-        input.parse::<syn::Token![>]>()?;
-        Ok(CompareOp::Gt)
-    } else if input.peek(syn::Token![<]) {
-        input.parse::<syn::Token![<]>()?;
-        Ok(CompareOp::Lt)
-    } else {
-        Err(input.error("expected comparison operator (==, !=, >, >=, <, <=)"))
-    }
+/// Check if the next token is a comparison operator without consuming it.
+fn peek_compare_op(input: ParseStream) -> bool {
+    input.peek(syn::Token![==])
+        || input.peek(syn::Token![!=])
+        || input.peek(syn::Token![>=])
+        || input.peek(syn::Token![<=])
+        || input.peek(syn::Token![>])
+        || input.peek(syn::Token![<])
 }
 
-// ---------------------------------------------------------------------------
-// Values (RHS of comparison)
-// ---------------------------------------------------------------------------
-
-fn parse_value(input: ParseStream) -> syn::Result<Value> {
-    if input.peek(syn::Token![.]) {
-        // Field-to-field comparison
-        let path = parse_field_path(input)?;
-        Ok(Value::Field(path))
-    } else if input.peek(syn::Token![#]) {
-        // External reference: `#ident` or `#(expr)`
-        input.parse::<syn::Token![#]>()?;
-        if input.peek(token::Paren) {
-            let content;
-            syn::parenthesized!(content in input);
-            let expr: syn::Expr = content.parse()?;
-            Ok(Value::Expr(Box::new(expr)))
-        } else {
-            let ident: syn::Ident = input.parse()?;
-            Ok(Value::Var(ident))
-        }
-    } else if input.peek(syn::Lit) {
-        let lit: syn::Lit = input.parse()?;
-        Ok(Value::Lit(lit))
-    } else if is_keyword(input, "true") {
-        let ident: syn::Ident = input.parse()?;
-        Ok(Value::Lit(syn::Lit::Bool(syn::LitBool {
-            value: true,
-            span: ident.span(),
-        })))
-    } else if is_keyword(input, "false") {
-        let ident: syn::Ident = input.parse()?;
-        Ok(Value::Lit(syn::Lit::Bool(syn::LitBool {
-            value: false,
-            span: ident.span(),
-        })))
+fn parse_compare_op(input: ParseStream) -> syn::Result<CompareOp> {
+    if input.peek(syn::Token![==]) {
+        let tok = input.parse::<syn::Token![==]>()?;
+        Ok(CompareOp {
+            kind: CompareOpKind::Eq,
+            span: tok.spans[0],
+        })
+    } else if input.peek(syn::Token![!=]) {
+        let tok = input.parse::<syn::Token![!=]>()?;
+        Ok(CompareOp {
+            kind: CompareOpKind::Ne,
+            span: tok.spans[0],
+        })
+    } else if input.peek(syn::Token![>=]) {
+        let tok = input.parse::<syn::Token![>=]>()?;
+        Ok(CompareOp {
+            kind: CompareOpKind::Ge,
+            span: tok.spans[0],
+        })
+    } else if input.peek(syn::Token![<=]) {
+        let tok = input.parse::<syn::Token![<=]>()?;
+        Ok(CompareOp {
+            kind: CompareOpKind::Le,
+            span: tok.spans[0],
+        })
+    } else if input.peek(syn::Token![>]) {
+        let tok = input.parse::<syn::Token![>]>()?;
+        Ok(CompareOp {
+            kind: CompareOpKind::Gt,
+            span: tok.span,
+        })
+    } else if input.peek(syn::Token![<]) {
+        let tok = input.parse::<syn::Token![<]>()?;
+        Ok(CompareOp {
+            kind: CompareOpKind::Lt,
+            span: tok.span,
+        })
     } else {
-        Err(input
-            .error("expected a value: literal, `#variable`, `#(expression)`, or `.field` path"))
+        Err(input.error("expected comparison operator (==, !=, >, >=, <, <=)"))
     }
 }
 
