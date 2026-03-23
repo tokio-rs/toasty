@@ -1,4 +1,4 @@
-use rand::{seq::SliceRandom, thread_rng};
+use rand::seq::SliceRandom;
 use std::{collections::HashSet, hash::Hash};
 
 pub trait SliceUtil {
@@ -59,5 +59,5 @@ pub fn is_unique<T: Eq + Hash>(slice: &[T]) -> bool {
 }
 
 pub fn shuffle<T>(slice: &mut [T]) {
-    SliceRandom::shuffle(slice, &mut thread_rng());
+    SliceRandom::shuffle(slice, &mut rand::rng());
 }

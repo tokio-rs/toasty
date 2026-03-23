@@ -87,7 +87,7 @@ postgres-types = { version = "0.2.9", features = ["with-uuid-1", "array-impls"] 
 pretty_assertions = "1.4.1"
 proc-macro2 = "1.0.37"
 quote = "1.0.18"
-rand = "0.8.5"
+rand = "0.10"
 rust_decimal = "1.39.0"
 bigdecimal = "0.4.7"
 rusqlite = { version = "0.32", features = ["bundled"] }

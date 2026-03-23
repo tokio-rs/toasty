@@ -4,7 +4,7 @@ use anyhow::Result;
 use clap::Parser;
 use console::style;
 use dialoguer::Select;
-use rand::Rng;
+use rand::RngExt;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use toasty::{
@@ -277,7 +277,7 @@ impl GenerateCommand {
 
         history.add_migration(HistoryFileMigration {
             // Some databases only supported signed 64-bit integers.
-            id: rand::thread_rng().gen_range(0..i64::MAX) as u64,
+            id: rand::rng().random_range(0..i64::MAX) as u64,
             name: migration_name.clone(),
             snapshot_name: snapshot_name.clone(),
             checksum: None,
