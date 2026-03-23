@@ -227,7 +227,7 @@ for generated code).
 
 ### Step 2: Add `is_required_on_create` helper to codegen field
 
-Add a method to `Field` in `toasty-codegen` that returns whether a field is
+Add a method to `Field` in `toasty-macros` that returns whether a field is
 required for creation. This centralizes the logic:
 
 ```rust
@@ -338,7 +338,7 @@ Add compile-fail tests that verify:
 | File | Change |
 |------|--------|
 | `crates/toasty/src/codegen_support.rs` | Add `Set`, `NotSet` marker types |
-| `crates/toasty-codegen/src/schema/field.rs` | Add `is_required_on_create()` method |
-| `crates/toasty-codegen/src/expand/create.rs` | Add `expand_create_verifier()` |
-| `crates/toasty-codegen/src/expand/mod.rs` | Call `expand_create_verifier()` from root expansion |
+| `crates/toasty-macros/src/schema/field.rs` | Add `is_required_on_create()` method |
+| `crates/toasty-macros/src/expand/create.rs` | Add `expand_create_verifier()` |
+| `crates/toasty-macros/src/expand/mod.rs` | Call `expand_create_verifier()` from root expansion |
 | `crates/toasty-macros/src/create/expand.rs` | Emit verification chain in `expand()` |

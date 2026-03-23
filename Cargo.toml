@@ -3,7 +3,6 @@ resolver = "2"
 members = [
     "crates/toasty",
     "crates/toasty-cli",
-    "crates/toasty-codegen",
     "crates/toasty-core",
     "crates/toasty-macros",
     "crates/toasty-sql",
@@ -41,7 +40,6 @@ unsafe_code = "deny"
 # Toasty crates
 toasty = { path = "crates/toasty" }
 toasty-cli = { path = "crates/toasty-cli" }
-toasty-codegen = { path = "crates/toasty-codegen" }
 toasty-core = { path = "crates/toasty-core" }
 toasty-macros = { path = "crates/toasty-macros" }
 toasty-sql = { path = "crates/toasty-sql" }

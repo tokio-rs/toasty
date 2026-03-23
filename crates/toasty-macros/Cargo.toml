@@ -9,7 +9,7 @@ proc-macro = true
 
 [dependencies]
 toasty-core.workspace = true
-toasty-codegen.workspace = true
+std-util.workspace = true
 
 proc-macro2.workspace = true
 quote.workspace = true

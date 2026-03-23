@@ -19,7 +19,7 @@ Load this skill when writing or editing tests anywhere in this project.
 | SQL generation in `toasty-sql` | `crates/toasty-sql/tests/` |
 | Complex internal logic (e.g., query simplification) | Inline `#[cfg(test)]` in the relevant source file |
 
-**Never write tests for `toasty-codegen` directly.** Test macro behavior at the user level (define a model, use the generated code) in the integration suite or `tests/tests/`.
+**Never write tests for macro codegen internals directly.** Test macro behavior at the user level (define a model, use the generated code) in the integration suite or `tests/tests/`.
 
 **Never write per-driver tests.** Any test that exercises a real DB goes in `toasty-driver-integration-suite` so third-party driver authors can run it too. The suite is instantiated per driver in `tests/tests/{sqlite,mysql,postgresql,dynamodb}.rs`.
 

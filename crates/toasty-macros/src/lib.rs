@@ -1,9 +1,27 @@
 extern crate proc_macro;
 
 mod create;
+mod expand;
+mod schema;
 
 use proc_macro::TokenStream;
 use quote::quote;
+
+fn generate_model(input: proc_macro2::TokenStream) -> syn::Result<proc_macro2::TokenStream> {
+    let item: syn::ItemStruct = syn::parse2(input)?;
+    let model = schema::Model::from_ast(&item, false)?;
+    Ok(expand::root_model(&model))
+}
+
+fn generate_embed(input: proc_macro2::TokenStream) -> syn::Result<proc_macro2::TokenStream> {
+    if let Ok(item) = syn::parse2::<syn::ItemStruct>(input.clone()) {
+        let model = schema::Model::from_ast(&item, true)?;
+        return Ok(expand::embedded_model(&model));
+    }
+    let item: syn::ItemEnum = syn::parse2(input)?;
+    let model = schema::Model::from_enum_ast(&item)?;
+    Ok(expand::embedded_enum(&model))
+}
 
 /// Derive macro that turns a struct into a Toasty model backed by a database
 /// table.
@@ -574,7 +592,7 @@ use quote::quote;
     )
 )]
 pub fn derive_model(input: TokenStream) -> TokenStream {
-    match toasty_codegen::generate_model(input.into()) {
+    match generate_model(input.into()) {
         Ok(output) => output.into(),
         Err(e) => e.to_compile_error().into(),
     }
@@ -893,7 +911,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// [`Register`]: toasty::Register
 #[proc_macro_derive(Embed, attributes(column, index, unique))]
 pub fn derive_embed(input: TokenStream) -> TokenStream {
-    match toasty_codegen::generate_embed(input.into()) {
+    match generate_embed(input.into()) {
         Ok(output) => output.into(),
         Err(e) => e.to_compile_error().into(),
     }
