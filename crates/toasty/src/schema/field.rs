@@ -1,11 +1,11 @@
 use std::{rc::Rc, sync::Arc};
 
-use crate::{stmt::Path, Result};
+use crate::{schema::Load, stmt::Path, Result};
 
 use std::borrow::Cow;
 use toasty_core::stmt;
 
-pub trait Field: Sized {
+pub trait Field: Sized + Load<Output = Self> {
     /// Whether or not the type is nullable
     const NULLABLE: bool = false;
 
@@ -20,8 +20,6 @@ pub trait Field: Sized {
     type UpdateBuilder<'a>;
 
     fn ty() -> stmt::Type;
-
-    fn load(value: stmt::Value) -> Result<Self>;
 
     /// Reload the value in-place from a value returned by the database.
     ///
@@ -64,20 +62,24 @@ pub trait Field: Sized {
     }
 }
 
-/// Macro to generate Field implementations for numeric types that use `try_into()`
+/// Macro to generate Load and Field implementations for numeric types that use `try_into()`
 macro_rules! impl_field_numeric {
     ($($ty:ty => $stmt_ty:ident),* $(,)?) => {
         $(
+            impl Load for $ty {
+                type Output = Self;
+
+                fn load(value: stmt::Value) -> Result<Self> {
+                    value.try_into()
+                }
+            }
+
             impl Field for $ty {
                 type FieldAccessor<Origin> = Path<Origin, Self>;
                 type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
                 fn ty() -> stmt::Type {
                     stmt::Type::$stmt_ty
-                }
-
-                fn load(value: stmt::Value) -> Result<Self> {
-                    value.try_into()
                 }
 
                 fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
@@ -101,6 +103,14 @@ impl_field_numeric! {
 }
 
 // Pointer-sized integers map to fixed-size types internally
+impl Load for isize {
+    type Output = Self;
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        value.try_into()
+    }
+}
+
 impl Field for isize {
     type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
@@ -109,12 +119,16 @@ impl Field for isize {
         stmt::Type::I64
     }
 
-    fn load(value: stmt::Value) -> Result<Self> {
-        value.try_into()
-    }
-
     fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
         path
+    }
+}
+
+impl Load for usize {
+    type Output = Self;
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        value.try_into()
     }
 }
 
@@ -126,12 +140,19 @@ impl Field for usize {
         stmt::Type::U64
     }
 
-    fn load(value: stmt::Value) -> Result<Self> {
-        value.try_into()
-    }
-
     fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
         path
+    }
+}
+
+impl Load for String {
+    type Output = Self;
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        match value {
+            stmt::Value::String(v) => Ok(v),
+            _ => Err(toasty_core::Error::type_conversion(value, "String")),
+        }
     }
 }
 
@@ -141,13 +162,6 @@ impl Field for String {
 
     fn ty() -> stmt::Type {
         stmt::Type::String
-    }
-
-    fn load(value: stmt::Value) -> Result<Self> {
-        match value {
-            stmt::Value::String(v) => Ok(v),
-            _ => Err(toasty_core::Error::type_conversion(value, "String")),
-        }
     }
 
     fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
@@ -161,10 +175,6 @@ impl Field for Vec<u8> {
 
     fn ty() -> stmt::Type {
         stmt::Type::Bytes
-    }
-
-    fn load(value: stmt::Value) -> Result<Self> {
-        value.try_into()
     }
 
     fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
@@ -181,16 +191,20 @@ impl<T: Field> Field for Option<T> {
     }
     const NULLABLE: bool = true;
 
-    fn load(value: stmt::Value) -> Result<Self> {
-        if value.is_null() {
-            Ok(None)
-        } else {
-            Ok(Some(T::load(value)?))
-        }
-    }
-
     fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
         path
+    }
+}
+
+impl<T> Load for Cow<'_, T>
+where
+    T: ToOwned + ?Sized,
+    T::Owned: Field,
+{
+    type Output = Self;
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        <T::Owned as Load>::load(value).map(Cow::Owned)
     }
 }
 
@@ -206,12 +220,19 @@ where
         <T::Owned as Field>::ty()
     }
 
-    fn load(value: stmt::Value) -> Result<Self> {
-        <T::Owned as Field>::load(value).map(Cow::Owned)
-    }
-
     fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
         path
+    }
+}
+
+impl Load for uuid::Uuid {
+    type Output = Self;
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        match value {
+            stmt::Value::Uuid(v) => Ok(v),
+            _ => Err(toasty_core::Error::type_conversion(value, "uuid::Uuid")),
+        }
     }
 }
 
@@ -223,15 +244,19 @@ impl Field for uuid::Uuid {
         stmt::Type::Uuid
     }
 
-    fn load(value: stmt::Value) -> Result<Self> {
-        match value {
-            stmt::Value::Uuid(v) => Ok(v),
-            _ => Err(toasty_core::Error::type_conversion(value, "uuid::Uuid")),
-        }
-    }
-
     fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
         path
+    }
+}
+
+impl Load for bool {
+    type Output = Self;
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        match value {
+            stmt::Value::Bool(v) => Ok(v),
+            _ => Err(toasty_core::Error::type_conversion(value, "bool")),
+        }
     }
 }
 
@@ -243,15 +268,16 @@ impl Field for bool {
         stmt::Type::Bool
     }
 
-    fn load(value: stmt::Value) -> Result<Self> {
-        match value {
-            stmt::Value::Bool(v) => Ok(v),
-            _ => Err(toasty_core::Error::type_conversion(value, "bool")),
-        }
-    }
-
     fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
         path
+    }
+}
+
+impl<T: Field> Load for Arc<T> {
+    type Output = Self;
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        <T as Load>::load(value).map(Arc::new)
     }
 }
 
@@ -263,12 +289,16 @@ impl<T: Field> Field for Arc<T> {
         T::ty()
     }
 
-    fn load(value: stmt::Value) -> Result<Self> {
-        <T as Field>::load(value).map(Arc::new)
-    }
-
     fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
         path
+    }
+}
+
+impl<T: Field> Load for Rc<T> {
+    type Output = Self;
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        <T as Load>::load(value).map(Rc::new)
     }
 }
 
@@ -280,12 +310,16 @@ impl<T: Field> Field for Rc<T> {
         T::ty()
     }
 
-    fn load(value: stmt::Value) -> Result<Self> {
-        <T as Field>::load(value).map(Rc::new)
-    }
-
     fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
         path
+    }
+}
+
+impl<T: Field> Load for Box<T> {
+    type Output = Self;
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        <T as Load>::load(value).map(Box::new)
     }
 }
 
@@ -297,12 +331,23 @@ impl<T: Field> Field for Box<T> {
         T::ty()
     }
 
-    fn load(value: stmt::Value) -> Result<Self> {
-        <T as Field>::load(value).map(Box::new)
-    }
-
     fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
         path
+    }
+}
+
+#[cfg(feature = "rust_decimal")]
+impl Load for rust_decimal::Decimal {
+    type Output = Self;
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        match value {
+            stmt::Value::Decimal(v) => Ok(v),
+            _ => Err(toasty_core::Error::type_conversion(
+                value,
+                "rust_decimal::Decimal",
+            )),
+        }
     }
 }
 
@@ -315,18 +360,23 @@ impl Field for rust_decimal::Decimal {
         stmt::Type::Decimal
     }
 
-    fn load(value: stmt::Value) -> Result<Self> {
-        match value {
-            stmt::Value::Decimal(v) => Ok(v),
-            _ => Err(toasty_core::Error::type_conversion(
-                value,
-                "rust_decimal::Decimal",
-            )),
-        }
-    }
-
     fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
         path
+    }
+}
+
+#[cfg(feature = "bigdecimal")]
+impl Load for bigdecimal::BigDecimal {
+    type Output = Self;
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        match value {
+            stmt::Value::BigDecimal(v) => Ok(v),
+            _ => Err(toasty_core::Error::type_conversion(
+                value,
+                "bigdecimal::BigDecimal",
+            )),
+        }
     }
 }
 
@@ -337,16 +387,6 @@ impl Field for bigdecimal::BigDecimal {
 
     fn ty() -> stmt::Type {
         stmt::Type::BigDecimal
-    }
-
-    fn load(value: stmt::Value) -> Result<Self> {
-        match value {
-            stmt::Value::BigDecimal(v) => Ok(v),
-            _ => Err(toasty_core::Error::type_conversion(
-                value,
-                "bigdecimal::BigDecimal",
-            )),
-        }
     }
 
     fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {

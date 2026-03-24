@@ -1,4 +1,4 @@
-use super::Field;
+use super::{Field, Load};
 use crate::stmt::Path;
 use toasty_core::{
     stmt::{Type, Value},
@@ -7,19 +7,23 @@ use toasty_core::{
 
 macro_rules! impl_jiff_field {
     ($ty:ty, $name:ident, $lit:literal) => {
-        impl Field for $ty {
-            type FieldAccessor<Origin> = Path<Origin, Self>;
-            type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
-
-            fn ty() -> Type {
-                Type::$name
-            }
+        impl Load for $ty {
+            type Output = Self;
 
             fn load(value: Value) -> Result<Self> {
                 match value {
                     Value::$name(v) => Ok(v),
                     _ => Err(toasty_core::Error::type_conversion(value, $lit)),
                 }
+            }
+        }
+
+        impl Field for $ty {
+            type FieldAccessor<Origin> = Path<Origin, Self>;
+            type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
+
+            fn ty() -> Type {
+                Type::$name
             }
 
             fn make_field_accessor<Origin>(

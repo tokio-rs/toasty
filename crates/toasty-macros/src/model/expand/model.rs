@@ -274,8 +274,8 @@ impl Expand<'_> {
     /// Generates the body for loading a model or embedded type from a Value.
     ///
     /// This method is used by both:
-    /// - Root models (in `Model::load`) - supports all field types
-    /// - Embedded types (in `Field::load`) - only primitive fields
+    /// - Root models (in `Load::load`) - supports all field types
+    /// - Embedded types (in `Load::load`) - only primitive fields
     ///
     /// The generated code pattern matches on `Value::Record`, extracts fields,
     /// and constructs the struct.
@@ -294,7 +294,7 @@ impl Expand<'_> {
                     let serialize_attr = field.attrs.serialize.as_ref().unwrap();
 
                     let json_deserialize = quote! {
-                        let json_str = <String as #toasty::Field>::load(value)?;
+                        let json_str = <String as #toasty::Load>::load(value)?;
                         #toasty::serde_json::from_str(&json_str)
                             .map_err(|e| #toasty::Error::from_args(
                                 format_args!("failed to deserialize field '{}': {}", #field_name_str, e)
@@ -317,7 +317,7 @@ impl Expand<'_> {
                     }
                 }
                 FieldTy::Primitive(ty) => {
-                    quote!(#field_ident: <#ty as #toasty::Field>::load(record[#index_tokenized].take())?,)
+                    quote!(#field_ident: <#ty as #toasty::Load>::load(record[#index_tokenized].take())?,)
                 }
                 FieldTy::BelongsTo(_) => {
                     quote!(#field_ident: #toasty::BelongsTo::load(record[#index].take())?,)
@@ -360,7 +360,7 @@ impl Expand<'_> {
                     let serialize_attr = field.attrs.serialize.as_ref().unwrap();
 
                     let json_deserialize = quote! {
-                        let json_str = <String as #toasty::Field>::load(value)?;
+                        let json_str = <String as #toasty::Load>::load(value)?;
                         #toasty::serde_json::from_str(&json_str)
                             .map_err(|e| #toasty::Error::from_args(
                                 format_args!("failed to deserialize field '{}': {}", #field_name_str, e)
@@ -402,7 +402,7 @@ impl Expand<'_> {
                     Ok(())
                 }
                 value => {
-                    *self = Self::load(value)?;
+                    *self = <Self as #toasty::Load>::load(value)?;
                     Ok(())
                 }
             }
