@@ -23,6 +23,10 @@ impl<T: Relation> Load for HasOne<T> {
         T::ty()
     }
 
+    fn ty_relation() -> toasty_core::stmt::Type {
+        T::ty_relation()
+    }
+
     fn load(input: Value) -> crate::Result<Self> {
         Ok(match input {
             Value::Null => Self::default(),

@@ -9,6 +9,10 @@ impl<T: Load> Load for Option<T> {
         T::ty()
     }
 
+    fn ty_relation() -> toasty_core::stmt::Type {
+        T::ty_relation()
+    }
+
     fn load(value: Value) -> Result<Self::Output, crate::Error> {
         match value {
             Value::Null => Ok(None),

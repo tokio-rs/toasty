@@ -17,6 +17,12 @@ pub trait Load {
     /// Returns the [`stmt::Type`] that describes values of this type.
     fn ty() -> stmt::Type;
 
+    /// Returns the [`stmt::Type`] used when this type appears as a relation
+    /// target. The default delegates to [`ty()`](Load::ty).
+    fn ty_relation() -> stmt::Type {
+        Self::ty()
+    }
+
     fn load(value: stmt::Value) -> Result<Self::Output, Error>;
 
     fn load_relation(value: stmt::Value) -> Result<Self::Output, Error> {
