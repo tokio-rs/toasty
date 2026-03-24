@@ -1,9 +1,9 @@
+use crate::engine::Engine;
+use toasty_core::driver::Capability;
 use toasty_core::{
     schema::{app::ModelId, Schema},
     stmt::{self, Statement, Visit},
 };
-use toasty_core::driver::Capability;
-use crate::engine::Engine;
 
 struct Verify<'a> {
     schema: &'a Schema,
@@ -18,10 +18,9 @@ struct VerifyExpr<'a> {
 
 impl Engine {
     pub(crate) fn verify(&self, stmt: &Statement) {
-
         Verify {
             schema: &self.schema,
-            capability: &self.capability,
+            capability: self.capability,
         }
         .visit(stmt);
     }
@@ -117,7 +116,7 @@ impl Verify<'_> {
                 if self.capability.sql {
                     assert!(order_by.exprs.len() == 1, "order_by = {order_by:#?}");
                 } else {
-                    assert!(false, "NoSQL requires a Record as offset");
+                    panic!("NoSQL requires a Record as offset");
                 }
             }
             _ => todo!("unsupported offset expression; stmt={i:#?}"),

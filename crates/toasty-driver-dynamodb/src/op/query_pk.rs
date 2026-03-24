@@ -114,10 +114,7 @@ impl Connection {
         let res = result?;
 
         // Capture LastEvaluatedKey for pagination
-        let cursor = res
-            .last_evaluated_key
-            .as_ref()
-            .map(|last_key| serialize_ddb_cursor(last_key));
+        let cursor = res.last_evaluated_key.as_ref().map(serialize_ddb_cursor);
 
         let rows = stmt::ValueStream::from_iter(res.items.into_iter().flatten().map(move |item| {
             item_to_record(

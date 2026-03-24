@@ -272,14 +272,11 @@ pub async fn paginate_for_dynamodb(test: &mut Test) -> Result<()> {
     }
 
     let mut count = 0;
-    loop {
-        match items.next(&mut db).await? {
-            Some(x) => {items = x; count += items.items.len()},
-            None => break,
-        }
+    while let Some(i) = items.next(&mut db).await? {
+        count += i.items.len();
+        items = i;
     }
     assert_eq!(count, 30);
-
 
     let mut items: Page<_> = Item::all()
         .order_by(Item::fields().order().asc())
@@ -289,14 +286,11 @@ pub async fn paginate_for_dynamodb(test: &mut Test) -> Result<()> {
         .await?;
 
     let mut count = items.items.len();
-    loop {
-        match items.next(&mut db).await? {
-            Some(x) => {items = x; count += items.items.len()},
-            None => break,
-        }
+    while let Some(i) = items.next(&mut db).await? {
+        count += i.items.len();
+        items = i;
     }
     assert_eq!(count, 50);
 
     Ok(())
 }
-

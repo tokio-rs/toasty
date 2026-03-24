@@ -60,7 +60,7 @@ use toasty_core::{
 /// Response from executing an action in the engine pipeline.
 /// Carries both the result values and optional pagination metadata.
 #[derive(Debug)]
-pub(crate) struct ExecResponse {
+pub struct ExecResponse {
     /// The result values (rows, count, or stream)
     pub values: Rows,
     /// Cursor to the next page (if paginated and more data exists)
@@ -77,11 +77,6 @@ impl ExecResponse {
             next_cursor: None,
             prev_cursor: None,
         }
-    }
-
-    /// Convert back to just the rows (discarding cursor metadata)
-    pub fn into_rows(self) -> Rows {
-        self.values
     }
 }
 

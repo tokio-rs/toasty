@@ -742,7 +742,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             |(page_size, original_column_count, cursor_column_indices)| {
                 // Extract row type from List<Row>
                 let row_ty = if let stmt::Type::List(item_ty) = &ty {
-                    (&**item_ty).clone()
+                    (**item_ty).clone()
                 } else {
                     stmt::Type::Unit
                 };
