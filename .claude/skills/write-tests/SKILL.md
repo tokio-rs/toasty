@@ -173,6 +173,31 @@ Operator patterns at leaves avoid importing types:
 
 Full pattern grammar: `~/.cargo/registry/src/index.crates.io-*/assert-struct-*/LLM.txt`
 
+### assert_struct! formatting
+
+**rustfmt does not format `assert_struct!` bodies.** You are responsible for formatting them manually, using the same rules rustfmt would apply to equivalent Rust code.
+
+**One-liner:** If the entire call fits on one line within the column limit (~100 chars), keep it on one line.
+
+```rust
+assert_struct!(resp, _ { rows: Rows::Count(1), .. });
+```
+
+**Multi-line:** When breaking across lines, treat the macro body like a struct literal or match arm — indent the contents by 4 spaces relative to the `assert_struct!` call, and put the closing `});` on its own line.
+
+```rust
+assert_struct!(op, Operation::QuerySql(_ {
+    stmt: Statement::Update(_ {
+        target: UpdateTarget::Table(== foo_table_id),
+        assignments: #{ 1: _ { expr: == "new", .. } },
+        ..
+    }),
+    ..
+}));
+```
+
+**When the macro syntax differs from Rust** (e.g. `#{ .. }` for map patterns, `== expr` leaf operators, dot-path keys like `items.len():`), use your best judgment to apply equivalent rustfmt rules: align commas consistently, indent nested levels, and never leave trailing whitespace.
+
 ### std-util assertion macros
 
 ```rust
