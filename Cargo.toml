@@ -17,9 +17,6 @@ members = [
     "crates/toasty-driver-integration-suite",
     "crates/toasty-driver-integration-suite-macros",
 
-    # General utilities.
-    "crates/std-util",
-
     # Examples
     "examples/composite-key",
     "examples/hello-toasty",
@@ -43,8 +40,6 @@ toasty-cli = { path = "crates/toasty-cli" }
 toasty-core = { path = "crates/toasty-core" }
 toasty-macros = { path = "crates/toasty-macros" }
 toasty-sql = { path = "crates/toasty-sql" }
-std-util = { path = "crates/std-util" }
-
 # Driver implementations
 toasty-driver-dynamodb = { path = "crates/toasty-driver-dynamodb" }
 toasty-driver-mysql = { path = "crates/toasty-driver-mysql" }

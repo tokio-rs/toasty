@@ -9,8 +9,9 @@ proc-macro = true
 
 [dependencies]
 toasty-core.workspace = true
-std-util.workspace = true
 
+heck.workspace = true
+pluralizer.workspace = true
 proc-macro2.workspace = true
 quote.workspace = true
 syn.workspace = true

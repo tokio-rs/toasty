@@ -6,9 +6,9 @@ use std::{
 
 use index_vec::IndexVec;
 use indexmap::IndexSet;
-use toasty_core::stmt::{self, ExprReference};
+use toasty_core::stmt;
 
-use crate::engine::mir;
+use crate::engine::{mir, SelectItems};
 
 /// High-level Intermediate Representation of a query.
 ///
@@ -75,11 +75,11 @@ pub(super) struct StatementInfo {
     /// Used to wire up dependencies between operations.
     pub(super) load_data_statement: Cell<Option<mir::NodeId>>,
 
-    /// Columns selected by the `exec_statement` operation.
+    /// Items selected by the `exec_statement` operation.
     ///
-    /// Populated during planning to track which columns are fetched from the
+    /// Populated during planning to track which items are fetched from the
     /// database. Used to resolve column references in child statements.
-    pub(super) load_data_columns: OnceCell<IndexSet<stmt::ExprReference>>,
+    pub(super) load_data_select_items: OnceCell<SelectItems>,
 
     /// MIR node representing this statement's final output.
     ///
@@ -109,7 +109,7 @@ impl StatementInfo {
             args: vec![],
             back_refs: HashMap::new(),
             load_data_statement: Cell::new(None),
-            load_data_columns: OnceCell::new(),
+            load_data_select_items: OnceCell::new(),
             output: Cell::new(None),
             independent: true,
         }
@@ -176,7 +176,7 @@ pub(super) enum Arg {
     /// A reference to a parent statement's columns.
     Ref {
         /// The expression reference relative to the target statement.
-        target_expr_ref: ExprReference,
+        target_expr_ref: stmt::ExprReference,
 
         /// The parent statement that provides the data for this reference.
         stmt_id: StmtId,

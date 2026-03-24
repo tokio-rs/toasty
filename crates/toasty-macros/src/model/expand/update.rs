@@ -233,7 +233,7 @@ impl Expand<'_> {
                 #vis async fn exec(mut self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<()> {
                     use #toasty::UpdateTarget as _;
                     let stmt = self.target.to_update_stmt(self.assignments);
-                    let value = executor.exec_untyped(stmt.into_untyped_stmt()).await?;
+                    let value = executor.exec_untyped(stmt.into_untyped()).await?;
                     self.target.apply_result(value)?;
                     Ok(())
                 }
@@ -311,7 +311,7 @@ impl Expand<'_> {
                 fn into_statement(mut self) -> #toasty::Statement<()> {
                     use #toasty::UpdateTarget as _;
                     let stmt = self.target.to_update_stmt(self.assignments);
-                    #toasty::Statement::from_untyped_stmt(stmt.into_untyped_stmt())
+                    #toasty::Statement::from_untyped_stmt(stmt.into_untyped())
                 }
             }
         }

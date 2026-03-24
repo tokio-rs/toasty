@@ -2,9 +2,9 @@ extern crate proc_macro;
 
 mod create;
 mod model;
+mod query;
 
 use proc_macro::TokenStream;
-use quote::quote;
 
 /// Derive macro that turns a struct into a Toasty model backed by a database
 /// table.
@@ -906,8 +906,11 @@ pub fn include_schema(_input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro]
-pub fn query(_input: TokenStream) -> TokenStream {
-    quote!(println!("TODO")).into()
+pub fn query(input: TokenStream) -> TokenStream {
+    match query::generate(input.into()) {
+        Ok(output) => output.into(),
+        Err(e) => e.to_compile_error().into(),
+    }
 }
 
 /// Expands struct-literal syntax into create builder method chains. Returns one

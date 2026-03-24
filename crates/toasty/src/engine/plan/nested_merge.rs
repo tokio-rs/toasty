@@ -6,7 +6,7 @@ use crate::engine::{
     exec::{MergeIndex, MergeQualification, NestedChild, NestedLevel},
     hir, mir,
     plan::HirPlanner,
-    Engine, HirStatement,
+    Engine, HirStatement, SelectItems,
 };
 
 #[derive(Debug)]
@@ -123,7 +123,7 @@ impl NestedMergePlanner<'_> {
 
         let level = self.plan_nested_level(stmt_id, depth);
         let stmt_state = &self.hir[stmt_id];
-        let selection = stmt_state.load_data_columns.get().unwrap();
+        let selection = stmt_state.load_data_select_items.get().unwrap();
 
         let ret = match stmt_state.stmt.as_deref().unwrap() {
             stmt::Statement::Query(query) => {
@@ -248,8 +248,8 @@ impl NestedMergePlanner<'_> {
 
         let mut fields = vec![];
 
-        for expr_reference in stmt_state.load_data_columns.get().unwrap() {
-            fields.push(cx.infer_expr_reference_ty(expr_reference));
+        for select_item in stmt_state.load_data_select_items.get().unwrap() {
+            fields.push(select_item.infer_ty(&cx));
         }
 
         stmt::Type::Record(fields)
@@ -272,7 +272,7 @@ impl NestedMergePlanner<'_> {
         // Copy the shared hir reference out of self so the closure can access
         // hir data without conflicting with the &mut self capture.
         let hir = self.hir;
-        let selection = hir[stmt_id].load_data_columns.get().unwrap();
+        let selection = hir[stmt_id].load_data_select_items.get().unwrap();
         let mut projection = expr.clone();
 
         visit_mut::walk_expr_scoped_mut(&mut projection, 0, |expr, scope_depth| match expr {
@@ -331,9 +331,7 @@ impl NestedMergePlanner<'_> {
             stmt::Expr::Reference(expr_reference) => {
                 let expr_column = expr_reference.as_expr_column_unwrap();
                 debug_assert_eq!(0, expr_column.nesting);
-                let index = selection
-                    .get_index_of(&stmt::ExprReference::from(*expr_column))
-                    .unwrap();
+                let index = selection.get_index_of_expr_reference(*expr_column);
                 *expr = stmt::Expr::arg_project(0, [index]);
                 false
             }
@@ -347,7 +345,7 @@ impl NestedMergePlanner<'_> {
     fn build_filter_for_nested_child(
         &self,
         stmt_id: hir::StmtId,
-        selection: &IndexSet<stmt::ExprReference>,
+        selection: &SelectItems,
         depth: usize,
     ) -> stmt::Expr {
         let stmt_state = &self.hir[stmt_id];
@@ -380,16 +378,15 @@ impl NestedMergePlanner<'_> {
                 let target_stmt = &self.hir[target_id];
 
                 let target_exec_statement_index = target_stmt
-                    .load_data_columns
+                    .load_data_select_items
                     .get()
                     .unwrap()
-                    .get_index_of(target_expr_ref)
-                    .unwrap();
+                    .get_index_of_expr_reference(*target_expr_ref);
 
                 *expr = stmt::Expr::arg_project(depth - *nesting, [target_exec_statement_index]);
             }
             stmt::Expr::Reference(expr_reference) => {
-                let index = selection.get_index_of(expr_reference).unwrap();
+                let index = selection.get_index_of_expr_reference(*expr_reference);
                 *expr = stmt::Expr::arg_project(depth, [index]);
             }
             _ => {}

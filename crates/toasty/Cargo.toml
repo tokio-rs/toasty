@@ -58,6 +58,7 @@ tracing.workspace = true
 url.workspace = true
 
 [dev-dependencies]
+assert-struct.workspace = true
 proptest.workspace = true
 tokio = { workspace = true }
 toasty-driver-sqlite = { workspace = true }
