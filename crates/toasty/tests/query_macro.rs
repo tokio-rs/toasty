@@ -61,9 +61,11 @@ fn bool_val(b: bool) -> core_stmt::Expr {
 fn query_all() {
     let sel = select(toasty::query!(User));
 
-    assert_struct!(sel, _ {
-        source: core_stmt::Source::Model(_ { via: None, .. }),
-        filter: _ { expr: Some(core_stmt::Expr::Value(core_stmt::Value::Bool(true))) },
+    assert_struct!(sel, {
+        source: core_stmt::Source::Model({ via: None }),
+        filter: {
+            expr: Some(core_stmt::Expr::Value(core_stmt::Value::Bool(true))),
+        },
         returning: core_stmt::Returning::Model { include: [] },
     });
 }
@@ -229,21 +231,21 @@ fn filter_keyword_mixed_case() {
 fn and_keyword_uppercase() {
     let expr = filter_expr(toasty::query!(User filter .name == "a" AND .age > 1));
 
-    assert_struct!(expr, core_stmt::Expr::And(_ { operands.len(): 2 }));
+    assert_struct!(expr, core_stmt::Expr::And({ operands.len(): 2 }));
 }
 
 #[test]
 fn or_keyword_uppercase() {
     let expr = filter_expr(toasty::query!(User filter .name == "a" OR .name == "b"));
 
-    assert_struct!(expr, core_stmt::Expr::Or(_ { operands.len(): 2 }));
+    assert_struct!(expr, core_stmt::Expr::Or({ operands.len(): 2 }));
 }
 
 #[test]
 fn not_keyword_uppercase() {
     let expr = filter_expr(toasty::query!(User filter NOT .active == true));
 
-    assert_struct!(expr, core_stmt::Expr::Not(_ { .. }));
+    assert_struct!(expr, core_stmt::Expr::Not(_));
 }
 
 // ---------------------------------------------------------------------------
@@ -277,7 +279,7 @@ fn triple_and() {
         filter_expr(toasty::query!(User filter .name == "A" and .age > 0 and .active == true));
 
     // AND flattens: and(and(a, b), c) → and(a, b, c)
-    assert_struct!(expr, core_stmt::Expr::And(_ { operands.len(): 3 }));
+    assert_struct!(expr, core_stmt::Expr::And({ operands.len(): 3 }));
 }
 
 #[test]
@@ -286,7 +288,7 @@ fn triple_or() {
         filter_expr(toasty::query!(User filter .name == "A" or .name == "B" or .name == "C"));
 
     // OR flattens: or(or(a, b), c) → or(a, b, c)
-    assert_struct!(expr, core_stmt::Expr::Or(_ { operands.len(): 3 }));
+    assert_struct!(expr, core_stmt::Expr::Or({ operands.len(): 3 }));
 }
 
 #[test]
@@ -331,7 +333,7 @@ fn query_all_is_not_single() {
         .into_untyped()
         .into_query_unwrap();
 
-    assert_struct!(query, _ {
+    assert_struct!(query, {
         single: false,
         order_by: None,
         limit: None,
@@ -347,13 +349,11 @@ fn filter_query_is_not_single() {
         .into_untyped()
         .into_query_unwrap();
 
-    assert_struct!(query, _ {
+    assert_struct!(query, {
         single: false,
-        body: core_stmt::ExprSet::Select(_ {
-            source: core_stmt::Source::Model(_ { via: None, .. }),
-            ..
+        body: core_stmt::ExprSet::Select({
+            source: core_stmt::Source::Model({ via: None }),
         }),
-        ..
     });
 }
 
