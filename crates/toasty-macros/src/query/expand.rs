@@ -1,4 +1,7 @@
-use super::parse::{CompareOpKind, Expr, ExprBinaryOp, FieldPath, QueryInput};
+use super::parse::{
+    CompareOpKind, Expr, ExprBinaryOp, FieldPath, LimitExpr, OffsetExpr, OrderByClause,
+    OrderDirection, QueryInput,
+};
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -7,13 +10,83 @@ use quote::quote;
 pub(crate) fn expand(input: &QueryInput) -> TokenStream {
     let source = &input.source;
 
-    match &input.filter {
+    let base = match &input.filter {
         Some(filter) => {
             let filter_expr = expand_filter(source, filter);
             quote! { #source::filter(#filter_expr) }
         }
         None => {
             quote! { #source::all() }
+        }
+    };
+
+    // If there are no additional clauses, return the base expression directly.
+    let has_clauses = input.order_by.is_some() || input.offset.is_some() || input.limit.is_some();
+
+    if !has_clauses {
+        return base;
+    }
+
+    // The generated query wrapper types consume `self` in their builder methods,
+    // so we chain reassignments.
+    let mut stmts = vec![quote! { let mut __toasty_query = #base; }];
+
+    if let Some(order_by) = &input.order_by {
+        let order_expr = expand_order_by(source, order_by);
+        stmts.push(quote! { __toasty_query = __toasty_query.order_by(#order_expr); });
+    }
+
+    if let Some(limit) = &input.limit {
+        let limit_expr = expand_pagination_expr(limit);
+        stmts.push(quote! { __toasty_query = __toasty_query.limit(#limit_expr); });
+    }
+
+    // offset must come after limit (the API requires it)
+    if let Some(offset) = &input.offset {
+        let offset_expr = expand_pagination_expr(offset);
+        stmts.push(quote! { __toasty_query = __toasty_query.offset(#offset_expr); });
+    }
+
+    stmts.push(quote! { __toasty_query });
+
+    quote! { { #(#stmts)* } }
+}
+
+/// Expand an ORDER BY clause: `.field ASC` → `Source::fields().field().asc()`.
+fn expand_order_by(source: &syn::Path, clause: &OrderByClause) -> TokenStream {
+    let field = expand_field_path(source, &clause.field);
+    match clause.direction {
+        OrderDirection::Asc => quote! { #field.asc() },
+        OrderDirection::Desc => quote! { #field.desc() },
+    }
+}
+
+/// Expand a pagination expression (LIMIT or OFFSET value).
+fn expand_pagination_expr<T: PaginationValue>(expr: &T) -> TokenStream {
+    expr.to_tokens()
+}
+
+/// Trait for expanding pagination values to tokens.
+trait PaginationValue {
+    fn to_tokens(&self) -> TokenStream;
+}
+
+impl PaginationValue for LimitExpr {
+    fn to_tokens(&self) -> TokenStream {
+        match self {
+            LimitExpr::Lit(lit) => quote! { #lit },
+            LimitExpr::Var(ident) => quote! { #ident },
+            LimitExpr::RustExpr(expr) => quote! { #expr },
+        }
+    }
+}
+
+impl PaginationValue for OffsetExpr {
+    fn to_tokens(&self) -> TokenStream {
+        match self {
+            OffsetExpr::Lit(lit) => quote! { #lit },
+            OffsetExpr::Var(ident) => quote! { #ident },
+            OffsetExpr::RustExpr(expr) => quote! { #expr },
         }
     }
 }

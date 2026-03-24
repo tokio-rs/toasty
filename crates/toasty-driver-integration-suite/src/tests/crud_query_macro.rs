@@ -328,6 +328,203 @@ pub async fn query_macro_filter_bool_literal(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+// --- ORDER BY, LIMIT, OFFSET tests ---
+
+#[driver_test(id(ID), requires(sql))]
+pub async fn query_macro_order_by_asc(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        #[index]
+        name: String,
+    }
+
+    let mut db = test.setup_db(models!(User)).await;
+
+    toasty::create!(User::[{ name: "Carl" }, { name: "Alice" }, { name: "Bob" }])
+        .exec(&mut db)
+        .await?;
+
+    let users = toasty::query!(User ORDER BY .name ASC)
+        .exec(&mut db)
+        .await?;
+    assert_struct!(users, [{ name: "Alice" }, { name: "Bob" }, { name: "Carl" }]);
+
+    Ok(())
+}
+
+#[driver_test(id(ID), requires(sql))]
+pub async fn query_macro_order_by_desc(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        #[index]
+        name: String,
+    }
+
+    let mut db = test.setup_db(models!(User)).await;
+
+    toasty::create!(User::[{ name: "Carl" }, { name: "Alice" }, { name: "Bob" }])
+        .exec(&mut db)
+        .await?;
+
+    let users = toasty::query!(User ORDER BY .name DESC)
+        .exec(&mut db)
+        .await?;
+    assert_struct!(users, [{ name: "Carl" }, { name: "Bob" }, { name: "Alice" }]);
+
+    Ok(())
+}
+
+#[driver_test(id(ID), requires(sql))]
+pub async fn query_macro_limit(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        #[index]
+        name: String,
+    }
+
+    let mut db = test.setup_db(models!(User)).await;
+
+    toasty::create!(User::[{ name: "Alice" }, { name: "Bob" }, { name: "Carl" }])
+        .exec(&mut db)
+        .await?;
+
+    let users = toasty::query!(User ORDER BY .name ASC LIMIT 2)
+        .exec(&mut db)
+        .await?;
+    assert_eq!(users.len(), 2);
+    assert_struct!(users, [{ name: "Alice" }, { name: "Bob" }]);
+
+    Ok(())
+}
+
+#[driver_test(id(ID), requires(sql))]
+pub async fn query_macro_offset_and_limit(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        #[index]
+        name: String,
+    }
+
+    let mut db = test.setup_db(models!(User)).await;
+
+    toasty::create!(User::[{ name: "Alice" }, { name: "Bob" }, { name: "Carl" }, { name: "Diana" }])
+        .exec(&mut db)
+        .await?;
+
+    // Skip 1, take 2 (ordered by name ascending)
+    let users = toasty::query!(User ORDER BY .name ASC OFFSET 1 LIMIT 2)
+        .exec(&mut db)
+        .await?;
+    assert_struct!(users, [{ name: "Bob" }, { name: "Carl" }]);
+
+    Ok(())
+}
+
+#[driver_test(id(ID), requires(sql))]
+pub async fn query_macro_filter_with_order_by_and_limit(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        #[index]
+        name: String,
+
+        #[index]
+        age: i64,
+    }
+
+    let mut db = test.setup_db(models!(User)).await;
+
+    toasty::create!(User::[
+        { name: "Alice", age: 30 },
+        { name: "Bob", age: 25 },
+        { name: "Carl", age: 35 },
+        { name: "Diana", age: 20 },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    // Filter age > 20, order by name desc, limit 2
+    let users = toasty::query!(User FILTER .age > 20 ORDER BY .name DESC LIMIT 2)
+        .exec(&mut db)
+        .await?;
+    assert_struct!(users, [{ name: "Carl" }, { name: "Bob" }]);
+
+    Ok(())
+}
+
+#[driver_test(id(ID), requires(sql))]
+pub async fn query_macro_limit_external_ref(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        #[index]
+        name: String,
+    }
+
+    let mut db = test.setup_db(models!(User)).await;
+
+    toasty::create!(User::[{ name: "Alice" }, { name: "Bob" }, { name: "Carl" }])
+        .exec(&mut db)
+        .await?;
+
+    let n = 1;
+    let users = toasty::query!(User ORDER BY .name ASC LIMIT #n)
+        .exec(&mut db)
+        .await?;
+    assert_struct!(users, [{ name: "Alice" }]);
+
+    Ok(())
+}
+
+#[driver_test(id(ID), requires(sql))]
+pub async fn query_macro_case_insensitive_order_limit(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        #[index]
+        name: String,
+    }
+
+    let mut db = test.setup_db(models!(User)).await;
+
+    toasty::create!(User::[{ name: "Alice" }, { name: "Bob" }, { name: "Carl" }])
+        .exec(&mut db)
+        .await?;
+
+    // Case-insensitive: order, by, asc, limit
+    let users = toasty::query!(User order by .name asc limit 2)
+        .exec(&mut db)
+        .await?;
+    assert_struct!(users, [{ name: "Alice" }, { name: "Bob" }]);
+
+    Ok(())
+}
+
 // --- DynamoDB-compatible query macro tests ---
 // These use composite primary keys (partition + local) so queries can be served
 // by DynamoDB's key condition expressions.
