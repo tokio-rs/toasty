@@ -331,7 +331,7 @@ impl Expand<'_> {
                     let serialize_attr = field.attrs.serialize.as_ref().unwrap();
 
                     let json_deserialize = quote! {
-                        let json_str = <String as #toasty::Field>::load(value)?;
+                        let json_str = <String as #toasty::Load>::load(value)?;
                         #toasty::serde_json::from_str(&json_str)
                             .map_err(|e| #toasty::Error::from_args(
                                 format_args!("failed to deserialize field '{}': {}", #field_name_str, e)

@@ -265,7 +265,7 @@ impl Expand<'_> {
             .collect()
     }
 
-    /// Generates match arms for the `Value::I64(d)` branch of `Field::load`.
+    /// Generates match arms for the `Value::I64(d)` branch of `Load::load`.
     /// Only unit variants are emitted here; data variants appear in `expand_enum_data_load_arms`.
     pub(super) fn expand_enum_unit_load_arms(&self) -> Vec<TokenStream> {
         let model_ident = &self.model.ident;
@@ -284,7 +284,7 @@ impl Expand<'_> {
             .collect()
     }
 
-    /// Generates match arms for the `Value::Record` branch of `Field::load`.
+    /// Generates match arms for the `Value::Record` branch of `Load::load`.
     /// Only data variants are emitted; unit variants appear in `expand_enum_unit_load_arms`.
     /// Record layout: `record[0]` is the discriminant, `record[1..]` are the variant's fields
     /// in declaration order (local indices, not global).
@@ -311,7 +311,7 @@ impl Expand<'_> {
                         let ty = primitive_ty_unwrap(field);
                         let record_pos = util::int(i + 1);
                         let load =
-                            quote! { <#ty as #toasty::Field>::load(record[#record_pos].take())? };
+                            quote! { <#ty as #toasty::Load>::load(record[#record_pos].take())? };
                         if variant.fields_named {
                             quote! { #field_ident: #load, }
                         } else {

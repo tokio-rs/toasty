@@ -28,16 +28,6 @@ impl Load for () {
     }
 }
 
-impl Load for u64 {
-    type Output = u64;
-    fn load(value: stmt::Value) -> Result<Self::Output, Error> {
-        match value {
-            stmt::Value::U64(n) => Ok(n),
-            _ => Err(Error::type_conversion(value, "u64")),
-        }
-    }
-}
-
 impl<T: Load<Output = T>> Load for Vec<T> {
     type Output = Vec<T>;
     fn load(value: stmt::Value) -> Result<Self::Output, Error> {
@@ -46,6 +36,11 @@ impl<T: Load<Output = T>> Load for Vec<T> {
             // Records are produced by dynamic batch queries (Vec/array inputs)
             // where each field in the record is one query's result.
             stmt::Value::Record(record) => record.into_iter().map(T::load).collect(),
+            // Bytes are a compact representation; load each byte individually.
+            stmt::Value::Bytes(bytes) => bytes
+                .into_iter()
+                .map(|b| T::load(stmt::Value::U8(b)))
+                .collect(),
             _ => Err(Error::type_conversion(value, "Vec<T>")),
         }
     }

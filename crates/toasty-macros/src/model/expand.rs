@@ -98,6 +98,14 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
 
         impl #toasty::Embed for #model_ident {}
 
+        impl #toasty::Load for #model_ident {
+            type Output = Self;
+
+            fn load(value: #toasty::core::stmt::Value) -> #toasty::Result<Self> {
+                #load_body
+            }
+        }
+
         impl #toasty::Field for #model_ident {
             type FieldAccessor<__Origin> = #field_struct_ident<__Origin>;
             type UpdateBuilder<'a> = #update_struct_ident<'a>;
@@ -106,10 +114,6 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
 
             fn ty() -> #toasty::core::stmt::Type {
                 #toasty::core::stmt::Type::Model(<Self as #toasty::Register>::id())
-            }
-
-            fn load(value: #toasty::core::stmt::Value) -> #toasty::Result<Self> {
-                #load_body
             }
 
             fn reload(&mut self, value: #toasty::core::stmt::Value) -> #toasty::Result<()> {
@@ -204,13 +208,8 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
 
         impl #toasty::Embed for #model_ident {}
 
-        impl #toasty::Field for #model_ident {
-            type FieldAccessor<__Origin> = #field_struct_ident<__Origin>;
-            type UpdateBuilder<'a> = ();
-
-            fn ty() -> #toasty::core::stmt::Type {
-                #ty_expr
-            }
+        impl #toasty::Load for #model_ident {
+            type Output = Self;
 
             fn load(value: #toasty::core::stmt::Value) -> #toasty::Result<Self> {
                 match value {
@@ -236,6 +235,15 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
                     },
                     value => Err(#toasty::Error::type_conversion(value, stringify!(#model_ident))),
                 }
+            }
+        }
+
+        impl #toasty::Field for #model_ident {
+            type FieldAccessor<__Origin> = #field_struct_ident<__Origin>;
+            type UpdateBuilder<'a> = ();
+
+            fn ty() -> #toasty::core::stmt::Type {
+                #ty_expr
             }
 
             fn make_field_accessor<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::FieldAccessor<__Origin> {
