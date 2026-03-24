@@ -4,10 +4,10 @@ mod value;
 
 pub(crate) use value::Value;
 
+use async_trait::async_trait;
 use postgres::{tls::MakeTlsConnect, types::ToSql, Socket};
 use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
-    async_trait,
     driver::{Capability, Driver, Operation, Response},
     schema::db::{self, Migration, SchemaDiff, Table},
     stmt,

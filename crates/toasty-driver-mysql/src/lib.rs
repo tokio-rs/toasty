@@ -3,13 +3,13 @@
 mod value;
 pub(crate) use value::Value;
 
+use async_trait::async_trait;
 use mysql_async::{
     prelude::{Queryable, ToValue},
     Conn, OptsBuilder,
 };
 use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
-    async_trait,
     driver::{Capability, Driver, Operation, Response},
     schema::db::{self, Migration, SchemaDiff, Table},
     stmt::{self, ValueRecord},

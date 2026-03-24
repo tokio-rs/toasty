@@ -9,6 +9,7 @@ bigdecimal = ["dep:bigdecimal", "toasty-core/bigdecimal"]
 jiff = ["dep:jiff", "toasty-core/jiff"]
 
 [dependencies]
+async-trait.workspace = true
 toasty-core.workspace = true
 toasty-sql.workspace = true
 rust_decimal = { workspace = true, optional = true }

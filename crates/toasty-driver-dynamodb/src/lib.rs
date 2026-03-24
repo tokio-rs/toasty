@@ -5,8 +5,8 @@ mod value;
 pub(crate) use r#type::TypeExt;
 pub(crate) use value::Value;
 
+use async_trait::async_trait;
 use toasty_core::{
-    async_trait,
     driver::{operation::Operation, Capability, Driver, Response},
     schema::db::{self, Column, ColumnId, Migration, SchemaDiff, Table},
     stmt::{self, ExprContext},

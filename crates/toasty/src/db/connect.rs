@@ -1,9 +1,9 @@
 use crate::Result;
 
+use async_trait::async_trait;
 use std::borrow::Cow;
 pub use toasty_core::driver::{operation::Operation, Capability, Connection, Response};
 use toasty_core::{
-    async_trait,
     driver::Driver,
     schema::db::{Migration, SchemaDiff},
 };

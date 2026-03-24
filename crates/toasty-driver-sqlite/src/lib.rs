@@ -1,6 +1,7 @@
 mod value;
 pub(crate) use value::Value;
 
+use async_trait::async_trait;
 use rusqlite::Connection as RusqliteConnection;
 use std::{
     borrow::Cow,
@@ -8,7 +9,6 @@ use std::{
     sync::Arc,
 };
 use toasty_core::{
-    async_trait,
     driver::{
         operation::{IsolationLevel, Operation, Transaction},
         Capability, Driver, Response,
@@ -139,7 +139,7 @@ impl Connection {
     }
 }
 
-#[toasty_core::async_trait]
+#[async_trait]
 impl toasty_core::driver::Connection for Connection {
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         let (sql, ret_tys): (sql::Statement, _) = match op {
