@@ -20,36 +20,26 @@ pub(crate) fn expand(input: &QueryInput) -> TokenStream {
         }
     };
 
-    // If there are no additional clauses, return the base expression directly.
-    let has_clauses = input.order_by.is_some() || input.offset.is_some() || input.limit.is_some();
-
-    if !has_clauses {
-        return base;
-    }
-
-    // The generated query wrapper types consume `self` in their builder methods,
-    // so we chain reassignments.
-    let mut stmts = vec![quote! { let mut __toasty_query = #base; }];
+    // Chain builder methods onto the base expression.
+    let mut out = base;
 
     if let Some(order_by) = &input.order_by {
         let order_expr = expand_order_by(source, order_by);
-        stmts.push(quote! { __toasty_query = __toasty_query.order_by(#order_expr); });
+        out = quote! { #out.order_by(#order_expr) };
     }
 
     if let Some(limit) = &input.limit {
         let limit_expr = expand_pagination_expr(limit);
-        stmts.push(quote! { __toasty_query = __toasty_query.limit(#limit_expr); });
+        out = quote! { #out.limit(#limit_expr) };
     }
 
     // offset must come after limit (the API requires it)
     if let Some(offset) = &input.offset {
         let offset_expr = expand_pagination_expr(offset);
-        stmts.push(quote! { __toasty_query = __toasty_query.offset(#offset_expr); });
+        out = quote! { #out.offset(#offset_expr) };
     }
 
-    stmts.push(quote! { __toasty_query });
-
-    quote! { { #(#stmts)* } }
+    out
 }
 
 /// Expand an ORDER BY clause: `.field ASC` → `Source::fields().field().asc()`.
