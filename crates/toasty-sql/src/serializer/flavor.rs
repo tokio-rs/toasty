@@ -10,6 +10,7 @@ pub(super) enum Flavor {
 }
 
 impl<'a> Serializer<'a> {
+    /// Creates a serializer that emits SQLite SQL.
     pub fn sqlite(schema: &'a db::Schema) -> Self {
         Serializer {
             schema,
@@ -17,10 +18,12 @@ impl<'a> Serializer<'a> {
         }
     }
 
+    /// Returns `true` if this serializer targets SQLite.
     pub fn is_sqlite(&self) -> bool {
         matches!(self.flavor, Flavor::Sqlite)
     }
 
+    /// Creates a serializer that emits PostgreSQL SQL.
     pub fn postgresql(schema: &'a db::Schema) -> Self {
         Serializer {
             schema,
@@ -28,6 +31,7 @@ impl<'a> Serializer<'a> {
         }
     }
 
+    /// Creates a serializer that emits MySQL SQL.
     pub fn mysql(schema: &'a db::Schema) -> Self {
         Serializer {
             schema,

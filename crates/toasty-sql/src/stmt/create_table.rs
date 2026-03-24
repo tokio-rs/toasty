@@ -6,6 +6,7 @@ use toasty_core::{
     stmt,
 };
 
+/// A `CREATE TABLE` statement.
 #[derive(Debug, Clone)]
 pub struct CreateTable {
     /// Name of the table
@@ -19,6 +20,7 @@ pub struct CreateTable {
 }
 
 impl Statement {
+    /// Creates a `CREATE TABLE` statement from a schema [`Table`].
     pub fn create_table(table: &Table, capability: &Capability) -> Self {
         CreateTable {
             table: table.id,

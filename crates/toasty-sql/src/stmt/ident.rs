@@ -1,5 +1,18 @@
 use std::fmt;
 
+/// A SQL identifier (table name, column name, etc.).
+///
+/// Wraps a string-like value. When serialized, the identifier is quoted to
+/// avoid conflicts with SQL reserved words.
+///
+/// # Example
+///
+/// ```
+/// use toasty_sql::stmt::Ident;
+///
+/// let id = Ident::from("users");
+/// assert_eq!(id.to_string(), "users");
+/// ```
 #[derive(Debug, Clone)]
 pub struct Ident<T = String>(pub T);
 

@@ -34,10 +34,12 @@ use toasty_core::{
     schema::db::{self, Index, Table},
 };
 
-/// Context information when serializing VALUES in an INSERT statement
+/// Context information when serializing VALUES in an INSERT statement.
 #[derive(Debug, Clone)]
 pub struct InsertContext {
+    /// The table being inserted into.
     pub table_id: db::TableId,
+    /// Columns receiving values, in order.
     pub columns: Vec<db::ColumnId>,
 }
 
@@ -73,9 +75,15 @@ struct Formatter<'a, T> {
     insert_context: Option<InsertContext>,
 }
 
+/// Expression context bound to a database-level schema.
 pub type ExprContext<'a> = toasty_core::stmt::ExprContext<'a, db::Schema>;
 
 impl<'a> Serializer<'a> {
+    /// Serializes a [`Statement`] to a SQL string, appending a trailing semicolon.
+    ///
+    /// Parameter placeholders are written in the dialect's native format
+    /// (`$1` for PostgreSQL, `?1` for SQLite, `?` for MySQL) and the
+    /// corresponding values are pushed into `params`.
     pub fn serialize(&self, stmt: &Statement, params: &mut impl Params) -> String {
         let mut ret = String::new();
 
