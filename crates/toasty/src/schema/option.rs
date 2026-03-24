@@ -1,16 +1,23 @@
 use super::{Load, Relation};
 use toasty_core::schema::app::FieldId;
-use toasty_core::stmt::Value;
+use toasty_core::stmt::{self, Value};
 
 impl<T: Load> Load for Option<T> {
     type Output = Option<T::Output>;
 
-    fn ty() -> toasty_core::stmt::Type {
+    fn ty() -> stmt::Type {
         T::ty()
     }
 
-    fn ty_relation() -> toasty_core::stmt::Type {
-        T::ty_relation()
+    fn ty_relation() -> stmt::Type {
+        let ty = T::ty();
+
+        debug_assert!(!ty.is_u64());
+
+        let mut union = stmt::TypeUnion::new();
+        union.insert(stmt::Type::I64);
+        union.insert(ty);
+        union.into()
     }
 
     fn load(value: Value) -> Result<Self::Output, crate::Error> {

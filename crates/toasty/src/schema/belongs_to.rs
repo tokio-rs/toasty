@@ -1,6 +1,6 @@
 use super::{Load, Relation};
 
-use toasty_core::stmt::Value;
+use toasty_core::stmt::{self, Value};
 
 use std::fmt;
 
@@ -19,8 +19,8 @@ pub struct BelongsTo<T> {
 impl<T: Relation> Load for BelongsTo<T> {
     type Output = Self;
 
-    fn ty() -> toasty_core::stmt::Type {
-        T::ty()
+    fn ty() -> stmt::Type {
+        T::ty_relation()
     }
 
     fn load(input: Value) -> crate::Result<Self> {

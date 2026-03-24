@@ -20,7 +20,7 @@ impl<T: Relation> Load for HasOne<T> {
     type Output = Self;
 
     fn ty() -> toasty_core::stmt::Type {
-        T::ty()
+        T::ty_relation()
     }
 
     fn load(input: Value) -> crate::Result<Self> {
