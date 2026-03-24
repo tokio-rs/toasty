@@ -1,10 +1,10 @@
-use crate::{schema::Load, Result, Statement, Transaction};
+use crate::{db::Transaction, schema::Load, Result, Statement};
 
 use std::sync::Arc;
 use toasty_core::{async_trait, stmt::Value, Schema};
 
 /// Anything that can execute queries — [`Db`](crate::Db) or
-/// [`Transaction`](crate::Transaction).
+/// [`Transaction`](crate::db::Transaction).
 ///
 /// This trait is dyn-compatible. The generic [`exec`](dyn Executor::exec)
 /// method lives on `dyn Executor` and accepts any typed
