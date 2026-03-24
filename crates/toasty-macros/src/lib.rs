@@ -1,6 +1,7 @@
 extern crate proc_macro;
 
 mod create;
+mod model;
 mod query;
 
 use proc_macro::TokenStream;
@@ -574,7 +575,7 @@ use proc_macro::TokenStream;
     )
 )]
 pub fn derive_model(input: TokenStream) -> TokenStream {
-    match toasty_codegen::generate_model(input.into()) {
+    match model::generate_model(input.into()) {
         Ok(output) => output.into(),
         Err(e) => e.to_compile_error().into(),
     }
@@ -893,7 +894,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// [`Register`]: toasty::Register
 #[proc_macro_derive(Embed, attributes(column, index, unique))]
 pub fn derive_embed(input: TokenStream) -> TokenStream {
-    match toasty_codegen::generate_embed(input.into()) {
+    match model::generate_embed(input.into()) {
         Ok(output) => output.into(),
         Err(e) => e.to_compile_error().into(),
     }

@@ -36,7 +36,7 @@ let posts = Post::all()
 ```
 
 **Implementation:**
-- File: `toasty-codegen/src/expand/query.rs`
+- File: `toasty-macros/src/expand/query.rs`
 - Add `.then_by()` method to query builder
 - Complexity: Medium
 
@@ -53,7 +53,7 @@ let recent_posts: Vec<Post> = Post::all()
 ```
 
 **Implementation:**
-- File: `toasty-codegen/src/expand/query.rs`
+- File: `toasty-macros/src/expand/query.rs`
 - Generate `.limit()` method
 - Complexity: Low
 
@@ -69,7 +69,7 @@ let last_user: Option<User> = User::all()
 ```
 
 **Implementation:**
-- File: `toasty-codegen/src/expand/query.rs`
+- File: `toasty-macros/src/expand/query.rs`
 - Generate `.last()` method
 - Complexity: Low
 
