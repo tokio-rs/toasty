@@ -50,21 +50,9 @@ pub async fn query_macro_filter_ne(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(sql))]
 pub async fn query_macro_filter_numeric_comparisons(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[index]
-        age: i64,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     toasty::create!(User::[
         { name: "Young", age: 15 },
@@ -93,22 +81,9 @@ pub async fn query_macro_filter_numeric_comparisons(test: &mut Test) -> Result<(
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(sql))]
 pub async fn query_macro_filter_and(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        name: String,
-
-        #[index]
-        age: i64,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     toasty::create!(User::[
         { name: "Alice", age: 30 },
@@ -161,22 +136,9 @@ pub async fn query_macro_filter_not(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(sql))]
 pub async fn query_macro_filter_parens(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        name: String,
-
-        #[index]
-        age: i64,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     toasty::create!(User::[
         { name: "Alice", age: 30 },
@@ -259,22 +221,9 @@ pub async fn query_macro_case_insensitive_keywords(test: &mut Test) -> Result<()
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(sql))]
 pub async fn query_macro_complex_boolean(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        name: String,
-
-        #[index]
-        age: i64,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     toasty::create!(User::[
         { name: "Alice", age: 30 },
@@ -330,19 +279,9 @@ pub async fn query_macro_filter_bool_literal(test: &mut Test) -> Result<()> {
 
 // --- ORDER BY, LIMIT, OFFSET tests ---
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
 pub async fn query_macro_order_by_asc(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        name: String,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     toasty::create!(User::[{ name: "Carl" }, { name: "Alice" }, { name: "Bob" }])
         .exec(&mut db)
@@ -356,19 +295,9 @@ pub async fn query_macro_order_by_asc(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
 pub async fn query_macro_order_by_desc(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        name: String,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     toasty::create!(User::[{ name: "Carl" }, { name: "Alice" }, { name: "Bob" }])
         .exec(&mut db)
@@ -382,19 +311,9 @@ pub async fn query_macro_order_by_desc(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
 pub async fn query_macro_limit(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        name: String,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     toasty::create!(User::[{ name: "Alice" }, { name: "Bob" }, { name: "Carl" }])
         .exec(&mut db)
@@ -409,19 +328,9 @@ pub async fn query_macro_limit(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
 pub async fn query_macro_offset_and_limit(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        name: String,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     toasty::create!(User::[{ name: "Alice" }, { name: "Bob" }, { name: "Carl" }, { name: "Diana" }])
         .exec(&mut db)
@@ -436,22 +345,9 @@ pub async fn query_macro_offset_and_limit(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(sql))]
 pub async fn query_macro_filter_with_order_by_and_limit(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        name: String,
-
-        #[index]
-        age: i64,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     toasty::create!(User::[
         { name: "Alice", age: 30 },
@@ -471,19 +367,9 @@ pub async fn query_macro_filter_with_order_by_and_limit(test: &mut Test) -> Resu
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
 pub async fn query_macro_limit_external_ref(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        name: String,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     toasty::create!(User::[{ name: "Alice" }, { name: "Bob" }, { name: "Carl" }])
         .exec(&mut db)
@@ -498,19 +384,9 @@ pub async fn query_macro_limit_external_ref(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
 pub async fn query_macro_case_insensitive_order_limit(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        name: String,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     toasty::create!(User::[{ name: "Alice" }, { name: "Bob" }, { name: "Carl" }])
         .exec(&mut db)

@@ -1,6 +1,6 @@
 use super::parse::{
-    CompareOpKind, Expr, ExprBinaryOp, FieldPath, LimitExpr, OffsetExpr, OrderByClause,
-    OrderDirection, QueryInput,
+    CompareOpKind, Expr, ExprBinaryOp, FieldPath, OrderByClause, OrderDirection, PaginationExpr,
+    QueryInput,
 };
 
 use proc_macro2::TokenStream;
@@ -62,32 +62,11 @@ fn expand_order_by(source: &syn::Path, clause: &OrderByClause) -> TokenStream {
 }
 
 /// Expand a pagination expression (LIMIT or OFFSET value).
-fn expand_pagination_expr<T: PaginationValue>(expr: &T) -> TokenStream {
-    expr.to_tokens()
-}
-
-/// Trait for expanding pagination values to tokens.
-trait PaginationValue {
-    fn to_tokens(&self) -> TokenStream;
-}
-
-impl PaginationValue for LimitExpr {
-    fn to_tokens(&self) -> TokenStream {
-        match self {
-            LimitExpr::Lit(lit) => quote! { #lit },
-            LimitExpr::Var(ident) => quote! { #ident },
-            LimitExpr::RustExpr(expr) => quote! { #expr },
-        }
-    }
-}
-
-impl PaginationValue for OffsetExpr {
-    fn to_tokens(&self) -> TokenStream {
-        match self {
-            OffsetExpr::Lit(lit) => quote! { #lit },
-            OffsetExpr::Var(ident) => quote! { #ident },
-            OffsetExpr::RustExpr(expr) => quote! { #expr },
-        }
+fn expand_pagination_expr(expr: &PaginationExpr) -> TokenStream {
+    match expr {
+        PaginationExpr::Lit(lit) => quote! { #lit },
+        PaginationExpr::Var(ident) => quote! { #ident },
+        PaginationExpr::RustExpr(expr) => quote! { #expr },
     }
 }
 

@@ -15,9 +15,9 @@ pub(crate) struct QueryInput {
     /// Optional ORDER BY clause.
     pub order_by: Option<OrderByClause>,
     /// Optional OFFSET value.
-    pub offset: Option<OffsetExpr>,
+    pub offset: Option<PaginationExpr>,
     /// Optional LIMIT value.
-    pub limit: Option<LimitExpr>,
+    pub limit: Option<PaginationExpr>,
 }
 
 /// An ORDER BY clause: a field path and a direction.
@@ -34,17 +34,10 @@ pub(crate) enum OrderDirection {
     Desc,
 }
 
-/// A LIMIT expression — either a literal integer or an external reference.
+/// A pagination expression (LIMIT or OFFSET) — either a literal integer or an
+/// external reference.
 #[derive(Debug)]
-pub(crate) enum LimitExpr {
-    Lit(syn::LitInt),
-    Var(syn::Ident),
-    RustExpr(Box<syn::Expr>),
-}
-
-/// An OFFSET expression — either a literal integer or an external reference.
-#[derive(Debug)]
-pub(crate) enum OffsetExpr {
+pub(crate) enum PaginationExpr {
     Lit(syn::LitInt),
     Var(syn::Ident),
     RustExpr(Box<syn::Expr>),
@@ -144,14 +137,14 @@ impl Parse for QueryInput {
 
         let offset = if is_keyword(input, "offset") {
             consume_ident(input)?;
-            Some(parse_pagination_expr::<OffsetExpr>(input)?)
+            Some(parse_pagination_expr(input)?)
         } else {
             None
         };
 
         let limit = if is_keyword(input, "limit") {
             consume_ident(input)?;
-            Some(parse_pagination_expr::<LimitExpr>(input)?)
+            Some(parse_pagination_expr(input)?)
         } else {
             None
         };
@@ -375,52 +368,21 @@ fn parse_order_by(input: ParseStream) -> syn::Result<OrderByClause> {
     Ok(OrderByClause { field, direction })
 }
 
-/// Trait to construct pagination expressions from parsed tokens.
-trait PaginationExpr: Sized {
-    fn from_lit(lit: syn::LitInt) -> Self;
-    fn from_var(ident: syn::Ident) -> Self;
-    fn from_rust_expr(expr: Box<syn::Expr>) -> Self;
-}
-
-impl PaginationExpr for LimitExpr {
-    fn from_lit(lit: syn::LitInt) -> Self {
-        LimitExpr::Lit(lit)
-    }
-    fn from_var(ident: syn::Ident) -> Self {
-        LimitExpr::Var(ident)
-    }
-    fn from_rust_expr(expr: Box<syn::Expr>) -> Self {
-        LimitExpr::RustExpr(expr)
-    }
-}
-
-impl PaginationExpr for OffsetExpr {
-    fn from_lit(lit: syn::LitInt) -> Self {
-        OffsetExpr::Lit(lit)
-    }
-    fn from_var(ident: syn::Ident) -> Self {
-        OffsetExpr::Var(ident)
-    }
-    fn from_rust_expr(expr: Box<syn::Expr>) -> Self {
-        OffsetExpr::RustExpr(expr)
-    }
-}
-
 /// Parse a pagination value: integer literal, `#ident`, or `#(expr)`.
-fn parse_pagination_expr<T: PaginationExpr>(input: ParseStream) -> syn::Result<T> {
+fn parse_pagination_expr(input: ParseStream) -> syn::Result<PaginationExpr> {
     if input.peek(syn::LitInt) {
         let lit: syn::LitInt = input.parse()?;
-        Ok(T::from_lit(lit))
+        Ok(PaginationExpr::Lit(lit))
     } else if input.peek(syn::Token![#]) {
         input.parse::<syn::Token![#]>()?;
         if input.peek(token::Paren) {
             let content;
             syn::parenthesized!(content in input);
             let expr: syn::Expr = content.parse()?;
-            Ok(T::from_rust_expr(Box::new(expr)))
+            Ok(PaginationExpr::RustExpr(Box::new(expr)))
         } else {
             let ident: syn::Ident = input.parse()?;
-            Ok(T::from_var(ident))
+            Ok(PaginationExpr::Var(ident))
         }
     } else {
         Err(input.error("expected integer literal, `#variable`, or `#(expression)`"))
