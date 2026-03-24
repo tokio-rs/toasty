@@ -2,6 +2,35 @@ use super::{sparse_record::SparseRecord, Entry, EntryPath, Type, TypeUnion, Valu
 use std::cmp::Ordering;
 use std::hash::Hash;
 
+/// A dynamically typed value used throughout Toasty's query engine.
+///
+/// `Value` represents any concrete data value that flows through the query
+/// pipeline: field values read from or written to the database, literal
+/// constants in expressions, and intermediate results during query evaluation.
+///
+/// Each variant wraps a Rust type that corresponds to a [`Type`] variant.
+/// Use [`Value::infer_ty`] to obtain the matching type, and [`Value::is_a`]
+/// to check compatibility.
+///
+/// # Construction
+///
+/// Values are typically created via `From` conversions from Rust primitives:
+///
+/// ```
+/// use toasty_core::stmt::Value;
+///
+/// let v = Value::from(42_i64);
+/// assert_eq!(v, 42_i64);
+///
+/// let v = Value::from("hello");
+/// assert_eq!(v, "hello");
+///
+/// let v = Value::null();
+/// assert!(v.is_null());
+///
+/// let v = Value::from(true);
+/// assert_eq!(v, true);
+/// ```
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub enum Value {
     /// Boolean value
@@ -90,28 +119,65 @@ pub enum Value {
 }
 
 impl Value {
-    /// Returns a `ValueCow` representing null
+    /// Returns a null value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use toasty_core::stmt::Value;
+    /// let v = Value::null();
+    /// assert!(v.is_null());
+    /// ```
     pub const fn null() -> Self {
         Self::Null
     }
 
+    /// Returns `true` if this value is [`Value::Null`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use toasty_core::stmt::Value;
+    /// assert!(Value::Null.is_null());
+    /// assert!(!Value::from(1_i64).is_null());
+    /// ```
     pub const fn is_null(&self) -> bool {
         matches!(self, Self::Null)
     }
 
+    /// Returns `true` if this value is a [`Value::Record`].
     pub const fn is_record(&self) -> bool {
         matches!(self, Self::Record(_))
     }
 
+    /// Creates a [`Value::Record`] from a vector of field values.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use toasty_core::stmt::Value;
+    /// let record = Value::record_from_vec(vec![Value::from(1_i64), Value::from("name")]);
+    /// assert!(record.is_record());
+    /// ```
     pub fn record_from_vec(fields: Vec<Self>) -> Self {
         ValueRecord::from_vec(fields).into()
     }
 
-    /// Create a `ValueCow` representing the given boolean value
+    /// Creates a boolean value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use toasty_core::stmt::Value;
+    /// let v = Value::from_bool(true);
+    /// assert_eq!(v, true);
+    /// ```
     pub const fn from_bool(src: bool) -> Self {
         Self::Bool(src)
     }
 
+    /// Returns the contained string slice if this is a [`Value::String`],
+    /// or `None` otherwise.
     pub fn as_str(&self) -> Option<&str> {
         match self {
             Self::String(v) => Some(&**v),
@@ -119,13 +185,21 @@ impl Value {
         }
     }
 
-    pub fn expect_string(&self) -> &str {
+    /// Returns the contained string slice, panicking if this is not a
+    /// [`Value::String`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the value is not a `String` variant.
+    pub fn as_string_unwrap(&self) -> &str {
         match self {
             Self::String(v) => v,
             _ => todo!(),
         }
     }
 
+    /// Returns a reference to the contained [`ValueRecord`] if this is a
+    /// [`Value::Record`], or `None` otherwise.
     pub fn as_record(&self) -> Option<&ValueRecord> {
         match self {
             Self::Record(record) => Some(record),
@@ -133,20 +207,38 @@ impl Value {
         }
     }
 
-    pub fn expect_record(&self) -> &ValueRecord {
+    /// Returns a reference to the contained [`ValueRecord`], panicking if
+    /// this is not a [`Value::Record`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the value is not a `Record` variant.
+    pub fn as_record_unwrap(&self) -> &ValueRecord {
         match self {
             Self::Record(record) => record,
             _ => panic!("{self:#?}"),
         }
     }
 
-    pub fn expect_record_mut(&mut self) -> &mut ValueRecord {
+    /// Returns a mutable reference to the contained [`ValueRecord`],
+    /// panicking if this is not a [`Value::Record`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the value is not a `Record` variant.
+    pub fn as_record_mut_unwrap(&mut self) -> &mut ValueRecord {
         match self {
             Self::Record(record) => record,
             _ => panic!(),
         }
     }
 
+    /// Consumes this value and returns the contained [`ValueRecord`],
+    /// panicking if this is not a [`Value::Record`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the value is not a `Record` variant.
     pub fn into_record(self) -> ValueRecord {
         match self {
             Self::Record(record) => record,
@@ -154,6 +246,10 @@ impl Value {
         }
     }
 
+    /// Returns `true` if this value is compatible with the given [`Type`].
+    ///
+    /// Null values are compatible with any type. For union types, the value
+    /// must be compatible with at least one member type.
     pub fn is_a(&self, ty: &Type) -> bool {
         if let Type::Union(types) = ty {
             return types.iter().any(|t| self.is_a(t));
@@ -211,7 +307,16 @@ impl Value {
         }
     }
 
-    /// Infer the type of a value
+    /// Infers and returns the [`Type`] of this value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use toasty_core::stmt::{Value, Type};
+    /// assert_eq!(Value::from(42_i64).infer_ty(), Type::I64);
+    /// assert_eq!(Value::from("hello").infer_ty(), Type::String);
+    /// assert_eq!(Value::Null.infer_ty(), Type::Null);
+    /// ```
     pub fn infer_ty(&self) -> Type {
         match self {
             Value::Bool(_) => Type::Bool,
@@ -254,6 +359,15 @@ impl Value {
         }
     }
 
+    /// Navigates into this value using the given path and returns an [`Entry`]
+    /// reference to the nested value.
+    ///
+    /// For records, each step indexes into the record's fields. For lists,
+    /// each step indexes into the list's elements.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the path is invalid for the value's structure.
     #[track_caller]
     pub fn entry(&self, path: impl EntryPath) -> Entry<'_> {
         let mut ret = Entry::Value(self);
@@ -269,6 +383,17 @@ impl Value {
         ret
     }
 
+    /// Takes the value out, replacing it with [`Value::Null`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use toasty_core::stmt::Value;
+    /// let mut v = Value::from(42_i64);
+    /// let taken = v.take();
+    /// assert_eq!(taken, 42_i64);
+    /// assert!(v.is_null());
+    /// ```
     pub fn take(&mut self) -> Self {
         std::mem::take(self)
     }

@@ -1,6 +1,6 @@
 use crate as toasty;
 use crate::engine::simplify::Simplify;
-use crate::Register;
+use crate::schema::Register;
 use toasty_core::{
     driver::Capability,
     schema::{
@@ -60,14 +60,14 @@ impl UserPostSchema {
         let user_id = schema
             .app
             .model(user_model)
-            .expect_root()
+            .as_root_unwrap()
             .field_by_name("id")
             .unwrap()
             .id;
         let post_user = schema
             .app
             .model(post_model)
-            .expect_root()
+            .as_root_unwrap()
             .field_by_name("user")
             .unwrap()
             .id;

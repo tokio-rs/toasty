@@ -9,6 +9,7 @@ scenario! {
         #[auto]
         id: ID,
 
+        #[index]
         name: String,
 
         #[has_many]
@@ -27,6 +28,7 @@ scenario! {
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
 
+        #[index]
         title: String,
     }
 

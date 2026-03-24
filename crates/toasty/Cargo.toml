@@ -31,6 +31,7 @@ serde = ["dep:serde_core", "dep:serde_json"]
 
 
 [dependencies]
+async-trait.workspace = true
 toasty-macros.workspace = true
 toasty-core.workspace = true
 
@@ -58,7 +59,10 @@ tracing.workspace = true
 url.workspace = true
 
 [dev-dependencies]
+assert-struct.workspace = true
 proptest.workspace = true
+tokio = { workspace = true }
+toasty-driver-sqlite = { workspace = true }
 
 [lints]
 workspace = true

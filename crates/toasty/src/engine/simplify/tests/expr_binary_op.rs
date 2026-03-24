@@ -1,6 +1,6 @@
 use crate as toasty;
 use crate::engine::simplify::Simplify;
-use crate::Register;
+use crate::schema::Register;
 use toasty_core::{
     driver::Capability,
     schema::{app, Builder},
@@ -286,7 +286,7 @@ fn self_comparison_eq_non_nullable_becomes_true() {
     let schema = test_schema();
     let model = schema.app.model(User::id());
     let simplify = Simplify::new(&schema);
-    let mut simplify = simplify.scope(model.expect_root());
+    let mut simplify = simplify.scope(model.as_root_unwrap());
 
     // `id = id` → `true` (non-nullable field)
     let mut lhs = Expr::Reference(ExprReference::Field {
@@ -308,7 +308,7 @@ fn self_comparison_ne_non_nullable_becomes_false() {
     let schema = test_schema();
     let model = schema.app.model(User::id());
     let simplify = Simplify::new(&schema);
-    let mut simplify = simplify.scope(model.expect_root());
+    let mut simplify = simplify.scope(model.as_root_unwrap());
 
     // `id != id` → `false` (non-nullable field)
     let mut lhs = Expr::Reference(ExprReference::Field {
@@ -330,7 +330,7 @@ fn self_comparison_nullable_not_simplified() {
     let schema = test_schema();
     let model = schema.app.model(User::id());
     let simplify = Simplify::new(&schema);
-    let mut simplify = simplify.scope(model.expect_root());
+    let mut simplify = simplify.scope(model.as_root_unwrap());
 
     // `name = name` is not simplified (nullable field)
     let mut lhs = Expr::Reference(ExprReference::Field {
@@ -352,7 +352,7 @@ fn different_fields_not_simplified() {
     let schema = test_schema();
     let model = schema.app.model(User::id());
     let simplify = Simplify::new(&schema);
-    let mut simplify = simplify.scope(model.expect_root());
+    let mut simplify = simplify.scope(model.as_root_unwrap());
 
     // `id = name` is not simplified (different fields)
     let mut lhs = Expr::Reference(ExprReference::Field {
@@ -811,7 +811,7 @@ fn match_with_non_constant_subject() {
     let schema = test_schema();
     let model = schema.app.model(User::id());
     let simplify = Simplify::new(&schema);
-    let mut simplify = simplify.scope(model.expect_root());
+    let mut simplify = simplify.scope(model.as_root_unwrap());
 
     // Match over a column reference (the real-world case)
     // Match(field[0], [1 => "a", 2 => "b"], else: "__") == "a"

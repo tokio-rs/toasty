@@ -60,14 +60,12 @@ Toasty is a Rust ORM supporting SQL (SQLite, PostgreSQL, MySQL) and NoSQL (Dynam
 |---|---|
 | `toasty` | User-facing API: `Db`, query engine, runtime |
 | `toasty-core` | Shared types: schema representations, statement AST, driver interface |
-| `toasty-macros` | Proc-macro entry points (`#[derive(Model)]`, `#[derive(Embed)]`) |
-| `toasty-codegen` | Code generation logic called by `toasty-macros` |
+| `toasty-macros` | Proc-macro entry points and code generation (`#[derive(Model)]`, `#[derive(Embed)]`) |
 | `toasty-sql` | SQL serialization (statement AST → SQL string), used by SQL drivers |
 | `toasty-driver-sqlite/postgresql/mysql/dynamodb` | Database driver implementations |
 | `toasty-driver-integration-suite` | Shared integration test suite run against all drivers |
 | `toasty-driver-integration-suite-macros` | Proc-macros for the test suite (`#[driver_test]`, `generate_driver_tests!`) |
 | `tests` | Workspace-level integration tests (invokes the suite per driver) |
-| `std-util` | Internal utilities |
 
 ### Schema Layers
 
@@ -77,12 +75,12 @@ The schema has two distinct layers bridged by a mapping:
 - **DB schema** (`toasty-core/src/schema/db/`): Table/column-level definitions. What the database sees.
 - **Mapping** (`toasty-core/src/schema/mapping/`): Connects app fields to db columns, supporting non-1-1 mappings.
 
-### Code Generation (`toasty-codegen`)
+### Code Generation (`toasty-macros`)
 
 `#[derive(Model)]` on a user struct triggers:
-1. `toasty-macros` delegates to `toasty-codegen::generate_model()`
-2. `codegen/src/schema/` parses macro attributes into an internal model representation
-3. `codegen/src/expand/` generates implementations: `Model` trait, query builders (`find_by_*`, `filter_by_*`), create/update builders, relation methods, field accessors, and the runtime schema registration
+1. `toasty-macros` calls `generate_model()` internally
+2. `macros/src/schema/` parses macro attributes into an internal model representation
+3. `macros/src/expand/` generates implementations: `Model` trait, query builders (`find_by_*`, `filter_by_*`), create/update builders, relation methods, field accessors, and the runtime schema registration
 
 ### Query Engine (`toasty/src/engine/`)
 

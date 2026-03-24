@@ -6,14 +6,27 @@ use toasty_core::stmt;
 
 /// Convert a value into a [`Statement`].
 ///
-/// This trait bridges query builders to `Statement<T>`. The associated
-/// `Returning` type encodes what the statement returns when executed:
-/// - Select queries: `Returning = List<M>` (returns a list)
-/// - Create builders: `Returning = M` (returns a single item)
-/// - Tuples: `Returning = (Q1::Returning, Q2::Returning, ...)` (composed naturally)
-/// - Homogeneous batches: `Returning = List<M>` (list encoding)
+/// This trait bridges query builders to [`Statement<T>`](Statement). The
+/// associated [`Returning`](IntoStatement::Returning) type encodes what the
+/// statement produces when executed:
+///
+/// | Builder | `Returning` |
+/// |---|---|
+/// | [`Query<M>`] | [`List<M>`] |
+/// | [`Delete<M>`] | `()` |
+/// | [`Association<M>`] | [`List<M>`] |
+/// | Create builders (generated) | `M` |
+/// | Tuples of builders | `(R1, R2, …)` |
+/// | `Vec<Q>` / `[Q; N]` | [`List<Q::Returning>`](List) |
+///
+/// Tuples, `Vec`, and arrays batch multiple statements into a single
+/// round-trip. Each sub-statement runs independently; the combined result is
+/// a tuple or list of individual results.
 pub trait IntoStatement {
+    /// The type this statement produces when executed.
     type Returning;
+
+    /// Consume `self` and produce the [`Statement`].
     fn into_statement(self) -> Statement<Self::Returning>;
 }
 
@@ -93,7 +106,7 @@ impl<Q: IntoStatement> IntoStatement for Vec<Q> {
     }
 }
 
-/// Dynamic batch via `[Q; N]`: fixed-size array of homogeneous queries, returns `List<Q::Output>`.
+/// Dynamic batch via `[Q; N]`: fixed-size array of typed queries, returns `List<Q::Output>`.
 impl<Q: IntoStatement, const N: usize> IntoStatement for [Q; N] {
     type Returning = List<Q::Returning>;
 

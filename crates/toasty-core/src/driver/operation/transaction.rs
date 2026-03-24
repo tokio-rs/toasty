@@ -1,17 +1,47 @@
 use super::Operation;
 
-/// Isolation levels supported across SQL backends.
+/// SQL transaction isolation levels.
 ///
-/// Not all backends support all levels — the driver will return an error
-/// if an unsupported level is requested.
+/// Not all backends support all levels. The driver returns an error if an
+/// unsupported level is requested.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::driver::operation::IsolationLevel;
+///
+/// let level = IsolationLevel::Serializable;
+/// assert_eq!(level, IsolationLevel::Serializable);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IsolationLevel {
+    /// Transactions can see uncommitted changes from other transactions.
     ReadUncommitted,
+    /// Transactions only see changes committed before each statement.
     ReadCommitted,
+    /// Transactions see a consistent snapshot from the start of the transaction.
     RepeatableRead,
+    /// Full serializability; transactions behave as if executed one at a time.
     Serializable,
 }
 
+/// A transaction lifecycle operation.
+///
+/// Covers the full transaction lifecycle: begin, commit, rollback, and
+/// savepoint management. Convert to [`Operation`] with `.into()`.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::driver::operation::{Transaction, Operation};
+///
+/// // Start a default transaction
+/// let op: Operation = Transaction::start().into();
+///
+/// // Commit
+/// let op: Operation = Transaction::Commit.into();
+/// assert!(op.is_transaction_commit());
+/// ```
 #[derive(Debug, Clone)]
 pub enum Transaction {
     /// Start a transaction with optional configuration.
@@ -19,7 +49,9 @@ pub enum Transaction {
     /// When `isolation` is `None` and `read_only` is `false`, the database's
     /// default isolation level and read-write mode are used.
     Start {
+        /// Optional isolation level. `None` uses the database default.
         isolation: Option<IsolationLevel>,
+        /// When `true`, the transaction is read-only.
         read_only: bool,
     },
 

@@ -43,7 +43,7 @@ async fn main() -> toasty::Result<()> {
 
     println!("created user; name={:?}", user.name);
 
-    if let Some(profile) = user.profile().get(&mut db).await? {
+    if let Some(profile) = user.profile().exec(&mut db).await? {
         println!("profile: {profile:#?}");
         println!("profile.user_id: {:#?}", profile.user_id);
     } else {

@@ -1,19 +1,41 @@
 use super::{InsertTarget, Node, Query, Returning, Statement, Visit, VisitMut};
 use crate::stmt;
 
+/// An `INSERT` statement that creates new records.
+///
+/// Combines an [`InsertTarget`] (where to insert), a [`Query`] source
+/// (the values to insert), and an optional [`Returning`] clause.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::stmt::{Insert, InsertTarget, Query, Values, Expr};
+/// use toasty_core::schema::app::ModelId;
+///
+/// let insert = Insert {
+///     target: InsertTarget::Model(ModelId(0)),
+///     source: Query::values(Values::new(vec![Expr::null()])),
+///     returning: None,
+/// };
+/// assert!(insert.target.is_model());
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct Insert {
-    /// Where to insert the values
+    /// The target to insert into (model, table, or scoped query).
     pub target: InsertTarget,
 
-    /// Source of values to insert
+    /// The source query providing values to insert.
     pub source: Query,
 
-    /// Optionally return data from the insertion
+    /// Optional `RETURNING` clause to return data from the insertion.
     pub returning: Option<Returning>,
 }
 
 impl Insert {
+    /// Merges another `Insert` into this one by appending its value rows.
+    ///
+    /// Both inserts must target the same model, and both sources must be
+    /// `VALUES` expressions.
     pub fn merge(&mut self, other: Self) {
         match (&self.target, &other.target) {
             (InsertTarget::Model(a), InsertTarget::Model(b)) if a == b => {}
@@ -32,6 +54,7 @@ impl Insert {
 }
 
 impl Statement {
+    /// Returns `true` if this statement is an [`Insert`].
     pub fn is_insert(&self) -> bool {
         matches!(self, Statement::Insert(..))
     }
@@ -65,7 +88,7 @@ impl Statement {
     /// # Panics
     ///
     /// If `self` is not a [`Statement::Insert`].
-    pub fn unwrap_insert(self) -> Insert {
+    pub fn into_insert_unwrap(self) -> Insert {
         match self {
             Self::Insert(insert) => insert,
             v => panic!("expected `Insert`, found {v:#?}"),

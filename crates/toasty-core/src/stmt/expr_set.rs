@@ -33,6 +33,7 @@ pub enum ExprSet {
 }
 
 impl ExprSet {
+    /// Creates an `ExprSet::Values` from explicit values.
     pub fn values(values: impl Into<Values>) -> ExprSet {
         ExprSet::Values(values.into())
     }
@@ -71,20 +72,37 @@ impl ExprSet {
     /// Panics if `self` is not an [`ExprSet::Values`].
     #[track_caller]
     pub fn as_values_unwrap(&self) -> &Values {
+        self.as_values()
+            .unwrap_or_else(|| panic!("expected `Values`, found {self:#?}"))
+    }
+
+    /// Returns a mutable reference to the inner [`Values`] if this is an
+    /// [`ExprSet::Values`], or `None` otherwise.
+    pub fn as_values_mut(&mut self) -> Option<&mut Values> {
         match self {
-            Self::Values(values) => values,
-            v => panic!("expected `Values`, found {v:#?}"),
+            Self::Values(expr) => Some(expr),
+            _ => None,
         }
     }
 
+    /// Returns a mutable reference to the inner [`Values`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not an [`ExprSet::Values`].
     #[track_caller]
-    pub fn as_values_mut(&mut self) -> &mut Values {
+    pub fn as_values_mut_unwrap(&mut self) -> &mut Values {
         match self {
             Self::Values(expr) => expr,
-            _ => todo!(),
+            _ => panic!("expected `Values`; actual={self:#?}"),
         }
     }
 
+    /// Consumes the expression set and returns the inner [`Values`].
+    ///
+    /// # Panics
+    ///
+    /// Panics (via `todo!()`) if `self` is not an [`ExprSet::Values`].
     #[track_caller]
     pub fn into_values(self) -> Values {
         match self {
@@ -93,6 +111,8 @@ impl ExprSet {
         }
     }
 
+    /// Returns `true` if this expression set contains only constant
+    /// expressions (no references, subqueries, or other external data).
     pub fn is_const(&self) -> bool {
         match self {
             ExprSet::Select(..) => false,

@@ -5,8 +5,6 @@
   - [Type System](./architecture/type-system.md)
 - [Design](./design/README.md)
   - [Batch Queries](./design/batch-queries.md)
-  - [Create Macro Required Field Verification](./design/create-macro-required-field-verification.md)
-  - [Create Macro v2](./design/create-macro-v2.md)
   - [DynamoDB OR Index Predicate](./design/ddb_or_index_predicate.md)
   - [Embedded Enums Data Carrying Impl](./design/embedded-enums-data-carrying-impl.md)
   - [Enums and Embedded Structs](./design/enums-and-embedded-structs.md)

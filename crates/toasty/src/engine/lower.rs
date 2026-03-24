@@ -333,7 +333,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     .schema()
                     .app
                     .model(e.variant.model)
-                    .expect_embedded_enum();
+                    .as_embedded_enum_unwrap();
                 let has_data = enum_model.has_data_variants();
                 let discriminant = enum_model.variants[e.variant.index].discriminant;
 
@@ -420,6 +420,36 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 if self.state.hir[target_id].independent {
                     self.curr_stmt_info().deps.insert(target_id);
                 }
+            }
+            stmt::Expr::Exists(_) if !self.capability().sql => {
+                let stmt::Expr::Exists(mut expr_exists) = expr.take() else {
+                    panic!()
+                };
+
+                // Extract the EXISTS subquery into a sub-statement so the
+                // executor can evaluate the condition in memory.
+                let source_id = self.scope_stmt_id();
+                let target_id = self.scope_statement(|child| {
+                    child.visit_stmt_query_mut(&mut expr_exists.subquery);
+                });
+
+                let mut stmt = stmt::Statement::Query(*expr_exists.subquery);
+                self.state.engine.simplify_stmt(&mut stmt);
+
+                let arg = self.new_sub_statement(source_id, target_id, Box::new(stmt));
+
+                if self.state.hir[target_id].independent {
+                    self.curr_stmt_info().deps.insert(target_id);
+                }
+
+                // The sub-statement result is a list of rows. Wrap it in
+                // a single-row VALUES query so the evaluator unwraps the
+                // outer list, letting EXISTS check the inner row count.
+                let mut subquery = stmt::Query::values(arg);
+                subquery.single = true;
+                *expr = stmt::Expr::Exists(stmt::ExprExists {
+                    subquery: Box::new(subquery),
+                });
             }
             _ => {
                 // Recurse down the statement tree
@@ -636,7 +666,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         if let stmt::Source::Model(source_model) = stmt {
             debug_assert!(source_model.via.is_none(), "TODO");
 
-            let table_id = self.schema().table_id_for(source_model.model);
+            let table_id = self.schema().table_id_for(source_model.id);
             *stmt = stmt::Source::table(table_id);
         }
     }

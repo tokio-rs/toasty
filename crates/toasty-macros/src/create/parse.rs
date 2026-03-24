@@ -1,16 +1,16 @@
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::token;
-use syn::{braced, bracketed};
+use syn::{braced, bracketed, parenthesized};
 
 /// A recursive create item. Represents both the top-level macro input and
-/// items nested inside a batch `[ ... ]`.
+/// items nested inside a tuple `( ... )`.
 ///
 /// Four forms:
 /// - `Path { fields }`        — type-target creation
 /// - `in expr { fields }`     — scoped creation
 /// - `Path::[ {..}, {..} ]`   — typed batch
-/// - `[ Item, Item, ... ]`    — mixed batch (items are themselves `CreateItem`s)
+/// - `( Item, Item, ... )`    — tuple (items are themselves `CreateItem`s)
 pub(crate) enum CreateItem {
     /// `User { name: "Carl" }`
     Typed { path: syn::Path, fields: FieldSet },
@@ -21,8 +21,8 @@ pub(crate) enum CreateItem {
         path: syn::Path,
         items: Vec<FieldSet>,
     },
-    /// `[ User { ... }, Article::[ {...}, {...} ], in scope { ... } ]`
-    Batch { items: Vec<CreateItem> },
+    /// `( User { ... }, Article::[ {...}, {...} ] )`
+    Tuple { items: Vec<CreateItem> },
 }
 
 /// A set of `name: value` field entries (i.e., the contents of `{ ... }`).
@@ -64,14 +64,19 @@ fn peek_path_sep_bracket(input: ParseStream) -> bool {
 
 impl Parse for CreateItem {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        if input.peek(token::Bracket) {
-            // `[ ... ]` → batch of items
+        if input.peek(token::Paren) {
+            // `( ... )` → tuple of items
             let content;
-            bracketed!(content in input);
+            parenthesized!(content in input);
             let items = Punctuated::<CreateItem, syn::Token![,]>::parse_terminated(&content)?;
-            Ok(CreateItem::Batch {
+            Ok(CreateItem::Tuple {
                 items: items.into_iter().collect(),
             })
+        } else if input.peek(token::Bracket) {
+            Err(input.error(
+                "unexpected `[` — use tuple syntax `(...)` for tuple creation, \
+                 or `Type::[...]` for same-type batch creation",
+            ))
         } else if input.peek(syn::Token![in]) {
             // `in expr { fields }` → scoped creation
             input.parse::<syn::Token![in]>()?;

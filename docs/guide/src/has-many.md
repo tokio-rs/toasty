@@ -70,7 +70,7 @@ children:
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-# let user = User::create().name("Alice").exec(&mut db).await?;
+# let user = toasty::create!(User { name: "Alice" }).exec(&mut db).await?;
 let posts: Vec<Post> = user.posts().exec(&mut db).await?;
 
 for post in &posts {
@@ -117,11 +117,8 @@ automatically sets the foreign key:
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-# let user = User::create().name("Alice").exec(&mut db).await?;
-let post = user
-    .posts()
-    .create()
-    .title("Hello World")
+# let user = toasty::create!(User { name: "Alice" }).exec(&mut db).await?;
+let post = toasty::create!(in user.posts() { title: "Hello World" })
     .exec(&mut db)
     .await?;
 
@@ -160,12 +157,12 @@ relation name on the create builder:
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let user = User::create()
-    .name("Alice")
-    .post(Post::create().title("First post"))
-    .post(Post::create().title("Second post"))
-    .exec(&mut db)
-    .await?;
+let user = toasty::create!(User {
+    name: "Alice",
+    posts: [{ title: "First post" }, { title: "Second post" }],
+})
+.exec(&mut db)
+.await?;
 
 let posts = user.posts().exec(&mut db).await?;
 assert_eq!(2, posts.len());
@@ -185,7 +182,7 @@ Use `.insert()` and `.remove()` to link and unlink existing records.
 Associate an existing child record with a parent:
 
 ```rust,ignore
-let post = Post::create().title("Orphan post").user_id(0).exec(&mut db).await?;
+let post = toasty::create!(Post { title: "Orphan post", user_id: 0 }).exec(&mut db).await?;
 
 // Associate the post with a user
 user.posts().insert(&mut db, &post).await?;
@@ -303,8 +300,7 @@ For a `User` model with `#[has_many] posts: HasMany<Post>`, Toasty generates:
 
 | Method | Description |
 |---|---|
-| `.post(Post::create()...)` | Add one child to create alongside the parent |
-| `.posts(...)` | Add multiple children to create alongside the parent |
+| `toasty::create!(User { posts: [{ ... }] })` | Add children to create alongside the parent |
 
 **On the fields accessor:**
 

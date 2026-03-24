@@ -39,7 +39,7 @@ impl Simplify<'_> {
                 return;
             };
             let nesting = *nesting;
-            let model = self.cx.resolve_expr_reference(expr_ref).expect_model();
+            let model = self.cx.resolve_expr_reference(expr_ref).as_model_unwrap();
             let [pk_field_id] = &model.primary_key.fields[..] else {
                 todo!()
             };
@@ -54,7 +54,7 @@ impl Simplify<'_> {
                 for item in &mut expr_list.items {
                     match item {
                         stmt::Expr::Value(value) => {
-                            assert!(value.is_a(&pk.ty.expect_primitive().ty));
+                            assert!(value.is_a(&pk.ty.as_primitive_unwrap().ty));
                         }
                         _ => todo!("{item:#?}"),
                     }
@@ -62,7 +62,7 @@ impl Simplify<'_> {
             }
             stmt::Expr::Value(stmt::Value::List(values)) => {
                 for value in values {
-                    assert!(value.is_a(&pk.ty.expect_primitive().ty));
+                    assert!(value.is_a(&pk.ty.as_primitive_unwrap().ty));
                 }
             }
             _ => todo!("expr={expr:#?}"),

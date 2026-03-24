@@ -29,6 +29,15 @@ impl Error {
     /// - Missing context or data
     /// - Type mismatches
     /// - Non-evaluable constructs
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use toasty_core::Error;
+    ///
+    /// let err = Error::expression_evaluation_failed("unresolved reference");
+    /// assert!(err.is_expression_evaluation_failed());
+    /// ```
     pub fn expression_evaluation_failed(message: impl Into<String>) -> Error {
         Error::from(super::ErrorKind::ExpressionEvaluationFailed(
             ExpressionEvaluationFailed {

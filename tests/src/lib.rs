@@ -20,8 +20,6 @@ pub mod prelude;
 mod setup;
 pub use setup::Setup;
 
-pub use std_util::*;
-
 pub mod stmt;
 
 // Guide doc tests — auto-discovered by build.rs from docs/guide/src/*.md

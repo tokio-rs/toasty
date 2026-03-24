@@ -28,6 +28,16 @@ impl Error {
     /// This is used when a schema definition is invalid - duplicate names,
     /// invalid column configurations, incompatible features, etc.
     /// These errors are typically caught at build/migration time.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use toasty_core::Error;
+    ///
+    /// let err = Error::invalid_schema("duplicate index name `idx_users`");
+    /// assert!(err.is_invalid_schema());
+    /// assert_eq!(err.to_string(), "invalid schema: duplicate index name `idx_users`");
+    /// ```
     pub fn invalid_schema(message: impl Into<String>) -> Error {
         Error::from(super::ErrorKind::InvalidSchema(InvalidSchema {
             message: message.into().into(),

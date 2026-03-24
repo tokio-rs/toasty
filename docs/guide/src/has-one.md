@@ -85,9 +85,9 @@ allowed:
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
 // A user without a profile — this is fine
-let user = User::create().name("Alice").exec(&mut db).await?;
+let user = toasty::create!(User { name: "Alice" }).exec(&mut db).await?;
 
-assert!(user.profile().get(&mut db).await?.is_none());
+assert!(user.profile().exec(&mut db).await?.is_none());
 # Ok(())
 # }
 ```
@@ -119,12 +119,13 @@ The parent must have a child. Creating a parent requires providing a child:
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
 // Must provide a profile when creating the user
-let user = User::create()
-    .profile(Profile::create().bio("Hello"))
-    .exec(&mut db)
-    .await?;
+let user = toasty::create!(User {
+    profile: { bio: "Hello" },
+})
+.exec(&mut db)
+.await?;
 
-let profile = user.profile().get(&mut db).await?;
+let profile = user.profile().exec(&mut db).await?;
 assert_eq!(profile.bio, "Hello");
 # Ok(())
 # }
@@ -157,13 +158,11 @@ Call the relation method on the parent instance to load the child:
 #     bio: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-# let user = User::create()
-#     .name("Alice")
-#     .profile(Profile::create().bio("A person"))
+# let user = toasty::create!(User { name: "Alice", profile: { bio: "A person" } })
 #     .exec(&mut db)
 #     .await?;
 // For HasOne<Option<Profile>> — returns Option<Profile>
-let profile = user.profile().get(&mut db).await?;
+let profile = user.profile().exec(&mut db).await?;
 
 if let Some(profile) = profile {
     println!("Bio: {}", profile.bio);
@@ -175,7 +174,7 @@ if let Some(profile) = profile {
 For a required `HasOne<Profile>`, `.get()` returns `Profile` directly (not
 wrapped in `Option`).
 
-Each call to `.profile().get()` executes a database query. To avoid this, use
+Each call to `.profile().exec()` executes a database query. To avoid this, use
 [preloading](./preloading-associations.md).
 
 ## Creating through the relation
@@ -205,12 +204,9 @@ Create a child for an existing parent through the relation accessor:
 #     bio: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let user = User::create().name("Alice").exec(&mut db).await?;
+let user = toasty::create!(User { name: "Alice" }).exec(&mut db).await?;
 
-let profile = user
-    .profile()
-    .create()
-    .bio("A person")
+let profile = toasty::create!(in user.profile() { bio: "A person" })
     .exec(&mut db)
     .await?;
 
@@ -244,11 +240,12 @@ Or create the parent and child together:
 #     bio: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let user = User::create()
-    .name("Alice")
-    .profile(Profile::create().bio("A person"))
-    .exec(&mut db)
-    .await?;
+let user = toasty::create!(User {
+    name: "Alice",
+    profile: { bio: "A person" },
+})
+.exec(&mut db)
+.await?;
 # Ok(())
 # }
 ```
@@ -282,17 +279,15 @@ Create a new child and associate it with the parent in an update:
 #     bio: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-# let mut user = User::create()
-#     .name("Alice")
-#     .profile(Profile::create().bio("Old bio"))
+# let mut user = toasty::create!(User { name: "Alice", profile: { bio: "Old bio" } })
 #     .exec(&mut db)
 #     .await?;
 user.update()
-    .profile(Profile::create().bio("New bio"))
+    .profile(toasty::create!(Profile { bio: "New bio" }))
     .exec(&mut db)
     .await?;
 
-let profile = user.profile().get(&mut db).await?.unwrap();
+let profile = user.profile().exec(&mut db).await?.unwrap();
 assert_eq!(profile.bio, "New bio");
 # Ok(())
 # }
@@ -323,8 +318,8 @@ Pass a reference to an existing child record:
 #     user: toasty::BelongsTo<Option<User>>,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let user = User::create().exec(&mut db).await?;
-let profile = Profile::create().exec(&mut db).await?;
+let user = toasty::create!(User {}).exec(&mut db).await?;
+let profile = toasty::create!(Profile {}).exec(&mut db).await?;
 
 User::filter_by_id(user.id)
     .update()
@@ -343,7 +338,7 @@ For an optional HasOne, pass `None` to disassociate the child:
 user.update().profile(None).exec(&mut db).await?;
 
 // The profile no longer belongs to the user
-assert!(user.profile().get(&mut db).await?.is_none());
+assert!(user.profile().exec(&mut db).await?.is_none());
 ```
 
 What happens to the child when you unset the relation depends on the child's
@@ -373,7 +368,7 @@ generates:
 | `user.profile()` | Relation accessor | Accessor for the associated profile |
 | `.get(&mut db)` | `Result<Option<Profile>>` | Load the associated profile |
 | `.create()` | Create builder | Create a profile with the foreign key pre-filled |
-| `User::create().profile(...)` | Create builder | Associate a profile on creation |
+| `toasty::create!(User { profile: { ... } })` | Create builder | Associate a profile on creation |
 | `user.update().profile(...)` | Update builder | Replace or associate a profile |
 | `user.update().profile(None)` | Update builder | Disassociate the profile |
 | `User::fields().profile()` | Field path | Used with `.include()` for preloading |

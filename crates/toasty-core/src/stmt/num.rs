@@ -1,3 +1,24 @@
+//! Numeric type support for [`Value`], [`Expr`], and [`Type`].
+//!
+//! This module uses the `impl_num!` macro to generate, for each integer type
+//! (`i8`..`u64`):
+//!
+//! - `Type::is_{ty}()` -- type predicate
+//! - `Value::to_{ty}()` / `Value::to_{ty}_unwrap()` -- cross-width conversion
+//! - `From<{ty}> for Value` / `TryFrom<Value> for {ty}`
+//! - `PartialEq<{ty}>` for both `Value` and `Expr`
+//!
+//! # Examples
+//!
+//! ```
+//! use toasty_core::stmt::{Value, Type};
+//!
+//! let v = Value::from(42_i64);
+//! assert_eq!(v, 42_i64);
+//! assert_eq!(v.to_i64(), Some(42));
+//! assert!(Type::I64.is_i64());
+//! ```
+
 use super::{Expr, Type, Value};
 
 macro_rules! try_from {
@@ -27,6 +48,7 @@ macro_rules! impl_num {
     ) => {
         impl Type {
             $(
+                /// Returns `true` if this type matches the corresponding integer variant.
                 pub fn $is(&self) -> bool {
                     matches!(self, Self::$variant)
                 }
@@ -35,10 +57,20 @@ macro_rules! impl_num {
 
         impl Value {
             $(
+                /// Attempts to convert this value to the target integer type.
+                ///
+                /// Returns `None` if the value is not an integer variant or is out of
+                /// range for the target type. Conversion works across all integer
+                /// widths and signedness.
                 pub fn $to(&self) -> Option<$ty> {
                     try_from!(*self, $ty)
                 }
 
+                /// Converts this value to the target integer type, panicking on failure.
+                ///
+                /// # Panics
+                ///
+                /// Panics if the value is not an integer variant or is out of range.
                 #[track_caller]
                 pub fn $to_unwrap(&self) -> $ty {
                     try_from!(*self, $ty).expect("out of range integral type conversion attempted")

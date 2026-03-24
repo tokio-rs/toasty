@@ -38,6 +38,18 @@ impl Error {
     }
 
     /// Returns `true` if this error is an adhoc error.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use toasty_core::Error;
+    ///
+    /// let err = Error::from_args(format_args!("oops"));
+    /// assert!(err.is_adhoc());
+    ///
+    /// let err = Error::record_not_found("missing");
+    /// assert!(!err.is_adhoc());
+    /// ```
     pub fn is_adhoc(&self) -> bool {
         matches!(self.kind(), super::ErrorKind::Adhoc(_))
     }

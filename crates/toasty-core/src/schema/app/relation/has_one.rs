@@ -3,26 +3,47 @@ use crate::{
     stmt,
 };
 
+/// The inverse side of a one-to-one relationship.
+///
+/// A `HasOne` field on model A means "A has exactly one B". The actual foreign
+/// key lives on model B as a [`BelongsTo`] field. The two sides are linked via
+/// the [`pair`](HasOne::pair) field.
+///
+/// # Examples
+///
+/// ```ignore
+/// // Given a `User` model that has one `Profile`:
+/// let has_one: &HasOne = user_field.ty.as_has_one_unwrap();
+/// let profile_model = has_one.target(&schema);
+/// let inverse = has_one.pair(&schema); // the BelongsTo on Profile
+/// ```
 #[derive(Debug, Clone)]
 pub struct HasOne {
-    /// Associated model
+    /// The [`ModelId`] of the associated (target) model.
     pub target: ModelId,
 
-    /// The association's expression type. This is the type the field evaluates
-    /// to from a user's point of view.
+    /// The expression type this field evaluates to from the application's
+    /// perspective.
     pub expr_ty: stmt::Type,
 
-    /// The `BelongsTo` association that pairs with this
+    /// The [`BelongsTo`] field on the target model that pairs with this
+    /// relation.
     pub pair: FieldId,
 }
 
 impl HasOne {
+    /// Resolves the target [`Model`] from the given schema.
     pub fn target<'a>(&self, schema: &'a Schema) -> &'a Model {
         schema.model(self.target)
     }
 
+    /// Resolves the paired [`BelongsTo`] relation on the target model.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the paired field is not a `BelongsTo` variant.
     pub fn pair<'a>(&self, schema: &'a Schema) -> &'a BelongsTo {
-        schema.field(self.pair).ty.expect_belongs_to()
+        schema.field(self.pair).ty.as_belongs_to_unwrap()
     }
 }
 

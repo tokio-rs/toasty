@@ -1,0 +1,5 @@
+error: unexpected `[` — use tuple syntax `(...)` for tuple creation, or `Type::[...]` for same-type batch creation
+  --> tests/ui/create_heterogeneous_batch_bracket.rs:20:29
+   |
+20 |     let _ = toasty::create!([User { name: "Carl" }, Article { title: "Hello" }]);
+   |                             ^

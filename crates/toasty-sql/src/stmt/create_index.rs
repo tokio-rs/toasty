@@ -5,6 +5,7 @@ use toasty_core::{
     stmt,
 };
 
+/// A `CREATE INDEX` statement.
 #[derive(Debug, Clone)]
 pub struct CreateIndex {
     /// Name of the index
@@ -21,6 +22,7 @@ pub struct CreateIndex {
 }
 
 impl Statement {
+    /// Creates a `CREATE INDEX` statement from a schema [`Index`].
     pub fn create_index(index: &Index) -> Self {
         CreateIndex {
             index: index.id,

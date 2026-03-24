@@ -1,8 +1,8 @@
 //! Test that Model associated types are accessible and correctly typed
 
-use toasty::Model;
+use toasty::schema::Model;
 
-#[derive(Model)]
+#[derive(toasty::Model)]
 struct User {
     #[key]
     id: u64,

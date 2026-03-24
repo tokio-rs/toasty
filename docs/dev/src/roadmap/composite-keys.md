@@ -36,7 +36,6 @@ struct Todo {
 **Generated query methods** for composite keys:
 - `filter_by_<field1>_and_<field2>()` — filter by both key fields
 - `get_by_<field1>_and_<field2>()` — get a single record by both keys
-- `filter_by_<field1>_and_<field2>_batch()` — batch get by key tuples
 - `filter_by_<partition_field>()` — filter by partition key alone
 - Comparison operators on local keys: `gt()`, `ge()`, `lt()`, `le()`, `ne()`, `eq()`
 
@@ -45,7 +44,6 @@ struct Todo {
 - DynamoDB: partition/local key syntax (max 2 keys: 1 partition + 1 local)
 
 **Test coverage:**
-- `one_model_composite_key::batch_get_by_key` — basic CRUD with field-level composite keys
 - `one_model_query` — partition/local key queries with range operators
 - `has_many_crud_basic::has_many_when_fk_is_composite` — HasMany with composite FK (working)
 - `embedded` — composite keys with embedded struct fields
@@ -324,7 +322,6 @@ Fill in the stubbed tests and add new ones covering all composite key combinatio
 | `composite_fk_belongs_to` | BelongsTo where the FK is composite (references a composite PK) |
 | `composite_fk_has_one` | HasOne with composite FK |
 | `composite_key_pagination` | Cursor-based pagination with composite PK ordering |
-| `composite_key_batch_operations` | Batch get/update/delete with composite keys |
 | `composite_key_scoped_queries` | Scoped queries (e.g., `user.todos().filter_by_id(...)`) with composite keys |
 | `composite_key_update_non_key_fields` | Update non-key fields on a composite-keyed model |
 | `composite_key_unique_constraint` | Composite unique constraint (not PK) behavior |
@@ -335,7 +332,7 @@ Fill in the stubbed tests and add new ones covering all composite key combinatio
 
 ### Tuple-Based Identity
 
-Following Diesel and SQLAlchemy's lead, composite key identity should be represented as tuples. The current generated methods (`get_by_field1_and_field2(val1, val2)`) are a good API. For batch operations, the tuple-of-references pattern (`filter_by_field1_and_field2_batch([(&a, &b), ...])`) is also solid.
+Following Diesel and SQLAlchemy's lead, composite key identity should be represented as tuples. The current generated methods (`get_by_field1_and_field2(val1, val2)`) are a good API.
 
 ### AND Composition for Multi-Field Conditions
 

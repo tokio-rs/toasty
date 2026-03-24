@@ -1,0 +1,121 @@
+use super::{util, Expand};
+use crate::model::schema::FieldTy::{BelongsTo, HasMany, HasOne, Primitive};
+use proc_macro2::TokenStream;
+use quote::quote;
+
+impl Expand<'_> {
+    pub(super) fn expand_field_struct(&self) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let field_struct_ident = self.field_struct_ident();
+        let model_ident = &self.model.ident;
+
+        // Generate methods that return field paths for the model
+        let methods = self
+            .model
+            .fields
+            .iter()
+            .enumerate()
+            .map(move |(offset, field)| {
+                let field_ident = &field.name.ident;
+                let field_offset = util::int(offset);
+
+                match &field.ty {
+                    Primitive(_) if field.attrs.serialize.is_some() => {
+                        // Serialized fields are stored as opaque JSON; no field accessor
+                        TokenStream::new()
+                    }
+                    Primitive(ty) => {
+                        self.expand_primitive_field_method(field_ident, ty, &field_offset)
+                    }
+                    BelongsTo(rel) => {
+                        self.expand_one_relation_field_method(field_ident, &rel.ty, &field_offset)
+                    }
+                    HasOne(rel) => {
+                        self.expand_one_relation_field_method(field_ident, &rel.ty, &field_offset)
+                    }
+                    HasMany(rel) => {
+                        let ty = &rel.ty;
+                        let path = quote! {
+                            self.path().chain(#toasty::Path::<#model_ident, _>::from_field_index(#field_offset))
+                        };
+
+                        quote! {
+                            #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::ManyField<__Origin> {
+                                <#ty as #toasty::Relation>::ManyField::from_path(#path)
+                            }
+                        }
+                    }
+                }
+            });
+
+        // Generate struct with path field
+        quote!(
+            #vis struct #field_struct_ident<__Origin> {
+                path: #toasty::Path<__Origin, #model_ident>,
+            }
+
+            impl<__Origin> #field_struct_ident<__Origin> {
+                fn path(&self) -> #toasty::Path<__Origin, #model_ident> {
+                    self.path.clone()
+                }
+
+                #( #methods )*
+            }
+        )
+    }
+
+    pub(super) fn expand_model_field_struct_init(&self) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let field_struct_ident = self.field_struct_ident();
+        let model_ident = &self.model.ident;
+
+        // Generate fields() as a method instead of const to avoid const initialization issues
+        // This will be placed inside the existing impl block for the model
+        quote!(
+            #vis fn fields() -> #field_struct_ident<#model_ident> {
+                #field_struct_ident {
+                    path: #toasty::Path::root(),
+                }
+            }
+        )
+    }
+
+    fn field_struct_ident(&self) -> &syn::Ident {
+        use crate::model::schema::ModelKind;
+
+        match &self.model.kind {
+            ModelKind::Root(root) => &root.field_struct_ident,
+            ModelKind::EmbeddedStruct(embedded) => &embedded.field_struct_ident,
+            ModelKind::EmbeddedEnum(e) => &e.field_struct_ident,
+        }
+    }
+
+    pub(super) fn expand_field_name_to_id(&self) -> TokenStream {
+        let toasty = &self.toasty;
+
+        let fields = self
+            .model
+            .fields
+            .iter()
+            .enumerate()
+            .map(move |(offset, field)| {
+                let field_name = field.name.ident.to_string();
+                let field_offset = util::int(offset);
+
+                quote!( #field_name => #toasty::core::schema::app::FieldId { model: Self::id(), index: #field_offset }, )
+            });
+
+        quote! {
+            fn field_name_to_id(name: &str) -> #toasty::core::schema::app::FieldId {
+                use #toasty::{Model, Register};
+
+                match name {
+                    #( #fields )*
+                    _ => todo!("field_name_to_id: {}", name),
+                }
+            }
+        }
+    }
+}

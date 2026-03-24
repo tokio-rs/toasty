@@ -19,6 +19,9 @@ pub(crate) use find_pk_by_index::FindPkByIndex;
 mod get_by_key;
 pub(crate) use get_by_key::GetByKey;
 
+mod guard;
+pub(crate) use guard::Guard;
+
 mod kv;
 
 mod nested_merge;
@@ -176,6 +179,7 @@ fn action_name(action: &Action) -> &'static str {
         Action::Filter(_) => "Filter",
         Action::FindPkByIndex(_) => "FindPkByIndex",
         Action::GetByKey(_) => "GetByKey",
+        Action::Guard(_) => "Guard",
         Action::NestedMerge(_) => "NestedMerge",
         Action::QueryPk(_) => "QueryPk",
         Action::ReadModifyWrite(_) => "ReadModifyWrite",
@@ -194,6 +198,7 @@ impl Exec<'_> {
             Action::Filter(action) => self.action_filter(action).await,
             Action::FindPkByIndex(action) => self.action_find_pk_by_index(action).await,
             Action::GetByKey(action) => self.action_get_by_key(action).await,
+            Action::Guard(action) => self.action_guard(action).await,
             Action::NestedMerge(action) => self.action_nested_merge(action).await,
             Action::QueryPk(action) => self.action_query_pk(action).await,
             Action::ReadModifyWrite(action) => self.action_read_modify_write(action).await,

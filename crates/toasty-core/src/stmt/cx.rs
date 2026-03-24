@@ -4,14 +4,29 @@ use crate::{
         db::{self, Column, ColumnId, Table, TableId},
     },
     stmt::{
-        Delete, Expr, ExprArg, ExprColumn, ExprReference, ExprSet, Insert, InsertTarget, Query,
-        Returning, Select, Source, SourceTable, Statement, TableDerived, TableFactor, TableRef,
-        Type, TypeUnion, Update, UpdateTarget,
+        Delete, Expr, ExprArg, ExprColumn, ExprFunc, ExprReference, ExprSet, Insert, InsertTarget,
+        Query, Returning, Select, Source, SourceTable, Statement, TableDerived, TableFactor,
+        TableRef, Type, TypeUnion, Update, UpdateTarget,
     },
     Schema,
 };
 
-// TODO: we probably want two lifetimes here. One for &Schema and one for the stmt.
+/// Provides schema-aware context for expression type inference and reference
+/// resolution.
+///
+/// An `ExprContext` binds a schema reference, an optional parent scope (for
+/// nested queries), and a target indicating what the expressions reference
+/// (a model, table, or source). It is used by the query engine to infer
+/// expression types and resolve column/field references.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::stmt::{ExprContext, ExprTarget};
+///
+/// let cx = ExprContext::new(&schema);
+/// let ty = cx.infer_expr_ty(&expr, &[]);
+/// ```
 #[derive(Debug)]
 pub struct ExprContext<'a, T = Schema> {
     schema: &'a T,
@@ -65,7 +80,12 @@ pub enum ResolvedRef<'a> {
     ///
     /// Example: In a WITH clause, resolving a reference to the second column of a CTE
     /// defined 1 level up returns Cte { nesting: 1, index: 1 }.
-    Cte { nesting: usize, index: usize },
+    Cte {
+        /// How many query scopes up from the current scope.
+        nesting: usize,
+        /// Column index within the CTE's output.
+        index: usize,
+    },
 
     /// A resolved reference to a derived table (subquery in FROM clause) column.
     ///
@@ -121,6 +141,10 @@ impl DerivedRef<'_> {
     }
 }
 
+/// What an expression in the current scope references.
+///
+/// Determines how column and field references are resolved within an
+/// [`ExprContext`].
 #[derive(Debug, Clone, Copy)]
 pub enum ExprTarget<'a> {
     /// Expression does *not* reference any model or table.
@@ -134,11 +158,17 @@ pub enum ExprTarget<'a> {
     /// Used primarily by database drivers
     Table(&'a Table),
 
-    // Reference statement targets directly
+    /// Expression references a source table (a FROM clause with table references).
     Source(&'a SourceTable),
 }
 
+/// Schema resolution trait used by [`ExprContext`] to look up models,
+/// tables, and the model-to-table mapping.
+///
+/// Implemented for [`Schema`], [`db::Schema`](crate::schema::db::Schema),
+/// and `()` (which resolves nothing).
 pub trait Resolve {
+    /// Returns the database table that stores the given model, if any.
     fn table_for_model(&self, model: &ModelRoot) -> Option<&Table>;
 
     /// Returns a reference to the application Model with the specified ID.
@@ -156,7 +186,10 @@ pub trait Resolve {
     fn table(&self, id: TableId) -> Option<&Table>;
 }
 
+/// Conversion trait for producing an [`ExprTarget`] from a statement or
+/// schema element.
 pub trait IntoExprTarget<'a, T = Schema> {
+    /// Converts `self` into an [`ExprTarget`] using the provided schema.
     fn into_expr_target(self, schema: &'a T) -> ExprTarget<'a>;
 }
 
@@ -167,10 +200,12 @@ struct ArgTyStack<'a> {
 }
 
 impl<'a, T> ExprContext<'a, T> {
+    /// Returns a reference to the schema.
     pub fn schema(&self) -> &'a T {
         self.schema
     }
 
+    /// Returns the current expression target.
     pub fn target(&self) -> ExprTarget<'a> {
         self.target
     }
@@ -193,6 +228,7 @@ impl<'a, T> ExprContext<'a, T> {
 }
 
 impl<'a> ExprContext<'a, ()> {
+    /// Creates a free context with no schema and no target.
     pub fn new_free() -> ExprContext<'a, ()> {
         ExprContext {
             schema: &(),
@@ -203,10 +239,12 @@ impl<'a> ExprContext<'a, ()> {
 }
 
 impl<'a, T: Resolve> ExprContext<'a, T> {
+    /// Creates a context bound to the given schema with a free target.
     pub fn new(schema: &'a T) -> ExprContext<'a, T> {
         ExprContext::new_with_target(schema, ExprTarget::Free)
     }
 
+    /// Creates a context bound to the given schema and target.
     pub fn new_with_target(
         schema: &'a T,
         target: impl IntoExprTarget<'a, T>,
@@ -219,6 +257,8 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
         }
     }
 
+    /// Creates a child context with a new target, linked to this context
+    /// as parent for nested scope resolution.
     pub fn scope<'child>(
         &'child self,
         target: impl IntoExprTarget<'child, T>,
@@ -325,6 +365,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
         }
     }
 
+    /// Infers the return type of a statement given argument types.
     pub fn infer_stmt_ty(&self, stmt: &Statement, args: &[Type]) -> Type {
         let cx = self.scope(stmt);
 
@@ -389,6 +430,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
         }
     }
 
+    /// Infers the type of an expression given argument types.
     pub fn infer_expr_ty(&self, expr: &Expr, args: &[Type]) -> Type {
         let arg_ty_stack = ArgTyStack::new(args);
         self.infer_expr_ty2(&arg_ty_stack, expr, false)
@@ -507,10 +549,14 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             // could be any type. Return Unknown so it unifies with whatever
             // the other branches produce.
             Expr::Error(_) => Type::Unknown,
+            Expr::Exists(_) => Type::Bool,
+            Expr::Func(ExprFunc::Count(_)) => Type::U64,
+            Expr::Func(ExprFunc::LastInsertId(_)) => Type::I64,
             _ => todo!("{expr:#?}"),
         }
     }
 
+    /// Infers the type of an expression reference (field or column).
     pub fn infer_expr_reference_ty(&self, expr_reference: &ExprReference) -> Type {
         match self.resolve_expr_reference(expr_reference) {
             ResolvedRef::Model(model) => Type::Model(model.id),
@@ -525,10 +571,19 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
 }
 
 impl<'a> ExprContext<'a, Schema> {
+    /// Returns the context target as a `ModelRoot` reference, or `None` if the target is not a
+    /// model.
     pub fn target_as_model(&self) -> Option<&'a ModelRoot> {
         self.target.as_model()
     }
 
+    /// Creates an `ExprReference::Column` for the given column ID.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the context has no table target (`ExprTarget::Free`), if the column does not
+    /// belong to the table associated with the current target, or if the target's model has no
+    /// mapped database table.
     pub fn expr_ref_column(&self, column_id: impl Into<ColumnId>) -> ExprReference {
         let column_id = column_id.into();
 
@@ -572,24 +627,39 @@ impl<'a, T> Clone for ExprContext<'a, T> {
 impl<'a, T> Copy for ExprContext<'a, T> {}
 
 impl<'a> ResolvedRef<'a> {
+    /// Returns the inner `Column` reference.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is not `ResolvedRef::Column`.
     #[track_caller]
-    pub fn expect_column(self) -> &'a Column {
+    pub fn as_column_unwrap(self) -> &'a Column {
         match self {
             ResolvedRef::Column(column) => column,
             _ => panic!("Expected ResolvedRef::Column, found {:?}", self),
         }
     }
 
+    /// Returns the inner `Field` reference.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is not `ResolvedRef::Field`.
     #[track_caller]
-    pub fn expect_field(self) -> &'a Field {
+    pub fn as_field_unwrap(self) -> &'a Field {
         match self {
             ResolvedRef::Field(field) => field,
             _ => panic!("Expected ResolvedRef::Field, found {:?}", self),
         }
     }
 
+    /// Returns the inner `ModelRoot` reference.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is not `ResolvedRef::Model`.
     #[track_caller]
-    pub fn expect_model(self) -> &'a ModelRoot {
+    pub fn as_model_unwrap(self) -> &'a ModelRoot {
         match self {
             ResolvedRef::Model(model) => model,
             _ => panic!("Expected ResolvedRef::Model, found {:?}", self),
@@ -640,6 +710,7 @@ impl Resolve for () {
 }
 
 impl<'a> ExprTarget<'a> {
+    /// Returns the model if this target is [`ExprTarget::Model`], or `None`.
     pub fn as_model(self) -> Option<&'a ModelRoot> {
         match self {
             ExprTarget::Model(model) => Some(model),
@@ -647,6 +718,11 @@ impl<'a> ExprTarget<'a> {
         }
     }
 
+    /// Returns the model, panicking if not [`ExprTarget::Model`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the target is not `Model`.
     #[track_caller]
     pub fn as_model_unwrap(self) -> &'a ModelRoot {
         match self.as_model() {
@@ -655,6 +731,7 @@ impl<'a> ExprTarget<'a> {
         }
     }
 
+    /// Returns the model ID if this target is [`ExprTarget::Model`], or `None`.
     pub fn model_id(self) -> Option<ModelId> {
         Some(match self {
             ExprTarget::Model(model) => model.id,
@@ -662,12 +739,23 @@ impl<'a> ExprTarget<'a> {
         })
     }
 
+    /// Returns the table if this target is [`ExprTarget::Table`], or `None`.
+    pub fn as_table(self) -> Option<&'a Table> {
+        match self {
+            ExprTarget::Table(table) => Some(table),
+            _ => None,
+        }
+    }
+
+    /// Returns the table, panicking if not [`ExprTarget::Table`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the target is not `Table`.
     #[track_caller]
     pub fn as_table_unwrap(self) -> &'a Table {
-        match self {
-            ExprTarget::Table(table) => table,
-            _ => panic!("expected ExprTarget::Table; was {self:#?}"),
-        }
+        self.as_table()
+            .unwrap_or_else(|| panic!("expected ExprTarget::Table; was {self:#?}"))
     }
 }
 
@@ -761,7 +849,7 @@ impl<'a, T: Resolve> IntoExprTarget<'a, T> for &'a InsertTarget {
                 let Some(model) = schema.model(*model) else {
                     todo!()
                 };
-                ExprTarget::Model(model.expect_root())
+                ExprTarget::Model(model.as_root_unwrap())
             }
             InsertTarget::Table(insert_table) => {
                 let table = schema.table(insert_table.table).unwrap();
@@ -779,7 +867,7 @@ impl<'a, T: Resolve> IntoExprTarget<'a, T> for &'a UpdateTarget {
                 let Some(model) = schema.model(*model) else {
                     todo!()
                 };
-                ExprTarget::Model(model.expect_root())
+                ExprTarget::Model(model.as_root_unwrap())
             }
             UpdateTarget::Table(table_id) => {
                 let Some(table) = schema.table(*table_id) else {
@@ -795,10 +883,10 @@ impl<'a, T: Resolve> IntoExprTarget<'a, T> for &'a Source {
     fn into_expr_target(self, schema: &'a T) -> ExprTarget<'a> {
         match self {
             Source::Model(source_model) => {
-                let Some(model) = schema.model(source_model.model) else {
+                let Some(model) = schema.model(source_model.id) else {
                     todo!()
                 };
-                ExprTarget::Model(model.expect_root())
+                ExprTarget::Model(model.as_root_unwrap())
             }
             Source::Table(source_table) => {
                 ExprTarget::Source(source_table).into_expr_target(schema)

@@ -1,3 +1,21 @@
+//! Client-side evaluation of constant or input-bound expressions and
+//! statements.
+//!
+//! The evaluator walks the expression tree recursively, resolving arguments
+//! via an [`Input`] implementation and producing [`Value`]s. It supports
+//! boolean logic, comparison, casting, records, lists, let-bindings, match
+//! expressions, and subqueries (VALUES only).
+//!
+//! # Examples
+//!
+//! ```
+//! use toasty_core::stmt::{Expr, Value, ConstInput};
+//!
+//! let expr = Expr::from(Value::from(42_i64));
+//! let result = expr.eval(ConstInput::new()).unwrap();
+//! assert_eq!(result, Value::from(42_i64));
+//! ```
+
 use crate::{
     stmt::{
         BinaryOp, ConstInput, Expr, ExprArg, ExprSet, Input, Limit, Offset, Projection, Statement,
@@ -16,10 +34,18 @@ enum ScopeStack<'a> {
 }
 
 impl Statement {
+    /// Evaluates this statement using the provided [`Input`] for argument
+    /// resolution. Only `Query` statements are supported.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for non-Query statements, or if evaluation of any
+    /// sub-expression fails.
     pub fn eval(&self, mut input: impl Input) -> Result<Value> {
         self.eval_ref(&ScopeStack::Root, &mut input)
     }
 
+    /// Evaluates this statement as a constant expression (no external input).
     pub fn eval_const(&self) -> Result<Value> {
         self.eval(ConstInput::new())
     }
@@ -124,14 +150,22 @@ impl ExprSet {
 }
 
 impl Expr {
+    /// Evaluates this expression using the provided [`Input`] for argument
+    /// and reference resolution.
     pub fn eval(&self, mut input: impl Input) -> Result<Value> {
         self.eval_ref(&ScopeStack::Root, &mut input)
     }
 
+    /// Evaluates this expression and returns the result as a `bool`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the expression does not evaluate to a boolean.
     pub fn eval_bool(&self, mut input: impl Input) -> Result<bool> {
         self.eval_ref_bool(&ScopeStack::Root, &mut input)
     }
 
+    /// Evaluates this expression as a constant (no external input).
     pub fn eval_const(&self) -> Result<Value> {
         self.eval(ConstInput::new())
     }
@@ -321,6 +355,28 @@ impl Expr {
                     }
                 }
                 expr_match.else_expr.eval_ref(scope, input)
+            }
+            Expr::Exists(expr_exists) => {
+                // Evaluate the subquery body. For Values bodies the rows are
+                // evaluated and flattened; for other bodies we evaluate the
+                // query as an expression.
+                match &expr_exists.subquery.body {
+                    ExprSet::Values(values) => {
+                        for row in &values.rows {
+                            let val = row.eval_ref(scope, input)?;
+                            match val {
+                                // An empty list means no rows — keep checking
+                                Value::List(items) if items.is_empty() => {}
+                                // Null means the row doesn't exist
+                                Value::Null => {}
+                                // Any other value means at least one row exists
+                                _ => return Ok(true.into()),
+                            }
+                        }
+                        Ok(false.into())
+                    }
+                    _ => todo!("ExprExists with non-Values body"),
+                }
             }
             Expr::Value(value) => Ok(value.clone()),
             Expr::Func(_) => Err(crate::Error::expression_evaluation_failed(

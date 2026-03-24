@@ -3,11 +3,24 @@ use super::{EnumVariant, Field, FieldId, FieldTy, Model, ModelId, VariantId};
 use crate::{stmt, Result};
 use indexmap::IndexMap;
 
-/// Result of resolving a projection through the application schema.
+/// The result of resolving a [`stmt::Projection`] through the application
+/// schema.
 ///
-/// A projection can resolve to either a concrete field or an enum variant
-/// (when the projection stops at a variant discriminant without descending
-/// into a variant's fields).
+/// A projection can resolve to either a concrete [`Field`] or an
+/// [`EnumVariant`] (when the projection stops at a variant discriminant
+/// without descending into the variant's data fields).
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::schema::app::Resolved;
+///
+/// match schema.resolve(root_model, &projection) {
+///     Some(Resolved::Field(f)) => println!("field: {}", f.name.app_name),
+///     Some(Resolved::Variant(v)) => println!("variant: {}", v.discriminant),
+///     None => println!("could not resolve"),
+/// }
+/// ```
 #[derive(Debug)]
 pub enum Resolved<'a> {
     /// The projection resolved to a concrete field.
@@ -16,8 +29,25 @@ pub enum Resolved<'a> {
     Variant(&'a EnumVariant),
 }
 
+/// The top-level application schema, containing all registered models.
+///
+/// `Schema` is the entry point for looking up models, fields, and variants by
+/// their IDs, and for resolving projections through the model graph.
+///
+/// Schemas are typically constructed via `Schema::from_macro` (called by the
+/// `#[derive(Model)]` proc macro) or built manually for testing.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::schema::app::Schema;
+///
+/// let schema = Schema::default();
+/// assert_eq!(schema.models().count(), 0);
+/// ```
 #[derive(Debug, Default)]
 pub struct Schema {
+    /// All models in the schema, keyed by [`ModelId`].
     pub models: IndexMap<ModelId, Model>,
 }
 
@@ -27,11 +57,19 @@ struct Builder {
 }
 
 impl Schema {
+    /// Builds a `Schema` from a slice of models, linking relations and
+    /// validating consistency.
+    ///
+    /// This is the primary constructor used by the derive macro infrastructure.
     pub fn from_macro(models: &[Model]) -> Result<Self> {
         Builder::from_macro(models)
     }
 
-    /// Get a field by ID
+    /// Returns a reference to the [`Field`] identified by `id`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the model or field index is invalid.
     pub fn field(&self, id: FieldId) -> &Field {
         let fields = match self.model(id.model) {
             Model::Root(root) => &root.fields,
@@ -41,7 +79,12 @@ impl Schema {
         fields.get(id.index).expect("invalid field ID")
     }
 
-    /// Get a variant by ID
+    /// Returns a reference to the [`EnumVariant`] identified by `id`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the model is not an [`EmbeddedEnum`](super::EmbeddedEnum) or
+    /// the variant index is out of bounds.
     pub fn variant(&self, id: VariantId) -> &EnumVariant {
         let Model::EmbeddedEnum(e) = self.model(id.model) else {
             panic!("VariantId references a non-enum model");
@@ -49,6 +92,7 @@ impl Schema {
         e.variants.get(id.index).expect("invalid variant index")
     }
 
+    /// Returns an iterator over all models in the schema.
     pub fn models(&self) -> impl Iterator<Item = &Model> {
         self.models.values()
     }
@@ -58,7 +102,11 @@ impl Schema {
         self.models.get(&id.into())
     }
 
-    /// Get a model by ID
+    /// Returns a reference to the [`Model`] identified by `id`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if no model with the given ID exists in the schema.
     pub fn model(&self, id: impl Into<ModelId>) -> &Model {
         self.models.get(&id.into()).expect("invalid model ID")
     }
@@ -84,7 +132,7 @@ impl Schema {
         };
 
         // Get the first field from the root model
-        let mut current_field = root.expect_root().fields.get(*first)?;
+        let mut current_field = root.as_root_unwrap().fields.get(*first)?;
 
         // Walk through remaining steps. Uses a manual iterator because
         // embedded enums consume two steps (variant discriminant + field index).
@@ -120,13 +168,13 @@ impl Schema {
                     }
                 }
                 FieldTy::BelongsTo(belongs_to) => {
-                    current_field = belongs_to.target(self).expect_root().fields.get(*step)?;
+                    current_field = belongs_to.target(self).as_root_unwrap().fields.get(*step)?;
                 }
                 FieldTy::HasMany(has_many) => {
-                    current_field = has_many.target(self).expect_root().fields.get(*step)?;
+                    current_field = has_many.target(self).as_root_unwrap().fields.get(*step)?;
                 }
                 FieldTy::HasOne(has_one) => {
-                    current_field = has_one.target(self).expect_root().fields.get(*step)?;
+                    current_field = has_one.target(self).as_root_unwrap().fields.get(*step)?;
                 }
             };
         }
@@ -149,8 +197,10 @@ impl Schema {
         }
     }
 
+    /// Resolves a [`stmt::Path`] to a [`Field`] by extracting the root model
+    /// from the path and delegating to [`resolve_field`](Schema::resolve_field).
     pub fn resolve_field_path<'a>(&'a self, path: &stmt::Path) -> Option<&'a Field> {
-        let model = self.model(path.root.expect_model());
+        let model = self.model(path.root.as_model_unwrap());
         self.resolve_field(model, &path.projection)
     }
 }
@@ -194,18 +244,18 @@ impl Builder {
             if self.models[curr].is_embedded() {
                 continue;
             }
-            for index in 0..self.models[curr].expect_root().fields.len() {
+            for index in 0..self.models[curr].as_root_unwrap().fields.len() {
                 let model = &self.models[curr];
                 let src = model.id();
-                let field = &model.expect_root().fields[index];
+                let field = &model.as_root_unwrap().fields[index];
 
                 if let FieldTy::HasMany(has_many) = &field.ty {
                     let target = has_many.target;
                     let field_name = field.name.app_name.clone();
                     let pair = self.find_has_many_pair(src, target, &field_name)?;
-                    self.models[curr].expect_root_mut().fields[index]
+                    self.models[curr].as_root_mut_unwrap().fields[index]
                         .ty
-                        .expect_has_many_mut()
+                        .as_has_many_mut_unwrap()
                         .pair = pair;
                 }
             }
@@ -216,10 +266,10 @@ impl Builder {
             if self.models[curr].is_embedded() {
                 continue;
             }
-            for index in 0..self.models[curr].expect_root().fields.len() {
+            for index in 0..self.models[curr].as_root_unwrap().fields.len() {
                 let model = &self.models[curr];
                 let src = model.id();
-                let field = &model.expect_root().fields[index];
+                let field = &model.as_root_unwrap().fields[index];
 
                 match &field.ty {
                     FieldTy::HasOne(has_one) => {
@@ -236,9 +286,9 @@ impl Builder {
                             }
                         };
 
-                        self.models[curr].expect_root_mut().fields[index]
+                        self.models[curr].as_root_mut_unwrap().fields[index]
                             .ty
-                            .expect_has_one_mut()
+                            .as_has_one_mut_unwrap()
                             .pair = pair;
                     }
                     FieldTy::BelongsTo(belongs_to) => {
@@ -255,11 +305,11 @@ impl Builder {
             if self.models[curr].is_embedded() {
                 continue;
             }
-            for index in 0..self.models[curr].expect_root().fields.len() {
+            for index in 0..self.models[curr].as_root_unwrap().fields.len() {
                 let model = &self.models[curr];
-                let field_id = model.expect_root().fields[index].id;
+                let field_id = model.as_root_unwrap().fields[index].id;
 
-                let pair = match &self.models[curr].expect_root().fields[index].ty {
+                let pair = match &self.models[curr].as_root_unwrap().fields[index].ty {
                     FieldTy::BelongsTo(belongs_to) => {
                         let mut pair = None;
                         let target = match self.models.get_index_of(&belongs_to.target) {
@@ -270,21 +320,28 @@ impl Builder {
                                     "field `{}::{}` references a model that was not registered \
                                      with the schema; did you forget to register it with `Db::builder()`?",
                                     model.name().upper_camel_case(),
-                                    model.expect_root().fields[index].name.app_name,
+                                    model.as_root_unwrap().fields[index].name.app_name,
                                 )));
                             }
                         };
 
-                        for target_index in 0..self.models[target].expect_root().fields.len() {
-                            pair = match &self.models[target].expect_root().fields[target_index].ty
+                        for target_index in 0..self.models[target].as_root_unwrap().fields.len() {
+                            pair = match &self.models[target].as_root_unwrap().fields[target_index]
+                                .ty
                             {
                                 FieldTy::HasMany(has_many) if has_many.pair == field_id => {
                                     assert!(pair.is_none());
-                                    Some(self.models[target].expect_root().fields[target_index].id)
+                                    Some(
+                                        self.models[target].as_root_unwrap().fields[target_index]
+                                            .id,
+                                    )
                                 }
                                 FieldTy::HasOne(has_one) if has_one.pair == field_id => {
                                     assert!(pair.is_none());
-                                    Some(self.models[target].expect_root().fields[target_index].id)
+                                    Some(
+                                        self.models[target].as_root_unwrap().fields[target_index]
+                                            .id,
+                                    )
                                 }
                                 _ => continue,
                             }
@@ -299,9 +356,9 @@ impl Builder {
                     _ => continue,
                 };
 
-                self.models[curr].expect_root_mut().fields[index]
+                self.models[curr].as_root_mut_unwrap().fields[index]
                     .ty
-                    .expect_belongs_to_mut()
+                    .as_belongs_to_mut_unwrap()
                     .pair = pair;
             }
         }
@@ -331,7 +388,7 @@ impl Builder {
 
         // Find all BelongsTo relations that reference the model
         let belongs_to: Vec<_> = target
-            .expect_root()
+            .as_root_unwrap()
             .fields
             .iter()
             .filter(|field| match &field.ty {

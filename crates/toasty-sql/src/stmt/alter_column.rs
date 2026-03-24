@@ -37,6 +37,10 @@ pub struct AlterColumnChanges {
 }
 
 impl AlterColumnChanges {
+    /// Computes the set of changes between two column definitions.
+    ///
+    /// Each field is `Some` only when the corresponding property differs
+    /// between `previous` and `next`.
     pub fn from_diff(previous: &Column, next: &Column) -> Self {
         Self {
             new_name: (previous.name != next.name).then(|| next.name.clone()),
@@ -89,6 +93,7 @@ impl AlterColumnChanges {
         result
     }
 
+    /// Returns `true` if any type-level property changed (type, nullability, or auto-increment).
     pub fn has_type_change(&self) -> bool {
         self.new_ty.is_some() || self.new_not_null.is_some() || self.new_auto_increment.is_some()
     }

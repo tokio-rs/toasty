@@ -19,6 +19,9 @@ pub struct ExprOr {
 }
 
 impl Expr {
+    /// Creates an OR expression from two operands.
+    ///
+    /// Flattens nested ORs: `or(or(a, b), c)` produces `or(a, b, c)`.
     pub fn or(lhs: impl Into<Self>, rhs: impl Into<Self>) -> Self {
         let mut lhs = lhs.into();
         let rhs = rhs.into();
@@ -43,6 +46,10 @@ impl Expr {
         }
     }
 
+    /// Creates an OR expression from a vector of operands.
+    ///
+    /// Returns `Expr::Value(false)` for an empty vector and unwraps
+    /// single-element vectors into the element itself.
     pub fn or_from_vec(operands: Vec<Self>) -> Self {
         if operands.is_empty() {
             return false.into();

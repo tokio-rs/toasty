@@ -18,7 +18,22 @@ use std::ops::Bound;
 /// # Cloning
 ///
 /// Key fields are cloned into owned [`Value`]s for storage. Full records are never
-/// cloned — the stored values are `&'a Value` references into the source slice.
+/// cloned -- the stored values are `&'a Value` references into the source slice.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::stmt::{SortedIndex, Projection, Value};
+///
+/// let records = vec![
+///     Value::record_from_vec(vec![Value::from(3_i64), Value::from("c")]),
+///     Value::record_from_vec(vec![Value::from(1_i64), Value::from("a")]),
+///     Value::record_from_vec(vec![Value::from(2_i64), Value::from("b")]),
+/// ];
+/// let index = SortedIndex::new(&records, &[Projection::single(0)]);
+/// let found = index.find_eq(&[Value::from(2_i64)]);
+/// assert!(found.is_some());
+/// ```
 pub struct SortedIndex<'a> {
     /// Entries sorted by key using [`total_cmp`].
     entries: Vec<(Vec<Value>, &'a Value)>,

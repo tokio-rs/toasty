@@ -9,6 +9,11 @@ use toasty_core::{
 
 use crate::stmt::{AlterColumnChanges, AlterTable, AlterTableAction, DropTable, Name, Statement};
 
+/// A migration step pairing a DDL [`Statement`] with the [`Schema`] it applies against.
+///
+/// Each `MigrationStatement` carries a snapshot of the schema at the point where
+/// the statement should be serialized. This is necessary because rename and
+/// recreation operations modify the schema as they go.
 pub struct MigrationStatement<'a> {
     statement: Statement,
     schema: Cow<'a, Schema>,
@@ -19,6 +24,12 @@ impl<'a> MigrationStatement<'a> {
         MigrationStatement { statement, schema }
     }
 
+    /// Generates migration statements from a [`SchemaDiff`].
+    ///
+    /// Walks the diff's table, column, and index changes and produces the
+    /// corresponding DDL statements. On databases that lack `ALTER COLUMN`
+    /// support (e.g. SQLite), column type changes trigger a full table
+    /// recreation sequence.
     pub fn from_diff(schema_diff: &'a SchemaDiff<'a>, capability: &Capability) -> Vec<Self> {
         let mut result = Vec::new();
         for table in schema_diff.tables().iter() {
@@ -249,10 +260,12 @@ impl<'a> MigrationStatement<'a> {
         }
     }
 
+    /// Returns the DDL statement for this migration step.
     pub fn statement(&self) -> &Statement {
         &self.statement
     }
 
+    /// Returns the schema snapshot this statement should be serialized against.
     pub fn schema(&self) -> &Schema {
         &self.schema
     }

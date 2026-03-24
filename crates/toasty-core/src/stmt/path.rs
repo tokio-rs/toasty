@@ -15,14 +15,16 @@ pub enum PathRoot {
     /// `parent` navigates to the enum field; subsequent projection steps index
     /// into that variant's fields using 0-based local indices.
     Variant {
+        /// Path that navigates to the enum field containing this variant.
         parent: Box<Path>,
+        /// Identifies which variant of the enum this path targets.
         variant_id: VariantId,
     },
 }
 
 impl PathRoot {
     /// Returns the `ModelId`, panicking if this root is a `Variant` root.
-    pub fn expect_model(&self) -> ModelId {
+    pub fn as_model_unwrap(&self) -> ModelId {
         match self {
             PathRoot::Model(id) => *id,
             PathRoot::Variant { .. } => panic!("expected Model root, got Variant root"),
@@ -39,19 +41,33 @@ impl PathRoot {
     }
 }
 
-/// Describes a traversal through fields.
+/// A rooted field traversal path through the application schema.
 ///
-/// The root is not specified as part of the struct.
+/// A `Path` starts at a [`PathRoot`] (a model or an enum variant) and
+/// navigates through fields via a [`Projection`]. It is used by the query
+/// engine to identify which field or nested field is being referenced.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::stmt::Path;
+/// use toasty_core::schema::app::ModelId;
+///
+/// // Path pointing to the root of model 0
+/// let p = Path::model(ModelId::from_index(0));
+/// assert!(p.is_empty()); // no field steps
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct Path {
-    /// Where the path originates from
+    /// Where the path originates from.
     pub root: PathRoot,
 
-    /// Traversal through the fields
+    /// Traversal through the fields.
     pub projection: Projection,
 }
 
 impl Path {
+    /// Creates a path rooted at a model with an identity projection (no field steps).
     pub fn model(root: impl Into<ModelId>) -> Self {
         Self {
             root: PathRoot::Model(root.into()),
@@ -59,6 +75,7 @@ impl Path {
         }
     }
 
+    /// Creates a path rooted at a model that navigates to a single field by index.
     pub fn field(root: impl Into<ModelId>, field: usize) -> Self {
         Self {
             root: PathRoot::Model(root.into()),
@@ -66,6 +83,7 @@ impl Path {
         }
     }
 
+    /// Creates a path rooted at a model with a single field step (const-compatible).
     pub const fn from_index(root: ModelId, index: usize) -> Self {
         Self {
             root: PathRoot::Model(root),
@@ -88,20 +106,24 @@ impl Path {
         }
     }
 
+    /// Returns `true` if the path has no field steps (identity projection).
     pub fn is_empty(&self) -> bool {
         self.projection.is_empty()
     }
 
+    /// Returns the number of field steps in the path.
     pub fn len(&self) -> usize {
         self.projection.len()
     }
 
+    /// Appends all field steps from `other` onto this path's projection.
     pub fn chain(&mut self, other: &Self) {
         for field in &other.projection[..] {
             self.projection.push(*field);
         }
     }
 
+    /// Converts this path into an [`Expr`] that references the path's field.
     pub fn into_stmt(self) -> Expr {
         match self.root {
             PathRoot::Model(model_id) => match self.projection.as_slice() {

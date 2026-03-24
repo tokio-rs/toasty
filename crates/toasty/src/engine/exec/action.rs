@@ -1,5 +1,5 @@
 use crate::engine::exec::{
-    DeleteByKey, Eval, ExecStatement, Filter, FindPkByIndex, GetByKey, NestedMerge, Project,
+    DeleteByKey, Eval, ExecStatement, Filter, FindPkByIndex, GetByKey, Guard, NestedMerge, Project,
     QueryPk, ReadModifyWrite, SetVar, UpdateByKey,
 };
 
@@ -22,6 +22,9 @@ pub(crate) enum Action {
 
     /// Execute `Operation::GetByKey` using key input
     GetByKey(GetByKey),
+
+    /// Conditionally pass through or suppress a data stream
+    Guard(Guard),
 
     /// Combines parent and child data into nested structures.
     ///
@@ -64,6 +67,7 @@ impl Action {
 
             Action::Eval(_)
             | Action::Filter(_)
+            | Action::Guard(_)
             | Action::NestedMerge(_)
             | Action::Project(_)
             | Action::SetVar(_) => false,
@@ -80,6 +84,7 @@ impl fmt::Debug for Action {
             Self::Filter(a) => a.fmt(f),
             Self::FindPkByIndex(a) => a.fmt(f),
             Self::GetByKey(a) => a.fmt(f),
+            Self::Guard(a) => a.fmt(f),
             Self::NestedMerge(a) => a.fmt(f),
             Self::QueryPk(a) => a.fmt(f),
             Self::ReadModifyWrite(a) => a.fmt(f),

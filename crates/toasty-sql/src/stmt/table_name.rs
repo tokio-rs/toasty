@@ -1,9 +1,12 @@
 use super::ident::Ident;
 use toasty_core::schema::db::TableId;
 
+/// A reference to a table, either by schema ID or by a string identifier.
 #[derive(Debug, Clone)]
 pub enum TableName {
+    /// Reference by schema-assigned table ID.
     TableId(TableId),
+    /// Reference by a literal identifier string.
     Ident(Ident),
 }
 

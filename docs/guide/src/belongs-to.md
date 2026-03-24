@@ -119,9 +119,9 @@ name matches the relation field name.
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-# let post = Post::create().title("Hello").user_id(1).exec(&mut db).await?;
+# let post = toasty::create!(Post { title: "Hello", user_id: 1 }).exec(&mut db).await?;
 // Load the associated user from the database
-let user = post.user().get(&mut db).await?;
+let user = post.user().exec(&mut db).await?;
 println!("Author: {}", user.name);
 # Ok(())
 # }
@@ -150,8 +150,8 @@ For an optional BelongsTo, `.get()` returns `Option<User>`:
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-# let post = Post::create().title("Hello").exec(&mut db).await?;
-match post.user().get(&mut db).await? {
+# let post = toasty::create!(Post { title: "Hello" }).exec(&mut db).await?;
+match post.user().exec(&mut db).await? {
     Some(user) => println!("Author: {}", user.name),
     None => println!("No author"),
 }
@@ -159,7 +159,7 @@ match post.user().get(&mut db).await? {
 # }
 ```
 
-Each call to `.user().get()` executes a database query. To avoid repeated
+Each call to `.user().exec()` executes a database query. To avoid repeated
 queries, use [preloading](./preloading-associations.md).
 
 ## Setting the relation on create
@@ -194,13 +194,14 @@ Pass a reference to an existing parent record:
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let user = User::create().name("Alice").exec(&mut db).await?;
+let user = toasty::create!(User { name: "Alice" }).exec(&mut db).await?;
 
-let post = Post::create()
-    .title("Hello World")
-    .user(&user)
-    .exec(&mut db)
-    .await?;
+let post = toasty::create!(Post {
+    title: "Hello World",
+    user: &user,
+})
+.exec(&mut db)
+.await?;
 
 assert_eq!(post.user_id, user.id);
 # Ok(())
@@ -237,12 +238,13 @@ Set the foreign key field directly:
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-# let user = User::create().name("Alice").exec(&mut db).await?;
-let post = Post::create()
-    .title("Hello World")
-    .user_id(user.id)
-    .exec(&mut db)
-    .await?;
+# let user = toasty::create!(User { name: "Alice" }).exec(&mut db).await?;
+let post = toasty::create!(Post {
+    title: "Hello World",
+    user_id: user.id,
+})
+.exec(&mut db)
+.await?;
 # Ok(())
 # }
 ```
@@ -295,6 +297,6 @@ For a `Post` model with `#[belongs_to] user: BelongsTo<User>`, Toasty generates:
 |---|---|---|
 | `post.user()` | Relation accessor | Returns an accessor for the associated user |
 | `.get(&mut db)` | `Result<User>` | Loads the associated user from the database |
-| `Post::create().user(&user)` | Create builder | Sets the foreign key from a parent reference |
-| `Post::create().user_id(id)` | Create builder | Sets the foreign key directly |
+| `toasty::create!(Post { user: &user })` | Create builder | Sets the foreign key from a parent reference |
+| `toasty::create!(Post { user_id: id })` | Create builder | Sets the foreign key directly |
 | `Post::fields().user()` | Field path | Used with `.include()` for preloading |

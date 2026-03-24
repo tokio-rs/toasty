@@ -1,24 +1,40 @@
 use super::{Expr, Path};
 use crate::stmt::{self, ExprSet, Node, Query, Statement, Value};
 
-/// TODO: rename since this is also used in `Select`?
+/// Specifies what data a statement returns.
+///
+/// Used both as the projection in `SELECT` queries and as the `RETURNING`
+/// clause in `INSERT`, `UPDATE`, and `DELETE` statements.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::stmt::Returning;
+///
+/// let ret = Returning::Model { include: vec![] };
+/// assert!(ret.is_model());
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub enum Returning {
-    /// Return the full model with specified includes
+    /// Return the full model with the specified association includes.
     Model {
+        /// Paths to associations that should be eagerly loaded.
         include: Vec<Path>,
     },
 
+    /// Return whether the operation changed any rows.
     Changed,
 
-    /// Return an expression.
+    /// Return the result of evaluating an expression against the source rows.
     Expr(Expr),
 
-    /// Return a value instead of a projection of the statement source.
+    /// Return a fixed value, independent of the statement source.
     Value(Expr),
 }
 
 impl Returning {
+    /// Creates a `Returning::Expr` from an iterator of expressions, combining
+    /// them into a record expression.
     pub fn from_expr_iter<T>(items: impl IntoIterator<Item = T>) -> Self
     where
         T: Into<Expr>,
@@ -26,32 +42,45 @@ impl Returning {
         Returning::Expr(Expr::record(items))
     }
 
+    /// Returns `true` if this is the `Model` variant.
     pub fn is_model(&self) -> bool {
         matches!(self, Self::Model { .. })
     }
 
-    pub fn as_model_includes(&self) -> &[Path] {
+    /// Returns the association include paths for a `Model` variant, or an
+    /// empty slice for other variants.
+    pub fn model_includes(&self) -> &[Path] {
         match self {
             Self::Model { include } => include,
             _ => &[],
         }
     }
 
-    pub fn as_model_includes_mut(&mut self) -> &mut Vec<Path> {
+    /// Returns a mutable reference to the `Model` variant's include paths.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is not the `Model` variant.
+    #[track_caller]
+    pub fn model_includes_mut_unwrap(&mut self) -> &mut Vec<Path> {
         match self {
             Self::Model { include } => include,
             _ => panic!("not a Model variant"),
         }
     }
 
+    /// Returns `true` if this is the `Changed` variant.
     pub fn is_changed(&self) -> bool {
         matches!(self, Self::Changed)
     }
 
+    /// Returns `true` if this is the `Expr` variant.
     pub fn is_expr(&self) -> bool {
         matches!(self, Self::Expr(_))
     }
 
+    /// Returns a reference to the inner expression if this is the `Expr`
+    /// variant.
     pub fn as_expr(&self) -> Option<&Expr> {
         match self {
             Self::Expr(expr) => Some(expr),
@@ -59,14 +88,19 @@ impl Returning {
         }
     }
 
+    /// Returns a reference to the inner expression.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is not the `Expr` variant.
     #[track_caller]
     pub fn as_expr_unwrap(&self) -> &Expr {
-        match self {
-            Self::Expr(expr) => expr,
-            _ => panic!("expected stmt::Returning::Expr; actual={self:#?}"),
-        }
+        self.as_expr()
+            .unwrap_or_else(|| panic!("expected stmt::Returning::Expr; actual={self:#?}"))
     }
 
+    /// Returns a mutable reference to the inner expression if this is the
+    /// `Expr` variant.
     pub fn as_expr_mut(&mut self) -> Option<&mut Expr> {
         match self {
             Self::Expr(expr) => Some(expr),
@@ -74,23 +108,32 @@ impl Returning {
         }
     }
 
+    /// Returns a mutable reference to the inner expression.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is not the `Expr` variant.
     #[track_caller]
     pub fn as_expr_mut_unwrap(&mut self) -> &mut Expr {
         match self {
             Self::Expr(expr) => expr,
-            _ => panic!("expected stmt::Returningm::Expr; actual={self:#?}"),
+            _ => panic!("expected stmt::Returning::Expr; actual={self:#?}"),
         }
     }
 
+    /// Replaces this returning clause with `Returning::Expr` containing the
+    /// given expression.
     pub fn set_expr(&mut self, expr: impl Into<Expr>) {
         *self = Returning::Expr(expr.into());
     }
 
+    /// Returns `true` if this is the `Value` variant.
     pub fn is_value(&self) -> bool {
         matches!(self, Self::Value(..))
     }
 
-    /// Replaces this value with `Returning::Expr(null)` and returns the original value.
+    /// Takes this returning clause, replacing it with `Returning::Expr(null)`,
+    /// and returns the original value.
     pub fn take(&mut self) -> Returning {
         std::mem::replace(self, Returning::Expr(stmt::Expr::null()))
     }
@@ -163,23 +206,7 @@ impl Statement {
     ///
     /// # Panics
     ///
-    /// Panics if the statement does not have a `RETURNING` clause. This can occur when:
-    /// - A `DELETE`, `INSERT`, or `UPDATE` statement was created without specifying a
-    ///   `RETURNING` clause (the internal `Option<Returning>` is `None`)
-    /// - A `Query` statement contains a non-`SELECT` body (e.g., `VALUES`, `UNION`)
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// let mut stmt = Statement::Insert(insert_with_returning);
-    /// let returning = stmt.returning_mut_unwrap();
-    /// // Modify the returning clause...
-    /// ```
-    ///
-    /// # Notes
-    ///
-    /// This method uses `#[track_caller]` to report the panic location at the call site
-    /// rather than inside this method, making debugging easier.
+    /// Panics if the statement does not have a `RETURNING` clause.
     #[track_caller]
     pub fn returning_mut_unwrap(&mut self) -> &mut Returning {
         match self {

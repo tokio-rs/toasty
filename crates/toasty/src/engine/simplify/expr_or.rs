@@ -209,7 +209,7 @@ impl Simplify<'_> {
             .schema()
             .app
             .model(model_id)
-            .expect_embedded_enum()
+            .as_embedded_enum_unwrap()
             .variants
             .len();
 
@@ -227,7 +227,7 @@ impl Simplify<'_> {
             seen.insert(iv.variant.index);
         }
 
-        seen.len() == num_variants
+        seen.count() == num_variants
     }
 
     /// Converts disjunctive equality chains to IN lists.

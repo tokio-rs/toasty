@@ -821,7 +821,7 @@ fn error_or_true_becomes_true() {
 mod variant_tautology {
     use super::*;
     use crate as toasty;
-    use crate::Register;
+    use crate::schema::Register;
     use toasty_core::schema::app::VariantId;
 
     #[derive(Debug, PartialEq, toasty::Embed)]

@@ -2,16 +2,43 @@ use super::Value;
 
 use std::{hash::Hash, ops};
 
+/// An ordered sequence of [`Value`]s representing a record (row).
+///
+/// `ValueRecord` stores the field values of a single record. It dereferences
+/// to `[Value]`, so slice methods like `len()`, `iter()`, and indexing work
+/// directly.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::stmt::{Value, ValueRecord};
+///
+/// let record = ValueRecord::from_vec(vec![Value::from(1_i64), Value::from("alice")]);
+/// assert_eq!(record.len(), 2);
+/// assert_eq!(record[0], 1_i64);
+/// assert_eq!(record[1], "alice");
+/// ```
 #[derive(Debug, Default, Clone, Eq)]
 pub struct ValueRecord {
+    /// The field values in this record, ordered by field index.
     pub fields: Vec<Value>,
 }
 
 impl ValueRecord {
+    /// Creates a `ValueRecord` from a vector of field values.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use toasty_core::stmt::{Value, ValueRecord};
+    /// let record = ValueRecord::from_vec(vec![Value::from(42_i64)]);
+    /// assert_eq!(record.len(), 1);
+    /// ```
     pub fn from_vec(fields: Vec<Value>) -> Self {
         Self { fields }
     }
 
+    /// Returns the fields as a slice of [`Value`]s.
     pub fn as_slice(&self) -> &[Value] {
         &self[..]
     }

@@ -27,6 +27,16 @@ impl Error {
     ///
     /// This is used when a statement is malformed or references invalid schema elements.
     /// These errors occur during statement lowering/execution at runtime.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use toasty_core::Error;
+    ///
+    /// let err = Error::invalid_statement("field `foo` does not exist");
+    /// assert!(err.is_invalid_statement());
+    /// assert_eq!(err.to_string(), "invalid statement: field `foo` does not exist");
+    /// ```
     pub fn invalid_statement(message: impl Into<String>) -> Error {
         Error::from(super::ErrorKind::InvalidStatement(InvalidStatement {
             message: message.into().into(),

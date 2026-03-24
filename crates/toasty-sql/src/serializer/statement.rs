@@ -414,7 +414,7 @@ impl ToSql for &stmt::Returning {
 
 impl ToSql for &stmt::Select {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
-        let source_table = self.source.as_source_table();
+        let source_table = self.source.as_table_unwrap();
 
         if source_table.from.is_empty() {
             fmt!(cx, f, "SELECT " self.returning)

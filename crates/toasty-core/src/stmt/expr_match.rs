@@ -3,9 +3,19 @@ use super::{Expr, Value};
 /// A match expression that dispatches on a subject expression.
 ///
 /// Each arm matches the subject against a constant value pattern and evaluates
-/// the corresponding expression. `Expr::Match` is never serialized to SQL — it
+/// the corresponding expression. `Expr::Match` is never serialized to SQL -- it
 /// is either evaluated in the engine (for writes) or eliminated by the
 /// simplifier before the plan stage (for reads/queries).
+///
+/// # Examples
+///
+/// ```text
+/// match discriminant {
+///   I64(0) => "active",
+///   I64(1) => "inactive",
+///   _      => error("unknown variant"),
+/// }
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprMatch {
     /// The expression to dispatch on.

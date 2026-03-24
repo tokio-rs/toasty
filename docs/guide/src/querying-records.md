@@ -98,7 +98,7 @@ query returns no results:
 #     email: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let maybe_user = User::all().first(&mut db).await?;
+let maybe_user = User::all().first().exec(&mut db).await?;
 
 match maybe_user {
     Some(user) => println!("Found: {}", user.name),
@@ -200,32 +200,6 @@ let users = User::filter_by_name("Alice")
 
 Each `.filter()` call adds an AND condition to the query.
 
-## Batch key lookups
-
-For primary key fields, Toasty generates a `filter_by_<key>_batch()` method that
-fetches multiple records by key in a single query:
-
-```rust
-# use toasty::Model;
-# #[derive(Debug, toasty::Model)]
-# struct User {
-#     #[key]
-#     #[auto]
-#     id: u64,
-#     name: String,
-#     #[unique]
-#     email: String,
-# }
-# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let users = User::filter_by_id_batch([&1, &2, &3])
-    .exec(&mut db)
-    .await?;
-# Ok(())
-# }
-```
-
-This is more efficient than calling `get_by_id()` in a loop.
-
 ## What gets generated
 
 For a model with `#[key]` on `id` and `#[unique]` on `email`, Toasty generates:
@@ -235,7 +209,6 @@ For a model with `#[key]` on `id` and `#[unique]` on `email`, Toasty generates:
 | `User::all()` | Query builder | All records |
 | `User::filter(expr)` | Query builder | Records matching expression |
 | `User::filter_by_id(id)` | Query builder | Records matching key |
-| `User::filter_by_id_batch(ids)` | Query builder | Records matching any key in list |
 | `User::filter_by_email(email)` | Query builder | Records matching unique field |
 | `User::get_by_id(&mut db, &id)` | `Result<User>` | One record by key (immediate) |
 | `User::get_by_email(&mut db, email)` | `Result<User>` | One record by unique field (immediate) |
@@ -245,5 +218,5 @@ Query builders support these terminal methods:
 | Method | Returns |
 |---|---|
 | `.exec(&mut db)` | `Result<Vec<User>>` |
-| `.first(&mut db)` | `Result<Option<User>>` |
+| `.first().exec(&mut db)` | `Result<Option<User>>` |
 | `.get(&mut db)` | `Result<User>` |

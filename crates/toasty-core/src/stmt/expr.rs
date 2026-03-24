@@ -8,91 +8,121 @@ use super::{
 };
 use std::fmt;
 
-/// An expression.
+/// An expression node in Toasty's query AST.
+///
+/// `Expr` is the central type in the statement intermediate representation. Every
+/// filter, projection, value, and computed result in a Toasty query is
+/// represented as an `Expr` tree. The query engine compiles these trees through
+/// several phases (simplify, lower, plan, execute) before they reach a database
+/// driver.
+///
+/// # Examples
+///
+/// ```ignore
+/// use toasty_core::stmt::{Expr, Value};
+///
+/// // Constant value expressions
+/// let t = Expr::TRUE;
+/// assert!(t.is_true());
+///
+/// let n = Expr::null();
+/// assert!(n.is_value_null());
+///
+/// // From conversions
+/// let i: Expr = 42i64.into();
+/// assert!(i.is_value());
+/// ```
 #[derive(Clone, PartialEq)]
 pub enum Expr {
-    /// AND a set of binary expressions
+    /// Logical AND of multiple expressions. See [`ExprAnd`].
     And(ExprAnd),
 
-    /// ANY - returns true if any of the items evaluate to true
+    /// Returns `true` if any item in a collection is truthy. See [`ExprAny`].
     Any(ExprAny),
 
-    /// An argument when the expression is a function body
+    /// Positional argument placeholder. See [`ExprArg`].
     Arg(ExprArg),
 
-    /// Binary expression
+    /// Binary comparison or arithmetic operation. See [`ExprBinaryOp`].
     BinaryOp(ExprBinaryOp),
 
-    /// Cast an expression to a different type
+    /// Type cast. See [`ExprCast`].
     Cast(ExprCast),
 
-    /// Suggests that the database should use its default value. Useful for
-    /// auto-increment fields and other columns with default values.
+    /// Instructs the database to use its default value for a column. Useful for
+    /// auto-increment fields and other columns with server-side defaults.
     Default,
 
-    /// An error expression that fails evaluation with a message.
+    /// An error expression that fails evaluation with a message. See [`ExprError`].
     Error(ExprError),
 
-    /// An exists expression `[ NOT ] EXISTS(SELECT ...)`, used in expressions like
-    /// `WHERE [ NOT ] EXISTS (SELECT ...)`.
+    /// `[NOT] EXISTS(SELECT ...)` check. See [`ExprExists`].
     Exists(ExprExists),
 
-    /// Function call
+    /// Aggregate or scalar function call. See [`ExprFunc`].
     Func(ExprFunc),
 
-    /// In list
+    /// `expr IN (list)` membership test. See [`ExprInList`].
     InList(ExprInList),
 
-    /// The expression is contained by the given subquery
+    /// `expr IN (SELECT ...)` membership test. See [`ExprInSubquery`].
     InSubquery(ExprInSubquery),
 
-    /// Whether an expression is (or is not) null. This is different from a
-    /// binary expression because of how databases treat null comparisons.
+    /// `IS [NOT] NULL` check. Separate from binary operators because of
+    /// three-valued logic semantics in SQL. See [`ExprIsNull`].
     IsNull(ExprIsNull),
 
-    /// Whether an expression evaluates to a specific enum variant.
+    /// Tests whether a value is a specific enum variant. See [`ExprIsVariant`].
     IsVariant(ExprIsVariant),
 
-    /// A scoped binding expression (transient — inlined before planning)
+    /// Scoped binding expression (transient -- inlined before planning).
+    /// See [`ExprLet`].
     Let(ExprLet),
 
-    /// Apply an expression to each item in a list
+    /// Applies a transformation to each item in a collection. See [`ExprMap`].
     Map(ExprMap),
 
-    /// A match expression that dispatches on a subject expression
+    /// Pattern-match dispatching on a subject. See [`ExprMatch`].
     Match(ExprMatch),
 
-    /// Negates a boolean expression
+    /// Boolean negation. See [`ExprNot`].
     Not(ExprNot),
 
-    /// OR a set of binary expressions
+    /// Logical OR of multiple expressions. See [`ExprOr`].
     Or(ExprOr),
 
-    /// Project an expression
+    /// Field projection from a composite value. See [`ExprProject`].
     Project(ExprProject),
 
-    /// Evaluates to a tuple value
+    /// Fixed-size heterogeneous tuple of expressions. See [`ExprRecord`].
     Record(ExprRecord),
 
     // TODO: delete this
-    /// Reference a value from within the statement itself.
+    /// Reference to a field, column, or model in the current or an outer query
+    /// scope. See [`ExprReference`].
     Reference(ExprReference),
 
-    /// A list of expressions of the same type
+    /// Ordered, homogeneous collection of expressions. See [`ExprList`].
     List(ExprList),
 
-    /// Evaluate a sub-statement
+    /// Embedded sub-statement (e.g., a subquery). See [`ExprStmt`].
     Stmt(ExprStmt),
 
-    /// Evaluates to a constant value reference
+    /// Constant value. See [`Value`].
     Value(Value),
 }
 
 impl Expr {
+    /// The boolean `true` constant expression.
     pub const TRUE: Expr = Expr::Value(Value::Bool(true));
+
+    /// The boolean `false` constant expression.
     pub const FALSE: Expr = Expr::Value(Value::Bool(false));
+
+    /// Alias for [`Expr::Default`] as a constant.
     pub const DEFAULT: Expr = Expr::Default;
 
+    /// Creates a null value expression.
     pub fn null() -> Self {
         Self::Value(Value::Null)
     }
@@ -130,6 +160,7 @@ impl Expr {
         matches!(self, Self::Value(..))
     }
 
+    /// Returns `true` if the expression is a sub-statement.
     pub fn is_stmt(&self) -> bool {
         matches!(self, Self::Stmt(..))
     }
@@ -139,6 +170,7 @@ impl Expr {
         matches!(self, Self::BinaryOp(..))
     }
 
+    /// Returns `true` if the expression is an argument placeholder.
     pub fn is_arg(&self) -> bool {
         matches!(self, Self::Arg(_))
     }
@@ -170,6 +202,11 @@ impl Expr {
         }
     }
 
+    /// Consumes the expression and returns the inner [`Value`].
+    ///
+    /// # Panics
+    ///
+    /// Panics (via `todo!()`) if `self` is not an `Expr::Value`.
     pub fn into_value(self) -> Value {
         match self {
             Self::Value(value) => value,
@@ -177,6 +214,11 @@ impl Expr {
         }
     }
 
+    /// Consumes the expression and returns the inner [`ExprStmt`].
+    ///
+    /// # Panics
+    ///
+    /// Panics (via `todo!()`) if `self` is not an `Expr::Stmt`.
     pub fn into_stmt(self) -> ExprStmt {
         match self {
             Self::Stmt(stmt) => stmt,
@@ -369,6 +411,8 @@ impl Expr {
         }
     }
 
+    /// Returns a clone of this expression with all [`Projection`] nodes
+    /// transformed by `f`.
     pub fn map_projections(&self, f: impl FnMut(&Projection) -> Projection) -> Self {
         struct MapProjections<T>(T);
 
@@ -383,6 +427,11 @@ impl Expr {
         mapped
     }
 
+    /// Navigates into a nested record or list expression by `path` and returns
+    /// a read-only [`Entry`] reference.
+    ///
+    /// Returns `None` if the path cannot be followed (e.g., the expression is
+    /// not a record or list at the expected depth).
     #[track_caller]
     pub fn entry(&self, path: impl EntryPath) -> Option<Entry<'_>> {
         let mut ret = Entry::Expr(self);
@@ -403,6 +452,12 @@ impl Expr {
         Some(ret)
     }
 
+    /// Navigates into a nested record or list expression by `path` and returns
+    /// a mutable [`EntryMut`] reference.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the path cannot be followed on the current expression shape.
     #[track_caller]
     pub fn entry_mut(&mut self, path: impl EntryPath) -> EntryMut<'_> {
         let mut ret = EntryMut::Expr(self);
@@ -421,10 +476,14 @@ impl Expr {
         ret
     }
 
+    /// Takes the expression out, leaving `Expr::Value(Value::Null)` in its
+    /// place. Equivalent to `std::mem::replace(self, Expr::null())`.
     pub fn take(&mut self) -> Self {
         std::mem::replace(self, Self::Value(Value::Null))
     }
 
+    /// Replaces every [`ExprArg`] in this expression tree with the
+    /// corresponding value from `input`.
     pub fn substitute(&mut self, input: impl Input) {
         Substitute::new(input).visit_expr_mut(self);
     }

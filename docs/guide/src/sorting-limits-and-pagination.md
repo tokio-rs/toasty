@@ -149,7 +149,7 @@ returns a `Page` instead of a `Vec`:
 
 ```rust
 # use toasty::Model;
-# use toasty::Page;
+# use toasty::stmt::Page;
 # #[derive(Debug, toasty::Model)]
 # struct Item {
 #     #[key]
@@ -187,7 +187,7 @@ direction:
 
 ```rust
 # use toasty::Model;
-# use toasty::Page;
+# use toasty::stmt::Page;
 # #[derive(Debug, toasty::Model)]
 # struct Item {
 #     #[key]
@@ -231,7 +231,7 @@ To process every record in pages:
 
 ```rust
 # use toasty::Model;
-# use toasty::Page;
+# use toasty::stmt::Page;
 # #[derive(Debug, toasty::Model)]
 # struct Item {
 #     #[key]
@@ -267,7 +267,7 @@ Use `.after()` to start pagination after a specific value in the sort field:
 
 ```rust
 # use toasty::Model;
-# use toasty::Page;
+# use toasty::stmt::Page;
 # #[derive(Debug, toasty::Model)]
 # struct Item {
 #     #[key]

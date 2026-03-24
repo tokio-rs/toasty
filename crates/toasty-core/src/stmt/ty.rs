@@ -116,7 +116,7 @@ pub enum Type {
     /// A fixed-length tuple where each item can have a different type.
     Record(Vec<Type>),
 
-    // An array of bytes that is more efficient than List(u8)
+    /// A byte array, more efficient than `List(U8)`.
     Bytes,
 
     /// A fixed-precision decimal number.
@@ -159,6 +159,8 @@ pub enum Type {
     /// is not yet known.
     Null,
 
+    /// A record type where only a subset of fields are populated, identified
+    /// by a [`PathFieldSet`].
     SparseRecord(PathFieldSet),
 
     /// Unit type
@@ -177,46 +179,69 @@ pub enum Type {
 }
 
 impl Type {
+    /// Creates a [`Type::List`] wrapping the given element type.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use toasty_core::stmt::Type;
+    /// let ty = Type::list(Type::String);
+    /// assert!(ty.is_list());
+    /// ```
     pub fn list(ty: impl Into<Self>) -> Self {
         Self::List(Box::new(ty.into()))
     }
 
+    /// Returns the element type of this list type, panicking if this is not
+    /// a [`Type::List`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the type is not a `List` variant.
     #[track_caller]
-    pub fn unwrap_list_ref(&self) -> &Type {
+    pub fn as_list_unwrap(&self) -> &Type {
         match self {
             stmt::Type::List(items) => items,
-            _ => todo!("expected stmt::Type::List; actual={self:#?}"),
+            _ => panic!("expected stmt::Type::List; actual={self:#?}"),
         }
     }
 
+    /// Returns `true` if this is [`Type::Bool`].
     pub fn is_bool(&self) -> bool {
         matches!(self, Self::Bool)
     }
 
+    /// Returns `true` if this is [`Type::Model`].
     pub fn is_model(&self) -> bool {
         matches!(self, Self::Model(_))
     }
 
+    /// Returns `true` if this is [`Type::List`].
     pub fn is_list(&self) -> bool {
         matches!(self, Self::List(_))
     }
 
+    /// Returns `true` if this is [`Type::String`].
     pub fn is_string(&self) -> bool {
         matches!(self, Self::String)
     }
 
+    /// Returns `true` if this is [`Type::Unit`].
     pub fn is_unit(&self) -> bool {
         matches!(self, Self::Unit)
     }
 
+    /// Returns `true` if this is [`Type::Record`].
     pub fn is_record(&self) -> bool {
         matches!(self, Self::Record(..))
     }
 
+    /// Returns `true` if this is [`Type::Bytes`].
     pub fn is_bytes(&self) -> bool {
         matches!(self, Self::Bytes)
     }
 
+    /// Returns `true` if this is [`Type::Decimal`] (requires `rust_decimal` feature).
     pub fn is_decimal(&self) -> bool {
         #[cfg(feature = "rust_decimal")]
         {
@@ -228,6 +253,7 @@ impl Type {
         }
     }
 
+    /// Returns `true` if this is [`Type::BigDecimal`] (requires `bigdecimal` feature).
     pub fn is_big_decimal(&self) -> bool {
         #[cfg(feature = "bigdecimal")]
         {
@@ -239,10 +265,12 @@ impl Type {
         }
     }
 
+    /// Returns `true` if this is [`Type::Uuid`].
     pub fn is_uuid(&self) -> bool {
         matches!(self, Self::Uuid)
     }
 
+    /// Returns `true` if this is [`Type::SparseRecord`].
     pub fn is_sparse_record(&self) -> bool {
         matches!(self, Self::SparseRecord(..))
     }
@@ -277,6 +305,16 @@ impl Type {
         )
     }
 
+    /// Casts `value` to this type, returning the converted value.
+    ///
+    /// Null values pass through unchanged. Supported conversions include
+    /// identity casts, string/UUID interchange, string/decimal interchange,
+    /// record-to-sparse-record, and integer width conversions.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the conversion is not supported or if the value
+    /// is out of range for the target type.
     pub fn cast(&self, value: Value) -> Result<Value> {
         use stmt::Value;
 

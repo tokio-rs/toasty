@@ -5,7 +5,7 @@ impl Simplify<'_> {
     pub(super) fn simplify_expr_is_null(&self, expr: &mut stmt::ExprIsNull) -> Option<stmt::Expr> {
         match &mut *expr.expr {
             stmt::Expr::Reference(f @ stmt::ExprReference::Field { .. }) => {
-                let field = self.cx.resolve_expr_reference(f).expect_field();
+                let field = self.cx.resolve_expr_reference(f).as_field_unwrap();
 
                 if !field.nullable() {
                     // Is null on a non nullable field evaluates to `false`.

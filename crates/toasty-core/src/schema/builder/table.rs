@@ -149,7 +149,7 @@ impl BuildSchema<'_> {
     }
 
     fn table_name_from_model(&self, model_name: &Name) -> String {
-        let base = std_util::str::pluralize(&model_name.snake_case());
+        let base = pluralizer::pluralize(&model_name.snake_case(), 2, false);
         self.prefix_table_name(&base)
     }
 
@@ -170,7 +170,7 @@ impl BuildTableFromModels<'_> {
     }
 
     fn map_model_fields(&mut self, model: &Model) -> Result<()> {
-        let root = model.expect_root();
+        let root = model.as_root_unwrap();
         let schema_prefix = if self.prefix_table_names {
             Some(model.name().snake_case())
         } else {

@@ -1,6 +1,6 @@
 use crate as toasty;
 use crate::engine::simplify::Simplify;
-use crate::Register;
+use crate::schema::Register;
 use toasty_core::{
     driver::Capability,
     schema::{app, app::FieldId, app::ModelId, Builder},
@@ -55,21 +55,21 @@ impl UserPostSchema {
         let user_id = schema
             .app
             .model(user_model)
-            .expect_root()
+            .as_root_unwrap()
             .field_by_name("id")
             .unwrap()
             .id;
         let user_posts = schema
             .app
             .model(user_model)
-            .expect_root()
+            .as_root_unwrap()
             .field_by_name("posts")
             .unwrap()
             .id;
         let post_author = schema
             .app
             .model(post_model)
-            .expect_root()
+            .as_root_unwrap()
             .field_by_name("author")
             .unwrap()
             .id;
@@ -142,6 +142,6 @@ fn has_many_via_becomes_in_subquery() {
     // Ensure the source of the subquery is the user model.
     assert!(matches!(
         &select.source,
-        stmt::Source::Model(SourceModel { model, .. }) if *model == s.user_model
+        stmt::Source::Model(SourceModel { id, .. }) if *id == s.user_model
     ));
 }

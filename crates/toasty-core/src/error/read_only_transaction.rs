@@ -1,5 +1,9 @@
 use super::Error;
 
+/// Error when a write operation is attempted inside a read-only transaction.
+///
+/// This maps to database-specific errors such as PostgreSQL SQLSTATE 25006
+/// or MySQL error 1792.
 #[derive(Debug)]
 pub(super) struct ReadOnlyTransaction {
     message: Box<str>,
@@ -18,6 +22,19 @@ impl Error {
     ///
     /// Returned when a write operation is attempted inside a read-only
     /// transaction (e.g. PostgreSQL SQLSTATE 25006, MySQL error 1792).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use toasty_core::Error;
+    ///
+    /// let err = Error::read_only_transaction("INSERT not allowed");
+    /// assert!(err.is_read_only_transaction());
+    /// assert_eq!(
+    ///     err.to_string(),
+    ///     "read-only transaction: INSERT not allowed"
+    /// );
+    /// ```
     pub fn read_only_transaction(message: impl Into<String>) -> Error {
         Error::from(super::ErrorKind::ReadOnlyTransaction(ReadOnlyTransaction {
             message: message.into().into(),

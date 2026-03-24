@@ -3,28 +3,50 @@ use crate::{
     stmt,
 };
 
+/// The inverse side of a one-to-many relationship.
+///
+/// A `HasMany` field on model A means "A has many Bs". The actual foreign key
+/// lives on model B as a [`BelongsTo`] field pointing back at A. The two
+/// sides are linked via the [`pair`](HasMany::pair) field.
+///
+/// # Examples
+///
+/// ```ignore
+/// // Given a `User` model that has many `Post`s:
+/// let has_many: &HasMany = user_field.ty.as_has_many_unwrap();
+/// let post_model = has_many.target(&schema);
+/// let inverse = has_many.pair(&schema); // the BelongsTo on Post
+/// ```
 #[derive(Debug, Clone)]
 pub struct HasMany {
-    /// Associated model
+    /// The [`ModelId`] of the associated (target) model.
     pub target: ModelId,
 
-    /// The association's expression type. This is the type the field evaluates
-    /// to from a user's point of view.
+    /// The expression type this field evaluates to from the application's
+    /// perspective.
     pub expr_ty: stmt::Type,
 
-    /// Singular item name
+    /// The singular name for one associated item (used in generated method
+    /// names).
     pub singular: Name,
 
-    /// The `BelongsTo` association that pairs with this
+    /// The [`BelongsTo`] field on the target model that pairs with this
+    /// relation.
     pub pair: FieldId,
 }
 
 impl HasMany {
+    /// Resolves the target [`Model`] from the given schema.
     pub fn target<'a>(&self, schema: &'a Schema) -> &'a Model {
         schema.model(self.target)
     }
 
+    /// Resolves the paired [`BelongsTo`] relation on the target model.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the paired field is not a `BelongsTo` variant.
     pub fn pair<'a>(&self, schema: &'a Schema) -> &'a BelongsTo {
-        schema.field(self.pair).ty.expect_belongs_to()
+        schema.field(self.pair).ty.as_belongs_to_unwrap()
     }
 }

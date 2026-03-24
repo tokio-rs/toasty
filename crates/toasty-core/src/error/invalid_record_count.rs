@@ -28,6 +28,16 @@ impl Error {
     /// This is used when an operation expects exactly one record but finds multiple.
     ///
     /// The context parameter provides information about the operation.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use toasty_core::Error;
+    ///
+    /// let err = Error::invalid_record_count("expected 1 record, found 3");
+    /// assert!(err.is_invalid_record_count());
+    /// assert_eq!(err.to_string(), "invalid record count: expected 1 record, found 3");
+    /// ```
     pub fn invalid_record_count(context: impl Into<String>) -> Error {
         Error::from(super::ErrorKind::InvalidRecordCount(InvalidRecordCount {
             context: Some(context.into().into()),

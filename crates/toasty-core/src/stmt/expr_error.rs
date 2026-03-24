@@ -34,6 +34,10 @@ pub struct ExprError {
 }
 
 impl Expr {
+    /// Creates an error expression with the given message.
+    ///
+    /// If this expression is ever evaluated at runtime, it will fail with the
+    /// provided message.
     pub fn error(message: impl Into<String>) -> Self {
         ExprError {
             message: message.into(),

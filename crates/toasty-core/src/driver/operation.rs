@@ -1,3 +1,11 @@
+//! Database operations dispatched to drivers.
+//!
+//! An [`Operation`] is the unit of work sent to [`Connection::exec`](super::Connection::exec).
+//! The query engine compiles user queries into one or more `Operation` values.
+//! SQL drivers handle [`QuerySql`] and [`Insert`]; key-value drivers handle
+//! [`GetByKey`], [`QueryPk`], [`DeleteByKey`], [`FindPkByIndex`], and
+//! [`UpdateByKey`]. Both driver types handle [`Transaction`] operations.
+
 mod delete_by_key;
 pub use delete_by_key::DeleteByKey;
 
@@ -22,29 +30,49 @@ pub use transaction::{IsolationLevel, Transaction};
 mod update_by_key;
 pub use update_by_key::UpdateByKey;
 
+/// A single database operation to be executed by a driver.
+///
+/// Each variant maps to one logical database action. The query planner selects
+/// variants based on the driver's [`Capability`](super::Capability): SQL
+/// drivers receive [`QuerySql`](Self::QuerySql) and [`Insert`](Self::Insert),
+/// while key-value drivers receive [`GetByKey`](Self::GetByKey),
+/// [`QueryPk`](Self::QueryPk), etc.
+///
+/// All operation types implement `From<T> for Operation`, so they can be
+/// converted with `.into()`.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::driver::operation::{Operation, Transaction};
+///
+/// let op: Operation = Transaction::start().into();
+/// assert!(!op.is_transaction_commit());
+/// ```
 #[derive(Debug, Clone)]
 pub enum Operation {
-    /// Create a new record. This will always be a lowered `stmt::Insert`
+    /// Insert a new record. Contains a lowered [`stmt::Insert`](crate::stmt::Insert) statement.
     Insert(Insert),
 
-    /// Delete records identified by the given keys.
+    /// Delete one or more records identified by primary key.
     DeleteByKey(DeleteByKey),
 
-    /// Find by index
+    /// Look up primary keys via a secondary index.
     FindPkByIndex(FindPkByIndex),
 
-    /// Get one or more records by the primary key
+    /// Fetch one or more records by exact primary key match.
     GetByKey(GetByKey),
 
-    /// Query the table, filtering by the primary key
+    /// Query a table with a primary key filter, optional secondary filtering,
+    /// ordering, and pagination.
     QueryPk(QueryPk),
 
-    /// Execute a SQL query
+    /// Execute a raw SQL statement. Only sent to SQL-capable drivers.
     QuerySql(QuerySql),
 
-    /// Execute a transaction lifecycle op
+    /// A transaction lifecycle operation (begin, commit, rollback, savepoint).
     Transaction(Transaction),
 
-    /// Update a record by the primary key
+    /// Update one or more records identified by primary key.
     UpdateByKey(UpdateByKey),
 }
