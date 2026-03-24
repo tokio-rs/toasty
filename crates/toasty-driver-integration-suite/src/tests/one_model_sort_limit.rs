@@ -77,7 +77,7 @@ pub async fn sort_asc(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), requires(sql))]
 pub async fn paginate(test: &mut Test) -> Result<()> {
     #[derive(toasty::Model)]
     struct Item {
@@ -155,7 +155,7 @@ pub async fn paginate(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), requires(sql))]
 pub async fn limit_offset(t: &mut Test) -> Result<()> {
     #[derive(toasty::Model)]
     struct Item {
@@ -232,3 +232,71 @@ pub async fn limit_offset(t: &mut Test) -> Result<()> {
 
     Ok(())
 }
+
+#[driver_test(requires(not(sql)))]
+pub async fn paginate_for_dynamodb(test: &mut Test) -> Result<()> {
+    #[derive(toasty::Model)]
+    #[key(id, order)]
+    struct Item {
+        id: i64,
+
+        order: i64,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+
+    for id in 0..2 {
+        for order in 0..50 {
+            Item::create().id(id).order(order).exec(&mut db).await?;
+        }
+    }
+
+    test.log().clear();
+
+    let items: Page<_> = Item::all()
+        .order_by(Item::fields().order().desc())
+        .filter(Item::fields().id().eq(0))
+        .paginate(10)
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(items.len(), 10);
+    for (i, order) in (40..50).rev().enumerate() {
+        assert_eq!(items[i].order, order);
+    }
+
+    let mut items: Page<_> = items.next(&mut db).await?.unwrap();
+    assert_eq!(items.len(), 10);
+    for (i, order) in (30..40).rev().enumerate() {
+        assert_eq!(items[i].order, order);
+    }
+
+    let mut count = 0;
+    loop {
+        match items.next(&mut db).await? {
+            Some(x) => {items = x; count += items.items.len()},
+            None => break,
+        }
+    }
+    assert_eq!(count, 30);
+
+
+    let mut items: Page<_> = Item::all()
+        .order_by(Item::fields().order().asc())
+        .filter(Item::fields().id().eq(0))
+        .paginate(10)
+        .exec(&mut db)
+        .await?;
+
+    let mut count = items.items.len();
+    loop {
+        match items.next(&mut db).await? {
+            Some(x) => {items = x; count += items.items.len()},
+            None => break,
+        }
+    }
+    assert_eq!(count, 50);
+
+    Ok(())
+}
+
