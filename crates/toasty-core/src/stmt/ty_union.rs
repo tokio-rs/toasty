@@ -108,3 +108,9 @@ impl<'a> IntoIterator for &'a TypeUnion {
         self.types.iter()
     }
 }
+
+impl From<TypeUnion> for Type {
+    fn from(value: TypeUnion) -> Self {
+        Type::Union(value)
+    }
+}

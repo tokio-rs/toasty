@@ -14,6 +14,15 @@ use toasty_core::Error;
 pub trait Load {
     type Output;
 
+    /// Returns the [`stmt::Type`] that describes values of this type.
+    fn ty() -> stmt::Type;
+
+    /// Returns the [`stmt::Type`] used when this type appears as a relation
+    /// target. The default delegates to [`ty()`](Load::ty).
+    fn ty_relation() -> stmt::Type {
+        Self::ty()
+    }
+
     fn load(value: stmt::Value) -> Result<Self::Output, Error>;
 
     fn load_relation(value: stmt::Value) -> Result<Self::Output, Error> {
@@ -23,6 +32,11 @@ pub trait Load {
 
 impl Load for () {
     type Output = ();
+
+    fn ty() -> stmt::Type {
+        stmt::Type::Unit
+    }
+
     fn load(_value: stmt::Value) -> Result<Self::Output, Error> {
         Ok(())
     }
@@ -30,6 +44,11 @@ impl Load for () {
 
 impl<T: Load<Output = T>> Load for Vec<T> {
     type Output = Vec<T>;
+
+    fn ty() -> stmt::Type {
+        stmt::Type::list(T::ty())
+    }
+
     fn load(value: stmt::Value) -> Result<Self::Output, Error> {
         match value {
             stmt::Value::List(items) => items.into_iter().map(T::load).collect(),
@@ -49,6 +68,11 @@ impl<T: Load<Output = T>> Load for Vec<T> {
 /// List type encoding: `List<M>` loads as `Vec<M::Output>`.
 impl<M: Load> Load for List<M> {
     type Output = Vec<M::Output>;
+
+    fn ty() -> stmt::Type {
+        stmt::Type::list(M::ty())
+    }
+
     fn load(value: stmt::Value) -> Result<Self::Output, Error> {
         match value {
             stmt::Value::List(items) => items.into_iter().map(M::load).collect(),
@@ -62,6 +86,11 @@ macro_rules! impl_load_for_tuple {
     ( $( $T:ident ),+ ; $( $idx:tt ),+ ) => {
         impl< $( $T: Load ),+ > Load for ( $( $T, )+ ) {
             type Output = ( $( $T::Output, )+ );
+
+            fn ty() -> stmt::Type {
+                stmt::Type::Record(vec![ $( $T::ty() ),+ ])
+            }
+
             fn load(value: stmt::Value) -> Result<Self::Output, Error> {
                 match value {
                     stmt::Value::Record(mut record) => Ok((
