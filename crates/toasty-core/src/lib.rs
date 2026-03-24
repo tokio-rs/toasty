@@ -60,6 +60,3 @@ pub mod stmt;
 /// }
 /// ```
 pub type Result<T, E = Error> = core::result::Result<T, E>;
-
-/// Re-export of `async_trait` for use by driver implementations.
-pub use async_trait::async_trait;

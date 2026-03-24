@@ -28,13 +28,12 @@ pub use response::{Response, Rows};
 pub mod operation;
 pub use operation::{IsolationLevel, Operation};
 
-use crate::{
-    async_trait,
-    schema::{
-        db::{AppliedMigration, Migration, SchemaDiff},
-        Schema,
-    },
+use crate::schema::{
+    db::{AppliedMigration, Migration, SchemaDiff},
+    Schema,
 };
+
+use async_trait::async_trait;
 
 use std::{borrow::Cow, fmt::Debug, sync::Arc};
 

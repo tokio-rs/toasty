@@ -42,25 +42,41 @@ pub use table_name::TableName;
 
 pub use toasty_core::stmt::*;
 
+/// A SQL statement, covering both DDL (schema changes) and DML (data manipulation).
 #[derive(Debug, Clone)]
 pub enum Statement {
+    /// Add a column to an existing table.
     AddColumn(AddColumn),
+    /// Alter properties of an existing column.
     AlterColumn(AlterColumn),
+    /// Alter an existing table (e.g. rename).
     AlterTable(AlterTable),
+    /// Copy rows from one table to another.
     CopyTable(CopyTable),
+    /// Create an index.
     CreateIndex(CreateIndex),
+    /// Create a table.
     CreateTable(CreateTable),
+    /// Drop a column from an existing table.
     DropColumn(DropColumn),
+    /// Drop a table.
     DropTable(DropTable),
+    /// Drop an index.
     DropIndex(DropIndex),
+    /// A SQLite PRAGMA statement.
     Pragma(Pragma),
+    /// A DELETE statement.
     Delete(Delete),
+    /// An INSERT statement.
     Insert(Insert),
+    /// A SELECT query.
     Query(Query),
+    /// An UPDATE statement.
     Update(Update),
 }
 
 impl Statement {
+    /// Returns `true` if this is an [`Update`] statement.
     pub fn is_update(&self) -> bool {
         matches!(self, Self::Update(_))
     }

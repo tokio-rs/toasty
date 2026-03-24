@@ -1,5 +1,5 @@
 use super::{util, Expand};
-use crate::schema::{BelongsTo, Field, FieldTy, HasMany, HasOne};
+use crate::model::schema::{BelongsTo, Field, FieldTy, HasMany, HasOne};
 
 use proc_macro2::TokenStream;
 use quote::quote;

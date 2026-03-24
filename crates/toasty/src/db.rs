@@ -14,8 +14,8 @@ pub(crate) use pool::{ConnectionHandle, ConnectionOperation};
 
 use crate::{engine::Engine, Result};
 
+use async_trait::async_trait;
 use toasty_core::{
-    async_trait,
     driver::Driver,
     stmt::{self, Value},
     Schema,

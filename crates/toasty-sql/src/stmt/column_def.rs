@@ -3,11 +3,16 @@ use toasty_core::{
     schema::db::{self, Column},
 };
 
+/// A column definition used in `CREATE TABLE` and `ADD COLUMN` statements.
 #[derive(Debug, Clone)]
 pub struct ColumnDef {
+    /// Column name.
     pub name: String,
+    /// Storage type (e.g. `INTEGER`, `TEXT`).
     pub ty: db::Type,
+    /// When `true`, the column has a `NOT NULL` constraint.
     pub not_null: bool,
+    /// When `true`, the column auto-increments.
     pub auto_increment: bool,
 }
 

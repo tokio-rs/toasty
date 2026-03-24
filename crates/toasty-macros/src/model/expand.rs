@@ -11,7 +11,7 @@ mod util;
 
 use filters::Filter;
 
-use crate::schema::Model;
+use super::schema::Model;
 
 use proc_macro2::TokenStream;
 use quote::quote;

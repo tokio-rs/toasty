@@ -221,13 +221,13 @@ exist. The compiler error points at the generated `serde_json::from_str` call.
 | `crates/toasty/Cargo.toml` | Add `serde_json` optional dep, update `serde` feature |
 | `crates/toasty/src/lib.rs` | Re-export `serde_json` in `codegen_support` |
 | `crates/toasty/src/stmt/primitive.rs` | Remove `serialize` param from `Primitive::field_ty` |
-| `crates/toasty-codegen/src/schema/field.rs` | Parse `nullable` flag from `#[serialize(...)]` attribute |
-| `crates/toasty-codegen/src/expand.rs` | Update `Embed`/enum `field_ty` overrides to drop `serialize` param |
-| `crates/toasty-codegen/src/expand/schema.rs` | Construct `FieldPrimitive` directly for serialized fields; remove `serialize` arg from non-serialized `field_ty` call |
-| `crates/toasty-codegen/src/expand/embedded_enum.rs` | Drop `serialize` arg from `field_ty` call |
-| `crates/toasty-codegen/src/expand/model.rs` | Deserialize in `expand_load_body()` and `expand_embedded_reload_body()` |
-| `crates/toasty-codegen/src/expand/create.rs` | Serialize in create setter for serialized fields |
-| `crates/toasty-codegen/src/expand/update.rs` | Serialize in update setter, deserialize in reload arms |
+| `crates/toasty-macros/src/schema/field.rs` | Parse `nullable` flag from `#[serialize(...)]` attribute |
+| `crates/toasty-macros/src/expand.rs` | Update `Embed`/enum `field_ty` overrides to drop `serialize` param |
+| `crates/toasty-macros/src/expand/schema.rs` | Construct `FieldPrimitive` directly for serialized fields; remove `serialize` arg from non-serialized `field_ty` call |
+| `crates/toasty-macros/src/expand/embedded_enum.rs` | Drop `serialize` arg from `field_ty` call |
+| `crates/toasty-macros/src/expand/model.rs` | Deserialize in `expand_load_body()` and `expand_embedded_reload_body()` |
+| `crates/toasty-macros/src/expand/create.rs` | Serialize in create setter for serialized fields |
+| `crates/toasty-macros/src/expand/update.rs` | Serialize in update setter, deserialize in reload arms |
 | `crates/toasty-driver-integration-suite/Cargo.toml` | Add `serde`, `serde_json` deps, enable `serde` feature |
 | `crates/toasty-driver-integration-suite/src/tests/serialize.rs` | Integration tests |
 

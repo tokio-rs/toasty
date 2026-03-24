@@ -1,13 +1,26 @@
+#![warn(missing_docs)]
+
+//! Toasty driver for [PostgreSQL](https://www.postgresql.org/) using
+//! [`tokio-postgres`](https://docs.rs/tokio-postgres).
+//!
+//! # Examples
+//!
+//! ```no_run
+//! use toasty_driver_postgresql::PostgreSQL;
+//!
+//! let driver = PostgreSQL::new("postgresql://localhost/mydb").unwrap();
+//! ```
+
 mod statement_cache;
 mod r#type;
 mod value;
 
 pub(crate) use value::Value;
 
+use async_trait::async_trait;
 use postgres::{tls::MakeTlsConnect, types::ToSql, Socket};
 use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
-    async_trait,
     driver::{Capability, Driver, Operation, Response},
     schema::db::{self, Migration, SchemaDiff, Table},
     stmt,
@@ -20,6 +33,15 @@ use url::Url;
 
 use crate::{r#type::TypeExt, statement_cache::StatementCache};
 
+/// A PostgreSQL [`Driver`] that connects via `tokio-postgres`.
+///
+/// # Examples
+///
+/// ```no_run
+/// use toasty_driver_postgresql::PostgreSQL;
+///
+/// let driver = PostgreSQL::new("postgresql://localhost/mydb").unwrap();
+/// ```
 #[derive(Debug)]
 pub struct PostgreSQL {
     url: String,
@@ -174,6 +196,7 @@ impl Driver for PostgreSQL {
     }
 }
 
+/// An open connection to a PostgreSQL database.
 #[derive(Debug)]
 pub struct Connection {
     client: Client,

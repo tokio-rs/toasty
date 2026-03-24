@@ -1,5 +1,5 @@
 use super::{util, Expand};
-use crate::schema::FieldTy::{BelongsTo, HasMany, HasOne, Primitive};
+use crate::model::schema::FieldTy::{BelongsTo, HasMany, HasOne, Primitive};
 use proc_macro2::TokenStream;
 use quote::quote;
 
@@ -83,7 +83,7 @@ impl Expand<'_> {
     }
 
     fn field_struct_ident(&self) -> &syn::Ident {
-        use crate::schema::ModelKind;
+        use crate::model::schema::ModelKind;
 
         match &self.model.kind {
             ModelKind::Root(root) => &root.field_struct_ident,

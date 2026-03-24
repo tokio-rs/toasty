@@ -1,6 +1,26 @@
+#![warn(missing_docs)]
+
+//! Toasty driver for [SQLite](https://www.sqlite.org/) using
+//! [`rusqlite`](https://docs.rs/rusqlite).
+//!
+//! Supports both file-backed and in-memory databases.
+//!
+//! # Examples
+//!
+//! ```
+//! use toasty_driver_sqlite::Sqlite;
+//!
+//! // In-memory database
+//! let driver = Sqlite::in_memory();
+//!
+//! // File-backed database
+//! let driver = Sqlite::open("path/to/db.sqlite3");
+//! ```
+
 mod value;
 pub(crate) use value::Value;
 
+use async_trait::async_trait;
 use rusqlite::Connection as RusqliteConnection;
 use std::{
     borrow::Cow,
@@ -8,7 +28,6 @@ use std::{
     sync::Arc,
 };
 use toasty_core::{
-    async_trait,
     driver::{
         operation::{IsolationLevel, Operation, Transaction},
         Capability, Driver, Response,
@@ -19,9 +38,20 @@ use toasty_core::{
 use toasty_sql::{self as sql, TypedValue};
 use url::Url;
 
+/// A SQLite [`Driver`] that opens connections to a file or in-memory database.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_driver_sqlite::Sqlite;
+///
+/// let driver = Sqlite::in_memory();
+/// ```
 #[derive(Debug)]
 pub enum Sqlite {
+    /// A database stored at a filesystem path.
     File(PathBuf),
+    /// An ephemeral in-memory database.
     InMemory,
 }
 
@@ -119,18 +149,21 @@ impl Driver for Sqlite {
     }
 }
 
+/// An open connection to a SQLite database.
 #[derive(Debug)]
 pub struct Connection {
     connection: RusqliteConnection,
 }
 
 impl Connection {
+    /// Open an in-memory SQLite connection.
     pub fn in_memory() -> Self {
         let connection = RusqliteConnection::open_in_memory().unwrap();
 
         Self { connection }
     }
 
+    /// Open a SQLite connection to a file at `path`.
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
         let connection =
             RusqliteConnection::open(path).map_err(toasty_core::Error::driver_operation_failed)?;
@@ -139,7 +172,7 @@ impl Connection {
     }
 }
 
-#[toasty_core::async_trait]
+#[async_trait]
 impl toasty_core::driver::Connection for Connection {
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         let (sql, ret_tys): (sql::Statement, _) = match op {

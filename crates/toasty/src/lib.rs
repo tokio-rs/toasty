@@ -94,8 +94,8 @@
 //! - **`toasty-core`** — shared types used across the workspace: the schema
 //!   representations (app-level and db-level), the statement AST, the
 //!   [`Driver`](driver::Driver) trait, and [`Error`] / [`Result`].
-//! - **`toasty-macros`** / **`toasty-codegen`** — the proc-macro entry points
-//!   and the code generation logic they call.
+//! - **`toasty-macros`** — the proc-macro entry points and the code generation
+//!   logic they call.
 //! - **`toasty-sql`** — serializes the statement AST to SQL strings. Used by
 //!   the SQL driver crates.
 //! - **`toasty-driver-*`** — one crate per database backend.

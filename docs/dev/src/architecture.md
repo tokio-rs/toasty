@@ -36,8 +36,8 @@ Shared types used by all other crates: schema representations, statement AST, an
 - `stmt/`: Statement AST nodes for queries, inserts, updates, deletes
 - `driver/`: Driver interface, capabilities, and operations
 
-### 3. toasty-codegen
-Generates Rust code from the `#[derive(Model)]` macro.
+### 3. toasty-macros (code generation)
+The `toasty-macros` crate contains both the proc-macro entry points and the code generation logic. It generates Rust code from the `#[derive(Model)]` and `#[derive(Embed)]` macros.
 
 **Key Components**:
 - `schema/`: Parses model attributes into schema representation

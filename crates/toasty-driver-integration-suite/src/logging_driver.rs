@@ -1,9 +1,9 @@
+use async_trait::async_trait;
 use std::{
     borrow::Cow,
     sync::{Arc, Mutex},
 };
 use toasty_core::{
-    async_trait,
     driver::{Capability, Connection, Driver, Operation, Response, Rows},
     schema::db::{AppliedMigration, Migration, SchemaDiff},
     Result, Schema,

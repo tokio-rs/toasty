@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use crate::{db::ConnectionOperation, db::Executor, Result};
 
+use async_trait::async_trait;
 use toasty_core::{
-    async_trait,
     driver::operation::{self, IsolationLevel},
     stmt::Value,
     Schema,

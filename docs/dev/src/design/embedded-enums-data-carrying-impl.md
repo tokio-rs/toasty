@@ -32,7 +32,7 @@ members of `Field` are always `false`/`None`/`[]` for variant fields.
 
 ## Codegen Changes
 
-**Parsing**: `toasty-codegen/src/schema/` parses variant fields and includes them
+**Parsing**: `toasty-macros/src/schema/` parses variant fields and includes them
 in `EmbeddedEnum` registration so the runtime schema is complete.
 
 **`Primitive::load`**: generated arms dispatch on value type first (I64 vs Record),
