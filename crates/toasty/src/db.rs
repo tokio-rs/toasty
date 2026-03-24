@@ -1,13 +1,18 @@
 mod builder;
 mod connect;
+mod executor;
 mod pool;
+mod tx;
 
 pub use builder::Builder;
-pub use connect::*;
-pub use pool::*;
+pub use connect::{Capability, Connect, Connection, Operation, Response};
+pub use executor::Executor;
+pub use pool::{Pool, PoolConfig, PoolConnection, PoolStatus, Timeouts};
+pub use tx::{Transaction, TransactionBuilder};
 
-use crate::{engine::Engine, Executor, Result, Transaction, TransactionBuilder};
 pub(crate) use pool::{ConnectionHandle, ConnectionOperation};
+
+use crate::{engine::Engine, Result};
 
 use async_trait::async_trait;
 use toasty_core::{

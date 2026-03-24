@@ -107,10 +107,7 @@ pub use update_target::UpdateTarget;
 pub use stmt::{batch, Batch};
 
 pub mod db;
-pub use db::Db;
-
-mod executor;
-pub use executor::Executor;
+pub use db::{Db, Executor, Transaction};
 
 mod engine;
 
@@ -121,9 +118,6 @@ pub use schema::{BelongsTo, HasMany, HasOne};
 
 pub mod stmt;
 pub use stmt::Statement;
-
-mod transaction;
-pub use transaction::{Transaction, TransactionBuilder};
 
 pub use toasty_macros::{create, query, Embed, Model};
 

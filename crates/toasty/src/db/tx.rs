@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{db::ConnectionOperation, Executor, Result};
+use crate::{db::ConnectionOperation, db::Executor, Result};
 
 use async_trait::async_trait;
 use toasty_core::{
