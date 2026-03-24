@@ -1,3 +1,19 @@
+#![warn(missing_docs)]
+
+//! Toasty driver for [Amazon DynamoDB](https://aws.amazon.com/dynamodb/) using
+//! the [`aws-sdk-dynamodb`](https://docs.rs/aws-sdk-dynamodb) SDK.
+//!
+//! # Examples
+//!
+//! ```no_run
+//! # async fn example() -> toasty_core::Result<()> {
+//! use toasty_driver_dynamodb::DynamoDb;
+//!
+//! let driver = DynamoDb::from_env("dynamodb://localhost".to_string()).await?;
+//! # Ok(())
+//! # }
+//! ```
+
 mod op;
 mod r#type;
 mod value;
@@ -25,6 +41,11 @@ use aws_sdk_dynamodb::{
 };
 use std::{borrow::Cow, collections::HashMap, sync::Arc};
 
+/// A DynamoDB [`Driver`] backed by the AWS SDK.
+///
+/// Create one with [`DynamoDb::from_env`] to load AWS credentials and region
+/// from the environment, or [`DynamoDb::new`] / [`DynamoDb::with_sdk_config`]
+/// for manual setup.
 #[derive(Debug, Clone)]
 pub struct DynamoDb {
     url: String,
@@ -108,6 +129,7 @@ impl Driver for DynamoDb {
     }
 }
 
+/// An open connection to DynamoDB.
 #[derive(Debug)]
 pub struct Connection {
     /// Handle to the AWS SDK client
@@ -115,6 +137,7 @@ pub struct Connection {
 }
 
 impl Connection {
+    /// Wrap an existing [`aws_sdk_dynamodb::Client`] as a Toasty connection.
     pub fn new(client: Client) -> Self {
         Self { client }
     }
