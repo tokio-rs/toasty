@@ -72,7 +72,7 @@ impl<T> Update<T> {
     ///
     /// // Round-trip through an untyped update
     /// let update = Update::<List<User>>::new(Query::<List<User>>::all());
-    /// let raw = update.into_untyped_stmt();
+    /// let raw = update.into_untyped();
     /// ```
     pub const fn from_untyped(untyped: stmt::Update) -> Self {
         Self {
@@ -220,9 +220,9 @@ impl<T> Update<T> {
     /// use toasty::stmt::{List, Query, Update};
     ///
     /// let update = Update::<List<User>>::new(Query::<List<User>>::all());
-    /// let _raw = update.into_untyped_stmt();
+    /// let _raw = update.into_untyped();
     /// ```
-    pub fn into_untyped_stmt(self) -> stmt::Statement {
+    pub fn into_untyped(self) -> stmt::Statement {
         self.untyped.into()
     }
 }
