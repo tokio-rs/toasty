@@ -5,6 +5,10 @@ use toasty_core::stmt::Value;
 impl<T: Load> Load for Option<T> {
     type Output = Option<T::Output>;
 
+    fn ty() -> toasty_core::stmt::Type {
+        T::ty()
+    }
+
     fn load(value: Value) -> Result<Self::Output, crate::Error> {
         match value {
             Value::Null => Ok(None),

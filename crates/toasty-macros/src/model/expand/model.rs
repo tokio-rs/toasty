@@ -82,6 +82,11 @@ impl Expand<'_> {
 
             impl #toasty::Load for #model_ident {
                 type Output = Self;
+
+                fn ty() -> #toasty::core::stmt::Type {
+                    #toasty::core::stmt::Type::Model(<Self as #toasty::Register>::id())
+                }
+
                 fn load(value: #toasty::core::stmt::Value) -> #toasty::Result<Self> {
                     #load_body
                 }

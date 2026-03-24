@@ -20,6 +20,10 @@ pub struct HasMany<T> {
 impl<T: Relation> Load for HasMany<T> {
     type Output = Self;
 
+    fn ty() -> toasty_core::stmt::Type {
+        toasty_core::stmt::Type::list(T::ty())
+    }
+
     fn load(input: Value) -> crate::Result<Self> {
         match input {
             Value::List(items) => {
