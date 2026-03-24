@@ -1,3 +1,4 @@
+use crate::engine::exec::ExecResponse;
 use crate::{
     engine::{
         eval,
@@ -6,7 +7,6 @@ use crate::{
     Result,
 };
 use toasty_core::{driver::Rows, stmt::ValueStream};
-use crate::engine::exec::ExecResponse;
 
 /// Gates a data stream with a boolean condition evaluated against separate
 /// inputs. When the guard is `false`, an empty stream is produced.
@@ -30,7 +30,13 @@ impl Exec<'_> {
         // Evaluate the guard expression against its inputs.
         let mut inputs = Vec::with_capacity(action.guard_inputs.len());
         for var_id in &action.guard_inputs {
-            let data = self.vars.load(*var_id).await?.values.collect_as_value().await?;
+            let data = self
+                .vars
+                .load(*var_id)
+                .await?
+                .values
+                .collect_as_value()
+                .await?;
             inputs.push(data);
         }
 

@@ -776,7 +776,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             // Try to convert the ORDER BY expression to an ExprReference
             if let Some(expr_ref) = self.expr_to_reference(&order_expr.expr) {
                 // Add to load_data if not already present
-                let (index, _) = self.load_data.select_items.insert_full(SelectItem::from(expr_ref));
+                let (index, _) = self
+                    .load_data
+                    .select_items
+                    .insert_full(SelectItem::from(expr_ref));
                 cursor_column_indices.push(index);
             } else {
                 // Complex expression in ORDER BY - can't handle yet
