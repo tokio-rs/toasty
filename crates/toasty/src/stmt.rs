@@ -108,10 +108,10 @@ impl<T> Statement<T> {
     /// # use toasty_core::stmt as core_stmt;
     /// let raw: core_stmt::Statement = core_stmt::Query::unit().into();
     /// let typed: Statement<()> = Statement::from_untyped_stmt(raw.clone());
-    /// let back: core_stmt::Statement = typed.into_untyped_stmt();
+    /// let back: core_stmt::Statement = typed.into_untyped();
     /// assert_eq!(raw, back);
     /// ```
-    pub fn into_untyped_stmt(self) -> stmt::Statement {
+    pub fn into_untyped(self) -> stmt::Statement {
         self.untyped
     }
 

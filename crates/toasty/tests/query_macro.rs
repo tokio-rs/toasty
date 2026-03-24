@@ -23,7 +23,7 @@ struct User {
 /// Extract the core `Select` from anything implementing IntoStatement.
 fn select(q: impl IntoStatement) -> core_stmt::Select {
     q.into_statement()
-        .into_untyped_stmt()
+        .into_untyped()
         .into_query_unwrap()
         .into_select()
 }
@@ -328,7 +328,7 @@ fn double_not() {
 fn query_all_is_not_single() {
     let query = toasty::query!(User)
         .into_statement()
-        .into_untyped_stmt()
+        .into_untyped()
         .into_query_unwrap();
 
     assert_struct!(query, _ {
@@ -344,7 +344,7 @@ fn query_all_is_not_single() {
 fn filter_query_is_not_single() {
     let query = toasty::query!(User filter .age > 0)
         .into_statement()
-        .into_untyped_stmt()
+        .into_untyped()
         .into_query_unwrap();
 
     assert_struct!(query, _ {
