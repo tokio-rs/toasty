@@ -132,12 +132,6 @@ impl Exec<'_> {
 
         let mut res = self.connection.exec(&self.engine.schema, op.into()).await?;
 
-        tracing::debug!(
-            "ExecStatement result:\n  Expected types: {:?}\n  Rows: {:#?}",
-            action.output.ty,
-            res.rows
-        );
-
         if action.conditional_update_with_no_returning {
             let Rows::Stream(rows) = res.rows else {
                 return Err(toasty_core::Error::invalid_result(format!(

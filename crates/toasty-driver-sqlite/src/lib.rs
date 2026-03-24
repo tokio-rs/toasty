@@ -161,7 +161,6 @@ impl toasty_core::driver::Connection for Connection {
                     *isolation = None;
                 }
                 let sql = sql::Serializer::sqlite(&schema.db).serialize_transaction(&op);
-                tracing::info!("Transaction SQL: {:?}", sql);
                 self.connection
                     .execute(&sql, [])
                     .map_err(toasty_core::Error::driver_operation_failed)?;
@@ -172,7 +171,6 @@ impl toasty_core::driver::Connection for Connection {
 
         let mut params: Vec<toasty_sql::TypedValue> = vec![];
         let sql_str = sql::Serializer::sqlite(&schema.db).serialize(&sql, &mut params);
-        tracing::info!("SQL: {:?}", sql_str);
         let mut stmt = self.connection.prepare_cached(&sql_str).unwrap();
 
         let width = match &sql {
@@ -198,7 +196,6 @@ impl toasty_core::driver::Connection for Connection {
             }
             _ => None,
         };
-        tracing::info!("width: {:?}", width);
         let params = params
             .into_iter()
             .map(|tv| Value::from(tv.value))
@@ -218,11 +215,9 @@ impl toasty_core::driver::Connection for Connection {
         let mut ret = vec![];
 
         let ret_tys = &ret_tys.as_ref().unwrap();
-        tracing::info!("Processing rows");
         loop {
             match rows.next() {
                 Ok(Some(row)) => {
-                    tracing::info!("building ValueRecord for row");
                     let mut items = vec![];
 
                     let width = width.unwrap();

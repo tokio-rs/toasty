@@ -41,17 +41,8 @@ impl Exec<'_> {
             }
         }
 
-        tracing::debug!(
-            "Eval action:\n  Input vars: {:?}\n  Input values:\n{:#?}\n  Function:\n{:#?}",
-            action.inputs,
-            input,
-            action.eval
-        );
-
         // Evaluate the function with the collected inputs
         let result = action.eval.eval(&input)?;
-
-        tracing::debug!("Eval result:\n{:#?}", result);
 
         // Store the result in the output variable with preserved pagination metadata
         self.vars.store(
