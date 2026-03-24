@@ -92,16 +92,18 @@ impl Expand<'_> {
                 }
             }
 
+            impl #toasty::Create<#model_ident> for #model_ident {
+                type Builder = #create_struct_ident;
+            }
+
             impl #toasty::Model for #model_ident {
                 type Query = #query_struct_ident;
-                type Create = #create_struct_ident;
                 type Update<'a> = #update_struct_ident<&'a mut Self>;
                 type UpdateQuery = #update_struct_ident;
             }
 
             impl #toasty::Relation for #model_ident {
                 type Model = #model_ident;
-                type Create = #create_struct_ident;
                 type Expr = #model_ident;
                 type Query = #query_struct_ident;
                 type Many = Many;

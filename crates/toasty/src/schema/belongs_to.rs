@@ -1,4 +1,4 @@
-use super::{Load, Relation};
+use super::{Create, Load, Relation};
 
 use toasty_core::stmt::{self, Value};
 
@@ -56,9 +56,12 @@ impl<T: Relation> BelongsTo<T> {
     }
 }
 
+impl<T: Relation> Create<T::Model> for BelongsTo<T> {
+    type Builder = <T as Create<T::Model>>::Builder;
+}
+
 impl<T: Relation> Relation for BelongsTo<T> {
     type Model = T::Model;
-    type Create = T::Create;
     type Expr = T::Expr;
     type Query = T::Query;
     type Many = T::Many;
