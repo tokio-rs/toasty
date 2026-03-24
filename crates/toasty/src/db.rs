@@ -9,8 +9,8 @@ pub use pool::*;
 use crate::{engine::Engine, Executor, Result, Transaction, TransactionBuilder};
 pub(crate) use pool::{ConnectionHandle, ConnectionOperation};
 
+use async_trait::async_trait;
 use toasty_core::{
-    async_trait,
     driver::Driver,
     stmt::{self, Value},
     Schema,

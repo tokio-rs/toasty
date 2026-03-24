@@ -5,6 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
+async-trait.workspace = true
 toasty-core.workspace = true
 aws-config.workspace = true
 aws-sdk-dynamodb.workspace = true
