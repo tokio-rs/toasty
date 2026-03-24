@@ -1,4 +1,16 @@
+#![warn(missing_docs)]
 #![allow(clippy::needless_range_loop)]
+
+//! Toasty driver for [MySQL](https://www.mysql.com/) using
+//! [`mysql_async`](https://docs.rs/mysql_async).
+//!
+//! # Examples
+//!
+//! ```no_run
+//! use toasty_driver_mysql::MySQL;
+//!
+//! let driver = MySQL::new("mysql://localhost/mydb").unwrap();
+//! ```
 
 mod value;
 pub(crate) use value::Value;
@@ -18,6 +30,15 @@ use toasty_core::{
 use toasty_sql::{self as sql, TypedValue};
 use url::Url;
 
+/// A MySQL [`Driver`] that connects via `mysql_async`.
+///
+/// # Examples
+///
+/// ```no_run
+/// use toasty_driver_mysql::MySQL;
+///
+/// let driver = MySQL::new("mysql://localhost/mydb").unwrap();
+/// ```
 #[derive(Debug)]
 pub struct MySQL {
     url: String,
@@ -25,6 +46,10 @@ pub struct MySQL {
 }
 
 impl MySQL {
+    /// Create a new MySQL driver from a connection URL.
+    ///
+    /// The URL must use the `mysql` scheme and include a database path, e.g.
+    /// `mysql://user:pass@host:3306/dbname`.
     pub fn new(url: impl Into<String>) -> Result<Self> {
         let url_str = url.into();
         let url = Url::parse(&url_str).map_err(toasty_core::Error::driver_operation_failed)?;
@@ -124,16 +149,19 @@ impl Driver for MySQL {
     }
 }
 
+/// An open connection to a MySQL database.
 #[derive(Debug)]
 pub struct Connection {
     conn: Conn,
 }
 
 impl Connection {
+    /// Wrap an existing [`mysql_async::Conn`] as a Toasty connection.
     pub fn new(conn: Conn) -> Self {
         Self { conn }
     }
 
+    /// Create a table and its indices from a schema definition.
     pub async fn create_table(&mut self, schema: &db::Schema, table: &Table) -> Result<()> {
         let serializer = sql::Serializer::mysql(schema);
 
