@@ -48,6 +48,7 @@ macro_rules! impl_num {
     ) => {
         impl Type {
             $(
+                /// Returns `true` if this type matches the corresponding integer variant.
                 pub fn $is(&self) -> bool {
                     matches!(self, Self::$variant)
                 }
@@ -56,10 +57,20 @@ macro_rules! impl_num {
 
         impl Value {
             $(
+                /// Attempts to convert this value to the target integer type.
+                ///
+                /// Returns `None` if the value is not an integer variant or is out of
+                /// range for the target type. Conversion works across all integer
+                /// widths and signedness.
                 pub fn $to(&self) -> Option<$ty> {
                     try_from!(*self, $ty)
                 }
 
+                /// Converts this value to the target integer type, panicking on failure.
+                ///
+                /// # Panics
+                ///
+                /// Panics if the value is not an integer variant or is out of range.
                 #[track_caller]
                 pub fn $to_unwrap(&self) -> $ty {
                     try_from!(*self, $ty).expect("out of range integral type conversion attempted")

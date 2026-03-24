@@ -40,7 +40,10 @@ pub enum ExprReference {
     /// Reference a model at a specific nesting level.
     ///
     /// This is roughly referencing the full record instead of a specific field.
-    Model { nesting: usize },
+    Model {
+        /// Query scope nesting level: 0 = current query, 1+ = higher scope queries.
+        nesting: usize,
+    },
 }
 
 /// A reference to a database column.
