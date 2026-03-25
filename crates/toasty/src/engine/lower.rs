@@ -213,7 +213,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         let mut assignments = stmt::Assignments::default();
         let mapping = self.mapping_unwrap();
 
-        for (projection, assignment) in &*i {
+        for (projection, assignment) in i.iter() {
             // Phase 1: Lower the assignment expression
             assert!(assignment.op.is_set(), "only SET supported");
             let mut lowered_expr = assignment.expr.clone();

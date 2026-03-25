@@ -251,7 +251,7 @@ pub async fn update_with_new_association_rolls_back_on_failure(t: &mut Test) -> 
     assert_err!(
         user.update()
             .name("taken") // UPDATE will fail: unique name
-            .todo(Todo::create().title("new-todo")) // INSERT runs first and succeeds
+            .todos(toasty::stmt::insert(Todo::create().title("new-todo"))) // INSERT runs first and succeeds
             .exec(&mut db)
             .await
     );

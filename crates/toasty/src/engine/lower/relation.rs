@@ -138,46 +138,49 @@ impl LowerStatement<'_, '_> {
                 continue;
             }
 
-            let Some(assignment) = assignments.take(&i) else {
+            let all_assignments = assignments.take_all(&i);
+            if all_assignments.is_empty() {
                 continue;
-            };
+            }
 
-            let mutation = match assignment.op {
-                stmt::AssignmentOp::Set => match assignment.expr {
-                    e if e.is_value_null() => Mutation::DisassociateAll { delete: false },
-                    expr => Mutation::Associate {
-                        expr,
-                        exclusive: true,
+            for assignment in all_assignments {
+                let mutation = match assignment.op {
+                    stmt::AssignmentOp::Set => match assignment.expr {
+                        e if e.is_value_null() => Mutation::DisassociateAll { delete: false },
+                        expr => Mutation::Associate {
+                            expr,
+                            exclusive: true,
+                        },
                     },
-                },
-                stmt::AssignmentOp::Insert => {
-                    assert!(field.ty.is_has_many());
-                    debug_assert!(!assignment.expr.is_value_null());
-                    Mutation::Associate {
-                        expr: assignment.expr,
-                        exclusive: false,
+                    stmt::AssignmentOp::Insert => {
+                        assert!(field.ty.is_has_many());
+                        debug_assert!(!assignment.expr.is_value_null());
+                        Mutation::Associate {
+                            expr: assignment.expr,
+                            exclusive: false,
+                        }
                     }
-                }
-                stmt::AssignmentOp::Remove => {
-                    assert!(field.ty.is_has_many());
-                    debug_assert!(!assignment.expr.is_value_null());
-                    Mutation::Disassociate {
-                        expr: assignment.expr,
+                    stmt::AssignmentOp::Remove => {
+                        assert!(field.ty.is_has_many());
+                        debug_assert!(!assignment.expr.is_value_null());
+                        Mutation::Disassociate {
+                            expr: assignment.expr,
+                        }
                     }
-                }
-            };
+                };
 
-            self.plan_mut_relation_field(
-                field,
-                mutation,
-                &mut UpdateRelationSource {
-                    model,
-                    filter,
-                    assignments: &mut *assignments,
-                    returning,
-                    returning_changed,
-                },
-            );
+                self.plan_mut_relation_field(
+                    field,
+                    mutation,
+                    &mut UpdateRelationSource {
+                        model,
+                        filter,
+                        assignments: &mut *assignments,
+                        returning,
+                        returning_changed,
+                    },
+                );
+            }
         }
     }
 
