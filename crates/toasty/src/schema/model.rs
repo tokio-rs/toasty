@@ -9,6 +9,9 @@ pub trait Model: Register + Load<Output = Self> + Create<Item = Self> + Sized {
     /// Query builder type for this model
     type Query;
 
+    // Create builder type for this model
+    type Create;
+
     /// Update builder type for this model
     type Update<'a>;
 
