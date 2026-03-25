@@ -43,8 +43,9 @@ impl<T: Load> Load for Option<T> {
     }
 }
 
-impl<T: Relation> Create<T::Model> for Option<T> {
-    type Builder = <T as Create<T::Model>>::Builder;
+impl<T: Relation> Create for Option<T> {
+    type Item = T::Model;
+    type Builder = <T as Create>::Builder;
 }
 
 impl<T: Relation> Relation for Option<T> {

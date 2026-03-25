@@ -56,8 +56,9 @@ impl<T: Relation> HasOne<T> {
     }
 }
 
-impl<T: Relation> Create<T::Model> for HasOne<T> {
-    type Builder = <T as Create<T::Model>>::Builder;
+impl<T: Relation> Create for HasOne<T> {
+    type Item = T::Model;
+    type Builder = <T as Create>::Builder;
 }
 
 impl<T: Relation> Relation for HasOne<T> {

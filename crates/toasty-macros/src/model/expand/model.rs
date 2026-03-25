@@ -92,7 +92,8 @@ impl Expand<'_> {
                 }
             }
 
-            impl #toasty::Create<#model_ident> for #model_ident {
+            impl #toasty::Create for #model_ident {
+                type Item = #model_ident;
                 type Builder = #create_struct_ident;
             }
 

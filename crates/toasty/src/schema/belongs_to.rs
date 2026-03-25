@@ -56,8 +56,9 @@ impl<T: Relation> BelongsTo<T> {
     }
 }
 
-impl<T: Relation> Create<T::Model> for BelongsTo<T> {
-    type Builder = <T as Create<T::Model>>::Builder;
+impl<T: Relation> Create for BelongsTo<T> {
+    type Item = T::Model;
+    type Builder = <T as Create>::Builder;
 }
 
 impl<T: Relation> Relation for BelongsTo<T> {

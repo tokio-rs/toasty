@@ -72,7 +72,7 @@ impl<M: Model> CreateMany<M> {
     /// Returns `self` for method chaining.
     pub fn with_item(
         mut self,
-        f: impl FnOnce(<M as Create<M>>::Builder) -> <M as Create<M>>::Builder,
+        f: impl FnOnce(<M as Create>::Builder) -> <M as Create>::Builder,
     ) -> Self {
         let create = f(M::builder());
         let stmt = create.into_insert();

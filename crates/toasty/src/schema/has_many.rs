@@ -69,8 +69,9 @@ impl<T: Relation> HasMany<T> {
     }
 }
 
-impl<T: Relation> Create<T::Model> for HasMany<T> {
-    type Builder = <T as Create<T::Model>>::Builder;
+impl<T: Relation> Create for HasMany<T> {
+    type Item = T::Model;
+    type Builder = <T as Create>::Builder;
 }
 
 impl<T: Relation> Relation for HasMany<T> {

@@ -12,7 +12,7 @@ struct User {
 #[allow(dead_code)]
 type UserQuery = <User as Model>::Query;
 #[allow(dead_code)]
-type UserCreate = <User as Create<User>>::Builder;
+type UserCreate = <User as Create>::Builder;
 #[allow(dead_code)]
 type UserUpdate<'a> = <User as Model>::Update<'a>;
 #[allow(dead_code)]
@@ -28,7 +28,7 @@ fn use_model_query_in_generic<M: Model>(_query: M::Query) {}
 
 // Test that Create::Builder can be used in generic contexts
 #[allow(dead_code)]
-fn use_model_create_in_generic<M: Model>(_create: <M as Create<M>>::Builder) {}
+fn use_model_create_in_generic<M: Model>(_create: <M as Create>::Builder) {}
 
 // Test that Model::Update can be used in generic contexts
 #[allow(dead_code)]
@@ -53,7 +53,7 @@ fn model_create_type_is_accessible() {
     let create = User::create();
 
     // Verify that the type matches Create::Builder associated type
-    check_type::<<User as Create<User>>::Builder>(&create);
+    check_type::<<User as Create>::Builder>(&create);
 }
 
 #[test]

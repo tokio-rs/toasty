@@ -2,7 +2,7 @@ use super::{Create, Load, Model};
 
 use toasty_core::schema::app::FieldId;
 
-pub trait Relation: Load<Output = Self> + Create<Self::Model> {
+pub trait Relation: Load<Output = Self> + Create<Item = Self::Model> {
     /// The target model
     type Model: Model;
 
