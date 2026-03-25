@@ -4,6 +4,9 @@ pub use auto::Auto;
 mod belongs_to;
 pub use belongs_to::BelongsTo;
 
+mod create;
+pub use create::Create;
+
 mod embed;
 pub use embed::Embed;
 

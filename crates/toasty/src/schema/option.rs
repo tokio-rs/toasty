@@ -1,4 +1,4 @@
-use super::{Load, Relation};
+use super::{Create, Load, Relation};
 use toasty_core::schema::app::FieldId;
 use toasty_core::stmt::{self, Value};
 
@@ -43,9 +43,13 @@ impl<T: Load> Load for Option<T> {
     }
 }
 
+impl<T: Relation> Create for Option<T> {
+    type Item = T::Model;
+    type Builder = <T as Create>::Builder;
+}
+
 impl<T: Relation> Relation for Option<T> {
     type Model = T::Model;
-    type Create = T::Create;
     type Expr = Option<T::Model>;
     type Query = T::Query;
     type Many = T::Many;

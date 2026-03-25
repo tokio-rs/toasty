@@ -1,6 +1,6 @@
 //! Test that Model associated types are accessible and correctly typed
 
-use toasty::schema::Model;
+use toasty::schema::{Create, Model};
 
 #[derive(toasty::Model)]
 struct User {
@@ -12,7 +12,7 @@ struct User {
 #[allow(dead_code)]
 type UserQuery = <User as Model>::Query;
 #[allow(dead_code)]
-type UserCreate = <User as Model>::Create;
+type UserCreate = <User as Create>::Builder;
 #[allow(dead_code)]
 type UserUpdate<'a> = <User as Model>::Update<'a>;
 #[allow(dead_code)]
@@ -26,9 +26,9 @@ fn check_type<T>(_value: &T) {}
 #[allow(dead_code)]
 fn use_model_query_in_generic<M: Model>(_query: M::Query) {}
 
-// Test that Model::Create can be used in generic contexts
+// Test that Create::Builder can be used in generic contexts
 #[allow(dead_code)]
-fn use_model_create_in_generic<M: Model>(_create: M::Create) {}
+fn use_model_create_in_generic<M: Model>(_create: <M as Create>::Builder) {}
 
 // Test that Model::Update can be used in generic contexts
 #[allow(dead_code)]
@@ -52,8 +52,8 @@ fn model_create_type_is_accessible() {
     // Get a create builder using the generated API
     let create = User::create();
 
-    // Verify that the type matches Model::Create associated type
-    check_type::<<User as Model>::Create>(&create);
+    // Verify that the type matches Create::Builder associated type
+    check_type::<<User as Create>::Builder>(&create);
 }
 
 #[test]

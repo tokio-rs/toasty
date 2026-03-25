@@ -1,14 +1,10 @@
-use super::{Load, Model};
-use crate::stmt::{IntoExpr, IntoInsert};
+use super::{Create, Load, Model};
 
 use toasty_core::schema::app::FieldId;
 
-pub trait Relation: Load<Output = Self> {
+pub trait Relation: Load<Output = Self> + Create<Item = Self::Model> {
     /// The target model
     type Model: Model;
-
-    /// Create builder for the target model
-    type Create: Default + IntoInsert<Model = Self::Model> + IntoExpr<Self::Model>;
 
     /// The target expression (e.g. `Option<Model>`)
     type Expr;
