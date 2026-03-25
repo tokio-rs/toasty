@@ -5,7 +5,7 @@ mod pool;
 mod tx;
 
 pub use builder::Builder;
-pub use connect::{Capability, Connect, Connection, Operation, Response};
+pub use connect::{Capability, Connect, Driver};
 pub use executor::Executor;
 pub use pool::{Pool, PoolConfig, PoolConnection, PoolStatus, Timeouts};
 pub use tx::{Transaction, TransactionBuilder};
@@ -16,7 +16,7 @@ use crate::{engine::Engine, Result};
 
 use async_trait::async_trait;
 use toasty_core::{
-    driver::Driver,
+    driver::{operation::Operation, Response},
     stmt::{self, Value},
     Schema,
 };
