@@ -218,6 +218,7 @@ impl Expand<'_> {
             // to build the final update statement:
             // - `T = GeneratedQuery`: query-based update, `Returning = List<Model>`
             // - `T = &mut Model`: instance update, `Returning = Model`
+            #[derive(Clone)]
             #vis struct #update_struct_ident<#target_ty: #toasty::UpdateTarget = #query_struct_ident> {
                 assignments: #toasty::core::stmt::Assignments,
                 target: #target_ty,

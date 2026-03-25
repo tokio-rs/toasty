@@ -5,6 +5,7 @@ pub mod batch_query;
 pub mod batch_query_dynamic;
 pub mod batch_rollback;
 pub mod batch_update_delete;
+pub mod clone_query;
 pub mod crud_basic;
 pub mod crud_batch_create;
 pub mod crud_composite_key_in_list;
