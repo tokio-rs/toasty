@@ -257,7 +257,7 @@ impl Expand<'_> {
                 }
 
                 fn apply_result(self, value: #toasty::core::stmt::Value) -> #toasty::Result<()> {
-                    self.reload(value)
+                    <#model_ident as #toasty::Load>::reload(self, value)
                 }
             }
 
@@ -349,32 +349,30 @@ impl Expand<'_> {
 
                     quote! {
                         #i => {
-                            self.#field_ident = #assign;
+                            target.#field_ident = #assign;
                         }
                     }
                 }
                 FieldTy::Primitive(ty) => {
-                    quote!(#i => <#ty as #toasty::Field>::reload(&mut self.#field_ident, value)?,)
+                    quote!(#i => <#ty as #toasty::Load>::reload(&mut target.#field_ident, value)?,)
                 }
                 _ => {
                     // Relation fields (BelongsTo, HasMany, HasOne) are unloaded on update.
                     // Embedded fields are handled above via the Primitive arm.
-                    quote!(#i => self.#field_ident.unload(),)
+                    quote!(#i => target.#field_ident.unload(),)
                 }
             }
 
         }).collect()
     }
 
-    /// Generate the body of the `reload` method for a root model.
-    pub(super) fn expand_reload_method(&self) -> TokenStream {
+    /// Generate the `Load::reload` trait method implementation for a root model.
+    pub(super) fn expand_reload_trait_method(&self) -> TokenStream {
         let toasty = &self.toasty;
-        let vis = &self.model.vis;
         let reload_arms = self.expand_reload_match_arms();
 
         quote! {
-            #vis fn reload(&mut self, value: #toasty::core::stmt::Value) -> #toasty::Result<()> {
-                use #toasty::Field;
+            fn reload(target: &mut Self, value: #toasty::core::stmt::Value) -> #toasty::Result<()> {
                 for (field, value) in value.into_sparse_record().into_iter() {
                     match field {
                         #reload_arms

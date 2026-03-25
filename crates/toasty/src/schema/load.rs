@@ -28,6 +28,23 @@ pub trait Load {
     fn load_relation(value: stmt::Value) -> Result<Self::Output, Error> {
         Self::load(value)
     }
+
+    /// Reload the value in-place from a value returned by the database.
+    ///
+    /// The value may be a `SparseRecord` for partial embedded updates, in which
+    /// case only the specified fields should be updated. Embedded types must
+    /// override this method to handle partial updates correctly.
+    ///
+    /// Takes `&mut Self::Output` rather than `&mut self` so that wrapper types
+    /// like `Option<T>` can implement reload generically regardless of whether
+    /// `T::Output == T`.
+    ///
+    /// The default implementation panics. Types that support reloading (i.e.,
+    /// types that implement [`Field`]) should override this.
+    fn reload(target: &mut Self::Output, value: stmt::Value) -> Result<(), Error> {
+        let _ = (target, value);
+        unimplemented!("reload is not supported for this type")
+    }
 }
 
 impl Load for () {
@@ -62,6 +79,11 @@ impl<T: Load<Output = T>> Load for Vec<T> {
                 .collect(),
             _ => Err(Error::type_conversion(value, "Vec<T>")),
         }
+    }
+
+    fn reload(target: &mut Self::Output, value: stmt::Value) -> Result<(), Error> {
+        *target = Self::load(value)?;
+        Ok(())
     }
 }
 
