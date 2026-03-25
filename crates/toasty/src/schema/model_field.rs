@@ -8,7 +8,7 @@ use super::Load;
 ///
 /// Separated from [`Field`](super::Field) so that schema registration does not
 /// depend on runtime concerns like update builders or field accessors.
-pub trait RegisterField: Load {
+pub trait ModelField: Load {
     /// Whether or not the type is nullable
     const NULLABLE: bool = false;
 

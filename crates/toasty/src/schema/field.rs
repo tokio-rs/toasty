@@ -1,7 +1,7 @@
 use std::{rc::Rc, sync::Arc};
 
 use crate::{
-    schema::{Load, RegisterField},
+    schema::{Load, ModelField},
     stmt::Path,
     Result,
 };
@@ -9,7 +9,7 @@ use crate::{
 use std::borrow::Cow;
 use toasty_core::stmt;
 
-pub trait Field: Sized + Load<Output = Self> + RegisterField {
+pub trait Field: Sized + Load<Output = Self> + ModelField {
     /// The type returned when accessing this field from a Fields struct.
     /// For primitives, this is Path<Origin, Self>.
     /// For embedded types, this is {Type}Fields<Origin>.
@@ -48,7 +48,7 @@ pub trait Field: Sized + Load<Output = Self> + RegisterField {
     }
 }
 
-/// Macro to generate Load, RegisterField, and Field implementations for numeric types that use `try_into()`
+/// Macro to generate Load, ModelField, and Field implementations for numeric types that use `try_into()`
 macro_rules! impl_field_numeric {
     ($($ty:ty => $stmt_ty:ident),* $(,)?) => {
         $(
@@ -64,7 +64,7 @@ macro_rules! impl_field_numeric {
                 }
             }
 
-            impl RegisterField for $ty {}
+            impl ModelField for $ty {}
 
             impl Field for $ty {
                 type FieldAccessor<Origin> = Path<Origin, Self>;
@@ -103,7 +103,7 @@ impl Load for isize {
     }
 }
 
-impl RegisterField for isize {}
+impl ModelField for isize {}
 
 impl Field for isize {
     type FieldAccessor<Origin> = Path<Origin, Self>;
@@ -126,7 +126,7 @@ impl Load for usize {
     }
 }
 
-impl RegisterField for usize {}
+impl ModelField for usize {}
 
 impl Field for usize {
     type FieldAccessor<Origin> = Path<Origin, Self>;
@@ -152,7 +152,7 @@ impl Load for String {
     }
 }
 
-impl RegisterField for String {}
+impl ModelField for String {}
 
 impl Field for String {
     type FieldAccessor<Origin> = Path<Origin, Self>;
@@ -163,7 +163,7 @@ impl Field for String {
     }
 }
 
-impl RegisterField for Vec<u8> {
+impl ModelField for Vec<u8> {
     fn field_ty(
         storage_ty: Option<toasty_core::schema::db::Type>,
     ) -> toasty_core::schema::app::FieldTy {
@@ -184,7 +184,7 @@ impl Field for Vec<u8> {
     }
 }
 
-impl<T: Field> RegisterField for Option<T> {
+impl<T: Field> ModelField for Option<T> {
     const NULLABLE: bool = true;
 }
 
@@ -213,7 +213,7 @@ where
     }
 }
 
-impl<T> RegisterField for Cow<'_, T>
+impl<T> ModelField for Cow<'_, T>
 where
     T: ToOwned + ?Sized,
     T::Owned: Field,
@@ -248,7 +248,7 @@ impl Load for uuid::Uuid {
     }
 }
 
-impl RegisterField for uuid::Uuid {}
+impl ModelField for uuid::Uuid {}
 
 impl Field for uuid::Uuid {
     type FieldAccessor<Origin> = Path<Origin, Self>;
@@ -274,7 +274,7 @@ impl Load for bool {
     }
 }
 
-impl RegisterField for bool {}
+impl ModelField for bool {}
 
 impl Field for bool {
     type FieldAccessor<Origin> = Path<Origin, Self>;
@@ -297,7 +297,7 @@ impl<T: Field> Load for Arc<T> {
     }
 }
 
-impl<T: Field> RegisterField for Arc<T> {}
+impl<T: Field> ModelField for Arc<T> {}
 
 impl<T: Field> Field for Arc<T> {
     type FieldAccessor<Origin> = Path<Origin, Self>;
@@ -320,7 +320,7 @@ impl<T: Field> Load for Rc<T> {
     }
 }
 
-impl<T: Field> RegisterField for Rc<T> {}
+impl<T: Field> ModelField for Rc<T> {}
 
 impl<T: Field> Field for Rc<T> {
     type FieldAccessor<Origin> = Path<Origin, Self>;
@@ -343,7 +343,7 @@ impl<T: Field> Load for Box<T> {
     }
 }
 
-impl<T: Field> RegisterField for Box<T> {}
+impl<T: Field> ModelField for Box<T> {}
 
 impl<T: Field> Field for Box<T> {
     type FieldAccessor<Origin> = Path<Origin, Self>;
@@ -374,7 +374,7 @@ impl Load for rust_decimal::Decimal {
 }
 
 #[cfg(feature = "rust_decimal")]
-impl RegisterField for rust_decimal::Decimal {}
+impl ModelField for rust_decimal::Decimal {}
 
 #[cfg(feature = "rust_decimal")]
 impl Field for rust_decimal::Decimal {
@@ -406,7 +406,7 @@ impl Load for bigdecimal::BigDecimal {
 }
 
 #[cfg(feature = "bigdecimal")]
-impl RegisterField for bigdecimal::BigDecimal {}
+impl ModelField for bigdecimal::BigDecimal {}
 
 #[cfg(feature = "bigdecimal")]
 impl Field for bigdecimal::BigDecimal {

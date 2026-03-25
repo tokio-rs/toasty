@@ -128,7 +128,7 @@ pub mod codegen_support {
     pub use crate::{
         schema::{
             generate_unique_id, Auto, BelongsTo, Create, Embed, Field, HasMany, HasOne, Load,
-            Model, Register, RegisterField, Relation,
+            Model, ModelField, Register, Relation,
         },
         stmt::CreateMany,
         stmt::{self, IntoExpr, IntoInsert, IntoStatement, List, Path},

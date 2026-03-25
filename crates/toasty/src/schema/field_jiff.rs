@@ -1,4 +1,4 @@
-use super::{Field, Load, RegisterField};
+use super::{Field, Load, ModelField};
 use crate::stmt::Path;
 use toasty_core::{
     stmt::{Type, Value},
@@ -22,7 +22,7 @@ macro_rules! impl_jiff_field {
             }
         }
 
-        impl RegisterField for $ty {}
+        impl ModelField for $ty {}
 
         impl Field for $ty {
             type FieldAccessor<Origin> = Path<Origin, Self>;

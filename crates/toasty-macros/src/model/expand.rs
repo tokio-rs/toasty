@@ -110,7 +110,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
             }
         }
 
-        impl #toasty::RegisterField for #model_ident {
+        impl #toasty::ModelField for #model_ident {
             fn field_ty(
                 _storage_ty: Option<#toasty::core::schema::db::Type>,
             ) -> #toasty::core::schema::app::FieldTy {
@@ -242,7 +242,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
             }
         }
 
-        impl #toasty::RegisterField for #model_ident {
+        impl #toasty::ModelField for #model_ident {
             fn field_ty(
                 _storage_ty: Option<#toasty::core::schema::db::Type>,
             ) -> #toasty::core::schema::app::FieldTy {
