@@ -14,6 +14,7 @@ impl Expand<'_> {
         let default_stmts = self.expand_create_default_stmts();
 
         quote! {
+            #[derive(Clone)]
             #vis struct #create_struct_ident {
                 stmt: #toasty::stmt::Insert<#model_ident>,
             }
