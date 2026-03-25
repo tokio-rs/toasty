@@ -20,16 +20,6 @@ pub trait Field: Sized + Load<Output = Self> + ModelField {
     /// For primitives, this will be {Type}Update<'a> once implemented.
     type UpdateBuilder<'a>;
 
-    /// Reload the value in-place from a value returned by the database.
-    ///
-    /// The value may be a `SparseRecord` for partial embedded updates, in which
-    /// case only the specified fields should be updated. Embedded types must
-    /// override this method to handle partial updates correctly.
-    fn reload(&mut self, value: stmt::Value) -> Result<()> {
-        *self = Self::load(value)?;
-        Ok(())
-    }
-
     /// Build a field accessor from a path.
     /// For primitives, returns the path as-is.
     /// For embedded types, wraps the path in a Fields struct.
@@ -61,6 +51,11 @@ macro_rules! impl_field_numeric {
 
                 fn load(value: stmt::Value) -> Result<Self> {
                     value.try_into()
+                }
+
+                fn reload(target: &mut Self, value: stmt::Value) -> Result<()> {
+                    *target = Self::load(value)?;
+                    Ok(())
                 }
             }
 
@@ -101,6 +96,11 @@ impl Load for isize {
     fn load(value: stmt::Value) -> Result<Self> {
         value.try_into()
     }
+
+    fn reload(target: &mut Self, value: stmt::Value) -> Result<()> {
+        *target = Self::load(value)?;
+        Ok(())
+    }
 }
 
 impl ModelField for isize {}
@@ -123,6 +123,11 @@ impl Load for usize {
 
     fn load(value: stmt::Value) -> Result<Self> {
         value.try_into()
+    }
+
+    fn reload(target: &mut Self, value: stmt::Value) -> Result<()> {
+        *target = Self::load(value)?;
+        Ok(())
     }
 }
 
@@ -149,6 +154,11 @@ impl Load for String {
             stmt::Value::String(v) => Ok(v),
             _ => Err(toasty_core::Error::type_conversion(value, "String")),
         }
+    }
+
+    fn reload(target: &mut Self, value: stmt::Value) -> Result<()> {
+        *target = Self::load(value)?;
+        Ok(())
     }
 }
 
@@ -211,6 +221,11 @@ where
     fn load(value: stmt::Value) -> Result<Self> {
         <T::Owned as Load>::load(value).map(Cow::Owned)
     }
+
+    fn reload(target: &mut Self, value: stmt::Value) -> Result<()> {
+        *target = Self::load(value)?;
+        Ok(())
+    }
 }
 
 impl<T> ModelField for Cow<'_, T>
@@ -246,6 +261,11 @@ impl Load for uuid::Uuid {
             _ => Err(toasty_core::Error::type_conversion(value, "uuid::Uuid")),
         }
     }
+
+    fn reload(target: &mut Self, value: stmt::Value) -> Result<()> {
+        *target = Self::load(value)?;
+        Ok(())
+    }
 }
 
 impl ModelField for uuid::Uuid {}
@@ -272,6 +292,11 @@ impl Load for bool {
             _ => Err(toasty_core::Error::type_conversion(value, "bool")),
         }
     }
+
+    fn reload(target: &mut Self, value: stmt::Value) -> Result<()> {
+        *target = Self::load(value)?;
+        Ok(())
+    }
 }
 
 impl ModelField for bool {}
@@ -294,6 +319,11 @@ impl<T: Field> Load for Arc<T> {
 
     fn load(value: stmt::Value) -> Result<Self> {
         <T as Load>::load(value).map(Arc::new)
+    }
+
+    fn reload(target: &mut Self, value: stmt::Value) -> Result<()> {
+        *target = Self::load(value)?;
+        Ok(())
     }
 }
 
@@ -318,6 +348,11 @@ impl<T: Field> Load for Rc<T> {
     fn load(value: stmt::Value) -> Result<Self> {
         <T as Load>::load(value).map(Rc::new)
     }
+
+    fn reload(target: &mut Self, value: stmt::Value) -> Result<()> {
+        *target = Self::load(value)?;
+        Ok(())
+    }
 }
 
 impl<T: Field> ModelField for Rc<T> {}
@@ -340,6 +375,11 @@ impl<T: Field> Load for Box<T> {
 
     fn load(value: stmt::Value) -> Result<Self> {
         <T as Load>::load(value).map(Box::new)
+    }
+
+    fn reload(target: &mut Self, value: stmt::Value) -> Result<()> {
+        *target = Self::load(value)?;
+        Ok(())
     }
 }
 
@@ -370,6 +410,11 @@ impl Load for rust_decimal::Decimal {
                 "rust_decimal::Decimal",
             )),
         }
+    }
+
+    fn reload(target: &mut Self, value: stmt::Value) -> Result<()> {
+        *target = Self::load(value)?;
+        Ok(())
     }
 }
 
@@ -402,6 +447,11 @@ impl Load for bigdecimal::BigDecimal {
                 "bigdecimal::BigDecimal",
             )),
         }
+    }
+
+    fn reload(target: &mut Self, value: stmt::Value) -> Result<()> {
+        *target = Self::load(value)?;
+        Ok(())
     }
 }
 

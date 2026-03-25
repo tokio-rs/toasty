@@ -108,6 +108,10 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
             fn load(value: #toasty::core::stmt::Value) -> #toasty::Result<Self> {
                 #load_body
             }
+
+            fn reload(target: &mut Self, value: #toasty::core::stmt::Value) -> #toasty::Result<()> {
+                #reload_body
+            }
         }
 
         impl #toasty::ModelField for #model_ident {
@@ -126,10 +130,6 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
         impl #toasty::Field for #model_ident {
             type FieldAccessor<__Origin> = #field_struct_ident<__Origin>;
             type UpdateBuilder<'a> = #update_struct_ident<'a>;
-
-            fn reload(&mut self, value: #toasty::core::stmt::Value) -> #toasty::Result<()> {
-                #reload_body
-            }
 
             fn make_field_accessor<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::FieldAccessor<__Origin> {
                 #field_struct_ident { path }
@@ -239,6 +239,11 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
                     },
                     value => Err(#toasty::Error::type_conversion(value, stringify!(#model_ident))),
                 }
+            }
+
+            fn reload(target: &mut Self, value: #toasty::core::stmt::Value) -> #toasty::Result<()> {
+                *target = Self::load(value)?;
+                Ok(())
             }
         }
 

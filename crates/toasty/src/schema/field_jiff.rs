@@ -20,6 +20,11 @@ macro_rules! impl_jiff_field {
                     _ => Err(toasty_core::Error::type_conversion(value, $lit)),
                 }
             }
+
+            fn reload(target: &mut Self, value: Value) -> Result<()> {
+                *target = Self::load(value)?;
+                Ok(())
+            }
         }
 
         impl ModelField for $ty {}

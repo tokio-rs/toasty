@@ -32,14 +32,13 @@ impl Expand<'_> {
         let into_delete_body = self.expand_model_into_delete_body();
         let into_expr_body_ref = self.expand_model_into_expr_body(true);
         let into_expr_body_val = self.expand_model_into_expr_body(false);
-        let reload_method = self.expand_reload_method();
+        let reload_trait_method = self.expand_reload_trait_method();
 
         quote! {
             impl #model_ident {
                 #model_fields
                 #filter_methods
                 #relation_methods
-                #reload_method
 
                 #vis fn create() -> #create_struct_ident {
                     #create_struct_ident::default()
@@ -90,6 +89,8 @@ impl Expand<'_> {
                 fn load(value: #toasty::core::stmt::Value) -> #toasty::Result<Self> {
                     #load_body
                 }
+
+                #reload_trait_method
             }
 
             impl #toasty::Create for #model_ident {
@@ -386,15 +387,15 @@ impl Expand<'_> {
 
                     quote! {
                         #i => {
-                            self.#field_ident = #assign;
+                            target.#field_ident = #assign;
                         }
                     }
                 }
                 FieldTy::Primitive(ty) => {
-                    quote!(#i => <#ty as #toasty::Field>::reload(&mut self.#field_ident, value)?,)
+                    quote!(#i => <#ty as #toasty::Load>::reload(&mut target.#field_ident, value)?,)
                 }
                 _ => {
-                    quote!(#i => self.#field_ident.unload(),)
+                    quote!(#i => target.#field_ident.unload(),)
                 }
             }
         });
@@ -411,7 +412,7 @@ impl Expand<'_> {
                     Ok(())
                 }
                 value => {
-                    *self = <Self as #toasty::Load>::load(value)?;
+                    *target = <Self as #toasty::Load>::load(value)?;
                     Ok(())
                 }
             }

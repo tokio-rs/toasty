@@ -41,6 +41,11 @@ impl<T: Load> Load for Option<T> {
             v => Ok(Some(T::load(v)?)),
         }
     }
+
+    fn reload(target: &mut Self::Output, value: Value) -> Result<(), crate::Error> {
+        *target = Self::load(value)?;
+        Ok(())
+    }
 }
 
 impl<T: Relation> Create for Option<T> {
