@@ -1,6 +1,5 @@
 use super::parse::{
-    CompareOpKind, Expr, ExprBinaryOp, FieldPath, OrderByClause, OrderDirection, PaginationExpr,
-    QueryInput,
+    CompareOpKind, Expr, ExprBinaryOp, FieldPath, OrderByClause, OrderDirection, QueryInput,
 };
 
 use proc_macro2::TokenStream;
@@ -29,13 +28,13 @@ pub(crate) fn expand(input: &QueryInput) -> TokenStream {
     }
 
     if let Some(limit) = &input.limit {
-        let limit_expr = expand_pagination_expr(limit);
+        let limit_expr = expand_filter(source, limit);
         out = quote! { #out.limit(#limit_expr) };
     }
 
     // offset must come after limit (the API requires it)
     if let Some(offset) = &input.offset {
-        let offset_expr = expand_pagination_expr(offset);
+        let offset_expr = expand_filter(source, offset);
         out = quote! { #out.offset(#offset_expr) };
     }
 
@@ -48,15 +47,6 @@ fn expand_order_by(source: &syn::Path, clause: &OrderByClause) -> TokenStream {
     match clause.direction {
         OrderDirection::Asc => quote! { #field.asc() },
         OrderDirection::Desc => quote! { #field.desc() },
-    }
-}
-
-/// Expand a pagination expression (LIMIT or OFFSET value).
-fn expand_pagination_expr(expr: &PaginationExpr) -> TokenStream {
-    match expr {
-        PaginationExpr::Lit(lit) => quote! { #lit },
-        PaginationExpr::Var(ident) => quote! { #ident },
-        PaginationExpr::RustExpr(expr) => quote! { #expr },
     }
 }
 

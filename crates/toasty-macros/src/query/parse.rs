@@ -15,9 +15,9 @@ pub(crate) struct QueryInput {
     /// Optional ORDER BY clause.
     pub order_by: Option<OrderByClause>,
     /// Optional OFFSET value.
-    pub offset: Option<PaginationExpr>,
+    pub offset: Option<Expr>,
     /// Optional LIMIT value.
-    pub limit: Option<PaginationExpr>,
+    pub limit: Option<Expr>,
 }
 
 /// An ORDER BY clause: a field path and a direction.
@@ -32,15 +32,6 @@ pub(crate) struct OrderByClause {
 pub(crate) enum OrderDirection {
     Asc,
     Desc,
-}
-
-/// A pagination expression (LIMIT or OFFSET) — either a literal integer or an
-/// external reference.
-#[derive(Debug)]
-pub(crate) enum PaginationExpr {
-    Lit(syn::LitInt),
-    Var(syn::Ident),
-    RustExpr(Box<syn::Expr>),
 }
 
 /// An expression — a tree of boolean operators, comparisons, NOT, and
@@ -369,20 +360,23 @@ fn parse_order_by(input: ParseStream) -> syn::Result<OrderByClause> {
 }
 
 /// Parse a pagination value: integer literal, `#ident`, or `#(expr)`.
-fn parse_pagination_expr(input: ParseStream) -> syn::Result<PaginationExpr> {
+///
+/// This is a restricted form of [`Expr`] — only values that make sense for
+/// LIMIT / OFFSET are accepted.
+fn parse_pagination_expr(input: ParseStream) -> syn::Result<Expr> {
     if input.peek(syn::LitInt) {
         let lit: syn::LitInt = input.parse()?;
-        Ok(PaginationExpr::Lit(lit))
+        Ok(Expr::Lit(syn::Lit::Int(lit)))
     } else if input.peek(syn::Token![#]) {
         input.parse::<syn::Token![#]>()?;
         if input.peek(token::Paren) {
             let content;
             syn::parenthesized!(content in input);
             let expr: syn::Expr = content.parse()?;
-            Ok(PaginationExpr::RustExpr(Box::new(expr)))
+            Ok(Expr::RustExpr(Box::new(expr)))
         } else {
             let ident: syn::Ident = input.parse()?;
-            Ok(PaginationExpr::Var(ident))
+            Ok(Expr::Var(ident))
         }
     } else {
         Err(input.error("expected integer literal, `#variable`, or `#(expression)`"))
