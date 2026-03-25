@@ -112,7 +112,7 @@ pub use db::{Db, Executor, Transaction};
 mod engine;
 
 pub mod schema;
-pub use schema::{BelongsTo, HasMany, HasOne};
+pub use schema::{BelongsTo, Create, HasMany, HasOne};
 
 // `Page` lives in `stmt`.
 
