@@ -110,11 +110,22 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
             }
         }
 
+        impl #toasty::ModelField for #model_ident {
+            fn field_ty(
+                _storage_ty: Option<#toasty::core::schema::db::Type>,
+            ) -> #toasty::core::schema::app::FieldTy {
+                #toasty::core::schema::app::FieldTy::Embedded(
+                    #toasty::core::schema::app::Embedded {
+                        target: <Self as #toasty::Register>::id(),
+                        expr_ty: <Self as #toasty::Load>::ty(),
+                    }
+                )
+            }
+        }
+
         impl #toasty::Field for #model_ident {
             type FieldAccessor<__Origin> = #field_struct_ident<__Origin>;
             type UpdateBuilder<'a> = #update_struct_ident<'a>;
-
-            const NULLABLE: bool = false;
 
             fn reload(&mut self, value: #toasty::core::stmt::Value) -> #toasty::Result<()> {
                 #reload_body
@@ -129,17 +140,6 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
                 projection: #toasty::core::stmt::Projection,
             ) -> Self::UpdateBuilder<'a> {
                 #update_struct_ident { assignments, projection }
-            }
-
-            fn field_ty(
-                _storage_ty: Option<#toasty::core::schema::db::Type>,
-            ) -> #toasty::core::schema::app::FieldTy {
-                #toasty::core::schema::app::FieldTy::Embedded(
-                    #toasty::core::schema::app::Embedded {
-                        target: <Self as #toasty::Register>::id(),
-                        expr_ty: <Self as #toasty::Load>::ty(),
-                    }
-                )
             }
         }
 
@@ -242,14 +242,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
             }
         }
 
-        impl #toasty::Field for #model_ident {
-            type FieldAccessor<__Origin> = #field_struct_ident<__Origin>;
-            type UpdateBuilder<'a> = ();
-
-            fn make_field_accessor<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::FieldAccessor<__Origin> {
-                #field_struct_ident { path }
-            }
-
+        impl #toasty::ModelField for #model_ident {
             fn field_ty(
                 _storage_ty: Option<#toasty::core::schema::db::Type>,
             ) -> #toasty::core::schema::app::FieldTy {
@@ -259,6 +252,15 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
                         expr_ty: <Self as #toasty::Load>::ty(),
                     }
                 )
+            }
+        }
+
+        impl #toasty::Field for #model_ident {
+            type FieldAccessor<__Origin> = #field_struct_ident<__Origin>;
+            type UpdateBuilder<'a> = ();
+
+            fn make_field_accessor<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::FieldAccessor<__Origin> {
+                #field_struct_ident { path }
             }
         }
 

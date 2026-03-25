@@ -32,3 +32,45 @@ error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::schema::
             bigdecimal::BigDecimal
             bool
           and $N others
+
+error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: ModelField` is not satisfied
+ --> tests/ui/relation_has_one_requires_attr.rs:7:14
+  |
+7 |     profile: toasty::HasOne<Option<Profile>>,
+  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `ModelField` is not implemented for `toasty::HasOne<Option<Profile>>`
+  |
+  = help: the following other types implement trait `ModelField`:
+            Arc<T>
+            Box<T>
+            Cow<'_, T>
+            Option<T>
+            Rc<T>
+            Vec<u8>
+            bigdecimal::BigDecimal
+            bool
+          and $N others
+
+error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: ModelField` is not satisfied
+ --> tests/ui/relation_has_one_requires_attr.rs:7:14
+  |
+7 |     profile: toasty::HasOne<Option<Profile>>,
+  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `ModelField` is not implemented for `toasty::HasOne<Option<Profile>>`
+  |
+  = help: the following other types implement trait `ModelField`:
+            Arc<T>
+            Box<T>
+            Cow<'_, T>
+            Option<T>
+            Rc<T>
+            Vec<u8>
+            bigdecimal::BigDecimal
+            bool
+          and $N others
+note: required by a bound in `make_field_accessor`
+ --> $WORKSPACE/crates/toasty/src/schema/field.rs
+  |
+  | pub trait Field: Sized + Load<Output = Self> + ModelField {
+  |                                                ^^^^^^^^^^ required by this bound in `Field::make_field_accessor`
+...
+  |     fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin>;
+  |        ------------------- required by a bound in this associated function

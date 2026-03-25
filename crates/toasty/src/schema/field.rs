@@ -1,14 +1,15 @@
 use std::{rc::Rc, sync::Arc};
 
-use crate::{schema::Load, stmt::Path, Result};
+use crate::{
+    schema::{Load, ModelField},
+    stmt::Path,
+    Result,
+};
 
 use std::borrow::Cow;
 use toasty_core::stmt;
 
-pub trait Field: Sized + Load<Output = Self> {
-    /// Whether or not the type is nullable
-    const NULLABLE: bool = false;
-
+pub trait Field: Sized + Load<Output = Self> + ModelField {
     /// The type returned when accessing this field from a Fields struct.
     /// For primitives, this is Path<Origin, Self>.
     /// For embedded types, this is {Type}Fields<Origin>.
@@ -45,22 +46,9 @@ pub trait Field: Sized + Load<Output = Self> {
         // For primitive types (where UpdateBuilder = ()), this is never called.
         panic!("make_update_builder must be overridden")
     }
-
-    /// Returns the app-level field type for this primitive.
-    /// Default implementation returns a Primitive field type.
-    /// Embedded types override this to return Embedded field type.
-    fn field_ty(
-        storage_ty: Option<toasty_core::schema::db::Type>,
-    ) -> toasty_core::schema::app::FieldTy {
-        toasty_core::schema::app::FieldTy::Primitive(toasty_core::schema::app::FieldPrimitive {
-            ty: Self::ty(),
-            storage_ty,
-            serialize: None,
-        })
-    }
 }
 
-/// Macro to generate Load and Field implementations for numeric types that use `try_into()`
+/// Macro to generate Load, ModelField, and Field implementations for numeric types that use `try_into()`
 macro_rules! impl_field_numeric {
     ($($ty:ty => $stmt_ty:ident),* $(,)?) => {
         $(
@@ -75,6 +63,8 @@ macro_rules! impl_field_numeric {
                     value.try_into()
                 }
             }
+
+            impl ModelField for $ty {}
 
             impl Field for $ty {
                 type FieldAccessor<Origin> = Path<Origin, Self>;
@@ -113,6 +103,8 @@ impl Load for isize {
     }
 }
 
+impl ModelField for isize {}
+
 impl Field for isize {
     type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
@@ -133,6 +125,8 @@ impl Load for usize {
         value.try_into()
     }
 }
+
+impl ModelField for usize {}
 
 impl Field for usize {
     type FieldAccessor<Origin> = Path<Origin, Self>;
@@ -158,6 +152,8 @@ impl Load for String {
     }
 }
 
+impl ModelField for String {}
+
 impl Field for String {
     type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
@@ -167,14 +163,7 @@ impl Field for String {
     }
 }
 
-impl Field for Vec<u8> {
-    type FieldAccessor<Origin> = Path<Origin, Self>;
-    type UpdateBuilder<'a> = ();
-
-    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
-        path
-    }
-
+impl ModelField for Vec<u8> {
     fn field_ty(
         storage_ty: Option<toasty_core::schema::db::Type>,
     ) -> toasty_core::schema::app::FieldTy {
@@ -186,11 +175,22 @@ impl Field for Vec<u8> {
     }
 }
 
+impl Field for Vec<u8> {
+    type FieldAccessor<Origin> = Path<Origin, Self>;
+    type UpdateBuilder<'a> = ();
+
+    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
+        path
+    }
+}
+
+impl<T: Field> ModelField for Option<T> {
+    const NULLABLE: bool = true;
+}
+
 impl<T: Field> Field for Option<T> {
     type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
-
-    const NULLABLE: bool = true;
 
     fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
         path
@@ -211,6 +211,13 @@ where
     fn load(value: stmt::Value) -> Result<Self> {
         <T::Owned as Load>::load(value).map(Cow::Owned)
     }
+}
+
+impl<T> ModelField for Cow<'_, T>
+where
+    T: ToOwned + ?Sized,
+    T::Owned: Field,
+{
 }
 
 impl<T> Field for Cow<'_, T>
@@ -241,6 +248,8 @@ impl Load for uuid::Uuid {
     }
 }
 
+impl ModelField for uuid::Uuid {}
+
 impl Field for uuid::Uuid {
     type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
@@ -265,6 +274,8 @@ impl Load for bool {
     }
 }
 
+impl ModelField for bool {}
+
 impl Field for bool {
     type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
@@ -285,6 +296,8 @@ impl<T: Field> Load for Arc<T> {
         <T as Load>::load(value).map(Arc::new)
     }
 }
+
+impl<T: Field> ModelField for Arc<T> {}
 
 impl<T: Field> Field for Arc<T> {
     type FieldAccessor<Origin> = Path<Origin, Self>;
@@ -307,6 +320,8 @@ impl<T: Field> Load for Rc<T> {
     }
 }
 
+impl<T: Field> ModelField for Rc<T> {}
+
 impl<T: Field> Field for Rc<T> {
     type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
@@ -327,6 +342,8 @@ impl<T: Field> Load for Box<T> {
         <T as Load>::load(value).map(Box::new)
     }
 }
+
+impl<T: Field> ModelField for Box<T> {}
 
 impl<T: Field> Field for Box<T> {
     type FieldAccessor<Origin> = Path<Origin, Self>;
@@ -357,6 +374,9 @@ impl Load for rust_decimal::Decimal {
 }
 
 #[cfg(feature = "rust_decimal")]
+impl ModelField for rust_decimal::Decimal {}
+
+#[cfg(feature = "rust_decimal")]
 impl Field for rust_decimal::Decimal {
     type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
@@ -384,6 +404,9 @@ impl Load for bigdecimal::BigDecimal {
         }
     }
 }
+
+#[cfg(feature = "bigdecimal")]
+impl ModelField for bigdecimal::BigDecimal {}
 
 #[cfg(feature = "bigdecimal")]
 impl Field for bigdecimal::BigDecimal {
