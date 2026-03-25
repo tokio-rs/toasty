@@ -905,8 +905,8 @@ pub fn include_schema(_input: TokenStream) -> TokenStream {
     todo!()
 }
 
-/// Builds a query from a concise, SQL-inspired syntax. The macro expands into
-/// the equivalent method-chain calls on the model's query builder API. It does
+/// Builds a query using the Toasty query language. The macro expands into
+/// the equivalent method-chain calls on the query builder API. It does
 /// not execute the query — chain `.exec(&mut db).await?` on the result to run
 /// it.
 ///
@@ -1052,11 +1052,10 @@ pub fn include_schema(_input: TokenStream) -> TokenStream {
 /// let _ = toasty::query!(User FILTER .age == 42);
 /// ```
 ///
-/// # External references
+/// # Referencing surrounding code
 ///
 /// `#ident` pulls a variable from the surrounding scope. `#(expr)` embeds an
-/// arbitrary Rust expression. This follows the convention used by the `quote!`
-/// macro.
+/// arbitrary Rust expression.
 ///
 /// ```
 /// # #[derive(toasty::Model)]
@@ -1191,7 +1190,7 @@ pub fn include_schema(_input: TokenStream) -> TokenStream {
 /// # Expansion details
 ///
 /// The macro translates each syntactic element into method-chain calls on the
-/// model's generated query builder API.
+/// query builder.
 ///
 /// ## No filter
 ///
