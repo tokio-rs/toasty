@@ -33,6 +33,9 @@ pub mod option;
 mod register;
 pub use register::{generate_unique_id, Register};
 
+mod register_field;
+pub use register_field::RegisterField;
+
 mod relation;
 pub use relation::Relation;
 
