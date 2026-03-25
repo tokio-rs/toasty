@@ -362,24 +362,13 @@ fn parse_order_by(input: ParseStream) -> syn::Result<OrderByClause> {
 /// Parse a pagination value: integer literal, `#ident`, or `#(expr)`.
 ///
 /// This is a restricted form of [`Expr`] — only values that make sense for
-/// LIMIT / OFFSET are accepted.
+/// LIMIT / OFFSET are accepted. Delegates to [`parse_primary`] for the actual
+/// parsing, then validates that the resulting expression is an allowed form.
 fn parse_pagination_expr(input: ParseStream) -> syn::Result<Expr> {
-    if input.peek(syn::LitInt) {
-        let lit: syn::LitInt = input.parse()?;
-        Ok(Expr::Lit(syn::Lit::Int(lit)))
-    } else if input.peek(syn::Token![#]) {
-        input.parse::<syn::Token![#]>()?;
-        if input.peek(token::Paren) {
-            let content;
-            syn::parenthesized!(content in input);
-            let expr: syn::Expr = content.parse()?;
-            Ok(Expr::RustExpr(Box::new(expr)))
-        } else {
-            let ident: syn::Ident = input.parse()?;
-            Ok(Expr::Var(ident))
-        }
-    } else {
-        Err(input.error("expected integer literal, `#variable`, or `#(expression)`"))
+    let expr = parse_primary(input)?;
+    match &expr {
+        Expr::Lit(syn::Lit::Int(_)) | Expr::Var(_) | Expr::RustExpr(_) => Ok(expr),
+        _ => Err(input.error("expected integer literal, `#variable`, or `#(expression)`")),
     }
 }
 
