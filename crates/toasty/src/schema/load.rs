@@ -132,3 +132,212 @@ impl_load_for_tuple!(A, B, C, D, E; 0, 1, 2, 3, 4);
 impl_load_for_tuple!(A, B, C, D, E, F; 0, 1, 2, 3, 4, 5);
 impl_load_for_tuple!(A, B, C, D, E, F, G; 0, 1, 2, 3, 4, 5, 6);
 impl_load_for_tuple!(A, B, C, D, E, F, G, H; 0, 1, 2, 3, 4, 5, 6, 7);
+
+impl Load for String {
+    type Output = Self;
+
+    fn ty() -> stmt::Type {
+        stmt::Type::String
+    }
+
+    fn load(value: stmt::Value) -> Result<Self::Output, Error> {
+        match value {
+            stmt::Value::String(v) => Ok(v),
+            _ => Err(Error::type_conversion(value, "String")),
+        }
+    }
+
+    fn reload(target: &mut Self, value: stmt::Value) -> Result<(), Error> {
+        *target = Self::load(value)?;
+        Ok(())
+    }
+}
+
+impl Load for uuid::Uuid {
+    type Output = Self;
+
+    fn ty() -> stmt::Type {
+        stmt::Type::Uuid
+    }
+
+    fn load(value: stmt::Value) -> Result<Self::Output, Error> {
+        match value {
+            stmt::Value::Uuid(v) => Ok(v),
+            _ => Err(Error::type_conversion(value, "uuid::Uuid")),
+        }
+    }
+
+    fn reload(target: &mut Self, value: stmt::Value) -> Result<(), Error> {
+        *target = Self::load(value)?;
+        Ok(())
+    }
+}
+
+impl Load for bool {
+    type Output = Self;
+
+    fn ty() -> stmt::Type {
+        stmt::Type::Bool
+    }
+
+    fn load(value: stmt::Value) -> Result<Self::Output, Error> {
+        match value {
+            stmt::Value::Bool(v) => Ok(v),
+            _ => Err(Error::type_conversion(value, "bool")),
+        }
+    }
+
+    fn reload(target: &mut Self, value: stmt::Value) -> Result<(), Error> {
+        *target = Self::load(value)?;
+        Ok(())
+    }
+}
+
+impl<T> Load for std::borrow::Cow<'_, T>
+where
+    T: ToOwned + ?Sized,
+    T::Owned: Load<Output = T::Owned>,
+{
+    type Output = Self;
+
+    fn ty() -> stmt::Type {
+        <T::Owned as Load>::ty()
+    }
+
+    fn load(value: stmt::Value) -> Result<Self::Output, Error> {
+        <T::Owned as Load>::load(value).map(std::borrow::Cow::Owned)
+    }
+
+    fn reload(target: &mut Self, value: stmt::Value) -> Result<(), Error> {
+        *target = Self::load(value)?;
+        Ok(())
+    }
+}
+
+impl<T: Load<Output = T>> Load for std::sync::Arc<T> {
+    type Output = Self;
+
+    fn ty() -> stmt::Type {
+        T::ty()
+    }
+
+    fn load(value: stmt::Value) -> Result<Self::Output, Error> {
+        <T as Load>::load(value).map(std::sync::Arc::new)
+    }
+
+    fn reload(target: &mut Self, value: stmt::Value) -> Result<(), Error> {
+        *target = Self::load(value)?;
+        Ok(())
+    }
+}
+
+impl<T: Load<Output = T>> Load for std::rc::Rc<T> {
+    type Output = Self;
+
+    fn ty() -> stmt::Type {
+        T::ty()
+    }
+
+    fn load(value: stmt::Value) -> Result<Self::Output, Error> {
+        <T as Load>::load(value).map(std::rc::Rc::new)
+    }
+
+    fn reload(target: &mut Self, value: stmt::Value) -> Result<(), Error> {
+        *target = Self::load(value)?;
+        Ok(())
+    }
+}
+
+impl<T: Load<Output = T>> Load for Box<T> {
+    type Output = Self;
+
+    fn ty() -> stmt::Type {
+        T::ty()
+    }
+
+    fn load(value: stmt::Value) -> Result<Self::Output, Error> {
+        <T as Load>::load(value).map(Box::new)
+    }
+
+    fn reload(target: &mut Self, value: stmt::Value) -> Result<(), Error> {
+        *target = Self::load(value)?;
+        Ok(())
+    }
+}
+
+// Pointer-sized integers map to fixed-size types internally
+impl Load for isize {
+    type Output = Self;
+
+    fn ty() -> stmt::Type {
+        stmt::Type::I64
+    }
+
+    fn load(value: stmt::Value) -> Result<Self::Output, Error> {
+        value.try_into()
+    }
+
+    fn reload(target: &mut Self, value: stmt::Value) -> Result<(), Error> {
+        *target = Self::load(value)?;
+        Ok(())
+    }
+}
+
+impl Load for usize {
+    type Output = Self;
+
+    fn ty() -> stmt::Type {
+        stmt::Type::U64
+    }
+
+    fn load(value: stmt::Value) -> Result<Self::Output, Error> {
+        value.try_into()
+    }
+
+    fn reload(target: &mut Self, value: stmt::Value) -> Result<(), Error> {
+        *target = Self::load(value)?;
+        Ok(())
+    }
+}
+
+#[cfg(feature = "rust_decimal")]
+impl Load for rust_decimal::Decimal {
+    type Output = Self;
+
+    fn ty() -> stmt::Type {
+        stmt::Type::Decimal
+    }
+
+    fn load(value: stmt::Value) -> Result<Self::Output, Error> {
+        match value {
+            stmt::Value::Decimal(v) => Ok(v),
+            _ => Err(Error::type_conversion(value, "rust_decimal::Decimal")),
+        }
+    }
+
+    fn reload(target: &mut Self, value: stmt::Value) -> Result<(), Error> {
+        *target = Self::load(value)?;
+        Ok(())
+    }
+}
+
+#[cfg(feature = "bigdecimal")]
+impl Load for bigdecimal::BigDecimal {
+    type Output = Self;
+
+    fn ty() -> stmt::Type {
+        stmt::Type::BigDecimal
+    }
+
+    fn load(value: stmt::Value) -> Result<Self::Output, Error> {
+        match value {
+            stmt::Value::BigDecimal(v) => Ok(v),
+            _ => Err(Error::type_conversion(value, "bigdecimal::BigDecimal")),
+        }
+    }
+
+    fn reload(target: &mut Self, value: stmt::Value) -> Result<(), Error> {
+        *target = Self::load(value)?;
+        Ok(())
+    }
+}
