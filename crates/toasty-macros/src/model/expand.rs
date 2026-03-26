@@ -115,6 +115,12 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
         }
 
         impl #toasty::ModelField for #model_ident {
+            type Path<__Origin> = #field_struct_ident<__Origin>;
+
+            fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
+                #field_struct_ident { path }
+            }
+
             fn field_ty(
                 _storage_ty: Option<#toasty::core::schema::db::Type>,
             ) -> #toasty::core::schema::app::FieldTy {
@@ -248,6 +254,12 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
         }
 
         impl #toasty::ModelField for #model_ident {
+            type Path<__Origin> = #field_struct_ident<__Origin>;
+
+            fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
+                #field_struct_ident { path }
+            }
+
             fn field_ty(
                 _storage_ty: Option<#toasty::core::schema::db::Type>,
             ) -> #toasty::core::schema::app::FieldTy {

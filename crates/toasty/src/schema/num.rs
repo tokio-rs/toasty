@@ -27,7 +27,13 @@ macro_rules! impl_field_numeric {
                 }
             }
 
-            impl ModelField for $ty {}
+            impl ModelField for $ty {
+                type Path<Origin> = Path<Origin, Self>;
+
+                fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
+                    path
+                }
+            }
 
             impl Field for $ty {
                 type FieldAccessor<Origin> = Path<Origin, Self>;

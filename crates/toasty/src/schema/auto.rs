@@ -1,4 +1,4 @@
-use super::Field;
+use super::ModelField;
 use toasty_core::schema::app::AutoStrategy;
 
 #[diagnostic::on_unimplemented(
@@ -6,7 +6,7 @@ use toasty_core::schema::app::AutoStrategy;
     label = "Toasty cannot automatically set values for this field",
     note = "Is the field annotated with #[auto]?"
 )]
-pub trait Auto: Field {
+pub trait Auto: ModelField {
     const STRATEGY: AutoStrategy;
 }
 
