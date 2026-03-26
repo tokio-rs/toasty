@@ -908,12 +908,6 @@ pub fn derive_embed(input: TokenStream) -> TokenStream {
     }
 }
 
-/// Includes a Toasty schema definition from an external file.
-#[proc_macro]
-pub fn include_schema(_input: TokenStream) -> TokenStream {
-    todo!()
-}
-
 /// Builds a query using the Toasty query language. The macro expands into
 /// the equivalent method-chain calls on the query builder API. It does
 /// not execute the query — chain `.exec(&mut db).await?` on the result to run
