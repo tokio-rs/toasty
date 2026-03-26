@@ -1,4 +1,4 @@
-use super::{Field, Load, ModelField};
+use super::{Field, Load};
 use crate::stmt::Path;
 use toasty_core::{
     stmt::{Type, Value},
@@ -27,7 +27,7 @@ macro_rules! impl_jiff_field {
             }
         }
 
-        impl ModelField for $ty {
+        impl Field for $ty {
             type Path<Origin> = Path<Origin, Self>;
             type Update<'a> = ();
 
@@ -39,17 +39,6 @@ macro_rules! impl_jiff_field {
                 _assignments: &'a mut toasty_core::stmt::Assignments,
                 _projection: toasty_core::stmt::Projection,
             ) -> Self::Update<'a> {
-            }
-        }
-
-        impl Field for $ty {
-            type FieldAccessor<Origin> = Path<Origin, Self>;
-            type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
-
-            fn make_field_accessor<Origin>(
-                path: Path<Origin, Self>,
-            ) -> Self::FieldAccessor<Origin> {
-                path
             }
         }
     };

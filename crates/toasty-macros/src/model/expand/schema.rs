@@ -110,8 +110,8 @@ impl Expand<'_> {
                             ));
                         }
                         None => {
-                            nullable = quote!(<#ty as #toasty::ModelField>::NULLABLE);
-                            field_ty = quote!(<#ty as #toasty::ModelField>::field_ty(#storage_ty));
+                            nullable = quote!(<#ty as #toasty::Field>::NULLABLE);
+                            field_ty = quote!(<#ty as #toasty::Field>::field_ty(#storage_ty));
                         }
                     }
                 }
