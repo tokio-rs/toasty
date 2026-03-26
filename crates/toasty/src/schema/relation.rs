@@ -1,8 +1,9 @@
-use super::{Create, Load, Model};
+use super::{Load, Model};
+use crate::stmt::{IntoExpr, IntoInsert};
 
 use toasty_core::schema::app::FieldId;
 
-pub trait Relation: Load<Output = Self> + Create<Item = Self::Model> {
+pub trait Relation: Load<Output = Self> {
     /// The target model
     type Model: Model;
 
@@ -10,6 +11,9 @@ pub trait Relation: Load<Output = Self> + Create<Item = Self::Model> {
     type Expr;
 
     type Query;
+
+    /// Create builder type for this relation's target model
+    type Create: Default + IntoInsert<Model = Self::Model> + IntoExpr<Self::Model>;
 
     /// HasMany relation type
     type Many;
@@ -22,6 +26,11 @@ pub trait Relation: Load<Output = Self> + Create<Item = Self::Model> {
 
     /// Option fields
     type OptionOne;
+
+    /// Return a fresh, default-initialized create builder.
+    fn new_create() -> Self::Create {
+        Self::Create::default()
+    }
 
     fn field_name_to_id(name: &str) -> FieldId;
 

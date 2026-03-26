@@ -117,7 +117,7 @@ impl Expand<'_> {
                 match &field.ty {
                     FieldTy::BelongsTo(rel) => {
                         let ty = &rel.ty;
-                        let rel_create = quote!(<#ty as #toasty::Create>::Builder);
+                        let rel_create = quote!(<#ty as #toasty::Relation>::Create);
 
                         quote! {
                             #vis fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
@@ -167,7 +167,7 @@ impl Expand<'_> {
                     }
                     FieldTy::HasOne(rel) => {
                         let ty = &rel.ty;
-                        let rel_create = quote!(<#ty as #toasty::Create>::Builder);
+                        let rel_create = quote!(<#ty as #toasty::Relation>::Create);
 
                         quote! {
                             #vis fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {

@@ -149,11 +149,6 @@ impl Expand<'_> {
                 #many_field_association_methods
             }
 
-            impl<__Origin> #toasty::Create for ManyField<__Origin> {
-                type Item = #model_ident;
-                type Builder = #create_builder_ident;
-            }
-
             impl<__Origin> Into<#toasty::Path<__Origin, #toasty::List<#model_ident>>> for ManyField<__Origin> {
                 fn into(self) -> #toasty::Path<__Origin, #toasty::List<#model_ident>> {
                     self.path
@@ -181,11 +176,6 @@ impl Expand<'_> {
                 }
 
                 #one_field_association_methods
-            }
-
-            impl<__Origin> #toasty::Create for OneField<__Origin> {
-                type Item = #model_ident;
-                type Builder = #create_builder_ident;
             }
 
             impl<__Origin> Into<#toasty::Path<__Origin, #model_ident>> for OneField<__Origin> {
