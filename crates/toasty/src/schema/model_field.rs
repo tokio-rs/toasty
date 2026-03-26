@@ -18,7 +18,7 @@ pub trait ModelField: Load {
     /// The type of the update builder for this field.
     /// For embedded types, this is {Type}Update<'a>.
     /// For primitives, this will be {Type}Update<'a> once implemented.
-    type UpdateBuilder<'a>;
+    type Update<'a>;
 
     /// Whether or not the type is nullable
     const NULLABLE: bool = false;
@@ -33,10 +33,10 @@ pub trait ModelField: Load {
     /// Build an update builder from assignments and a projection.
     /// For primitives, this returns `()` (no builder).
     /// For embedded types, this is overridden to construct the {Type}Update builder.
-    fn make_update_builder<'a>(
+    fn new_update<'a>(
         _assignments: &'a mut toasty_core::stmt::Assignments,
         _projection: toasty_core::stmt::Projection,
-    ) -> Self::UpdateBuilder<'a>;
+    ) -> Self::Update<'a>;
 
     /// Returns the app-level field type for this primitive.
     /// Default implementation returns a Primitive field type.
@@ -56,16 +56,16 @@ macro_rules! impl_model_field_primitive {
     ($ty:ty) => {
         impl ModelField for $ty {
             type Path<Origin> = stmt::Path<Origin, Self>;
-            type UpdateBuilder<'a> = ();
+            type Update<'a> = ();
 
             fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
                 path
             }
 
-            fn make_update_builder<'a>(
+            fn new_update<'a>(
                 _assignments: &'a mut toasty_core::stmt::Assignments,
                 _projection: toasty_core::stmt::Projection,
-            ) -> Self::UpdateBuilder<'a> {
+            ) -> Self::Update<'a> {
             }
         }
     };
@@ -79,16 +79,16 @@ impl_model_field_primitive!(usize);
 
 impl ModelField for Vec<u8> {
     type Path<Origin> = stmt::Path<Origin, Self>;
-    type UpdateBuilder<'a> = ();
+    type Update<'a> = ();
 
     fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
         path
     }
 
-    fn make_update_builder<'a>(
+    fn new_update<'a>(
         _assignments: &'a mut toasty_core::stmt::Assignments,
         _projection: toasty_core::stmt::Projection,
-    ) -> Self::UpdateBuilder<'a> {
+    ) -> Self::Update<'a> {
     }
 
     fn field_ty(
@@ -104,17 +104,17 @@ impl ModelField for Vec<u8> {
 
 impl<T: ModelField> ModelField for Option<T> {
     type Path<Origin> = stmt::Path<Origin, Self>;
-    type UpdateBuilder<'a> = ();
+    type Update<'a> = ();
     const NULLABLE: bool = true;
 
     fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
         path
     }
 
-    fn make_update_builder<'a>(
+    fn new_update<'a>(
         _assignments: &'a mut toasty_core::stmt::Assignments,
         _projection: toasty_core::stmt::Projection,
-    ) -> Self::UpdateBuilder<'a> {
+    ) -> Self::Update<'a> {
     }
 }
 
@@ -124,61 +124,61 @@ where
     T::Owned: ModelField<Output = T::Owned>,
 {
     type Path<Origin> = stmt::Path<Origin, Self>;
-    type UpdateBuilder<'a> = ();
+    type Update<'a> = ();
 
     fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
         path
     }
 
-    fn make_update_builder<'a>(
+    fn new_update<'a>(
         _assignments: &'a mut toasty_core::stmt::Assignments,
         _projection: toasty_core::stmt::Projection,
-    ) -> Self::UpdateBuilder<'a> {
+    ) -> Self::Update<'a> {
     }
 }
 
 impl<T: ModelField<Output = T>> ModelField for std::sync::Arc<T> {
     type Path<Origin> = stmt::Path<Origin, Self>;
-    type UpdateBuilder<'a> = ();
+    type Update<'a> = ();
 
     fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
         path
     }
 
-    fn make_update_builder<'a>(
+    fn new_update<'a>(
         _assignments: &'a mut toasty_core::stmt::Assignments,
         _projection: toasty_core::stmt::Projection,
-    ) -> Self::UpdateBuilder<'a> {
+    ) -> Self::Update<'a> {
     }
 }
 
 impl<T: ModelField<Output = T>> ModelField for std::rc::Rc<T> {
     type Path<Origin> = stmt::Path<Origin, Self>;
-    type UpdateBuilder<'a> = ();
+    type Update<'a> = ();
 
     fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
         path
     }
 
-    fn make_update_builder<'a>(
+    fn new_update<'a>(
         _assignments: &'a mut toasty_core::stmt::Assignments,
         _projection: toasty_core::stmt::Projection,
-    ) -> Self::UpdateBuilder<'a> {
+    ) -> Self::Update<'a> {
     }
 }
 
 impl<T: ModelField<Output = T>> ModelField for Box<T> {
     type Path<Origin> = stmt::Path<Origin, Self>;
-    type UpdateBuilder<'a> = ();
+    type Update<'a> = ();
 
     fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
         path
     }
 
-    fn make_update_builder<'a>(
+    fn new_update<'a>(
         _assignments: &'a mut toasty_core::stmt::Assignments,
         _projection: toasty_core::stmt::Projection,
-    ) -> Self::UpdateBuilder<'a> {
+    ) -> Self::Update<'a> {
     }
 }
 

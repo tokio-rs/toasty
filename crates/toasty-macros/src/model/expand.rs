@@ -116,16 +116,16 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
 
         impl #toasty::ModelField for #model_ident {
             type Path<__Origin> = #field_struct_ident<__Origin>;
-            type UpdateBuilder<'a> = #update_struct_ident<'a>;
+            type Update<'a> = #update_struct_ident<'a>;
 
             fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
                 #field_struct_ident { path }
             }
 
-            fn make_update_builder<'a>(
+            fn new_update<'a>(
                 assignments: &'a mut #toasty::core::stmt::Assignments,
                 projection: #toasty::core::stmt::Projection,
-            ) -> Self::UpdateBuilder<'a> {
+            ) -> Self::Update<'a> {
                 #update_struct_ident { assignments, projection }
             }
 
@@ -263,16 +263,16 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
 
         impl #toasty::ModelField for #model_ident {
             type Path<__Origin> = #field_struct_ident<__Origin>;
-            type UpdateBuilder<'a> = ();
+            type Update<'a> = ();
 
             fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
                 #field_struct_ident { path }
             }
 
-            fn make_update_builder<'a>(
+            fn new_update<'a>(
                 _assignments: &'a mut #toasty::core::stmt::Assignments,
                 _projection: #toasty::core::stmt::Projection,
-            ) -> Self::UpdateBuilder<'a> {
+            ) -> Self::Update<'a> {
             }
 
             fn field_ty(
