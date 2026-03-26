@@ -114,7 +114,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
             }
         }
 
-        impl #toasty::ModelField for #model_ident {
+        impl #toasty::Field for #model_ident {
             type Path<__Origin> = #field_struct_ident<__Origin>;
             type Update<'a> = #update_struct_ident<'a>;
 
@@ -138,22 +138,6 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
                         expr_ty: <Self as #toasty::Load>::ty(),
                     }
                 )
-            }
-        }
-
-        impl #toasty::Field for #model_ident {
-            type FieldAccessor<__Origin> = #field_struct_ident<__Origin>;
-            type UpdateBuilder<'a> = #update_struct_ident<'a>;
-
-            fn make_field_accessor<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::FieldAccessor<__Origin> {
-                #field_struct_ident { path }
-            }
-
-            fn make_update_builder<'a>(
-                assignments: &'a mut #toasty::core::stmt::Assignments,
-                projection: #toasty::core::stmt::Projection,
-            ) -> Self::UpdateBuilder<'a> {
-                #update_struct_ident { assignments, projection }
             }
         }
 
@@ -261,7 +245,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
             }
         }
 
-        impl #toasty::ModelField for #model_ident {
+        impl #toasty::Field for #model_ident {
             type Path<__Origin> = #field_struct_ident<__Origin>;
             type Update<'a> = ();
 
@@ -284,15 +268,6 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
                         expr_ty: <Self as #toasty::Load>::ty(),
                     }
                 )
-            }
-        }
-
-        impl #toasty::Field for #model_ident {
-            type FieldAccessor<__Origin> = #field_struct_ident<__Origin>;
-            type UpdateBuilder<'a> = ();
-
-            fn make_field_accessor<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::FieldAccessor<__Origin> {
-                #field_struct_ident { path }
             }
         }
 
@@ -362,7 +337,7 @@ impl Expand<'_> {
     }
 
     /// Generates a field accessor method for a primitive field using the
-    /// `ModelField::new_path` trait.
+    /// `Field::new_path` trait.
     fn expand_primitive_field_method(
         &self,
         field_ident: &syn::Ident,
@@ -374,8 +349,8 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
 
         quote! {
-            #vis fn #field_ident(&self) -> <#ty as #toasty::ModelField>::Path<__Origin> {
-                <#ty as #toasty::ModelField>::new_path(
+            #vis fn #field_ident(&self) -> <#ty as #toasty::Field>::Path<__Origin> {
+                <#ty as #toasty::Field>::new_path(
                     self.path().chain(
                         #toasty::Path::<#model_ident, _>::from_field_index(#field_offset)
                     )

@@ -30,9 +30,6 @@ pub mod option;
 mod register;
 pub use register::{generate_unique_id, Register};
 
-mod model_field;
-pub use model_field::ModelField;
-
 mod num;
 
 mod relation;

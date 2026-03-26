@@ -20,8 +20,9 @@
 //! The [`Model`](schema::Model) trait represents a root model that maps to a
 //! database table. It is implemented by `#[derive(Model)]` — users do not
 //! implement it manually. The module also contains [`Field`](schema::Field),
-//! which describes a typed field accessor, and [`Auto`](schema::Auto), a
-//! wrapper for auto-generated values such as database-assigned IDs.
+//! which provides schema registration and runtime helpers for field types, and
+//! [`Auto`](schema::Auto), a wrapper for auto-generated values such as
+//! database-assigned IDs.
 //!
 //! The module also provides the types that represent associations between
 //! models: [`HasMany`](schema::HasMany), [`HasOne`](schema::HasOne), and
@@ -128,7 +129,7 @@ pub mod codegen_support {
     pub use crate::{
         schema::{
             generate_unique_id, Auto, BelongsTo, Embed, Field, HasMany, HasOne, Load, Model,
-            ModelField, Register, Relation,
+            Register, Relation,
         },
         stmt::CreateMany,
         stmt::{self, IntoExpr, IntoInsert, IntoStatement, List, Path},
