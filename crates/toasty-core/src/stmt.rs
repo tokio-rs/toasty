@@ -198,7 +198,7 @@ mod path_field_set;
 pub use path_field_set::PathFieldSet;
 
 mod projection;
-pub use projection::{Project, Projection};
+pub use projection::{AsProjection, Project, Projection};
 
 mod query;
 pub use query::{Lock, Query};

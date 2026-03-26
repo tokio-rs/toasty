@@ -1,6 +1,6 @@
 use crate::stmt::Statement;
 
-use super::{Expr, Projection};
+use super::{AsProjection, Expr, Projection};
 
 use std::collections::BTreeMap;
 
@@ -92,11 +92,8 @@ impl Statement {
 }
 
 impl Assignments {
-    /// Creates an empty `Assignments` with the specified capacity.
-    ///
-    /// Note: `BTreeMap` does not support pre-allocation, so the capacity hint
-    /// is currently unused. The signature is preserved for API compatibility.
-    pub fn with_capacity(_capacity: usize) -> Self {
+    /// Creates an empty `Assignments`.
+    pub fn new() -> Self {
         Self::default()
     }
 
@@ -114,20 +111,23 @@ impl Assignments {
 
     /// Returns `true` if at least one assignment exists for the given
     /// projection.
-    pub fn contains(&self, key: &(impl Into<Projection> + Clone)) -> bool {
-        self.inner.contains_key(&key.clone().into())
+    pub fn contains(&self, key: &Projection) -> bool {
+        self.inner.contains_key(key)
     }
 
     /// Returns a reference to the first assignment for the given projection.
-    pub fn get(&self, key: &(impl Into<Projection> + Clone)) -> Option<&Assignment> {
-        self.inner.get(&key.clone().into()).and_then(|v| v.first())
+    ///
+    /// Also accepts `&usize` for single-field lookups via the
+    /// [`AsProjection`](super::AsProjection) trait.
+    pub fn get<Q: AsProjection>(&self, key: &Q) -> Option<&Assignment> {
+        self.inner.get(&key.as_projection()).and_then(|v| v.first())
     }
 
     /// Returns a mutable reference to the first assignment for the given
     /// projection.
-    pub fn get_mut(&mut self, key: &(impl Into<Projection> + Clone)) -> Option<&mut Assignment> {
+    pub fn get_mut<Q: AsProjection>(&mut self, key: &Q) -> Option<&mut Assignment> {
         self.inner
-            .get_mut(&key.clone().into())
+            .get_mut(&key.as_projection())
             .and_then(|v| v.first_mut())
     }
 
@@ -323,28 +323,12 @@ impl std::ops::Index<usize> for Assignments {
     type Output = Assignment;
 
     fn index(&self, index: usize) -> &Self::Output {
-        let key = Projection::from(index);
-        self.get(&key).expect("no assignment for projection")
+        self.get(&index).expect("no assignment for projection")
     }
 }
 
 impl std::ops::IndexMut<usize> for Assignments {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        let key = Projection::from(index);
-        self.get_mut(&key).expect("no assignment for projection")
-    }
-}
-
-impl std::ops::Index<Projection> for Assignments {
-    type Output = Assignment;
-
-    fn index(&self, index: Projection) -> &Self::Output {
-        self.get(&index).expect("no assignment for projection")
-    }
-}
-
-impl std::ops::IndexMut<Projection> for Assignments {
-    fn index_mut(&mut self, index: Projection) -> &mut Self::Output {
         self.get_mut(&index).expect("no assignment for projection")
     }
 }

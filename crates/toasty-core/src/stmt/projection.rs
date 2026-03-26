@@ -60,6 +60,28 @@ impl PartialOrd for Projection {
     }
 }
 
+/// Cheaply obtain a [`Projection`] from a reference, without cloning.
+///
+/// Implemented for `Projection` (returns self) and `usize` (creates a
+/// single-step projection). Used by [`Assignments::get`] and
+/// [`Assignments::get_mut`] so callers can pass `&Projection` or `&usize`.
+pub trait AsProjection {
+    /// Returns the value as a [`Projection`].
+    fn as_projection(&self) -> Projection;
+}
+
+impl AsProjection for Projection {
+    fn as_projection(&self) -> Projection {
+        self.clone()
+    }
+}
+
+impl AsProjection for usize {
+    fn as_projection(&self) -> Projection {
+        Projection::from(*self)
+    }
+}
+
 /// Trait for types that can be projected through a [`Projection`].
 ///
 /// Returns the projected expression, or `None` if the projection is not
