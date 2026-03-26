@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use toasty_core::{
     driver::{Operation, Rows},
-    stmt::{ExprSet, Statement, Value},
+    stmt::{Assignment, ExprSet, Statement, Value},
 };
 
 #[driver_test(id(ID))]
@@ -50,14 +50,14 @@ pub async fn serialize_vec_string(t: &mut Test) -> Result<(), BoxError> {
     if t.capability().sql {
         assert_struct!(op, Operation::QuerySql(_ {
             stmt: Statement::Update(_ {
-                assignments: #{ [1]: _ { expr: == expected_json, .. }},
+                assignments: #{ [1]: Assignment::Set(== expected_json)},
                 ..
             }),
             ..
         }));
     } else {
         assert_struct!(op, Operation::UpdateByKey(_ {
-            assignments: #{ [1]: _ { expr: == expected_json, .. }},
+            assignments: #{ [1]: Assignment::Set(== expected_json)},
             ..
         }));
     }

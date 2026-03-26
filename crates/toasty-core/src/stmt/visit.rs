@@ -745,7 +745,7 @@ pub fn visit_assignment<V>(v: &mut V, node: &Assignment)
 where
     V: Visit + ?Sized,
 {
-    v.visit_expr(&node.expr);
+    v.visit_expr(node.expr());
 }
 
 /// Default traversal for [`Assignments`] nodes. Visits each assignment in the collection.

@@ -215,8 +215,8 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
         for (projection, assignment) in &*i {
             // Phase 1: Lower the assignment expression
-            assert!(assignment.op.is_set(), "only SET supported");
-            let mut lowered_expr = assignment.expr.clone();
+            assert!(assignment.is_set(), "only SET supported");
+            let mut lowered_expr = assignment.expr().clone();
             self.visit_expr_mut(&mut lowered_expr);
 
             // Phase 2: Resolve field mapping (handles primitives, partial updates, and full replacements)

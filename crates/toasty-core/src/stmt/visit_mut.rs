@@ -747,7 +747,7 @@ pub fn visit_assignment_mut<V>(v: &mut V, node: &mut Assignment)
 where
     V: VisitMut + ?Sized,
 {
-    v.visit_expr_mut(&mut node.expr);
+    v.visit_expr_mut(node.expr_mut());
 }
 
 /// Default mutable traversal for [`Assignments`] nodes. Visits each assignment.

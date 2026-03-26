@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 use toasty_core::{
     driver::{Operation, Rows},
-    stmt::{Source, Statement, UpdateTarget},
+    stmt::{Assignment, Source, Statement, UpdateTarget},
 };
 
 /// Test update on a model with a partitioned composite primary key using the
@@ -61,7 +61,7 @@ pub async fn update_by_partition_key(test: &mut Test) {
         assert_struct!(op, Operation::QuerySql(_ {
             stmt: Statement::Update(_ {
                 target: UpdateTarget::Table(== todo_table_id),
-                assignments: #{ [2]: _ { expr: == "updated", .. }},
+                assignments: #{ [2]: Assignment::Set(== "updated")},
                 ..
             }),
             ret: None,
@@ -90,7 +90,7 @@ pub async fn update_by_partition_key(test: &mut Test) {
         assert_struct!(op, Operation::UpdateByKey(_ {
             table: == todo_table_id,
             keys.len(): 2,
-            assignments: #{ [2]: _ { expr: == "updated", .. }},
+            assignments: #{ [2]: Assignment::Set(== "updated")},
             filter: None,
             returning: false,
             ..

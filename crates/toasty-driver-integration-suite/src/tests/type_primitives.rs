@@ -4,7 +4,7 @@ use std::{rc::Rc, sync::Arc};
 use toasty::schema::db;
 use toasty_core::{
     driver::Operation,
-    stmt::{ExprSet, InsertTarget, Statement},
+    stmt::{Assignment, ExprSet, InsertTarget, Statement},
 };
 
 /// Macro to generate the common test body for numeric types
@@ -97,14 +97,14 @@ macro_rules! num_ty_test_body {
                 if test.capability().sql {
                     assert_struct!(op, Operation::QuerySql(_ {
                         stmt: Statement::Update(_ {
-                            assignments: #{ [1]: _ { expr: _, .. }},
+                            assignments: #{ [1]: Assignment::Set(_)},
                             ..
                         }),
                         ..
                     }));
                 } else {
                     assert_struct!(op, Operation::UpdateByKey(_ {
-                        assignments: #{ [1]: _ { expr: _, .. }},
+                        assignments: #{ [1]: Assignment::Set(_)},
                         ..
                     }));
                 }
@@ -309,14 +309,14 @@ pub async fn ty_str(test: &mut Test) -> Result<()> {
         if test.capability().sql {
             assert_struct!(op, Operation::QuerySql(_ {
                 stmt: Statement::Update(_ {
-                    assignments: #{ [1]: _ { expr: _, .. }},
+                    assignments: #{ [1]: Assignment::Set(_)},
                     ..
                 }),
                 ..
             }));
         } else {
             assert_struct!(op, Operation::UpdateByKey(_ {
-                assignments: #{ [1]: _ { expr: _, .. }},
+                assignments: #{ [1]: Assignment::Set(_)},
                 ..
             }));
         }
@@ -409,14 +409,14 @@ pub async fn ty_bytes(test: &mut Test) -> Result<()> {
         if test.capability().sql {
             assert_struct!(op, Operation::QuerySql(_ {
                 stmt: Statement::Update(_ {
-                    assignments: #{ [1]: _ { expr: _, .. }},
+                    assignments: #{ [1]: Assignment::Set(_)},
                     ..
                 }),
                 ..
             }));
         } else {
             assert_struct!(op, Operation::UpdateByKey(_ {
-                assignments: #{ [1]: _ { expr: _, .. }},
+                assignments: #{ [1]: Assignment::Set(_)},
                 ..
             }));
         }
