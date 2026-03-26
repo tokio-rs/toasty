@@ -91,8 +91,8 @@ impl Statement {
 }
 
 impl Assignments {
-    /// Creates an empty `Assignments` with the specified capacity.
-    pub fn with_capacity(_capacity: usize) -> Self {
+    /// Creates an empty `Assignments`.
+    pub fn new() -> Self {
         Self {
             assignments: BTreeMap::new(),
         }
