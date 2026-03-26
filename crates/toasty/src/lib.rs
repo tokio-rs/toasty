@@ -127,8 +127,8 @@ pub use toasty_core::{Error, Result};
 pub mod codegen_support {
     pub use crate::{
         schema::{
-            generate_unique_id, Auto, BelongsTo, Create, Embed, Field, HasMany, HasOne, Load,
-            Model, ModelField, Register, Relation,
+            generate_unique_id, Auto, BelongsTo, Create, Embed, HasMany, HasOne, Load, Model,
+            ModelField, Register, Relation, Scope,
         },
         stmt::CreateMany,
         stmt::{self, IntoExpr, IntoInsert, IntoStatement, List, Path},

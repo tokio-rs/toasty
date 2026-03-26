@@ -37,7 +37,7 @@ pub use paginate::Paginate;
 mod path;
 pub use path::Path;
 
-pub use crate::schema::{Auto, Field};
+pub use crate::schema::{Auto, Scope};
 use crate::{schema::Load, Executor};
 
 mod query;

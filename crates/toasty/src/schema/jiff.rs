@@ -1,4 +1,4 @@
-use super::{Field, Load, ModelField};
+use super::{Load, ModelField, Scope};
 use crate::stmt::Path;
 use toasty_core::{
     stmt::{Type, Value},
@@ -35,7 +35,7 @@ macro_rules! impl_jiff_field {
             }
         }
 
-        impl Field for $ty {
+        impl Scope for $ty {
             type FieldAccessor<Origin> = Path<Origin, Self>;
             type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 

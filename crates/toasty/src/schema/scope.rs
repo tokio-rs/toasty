@@ -5,10 +5,10 @@ use crate::stmt::Path;
 use std::borrow::Cow;
 use toasty_core::stmt;
 
-pub trait Field: Sized {
-    /// The type returned when accessing this field from a Fields struct.
+pub trait Scope: Sized {
+    /// The type returned when accessing this field from a Scopes struct.
     /// For primitives, this is Path<Origin, Self>.
-    /// For embedded types, this is {Type}Fields<Origin>.
+    /// For embedded types, this is {Type}Scopes<Origin>.
     type FieldAccessor<Origin>;
 
     /// The type of the update builder for this field.
@@ -18,7 +18,7 @@ pub trait Field: Sized {
 
     /// Build a field accessor from a path.
     /// For primitives, returns the path as-is.
-    /// For embedded types, wraps the path in a Fields struct.
+    /// For embedded types, wraps the path in a Scopes struct.
     fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin>;
 
     /// Build an update builder from assignments and a projection.
@@ -34,7 +34,7 @@ pub trait Field: Sized {
     }
 }
 
-impl Field for String {
+impl Scope for String {
     type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
@@ -43,7 +43,7 @@ impl Field for String {
     }
 }
 
-impl Field for Vec<u8> {
+impl Scope for Vec<u8> {
     type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = ();
 
@@ -52,7 +52,7 @@ impl Field for Vec<u8> {
     }
 }
 
-impl<T: Field> Field for Option<T> {
+impl<T: Scope> Scope for Option<T> {
     type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
@@ -61,10 +61,10 @@ impl<T: Field> Field for Option<T> {
     }
 }
 
-impl<T> Field for Cow<'_, T>
+impl<T> Scope for Cow<'_, T>
 where
     T: ToOwned + ?Sized,
-    T::Owned: Field,
+    T::Owned: Scope,
 {
     type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
@@ -74,7 +74,7 @@ where
     }
 }
 
-impl Field for uuid::Uuid {
+impl Scope for uuid::Uuid {
     type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
@@ -83,7 +83,7 @@ impl Field for uuid::Uuid {
     }
 }
 
-impl Field for bool {
+impl Scope for bool {
     type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
@@ -92,7 +92,7 @@ impl Field for bool {
     }
 }
 
-impl<T: Field> Field for Arc<T> {
+impl<T: Scope> Scope for Arc<T> {
     type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
@@ -101,7 +101,7 @@ impl<T: Field> Field for Arc<T> {
     }
 }
 
-impl<T: Field> Field for Rc<T> {
+impl<T: Scope> Scope for Rc<T> {
     type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
@@ -110,7 +110,7 @@ impl<T: Field> Field for Rc<T> {
     }
 }
 
-impl<T: Field> Field for Box<T> {
+impl<T: Scope> Scope for Box<T> {
     type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
@@ -119,7 +119,7 @@ impl<T: Field> Field for Box<T> {
     }
 }
 
-impl Field for isize {
+impl Scope for isize {
     type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
@@ -128,7 +128,7 @@ impl Field for isize {
     }
 }
 
-impl Field for usize {
+impl Scope for usize {
     type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
@@ -138,7 +138,7 @@ impl Field for usize {
 }
 
 #[cfg(feature = "rust_decimal")]
-impl Field for rust_decimal::Decimal {
+impl Scope for rust_decimal::Decimal {
     type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
@@ -148,7 +148,7 @@ impl Field for rust_decimal::Decimal {
 }
 
 #[cfg(feature = "bigdecimal")]
-impl Field for bigdecimal::BigDecimal {
+impl Scope for bigdecimal::BigDecimal {
     type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 

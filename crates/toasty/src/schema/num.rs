@@ -1,12 +1,12 @@
 use crate::{
-    schema::{Field, Load, ModelField},
+    schema::{Load, ModelField, Scope},
     stmt::Path,
     Result,
 };
 
 use toasty_core::stmt;
 
-/// Macro to generate Load, ModelField, and Field implementations for numeric types that use `try_into()`
+/// Macro to generate Load, ModelField, and Scope implementations for numeric types that use `try_into()`
 macro_rules! impl_field_numeric {
     ($($ty:ty => $stmt_ty:ident),* $(,)?) => {
         $(
@@ -35,7 +35,7 @@ macro_rules! impl_field_numeric {
                 }
             }
 
-            impl Field for $ty {
+            impl Scope for $ty {
                 type FieldAccessor<Origin> = Path<Origin, Self>;
                 type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 

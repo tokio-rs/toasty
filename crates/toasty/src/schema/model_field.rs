@@ -7,7 +7,7 @@ use crate::stmt;
 /// app schema: its nullability and its [`FieldTy`](toasty_core::schema::app::FieldTy).
 /// It is used by the `Register::schema()` implementation that the macro expands.
 ///
-/// Separated from [`Field`](super::Field) so that schema registration does not
+/// Separated from [`Scope`](super::Scope) so that schema registration does not
 /// depend on runtime concerns like update builders or field accessors.
 pub trait ModelField: Load {
     /// The type returned when accessing this field from a Fields struct.

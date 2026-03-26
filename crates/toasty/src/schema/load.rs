@@ -40,7 +40,7 @@ pub trait Load {
     /// `T::Output == T`.
     ///
     /// The default implementation panics. Types that support reloading (i.e.,
-    /// types that implement [`Field`]) should override this.
+    /// types that implement [`Scope`]) should override this.
     fn reload(target: &mut Self::Output, value: stmt::Value) -> Result<(), Error> {
         let _ = (target, value);
         unimplemented!("reload is not supported for this type")

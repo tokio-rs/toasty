@@ -1,10 +1,10 @@
-error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::schema::Field` is not satisfied
+error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::schema::Scope` is not satisfied
  --> tests/ui/relation_has_one_requires_attr.rs:1:10
   |
 1 | #[derive(toasty::Model)]
-  |          ^^^^^^^^^^^^^ the trait `toasty::schema::Field` is not implemented for `toasty::HasOne<Option<Profile>>`
+  |          ^^^^^^^^^^^^^ the trait `toasty::schema::Scope` is not implemented for `toasty::HasOne<Option<Profile>>`
   |
-  = help: the following other types implement trait `toasty::schema::Field`:
+  = help: the following other types implement trait `toasty::schema::Scope`:
             Arc<T>
             Box<T>
             Cow<'_, T>
@@ -33,13 +33,13 @@ error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: ModelField` is n
             bool
           and $N others
 
-error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::schema::Field` is not satisfied
+error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::schema::Scope` is not satisfied
  --> tests/ui/relation_has_one_requires_attr.rs:7:14
   |
 7 |     profile: toasty::HasOne<Option<Profile>>,
-  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `toasty::schema::Field` is not implemented for `toasty::HasOne<Option<Profile>>`
+  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `toasty::schema::Scope` is not implemented for `toasty::HasOne<Option<Profile>>`
   |
-  = help: the following other types implement trait `toasty::schema::Field`:
+  = help: the following other types implement trait `toasty::schema::Scope`:
             Arc<T>
             Box<T>
             Cow<'_, T>

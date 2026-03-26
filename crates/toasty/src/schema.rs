@@ -10,8 +10,8 @@ pub use create::Create;
 mod embed;
 pub use embed::Embed;
 
-mod field;
-pub use field::Field;
+mod scope;
+pub use scope::Scope;
 
 #[cfg(feature = "jiff")]
 mod jiff;
