@@ -105,13 +105,13 @@ impl Pool {
     }
 
     /// Retrieves a connection from the pool.
-    pub async fn get(&self) -> crate::Result<PoolConnection> {
+    pub async fn get(&self) -> crate::Result<super::Connection> {
         let connection = self
             .inner
             .get()
             .await
             .map_err(toasty_core::Error::connection_pool)?;
-        Ok(PoolConnection { inner: connection })
+        Ok(super::Connection { inner: connection })
     }
 
     /// Returns the database driver this pool uses to create connections.
@@ -137,7 +137,7 @@ impl Pool {
     }
 }
 
-struct Manager {
+pub(super) struct Manager {
     driver: Box<dyn Driver>,
     engine: Engine,
 }
@@ -232,18 +232,4 @@ pub struct PoolStatus {
 
     /// The number of tasks waiting for a connection to become available.
     pub waiting: usize,
-}
-
-/// A connection retrieved from a pool.
-///
-/// When dropped, the connection is returned to the pool for reuse.
-pub struct PoolConnection {
-    inner: deadpool::managed::Object<Manager>,
-}
-
-impl PoolConnection {
-    /// Access the underlying connection handle.
-    pub(crate) fn handle(&self) -> &ConnectionHandle {
-        &self.inner
-    }
 }

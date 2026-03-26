@@ -2,7 +2,7 @@ use crate::Result;
 
 use async_trait::async_trait;
 use std::borrow::Cow;
-pub use toasty_core::driver::{Capability, Driver};
+use toasty_core::driver::{Capability, Driver};
 use toasty_core::{
     driver::Connection,
     schema::db::{Migration, SchemaDiff},

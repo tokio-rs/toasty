@@ -48,7 +48,7 @@ pub async fn clone_acquires_separate_connection(t: &mut Test) -> Result<()> {
     drop(db2);
 
     // The background task needs a moment to notice the channel closed and exit,
-    // which drops the PoolConnection and returns it to the pool.
+    // which drops the Connection and returns it to the pool.
     tokio::task::yield_now().await;
 
     let status = db.pool().status();
