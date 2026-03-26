@@ -38,3 +38,124 @@ pub trait ModelField: Load {
         })
     }
 }
+
+impl ModelField for String {
+    type Path<Origin> = stmt::Path<Origin, Self>;
+
+    fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+}
+
+impl ModelField for Vec<u8> {
+    type Path<Origin> = stmt::Path<Origin, Self>;
+
+    fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+
+    fn field_ty(
+        storage_ty: Option<toasty_core::schema::db::Type>,
+    ) -> toasty_core::schema::app::FieldTy {
+        toasty_core::schema::app::FieldTy::Primitive(toasty_core::schema::app::FieldPrimitive {
+            ty: toasty_core::stmt::Type::Bytes,
+            storage_ty,
+            serialize: None,
+        })
+    }
+}
+
+impl<T: ModelField> ModelField for Option<T> {
+    type Path<Origin> = stmt::Path<Origin, Self>;
+    const NULLABLE: bool = true;
+
+    fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+}
+
+impl<T> ModelField for std::borrow::Cow<'_, T>
+where
+    T: ToOwned + ?Sized,
+    T::Owned: ModelField<Output = T::Owned>,
+{
+    type Path<Origin> = stmt::Path<Origin, Self>;
+
+    fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+}
+
+impl ModelField for uuid::Uuid {
+    type Path<Origin> = stmt::Path<Origin, Self>;
+
+    fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+}
+
+impl ModelField for bool {
+    type Path<Origin> = stmt::Path<Origin, Self>;
+
+    fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+}
+
+impl<T: ModelField<Output = T>> ModelField for std::sync::Arc<T> {
+    type Path<Origin> = stmt::Path<Origin, Self>;
+
+    fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+}
+
+impl<T: ModelField<Output = T>> ModelField for std::rc::Rc<T> {
+    type Path<Origin> = stmt::Path<Origin, Self>;
+
+    fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+}
+
+impl<T: ModelField<Output = T>> ModelField for Box<T> {
+    type Path<Origin> = stmt::Path<Origin, Self>;
+
+    fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+}
+
+impl ModelField for isize {
+    type Path<Origin> = stmt::Path<Origin, Self>;
+
+    fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+}
+
+impl ModelField for usize {
+    type Path<Origin> = stmt::Path<Origin, Self>;
+
+    fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+}
+
+#[cfg(feature = "rust_decimal")]
+impl ModelField for rust_decimal::Decimal {
+    type Path<Origin> = stmt::Path<Origin, Self>;
+
+    fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+}
+
+#[cfg(feature = "bigdecimal")]
+impl ModelField for bigdecimal::BigDecimal {
+    type Path<Origin> = stmt::Path<Origin, Self>;
+
+    fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+}

@@ -14,7 +14,7 @@ mod field;
 pub use field::Field;
 
 #[cfg(feature = "jiff")]
-mod field_jiff;
+mod jiff;
 
 mod has_many;
 pub use has_many::HasMany;
@@ -35,6 +35,8 @@ pub use register::{generate_unique_id, Register};
 
 mod model_field;
 pub use model_field::ModelField;
+
+mod num;
 
 mod relation;
 pub use relation::Relation;
