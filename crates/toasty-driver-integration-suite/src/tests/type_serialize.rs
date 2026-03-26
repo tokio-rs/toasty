@@ -50,14 +50,14 @@ pub async fn serialize_vec_string(t: &mut Test) -> Result<(), BoxError> {
     if t.capability().sql {
         assert_struct!(op, Operation::QuerySql(_ {
             stmt: Statement::Update(_ {
-                assignments: #{ [1_usize]: _ { expr: == expected_json, .. }},
+                assignments: #{ [1]: _ { expr: == expected_json, .. }},
                 ..
             }),
             ..
         }));
     } else {
         assert_struct!(op, Operation::UpdateByKey(_ {
-            assignments: #{ [1_usize]: _ { expr: == expected_json, .. }},
+            assignments: #{ [1]: _ { expr: == expected_json, .. }},
             ..
         }));
     }

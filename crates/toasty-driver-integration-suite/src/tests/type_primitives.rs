@@ -97,14 +97,14 @@ macro_rules! num_ty_test_body {
                 if test.capability().sql {
                     assert_struct!(op, Operation::QuerySql(_ {
                         stmt: Statement::Update(_ {
-                            assignments: #{ [1_usize]: _ { expr: _, .. }},
+                            assignments: #{ [1]: _ { expr: _, .. }},
                             ..
                         }),
                         ..
                     }));
                 } else {
                     assert_struct!(op, Operation::UpdateByKey(_ {
-                        assignments: #{ [1_usize]: _ { expr: _, .. }},
+                        assignments: #{ [1]: _ { expr: _, .. }},
                         ..
                     }));
                 }
@@ -309,14 +309,14 @@ pub async fn ty_str(test: &mut Test) -> Result<()> {
         if test.capability().sql {
             assert_struct!(op, Operation::QuerySql(_ {
                 stmt: Statement::Update(_ {
-                    assignments: #{ [1_usize]: _ { expr: _, .. }},
+                    assignments: #{ [1]: _ { expr: _, .. }},
                     ..
                 }),
                 ..
             }));
         } else {
             assert_struct!(op, Operation::UpdateByKey(_ {
-                assignments: #{ [1_usize]: _ { expr: _, .. }},
+                assignments: #{ [1]: _ { expr: _, .. }},
                 ..
             }));
         }
@@ -409,14 +409,14 @@ pub async fn ty_bytes(test: &mut Test) -> Result<()> {
         if test.capability().sql {
             assert_struct!(op, Operation::QuerySql(_ {
                 stmt: Statement::Update(_ {
-                    assignments: #{ [1_usize]: _ { expr: _, .. }},
+                    assignments: #{ [1]: _ { expr: _, .. }},
                     ..
                 }),
                 ..
             }));
         } else {
             assert_struct!(op, Operation::UpdateByKey(_ {
-                assignments: #{ [1_usize]: _ { expr: _, .. }},
+                assignments: #{ [1]: _ { expr: _, .. }},
                 ..
             }));
         }
