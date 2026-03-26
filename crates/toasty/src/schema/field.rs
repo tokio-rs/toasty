@@ -1,10 +1,6 @@
 use std::{rc::Rc, sync::Arc};
 
-use crate::{
-    schema::{Load, ModelField},
-    stmt::Path,
-    Result,
-};
+use crate::stmt::Path;
 
 use std::borrow::Cow;
 use toasty_core::stmt;
@@ -38,46 +34,12 @@ pub trait Field: Sized {
     }
 }
 
-impl Load for String {
-    type Output = Self;
-
-    fn ty() -> stmt::Type {
-        stmt::Type::String
-    }
-
-    fn load(value: stmt::Value) -> Result<Self> {
-        match value {
-            stmt::Value::String(v) => Ok(v),
-            _ => Err(toasty_core::Error::type_conversion(value, "String")),
-        }
-    }
-
-    fn reload(target: &mut Self, value: stmt::Value) -> Result<()> {
-        *target = Self::load(value)?;
-        Ok(())
-    }
-}
-
-impl ModelField for String {}
-
 impl Field for String {
     type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
     fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
         path
-    }
-}
-
-impl ModelField for Vec<u8> {
-    fn field_ty(
-        storage_ty: Option<toasty_core::schema::db::Type>,
-    ) -> toasty_core::schema::app::FieldTy {
-        toasty_core::schema::app::FieldTy::Primitive(toasty_core::schema::app::FieldPrimitive {
-            ty: stmt::Type::Bytes,
-            storage_ty,
-            serialize: None,
-        })
     }
 }
 
@@ -90,10 +52,6 @@ impl Field for Vec<u8> {
     }
 }
 
-impl<T: ModelField> ModelField for Option<T> {
-    const NULLABLE: bool = true;
-}
-
 impl<T: Field> Field for Option<T> {
     type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
@@ -101,34 +59,6 @@ impl<T: Field> Field for Option<T> {
     fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
         path
     }
-}
-
-impl<T> Load for Cow<'_, T>
-where
-    T: ToOwned + ?Sized,
-    T::Owned: Load<Output = T::Owned>,
-{
-    type Output = Self;
-
-    fn ty() -> stmt::Type {
-        <T::Owned as Load>::ty()
-    }
-
-    fn load(value: stmt::Value) -> Result<Self> {
-        <T::Owned as Load>::load(value).map(Cow::Owned)
-    }
-
-    fn reload(target: &mut Self, value: stmt::Value) -> Result<()> {
-        *target = Self::load(value)?;
-        Ok(())
-    }
-}
-
-impl<T> ModelField for Cow<'_, T>
-where
-    T: ToOwned + ?Sized,
-    T::Owned: ModelField<Output = T::Owned>,
-{
 }
 
 impl<T> Field for Cow<'_, T>
@@ -144,28 +74,6 @@ where
     }
 }
 
-impl Load for uuid::Uuid {
-    type Output = Self;
-
-    fn ty() -> stmt::Type {
-        stmt::Type::Uuid
-    }
-
-    fn load(value: stmt::Value) -> Result<Self> {
-        match value {
-            stmt::Value::Uuid(v) => Ok(v),
-            _ => Err(toasty_core::Error::type_conversion(value, "uuid::Uuid")),
-        }
-    }
-
-    fn reload(target: &mut Self, value: stmt::Value) -> Result<()> {
-        *target = Self::load(value)?;
-        Ok(())
-    }
-}
-
-impl ModelField for uuid::Uuid {}
-
 impl Field for uuid::Uuid {
     type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
@@ -174,28 +82,6 @@ impl Field for uuid::Uuid {
         path
     }
 }
-
-impl Load for bool {
-    type Output = Self;
-
-    fn ty() -> stmt::Type {
-        stmt::Type::Bool
-    }
-
-    fn load(value: stmt::Value) -> Result<Self> {
-        match value {
-            stmt::Value::Bool(v) => Ok(v),
-            _ => Err(toasty_core::Error::type_conversion(value, "bool")),
-        }
-    }
-
-    fn reload(target: &mut Self, value: stmt::Value) -> Result<()> {
-        *target = Self::load(value)?;
-        Ok(())
-    }
-}
-
-impl ModelField for bool {}
 
 impl Field for bool {
     type FieldAccessor<Origin> = Path<Origin, Self>;
@@ -206,25 +92,6 @@ impl Field for bool {
     }
 }
 
-impl<T: Load<Output = T>> Load for Arc<T> {
-    type Output = Self;
-
-    fn ty() -> stmt::Type {
-        T::ty()
-    }
-
-    fn load(value: stmt::Value) -> Result<Self> {
-        <T as Load>::load(value).map(Arc::new)
-    }
-
-    fn reload(target: &mut Self, value: stmt::Value) -> Result<()> {
-        *target = Self::load(value)?;
-        Ok(())
-    }
-}
-
-impl<T: ModelField<Output = T>> ModelField for Arc<T> {}
-
 impl<T: Field> Field for Arc<T> {
     type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
@@ -234,25 +101,6 @@ impl<T: Field> Field for Arc<T> {
     }
 }
 
-impl<T: Load<Output = T>> Load for Rc<T> {
-    type Output = Self;
-
-    fn ty() -> stmt::Type {
-        T::ty()
-    }
-
-    fn load(value: stmt::Value) -> Result<Self> {
-        <T as Load>::load(value).map(Rc::new)
-    }
-
-    fn reload(target: &mut Self, value: stmt::Value) -> Result<()> {
-        *target = Self::load(value)?;
-        Ok(())
-    }
-}
-
-impl<T: ModelField<Output = T>> ModelField for Rc<T> {}
-
 impl<T: Field> Field for Rc<T> {
     type FieldAccessor<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
@@ -261,25 +109,6 @@ impl<T: Field> Field for Rc<T> {
         path
     }
 }
-
-impl<T: Load<Output = T>> Load for Box<T> {
-    type Output = Self;
-
-    fn ty() -> stmt::Type {
-        T::ty()
-    }
-
-    fn load(value: stmt::Value) -> Result<Self> {
-        <T as Load>::load(value).map(Box::new)
-    }
-
-    fn reload(target: &mut Self, value: stmt::Value) -> Result<()> {
-        *target = Self::load(value)?;
-        Ok(())
-    }
-}
-
-impl<T: ModelField<Output = T>> ModelField for Box<T> {}
 
 impl<T: Field> Field for Box<T> {
     type FieldAccessor<Origin> = Path<Origin, Self>;

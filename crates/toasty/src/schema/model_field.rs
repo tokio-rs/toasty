@@ -26,6 +26,41 @@ pub trait ModelField: Load {
     }
 }
 
+impl ModelField for String {}
+
+impl ModelField for Vec<u8> {
+    fn field_ty(
+        storage_ty: Option<toasty_core::schema::db::Type>,
+    ) -> toasty_core::schema::app::FieldTy {
+        toasty_core::schema::app::FieldTy::Primitive(toasty_core::schema::app::FieldPrimitive {
+            ty: <Self as Load>::ty(),
+            storage_ty,
+            serialize: None,
+        })
+    }
+}
+
+impl<T: ModelField> ModelField for Option<T> {
+    const NULLABLE: bool = true;
+}
+
+impl<T> ModelField for std::borrow::Cow<'_, T>
+where
+    T: ToOwned + ?Sized,
+    T::Owned: ModelField<Output = T::Owned>,
+{
+}
+
+impl ModelField for uuid::Uuid {}
+
+impl ModelField for bool {}
+
+impl<T: ModelField<Output = T>> ModelField for std::sync::Arc<T> {}
+
+impl<T: ModelField<Output = T>> ModelField for std::rc::Rc<T> {}
+
+impl<T: ModelField<Output = T>> ModelField for Box<T> {}
+
 impl ModelField for isize {}
 
 impl ModelField for usize {}
