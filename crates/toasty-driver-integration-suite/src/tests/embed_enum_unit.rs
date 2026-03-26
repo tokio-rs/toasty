@@ -79,7 +79,7 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
         assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
             stmt: Statement::Update(_ {
                 target: toasty_core::stmt::UpdateTarget::Table(== user_table),
-                assignments: #{ 2: _ { expr: == 2i64, .. }},
+                assignments: #{ [2_usize]: _ { expr: == 2i64, .. }},
                 ..
             }),
             ..
@@ -89,7 +89,7 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
             table: == user_table,
             filter: None,
             keys: _,
-            assignments: #{ 2: _ { expr: == 2i64, .. }},
+            assignments: #{ [2_usize]: _ { expr: == 2i64, .. }},
             returning: false,
             ..
         }));

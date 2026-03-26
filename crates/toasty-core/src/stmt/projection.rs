@@ -8,6 +8,8 @@ use crate::{
 
 use indexmap::Equivalent;
 use std::{
+    borrow::Borrow,
+    cmp::Ordering,
     fmt,
     hash::{Hash, Hasher},
     ops,
@@ -39,6 +41,18 @@ use std::{
 #[derive(Clone, PartialEq, Eq)]
 pub struct Projection {
     steps: Steps,
+}
+
+impl PartialOrd for Projection {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Projection {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.as_slice().cmp(other.as_slice())
+    }
 }
 
 /// Trait for types that can be projected through a [`Projection`].
@@ -147,6 +161,12 @@ impl Projection {
     pub fn resolves_to(&self, other: impl Into<Self>) -> bool {
         let other = other.into();
         *self == other
+    }
+}
+
+impl AsRef<[usize]> for Projection {
+    fn as_ref(&self) -> &[usize] {
+        self.as_slice()
     }
 }
 
@@ -289,6 +309,13 @@ impl Project for &&Value {
     }
 }
 
+// Borrow implementations for BTreeMap lookups
+impl Borrow<[usize]> for Projection {
+    fn borrow(&self) -> &[usize] {
+        self.as_slice()
+    }
+}
+
 // Allow using usize directly where Projection is expected (for single-step projections)
 impl Equivalent<Projection> for usize {
     fn equivalent(&self, key: &Projection) -> bool {
@@ -303,12 +330,8 @@ impl Equivalent<Projection> for &Projection {
     }
 }
 
-// Allow using [usize] slices where Projection is expected
-impl Equivalent<Projection> for [usize] {
-    fn equivalent(&self, key: &Projection) -> bool {
-        self == key.as_slice()
-    }
-}
+// Note: `Equivalent<Projection> for [usize]` is provided automatically by
+// the blanket impl in `equivalent` crate because `Projection: Borrow<[usize]>`.
 
 // PartialEq implementations for ergonomic comparisons
 impl PartialEq<usize> for Projection {
