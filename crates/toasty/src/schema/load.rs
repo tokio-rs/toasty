@@ -132,3 +132,80 @@ impl_load_for_tuple!(A, B, C, D, E; 0, 1, 2, 3, 4);
 impl_load_for_tuple!(A, B, C, D, E, F; 0, 1, 2, 3, 4, 5);
 impl_load_for_tuple!(A, B, C, D, E, F, G; 0, 1, 2, 3, 4, 5, 6);
 impl_load_for_tuple!(A, B, C, D, E, F, G, H; 0, 1, 2, 3, 4, 5, 6, 7);
+
+// Pointer-sized integers map to fixed-size types internally
+impl Load for isize {
+    type Output = Self;
+
+    fn ty() -> stmt::Type {
+        stmt::Type::I64
+    }
+
+    fn load(value: stmt::Value) -> Result<Self::Output, Error> {
+        value.try_into()
+    }
+
+    fn reload(target: &mut Self, value: stmt::Value) -> Result<(), Error> {
+        *target = Self::load(value)?;
+        Ok(())
+    }
+}
+
+impl Load for usize {
+    type Output = Self;
+
+    fn ty() -> stmt::Type {
+        stmt::Type::U64
+    }
+
+    fn load(value: stmt::Value) -> Result<Self::Output, Error> {
+        value.try_into()
+    }
+
+    fn reload(target: &mut Self, value: stmt::Value) -> Result<(), Error> {
+        *target = Self::load(value)?;
+        Ok(())
+    }
+}
+
+#[cfg(feature = "rust_decimal")]
+impl Load for rust_decimal::Decimal {
+    type Output = Self;
+
+    fn ty() -> stmt::Type {
+        stmt::Type::Decimal
+    }
+
+    fn load(value: stmt::Value) -> Result<Self::Output, Error> {
+        match value {
+            stmt::Value::Decimal(v) => Ok(v),
+            _ => Err(Error::type_conversion(value, "rust_decimal::Decimal")),
+        }
+    }
+
+    fn reload(target: &mut Self, value: stmt::Value) -> Result<(), Error> {
+        *target = Self::load(value)?;
+        Ok(())
+    }
+}
+
+#[cfg(feature = "bigdecimal")]
+impl Load for bigdecimal::BigDecimal {
+    type Output = Self;
+
+    fn ty() -> stmt::Type {
+        stmt::Type::BigDecimal
+    }
+
+    fn load(value: stmt::Value) -> Result<Self::Output, Error> {
+        match value {
+            stmt::Value::BigDecimal(v) => Ok(v),
+            _ => Err(Error::type_conversion(value, "bigdecimal::BigDecimal")),
+        }
+    }
+
+    fn reload(target: &mut Self, value: stmt::Value) -> Result<(), Error> {
+        *target = Self::load(value)?;
+        Ok(())
+    }
+}

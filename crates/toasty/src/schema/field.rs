@@ -289,3 +289,41 @@ impl<T: Field> Field for Box<T> {
         path
     }
 }
+
+impl Field for isize {
+    type FieldAccessor<Origin> = Path<Origin, Self>;
+    type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
+
+    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
+        path
+    }
+}
+
+impl Field for usize {
+    type FieldAccessor<Origin> = Path<Origin, Self>;
+    type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
+
+    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
+        path
+    }
+}
+
+#[cfg(feature = "rust_decimal")]
+impl Field for rust_decimal::Decimal {
+    type FieldAccessor<Origin> = Path<Origin, Self>;
+    type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
+
+    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
+        path
+    }
+}
+
+#[cfg(feature = "bigdecimal")]
+impl Field for bigdecimal::BigDecimal {
+    type FieldAccessor<Origin> = Path<Origin, Self>;
+    type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
+
+    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
+        path
+    }
+}

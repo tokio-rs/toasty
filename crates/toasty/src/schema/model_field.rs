@@ -25,3 +25,13 @@ pub trait ModelField: Load {
         })
     }
 }
+
+impl ModelField for isize {}
+
+impl ModelField for usize {}
+
+#[cfg(feature = "rust_decimal")]
+impl ModelField for rust_decimal::Decimal {}
+
+#[cfg(feature = "bigdecimal")]
+impl ModelField for bigdecimal::BigDecimal {}
