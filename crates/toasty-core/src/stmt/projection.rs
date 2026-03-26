@@ -44,10 +44,6 @@ pub struct Projection {
 
 /// Lexicographic ordering on the step sequence, so projections sort the same
 /// way `[usize]` slices do: `[] < [0] < [0, 1] < [1] < [1, 0] < [2]`.
-///
-/// This makes `BTreeMap<Projection, _>` support prefix-range queries: to find
-/// every assignment under field 1 (including `[1]`, `[1, 0]`, `[1, 2]`, …),
-/// scan `range(Projection::single(1)..Projection::single(2))`.
 impl Ord for Projection {
     fn cmp(&self, other: &Self) -> Ordering {
         self.as_slice().cmp(other.as_slice())
