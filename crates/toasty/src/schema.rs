@@ -14,7 +14,7 @@ mod field;
 pub use field::Field;
 
 #[cfg(feature = "jiff")]
-mod field_jiff;
+mod jiff;
 
 mod has_many;
 pub use has_many::HasMany;
