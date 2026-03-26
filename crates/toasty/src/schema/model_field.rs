@@ -33,7 +33,7 @@ impl ModelField for Vec<u8> {
         storage_ty: Option<toasty_core::schema::db::Type>,
     ) -> toasty_core::schema::app::FieldTy {
         toasty_core::schema::app::FieldTy::Primitive(toasty_core::schema::app::FieldPrimitive {
-            ty: <Self as Load>::ty(),
+            ty: toasty_core::stmt::Type::Bytes,
             storage_ty,
             serialize: None,
         })
