@@ -15,6 +15,11 @@ pub trait ModelField: Load {
     /// For embedded types, this is {Type}Fields<Origin>.
     type Path<Origin>;
 
+    /// The type of the update builder for this field.
+    /// For embedded types, this is {Type}Update<'a>.
+    /// For primitives, this will be {Type}Update<'a> once implemented.
+    type UpdateBuilder<'a>;
+
     /// Whether or not the type is nullable
     const NULLABLE: bool = false;
 
@@ -24,6 +29,14 @@ pub trait ModelField: Load {
     fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin>
     where
         Self: Sized;
+
+    /// Build an update builder from assignments and a projection.
+    /// For primitives, this returns `()` (no builder).
+    /// For embedded types, this is overridden to construct the {Type}Update builder.
+    fn make_update_builder<'a>(
+        _assignments: &'a mut toasty_core::stmt::Assignments,
+        _projection: toasty_core::stmt::Projection,
+    ) -> Self::UpdateBuilder<'a>;
 
     /// Returns the app-level field type for this primitive.
     /// Default implementation returns a Primitive field type.
@@ -39,19 +52,43 @@ pub trait ModelField: Load {
     }
 }
 
-impl ModelField for String {
+macro_rules! impl_model_field_primitive {
+    ($ty:ty) => {
+        impl ModelField for $ty {
+            type Path<Origin> = stmt::Path<Origin, Self>;
+            type UpdateBuilder<'a> = ();
+
+            fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
+                path
+            }
+
+            fn make_update_builder<'a>(
+                _assignments: &'a mut toasty_core::stmt::Assignments,
+                _projection: toasty_core::stmt::Projection,
+            ) -> Self::UpdateBuilder<'a> {
+            }
+        }
+    };
+}
+
+impl_model_field_primitive!(String);
+impl_model_field_primitive!(uuid::Uuid);
+impl_model_field_primitive!(bool);
+impl_model_field_primitive!(isize);
+impl_model_field_primitive!(usize);
+
+impl ModelField for Vec<u8> {
     type Path<Origin> = stmt::Path<Origin, Self>;
+    type UpdateBuilder<'a> = ();
 
     fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
         path
     }
-}
 
-impl ModelField for Vec<u8> {
-    type Path<Origin> = stmt::Path<Origin, Self>;
-
-    fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
-        path
+    fn make_update_builder<'a>(
+        _assignments: &'a mut toasty_core::stmt::Assignments,
+        _projection: toasty_core::stmt::Projection,
+    ) -> Self::UpdateBuilder<'a> {
     }
 
     fn field_ty(
@@ -67,10 +104,17 @@ impl ModelField for Vec<u8> {
 
 impl<T: ModelField> ModelField for Option<T> {
     type Path<Origin> = stmt::Path<Origin, Self>;
+    type UpdateBuilder<'a> = ();
     const NULLABLE: bool = true;
 
     fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
         path
+    }
+
+    fn make_update_builder<'a>(
+        _assignments: &'a mut toasty_core::stmt::Assignments,
+        _projection: toasty_core::stmt::Projection,
+    ) -> Self::UpdateBuilder<'a> {
     }
 }
 
@@ -80,82 +124,66 @@ where
     T::Owned: ModelField<Output = T::Owned>,
 {
     type Path<Origin> = stmt::Path<Origin, Self>;
+    type UpdateBuilder<'a> = ();
 
     fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
         path
     }
-}
 
-impl ModelField for uuid::Uuid {
-    type Path<Origin> = stmt::Path<Origin, Self>;
-
-    fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
-        path
-    }
-}
-
-impl ModelField for bool {
-    type Path<Origin> = stmt::Path<Origin, Self>;
-
-    fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
-        path
+    fn make_update_builder<'a>(
+        _assignments: &'a mut toasty_core::stmt::Assignments,
+        _projection: toasty_core::stmt::Projection,
+    ) -> Self::UpdateBuilder<'a> {
     }
 }
 
 impl<T: ModelField<Output = T>> ModelField for std::sync::Arc<T> {
     type Path<Origin> = stmt::Path<Origin, Self>;
+    type UpdateBuilder<'a> = ();
 
     fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
         path
+    }
+
+    fn make_update_builder<'a>(
+        _assignments: &'a mut toasty_core::stmt::Assignments,
+        _projection: toasty_core::stmt::Projection,
+    ) -> Self::UpdateBuilder<'a> {
     }
 }
 
 impl<T: ModelField<Output = T>> ModelField for std::rc::Rc<T> {
     type Path<Origin> = stmt::Path<Origin, Self>;
+    type UpdateBuilder<'a> = ();
 
     fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
         path
+    }
+
+    fn make_update_builder<'a>(
+        _assignments: &'a mut toasty_core::stmt::Assignments,
+        _projection: toasty_core::stmt::Projection,
+    ) -> Self::UpdateBuilder<'a> {
     }
 }
 
 impl<T: ModelField<Output = T>> ModelField for Box<T> {
     type Path<Origin> = stmt::Path<Origin, Self>;
+    type UpdateBuilder<'a> = ();
 
     fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
         path
     }
-}
 
-impl ModelField for isize {
-    type Path<Origin> = stmt::Path<Origin, Self>;
-
-    fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
-        path
-    }
-}
-
-impl ModelField for usize {
-    type Path<Origin> = stmt::Path<Origin, Self>;
-
-    fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
-        path
+    fn make_update_builder<'a>(
+        _assignments: &'a mut toasty_core::stmt::Assignments,
+        _projection: toasty_core::stmt::Projection,
+    ) -> Self::UpdateBuilder<'a> {
     }
 }
 
 #[cfg(feature = "rust_decimal")]
-impl ModelField for rust_decimal::Decimal {
-    type Path<Origin> = stmt::Path<Origin, Self>;
-
-    fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
-        path
-    }
-}
+impl_model_field_primitive!(rust_decimal::Decimal);
 
 #[cfg(feature = "bigdecimal")]
-impl ModelField for bigdecimal::BigDecimal {
-    type Path<Origin> = stmt::Path<Origin, Self>;
-
-    fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
-        path
-    }
-}
+impl_model_field_primitive!(bigdecimal::BigDecimal);

@@ -116,9 +116,17 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
 
         impl #toasty::ModelField for #model_ident {
             type Path<__Origin> = #field_struct_ident<__Origin>;
+            type UpdateBuilder<'a> = #update_struct_ident<'a>;
 
             fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
                 #field_struct_ident { path }
+            }
+
+            fn make_update_builder<'a>(
+                assignments: &'a mut #toasty::core::stmt::Assignments,
+                projection: #toasty::core::stmt::Projection,
+            ) -> Self::UpdateBuilder<'a> {
+                #update_struct_ident { assignments, projection }
             }
 
             fn field_ty(
@@ -255,9 +263,16 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
 
         impl #toasty::ModelField for #model_ident {
             type Path<__Origin> = #field_struct_ident<__Origin>;
+            type UpdateBuilder<'a> = ();
 
             fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
                 #field_struct_ident { path }
+            }
+
+            fn make_update_builder<'a>(
+                _assignments: &'a mut #toasty::core::stmt::Assignments,
+                _projection: #toasty::core::stmt::Projection,
+            ) -> Self::UpdateBuilder<'a> {
             }
 
             fn field_ty(
@@ -347,7 +362,7 @@ impl Expand<'_> {
     }
 
     /// Generates a field accessor method for a primitive field using the
-    /// `Field::make_field_accessor` trait.
+    /// `ModelField::new_path` trait.
     fn expand_primitive_field_method(
         &self,
         field_ident: &syn::Ident,
@@ -359,8 +374,8 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
 
         quote! {
-            #vis fn #field_ident(&self) -> <#ty as #toasty::Field>::FieldAccessor<__Origin> {
-                <#ty as #toasty::Field>::make_field_accessor(
+            #vis fn #field_ident(&self) -> <#ty as #toasty::ModelField>::Path<__Origin> {
+                <#ty as #toasty::ModelField>::new_path(
                     self.path().chain(
                         #toasty::Path::<#model_ident, _>::from_field_index(#field_offset)
                     )

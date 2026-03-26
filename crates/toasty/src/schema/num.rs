@@ -29,9 +29,16 @@ macro_rules! impl_field_numeric {
 
             impl ModelField for $ty {
                 type Path<Origin> = Path<Origin, Self>;
+                type UpdateBuilder<'a> = ();
 
                 fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
                     path
+                }
+
+                fn make_update_builder<'a>(
+                    _assignments: &'a mut toasty_core::stmt::Assignments,
+                    _projection: toasty_core::stmt::Projection,
+                ) -> Self::UpdateBuilder<'a> {
                 }
             }
 

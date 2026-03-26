@@ -165,10 +165,10 @@ impl Expand<'_> {
 
                     #vis fn #with_field_ident(
                         mut self,
-                        f: impl FnOnce(<#ty as #toasty::Field>::UpdateBuilder<'_>)
+                        f: impl FnOnce(<#ty as #toasty::ModelField>::UpdateBuilder<'_>)
                     ) -> Self {
                         let projection = #projection;
-                        let builder = <#ty as #toasty::Field>::make_update_builder(#assignments_for_builder, projection);
+                        let builder = <#ty as #toasty::ModelField>::make_update_builder(#assignments_for_builder, projection);
                         f(builder);
                         self
                     }
