@@ -1,6 +1,6 @@
 use toasty_core::{
     schema::app::{self, Field, FieldId, FieldTy},
-    stmt,
+    stmt::{self, Projection},
 };
 
 use crate::engine::lower::LowerStatement;
@@ -138,7 +138,7 @@ impl LowerStatement<'_, '_> {
                 continue;
             }
 
-            let all_assignments = assignments.take_all(&i);
+            let all_assignments = assignments.take_all(&Projection::from(i));
             if all_assignments.is_empty() {
                 continue;
             }

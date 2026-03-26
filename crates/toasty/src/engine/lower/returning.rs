@@ -1,5 +1,8 @@
 use indexmap::IndexMap;
-use toasty_core::{schema::db::ColumnId, stmt};
+use toasty_core::{
+    schema::db::ColumnId,
+    stmt::{self, Projection},
+};
 
 use crate::engine::lower::{LowerStatement, LoweringContext};
 
@@ -347,7 +350,7 @@ impl stmt::Input for ConstantizeReturning<'_> {
                 }
             }
             ConstantizeSource::UpdateAssignments { assignments } => {
-                if let Some(assignment) = assignments.get(&needle.id.index) {
+                if let Some(assignment) = assignments.get(&Projection::from(needle.id.index)) {
                     assert!(assignment.op.is_set(), "TODO");
                     assert!(
                         assignment.expr.is_const(),

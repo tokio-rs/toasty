@@ -8,6 +8,7 @@ use crate::{
 
 use indexmap::Equivalent;
 use std::{
+    cmp::Ordering,
     fmt,
     hash::{Hash, Hasher},
     ops,
@@ -39,6 +40,24 @@ use std::{
 #[derive(Clone, PartialEq, Eq)]
 pub struct Projection {
     steps: Steps,
+}
+
+/// Lexicographic ordering on the step sequence, so projections sort the same
+/// way `[usize]` slices do: `[] < [0] < [0, 1] < [1] < [1, 0] < [2]`.
+///
+/// This makes `BTreeMap<Projection, _>` support prefix-range queries: to find
+/// every assignment under field 1 (including `[1]`, `[1, 0]`, `[1, 2]`, …),
+/// scan `range(Projection::single(1)..Projection::single(2))`.
+impl Ord for Projection {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.as_slice().cmp(other.as_slice())
+    }
+}
+
+impl PartialOrd for Projection {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 /// Trait for types that can be projected through a [`Projection`].

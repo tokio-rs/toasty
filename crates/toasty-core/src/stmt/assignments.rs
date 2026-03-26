@@ -2,13 +2,18 @@ use crate::stmt::Statement;
 
 use super::{Expr, Projection};
 
-use indexmap::{Equivalent, IndexMap};
-use std::{hash::Hash, ops};
+use std::collections::BTreeMap;
 
 /// An ordered map of field assignments for an [`Update`](super::Update) statement.
 ///
-/// Each entry maps a field projection (identifying which field to change) to an
-/// [`Assignment`] (how to change it). The insertion order is preserved.
+/// Entries are sorted by projection (lexicographic on the step sequence), so
+/// prefix-range queries work naturally: to find every assignment under field 1
+/// (including `[1]`, `[1, 0]`, `[1, 2]`, …), use
+/// [`range`](Self::range)`(Projection::single(1)..Projection::single(2))`.
+///
+/// Each projection may have multiple assignments with different operation types
+/// (e.g., both an `Insert` and a `Remove` for a has-many field). Same-op
+/// entries are merged into list expressions automatically.
 ///
 /// # Examples
 ///
@@ -21,18 +26,12 @@ use std::{hash::Hash, ops};
 /// assignments.set(Projection::single(0), Expr::null());
 /// assert_eq!(assignments.len(), 1);
 /// ```
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Assignments {
-    /// Map from field projection to assignment. The projection may reference an
-    /// application-level model field or a lowered table column. Supports both
-    /// single-step (e.g., `[0]`) and multi-step projections (e.g., `[0, 1]`
-    /// for nested fields).
-    assignments: IndexMap<Projection, Assignment>,
-
-    /// Additional assignments for projections that already have a primary entry
-    /// with a different operation type. This supports combining insert and
-    /// remove operations on the same has-many field in a single update.
-    extra: Vec<(Projection, Assignment)>,
+    /// Sorted map from projection to one or more assignments. Multiple entries
+    /// per projection arise when different operation types (e.g., Insert +
+    /// Remove) target the same field.
+    inner: BTreeMap<Projection, Vec<Assignment>>,
 }
 
 /// A single field assignment within an [`Update`](super::Update) statement.
@@ -94,72 +93,60 @@ impl Statement {
 
 impl Assignments {
     /// Creates an empty `Assignments` with the specified capacity.
-    pub fn with_capacity(capacity: usize) -> Self {
-        Self {
-            assignments: IndexMap::with_capacity(capacity),
-            extra: Vec::new(),
-        }
+    ///
+    /// Note: `BTreeMap` does not support pre-allocation, so the capacity hint
+    /// is currently unused. The signature is preserved for API compatibility.
+    pub fn with_capacity(_capacity: usize) -> Self {
+        Self::default()
     }
 
     /// Returns `true` if there are no assignments.
     pub fn is_empty(&self) -> bool {
-        self.assignments.is_empty() && self.extra.is_empty()
+        self.inner.is_empty()
     }
 
-    /// Returns the number of assignments (including extra entries for mixed
-    /// operations on the same field).
+    /// Returns the total number of individual assignments across all
+    /// projections. A projection with both an `Insert` and a `Remove` counts
+    /// as two.
     pub fn len(&self) -> usize {
-        self.assignments.len() + self.extra.len()
+        self.inner.values().map(|v| v.len()).sum()
     }
 
-    /// Returns `true` if an assignment exists for the given projection.
-    pub fn contains<Q>(&self, key: &Q) -> bool
-    where
-        Q: ?Sized + Hash + Equivalent<Projection>,
-    {
-        self.assignments.contains_key(key)
+    /// Returns `true` if at least one assignment exists for the given
+    /// projection.
+    pub fn contains(&self, key: &(impl Into<Projection> + Clone)) -> bool {
+        self.inner.contains_key(&key.clone().into())
     }
 
-    /// Returns a reference to the assignment for the given projection, if any.
-    pub fn get<Q>(&self, key: &Q) -> Option<&Assignment>
-    where
-        Q: ?Sized + Hash + Equivalent<Projection>,
-    {
-        self.assignments.get(key)
+    /// Returns a reference to the first assignment for the given projection.
+    pub fn get(&self, key: &(impl Into<Projection> + Clone)) -> Option<&Assignment> {
+        self.inner.get(&key.clone().into()).and_then(|v| v.first())
     }
 
-    /// Returns a mutable reference to the assignment for the given projection.
-    pub fn get_mut<Q>(&mut self, key: &Q) -> Option<&mut Assignment>
-    where
-        Q: ?Sized + Hash + Equivalent<Projection>,
-    {
-        self.assignments.get_mut(key)
+    /// Returns a mutable reference to the first assignment for the given
+    /// projection.
+    pub fn get_mut(&mut self, key: &(impl Into<Projection> + Clone)) -> Option<&mut Assignment> {
+        self.inner
+            .get_mut(&key.clone().into())
+            .and_then(|v| v.first_mut())
     }
 
-    /// Sets a field to the given expression value, replacing any existing
-    /// assignment for that projection.
-    pub fn set<Q>(&mut self, key: Q, expr: impl Into<Expr>)
-    where
-        Q: Into<Projection>,
-    {
+    /// Sets a field to the given expression value, replacing **all** existing
+    /// assignments for that projection.
+    pub fn set(&mut self, key: impl Into<Projection>, expr: impl Into<Expr>) {
         let key = key.into();
-        self.assignments.insert(
+        self.inner.insert(
             key,
-            Assignment {
+            vec![Assignment {
                 op: AssignmentOp::Set,
                 expr: expr.into(),
-            },
+            }],
         );
     }
 
-    /// Removes all assignments for the given projection, including extra
-    /// entries.
-    pub fn unset<Q>(&mut self, key: &Q)
-    where
-        Q: ?Sized + Hash + Equivalent<Projection>,
-    {
-        self.assignments.swap_remove(key);
-        self.extra.retain(|(p, _)| !key.equivalent(p));
+    /// Removes all assignments for the given projection.
+    pub fn unset(&mut self, key: &Projection) {
+        self.inner.remove(key);
     }
 
     /// Insert a value into a set. The expression should evaluate to a single
@@ -167,193 +154,112 @@ impl Assignments {
     ///
     /// When there is already an `Insert` assignment for this projection, the
     /// expressions are merged into a list so that multiple values can be
-    /// inserted in a single update.
-    pub fn insert<Q>(&mut self, key: Q, expr: impl Into<Expr>)
-    where
-        Q: Into<Projection>,
-    {
+    /// inserted in a single update. A different op (e.g., `Remove`) coexists
+    /// as a separate entry.
+    pub fn insert(&mut self, key: impl Into<Projection>, expr: impl Into<Expr>) {
         let key = key.into();
         let new_expr = expr.into();
-
-        // If there is already an assignment for this projection, either merge
-        // (same op) or overflow (different op).
-        if let Some(existing) = self.assignments.get_mut(&key) {
-            if existing.op == AssignmentOp::Insert {
-                merge_expr(&mut existing.expr, new_expr);
-                return;
-            }
-            // Different op (e.g., Remove already present) — store in extra.
-            self.extra.push((
-                key,
-                Assignment {
-                    op: AssignmentOp::Insert,
-                    expr: new_expr,
-                },
-            ));
-            return;
-        }
-
-        self.assignments.insert(
-            key,
-            Assignment {
-                op: AssignmentOp::Insert,
-                expr: new_expr,
-            },
-        );
+        push_or_merge(&mut self.inner, key, AssignmentOp::Insert, new_expr);
     }
 
     /// Adds a `Remove` assignment for the given projection.
     ///
     /// When there is already a `Remove` assignment for this projection, the
     /// expressions are merged into a list so that multiple values can be
-    /// removed in a single update.
-    pub fn remove<Q>(&mut self, key: Q, expr: impl Into<Expr>)
-    where
-        Q: Into<Projection>,
-    {
+    /// removed in a single update. A different op coexists as a separate entry.
+    pub fn remove(&mut self, key: impl Into<Projection>, expr: impl Into<Expr>) {
         let key = key.into();
         let new_expr = expr.into();
-
-        if let Some(existing) = self.assignments.get_mut(&key) {
-            if existing.op == AssignmentOp::Remove {
-                merge_expr(&mut existing.expr, new_expr);
-                return;
-            }
-            // Different op — store in extra.
-            self.extra.push((
-                key,
-                Assignment {
-                    op: AssignmentOp::Remove,
-                    expr: new_expr,
-                },
-            ));
-            return;
-        }
-
-        self.assignments.insert(
-            key,
-            Assignment {
-                op: AssignmentOp::Remove,
-                expr: new_expr,
-            },
-        );
+        push_or_merge(&mut self.inner, key, AssignmentOp::Remove, new_expr);
     }
 
-    /// Removes and returns the assignment for the given projection.
+    /// Removes and returns the first assignment for the given projection.
     ///
-    /// Returns only the primary entry. Use [`take_all`](Self::take_all) to
-    /// retrieve both primary and extra entries (e.g., mixed insert + remove).
-    pub fn take<Q>(&mut self, key: &Q) -> Option<Assignment>
-    where
-        Q: ?Sized + Hash + Equivalent<Projection>,
-    {
-        self.assignments.swap_remove(key)
-    }
-
-    /// Removes and returns **all** assignments for the given projection,
-    /// including any extra entries with different operation types.
+    /// If the projection has only one assignment, the entry is removed
+    /// entirely. Otherwise, the first assignment is popped and the rest remain.
     ///
-    /// This is needed for has-many fields that may have both insert and remove
-    /// assignments in a single update.
-    pub fn take_all<Q>(&mut self, key: &Q) -> Vec<Assignment>
-    where
-        Q: ?Sized + Hash + Equivalent<Projection>,
-    {
-        let mut result = Vec::new();
+    /// Use [`take_all`](Self::take_all) to retrieve every assignment for a
+    /// projection (e.g., mixed insert + remove).
+    pub fn take(&mut self, key: &Projection) -> Option<Assignment> {
+        let entries = self.inner.get_mut(key)?;
 
-        if let Some(primary) = self.assignments.swap_remove(key) {
-            result.push(primary);
+        if entries.len() == 1 {
+            // Remove the whole key when the last entry is taken.
+            self.inner.remove(key).unwrap().into_iter().next()
+        } else {
+            // Pop the first entry; the rest stay.
+            Some(entries.remove(0))
         }
-
-        // Drain matching entries from extra (in reverse to preserve order
-        // while removing).
-        let mut i = 0;
-        while i < self.extra.len() {
-            if key.equivalent(&self.extra[i].0) {
-                result.push(self.extra.swap_remove(i).1);
-            } else {
-                i += 1;
-            }
-        }
-
-        result
     }
 
-    /// Returns an iterator over the assignment projections (keys).
+    /// Removes and returns **all** assignments for the given projection.
+    pub fn take_all(&mut self, key: &Projection) -> Vec<Assignment> {
+        self.inner.remove(key).unwrap_or_default()
+    }
+
+    /// Returns an iterator over the unique assignment projections (keys),
+    /// in sorted order.
     pub fn keys(&self) -> impl Iterator<Item = &Projection> + '_ {
-        self.assignments.keys()
+        self.inner.keys()
     }
 
-    /// Returns an iterator over the assignment expressions (values), including
-    /// extra entries.
+    /// Returns an iterator over all assignment expressions (values).
     pub fn exprs(&self) -> impl Iterator<Item = &Expr> + '_ {
-        self.assignments
-            .values()
-            .map(|a| &a.expr)
-            .chain(self.extra.iter().map(|(_, a)| &a.expr))
+        self.inner.values().flat_map(|v| v.iter()).map(|a| &a.expr)
     }
 
-    /// Returns an iterator over `(projection, assignment)` pairs, including
-    /// extra entries for mixed operations.
+    /// Returns an iterator over all `(projection, assignment)` pairs.
+    ///
+    /// Projections with multiple assignments yield one pair per assignment.
     pub fn iter(&self) -> impl Iterator<Item = (&Projection, &Assignment)> + '_ {
-        self.assignments
+        self.inner
             .iter()
-            .chain(self.extra.iter().map(|(p, a)| (p, a)))
+            .flat_map(|(p, v)| v.iter().map(move |a| (p, a)))
     }
 
-    /// Returns a mutable iterator over `(projection, assignment)` pairs,
-    /// including extra entries for mixed operations.
+    /// Returns a mutable iterator over all `(projection, assignment)` pairs.
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (&Projection, &mut Assignment)> + '_ {
-        self.assignments
+        self.inner
             .iter_mut()
-            .chain(self.extra.iter_mut().map(|(p, a)| (&*p, a)))
+            .flat_map(|(p, v)| v.iter_mut().map(move |a| (p as &Projection, a)))
+    }
+
+    /// Returns an iterator over `(projection, assignments)` pairs whose
+    /// projections fall within the given range.
+    ///
+    /// This enables prefix queries: to find every assignment under field 1
+    /// (including `[1]`, `[1, 0]`, `[1, 2]`, …):
+    ///
+    /// ```ignore
+    /// let field_1 = Projection::single(1);
+    /// let field_2 = Projection::single(2);
+    /// for (proj, assignments) in assignments.range(field_1..field_2) {
+    ///     // ...
+    /// }
+    /// ```
+    pub fn range<R>(&self, range: R) -> impl Iterator<Item = (&Projection, &[Assignment])> + '_
+    where
+        R: std::ops::RangeBounds<Projection>,
+    {
+        self.inner.range(range).map(|(p, v)| (p, v.as_slice()))
     }
 }
 
-impl IntoIterator for Assignments {
-    type Item = (Projection, Assignment);
-    type IntoIter = std::iter::Chain<
-        indexmap::map::IntoIter<Projection, Assignment>,
-        std::vec::IntoIter<(Projection, Assignment)>,
-    >;
+/// If the vec already has an entry with the same op, merge the expression into
+/// it (turning it into a list if needed). Otherwise, push a new entry.
+fn push_or_merge(
+    map: &mut BTreeMap<Projection, Vec<Assignment>>,
+    key: Projection,
+    op: AssignmentOp,
+    new_expr: Expr,
+) {
+    let entries = map.entry(key).or_default();
 
-    fn into_iter(self) -> Self::IntoIter {
-        self.assignments.into_iter().chain(self.extra)
-    }
-}
-
-impl Default for Assignments {
-    fn default() -> Self {
-        Self {
-            assignments: IndexMap::new(),
-            extra: Vec::new(),
-        }
-    }
-}
-
-impl<Q> ops::Index<Q> for Assignments
-where
-    Q: Hash + Equivalent<Projection>,
-{
-    type Output = Assignment;
-
-    fn index(&self, index: Q) -> &Self::Output {
-        match self.assignments.get(&index) {
-            Some(ret) => ret,
-            None => panic!("no assignment for projection"),
-        }
-    }
-}
-
-impl<Q> ops::IndexMut<Q> for Assignments
-where
-    Q: Hash + Equivalent<Projection>,
-{
-    fn index_mut(&mut self, index: Q) -> &mut Self::Output {
-        match self.assignments.get_mut(&index) {
-            Some(ret) => ret,
-            None => panic!("no assignment for projection"),
-        }
+    // Look for an existing entry with the same op to merge into.
+    if let Some(existing) = entries.iter_mut().find(|a| a.op == op) {
+        merge_expr(&mut existing.expr, new_expr);
+    } else {
+        entries.push(Assignment { op, expr: new_expr });
     }
 }
 
@@ -369,6 +275,77 @@ fn merge_expr(existing: &mut Expr, new_expr: Expr) {
         other => {
             *existing = Expr::list_from_vec(vec![other, new_expr]);
         }
+    }
+}
+
+impl IntoIterator for Assignments {
+    type Item = (Projection, Assignment);
+    type IntoIter = IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIter {
+            inner: self.inner.into_iter(),
+            current: None,
+        }
+    }
+}
+
+/// Owning iterator that flattens `BTreeMap<Projection, Vec<Assignment>>` into
+/// `(Projection, Assignment)` pairs.
+pub struct IntoIter {
+    inner: std::collections::btree_map::IntoIter<Projection, Vec<Assignment>>,
+    current: Option<(Projection, std::vec::IntoIter<Assignment>)>,
+}
+
+impl Iterator for IntoIter {
+    type Item = (Projection, Assignment);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some((ref proj, ref mut vec_iter)) = self.current {
+                if let Some(assignment) = vec_iter.next() {
+                    return Some((proj.clone(), assignment));
+                }
+            }
+            // Advance to the next key.
+            let (proj, vec) = self.inner.next()?;
+            self.current = Some((proj, vec.into_iter()));
+        }
+    }
+}
+
+// --- Index impls --------------------------------------------------------
+//
+// These allow `assignments[usize]` and `assignments[Projection]` to retrieve
+// the first assignment for a given projection, matching the pre-refactor API.
+
+impl std::ops::Index<usize> for Assignments {
+    type Output = Assignment;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        let key = Projection::from(index);
+        self.get(&key).expect("no assignment for projection")
+    }
+}
+
+impl std::ops::IndexMut<usize> for Assignments {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        let key = Projection::from(index);
+        self.get_mut(&key).expect("no assignment for projection")
+    }
+}
+
+impl std::ops::Index<Projection> for Assignments {
+    type Output = Assignment;
+
+    fn index(&self, index: Projection) -> &Self::Output {
+        self.get(&index).expect("no assignment for projection")
+    }
+}
+
+impl std::ops::IndexMut<Projection> for Assignments {
+    fn index_mut(&mut self, index: Projection) -> &mut Self::Output {
+        self.get_mut(&index).expect("no assignment for projection")
     }
 }
 
