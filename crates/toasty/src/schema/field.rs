@@ -194,7 +194,7 @@ impl Field for Vec<u8> {
     }
 }
 
-impl<T: Field> ModelField for Option<T> {
+impl<T: ModelField> ModelField for Option<T> {
     const NULLABLE: bool = true;
 }
 
@@ -210,7 +210,7 @@ impl<T: Field> Field for Option<T> {
 impl<T> Load for Cow<'_, T>
 where
     T: ToOwned + ?Sized,
-    T::Owned: Field,
+    T::Owned: Load<Output = T::Owned>,
 {
     type Output = Self;
 
@@ -231,7 +231,7 @@ where
 impl<T> ModelField for Cow<'_, T>
 where
     T: ToOwned + ?Sized,
-    T::Owned: Field,
+    T::Owned: ModelField<Output = T::Owned>,
 {
 }
 
@@ -310,7 +310,7 @@ impl Field for bool {
     }
 }
 
-impl<T: Field> Load for Arc<T> {
+impl<T: Load<Output = T>> Load for Arc<T> {
     type Output = Self;
 
     fn ty() -> stmt::Type {
@@ -327,7 +327,7 @@ impl<T: Field> Load for Arc<T> {
     }
 }
 
-impl<T: Field> ModelField for Arc<T> {}
+impl<T: ModelField<Output = T>> ModelField for Arc<T> {}
 
 impl<T: Field> Field for Arc<T> {
     type FieldAccessor<Origin> = Path<Origin, Self>;
@@ -338,7 +338,7 @@ impl<T: Field> Field for Arc<T> {
     }
 }
 
-impl<T: Field> Load for Rc<T> {
+impl<T: Load<Output = T>> Load for Rc<T> {
     type Output = Self;
 
     fn ty() -> stmt::Type {
@@ -355,7 +355,7 @@ impl<T: Field> Load for Rc<T> {
     }
 }
 
-impl<T: Field> ModelField for Rc<T> {}
+impl<T: ModelField<Output = T>> ModelField for Rc<T> {}
 
 impl<T: Field> Field for Rc<T> {
     type FieldAccessor<Origin> = Path<Origin, Self>;
@@ -366,7 +366,7 @@ impl<T: Field> Field for Rc<T> {
     }
 }
 
-impl<T: Field> Load for Box<T> {
+impl<T: Load<Output = T>> Load for Box<T> {
     type Output = Self;
 
     fn ty() -> stmt::Type {
@@ -383,7 +383,7 @@ impl<T: Field> Load for Box<T> {
     }
 }
 
-impl<T: Field> ModelField for Box<T> {}
+impl<T: ModelField<Output = T>> ModelField for Box<T> {}
 
 impl<T: Field> Field for Box<T> {
     type FieldAccessor<Origin> = Path<Origin, Self>;
