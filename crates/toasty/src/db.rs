@@ -1,13 +1,16 @@
 mod builder;
 mod connect;
+mod connection;
 mod executor;
 mod pool;
 mod tx;
 
 pub use builder::Builder;
-pub use connect::{Capability, Connect, Driver};
+pub use connect::Connect;
+pub use connection::Connection;
 pub use executor::Executor;
-pub use pool::{Pool, PoolConfig, PoolConnection, PoolStatus, Timeouts};
+pub use pool::{Pool, PoolConfig, PoolStatus, Timeouts};
+pub use toasty_core::driver::{Capability, Driver};
 pub use tx::{Transaction, TransactionBuilder};
 
 pub(crate) use pool::{ConnectionHandle, ConnectionOperation};
@@ -36,7 +39,7 @@ pub(crate) struct Shared {
 /// back to the pool.
 pub struct Db {
     shared: Arc<Shared>,
-    pub(crate) connection: Option<PoolConnection>,
+    pub(crate) connection: Option<Connection>,
 }
 
 impl Clone for Db {
