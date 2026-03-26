@@ -1,3 +1,11 @@
+//! Procedural macros for the Toasty ORM.
+//!
+//! This crate provides `#[derive(Model)]`, `#[derive(Embed)]`, and related
+//! attribute macros that generate query builders, schema registration, and
+//! database mapping code.
+
+#![warn(missing_docs)]
+
 extern crate proc_macro;
 
 mod create;
@@ -898,11 +906,6 @@ pub fn derive_embed(input: TokenStream) -> TokenStream {
         Ok(output) => output.into(),
         Err(e) => e.to_compile_error().into(),
     }
-}
-
-#[proc_macro]
-pub fn include_schema(_input: TokenStream) -> TokenStream {
-    todo!()
 }
 
 /// Builds a query using the Toasty query language. The macro expands into
