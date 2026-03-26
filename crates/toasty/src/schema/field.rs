@@ -9,7 +9,7 @@ use crate::{
 use std::borrow::Cow;
 use toasty_core::stmt;
 
-pub trait Field: Sized + Load<Output = Self> + ModelField {
+pub trait Field: Sized {
     /// The type returned when accessing this field from a Fields struct.
     /// For primitives, this is Path<Origin, Self>.
     /// For embedded types, this is {Type}Fields<Origin>.
