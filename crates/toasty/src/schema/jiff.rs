@@ -36,12 +36,10 @@ macro_rules! impl_jiff_field {
         }
 
         impl Scope for $ty {
-            type FieldAccessor<Origin> = Path<Origin, Self>;
+            type Path<Origin> = Path<Origin, Self>;
             type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
-            fn make_field_accessor<Origin>(
-                path: Path<Origin, Self>,
-            ) -> Self::FieldAccessor<Origin> {
+            fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
                 path
             }
         }

@@ -134,10 +134,10 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
         }
 
         impl #toasty::Scope for #model_ident {
-            type FieldAccessor<__Origin> = #field_struct_ident<__Origin>;
+            type Path<__Origin> = #field_struct_ident<__Origin>;
             type UpdateBuilder<'a> = #update_struct_ident<'a>;
 
-            fn make_field_accessor<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::FieldAccessor<__Origin> {
+            fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
                 #field_struct_ident { path }
             }
 
@@ -273,10 +273,10 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
         }
 
         impl #toasty::Scope for #model_ident {
-            type FieldAccessor<__Origin> = #field_struct_ident<__Origin>;
+            type Path<__Origin> = #field_struct_ident<__Origin>;
             type UpdateBuilder<'a> = ();
 
-            fn make_field_accessor<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::FieldAccessor<__Origin> {
+            fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
                 #field_struct_ident { path }
             }
         }
@@ -347,7 +347,7 @@ impl Expand<'_> {
     }
 
     /// Generates a field accessor method for a primitive field using the
-    /// `Scope::make_field_accessor` trait.
+    /// `Scope::new_path` trait.
     fn expand_primitive_field_method(
         &self,
         field_ident: &syn::Ident,
@@ -359,8 +359,8 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
 
         quote! {
-            #vis fn #field_ident(&self) -> <#ty as #toasty::Scope>::FieldAccessor<__Origin> {
-                <#ty as #toasty::Scope>::make_field_accessor(
+            #vis fn #field_ident(&self) -> <#ty as #toasty::Scope>::Path<__Origin> {
+                <#ty as #toasty::Scope>::new_path(
                     self.path().chain(
                         #toasty::Path::<#model_ident, _>::from_field_index(#field_offset)
                     )

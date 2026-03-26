@@ -9,7 +9,7 @@ pub trait Scope: Sized {
     /// The type returned when accessing this field from a Scopes struct.
     /// For primitives, this is Path<Origin, Self>.
     /// For embedded types, this is {Type}Scopes<Origin>.
-    type FieldAccessor<Origin>;
+    type Path<Origin>;
 
     /// The type of the update builder for this field.
     /// For embedded types, this is {Type}Update<'a>.
@@ -19,7 +19,7 @@ pub trait Scope: Sized {
     /// Build a field accessor from a path.
     /// For primitives, returns the path as-is.
     /// For embedded types, wraps the path in a Scopes struct.
-    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin>;
+    fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin>;
 
     /// Build an update builder from assignments and a projection.
     /// For primitives, this returns `()` (no builder).
@@ -35,28 +35,28 @@ pub trait Scope: Sized {
 }
 
 impl Scope for String {
-    type FieldAccessor<Origin> = Path<Origin, Self>;
+    type Path<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
-    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
+    fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
         path
     }
 }
 
 impl Scope for Vec<u8> {
-    type FieldAccessor<Origin> = Path<Origin, Self>;
+    type Path<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = ();
 
-    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
+    fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
         path
     }
 }
 
 impl<T: Scope> Scope for Option<T> {
-    type FieldAccessor<Origin> = Path<Origin, Self>;
+    type Path<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
-    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
+    fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
         path
     }
 }
@@ -66,93 +66,93 @@ where
     T: ToOwned + ?Sized,
     T::Owned: Scope,
 {
-    type FieldAccessor<Origin> = Path<Origin, Self>;
+    type Path<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
-    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
+    fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
         path
     }
 }
 
 impl Scope for uuid::Uuid {
-    type FieldAccessor<Origin> = Path<Origin, Self>;
+    type Path<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
-    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
+    fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
         path
     }
 }
 
 impl Scope for bool {
-    type FieldAccessor<Origin> = Path<Origin, Self>;
+    type Path<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
-    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
+    fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
         path
     }
 }
 
 impl<T: Scope> Scope for Arc<T> {
-    type FieldAccessor<Origin> = Path<Origin, Self>;
+    type Path<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
-    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
+    fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
         path
     }
 }
 
 impl<T: Scope> Scope for Rc<T> {
-    type FieldAccessor<Origin> = Path<Origin, Self>;
+    type Path<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
-    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
+    fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
         path
     }
 }
 
 impl<T: Scope> Scope for Box<T> {
-    type FieldAccessor<Origin> = Path<Origin, Self>;
+    type Path<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
-    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
+    fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
         path
     }
 }
 
 impl Scope for isize {
-    type FieldAccessor<Origin> = Path<Origin, Self>;
+    type Path<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
-    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
+    fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
         path
     }
 }
 
 impl Scope for usize {
-    type FieldAccessor<Origin> = Path<Origin, Self>;
+    type Path<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
-    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
+    fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
         path
     }
 }
 
 #[cfg(feature = "rust_decimal")]
 impl Scope for rust_decimal::Decimal {
-    type FieldAccessor<Origin> = Path<Origin, Self>;
+    type Path<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
-    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
+    fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
         path
     }
 }
 
 #[cfg(feature = "bigdecimal")]
 impl Scope for bigdecimal::BigDecimal {
-    type FieldAccessor<Origin> = Path<Origin, Self>;
+    type Path<Origin> = Path<Origin, Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
-    fn make_field_accessor<Origin>(path: Path<Origin, Self>) -> Self::FieldAccessor<Origin> {
+    fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
         path
     }
 }
