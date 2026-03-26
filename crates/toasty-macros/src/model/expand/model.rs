@@ -93,11 +93,6 @@ impl Expand<'_> {
                 #reload_trait_method
             }
 
-            impl #toasty::Create for #model_ident {
-                type Item = #model_ident;
-                type Builder = #create_struct_ident;
-            }
-
             impl #toasty::Model for #model_ident {
                 type Query = #query_struct_ident;
                 type Create = #create_struct_ident;
@@ -109,6 +104,7 @@ impl Expand<'_> {
                 type Model = #model_ident;
                 type Expr = #model_ident;
                 type Query = #query_struct_ident;
+                type Create = #create_struct_ident;
                 type Many = Many;
                 type ManyField<__Origin> = ManyField<__Origin>;
                 type One = One;

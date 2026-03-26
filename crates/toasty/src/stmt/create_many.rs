@@ -1,5 +1,5 @@
 use crate::{
-    schema::{Create, Model},
+    schema::Model,
     stmt::{Expr, Insert, IntoExpr, IntoInsert, List},
     Executor, Result,
 };
@@ -72,9 +72,9 @@ impl<M: Model> CreateMany<M> {
     /// Returns `self` for method chaining.
     pub fn with_item(
         mut self,
-        f: impl FnOnce(<M as Create>::Builder) -> <M as Create>::Builder,
+        f: impl FnOnce(<M as Model>::Create) -> <M as Model>::Create,
     ) -> Self {
-        let create = f(M::builder());
+        let create = f(M::new_create());
         let stmt = create.into_insert();
         assert!(
             stmt.untyped.source.single,

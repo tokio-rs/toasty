@@ -1,4 +1,4 @@
-use super::{Create, Load, Relation};
+use super::{Load, Relation};
 
 use toasty_core::stmt::Value;
 
@@ -69,15 +69,11 @@ impl<T: Relation> HasMany<T> {
     }
 }
 
-impl<T: Relation> Create for HasMany<T> {
-    type Item = T::Model;
-    type Builder = <T as Create>::Builder;
-}
-
 impl<T: Relation> Relation for HasMany<T> {
     type Model = T::Model;
     type Expr = T::Expr;
     type Query = T::Query;
+    type Create = T::Create;
     type Many = T::Many;
     type ManyField<__Origin> = T::ManyField<__Origin>;
     type One = T::One;
