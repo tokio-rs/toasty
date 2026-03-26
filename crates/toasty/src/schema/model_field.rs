@@ -1,4 +1,5 @@
 use super::Load;
+use crate::stmt;
 
 /// Schema registration information for a field type.
 ///
@@ -9,8 +10,20 @@ use super::Load;
 /// Separated from [`Field`](super::Field) so that schema registration does not
 /// depend on runtime concerns like update builders or field accessors.
 pub trait ModelField: Load {
+    /// The type returned when accessing this field from a Fields struct.
+    /// For primitives, this is Path<Origin, Self>.
+    /// For embedded types, this is {Type}Fields<Origin>.
+    type Path<Origin>;
+
     /// Whether or not the type is nullable
     const NULLABLE: bool = false;
+
+    /// Build a field path from a raw path.
+    /// For primitives, returns the path as-is.
+    /// For embedded types, wraps the path in a Fields struct.
+    fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin>
+    where
+        Self: Sized;
 
     /// Returns the app-level field type for this primitive.
     /// Default implementation returns a Primitive field type.

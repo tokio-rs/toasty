@@ -59,7 +59,13 @@ macro_rules! impl_field_numeric {
                 }
             }
 
-            impl ModelField for $ty {}
+            impl ModelField for $ty {
+                type Path<Origin> = Path<Origin, Self>;
+
+                fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
+                    path
+                }
+            }
 
             impl Field for $ty {
                 type FieldAccessor<Origin> = Path<Origin, Self>;
@@ -103,7 +109,13 @@ impl Load for isize {
     }
 }
 
-impl ModelField for isize {}
+impl ModelField for isize {
+    type Path<Origin> = Path<Origin, Self>;
+
+    fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+}
 
 impl Field for isize {
     type FieldAccessor<Origin> = Path<Origin, Self>;
@@ -131,7 +143,13 @@ impl Load for usize {
     }
 }
 
-impl ModelField for usize {}
+impl ModelField for usize {
+    type Path<Origin> = Path<Origin, Self>;
+
+    fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+}
 
 impl Field for usize {
     type FieldAccessor<Origin> = Path<Origin, Self>;
@@ -162,7 +180,13 @@ impl Load for String {
     }
 }
 
-impl ModelField for String {}
+impl ModelField for String {
+    type Path<Origin> = Path<Origin, Self>;
+
+    fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+}
 
 impl Field for String {
     type FieldAccessor<Origin> = Path<Origin, Self>;
@@ -174,6 +198,12 @@ impl Field for String {
 }
 
 impl ModelField for Vec<u8> {
+    type Path<Origin> = Path<Origin, Self>;
+
+    fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+
     fn field_ty(
         storage_ty: Option<toasty_core::schema::db::Type>,
     ) -> toasty_core::schema::app::FieldTy {
@@ -195,7 +225,12 @@ impl Field for Vec<u8> {
 }
 
 impl<T: ModelField> ModelField for Option<T> {
+    type Path<Origin> = Path<Origin, Self>;
     const NULLABLE: bool = true;
+
+    fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
 }
 
 impl<T: Field> Field for Option<T> {
@@ -233,6 +268,11 @@ where
     T: ToOwned + ?Sized,
     T::Owned: ModelField<Output = T::Owned>,
 {
+    type Path<Origin> = Path<Origin, Self>;
+
+    fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
 }
 
 impl<T> Field for Cow<'_, T>
@@ -268,7 +308,13 @@ impl Load for uuid::Uuid {
     }
 }
 
-impl ModelField for uuid::Uuid {}
+impl ModelField for uuid::Uuid {
+    type Path<Origin> = Path<Origin, Self>;
+
+    fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+}
 
 impl Field for uuid::Uuid {
     type FieldAccessor<Origin> = Path<Origin, Self>;
@@ -299,7 +345,13 @@ impl Load for bool {
     }
 }
 
-impl ModelField for bool {}
+impl ModelField for bool {
+    type Path<Origin> = Path<Origin, Self>;
+
+    fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+}
 
 impl Field for bool {
     type FieldAccessor<Origin> = Path<Origin, Self>;
@@ -327,7 +379,13 @@ impl<T: Load<Output = T>> Load for Arc<T> {
     }
 }
 
-impl<T: ModelField<Output = T>> ModelField for Arc<T> {}
+impl<T: ModelField<Output = T>> ModelField for Arc<T> {
+    type Path<Origin> = Path<Origin, Self>;
+
+    fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+}
 
 impl<T: Field> Field for Arc<T> {
     type FieldAccessor<Origin> = Path<Origin, Self>;
@@ -355,7 +413,13 @@ impl<T: Load<Output = T>> Load for Rc<T> {
     }
 }
 
-impl<T: ModelField<Output = T>> ModelField for Rc<T> {}
+impl<T: ModelField<Output = T>> ModelField for Rc<T> {
+    type Path<Origin> = Path<Origin, Self>;
+
+    fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+}
 
 impl<T: Field> Field for Rc<T> {
     type FieldAccessor<Origin> = Path<Origin, Self>;
@@ -383,7 +447,13 @@ impl<T: Load<Output = T>> Load for Box<T> {
     }
 }
 
-impl<T: ModelField<Output = T>> ModelField for Box<T> {}
+impl<T: ModelField<Output = T>> ModelField for Box<T> {
+    type Path<Origin> = Path<Origin, Self>;
+
+    fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+}
 
 impl<T: Field> Field for Box<T> {
     type FieldAccessor<Origin> = Path<Origin, Self>;
@@ -419,7 +489,13 @@ impl Load for rust_decimal::Decimal {
 }
 
 #[cfg(feature = "rust_decimal")]
-impl ModelField for rust_decimal::Decimal {}
+impl ModelField for rust_decimal::Decimal {
+    type Path<Origin> = Path<Origin, Self>;
+
+    fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+}
 
 #[cfg(feature = "rust_decimal")]
 impl Field for rust_decimal::Decimal {
@@ -456,7 +532,13 @@ impl Load for bigdecimal::BigDecimal {
 }
 
 #[cfg(feature = "bigdecimal")]
-impl ModelField for bigdecimal::BigDecimal {}
+impl ModelField for bigdecimal::BigDecimal {
+    type Path<Origin> = Path<Origin, Self>;
+
+    fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+}
 
 #[cfg(feature = "bigdecimal")]
 impl Field for bigdecimal::BigDecimal {
