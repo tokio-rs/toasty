@@ -13,19 +13,18 @@ pub use pool::{Pool, PoolConfig, PoolStatus, Timeouts};
 pub use toasty_core::driver::{Capability, Driver};
 pub use tx::{Transaction, TransactionBuilder};
 
-pub(crate) use pool::{ConnectionHandle, ConnectionOperation};
+pub(crate) use pool::ConnectionOperation;
+pub(crate) use tx::ConnRef;
 
 use crate::{engine::Engine, Result};
 
 use async_trait::async_trait;
 use toasty_core::{
-    driver::{operation::Operation, Response},
     stmt::{self, Value},
     Schema,
 };
 
 use std::sync::Arc;
-use tokio::sync::oneshot;
 
 /// Shared state between all `Db` clones.
 pub(crate) struct Shared {
@@ -33,21 +32,22 @@ pub(crate) struct Shared {
     pub(crate) pool: Pool,
 }
 
-/// A database handle. Each instance owns (or will lazily acquire) a dedicated
-/// connection from the pool. Cloning produces a new handle that will acquire its
-/// own connection on first use. Dropping the [`Db`] instance will release the database connection
-/// back to the pool.
+/// A database handle backed by a connection pool.
+///
+/// Each operation acquires a connection from the pool, executes, and returns
+/// the connection. For operations that must share a single physical connection
+/// (e.g. transactions), use [`Db::connection`] to obtain a dedicated
+/// [`Connection`].
+///
+/// Cloning a `Db` is cheap — it shares the underlying pool.
 pub struct Db {
     shared: Arc<Shared>,
-    pub(crate) connection: Option<Connection>,
 }
 
 impl Clone for Db {
     fn clone(&self) -> Self {
         Db {
             shared: self.shared.clone(),
-            // Cloned Db will acquire a new connection lazily.
-            connection: None,
         }
     }
 }
@@ -77,68 +77,24 @@ impl Db {
         Builder::default()
     }
 
-    /// Lazily acquire a connection from the pool.
-    pub(crate) async fn connection(&mut self) -> Result<&ConnectionHandle> {
-        let conn = match &mut self.connection {
-            Some(conn) => conn,
-            empty => empty.insert(self.shared.pool.get().await?),
-        };
-
-        Ok(conn.handle())
+    /// Acquire a dedicated connection from the pool.
+    ///
+    /// The returned [`Connection`] implements [`Executor`] and pins all
+    /// operations to the same physical connection. This is required for
+    /// transactions and useful when you need sequential consistency.
+    ///
+    /// When the `Connection` is dropped it is returned to the pool for reuse.
+    pub async fn connection(&self) -> Result<Connection> {
+        self.shared.pool.get(self.shared.clone()).await
     }
 
     pub(crate) async fn exec_stmt(
-        &mut self,
+        &self,
         stmt: stmt::Statement,
         in_transaction: bool,
     ) -> Result<Value> {
-        let returns_list = match &stmt {
-            stmt::Statement::Query(q) => !q.single,
-            stmt::Statement::Insert(i) => !i.source.single,
-            stmt::Statement::Update(i) => match &i.target {
-                stmt::UpdateTarget::Query(q) => !q.single,
-                stmt::UpdateTarget::Model(_) => false,
-                _ => true,
-            },
-            stmt::Statement::Delete(d) => !d.selection().single,
-        };
-
-        let (tx, rx) = oneshot::channel();
-
         let conn = self.connection().await?;
-        conn.in_tx
-            .send(ConnectionOperation::ExecStatement {
-                stmt: Box::new(stmt),
-                in_transaction,
-                tx,
-            })
-            .unwrap();
-
-        let mut stream = rx.await.unwrap()?;
-
-        if returns_list {
-            let values = stream.collect().await?;
-            Ok(Value::List(values))
-        } else {
-            match stream.next().await {
-                Some(value) => value,
-                None => Ok(Value::Null),
-            }
-        }
-    }
-
-    pub(crate) async fn exec_operation(&mut self, operation: Operation) -> Result<Response> {
-        let (tx, rx) = oneshot::channel();
-
-        let conn = self.connection().await?;
-        conn.in_tx
-            .send(ConnectionOperation::ExecOperation {
-                operation: Box::new(operation),
-                tx,
-            })
-            .unwrap();
-
-        rx.await.unwrap()
+        conn.exec_stmt(stmt, in_transaction).await
     }
 
     /// Create a [`TransactionBuilder`] for configuring transaction options
@@ -156,26 +112,23 @@ impl Db {
     /// # }
     /// # let driver = toasty_driver_sqlite::Sqlite::in_memory();
     /// # let mut db = toasty::Db::builder().register::<User>().build(driver).await.unwrap();
-    /// let tx = db.transaction_builder()
+    /// let mut conn = db.connection().await.unwrap();
+    /// let tx = toasty::TransactionBuilder::new()
     ///     .read_only(true)
-    ///     .begin()
+    ///     .begin(&mut conn)
     ///     .await
     ///     .unwrap();
     /// tx.commit().await.unwrap();
     /// # });
     /// ```
-    pub fn transaction_builder(&mut self) -> TransactionBuilder<'_> {
-        TransactionBuilder::new(self)
+    pub fn transaction_builder(&self) -> TransactionBuilder {
+        TransactionBuilder::new()
     }
 
     /// Creates tables and indices defined in the schema on the database.
-    pub async fn push_schema(&mut self) -> Result<()> {
-        let (tx, rx) = oneshot::channel();
+    pub async fn push_schema(&self) -> Result<()> {
         let conn = self.connection().await?;
-        conn.in_tx
-            .send(ConnectionOperation::PushSchema { tx })
-            .unwrap();
-        rx.await.unwrap()
+        conn.push_schema().await
     }
 
     /// Drops the entire database and recreates an empty one without applying migrations.
@@ -212,17 +165,15 @@ impl std::fmt::Debug for Db {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Db")
             .field("engine", &self.shared.engine)
-            .field("connected", &self.connection.is_some())
             .finish()
     }
 }
 
-impl Db {}
-
 #[async_trait]
 impl Executor for Db {
     async fn transaction(&mut self) -> Result<Transaction<'_>> {
-        Transaction::begin(self).await
+        let conn = self.connection().await?;
+        Transaction::begin(ConnRef::owned(conn)).await
     }
 
     async fn exec_untyped(&mut self, stmt: stmt::Statement) -> Result<Value> {

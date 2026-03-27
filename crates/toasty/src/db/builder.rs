@@ -52,13 +52,12 @@ impl Builder {
         let engine = Engine::new(Arc::new(schema), capability);
         let pool = Pool::new(driver, engine.clone())?;
 
+        let shared = Arc::new(Shared { engine, pool });
+
         // see if we're able to acquire a valid connection
-        let conn = pool.get().await?;
+        let conn = shared.pool.get(shared.clone()).await?;
         std::mem::drop(conn);
 
-        Ok(Db {
-            shared: Arc::new(Shared { engine, pool }),
-            connection: None,
-        })
+        Ok(Db { shared })
     }
 }
