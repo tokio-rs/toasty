@@ -35,9 +35,9 @@ pub(crate) struct Shared {
 /// A database handle backed by a connection pool.
 ///
 /// Each operation acquires a connection from the pool, executes, and returns
-/// the connection. For operations that must share a single physical connection
-/// (e.g. transactions), use [`Db::connection`] to obtain a dedicated
-/// [`Connection`].
+/// the connection. Use [`Db::connection`] to obtain a dedicated
+/// [`Connection`] when you need multiple statements to share the same
+/// physical connection (e.g. temporary tables or session-level state).
 ///
 /// Cloning a `Db` is cheap — it shares the underlying pool.
 pub struct Db {
@@ -80,8 +80,9 @@ impl Db {
     /// Acquire a dedicated connection from the pool.
     ///
     /// The returned [`Connection`] implements [`Executor`] and pins all
-    /// operations to the same physical connection. This is required for
-    /// transactions and useful when you need sequential consistency.
+    /// operations to the same physical connection. This is useful when
+    /// multiple statements must share connection-level state such as
+    /// temporary tables or session variables.
     ///
     /// When the `Connection` is dropped it is returned to the pool for reuse.
     pub async fn connection(&self) -> Result<Connection> {

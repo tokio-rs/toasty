@@ -14,8 +14,8 @@ use tokio::sync::oneshot;
 /// A dedicated database connection retrieved from a pool.
 ///
 /// Holding a `Connection` guarantees that all operations are executed on the
-/// same physical connection, which is required for transactions and useful when
-/// you want sequential consistency across multiple statements.
+/// same physical connection. This is useful when multiple statements must
+/// share connection-level state such as temporary tables or session variables.
 ///
 /// When dropped, the connection is returned to the pool for reuse.
 pub struct Connection {
