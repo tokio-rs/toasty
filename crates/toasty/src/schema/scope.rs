@@ -1,4 +1,3 @@
-use crate::schema::Register;
 use crate::stmt::Path;
 
 /// A scope represents a context that contains items of a particular type.
@@ -18,17 +17,6 @@ pub trait Scope {
 
     /// Construct a scope path from a [`Path`] targeting the item type.
     fn new_path<Origin>(path: Path<Origin, Self::Item>) -> Self::Path<Origin>;
-
-    /// Construct a scope path assuming the scope is the root of a query.
-    ///
-    /// The default implementation calls [`new_path`](Scope::new_path) with an
-    /// identity (root) path.
-    fn new_path_root() -> Self::Path<Self::Item>
-    where
-        Self::Item: Register,
-    {
-        Self::new_path(Path::root())
-    }
 
     /// Return a fresh, default-initialized create builder for this scope.
     fn new_create() -> Self::Create;
