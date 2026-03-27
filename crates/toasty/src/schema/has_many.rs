@@ -96,12 +96,12 @@ impl<T: Relation> Relation for HasMany<T> {
 }
 
 impl<T: Relation> Scope for HasMany<T> {
-    type Item = T::Model;
+    type Item = crate::stmt::List<T::Model>;
     type Path<Origin> = T::ManyField<Origin>;
     type Create = T::Create;
 
     fn new_path<Origin>(path: crate::stmt::Path<Origin, Self::Item>) -> Self::Path<Origin> {
-        T::new_many_field(path.to_list())
+        T::new_many_field(path)
     }
 
     fn new_create() -> Self::Create {

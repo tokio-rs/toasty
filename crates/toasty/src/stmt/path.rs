@@ -365,19 +365,6 @@ impl<T, U> Path<T, U> {
     }
 }
 
-impl<T, U> Path<T, U> {
-    /// Convert this path into a `Path<T, List<U>>`.
-    ///
-    /// This is useful when building a has-many scope from a path that targets a
-    /// single model, since `ManyField` stores `Path<Origin, List<Model>>`.
-    pub fn to_list(self) -> Path<T, List<U>> {
-        Path {
-            untyped: self.untyped,
-            _p: PhantomData,
-        }
-    }
-}
-
 impl<T, U> Path<T, List<U>> {
     /// Build an `IN subquery` expression that tests whether **any** associated
     /// record satisfies `filter`.

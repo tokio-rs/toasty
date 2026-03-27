@@ -32,7 +32,7 @@ pub trait Relation: Load<Output = Self> {
         Self::Create::default()
     }
 
-    /// Construct a `ManyField` from a path targeting the model.
+    /// Construct a `ManyField` from a path targeting a list of the model.
     fn new_many_field<Origin>(path: Path<Origin, List<Self::Model>>) -> Self::ManyField<Origin>;
 
     fn field_name_to_id(name: &str) -> FieldId;
