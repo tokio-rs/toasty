@@ -67,6 +67,12 @@ impl<T: Relation> Relation for HasOne<T> {
     type OneField<__Origin> = T::OneField<__Origin>;
     type OptionOne = T::OptionOne;
 
+    fn new_many_field<__Origin>(
+        path: crate::stmt::Path<__Origin, crate::stmt::List<Self::Model>>,
+    ) -> Self::ManyField<__Origin> {
+        T::new_many_field(path)
+    }
+
     fn field_name_to_id(name: &str) -> toasty_core::schema::app::FieldId {
         T::field_name_to_id(name)
     }

@@ -1,5 +1,5 @@
 use super::{Load, Model};
-use crate::stmt::{IntoExpr, IntoInsert};
+use crate::stmt::{IntoExpr, IntoInsert, List, Path};
 
 use toasty_core::schema::app::FieldId;
 
@@ -31,6 +31,9 @@ pub trait Relation: Load<Output = Self> {
     fn new_create() -> Self::Create {
         Self::Create::default()
     }
+
+    /// Construct a `ManyField` from a path targeting the model.
+    fn new_many_field<Origin>(path: Path<Origin, List<Self::Model>>) -> Self::ManyField<Origin>;
 
     fn field_name_to_id(name: &str) -> FieldId;
 

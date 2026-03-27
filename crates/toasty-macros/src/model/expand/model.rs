@@ -111,6 +111,12 @@ impl Expand<'_> {
                 type OneField<__Origin> = OneField<__Origin>;
                 type OptionOne = OptionOne;
 
+                fn new_many_field<__Origin>(
+                    path: #toasty::Path<__Origin, #toasty::List<Self::Model>>,
+                ) -> ManyField<__Origin> {
+                    ManyField::from_path(path)
+                }
+
                 #field_name_to_id
             }
 
