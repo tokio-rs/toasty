@@ -740,12 +740,21 @@ impl<V: Visit> Visit for &mut V {
     }
 }
 
-/// Default traversal for [`Assignment`] nodes. Visits the assignment's expression.
+/// Default traversal for [`Assignment`] nodes. Visits the assignment's expression(s).
 pub fn visit_assignment<V>(v: &mut V, node: &Assignment)
 where
     V: Visit + ?Sized,
 {
-    v.visit_expr(node.expr());
+    match node {
+        Assignment::Set(expr) | Assignment::Insert(expr) | Assignment::Remove(expr) => {
+            v.visit_expr(expr);
+        }
+        Assignment::Batch(entries) => {
+            for entry in entries {
+                visit_assignment(v, entry);
+            }
+        }
+    }
 }
 
 /// Default traversal for [`Assignments`] nodes. Visits each assignment in the collection.
