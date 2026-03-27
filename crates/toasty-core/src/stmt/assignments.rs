@@ -204,13 +204,12 @@ impl<'a> IntoIterator for &'a Assignments {
 
 impl<Q> ops::Index<Q> for Assignments
 where
-    Q: Into<Projection>,
+    Q: AsRef<[usize]>,
 {
     type Output = Assignment;
 
     fn index(&self, index: Q) -> &Self::Output {
-        let proj = index.into();
-        match self.assignments.get(&proj) {
+        match self.assignments.get(index.as_ref()) {
             Some(ret) => ret,
             None => panic!("no assignment for projection"),
         }
@@ -219,11 +218,10 @@ where
 
 impl<Q> ops::IndexMut<Q> for Assignments
 where
-    Q: Into<Projection> + Clone,
+    Q: AsRef<[usize]>,
 {
     fn index_mut(&mut self, index: Q) -> &mut Self::Output {
-        let proj = index.into();
-        match self.assignments.get_mut(&proj) {
+        match self.assignments.get_mut(index.as_ref()) {
             Some(ret) => ret,
             None => panic!("no assignment for projection"),
         }
