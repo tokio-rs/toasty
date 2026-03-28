@@ -7,13 +7,10 @@ pub(crate) fn expand(item: &CreateItem) -> TokenStream {
     match item {
         CreateItem::Typed { path, fields } => {
             let fields_path = quote! { #path::fields() };
-            let field_calls = expand_field_set(fields, Some(&fields_path));
+            let field_calls = expand_field_set(fields, &fields_path);
             quote! { #path::create() #(#field_calls)* }
         }
-        CreateItem::Scoped { expr, fields } => {
-            let field_calls = expand_field_set(fields, None);
-            quote! { #expr.create() #(#field_calls)* }
-        }
+        CreateItem::Scoped { expr, fields } => expand_scoped(expr, fields),
         CreateItem::TypedBatch { path, items } => {
             let batch = expand_typed_batch(path, items);
             quote! { toasty::batch(#batch) }
@@ -21,6 +18,29 @@ pub(crate) fn expand(item: &CreateItem) -> TokenStream {
         CreateItem::Tuple { items } => {
             let elements: Vec<_> = items.iter().map(expand_as_element).collect();
             quote! { toasty::batch(( #( #elements, )* )) }
+        }
+    }
+}
+
+/// Expand a scoped creation (`in expr { fields }`).
+///
+/// Uses the `Scope` trait to obtain a fields path for nested builders.
+/// The scope expression is bound to a variable so it can be referenced both
+/// for `.create()` and for extracting the field struct via `Scope::new_path`.
+fn expand_scoped(expr: &syn::Expr, fields: &FieldSet) -> TokenStream {
+    let fields_path = quote! { __scope_fields };
+    let field_calls = expand_field_set(fields, &fields_path);
+
+    quote! {
+        {
+            fn __new_scope_fields<__S: toasty::Scope>(
+                _: &__S,
+            ) -> __S::Path<__S::Item> {
+                __S::new_path(toasty::stmt::Path::__stub())
+            }
+            let __scope = #expr;
+            let __scope_fields = __new_scope_fields(&__scope);
+            __scope.create() #(#field_calls)*
         }
     }
 }
@@ -44,7 +64,7 @@ fn expand_typed_batch(path: &syn::Path, items: &[FieldSet]) -> TokenStream {
     let builders: Vec<_> = items
         .iter()
         .map(|fields| {
-            let field_calls = expand_field_set(fields, Some(&fields_path));
+            let field_calls = expand_field_set(fields, &fields_path);
             quote! { #path::create() #(#field_calls)* }
         })
         .collect();
@@ -52,48 +72,32 @@ fn expand_typed_batch(path: &syn::Path, items: &[FieldSet]) -> TokenStream {
 }
 
 /// Expand a `FieldSet` into method calls.
-///
-/// When `path` is `Some`, nested fields (Single/List) use path-based builders
-/// instead of closure-based `CreateMany` patterns.
-fn expand_field_set(fields: &FieldSet, path: Option<&TokenStream>) -> Vec<TokenStream> {
+fn expand_field_set(fields: &FieldSet, path: &TokenStream) -> Vec<TokenStream> {
     fields.0.iter().map(|f| expand_field(f, path)).collect()
 }
 
 /// Expand a single field entry into a method call token stream.
-fn expand_field(field: &FieldEntry, path: Option<&TokenStream>) -> TokenStream {
+fn expand_field(field: &FieldEntry, path: &TokenStream) -> TokenStream {
     let name = &field.name;
-    let with_name = &field.with_name;
 
     match &field.value {
         FieldValue::Expr(expr) => {
             quote! { .#name(#expr) }
         }
         FieldValue::Single(sub_fields) => {
-            if let Some(path) = path {
-                // Path-based: use path.field().create() to build the nested item
-                let nested_path = quote! { #path.#name() };
-                let sub_calls = expand_field_set(sub_fields, Some(&nested_path));
-                quote! { .#name(#path.#name().create() #(#sub_calls)*) }
-            } else {
-                // Fallback: closure-based approach
-                let sub_calls = sub_fields.0.iter().map(|f| expand_field(f, None));
-                quote! { .#with_name(|b| { #(let b = b #sub_calls;)* b }) }
-            }
+            // Path-based: use path.field().create() to build the nested item
+            let nested_path = quote! { #path.#name() };
+            let sub_calls = expand_field_set(sub_fields, &nested_path);
+            quote! { .#name(#path.#name().create() #(#sub_calls)*) }
         }
         FieldValue::List(items) => {
-            if let Some(path) = path {
-                // Path-based: build an array of nested create builders
-                let nested_path = quote! { #path.#name() };
-                let item_builders: Vec<_> = items
-                    .iter()
-                    .map(|item| expand_nested_item_with_path(item, path, name, &nested_path))
-                    .collect();
-                quote! { .#name([#(#item_builders),*]) }
-            } else {
-                // Fallback: closure-based CreateMany approach
-                let item_calls: Vec<_> = items.iter().map(expand_nested_item_fallback).collect();
-                quote! { .#with_name(|b| b #(#item_calls)*) }
-            }
+            // Path-based: build an array of nested create builders
+            let nested_path = quote! { #path.#name() };
+            let item_builders: Vec<_> = items
+                .iter()
+                .map(|item| expand_nested_item(item, path, name, &nested_path))
+                .collect();
+            quote! { .#name([#(#item_builders),*]) }
         }
     }
 }
@@ -103,7 +107,7 @@ fn expand_field(field: &FieldEntry, path: Option<&TokenStream>) -> TokenStream {
 /// `parent_path` is the current fields path (e.g., `User::fields()`).
 /// `field_name` is the field identifier (e.g., `todos`).
 /// `nested_path` is `parent_path.field_name()` for deeper nesting.
-fn expand_nested_item_with_path(
+fn expand_nested_item(
     item: &FieldValue,
     parent_path: &TokenStream,
     field_name: &syn::Ident,
@@ -111,27 +115,11 @@ fn expand_nested_item_with_path(
 ) -> TokenStream {
     match item {
         FieldValue::Single(fields) => {
-            let sub_calls = expand_field_set(fields, Some(nested_path));
+            let sub_calls = expand_field_set(fields, nested_path);
             quote! { #parent_path.#field_name().create() #(#sub_calls)* }
         }
         FieldValue::Expr(e) => {
             quote! { #e }
-        }
-        FieldValue::List(_) => {
-            quote! { compile_error!("nested lists are not supported in create!") }
-        }
-    }
-}
-
-/// Fallback: expand a single item within a field-level list using CreateMany closures.
-fn expand_nested_item_fallback(item: &FieldValue) -> TokenStream {
-    match item {
-        FieldValue::Single(fields) => {
-            let sub_calls = fields.0.iter().map(|f| expand_field(f, None));
-            quote! { .with_item(|b| { #(let b = b #sub_calls;)* b }) }
-        }
-        FieldValue::Expr(e) => {
-            quote! { .item(#e) }
         }
         FieldValue::List(_) => {
             quote! { compile_error!("nested lists are not supported in create!") }

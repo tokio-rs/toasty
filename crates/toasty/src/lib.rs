@@ -116,7 +116,7 @@ mod engine;
 
 /// Model, relation, and schema inspection types.
 pub mod schema;
-pub use schema::{BelongsTo, HasMany, HasOne};
+pub use schema::{BelongsTo, HasMany, HasOne, Scope};
 
 // `Page` lives in `stmt`.
 

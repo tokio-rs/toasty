@@ -64,6 +64,19 @@ impl<T: Register> Path<T, T> {
 }
 
 impl<T, U> Path<T, U> {
+    /// Create a stub path with a dummy root.
+    ///
+    /// Used internally by macro-generated code to construct field structs
+    /// solely for accessing their `.create()` method. The path value itself
+    /// is not meaningful.
+    #[doc(hidden)]
+    pub fn __stub() -> Self {
+        Self {
+            untyped: stmt::Path::model(toasty_core::schema::app::ModelId(0)),
+            _p: PhantomData,
+        }
+    }
+
     /// Create a path to the field at `index` on model `T`.
     ///
     /// # Examples
