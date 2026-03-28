@@ -347,7 +347,7 @@ impl stmt::Input for ConstantizeReturning<'_> {
                 }
             }
             ConstantizeSource::UpdateAssignments { assignments } => {
-                if let Some(assignment) = assignments.get(&[needle.id.index][..]) {
+                if let Some(assignment) = assignments.get(&[needle.id.index]) {
                     let stmt::Assignment::Set(expr) = assignment else {
                         todo!("only SET supported; got {assignment:#?}");
                     };

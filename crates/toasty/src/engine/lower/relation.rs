@@ -138,7 +138,7 @@ impl LowerStatement<'_, '_> {
                 continue;
             }
 
-            let Some(assignment) = assignments.take(&[i][..]) else {
+            let Some(assignment) = assignments.take(&[i]) else {
                 continue;
             };
 
