@@ -615,7 +615,9 @@ impl ToSql for (&db::Table, &stmt::Assignments) {
             f.dst.push_str(" = ");
 
             // For value expressions, provide type hint from the column
-            let expr = assignment.expr();
+            let stmt::Assignment::Set(expr) = assignment else {
+                todo!("only SET supported in SQL serialization; got {assignment:#?}");
+            };
             if let stmt::Expr::Value(value) = expr {
                 let type_hint = Some(&column.ty);
                 let placeholder = f.params.push(value, type_hint);

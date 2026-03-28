@@ -168,11 +168,6 @@ impl Assignments {
         self.assignments.keys()
     }
 
-    /// Returns an iterator over the assignment expressions (values).
-    pub fn exprs(&self) -> impl Iterator<Item = &Expr> + '_ {
-        self.assignments.values().map(|a| a.expr())
-    }
-
     /// Returns an iterator over `(projection, assignment)` pairs.
     pub fn iter(&self) -> impl Iterator<Item = (&Projection, &Assignment)> + '_ {
         self.assignments.iter()
@@ -237,26 +232,6 @@ impl Assignment {
     /// Returns `true` if this is the `Remove` variant.
     pub fn is_remove(&self) -> bool {
         matches!(self, Self::Remove(_))
-    }
-
-    /// Returns a reference to the expression in this assignment.
-    ///
-    /// For `Batch`, returns the expression of the first entry.
-    pub fn expr(&self) -> &Expr {
-        match self {
-            Self::Set(expr) | Self::Insert(expr) | Self::Remove(expr) => expr,
-            Self::Batch(entries) => entries[0].expr(),
-        }
-    }
-
-    /// Returns a mutable reference to the expression in this assignment.
-    ///
-    /// For `Batch`, returns the expression of the first entry.
-    pub fn expr_mut(&mut self) -> &mut Expr {
-        match self {
-            Self::Set(expr) | Self::Insert(expr) | Self::Remove(expr) => expr,
-            Self::Batch(entries) => entries[0].expr_mut(),
-        }
     }
 
     /// Appends another assignment, converting to `Batch` if needed.
