@@ -1,4 +1,4 @@
-use crate::stmt::Statement;
+use crate::stmt::{Node, Statement, Visit, VisitMut};
 
 use super::{Expr, Projection};
 
@@ -246,5 +246,15 @@ impl Assignment {
                 }
             }
         }
+    }
+}
+
+impl Node for Assignment {
+    fn visit<V: Visit>(&self, mut visit: V) {
+        visit.visit_assignment(self);
+    }
+
+    fn visit_mut<V: VisitMut>(&mut self, mut visit: V) {
+        visit.visit_assignment_mut(self);
     }
 }

@@ -432,15 +432,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         if let stmt::Statement::Update(update) = stmt {
             for (_, assignment) in update.assignments.iter() {
-                let expr = match assignment {
-                    stmt::Assignment::Set(expr)
-                    | stmt::Assignment::Insert(expr)
-                    | stmt::Assignment::Remove(expr) => expr,
-                    stmt::Assignment::Batch(_) => {
-                        todo!("batch assignments in data load extraction")
-                    }
-                };
-                stmt::visit::for_each_expr(expr, |expr| {
+                stmt::visit::for_each_expr(assignment, |expr| {
                     self.extract_data_load_args_from_expr(expr, None);
                 });
             }
