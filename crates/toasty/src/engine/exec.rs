@@ -8,7 +8,7 @@ mod eval;
 pub(crate) use eval::Eval;
 
 mod exec_statement;
-pub(crate) use exec_statement::{ExecStatement, ExecStatementOutput};
+pub(crate) use exec_statement::{ExecStatement, ExecStatementOutput, PaginationConfig};
 
 mod filter;
 pub(crate) use filter::Filter;
@@ -60,6 +60,29 @@ use toasty_core::{
     Connection,
 };
 
+/// Response from executing an action in the engine pipeline.
+/// Carries both the result values and optional pagination metadata.
+#[derive(Debug)]
+pub struct ExecResponse {
+    /// The result values (rows, count, or stream)
+    pub values: Rows,
+    /// Cursor to the next page (if paginated and more data exists)
+    pub next_cursor: Option<stmt::Value>,
+    /// Cursor to the previous page (if backward pagination is supported)
+    pub prev_cursor: Option<stmt::Value>,
+}
+
+impl ExecResponse {
+    /// Create a response from rows with no pagination cursors
+    pub fn from_rows(rows: Rows) -> Self {
+        Self {
+            values: rows,
+            next_cursor: None,
+            prev_cursor: None,
+        }
+    }
+}
+
 struct Exec<'a> {
     engine: &'a Engine,
     connection: &'a mut dyn Connection,
@@ -76,7 +99,7 @@ impl Engine {
         connection: &mut dyn Connection,
         plan: ExecPlan,
         in_transaction: bool,
-    ) -> Result<ValueStream> {
+    ) -> Result<ExecResponse> {
         let mut exec = Exec {
             engine: self,
             connection,
@@ -108,7 +131,8 @@ impl Engine {
             exec.in_transaction = true;
         }
 
-        for step in &plan.actions {
+        for (i, step) in plan.actions.iter().enumerate() {
+            tracing::debug!("Executing action {}: {:?}", i, action_name(step));
             if let Err(e) = exec.exec_step(step).await {
                 if plan.needs_transaction {
                     // Best effort: ignore rollback errors so the original error is returned
@@ -122,17 +146,46 @@ impl Engine {
             exec.connection.exec(&self.schema, commit.into()).await?;
         }
 
-        Ok(if let Some(returning) = plan.returning {
-            match exec.vars.load(returning).await? {
+        let result = if let Some(returning) = plan.returning {
+            let response = exec.vars.load(returning).await?;
+            tracing::debug!("Final result from var {:?}:\n{:#?}", returning, response);
+
+            let value_stream = match response.values {
                 Rows::Count(_) => ValueStream::default(),
                 Rows::Value(stmt::Value::List(items)) => ValueStream::from_vec(items),
                 // TODO have the public API be able to handle single rows
                 Rows::Value(value) => ValueStream::from_vec(vec![value]),
                 Rows::Stream(value_stream) => value_stream,
+            };
+
+            ExecResponse {
+                values: Rows::Stream(value_stream),
+                next_cursor: response.next_cursor,
+                prev_cursor: response.prev_cursor,
             }
         } else {
-            ValueStream::default()
-        })
+            ExecResponse::from_rows(Rows::Stream(ValueStream::default()))
+        };
+
+        Ok(result)
+    }
+}
+
+fn action_name(action: &Action) -> &'static str {
+    match action {
+        Action::DeleteByKey(_) => "DeleteByKey",
+        Action::Eval(_) => "Eval",
+        Action::ExecStatement(_) => "ExecStatement",
+        Action::Filter(_) => "Filter",
+        Action::FindPkByIndex(_) => "FindPkByIndex",
+        Action::GetByKey(_) => "GetByKey",
+        Action::Guard(_) => "Guard",
+        Action::NestedMerge(_) => "NestedMerge",
+        Action::QueryPk(_) => "QueryPk",
+        Action::ReadModifyWrite(_) => "ReadModifyWrite",
+        Action::Project(_) => "Project",
+        Action::SetVar(_) => "SetVar",
+        Action::UpdateByKey(_) => "UpdateByKey",
     }
 }
 
@@ -159,7 +212,8 @@ impl Exec<'_> {
         let mut ret = Vec::new();
 
         for var_id in input {
-            let value = self.vars.load(*var_id).await?.collect_as_value().await?;
+            let response = self.vars.load(*var_id).await?;
+            let value = response.values.collect_as_value().await?;
             ret.push(value);
         }
 

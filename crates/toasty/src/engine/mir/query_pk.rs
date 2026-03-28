@@ -44,6 +44,9 @@ pub(crate) struct QueryPk {
 
     /// Cursor for resuming a paginated query.
     pub(crate) cursor: Option<stmt::Value>,
+
+    /// Pagination configuration (None if not paginated)
+    pub(crate) pagination: Option<exec::PaginationConfig>,
 }
 
 impl QueryPk {
@@ -90,6 +93,7 @@ impl QueryPk {
             limit: self.limit,
             order: self.order,
             cursor: self.cursor.clone(),
+            pagination: self.pagination.clone(),
         }
     }
 }

@@ -18,6 +18,8 @@ use crate::{stmt, Result};
 pub struct Response {
     /// The rows produced by the operation.
     pub rows: Rows,
+    /// Opaque cursor for pagination. Driver-specific format.
+    pub cursor: Option<stmt::Value>,
 }
 
 /// The payload of a [`Response`].
@@ -42,6 +44,7 @@ impl Response {
     pub fn count(count: u64) -> Self {
         Self {
             rows: Rows::Count(count),
+            cursor: None,
         }
     }
 
@@ -49,6 +52,7 @@ impl Response {
     pub fn value_stream(values: impl Into<stmt::ValueStream>) -> Self {
         Self {
             rows: Rows::value_stream(values),
+            cursor: None,
         }
     }
 
@@ -56,6 +60,7 @@ impl Response {
     pub fn empty_value_stream() -> Self {
         Self {
             rows: Rows::Stream(stmt::ValueStream::default()),
+            cursor: None,
         }
     }
 }

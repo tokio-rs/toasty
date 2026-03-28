@@ -204,7 +204,6 @@ impl toasty_core::driver::Connection for Connection {
 
         let mut params: Vec<toasty_sql::TypedValue> = vec![];
         let sql_str = sql::Serializer::sqlite(&schema.db).serialize(&sql, &mut params);
-
         let mut stmt = self.connection.prepare_cached(&sql_str).unwrap();
 
         let width = match &sql {
@@ -230,7 +229,6 @@ impl toasty_core::driver::Connection for Connection {
             }
             _ => None,
         };
-
         let params = params
             .into_iter()
             .map(|tv| Value::from(tv.value))
@@ -247,11 +245,9 @@ impl toasty_core::driver::Connection for Connection {
         let mut rows = stmt
             .query(rusqlite::params_from_iter(params.iter()))
             .unwrap();
-
         let mut ret = vec![];
 
         let ret_tys = &ret_tys.as_ref().unwrap();
-
         loop {
             match rows.next() {
                 Ok(Some(row)) => {

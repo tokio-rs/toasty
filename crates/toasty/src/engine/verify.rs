@@ -1,16 +1,18 @@
+use crate::engine::Engine;
+use toasty_core::driver::Capability;
 use toasty_core::{
     schema::{app::ModelId, Schema},
     stmt::{self, Statement, Visit},
 };
 
-use crate::engine::Engine;
-
 struct Verify<'a> {
     schema: &'a Schema,
+    capability: &'a Capability,
 }
 
 struct VerifyExpr<'a> {
     schema: &'a Schema,
+    capability: &'a Capability,
     model: ModelId,
 }
 
@@ -18,6 +20,7 @@ impl Engine {
     pub(crate) fn verify(&self, stmt: &Statement) {
         Verify {
             schema: &self.schema,
+            capability: self.capability,
         }
         .visit(stmt);
     }
@@ -30,6 +33,7 @@ impl stmt::Visit for Verify<'_> {
         VerifyExpr {
             schema: self.schema,
             model: i.from.model_id_unwrap(),
+            capability: self.capability,
         }
         .verify_filter(&i.filter);
     }
@@ -47,6 +51,7 @@ impl stmt::Visit for Verify<'_> {
         VerifyExpr {
             schema: self.schema,
             model: i.source.model_id_unwrap(),
+            capability: self.capability,
         }
         .verify_filter(&i.filter);
     }
@@ -75,6 +80,7 @@ impl stmt::Visit for Verify<'_> {
         let mut verify_expr = VerifyExpr {
             schema: self.schema,
             model: i.target.model_id_unwrap(),
+            capability: self.capability,
         };
 
         verify_expr.visit_stmt_update(i);
@@ -97,13 +103,21 @@ impl Verify<'_> {
 
         match offset {
             stmt::Expr::Value(stmt::Value::Record(record)) => {
-                assert!(
-                    order_by.exprs.len() == record.fields.len(),
-                    "order_by = {order_by:#?}"
-                );
+                if self.capability.sql {
+                    assert!(
+                        order_by.exprs.len() == record.fields.len(),
+                        "order_by = {order_by:#?}"
+                    );
+                }
+                // DDB requires a Record, but the columns counts do not match.
+                // The value is a full key, but the order by clause is just the sort key.
             }
             stmt::Expr::Value(_) => {
-                assert!(order_by.exprs.len() == 1, "order_by = {order_by:#?}");
+                if self.capability.sql {
+                    assert!(order_by.exprs.len() == 1, "order_by = {order_by:#?}");
+                } else {
+                    panic!("NoSQL requires a Record as offset");
+                }
             }
             _ => todo!("unsupported offset expression; stmt={i:#?}"),
         }
@@ -209,6 +223,7 @@ impl stmt::Visit for VerifyExpr<'_> {
         // The subquery is verified independently
         Verify {
             schema: self.schema,
+            capability: self.capability,
         }
         .visit(&*i.query);
     }

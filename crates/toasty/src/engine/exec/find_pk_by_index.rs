@@ -5,7 +5,7 @@ use toasty_core::{
 };
 
 use crate::{
-    engine::exec::{Action, Exec, Output, VarId},
+    engine::exec::{Action, Exec, ExecResponse, Output, VarId},
     Result,
 };
 
@@ -61,7 +61,7 @@ impl Exec<'_> {
         self.vars.store(
             action.output.var,
             action.output.num_uses,
-            Rows::Stream(stmt::ValueStream::from_vec(all_rows)),
+            ExecResponse::from_rows(Rows::Stream(stmt::ValueStream::from_vec(all_rows))),
         );
 
         Ok(())

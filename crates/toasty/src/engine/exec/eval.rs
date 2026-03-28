@@ -1,7 +1,7 @@
 use crate::{
     engine::{
         eval,
-        exec::{Action, Exec, Output, VarId},
+        exec::{Action, Exec, ExecResponse, Output, VarId},
     },
     Result,
 };
@@ -21,22 +21,38 @@ pub(crate) struct Eval {
 
 impl Exec<'_> {
     pub(super) async fn action_eval(&mut self, action: &Eval) -> Result<()> {
-        // Load all input data upfront
+        // Load all input data upfront, preserving pagination metadata
         let mut input = Vec::with_capacity(action.inputs.len());
+        let mut next_cursor = None;
+        let mut prev_cursor = None;
 
         for var_id in &action.inputs {
-            let data = self.vars.load(*var_id).await?.collect_as_value().await?;
+            let response = self.vars.load(*var_id).await?;
+            let data = response.values.collect_as_value().await?;
             input.push(data);
+
+            // Preserve pagination cursors from any input that has them
+            // (typically only one input will have cursors - the paginated query result)
+            if response.next_cursor.is_some() {
+                next_cursor = response.next_cursor;
+            }
+            if response.prev_cursor.is_some() {
+                prev_cursor = response.prev_cursor;
+            }
         }
 
         // Evaluate the function with the collected inputs
         let result = action.eval.eval(&input)?;
 
-        // Store the result in the output variable
+        // Store the result in the output variable with preserved pagination metadata
         self.vars.store(
             action.output.var,
             action.output.num_uses,
-            Rows::Value(result),
+            ExecResponse {
+                values: Rows::Value(result),
+                next_cursor,
+                prev_cursor,
+            },
         );
 
         Ok(())

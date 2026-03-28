@@ -1,5 +1,5 @@
 pub(crate) mod eval;
-mod exec;
+pub(crate) mod exec;
 
 mod hir;
 use hir::HirStatement;
@@ -67,6 +67,23 @@ impl Engine {
         stmt: Statement,
         in_transaction: bool,
     ) -> Result<ValueStream> {
+        let response = self
+            .exec_with_metadata(connection, stmt, in_transaction)
+            .await?;
+        Ok(response.values.into_value_stream())
+    }
+
+    /// Executes a statement and returns the full response including pagination metadata.
+    ///
+    /// Unlike [`exec`](Self::exec), this method preserves pagination cursors in the
+    /// response. It follows the same compilation pipeline but returns the complete
+    /// `ExecResponse` instead of just the value stream.
+    pub(crate) async fn exec_with_metadata(
+        &self,
+        connection: &mut dyn Connection,
+        stmt: Statement,
+        in_transaction: bool,
+    ) -> Result<exec::ExecResponse> {
         if cfg!(debug_assertions) {
             self.verify(&stmt);
         }

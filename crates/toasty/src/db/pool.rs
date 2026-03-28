@@ -65,6 +65,12 @@ pub(crate) enum ConnectionOperation {
         in_transaction: bool,
         tx: oneshot::Sender<crate::Result<toasty_core::stmt::ValueStream>>,
     },
+    /// Execute a statement and return pagination metadata.
+    ExecStatementPaginated {
+        stmt: Box<toasty_core::stmt::Statement>,
+        in_transaction: bool,
+        tx: oneshot::Sender<crate::Result<crate::engine::exec::ExecResponse>>,
+    },
     ExecOperation {
         operation: Box<toasty_core::driver::operation::Operation>,
         tx: oneshot::Sender<crate::Result<toasty_core::driver::Response>>,
@@ -193,6 +199,16 @@ impl deadpool::managed::Manager for Manager {
                             let _ = tx.send(Err(err));
                         }
                     },
+                    ConnectionOperation::ExecStatementPaginated {
+                        stmt,
+                        in_transaction,
+                        tx,
+                    } => {
+                        let result = engine
+                            .exec_with_metadata(&mut *connection, *stmt, in_transaction)
+                            .await;
+                        let _ = tx.send(result);
+                    }
                     ConnectionOperation::ExecOperation { operation, tx } => {
                         let result = connection.exec(&engine.schema, *operation).await;
                         let _ = tx.send(result);

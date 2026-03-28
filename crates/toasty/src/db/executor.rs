@@ -1,5 +1,6 @@
 use crate::{db::Transaction, schema::Load, Result, Statement};
 
+use crate::engine::exec::ExecResponse;
 use async_trait::async_trait;
 use std::sync::Arc;
 use toasty_core::{stmt::Value, Schema};
@@ -18,6 +19,10 @@ pub trait Executor: Send + Sync {
     /// Execute an untyped statement, returning a raw value stream.
     #[doc(hidden)]
     async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> Result<Value>;
+
+    /// Execute an untyped statement, returning the full response with pagination metadata.
+    #[doc(hidden)]
+    async fn exec_paginated(&mut self, stmt: toasty_core::stmt::Statement) -> Result<ExecResponse>;
 
     /// Returns the schema associated with this executor.
     #[doc(hidden)]

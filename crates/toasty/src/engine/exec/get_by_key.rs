@@ -1,5 +1,5 @@
 use crate::{
-    engine::exec::{Action, Exec, Output, VarId},
+    engine::exec::{Action, Exec, ExecResponse, Output, VarId},
     Result,
 };
 use toasty_core::{
@@ -30,6 +30,7 @@ impl Exec<'_> {
             .vars
             .load(action.input)
             .await?
+            .values
             .collect_as_value()
             .await?
             .into_list_unwrap()
@@ -50,8 +51,11 @@ impl Exec<'_> {
             res.rows
         };
 
-        self.vars
-            .store(action.output.var, action.output.num_uses, res);
+        self.vars.store(
+            action.output.var,
+            action.output.num_uses,
+            ExecResponse::from_rows(res),
+        );
         Ok(())
     }
 }

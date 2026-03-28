@@ -49,6 +49,7 @@ impl Builder {
         let capability = driver.capability();
         capability.validate()?;
         let schema = self.core.build(self.build_app_schema()?, capability)?;
+
         let engine = Engine::new(Arc::new(schema), capability);
         let pool = Pool::new(driver, engine.clone())?;
 

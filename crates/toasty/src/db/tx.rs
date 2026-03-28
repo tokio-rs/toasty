@@ -232,6 +232,24 @@ impl<'a> Executor for Transaction<'a> {
         self.conn.exec_stmt(stmt, true).await
     }
 
+    async fn exec_paginated(
+        &mut self,
+        stmt: toasty_core::stmt::Statement,
+    ) -> Result<crate::engine::exec::ExecResponse> {
+        let (tx, rx) = oneshot::channel();
+
+        let conn = self.db.connection().await?;
+        conn.in_tx
+            .send(ConnectionOperation::ExecStatementPaginated {
+                stmt: Box::new(stmt),
+                in_transaction: true,
+                tx,
+            })
+            .unwrap();
+
+        rx.await.unwrap()
+    }
+
     fn schema(&mut self) -> &Arc<Schema> {
         self.conn.schema()
     }

@@ -23,6 +23,9 @@ pub(crate) struct ExecStatement {
 
     /// When `true`, this is a conditional update that returns status, not rows.
     pub(crate) conditional_update_with_no_returning: bool,
+
+    /// Pagination configuration (None if not paginated)
+    pub(crate) pagination: Option<exec::PaginationConfig>,
 }
 
 impl ExecStatement {
@@ -75,6 +78,7 @@ impl ExecStatement {
             },
             stmt: self.stmt.clone(),
             conditional_update_with_no_returning: self.conditional_update_with_no_returning,
+            pagination: self.pagination.clone(),
         }
     }
 }
