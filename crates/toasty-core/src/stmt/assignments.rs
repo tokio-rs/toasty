@@ -87,6 +87,13 @@ impl Assignments {
     }
 
     /// Returns `true` if an assignment exists for the given projection.
+    ///
+    /// The `key` accepts any type that implements `AsRef<[usize]>`:
+    /// - [`Projection`] — look up by projection directly
+    /// - `&[usize]` — a slice of field indices (e.g., `&[1, 2]`)
+    /// - `[usize; N]` — a fixed-size array (e.g., `[1]`, `[1, 2]`).
+    ///   Integer literals infer as `usize` from the `AsRef<[usize]>` bound,
+    ///   so `&[1]` works without a suffix.
     pub fn contains<Q>(&self, key: &Q) -> bool
     where
         Q: ?Sized + AsRef<[usize]>,
@@ -95,6 +102,13 @@ impl Assignments {
     }
 
     /// Returns a reference to the assignment for the given projection, if any.
+    ///
+    /// The `key` accepts any type that implements `AsRef<[usize]>`:
+    /// - [`Projection`] — look up by projection directly
+    /// - `&[usize]` — a slice of field indices (e.g., `&[1, 2]`)
+    /// - `[usize; N]` — a fixed-size array (e.g., `[1]`, `[1, 2]`).
+    ///   Integer literals infer as `usize` from the `AsRef<[usize]>` bound,
+    ///   so `&[1]` works without a suffix.
     pub fn get<Q>(&self, key: &Q) -> Option<&Assignment>
     where
         Q: ?Sized + AsRef<[usize]>,
@@ -103,6 +117,13 @@ impl Assignments {
     }
 
     /// Returns a mutable reference to the assignment for the given projection.
+    ///
+    /// The `key` accepts any type that implements `AsRef<[usize]>`:
+    /// - [`Projection`] — look up by projection directly
+    /// - `&[usize]` — a slice of field indices (e.g., `&[1, 2]`)
+    /// - `[usize; N]` — a fixed-size array (e.g., `[1]`, `[1, 2]`).
+    ///   Integer literals infer as `usize` from the `AsRef<[usize]>` bound,
+    ///   so `&[1]` works without a suffix.
     pub fn get_mut<Q>(&mut self, key: &Q) -> Option<&mut Assignment>
     where
         Q: ?Sized + AsRef<[usize]>,
@@ -121,6 +142,13 @@ impl Assignments {
     }
 
     /// Removes the assignment for the given projection, if any.
+    ///
+    /// The `key` accepts any type that implements `AsRef<[usize]>`:
+    /// - [`Projection`] — look up by projection directly
+    /// - `&[usize]` — a slice of field indices (e.g., `&[1, 2]`)
+    /// - `[usize; N]` — a fixed-size array (e.g., `[1]`, `[1, 2]`).
+    ///   Integer literals infer as `usize` from the `AsRef<[usize]>` bound,
+    ///   so `&[1]` works without a suffix.
     pub fn unset<Q>(&mut self, key: &Q)
     where
         Q: ?Sized + AsRef<[usize]>,
@@ -156,6 +184,13 @@ impl Assignments {
     }
 
     /// Removes and returns the assignment for the given projection.
+    ///
+    /// The `key` accepts any type that implements `AsRef<[usize]>`:
+    /// - [`Projection`] — look up by projection directly
+    /// - `&[usize]` — a slice of field indices (e.g., `&[1, 2]`)
+    /// - `[usize; N]` — a fixed-size array (e.g., `[1]`, `[1, 2]`).
+    ///   Integer literals infer as `usize` from the `AsRef<[usize]>` bound,
+    ///   so `&[1]` works without a suffix.
     pub fn take<Q>(&mut self, key: &Q) -> Option<Assignment>
     where
         Q: ?Sized + AsRef<[usize]>,
@@ -197,6 +232,11 @@ impl<'a> IntoIterator for &'a Assignments {
     }
 }
 
+/// Indexes into the assignments by projection. Panics if no assignment exists
+/// for the given key.
+///
+/// The index accepts any type that implements `AsRef<[usize]>`:
+/// [`Projection`], `&[usize]`, or `[usize; N]` arrays.
 impl<Q> ops::Index<Q> for Assignments
 where
     Q: AsRef<[usize]>,
@@ -211,6 +251,11 @@ where
     }
 }
 
+/// Mutably indexes into the assignments by projection. Panics if no assignment
+/// exists for the given key.
+///
+/// The index accepts any type that implements `AsRef<[usize]>`:
+/// [`Projection`], `&[usize]`, or `[usize; N]` arrays.
 impl<Q> ops::IndexMut<Q> for Assignments
 where
     Q: AsRef<[usize]>,
