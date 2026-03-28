@@ -108,7 +108,7 @@ pub use update_target::UpdateTarget;
 pub use stmt::{batch, Batch};
 
 pub mod db;
-pub use db::{Db, Executor, Transaction};
+pub use db::{Connection, Db, Executor, Transaction, TransactionBuilder};
 
 mod engine;
 
