@@ -105,6 +105,11 @@ impl Expand<'_> {
                 type Create = #create_struct_ident;
                 type Update<'a> = #update_struct_ident<&'a mut Self>;
                 type UpdateQuery = #update_struct_ident;
+                type Path<__Origin> = #field_struct_ident<__Origin>;
+
+                fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
+                    #field_struct_ident::from_path(path)
+                }
             }
 
             impl #toasty::Relation for #model_ident {
