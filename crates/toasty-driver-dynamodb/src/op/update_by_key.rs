@@ -48,7 +48,10 @@ impl Connection {
         let mut ret = vec![];
 
         for (projection, assignment) in op.assignments.iter() {
-            let value = match &assignment.expr {
+            let stmt::Assignment::Set(expr) = assignment else {
+                todo!("only SET supported in DynamoDB; got {assignment:#?}");
+            };
+            let value = match expr {
                 stmt::Expr::Value(value) => value,
                 _ => todo!("op = {:#?}", op),
             };
@@ -239,7 +242,10 @@ impl Connection {
                     for (projection, assignment) in op.assignments.iter() {
                         if *projection == column.id.index {
                             if let Some(prev) = curr_unique_values.remove(&column.name) {
-                                let stmt::Expr::Value(value) = &assignment.expr else {
+                                let stmt::Assignment::Set(expr) = assignment else {
+                                    todo!("only SET supported in DynamoDB unique check; got {assignment:#?}");
+                                };
+                                let stmt::Expr::Value(value) = expr else {
                                     todo!()
                                 };
 
@@ -329,7 +335,10 @@ impl Connection {
                                 .find(|(projection, _)| **projection == column_id.index)
                                 .unwrap();
 
-                            let stmt::Expr::Value(value) = &assignment.expr else {
+                            let stmt::Assignment::Set(expr) = assignment else {
+                                todo!("only SET supported in DynamoDB index insert; got {assignment:#?}");
+                            };
+                            let stmt::Expr::Value(value) = expr else {
                                 todo!()
                             };
 

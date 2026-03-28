@@ -347,14 +347,13 @@ impl stmt::Input for ConstantizeReturning<'_> {
                 }
             }
             ConstantizeSource::UpdateAssignments { assignments } => {
-                if let Some(assignment) = assignments.get(&needle.id.index) {
-                    assert!(assignment.op.is_set(), "TODO");
-                    assert!(
-                        assignment.expr.is_const(),
-                        "TODO; assignment={assignment:#?}"
-                    );
+                if let Some(assignment) = assignments.get(&[needle.id.index]) {
+                    let stmt::Assignment::Set(expr) = assignment else {
+                        todo!("only SET supported; got {assignment:#?}");
+                    };
+                    assert!(expr.is_const(), "TODO; assignment={assignment:#?}");
 
-                    Some(assignment.expr.clone())
+                    Some(expr.clone())
                 } else {
                     None
                 }

@@ -3,7 +3,7 @@ use crate::prelude::*;
 
 use toasty_core::{
     driver::{Operation, Rows},
-    stmt::{BinaryOp, Expr, ExprColumn, ExprSet, Source, Statement, Type},
+    stmt::{Assignment, BinaryOp, Expr, ExprColumn, ExprSet, Source, Statement, Type},
 };
 
 #[driver_test(id(ID))]
@@ -148,7 +148,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
         assert_struct!(op, Operation::QuerySql(_ {
             stmt: Statement::Update(_ {
                 target: toasty_core::stmt::UpdateTarget::Table(== user_table_id),
-                assignments: #{ 2: _ { expr: == 31, .. }},
+                assignments: #{ [2]: Assignment::Set(== 31)},
                 filter.expr: Some(Expr::BinaryOp(_ {
                     lhs.as_expr_column_unwrap(): ExprColumn {
                         nesting: 0,
@@ -169,7 +169,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
             table: == user_table_id,
             filter: None,
             keys: _,
-            assignments: #{ 2: _ { expr: == 31, .. }},
+            assignments: #{ [2]: Assignment::Set(== 31)},
             returning: false,
             ..
         }));

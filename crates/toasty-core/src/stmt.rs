@@ -29,7 +29,7 @@
 //! ```
 
 mod assignments;
-pub use assignments::{Assignment, AssignmentOp, Assignments};
+pub use assignments::{Assignment, Assignments};
 
 mod association;
 pub use association::Association;

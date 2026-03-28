@@ -138,32 +138,36 @@ impl LowerStatement<'_, '_> {
                 continue;
             }
 
-            let Some(assignment) = assignments.take(&i) else {
+            let Some(assignment) = assignments.take(&[i]) else {
                 continue;
             };
 
-            let mutation = match assignment.op {
-                stmt::AssignmentOp::Set => match assignment.expr {
-                    e if e.is_value_null() => Mutation::DisassociateAll { delete: false },
-                    expr => Mutation::Associate {
-                        expr,
-                        exclusive: true,
-                    },
-                },
-                stmt::AssignmentOp::Insert => {
+            let mutation = match assignment {
+                stmt::Assignment::Set(expr) => {
+                    if expr.is_value_null() {
+                        Mutation::DisassociateAll { delete: false }
+                    } else {
+                        Mutation::Associate {
+                            expr,
+                            exclusive: true,
+                        }
+                    }
+                }
+                stmt::Assignment::Insert(expr) => {
                     assert!(field.ty.is_has_many());
-                    debug_assert!(!assignment.expr.is_value_null());
+                    debug_assert!(!expr.is_value_null());
                     Mutation::Associate {
-                        expr: assignment.expr,
+                        expr,
                         exclusive: false,
                     }
                 }
-                stmt::AssignmentOp::Remove => {
+                stmt::Assignment::Remove(expr) => {
                     assert!(field.ty.is_has_many());
-                    debug_assert!(!assignment.expr.is_value_null());
-                    Mutation::Disassociate {
-                        expr: assignment.expr,
-                    }
+                    debug_assert!(!expr.is_value_null());
+                    Mutation::Disassociate { expr }
+                }
+                stmt::Assignment::Batch(_) => {
+                    todo!("batch assignments for relations")
                 }
             };
 
