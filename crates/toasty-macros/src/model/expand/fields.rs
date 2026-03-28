@@ -1,5 +1,6 @@
 use super::{util, Expand};
 use crate::model::schema::FieldTy::{BelongsTo, HasMany, HasOne, Primitive};
+use crate::model::schema::ModelKind;
 use proc_macro2::TokenStream;
 use quote::quote;
 
@@ -9,6 +10,18 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let field_struct_ident = self.field_struct_ident();
         let model_ident = &self.model.ident;
+
+        let create_method = if let ModelKind::Root(root) = &self.model.kind {
+            let create_struct_ident = &root.create_struct_ident;
+            quote! {
+                #vis fn create() -> #create_struct_ident {
+                    #create_struct_ident::default()
+                }
+            }
+        } else {
+            TokenStream::new()
+        };
+
         // Generate methods that return field paths for the model
         let methods = self
             .model
@@ -72,6 +85,8 @@ impl Expand<'_> {
                     self.path.in_query(rhs)
                 }
 
+                #create_method
+
                 #( #methods )*
             }
 
@@ -88,7 +103,7 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let field_list_struct_ident = self.field_list_struct_ident();
         let model_ident = &self.model.ident;
-        let is_root = matches!(self.model.kind, crate::model::schema::ModelKind::Root(_));
+        let is_root = matches!(self.model.kind, ModelKind::Root(_));
 
         // Generate methods that return list field paths
         let methods = self
@@ -121,6 +136,17 @@ impl Expand<'_> {
                 }
             });
 
+        let create_method = if let ModelKind::Root(root) = &self.model.kind {
+            let create_struct_ident = &root.create_struct_ident;
+            quote! {
+                #vis fn create() -> #create_struct_ident {
+                    #create_struct_ident::default()
+                }
+            }
+        } else {
+            TokenStream::new()
+        };
+
         // any() is only available on root models (requires Model trait bound)
         let any_method = if is_root {
             quote! {
@@ -150,6 +176,8 @@ impl Expand<'_> {
                 }
 
                 #any_method
+
+                #create_method
 
                 #( #methods )*
             }
