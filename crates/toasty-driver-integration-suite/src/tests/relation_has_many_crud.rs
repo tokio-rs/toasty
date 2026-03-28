@@ -174,7 +174,7 @@ pub async fn has_many_insert_on_update(test: &mut Test) -> Result<()> {
     // Update the user and create a todo in a batch
     user.update()
         .name("Bob")
-        .todo(Todo::create().title("change name"))
+        .todos(toasty::stmt::insert(Todo::create().title("change name")))
         .exec(&mut db)
         .await?;
 
@@ -627,7 +627,10 @@ pub async fn assign_todo_that_already_has_user_on_update(test: &mut Test) -> Res
     let mut u2 = User::create().name("User 2").exec(&mut db).await?;
 
     // Update the user
-    u2.update().todo(&todo).exec(&mut db).await?;
+    u2.update()
+        .todos(toasty::stmt::insert(&todo))
+        .exec(&mut db)
+        .await?;
 
     let todo_reload = Todo::get_by_id(&mut db, &todo.id).await?;
 
@@ -684,7 +687,7 @@ pub async fn assign_todo_to_user_on_update_query(test: &mut Test) -> Result<()> 
 
     User::filter_by_id(user.id)
         .update()
-        .todo(Todo::create().title("hello"))
+        .todos(toasty::stmt::insert(Todo::create().title("hello")))
         .exec(&mut db)
         .await?;
 
