@@ -25,8 +25,7 @@ pub use load::Load;
 mod model;
 pub use model::Model;
 
-/// [`Load`] and [`Relation`] implementations for `Option<T>`.
-pub mod option;
+mod option;
 
 mod register;
 pub use register::{generate_unique_id, Register};
