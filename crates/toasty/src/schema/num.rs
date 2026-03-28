@@ -1,6 +1,6 @@
 use crate::{
     schema::{Field, Load},
-    stmt::Path,
+    stmt::{List, Path},
     Result,
 };
 
@@ -29,9 +29,14 @@ macro_rules! impl_field_numeric {
 
             impl Field for $ty {
                 type Path<Origin> = Path<Origin, Self>;
+                type ListPath<Origin> = Path<Origin, List<Self>>;
                 type Update<'a> = ();
 
                 fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
+                    path
+                }
+
+                fn new_list_path<Origin>(path: Path<Origin, List<Self>>) -> Self::ListPath<Origin> {
                     path
                 }
 

@@ -1,6 +1,7 @@
 //! Connection pooling for database connections.
 
 pub use deadpool::managed::Timeouts;
+use std::sync::Arc;
 use toasty_core::driver::{Capability, Driver};
 use tokio::{
     sync::{mpsc, oneshot},
@@ -105,13 +106,16 @@ impl Pool {
     }
 
     /// Retrieves a connection from the pool.
-    pub async fn get(&self) -> crate::Result<super::Connection> {
+    pub(crate) async fn get(&self, shared: Arc<super::Shared>) -> crate::Result<super::Connection> {
         let connection = self
             .inner
             .get()
             .await
             .map_err(toasty_core::Error::connection_pool)?;
-        Ok(super::Connection { inner: connection })
+        Ok(super::Connection {
+            inner: connection,
+            shared,
+        })
     }
 
     /// Returns the database driver this pool uses to create connections.

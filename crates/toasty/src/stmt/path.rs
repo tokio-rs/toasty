@@ -117,11 +117,10 @@ impl<T, U> Path<T, U> {
 
     /// Append `other` to this path, producing a new path from `T` to `V`.
     ///
-    /// Ideally the origin of `other` would be constrained to `U` (the target
-    /// of `self`), but `ManyField` stores `Path<Origin, List<M>>` while its
-    /// association methods chain segments rooted at `M` (not `List<M>`).
-    /// Until `ManyField` is restructured, the origin of `other` is left
-    /// unconstrained.
+    /// The origin of `other` is left unconstrained because list field structs
+    /// store `Path<Origin, List<M>>` while chaining segments rooted at `M`
+    /// (not `List<M>`). The untyped path concatenation is always correct; the
+    /// generic parameters serve only as compile-time markers.
     ///
     /// # Examples
     ///

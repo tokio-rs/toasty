@@ -1,5 +1,5 @@
 use super::{Field, Load};
-use crate::stmt::Path;
+use crate::stmt::{List, Path};
 use toasty_core::{
     stmt::{Type, Value},
     Result,
@@ -29,9 +29,14 @@ macro_rules! impl_jiff_field {
 
         impl Field for $ty {
             type Path<Origin> = Path<Origin, Self>;
+            type ListPath<Origin> = Path<Origin, List<Self>>;
             type Update<'a> = ();
 
             fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
+                path
+            }
+
+            fn new_list_path<Origin>(path: Path<Origin, List<Self>>) -> Self::ListPath<Origin> {
                 path
             }
 
