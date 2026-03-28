@@ -9,9 +9,6 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let field_struct_ident = self.field_struct_ident();
         let model_ident = &self.model.ident;
-        let eq_ty = util::ident("T");
-        let in_query_ty = util::ident("Q");
-
         // Generate methods that return field paths for the model
         let methods = self
             .model
@@ -66,18 +63,12 @@ impl Expand<'_> {
                     self.path.clone()
                 }
 
-                #vis fn eq<#eq_ty>(self, rhs: #eq_ty) -> #toasty::stmt::Expr<bool>
-                where
-                    #eq_ty: #toasty::IntoExpr<#model_ident>,
-                {
+                #vis fn eq(self, rhs: impl #toasty::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
                     use #toasty::IntoExpr;
                     self.path.eq(rhs.into_expr())
                 }
 
-                #vis fn in_query<#in_query_ty>(self, rhs: #in_query_ty) -> #toasty::stmt::Expr<bool>
-                where
-                    #in_query_ty: #toasty::IntoStatement<Returning = #toasty::List<#model_ident>>,
-                {
+                #vis fn in_query(self, rhs: impl #toasty::IntoStatement<Returning = #toasty::List<#model_ident>>) -> #toasty::stmt::Expr<bool> {
                     self.path.in_query(rhs)
                 }
 
