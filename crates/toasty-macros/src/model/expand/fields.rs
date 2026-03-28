@@ -9,7 +9,6 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let field_struct_ident = self.field_struct_ident();
         let model_ident = &self.model.ident;
-
         // Generate methods that return field paths for the model
         let methods = self
             .model
@@ -56,11 +55,109 @@ impl Expand<'_> {
             }
 
             impl<__Origin> #field_struct_ident<__Origin> {
+                #vis const fn from_path(path: #toasty::Path<__Origin, #model_ident>) -> #field_struct_ident<__Origin> {
+                    #field_struct_ident { path }
+                }
+
                 fn path(&self) -> #toasty::Path<__Origin, #model_ident> {
                     self.path.clone()
                 }
 
+                #vis fn eq(self, rhs: impl #toasty::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
+                    use #toasty::IntoExpr;
+                    self.path.eq(rhs.into_expr())
+                }
+
+                #vis fn in_query(self, rhs: impl #toasty::IntoStatement<Returning = #toasty::List<#model_ident>>) -> #toasty::stmt::Expr<bool> {
+                    self.path.in_query(rhs)
+                }
+
                 #( #methods )*
+            }
+
+            impl<__Origin> Into<#toasty::Path<__Origin, #model_ident>> for #field_struct_ident<__Origin> {
+                fn into(self) -> #toasty::Path<__Origin, #model_ident> {
+                    self.path
+                }
+            }
+        )
+    }
+
+    pub(super) fn expand_field_list_struct(&self) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let field_list_struct_ident = self.field_list_struct_ident();
+        let model_ident = &self.model.ident;
+        let is_root = matches!(self.model.kind, crate::model::schema::ModelKind::Root(_));
+
+        // Generate methods that return list field paths
+        let methods = self
+            .model
+            .fields
+            .iter()
+            .enumerate()
+            .map(move |(offset, field)| {
+                let field_ident = &field.name.ident;
+                let field_offset = util::int(offset);
+
+                match &field.ty {
+                    Primitive(_) if field.attrs.serialize.is_some() => TokenStream::new(),
+                    Primitive(ty) => {
+                        self.expand_list_primitive_field_method(field_ident, ty, &field_offset)
+                    }
+                    // All relations from a list context return the list variant
+                    BelongsTo(rel) => {
+                        let ty = &rel.ty;
+                        self.expand_list_relation_field_method(field_ident, ty, &field_offset)
+                    }
+                    HasOne(rel) => {
+                        let ty = &rel.ty;
+                        self.expand_list_relation_field_method(field_ident, ty, &field_offset)
+                    }
+                    HasMany(rel) => {
+                        let ty = &rel.ty;
+                        self.expand_list_relation_field_method(field_ident, ty, &field_offset)
+                    }
+                }
+            });
+
+        // any() is only available on root models (requires Model trait bound)
+        let any_method = if is_root {
+            quote! {
+                /// Filter the parent model by a condition on the associated
+                /// (child) model. Returns `true` when **any** associated record
+                /// satisfies `filter`.
+                #vis fn any(self, filter: #toasty::stmt::Expr<bool>) -> #toasty::stmt::Expr<bool> {
+                    self.path.any(filter)
+                }
+            }
+        } else {
+            TokenStream::new()
+        };
+
+        quote!(
+            #vis struct #field_list_struct_ident<__Origin> {
+                path: #toasty::Path<__Origin, #toasty::List<#model_ident>>,
+            }
+
+            impl<__Origin> #field_list_struct_ident<__Origin> {
+                #vis const fn from_path(path: #toasty::Path<__Origin, #toasty::List<#model_ident>>) -> #field_list_struct_ident<__Origin> {
+                    #field_list_struct_ident { path }
+                }
+
+                fn path(&self) -> #toasty::Path<__Origin, #toasty::List<#model_ident>> {
+                    self.path.clone()
+                }
+
+                #any_method
+
+                #( #methods )*
+            }
+
+            impl<__Origin> Into<#toasty::Path<__Origin, #toasty::List<#model_ident>>> for #field_list_struct_ident<__Origin> {
+                fn into(self) -> #toasty::Path<__Origin, #toasty::List<#model_ident>> {
+                    self.path
+                }
             }
         )
     }
@@ -92,6 +189,16 @@ impl Expand<'_> {
         }
     }
 
+    pub(super) fn field_list_struct_ident(&self) -> &syn::Ident {
+        use crate::model::schema::ModelKind;
+
+        match &self.model.kind {
+            ModelKind::Root(root) => &root.field_list_struct_ident,
+            ModelKind::EmbeddedStruct(embedded) => &embedded.field_list_struct_ident,
+            ModelKind::EmbeddedEnum(e) => &e.field_list_struct_ident,
+        }
+    }
+
     pub(super) fn expand_field_name_to_id(&self) -> TokenStream {
         let toasty = &self.toasty;
 
@@ -115,6 +222,52 @@ impl Expand<'_> {
                     #( #fields )*
                     _ => todo!("field_name_to_id: {}", name),
                 }
+            }
+        }
+    }
+
+    /// Generates a field accessor method for a primitive field on the list
+    /// fields struct, using `Field::new_list_path`.
+    fn expand_list_primitive_field_method(
+        &self,
+        field_ident: &syn::Ident,
+        ty: &syn::Type,
+        field_offset: &TokenStream,
+    ) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let model_ident = &self.model.ident;
+
+        quote! {
+            #vis fn #field_ident(&self) -> <#ty as #toasty::Field>::ListPath<__Origin> {
+                <#ty as #toasty::Field>::new_list_path(
+                    self.path().chain(
+                        #toasty::Path::<#model_ident, _>::from_field_index(#field_offset)
+                    )
+                )
+            }
+        }
+    }
+
+    /// Generates a relation accessor method on the list fields struct.
+    /// All relations from a list context return the ManyField (list) variant.
+    fn expand_list_relation_field_method(
+        &self,
+        field_ident: &syn::Ident,
+        ty: &syn::Type,
+        field_offset: &TokenStream,
+    ) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let model_ident = &self.model.ident;
+
+        quote! {
+            #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::ManyField<__Origin> {
+                <#ty as #toasty::Relation>::ManyField::from_path(
+                    self.path().chain(
+                        #toasty::Path::<#model_ident, _>::from_field_index(#field_offset)
+                    )
+                )
             }
         }
     }

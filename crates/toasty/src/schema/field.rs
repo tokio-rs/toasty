@@ -1,5 +1,5 @@
 use super::Load;
-use crate::stmt;
+use crate::stmt::{self, List};
 
 /// Schema and runtime information for a field type.
 ///
@@ -13,6 +13,11 @@ pub trait Field: Load {
     /// For embedded types, this is {Type}Fields<Origin>.
     type Path<Origin>;
 
+    /// The type returned when accessing this field from a list Fields struct.
+    /// For primitives, this is Path<Origin, List<Self>>.
+    /// For embedded types, this is {Type}ListFields<Origin>.
+    type ListPath<Origin>;
+
     /// The type of the update builder for this field.
     /// For embedded types, this is {Type}Update<'a>.
     /// For primitives, this will be {Type}Update<'a> once implemented.
@@ -25,6 +30,13 @@ pub trait Field: Load {
     /// For primitives, returns the path as-is.
     /// For embedded types, wraps the path in a Fields struct.
     fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin>
+    where
+        Self: Sized;
+
+    /// Build a list field path from a raw path.
+    /// For primitives, returns the path as-is.
+    /// For embedded types, wraps the path in a ListFields struct.
+    fn new_list_path<Origin>(path: stmt::Path<Origin, List<Self>>) -> Self::ListPath<Origin>
     where
         Self: Sized;
 
@@ -54,9 +66,16 @@ macro_rules! impl_field_primitive {
     ($ty:ty) => {
         impl Field for $ty {
             type Path<Origin> = stmt::Path<Origin, Self>;
+            type ListPath<Origin> = stmt::Path<Origin, List<Self>>;
             type Update<'a> = ();
 
             fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
+                path
+            }
+
+            fn new_list_path<Origin>(
+                path: stmt::Path<Origin, List<Self>>,
+            ) -> Self::ListPath<Origin> {
                 path
             }
 
@@ -77,9 +96,14 @@ impl_field_primitive!(usize);
 
 impl Field for Vec<u8> {
     type Path<Origin> = stmt::Path<Origin, Self>;
+    type ListPath<Origin> = stmt::Path<Origin, List<Self>>;
     type Update<'a> = ();
 
     fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+
+    fn new_list_path<Origin>(path: stmt::Path<Origin, List<Self>>) -> Self::ListPath<Origin> {
         path
     }
 
@@ -102,10 +126,15 @@ impl Field for Vec<u8> {
 
 impl<T: Field> Field for Option<T> {
     type Path<Origin> = stmt::Path<Origin, Self>;
+    type ListPath<Origin> = stmt::Path<Origin, List<Self>>;
     type Update<'a> = ();
     const NULLABLE: bool = true;
 
     fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+
+    fn new_list_path<Origin>(path: stmt::Path<Origin, List<Self>>) -> Self::ListPath<Origin> {
         path
     }
 
@@ -122,9 +151,14 @@ where
     T::Owned: Field<Output = T::Owned>,
 {
     type Path<Origin> = stmt::Path<Origin, Self>;
+    type ListPath<Origin> = stmt::Path<Origin, List<Self>>;
     type Update<'a> = ();
 
     fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+
+    fn new_list_path<Origin>(path: stmt::Path<Origin, List<Self>>) -> Self::ListPath<Origin> {
         path
     }
 
@@ -137,9 +171,14 @@ where
 
 impl<T: Field<Output = T>> Field for std::sync::Arc<T> {
     type Path<Origin> = stmt::Path<Origin, Self>;
+    type ListPath<Origin> = stmt::Path<Origin, List<Self>>;
     type Update<'a> = ();
 
     fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+
+    fn new_list_path<Origin>(path: stmt::Path<Origin, List<Self>>) -> Self::ListPath<Origin> {
         path
     }
 
@@ -152,9 +191,14 @@ impl<T: Field<Output = T>> Field for std::sync::Arc<T> {
 
 impl<T: Field<Output = T>> Field for std::rc::Rc<T> {
     type Path<Origin> = stmt::Path<Origin, Self>;
+    type ListPath<Origin> = stmt::Path<Origin, List<Self>>;
     type Update<'a> = ();
 
     fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+
+    fn new_list_path<Origin>(path: stmt::Path<Origin, List<Self>>) -> Self::ListPath<Origin> {
         path
     }
 
@@ -167,9 +211,14 @@ impl<T: Field<Output = T>> Field for std::rc::Rc<T> {
 
 impl<T: Field<Output = T>> Field for Box<T> {
     type Path<Origin> = stmt::Path<Origin, Self>;
+    type ListPath<Origin> = stmt::Path<Origin, List<Self>>;
     type Update<'a> = ();
 
     fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+
+    fn new_list_path<Origin>(path: stmt::Path<Origin, List<Self>>) -> Self::ListPath<Origin> {
         path
     }
 

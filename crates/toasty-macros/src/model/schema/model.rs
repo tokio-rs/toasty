@@ -44,8 +44,11 @@ pub(crate) struct ModelRoot {
     /// Tracks fields in the primary key
     pub(crate) primary_key: PrimaryKey,
 
-    /// The field struct identifier
+    /// The field struct identifier (e.g., `UserFields`)
     pub(crate) field_struct_ident: syn::Ident,
+
+    /// The list field struct identifier (e.g., `UserListFields`)
+    pub(crate) field_list_struct_ident: syn::Ident,
 
     /// The query struct identifier
     pub(crate) query_struct_ident: syn::Ident,
@@ -62,6 +65,9 @@ pub(crate) struct ModelEmbeddedStruct {
     /// The field struct identifier
     pub(crate) field_struct_ident: syn::Ident,
 
+    /// The list field struct identifier (e.g., `AddressListFields`)
+    pub(crate) field_list_struct_ident: syn::Ident,
+
     /// Update builder struct identifier
     pub(crate) update_struct_ident: syn::Ident,
 }
@@ -70,6 +76,9 @@ pub(crate) struct ModelEmbeddedStruct {
 pub(crate) struct ModelEmbeddedEnum {
     /// The field struct identifier (e.g., `ContactInfoFields`)
     pub(crate) field_struct_ident: syn::Ident,
+
+    /// The list field struct identifier (e.g., `ContactInfoListFields`)
+    pub(crate) field_list_struct_ident: syn::Ident,
 
     /// The enum's variants with their names and discriminant values
     pub(crate) variants: Vec<Variant>,
@@ -198,6 +207,7 @@ impl Model {
         let kind = if is_embedded {
             ModelKind::EmbeddedStruct(ModelEmbeddedStruct {
                 field_struct_ident: struct_ident("Fields", ast),
+                field_list_struct_ident: struct_list_ident("ListFields", ast),
                 update_struct_ident: struct_ident("Update", ast),
             })
         } else {
@@ -216,6 +226,7 @@ impl Model {
             ModelKind::Root(ModelRoot {
                 primary_key: PrimaryKey { fields: pk_fields },
                 field_struct_ident: struct_ident("Fields", ast),
+                field_list_struct_ident: struct_list_ident("ListFields", ast),
                 query_struct_ident: struct_ident("Query", ast),
                 create_struct_ident: struct_ident("Create", ast),
                 update_struct_ident: struct_ident("Update", ast),
@@ -349,6 +360,7 @@ impl Model {
             fields: all_fields,
             kind: ModelKind::EmbeddedEnum(ModelEmbeddedEnum {
                 field_struct_ident: enum_ident("Fields", ast),
+                field_list_struct_ident: enum_list_ident("ListFields", ast),
                 variants,
             }),
             indices,
@@ -376,6 +388,15 @@ fn struct_ident(suffix: &str, model: &syn::ItemStruct) -> syn::Ident {
     syn::Ident::new(&format!("{}{}", model.ident, suffix), model.ident.span())
 }
 
+/// Generates an ident like `UserListFields` — injects the suffix after the model name.
+fn struct_list_ident(suffix: &str, model: &syn::ItemStruct) -> syn::Ident {
+    syn::Ident::new(&format!("{}{}", model.ident, suffix), model.ident.span())
+}
+
 fn enum_ident(suffix: &str, model: &syn::ItemEnum) -> syn::Ident {
+    syn::Ident::new(&format!("{}{}", model.ident, suffix), model.ident.span())
+}
+
+fn enum_list_ident(suffix: &str, model: &syn::ItemEnum) -> syn::Ident {
     syn::Ident::new(&format!("{}{}", model.ident, suffix), model.ident.span())
 }
