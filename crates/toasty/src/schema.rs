@@ -35,6 +35,9 @@ mod num;
 mod relation;
 pub use relation::Relation;
 
+mod scope;
+pub use scope::Scope;
+
 use crate::Result;
 
 pub use toasty_core::schema::{app, db, mapping};

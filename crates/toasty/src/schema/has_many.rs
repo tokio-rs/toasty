@@ -1,4 +1,4 @@
-use super::{Load, Relation};
+use super::{Load, Relation, Scope};
 
 use toasty_core::stmt::Value;
 
@@ -80,12 +80,32 @@ impl<T: Relation> Relation for HasMany<T> {
     type OneField<__Origin> = T::OneField<__Origin>;
     type OptionOne = T::OptionOne;
 
+    fn new_many_field<__Origin>(
+        path: crate::stmt::Path<__Origin, crate::stmt::List<Self::Model>>,
+    ) -> Self::ManyField<__Origin> {
+        T::new_many_field(path)
+    }
+
     fn field_name_to_id(name: &str) -> toasty_core::schema::app::FieldId {
         T::field_name_to_id(name)
     }
 
     fn nullable() -> bool {
         T::nullable()
+    }
+}
+
+impl<T: Relation> Scope for HasMany<T> {
+    type Item = crate::stmt::List<T::Model>;
+    type Path<Origin> = T::ManyField<Origin>;
+    type Create = T::Create;
+
+    fn new_path<Origin>(path: crate::stmt::Path<Origin, Self::Item>) -> Self::Path<Origin> {
+        T::new_many_field(path)
+    }
+
+    fn new_create() -> Self::Create {
+        T::new_create()
     }
 }
 

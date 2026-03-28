@@ -118,6 +118,12 @@ impl Expand<'_> {
                 type OneField<__Origin> = #field_struct_ident<__Origin>;
                 type OptionOne = OptionOne;
 
+                fn new_many_field<__Origin>(
+                    path: #toasty::Path<__Origin, #toasty::List<Self::Model>>,
+                ) -> #field_list_struct_ident<__Origin> {
+                    #field_list_struct_ident::from_path(path)
+                }
+
                 #field_name_to_id
             }
 
