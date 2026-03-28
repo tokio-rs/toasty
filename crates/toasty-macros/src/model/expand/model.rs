@@ -120,8 +120,8 @@ impl Expand<'_> {
 
                 fn new_many_field<__Origin>(
                     path: #toasty::Path<__Origin, #toasty::List<Self::Model>>,
-                ) -> ManyField<__Origin> {
-                    ManyField::from_path(path)
+                ) -> #field_list_struct_ident<__Origin> {
+                    #field_list_struct_ident::from_path(path)
                 }
 
                 #field_name_to_id
