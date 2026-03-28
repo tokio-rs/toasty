@@ -31,6 +31,7 @@ impl Expand<'_> {
     fn expand(&self) -> TokenStream {
         let model_impls = self.expand_model_impls();
         let model_field_struct = self.expand_field_struct();
+        let model_field_list_struct = self.expand_field_list_struct();
         let query_struct = self.expand_query_struct();
         let create_builder = self.expand_create_builder();
         let update_builder = self.expand_update_builder();
@@ -39,6 +40,7 @@ impl Expand<'_> {
         wrap_in_const(quote! {
             #model_impls
             #model_field_struct
+            #model_field_list_struct
             #query_struct
             #create_builder
             #update_builder
@@ -77,11 +79,14 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let load_body = expand.expand_load_body();
     let reload_body = expand.expand_embedded_reload_body();
     let embedded_field_struct = expand.expand_field_struct();
+    let embedded_field_list_struct = expand.expand_field_list_struct();
     let embedded_model_impls = expand.expand_embedded_model_impls();
     let embedded_update_builder = expand.expand_embedded_update_builder();
+    let field_list_struct_ident = &embedded.field_list_struct_ident;
 
     wrap_in_const(quote! {
         #embedded_field_struct
+        #embedded_field_list_struct
 
         #embedded_update_builder
 
@@ -116,10 +121,15 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
 
         impl #toasty::Field for #model_ident {
             type Path<__Origin> = #field_struct_ident<__Origin>;
+            type ListPath<__Origin> = #field_list_struct_ident<__Origin>;
             type Update<'a> = #update_struct_ident<'a>;
 
             fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
                 #field_struct_ident { path }
+            }
+
+            fn new_list_path<__Origin>(path: #toasty::Path<__Origin, #toasty::List<Self>>) -> Self::ListPath<__Origin> {
+                #field_list_struct_ident { path }
             }
 
             fn new_update<'a>(
@@ -174,10 +184,13 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
 
     let embedded_enum = model.kind.as_embedded_enum_unwrap();
     let field_struct_ident = &embedded_enum.field_struct_ident;
+    let field_list_struct_ident = &embedded_enum.field_list_struct_ident;
     let enum_field_struct = e.expand_enum_field_struct();
+    let enum_field_list_struct = e.expand_field_list_struct();
 
     wrap_in_const(quote! {
         #enum_field_struct
+        #enum_field_list_struct
 
         impl #toasty::Register for #model_ident {
             fn id() -> #toasty::core::schema::app::ModelId {
@@ -247,10 +260,15 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
 
         impl #toasty::Field for #model_ident {
             type Path<__Origin> = #field_struct_ident<__Origin>;
+            type ListPath<__Origin> = #field_list_struct_ident<__Origin>;
             type Update<'a> = ();
 
             fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
                 #field_struct_ident { path }
+            }
+
+            fn new_list_path<__Origin>(path: #toasty::Path<__Origin, #toasty::List<Self>>) -> Self::ListPath<__Origin> {
+                #field_list_struct_ident { path }
             }
 
             fn new_update<'a>(

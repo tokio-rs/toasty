@@ -10,9 +10,16 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
 
-        let (query_struct_ident, create_struct_ident, update_struct_ident) = match &self.model.kind
-        {
+        let (
+            field_struct_ident,
+            field_list_struct_ident,
+            query_struct_ident,
+            create_struct_ident,
+            update_struct_ident,
+        ) = match &self.model.kind {
             ModelKind::Root(root) => (
+                &root.field_struct_ident,
+                &root.field_list_struct_ident,
                 &root.query_struct_ident,
                 &root.create_struct_ident,
                 &root.update_struct_ident,
@@ -106,9 +113,9 @@ impl Expand<'_> {
                 type Query = #query_struct_ident;
                 type Create = #create_struct_ident;
                 type Many = Many;
-                type ManyField<__Origin> = ManyField<__Origin>;
+                type ManyField<__Origin> = #field_list_struct_ident<__Origin>;
                 type One = One;
-                type OneField<__Origin> = OneField<__Origin>;
+                type OneField<__Origin> = #field_struct_ident<__Origin>;
                 type OptionOne = OptionOne;
 
                 #field_name_to_id
