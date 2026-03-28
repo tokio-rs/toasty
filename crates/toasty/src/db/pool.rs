@@ -19,7 +19,9 @@ fn get_default_pool_max_size() -> usize {
 /// Configuration for connection pool behavior.
 #[derive(Debug, Clone)]
 pub struct PoolConfig {
+    /// Maximum number of connections the pool will maintain.
     pub max_size: usize,
+    /// Timeout settings for acquiring a connection from the pool.
     pub timeouts: Timeouts,
 }
 

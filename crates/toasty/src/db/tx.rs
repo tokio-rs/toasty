@@ -23,6 +23,8 @@ pub struct TransactionBuilder {
 }
 
 impl TransactionBuilder {
+    /// Create a new builder with default settings (no explicit isolation
+    /// level, read-write mode).
     pub fn new() -> Self {
         TransactionBuilder {
             isolation: None,

@@ -6,7 +6,20 @@ use toasty_core::schema::app::AutoStrategy;
     label = "Toasty cannot automatically set values for this field",
     note = "Is the field annotated with #[auto]?"
 )]
+/// A field type that supports automatic value generation.
+///
+/// Types implementing this trait can be used with the `#[auto]` attribute on
+/// model fields. The database or Toasty runtime assigns values for these
+/// fields automatically when a new record is created.
+///
+/// Built-in implementations:
+///
+/// | Type | Strategy |
+/// |---|---|
+/// | Integer types (`i8`..`i64`, `u8`..`u64`, `isize`, `usize`) | Auto-increment |
+/// | `uuid::Uuid` | UUID v7 |
 pub trait Auto: Field {
+    /// The strategy the runtime uses to generate values for this type.
     const STRATEGY: AutoStrategy;
 }
 

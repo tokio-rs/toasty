@@ -12,6 +12,10 @@ use toasty_core::Error;
 /// specify a concrete return type. For sized types `Output = Self`; for
 /// `List<M>`, `Output = Vec<M>`.
 pub trait Load {
+    /// The concrete type produced by [`load`](Self::load).
+    ///
+    /// For sized types this is `Self`. For marker types like [`List<M>`](crate::stmt::List),
+    /// it is `Vec<M::Output>`.
     type Output;
 
     /// Returns the [`stmt::Type`] that describes values of this type.
@@ -23,8 +27,16 @@ pub trait Load {
         Self::ty()
     }
 
+    /// Deserialize a database [`Value`](stmt::Value) into `Self::Output`.
+    ///
+    /// Returns an error if the value cannot be converted to this type.
     fn load(value: stmt::Value) -> Result<Self::Output, Error>;
 
+    /// Deserialize a value that was loaded as a relation target.
+    ///
+    /// The default delegates to [`load`](Self::load). Override this when
+    /// relation values use a different encoding (e.g., `Option<T>` uses a
+    /// sentinel integer to distinguish "loaded as None" from "not loaded").
     fn load_relation(value: stmt::Value) -> Result<Self::Output, Error> {
         Self::load(value)
     }

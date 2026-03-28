@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Toasty is an async ORM for Rust supporting both SQL (SQLite, PostgreSQL,
 //! MySQL) and NoSQL (DynamoDB) databases.
 //!
@@ -107,16 +108,19 @@ pub use update_target::UpdateTarget;
 // `Batch`, `batch()`, and `CreateMany` live in `stmt`.
 pub use stmt::{batch, Batch};
 
+/// Database handle, connection pool, executor trait, and transaction support.
 pub mod db;
 pub use db::{Connection, Db, Executor, Transaction, TransactionBuilder};
 
 mod engine;
 
+/// Model, relation, and schema inspection types.
 pub mod schema;
 pub use schema::{BelongsTo, HasMany, HasOne};
 
 // `Page` lives in `stmt`.
 
+/// Typed statement, expression, and query builder types.
 pub mod stmt;
 pub use stmt::Statement;
 
