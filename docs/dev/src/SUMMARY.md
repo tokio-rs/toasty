@@ -8,6 +8,7 @@
   - [DynamoDB OR Index Predicate](./design/ddb_or_index_predicate.md)
   - [Embedded Enums Data Carrying Impl](./design/embedded-enums-data-carrying-impl.md)
   - [Enums and Embedded Structs](./design/enums-and-embedded-structs.md)
+  - [PostgreSQL Native Enum Mapping](./design/pg-native-enums.md)
   - [Mapping Formalization](./design/mapping-formalization.md)
   - [Pagination](./design/pagination.md)
   - [Serialize Fields](./design/serialize-fields.md)
