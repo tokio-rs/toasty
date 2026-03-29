@@ -1,0 +1,32 @@
+error[E0277]: the trait bound `i64: toasty::Scope` is not satisfied
+  --> tests/ui/create_scoped_not_scope.rs:11:32
+   |
+11 |     let _ = toasty::create!(in 42_i64 { name: "Carl" });
+   |                                ^^^^^^ the trait `toasty::Scope` is not implemented for `i64`
+   |
+help: the following other types implement trait `toasty::Scope`
+  --> tests/ui/create_scoped_not_scope.rs:1:17
+   |
+ 1 | #[derive(Debug, toasty::Model)]
+   |                 ^^^^^^^^^^^^^
+   |                 |
+   |                 `Many`
+   |                 `One`
+   |                 `OptionOne`
+   |
+  ::: $WORKSPACE/crates/toasty/src/schema/has_many.rs
+   |
+   | impl<T: Relation> Scope for HasMany<T> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `toasty::HasMany<T>`
+note: required by a bound in `scope_fields`
+  --> $WORKSPACE/crates/toasty/src/lib.rs
+   |
+   |     pub fn scope_fields<S: Scope>(_scope: &S) -> S::Path<S::Item> {
+   |                            ^^^^^ required by this bound in `scope_fields`
+   = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0599]: no method named `create` found for type `i64` in the current scope
+  --> tests/ui/create_scoped_not_scope.rs:11:32
+   |
+11 |     let _ = toasty::create!(in 42_i64 { name: "Carl" });
+   |                                ^^^^^^ method not found in `i64`
