@@ -120,6 +120,7 @@ impl Expand<'_> {
                 }
             }
 
+            #[diagnostic::do_not_recommend]
             impl #toasty::Scope for Many {
                 type Item = #toasty::List<#model_ident>;
                 type Path<__Origin> = #field_list_struct_ident<__Origin>;
@@ -138,6 +139,7 @@ impl Expand<'_> {
                 }
             }
 
+            #[diagnostic::do_not_recommend]
             impl #toasty::Scope for One {
                 type Item = #model_ident;
                 type Path<__Origin> = #field_struct_ident<__Origin>;
@@ -156,6 +158,7 @@ impl Expand<'_> {
                 }
             }
 
+            #[diagnostic::do_not_recommend]
             impl #toasty::Scope for OptionOne {
                 type Item = #model_ident;
                 type Path<__Origin> = #field_struct_ident<__Origin>;
