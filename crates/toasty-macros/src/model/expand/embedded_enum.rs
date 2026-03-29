@@ -305,180 +305,125 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let model_ident = &self.model.ident;
         let ty_expr = self.expand_enum_primitive_ty();
-        let uses_string = self.uses_string_discriminants();
 
-        let unit_load_arms = self.expand_enum_unit_load_arms_inner();
-        let data_load_arms = self.expand_enum_data_load_arms_inner();
+        let unit_load_arms = self.expand_enum_load_arms(true);
+        let data_load_arms = self.expand_enum_load_arms(false);
 
-        if uses_string {
-            quote! {
-                impl #toasty::Load for #model_ident {
-                    type Output = Self;
+        // Generate the discriminant-specific destructure/rewrap tokens.
+        // The outer (unit) match borrows via `ref` for strings so `value`
+        // stays available for the error path. The inner (record) match owns
+        // the taken element and must rewrap it for the error.
+        let (outer_pattern, outer_match, outer_rewrap, inner_pattern, inner_match, inner_rewrap) =
+            if self.uses_string_discriminants() {
+                (
+                    quote! { #toasty::core::stmt::Value::String(ref d) },
+                    quote! { d.as_str() },
+                    quote! { value },
+                    quote! { #toasty::core::stmt::Value::String(d) },
+                    quote! { d.as_str() },
+                    quote! { #toasty::core::stmt::Value::String(d) },
+                )
+            } else {
+                (
+                    quote! { #toasty::core::stmt::Value::I64(d) },
+                    quote! { d },
+                    quote! { #toasty::core::stmt::Value::I64(d) },
+                    quote! { #toasty::core::stmt::Value::I64(d) },
+                    quote! { d },
+                    quote! { #toasty::core::stmt::Value::I64(d) },
+                )
+            };
 
-                    fn ty() -> #toasty::core::stmt::Type {
-                        #ty_expr
-                    }
+        quote! {
+            impl #toasty::Load for #model_ident {
+                type Output = Self;
 
-                    fn load(value: #toasty::core::stmt::Value) -> #toasty::Result<Self> {
-                        match value {
-                            #toasty::core::stmt::Value::String(ref d) => match d.as_str() {
-                                #( #unit_load_arms )*
+                fn ty() -> #toasty::core::stmt::Type {
+                    #ty_expr
+                }
+
+                fn load(value: #toasty::core::stmt::Value) -> #toasty::Result<Self> {
+                    match value {
+                        #outer_pattern => match #outer_match {
+                            #( #unit_load_arms )*
+                            _ => Err(#toasty::Error::type_conversion(
+                                #outer_rewrap,
+                                stringify!(#model_ident),
+                            )),
+                        },
+                        #toasty::core::stmt::Value::Record(mut record) => match record[0].take() {
+                            #inner_pattern => match #inner_match {
+                                #( #data_load_arms )*
                                 _ => Err(#toasty::Error::type_conversion(
-                                    value,
+                                    #inner_rewrap,
                                     stringify!(#model_ident),
                                 )),
                             },
-                            #toasty::core::stmt::Value::Record(mut record) => match record[0].take() {
-                                #toasty::core::stmt::Value::String(d) => match d.as_str() {
-                                    #( #data_load_arms )*
-                                    _ => Err(#toasty::Error::type_conversion(
-                                        #toasty::core::stmt::Value::String(d),
-                                        stringify!(#model_ident),
-                                    )),
-                                },
-                                other => Err(#toasty::Error::type_conversion(
-                                    other,
-                                    stringify!(#model_ident),
-                                )),
-                            },
-                            value => Err(#toasty::Error::type_conversion(value, stringify!(#model_ident))),
-                        }
-                    }
-
-                    fn reload(target: &mut Self, value: #toasty::core::stmt::Value) -> #toasty::Result<()> {
-                        *target = Self::load(value)?;
-                        Ok(())
+                            other => Err(#toasty::Error::type_conversion(
+                                other,
+                                stringify!(#model_ident),
+                            )),
+                        },
+                        value => Err(#toasty::Error::type_conversion(value, stringify!(#model_ident))),
                     }
                 }
-            }
-        } else {
-            quote! {
-                impl #toasty::Load for #model_ident {
-                    type Output = Self;
 
-                    fn ty() -> #toasty::core::stmt::Type {
-                        #ty_expr
-                    }
-
-                    fn load(value: #toasty::core::stmt::Value) -> #toasty::Result<Self> {
-                        match value {
-                            #toasty::core::stmt::Value::I64(d) => match d {
-                                #( #unit_load_arms )*
-                                _ => Err(#toasty::Error::type_conversion(
-                                    #toasty::core::stmt::Value::I64(d),
-                                    stringify!(#model_ident),
-                                )),
-                            },
-                            #toasty::core::stmt::Value::Record(mut record) => match record[0].take() {
-                                #toasty::core::stmt::Value::I64(d) => match d {
-                                    #( #data_load_arms )*
-                                    _ => Err(#toasty::Error::type_conversion(
-                                        #toasty::core::stmt::Value::I64(d),
-                                        stringify!(#model_ident),
-                                    )),
-                                },
-                                other => Err(#toasty::Error::type_conversion(
-                                    other,
-                                    stringify!(#model_ident),
-                                )),
-                            },
-                            value => Err(#toasty::Error::type_conversion(value, stringify!(#model_ident))),
-                        }
-                    }
-
-                    fn reload(target: &mut Self, value: #toasty::core::stmt::Value) -> #toasty::Result<()> {
-                        *target = Self::load(value)?;
-                        Ok(())
-                    }
+                fn reload(target: &mut Self, value: #toasty::core::stmt::Value) -> #toasty::Result<()> {
+                    *target = Self::load(value)?;
+                    Ok(())
                 }
             }
         }
     }
 
-    fn expand_enum_unit_load_arms_inner(&self) -> Vec<TokenStream> {
-        let model_ident = &self.model.ident;
-        let embedded_enum = self.model.kind.as_embedded_enum_unwrap();
-        let uses_string = self.uses_string_discriminants();
-
-        embedded_enum
-            .variants
-            .iter()
-            .enumerate()
-            .filter(|(variant_index, _)| self.variant_fields(*variant_index).is_empty())
-            .map(|(_, variant)| {
-                let ident = &variant.ident;
-                if uses_string {
-                    let label = match &variant.attrs.discriminant {
-                        VariantValue::String(s) => s.as_str(),
-                        _ => unreachable!(),
-                    };
-                    quote! { #label => Ok(#model_ident::#ident), }
-                } else {
-                    let discriminant = match &variant.attrs.discriminant {
-                        VariantValue::Integer(n) => *n,
-                        _ => unreachable!(),
-                    };
-                    quote! { #discriminant => Ok(#model_ident::#ident), }
-                }
-            })
-            .collect()
-    }
-
-    fn expand_enum_data_load_arms_inner(&self) -> Vec<TokenStream> {
+    /// Generates match arms for Load. When `unit_only` is true, emits arms for
+    /// unit variants; otherwise emits arms for data-carrying variants.
+    fn expand_enum_load_arms(&self, unit_only: bool) -> Vec<TokenStream> {
         let toasty = &self.toasty;
         let model_ident = &self.model.ident;
         let embedded_enum = self.model.kind.as_embedded_enum_unwrap();
-        let uses_string = self.uses_string_discriminants();
 
         embedded_enum
             .variants
             .iter()
             .enumerate()
-            .filter(|(variant_index, _)| !self.variant_fields(*variant_index).is_empty())
+            .filter(|(variant_index, _)| {
+                self.variant_fields(*variant_index).is_empty() == unit_only
+            })
             .map(|(variant_index, variant)| {
                 let ident = &variant.ident;
-                let fields = self.variant_fields(variant_index);
+                let pattern = expand_discriminant_match_pattern(&variant.attrs.discriminant);
 
-                let field_loads: Vec<_> = fields
-                    .iter()
-                    .enumerate()
-                    .map(|(i, field)| {
-                        let field_ident = &field.name.ident;
-                        let ty = primitive_ty_unwrap(field);
-                        let record_pos = util::int(i + 1);
-                        let load =
-                            quote! { <#ty as #toasty::Load>::load(record[#record_pos].take())? };
-                        if variant.fields_named {
-                            quote! { #field_ident: #load, }
-                        } else {
-                            quote! { #load, }
-                        }
-                    })
-                    .collect();
-
-                let construction = if variant.fields_named {
-                    quote! { #model_ident::#ident { #( #field_loads )* } }
+                let construction = if unit_only {
+                    quote! { #model_ident::#ident }
                 } else {
-                    quote! { #model_ident::#ident( #( #field_loads )* ) }
+                    let fields = self.variant_fields(variant_index);
+                    let field_loads: Vec<_> = fields
+                        .iter()
+                        .enumerate()
+                        .map(|(i, field)| {
+                            let field_ident = &field.name.ident;
+                            let ty = primitive_ty_unwrap(field);
+                            let record_pos = util::int(i + 1);
+                            let load = quote! {
+                                <#ty as #toasty::Load>::load(record[#record_pos].take())?
+                            };
+                            if variant.fields_named {
+                                quote! { #field_ident: #load, }
+                            } else {
+                                quote! { #load, }
+                            }
+                        })
+                        .collect();
+
+                    if variant.fields_named {
+                        quote! { #model_ident::#ident { #( #field_loads )* } }
+                    } else {
+                        quote! { #model_ident::#ident( #( #field_loads )* ) }
+                    }
                 };
 
-                if uses_string {
-                    let label = match &variant.attrs.discriminant {
-                        VariantValue::String(s) => s.as_str(),
-                        _ => unreachable!(),
-                    };
-                    quote! {
-                        #label => Ok(#construction),
-                    }
-                } else {
-                    let discriminant = match &variant.attrs.discriminant {
-                        VariantValue::Integer(n) => *n,
-                        _ => unreachable!(),
-                    };
-                    quote! {
-                        #discriminant => Ok(#construction),
-                    }
-                }
+                quote! { #pattern => Ok(#construction), }
             })
             .collect()
     }
@@ -569,5 +514,14 @@ fn primitive_ty_unwrap(field: &crate::model::schema::Field) -> &syn::Type {
     match &field.ty {
         FieldTy::Primitive(ty) => ty,
         _ => panic!("expected primitive field type for enum variant field"),
+    }
+}
+
+/// Generates the match pattern token for a discriminant value:
+/// a string literal for `VariantValue::String`, an integer literal for `VariantValue::Integer`.
+fn expand_discriminant_match_pattern(value: &VariantValue) -> TokenStream {
+    match value {
+        VariantValue::String(s) => quote! { #s },
+        VariantValue::Integer(n) => quote! { #n },
     }
 }
