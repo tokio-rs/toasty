@@ -1,5 +1,5 @@
 use super::{Load, Model};
-use crate::stmt::{IntoExpr, IntoInsert, List, Path};
+use crate::stmt::{IntoExpr, IntoInsert, List, Path, Query};
 
 use toasty_core::schema::app::FieldId;
 
@@ -41,6 +41,17 @@ pub trait Relation: Load<Output = Self> {
     /// The optional has-one relation wrapper type. Used when the foreign key
     /// is nullable, making the association optional.
     type OptionOne;
+
+    /// The element type produced when narrowing a `Query<List<Model>>` to a
+    /// single-result query. For a required relation this is `Model`; for an
+    /// optional relation (`Option<Model>`) this is `Option<Model>`.
+    type NarrowQuery;
+
+    /// Narrow a list query into a single-result query.
+    ///
+    /// Required relations narrow via `.one()`, optional relations via
+    /// `.first()`.
+    fn narrow_query(query: Query<List<Self::Model>>) -> Query<Self::NarrowQuery>;
 
     /// Return a fresh, default-initialized create builder.
     fn new_create() -> Self::Create {

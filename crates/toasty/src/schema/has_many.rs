@@ -79,6 +79,13 @@ impl<T: Relation> Relation for HasMany<T> {
     type One = T::One;
     type OneField<__Origin> = T::OneField<__Origin>;
     type OptionOne = T::OptionOne;
+    type NarrowQuery = T::NarrowQuery;
+
+    fn narrow_query(
+        query: crate::stmt::Query<crate::stmt::List<Self::Model>>,
+    ) -> crate::stmt::Query<Self::NarrowQuery> {
+        T::narrow_query(query)
+    }
 
     fn new_many_field<__Origin>(
         path: crate::stmt::Path<__Origin, crate::stmt::List<Self::Model>>,
