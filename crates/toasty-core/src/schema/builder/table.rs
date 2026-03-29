@@ -406,8 +406,12 @@ impl BuildMapping<'_> {
                 }
                 stmt::Expr::record(record_elems)
             };
+            let pattern = match &variant.discriminant {
+                app::Discriminant::Integer(n) => stmt::Value::I64(*n),
+                app::Discriminant::String(s) => stmt::Value::String(s.clone()),
+            };
             arms.push(stmt::MatchArm {
-                pattern: stmt::Value::I64(variant.discriminant),
+                pattern,
                 expr: arm_expr,
             });
         }
@@ -649,7 +653,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             .enumerate()
             .map(|(variant_index, variant)| {
                 let mut mapper =
-                    self.for_variant(field, field_index, disc_proj.clone(), variant.discriminant);
+                    self.for_variant(field, field_index, disc_proj.clone(), &variant.discriminant);
 
                 let fields: Vec<mapping::Field> = embedded_enum
                     .variant_fields(variant_index)
@@ -662,7 +666,7 @@ impl<'a, 'b> MapField<'a, 'b> {
                     .collect::<Result<_>>()?;
 
                 Ok(mapping::EnumVariant {
-                    discriminant: variant.discriminant,
+                    discriminant: variant.discriminant.clone(),
                     fields,
                 })
             })
@@ -846,14 +850,19 @@ impl<'a, 'b> MapField<'a, 'b> {
         field: &app::Field,
         field_index: usize,
         disc_proj: stmt::Expr,
-        discriminant: i64,
+        discriminant: &app::Discriminant,
     ) -> MapField<'_, 'b> {
         let field_base = self.extend_field_base(field, field_index);
+
+        let pattern = match discriminant {
+            app::Discriminant::Integer(n) => stmt::Value::I64(*n),
+            app::Discriminant::String(s) => stmt::Value::String(s.clone()),
+        };
 
         let field_expr_base = stmt::Expr::match_expr(
             disc_proj,
             vec![stmt::MatchArm {
-                pattern: stmt::Value::I64(discriminant),
+                pattern,
                 expr: stmt::Expr::arg(0),
             }],
             stmt::Expr::null(),

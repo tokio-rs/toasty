@@ -1,5 +1,5 @@
 use super::{schema, util, Expand};
-use crate::model::schema::FieldTy;
+use crate::model::schema::{FieldTy, VariantValue};
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -18,6 +18,13 @@ impl Expand<'_> {
     /// what `Field::ty()` returns.
     pub(super) fn expand_enum_has_data_variants(&self) -> bool {
         !self.model.fields.is_empty()
+    }
+
+    fn uses_string_discriminants(&self) -> bool {
+        self.model
+            .kind
+            .as_embedded_enum_unwrap()
+            .uses_string_discriminants()
     }
 
     /// Generates tokens for an `is_variant(path, variant_id)` expression.
@@ -215,15 +222,42 @@ impl Expand<'_> {
             .iter()
             .map(|variant| {
                 let variant_name = schema::expand_name(toasty, &variant.name);
-                let discriminant = variant.attrs.discriminant;
+                let discriminant_expr =
+                    self.expand_discriminant_schema(&variant.attrs.discriminant);
                 quote! {
                     #toasty::core::schema::app::EnumVariant {
                         name: #variant_name,
-                        discriminant: #discriminant,
+                        discriminant: #discriminant_expr,
                     }
                 }
             })
             .collect()
+    }
+
+    /// Expands a `VariantValue` to a `Discriminant` token for use in schema registration.
+    fn expand_discriminant_schema(&self, value: &VariantValue) -> TokenStream {
+        let toasty = &self.toasty;
+        match value {
+            VariantValue::Integer(n) => {
+                quote! { #toasty::core::schema::app::Discriminant::Integer(#n) }
+            }
+            VariantValue::String(s) => {
+                quote! { #toasty::core::schema::app::Discriminant::String(#s.to_string()) }
+            }
+        }
+    }
+
+    /// Expands a discriminant value to a `Value::I64(n)` or `Value::String(s.into())` expression.
+    fn expand_discriminant_value_expr(&self, value: &VariantValue) -> TokenStream {
+        let toasty = &self.toasty;
+        match value {
+            VariantValue::Integer(n) => {
+                quote! { #toasty::core::stmt::Expr::Value(#toasty::core::stmt::Value::I64(#n)) }
+            }
+            VariantValue::String(s) => {
+                quote! { #toasty::core::stmt::Expr::Value(#toasty::core::stmt::Value::String(#s.into())) }
+            }
+        }
     }
 
     /// Generates the flat list of `Field` schema tokens for all variant fields,
@@ -265,11 +299,106 @@ impl Expand<'_> {
             .collect()
     }
 
-    /// Generates match arms for the `Value::I64(d)` branch of `Load::load`.
-    /// Only unit variants are emitted here; data variants appear in `expand_enum_data_load_arms`.
-    pub(super) fn expand_enum_unit_load_arms(&self) -> Vec<TokenStream> {
+    /// Generates the full `impl Load for Enum { ... }` block, adapting
+    /// discriminant matching based on whether integer or string discriminants are used.
+    pub(super) fn expand_enum_load_impl(&self) -> TokenStream {
+        let toasty = &self.toasty;
+        let model_ident = &self.model.ident;
+        let ty_expr = self.expand_enum_primitive_ty();
+        let uses_string = self.uses_string_discriminants();
+
+        let unit_load_arms = self.expand_enum_unit_load_arms_inner();
+        let data_load_arms = self.expand_enum_data_load_arms_inner();
+
+        if uses_string {
+            quote! {
+                impl #toasty::Load for #model_ident {
+                    type Output = Self;
+
+                    fn ty() -> #toasty::core::stmt::Type {
+                        #ty_expr
+                    }
+
+                    fn load(value: #toasty::core::stmt::Value) -> #toasty::Result<Self> {
+                        match value {
+                            #toasty::core::stmt::Value::String(ref d) => match d.as_str() {
+                                #( #unit_load_arms )*
+                                _ => Err(#toasty::Error::type_conversion(
+                                    value,
+                                    stringify!(#model_ident),
+                                )),
+                            },
+                            #toasty::core::stmt::Value::Record(mut record) => match record[0].take() {
+                                #toasty::core::stmt::Value::String(d) => match d.as_str() {
+                                    #( #data_load_arms )*
+                                    _ => Err(#toasty::Error::type_conversion(
+                                        #toasty::core::stmt::Value::String(d),
+                                        stringify!(#model_ident),
+                                    )),
+                                },
+                                other => Err(#toasty::Error::type_conversion(
+                                    other,
+                                    stringify!(#model_ident),
+                                )),
+                            },
+                            value => Err(#toasty::Error::type_conversion(value, stringify!(#model_ident))),
+                        }
+                    }
+
+                    fn reload(target: &mut Self, value: #toasty::core::stmt::Value) -> #toasty::Result<()> {
+                        *target = Self::load(value)?;
+                        Ok(())
+                    }
+                }
+            }
+        } else {
+            quote! {
+                impl #toasty::Load for #model_ident {
+                    type Output = Self;
+
+                    fn ty() -> #toasty::core::stmt::Type {
+                        #ty_expr
+                    }
+
+                    fn load(value: #toasty::core::stmt::Value) -> #toasty::Result<Self> {
+                        match value {
+                            #toasty::core::stmt::Value::I64(d) => match d {
+                                #( #unit_load_arms )*
+                                _ => Err(#toasty::Error::type_conversion(
+                                    #toasty::core::stmt::Value::I64(d),
+                                    stringify!(#model_ident),
+                                )),
+                            },
+                            #toasty::core::stmt::Value::Record(mut record) => match record[0].take() {
+                                #toasty::core::stmt::Value::I64(d) => match d {
+                                    #( #data_load_arms )*
+                                    _ => Err(#toasty::Error::type_conversion(
+                                        #toasty::core::stmt::Value::I64(d),
+                                        stringify!(#model_ident),
+                                    )),
+                                },
+                                other => Err(#toasty::Error::type_conversion(
+                                    other,
+                                    stringify!(#model_ident),
+                                )),
+                            },
+                            value => Err(#toasty::Error::type_conversion(value, stringify!(#model_ident))),
+                        }
+                    }
+
+                    fn reload(target: &mut Self, value: #toasty::core::stmt::Value) -> #toasty::Result<()> {
+                        *target = Self::load(value)?;
+                        Ok(())
+                    }
+                }
+            }
+        }
+    }
+
+    fn expand_enum_unit_load_arms_inner(&self) -> Vec<TokenStream> {
         let model_ident = &self.model.ident;
         let embedded_enum = self.model.kind.as_embedded_enum_unwrap();
+        let uses_string = self.uses_string_discriminants();
 
         embedded_enum
             .variants
@@ -278,20 +407,28 @@ impl Expand<'_> {
             .filter(|(variant_index, _)| self.variant_fields(*variant_index).is_empty())
             .map(|(_, variant)| {
                 let ident = &variant.ident;
-                let discriminant = variant.attrs.discriminant;
-                quote! { #discriminant => Ok(#model_ident::#ident), }
+                if uses_string {
+                    let label = match &variant.attrs.discriminant {
+                        VariantValue::String(s) => s.as_str(),
+                        _ => unreachable!(),
+                    };
+                    quote! { #label => Ok(#model_ident::#ident), }
+                } else {
+                    let discriminant = match &variant.attrs.discriminant {
+                        VariantValue::Integer(n) => *n,
+                        _ => unreachable!(),
+                    };
+                    quote! { #discriminant => Ok(#model_ident::#ident), }
+                }
             })
             .collect()
     }
 
-    /// Generates match arms for the `Value::Record` branch of `Load::load`.
-    /// Only data variants are emitted; unit variants appear in `expand_enum_unit_load_arms`.
-    /// Record layout: `record[0]` is the discriminant, `record[1..]` are the variant's fields
-    /// in declaration order (local indices, not global).
-    pub(super) fn expand_enum_data_load_arms(&self) -> Vec<TokenStream> {
+    fn expand_enum_data_load_arms_inner(&self) -> Vec<TokenStream> {
         let toasty = &self.toasty;
         let model_ident = &self.model.ident;
         let embedded_enum = self.model.kind.as_embedded_enum_unwrap();
+        let uses_string = self.uses_string_discriminants();
 
         embedded_enum
             .variants
@@ -300,7 +437,6 @@ impl Expand<'_> {
             .filter(|(variant_index, _)| !self.variant_fields(*variant_index).is_empty())
             .map(|(variant_index, variant)| {
                 let ident = &variant.ident;
-                let discriminant = variant.attrs.discriminant;
                 let fields = self.variant_fields(variant_index);
 
                 let field_loads: Vec<_> = fields
@@ -326,8 +462,22 @@ impl Expand<'_> {
                     quote! { #model_ident::#ident( #( #field_loads )* ) }
                 };
 
-                quote! {
-                    #discriminant => Ok(#construction),
+                if uses_string {
+                    let label = match &variant.attrs.discriminant {
+                        VariantValue::String(s) => s.as_str(),
+                        _ => unreachable!(),
+                    };
+                    quote! {
+                        #label => Ok(#construction),
+                    }
+                } else {
+                    let discriminant = match &variant.attrs.discriminant {
+                        VariantValue::Integer(n) => *n,
+                        _ => unreachable!(),
+                    };
+                    quote! {
+                        #discriminant => Ok(#construction),
+                    }
                 }
             })
             .collect()
@@ -349,12 +499,10 @@ impl Expand<'_> {
             .enumerate()
             .map(|(variant_index, variant)| {
                 let ident = &variant.ident;
-                let discriminant = variant.attrs.discriminant;
                 let fields = self.variant_fields(variant_index);
 
-                let discriminant_expr = quote!(#toasty::core::stmt::Expr::Value(
-                    #toasty::core::stmt::Value::I64(#discriminant)
-                ));
+                let discriminant_expr =
+                    self.expand_discriminant_value_expr(&variant.attrs.discriminant);
 
                 if fields.is_empty() {
                     // In a mixed enum (has_data_variants), the model value is always a
@@ -404,11 +552,13 @@ impl Expand<'_> {
     }
 
     /// Generates the `Field::ty()` return expression. Unit-only enums map to
-    /// `Type::I64`; enums with at least one data variant map to `Type::Model`.
+    /// `Type::I64` or `Type::String`; enums with at least one data variant map to `Type::Model`.
     pub(super) fn expand_enum_primitive_ty(&self) -> TokenStream {
         let toasty = &self.toasty;
         if self.expand_enum_has_data_variants() {
             quote! { #toasty::core::stmt::Type::Model(<Self as #toasty::Register>::id()) }
+        } else if self.uses_string_discriminants() {
+            quote! { #toasty::core::stmt::Type::String }
         } else {
             quote! { #toasty::core::stmt::Type::I64 }
         }

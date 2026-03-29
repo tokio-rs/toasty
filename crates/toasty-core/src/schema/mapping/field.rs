@@ -263,7 +263,7 @@ pub struct FieldEnum {
 #[derive(Debug, Clone)]
 pub struct EnumVariant {
     /// The discriminant value for this variant.
-    pub discriminant: i64,
+    pub discriminant: crate::schema::app::Discriminant,
 
     /// Field mappings for this variant's data fields, in declaration order.
     /// Empty for unit variants. Supports nesting (each entry is a full `Field`).

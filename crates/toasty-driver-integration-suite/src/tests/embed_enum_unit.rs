@@ -260,9 +260,9 @@ pub async fn basic_embedded_enum(test: &mut Test) {
         Status::id(): toasty::schema::app::Model::EmbeddedEnum(_ {
             name.upper_camel_case(): "Status",
             variants: [
-                _ { name.upper_camel_case(): "Pending", discriminant: 1, .. },
-                _ { name.upper_camel_case(): "Active", discriminant: 2, .. },
-                _ { name.upper_camel_case(): "Done", discriminant: 3, .. },
+                _ { name.upper_camel_case(): "Pending", discriminant: toasty::schema::app::Discriminant::Integer(1), .. },
+                _ { name.upper_camel_case(): "Active", discriminant: toasty::schema::app::Discriminant::Integer(2), .. },
+                _ { name.upper_camel_case(): "Done", discriminant: toasty::schema::app::Discriminant::Integer(3), .. },
             ],
             ..
         }),

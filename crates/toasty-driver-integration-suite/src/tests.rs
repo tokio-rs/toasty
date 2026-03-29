@@ -23,6 +23,7 @@ pub mod embed_enum_filter;
 pub mod embed_enum_filter_comparison;
 pub mod embed_enum_filter_variant_field;
 pub mod embed_enum_index;
+pub mod embed_enum_string_discriminant;
 pub mod embed_enum_unit;
 pub mod embed_struct;
 pub mod embed_struct_index;

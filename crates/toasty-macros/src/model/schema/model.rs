@@ -1,6 +1,6 @@
 use super::{
     ErrorSet, Field, FieldAttr, FieldTy, Index, IndexField, IndexScope, ModelAttr, Name,
-    PrimaryKey, Variant,
+    PrimaryKey, Variant, VariantValue,
 };
 
 #[derive(Debug)]
@@ -82,6 +82,16 @@ pub(crate) struct ModelEmbeddedEnum {
 
     /// The enum's variants with their names and discriminant values
     pub(crate) variants: Vec<Variant>,
+}
+
+impl ModelEmbeddedEnum {
+    /// Returns true if this enum uses string discriminants.
+    pub(crate) fn uses_string_discriminants(&self) -> bool {
+        self.variants
+            .first()
+            .map(|v| matches!(v.attrs.discriminant, VariantValue::String(_)))
+            .unwrap_or(false)
+    }
 }
 
 #[derive(Debug)]
@@ -264,6 +274,8 @@ impl Model {
     }
 
     pub(crate) fn from_enum_ast(ast: &syn::ItemEnum) -> syn::Result<Self> {
+        use super::variant::VariantAttr;
+
         if !ast.generics.params.is_empty() {
             return Err(syn::Error::new_spanned(
                 &ast.generics,
@@ -276,8 +288,20 @@ impl Model {
         let mut errs = ErrorSet::new();
         let mut global_field_index = 0usize;
 
-        for (variant_index, variant) in ast.variants.iter().enumerate() {
-            // Collect (ident, syn::Field) pairs for each variant field
+        // First pass: parse variant attributes to determine discriminant kind.
+        // Collect (variant_index, parsed VariantAttr or None, has_fields, variant_field_pairs)
+        struct VariantInfo<'a> {
+            variant: &'a syn::Variant,
+            attr: Option<VariantAttr>,
+            has_fields: bool,
+        }
+
+        let mut variant_infos = vec![];
+        let mut has_any_integer = false;
+        let mut has_any_string = false;
+        let mut has_any_omitted = false;
+
+        for variant in ast.variants.iter() {
             let variant_field_pairs: Vec<_> = match &variant.fields {
                 syn::Fields::Unit => vec![],
                 syn::Fields::Named(named) => named
@@ -297,12 +321,79 @@ impl Model {
                     })
                     .collect(),
             };
-
             let has_fields = !variant_field_pairs.is_empty();
 
-            // Create Field entries for each variant field
+            let attr = match VariantAttr::from_attrs(&variant.attrs) {
+                Ok(a) => a,
+                Err(e) => {
+                    errs.push(e);
+                    variant_infos.push(VariantInfo {
+                        variant,
+                        attr: None,
+                        has_fields,
+                    });
+                    continue;
+                }
+            };
+
+            match &attr {
+                Some(a) => match &a.discriminant {
+                    VariantValue::Integer(_) => has_any_integer = true,
+                    VariantValue::String(_) => has_any_string = true,
+                },
+                None => has_any_omitted = true,
+            }
+
+            variant_infos.push(VariantInfo {
+                variant,
+                attr,
+                has_fields,
+            });
+        }
+
+        // Validate: cannot mix integer and string discriminants
+        if has_any_integer && (has_any_string || has_any_omitted) {
+            errs.push(syn::Error::new_spanned(
+                ast,
+                "cannot mix integer and string variant discriminants; \
+                 all variants must use the same discriminant kind",
+            ));
+        }
+
+        // If all variants have explicit integer discriminants, use integer mode (existing behavior).
+        // Otherwise, use string mode: explicit string labels + default labels for omitted variants.
+        let uses_string_discriminants = !has_any_integer;
+
+        for (variant_index, info) in variant_infos.iter().enumerate() {
+            // Collect fields
+            let variant_field_pairs: Vec<_> = match &info.variant.fields {
+                syn::Fields::Unit => vec![],
+                syn::Fields::Named(named) => named
+                    .named
+                    .iter()
+                    .map(|f| (f.ident.as_ref().unwrap().clone(), f))
+                    .collect(),
+                syn::Fields::Unnamed(unnamed) => unnamed
+                    .unnamed
+                    .iter()
+                    .enumerate()
+                    .map(|(i, f)| {
+                        (
+                            syn::Ident::new(&format!("field{i}"), info.variant.ident.span()),
+                            f,
+                        )
+                    })
+                    .collect(),
+            };
+
             for (ident, f) in &variant_field_pairs {
-                let attrs = FieldAttr::from_attrs(&f.attrs)?;
+                let attrs = match FieldAttr::from_attrs(&f.attrs) {
+                    Ok(a) => a,
+                    Err(e) => {
+                        errs.push(e);
+                        continue;
+                    }
+                };
                 let name = Name::from_ident(ident);
                 let set_ident = syn::Ident::new(&format!("set_{}", name.ident), ident.span());
                 let with_ident = syn::Ident::new(&format!("with_{}", name.ident), ident.span());
@@ -319,7 +410,29 @@ impl Model {
                 global_field_index += 1;
             }
 
-            match Variant::from_ast(variant, &ast.ident, has_fields) {
+            // Resolve discriminant: use explicit attribute or default to variant ident as string
+            let resolved_attr = match &info.attr {
+                Some(a) => VariantAttr {
+                    discriminant: a.discriminant.clone(),
+                },
+                None => {
+                    if uses_string_discriminants {
+                        // Default: use variant identifier as string label
+                        VariantAttr {
+                            discriminant: VariantValue::String(info.variant.ident.to_string()),
+                        }
+                    } else {
+                        // Integer mode but no attribute — error
+                        errs.push(syn::Error::new_spanned(
+                            info.variant,
+                            "embedded enum variant must have a #[column(variant = N)] attribute",
+                        ));
+                        continue;
+                    }
+                }
+            };
+
+            match Variant::from_ast(info.variant, &ast.ident, info.has_fields, resolved_attr) {
                 Ok(v) => variants.push(v),
                 Err(e) => {
                     errs.push(e);
@@ -329,19 +442,42 @@ impl Model {
         }
 
         // Check for duplicate discriminant values
-        {
+        if uses_string_discriminants {
+            let mut seen = std::collections::HashMap::<&str, &syn::Ident>::new();
+            for v in &variants {
+                let label = match &v.attrs.discriminant {
+                    VariantValue::String(s) => s.as_str(),
+                    _ => unreachable!(),
+                };
+                if let Some(prev) = seen.get(label) {
+                    errs.push(syn::Error::new_spanned(
+                        &v.ident,
+                        format!(
+                            "duplicate variant label \"{}\"; already used by `{}`",
+                            label, prev
+                        ),
+                    ));
+                } else {
+                    seen.insert(label, &v.ident);
+                }
+            }
+        } else {
             let mut seen = std::collections::HashMap::<i64, &syn::Ident>::new();
             for v in &variants {
-                if let Some(prev) = seen.get(&v.attrs.discriminant) {
+                let d = match &v.attrs.discriminant {
+                    VariantValue::Integer(n) => *n,
+                    _ => unreachable!(),
+                };
+                if let Some(prev) = seen.get(&d) {
                     errs.push(syn::Error::new_spanned(
                         &v.ident,
                         format!(
                             "duplicate variant value `{}`; already used by `{}`",
-                            v.attrs.discriminant, prev
+                            d, prev
                         ),
                     ));
                 } else {
-                    seen.insert(v.attrs.discriminant, &v.ident);
+                    seen.insert(d, &v.ident);
                 }
             }
         }
