@@ -1,8 +1,8 @@
 error[E0599]: no method named `nonexistent` found for struct `UserCreate` in the current scope
   --> tests/ui/create_invalid_field.rs:11:36
    |
- 1 | #[derive(Debug, toasty::Model)]
-   |                 ------------- method `nonexistent` not found for this struct
+ 2 | struct User {
+   |        ---- method `nonexistent` not found for this struct
 ...
 11 |     let _ = toasty::create!(User { nonexistent: "value" });
    |                                    ^^^^^^^^^^^ method not found in `UserCreate`

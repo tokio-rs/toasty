@@ -2,22 +2,30 @@ use super::{util, Expand};
 use crate::model::schema::FieldTy;
 
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{quote, quote_spanned};
 
 impl Expand<'_> {
     pub(super) fn expand_create_builder(&self) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
+        let model_span = model_ident.span();
         let create_struct_ident = &self.model.kind.as_root_unwrap().create_struct_ident;
         let create_methods = self.expand_create_methods();
         let default_stmts = self.expand_create_default_stmts();
 
-        quote! {
+        // Span the struct definition to the model ident so that "method not
+        // found for this struct" errors point at `struct User`, not the derive
+        // attribute.
+        let struct_def = quote_spanned! { model_span=>
             #[derive(Clone)]
             #vis struct #create_struct_ident {
                 stmt: #toasty::stmt::Insert<#model_ident>,
             }
+        };
+
+        quote! {
+            #struct_def
 
             impl #create_struct_ident {
                 #create_methods
