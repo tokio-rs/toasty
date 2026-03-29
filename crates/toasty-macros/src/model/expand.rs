@@ -14,7 +14,7 @@ use filters::Filter;
 use super::schema::Model;
 
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{quote, quote_spanned};
 
 struct Expand<'a> {
     /// The model being expanded
@@ -342,8 +342,9 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
+        let span = field_ident.span();
 
-        quote! {
+        quote_spanned! { span=>
             #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::OneField<__Origin> {
                 <#ty as #toasty::Relation>::OneField::from_path(
                     self.path().chain(
@@ -365,8 +366,9 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
+        let span = field_ident.span();
 
-        quote! {
+        quote_spanned! { span=>
             #vis fn #field_ident(&self) -> <#ty as #toasty::Field>::Path<__Origin> {
                 <#ty as #toasty::Field>::new_path(
                     self.path().chain(

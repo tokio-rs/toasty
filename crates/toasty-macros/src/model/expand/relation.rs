@@ -9,8 +9,11 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
-        let query_ident = &self.model.kind.as_root_unwrap().query_struct_ident;
-        let create_builder_ident = &self.model.kind.as_root_unwrap().create_struct_ident;
+        let root = self.model.kind.as_root_unwrap();
+        let query_ident = &root.query_struct_ident;
+        let create_builder_ident = &root.create_struct_ident;
+        let field_struct_ident = &root.field_struct_ident;
+        let field_list_struct_ident = &root.field_list_struct_ident;
         let filter_methods = self.expand_relation_filter_methods();
 
         quote! {
@@ -114,6 +117,63 @@ impl Expand<'_> {
 
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#toasty::Option<#model_ident>> {
                     self.stmt.first().exec(executor).await
+                }
+            }
+
+            #[diagnostic::do_not_recommend]
+            impl #toasty::Scope for Many {
+                type Item = #toasty::List<#model_ident>;
+                type Path<__Origin> = #field_list_struct_ident<__Origin>;
+                type Create = #create_builder_ident;
+
+                fn new_path<__Origin>(path: #toasty::Path<__Origin, Self::Item>) -> Self::Path<__Origin> {
+                    #field_list_struct_ident::from_path(path)
+                }
+
+                fn new_create() -> Self::Create {
+                    #create_builder_ident::default()
+                }
+
+                fn new_path_root() -> Self::Path<Self::Item> {
+                    #field_list_struct_ident::from_path(#toasty::Path::from_model_list())
+                }
+            }
+
+            #[diagnostic::do_not_recommend]
+            impl #toasty::Scope for One {
+                type Item = #model_ident;
+                type Path<__Origin> = #field_struct_ident<__Origin>;
+                type Create = #create_builder_ident;
+
+                fn new_path<__Origin>(path: #toasty::Path<__Origin, Self::Item>) -> Self::Path<__Origin> {
+                    #field_struct_ident::from_path(path)
+                }
+
+                fn new_create() -> Self::Create {
+                    #create_builder_ident::default()
+                }
+
+                fn new_path_root() -> Self::Path<Self::Item> {
+                    #field_struct_ident::from_path(#toasty::Path::root())
+                }
+            }
+
+            #[diagnostic::do_not_recommend]
+            impl #toasty::Scope for OptionOne {
+                type Item = #model_ident;
+                type Path<__Origin> = #field_struct_ident<__Origin>;
+                type Create = #create_builder_ident;
+
+                fn new_path<__Origin>(path: #toasty::Path<__Origin, Self::Item>) -> Self::Path<__Origin> {
+                    #field_struct_ident::from_path(path)
+                }
+
+                fn new_create() -> Self::Create {
+                    #create_builder_ident::default()
+                }
+
+                fn new_path_root() -> Self::Path<Self::Item> {
+                    #field_struct_ident::from_path(#toasty::Path::root())
                 }
             }
         }

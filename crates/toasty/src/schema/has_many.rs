@@ -107,6 +107,10 @@ impl<T: Relation> Scope for HasMany<T> {
     fn new_create() -> Self::Create {
         T::new_create()
     }
+
+    fn new_path_root() -> Self::Path<Self::Item> {
+        T::new_many_field(crate::stmt::Path::from_model_list())
+    }
 }
 
 impl<T> Default for HasMany<T> {
