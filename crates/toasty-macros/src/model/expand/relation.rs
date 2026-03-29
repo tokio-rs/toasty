@@ -135,7 +135,7 @@ impl Expand<'_> {
                 }
 
                 fn new_path_root() -> Self::Path<Self::Item> {
-                    #field_list_struct_ident::from_path(#toasty::Path::from_model::<#model_ident>())
+                    #field_list_struct_ident::from_path(#toasty::Path::from_model_list())
                 }
             }
 
@@ -154,7 +154,7 @@ impl Expand<'_> {
                 }
 
                 fn new_path_root() -> Self::Path<Self::Item> {
-                    #field_struct_ident::from_path(#toasty::Path::from_model::<#model_ident>())
+                    #field_struct_ident::from_path(#toasty::Path::root())
                 }
             }
 
@@ -173,7 +173,7 @@ impl Expand<'_> {
                 }
 
                 fn new_path_root() -> Self::Path<Self::Item> {
-                    #field_struct_ident::from_path(#toasty::Path::from_model::<#model_ident>())
+                    #field_struct_ident::from_path(#toasty::Path::root())
                 }
             }
         }

@@ -63,12 +63,12 @@ impl<T: Register> Path<T, T> {
     }
 }
 
-impl<T> Path<T, T> {
-    /// Create an identity path rooted at model `M`.
+impl<M: Register> Path<List<M>, List<M>> {
+    /// Create an identity path for a list of model `M`.
     ///
-    /// `T` may differ from `M` — for example `Path<List<Model>, List<Model>>`
-    /// is rooted at `Model` but carries list-typed phantoms.
-    pub fn from_model<M: Register>() -> Self {
+    /// This is the list counterpart of [`Path::root`] — it produces a
+    /// `Path<List<M>, List<M>>` rooted at the model's identity.
+    pub fn from_model_list() -> Self {
         Self {
             untyped: stmt::Path::model(M::id()),
             _p: PhantomData,

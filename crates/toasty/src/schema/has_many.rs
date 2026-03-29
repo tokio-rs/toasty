@@ -109,7 +109,7 @@ impl<T: Relation> Scope for HasMany<T> {
     }
 
     fn new_path_root() -> Self::Path<Self::Item> {
-        T::new_many_field(crate::stmt::Path::from_model::<T::Model>())
+        T::new_many_field(crate::stmt::Path::from_model_list())
     }
 }
 
