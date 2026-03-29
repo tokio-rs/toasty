@@ -9,7 +9,7 @@ pub(crate) enum ModelKind {
     Root(ModelRoot),
     /// Embedded struct model that is flattened into parent
     EmbeddedStruct(ModelEmbeddedStruct),
-    /// Embedded enum stored as a single integer discriminant column
+    /// Embedded enum stored as a discriminant column (integer or string)
     EmbeddedEnum(ModelEmbeddedEnum),
 }
 
@@ -360,7 +360,7 @@ impl Model {
             ));
         }
 
-        // If all variants have explicit integer discriminants, use integer mode (existing behavior).
+        // If all variants have explicit integer discriminants, use integer mode.
         // Otherwise, use string mode: explicit string labels + default labels for omitted variants.
         let uses_string_discriminants = !has_any_integer;
 

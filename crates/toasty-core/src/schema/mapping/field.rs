@@ -221,7 +221,7 @@ pub struct FieldStruct {
 
 /// Maps an embedded enum field to its discriminant column and per-variant data columns.
 ///
-/// The discriminant column always stores the active variant's integer discriminant.
+/// The discriminant column stores the active variant's discriminant (integer or string).
 /// Each data variant additionally has nullable columns for its fields; unit variants
 /// have no extra columns (all variant-field columns are NULL for them).
 ///

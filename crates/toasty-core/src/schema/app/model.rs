@@ -32,7 +32,7 @@ pub enum Model {
     /// An embedded struct whose fields are flattened into its parent model's
     /// table.
     EmbeddedStruct(EmbeddedStruct),
-    /// An embedded enum stored as a discriminant integer column (plus optional
+    /// An embedded enum stored as a discriminant column (plus optional
     /// per-variant data columns) in the parent table.
     EmbeddedEnum(EmbeddedEnum),
 }
@@ -171,7 +171,7 @@ impl EmbeddedStruct {
 /// An embedded enum model stored in the parent table via a discriminant column
 /// and optional per-variant data columns.
 ///
-/// The discriminant column holds an integer identifying the active variant.
+/// The discriminant column holds a value (integer or string) identifying the active variant.
 /// Variants may optionally carry data fields, which are stored as additional
 /// nullable columns in the parent table.
 ///
