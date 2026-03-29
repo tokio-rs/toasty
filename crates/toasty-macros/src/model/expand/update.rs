@@ -81,14 +81,14 @@ impl Expand<'_> {
                 let ty = &rel.ty;
 
                 quote! {
-                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::IntoAssignment<#toasty::List<<#ty as #toasty::Relation>::Expr>>) -> Self {
+                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<#toasty::List<<#ty as #toasty::Relation>::Expr>>) -> Self {
                         self.#set_field_ident(#field_ident);
                         self
                     }
 
-                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoAssignment<#toasty::List<<#ty as #toasty::Relation>::Expr>>) -> &mut Self {
+                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<#toasty::List<<#ty as #toasty::Relation>::Expr>>) -> &mut Self {
                         let projection = #projection;
-                        #field_ident.into_assignment(&mut self.assignments, projection);
+                        #field_ident.assign(&mut self.assignments, projection);
                         self
                     }
                 }

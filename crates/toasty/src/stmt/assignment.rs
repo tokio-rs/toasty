@@ -2,7 +2,7 @@ use super::{IntoExpr, List};
 use std::marker::PhantomData;
 use toasty_core::stmt;
 
-/// Convert a value into a field assignment for an update statement.
+/// Apply a field mutation to an update statement's [`Assignments`] map.
 ///
 /// This trait is used for field types where the mutation semantics are
 /// ambiguous from a plain value alone — primarily **has-many** collection
@@ -10,9 +10,9 @@ use toasty_core::stmt;
 /// ([`insert`], [`remove`], or [`set`]) to specify the intent.
 ///
 /// Scalar fields continue to accept `impl IntoExpr<T>` directly (a plain
-/// value means "set"). Only collection setters use `IntoAssignment`.
+/// value means "set"). Only collection setters use `Assign`.
 ///
-/// Arrays and [`Vec`]s of assignments implement `IntoAssignment<T>` when their
+/// Arrays and [`Vec`]s of assignments implement `Assign<T>` when their
 /// elements do, allowing multiple operations in a single setter call:
 ///
 /// ```ignore
@@ -25,17 +25,17 @@ use toasty_core::stmt;
 ///     .exec(&mut db)
 ///     .await?;
 /// ```
-pub trait IntoAssignment<T> {
+pub trait Assign<T> {
     /// Record one or more assignments into the given [`Assignments`] map at
     /// the specified projection.
-    fn into_assignment(self, assignments: &mut stmt::Assignments, projection: stmt::Projection);
+    fn assign(self, assignments: &mut stmt::Assignments, projection: stmt::Projection);
 }
 
 /// A typed assignment produced by the [`insert`], [`remove`], and [`set`]
 /// combinators.
 ///
-/// `Assignment<T>` implements `IntoAssignment<T>`, so it can be passed directly
-/// to any update builder setter that accepts `impl IntoAssignment<T>`.
+/// `Assignment<T>` implements `Assign<T>`, so it can be passed directly
+/// to any update builder setter that accepts `impl Assign<T>`.
 pub struct Assignment<T> {
     kind: AssignmentKind,
     _p: PhantomData<T>,
@@ -47,9 +47,9 @@ enum AssignmentKind {
     Remove(stmt::Expr),
 }
 
-// Assignment<T> implements IntoAssignment<T>
-impl<T> IntoAssignment<T> for Assignment<T> {
-    fn into_assignment(self, assignments: &mut stmt::Assignments, projection: stmt::Projection) {
+// Assignment<T> implements Assign<T>
+impl<T> Assign<T> for Assignment<T> {
+    fn assign(self, assignments: &mut stmt::Assignments, projection: stmt::Projection) {
         match self.kind {
             AssignmentKind::Set(expr) => assignments.set(projection, expr),
             AssignmentKind::Insert(expr) => assignments.insert(projection, expr),
@@ -58,20 +58,20 @@ impl<T> IntoAssignment<T> for Assignment<T> {
     }
 }
 
-// Arrays of assignments: [Q; N] implements IntoAssignment<T> when Q does.
-impl<T, Q: IntoAssignment<T>, const N: usize> IntoAssignment<T> for [Q; N] {
-    fn into_assignment(self, assignments: &mut stmt::Assignments, projection: stmt::Projection) {
+// Arrays of assignments: [Q; N] implements Assign<T> when Q does.
+impl<T, Q: Assign<T>, const N: usize> Assign<T> for [Q; N] {
+    fn assign(self, assignments: &mut stmt::Assignments, projection: stmt::Projection) {
         for item in self {
-            item.into_assignment(assignments, projection.clone());
+            item.assign(assignments, projection.clone());
         }
     }
 }
 
 // Vec of assignments
-impl<T, Q: IntoAssignment<T>> IntoAssignment<T> for Vec<Q> {
-    fn into_assignment(self, assignments: &mut stmt::Assignments, projection: stmt::Projection) {
+impl<T, Q: Assign<T>> Assign<T> for Vec<Q> {
+    fn assign(self, assignments: &mut stmt::Assignments, projection: stmt::Projection) {
         for item in self {
-            item.into_assignment(assignments, projection.clone());
+            item.assign(assignments, projection.clone());
         }
     }
 }
@@ -80,7 +80,9 @@ impl<T, Q: IntoAssignment<T>> IntoAssignment<T> for Vec<Q> {
 ///
 /// Takes an expression of `T` (a single item) and produces an assignment for
 /// `List<T>` (the collection). The returned [`Assignment`] can be passed to any
-/// update builder setter that accepts `impl IntoAssignment<List<T>>`.
+/// update builder setter that accepts `impl Assign<List<T>>`.
+///
+/// [`Assignments`]: toasty_core::stmt::Assignments
 ///
 /// # Examples
 ///
