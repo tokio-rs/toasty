@@ -132,6 +132,10 @@ impl Expand<'_> {
                 fn new_create() -> Self::Create {
                     #create_builder_ident::default()
                 }
+
+                fn fields() -> Self::Path<Self::Item> {
+                    #field_list_struct_ident::from_path(#toasty::Path::from_model::<#model_ident>())
+                }
             }
 
             impl #toasty::Scope for One {
@@ -146,6 +150,10 @@ impl Expand<'_> {
                 fn new_create() -> Self::Create {
                     #create_builder_ident::default()
                 }
+
+                fn fields() -> Self::Path<Self::Item> {
+                    #field_struct_ident::from_path(#toasty::Path::from_model::<#model_ident>())
+                }
             }
 
             impl #toasty::Scope for OptionOne {
@@ -159,6 +167,10 @@ impl Expand<'_> {
 
                 fn new_create() -> Self::Create {
                     #create_builder_ident::default()
+                }
+
+                fn fields() -> Self::Path<Self::Item> {
+                    #field_struct_ident::from_path(#toasty::Path::from_model::<#model_ident>())
                 }
             }
         }

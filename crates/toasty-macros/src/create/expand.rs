@@ -26,20 +26,18 @@ pub(crate) fn expand(item: &CreateItem) -> TokenStream {
 ///
 /// Uses the `Scope` trait to obtain a fields path for nested builders.
 /// The scope expression is bound to a variable so it can be referenced both
-/// for `.create()` and for extracting the field struct via `Scope::new_path`.
+/// for `.create()` and for extracting the field struct via `Scope::fields()`.
 fn expand_scoped(expr: &syn::Expr, fields: &FieldSet) -> TokenStream {
     let fields_path = quote! { __scope_fields };
     let field_calls = expand_field_set(fields, &fields_path);
 
     quote! {
         {
-            fn __new_scope_fields<__S: toasty::Scope>(
-                _: &__S,
-            ) -> __S::Path<__S::Item> {
-                __S::new_path(toasty::stmt::Path::__stub())
+            fn __scope_fields<__S: toasty::Scope>(_: &__S) -> __S::Path<__S::Item> {
+                __S::fields()
             }
             let __scope = #expr;
-            let __scope_fields = __new_scope_fields(&__scope);
+            let __scope_fields = __scope_fields(&__scope);
             __scope.create() #(#field_calls)*
         }
     }

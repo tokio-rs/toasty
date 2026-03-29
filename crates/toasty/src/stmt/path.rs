@@ -64,15 +64,15 @@ impl<T: Register> Path<T, T> {
 }
 
 impl<T, U> Path<T, U> {
-    /// Create a stub path with a dummy root.
+    /// Create an identity path rooted at model `M`.
     ///
-    /// Used internally by macro-generated code to construct field structs
-    /// solely for accessing their `.create()` method. The path value itself
-    /// is not meaningful.
-    #[doc(hidden)]
-    pub fn __stub() -> Self {
+    /// The type parameters `T` and `U` are determined by the call site and are
+    /// not constrained to `M` — this allows constructing paths such as
+    /// `Path<List<Model>, List<Model>>` that are rooted at the model but carry
+    /// list-typed phantoms.
+    pub fn from_model<M: Register>() -> Self {
         Self {
-            untyped: stmt::Path::model(toasty_core::schema::app::ModelId(0)),
+            untyped: stmt::Path::model(M::id()),
             _p: PhantomData,
         }
     }
