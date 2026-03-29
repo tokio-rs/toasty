@@ -21,9 +21,9 @@ pub trait Scope {
     /// Return a fresh, default-initialized create builder for this scope.
     fn new_create() -> Self::Create;
 
-    /// Return the fields path for this scope, rooted at the scope's model.
+    /// Return a root path for this scope, anchored at the scope's model.
     ///
     /// This is used by the `create!` macro to obtain field accessors for
     /// nested builders without needing to know the concrete model type.
-    fn fields() -> Self::Path<Self::Item>;
+    fn new_path_root() -> Self::Path<Self::Item>;
 }

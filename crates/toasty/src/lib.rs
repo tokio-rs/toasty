@@ -151,9 +151,9 @@ pub mod codegen_support {
     ///
     /// The `create!` macro uses this in the scoped form (`in expr { ... }`) to
     /// obtain the field struct for nested builders. Because the macro has no
-    /// type information, it cannot call `S::fields()` directly — this function
+    /// type information, it cannot call `S::new_path_root()` directly — this function
     /// lets Rust infer `S` from the scope argument.
     pub fn scope_fields<S: Scope>(_scope: &S) -> S::Path<S::Item> {
-        S::fields()
+        S::new_path_root()
     }
 }
