@@ -79,18 +79,16 @@ impl Expand<'_> {
             }
             FieldTy::HasMany(rel) => {
                 let ty = &rel.ty;
-                let singular = &rel.singular.ident;
-                let insert_ident = &rel.insert_ident;
 
                 quote! {
-                    #vis fn #singular(mut self, #singular: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
-                        self.#insert_ident(#singular);
+                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<#toasty::List<<#ty as #toasty::Relation>::Expr>>) -> Self {
+                        self.#set_field_ident(#field_ident);
                         self
                     }
 
-                    #vis fn #insert_ident(&mut self, #singular: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> &mut Self {
+                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<#toasty::List<<#ty as #toasty::Relation>::Expr>>) -> &mut Self {
                         let projection = #projection;
-                        self.assignments.insert(projection, #singular.into_expr());
+                        #field_ident.assign(&mut self.assignments, projection);
                         self
                     }
                 }
