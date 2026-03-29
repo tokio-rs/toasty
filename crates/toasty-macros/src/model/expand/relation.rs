@@ -75,8 +75,12 @@ impl Expand<'_> {
             }
 
             impl One {
-                #vis fn from_stmt(stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>) -> One {
-                    One { stmt: stmt.one() }
+                #vis fn from_stmt(stmt: #toasty::stmt::Query<#model_ident>) -> One {
+                    One { stmt }
+                }
+
+                #vis fn from_list_query(stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>) -> One {
+                    One::from_stmt(stmt.one())
                 }
 
                 /// Create a new associated record
@@ -101,8 +105,12 @@ impl Expand<'_> {
             }
 
             impl OptionOne {
-                pub fn from_stmt(stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>) -> OptionOne {
-                    OptionOne { stmt: stmt.first() }
+                pub fn from_stmt(stmt: #toasty::stmt::Query<#toasty::Option<#model_ident>>) -> OptionOne {
+                    OptionOne { stmt }
+                }
+
+                pub fn from_list_query(stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>) -> OptionOne {
+                    OptionOne::from_stmt(stmt.first())
                 }
 
                 /// Create a new associated record
@@ -185,7 +193,7 @@ impl Expand<'_> {
 
                 {
                     use #toasty::IntoStatement;
-                    <#ty as #toasty::Relation>::One::from_stmt(
+                    <#ty as #toasty::Relation>::One::from_list_query(
                         <#ty as #toasty::Relation>::Model::filter(#filter).into_statement().into_query().unwrap()
                     )
                 }
@@ -343,7 +351,7 @@ impl Expand<'_> {
 
                 {
                     use #toasty::IntoStatement;
-                    <#ty as #toasty::Relation>::One::from_stmt(
+                    <#ty as #toasty::Relation>::One::from_list_query(
                         #toasty::stmt::Association::one(
                             self.into_statement().into_query().unwrap().to_list(),
                             Self::fields().#field_ident().into()
