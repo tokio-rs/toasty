@@ -234,15 +234,15 @@ impl Expand<'_> {
             .collect()
     }
 
-    /// Expands a `VariantValue` to a `Discriminant` token for use in schema registration.
+    /// Expands a `VariantValue` to a `Value` token for use in schema registration.
     fn expand_discriminant_schema(&self, value: &VariantValue) -> TokenStream {
         let toasty = &self.toasty;
         match value {
             VariantValue::Integer(n) => {
-                quote! { #toasty::core::schema::app::Discriminant::Integer(#n) }
+                quote! { #toasty::core::stmt::Value::I64(#n) }
             }
             VariantValue::String(s) => {
-                quote! { #toasty::core::schema::app::Discriminant::String(#s.to_string()) }
+                quote! { #toasty::core::stmt::Value::String(#s.to_string()) }
             }
         }
     }

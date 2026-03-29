@@ -213,29 +213,15 @@ pub struct EmbeddedEnum {
 ///
 /// Each variant has a name and a discriminant value (integer or string) that is
 /// stored in the database to identify which variant is active.
-///
-/// # Examples
-///
-/// ```ignore
-/// let variant = &embedded_enum.variants[0];
-/// println!("{}: discriminant = {:?}", variant.name.upper_camel_case(), variant.discriminant);
-/// ```
 #[derive(Debug, Clone)]
 pub struct EnumVariant {
     /// The Rust variant name.
     pub name: Name,
 
     /// The discriminant value stored in the database column.
-    pub discriminant: Discriminant,
-}
-
-/// The discriminant value for an enum variant, either an integer or a string label.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Discriminant {
-    /// Integer discriminant stored as an INTEGER column.
-    Integer(i64),
-    /// String discriminant stored as a VARCHAR(255) column.
-    String(String),
+    /// Typically `Value::I64` for integer discriminants or `Value::String` for
+    /// string discriminants.
+    pub discriminant: stmt::Value,
 }
 
 impl EmbeddedEnum {

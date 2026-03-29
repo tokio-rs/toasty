@@ -106,11 +106,11 @@ fn schema() -> Schema {
         variants: vec![
             EnumVariant {
                 name: Name::new("Active"),
-                discriminant: Discriminant::Integer(0),
+                discriminant: stmt::Value::I64(0),
             },
             EnumVariant {
                 name: Name::new("Inactive"),
-                discriminant: Discriminant::Integer(1),
+                discriminant: stmt::Value::I64(1),
             },
         ],
         fields: vec![],
@@ -128,11 +128,11 @@ fn schema() -> Schema {
         variants: vec![
             EnumVariant {
                 name: Name::new("Email"),
-                discriminant: Discriminant::Integer(0),
+                discriminant: stmt::Value::I64(0),
             },
             EnumVariant {
                 name: Name::new("Phone"),
-                discriminant: Discriminant::Integer(1),
+                discriminant: stmt::Value::I64(1),
             },
         ],
         fields: vec![

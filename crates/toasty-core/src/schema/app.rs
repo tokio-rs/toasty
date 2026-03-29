@@ -49,9 +49,7 @@ mod index;
 pub use index::{Index, IndexField, IndexId};
 
 mod model;
-pub use model::{
-    Discriminant, EmbeddedEnum, EmbeddedStruct, EnumVariant, Model, ModelId, ModelRoot, VariantId,
-};
+pub use model::{EmbeddedEnum, EmbeddedStruct, EnumVariant, Model, ModelId, ModelRoot, VariantId};
 
 mod pk;
 pub use pk::PrimaryKey;

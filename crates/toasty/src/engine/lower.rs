@@ -337,14 +337,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     .model(e.variant.model)
                     .as_embedded_enum_unwrap();
                 let has_data = enum_model.has_data_variants();
-                let disc = &enum_model.variants[e.variant.index].discriminant;
-
-                let disc_value = match disc {
-                    toasty_core::schema::app::Discriminant::Integer(n) => stmt::Value::I64(*n),
-                    toasty_core::schema::app::Discriminant::String(s) => {
-                        stmt::Value::String(s.clone())
-                    }
-                };
+                let disc_value = enum_model.variants[e.variant.index].discriminant.clone();
 
                 // Lower the inner expression
                 self.visit_expr_mut(&mut e.expr);

@@ -406,12 +406,8 @@ impl BuildMapping<'_> {
                 }
                 stmt::Expr::record(record_elems)
             };
-            let pattern = match &variant.discriminant {
-                app::Discriminant::Integer(n) => stmt::Value::I64(*n),
-                app::Discriminant::String(s) => stmt::Value::String(s.clone()),
-            };
             arms.push(stmt::MatchArm {
-                pattern,
+                pattern: variant.discriminant.clone(),
                 expr: arm_expr,
             });
         }
@@ -850,19 +846,14 @@ impl<'a, 'b> MapField<'a, 'b> {
         field: &app::Field,
         field_index: usize,
         disc_proj: stmt::Expr,
-        discriminant: &app::Discriminant,
+        discriminant: &stmt::Value,
     ) -> MapField<'_, 'b> {
         let field_base = self.extend_field_base(field, field_index);
-
-        let pattern = match discriminant {
-            app::Discriminant::Integer(n) => stmt::Value::I64(*n),
-            app::Discriminant::String(s) => stmt::Value::String(s.clone()),
-        };
 
         let field_expr_base = stmt::Expr::match_expr(
             disc_proj,
             vec![stmt::MatchArm {
-                pattern,
+                pattern: discriminant.clone(),
                 expr: stmt::Expr::arg(0),
             }],
             stmt::Expr::null(),

@@ -237,14 +237,14 @@ pub async fn string_discriminant_schema_registration(t: &mut Test) {
     assert_eq!(color_model.variants.len(), 3);
     assert_eq!(
         color_model.variants[0].discriminant,
-        toasty::schema::app::Discriminant::String("red".to_string())
+        toasty_core::stmt::Value::String("red".to_string())
     );
     assert_eq!(
         color_model.variants[1].discriminant,
-        toasty::schema::app::Discriminant::String("green".to_string())
+        toasty_core::stmt::Value::String("green".to_string())
     );
     assert_eq!(
         color_model.variants[2].discriminant,
-        toasty::schema::app::Discriminant::String("blue".to_string())
+        toasty_core::stmt::Value::String("blue".to_string())
     );
 }
