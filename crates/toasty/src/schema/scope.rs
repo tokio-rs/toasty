@@ -20,4 +20,10 @@ pub trait Scope {
 
     /// Return a fresh, default-initialized create builder for this scope.
     fn new_create() -> Self::Create;
+
+    /// Return a root path for this scope, anchored at the scope's model.
+    ///
+    /// This is used by the `create!` macro to obtain field accessors for
+    /// nested builders without needing to know the concrete model type.
+    fn new_path_root() -> Self::Path<Self::Item>;
 }

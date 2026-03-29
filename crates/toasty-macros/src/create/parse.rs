@@ -31,8 +31,6 @@ pub(crate) struct FieldSet(pub Vec<FieldEntry>);
 /// A single `name: value` pair.
 pub(crate) struct FieldEntry {
     pub name: syn::Ident,
-    /// Pre-computed `with_{name}` ident for closure-based setters.
-    pub with_name: syn::Ident,
     pub value: FieldValue,
 }
 
@@ -164,14 +162,9 @@ impl Parse for FieldSet {
 impl Parse for FieldEntry {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let name = input.parse::<syn::Ident>()?;
-        let with_name = syn::Ident::new(&format!("with_{}", name), name.span());
         input.parse::<syn::Token![:]>()?;
         let value = input.parse()?;
-        Ok(FieldEntry {
-            name,
-            with_name,
-            value,
-        })
+        Ok(FieldEntry { name, value })
     }
 }
 

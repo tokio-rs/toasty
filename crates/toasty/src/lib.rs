@@ -116,7 +116,7 @@ mod engine;
 
 /// Model, relation, and schema inspection types.
 pub mod schema;
-pub use schema::{BelongsTo, HasMany, HasOne};
+pub use schema::{BelongsTo, HasMany, HasOne, Scope};
 
 // `Page` lives in `stmt`.
 
@@ -145,4 +145,15 @@ pub mod codegen_support {
     pub use std::{convert::Into, default::Default, option::Option};
 
     pub use toasty_core as core;
+
+    /// Infer the [`Scope`] type from a scope expression and return its fields
+    /// path.
+    ///
+    /// The `create!` macro uses this in the scoped form (`in expr { ... }`) to
+    /// obtain the field struct for nested builders. Because the macro has no
+    /// type information, it cannot call `S::new_path_root()` directly — this function
+    /// lets Rust infer `S` from the scope argument.
+    pub fn scope_fields<S: Scope>(_scope: &S) -> S::Path<S::Item> {
+        S::new_path_root()
+    }
 }

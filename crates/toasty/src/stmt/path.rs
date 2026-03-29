@@ -64,6 +64,19 @@ impl<T: Register> Path<T, T> {
 }
 
 impl<T, U> Path<T, U> {
+    /// Create an identity path rooted at model `M`.
+    ///
+    /// The type parameters `T` and `U` are determined by the call site and are
+    /// not constrained to `M` — this allows constructing paths such as
+    /// `Path<List<Model>, List<Model>>` that are rooted at the model but carry
+    /// list-typed phantoms.
+    pub fn from_model<M: Register>() -> Self {
+        Self {
+            untyped: stmt::Path::model(M::id()),
+            _p: PhantomData,
+        }
+    }
+
     /// Create a path to the field at `index` on model `T`.
     ///
     /// # Examples

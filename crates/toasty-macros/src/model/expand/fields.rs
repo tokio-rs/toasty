@@ -14,7 +14,7 @@ impl Expand<'_> {
         let create_method = if let ModelKind::Root(root) = &self.model.kind {
             let create_struct_ident = &root.create_struct_ident;
             quote! {
-                #vis fn create() -> #create_struct_ident {
+                #vis fn create(&self) -> #create_struct_ident {
                     #create_struct_ident::default()
                 }
             }
@@ -139,7 +139,7 @@ impl Expand<'_> {
         let create_method = if let ModelKind::Root(root) = &self.model.kind {
             let create_struct_ident = &root.create_struct_ident;
             quote! {
-                #vis fn create() -> #create_struct_ident {
+                #vis fn create(&self) -> #create_struct_ident {
                     #create_struct_ident::default()
                 }
             }
