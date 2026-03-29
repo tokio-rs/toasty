@@ -11,6 +11,7 @@
   - [Mapping Formalization](./design/mapping-formalization.md)
   - [Pagination](./design/pagination.md)
   - [Serialize Fields](./design/serialize-fields.md)
+  - [String Discriminants](./design/string-discriminants.md)
 - [Roadmap](./roadmap/README.md)
   - [Composite Keys](./roadmap/composite-keys.md)
   - [Order, Limit, Pagination](./roadmap/order_limit_pagination.md)
