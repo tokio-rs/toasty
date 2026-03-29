@@ -136,7 +136,7 @@ pub mod codegen_support {
             Register, Relation, Scope,
         },
         stmt::CreateMany,
-        stmt::{self, IntoExpr, IntoInsert, IntoStatement, List, Path},
+        stmt::{self, IntoAssignment, IntoExpr, IntoInsert, IntoStatement, List, Path},
         update_target::UpdateTarget,
         Db, Error, Executor, Result, Statement,
     };

@@ -8,9 +8,6 @@ pub(crate) struct HasMany {
     /// Singular field name
     pub(crate) singular: Name,
 
-    /// Insert method ident
-    pub(crate) insert_ident: syn::Ident,
-
     /// Field on target that the relation references
     pub(crate) pair: Option<syn::Ident>,
 
@@ -29,8 +26,6 @@ impl HasMany {
             &pluralizer::pluralize(&name.to_string(), 1, false),
             name.span(),
         );
-        let insert_ident = syn::Ident::new(&format!("insert_{}", singular.ident), name.span());
-
         if let syn::Meta::List(_) = &attr.meta {
             attr.parse_nested_meta(|meta| {
                 if meta.path.is_ident("pair") {
@@ -50,7 +45,6 @@ impl HasMany {
         Ok(Self {
             ty: ty.clone(),
             singular,
-            insert_ident,
             pair,
             span,
         })
