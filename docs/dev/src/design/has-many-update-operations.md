@@ -44,12 +44,13 @@ trait Assign<T> {
 ```
 
 Every update builder setter becomes `.field(impl Assign<T>)`. The argument
-decides what kind of mutation to record. For scalar fields, the call site looks
-the same as today because `IntoExpr<T>` gets a blanket impl of `Assign<T>` that
-defaults to set. For collection fields, callers must use an explicit combinator
-(`stmt::insert`, `stmt::remove`, `stmt::set`) — there is no blanket lift from
-`Assign<T>` to `Assign<List<T>>` because the intent (insert vs. replace) would
-be ambiguous.
+decides what kind of mutation to record. `IntoExpr<T>` has a blanket impl of
+`Assign<T>` that defaults to set, so plain values work everywhere — scalars,
+collections, embedded types. For collection fields, a plain value of the
+collection type (e.g., `impl IntoExpr<List<Todo>>`) means "replace the entire
+set". A single item (`impl IntoExpr<Todo>`) won't compile for a `List<Todo>`
+field because `Assign<Todo>` is not `Assign<List<Todo>>` — callers must use an
+explicit combinator (`stmt::insert`, `stmt::remove`) to specify intent.
 
 ### Assignment combinators
 
@@ -113,12 +114,11 @@ user.update()
 ```
 
 `stmt::insert` takes an `impl IntoExpr<Todo>` and returns an
-`Assignment<List<Todo>>`, which `.todos()` accepts. The combinator is always
-required — passing a bare `Todo::create()` directly to `.todos()` won't compile
-because there is no implicit lift from `Assign<Todo>` to
-`Assign<List<Todo>>`. This is intentional: a bare value going into a
-collection field is ambiguous (insert? replace the whole set?) so the caller
-must be explicit.
+`Assignment<List<Todo>>`, which `.todos()` accepts. The combinator is required
+for single items — passing a bare `Todo::create()` directly to `.todos()` won't
+compile because `Assign<Todo>` is not `Assign<List<Todo>>`. A bare *list*
+expression would compile (it means "replace" via the blanket impl), but a single
+item is ambiguous so the caller must be explicit.
 
 #### Remove
 
@@ -143,7 +143,23 @@ What "remove" means depends on the belongs-to side of the relationship:
 
 #### Replace
 
-Use `stmt::set` with a list expression to replace the entire set:
+A plain list expression replaces the entire set:
+
+```rust
+user.update()
+    .todos([
+        Todo::create().title("Only todo"),
+    ])
+    .exec(&mut db)
+    .await?;
+```
+
+The array implements `IntoExpr<List<Todo>>`, which satisfies `Assign<List<Todo>>`
+via the blanket impl, defaulting to set. This disassociates all current todos
+from the user (following the same optional/required foreign key rules as remove),
+then associates the new set.
+
+`stmt::set` can also be used explicitly, though there's no reason to:
 
 ```rust
 user.update()
@@ -154,16 +170,11 @@ user.update()
     .await?;
 ```
 
-Here `stmt::set` takes an `impl IntoExpr<List<Todo>>` (the new set) and returns
-an `Assignment<List<Todo>>`. This disassociates all current todos from the user
-(following the same optional/required foreign key rules as remove), then
-associates the new set.
-
 Pass an empty slice to clear the set:
 
 ```rust
 user.update()
-    .todos(stmt::set([]))
+    .todos([])
     .exec(&mut db)
     .await?;
 ```
@@ -229,13 +240,18 @@ The path reuses the existing `fields()` accessor chain, which already returns
 typed `Path<T, U>` values:
 
 ```rust
-fn patch<T, U>(path: Path<T, U>, value: impl IntoExpr<U>) -> Assignment<T>
+fn patch<T, U>(path: Path<T, U>, value: impl Assign<U>) -> Assignment<T>
 ```
 
 `Path<T, U>` carries both the origin type `T` (the embedded type being patched)
 and the leaf type `U` (the field being set). The origin type is what makes
 `patch` return `Assignment<Creature>` — no extra type information needed at the
 call site. `Path<T, U>` is already implemented in `toasty::stmt::Path`.
+
+The value accepts `impl Assign<U>`. Plain values work via the blanket
+`IntoExpr<U> -> Assign<U>` impl. Nested patches work because `Assignment<U>`
+implements `Assign<U>` directly — no need for `Assignment` to implement
+`IntoExpr`.
 
 ```rust
 user.update()
@@ -265,7 +281,7 @@ implements `Assign<T>`, so the array is accepted by `.critter()`.
 
 #### Nested patching
 
-Because `Assignment<T>` implements `IntoExpr<T>`, `stmt::patch` composes with
+Because `Assignment<T>` implements `Assign<T>`, `stmt::patch` composes with
 itself. When an embedded type contains another embedded type, the inner patch
 becomes the value argument to the outer patch:
 
@@ -285,15 +301,14 @@ user.update()
 ```
 
 Here `stmt::patch(Permission::fields().everything(), true)` returns
-`Assignment<Permission>`, which implements `IntoExpr<Permission>`. The outer
+`Assignment<Permission>`, which implements `Assign<Permission>`. The outer
 `stmt::patch` accepts it as the value for the `perm` path, returning
 `Assignment<Kind>`. The nesting works to arbitrary depth — each layer resolves
 one level of the field path.
 
 This approach avoids generating update builder types for embedded types
 entirely — the `fields()` path infrastructure already exists and provides full
-type safety. It also avoids the trait coherence problem that closures would
-cause (a closure impl of `Assign` would conflict with the blanket expr impl).
+type safety.
 
 The `.with_critter()` closure method remains for now but can be removed once
 `stmt::patch` is implemented.
@@ -307,7 +322,7 @@ The same `.field(impl Assign<T>)` pattern covers every field type:
 | Scalar (`String`) | Set the field | `stmt::set` (explicit) | — |
 | Embedded (`Creature`) | Replace the whole value | `stmt::patch` (sub-field) | Multiple patches |
 | BelongsTo (`User`) | Set the association | — | — |
-| HasMany (`List<Todo>`) | — (ambiguous) | `stmt::insert`, `stmt::remove`, `stmt::set` | Multiple operations |
+| HasMany (`List<Todo>`) | Replace the set | `stmt::insert`, `stmt::remove` | Multiple operations |
 
 Every setter method has the same signature. The argument type determines the
 behavior. No more `.todo()` vs `.remove_todo()` vs `.set_todos()` — each field
@@ -322,7 +337,7 @@ remain for now alongside `stmt::patch`.
 | `.todo(expr)` | `.todos(stmt::insert(expr))` |
 | `.todo(a).todo(b)` | `.todos([stmt::insert(a), stmt::insert(b)])` |
 | _not possible_ | `.todos(stmt::remove(&todo))` |
-| _not possible_ | `.todos(stmt::set([...]))` |
+| _not possible_ | `.todos([...])` (replace) |
 | _not possible_ | `.todos([stmt::insert(a), stmt::remove(b)])` |
 | `.critter(value)` | `.critter(value)` (unchanged) |
 | `.with_critter(\|c\| c.profession("x"))` | `.critter(stmt::patch(Creature::fields().human().profession(), "x"))` |
