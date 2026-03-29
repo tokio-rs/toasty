@@ -4,7 +4,8 @@
 
 Embedded enums currently store their discriminant as an integer column using
 `#[column(variant = N)]`. String discriminants let users write
-`#[column(variant = "label")]` instead, storing the discriminant as a TEXT column.
+`#[column(variant = "label")]` instead, storing the discriminant as a VARCHAR(255)
+column.
 This works across all supported databases (SQLite, PostgreSQL, MySQL, DynamoDB).
 
 This document covers the public-facing API only. PostgreSQL native enum types are
@@ -28,36 +29,36 @@ enum Status {
 }
 ```
 
-The discriminant column stores `"pending"`, `"active"`, or `"done"` as TEXT.
+The discriminant column stores `"pending"`, `"active"`, or `"done"` as VARCHAR(255).
 
 ### Default labels (omit variant attribute)
 
-When all variants omit `#[column(variant = ...)]`, Toasty derives string labels
-automatically by converting each variant name to `snake_case`:
+When all variants omit `#[column(variant = ...)]`, Toasty uses the Rust variant
+identifier as the label:
 
 ```rust
 #[derive(toasty::Embed)]
 enum Status {
-    Pending,        // → "pending"
-    Active,         // → "active"
-    AlmostDone,     // → "almost_done"
+    Pending,        // → "Pending"
+    Active,         // → "Active"
+    AlmostDone,     // → "AlmostDone"
 }
 ```
 
-This is equivalent to writing `#[column(variant = "pending")]` on each variant.
+This is equivalent to writing `#[column(variant = "Pending")]` on each variant.
 
 ### Mixing explicit and default labels
 
 Variants with explicit string labels and variants without any label can coexist.
-Unlabeled variants use the default `snake_case` derivation:
+Unlabeled variants use the Rust identifier as the default:
 
 ```rust
 #[derive(toasty::Embed)]
 enum Status {
     #[column(variant = "waiting")]
     Pending,          // stored as "waiting"
-    Active,           // stored as "active" (default)
-    Done,             // stored as "done" (default)
+    Active,           // stored as "Active" (default)
+    Done,             // stored as "Done" (default)
 }
 ```
 
@@ -69,7 +70,8 @@ discriminants.
 ## Generated SQL Schema
 
 Integer discriminants produce an INTEGER column. String discriminants produce a
-TEXT column.
+VARCHAR(255) column. The 255-byte limit ensures the column can be indexed on all
+databases, including MySQL.
 
 ### Unit enum with integer discriminants (existing behavior)
 
@@ -105,7 +107,7 @@ enum Status {
 ```sql
 CREATE TABLE task (
     id INTEGER PRIMARY KEY,
-    status TEXT NOT NULL
+    status VARCHAR(255) NOT NULL
 );
 ```
 
@@ -124,14 +126,14 @@ enum ContactMethod {
 ```sql
 CREATE TABLE user (
     id INTEGER PRIMARY KEY,
-    contact TEXT NOT NULL,
+    contact VARCHAR(255) NOT NULL,
     contact_email_address TEXT,
     contact_phone_country TEXT,
     contact_phone_number TEXT
 );
 ```
 
-The discriminant column type changes from INTEGER to TEXT. All other columns
+The discriminant column type changes from INTEGER to VARCHAR(255). All other columns
 (variant data fields) remain the same.
 
 ## Querying
@@ -168,7 +170,7 @@ to the database:
 Task::create()
     .status(Status::Pending)
     .exec(&db).await?;
-// Inserts status = 'pending' (string) instead of status = 1 (integer)
+// Inserts status = 'Pending' (string) instead of status = 1 (integer)
 ```
 
 ## Updating
@@ -200,8 +202,8 @@ compile time.
 |---|---|
 | All variants have `#[column(variant = N)]` (integer) | Integer discriminants |
 | All variants have `#[column(variant = "label")]` (string) | String discriminants |
-| All variants omit `#[column(variant = ...)]` | String discriminants (default `snake_case` labels) |
-| Some variants have string labels, others omit the attribute | String discriminants (omitted variants use defaults) |
+| All variants omit `#[column(variant = ...)]` | String discriminants (labels match variant identifiers) |
+| Some variants have string labels, others omit the attribute | String discriminants (omitted variants use identifier as label) |
 | Mix of integer and string `variant` values | Compile error |
 | Duplicate integer discriminant values | Compile error |
 | Duplicate string labels (including derived defaults) | Compile error |
@@ -231,9 +233,9 @@ enum Status {
 ```sql
 CREATE TABLE task (
     id INTEGER PRIMARY KEY,
-    status TEXT NOT NULL
+    status VARCHAR(255) NOT NULL
 );
--- Values: 'pending', 'active', 'done'
+-- Values: 'Pending', 'Active', 'Done'
 ```
 
 ### Unit enum with explicit string labels
@@ -263,7 +265,7 @@ enum OrderState {
 ```sql
 CREATE TABLE order (
     id INTEGER PRIMARY KEY,
-    state TEXT NOT NULL
+    state VARCHAR(255) NOT NULL
 );
 -- Values: 'new', 'in_progress', 'shipped', 'delivered'
 ```
@@ -299,7 +301,7 @@ struct Address {
 ```sql
 CREATE TABLE user (
     id INTEGER PRIMARY KEY,
-    contact TEXT NOT NULL,
+    contact VARCHAR(255) NOT NULL,
     contact_email_address TEXT,
     contact_phone_country TEXT,
     contact_phone_number TEXT,
