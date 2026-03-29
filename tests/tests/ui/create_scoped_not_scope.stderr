@@ -1,10 +1,10 @@
-error[E0277]: the trait bound `i64: toasty::Scope` is not satisfied
+error[E0277]: the trait bound `i64: toasty::schema::Scope` is not satisfied
   --> tests/ui/create_scoped_not_scope.rs:11:32
    |
 11 |     let _ = toasty::create!(in 42_i64 { name: "Carl" });
-   |                                ^^^^^^ the trait `toasty::Scope` is not implemented for `i64`
+   |                                ^^^^^^ the trait `toasty::schema::Scope` is not implemented for `i64`
    |
-help: the following other types implement trait `toasty::Scope`
+help: the following other types implement trait `toasty::schema::Scope`
   --> tests/ui/create_scoped_not_scope.rs:1:17
    |
  1 | #[derive(Debug, toasty::Model)]
