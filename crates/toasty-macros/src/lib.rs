@@ -1476,7 +1476,8 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// ## Nested struct (BelongsTo / HasOne)
 ///
 /// Use `{ ... }` **without** a type prefix to create a related record inline.
-/// The macro calls the `with_<field>` closure setter on the builder.
+/// The macro expands the nested fields into a create builder and passes it
+/// to the field's setter method.
 ///
 /// ```
 /// # #[derive(toasty::Model)]
@@ -1705,7 +1706,6 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// | `in expr { ... }` | Builder for the relation's model |
 /// | `Type::[ ... ]` | `Batch` — executes to `Vec<Type>` |
 /// | `( ... )` | `Batch` — executes to tuple of results |
-/// | `[ ... ]` | Tuple of builders (one per item) |
 ///
 /// Single and scoped forms return a builder — call `.exec(&mut db).await?`.
 /// Batch and tuple forms return a `Batch` — also call `.exec(&mut db).await?`.
