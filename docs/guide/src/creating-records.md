@@ -231,10 +231,10 @@ This expands to:
 ```rust,ignore
 User::create()
     .name("Alice")
-    .with_todos(|b| {
-        b.with_item(|b| b.title("Buy groceries"))
-         .with_item(|b| b.title("Write docs"))
-    })
+    .todos([
+        User::fields().todos().create().title("Buy groceries"),
+        User::fields().todos().create().title("Write docs"),
+    ])
     .exec(&mut db)
     .await?;
 ```
@@ -369,8 +369,8 @@ Each macro form has a direct builder equivalent:
 |---|---|
 | `toasty::create!(User { name: "Alice" })` | `User::create().name("Alice")` |
 | `toasty::create!(in user.todos() { title: "Buy milk" })` | `user.todos().create().title("Buy milk")` |
-| Nested `{ ... }` for BelongsTo/HasOne | `.with_field(\|b\| b.field_calls)` |
-| Nested `[{ ... }]` for HasMany | `.with_field(\|b\| b.with_item(...))` |
+| Nested `{ ... }` for BelongsTo/HasOne | `.field(Model::fields().field().create().field_calls)` |
+| Nested `[{ ... }]` for HasMany | `.fields([Model::fields().field().create()...])` |
 | `toasty::create!(User::[{ ... }, { ... }])` | `toasty::batch([User::create()...])` → `Vec<User>` |
 | `toasty::create!((User { ... }, Post { ... }))` | `toasty::batch((User::create()..., Post::create()...))` → tuple |
 
