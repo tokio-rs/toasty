@@ -1,10 +1,29 @@
 use quote::quote;
 use syn::parenthesized;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum VariantValue {
     Integer(i64),
     String(String),
+}
+
+impl VariantValue {
+    pub(crate) fn is_integer(&self) -> bool {
+        matches!(self, Self::Integer(_))
+    }
+
+    pub(crate) fn is_string(&self) -> bool {
+        matches!(self, Self::String(_))
+    }
+}
+
+impl std::fmt::Display for VariantValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Integer(n) => write!(f, "{n}"),
+            Self::String(s) => write!(f, "\"{s}\""),
+        }
+    }
 }
 
 #[derive(Debug)]

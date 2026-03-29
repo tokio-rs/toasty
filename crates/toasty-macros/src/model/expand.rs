@@ -181,16 +181,10 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     let load_impl = e.expand_enum_load_impl();
 
     let embedded_enum = model.kind.as_embedded_enum_unwrap();
-    let uses_string = embedded_enum.uses_string_discriminants();
-    let disc_ty = if uses_string {
+    let disc_ty = if embedded_enum.uses_string_discriminants() {
         quote! { #toasty::core::stmt::Type::String }
     } else {
         quote! { #toasty::core::stmt::Type::I64 }
-    };
-    let disc_storage_ty = if uses_string {
-        quote! { ::std::option::Option::Some(#toasty::core::schema::db::Type::VarChar(255)) }
-    } else {
-        quote! { ::std::option::Option::None }
     };
     let field_struct_ident = &embedded_enum.field_struct_ident;
     let field_list_struct_ident = &embedded_enum.field_list_struct_ident;
@@ -215,7 +209,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
                         name: #name,
                         discriminant: #toasty::core::schema::app::FieldPrimitive {
                             ty: #disc_ty,
-                            storage_ty: #disc_storage_ty,
+                            storage_ty: ::std::option::Option::None,
                             serialize: ::std::option::Option::None,
                         },
                         variants: vec![ #( #variant_tokens ),* ],
