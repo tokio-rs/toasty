@@ -42,16 +42,15 @@ pub trait Relation: Load<Output = Self> {
     /// is nullable, making the association optional.
     type OptionOne;
 
-    /// The element type produced when narrowing a `Query<List<Model>>` to a
-    /// single-result query. For a required relation this is `Model`; for an
-    /// optional relation (`Option<Model>`) this is `Option<Model>`.
-    type NarrowQuery;
-
-    /// Narrow a list query into a single-result query.
+    /// Construct a [`One`](Self::One) from a list query.
     ///
-    /// Required relations narrow via `.one()`, optional relations via
-    /// `.first()`.
-    fn narrow_query(query: Query<List<Self::Model>>) -> Query<Self::NarrowQuery>;
+    /// Narrows via `.one()` and wraps in the `One` struct.
+    fn one_from_query(query: Query<List<Self::Model>>) -> Self::One;
+
+    /// Construct an [`OptionOne`](Self::OptionOne) from a list query.
+    ///
+    /// Narrows via `.first()` and wraps in the `OptionOne` struct.
+    fn option_one_from_query(query: Query<List<Self::Model>>) -> Self::OptionOne;
 
     /// Return a fresh, default-initialized create builder.
     fn new_create() -> Self::Create {

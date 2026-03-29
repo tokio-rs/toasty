@@ -185,10 +185,8 @@ impl Expand<'_> {
 
                 {
                     use #toasty::IntoStatement;
-                    <#ty as #toasty::Relation>::One::from_stmt(
-                        <#ty as #toasty::Relation>::narrow_query(
-                            <#ty as #toasty::Relation>::Model::filter(#filter).into_statement().into_query().unwrap()
-                        )
+                    <#ty as #toasty::Relation>::one_from_query(
+                        <#ty as #toasty::Relation>::Model::filter(#filter).into_statement().into_query().unwrap()
                     )
                 }
             }
@@ -345,13 +343,11 @@ impl Expand<'_> {
 
                 {
                     use #toasty::IntoStatement;
-                    <#ty as #toasty::Relation>::One::from_stmt(
-                        <#ty as #toasty::Relation>::narrow_query(
-                            #toasty::stmt::Association::one(
-                                self.into_statement().into_query().unwrap().to_list(),
-                                Self::fields().#field_ident().into()
-                            ).into_statement().into_query().unwrap()
-                        )
+                    <#ty as #toasty::Relation>::one_from_query(
+                        #toasty::stmt::Association::one(
+                            self.into_statement().into_query().unwrap().to_list(),
+                            Self::fields().#field_ident().into()
+                        ).into_statement().into_query().unwrap()
                     )
                 }
             }

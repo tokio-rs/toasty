@@ -66,12 +66,15 @@ impl<T: Relation> Relation for BelongsTo<T> {
     type One = T::One;
     type OneField<__Origin> = T::OneField<__Origin>;
     type OptionOne = T::OptionOne;
-    type NarrowQuery = T::NarrowQuery;
 
-    fn narrow_query(
+    fn one_from_query(query: crate::stmt::Query<crate::stmt::List<Self::Model>>) -> Self::One {
+        T::one_from_query(query)
+    }
+
+    fn option_one_from_query(
         query: crate::stmt::Query<crate::stmt::List<Self::Model>>,
-    ) -> crate::stmt::Query<Self::NarrowQuery> {
-        T::narrow_query(query)
+    ) -> Self::OptionOne {
+        T::option_one_from_query(query)
     }
 
     fn new_many_field<__Origin>(

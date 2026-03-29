@@ -1,5 +1,4 @@
 use super::{Load, Relation};
-use crate::stmt::Query;
 use toasty_core::schema::app::FieldId;
 use toasty_core::stmt::{self, Value};
 
@@ -59,10 +58,15 @@ impl<T: Relation> Relation for Option<T> {
     type One = T::OptionOne;
     type OneField<__Origin> = T::OneField<__Origin>;
     type OptionOne = T::OptionOne;
-    type NarrowQuery = Option<T::Model>;
 
-    fn narrow_query(query: Query<crate::stmt::List<Self::Model>>) -> Query<Self::NarrowQuery> {
-        query.first()
+    fn one_from_query(query: crate::stmt::Query<crate::stmt::List<Self::Model>>) -> Self::One {
+        T::option_one_from_query(query)
+    }
+
+    fn option_one_from_query(
+        query: crate::stmt::Query<crate::stmt::List<Self::Model>>,
+    ) -> Self::OptionOne {
+        T::option_one_from_query(query)
     }
 
     fn new_many_field<__Origin>(
