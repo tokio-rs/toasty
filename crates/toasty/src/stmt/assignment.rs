@@ -47,29 +47,6 @@ enum AssignmentKind {
     Remove(stmt::Expr),
 }
 
-impl<T> Assignment<T> {
-    fn new_set(expr: stmt::Expr) -> Self {
-        Self {
-            kind: AssignmentKind::Set(expr),
-            _p: PhantomData,
-        }
-    }
-
-    fn new_insert(expr: stmt::Expr) -> Self {
-        Self {
-            kind: AssignmentKind::Insert(expr),
-            _p: PhantomData,
-        }
-    }
-
-    fn new_remove(expr: stmt::Expr) -> Self {
-        Self {
-            kind: AssignmentKind::Remove(expr),
-            _p: PhantomData,
-        }
-    }
-}
-
 // Assignment<T> implements IntoAssignment<T>
 impl<T> IntoAssignment<T> for Assignment<T> {
     fn into_assignment(self, assignments: &mut stmt::Assignments, projection: stmt::Projection) {
@@ -114,7 +91,10 @@ impl<T, Q: IntoAssignment<T>> IntoAssignment<T> for Vec<Q> {
 ///     .await?;
 /// ```
 pub fn insert<T>(expr: impl IntoExpr<T>) -> Assignment<List<T>> {
-    Assignment::new_insert(expr.into_expr().untyped)
+    Assignment {
+        kind: AssignmentKind::Insert(expr.into_expr().untyped),
+        _p: PhantomData,
+    }
 }
 
 /// Remove a value from a collection field.
@@ -135,7 +115,10 @@ pub fn insert<T>(expr: impl IntoExpr<T>) -> Assignment<List<T>> {
 ///     .await?;
 /// ```
 pub fn remove<T>(expr: impl IntoExpr<T>) -> Assignment<List<T>> {
-    Assignment::new_remove(expr.into_expr().untyped)
+    Assignment {
+        kind: AssignmentKind::Remove(expr.into_expr().untyped),
+        _p: PhantomData,
+    }
 }
 
 /// Replace a field's value entirely.
@@ -168,5 +151,8 @@ pub fn remove<T>(expr: impl IntoExpr<T>) -> Assignment<List<T>> {
 ///     .await?;
 /// ```
 pub fn set<T>(expr: impl IntoExpr<T>) -> Assignment<T> {
-    Assignment::new_set(expr.into_expr().untyped)
+    Assignment {
+        kind: AssignmentKind::Set(expr.into_expr().untyped),
+        _p: PhantomData,
+    }
 }
