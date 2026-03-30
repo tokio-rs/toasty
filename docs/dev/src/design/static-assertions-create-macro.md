@@ -1,0 +1,297 @@
+# Static Assertions for `create!` Required Fields
+
+The `create!` macro does not check that all required fields are specified.
+Missing a required field compiles successfully but fails at runtime when the
+database rejects a NULL value in a NOT NULL column. This design adds
+compile-time checking so that omitting a required field is a compilation error.
+
+## Problem
+
+Given these models:
+
+```rust
+#[derive(Model)]
+struct User {
+    #[key]
+    #[auto]
+    id: Id<User>,
+    name: String,
+    #[has_many]
+    todos: HasMany<Todo>,
+}
+
+#[derive(Model)]
+struct Todo {
+    #[key]
+    #[auto]
+    id: Id<Todo>,
+    #[index]
+    user_id: Id<User>,
+    #[belongs_to(key = user_id, references = id)]
+    user: BelongsTo<User>,
+    title: String,
+}
+```
+
+This compiles today but panics at runtime:
+
+```rust
+// Missing `name` — no compile error
+let user = toasty::create!(User { }).exec(&mut db).await?;
+```
+
+## Approach
+
+### `RequiredFields` struct
+
+A `RequiredFields` struct in `toasty::codegen_support` describes which fields
+a model requires on creation. It supports nested relations so the check can
+recurse into associated creates.
+
+```rust
+pub struct RequiredFields {
+    pub fields: &'static [&'static str],
+    pub nested: &'static [(&'static str, &'static RequiredFields)],
+    pub model_name: &'static str,
+}
+```
+
+A set of `const fn` helpers perform the actual checking:
+
+```rust
+pub const fn assert_required_fields(
+    info: &RequiredFields,
+    provided: &[&str],
+) { /* panics listing the missing field */ }
+
+pub const fn assert_nested_required_fields(
+    info: &RequiredFields,
+    field_name: &str,
+    provided: &[&str],
+) { /* looks up field_name in info.nested, then asserts */ }
+```
+
+These use byte-level string comparison (`str::as_bytes()` in a `while` loop)
+since `const fn` cannot call trait methods.
+
+### Which fields are required
+
+A field is **required** if it is a primitive field that is:
+
+- Not `Option<T>`
+- Not `#[auto]`
+- Not `#[default(...)]`
+- Not `#[update(...)]`
+
+These fields are **always excluded**:
+
+- Relation fields (`BelongsTo`, `HasMany`, `HasOne`)
+- FK source fields (fields referenced by a `#[belongs_to(key = ...)]` on the
+  same model)
+
+FK source fields are excluded because they are set implicitly — either by the
+scope in a scoped create, or by providing the `BelongsTo` relation. This means
+the same `REQUIRED_FIELDS` constant works for both scoped and unscoped creates.
+
+For the models above:
+
+| Model | Required | Excluded |
+|-------|----------|----------|
+| `User` | `name` | `id` (auto), `todos` (relation) |
+| `Todo` | `title` | `id` (auto), `user_id` (FK source), `user` (relation) |
+
+### Trait constants
+
+`REQUIRED_FIELDS` is an associated constant on both `Model` and `Scope`:
+
+```rust
+pub trait Model: Register + Load<Output = Self> + Sized {
+    // ...existing associated types and methods...
+    const REQUIRED_FIELDS: RequiredFields;
+}
+
+pub trait Scope {
+    // ...existing associated types and methods...
+    const REQUIRED_FIELDS: &'static RequiredFields;
+}
+```
+
+The `Scope` impl references the target model's constant:
+
+```rust
+impl Scope for Many {
+    const REQUIRED_FIELDS: &'static RequiredFields =
+        &<Todo as Model>::REQUIRED_FIELDS;
+}
+```
+
+Nested relations chain through trait references:
+
+```rust
+impl Model for User {
+    const REQUIRED_FIELDS: RequiredFields = RequiredFields {
+        fields: &["name"],
+        nested: &[("todos", &<Todo as Model>::REQUIRED_FIELDS)],
+        model_name: "User",
+    };
+}
+```
+
+This works because `const` items can reference other associated constants. The
+compiler builds a dependency graph and evaluates them in order. The `&'static`
+references are promoted to static storage.
+
+### Typed creates
+
+`create!(User { name: "Alice" })` currently expands to:
+
+```rust
+User::create().name("Alice")
+```
+
+With this change it expands to:
+
+```rust
+{
+    const _: () = toasty::codegen_support::assert_required_fields(
+        &<User as toasty::codegen_support::Model>::REQUIRED_FIELDS,
+        &["name"],
+    );
+    User::create().name("Alice")
+}
+```
+
+The `const _: ()` block forces compile-time evaluation. If `assert_required_fields`
+panics, the compiler reports the panic message as an error at the `create!` call
+site.
+
+### Nested creates
+
+`create!(User { name: "Alice", todos: [{ title: "x" }] })` adds an additional
+nested assertion:
+
+```rust
+const _: () = {
+    toasty::codegen_support::assert_required_fields(
+        &<User as toasty::codegen_support::Model>::REQUIRED_FIELDS,
+        &["name", "todos"],
+    );
+    toasty::codegen_support::assert_nested_required_fields(
+        &<User as toasty::codegen_support::Model>::REQUIRED_FIELDS,
+        "todos",
+        &["title"],
+    );
+};
+```
+
+`assert_nested_required_fields` finds `"todos"` in `REQUIRED_FIELDS.nested`,
+retrieves the `&RequiredFields` for `Todo`, and checks the provided fields
+against it. This chains to arbitrary depth because each `RequiredFields`
+references its children through `&'static` pointers.
+
+### Scoped creates
+
+`create!(in user.todos() { title: "buy milk" })` is harder because the macro
+does not know the scope type — it only has the expression `user.todos()`. A
+`const fn` cannot have trait bounds on stable Rust, so we cannot write
+`const fn check<S: Scope>(...)`.
+
+The workaround uses **monomorphization-time const evaluation**. Associated
+constants on a generic struct are evaluated when the struct is monomorphized.
+The `create!` macro generates a local generic struct whose associated constant
+contains the assertion, then forces monomorphization by calling a helper
+function that infers the scope type from the expression:
+
+```rust
+{
+    let __scope = user.todos();
+
+    struct __Check<__S: toasty::codegen_support::Scope>(
+        std::marker::PhantomData<__S>,
+    );
+    impl<__S: toasty::codegen_support::Scope> __Check<__S> {
+        const __ASSERT: () = toasty::codegen_support::assert_required_fields(
+            __S::REQUIRED_FIELDS,
+            &["title"],
+        );
+    }
+    fn __force_check<__S: toasty::codegen_support::Scope>(_: &__S) {
+        let _ = __Check::<__S>::__ASSERT;
+    }
+    __force_check(&__scope);
+
+    let __scope_fields = toasty::codegen_support::scope_fields(&__scope);
+    __scope.create().title("buy milk")
+}
+```
+
+When the compiler monomorphizes `__Check<Many>::__ASSERT`, it evaluates the
+`const` expression. If it panics, the error points at the `create!` call site
+through the monomorphization chain. This requires no unstable features.
+
+### Batch and tuple creates
+
+**TypedBatch** (`User::[{ name: "A" }, { name: "B" }]`): Each item in the
+batch gets its own assertion since different items can specify different field
+sets.
+
+**Tuple** (`(User { name: "A" }, Todo { title: "x" })`): Each element is a
+`CreateItem` and is checked independently.
+
+## Code generation changes
+
+### `#[derive(Model)]` changes
+
+The `expand_model_impls` method in `model/expand/model.rs` adds
+`REQUIRED_FIELDS` to the `Model` trait impl. At macro expansion time, the
+required fields are computed by:
+
+1. Collecting FK source field indices — fields referenced by any `BelongsTo`'s
+   `key` attribute
+2. Filtering to primitive fields that are not in the FK source set, not
+   `#[auto]`, not `#[default]`, not `#[update]`
+3. Checking for `Option<T>` syntactically (the proc macro does not have type
+   resolution, but `Option<...>` is identifiable from the AST)
+4. Building the `nested` array from `HasMany` and `HasOne` relation fields,
+   referencing the target model's `REQUIRED_FIELDS` via `<Target as Model>::REQUIRED_FIELDS`
+
+### `create!` macro changes
+
+The `expand` function in `create/expand.rs` wraps each form's expansion in a
+block that includes the appropriate `const` assertion. The field names are
+extracted from the already-parsed `FieldSet`.
+
+## Example error messages
+
+Missing a top-level field:
+
+```
+error[E0080]: evaluation panicked: missing required field `name` in create! for `User`
+  --> src/main.rs:10:5
+   |
+10 |     toasty::create!(User { })
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `_` failed inside this call
+```
+
+Missing a nested field:
+
+```
+error[E0080]: evaluation panicked: missing required field `title` in create! for `Todo`
+  --> src/main.rs:12:5
+   |
+12 |     toasty::create!(User { name: "Alice", todos: [{ }] })
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `_` failed inside this call
+```
+
+## Limitations
+
+- FK source fields and `BelongsTo` relation fields are not checked. If you
+  write `create!(Todo { title: "x" })` without providing `user`, it compiles
+  but fails at the database. A future enhancement could add disjunction
+  checking (require `user` OR `user_id` in unscoped creates).
+- The `Option<T>` check is syntactic. A type alias like `type Opt<T> = Option<T>`
+  would not be recognized as nullable. In practice, Toasty models use
+  `Option<T>` directly.
+- Error messages include the field name but not a file/line pointer to the model
+  definition. The Rust compiler's error output shows the `create!` call site,
+  which is the actionable location.
