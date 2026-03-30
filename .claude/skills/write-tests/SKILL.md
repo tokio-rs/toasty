@@ -27,6 +27,7 @@ Load this skill when writing or editing tests anywhere in this project.
 
 - **Succinct over thorough-looking**: Each test function should focus on one thing. Code inside the test body should be the core behavior under test — nothing more.
 - **DRY the scaffolding**: Use or write helpers for setup that is not what the test is testing. If you find yourself copy-pasting non-essential setup across tests, extract a helper.
+- **Use `create!` for data setup**: Unless the test is explicitly testing the create builder itself, use the `toasty::create!` macro to insert data. It is more concise and reads like a struct literal. For example: `let user = toasty::create!(User { name: "Alice" }).exec(&db).await?;` instead of `let user = User::create().name("Alice").exec(&db).await?;`.
 - **assert_struct! vs assert_eq!**: Use whichever produces fewer characters and the same coverage. See the decision rule below.
 
 ## Integration Suite Tests
@@ -53,7 +54,7 @@ pub async fn my_test(t: &mut Test) -> Result<()> {
     let db = t.setup_db(models!(Foo)).await;
 
     // 3. Exercise behavior
-    let foo = Foo::create().name("hi").exec(&db).await?;
+    let foo = toasty::create!(Foo { name: "hi" }).exec(&db).await?;
 
     // 4. Assert
     assert_eq!(foo.name, "hi");
