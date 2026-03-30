@@ -55,9 +55,21 @@ pub struct FieldInfo {
     pub required: bool,
 }
 
+pub struct BelongsToInfo {
+    pub name: &'static str,
+    pub fk_fields: &'static [&'static str],
+}
+
+pub struct NestedFieldInfo {
+    pub name: &'static str,
+    pub field: &'static RequiredFields,
+    pub pair: &'static str,
+}
+
 pub struct RequiredFields {
     pub fields: &'static [FieldInfo],
-    pub nested: &'static [(&'static str, &'static RequiredFields)],
+    pub nested: &'static [NestedFieldInfo],
+    pub belongs_to: &'static [BelongsToInfo],
     pub model_name: &'static str,
 }
 ```
@@ -133,27 +145,49 @@ When `Todo` is created nested inside a `User` create, the `user`/`user_id`
 fields are provided by the parent context. But when `Todo` is created as a
 standalone top-level create, `user_id` is required.
 
-To handle this, the `nested` array uses `NestedFieldInfo` instead of a plain
-tuple:
+`RequiredFields` includes a `belongs_to` array so the parent side can discover
+which FK fields the relationship provides:
 
 ```rust
+pub struct BelongsToInfo {
+    pub name: &'static str,
+    pub fk_fields: &'static [&'static str],
+}
+
 pub struct NestedFieldInfo {
     pub name: &'static str,
     pub field: &'static RequiredFields,
-    pub optional: &'static [&'static str],
+    pub pair: &'static str,
 }
 
 pub struct RequiredFields {
     pub fields: &'static [FieldInfo],
     pub nested: &'static [NestedFieldInfo],
+    pub belongs_to: &'static [BelongsToInfo],
     pub model_name: &'static str,
 }
 ```
 
-The `optional` list names fields on the target model that become optional in
-this nested position because the parent-child relationship provides them. For
-`User.todos`, the `optional` list contains the FK source fields that
-`Todo`'s `BelongsTo<User>` references:
+The `BelongsToInfo` entries are generated on the child model. `Todo` declares
+that its `user` BelongsTo relation owns the FK field `user_id`:
+
+```rust
+impl Model for Todo {
+    const REQUIRED_FIELDS: RequiredFields = RequiredFields {
+        fields: &[
+            FieldInfo { name: "title", required: !<String as Field>::NULLABLE },
+        ],
+        nested: &[],
+        belongs_to: &[BelongsToInfo { name: "user", fk_fields: &["user_id"] }],
+        model_name: "Todo",
+    };
+}
+```
+
+The parent side references the child's `RequiredFields` and specifies the
+`pair` name — the BelongsTo field that this relationship satisfies. The
+`HasMany` on `User` knows the pair name: it is either explicit via
+`#[has_many(pair = user)]` or defaults to the lowercased parent model name.
 
 ```rust
 impl Model for User {
@@ -164,32 +198,22 @@ impl Model for User {
         nested: &[NestedFieldInfo {
             name: "todos",
             field: &<Todo as Model>::REQUIRED_FIELDS,
-            optional: Todo::BELONGS_TO_USER_FK_FIELDS,
+            pair: "user",
         }],
+        belongs_to: &[],
         model_name: "User",
     };
 }
 ```
 
-Each model generates a constant per `BelongsTo` relation listing its FK source
-field names:
+The `assert_nested_required_fields` function uses the `pair` name to look up
+the matching `BelongsToInfo` in the child's `RequiredFields.belongs_to`, reads
+its `fk_fields`, and skips those fields when checking the nested create. No
+extra constants or naming conventions are needed — all the information flows
+through `RequiredFields`.
 
-```rust
-impl Todo {
-    const BELONGS_TO_USER_FK_FIELDS: &'static [&'static str] = &["user_id"];
-}
-```
-
-The constant name follows a predictable pattern:
-`BELONGS_TO_{pair_field}_FK_FIELDS`. The `HasMany` on `User` knows the pair
-field name — it is either explicit via `#[has_many(pair = ...)]` or defaults to
-the lowercased parent model name. The macro uses this to reference the correct
-constant on the target type.
-
-The `assert_nested_required_fields` function skips any field whose name appears
-in the `optional` list when checking a nested create. This means
-`create!(User { name: "Alice", todos: [{ title: "x" }] })` passes without
-specifying `user_id` on the nested Todo, but a top-level
+This means `create!(User { name: "Alice", todos: [{ title: "x" }] })` passes
+without specifying `user_id` on the nested Todo, but a top-level
 `create!(Todo { title: "x" })` still requires it (since it appears in
 `Todo::REQUIRED_FIELDS.fields` with `required: true`).
 
@@ -270,11 +294,10 @@ const _: () = {
 ```
 
 `assert_nested_required_fields` finds `"todos"` in `REQUIRED_FIELDS.nested`,
-retrieves the `NestedFieldInfo` for `Todo`, and checks the provided fields
-against it. Fields listed in `NestedFieldInfo.optional` are treated as not
-required even if their `FieldInfo.required` flag is `true`. This chains to
-arbitrary depth because each `RequiredFields` references its children through
-`&'static` pointers.
+retrieves the `NestedFieldInfo`, looks up the `pair` name (`"user"`) in the
+child's `belongs_to` array to get the FK fields (`["user_id"]`), and skips
+those when checking the provided fields. This chains to arbitrary depth because
+each `RequiredFields` references its children through `&'static` pointers.
 
 ### Scoped creates
 
@@ -334,18 +357,16 @@ The `expand_model_impls` method in `model/expand/model.rs` adds
 
 1. Collect FK source field indices — fields referenced by any `BelongsTo`'s
    `key` attribute
-2. For each `BelongsTo` relation, generate a `BELONGS_TO_{pair}_FK_FIELDS`
-   constant listing the FK source field names (e.g., `&["user_id"]`). This
-   constant is referenced by the parent model's `NestedFieldInfo.optional`
-3. Filter to primitive fields that are not in the FK source set, not
+2. Filter to primitive fields that are not in the FK source set, not
    `#[auto]`, not `#[default]`, not `#[update]`
-4. For each remaining field, emit a `FieldInfo` with `required` set to
+3. For each remaining field, emit a `FieldInfo` with `required` set to
    `!<FieldType as Field>::NULLABLE`. The compiler resolves `NULLABLE` at const
    evaluation time, so the proc macro does not need to parse `Option<T>`
+4. Build the `belongs_to` array from `BelongsTo` relation fields, listing
+   the relation name and its FK source field names
 5. Build the `nested` array from `HasMany` and `HasOne` relation fields as
    `NestedFieldInfo` entries, referencing the target model's `REQUIRED_FIELDS`
-   via `<Target as Model>::REQUIRED_FIELDS` and the target's
-   `BELONGS_TO_{pair}_FK_FIELDS` for the `optional` list
+   via `<Target as Model>::REQUIRED_FIELDS` and the pair field name
 
 ### `create!` macro changes
 
