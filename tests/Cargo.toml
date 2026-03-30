@@ -1,7 +1,10 @@
 [package]
 name = "tests"
 version = "0.1.0"
-edition = "2021"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
 publish = false
 build = "build.rs"
 
@@ -46,7 +49,7 @@ rusqlite = { workspace = true, optional = true }
 # Utilities
 tempfile.workspace = true
 trybuild.workspace = true
-env_logger = "0.11.8"
+env_logger = "0.11.10"
 url.workspace = true
 
 # Third-party types

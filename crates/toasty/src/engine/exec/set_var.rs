@@ -1,6 +1,6 @@
 use crate::{
-    engine::exec::{Action, Exec, ExecResponse, Output},
     Result,
+    engine::exec::{Action, Exec, ExecResponse, Output},
 };
 use toasty_core::{driver::Rows, stmt};
 

@@ -1,4 +1,4 @@
-use super::{util, Expand};
+use super::{Expand, util};
 use crate::model::schema::{BelongsTo, Field, FieldTy, HasMany, HasOne};
 
 use proc_macro2::TokenStream;

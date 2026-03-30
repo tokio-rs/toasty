@@ -23,13 +23,14 @@ pub(crate) use value::Value;
 
 use async_trait::async_trait;
 use toasty_core::{
-    driver::{operation::Operation, Capability, Driver, Response},
+    Error, Result, Schema,
+    driver::{Capability, Driver, Response, operation::Operation},
     schema::db::{self, Column, ColumnId, Migration, SchemaDiff, Table},
     stmt::{self, ExprContext},
-    Error, Result, Schema,
 };
 
 use aws_sdk_dynamodb::{
+    Client,
     error::SdkError,
     operation::update_item::UpdateItemError,
     types::{
@@ -37,7 +38,6 @@ use aws_sdk_dynamodb::{
         KeyType, KeysAndAttributes, Projection, ProjectionType, ProvisionedThroughput, Put,
         PutRequest, ReturnValuesOnConditionCheckFailure, TransactWriteItem, Update, WriteRequest,
     },
-    Client,
 };
 use std::{borrow::Cow, collections::HashMap, sync::Arc};
 
@@ -91,7 +91,9 @@ impl Driver for DynamoDb {
     }
 
     fn generate_migration(&self, _schema_diff: &SchemaDiff<'_>) -> Migration {
-        unimplemented!("DynamoDB migrations are not yet supported. DynamoDB schema changes require manual table updates through the AWS console or SDK.")
+        unimplemented!(
+            "DynamoDB migrations are not yet supported. DynamoDB schema changes require manual table updates through the AWS console or SDK."
+        )
     }
 
     async fn reset_db(&self) -> toasty_core::Result<()> {

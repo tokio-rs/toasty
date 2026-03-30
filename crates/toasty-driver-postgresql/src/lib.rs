@@ -18,20 +18,20 @@ mod value;
 pub(crate) use value::Value;
 
 use async_trait::async_trait;
-use postgres::{tls::MakeTlsConnect, types::ToSql, Socket};
+use postgres::{Socket, tls::MakeTlsConnect, types::ToSql};
 use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
+    Result, Schema,
     driver::{Capability, Driver, Operation, Response},
     schema::db::{self, Migration, SchemaDiff, Table},
     stmt,
     stmt::ValueRecord,
-    Result, Schema,
 };
 use toasty_sql::{self as sql, TypedValue};
 use tokio_postgres::{Client, Config};
 use url::Url;
 
-use crate::{r#type::TypeExt, statement_cache::StatementCache};
+use crate::{statement_cache::StatementCache, r#type::TypeExt};
 
 /// A PostgreSQL [`Driver`] that connects via `tokio-postgres`.
 ///

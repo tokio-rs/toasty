@@ -30,10 +30,10 @@ impl Simplify<'_> {
         // Examples:
         //   project([street_col, city_col, zip_col], [1]) → city_col
         //   project([name_col, record([street_col, city_col])], [1, 1]) → city_col
-        if let stmt::Expr::Record(_) = &*expr.base {
-            if let Some(entry) = expr.base.entry(&expr.projection) {
-                return Some(entry.to_expr());
-            }
+        if let stmt::Expr::Record(_) = &*expr.base
+            && let Some(entry) = expr.base.entry(&expr.projection)
+        {
+            return Some(entry.to_expr());
         }
 
         // Project into Match: distribute the projection into each arm's expression.

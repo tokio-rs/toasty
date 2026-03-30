@@ -1,6 +1,6 @@
 use super::{List, Query};
 
-use crate::{schema::Load, Executor, Result};
+use crate::{Executor, Result, schema::Load};
 
 use toasty_core::stmt::{self, Value};
 

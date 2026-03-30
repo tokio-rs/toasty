@@ -260,37 +260,47 @@ fn le_greater() {
 
 #[test]
 fn gt_null_lhs_is_error() {
-    assert!(Expr::binary_op(Value::Null, BinaryOp::Gt, 1i64)
-        .eval_const()
-        .is_err());
+    assert!(
+        Expr::binary_op(Value::Null, BinaryOp::Gt, 1i64)
+            .eval_const()
+            .is_err()
+    );
 }
 
 #[test]
 fn gt_null_rhs_is_error() {
-    assert!(Expr::binary_op(1i64, BinaryOp::Gt, Value::Null)
-        .eval_const()
-        .is_err());
+    assert!(
+        Expr::binary_op(1i64, BinaryOp::Gt, Value::Null)
+            .eval_const()
+            .is_err()
+    );
 }
 
 #[test]
 fn ge_null_is_error() {
-    assert!(Expr::binary_op(Value::Null, BinaryOp::Ge, Value::Null)
-        .eval_const()
-        .is_err());
+    assert!(
+        Expr::binary_op(Value::Null, BinaryOp::Ge, Value::Null)
+            .eval_const()
+            .is_err()
+    );
 }
 
 #[test]
 fn lt_null_is_error() {
-    assert!(Expr::binary_op(Value::Null, BinaryOp::Lt, 1i64)
-        .eval_const()
-        .is_err());
+    assert!(
+        Expr::binary_op(Value::Null, BinaryOp::Lt, 1i64)
+            .eval_const()
+            .is_err()
+    );
 }
 
 #[test]
 fn le_null_is_error() {
-    assert!(Expr::binary_op(Value::Null, BinaryOp::Le, 1i64)
-        .eval_const()
-        .is_err());
+    assert!(
+        Expr::binary_op(Value::Null, BinaryOp::Le, 1i64)
+            .eval_const()
+            .is_err()
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -299,16 +309,20 @@ fn le_null_is_error() {
 
 #[test]
 fn gt_cross_type_is_error() {
-    assert!(Expr::binary_op(1i64, BinaryOp::Gt, "hello")
-        .eval_const()
-        .is_err());
+    assert!(
+        Expr::binary_op(1i64, BinaryOp::Gt, "hello")
+            .eval_const()
+            .is_err()
+    );
 }
 
 #[test]
 fn lt_cross_type_is_error() {
-    assert!(Expr::binary_op("hello", BinaryOp::Lt, 1i64)
-        .eval_const()
-        .is_err());
+    assert!(
+        Expr::binary_op("hello", BinaryOp::Lt, 1i64)
+            .eval_const()
+            .is_err()
+    );
 }
 
 // ---------------------------------------------------------------------------

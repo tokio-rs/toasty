@@ -1,5 +1,5 @@
 use toasty_core::{
-    driver::{operation, Rows},
+    driver::{Rows, operation},
     schema::db::TableId,
     stmt,
 };

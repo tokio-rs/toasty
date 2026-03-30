@@ -1,5 +1,5 @@
 use super::{
-    db, stmt, Connection, Put, PutRequest, Result, TransactWriteItem, Value, WriteRequest,
+    Connection, Put, PutRequest, Result, TransactWriteItem, Value, WriteRequest, db, stmt,
 };
 use std::collections::HashMap;
 use toasty_core::driver::Response;

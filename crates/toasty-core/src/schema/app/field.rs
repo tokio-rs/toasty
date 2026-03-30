@@ -5,7 +5,7 @@ use super::{
     AutoStrategy, BelongsTo, Constraint, Embedded, HasMany, HasOne, Model, ModelId, Schema,
     VariantId,
 };
-use crate::{driver, stmt, Result};
+use crate::{Result, driver, stmt};
 use std::fmt;
 
 /// A single field within a model.
@@ -245,10 +245,10 @@ impl Field {
     }
 
     pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
-        if let FieldTy::Primitive(primitive) = &self.ty {
-            if let Some(storage_ty) = &primitive.storage_ty {
-                storage_ty.verify(db)?;
-            }
+        if let FieldTy::Primitive(primitive) = &self.ty
+            && let Some(storage_ty) = &primitive.storage_ty
+        {
+            storage_ty.verify(db)?;
         }
 
         Ok(())

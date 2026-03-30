@@ -1,8 +1,17 @@
 [package]
 name = "toasty-driver-integration-suite"
-version = "0.1.0"
-edition = "2021"
-publish = false
+version = "0.2.0"
+description = "Integration test suite for Toasty database drivers"
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+categories.workspace = true
+readme.workspace = true
+documentation = "https://docs.rs/toasty-driver-integration-suite"
 
 [dependencies]
 assert-struct.workspace = true

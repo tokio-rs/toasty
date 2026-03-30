@@ -1,13 +1,13 @@
 use super::BuildSchema;
 use crate::{
-    driver,
+    Error, Result, driver,
     schema::{
+        Name,
         app::{self, Model, ModelId, ModelRoot},
         db::{self, ColumnId, IndexId, Table, TableId},
         mapping::{self, Mapping, TableToModel},
-        Name,
     },
-    stmt, Error, Result,
+    stmt,
 };
 
 struct BuildTableFromModels<'a> {

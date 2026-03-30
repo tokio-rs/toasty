@@ -122,9 +122,13 @@ impl LowerStatement<'_, '_> {
                                 app::UuidVersion::V7 => uuid::Uuid::now_v7(),
                             };
                             match ty {
-                                stmt::Type::String => field_expr.insert(stmt::Value::String(id.to_string()).into()),
+                                stmt::Type::String => {
+                                    field_expr.insert(stmt::Value::String(id.to_string()).into())
+                                }
                                 stmt::Type::Uuid => field_expr.insert(stmt::Value::Uuid(id).into()),
-                                _ => panic!("auto-generated UUID cannot be inserted into column of type {ty:?}"),
+                                _ => panic!(
+                                    "auto-generated UUID cannot be inserted into column of type {ty:?}"
+                                ),
                             };
                         }
                         app::AutoStrategy::Increment => {

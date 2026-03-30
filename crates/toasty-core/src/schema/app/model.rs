@@ -1,5 +1,5 @@
 use super::{Field, FieldId, FieldPrimitive, Index, Name, PrimaryKey};
-use crate::{driver, stmt, Result};
+use crate::{Result, driver, stmt};
 use std::fmt;
 
 /// A model in the application schema.

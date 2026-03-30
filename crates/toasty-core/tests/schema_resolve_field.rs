@@ -1,5 +1,5 @@
-use toasty_core::schema::app::*;
 use toasty_core::schema::Name;
+use toasty_core::schema::app::*;
 use toasty_core::stmt;
 
 const USER: ModelId = ModelId(0);
@@ -192,18 +192,20 @@ fn resolve_primitive_field() {
 fn resolve_empty_projection_returns_none() {
     let s = schema();
     let root = s.model(USER);
-    assert!(s
-        .resolve_field(root, &stmt::Projection::identity())
-        .is_none());
+    assert!(
+        s.resolve_field(root, &stmt::Projection::identity())
+            .is_none()
+    );
 }
 
 #[test]
 fn resolve_out_of_bounds_returns_none() {
     let s = schema();
     let root = s.model(USER);
-    assert!(s
-        .resolve_field(root, &stmt::Projection::from([99]))
-        .is_none());
+    assert!(
+        s.resolve_field(root, &stmt::Projection::from([99]))
+            .is_none()
+    );
 }
 
 #[test]
@@ -211,9 +213,10 @@ fn resolve_project_through_primitive_returns_none() {
     let s = schema();
     let root = s.model(USER);
     // User.name is primitive — projecting further is invalid
-    assert!(s
-        .resolve_field(root, &stmt::Projection::from([1, 0]))
-        .is_none());
+    assert!(
+        s.resolve_field(root, &stmt::Projection::from([1, 0]))
+            .is_none()
+    );
 }
 
 // === Embedded struct ===
@@ -264,9 +267,10 @@ fn resolve_enum_single_step_returns_none() {
     let root = s.model(USER);
 
     // User.contact -> [0] — only a variant discriminant, not a field
-    assert!(s
-        .resolve_field(root, &stmt::Projection::from([3, 0]))
-        .is_none());
+    assert!(
+        s.resolve_field(root, &stmt::Projection::from([3, 0]))
+            .is_none()
+    );
 }
 
 #[test]
@@ -275,9 +279,10 @@ fn resolve_unit_enum_single_step_returns_none() {
     let root = s.model(USER);
 
     // User.status -> [0] — unit variant, no fields to resolve
-    assert!(s
-        .resolve_field(root, &stmt::Projection::from([2, 0]))
-        .is_none());
+    assert!(
+        s.resolve_field(root, &stmt::Projection::from([2, 0]))
+            .is_none()
+    );
 }
 
 // === Embedded enum — invalid variant/field indices ===
@@ -288,9 +293,10 @@ fn resolve_enum_invalid_variant_returns_none() {
     let root = s.model(USER);
 
     // User.contact -> variant disc 99 doesn't exist
-    assert!(s
-        .resolve_field(root, &stmt::Projection::from([3, 99, 0]))
-        .is_none());
+    assert!(
+        s.resolve_field(root, &stmt::Projection::from([3, 99, 0]))
+            .is_none()
+    );
 }
 
 #[test]
@@ -299,9 +305,10 @@ fn resolve_enum_invalid_field_in_variant_returns_none() {
     let root = s.model(USER);
 
     // User.contact -> Email(disc=0) -> field 99 doesn't exist
-    assert!(s
-        .resolve_field(root, &stmt::Projection::from([3, 0, 99]))
-        .is_none());
+    assert!(
+        s.resolve_field(root, &stmt::Projection::from([3, 0, 99]))
+            .is_none()
+    );
 }
 
 // === resolve() — Resolved::Variant case ===
@@ -339,12 +346,14 @@ fn resolve_field_returns_none_for_variant_only_projection() {
     let root = s.model(USER);
 
     // resolve_field should return None for variant-only projections
-    assert!(s
-        .resolve_field(root, &stmt::Projection::from([3, 0]))
-        .is_none());
-    assert!(s
-        .resolve_field(root, &stmt::Projection::from([2, 0]))
-        .is_none());
+    assert!(
+        s.resolve_field(root, &stmt::Projection::from([3, 0]))
+            .is_none()
+    );
+    assert!(
+        s.resolve_field(root, &stmt::Projection::from([2, 0]))
+            .is_none()
+    );
 }
 
 // === resolve() covers all old is_valid_projection cases ===
@@ -368,9 +377,10 @@ fn resolve_enum_discriminant_is_some() {
 fn resolve_enum_variant_field_is_some() {
     let s = schema();
     let root = s.model(USER);
-    assert!(s
-        .resolve(root, &stmt::Projection::from([3, 0, 0]))
-        .is_some());
+    assert!(
+        s.resolve(root, &stmt::Projection::from([3, 0, 0]))
+            .is_some()
+    );
 }
 
 #[test]

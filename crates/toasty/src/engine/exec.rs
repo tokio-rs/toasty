@@ -53,11 +53,11 @@ pub(crate) use update_by_key::UpdateByKey;
 mod var;
 pub(crate) use var::{VarDecls, VarId, VarStore};
 
-use crate::{engine::Engine, Result};
+use crate::{Result, engine::Engine};
 use toasty_core::{
-    driver::{operation::Transaction, Rows},
-    stmt::{self, ValueStream},
     Connection,
+    driver::{Rows, operation::Transaction},
+    stmt::{self, ValueStream},
 };
 
 /// Response from executing an action in the engine pipeline.

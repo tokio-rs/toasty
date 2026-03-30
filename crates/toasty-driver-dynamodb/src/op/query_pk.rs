@@ -1,6 +1,6 @@
 use super::{
-    ddb_expression, ddb_key, deserialize_ddb_cursor, item_to_record, operation,
-    serialize_ddb_cursor, stmt, Connection, ExprAttrs, Result, Schema,
+    Connection, ExprAttrs, Result, Schema, ddb_expression, ddb_key, deserialize_ddb_cursor,
+    item_to_record, operation, serialize_ddb_cursor, stmt,
 };
 use std::sync::Arc;
 use toasty_core::{driver::Response, stmt::ExprContext};

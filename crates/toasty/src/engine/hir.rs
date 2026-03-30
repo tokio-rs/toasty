@@ -8,7 +8,7 @@ use index_vec::IndexVec;
 use indexmap::IndexSet;
 use toasty_core::stmt;
 
-use crate::engine::{mir, SelectItems};
+use crate::engine::{SelectItems, mir};
 
 /// High-level Intermediate Representation of a query.
 ///

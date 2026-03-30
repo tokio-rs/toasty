@@ -2,13 +2,13 @@ use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
-use crate::{db::ConnectionOperation, db::Executor, Result};
+use crate::{Result, db::ConnectionOperation, db::Executor};
 
 use async_trait::async_trait;
 use toasty_core::{
+    Schema,
     driver::operation::{self, IsolationLevel},
     stmt::Value,
-    Schema,
 };
 use tokio::sync::oneshot;
 

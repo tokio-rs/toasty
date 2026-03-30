@@ -81,13 +81,13 @@ pub async fn specify_custom_column_name_with_type(test: &mut Test) -> Result<()>
     }));
 
     // Verify the value "foo" is sent as a string
-    if let Operation::QuerySql(query) = op {
-        if let Statement::Insert(insert) = query.stmt {
-            if let ExprSet::Values(values) = insert.source.body {
-                assert_struct!(values.rows, [=~ (Any, "foo")]);
-            } else {
-                panic!("Expected Values in INSERT source");
-            }
+    if let Operation::QuerySql(query) = op
+        && let Statement::Insert(insert) = query.stmt
+    {
+        if let ExprSet::Values(values) = insert.source.body {
+            assert_struct!(values.rows, [=~ (Any, "foo")]);
+        } else {
+            panic!("Expected Values in INSERT source");
         }
     }
 

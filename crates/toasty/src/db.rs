@@ -16,12 +16,12 @@ pub use tx::{Transaction, TransactionBuilder};
 pub(crate) use pool::ConnectionOperation;
 pub(crate) use tx::ConnRef;
 
-use crate::{engine::Engine, Result};
+use crate::{Result, engine::Engine};
 
 use async_trait::async_trait;
 use toasty_core::{
-    stmt::{self, Value},
     Schema,
+    stmt::{self, Value},
 };
 
 use std::sync::Arc;

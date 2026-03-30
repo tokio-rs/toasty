@@ -90,18 +90,17 @@
 use std::mem;
 
 use indexmap::{IndexMap, IndexSet};
-use toasty_core::stmt::{self, visit_mut, Condition};
+use toasty_core::stmt::{self, Condition, visit_mut};
 
 use crate::{
+    Result,
     engine::{
-        eval, exec,
+        SelectItem, SelectItems, exec, eval,
         hir::{self},
         index::{self, IndexPlan},
         mir,
         plan::HirPlanner,
-        SelectItem, SelectItems,
     },
-    Result,
 };
 
 #[derive(Debug)]
@@ -186,17 +185,16 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         // For single VALUES queries (e.g., batch queries), the VALUES body is
         // the output expression. Extract it as a returning value so the planner
         // can wire up sub-statement dependencies.
-        if returning.is_none() {
-            if let stmt::Statement::Query(query) = &mut stmt {
-                if let stmt::ExprSet::Values(values) = &mut query.body {
-                    returning = Some(stmt::Returning::Value(if query.single {
-                        assert_eq!(1, values.rows.len());
-                        values.rows.drain(..).next().unwrap()
-                    } else {
-                        stmt::Expr::list(std::mem::take(&mut values.rows))
-                    }));
-                }
-            }
+        if returning.is_none()
+            && let stmt::Statement::Query(query) = &mut stmt
+            && let stmt::ExprSet::Values(values) = &mut query.body
+        {
+            returning = Some(stmt::Returning::Value(if query.single {
+                assert_eq!(1, values.rows.len());
+                values.rows.drain(..).next().unwrap()
+            } else {
+                stmt::Expr::list(std::mem::take(&mut values.rows))
+            }));
         }
 
         // No queries are single at this point.
@@ -453,7 +451,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
                     let target = &self.planner.hir[target_id];
                     let Some(node_id) = target.output.get() else {
-                        panic!("bug: expected target statement to be planned; curr={:#?}; target={:#?}", self.stmt_info, target);
+                        panic!(
+                            "bug: expected target statement to be planned; curr={:#?}; target={:#?}",
+                            self.stmt_info, target
+                        );
                     };
                     let (index, _) = self.load_data.inputs.insert_full(node_id);
                     batch_load_index.set(insert_row);
@@ -1473,13 +1474,14 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         // If fetching rows using GetByKey, some databases do not support
         // applying additional filters to the rows before returning results.
         // In this case, the result_filter needs to be applied in-memory.
-        if stmt.is_query() && (index_plan.has_pk_keys || !index_plan.index.primary_key) {
-            if let Some(result_filter) = index_plan.result_filter.take() {
-                post_filter = Some(match post_filter {
-                    Some(post_filter) => stmt::Expr::and(result_filter, post_filter),
-                    None => result_filter,
-                });
-            }
+        if stmt.is_query()
+            && (index_plan.has_pk_keys || !index_plan.index.primary_key)
+            && let Some(result_filter) = index_plan.result_filter.take()
+        {
+            post_filter = Some(match post_filter {
+                Some(post_filter) => stmt::Expr::and(result_filter, post_filter),
+                None => result_filter,
+            });
         }
 
         debug_assert!(

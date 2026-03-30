@@ -1,6 +1,6 @@
 use rusqlite::{
-    types::{ToSql, ToSqlOutput, Value as SqlValue, ValueRef},
     Row,
+    types::{ToSql, ToSqlOutput, Value as SqlValue, ValueRef},
 };
 use toasty_core::stmt::{self, Value as CoreValue};
 

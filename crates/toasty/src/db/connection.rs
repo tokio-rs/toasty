@@ -1,15 +1,15 @@
+use super::Transaction;
 use super::pool::{ConnectionHandle, ConnectionOperation, Manager};
 use super::tx::ConnRef;
-use super::Transaction;
 
 use crate::engine::exec::ExecResponse;
 use async_trait::async_trait;
 use std::sync::Arc;
 use toasty_core::stmt::Statement;
 use toasty_core::{
-    driver::{operation::Operation, Response},
-    stmt::{self, Value},
     Schema,
+    driver::{Response, operation::Operation},
+    stmt::{self, Value},
 };
 use tokio::sync::oneshot;
 

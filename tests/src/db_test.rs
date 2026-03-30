@@ -1,4 +1,4 @@
-use crate::{exec_log::ExecLog, logging_driver::LoggingDriver, Setup};
+use crate::{Setup, exec_log::ExecLog, logging_driver::LoggingDriver};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},

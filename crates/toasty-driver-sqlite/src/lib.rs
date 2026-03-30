@@ -28,12 +28,13 @@ use std::{
     sync::Arc,
 };
 use toasty_core::{
+    Result, Schema,
     driver::{
-        operation::{IsolationLevel, Operation, Transaction},
         Capability, Driver, Response,
+        operation::{IsolationLevel, Operation, Transaction},
     },
     schema::db::{self, Migration, SchemaDiff, Table},
-    stmt, Result, Schema,
+    stmt,
 };
 use toasty_sql::{self as sql, TypedValue};
 use url::Url;

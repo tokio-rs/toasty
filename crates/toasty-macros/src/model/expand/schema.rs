@@ -1,4 +1,4 @@
-use super::{util, Expand};
+use super::{Expand, util};
 use crate::model::schema::SerializeAttr;
 use crate::model::schema::{
     AutoStrategy, Column, FieldTy, ModelKind, Name, SerializeFormat, UuidVersion,

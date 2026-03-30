@@ -66,7 +66,7 @@ impl Connect {
             "dynamodb" => {
                 return Err(toasty_core::Error::unsupported_feature(
                     "`dynamodb` feature not enabled",
-                ))
+                ));
             }
 
             #[cfg(feature = "mysql")]
@@ -75,7 +75,7 @@ impl Connect {
             "mysql" => {
                 return Err(toasty_core::Error::unsupported_feature(
                     "`mysql` feature not enabled",
-                ))
+                ));
             }
 
             #[cfg(feature = "postgresql")]
@@ -84,7 +84,7 @@ impl Connect {
             "postgresql" | "postgres" => {
                 return Err(toasty_core::Error::unsupported_feature(
                     "`postgresql` feature not enabled",
-                ))
+                ));
             }
 
             #[cfg(feature = "sqlite")]
@@ -93,13 +93,13 @@ impl Connect {
             "sqlite" => {
                 return Err(toasty_core::Error::unsupported_feature(
                     "`sqlite` feature not enabled",
-                ))
+                ));
             }
 
             scheme => {
                 return Err(toasty_core::Error::unsupported_feature(format!(
                     "unsupported database scheme `{scheme}`"
-                )))
+                )));
             }
         };
 

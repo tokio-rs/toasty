@@ -5,7 +5,7 @@ use toasty_core::driver::{Capability, Driver};
 use toasty_core::stmt;
 use tokio::sync::OnceCell;
 
-use crate::{isolation::TestIsolation, Setup};
+use crate::{Setup, isolation::TestIsolation};
 
 pub struct SetupPostgreSQL {
     isolation: TestIsolation,

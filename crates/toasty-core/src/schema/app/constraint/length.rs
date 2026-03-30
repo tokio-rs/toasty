@@ -1,6 +1,6 @@
 use super::Constraint;
 
-use crate::{stmt, Result};
+use crate::{Result, stmt};
 
 /// A length constraint for string fields.
 ///
@@ -35,17 +35,17 @@ impl ConstraintLength {
         let max = self.max.map(|m| m as usize);
 
         // Check minimum length
-        if let Some(min_val) = min {
-            if value_len < min_val {
-                return Err(crate::Error::validation_length(value_len, min, max));
-            }
+        if let Some(min_val) = min
+            && value_len < min_val
+        {
+            return Err(crate::Error::validation_length(value_len, min, max));
         }
 
         // Check maximum length
-        if let Some(max_val) = max {
-            if value_len > max_val {
-                return Err(crate::Error::validation_length(value_len, min, max));
-            }
+        if let Some(max_val) = max
+            && value_len > max_val
+        {
+            return Err(crate::Error::validation_length(value_len, min, max));
         }
 
         Ok(())

@@ -1,7 +1,7 @@
 use crate::engine::Engine;
 use toasty_core::driver::Capability;
 use toasty_core::{
-    schema::{app::ModelId, Schema},
+    schema::{Schema, app::ModelId},
     stmt::{self, Statement, Visit},
 };
 

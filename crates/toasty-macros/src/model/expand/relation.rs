@@ -1,4 +1,4 @@
-use super::{util, Expand};
+use super::{Expand, util};
 use crate::model::schema::{BelongsTo, Field, FieldTy, HasMany, HasOne};
 
 use proc_macro2::TokenStream;
@@ -280,7 +280,9 @@ impl Expand<'_> {
         let verify_a = util::ident("A");
         let verify_t = util::ident("T");
 
-        let my_msg = format!("HasMany requires the {{{verify_a}}}::{pair_ident} field to be of type `BelongsTo<Self>`, but it was `{{Self}}` instead");
+        let my_msg = format!(
+            "HasMany requires the {{{verify_a}}}::{pair_ident} field to be of type `BelongsTo<Self>`, but it was `{{Self}}` instead"
+        );
         let my_label =
             "Has many associations require the target to include a back-reference".to_string();
 
@@ -355,7 +357,9 @@ impl Expand<'_> {
         let verify_a = util::ident("A");
         let verify_t = util::ident("T");
 
-        let my_msg = format!("HasOne requires the {{{verify_a}}}::{pair_ident} field to be of type `BelongsTo<Self>`, but it was `{{Self}}` instead");
+        let my_msg = format!(
+            "HasOne requires the {{{verify_a}}}::{pair_ident} field to be of type `BelongsTo<Self>`, but it was `{{Self}}` instead"
+        );
         let my_label =
             "Has one associations require the target to include a back-reference".to_string();
 

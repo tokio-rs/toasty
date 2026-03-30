@@ -1,9 +1,9 @@
-use crate::{db::Transaction, schema::Load, Result, Statement};
+use crate::{Result, Statement, db::Transaction, schema::Load};
 
 use crate::engine::exec::ExecResponse;
 use async_trait::async_trait;
 use std::sync::Arc;
-use toasty_core::{stmt::Value, Schema};
+use toasty_core::{Schema, stmt::Value};
 
 /// Anything that can execute queries — [`Db`](crate::Db) or
 /// [`Transaction`](crate::db::Transaction).

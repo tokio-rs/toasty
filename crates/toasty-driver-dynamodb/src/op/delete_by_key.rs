@@ -1,6 +1,6 @@
 use super::{
-    db, ddb_expression, ddb_key, operation, Connection, Delete, ExprAttrs, Result, SdkError,
-    TransactWriteItem,
+    Connection, Delete, ExprAttrs, Result, SdkError, TransactWriteItem, db, ddb_expression,
+    ddb_key, operation,
 };
 use std::collections::HashMap;
 use toasty_core::{driver::Response, stmt::ExprContext};

@@ -1,8 +1,8 @@
 use super::{Field, Load};
 use crate::stmt::{List, Path};
 use toasty_core::{
-    stmt::{Type, Value},
     Result,
+    stmt::{Type, Value},
 };
 
 macro_rules! impl_jiff_field {

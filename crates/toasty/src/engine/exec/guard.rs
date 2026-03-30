@@ -1,10 +1,10 @@
 use crate::engine::exec::ExecResponse;
 use crate::{
+    Result,
     engine::{
         eval,
         exec::{Action, Exec, Output, VarId},
     },
-    Result,
 };
 use toasty_core::{driver::Rows, stmt::ValueStream};
 

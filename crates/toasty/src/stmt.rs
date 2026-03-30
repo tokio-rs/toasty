@@ -2,7 +2,7 @@ mod association;
 pub use association::Association;
 
 mod batch;
-pub use batch::{batch, Batch};
+pub use batch::{Batch, batch};
 
 mod create_many;
 pub use create_many::CreateMany;
@@ -17,7 +17,7 @@ mod insert;
 pub use insert::Insert;
 
 mod assignment;
-pub use assignment::{insert, remove, set, Assign, Assignment};
+pub use assignment::{Assign, Assignment, insert, remove, set};
 
 mod into_expr;
 pub use into_expr::IntoExpr;
@@ -41,7 +41,7 @@ mod path;
 pub use path::Path;
 
 pub use crate::schema::Auto;
-use crate::{schema::Load, Executor};
+use crate::{Executor, schema::Load};
 
 mod query;
 pub use query::Query;

@@ -1,9 +1,9 @@
 use crate::{
+    Result,
     engine::{
         eval,
         exec::{Action, Exec, ExecResponse, Output, VarId},
     },
-    Result,
 };
 use toasty_core::driver::Rows;
 

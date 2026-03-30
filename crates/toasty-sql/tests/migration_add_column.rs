@@ -7,9 +7,9 @@ use toasty_core::{
     stmt as core_stmt,
 };
 use toasty_sql::{
+    Serializer,
     migration::MigrationStatement,
     serializer::{Params, Placeholder},
-    Serializer,
 };
 
 struct NoParams;

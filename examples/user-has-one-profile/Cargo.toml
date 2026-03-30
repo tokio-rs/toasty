@@ -1,7 +1,10 @@
 [package]
 name = "example-user-has-one-profile"
 version = "0.1.0"
-edition = "2021"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
 publish = false
 
 [features]
