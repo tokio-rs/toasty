@@ -31,6 +31,7 @@ members = [
 ]
 
 [workspace.package]
+readme = "README.md"
 authors = ["Carl Lerche <me@carllerche.com>"]
 edition = "2024"
 homepage = "https://github.com/tokio-rs/toasty"
