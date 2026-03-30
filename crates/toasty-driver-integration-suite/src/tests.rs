@@ -36,6 +36,7 @@ pub mod infra_missing_registrations;
 pub mod infra_reset_db;
 pub mod infra_sync_send;
 pub mod query_count;
+pub mod record_not_found;
 pub mod relation_belongs_to_configured;
 pub mod relation_belongs_to_one_way;
 pub mod relation_belongs_to_self_referential;

@@ -357,6 +357,9 @@ impl Expand<'_> {
 
         quote! {
             match value {
+                #toasty::core::stmt::Value::Null => {
+                    Err(#toasty::Error::record_not_found(stringify!(#model_ident)))
+                }
                 #toasty::core::stmt::Value::Record(mut record) => {
                     Ok(#model_ident {
                         #( #field_loads )*
