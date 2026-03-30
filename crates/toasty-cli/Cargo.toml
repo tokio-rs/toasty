@@ -5,6 +5,7 @@ authors.workspace = true
 edition.workspace = true
 license.workspace = true
 readme.workspace = true
+documentation = "https://docs.rs/toasty-cli"
 
 [dependencies]
 toasty.workspace = true

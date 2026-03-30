@@ -10,6 +10,7 @@ repository.workspace = true
 rust-version.workspace = true
 categories.workspace = true
 readme.workspace = true
+documentation = "https://docs.rs/toasty-macros"
 
 [lib]
 proc-macro = true
