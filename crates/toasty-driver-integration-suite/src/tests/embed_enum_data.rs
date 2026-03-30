@@ -22,11 +22,13 @@ pub async fn data_carrying_enum_schema(test: &mut Test) {
             variants: [
                 {
                     name.upper_camel_case(): "Email",
-                    discriminant: 1,
+                    discriminant: toasty_core::stmt::Value::I64(1),
+                    ..
                 },
                 {
                     name.upper_camel_case(): "Phone",
-                    discriminant: 2,
+                    discriminant: toasty_core::stmt::Value::I64(2),
+                    ..
                 },
             ],
             fields: [
@@ -61,15 +63,18 @@ pub async fn mixed_enum_schema(test: &mut Test) {
             variants: [
                 {
                     name.upper_camel_case(): "Pending",
-                    discriminant: 1,
+                    discriminant: toasty_core::stmt::Value::I64(1),
+                    ..
                 },
                 {
                     name.upper_camel_case(): "Failed",
-                    discriminant: 2,
+                    discriminant: toasty_core::stmt::Value::I64(2),
+                    ..
                 },
                 {
                     name.upper_camel_case(): "Done",
-                    discriminant: 3,
+                    discriminant: toasty_core::stmt::Value::I64(3),
+                    ..
                 },
             ],
             fields: [

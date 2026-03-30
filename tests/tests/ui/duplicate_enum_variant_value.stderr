@@ -1,4 +1,4 @@
-error: duplicate variant value `1`; already used by `Active`
+error: duplicate variant discriminant 1; already used by `Active`
  --> tests/ui/duplicate_enum_variant_value.rs:6:5
   |
 6 |     Inactive,

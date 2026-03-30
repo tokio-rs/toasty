@@ -1,4 +1,4 @@
-use super::{Column, ErrorSet, Name};
+use super::{Column, ErrorSet, Name, VariantValue};
 
 #[derive(Debug)]
 pub(crate) struct Variant {
@@ -29,12 +29,12 @@ pub(crate) struct Variant {
 
 #[derive(Debug)]
 pub(crate) struct VariantAttr {
-    /// Discriminant value stored in the database column
-    pub(crate) discriminant: i64,
+    /// Discriminant value stored in the database column.
+    pub(crate) discriminant: VariantValue,
 }
 
 impl VariantAttr {
-    fn from_attrs(attrs: &[syn::Attribute]) -> syn::Result<Option<Self>> {
+    pub(crate) fn from_attrs(attrs: &[syn::Attribute]) -> syn::Result<Option<Self>> {
         let mut errs = ErrorSet::new();
         let mut discriminant = None;
 
@@ -64,14 +64,8 @@ impl Variant {
         variant: &syn::Variant,
         enum_ident: &syn::Ident,
         has_fields: bool,
+        attrs: VariantAttr,
     ) -> syn::Result<Self> {
-        let attrs = VariantAttr::from_attrs(&variant.attrs)?.ok_or_else(|| {
-            syn::Error::new_spanned(
-                variant,
-                "embedded enum variant must have a #[column(variant = N)] attribute",
-            )
-        })?;
-
         let fields_named = matches!(&variant.fields, syn::Fields::Named(_));
         let name = Name::from_ident(&variant.ident);
         let is_method_ident = syn::Ident::new(&format!("is_{}", name.ident), variant.ident.span());
