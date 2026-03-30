@@ -50,7 +50,7 @@ toasty-driver-dynamodb = { workspace = true, optional = true }
 toasty-driver-mysql = { workspace = true, optional = true }
 toasty-driver-postgresql = { workspace = true, optional = true }
 toasty-driver-sqlite = { workspace = true, optional = true }
-serde_core = { version = "1.0.221", optional = true }
+serde_core = { version = "1.0.228", optional = true }
 serde_json = { workspace = true, optional = true }
 
 bit-set.workspace = true
