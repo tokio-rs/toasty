@@ -14,7 +14,6 @@ serde_json.workspace = true
 tracing.workspace = true
 url.workspace = true
 uuid.workspace = true
-tracing = "0.1.44"
 
 [lints]
 workspace = true

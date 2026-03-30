@@ -175,24 +175,6 @@ impl Engine {
     }
 }
 
-fn action_name(action: &Action) -> &'static str {
-    match action {
-        Action::DeleteByKey(_) => "DeleteByKey",
-        Action::Eval(_) => "Eval",
-        Action::ExecStatement(_) => "ExecStatement",
-        Action::Filter(_) => "Filter",
-        Action::FindPkByIndex(_) => "FindPkByIndex",
-        Action::GetByKey(_) => "GetByKey",
-        Action::Guard(_) => "Guard",
-        Action::NestedMerge(_) => "NestedMerge",
-        Action::QueryPk(_) => "QueryPk",
-        Action::ReadModifyWrite(_) => "ReadModifyWrite",
-        Action::Project(_) => "Project",
-        Action::SetVar(_) => "SetVar",
-        Action::UpdateByKey(_) => "UpdateByKey",
-    }
-}
-
 impl Exec<'_> {
     async fn exec_step(&mut self, action: &Action) -> Result<()> {
         match action {

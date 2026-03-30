@@ -2,8 +2,10 @@ use super::pool::{ConnectionHandle, ConnectionOperation, Manager};
 use super::tx::ConnRef;
 use super::Transaction;
 
+use crate::engine::exec::ExecResponse;
 use async_trait::async_trait;
 use std::sync::Arc;
+use toasty_core::stmt::Statement;
 use toasty_core::{
     driver::{operation::Operation, Response},
     stmt::{self, Value},
@@ -98,6 +100,24 @@ impl Connection {
             .unwrap();
         rx.await.unwrap()
     }
+
+    async fn exec_paginated(
+        &mut self,
+        stmt: toasty_core::stmt::Statement,
+    ) -> toasty_core::Result<crate::engine::exec::ExecResponse> {
+        let (tx, rx) = oneshot::channel();
+
+        self.handle()
+            .in_tx
+            .send(ConnectionOperation::ExecStatementPaginated {
+                stmt: Box::new(stmt),
+                in_transaction: false,
+                tx,
+            })
+            .unwrap();
+
+        rx.await.unwrap()
+    }
 }
 
 impl Connection {
@@ -116,6 +136,10 @@ impl super::Executor for Connection {
 
     async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> crate::Result<Value> {
         self.exec_stmt(stmt, false).await
+    }
+
+    async fn exec_paginated(&mut self, stmt: Statement) -> toasty_core::Result<ExecResponse> {
+        Connection::exec_paginated(self, stmt).await
     }
 
     fn schema(&mut self) -> &Arc<Schema> {

@@ -185,18 +185,7 @@ impl Executor for Db {
         &mut self,
         stmt: toasty_core::stmt::Statement,
     ) -> Result<crate::engine::exec::ExecResponse> {
-        let (tx, rx) = oneshot::channel();
-
-        let conn = self.connection().await?;
-        conn.in_tx
-            .send(ConnectionOperation::ExecStatementPaginated {
-                stmt: Box::new(stmt),
-                in_transaction: false,
-                tx,
-            })
-            .unwrap();
-
-        rx.await.unwrap()
+        self.connection().await?.exec_paginated(stmt).await
     }
 
     fn schema(&mut self) -> &Arc<Schema> {
