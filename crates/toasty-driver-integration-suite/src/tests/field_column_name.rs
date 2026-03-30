@@ -31,20 +31,16 @@ pub async fn specify_custom_column_name(test: &mut Test) -> Result<()> {
     let expected_columns = columns(&db, "users", &["id", "my_name"]);
 
     // Verify the operation uses the correct table and column names
-    assert_struct!(op, Operation::QuerySql(_ {
-        stmt: Statement::Insert(_ {
-            target: InsertTarget::Table(_ {
+    assert_struct!(op, Operation::QuerySql({
+        stmt: Statement::Insert({
+            target: InsertTarget::Table({
                 table: == user_table_id,
                 columns: == expected_columns,
-                ..
             }),
-            source.body: ExprSet::Values(_ {
+            source.body: ExprSet::Values({
                 rows: [=~ (Any, "foo")],
-                ..
             }),
-            ..
         }),
-        ..
     }));
     Ok(())
 }
@@ -75,16 +71,13 @@ pub async fn specify_custom_column_name_with_type(test: &mut Test) -> Result<()>
     let expected_columns = columns(&db, "users", &["id", "my_name"]);
 
     // Verify the operation uses the correct table and column names
-    assert_struct!(op, Operation::QuerySql(_ {
-        stmt: Statement::Insert(_ {
-            target: InsertTarget::Table(_ {
+    assert_struct!(op, Operation::QuerySql({
+        stmt: Statement::Insert({
+            target: InsertTarget::Table({
                 table: == user_table_id,
                 columns: == expected_columns,
-                ..
             }),
-            ..
         }),
-        ..
     }));
 
     // Verify the value "foo" is sent as a string

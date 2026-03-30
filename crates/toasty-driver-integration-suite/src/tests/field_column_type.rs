@@ -102,20 +102,16 @@ pub async fn specify_uuid_as_text(test: &mut Test) -> Result<()> {
 
         // Verify the operation uses the correct table and columns,
         // and the UUID value is sent as a string
-        assert_struct!(op, Operation::QuerySql(_ {
-            stmt: Statement::Insert(_ {
-                target: InsertTarget::Table(_ {
+        assert_struct!(op, Operation::QuerySql({
+            stmt: Statement::Insert({
+                target: InsertTarget::Table({
                     table: == table_id(&db, "items"),
                     columns: == columns(&db, "items", &["id", "val"]),
-                    ..
                 }),
-                source.body: ExprSet::Values(_ {
+                source.body: ExprSet::Values({
                     rows: [=~ (Any, val_str)],
-                    ..
                 }),
-                ..
             }),
-            ..
         }));
 
         let read = Item::get_by_id(&mut db, &created.id).await?;
@@ -124,9 +120,8 @@ pub async fn specify_uuid_as_text(test: &mut Test) -> Result<()> {
         let (op, _) = test.log().pop();
 
         if test.capability().sql {
-            assert_struct!(op, Operation::QuerySql(_ {
+            assert_struct!(op, Operation::QuerySql({
                 stmt: Statement::Query(_),
-                ..
             }))
         } else {
             assert_struct!(op, Operation::GetByKey(_))
