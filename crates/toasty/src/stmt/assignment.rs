@@ -1,16 +1,17 @@
-use super::{IntoExpr, List};
+use super::{IntoExpr, List, Path};
 use std::marker::PhantomData;
 use toasty_core::stmt;
 
 /// Apply a field mutation to an update statement's [`Assignments`] map.
 ///
-/// This trait is used for field types where the mutation semantics are
-/// ambiguous from a plain value alone — primarily **has-many** collection
-/// fields. For these fields, callers must use an explicit combinator
-/// ([`insert`], [`remove`], or [`set`]) to specify the intent.
+/// This trait unifies all update mutations behind a single bound.
+/// Collection field setters accept `impl Assign<List<T>>`, requiring
+/// callers to use explicit combinators ([`insert`], [`remove`], or
+/// [`set`]).
 ///
-/// Scalar fields continue to accept `impl IntoExpr<T>` directly (a plain
-/// value means "set"). Only collection setters use `Assign`.
+/// Scalar and relation field setters accept `impl IntoExpr<T>` directly
+/// (a plain value means "set"). Both paths write into the same
+/// [`Assignments`] map.
 ///
 /// Arrays and [`Vec`]s of assignments implement `Assign<T>` when their
 /// elements do, allowing multiple operations in a single setter call:
@@ -25,14 +26,16 @@ use toasty_core::stmt;
 ///     .exec(&mut db)
 ///     .await?;
 /// ```
+///
+/// [`Assignments`]: toasty_core::stmt::Assignments
 pub trait Assign<T> {
     /// Record one or more assignments into the given [`Assignments`] map at
     /// the specified projection.
     fn assign(self, assignments: &mut stmt::Assignments, projection: stmt::Projection);
 }
 
-/// A typed assignment produced by the [`insert`], [`remove`], and [`set`]
-/// combinators.
+/// A typed assignment produced by the [`insert`], [`remove`], [`set`], and
+/// [`patch`] combinators.
 ///
 /// `Assignment<T>` implements `Assign<T>`, so it can be passed directly
 /// to any update builder setter that accepts `impl Assign<T>`.
@@ -41,10 +44,13 @@ pub struct Assignment<T> {
     _p: PhantomData<T>,
 }
 
+type PatchFn = Box<dyn FnOnce(&mut stmt::Assignments, stmt::Projection)>;
+
 enum AssignmentKind {
     Set(stmt::Expr),
     Insert(stmt::Expr),
     Remove(stmt::Expr),
+    Patch(PatchFn),
 }
 
 // Assignment<T> implements Assign<T>
@@ -54,6 +60,7 @@ impl<T> Assign<T> for Assignment<T> {
             AssignmentKind::Set(expr) => assignments.set(projection, expr),
             AssignmentKind::Insert(expr) => assignments.insert(projection, expr),
             AssignmentKind::Remove(expr) => assignments.remove(projection, expr),
+            AssignmentKind::Patch(f) => f(assignments, projection),
         }
     }
 }
@@ -155,6 +162,51 @@ pub fn remove<T>(expr: impl IntoExpr<T>) -> Assignment<List<T>> {
 pub fn set<T>(expr: impl IntoExpr<T>) -> Assignment<T> {
     Assignment {
         kind: AssignmentKind::Set(expr.into_expr().untyped),
+        _p: PhantomData,
+    }
+}
+
+/// Partially update a sub-field of an embedded type.
+///
+/// Takes a [`Path<T, U>`] (identifying which sub-field to update) and an
+/// [`Assignment<U>`] for the value. Returns an [`Assignment<T>`] that can
+/// be passed to the parent field's setter.
+///
+/// For plain values, wrap with [`set`]:
+///
+/// ```ignore
+/// user.update()
+///     .critter(stmt::patch(
+///         Creature::fields().human().profession(),
+///         stmt::set("doctor"),
+///     ))
+///     .exec(&mut db)
+///     .await?;
+/// ```
+///
+/// For nested patching, pass the inner [`patch`] result directly:
+///
+/// ```ignore
+/// user.update()
+///     .kind(stmt::patch(
+///         Kind::variants().admin().perm(),
+///         stmt::patch(Permission::fields().everything(), stmt::set(true)),
+///     ))
+///     .exec(&mut db)
+///     .await?;
+/// ```
+pub fn patch<T, U>(path: Path<T, U>, value: impl Assign<U> + 'static) -> Assignment<T> {
+    let path_projection = path.untyped.projection;
+
+    Assignment {
+        kind: AssignmentKind::Patch(Box::new(move |assignments, mut projection| {
+            // Append the path's field steps to the parent projection,
+            // so the inner assignment lands at the correct nested key.
+            for &step in path_projection.as_slice() {
+                projection.push(step);
+            }
+            value.assign(assignments, projection);
+        })),
         _p: PhantomData,
     }
 }
