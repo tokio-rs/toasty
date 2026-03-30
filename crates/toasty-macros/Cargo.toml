@@ -25,5 +25,10 @@ proc-macro2.workspace = true
 quote.workspace = true
 syn.workspace = true
 
+[dev-dependencies]
+toasty = { path = "../toasty", features = ["jiff", "serde", "sqlite"] }
+uuid.workspace = true
+jiff.workspace = true
+
 [lints]
 workspace = true
