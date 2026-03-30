@@ -310,24 +310,22 @@ impl Expand<'_> {
         let data_load_arms = self.expand_enum_load_arms(false);
 
         // Generate the discriminant-specific destructure/rewrap tokens.
-        // The outer (unit) match borrows via `ref` for strings so `value`
-        // stays available for the error path. The inner (record) match owns
-        // the taken element and must rewrap it for the error.
-        let (outer_pattern, outer_match, outer_rewrap, inner_pattern, inner_match, inner_rewrap) =
+        // The outer match borrows via `ref` so `value` stays available for the
+        // error path. The inner (record) match owns the taken element and must
+        // rewrap it for the error.
+        let (outer_pattern, outer_match, inner_pattern, inner_match, inner_rewrap) =
             if self.uses_string_discriminants() {
                 (
                     quote! { #toasty::core::stmt::Value::String(ref d) },
                     quote! { d.as_str() },
-                    quote! { value },
                     quote! { #toasty::core::stmt::Value::String(d) },
                     quote! { d.as_str() },
                     quote! { #toasty::core::stmt::Value::String(d) },
                 )
             } else {
                 (
-                    quote! { #toasty::core::stmt::Value::I64(d) },
+                    quote! { #toasty::core::stmt::Value::I64(ref d) },
                     quote! { d },
-                    quote! { #toasty::core::stmt::Value::I64(d) },
                     quote! { #toasty::core::stmt::Value::I64(d) },
                     quote! { d },
                     quote! { #toasty::core::stmt::Value::I64(d) },
@@ -347,7 +345,7 @@ impl Expand<'_> {
                         #outer_pattern => match #outer_match {
                             #( #unit_load_arms )*
                             _ => Err(#toasty::Error::type_conversion(
-                                #outer_rewrap,
+                                value,
                                 stringify!(#model_ident),
                             )),
                         },
