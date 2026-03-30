@@ -11,6 +11,7 @@
   - [Mapping Formalization](./design/mapping-formalization.md)
   - [Pagination](./design/pagination.md)
   - [Serialize Fields](./design/serialize-fields.md)
+  - [Static Assertions for create! Required Fields](./design/static-assertions-create-macro.md)
   - [String Discriminants](./design/string-discriminants.md)
 - [Roadmap](./roadmap/README.md)
   - [Composite Keys](./roadmap/composite-keys.md)
