@@ -67,14 +67,7 @@ impl Engine {
         stmt: Statement,
         in_transaction: bool,
     ) -> Result<ValueStream> {
-        let stmt_kind = match &stmt {
-            stmt::Statement::Query(_) => "query",
-            stmt::Statement::Insert(_) => "insert",
-            stmt::Statement::Update(_) => "update",
-            stmt::Statement::Delete(_) => "delete",
-        };
-
-        tracing::debug!(stmt.kind = stmt_kind, "executing statement");
+        tracing::debug!(stmt.kind = stmt.name(), "executing statement");
 
         if cfg!(debug_assertions) {
             self.verify(&stmt);

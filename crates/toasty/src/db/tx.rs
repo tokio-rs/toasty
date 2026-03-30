@@ -198,7 +198,6 @@ impl<'a> Transaction<'a> {
 impl Drop for Transaction<'_> {
     fn drop(&mut self) {
         if !self.finalized {
-            tracing::warn!("transaction dropped without commit or rollback, rolling back");
             let op = match self.savepoint {
                 Some(_) => operation::Transaction::RollbackToSavepoint(self.savepoint()),
                 None => operation::Transaction::Rollback,
