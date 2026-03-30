@@ -309,28 +309,22 @@ impl Expand<'_> {
         let unit_load_arms = self.expand_enum_load_arms(true);
         let data_load_arms = self.expand_enum_load_arms(false);
 
-        // Generate the discriminant-specific destructure/rewrap tokens.
-        // The outer match borrows via `ref` so `value` stays available for the
-        // error path. The inner (record) match owns the taken element and must
-        // rewrap it for the error.
-        let (outer_pattern, outer_match, inner_pattern, inner_match, inner_rewrap) =
-            if self.uses_string_discriminants() {
-                (
-                    quote! { #toasty::core::stmt::Value::String(ref d) },
-                    quote! { d.as_str() },
-                    quote! { #toasty::core::stmt::Value::String(d) },
-                    quote! { d.as_str() },
-                    quote! { #toasty::core::stmt::Value::String(d) },
-                )
-            } else {
-                (
-                    quote! { #toasty::core::stmt::Value::I64(ref d) },
-                    quote! { d },
-                    quote! { #toasty::core::stmt::Value::I64(d) },
-                    quote! { d },
-                    quote! { #toasty::core::stmt::Value::I64(d) },
-                )
-            };
+        // Generate discriminant-specific match tokens. The outer match uses
+        // `ref` so `value` stays available for the error path. The inner
+        // (record) match owns the taken element.
+        let (ref_pattern, owned_pattern, match_expr) = if self.uses_string_discriminants() {
+            (
+                quote! { #toasty::core::stmt::Value::String(ref d) },
+                quote! { #toasty::core::stmt::Value::String(d) },
+                quote! { d.as_str() },
+            )
+        } else {
+            (
+                quote! { #toasty::core::stmt::Value::I64(ref d) },
+                quote! { #toasty::core::stmt::Value::I64(d) },
+                quote! { d },
+            )
+        };
 
         quote! {
             impl #toasty::Load for #model_ident {
@@ -342,7 +336,7 @@ impl Expand<'_> {
 
                 fn load(value: #toasty::core::stmt::Value) -> #toasty::Result<Self> {
                     match value {
-                        #outer_pattern => match #outer_match {
+                        #ref_pattern => match #match_expr {
                             #( #unit_load_arms )*
                             _ => Err(#toasty::Error::type_conversion(
                                 value,
@@ -350,10 +344,10 @@ impl Expand<'_> {
                             )),
                         },
                         #toasty::core::stmt::Value::Record(mut record) => match record[0].take() {
-                            #inner_pattern => match #inner_match {
+                            #owned_pattern => match #match_expr {
                                 #( #data_load_arms )*
                                 _ => Err(#toasty::Error::type_conversion(
-                                    #inner_rewrap,
+                                    #owned_pattern,
                                     stringify!(#model_ident),
                                 )),
                             },
