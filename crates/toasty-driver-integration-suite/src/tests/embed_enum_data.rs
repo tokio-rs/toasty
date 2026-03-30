@@ -17,25 +17,24 @@ pub async fn data_carrying_enum_schema(test: &mut Test) {
     let schema = db.schema();
 
     assert_struct!(schema.app.models, #{
-        ContactInfo::id(): toasty::schema::app::Model::EmbeddedEnum(_ {
+        ContactInfo::id(): toasty::schema::app::Model::EmbeddedEnum({
             name.upper_camel_case(): "ContactInfo",
             variants: [
-                _ {
+                {
                     name.upper_camel_case(): "Email",
                     discriminant: toasty_core::stmt::Value::I64(1),
                     ..
                 },
-                _ {
+                {
                     name.upper_camel_case(): "Phone",
                     discriminant: toasty_core::stmt::Value::I64(2),
                     ..
                 },
             ],
             fields: [
-                _ { id.index: 0, name.app_name: "address", .. },
-                _ { id.index: 1, name.app_name: "number", .. },
+                { id.index: 0, name.app_name: "address" },
+                { id.index: 1, name.app_name: "number" },
             ],
-            ..
         }),
     });
 }
@@ -60,28 +59,27 @@ pub async fn mixed_enum_schema(test: &mut Test) {
     let schema = db.schema();
 
     assert_struct!(schema.app.models, #{
-        Status::id(): toasty::schema::app::Model::EmbeddedEnum(_ {
+        Status::id(): toasty::schema::app::Model::EmbeddedEnum({
             variants: [
-                _ {
+                {
                     name.upper_camel_case(): "Pending",
                     discriminant: toasty_core::stmt::Value::I64(1),
                     ..
                 },
-                _ {
+                {
                     name.upper_camel_case(): "Failed",
                     discriminant: toasty_core::stmt::Value::I64(2),
                     ..
                 },
-                _ {
+                {
                     name.upper_camel_case(): "Done",
                     discriminant: toasty_core::stmt::Value::I64(3),
                     ..
                 },
             ],
             fields: [
-                _ { id.index: 0, name.app_name: "reason", .. },
+                { id.index: 0, name.app_name: "reason" },
             ],
-            ..
         }),
     });
 }
@@ -112,15 +110,14 @@ pub async fn data_carrying_enum_db_schema(test: &mut Test) {
 
     // The DB table has disc col + one col per variant field (2 variants × 1 field each).
     assert_struct!(schema.db.tables, [
-        _ {
+        {
             name: =~ r"users$",
             columns: [
-                _ { name: "id", .. },
-                _ { name: "contact", nullable: false, .. },
-                _ { name: "contact_address", nullable: true, .. },
-                _ { name: "contact_number", nullable: true, .. },
+                { name: "id" },
+                { name: "contact", nullable: false },
+                { name: "contact_address", nullable: true },
+                { name: "contact_number", nullable: true },
             ],
-            ..
         },
     ]);
 }
@@ -502,14 +499,13 @@ pub async fn global_field_indices(test: &mut Test) {
     let schema = db.schema();
 
     assert_struct!(schema.app.models, #{
-        Event::id(): toasty::schema::app::Model::EmbeddedEnum(_ {
+        Event::id(): toasty::schema::app::Model::EmbeddedEnum({
             fields: [
-                _ { id.index: 0, name.app_name: "user_id", .. },
-                _ { id.index: 1, name.app_name: "ip", .. },
-                _ { id.index: 2, name.app_name: "item_id", .. },
-                _ { id.index: 3, name.app_name: "amount", .. },
+                { id.index: 0, name.app_name: "user_id" },
+                { id.index: 1, name.app_name: "ip" },
+                { id.index: 2, name.app_name: "item_id" },
+                { id.index: 3, name.app_name: "amount" },
             ],
-            ..
         }),
     });
 }

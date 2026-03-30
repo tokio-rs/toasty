@@ -90,7 +90,7 @@ pub async fn batch_all_four_statement_types(t: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await?;
 
-    assert_struct!(queried, [_ { name: "Alice" }]);
+    assert_struct!(queried, [{ name: "Alice" }]);
     assert_eq!(created.name, "Carol");
 
     // Verify update applied

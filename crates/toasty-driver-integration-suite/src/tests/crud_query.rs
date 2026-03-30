@@ -315,34 +315,28 @@ pub async fn query_or_basic(test: &mut Test) -> Result<()> {
         // Verify the driver operation contains the expected OR filter
         let (op, _) = test.log().pop();
 
-        assert_struct!(&op, Operation::QuerySql(_ {
-            stmt: Statement::Query(_ {
-                body: ExprSet::Select(_ {
-                    filter.expr: Some(Expr::Or(_ {
+        assert_struct!(&op, Operation::QuerySql({
+            stmt: Statement::Query({
+                body: ExprSet::Select({
+                    filter.expr: Some(Expr::Or({
                         // TODO: assert_struct! needs a set matcher
                         /*
                         operands: [
-                            Expr::BinaryOp(_ {
+                            Expr::BinaryOp({
                                 op: BinaryOp::Eq,
                                 *lhs: == Expr::column(age_column),
                                 *rhs: Expr::Value(Value::I64(35)),
-                                ..
                             }),
-                            Expr::BinaryOp(_ {
+                            Expr::BinaryOp({
                                 op: BinaryOp::Eq,
                                 *lhs: == Expr::column(name_column),
                                 *rhs: Expr::Value(Value::String("Alice")),
-                                ..
                             }),
                         ],
                         */
-                        ..
                     })),
-                    ..
                 }),
-                ..
             }),
-            ..
         }));
     } else {
         // DynamoDB requires key conditions for queries - OR filters without

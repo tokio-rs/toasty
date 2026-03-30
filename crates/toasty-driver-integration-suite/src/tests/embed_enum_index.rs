@@ -32,9 +32,8 @@ pub async fn embedded_enum_index_schema(test: &mut Test) {
 
     // The embedded enum should carry its indices in the app schema
     assert_struct!(schema.app.models, #{
-        ContactInfo::id(): toasty::schema::app::Model::EmbeddedEnum(_ {
+        ContactInfo::id(): toasty::schema::app::Model::EmbeddedEnum({
             indices.len(): 2,
-            ..
         }),
         ..
     });
@@ -49,11 +48,11 @@ pub async fn embedded_enum_index_schema(test: &mut Test) {
 
     assert_struct!(table.indices, [
         // PK
-        _ { primary_key: true, .. },
+        { primary_key: true },
         // Unique index on contact_address
-        _ { unique: true, primary_key: false, columns: [_ { column: == address_col }] },
+        { unique: true, primary_key: false, columns: [{ column: == address_col }] },
         // Non-unique index on contact_number
-        _ { unique: false, primary_key: false, columns: [_ { column: == number_col }] },
+        { unique: false, primary_key: false, columns: [{ column: == number_col }] },
     ]);
 }
 
@@ -134,7 +133,7 @@ pub async fn embedded_enum_unique_index_enforced(test: &mut Test) -> Result<()> 
     .exec(&mut db)
     .await?;
 
-    assert_struct!(users, [_ { name: "Alice", .. }]);
+    assert_struct!(users, [{ name: "Alice" }]);
 
     Ok(())
 }
