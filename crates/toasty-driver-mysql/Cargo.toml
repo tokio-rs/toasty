@@ -17,6 +17,7 @@ bigdecimal = { workspace = true, optional = true }
 jiff = { workspace = true, optional = true }
 mysql_async.workspace = true
 tokio.workspace = true
+tracing.workspace = true
 url.workspace = true
 uuid.workspace = true
 

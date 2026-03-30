@@ -213,6 +213,8 @@ impl From<Conn> for Connection {
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
+        tracing::trace!(driver = "mysql", op = %op.name(), "driver exec");
+
         let (sql, ret, last_insert_id_hack): (sql::Statement, _, _) = match op {
             Operation::QuerySql(op) => (op.stmt.into(), op.ret, op.last_insert_id_hack),
             Operation::Transaction(op) => {
@@ -235,6 +237,8 @@ impl toasty_core::driver::Connection for Connection {
         let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
 
         let sql_as_str = sql::Serializer::mysql(&schema.db).serialize(&sql, &mut params);
+
+        tracing::debug!(db.system = "mysql", db.statement = %sql_as_str, params = params.len(), "executing SQL");
 
         let params = params
             .into_iter()
@@ -337,6 +341,7 @@ impl toasty_core::driver::Connection for Connection {
 
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
         for table in &schema.db.tables {
+            tracing::debug!(table = %table.name, "creating table");
             self.create_table(&schema.db, table).await?;
         }
         Ok(())
@@ -377,6 +382,7 @@ impl toasty_core::driver::Connection for Connection {
         name: String,
         migration: &toasty_core::schema::db::Migration,
     ) -> Result<()> {
+        tracing::info!(id = id, name = %name, "applying migration");
         // Ensure the migrations table exists
         self.conn
             .exec_drop(

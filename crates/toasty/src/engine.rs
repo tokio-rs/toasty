@@ -67,6 +67,8 @@ impl Engine {
         stmt: Statement,
         in_transaction: bool,
     ) -> Result<ValueStream> {
+        tracing::debug!(stmt.kind = stmt.name(), "executing statement");
+
         if cfg!(debug_assertions) {
             self.verify(&stmt);
         }
@@ -83,6 +85,12 @@ impl Engine {
 
         // Translate the optimized statement into a series of driver operations.
         let plan = self.plan_hir_statement(hir)?;
+
+        tracing::trace!(
+            actions = plan.actions.len(),
+            needs_transaction = plan.needs_transaction,
+            "execution plan ready"
+        );
 
         // The plan is called once (single entry record stream) with no arguments
         // (empty record).
