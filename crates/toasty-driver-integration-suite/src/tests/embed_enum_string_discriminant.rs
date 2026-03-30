@@ -172,6 +172,143 @@ pub async fn string_discriminant_data_enum(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// Tests data-carrying enum with default string labels (variant ident as discriminant).
+#[driver_test(id(ID))]
+pub async fn default_string_labels_data_enum(t: &mut Test) -> Result<()> {
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    enum ContactMethod {
+        Email { address: String },
+        Phone { number: String },
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+        name: String,
+        contact: ContactMethod,
+    }
+
+    let mut db = t.setup_db(models!(User, ContactMethod)).await;
+
+    let user = User::create()
+        .name("Alice")
+        .contact(ContactMethod::Email {
+            address: "alice@example.com".into(),
+        })
+        .exec(&mut db)
+        .await?;
+
+    let found = User::get_by_id(&mut db, &user.id).await?;
+    assert_eq!(
+        found.contact,
+        ContactMethod::Email {
+            address: "alice@example.com".into()
+        }
+    );
+
+    // Update to a different variant
+    let mut user = found;
+    user.update()
+        .contact(ContactMethod::Phone {
+            number: "555-0100".into(),
+        })
+        .exec(&mut db)
+        .await?;
+
+    let found = User::get_by_id(&mut db, &user.id).await?;
+    assert_eq!(
+        found.contact,
+        ContactMethod::Phone {
+            number: "555-0100".into()
+        }
+    );
+
+    Ok(())
+}
+
+/// Tests data-carrying enum mixing explicit string labels with defaults.
+#[driver_test(id(ID))]
+pub async fn mixed_string_labels_data_enum(t: &mut Test) -> Result<()> {
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    enum ContactMethod {
+        #[column(variant = "mail")]
+        Email {
+            address: String,
+        },
+        Phone {
+            number: String,
+        },
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+        name: String,
+        contact: ContactMethod,
+    }
+
+    let mut db = t.setup_db(models!(User, ContactMethod)).await;
+
+    // Create with the explicit-label variant
+    let u1 = User::create()
+        .name("Alice")
+        .contact(ContactMethod::Email {
+            address: "alice@example.com".into(),
+        })
+        .exec(&mut db)
+        .await?;
+
+    // Create with the default-label variant
+    let u2 = User::create()
+        .name("Bob")
+        .contact(ContactMethod::Phone {
+            number: "555-0200".into(),
+        })
+        .exec(&mut db)
+        .await?;
+
+    let found1 = User::get_by_id(&mut db, &u1.id).await?;
+    assert_eq!(
+        found1.contact,
+        ContactMethod::Email {
+            address: "alice@example.com".into()
+        }
+    );
+
+    let found2 = User::get_by_id(&mut db, &u2.id).await?;
+    assert_eq!(
+        found2.contact,
+        ContactMethod::Phone {
+            number: "555-0200".into()
+        }
+    );
+
+    // Update from explicit-label variant to default-label variant
+    let mut user = found1;
+    user.update()
+        .contact(ContactMethod::Phone {
+            number: "555-0300".into(),
+        })
+        .exec(&mut db)
+        .await?;
+
+    let found = User::get_by_id(&mut db, &user.id).await?;
+    assert_eq!(
+        found.contact,
+        ContactMethod::Phone {
+            number: "555-0300".into()
+        }
+    );
+
+    Ok(())
+}
+
 /// Tests filtering by variant with string discriminants.
 #[driver_test(requires(sql))]
 pub async fn filter_by_string_variant(t: &mut Test) -> Result<()> {
