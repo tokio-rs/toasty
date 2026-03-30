@@ -53,7 +53,7 @@ fn expand_scoped(expr: &syn::Expr, fields: &FieldSet) -> TokenStream {
         quote_spanned! { span=> toasty::codegen_support::scope_fields(&__scope) };
     let create_call = quote_spanned! { span=> __scope.create() };
 
-    quote! {
+    quote_spanned! { span=>
         {
             let __scope = #expr;
 
