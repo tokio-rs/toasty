@@ -72,7 +72,7 @@ url.workspace = true
 assert-struct.workspace = true
 proptest.workspace = true
 tokio = { workspace = true }
-toasty-driver-sqlite = { workspace = true }
+toasty-driver-sqlite = { path = "../toasty-driver-sqlite" }
 
 [lints]
 workspace = true
