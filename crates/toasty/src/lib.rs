@@ -132,6 +132,10 @@ pub use toasty_core::{Error, Result};
 pub mod codegen_support {
     pub use crate::{
         schema::{
+            create_meta::{
+                assert_create_fields, assert_nested_create_fields, CreateBelongsTo, CreateField,
+                CreateMeta, CreateNested,
+            },
             generate_unique_id, Auto, BelongsTo, Embed, Field, HasMany, HasOne, Load, Model,
             Register, Relation, Scope,
         },

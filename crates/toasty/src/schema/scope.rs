@@ -1,3 +1,4 @@
+use crate::schema::create_meta::CreateMeta;
 use crate::stmt::Path;
 
 /// A scope represents a context that contains items of a particular type.
@@ -14,6 +15,9 @@ pub trait Scope {
 
     /// The create builder for items in this scope.
     type Create;
+
+    /// Compile-time metadata for validating `create!` fields in scoped creates.
+    const CREATE_META: &'static CreateMeta;
 
     /// Construct a scope path from a [`Path`] targeting the item type.
     fn new_path<Origin>(path: Path<Origin, Self::Item>) -> Self::Path<Origin>;

@@ -10,7 +10,20 @@ pub(crate) fn expand(item: &CreateItem) -> TokenStream {
             let span = path.span();
             let fields_path = quote_spanned! { span=> #path::fields() };
             let field_calls = expand_field_set(fields, &fields_path);
-            quote_spanned! { span=> #path::create() #(#field_calls)* }
+            let field_names = collect_field_names(fields);
+            let nested_assertions = expand_nested_assertions(path, fields);
+            quote_spanned! { span=>
+                {
+                    const _: () = {
+                        toasty::codegen_support::assert_create_fields(
+                            &<#path as toasty::codegen_support::Model>::CREATE_META,
+                            &[ #( #field_names ),* ],
+                        );
+                        #( #nested_assertions )*
+                    };
+                    #path::create() #(#field_calls)*
+                }
+            }
         }
         CreateItem::Scoped { expr, fields } => expand_scoped(expr, fields),
         CreateItem::TypedBatch { path, items } => {
@@ -32,6 +45,7 @@ fn expand_scoped(expr: &syn::Expr, fields: &FieldSet) -> TokenStream {
     let span = expr.span();
     let fields_path = quote! { __scope_fields };
     let field_calls = expand_field_set(fields, &fields_path);
+    let field_names = collect_field_names(fields);
 
     // The `scope_fields` call is spanned to the user's expression so that
     // a missing `Scope` impl produces an error pointing at that expression.
@@ -42,6 +56,21 @@ fn expand_scoped(expr: &syn::Expr, fields: &FieldSet) -> TokenStream {
     quote! {
         {
             let __scope = #expr;
+
+            struct __Check<__S: toasty::codegen_support::Scope>(
+                std::marker::PhantomData<__S>,
+            );
+            impl<__S: toasty::codegen_support::Scope> __Check<__S> {
+                const __ASSERT: () = toasty::codegen_support::assert_create_fields(
+                    __S::CREATE_META,
+                    &[ #( #field_names ),* ],
+                );
+            }
+            fn __force_check<__S: toasty::codegen_support::Scope>(_: &__S) {
+                let _ = __Check::<__S>::__ASSERT;
+            }
+            __force_check(&__scope);
+
             let __scope_fields = #scope_fields_call;
             #create_call #(#field_calls)*
         }
@@ -69,7 +98,20 @@ fn expand_typed_batch(path: &syn::Path, items: &[FieldSet]) -> TokenStream {
         .iter()
         .map(|fields| {
             let field_calls = expand_field_set(fields, &fields_path);
-            quote_spanned! { span=> #path::create() #(#field_calls)* }
+            let field_names = collect_field_names(fields);
+            let nested_assertions = expand_nested_assertions(path, fields);
+            quote_spanned! { span=>
+                {
+                    const _: () = {
+                        toasty::codegen_support::assert_create_fields(
+                            &<#path as toasty::codegen_support::Model>::CREATE_META,
+                            &[ #( #field_names ),* ],
+                        );
+                        #( #nested_assertions )*
+                    };
+                    #path::create() #(#field_calls)*
+                }
+            }
         })
         .collect();
     quote! { [ #( #builders, )* ] }
@@ -130,4 +172,46 @@ fn expand_nested_item(
             quote! { compile_error!("nested lists are not supported in create!") }
         }
     }
+}
+
+/// Collect field name strings from a FieldSet for use in assertions.
+fn collect_field_names(fields: &FieldSet) -> Vec<String> {
+    fields.0.iter().map(|f| f.name.to_string()).collect()
+}
+
+/// Generate nested assertion calls for any fields that use `Single` or `List`
+/// values (i.e., nested creates).
+fn expand_nested_assertions(model_path: &syn::Path, fields: &FieldSet) -> Vec<TokenStream> {
+    let mut assertions = Vec::new();
+    for entry in &fields.0 {
+        let field_name = entry.name.to_string();
+        match &entry.value {
+            FieldValue::Single(sub_fields) => {
+                let sub_field_names = collect_field_names(sub_fields);
+                assertions.push(quote! {
+                    toasty::codegen_support::assert_nested_create_fields(
+                        &<#model_path as toasty::codegen_support::Model>::CREATE_META,
+                        #field_name,
+                        &[ #( #sub_field_names ),* ],
+                    );
+                });
+            }
+            FieldValue::List(items) => {
+                for item in items {
+                    if let FieldValue::Single(sub_fields) = item {
+                        let sub_field_names = collect_field_names(sub_fields);
+                        assertions.push(quote! {
+                            toasty::codegen_support::assert_nested_create_fields(
+                                &<#model_path as toasty::codegen_support::Model>::CREATE_META,
+                                #field_name,
+                                &[ #( #sub_field_names ),* ],
+                            );
+                        });
+                    }
+                }
+            }
+            FieldValue::Expr(_) => {}
+        }
+    }
+    assertions
 }
