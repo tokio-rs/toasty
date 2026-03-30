@@ -19,6 +19,12 @@ impl Simplify<'_> {
             //  - `null is null` → `true`
             //  - `<non-null const> is null` → `false`
             stmt::Expr::Value(value) => Some(value.is_null().into()),
+            // Strip type casts: `is_null(cast(x, T))` → `is_null(x)`.
+            // Nullity is type-independent so the cast is unnecessary.
+            stmt::Expr::Cast(expr_cast) => {
+                *expr.expr = expr_cast.expr.take();
+                None
+            }
             _ => None,
         }
     }

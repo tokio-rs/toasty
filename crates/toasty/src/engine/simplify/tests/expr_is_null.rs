@@ -5,11 +5,12 @@ use toasty_core::stmt::{
 };
 
 #[test]
-fn cast_to_non_id_not_simplified() {
+fn cast_is_stripped_from_is_null() {
     let schema = test_schema();
     let simplify = Simplify::new(&schema);
 
-    // `is_null(cast(arg(0), String))`, non-Id cast, not simplified
+    // `is_null(cast(arg(0), String))` → `is_null(arg(0))`
+    // Nullity is type-independent, so the cast is stripped.
     let mut expr = ExprIsNull {
         expr: Box::new(Expr::Cast(ExprCast {
             expr: Box::new(Expr::arg(0)),
@@ -19,13 +20,7 @@ fn cast_to_non_id_not_simplified() {
     let result = simplify.simplify_expr_is_null(&mut expr);
 
     assert!(result.is_none());
-    assert!(matches!(
-        *expr.expr,
-        Expr::Cast(ExprCast {
-            ty: Type::String,
-            ..
-        })
-    ));
+    assert!(matches!(*expr.expr, Expr::Arg(ExprArg { position: 0, .. })));
 }
 
 #[test]

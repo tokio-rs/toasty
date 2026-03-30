@@ -335,8 +335,9 @@ pub async fn filter_option_id_is_none(test: &mut Test) -> Result<()> {
 
     let mut db = test.setup_db(models!(Player)).await;
 
-    Player::create().name("Alice").exec(&mut db).await?;
-    Player::create().name("Bob").exec(&mut db).await?;
+    toasty::create!(Player::[{ name: "Alice" }, { name: "Bob" }])
+        .exec(&mut db)
+        .await?;
 
     // This panics with: "not yet implemented: expr=ExprCast { ... }"
     let players = Player::filter(Player::fields().user_id().is_none())
