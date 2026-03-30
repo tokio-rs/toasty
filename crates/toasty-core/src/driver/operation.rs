@@ -79,7 +79,7 @@ pub enum Operation {
 
 impl Operation {
     /// Returns the operation variant name for logging.
-    pub fn name(&self) -> &'static str {
+    pub fn name(&self) -> &str {
         match self {
             Operation::Insert(_) => "insert",
             Operation::DeleteByKey(_) => "delete_by_key",

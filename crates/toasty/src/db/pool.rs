@@ -100,20 +100,20 @@ impl Pool {
             builder = builder.max_size(max_connections);
         }
 
-        let inner = builder
-            .build()
-            .map_err(toasty_core::Error::connection_pool)?;
+        let inner = builder.build().map_err(|e| {
+            tracing::error!(error = %e, "failed to build connection pool");
+            toasty_core::Error::connection_pool(e)
+        })?;
 
         Ok(Self { inner, capability })
     }
 
     /// Retrieves a connection from the pool.
     pub(crate) async fn get(&self, shared: Arc<super::Shared>) -> crate::Result<super::Connection> {
-        let connection = self
-            .inner
-            .get()
-            .await
-            .map_err(toasty_core::Error::connection_pool)?;
+        let connection = self.inner.get().await.map_err(|e| {
+            tracing::error!(error = %e, "failed to acquire connection from pool");
+            toasty_core::Error::connection_pool(e)
+        })?;
         Ok(super::Connection {
             inner: connection,
             shared,
@@ -162,7 +162,13 @@ impl deadpool::managed::Manager for Manager {
 
     async fn create(&self) -> Result<Self::Type, Self::Error> {
         tracing::debug!("creating new pooled connection");
-        let mut connection = self.driver.connect().await?;
+        let mut connection = match self.driver.connect().await {
+            Ok(conn) => conn,
+            Err(e) => {
+                tracing::error!(error = %e, "failed to create database connection");
+                return Err(e);
+            }
+        };
         let engine = self.engine.clone();
 
         let (in_tx, mut in_rx) = mpsc::unbounded_channel::<ConnectionOperation>();

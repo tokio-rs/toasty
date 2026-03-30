@@ -112,6 +112,7 @@ impl Engine {
         for (i, step) in plan.actions.iter().enumerate() {
             tracing::trace!(step = i, action = %step.name(), "executing action");
             if let Err(e) = exec.exec_step(step).await {
+                tracing::error!(step = i, action = %step.name(), error = %e, "action failed");
                 if plan.needs_transaction {
                     tracing::trace!("rolling back plan transaction due to error");
                     // Best effort: ignore rollback errors so the original error is returned
