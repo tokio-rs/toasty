@@ -11,7 +11,7 @@ mod field;
 pub use field::Field;
 
 #[cfg(feature = "jiff")]
-mod field_jiff;
+mod jiff;
 
 mod has_many;
 pub use has_many::HasMany;
@@ -25,18 +25,28 @@ pub use load::Load;
 mod model;
 pub use model::Model;
 
-pub mod option;
+mod option;
 
 mod register;
 pub use register::{generate_unique_id, Register};
 
+mod num;
+
 mod relation;
 pub use relation::Relation;
+
+mod scope;
+pub use scope::Scope;
 
 use crate::Result;
 
 pub use toasty_core::schema::{app, db, mapping};
 
+/// Build an [`app::Schema`] from a slice of model definitions produced by
+/// `#[derive(Model)]`.
+///
+/// This is a thin wrapper around [`app::Schema::from_macro`] exposed for
+/// use by generated code.
 pub fn from_macro(models: &[app::Model]) -> Result<app::Schema> {
     app::Schema::from_macro(models)
 }

@@ -17,6 +17,7 @@ bigdecimal = { workspace = true, optional = true }
 jiff = { workspace = true, optional = true }
 lru.workspace = true
 postgres.workspace = true
+tracing.workspace = true
 postgres-types.workspace = true
 tokio.workspace = true
 tokio-postgres.workspace = true

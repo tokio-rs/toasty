@@ -29,7 +29,7 @@
 //! ```
 
 mod assignments;
-pub use assignments::{Assignment, AssignmentOp, Assignments};
+pub use assignments::{Assignment, Assignments};
 
 mod association;
 pub use association::Association;
@@ -313,6 +313,16 @@ pub enum Statement {
 }
 
 impl Statement {
+    /// Returns the statement variant name for logging.
+    pub fn name(&self) -> &str {
+        match self {
+            Statement::Query(_) => "query",
+            Statement::Insert(_) => "insert",
+            Statement::Update(_) => "update",
+            Statement::Delete(_) => "delete",
+        }
+    }
+
     /// Substitutes argument placeholders in this statement with concrete values
     /// from `input`.
     pub fn substitute(&mut self, input: impl Input) {

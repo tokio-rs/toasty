@@ -4,7 +4,7 @@ use std::{rc::Rc, sync::Arc};
 use toasty::schema::db;
 use toasty_core::{
     driver::Operation,
-    stmt::{ExprSet, InsertTarget, Statement},
+    stmt::{Assignment, ExprSet, InsertTarget, Statement},
 };
 
 /// Macro to generate the common test body for numeric types
@@ -43,20 +43,16 @@ macro_rules! num_ty_test_body {
 
             // Verify the INSERT operation stored the correct value
             let (op, _resp) = test.log().pop();
-            assert_struct!(op, Operation::QuerySql(_ {
-                stmt: Statement::Insert(_ {
-                    target: InsertTarget::Table(_ {
+            assert_struct!(op, Operation::QuerySql({
+                stmt: Statement::Insert({
+                    target: InsertTarget::Table({
                         table: == table_id(&mut db, "items"),
                         columns: == columns(&mut db, "items", &["id", "val"]),
-                        ..
                     }),
-                    source.body: ExprSet::Values(_ {
+                    source.body: ExprSet::Values({
                         rows: [=~ (Any, val)],
-                        ..
                     }),
-                    ..
                 }),
-                ..
             }));
 
             let read = Item::get_by_id(&mut db, &created.id).await?;
@@ -95,17 +91,14 @@ macro_rules! num_ty_test_body {
                 // Verify the UPDATE operation sent the correct value
                 let (op, _resp) = test.log().pop();
                 if test.capability().sql {
-                    assert_struct!(op, Operation::QuerySql(_ {
-                        stmt: Statement::Update(_ {
-                            assignments: #{ 1: _ { expr: _, .. }},
-                            ..
+                    assert_struct!(op, Operation::QuerySql({
+                        stmt: Statement::Update({
+                            assignments: #{ [1]: Assignment::Set(_)},
                         }),
-                        ..
                     }));
                 } else {
-                    assert_struct!(op, Operation::UpdateByKey(_ {
-                        assignments: #{ 1: _ { expr: _, .. }},
-                        ..
+                    assert_struct!(op, Operation::UpdateByKey({
+                        assignments: #{ [1]: Assignment::Set(_)},
                     }));
                 }
 
@@ -275,20 +268,16 @@ pub async fn ty_str(test: &mut Test) -> Result<()> {
 
         // Verify the INSERT operation stored the string value
         let (op, _resp) = test.log().pop();
-        assert_struct!(op, Operation::QuerySql(_ {
-            stmt: Statement::Insert(_ {
-                target: InsertTarget::Table(_ {
+        assert_struct!(op, Operation::QuerySql({
+            stmt: Statement::Insert({
+                target: InsertTarget::Table({
                     table: == table_id(&db, "items"),
                     columns: == columns(&db, "items", &["id", "val"]),
-                    ..
                 }),
-                source.body: ExprSet::Values(_ {
+                source.body: ExprSet::Values({
                     rows: [=~ (Any, val)],
-                    ..
                 }),
-                ..
             }),
-            ..
         }));
 
         let read = Item::get_by_id(&mut db, &created.id).await?;
@@ -307,17 +296,14 @@ pub async fn ty_str(test: &mut Test) -> Result<()> {
         // Verify the UPDATE operation sent the string value
         let (op, _resp) = test.log().pop();
         if test.capability().sql {
-            assert_struct!(op, Operation::QuerySql(_ {
-                stmt: Statement::Update(_ {
-                    assignments: #{ 1: _ { expr: _, .. }},
-                    ..
+            assert_struct!(op, Operation::QuerySql({
+                stmt: Statement::Update({
+                    assignments: #{ [1]: Assignment::Set(_)},
                 }),
-                ..
             }));
         } else {
-            assert_struct!(op, Operation::UpdateByKey(_ {
-                assignments: #{ 1: _ { expr: _, .. }},
-                ..
+            assert_struct!(op, Operation::UpdateByKey({
+                assignments: #{ [1]: Assignment::Set(_)},
             }));
         }
 
@@ -372,20 +358,16 @@ pub async fn ty_bytes(test: &mut Test) -> Result<()> {
 
         // Verify the INSERT operation stored the bytes value
         let (op, _resp) = test.log().pop();
-        assert_struct!(op, Operation::QuerySql(_ {
-            stmt: Statement::Insert(_ {
-                target: InsertTarget::Table(_ {
+        assert_struct!(op, Operation::QuerySql({
+            stmt: Statement::Insert({
+                target: InsertTarget::Table({
                     table: == table_id(&db, "items"),
                     columns: == columns(&db, "items", &["id", "val"]),
-                    ..
                 }),
-                source.body: ExprSet::Values(_ {
+                source.body: ExprSet::Values({
                     rows: [=~ (Any, val.as_slice())],
-                    ..
                 }),
-                ..
             }),
-            ..
         }));
 
         let read = Item::get_by_id(&mut db, &created.id).await?;
@@ -407,17 +389,14 @@ pub async fn ty_bytes(test: &mut Test) -> Result<()> {
         // Verify the UPDATE operation sent the bytes value
         let (op, _resp) = test.log().pop();
         if test.capability().sql {
-            assert_struct!(op, Operation::QuerySql(_ {
-                stmt: Statement::Update(_ {
-                    assignments: #{ 1: _ { expr: _, .. }},
-                    ..
+            assert_struct!(op, Operation::QuerySql({
+                stmt: Statement::Update({
+                    assignments: #{ [1]: Assignment::Set(_)},
                 }),
-                ..
             }));
         } else {
-            assert_struct!(op, Operation::UpdateByKey(_ {
-                assignments: #{ 1: _ { expr: _, .. }},
-                ..
+            assert_struct!(op, Operation::UpdateByKey({
+                assignments: #{ [1]: Assignment::Set(_)},
             }));
         }
 
@@ -450,53 +429,41 @@ pub async fn ty_uuid(test: &mut Test) -> Result<()> {
 
         // Verify the INSERT operation - UUID should be stored in its native format
         let (op, _resp) = test.log().pop();
-        assert_struct!(op, Operation::QuerySql(_ {
-            stmt: Statement::Insert(_ {
-                target: InsertTarget::Table(_ {
+        assert_struct!(op, Operation::QuerySql({
+            stmt: Statement::Insert({
+                target: InsertTarget::Table({
                     table: == table_id(&db, "items"),
                     columns: == columns(&db, "items", &["id", "val"]),
-                    ..
                 }),
-                ..
             }),
-            ..
         }));
 
         match &test.capability().storage_types.default_uuid_type {
             db::Type::Uuid => {
-                assert_struct!(op, Operation::QuerySql(_ {
-                    stmt: Statement::Insert(_ {
-                        source.body: ExprSet::Values(_ {
+                assert_struct!(op, Operation::QuerySql({
+                    stmt: Statement::Insert({
+                        source.body: ExprSet::Values({
                             rows: [=~ (Any, val)],
-                            ..
                         }),
-                        ..
                     }),
-                    ..
                 }));
             }
             db::Type::Blob => {
-                assert_struct!(op, Operation::QuerySql(_ {
-                    stmt: Statement::Insert(_ {
-                        source.body: ExprSet::Values(_ {
+                assert_struct!(op, Operation::QuerySql({
+                    stmt: Statement::Insert({
+                        source.body: ExprSet::Values({
                             rows: [=~ (Any, val.as_bytes())],
-                            ..
                         }),
-                        ..
                     }),
-                    ..
                 }));
             }
             db::Type::Text | db::Type::VarChar(..) => {
-                assert_struct!(op, Operation::QuerySql(_ {
-                    stmt: Statement::Insert(_ {
-                        source.body: ExprSet::Values(_ {
+                assert_struct!(op, Operation::QuerySql({
+                    stmt: Statement::Insert({
+                        source.body: ExprSet::Values({
                             rows: [=~ (Any, val.to_string())],
-                            ..
                         }),
-                        ..
                     }),
-                    ..
                 }));
             }
             ty => todo!("ty={ty:#?}"),
@@ -536,20 +503,16 @@ pub async fn ty_smart_ptrs(test: &mut Test) -> Result<()> {
 
     // Verify the INSERT operation stored the unwrapped values
     let (op, _resp) = test.log().pop();
-    assert_struct!(op, Operation::QuerySql(_ {
-        stmt: Statement::Insert(_ {
-            target: InsertTarget::Table(_ {
+    assert_struct!(op, Operation::QuerySql({
+        stmt: Statement::Insert({
+            target: InsertTarget::Table({
                 table: == table_id(&db, "items"),
                 columns: == columns(&db, "items", &["id", "arced", "rced", "boxed"]),
-                ..
             }),
-            source.body: ExprSet::Values(_ {
+            source.body: ExprSet::Values({
                 rows: [=~ (Any, Any, Any, Any)],
-                ..
             }),
-            ..
         }),
-        ..
     }));
 
     let read = Item::get_by_id(&mut db, &created.id).await?;

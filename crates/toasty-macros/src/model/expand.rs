@@ -14,7 +14,7 @@ use filters::Filter;
 use super::schema::Model;
 
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{quote, quote_spanned};
 
 struct Expand<'a> {
     /// The model being expanded
@@ -31,6 +31,7 @@ impl Expand<'_> {
     fn expand(&self) -> TokenStream {
         let model_impls = self.expand_model_impls();
         let model_field_struct = self.expand_field_struct();
+        let model_field_list_struct = self.expand_field_list_struct();
         let query_struct = self.expand_query_struct();
         let create_builder = self.expand_create_builder();
         let update_builder = self.expand_update_builder();
@@ -39,6 +40,7 @@ impl Expand<'_> {
         wrap_in_const(quote! {
             #model_impls
             #model_field_struct
+            #model_field_list_struct
             #query_struct
             #create_builder
             #update_builder
@@ -77,11 +79,14 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let load_body = expand.expand_load_body();
     let reload_body = expand.expand_embedded_reload_body();
     let embedded_field_struct = expand.expand_field_struct();
+    let embedded_field_list_struct = expand.expand_field_list_struct();
     let embedded_model_impls = expand.expand_embedded_model_impls();
     let embedded_update_builder = expand.expand_embedded_update_builder();
+    let field_list_struct_ident = &embedded.field_list_struct_ident;
 
     wrap_in_const(quote! {
         #embedded_field_struct
+        #embedded_field_list_struct
 
         #embedded_update_builder
 
@@ -101,33 +106,36 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
         impl #toasty::Load for #model_ident {
             type Output = Self;
 
-            fn load(value: #toasty::core::stmt::Value) -> #toasty::Result<Self> {
-                #load_body
-            }
-        }
-
-        impl #toasty::Field for #model_ident {
-            type FieldAccessor<__Origin> = #field_struct_ident<__Origin>;
-            type UpdateBuilder<'a> = #update_struct_ident<'a>;
-
-            const NULLABLE: bool = false;
-
             fn ty() -> #toasty::core::stmt::Type {
                 #toasty::core::stmt::Type::Model(<Self as #toasty::Register>::id())
             }
 
-            fn reload(&mut self, value: #toasty::core::stmt::Value) -> #toasty::Result<()> {
-                #reload_body
+            fn load(value: #toasty::core::stmt::Value) -> #toasty::Result<Self> {
+                #load_body
             }
 
-            fn make_field_accessor<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::FieldAccessor<__Origin> {
+            fn reload(target: &mut Self, value: #toasty::core::stmt::Value) -> #toasty::Result<()> {
+                #reload_body
+            }
+        }
+
+        impl #toasty::Field for #model_ident {
+            type Path<__Origin> = #field_struct_ident<__Origin>;
+            type ListPath<__Origin> = #field_list_struct_ident<__Origin>;
+            type Update<'a> = #update_struct_ident<'a>;
+
+            fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
                 #field_struct_ident { path }
             }
 
-            fn make_update_builder<'a>(
+            fn new_list_path<__Origin>(path: #toasty::Path<__Origin, #toasty::List<Self>>) -> Self::ListPath<__Origin> {
+                #field_list_struct_ident { path }
+            }
+
+            fn new_update<'a>(
                 assignments: &'a mut #toasty::core::stmt::Assignments,
                 projection: #toasty::core::stmt::Projection,
-            ) -> Self::UpdateBuilder<'a> {
+            ) -> Self::Update<'a> {
                 #update_struct_ident { assignments, projection }
             }
 
@@ -137,7 +145,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
                 #toasty::core::schema::app::FieldTy::Embedded(
                     #toasty::core::schema::app::Embedded {
                         target: <Self as #toasty::Register>::id(),
-                        expr_ty: Self::ty(),
+                        expr_ty: <Self as #toasty::Load>::ty(),
                     }
                 )
             }
@@ -169,17 +177,23 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     let variant_tokens = e.expand_enum_variants();
     let field_tokens = e.expand_enum_schema_fields();
     let indices = e.expand_model_indices();
-    let unit_load_arms = e.expand_enum_unit_load_arms();
-    let data_load_arms = e.expand_enum_data_load_arms();
     let into_expr_arms = e.expand_enum_into_expr_arms();
-    let ty_expr = e.expand_enum_primitive_ty();
+    let load_impl = e.expand_enum_load_impl();
 
     let embedded_enum = model.kind.as_embedded_enum_unwrap();
+    let disc_ty = if embedded_enum.uses_string_discriminants() {
+        quote! { #toasty::core::stmt::Type::String }
+    } else {
+        quote! { #toasty::core::stmt::Type::I64 }
+    };
     let field_struct_ident = &embedded_enum.field_struct_ident;
+    let field_list_struct_ident = &embedded_enum.field_list_struct_ident;
     let enum_field_struct = e.expand_enum_field_struct();
+    let enum_field_list_struct = e.expand_field_list_struct();
 
     wrap_in_const(quote! {
         #enum_field_struct
+        #enum_field_list_struct
 
         impl #toasty::Register for #model_ident {
             fn id() -> #toasty::core::schema::app::ModelId {
@@ -194,7 +208,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
                         id,
                         name: #name,
                         discriminant: #toasty::core::schema::app::FieldPrimitive {
-                            ty: #toasty::core::stmt::Type::I64,
+                            ty: #disc_ty,
                             storage_ty: ::std::option::Option::None,
                             serialize: ::std::option::Option::None,
                         },
@@ -208,46 +222,25 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
 
         impl #toasty::Embed for #model_ident {}
 
-        impl #toasty::Load for #model_ident {
-            type Output = Self;
-
-            fn load(value: #toasty::core::stmt::Value) -> #toasty::Result<Self> {
-                match value {
-                    #toasty::core::stmt::Value::I64(d) => match d {
-                        #( #unit_load_arms )*
-                        _ => Err(#toasty::Error::type_conversion(
-                            #toasty::core::stmt::Value::I64(d),
-                            stringify!(#model_ident),
-                        )),
-                    },
-                    #toasty::core::stmt::Value::Record(mut record) => match record[0].take() {
-                        #toasty::core::stmt::Value::I64(d) => match d {
-                            #( #data_load_arms )*
-                            _ => Err(#toasty::Error::type_conversion(
-                                #toasty::core::stmt::Value::I64(d),
-                                stringify!(#model_ident),
-                            )),
-                        },
-                        other => Err(#toasty::Error::type_conversion(
-                            other,
-                            stringify!(#model_ident),
-                        )),
-                    },
-                    value => Err(#toasty::Error::type_conversion(value, stringify!(#model_ident))),
-                }
-            }
-        }
+        #load_impl
 
         impl #toasty::Field for #model_ident {
-            type FieldAccessor<__Origin> = #field_struct_ident<__Origin>;
-            type UpdateBuilder<'a> = ();
+            type Path<__Origin> = #field_struct_ident<__Origin>;
+            type ListPath<__Origin> = #field_list_struct_ident<__Origin>;
+            type Update<'a> = ();
 
-            fn ty() -> #toasty::core::stmt::Type {
-                #ty_expr
+            fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
+                #field_struct_ident { path }
             }
 
-            fn make_field_accessor<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::FieldAccessor<__Origin> {
-                #field_struct_ident { path }
+            fn new_list_path<__Origin>(path: #toasty::Path<__Origin, #toasty::List<Self>>) -> Self::ListPath<__Origin> {
+                #field_list_struct_ident { path }
+            }
+
+            fn new_update<'a>(
+                _assignments: &'a mut #toasty::core::stmt::Assignments,
+                _projection: #toasty::core::stmt::Projection,
+            ) -> Self::Update<'a> {
             }
 
             fn field_ty(
@@ -256,7 +249,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
                 #toasty::core::schema::app::FieldTy::Embedded(
                     #toasty::core::schema::app::Embedded {
                         target: <Self as #toasty::Register>::id(),
-                        expr_ty: Self::ty(),
+                        expr_ty: <Self as #toasty::Load>::ty(),
                     }
                 )
             }
@@ -315,8 +308,9 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
+        let span = field_ident.span();
 
-        quote! {
+        quote_spanned! { span=>
             #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::OneField<__Origin> {
                 <#ty as #toasty::Relation>::OneField::from_path(
                     self.path().chain(
@@ -328,7 +322,7 @@ impl Expand<'_> {
     }
 
     /// Generates a field accessor method for a primitive field using the
-    /// `Field::make_field_accessor` trait.
+    /// `Field::new_path` trait.
     fn expand_primitive_field_method(
         &self,
         field_ident: &syn::Ident,
@@ -338,10 +332,11 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
+        let span = field_ident.span();
 
-        quote! {
-            #vis fn #field_ident(&self) -> <#ty as #toasty::Field>::FieldAccessor<__Origin> {
-                <#ty as #toasty::Field>::make_field_accessor(
+        quote_spanned! { span=>
+            #vis fn #field_ident(&self) -> <#ty as #toasty::Field>::Path<__Origin> {
+                <#ty as #toasty::Field>::new_path(
                     self.path().chain(
                         #toasty::Path::<#model_ident, _>::from_field_index(#field_offset)
                     )

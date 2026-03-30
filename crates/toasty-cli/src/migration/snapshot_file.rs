@@ -8,7 +8,28 @@ use toml_edit::{DocumentMut, Item};
 
 const SNAPSHOT_FILE_VERSION: u32 = 1;
 
-/// Snapshot file containing the current database schema state
+/// A TOML-serializable snapshot of the database schema at a point in time.
+///
+/// Each time a migration is generated, a corresponding snapshot is written
+/// alongside it. The next `generate` run loads the most recent snapshot to
+/// compute a diff against the current schema.
+///
+/// The file carries a version number. [`SnapshotFile::load`] and the
+/// [`FromStr`] implementation reject files whose version does not match the
+/// current format.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_cli::SnapshotFile;
+/// use toasty_core::schema::db::Schema;
+///
+/// let snapshot = SnapshotFile::new(Schema::default());
+///
+/// // Serialize to TOML via the serde impl
+/// let toml_str = toml::to_string_pretty(&snapshot).unwrap();
+/// let restored: SnapshotFile = toml::from_str(&toml_str).unwrap();
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SnapshotFile {
     /// Snapshot file format version

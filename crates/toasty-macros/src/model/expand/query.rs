@@ -17,6 +17,7 @@ impl Expand<'_> {
         let include = self.expand_include_method(&include_ty);
 
         quote! {
+            #[derive(Clone)]
             #vis struct #query_struct_ident {
                 stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>,
             }

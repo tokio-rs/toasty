@@ -215,8 +215,10 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
         for (projection, assignment) in &*i {
             // Phase 1: Lower the assignment expression
-            assert!(assignment.op.is_set(), "only SET supported");
-            let mut lowered_expr = assignment.expr.clone();
+            let stmt::Assignment::Set(expr) = assignment else {
+                todo!("only SET supported; got {assignment:#?}");
+            };
+            let mut lowered_expr = expr.clone();
             self.visit_expr_mut(&mut lowered_expr);
 
             // Phase 2: Resolve field mapping (handles primitives, partial updates, and full replacements)
@@ -335,7 +337,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     .model(e.variant.model)
                     .as_embedded_enum_unwrap();
                 let has_data = enum_model.has_data_variants();
-                let discriminant = enum_model.variants[e.variant.index].discriminant;
+                let disc_value = enum_model.variants[e.variant.index].discriminant.clone();
 
                 // Lower the inner expression
                 self.visit_expr_mut(&mut e.expr);
@@ -347,14 +349,11 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     // Data-carrying: project([0]) to extract discriminant from Record
                     *expr = stmt::Expr::eq(
                         stmt::Expr::project(lowered_expr, [0usize]),
-                        stmt::Expr::Value(stmt::Value::I64(discriminant)),
+                        stmt::Expr::Value(disc_value),
                     );
                 } else {
                     // Unit-only: compare directly
-                    *expr = stmt::Expr::eq(
-                        lowered_expr,
-                        stmt::Expr::Value(stmt::Value::I64(discriminant)),
-                    );
+                    *expr = stmt::Expr::eq(lowered_expr, stmt::Expr::Value(disc_value));
                 }
             }
             stmt::Expr::Reference(expr_reference) => {

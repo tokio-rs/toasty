@@ -1,6 +1,6 @@
 use super::{Load, Relation};
 
-use toasty_core::stmt::Value;
+use toasty_core::stmt::{self, Value};
 
 use std::fmt;
 
@@ -18,6 +18,10 @@ pub struct BelongsTo<T> {
 
 impl<T: Relation> Load for BelongsTo<T> {
     type Output = Self;
+
+    fn ty() -> stmt::Type {
+        T::ty_relation()
+    }
 
     fn load(input: Value) -> crate::Result<Self> {
         Ok(match input {
@@ -54,14 +58,20 @@ impl<T: Relation> BelongsTo<T> {
 
 impl<T: Relation> Relation for BelongsTo<T> {
     type Model = T::Model;
-    type Create = T::Create;
     type Expr = T::Expr;
     type Query = T::Query;
+    type Create = T::Create;
     type Many = T::Many;
     type ManyField<__Origin> = T::ManyField<__Origin>;
     type One = T::One;
     type OneField<__Origin> = T::OneField<__Origin>;
     type OptionOne = T::OptionOne;
+
+    fn new_many_field<__Origin>(
+        path: crate::stmt::Path<__Origin, crate::stmt::List<Self::Model>>,
+    ) -> Self::ManyField<__Origin> {
+        T::new_many_field(path)
+    }
 
     fn field_name_to_id(name: &str) -> toasty_core::schema::app::FieldId {
         T::field_name_to_id(name)

@@ -10,9 +10,16 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
 
-        let (query_struct_ident, create_struct_ident, update_struct_ident) = match &self.model.kind
-        {
+        let (
+            field_struct_ident,
+            field_list_struct_ident,
+            query_struct_ident,
+            create_struct_ident,
+            update_struct_ident,
+        ) = match &self.model.kind {
             ModelKind::Root(root) => (
+                &root.field_struct_ident,
+                &root.field_list_struct_ident,
                 &root.query_struct_ident,
                 &root.create_struct_ident,
                 &root.update_struct_ident,
@@ -32,14 +39,13 @@ impl Expand<'_> {
         let into_delete_body = self.expand_model_into_delete_body();
         let into_expr_body_ref = self.expand_model_into_expr_body(true);
         let into_expr_body_val = self.expand_model_into_expr_body(false);
-        let reload_method = self.expand_reload_method();
+        let reload_trait_method = self.expand_reload_trait_method();
 
         quote! {
             impl #model_ident {
                 #model_fields
                 #filter_methods
                 #relation_methods
-                #reload_method
 
                 #vis fn create() -> #create_struct_ident {
                     #create_struct_ident::default()
@@ -82,9 +88,16 @@ impl Expand<'_> {
 
             impl #toasty::Load for #model_ident {
                 type Output = Self;
+
+                fn ty() -> #toasty::core::stmt::Type {
+                    #toasty::core::stmt::Type::Model(<Self as #toasty::Register>::id())
+                }
+
                 fn load(value: #toasty::core::stmt::Value) -> #toasty::Result<Self> {
                     #load_body
                 }
+
+                #reload_trait_method
             }
 
             impl #toasty::Model for #model_ident {
@@ -92,18 +105,29 @@ impl Expand<'_> {
                 type Create = #create_struct_ident;
                 type Update<'a> = #update_struct_ident<&'a mut Self>;
                 type UpdateQuery = #update_struct_ident;
+                type Path<__Origin> = #field_struct_ident<__Origin>;
+
+                fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
+                    #field_struct_ident::from_path(path)
+                }
             }
 
             impl #toasty::Relation for #model_ident {
                 type Model = #model_ident;
-                type Create = #create_struct_ident;
                 type Expr = #model_ident;
                 type Query = #query_struct_ident;
+                type Create = #create_struct_ident;
                 type Many = Many;
-                type ManyField<__Origin> = ManyField<__Origin>;
+                type ManyField<__Origin> = #field_list_struct_ident<__Origin>;
                 type One = One;
-                type OneField<__Origin> = OneField<__Origin>;
+                type OneField<__Origin> = #field_struct_ident<__Origin>;
                 type OptionOne = OptionOne;
+
+                fn new_many_field<__Origin>(
+                    path: #toasty::Path<__Origin, #toasty::List<Self::Model>>,
+                ) -> #field_list_struct_ident<__Origin> {
+                    #field_list_struct_ident::from_path(path)
+                }
 
                 #field_name_to_id
             }
@@ -333,6 +357,9 @@ impl Expand<'_> {
 
         quote! {
             match value {
+                #toasty::core::stmt::Value::Null => {
+                    Err(#toasty::Error::record_not_found(stringify!(#model_ident)))
+                }
                 #toasty::core::stmt::Value::Record(mut record) => {
                     Ok(#model_ident {
                         #( #field_loads )*
@@ -377,15 +404,15 @@ impl Expand<'_> {
 
                     quote! {
                         #i => {
-                            self.#field_ident = #assign;
+                            target.#field_ident = #assign;
                         }
                     }
                 }
                 FieldTy::Primitive(ty) => {
-                    quote!(#i => <#ty as #toasty::Field>::reload(&mut self.#field_ident, value)?,)
+                    quote!(#i => <#ty as #toasty::Load>::reload(&mut target.#field_ident, value)?,)
                 }
                 _ => {
-                    quote!(#i => self.#field_ident.unload(),)
+                    quote!(#i => target.#field_ident.unload(),)
                 }
             }
         });
@@ -402,7 +429,7 @@ impl Expand<'_> {
                     Ok(())
                 }
                 value => {
-                    *self = <Self as #toasty::Load>::load(value)?;
+                    *target = <Self as #toasty::Load>::load(value)?;
                     Ok(())
                 }
             }

@@ -1,6 +1,7 @@
 //! Connection pooling for database connections.
 
 pub use deadpool::managed::Timeouts;
+use std::sync::Arc;
 use toasty_core::driver::{Capability, Driver};
 use tokio::{
     sync::{mpsc, oneshot},
@@ -18,7 +19,9 @@ fn get_default_pool_max_size() -> usize {
 /// Configuration for connection pool behavior.
 #[derive(Debug, Clone)]
 pub struct PoolConfig {
+    /// Maximum number of connections the pool will maintain.
     pub max_size: usize,
+    /// Timeout settings for acquiring a connection from the pool.
     pub timeouts: Timeouts,
 }
 
@@ -103,21 +106,24 @@ impl Pool {
             builder = builder.max_size(max_connections);
         }
 
-        let inner = builder
-            .build()
-            .map_err(toasty_core::Error::connection_pool)?;
+        let inner = builder.build().map_err(|e| {
+            tracing::error!(error = %e, "failed to build connection pool");
+            toasty_core::Error::connection_pool(e)
+        })?;
 
         Ok(Self { inner, capability })
     }
 
     /// Retrieves a connection from the pool.
-    pub async fn get(&self) -> crate::Result<PoolConnection> {
-        let connection = self
-            .inner
-            .get()
-            .await
-            .map_err(toasty_core::Error::connection_pool)?;
-        Ok(PoolConnection { inner: connection })
+    pub(crate) async fn get(&self, shared: Arc<super::Shared>) -> crate::Result<super::Connection> {
+        let connection = self.inner.get().await.map_err(|e| {
+            tracing::error!(error = %e, "failed to acquire connection from pool");
+            toasty_core::Error::connection_pool(e)
+        })?;
+        Ok(super::Connection {
+            inner: connection,
+            shared,
+        })
     }
 
     /// Returns the database driver this pool uses to create connections.
@@ -143,7 +149,7 @@ impl Pool {
     }
 }
 
-struct Manager {
+pub(super) struct Manager {
     driver: Box<dyn Driver>,
     engine: Engine,
 }
@@ -161,7 +167,14 @@ impl deadpool::managed::Manager for Manager {
     type Error = crate::Error;
 
     async fn create(&self) -> Result<Self::Type, Self::Error> {
-        let mut connection = self.driver.connect().await?;
+        tracing::debug!("creating new pooled connection");
+        let mut connection = match self.driver.connect().await {
+            Ok(conn) => conn,
+            Err(e) => {
+                tracing::error!(error = %e, "failed to create database connection");
+                return Err(e);
+            }
+        };
         let engine = self.engine.clone();
 
         let (in_tx, mut in_rx) = mpsc::unbounded_channel::<ConnectionOperation>();
@@ -226,10 +239,12 @@ impl deadpool::managed::Manager for Manager {
         _metrics: &deadpool::managed::Metrics,
     ) -> deadpool::managed::RecycleResult<Self::Error> {
         if obj.in_tx.is_closed() || obj.join_handle.is_finished() {
+            tracing::debug!("discarding dead pooled connection");
             return Err(deadpool::managed::RecycleError::message(
                 "background task is no longer running",
             ));
         }
+        tracing::trace!("recycling pooled connection");
         Ok(())
     }
 }
@@ -248,18 +263,4 @@ pub struct PoolStatus {
 
     /// The number of tasks waiting for a connection to become available.
     pub waiting: usize,
-}
-
-/// A connection retrieved from a pool.
-///
-/// When dropped, the connection is returned to the pool for reuse.
-pub struct PoolConnection {
-    inner: deadpool::managed::Object<Manager>,
-}
-
-impl PoolConnection {
-    /// Access the underlying connection handle.
-    pub(crate) fn handle(&self) -> &ConnectionHandle {
-        &self.inner
-    }
 }

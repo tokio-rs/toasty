@@ -7,7 +7,7 @@ use crate::{helpers::column, prelude::*};
 
 use toasty_core::{
     driver::Operation,
-    stmt::{BinaryOp, Expr, ExprSet, Statement},
+    stmt::{Assignment, BinaryOp, Expr, ExprSet, Statement},
 };
 
 /// Tests basic CRUD operations with an embedded enum field.
@@ -49,20 +49,16 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
         .await?;
 
     // Verify column list and that the discriminant is stored as I64, not a string or record
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
-        stmt: Statement::Insert(_ {
-            source.body: ExprSet::Values(_ {
+    assert_struct!(t.log().pop_op(), Operation::QuerySql({
+        stmt: Statement::Insert({
+            source.body: ExprSet::Values({
                 rows: [== (Any, Any, 1i64)],
-                ..
             }),
-            target: toasty_core::stmt::InsertTarget::Table(_ {
+            target: toasty_core::stmt::InsertTarget::Table({
                 table: == user_table,
                 columns: == columns(&db, "users", &["id", "name", "status"]),
-                ..
             }),
-            ..
         }),
-        ..
     }));
 
     // Read: discriminant is loaded back and converted to the enum variant
@@ -76,22 +72,19 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
     // Verify the status column receives the new discriminant as I64
     // Column index 2 is "status"; value I64(2) = Active discriminant
     if t.capability().sql {
-        assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
-            stmt: Statement::Update(_ {
+        assert_struct!(t.log().pop_op(), Operation::QuerySql({
+            stmt: Statement::Update({
                 target: toasty_core::stmt::UpdateTarget::Table(== user_table),
-                assignments: #{ 2: _ { expr: == 2i64, .. }},
-                ..
+                assignments: #{ [2]: Assignment::Set(== 2i64)},
             }),
-            ..
         }));
     } else {
-        assert_struct!(t.log().pop_op(), Operation::UpdateByKey(_ {
+        assert_struct!(t.log().pop_op(), Operation::UpdateByKey({
             table: == user_table,
             filter: None,
             keys: _,
-            assignments: #{ 2: _ { expr: == 2i64, .. }},
+            assignments: #{ [2]: Assignment::Set(== 2i64)},
             returning: false,
-            ..
         }));
     }
 
@@ -168,20 +161,16 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
     assert_eq!(active.len(), 2);
     {
         let (op, _) = t.log().pop();
-        assert_struct!(op, Operation::QuerySql(_ {
-            stmt: Statement::Query(_ {
-                body: ExprSet::Select(_ {
-                    filter.expr: Some(Expr::BinaryOp(_ {
+        assert_struct!(op, Operation::QuerySql({
+            stmt: Statement::Query({
+                body: ExprSet::Select({
+                    filter.expr: Some(Expr::BinaryOp({
                         lhs.as_expr_column_unwrap().column: == status_col.index,
                         op: BinaryOp::Eq,
                         *rhs: == 2i64,
-                        ..
                     })),
-                    ..
                 }),
-                ..
             }),
-            ..
         }));
     }
 
@@ -193,20 +182,16 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
     assert_eq!(pending[0].name, "Task A");
     {
         let (op, _) = t.log().pop();
-        assert_struct!(op, Operation::QuerySql(_ {
-            stmt: Statement::Query(_ {
-                body: ExprSet::Select(_ {
-                    filter.expr: Some(Expr::BinaryOp(_ {
+        assert_struct!(op, Operation::QuerySql({
+            stmt: Statement::Query({
+                body: ExprSet::Select({
+                    filter.expr: Some(Expr::BinaryOp({
                         lhs.as_expr_column_unwrap().column: == status_col.index,
                         op: BinaryOp::Eq,
                         *rhs: == 1i64,
-                        ..
                     })),
-                    ..
                 }),
-                ..
             }),
-            ..
         }));
     }
 
@@ -218,20 +203,16 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
     assert_eq!(done[0].name, "Task D");
     {
         let (op, _) = t.log().pop();
-        assert_struct!(op, Operation::QuerySql(_ {
-            stmt: Statement::Query(_ {
-                body: ExprSet::Select(_ {
-                    filter.expr: Some(Expr::BinaryOp(_ {
+        assert_struct!(op, Operation::QuerySql({
+            stmt: Statement::Query({
+                body: ExprSet::Select({
+                    filter.expr: Some(Expr::BinaryOp({
                         lhs.as_expr_column_unwrap().column: == status_col.index,
                         op: BinaryOp::Eq,
                         *rhs: == 3i64,
-                        ..
                     })),
-                    ..
                 }),
-                ..
             }),
-            ..
         }));
     }
 
@@ -257,14 +238,13 @@ pub async fn basic_embedded_enum(test: &mut Test) {
 
     // Embedded enums exist in app schema as Model::EmbeddedEnum
     assert_struct!(schema.app.models, #{
-        Status::id(): toasty::schema::app::Model::EmbeddedEnum(_ {
+        Status::id(): toasty::schema::app::Model::EmbeddedEnum({
             name.upper_camel_case(): "Status",
             variants: [
-                _ { name.upper_camel_case(): "Pending", discriminant: 1, .. },
-                _ { name.upper_camel_case(): "Active", discriminant: 2, .. },
-                _ { name.upper_camel_case(): "Done", discriminant: 3, .. },
+                _ { name.upper_camel_case(): "Pending", discriminant: toasty_core::stmt::Value::I64(1), .. },
+                _ { name.upper_camel_case(): "Active", discriminant: toasty_core::stmt::Value::I64(2), .. },
+                _ { name.upper_camel_case(): "Done", discriminant: toasty_core::stmt::Value::I64(3), .. },
             ],
-            ..
         }),
     });
 
@@ -301,37 +281,32 @@ pub async fn root_model_with_embedded_enum_field(test: &mut Test) {
 
     // Both embedded enum and root model exist in app schema
     assert_struct!(schema.app.models, #{
-        Status::id(): toasty::schema::app::Model::EmbeddedEnum(_ {
+        Status::id(): toasty::schema::app::Model::EmbeddedEnum({
             name.upper_camel_case(): "Status",
             variants.len(): 3,
-            ..
         }),
-        User::id(): toasty::schema::app::Model::Root(_ {
+        User::id(): toasty::schema::app::Model::Root({
             name.upper_camel_case(): "User",
             fields: [
-                _ { name.app_name: "id", .. },
-                _ {
+                { name.app_name: "id" },
+                {
                     name.app_name: "status",
-                    ty: FieldTy::Embedded(_ {
+                    ty: FieldTy::Embedded({
                         target: == Status::id(),
-                        ..
                     }),
-                    ..
                 },
             ],
-            ..
         }),
     });
 
     // Database table has a single INTEGER column for the enum discriminant
     assert_struct!(schema.db.tables, [
-        _ {
+        {
             name: =~ r"users$",
             columns: [
-                _ { name: "id", .. },
-                _ { name: "status", .. },
+                { name: "id" },
+                { name: "status" },
             ],
-            ..
         },
     ]);
 
@@ -339,7 +314,7 @@ pub async fn root_model_with_embedded_enum_field(test: &mut Test) {
     let user_table = schema.table_for(user);
     let user_mapping = &schema.mapping.models[&User::id()];
 
-    assert_struct!(user_mapping, _ {
+    assert_struct!(user_mapping, {
         columns.len(): 2,
         fields: [
             mapping::Field::Primitive(FieldPrimitive {
@@ -357,6 +332,5 @@ pub async fn root_model_with_embedded_enum_field(test: &mut Test) {
                 ..
             }),
         ],
-        ..
     });
 }

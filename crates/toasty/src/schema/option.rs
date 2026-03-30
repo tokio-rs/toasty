@@ -1,9 +1,24 @@
 use super::{Load, Relation};
 use toasty_core::schema::app::FieldId;
-use toasty_core::stmt::Value;
+use toasty_core::stmt::{self, Value};
 
 impl<T: Load> Load for Option<T> {
     type Output = Option<T::Output>;
+
+    fn ty() -> stmt::Type {
+        T::ty()
+    }
+
+    fn ty_relation() -> stmt::Type {
+        let ty = T::ty();
+
+        debug_assert!(!ty.is_u64());
+
+        let mut union = stmt::TypeUnion::new();
+        union.insert(stmt::Type::I64);
+        union.insert(ty);
+        union.into()
+    }
 
     fn load(value: Value) -> Result<Self::Output, crate::Error> {
         match value {
@@ -26,18 +41,29 @@ impl<T: Load> Load for Option<T> {
             v => Ok(Some(T::load(v)?)),
         }
     }
+
+    fn reload(target: &mut Self::Output, value: Value) -> Result<(), crate::Error> {
+        *target = Self::load(value)?;
+        Ok(())
+    }
 }
 
 impl<T: Relation> Relation for Option<T> {
     type Model = T::Model;
-    type Create = T::Create;
     type Expr = Option<T::Model>;
     type Query = T::Query;
+    type Create = T::Create;
     type Many = T::Many;
     type ManyField<__Origin> = T::ManyField<__Origin>;
     type One = T::OptionOne;
     type OneField<__Origin> = T::OneField<__Origin>;
     type OptionOne = T::OptionOne;
+
+    fn new_many_field<__Origin>(
+        path: crate::stmt::Path<__Origin, crate::stmt::List<Self::Model>>,
+    ) -> Self::ManyField<__Origin> {
+        T::new_many_field(path)
+    }
 
     fn field_name_to_id(name: &str) -> FieldId {
         T::field_name_to_id(name)

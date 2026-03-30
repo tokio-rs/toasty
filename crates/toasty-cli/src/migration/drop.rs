@@ -7,6 +7,12 @@ use dialoguer::Select;
 use std::fs;
 use toasty::Db;
 
+/// Removes a migration from the history and deletes its files on disk.
+///
+/// The migration to drop can be specified by `--name`, by `--latest`, or by
+/// interactive selection when neither flag is provided. Dropping a migration
+/// removes its SQL file, its snapshot file, and its entry in the history
+/// file. It does **not** undo any changes already applied to the database.
 #[derive(Parser, Debug)]
 pub struct DropCommand {
     /// Name of the migration to drop (if not provided, will prompt)

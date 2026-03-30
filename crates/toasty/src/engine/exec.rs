@@ -127,14 +127,17 @@ impl Engine {
         };
 
         if plan.needs_transaction {
+            tracing::trace!("beginning plan transaction");
             exec.connection.exec(&self.schema, begin.into()).await?;
             exec.in_transaction = true;
         }
 
         for (i, step) in plan.actions.iter().enumerate() {
-            tracing::debug!("Executing action {}: {:?}", i, action_name(step));
+            tracing::trace!(step = i, action = %step.name(), "executing action");
             if let Err(e) = exec.exec_step(step).await {
+                tracing::error!(step = i, action = %step.name(), error = %e, "action failed");
                 if plan.needs_transaction {
+                    tracing::trace!("rolling back plan transaction due to error");
                     // Best effort: ignore rollback errors so the original error is returned
                     let _ = exec.connection.exec(&self.schema, rollback.into()).await;
                 }
@@ -143,6 +146,7 @@ impl Engine {
         }
 
         if plan.needs_transaction {
+            tracing::trace!("committing plan transaction");
             exec.connection.exec(&self.schema, commit.into()).await?;
         }
 

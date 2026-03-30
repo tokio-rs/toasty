@@ -19,6 +19,10 @@ pub struct HasOne<T> {
 impl<T: Relation> Load for HasOne<T> {
     type Output = Self;
 
+    fn ty() -> toasty_core::stmt::Type {
+        T::ty_relation()
+    }
+
     fn load(input: Value) -> crate::Result<Self> {
         Ok(match input {
             Value::Null => Self::default(),
@@ -54,14 +58,20 @@ impl<T: Relation> HasOne<T> {
 
 impl<T: Relation> Relation for HasOne<T> {
     type Model = T::Model;
-    type Create = T::Create;
     type Expr = T::Expr;
     type Query = T::Query;
+    type Create = T::Create;
     type Many = T::Many;
     type ManyField<__Origin> = T::ManyField<__Origin>;
     type One = T::One;
     type OneField<__Origin> = T::OneField<__Origin>;
     type OptionOne = T::OptionOne;
+
+    fn new_many_field<__Origin>(
+        path: crate::stmt::Path<__Origin, crate::stmt::List<Self::Model>>,
+    ) -> Self::ManyField<__Origin> {
+        T::new_many_field(path)
+    }
 
     fn field_name_to_id(name: &str) -> toasty_core::schema::app::FieldId {
         T::field_name_to_id(name)

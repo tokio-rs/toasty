@@ -40,13 +40,11 @@ pub async fn sort_asc(test: &mut Test) -> Result<()> {
 
     // Verify the SQL query has an ORDER BY clause
     let (op, resp) = test.log().pop();
-    assert_struct!(op, Operation::QuerySql(_ {
-        stmt: Statement::Query(_ {
-            body: ExprSet::Select(_ { .. }),
+    assert_struct!(op, Operation::QuerySql({
+        stmt: Statement::Query({
+            body: ExprSet::Select({ .. }),
             order_by: Some(_),
-            ..
         }),
-        ..
     }));
     assert_struct!(resp.rows, Rows::Stream(_));
 
@@ -64,13 +62,11 @@ pub async fn sort_asc(test: &mut Test) -> Result<()> {
     }
 
     let (op, resp) = test.log().pop();
-    assert_struct!(op, Operation::QuerySql(_ {
-        stmt: Statement::Query(_ {
-            body: ExprSet::Select(_ { .. }),
+    assert_struct!(op, Operation::QuerySql({
+        stmt: Statement::Query({
+            body: ExprSet::Select({ .. }),
             order_by: Some(_),
-            ..
         }),
-        ..
     }));
     assert_struct!(resp.rows, Rows::Stream(_));
 
@@ -110,14 +106,12 @@ pub async fn paginate(test: &mut Test) -> Result<()> {
 
     // First page: SQL query should have ORDER BY and LIMIT
     let (op, resp) = test.log().pop();
-    assert_struct!(op, Operation::QuerySql(_ {
-        stmt: Statement::Query(_ {
-            body: ExprSet::Select(_ { .. }),
+    assert_struct!(op, Operation::QuerySql({
+        stmt: Statement::Query({
+            body: ExprSet::Select({ .. }),
             order_by: Some(_),
             limit: Some(_),
-            ..
         }),
-        ..
     }));
     assert_struct!(resp.rows, Rows::Stream(_));
 
@@ -179,13 +173,11 @@ pub async fn limit_offset(t: &mut Test) -> Result<()> {
     assert_eq!(items.len(), 5);
 
     let (op, _) = t.log().pop();
-    assert_struct!(op, Operation::QuerySql(_ {
-        stmt: Statement::Query(_ {
-            body: ExprSet::Select(_ { .. }),
+    assert_struct!(op, Operation::QuerySql({
+        stmt: Statement::Query({
+            body: ExprSet::Select({ .. }),
             limit: Some(_),
-            ..
         }),
-        ..
     }));
 
     t.log().clear();
@@ -202,14 +194,12 @@ pub async fn limit_offset(t: &mut Test) -> Result<()> {
     }
 
     let (op, _) = t.log().pop();
-    assert_struct!(op, Operation::QuerySql(_ {
-        stmt: Statement::Query(_ {
-            body: ExprSet::Select(_ { .. }),
+    assert_struct!(op, Operation::QuerySql({
+        stmt: Statement::Query({
+            body: ExprSet::Select({ .. }),
             order_by: Some(_),
             limit: Some(_),
-            ..
         }),
-        ..
     }));
 
     t.log().clear();

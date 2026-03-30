@@ -16,6 +16,9 @@ pub use expr::Expr;
 mod insert;
 pub use insert::Insert;
 
+mod assignment;
+pub use assignment::{insert, remove, set, Assign, Assignment};
+
 mod into_expr;
 pub use into_expr::IntoExpr;
 
@@ -37,7 +40,7 @@ pub use paginate::Paginate;
 mod path;
 pub use path::Path;
 
-pub use crate::schema::{Auto, Field};
+pub use crate::schema::Auto;
 use crate::{schema::Load, Executor};
 
 mod query;

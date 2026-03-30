@@ -1,5 +1,5 @@
 use super::{Load, Register};
-use crate::stmt::{IntoExpr, IntoInsert};
+use crate::stmt::{IntoExpr, IntoInsert, Path};
 
 /// Trait for root models that map to database tables and can be queried.
 ///
@@ -18,4 +18,20 @@ pub trait Model: Register + Load<Output = Self> + Sized {
 
     /// Update by query builder type for this model
     type UpdateQuery;
+
+    /// A typed path from `Origin` into this model.
+    type Path<Origin>;
+
+    /// Construct a model path from a [`Path`] targeting this model.
+    fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin>;
+
+    /// Construct a path rooted at this model.
+    fn new_root_path() -> Self::Path<Self> {
+        Self::new_path(Path::root())
+    }
+
+    /// Return a fresh, default-initialized create builder.
+    fn new_create() -> Self::Create {
+        Self::Create::default()
+    }
 }

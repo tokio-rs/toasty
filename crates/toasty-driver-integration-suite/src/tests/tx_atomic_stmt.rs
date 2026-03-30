@@ -251,7 +251,7 @@ pub async fn update_with_new_association_rolls_back_on_failure(t: &mut Test) -> 
     assert_err!(
         user.update()
             .name("taken") // UPDATE will fail: unique name
-            .todo(Todo::create().title("new-todo")) // INSERT runs first and succeeds
+            .todos(toasty::stmt::insert(Todo::create().title("new-todo"))) // INSERT runs first and succeeds
             .exec(&mut db)
             .await
     );
@@ -403,7 +403,7 @@ pub async fn rmw_condition_failure_issues_rollback_to_savepoint(t: &mut Test) ->
 
     // The todo is untouched — still belongs to user2
     let reloaded = Todo::get_by_id(&mut db, u2_todos[0].id).await?;
-    assert_struct!(reloaded, _ { user_id: Some(== user2.id), .. });
+    assert_struct!(reloaded, { user_id: Some(== user2.id) });
 
     Ok(())
 }

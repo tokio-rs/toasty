@@ -432,7 +432,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         if let stmt::Statement::Update(update) = stmt {
             for (_, assignment) in update.assignments.iter() {
-                stmt::visit::for_each_expr(&assignment.expr, |expr| {
+                stmt::visit::for_each_expr(assignment, |expr| {
                     self.extract_data_load_args_from_expr(expr, None);
                 });
             }
@@ -637,7 +637,15 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     fn rewrite_stmt_update_arg_dependencies(&mut self, stmt: &mut stmt::Update) {
         for (_, assignment) in stmt.assignments.iter_mut() {
-            self.rewrite_arg_dependencies(&mut assignment.expr);
+            let expr = match assignment {
+                stmt::Assignment::Set(expr)
+                | stmt::Assignment::Insert(expr)
+                | stmt::Assignment::Remove(expr) => expr,
+                stmt::Assignment::Batch(_) => {
+                    todo!("batch assignments in arg dependency rewriting")
+                }
+            };
+            self.rewrite_arg_dependencies(expr);
         }
     }
 

@@ -125,7 +125,9 @@ async fn main() -> toasty::Result<()> {
         .await?;
 
     user.update()
-        .todo(Todo::create().title("might delete later"))
+        .todos(toasty::stmt::insert(
+            Todo::create().title("might delete later"),
+        ))
         .exec(&mut db)
         .await?;
 

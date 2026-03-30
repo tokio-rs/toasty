@@ -1,4 +1,6 @@
-use super::parse::{CompareOpKind, Expr, ExprBinaryOp, FieldPath, QueryInput};
+use super::parse::{
+    CompareOpKind, Expr, ExprBinaryOp, FieldPath, OrderByClause, OrderDirection, QueryInput,
+};
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -7,7 +9,7 @@ use quote::quote;
 pub(crate) fn expand(input: &QueryInput) -> TokenStream {
     let source = &input.source;
 
-    match &input.filter {
+    let base = match &input.filter {
         Some(filter) => {
             let filter_expr = expand_filter(source, filter);
             quote! { #source::filter(#filter_expr) }
@@ -15,6 +17,36 @@ pub(crate) fn expand(input: &QueryInput) -> TokenStream {
         None => {
             quote! { #source::all() }
         }
+    };
+
+    // Chain builder methods onto the base expression.
+    let mut out = base;
+
+    if let Some(order_by) = &input.order_by {
+        let order_expr = expand_order_by(source, order_by);
+        out = quote! { #out.order_by(#order_expr) };
+    }
+
+    if let Some(limit) = &input.limit {
+        let limit_expr = expand_filter(source, limit);
+        out = quote! { #out.limit(#limit_expr) };
+    }
+
+    // offset must come after limit (the API requires it)
+    if let Some(offset) = &input.offset {
+        let offset_expr = expand_filter(source, offset);
+        out = quote! { #out.offset(#offset_expr) };
+    }
+
+    out
+}
+
+/// Expand an ORDER BY clause: `.field ASC` → `Source::fields().field().asc()`.
+fn expand_order_by(source: &syn::Path, clause: &OrderByClause) -> TokenStream {
+    let field = expand_field_path(source, &clause.field);
+    match clause.direction {
+        OrderDirection::Asc => quote! { #field.asc() },
+        OrderDirection::Desc => quote! { #field.desc() },
     }
 }
 

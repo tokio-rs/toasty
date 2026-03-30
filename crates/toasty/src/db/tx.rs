@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 use crate::{db::ConnectionOperation, db::Executor, Result};
@@ -11,16 +13,20 @@ use toasty_core::{
 use tokio::sync::oneshot;
 
 /// Builder for configuring a transaction before starting it.
-pub struct TransactionBuilder<'db> {
-    db: &'db mut crate::Db,
+///
+/// Collect isolation level and read-only settings, then call
+/// [`begin`](Self::begin) with a [`Connection`](super::Connection) or
+/// [`Db`](super::Db) to start the transaction.
+pub struct TransactionBuilder {
     isolation: Option<IsolationLevel>,
     read_only: bool,
 }
 
-impl<'db> TransactionBuilder<'db> {
-    pub(crate) fn new(db: &'db mut crate::Db) -> Self {
+impl TransactionBuilder {
+    /// Create a new builder with default settings (no explicit isolation
+    /// level, read-write mode).
+    pub fn new() -> Self {
         TransactionBuilder {
-            db,
             isolation: None,
             read_only: false,
         }
@@ -38,24 +44,38 @@ impl<'db> TransactionBuilder<'db> {
         self
     }
 
-    /// Begin the transaction with the configured options.
-    pub async fn begin(self) -> Result<Transaction<'db>> {
-        Transaction::begin_with(self.db, self.isolation, self.read_only).await
+    /// Begin the transaction on the given connection.
+    pub async fn begin(self, conn: &mut super::Connection) -> Result<Transaction<'_>> {
+        Transaction::begin_with(ConnRef::Borrowed(conn), self.isolation, self.read_only).await
+    }
+
+    /// Begin the transaction on a freshly acquired connection from the pool.
+    ///
+    /// The connection is owned by the returned [`Transaction`] and will be
+    /// returned to the pool when the transaction is dropped.
+    pub async fn begin_on_db(self, db: &mut super::Db) -> Result<Transaction<'_>> {
+        let conn = db.connection().await?;
+        Transaction::begin_with(ConnRef::owned(conn), self.isolation, self.read_only).await
+    }
+}
+
+impl Default for TransactionBuilder {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 /// An active database transaction.
 ///
-/// Borrows `&mut Db` for its lifetime, preventing concurrent use of the
-/// same Db handle while a transaction is open.
+/// All operations executed through a `Transaction` are guaranteed to use the
+/// same physical connection.
 ///
 /// If dropped without calling [`commit`](Self::commit) or
 /// [`rollback`](Self::rollback), the transaction is automatically rolled back.
-pub struct Transaction<'db> {
-    /// Holds the mutable borrow of Db to prevent concurrent use.
-    db: &'db mut crate::Db,
+pub struct Transaction<'a> {
+    /// The connection this transaction operates on.
+    conn: ConnRef<'a>,
 
-    /// Cloned engine for schema access and query compilation.
     /// Whether commit or rollback has been called.
     finalized: bool,
 
@@ -64,26 +84,64 @@ pub struct Transaction<'db> {
     savepoint: Option<usize>,
 }
 
-impl<'db> Transaction<'db> {
-    pub(crate) async fn begin(db: &'db mut crate::Db) -> Result<Transaction<'db>> {
-        Self::begin_with(db, None, false).await
+/// Either a borrowed or owned reference to a [`Connection`](super::Connection).
+pub(crate) enum ConnRef<'a> {
+    Borrowed(&'a mut super::Connection),
+    Owned(super::Connection, PhantomData<&'a ()>),
+}
+
+impl<'a> ConnRef<'a> {
+    pub(crate) fn owned(conn: super::Connection) -> ConnRef<'a> {
+        ConnRef::Owned(conn, PhantomData)
+    }
+}
+
+impl Deref for ConnRef<'_> {
+    type Target = super::Connection;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            ConnRef::Borrowed(c) => c,
+            ConnRef::Owned(c, _) => c,
+        }
+    }
+}
+
+impl DerefMut for ConnRef<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        match self {
+            ConnRef::Borrowed(c) => c,
+            ConnRef::Owned(c, _) => c,
+        }
+    }
+}
+
+impl<'a> Transaction<'a> {
+    pub(crate) async fn begin(conn: ConnRef<'a>) -> Result<Transaction<'a>> {
+        Self::begin_with(conn, None, false).await
     }
 
     pub(crate) async fn begin_with(
-        db: &'db mut crate::Db,
+        conn: ConnRef<'a>,
         isolation: Option<IsolationLevel>,
         read_only: bool,
-    ) -> Result<Transaction<'db>> {
+    ) -> Result<Transaction<'a>> {
+        tracing::debug!(
+            isolation = ?isolation,
+            read_only = read_only,
+            "beginning transaction"
+        );
+
         // We're creating the Transaction struct before actually starting the transaction. If the
         // future is cancelled while waiting on the response of the start command, the transaction
         // is still rolled back.
         let tx = Transaction {
-            db,
+            conn,
             finalized: false,
             savepoint: None,
         };
 
-        tx.db
+        tx.conn
             .exec_operation(
                 operation::Transaction::Start {
                     isolation,
@@ -97,6 +155,7 @@ impl<'db> Transaction<'db> {
 
     /// Commit the transaction.
     pub async fn commit(mut self) -> Result<()> {
+        tracing::debug!("committing transaction");
         // Because driver operations are done in a background task, all the operations aren't
         // cancelled and will continue even if this future is dropped. Setting the finalized flag
         // to true early here makes sure that if the future is dropped we don't queue a rollback
@@ -104,10 +163,10 @@ impl<'db> Transaction<'db> {
         self.finalized = true;
         match self.savepoint {
             Some(_) => self
-                .db
+                .conn
                 .exec_operation(operation::Transaction::ReleaseSavepoint(self.savepoint()).into()),
             None => self
-                .db
+                .conn
                 .exec_operation(operation::Transaction::Commit.into()),
         }
         .await?;
@@ -116,14 +175,15 @@ impl<'db> Transaction<'db> {
 
     /// Roll back the transaction.
     pub async fn rollback(mut self) -> Result<()> {
+        tracing::debug!("rolling back transaction");
         // See `commit` why we're setting the finalized flag to true early.
         self.finalized = true;
         match self.savepoint {
-            Some(_) => self.db.exec_operation(
+            Some(_) => self.conn.exec_operation(
                 operation::Transaction::RollbackToSavepoint(self.savepoint()).into(),
             ),
             None => self
-                .db
+                .conn
                 .exec_operation(operation::Transaction::Rollback.into()),
         }
         .await?;
@@ -144,19 +204,16 @@ impl Drop for Transaction<'_> {
             };
 
             // Fire-and-forget rollback: send the operation to the background
-            // connection task without awaiting the response. By the time a
-            // transaction exists, `begin` already acquired the connection, so
-            // it is always cached.
-            if let Some(conn) = self.db.connection.as_ref() {
-                let (tx, _rx) = oneshot::channel();
-                let _ = conn
-                    .handle()
-                    .in_tx
-                    .send(ConnectionOperation::ExecOperation {
-                        operation: Box::new(op.into()),
-                        tx,
-                    });
-            }
+            // connection task without awaiting the response.
+            let (tx, _rx) = oneshot::channel();
+            let _ = self
+                .conn
+                .handle()
+                .in_tx
+                .send(ConnectionOperation::ExecOperation {
+                    operation: Box::new(op.into()),
+                    tx,
+                });
         }
     }
 }
@@ -164,17 +221,20 @@ impl Drop for Transaction<'_> {
 #[async_trait]
 impl<'a> Executor for Transaction<'a> {
     async fn transaction(&mut self) -> Result<Transaction<'_>> {
+        let depth = match self.savepoint {
+            Some(savepoint) => savepoint + 1,
+            None => 1,
+        };
+        tracing::debug!(depth = depth, "creating nested transaction (savepoint)");
+
         let transaction = Transaction {
-            db: self.db,
+            conn: ConnRef::Borrowed(&mut self.conn),
             finalized: false,
-            savepoint: Some(match self.savepoint {
-                Some(savepoint) => savepoint + 1,
-                None => 1,
-            }),
+            savepoint: Some(depth),
         };
 
         transaction
-            .db
+            .conn
             .exec_operation(operation::Transaction::Savepoint(transaction.savepoint()).into())
             .await?;
 
@@ -182,7 +242,7 @@ impl<'a> Executor for Transaction<'a> {
     }
 
     async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> Result<Value> {
-        self.db.exec_stmt(stmt, true).await
+        self.conn.exec_stmt(stmt, true).await
     }
 
     async fn exec_paginated(
@@ -204,6 +264,6 @@ impl<'a> Executor for Transaction<'a> {
     }
 
     fn schema(&mut self) -> &Arc<Schema> {
-        self.db.schema()
+        self.conn.schema()
     }
 }

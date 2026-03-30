@@ -70,8 +70,11 @@ impl<M: Model> CreateMany<M> {
     /// the desired fields.
     ///
     /// Returns `self` for method chaining.
-    pub fn with_item(mut self, f: impl FnOnce(M::Create) -> M::Create) -> Self {
-        let create = f(M::Create::default());
+    pub fn with_item(
+        mut self,
+        f: impl FnOnce(<M as Model>::Create) -> <M as Model>::Create,
+    ) -> Self {
+        let create = f(M::new_create());
         let stmt = create.into_insert();
         assert!(
             stmt.untyped.source.single,

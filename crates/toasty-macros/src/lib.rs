@@ -1,3 +1,11 @@
+//! Procedural macros for the Toasty ORM.
+//!
+//! This crate provides `#[derive(Model)]`, `#[derive(Embed)]`, and related
+//! attribute macros that generate query builders, schema registration, and
+//! database mapping code.
+
+#![warn(missing_docs)]
+
 extern crate proc_macro;
 
 mod create;
@@ -900,11 +908,368 @@ pub fn derive_embed(input: TokenStream) -> TokenStream {
     }
 }
 
-#[proc_macro]
-pub fn include_schema(_input: TokenStream) -> TokenStream {
-    todo!()
-}
-
+/// Builds a query using the Toasty query language. The macro expands into
+/// the equivalent method-chain calls on the query builder API. It does
+/// not execute the query — chain `.exec(&mut db).await?` on the result to run
+/// it.
+///
+/// # Syntax
+///
+/// ```text
+/// query!(Source [FILTER expr] [ORDER BY .field ASC|DESC] [OFFSET n] [LIMIT n])
+/// ```
+///
+/// `Source` is a model type path (e.g., `User`). All clauses are optional and
+/// can appear in any combination, but must follow the order shown above when
+/// present. All keywords are case-insensitive: `FILTER`, `filter`, and `Filter`
+/// all work.
+///
+/// # Basic queries
+///
+/// With no clauses, `query!` returns all records of the given model.
+///
+/// ```
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     id: i64,
+/// #     name: String,
+/// #     age: i64,
+/// #     active: bool,
+/// # }
+/// // Returns all users — expands to User::all()
+/// let _ = toasty::query!(User);
+/// ```
+///
+/// # Filter expressions
+///
+/// The `FILTER` clause accepts an expression built from field comparisons,
+/// boolean operators, and external references.
+///
+/// ## Comparison operators
+///
+/// Dot-prefixed field paths (`.name`, `.age`) refer to fields on the source
+/// model. The right-hand side is a literal or external reference.
+///
+/// | Operator | Expansion         |
+/// |----------|-------------------|
+/// | `==`     | `.eq(val)`        |
+/// | `!=`     | `.ne(val)`        |
+/// | `>`      | `.gt(val)`        |
+/// | `>=`     | `.ge(val)`        |
+/// | `<`      | `.lt(val)`        |
+/// | `<=`     | `.le(val)`        |
+///
+/// ```
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     id: i64,
+/// #     name: String,
+/// #     age: i64,
+/// #     active: bool,
+/// # }
+/// // Equality — expands to User::filter(User::fields().name().eq("Alice"))
+/// let _ = toasty::query!(User FILTER .name == "Alice");
+///
+/// // Not equal
+/// let _ = toasty::query!(User FILTER .name != "Bob");
+///
+/// // Greater than
+/// let _ = toasty::query!(User FILTER .age > 18);
+///
+/// // Greater than or equal
+/// let _ = toasty::query!(User FILTER .age >= 21);
+///
+/// // Less than
+/// let _ = toasty::query!(User FILTER .age < 65);
+///
+/// // Less than or equal
+/// let _ = toasty::query!(User FILTER .age <= 99);
+/// ```
+///
+/// ## Boolean operators
+///
+/// `AND`, `OR`, and `NOT` combine filter expressions. Precedence follows
+/// standard boolean logic: `NOT` binds tightest, then `AND`, then `OR`.
+///
+/// ```
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     id: i64,
+/// #     name: String,
+/// #     age: i64,
+/// #     active: bool,
+/// # }
+/// // AND — both conditions must match
+/// let _ = toasty::query!(User FILTER .name == "Alice" AND .age > 18);
+///
+/// // OR — either condition matches
+/// let _ = toasty::query!(User FILTER .name == "Alice" OR .name == "Bob");
+///
+/// // NOT — negates the following expression
+/// let _ = toasty::query!(User FILTER NOT .active == true);
+///
+/// // Combining all three
+/// let _ = toasty::query!(User FILTER NOT .active == true AND (.name == "Alice" OR .age >= 21));
+/// ```
+///
+/// ## Operator precedence
+///
+/// Without parentheses, `NOT` binds tightest, then `AND`, then `OR`. Use
+/// parentheses to override.
+///
+/// ```
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     id: i64,
+/// #     name: String,
+/// #     age: i64,
+/// #     active: bool,
+/// # }
+/// // Without parens: parsed as (.name == "A" AND .age > 0) OR .active == false
+/// let _ = toasty::query!(User FILTER .name == "A" AND .age > 0 OR .active == false);
+///
+/// // With parens: forces OR to bind first
+/// let _ = toasty::query!(User FILTER .name == "A" AND (.age > 0 OR .active == false));
+/// ```
+///
+/// ## Boolean and integer literals
+///
+/// Boolean fields can be compared against `true` and `false` literals.
+/// Integer literals work as expected.
+///
+/// ```
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     id: i64,
+/// #     name: String,
+/// #     age: i64,
+/// #     active: bool,
+/// # }
+/// let _ = toasty::query!(User FILTER .active == true);
+/// let _ = toasty::query!(User FILTER .active == false);
+/// let _ = toasty::query!(User FILTER .age == 42);
+/// ```
+///
+/// # Referencing surrounding code
+///
+/// `#ident` pulls a variable from the surrounding scope. `#(expr)` embeds an
+/// arbitrary Rust expression.
+///
+/// ```
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     id: i64,
+/// #     name: String,
+/// #     age: i64,
+/// #     active: bool,
+/// # }
+/// // Variable reference — expands to User::filter(User::fields().name().eq(name))
+/// let name = "Carl";
+/// let _ = toasty::query!(User FILTER .name == #name);
+///
+/// // Expression reference
+/// fn min_age() -> i64 { 18 }
+/// let _ = toasty::query!(User FILTER .age > #(min_age()));
+/// ```
+///
+/// # Dot-prefixed field paths
+///
+/// A leading `.` starts a field path rooted at the source model's `fields()`
+/// method. Chained dots navigate multi-segment paths.
+///
+/// ```
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     id: i64,
+/// #     name: String,
+/// #     age: i64,
+/// #     active: bool,
+/// # }
+/// // .name expands to User::fields().name()
+/// let _ = toasty::query!(User FILTER .name == "Alice");
+///
+/// // Multiple fields in a single expression
+/// let _ = toasty::query!(User FILTER .id == 1 AND .name == "X" AND .age > 0);
+/// ```
+///
+/// # ORDER BY
+///
+/// Sort results by a field in ascending (`ASC`) or descending (`DESC`) order.
+/// If no direction is specified, ascending is the default.
+///
+/// ```
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     id: i64,
+/// #     name: String,
+/// #     age: i64,
+/// #     active: bool,
+/// # }
+/// // Ascending order (explicit)
+/// let _ = toasty::query!(User ORDER BY .name ASC);
+///
+/// // Descending order
+/// let _ = toasty::query!(User ORDER BY .age DESC);
+///
+/// // Combined with filter
+/// let _ = toasty::query!(User FILTER .active == true ORDER BY .name ASC);
+/// ```
+///
+/// # LIMIT and OFFSET
+///
+/// `LIMIT` restricts the number of returned records. `OFFSET` skips a number
+/// of records before returning. Both accept integer literals, `#ident`
+/// variables, and `#(expr)` expressions.
+///
+/// ```
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     id: i64,
+/// #     name: String,
+/// #     age: i64,
+/// #     active: bool,
+/// # }
+/// // Return at most 10 records
+/// let _ = toasty::query!(User LIMIT 10);
+///
+/// // Skip 20, then return 10
+/// let _ = toasty::query!(User OFFSET 20 LIMIT 10);
+///
+/// // Variable pagination
+/// let page_size = 25usize;
+/// let _ = toasty::query!(User LIMIT #page_size);
+///
+/// // Expression pagination
+/// let _ = toasty::query!(User LIMIT #(5 + 5));
+/// ```
+///
+/// # Combining clauses
+///
+/// All clauses can be combined. When present, they must appear in this order:
+/// `FILTER`, `ORDER BY`, `OFFSET`, `LIMIT`.
+///
+/// ```
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     id: i64,
+/// #     name: String,
+/// #     age: i64,
+/// #     active: bool,
+/// # }
+/// let _ = toasty::query!(User FILTER .active == true ORDER BY .name ASC LIMIT 10);
+/// let _ = toasty::query!(User FILTER .age > 18 ORDER BY .age DESC OFFSET 0 LIMIT 50);
+/// ```
+///
+/// # Case-insensitive keywords
+///
+/// All keywords — `FILTER`, `AND`, `OR`, `NOT`, `ORDER`, `BY`, `ASC`, `DESC`,
+/// `OFFSET`, `LIMIT` — are matched case-insensitively. Any casing works.
+///
+/// ```
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     id: i64,
+/// #     name: String,
+/// #     age: i64,
+/// #     active: bool,
+/// # }
+/// // These are all equivalent
+/// let _ = toasty::query!(User FILTER .name == "A");
+/// let _ = toasty::query!(User filter .name == "A");
+/// let _ = toasty::query!(User Filter .name == "A");
+/// ```
+///
+/// # Expansion details
+///
+/// The macro translates each syntactic element into method-chain calls on the
+/// query builder.
+///
+/// ## No filter
+///
+/// ```text
+/// query!(User)          →  User::all()
+/// ```
+///
+/// ## Filter
+///
+/// ```text
+/// query!(User FILTER .name == "A")
+///     →  User::filter(User::fields().name().eq("A"))
+/// ```
+///
+/// ## Logical operators
+///
+/// ```text
+/// query!(User FILTER .a == 1 AND .b == 2)
+///     →  User::filter(User::fields().a().eq(1).and(User::fields().b().eq(2)))
+///
+/// query!(User FILTER .a == 1 OR .b == 2)
+///     →  User::filter(User::fields().a().eq(1).or(User::fields().b().eq(2)))
+///
+/// query!(User FILTER NOT .a == 1)
+///     →  User::filter((User::fields().a().eq(1)).not())
+/// ```
+///
+/// ## ORDER BY
+///
+/// ```text
+/// query!(User ORDER BY .name ASC)
+///     →  { let mut q = User::all(); q = q.order_by(User::fields().name().asc()); q }
+/// ```
+///
+/// ## LIMIT / OFFSET
+///
+/// ```text
+/// query!(User LIMIT 10)
+///     →  { let mut q = User::all(); q = q.limit(10); q }
+///
+/// query!(User OFFSET 5 LIMIT 10)
+///     →  { let mut q = User::all(); q = q.limit(10); q = q.offset(5); q }
+/// ```
+///
+/// Note: in the expansion, `limit` is called before `offset` because the
+/// API requires it.
+///
+/// ## External references
+///
+/// ```text
+/// let x = "Carl";
+/// query!(User FILTER .name == #x)
+///     →  User::filter(User::fields().name().eq(x))
+///
+/// query!(User FILTER .age > #(compute()))
+///     →  User::filter(User::fields().age().gt(compute()))
+/// ```
+///
+/// # Errors
+///
+/// The macro produces compile-time errors for:
+///
+/// - **Missing model path**: the first token must be a valid type path.
+/// - **Unknown fields**: dot-prefixed paths that don't match a field on the
+///   model produce a type error from the generated `fields()` method.
+/// - **Type mismatches**: comparing a field to a value of the wrong type
+///   produces a standard Rust type error (e.g., `.age == "not a number"`).
+/// - **Unexpected tokens**: tokens after the last recognized clause cause
+///   `"unexpected tokens after query"`.
+/// - **Invalid clause order**: placing `FILTER` after `ORDER BY` or `LIMIT`
+///   before `OFFSET` causes a parse error since the clauses are parsed in
+///   fixed order.
+/// - **Missing `BY` after `ORDER`**: writing `ORDER .name` instead of
+///   `ORDER BY .name` produces `"expected 'BY' after 'ORDER'"`.
+/// - **Invalid pagination value**: `LIMIT` and `OFFSET` require an integer
+///   literal, `#variable`, or `#(expression)`.
 #[proc_macro]
 pub fn query(input: TokenStream) -> TokenStream {
     match query::generate(input.into()) {
@@ -1111,7 +1476,8 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// ## Nested struct (BelongsTo / HasOne)
 ///
 /// Use `{ ... }` **without** a type prefix to create a related record inline.
-/// The macro calls the `with_<field>` closure setter on the builder.
+/// The macro expands the nested fields into a create builder and passes it
+/// to the field's setter method.
 ///
 /// ```
 /// # #[derive(toasty::Model)]
@@ -1139,7 +1505,7 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// // Expands to:
 /// // Todo::create()
 /// //     .title("buy milk")
-/// //     .with_user(|b| { let b = b.name("Alice"); b })
+/// //     .user(Todo::fields().user().create().name("Alice"))
 /// ```
 ///
 /// The related record is created first and the foreign key is set
@@ -1147,9 +1513,9 @@ pub fn query(input: TokenStream) -> TokenStream {
 ///
 /// ## Nested list (HasMany)
 ///
-/// Use `[{ ... }, { ... }]` to create multiple related records. The macro calls
-/// `with_<field>` with a `CreateMany` builder, invoking `.with_item()` for each
-/// entry.
+/// Use `[{ ... }, { ... }]` to create multiple related records. The macro
+/// expands each entry into a create builder and passes them as an array to
+/// the plural field setter.
 ///
 /// ```
 /// # #[derive(toasty::Model)]
@@ -1179,10 +1545,10 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// // Expands to:
 /// // User::create()
 /// //     .name("Alice")
-/// //     .with_todos(|b| b
-/// //         .with_item(|b| { let b = b.title("first"); b })
-/// //         .with_item(|b| { let b = b.title("second"); b })
-/// //     )
+/// //     .todos([
+/// //         User::fields().todos().create().title("first"),
+/// //         User::fields().todos().create().title("second"),
+/// //     ])
 /// ```
 ///
 /// Items in a nested list can also be plain expressions (e.g., an existing
@@ -1340,7 +1706,6 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// | `in expr { ... }` | Builder for the relation's model |
 /// | `Type::[ ... ]` | `Batch` — executes to `Vec<Type>` |
 /// | `( ... )` | `Batch` — executes to tuple of results |
-/// | `[ ... ]` | Tuple of builders (one per item) |
 ///
 /// Single and scoped forms return a builder — call `.exec(&mut db).await?`.
 /// Batch and tuple forms return a `Batch` — also call `.exec(&mut db).await?`.

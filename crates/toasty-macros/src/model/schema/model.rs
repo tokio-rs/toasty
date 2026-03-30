@@ -1,6 +1,6 @@
 use super::{
     ErrorSet, Field, FieldAttr, FieldTy, Index, IndexField, IndexScope, ModelAttr, Name,
-    PrimaryKey, Variant,
+    PrimaryKey, Variant, VariantValue,
 };
 
 #[derive(Debug)]
@@ -9,7 +9,7 @@ pub(crate) enum ModelKind {
     Root(ModelRoot),
     /// Embedded struct model that is flattened into parent
     EmbeddedStruct(ModelEmbeddedStruct),
-    /// Embedded enum stored as a single integer discriminant column
+    /// Embedded enum stored as a discriminant column (integer or string)
     EmbeddedEnum(ModelEmbeddedEnum),
 }
 
@@ -44,8 +44,11 @@ pub(crate) struct ModelRoot {
     /// Tracks fields in the primary key
     pub(crate) primary_key: PrimaryKey,
 
-    /// The field struct identifier
+    /// The field struct identifier (e.g., `UserFields`)
     pub(crate) field_struct_ident: syn::Ident,
+
+    /// The list field struct identifier (e.g., `UserListFields`)
+    pub(crate) field_list_struct_ident: syn::Ident,
 
     /// The query struct identifier
     pub(crate) query_struct_ident: syn::Ident,
@@ -62,6 +65,9 @@ pub(crate) struct ModelEmbeddedStruct {
     /// The field struct identifier
     pub(crate) field_struct_ident: syn::Ident,
 
+    /// The list field struct identifier (e.g., `AddressListFields`)
+    pub(crate) field_list_struct_ident: syn::Ident,
+
     /// Update builder struct identifier
     pub(crate) update_struct_ident: syn::Ident,
 }
@@ -71,8 +77,21 @@ pub(crate) struct ModelEmbeddedEnum {
     /// The field struct identifier (e.g., `ContactInfoFields`)
     pub(crate) field_struct_ident: syn::Ident,
 
+    /// The list field struct identifier (e.g., `ContactInfoListFields`)
+    pub(crate) field_list_struct_ident: syn::Ident,
+
     /// The enum's variants with their names and discriminant values
     pub(crate) variants: Vec<Variant>,
+}
+
+impl ModelEmbeddedEnum {
+    /// Returns true if this enum uses string discriminants.
+    pub(crate) fn uses_string_discriminants(&self) -> bool {
+        self.variants
+            .first()
+            .map(|v| matches!(v.attrs.discriminant, VariantValue::String(_)))
+            .unwrap_or(false)
+    }
 }
 
 #[derive(Debug)]
@@ -198,6 +217,7 @@ impl Model {
         let kind = if is_embedded {
             ModelKind::EmbeddedStruct(ModelEmbeddedStruct {
                 field_struct_ident: struct_ident("Fields", ast),
+                field_list_struct_ident: struct_list_ident("ListFields", ast),
                 update_struct_ident: struct_ident("Update", ast),
             })
         } else {
@@ -216,6 +236,7 @@ impl Model {
             ModelKind::Root(ModelRoot {
                 primary_key: PrimaryKey { fields: pk_fields },
                 field_struct_ident: struct_ident("Fields", ast),
+                field_list_struct_ident: struct_list_ident("ListFields", ast),
                 query_struct_ident: struct_ident("Query", ast),
                 create_struct_ident: struct_ident("Create", ast),
                 update_struct_ident: struct_ident("Update", ast),
@@ -253,6 +274,8 @@ impl Model {
     }
 
     pub(crate) fn from_enum_ast(ast: &syn::ItemEnum) -> syn::Result<Self> {
+        use super::variant::VariantAttr;
+
         if !ast.generics.params.is_empty() {
             return Err(syn::Error::new_spanned(
                 &ast.generics,
@@ -265,9 +288,30 @@ impl Model {
         let mut errs = ErrorSet::new();
         let mut global_field_index = 0usize;
 
+        // Parse all variants in a single pass, defaulting omitted discriminants
+        // to string labels using the variant identifier.
         for (variant_index, variant) in ast.variants.iter().enumerate() {
-            // Collect (ident, syn::Field) pairs for each variant field
-            let variant_field_pairs: Vec<_> = match &variant.fields {
+            let has_fields = !variant.fields.is_empty();
+
+            // Parse variant attribute
+            let explicit_attr = match VariantAttr::from_attrs(&variant.attrs) {
+                Ok(a) => a,
+                Err(e) => {
+                    errs.push(e);
+                    continue;
+                }
+            };
+
+            // Resolve discriminant: explicit value or default to variant name as string
+            let attr = match explicit_attr {
+                Some(a) => a,
+                None => VariantAttr {
+                    discriminant: VariantValue::String(variant.ident.to_string()),
+                },
+            };
+
+            // Collect variant data fields
+            let field_pairs: Vec<_> = match &variant.fields {
                 syn::Fields::Unit => vec![],
                 syn::Fields::Named(named) => named
                     .named
@@ -287,11 +331,14 @@ impl Model {
                     .collect(),
             };
 
-            let has_fields = !variant_field_pairs.is_empty();
-
-            // Create Field entries for each variant field
-            for (ident, f) in &variant_field_pairs {
-                let attrs = FieldAttr::from_attrs(&f.attrs)?;
+            for (ident, f) in &field_pairs {
+                let attrs = match FieldAttr::from_attrs(&f.attrs) {
+                    Ok(a) => a,
+                    Err(e) => {
+                        errs.push(e);
+                        continue;
+                    }
+                };
                 let name = Name::from_ident(ident);
                 let set_ident = syn::Ident::new(&format!("set_{}", name.ident), ident.span());
                 let with_ident = syn::Ident::new(&format!("with_{}", name.ident), ident.span());
@@ -308,29 +355,35 @@ impl Model {
                 global_field_index += 1;
             }
 
-            match Variant::from_ast(variant, &ast.ident, has_fields) {
+            match Variant::from_ast(variant, &ast.ident, has_fields, attr) {
                 Ok(v) => variants.push(v),
-                Err(e) => {
-                    errs.push(e);
-                    continue;
-                }
+                Err(e) => errs.push(e),
             }
         }
 
-        // Check for duplicate discriminant values
+        // Validate: all discriminants must be the same kind (all integer or all string)
+        if variants.iter().any(|v| v.attrs.discriminant.is_integer())
+            && variants.iter().any(|v| v.attrs.discriminant.is_string())
         {
-            let mut seen = std::collections::HashMap::<i64, &syn::Ident>::new();
-            for v in &variants {
-                if let Some(prev) = seen.get(&v.attrs.discriminant) {
+            errs.push(syn::Error::new_spanned(
+                ast,
+                "cannot mix integer and string variant discriminants; \
+                 all variants must use the same discriminant kind",
+            ));
+        }
+
+        // Validate: no duplicate discriminant values
+        for (i, v) in variants.iter().enumerate() {
+            for prev in &variants[..i] {
+                if v.attrs.discriminant == prev.attrs.discriminant {
                     errs.push(syn::Error::new_spanned(
                         &v.ident,
                         format!(
-                            "duplicate variant value `{}`; already used by `{}`",
-                            v.attrs.discriminant, prev
+                            "duplicate variant discriminant {}; already used by `{}`",
+                            v.attrs.discriminant, prev.ident
                         ),
                     ));
-                } else {
-                    seen.insert(v.attrs.discriminant, &v.ident);
+                    break;
                 }
             }
         }
@@ -349,6 +402,7 @@ impl Model {
             fields: all_fields,
             kind: ModelKind::EmbeddedEnum(ModelEmbeddedEnum {
                 field_struct_ident: enum_ident("Fields", ast),
+                field_list_struct_ident: enum_list_ident("ListFields", ast),
                 variants,
             }),
             indices,
@@ -376,6 +430,15 @@ fn struct_ident(suffix: &str, model: &syn::ItemStruct) -> syn::Ident {
     syn::Ident::new(&format!("{}{}", model.ident, suffix), model.ident.span())
 }
 
+/// Generates an ident like `UserListFields` — injects the suffix after the model name.
+fn struct_list_ident(suffix: &str, model: &syn::ItemStruct) -> syn::Ident {
+    syn::Ident::new(&format!("{}{}", model.ident, suffix), model.ident.span())
+}
+
 fn enum_ident(suffix: &str, model: &syn::ItemEnum) -> syn::Ident {
+    syn::Ident::new(&format!("{}{}", model.ident, suffix), model.ident.span())
+}
+
+fn enum_list_ident(suffix: &str, model: &syn::ItemEnum) -> syn::Ident {
     syn::Ident::new(&format!("{}{}", model.ident, suffix), model.ident.span())
 }

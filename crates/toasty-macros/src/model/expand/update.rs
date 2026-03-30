@@ -79,18 +79,16 @@ impl Expand<'_> {
             }
             FieldTy::HasMany(rel) => {
                 let ty = &rel.ty;
-                let singular = &rel.singular.ident;
-                let insert_ident = &rel.insert_ident;
 
                 quote! {
-                    #vis fn #singular(mut self, #singular: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
-                        self.#insert_ident(#singular);
+                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<#toasty::List<<#ty as #toasty::Relation>::Expr>>) -> Self {
+                        self.#set_field_ident(#field_ident);
                         self
                     }
 
-                    #vis fn #insert_ident(&mut self, #singular: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> &mut Self {
+                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<#toasty::List<<#ty as #toasty::Relation>::Expr>>) -> &mut Self {
                         let projection = #projection;
-                        self.assignments.insert(projection, #singular.into_expr());
+                        #field_ident.assign(&mut self.assignments, projection);
                         self
                     }
                 }
@@ -165,10 +163,10 @@ impl Expand<'_> {
 
                     #vis fn #with_field_ident(
                         mut self,
-                        f: impl FnOnce(<#ty as #toasty::Field>::UpdateBuilder<'_>)
+                        f: impl FnOnce(<#ty as #toasty::Field>::Update<'_>)
                     ) -> Self {
                         let projection = #projection;
-                        let builder = <#ty as #toasty::Field>::make_update_builder(#assignments_for_builder, projection);
+                        let builder = <#ty as #toasty::Field>::new_update(#assignments_for_builder, projection);
                         f(builder);
                         self
                     }
@@ -218,6 +216,7 @@ impl Expand<'_> {
             // to build the final update statement:
             // - `T = GeneratedQuery`: query-based update, `Returning = List<Model>`
             // - `T = &mut Model`: instance update, `Returning = Model`
+            #[derive(Clone)]
             #vis struct #update_struct_ident<#target_ty: #toasty::UpdateTarget = #query_struct_ident> {
                 assignments: #toasty::core::stmt::Assignments,
                 target: #target_ty,
@@ -256,7 +255,7 @@ impl Expand<'_> {
                 }
 
                 fn apply_result(self, value: #toasty::core::stmt::Value) -> #toasty::Result<()> {
-                    self.reload(value)
+                    <#model_ident as #toasty::Load>::reload(self, value)
                 }
             }
 
@@ -348,32 +347,30 @@ impl Expand<'_> {
 
                     quote! {
                         #i => {
-                            self.#field_ident = #assign;
+                            target.#field_ident = #assign;
                         }
                     }
                 }
                 FieldTy::Primitive(ty) => {
-                    quote!(#i => <#ty as #toasty::Field>::reload(&mut self.#field_ident, value)?,)
+                    quote!(#i => <#ty as #toasty::Load>::reload(&mut target.#field_ident, value)?,)
                 }
                 _ => {
                     // Relation fields (BelongsTo, HasMany, HasOne) are unloaded on update.
                     // Embedded fields are handled above via the Primitive arm.
-                    quote!(#i => self.#field_ident.unload(),)
+                    quote!(#i => target.#field_ident.unload(),)
                 }
             }
 
         }).collect()
     }
 
-    /// Generate the body of the `reload` method for a root model.
-    pub(super) fn expand_reload_method(&self) -> TokenStream {
+    /// Generate the `Load::reload` trait method implementation for a root model.
+    pub(super) fn expand_reload_trait_method(&self) -> TokenStream {
         let toasty = &self.toasty;
-        let vis = &self.model.vis;
         let reload_arms = self.expand_reload_match_arms();
 
         quote! {
-            #vis fn reload(&mut self, value: #toasty::core::stmt::Value) -> #toasty::Result<()> {
-                use #toasty::Field;
+            fn reload(target: &mut Self, value: #toasty::core::stmt::Value) -> #toasty::Result<()> {
                 for (field, value) in value.into_sparse_record().into_iter() {
                     match field {
                         #reload_arms

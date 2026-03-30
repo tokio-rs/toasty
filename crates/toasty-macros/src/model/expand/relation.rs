@@ -9,13 +9,12 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
-        let query_ident = &self.model.kind.as_root_unwrap().query_struct_ident;
-        let create_builder_ident = &self.model.kind.as_root_unwrap().create_struct_ident;
-        let eq_ty = util::ident("T");
-        let in_query_ty = util::ident("Q");
+        let root = self.model.kind.as_root_unwrap();
+        let query_ident = &root.query_struct_ident;
+        let create_builder_ident = &root.create_struct_ident;
+        let field_struct_ident = &root.field_struct_ident;
+        let field_list_struct_ident = &root.field_list_struct_ident;
         let filter_methods = self.expand_relation_filter_methods();
-        let many_field_association_methods = self.expand_field_association_methods();
-        let one_field_association_methods = self.expand_field_association_methods();
 
         quote! {
             #vis struct Many {
@@ -28,14 +27,6 @@ impl Expand<'_> {
 
             #vis struct OptionOne {
                 stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>,
-            }
-
-            #vis struct ManyField<__Origin> {
-                path: #toasty::Path<__Origin, #toasty::List<#model_ident>>,
-            }
-
-            #vis struct OneField<__Origin> {
-                path: #toasty::Path<__Origin, #model_ident>,
             }
 
             impl Many {
@@ -129,113 +120,63 @@ impl Expand<'_> {
                 }
             }
 
-            impl<__Origin> ManyField<__Origin> {
-                #vis const fn from_path(path: #toasty::Path<__Origin, #toasty::List<#model_ident>>) -> ManyField<__Origin> {
-                    ManyField { path }
+            #[diagnostic::do_not_recommend]
+            impl #toasty::Scope for Many {
+                type Item = #toasty::List<#model_ident>;
+                type Path<__Origin> = #field_list_struct_ident<__Origin>;
+                type Create = #create_builder_ident;
+
+                fn new_path<__Origin>(path: #toasty::Path<__Origin, Self::Item>) -> Self::Path<__Origin> {
+                    #field_list_struct_ident::from_path(path)
                 }
 
-                /// Filter the parent model by a condition on the associated
-                /// (child) model. Returns `true` when **any** associated record
-                /// satisfies `filter`.
-                ///
-                /// ```ignore
-                /// // Find users who have at least one incomplete todo
-                /// User::filter(User::fields().todos().any(Todo::fields().complete().eq(false)))
-                /// ```
-                #vis fn any(self, filter: #toasty::stmt::Expr<bool>) -> #toasty::stmt::Expr<bool> {
-                    self.path.any(filter)
+                fn new_create() -> Self::Create {
+                    #create_builder_ident::default()
                 }
 
-                #many_field_association_methods
-            }
-
-            impl<__Origin> Into<#toasty::Path<__Origin, #toasty::List<#model_ident>>> for ManyField<__Origin> {
-                fn into(self) -> #toasty::Path<__Origin, #toasty::List<#model_ident>> {
-                    self.path
+                fn new_path_root() -> Self::Path<Self::Item> {
+                    #field_list_struct_ident::from_path(#toasty::Path::from_model_list())
                 }
             }
 
-            impl<__Origin> OneField<__Origin> {
-                #vis const fn from_path(path: #toasty::Path<__Origin, #model_ident>) -> OneField<__Origin> {
-                    OneField { path }
+            #[diagnostic::do_not_recommend]
+            impl #toasty::Scope for One {
+                type Item = #model_ident;
+                type Path<__Origin> = #field_struct_ident<__Origin>;
+                type Create = #create_builder_ident;
+
+                fn new_path<__Origin>(path: #toasty::Path<__Origin, Self::Item>) -> Self::Path<__Origin> {
+                    #field_struct_ident::from_path(path)
                 }
 
-                #vis fn eq<#eq_ty>(self, rhs: #eq_ty) -> #toasty::stmt::Expr<bool>
-                where
-                    #eq_ty: #toasty::IntoExpr<#model_ident>,
-                {
-                    use #toasty::IntoExpr;
-                    self.path.eq(rhs.into_expr())
+                fn new_create() -> Self::Create {
+                    #create_builder_ident::default()
                 }
 
-                #vis fn in_query<#in_query_ty>(self, rhs: #in_query_ty) -> #toasty::stmt::Expr<bool>
-                where
-                    #in_query_ty: #toasty::IntoStatement<Returning = #toasty::List<#model_ident>>,
-                {
-                    self.path.in_query(rhs)
+                fn new_path_root() -> Self::Path<Self::Item> {
+                    #field_struct_ident::from_path(#toasty::Path::root())
                 }
-
-                #one_field_association_methods
             }
 
-            impl<__Origin> Into<#toasty::Path<__Origin, #model_ident>> for OneField<__Origin> {
-                fn into(self) -> #toasty::Path<__Origin, #model_ident> {
-                    self.path
+            #[diagnostic::do_not_recommend]
+            impl #toasty::Scope for OptionOne {
+                type Item = #model_ident;
+                type Path<__Origin> = #field_struct_ident<__Origin>;
+                type Create = #create_builder_ident;
+
+                fn new_path<__Origin>(path: #toasty::Path<__Origin, Self::Item>) -> Self::Path<__Origin> {
+                    #field_struct_ident::from_path(path)
+                }
+
+                fn new_create() -> Self::Create {
+                    #create_builder_ident::default()
+                }
+
+                fn new_path_root() -> Self::Path<Self::Item> {
+                    #field_struct_ident::from_path(#toasty::Path::root())
                 }
             }
         }
-    }
-
-    /// Generate association field accessor methods for ManyField and OneField.
-    /// These allow chaining like `User::fields().todos().steps()` for nested includes.
-    fn expand_field_association_methods(&self) -> TokenStream {
-        let toasty = &self.toasty;
-        let vis = &self.model.vis;
-        let model_ident = &self.model.ident;
-
-        self.model
-            .fields
-            .iter()
-            .enumerate()
-            .filter_map(|(offset, field)| {
-                let field_ident = &field.name.ident;
-                let field_offset = util::int(offset);
-
-                match &field.ty {
-                    FieldTy::HasMany(rel) => {
-                        let ty = &rel.ty;
-                        Some(quote! {
-                            #vis fn #field_ident(self) -> <#ty as #toasty::Relation>::ManyField<__Origin> {
-                                <#ty as #toasty::Relation>::ManyField::from_path(
-                                    self.path.chain(#toasty::Path::<#model_ident, _>::from_field_index(#field_offset))
-                                )
-                            }
-                        })
-                    }
-                    FieldTy::BelongsTo(rel) => {
-                        let ty = &rel.ty;
-                        Some(quote! {
-                            #vis fn #field_ident(self) -> <#ty as #toasty::Relation>::OneField<__Origin> {
-                                <#ty as #toasty::Relation>::OneField::from_path(
-                                    self.path.chain(#toasty::Path::<#model_ident, _>::from_field_index(#field_offset))
-                                )
-                            }
-                        })
-                    }
-                    FieldTy::HasOne(rel) => {
-                        let ty = &rel.ty;
-                        Some(quote! {
-                            #vis fn #field_ident(self) -> <#ty as #toasty::Relation>::OneField<__Origin> {
-                                <#ty as #toasty::Relation>::OneField::from_path(
-                                    self.path.chain(#toasty::Path::<#model_ident, _>::from_field_index(#field_offset))
-                                )
-                            }
-                        })
-                    }
-                    FieldTy::Primitive(_) => None,
-                }
-            })
-            .collect()
     }
 
     pub(super) fn expand_model_relation_methods(&self) -> TokenStream {

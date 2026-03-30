@@ -8,6 +8,14 @@ use std::fs;
 use toasty::Db;
 use toasty::schema::db::Migration;
 
+/// Applies pending migrations to the database.
+///
+/// Reads the migration history file to determine which migrations exist, then
+/// queries the database for already-applied migrations. Any migration present
+/// in the history but not yet applied is executed in order.
+///
+/// If no pending migrations are found, the command prints a message and exits
+/// without modifying the database.
 #[derive(Parser, Debug)]
 pub struct ApplyCommand {}
 

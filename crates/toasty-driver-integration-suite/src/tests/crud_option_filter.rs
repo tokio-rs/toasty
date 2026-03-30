@@ -314,3 +314,43 @@ pub async fn filter_option_with_partition_key(test: &mut Test) -> Result<()> {
 
     Ok(())
 }
+
+/// Regression test for https://github.com/tokio-rs/toasty/issues/581
+///
+/// `is_none()` on an `Option<ID>` field panics because the lowering phase
+/// does not strip the `ExprCast` wrapper from the column expression inside
+/// `IsNull`. The cast leaks into the SQL serializer which does not handle it.
+#[driver_test(id(ID), requires(sql))]
+pub async fn filter_option_id_is_none(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Player {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        user_id: Option<ID>,
+    }
+
+    let mut db = test.setup_db(models!(Player)).await;
+
+    toasty::create!(Player::[{ name: "Alice" }, { name: "Bob" }])
+        .exec(&mut db)
+        .await?;
+
+    // This panics with: "not yet implemented: expr=ExprCast { ... }"
+    let players = Player::filter(Player::fields().user_id().is_none())
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(2, players.len());
+
+    let players = Player::filter(Player::fields().user_id().is_some())
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(0, players.len());
+
+    Ok(())
+}

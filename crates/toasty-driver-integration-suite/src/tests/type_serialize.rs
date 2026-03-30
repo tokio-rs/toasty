@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use toasty_core::{
     driver::{Operation, Rows},
-    stmt::{ExprSet, Statement, Value},
+    stmt::{Assignment, ExprSet, Statement, Value},
 };
 
 #[driver_test(id(ID))]
@@ -27,15 +27,12 @@ pub async fn serialize_vec_string(t: &mut Test) -> Result<(), BoxError> {
     let mut record = Item::create().tags(tags.clone()).exec(&mut db).await?;
 
     let (op, _) = t.log().pop();
-    assert_struct!(op, Operation::QuerySql(_ {
-        stmt: Statement::Insert(_ {
-            source.body: ExprSet::Values(_ {
+    assert_struct!(op, Operation::QuerySql({
+        stmt: Statement::Insert({
+            source.body: ExprSet::Values({
                 rows: [=~ (Any, expected_json)],
-                ..
             }),
-            ..
         }),
-        ..
     }));
 
     assert_eq!(Item::get_by_id(&mut db, &record.id).await?.tags, tags);
@@ -48,20 +45,17 @@ pub async fn serialize_vec_string(t: &mut Test) -> Result<(), BoxError> {
 
     let (op, resp) = t.log().pop();
     if t.capability().sql {
-        assert_struct!(op, Operation::QuerySql(_ {
-            stmt: Statement::Update(_ {
-                assignments: #{ 1: _ { expr: == expected_json, .. }},
-                ..
+        assert_struct!(op, Operation::QuerySql({
+            stmt: Statement::Update({
+                assignments: #{ [1]: Assignment::Set(== expected_json)},
             }),
-            ..
         }));
     } else {
-        assert_struct!(op, Operation::UpdateByKey(_ {
-            assignments: #{ 1: _ { expr: == expected_json, .. }},
-            ..
+        assert_struct!(op, Operation::UpdateByKey({
+            assignments: #{ [1]: Assignment::Set(== expected_json)},
         }));
     }
-    assert_struct!(resp, _ { rows: Rows::Count(1), .. });
+    assert_struct!(resp, { rows: Rows::Count(1) });
 
     assert_eq!(Item::get_by_id(&mut db, &record.id).await?.tags, new_tags);
 
@@ -88,15 +82,12 @@ pub async fn serialize_nullable(t: &mut Test) -> Result<(), BoxError> {
     let record = Item::create().data(Some(map.clone())).exec(&mut db).await?;
 
     let (op, _) = t.log().pop();
-    assert_struct!(op, Operation::QuerySql(_ {
-        stmt: Statement::Insert(_ {
-            source.body: ExprSet::Values(_ {
+    assert_struct!(op, Operation::QuerySql({
+        stmt: Statement::Insert({
+            source.body: ExprSet::Values({
                 rows: [=~ (Any, expected_json)],
-                ..
             }),
-            ..
         }),
-        ..
     }));
 
     assert_eq!(Item::get_by_id(&mut db, &record.id).await?.data, Some(map));
@@ -106,15 +97,12 @@ pub async fn serialize_nullable(t: &mut Test) -> Result<(), BoxError> {
     let empty_record = Item::create().data(None).exec(&mut db).await?;
 
     let (op, _) = t.log().pop();
-    assert_struct!(op, Operation::QuerySql(_ {
-        stmt: Statement::Insert(_ {
-            source.body: ExprSet::Values(_ {
+    assert_struct!(op, Operation::QuerySql({
+        stmt: Statement::Insert({
+            source.body: ExprSet::Values({
                 rows: [=~ (Any, Value::Null)],
-                ..
             }),
-            ..
         }),
-        ..
     }));
 
     assert_eq!(Item::get_by_id(&mut db, &empty_record.id).await?.data, None);
@@ -140,15 +128,12 @@ pub async fn serialize_non_nullable_option(t: &mut Test) -> Result<(), BoxError>
     let empty_record = Item::create().extra(None).exec(&mut db).await?;
 
     let (op, _) = t.log().pop();
-    assert_struct!(op, Operation::QuerySql(_ {
-        stmt: Statement::Insert(_ {
-            source.body: ExprSet::Values(_ {
+    assert_struct!(op, Operation::QuerySql({
+        stmt: Statement::Insert({
+            source.body: ExprSet::Values({
                 rows: [=~ (Any, "null")],
-                ..
             }),
-            ..
         }),
-        ..
     }));
 
     assert_eq!(
@@ -165,15 +150,12 @@ pub async fn serialize_non_nullable_option(t: &mut Test) -> Result<(), BoxError>
         .await?;
 
     let (op, _) = t.log().pop();
-    assert_struct!(op, Operation::QuerySql(_ {
-        stmt: Statement::Insert(_ {
-            source.body: ExprSet::Values(_ {
+    assert_struct!(op, Operation::QuerySql({
+        stmt: Statement::Insert({
+            source.body: ExprSet::Values({
                 rows: [=~ (Any, expected_json)],
-                ..
             }),
-            ..
         }),
-        ..
     }));
 
     assert_eq!(
@@ -212,15 +194,12 @@ pub async fn serialize_custom_struct(t: &mut Test) -> Result<(), BoxError> {
     let record = Item::create().meta(meta.clone()).exec(&mut db).await?;
 
     let (op, _) = t.log().pop();
-    assert_struct!(op, Operation::QuerySql(_ {
-        stmt: Statement::Insert(_ {
-            source.body: ExprSet::Values(_ {
+    assert_struct!(op, Operation::QuerySql({
+        stmt: Statement::Insert({
+            source.body: ExprSet::Values({
                 rows: [=~ (Any, expected_json)],
-                ..
             }),
-            ..
         }),
-        ..
     }));
 
     assert_eq!(Item::get_by_id(&mut db, &record.id).await?.meta, meta);

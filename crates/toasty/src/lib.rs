@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Toasty is an async ORM for Rust supporting both SQL (SQLite, PostgreSQL,
 //! MySQL) and NoSQL (DynamoDB) databases.
 //!
@@ -20,8 +21,9 @@
 //! The [`Model`](schema::Model) trait represents a root model that maps to a
 //! database table. It is implemented by `#[derive(Model)]` — users do not
 //! implement it manually. The module also contains [`Field`](schema::Field),
-//! which describes a typed field accessor, and [`Auto`](schema::Auto), a
-//! wrapper for auto-generated values such as database-assigned IDs.
+//! which provides schema registration and runtime helpers for field types, and
+//! [`Auto`](schema::Auto), a wrapper for auto-generated values such as
+//! database-assigned IDs.
 //!
 //! The module also provides the types that represent associations between
 //! models: [`HasMany`](schema::HasMany), [`HasOne`](schema::HasOne), and
@@ -106,16 +108,19 @@ pub use update_target::UpdateTarget;
 // `Batch`, `batch()`, and `CreateMany` live in `stmt`.
 pub use stmt::{batch, Batch};
 
+/// Database handle, connection pool, executor trait, and transaction support.
 pub mod db;
-pub use db::{Db, Executor, Transaction};
+pub use db::{Connection, Db, Executor, Transaction, TransactionBuilder};
 
 mod engine;
 
+/// Model, relation, and schema inspection types.
 pub mod schema;
 pub use schema::{BelongsTo, HasMany, HasOne};
 
 // `Page` lives in `stmt`.
 
+/// Typed statement, expression, and query builder types.
 pub mod stmt;
 pub use stmt::Statement;
 
@@ -128,10 +133,10 @@ pub mod codegen_support {
     pub use crate::{
         schema::{
             generate_unique_id, Auto, BelongsTo, Embed, Field, HasMany, HasOne, Load, Model,
-            Register, Relation,
+            Register, Relation, Scope,
         },
         stmt::CreateMany,
-        stmt::{self, IntoExpr, IntoInsert, IntoStatement, List, Path},
+        stmt::{self, Assign, IntoExpr, IntoInsert, IntoStatement, List, Path},
         update_target::UpdateTarget,
         Db, Error, Executor, Result, Statement,
     };
@@ -140,4 +145,15 @@ pub mod codegen_support {
     pub use std::{convert::Into, default::Default, option::Option};
 
     pub use toasty_core as core;
+
+    /// Infer the [`Scope`] type from a scope expression and return its fields
+    /// path.
+    ///
+    /// The `create!` macro uses this in the scoped form (`in expr { ... }`) to
+    /// obtain the field struct for nested builders. Because the macro has no
+    /// type information, it cannot call `S::new_path_root()` directly — this function
+    /// lets Rust infer `S` from the scope argument.
+    pub fn scope_fields<S: Scope>(_scope: &S) -> S::Path<S::Item> {
+        S::new_path_root()
+    }
 }

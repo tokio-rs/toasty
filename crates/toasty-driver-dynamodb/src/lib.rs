@@ -151,6 +151,7 @@ impl toasty_core::driver::Connection for Connection {
 
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
         for table in &schema.db.tables {
+            tracing::debug!(table = %table.name, "creating table");
             self.create_table(&schema.db, table, true).await?;
         }
         Ok(())

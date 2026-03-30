@@ -2,9 +2,9 @@ use crate::Result;
 
 use async_trait::async_trait;
 use std::borrow::Cow;
-pub use toasty_core::driver::{operation::Operation, Capability, Connection, Response};
+use toasty_core::driver::{Capability, Driver};
 use toasty_core::{
-    driver::Driver,
+    driver::Connection,
     schema::db::{Migration, SchemaDiff},
 };
 
@@ -24,6 +24,22 @@ impl std::fmt::Debug for Connect {
 }
 
 impl Connect {
+    /// Create a new connection by parsing a database URL and constructing the
+    /// appropriate driver.
+    ///
+    /// The URL scheme determines which driver is used:
+    ///
+    /// | Scheme | Driver | Feature flag |
+    /// |---|---|---|
+    /// | `sqlite` | SQLite | `sqlite` |
+    /// | `postgresql` / `postgres` | PostgreSQL | `postgresql` |
+    /// | `mysql` | MySQL | `mysql` |
+    /// | `dynamodb` | DynamoDB | `dynamodb` |
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the URL is malformed, the scheme is unrecognized,
+    /// or the required feature flag is not enabled.
     pub async fn new(url: &str) -> Result<Self> {
         #![cfg_attr(
             not(any(

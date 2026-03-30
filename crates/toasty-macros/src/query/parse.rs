@@ -5,15 +5,33 @@ use syn::token;
 /// Top-level input to the `query!` macro.
 ///
 /// ```text
-/// query!($source [FILTER $filter])
+/// query!($source [FILTER $filter] [ORDER BY $field ASC|DESC] [OFFSET $n] [LIMIT $n])
 /// ```
-///
-/// Future clauses (ORDER BY, OFFSET, LIMIT, includes) will be added here.
 pub(crate) struct QueryInput {
     /// The model type path (e.g. `User`, `my_mod::User`).
     pub source: syn::Path,
     /// Optional filter expression.
     pub filter: Option<Expr>,
+    /// Optional ORDER BY clause.
+    pub order_by: Option<OrderByClause>,
+    /// Optional OFFSET value.
+    pub offset: Option<Expr>,
+    /// Optional LIMIT value.
+    pub limit: Option<Expr>,
+}
+
+/// An ORDER BY clause: a field path and a direction.
+#[derive(Debug)]
+pub(crate) struct OrderByClause {
+    pub field: FieldPath,
+    pub direction: OrderDirection,
+}
+
+/// Sort direction for ORDER BY.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum OrderDirection {
+    Asc,
+    Desc,
 }
 
 /// An expression — a tree of boolean operators, comparisons, NOT, and
@@ -97,11 +115,42 @@ impl Parse for QueryInput {
             None
         };
 
+        let order_by = if is_keyword(input, "order") {
+            consume_ident(input)?;
+            if !is_keyword(input, "by") {
+                return Err(input.error("expected `BY` after `ORDER`"));
+            }
+            consume_ident(input)?;
+            Some(parse_order_by(input)?)
+        } else {
+            None
+        };
+
+        let offset = if is_keyword(input, "offset") {
+            consume_ident(input)?;
+            Some(parse_pagination_expr(input)?)
+        } else {
+            None
+        };
+
+        let limit = if is_keyword(input, "limit") {
+            consume_ident(input)?;
+            Some(parse_pagination_expr(input)?)
+        } else {
+            None
+        };
+
         if !input.is_empty() {
             return Err(input.error("unexpected tokens after query"));
         }
 
-        Ok(QueryInput { source, filter })
+        Ok(QueryInput {
+            source,
+            filter,
+            order_by,
+            offset,
+            limit,
+        })
     }
 }
 
@@ -285,6 +334,41 @@ fn parse_compare_op(input: ParseStream) -> syn::Result<CompareOp> {
         })
     } else {
         Err(input.error("expected comparison operator (==, !=, >, >=, <, <=)"))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ORDER BY, OFFSET, LIMIT helpers
+// ---------------------------------------------------------------------------
+
+/// Parse `ORDER BY .field ASC|DESC`.
+fn parse_order_by(input: ParseStream) -> syn::Result<OrderByClause> {
+    let field = parse_field_path(input)?;
+
+    let direction = if is_keyword(input, "asc") {
+        consume_ident(input)?;
+        OrderDirection::Asc
+    } else if is_keyword(input, "desc") {
+        consume_ident(input)?;
+        OrderDirection::Desc
+    } else {
+        // Default to ascending if no direction specified
+        OrderDirection::Asc
+    };
+
+    Ok(OrderByClause { field, direction })
+}
+
+/// Parse a pagination value: integer literal, `#ident`, or `#(expr)`.
+///
+/// This is a restricted form of [`Expr`] — only values that make sense for
+/// LIMIT / OFFSET are accepted. Delegates to [`parse_primary`] for the actual
+/// parsing, then validates that the resulting expression is an allowed form.
+fn parse_pagination_expr(input: ParseStream) -> syn::Result<Expr> {
+    let expr = parse_primary(input)?;
+    match &expr {
+        Expr::Lit(syn::Lit::Int(_)) | Expr::Var(_) | Expr::RustExpr(_) => Ok(expr),
+        _ => Err(input.error("expected integer literal, `#variable`, or `#(expression)`")),
     }
 }
 
