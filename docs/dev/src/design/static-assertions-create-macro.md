@@ -116,9 +116,9 @@ These fields are **always excluded** from the list entirely:
 - FK source fields (fields referenced by a `#[belongs_to(key = ...)]` on the
   same model)
 
-FK source fields are excluded because they are set implicitly — either by the
-scope in a scoped create, or by providing the `BelongsTo` relation. This means
-the same `REQUIRED_FIELDS` constant works for both scoped and unscoped creates.
+FK source fields are excluded from `RequiredFields.fields` because in a
+top-level create they are set implicitly when you provide the `BelongsTo`
+relation. In a nested or scoped create the parent context fills them in.
 
 For the models above:
 
@@ -126,6 +126,72 @@ For the models above:
 |-------|----------|-------------|----------|
 | `User` | `name` | | `id` (auto), `todos` (relation) |
 | `Todo` | `title` | | `id` (auto), `user_id` (FK source), `user` (relation) |
+
+### Nested relations and optional FK fields
+
+When `Todo` is created nested inside a `User` create, the `user`/`user_id`
+fields are provided by the parent context. But when `Todo` is created as a
+standalone top-level create, `user_id` is required.
+
+To handle this, the `nested` array uses `NestedFieldInfo` instead of a plain
+tuple:
+
+```rust
+pub struct NestedFieldInfo {
+    pub name: &'static str,
+    pub field: &'static RequiredFields,
+    pub optional: &'static [&'static str],
+}
+
+pub struct RequiredFields {
+    pub fields: &'static [FieldInfo],
+    pub nested: &'static [NestedFieldInfo],
+    pub model_name: &'static str,
+}
+```
+
+The `optional` list names fields on the target model that become optional in
+this nested position because the parent-child relationship provides them. For
+`User.todos`, the `optional` list contains the FK source fields that
+`Todo`'s `BelongsTo<User>` references:
+
+```rust
+impl Model for User {
+    const REQUIRED_FIELDS: RequiredFields = RequiredFields {
+        fields: &[
+            FieldInfo { name: "name", required: !<String as Field>::NULLABLE },
+        ],
+        nested: &[NestedFieldInfo {
+            name: "todos",
+            field: &<Todo as Model>::REQUIRED_FIELDS,
+            optional: Todo::BELONGS_TO_USER_FK_FIELDS,
+        }],
+        model_name: "User",
+    };
+}
+```
+
+Each model generates a constant per `BelongsTo` relation listing its FK source
+field names:
+
+```rust
+impl Todo {
+    const BELONGS_TO_USER_FK_FIELDS: &'static [&'static str] = &["user_id"];
+}
+```
+
+The constant name follows a predictable pattern:
+`BELONGS_TO_{pair_field}_FK_FIELDS`. The `HasMany` on `User` knows the pair
+field name — it is either explicit via `#[has_many(pair = ...)]` or defaults to
+the lowercased parent model name. The macro uses this to reference the correct
+constant on the target type.
+
+The `assert_nested_required_fields` function skips any field whose name appears
+in the `optional` list when checking a nested create. This means
+`create!(User { name: "Alice", todos: [{ title: "x" }] })` passes without
+specifying `user_id` on the nested Todo, but a top-level
+`create!(Todo { title: "x" })` still requires it (since it appears in
+`Todo::REQUIRED_FIELDS.fields` with `required: true`).
 
 ### Trait constants
 
@@ -152,19 +218,9 @@ impl Scope for Many {
 }
 ```
 
-Nested relations chain through trait references:
-
-```rust
-impl Model for User {
-    const REQUIRED_FIELDS: RequiredFields = RequiredFields {
-        fields: &[
-            FieldInfo { name: "name", required: !<String as Field>::NULLABLE },
-        ],
-        nested: &[("todos", &<Todo as Model>::REQUIRED_FIELDS)],
-        model_name: "User",
-    };
-}
-```
+Nested relations chain through trait references. See the
+[nested relations](#nested-relations-and-optional-fk-fields) section for the
+full `NestedFieldInfo` example.
 
 This works because `const` items can reference other associated constants. The
 compiler builds a dependency graph and evaluates them in order. The `&'static`
@@ -214,9 +270,11 @@ const _: () = {
 ```
 
 `assert_nested_required_fields` finds `"todos"` in `REQUIRED_FIELDS.nested`,
-retrieves the `&RequiredFields` for `Todo`, and checks the provided fields
-against it. This chains to arbitrary depth because each `RequiredFields`
-references its children through `&'static` pointers.
+retrieves the `NestedFieldInfo` for `Todo`, and checks the provided fields
+against it. Fields listed in `NestedFieldInfo.optional` are treated as not
+required even if their `FieldInfo.required` flag is `true`. This chains to
+arbitrary depth because each `RequiredFields` references its children through
+`&'static` pointers.
 
 ### Scoped creates
 
@@ -276,13 +334,18 @@ The `expand_model_impls` method in `model/expand/model.rs` adds
 
 1. Collect FK source field indices — fields referenced by any `BelongsTo`'s
    `key` attribute
-2. Filter to primitive fields that are not in the FK source set, not
+2. For each `BelongsTo` relation, generate a `BELONGS_TO_{pair}_FK_FIELDS`
+   constant listing the FK source field names (e.g., `&["user_id"]`). This
+   constant is referenced by the parent model's `NestedFieldInfo.optional`
+3. Filter to primitive fields that are not in the FK source set, not
    `#[auto]`, not `#[default]`, not `#[update]`
-3. For each remaining field, emit a `FieldInfo` with `required` set to
+4. For each remaining field, emit a `FieldInfo` with `required` set to
    `!<FieldType as Field>::NULLABLE`. The compiler resolves `NULLABLE` at const
    evaluation time, so the proc macro does not need to parse `Option<T>`
-4. Build the `nested` array from `HasMany` and `HasOne` relation fields,
-   referencing the target model's `REQUIRED_FIELDS` via `<Target as Model>::REQUIRED_FIELDS`
+5. Build the `nested` array from `HasMany` and `HasOne` relation fields as
+   `NestedFieldInfo` entries, referencing the target model's `REQUIRED_FIELDS`
+   via `<Target as Model>::REQUIRED_FIELDS` and the target's
+   `BELONGS_TO_{pair}_FK_FIELDS` for the `optional` list
 
 ### `create!` macro changes
 
@@ -314,10 +377,12 @@ error[E0080]: evaluation panicked: missing required field `title` in create! for
 
 ## Limitations
 
-- FK source fields and `BelongsTo` relation fields are not checked. If you
-  write `create!(Todo { title: "x" })` without providing `user`, it compiles
-  but fails at the database. A future enhancement could add disjunction
-  checking (require `user` OR `user_id` in unscoped creates).
+- `BelongsTo` relation fields themselves are not checked. If you write
+  `create!(Todo { title: "x" })` without providing `user` or `user_id`, it
+  compiles but fails at the database. A future enhancement could add
+  disjunction checking (require `user` OR `user_id` in top-level creates).
+  In nested and scoped creates this is not a problem because the parent
+  context provides the FK.
 - Error messages include the field name but not a file/line pointer to the model
   definition. The Rust compiler's error output shows the `create!` call site,
   which is the actionable location.
