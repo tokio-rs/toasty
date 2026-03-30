@@ -24,11 +24,12 @@ pub async fn string_discriminant_unit_enum(t: &mut Test) -> Result<()> {
 
     let mut db = t.setup_db(models!(Task, Status)).await;
 
-    let task = Task::create()
-        .title("Ship it")
-        .status(Status::Pending)
-        .exec(&mut db)
-        .await?;
+    let task = toasty::create!(Task {
+        title: "Ship it",
+        status: Status::Pending,
+    })
+    .exec(&mut db)
+    .await?;
     assert_eq!(task.status, Status::Pending);
 
     let found = Task::get_by_id(&mut db, &task.id).await?;
@@ -64,11 +65,12 @@ pub async fn default_string_labels(t: &mut Test) -> Result<()> {
 
     let mut db = t.setup_db(models!(Task, Priority)).await;
 
-    let task = Task::create()
-        .title("Fix bug")
-        .priority(Priority::High)
-        .exec(&mut db)
-        .await?;
+    let task = toasty::create!(Task {
+        title: "Fix bug",
+        priority: Priority::High,
+    })
+    .exec(&mut db)
+    .await?;
     assert_eq!(task.priority, Priority::High);
 
     let found = Task::get_by_id(&mut db, &task.id).await?;
@@ -99,11 +101,19 @@ pub async fn mixed_explicit_and_default_labels(t: &mut Test) -> Result<()> {
     let mut db = t.setup_db(models!(Task, Status)).await;
 
     // "waiting" is the explicit label for Pending
-    let t1 = Task::create().status(Status::Pending).exec(&mut db).await?;
+    let t1 = toasty::create!(Task {
+        status: Status::Pending
+    })
+    .exec(&mut db)
+    .await?;
     assert_eq!(t1.status, Status::Pending);
 
     // "Active" is the default label
-    let t2 = Task::create().status(Status::Active).exec(&mut db).await?;
+    let t2 = toasty::create!(Task {
+        status: Status::Active
+    })
+    .exec(&mut db)
+    .await?;
 
     let found1 = Task::get_by_id(&mut db, &t1.id).await?;
     let found2 = Task::get_by_id(&mut db, &t2.id).await?;
@@ -136,13 +146,15 @@ pub async fn string_discriminant_data_enum(t: &mut Test) -> Result<()> {
 
     let mut db = t.setup_db(models!(User, ContactMethod)).await;
 
-    let user = User::create()
-        .name("Alice")
-        .contact(ContactMethod::Email {
-            address: "alice@example.com".into(),
-        })
-        .exec(&mut db)
-        .await?;
+    let email = ContactMethod::Email {
+        address: "alice@example.com".into(),
+    };
+    let user = toasty::create!(User {
+        name: "Alice",
+        contact: email,
+    })
+    .exec(&mut db)
+    .await?;
 
     let found = User::get_by_id(&mut db, &user.id).await?;
     assert_eq!(
@@ -193,13 +205,15 @@ pub async fn default_string_labels_data_enum(t: &mut Test) -> Result<()> {
 
     let mut db = t.setup_db(models!(User, ContactMethod)).await;
 
-    let user = User::create()
-        .name("Alice")
-        .contact(ContactMethod::Email {
-            address: "alice@example.com".into(),
-        })
-        .exec(&mut db)
-        .await?;
+    let email = ContactMethod::Email {
+        address: "alice@example.com".into(),
+    };
+    let user = toasty::create!(User {
+        name: "Alice",
+        contact: email,
+    })
+    .exec(&mut db)
+    .await?;
 
     let found = User::get_by_id(&mut db, &user.id).await?;
     assert_eq!(
@@ -256,22 +270,26 @@ pub async fn mixed_string_labels_data_enum(t: &mut Test) -> Result<()> {
     let mut db = t.setup_db(models!(User, ContactMethod)).await;
 
     // Create with the explicit-label variant
-    let u1 = User::create()
-        .name("Alice")
-        .contact(ContactMethod::Email {
-            address: "alice@example.com".into(),
-        })
-        .exec(&mut db)
-        .await?;
+    let email = ContactMethod::Email {
+        address: "alice@example.com".into(),
+    };
+    let u1 = toasty::create!(User {
+        name: "Alice",
+        contact: email,
+    })
+    .exec(&mut db)
+    .await?;
 
     // Create with the default-label variant
-    let u2 = User::create()
-        .name("Bob")
-        .contact(ContactMethod::Phone {
-            number: "555-0200".into(),
-        })
-        .exec(&mut db)
-        .await?;
+    let phone = ContactMethod::Phone {
+        number: "555-0200".into(),
+    };
+    let u2 = toasty::create!(User {
+        name: "Bob",
+        contact: phone,
+    })
+    .exec(&mut db)
+    .await?;
 
     let found1 = User::get_by_id(&mut db, &u1.id).await?;
     assert_eq!(
@@ -332,17 +350,19 @@ pub async fn filter_by_string_variant(t: &mut Test) -> Result<()> {
 
     let mut db = t.setup_db(models!(Task, Status)).await;
 
-    Task::create()
-        .title("A")
-        .status(Status::Pending)
-        .exec(&mut db)
-        .await?;
+    toasty::create!(Task {
+        title: "A",
+        status: Status::Pending
+    })
+    .exec(&mut db)
+    .await?;
 
-    Task::create()
-        .title("B")
-        .status(Status::Active)
-        .exec(&mut db)
-        .await?;
+    toasty::create!(Task {
+        title: "B",
+        status: Status::Active
+    })
+    .exec(&mut db)
+    .await?;
 
     let pending = Task::filter(Task::fields().status().is_pending())
         .exec(&mut db)
