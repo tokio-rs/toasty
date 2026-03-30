@@ -15,8 +15,8 @@ pub async fn batch_two_models(t: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await?;
 
-    assert_struct!(users, [_ { name: "Alice" }]);
-    assert_struct!(posts, [_ { title: "Hello" }]);
+    assert_struct!(users, [{ name: "Alice" }]);
+    assert_struct!(posts, [{ title: "Hello" }]);
 
     Ok(())
 }
@@ -34,7 +34,7 @@ pub async fn batch_one_empty(t: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await?;
 
-    assert_struct!(users, [_ { name: "Alice" }]);
+    assert_struct!(users, [{ name: "Alice" }]);
     assert!(posts.is_empty());
 
     Ok(())
@@ -53,8 +53,8 @@ pub async fn batch_same_model(t: &mut Test) -> Result<()> {
             .exec(&mut db)
             .await?;
 
-    assert_struct!(alices, [_ { name: "Alice" }]);
-    assert_struct!(bobs, [_ { name: "Bob" }]);
+    assert_struct!(alices, [{ name: "Alice" }]);
+    assert_struct!(bobs, [{ name: "Bob" }]);
 
     Ok(())
 }
@@ -75,9 +75,9 @@ pub async fn batch_three_queries(t: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await?;
 
-    assert_struct!(alices, [_ { name: "Alice" }]);
-    assert_struct!(bobs, [_ { name: "Bob" }]);
-    assert_struct!(carols, [_ { name: "Carol" }]);
+    assert_struct!(alices, [{ name: "Alice" }]);
+    assert_struct!(bobs, [{ name: "Bob" }]);
+    assert_struct!(carols, [{ name: "Carol" }]);
 
     Ok(())
 }
@@ -110,7 +110,7 @@ pub async fn batch_select_and_create(t: &mut Test) -> Result<()> {
             .exec(&mut db)
             .await?;
 
-    assert_struct!(users, [_ { name: "Alice" }]);
+    assert_struct!(users, [{ name: "Alice" }]);
     assert_eq!(created.name, "Bob");
 
     // Verify Bob was actually persisted

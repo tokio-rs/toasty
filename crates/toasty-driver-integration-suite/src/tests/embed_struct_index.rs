@@ -26,9 +26,8 @@ pub async fn embedded_struct_index_schema(test: &mut Test) {
 
     // The embedded struct should carry its indices in the app schema
     assert_struct!(schema.app.models, #{
-        Contact::id(): toasty::schema::app::Model::EmbeddedStruct(_ {
+        Contact::id(): toasty::schema::app::Model::EmbeddedStruct({
             indices.len(): 2,
-            ..
         }),
         ..
     });

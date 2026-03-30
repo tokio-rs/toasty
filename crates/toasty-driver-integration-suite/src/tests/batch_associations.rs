@@ -41,8 +41,8 @@ pub async fn batch_two_scoped_queries_same_relation(t: &mut Test) -> Result<()> 
         .exec(&mut db)
         .await?;
 
-    assert_struct!(u1_todos, [_ { title: "u1 todo" }]);
-    assert_struct!(u2_todos, [_ { title: "u2 todo" }]);
+    assert_struct!(u1_todos, [{ title: "u1 todo" }]);
+    assert_struct!(u2_todos, [{ title: "u2 todo" }]);
 
     Ok(())
 }
@@ -127,7 +127,7 @@ pub async fn batch_scoped_with_root_statements(t: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await?;
 
-    assert_struct!(users, [_ { name: "Alice" }]);
+    assert_struct!(users, [{ name: "Alice" }]);
     assert_eq!(todo.title, "from batch");
     assert_eq!(todo.user_id, user.id);
     assert_eq!(new_user.name, "Bob");
@@ -271,8 +271,8 @@ pub async fn batch_scoped_different_parents(t: &mut Test) -> Result<()> {
             .exec(&mut db)
             .await?;
 
-    assert_struct!(alice_todos, [_ { title: "alice task" }]);
-    assert_struct!(bob_todos, [_ { title: "bob task" }]);
+    assert_struct!(alice_todos, [{ title: "alice task" }]);
+    assert_struct!(bob_todos, [{ title: "bob task" }]);
 
     Ok(())
 }
