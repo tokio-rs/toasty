@@ -37,7 +37,7 @@ homepage = "https://github.com/tokio-rs/toasty"
 keywords = ["orm", "database", "sql", "nosql", "async"]
 license = "MIT"
 repository = "https://github.com/tokio-rs/toasty"
-rust-version = "1.85"
+rust-version = "1.94"
 categories = ["database"]
 
 [workspace.lints.rust]
