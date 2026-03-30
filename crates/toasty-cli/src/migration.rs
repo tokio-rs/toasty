@@ -21,6 +21,10 @@ use anyhow::Result;
 use clap::Parser;
 use toasty::Db;
 
+/// Top-level `migration` subcommand.
+///
+/// Groups all migration-related subcommands: apply, generate, snapshot, drop,
+/// and reset. This struct is used by clap to parse `toasty migration <sub>`.
 #[derive(Parser, Debug)]
 pub struct MigrationCommand {
     #[command(subcommand)]

@@ -15,6 +15,18 @@ use toasty::{
     },
 };
 
+/// Generates a new SQL migration from the current schema diff.
+///
+/// Compares the current database schema (as registered on the [`Db`]) against
+/// the most recent snapshot. If there are differences, generates a SQL
+/// migration file, writes a new snapshot, and updates the history file.
+///
+/// When the diff contains dropped-and-added tables, columns, or indices, the
+/// command interactively asks whether these are renames rather than
+/// drop-then-create pairs.
+///
+/// If no schema changes are detected, the command exits without creating any
+/// files.
 #[derive(Parser, Debug)]
 pub struct GenerateCommand {
     /// Name for the migration
