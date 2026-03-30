@@ -55,14 +55,15 @@ Then, you can easily work with the data model:
 
 ```rust
 // Create a new user and give them some todos.
-let user = User::create()
-    .name("John Doe")
-    .email("john@example.com")
-    .todo(Todo::create().title("Make pizza"))
-    .todo(Todo::create().title("Finish Toasty"))
-    .todo(Todo::create().title("Sleep"))
-    .exec(&mut db)
-    .await?;
+let user = toasty::create!(User {
+    name: "John Doe",
+    email: "john@example.com",
+    todos: [
+        { title: "Make pizza" },
+        { title: "Finish Toasty" },
+        { title: "Sleep" },
+    ],
+}).exec(&mut db).await?;
 
 // Load the user from the database
 let user = User::get_by_id(&mut db, &user.id).await?;
