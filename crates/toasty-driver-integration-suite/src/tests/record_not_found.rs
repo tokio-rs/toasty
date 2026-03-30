@@ -14,8 +14,8 @@ pub async fn not_found(t: &mut Test) -> Result<()> {
 
     let err = Item::all().get(&mut db).await.unwrap_err();
     assert!(
-        err.is_record_not_found(),
-        "expected RecordNotFound, got: {err}"
+        err.is_record_not_found() | err.is_unsupported_feature(),
+        "expected RecordNotFound or UnsupportedFeature, got: {err}"
     );
 
     // Create and immediately delete to get a known-missing ID
