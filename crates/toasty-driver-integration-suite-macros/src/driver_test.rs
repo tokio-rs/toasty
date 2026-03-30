@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, visit_mut::VisitMut, ItemFn};
+use syn::{ItemFn, parse_macro_input, visit_mut::VisitMut};
 
 use crate::id_rewriter::IdRewriter;
 use crate::parse::{BoolExpr, DriverTest, DriverTestAttr, Expansion, ExpansionList};
@@ -92,8 +92,7 @@ fn generate_variant(
     rewrite_driver_test_cfg_macros(&mut variant, expansion);
 
     // Rewrite ID types if expansion has an ID variant
-    if let (Some(ref id_ident), Some(ref id_variant)) = (&expansion.id_ident, &expansion.id_variant)
-    {
+    if let (Some(id_ident), Some(id_variant)) = (&expansion.id_ident, &expansion.id_variant) {
         let target_type = match id_variant {
             crate::parse::KindVariant::IdU64 => syn::parse_quote!(u64),
             crate::parse::KindVariant::IdUuid => syn::parse_quote!(uuid::Uuid),
@@ -118,7 +117,7 @@ fn generate_variant(
     }
 
     // Add capability checks at the beginning of the function if there are requires
-    if let Some(ref requires_expr) = requires {
+    if let Some(requires_expr) = requires {
         add_capability_checks_from_expr(&mut variant, requires_expr, expansion);
     }
 
@@ -193,7 +192,7 @@ fn add_capability_checks_from_expr(
     requires_expr: &BoolExpr,
     expansion: &Expansion,
 ) {
-    use syn::{parse_quote, Ident, Stmt};
+    use syn::{Ident, Stmt, parse_quote};
 
     // Extract database capability identifiers from the expression
     let db_capabilities = extract_db_capabilities(requires_expr, expansion);

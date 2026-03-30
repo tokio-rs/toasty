@@ -6,7 +6,7 @@
 //! functions are not recursed into (their local args must remain intact).
 
 use crate::stmt::{
-    visit, visit_mut, ExprSet, Input, Projection, Query, TableDerived, TableRef, Values,
+    ExprSet, Input, Projection, Query, TableDerived, TableRef, Values, visit, visit_mut,
 };
 
 use super::{Expr, Value};

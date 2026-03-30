@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
 use toasty_core::{
-    driver::{operation::Transaction, Operation},
+    driver::{Operation, operation::Transaction},
     stmt::Statement,
 };
 

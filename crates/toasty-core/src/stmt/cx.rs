@@ -1,4 +1,5 @@
 use crate::{
+    Schema,
     schema::{
         app::{Field, Model, ModelId, ModelRoot},
         db::{self, Column, ColumnId, Table, TableId},
@@ -8,7 +9,6 @@ use crate::{
         Query, Returning, Select, Source, SourceTable, Statement, TableDerived, TableFactor,
         TableRef, Type, TypeUnion, Update, UpdateTarget,
     },
-    Schema,
 };
 
 /// Provides schema-aware context for expression type inference and reference
@@ -305,19 +305,24 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                     assert_eq!(expr_column.table, 0, "TODO: is this true?");
 
                     let Some(table) = self.schema.table_for_model(model) else {
-                        panic!("Failed to find database table for model '{:?}' - model may not be mapped to a table", model.name)
+                        panic!(
+                            "Failed to find database table for model '{:?}' - model may not be mapped to a table",
+                            model.name
+                        )
                     };
                     ResolvedRef::Column(&table.columns[expr_column.column])
                 }
             },
             ExprTarget::Table(table) => match expr_reference {
-                ExprReference::Model { .. } => panic!(
-                    "Cannot resolve ExprReference::Model in Table target context"
-                ),
-                ExprReference::Field {.. } => panic!(
+                ExprReference::Model { .. } => {
+                    panic!("Cannot resolve ExprReference::Model in Table target context")
+                }
+                ExprReference::Field { .. } => panic!(
                     "Cannot resolve ExprReference::Field in Table target context - use ExprReference::Column instead"
                 ),
-                ExprReference::Column(expr_column) => ResolvedRef::Column(&table.columns[expr_column.column]),
+                ExprReference::Column(expr_column) => {
+                    ResolvedRef::Column(&table.columns[expr_column.column])
+                }
             },
             ExprTarget::Source(source_table) => {
                 match expr_reference {
@@ -328,19 +333,17 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                             TableRef::Table(table_id) => {
                                 let Some(table) = self.schema.table(*table_id) else {
                                     panic!(
-                                    "Failed to resolve table with ID {:?} - table not found in schema.",
-                                    table_id,
-                                );
+                                        "Failed to resolve table with ID {:?} - table not found in schema.",
+                                        table_id,
+                                    );
                                 };
                                 ResolvedRef::Column(&table.columns[expr_column.column])
                             }
-                            TableRef::Derived(derived) => {
-                                ResolvedRef::Derived(DerivedRef {
-                                    nesting: expr_column.nesting,
-                                    index: expr_column.column,
-                                    derived,
-                                })
-                            }
+                            TableRef::Derived(derived) => ResolvedRef::Derived(DerivedRef {
+                                nesting: expr_column.nesting,
+                                index: expr_column.column,
+                                derived,
+                            }),
                             TableRef::Cte {
                                 nesting: cte_nesting,
                                 index,
@@ -354,9 +357,9 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                             TableRef::Arg(_) => todo!(),
                         }
                     }
-                    ExprReference::Model { .. } => panic!(
-                        "Cannot resolve ExprReference::Model in Source::Table context"
-                    ),
+                    ExprReference::Model { .. } => {
+                        panic!("Cannot resolve ExprReference::Model in Source::Table context")
+                    }
                     ExprReference::Field { .. } => panic!(
                         "Cannot resolve ExprReference::Field in Source::Table context - use ExprReference::Column instead"
                     ),
@@ -410,21 +413,13 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                         .expect("returning `Model` when not in model context"),
                 );
 
-                if single {
-                    ty
-                } else {
-                    Type::list(ty)
-                }
+                if single { ty } else { Type::list(ty) }
             }
             Returning::Changed => todo!(),
             Returning::Expr(expr) => {
                 let ty = self.infer_expr_ty2(&arg_ty_stack, expr, false);
 
-                if single {
-                    ty
-                } else {
-                    Type::list(ty)
-                }
+                if single { ty } else { Type::list(ty) }
             }
             Returning::Value(expr) => self.infer_expr_ty2(&arg_ty_stack, expr, true),
         }
@@ -593,7 +588,10 @@ impl<'a> ExprContext<'a, Schema> {
             }
             ExprTarget::Model(model) => {
                 let Some(table) = self.schema.table_for_model(model) else {
-                    panic!("Failed to find database table for model '{:?}' - model may not be mapped to a table", model.name)
+                    panic!(
+                        "Failed to find database table for model '{:?}' - model may not be mapped to a table",
+                        model.name
+                    )
                 };
 
                 assert_eq!(table.id, column_id.table);

@@ -1,6 +1,6 @@
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
-use tests::{models, LoggingDriver, Setup};
+use tests::{LoggingDriver, Setup, models};
 
 type SetupFactory = Box<dyn Fn() -> Box<dyn Setup>>;
 

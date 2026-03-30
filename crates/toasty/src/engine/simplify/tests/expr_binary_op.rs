@@ -3,7 +3,7 @@ use crate::engine::simplify::Simplify;
 use crate::schema::Register;
 use toasty_core::{
     driver::Capability,
-    schema::{app, Builder},
+    schema::{Builder, app},
     stmt::{BinaryOp, Expr, ExprCast, ExprReference, MatchArm, Type, Value, ValueRecord, VisitMut},
 };
 

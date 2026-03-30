@@ -7,17 +7,17 @@ use std::{cell::Cell, collections::HashSet};
 
 use index_vec::IndexVec;
 use toasty_core::{
+    Result, Schema,
     driver::Capability,
     schema::{
         app::{self, FieldTy, ModelRoot},
         db::ColumnId,
         mapping,
     },
-    stmt::{self, visit_mut, IntoExprTarget, VisitMut},
-    Result, Schema,
+    stmt::{self, IntoExprTarget, VisitMut, visit_mut},
 };
 
-use crate::engine::{hir, simplify::Simplify, Engine, HirStatement};
+use crate::engine::{Engine, HirStatement, hir, simplify::Simplify};
 
 impl Engine {
     pub(super) fn lower_stmt(&self, stmt: stmt::Statement) -> Result<HirStatement> {

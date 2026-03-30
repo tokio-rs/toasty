@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-use toasty_core::driver::{operation::Transaction, Operation};
+use toasty_core::driver::{Operation, operation::Transaction};
 
 // ===== Transaction wrapping =====
 

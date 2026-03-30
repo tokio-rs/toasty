@@ -90,18 +90,17 @@
 use std::mem;
 
 use indexmap::{IndexMap, IndexSet};
-use toasty_core::stmt::{self, visit_mut, Condition};
+use toasty_core::stmt::{self, Condition, visit_mut};
 
 use crate::{
+    Result,
     engine::{
-        eval,
+        SelectItem, SelectItems, eval,
         hir::{self},
         index::{self, IndexPlan},
         mir,
         plan::HirPlanner,
-        SelectItem, SelectItems,
     },
-    Result,
 };
 
 #[derive(Debug)]
@@ -453,7 +452,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
                     let target = &self.planner.hir[target_id];
                     let Some(node_id) = target.output.get() else {
-                        panic!("bug: expected target statement to be planned; curr={:#?}; target={:#?}", self.stmt_info, target);
+                        panic!(
+                            "bug: expected target statement to be planned; curr={:#?}; target={:#?}",
+                            self.stmt_info, target
+                        );
                     };
                     let (index, _) = self.load_data.inputs.insert_full(node_id);
                     batch_load_index.set(insert_row);

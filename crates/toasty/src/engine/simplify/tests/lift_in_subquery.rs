@@ -4,9 +4,8 @@ use crate::schema::Register;
 use toasty_core::{
     driver::Capability,
     schema::{
-        app,
+        Builder, app,
         app::{FieldId, ModelId},
-        Builder,
     },
     stmt::{self, Expr, ExprBinaryOp, Query, Value},
 };

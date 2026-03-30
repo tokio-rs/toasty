@@ -1,6 +1,6 @@
 use std::cell::Cell;
 
-use indexmap::{indexset, IndexSet};
+use indexmap::{IndexSet, indexset};
 
 use crate::engine::mir::Eval;
 

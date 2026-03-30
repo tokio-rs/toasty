@@ -1,8 +1,8 @@
 use crate::{
+    Db, Result,
     db::{Connect, Pool, Shared},
     engine::Engine,
     schema::Register,
-    Db, Result,
 };
 
 use toasty_core::{

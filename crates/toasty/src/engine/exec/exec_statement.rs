@@ -1,11 +1,11 @@
 use toasty_core::{
-    driver::{operation, Rows},
+    driver::{Rows, operation},
     stmt,
 };
 
 use crate::{
-    engine::exec::{Action, Exec, Output, VarId},
     Result,
+    engine::exec::{Action, Exec, Output, VarId},
 };
 
 /// Information about a MySQL INSERT with RETURNING that needs special handling.

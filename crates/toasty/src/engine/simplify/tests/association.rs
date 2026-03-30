@@ -3,7 +3,7 @@ use crate::engine::simplify::Simplify;
 use crate::schema::Register;
 use toasty_core::{
     driver::Capability,
-    schema::{app, app::FieldId, app::ModelId, Builder},
+    schema::{Builder, app, app::FieldId, app::ModelId},
     stmt::{self, Association, Expr, ExprInSubquery, Path, Query, SourceModel, Value},
 };
 

@@ -1,9 +1,9 @@
 #![cfg(feature = "dynamodb")]
 
-use aws_config::meta::region::RegionProviderChain;
 use aws_config::BehaviorVersion;
-use aws_sdk_dynamodb::config::Credentials;
+use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_dynamodb::Client;
+use aws_sdk_dynamodb::config::Credentials;
 use std::sync::OnceLock;
 use toasty_driver_dynamodb::DynamoDb;
 

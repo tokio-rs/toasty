@@ -1,6 +1,6 @@
 use super::{EnumVariant, Field, FieldId, FieldTy, Model, ModelId, VariantId};
 
-use crate::{stmt, Result};
+use crate::{Result, stmt};
 use indexmap::IndexMap;
 
 /// The result of resolving a [`stmt::Projection`] through the application

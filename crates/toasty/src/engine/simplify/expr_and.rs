@@ -278,7 +278,7 @@ fn is_contradicting_eq_constraints(a: &[Expr], b: &[Expr]) -> bool {
             match (o_op, b_op) {
                 (BinaryOp::Eq, BinaryOp::Eq) if o_val != b_val => return true,
                 (BinaryOp::Eq, BinaryOp::Ne) | (BinaryOp::Ne, BinaryOp::Eq) if o_val == b_val => {
-                    return true
+                    return true;
                 }
                 _ => {}
             }

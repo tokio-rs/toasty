@@ -1,7 +1,7 @@
 use crate::{
+    Executor, Result,
     schema::Model,
     stmt::{Expr, Insert, IntoExpr, IntoInsert, List},
-    Executor, Result,
 };
 use toasty_core::stmt as core_stmt;
 

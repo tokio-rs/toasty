@@ -1,9 +1,9 @@
 use crate::{
-    engine::exec::{Action, Exec, Output, VarId},
     Result,
+    engine::exec::{Action, Exec, Output, VarId},
 };
 use toasty_core::{
-    driver::{operation, Rows},
+    driver::{Rows, operation},
     schema::db::TableId,
     stmt::{self, ValueStream},
 };

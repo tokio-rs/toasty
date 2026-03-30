@@ -1,6 +1,6 @@
 use super::Constraint;
 
-use crate::{stmt, Result};
+use crate::{Result, stmt};
 
 /// A length constraint for string fields.
 ///

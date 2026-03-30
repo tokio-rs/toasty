@@ -554,10 +554,12 @@ mod tests {
 
         let result = invalid.validate();
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("native_varchar is true but storage_types.varchar is None"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("native_varchar is true but storage_types.varchar is None")
+        );
     }
 
     #[test]
@@ -573,9 +575,11 @@ mod tests {
 
         let result = invalid.validate();
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("native_varchar is false but storage_types.varchar is Some"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("native_varchar is false but storage_types.varchar is Some")
+        );
     }
 }

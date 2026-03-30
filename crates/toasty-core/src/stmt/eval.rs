@@ -17,11 +17,11 @@
 //! ```
 
 use crate::{
+    Result,
     stmt::{
         BinaryOp, ConstInput, Expr, ExprArg, ExprSet, Input, Limit, Offset, Projection, Statement,
         Value,
     },
-    Result,
 };
 use std::cmp::Ordering;
 
@@ -101,7 +101,7 @@ impl Limit {
         scope: &ScopeStack<'_>,
         input: &mut impl Input,
     ) -> Result<()> {
-        let Value::List(ref mut items) = value else {
+        let Value::List(items) = value else {
             return Err(crate::Error::expression_evaluation_failed(
                 "LIMIT requires body to evaluate to a list",
             ));
@@ -243,7 +243,7 @@ impl Expr {
             Expr::Map(expr_map) => {
                 let mut base = expr_map.base.eval_ref(scope, input)?;
 
-                let Value::List(ref mut items) = &mut base else {
+                let Value::List(items) = &mut base else {
                     return Err(crate::Error::expression_evaluation_failed(
                         "Map base must evaluate to a list",
                     ));
@@ -328,7 +328,7 @@ impl Expr {
                         _ => {
                             return Err(crate::Error::expression_evaluation_failed(
                                 "Any expression items must evaluate to bool",
-                            ))
+                            ));
                         }
                     }
                 }
@@ -426,7 +426,7 @@ impl ScopeStack<'_> {
 
         match scope {
             ScopeStack::Root => input.resolve_arg(expr_arg, projection),
-            ScopeStack::Scope { mut args, .. } => args.resolve_arg(expr_arg, projection),
+            &ScopeStack::Scope { mut args, .. } => args.resolve_arg(expr_arg, projection),
         }
     }
 

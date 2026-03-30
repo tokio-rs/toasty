@@ -1,4 +1,4 @@
-use syn::{parse::Parse, punctuated::Punctuated, token::Comma, Ident, ItemFn};
+use syn::{Ident, ItemFn, parse::Parse, punctuated::Punctuated, token::Comma};
 
 /// Helper trait for working with collections of expansions
 pub trait ExpansionList {

@@ -1,4 +1,4 @@
-use crate::{stmt, Result};
+use crate::{Result, stmt};
 
 /// The result returned by [`Connection::exec`](super::Connection::exec).
 ///
