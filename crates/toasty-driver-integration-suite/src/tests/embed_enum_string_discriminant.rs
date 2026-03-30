@@ -146,12 +146,11 @@ pub async fn string_discriminant_data_enum(t: &mut Test) -> Result<()> {
 
     let mut db = t.setup_db(models!(User, ContactMethod)).await;
 
-    let email = ContactMethod::Email {
-        address: "alice@example.com".into(),
-    };
     let user = toasty::create!(User {
         name: "Alice",
-        contact: email,
+        contact: ContactMethod::Email {
+            address: "alice@example.com".into(),
+        },
     })
     .exec(&mut db)
     .await?;
@@ -205,12 +204,11 @@ pub async fn default_string_labels_data_enum(t: &mut Test) -> Result<()> {
 
     let mut db = t.setup_db(models!(User, ContactMethod)).await;
 
-    let email = ContactMethod::Email {
-        address: "alice@example.com".into(),
-    };
     let user = toasty::create!(User {
         name: "Alice",
-        contact: email,
+        contact: ContactMethod::Email {
+            address: "alice@example.com".into(),
+        },
     })
     .exec(&mut db)
     .await?;
@@ -270,23 +268,21 @@ pub async fn mixed_string_labels_data_enum(t: &mut Test) -> Result<()> {
     let mut db = t.setup_db(models!(User, ContactMethod)).await;
 
     // Create with the explicit-label variant
-    let email = ContactMethod::Email {
-        address: "alice@example.com".into(),
-    };
     let u1 = toasty::create!(User {
         name: "Alice",
-        contact: email,
+        contact: ContactMethod::Email {
+            address: "alice@example.com".into(),
+        },
     })
     .exec(&mut db)
     .await?;
 
     // Create with the default-label variant
-    let phone = ContactMethod::Phone {
-        number: "555-0200".into(),
-    };
     let u2 = toasty::create!(User {
         name: "Bob",
-        contact: phone,
+        contact: ContactMethod::Phone {
+            number: "555-0200".into(),
+        },
     })
     .exec(&mut db)
     .await?;
