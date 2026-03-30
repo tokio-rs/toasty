@@ -1,5 +1,6 @@
 use std::{rc::Rc, sync::Arc};
 
+use super::assignment::impl_assign_via_expr;
 use super::{Expr, List, Value};
 use toasty_core::stmt;
 
@@ -68,6 +69,8 @@ macro_rules! impl_into_expr_for_copy {
                     Expr::from_value(Value::from(self.clone()))
                 }
             }
+
+            impl_assign_via_expr!($t => $t);
         )*
     };
 }
@@ -104,6 +107,7 @@ impl IntoExpr<isize> for isize {
         Expr::from_value(Value::from(*self as i64))
     }
 }
+impl_assign_via_expr!(isize => isize);
 
 impl IntoExpr<usize> for usize {
     fn into_expr(self) -> Expr<usize> {
@@ -114,6 +118,7 @@ impl IntoExpr<usize> for usize {
         Expr::from_value(Value::from(*self as u64))
     }
 }
+impl_assign_via_expr!(usize => usize);
 
 impl<T> IntoExpr<T> for Expr<T> {
     fn into_expr(self) -> Self {
@@ -124,6 +129,7 @@ impl<T> IntoExpr<T> for Expr<T> {
         self.clone()
     }
 }
+impl_assign_via_expr!({T} Expr<T> => T);
 
 impl<T: IntoExpr<T>> IntoExpr<T> for &T {
     fn into_expr(self) -> Expr<T> {
@@ -134,6 +140,7 @@ impl<T: IntoExpr<T>> IntoExpr<T> for &T {
         (*self).by_ref()
     }
 }
+impl_assign_via_expr!({T: IntoExpr<T>} &T => T);
 
 impl<T: IntoExpr<T>> IntoExpr<List<T>> for &T {
     fn into_expr(self) -> Expr<List<T>> {
@@ -144,6 +151,7 @@ impl<T: IntoExpr<T>> IntoExpr<List<T>> for &T {
         (*self).by_ref().cast()
     }
 }
+impl_assign_via_expr!({T: IntoExpr<T>} &T => List<T>);
 
 impl<T: IntoExpr<T>> IntoExpr<Self> for Option<T> {
     fn into_expr(self) -> Expr<Self> {
@@ -160,6 +168,7 @@ impl<T: IntoExpr<T>> IntoExpr<Self> for Option<T> {
         }
     }
 }
+impl_assign_via_expr!({T: IntoExpr<T>} Option<T> => Option<T>);
 
 impl<T: IntoExpr<T>> IntoExpr<Option<T>> for T {
     fn into_expr(self) -> Expr<Option<T>> {
@@ -170,6 +179,7 @@ impl<T: IntoExpr<T>> IntoExpr<Option<T>> for T {
         self.by_ref().cast()
     }
 }
+// NOTE: no Assign impl for T => Option<T> — it would conflict with T => T.
 
 impl<T: IntoExpr<T>> IntoExpr<Option<T>> for &T {
     fn into_expr(self) -> Expr<Option<T>> {
@@ -180,6 +190,7 @@ impl<T: IntoExpr<T>> IntoExpr<Option<T>> for &T {
         (*self).by_ref().cast()
     }
 }
+// NOTE: no Assign impl for &T => Option<T> — would conflict with &T => T.
 
 impl<T: IntoExpr<T>> IntoExpr<T> for &Option<T> {
     fn into_expr(self) -> Expr<T> {
@@ -196,6 +207,7 @@ impl<T: IntoExpr<T>> IntoExpr<T> for &Option<T> {
         }
     }
 }
+// NOTE: no Assign impl for &Option<T> => T — would conflict with &T => T.
 
 impl IntoExpr<String> for &str {
     fn into_expr(self) -> Expr<String> {
@@ -206,6 +218,7 @@ impl IntoExpr<String> for &str {
         Expr::from_value(Value::from(*self))
     }
 }
+impl_assign_via_expr!(&str => String);
 
 impl IntoExpr<Option<String>> for &str {
     fn into_expr(self) -> Expr<Option<String>> {
@@ -216,6 +229,7 @@ impl IntoExpr<Option<String>> for &str {
         Expr::from_value(Value::from(*self))
     }
 }
+impl_assign_via_expr!(&str => Option<String>);
 
 impl IntoExpr<Self> for String {
     fn into_expr(self) -> Expr<Self> {
@@ -226,6 +240,7 @@ impl IntoExpr<Self> for String {
         Expr::from_value(self.into())
     }
 }
+impl_assign_via_expr!(String => String);
 
 impl IntoExpr<Self> for Vec<u8> {
     fn into_expr(self) -> Expr<Self> {
@@ -236,6 +251,7 @@ impl IntoExpr<Self> for Vec<u8> {
         Expr::from_value(self.clone().into())
     }
 }
+impl_assign_via_expr!(Vec<u8> => Vec<u8>);
 
 #[cfg(feature = "rust_decimal")]
 impl IntoExpr<Self> for rust_decimal::Decimal {
@@ -247,6 +263,8 @@ impl IntoExpr<Self> for rust_decimal::Decimal {
         Expr::from_value((*self).into())
     }
 }
+#[cfg(feature = "rust_decimal")]
+impl_assign_via_expr!(rust_decimal::Decimal => rust_decimal::Decimal);
 
 #[cfg(feature = "bigdecimal")]
 impl IntoExpr<Self> for bigdecimal::BigDecimal {
@@ -258,6 +276,8 @@ impl IntoExpr<Self> for bigdecimal::BigDecimal {
         Expr::from_value(self.clone().into())
     }
 }
+#[cfg(feature = "bigdecimal")]
+impl_assign_via_expr!(bigdecimal::BigDecimal => bigdecimal::BigDecimal);
 
 impl<T, U, const N: usize> IntoExpr<List<T>> for [U; N]
 where
@@ -275,6 +295,8 @@ where
         ))
     }
 }
+// NOTE: no Assign impl for [U; N] => List<T> — would conflict with
+// [Assignment<T>; N]: Assign<T>. Use stmt::set([...]) for list replacement.
 
 impl<T, U, const N: usize> IntoExpr<List<T>> for &[U; N]
 where
@@ -292,6 +314,7 @@ where
         ))
     }
 }
+// NOTE: no Assign impl for &[U; N] => List<T> — same reason as [U; N].
 
 impl<T, E: IntoExpr<T>> IntoExpr<List<T>> for &[E] {
     fn into_expr(self) -> Expr<List<T>> {
@@ -306,6 +329,7 @@ impl<T, E: IntoExpr<T>> IntoExpr<List<T>> for &[E] {
         ))
     }
 }
+// NOTE: no Assign impl for &[E] => List<T> — same reason as [U; N].
 
 impl<T, U> IntoExpr<List<T>> for Vec<U>
 where
@@ -323,6 +347,8 @@ where
         ))
     }
 }
+// NOTE: no Assign impl for Vec<U> => List<T> — would conflict with
+// Vec<Assignment<T>>: Assign<T>. Use stmt::set(vec) for list replacement.
 
 macro_rules! forward_impl {
     ( $( $ty:ty ,) *) => {
@@ -344,6 +370,8 @@ macro_rules! forward_impl {
 }
 
 forward_impl!(Arc<T>, Box<T>, Rc<T>,);
+// NOTE: no Assign impls for Arc<T>/Box<T>/Rc<T> — they would conflict with
+// the T => T impls since T could be Arc<U>, Box<U>, or Rc<U>.
 
 macro_rules! impl_into_expr_for_tuple {
     (! $( $n:tt $t:ident $e:ident )* ) => {
@@ -367,6 +395,8 @@ macro_rules! impl_into_expr_for_tuple {
                 Expr::from_untyped(untyped)
             }
         }
+
+        impl_assign_via_expr!({$( $t, $e: IntoExpr<$t> ),*} ($( $e, )*) => ($( $t, )*));
     };
 
     (

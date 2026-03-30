@@ -65,14 +65,14 @@ impl Expand<'_> {
                 let ty = &rel.ty;
 
                 quote! {
-                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
+                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::Relation>::Expr>) -> Self {
                         self.#set_field_ident(#field_ident);
                         self
                     }
 
-                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> &mut Self {
+                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::Relation>::Expr>) -> &mut Self {
                         let projection = #projection;
-                        self.assignments.set(projection, #field_ident.into_expr());
+                        #field_ident.assign(&mut self.assignments, projection);
                         self
                     }
                 }
@@ -97,14 +97,14 @@ impl Expand<'_> {
                 let ty = &rel.ty;
 
                 quote! {
-                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
+                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::Relation>::Expr>) -> Self {
                         self.#set_field_ident(#field_ident);
                         self
                     }
 
-                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> &mut Self {
+                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::Relation>::Expr>) -> &mut Self {
                         let projection = #projection;
-                        self.assignments.set(projection, #field_ident.into_expr());
+                        #field_ident.assign(&mut self.assignments, projection);
                         self
                     }
                 }
@@ -150,14 +150,14 @@ impl Expand<'_> {
             }
             FieldTy::Primitive(ty) => {
                 quote! {
-                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::IntoExpr<#ty>) -> Self {
+                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<#ty>) -> Self {
                         self.#set_field_ident(#field_ident);
                         self
                     }
 
-                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<#ty>) -> &mut Self {
+                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<#ty>) -> &mut Self {
                         let projection = #projection;
-                        self.assignments.set(projection, #field_ident.into_expr());
+                        #field_ident.assign(&mut self.assignments, projection);
                         self
                     }
 

@@ -4,17 +4,17 @@ use toasty_core::stmt;
 
 /// Apply a field mutation to an update statement's [`Assignments`] map.
 ///
-/// This trait unifies all update mutations behind a single bound.
-/// Collection field setters accept `impl Assign<List<T>>`, requiring
-/// callers to use explicit combinators ([`insert`], [`remove`], or
-/// [`set`]).
+/// This trait unifies all update mutations behind a single bound. Every
+/// update builder setter accepts `impl Assign<T>`.
 ///
-/// Scalar and relation field setters accept `impl IntoExpr<T>` directly
-/// (a plain value means "set"). Both paths write into the same
-/// [`Assignments`] map.
+/// All types that implement [`IntoExpr<T>`] also implement `Assign<T>`,
+/// defaulting to set semantics. This means plain values work everywhere.
+/// For collection fields, a single item (`impl IntoExpr<Todo>`) won't
+/// satisfy `Assign<List<Todo>>` — callers must use an explicit combinator
+/// ([`insert`], [`remove`]) to specify intent.
 ///
-/// Arrays and [`Vec`]s of assignments implement `Assign<T>` when their
-/// elements do, allowing multiple operations in a single setter call:
+/// Arrays and [`Vec`]s of [`Assignment<T>`] implement `Assign<T>`,
+/// allowing multiple operations in a single setter call:
 ///
 /// ```ignore
 /// user.update()
@@ -65,8 +65,8 @@ impl<T> Assign<T> for Assignment<T> {
     }
 }
 
-// Arrays of assignments: [Q; N] implements Assign<T> when Q does.
-impl<T, Q: Assign<T>, const N: usize> Assign<T> for [Q; N] {
+// Arrays of Assignment<T>
+impl<T, const N: usize> Assign<T> for [Assignment<T>; N] {
     fn assign(self, assignments: &mut stmt::Assignments, projection: stmt::Projection) {
         for item in self {
             item.assign(assignments, projection.clone());
@@ -74,14 +74,40 @@ impl<T, Q: Assign<T>, const N: usize> Assign<T> for [Q; N] {
     }
 }
 
-// Vec of assignments
-impl<T, Q: Assign<T>> Assign<T> for Vec<Q> {
+// Vec of Assignment<T>
+impl<T> Assign<T> for Vec<Assignment<T>> {
     fn assign(self, assignments: &mut stmt::Assignments, projection: stmt::Projection) {
         for item in self {
             item.assign(assignments, projection.clone());
         }
     }
 }
+
+/// Helper macro: generates `impl Assign<$target> for $source` with set
+/// semantics by delegating to `IntoExpr`. Used alongside every `IntoExpr`
+/// impl to keep the two traits in sync.
+macro_rules! impl_assign_via_expr {
+    // Simple: impl Assign<T> for S
+    ($source:ty => $target:ty) => {
+        impl super::assignment::Assign<$target> for $source {
+            fn assign(self, assignments: &mut toasty_core::stmt::Assignments, projection: toasty_core::stmt::Projection) {
+                assignments.set(projection, super::IntoExpr::<$target>::into_expr(self).untyped);
+            }
+        }
+    };
+    // Generic: impl<generics> Assign<Target> for Source where bounds
+    // Uses { } instead of [ ] to avoid parsing ambiguity with array types.
+    ({ $($gen:tt)* } $source:ty => $target:ty) => {
+        impl<$($gen)*> super::assignment::Assign<$target> for $source {
+            fn assign(self, assignments: &mut toasty_core::stmt::Assignments, projection: toasty_core::stmt::Projection) {
+                assignments.set(projection, super::IntoExpr::<$target>::into_expr(self).untyped);
+            }
+        }
+    };
+}
+
+// Make the macro available to into_expr.rs (sibling module)
+pub(super) use impl_assign_via_expr;
 
 /// Insert a value into a collection field.
 ///
@@ -168,29 +194,25 @@ pub fn set<T>(expr: impl IntoExpr<T>) -> Assignment<T> {
 
 /// Partially update a sub-field of an embedded type.
 ///
-/// Takes a [`Path<T, U>`] (identifying which sub-field to update) and an
-/// [`Assignment<U>`] for the value. Returns an [`Assignment<T>`] that can
-/// be passed to the parent field's setter.
+/// Takes a [`Path<T, U>`] (identifying which sub-field to update) and a
+/// value (`impl Assign<U>` — either a plain value or a nested
+/// [`Assignment<U>`] for deeper patching). Returns an [`Assignment<T>`]
+/// that can be passed to the parent field's setter.
 ///
-/// For plain values, wrap with [`set`]:
+/// # Examples
 ///
 /// ```ignore
+/// // Update a single sub-field
 /// user.update()
-///     .critter(stmt::patch(
-///         Creature::fields().human().profession(),
-///         stmt::set("doctor"),
-///     ))
+///     .critter(stmt::patch(Creature::fields().human().profession(), "doctor"))
 ///     .exec(&mut db)
 ///     .await?;
-/// ```
 ///
-/// For nested patching, pass the inner [`patch`] result directly:
-///
-/// ```ignore
+/// // Nested patching
 /// user.update()
 ///     .kind(stmt::patch(
 ///         Kind::variants().admin().perm(),
-///         stmt::patch(Permission::fields().everything(), stmt::set(true)),
+///         stmt::patch(Permission::fields().everything(), true),
 ///     ))
 ///     .exec(&mut db)
 ///     .await?;
