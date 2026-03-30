@@ -1,6 +1,7 @@
 [package]
 name = "toasty-macros"
 version = "0.1.0"
+description = "Derive macros for Toasty models and embeds"
 authors.workspace = true
 edition.workspace = true
 homepage.workspace = true

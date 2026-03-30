@@ -1,6 +1,7 @@
 [package]
 name = "toasty-driver-integration-suite"
 version = "0.1.0"
+description = "Integration test suite for Toasty database drivers"
 authors.workspace = true
 edition.workspace = true
 homepage.workspace = true

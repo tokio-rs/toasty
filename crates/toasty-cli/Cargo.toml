@@ -1,6 +1,7 @@
 [package]
 name = "toasty-cli"
 version = "0.1.0"
+description = "Command-line interface for Toasty schema management"
 authors.workspace = true
 edition.workspace = true
 homepage.workspace = true

@@ -1,6 +1,7 @@
 [package]
 name = "toasty-driver-integration-suite-macros"
 version = "0.1.0"
+description = "Proc macros for the Toasty driver integration test suite"
 authors.workspace = true
 edition.workspace = true
 homepage.workspace = true

@@ -1,6 +1,7 @@
 [package]
 name = "toasty-core"
 version = "0.1.0"
+description = "Core types, schema representations, and driver interface for Toasty"
 authors.workspace = true
 edition.workspace = true
 homepage.workspace = true
