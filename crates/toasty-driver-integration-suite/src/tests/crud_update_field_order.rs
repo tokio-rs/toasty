@@ -23,10 +23,10 @@ pub async fn update_last_field_only(test: &mut Test) -> Result<()> {
 
     w.update().description("updated").exec(&mut db).await?;
 
-    assert_struct!(w, _ { label: "w1", count: 10, active: true, description: "updated", .. });
+    assert_struct!(w, { label: "w1", count: 10, active: true, description: "updated" });
 
     let reloaded = Widget::get_by_id(&mut db, &w.id).await?;
-    assert_struct!(reloaded, _ { label: "w1", count: 10, active: true, description: "updated", .. });
+    assert_struct!(reloaded, { label: "w1", count: 10, active: true, description: "updated" });
 
     Ok(())
 }
@@ -54,10 +54,10 @@ pub async fn update_fields_reverse_order(test: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
 
-    assert_struct!(w, _ { label: "A", count: 2, active: true, description: "C", .. });
+    assert_struct!(w, { label: "A", count: 2, active: true, description: "C" });
 
     let reloaded = Widget::get_by_id(&mut db, &w.id).await?;
-    assert_struct!(reloaded, _ { label: "A", count: 2, active: true, description: "C", .. });
+    assert_struct!(reloaded, { label: "A", count: 2, active: true, description: "C" });
 
     Ok(())
 }
@@ -81,10 +81,10 @@ pub async fn update_middle_field_mixed_types(test: &mut Test) -> Result<()> {
     // land in the String column at offset 1, causing a type error.
     w.update().count(99).exec(&mut db).await?;
 
-    assert_struct!(w, _ { label: "w1", count: 99, active: true, description: "original", .. });
+    assert_struct!(w, { label: "w1", count: 99, active: true, description: "original" });
 
     let reloaded = Widget::get_by_id(&mut db, &w.id).await?;
-    assert_struct!(reloaded, _ { label: "w1", count: 99, .. });
+    assert_struct!(reloaded, { label: "w1", count: 99 });
 
     Ok(())
 }
@@ -116,7 +116,7 @@ pub async fn query_update_non_declaration_order(test: &mut Test) -> Result<()> {
     let reloaded = Widget::get_by_id(&mut db, &w.id).await?;
     assert_struct!(
         reloaded,
-        _ { label: "urgent", count: 5, active: true, description: "important", .. }
+        { label: "urgent", count: 5, active: true, description: "important" }
     );
 
     Ok(())
@@ -150,7 +150,7 @@ pub async fn successive_single_field_updates(test: &mut Test) -> Result<()> {
     assert_eq!(w.label, "a1");
 
     let reloaded = Widget::get_by_id(&mut db, &w.id).await?;
-    assert_struct!(reloaded, _ { label: "a1", count: 2, active: true, description: "d1", .. });
+    assert_struct!(reloaded, { label: "a1", count: 2, active: true, description: "d1" });
 
     Ok(())
 }
