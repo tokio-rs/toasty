@@ -70,7 +70,9 @@ impl Builder {
     /// builder.register::<User>();
     /// ```
     pub fn register<T: Register>(&mut self) -> &mut Self {
-        self.models.push(T::schema());
+        let schema = T::schema();
+        tracing::debug!(model = %schema.name(), "registering model");
+        self.models.push(schema);
         self
     }
 
@@ -153,9 +155,13 @@ impl Builder {
     /// # });
     /// ```
     pub async fn build(&mut self, driver: impl Driver) -> Result<Db> {
+        tracing::info!(models = self.models.len(), "building database schema");
         let capability = driver.capability();
         capability.validate()?;
         let schema = self.core.build(self.build_app_schema()?, capability)?;
+
+        tracing::info!(tables = schema.db.tables.len(), "schema built successfully");
+
         let engine = Engine::new(Arc::new(schema), capability);
         let pool = Pool::new(driver, engine.clone())?;
 
@@ -165,6 +171,7 @@ impl Builder {
         let conn = shared.pool.get(shared.clone()).await?;
         std::mem::drop(conn);
 
+        tracing::info!("database ready");
         Ok(Db { shared })
     }
 }

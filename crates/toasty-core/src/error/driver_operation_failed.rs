@@ -48,6 +48,7 @@ impl Error {
     /// assert!(err.is_driver_operation_failed());
     /// ```
     pub fn driver_operation_failed(err: impl std::error::Error + Send + Sync + 'static) -> Error {
+        tracing::error!(error = %err, "driver operation failed");
         Error::from(super::ErrorKind::DriverOperationFailed(
             DriverOperationFailed {
                 inner: Box::new(err),

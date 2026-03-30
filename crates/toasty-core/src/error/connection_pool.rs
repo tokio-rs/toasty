@@ -40,6 +40,7 @@ impl Error {
     /// assert!(err.is_connection_pool());
     /// ```
     pub fn connection_pool(err: impl std::error::Error + Send + Sync + 'static) -> Error {
+        tracing::error!(error = %err, "connection pool error");
         Error::from(super::ErrorKind::ConnectionPool(ConnectionPool {
             inner: Box::new(err),
         }))

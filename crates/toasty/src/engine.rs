@@ -67,6 +67,15 @@ impl Engine {
         stmt: Statement,
         in_transaction: bool,
     ) -> Result<ValueStream> {
+        let stmt_kind = match &stmt {
+            stmt::Statement::Query(_) => "query",
+            stmt::Statement::Insert(_) => "insert",
+            stmt::Statement::Update(_) => "update",
+            stmt::Statement::Delete(_) => "delete",
+        };
+
+        tracing::debug!(stmt.kind = stmt_kind, "executing statement");
+
         if cfg!(debug_assertions) {
             self.verify(&stmt);
         }
@@ -83,6 +92,12 @@ impl Engine {
 
         // Translate the optimized statement into a series of driver operations.
         let plan = self.plan_hir_statement(hir)?;
+
+        tracing::trace!(
+            actions = plan.actions.len(),
+            needs_transaction = plan.needs_transaction,
+            "execution plan ready"
+        );
 
         // The plan is called once (single entry record stream) with no arguments
         // (empty record).

@@ -95,3 +95,9 @@ impl Name {
         self.snake_case().to_shouty_snake_case()
     }
 }
+
+impl core::fmt::Display for Name {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(&self.upper_camel_case())
+    }
+}

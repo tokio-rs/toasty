@@ -90,6 +90,7 @@ impl Connection {
 
     /// Creates tables and indices defined in the schema on the database.
     pub async fn push_schema(&self) -> crate::Result<()> {
+        tracing::info!("pushing schema to database");
         let (tx, rx) = oneshot::channel();
         self.handle()
             .in_tx

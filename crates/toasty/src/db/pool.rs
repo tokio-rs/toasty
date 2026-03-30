@@ -161,6 +161,7 @@ impl deadpool::managed::Manager for Manager {
     type Error = crate::Error;
 
     async fn create(&self) -> Result<Self::Type, Self::Error> {
+        tracing::debug!("creating new pooled connection");
         let mut connection = self.driver.connect().await?;
         let engine = self.engine.clone();
 
@@ -216,10 +217,12 @@ impl deadpool::managed::Manager for Manager {
         _metrics: &deadpool::managed::Metrics,
     ) -> deadpool::managed::RecycleResult<Self::Error> {
         if obj.in_tx.is_closed() || obj.join_handle.is_finished() {
+            tracing::debug!("discarding dead pooled connection");
             return Err(deadpool::managed::RecycleError::message(
                 "background task is no longer running",
             ));
         }
+        tracing::trace!("recycling pooled connection");
         Ok(())
     }
 }
