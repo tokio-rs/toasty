@@ -9,84 +9,55 @@ use crate::prelude::*;
 
 /// Update only the last declared field, leaving earlier fields untouched.
 /// With offset-based IndexMap this could assign the value to field 0 instead.
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::widget_mixed_types))]
 pub async fn update_last_field_only(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Profile {
-        #[key]
-        #[auto]
-        id: ID,
+    let mut db = setup(test).await;
 
-        name: String,
-        age: i64,
-        bio: String,
-    }
-
-    let mut db = test.setup_db(models!(Profile)).await;
-
-    let mut profile = Profile::create()
-        .name("Alice")
-        .age(30)
-        .bio("hello")
+    let mut w = Widget::create()
+        .label("w1")
+        .count(10)
+        .active(true)
+        .description("hello")
         .exec(&mut db)
         .await?;
 
-    // Update only the last field
-    profile.update().bio("updated bio").exec(&mut db).await?;
+    w.update().description("updated").exec(&mut db).await?;
 
-    assert_eq!(profile.bio, "updated bio");
-    assert_eq!(profile.name, "Alice");
-    assert_eq!(profile.age, 30);
+    assert_struct!(w, _ { label: "w1", count: 10, active: true, description: "updated", .. });
 
-    // Verify round-trip through DB
-    let reloaded = Profile::get_by_id(&mut db, &profile.id).await?;
-    assert_eq!(reloaded.bio, "updated bio");
-    assert_eq!(reloaded.name, "Alice");
-    assert_eq!(reloaded.age, 30);
+    let reloaded = Widget::get_by_id(&mut db, &w.id).await?;
+    assert_struct!(reloaded, _ { label: "w1", count: 10, active: true, description: "updated", .. });
 
     Ok(())
 }
 
 /// Update fields in reverse declaration order. If offset mapping is wrong, the
 /// String value ends up in the i64 column (or vice versa), causing a parse error.
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::widget_mixed_types))]
 pub async fn update_fields_reverse_order(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Record {
-        #[key]
-        #[auto]
-        id: ID,
+    let mut db = setup(test).await;
 
-        first: String,
-        second: i64,
-        third: String,
-    }
-
-    let mut db = test.setup_db(models!(Record)).await;
-
-    let mut rec = Record::create()
-        .first("a")
-        .second(1)
-        .third("c")
+    let mut w = Widget::create()
+        .label("a")
+        .count(1)
+        .active(false)
+        .description("c")
         .exec(&mut db)
         .await?;
 
-    // Update in reverse declaration order: third, then second, then first
-    rec.update()
-        .third("C")
-        .second(2)
-        .first("A")
+    // Update in reverse declaration order
+    w.update()
+        .description("C")
+        .active(true)
+        .count(2)
+        .label("A")
         .exec(&mut db)
         .await?;
 
-    assert_eq!(rec.first, "A");
-    assert_eq!(rec.second, 2);
-    assert_eq!(rec.third, "C");
+    assert_struct!(w, _ { label: "A", count: 2, active: true, description: "C", .. });
 
-    let reloaded = Record::get_by_id(&mut db, &rec.id).await?;
-    assert_eq!(reloaded.first, "A");
-    assert_eq!(reloaded.second, 2);
-    assert_eq!(reloaded.third, "C");
+    let reloaded = Widget::get_by_id(&mut db, &w.id).await?;
+    assert_struct!(reloaded, _ { label: "A", count: 2, active: true, description: "C", .. });
 
     Ok(())
 }
@@ -94,23 +65,11 @@ pub async fn update_fields_reverse_order(test: &mut Test) -> Result<()> {
 /// Update a single middle field among many typed fields. This is the simplest
 /// trigger for the original bug: a single assignment at a high offset gets
 /// misrouted to offset 0.
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::widget_mixed_types))]
 pub async fn update_middle_field_mixed_types(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Widget {
-        #[key]
-        #[auto]
-        id: ID,
+    let mut db = setup(test).await;
 
-        label: String,
-        count: i64,
-        active: bool,
-        description: String,
-    }
-
-    let mut db = test.setup_db(models!(Widget)).await;
-
-    let mut widget = Widget::create()
+    let mut w = Widget::create()
         .label("w1")
         .count(10)
         .active(true)
@@ -120,102 +79,78 @@ pub async fn update_middle_field_mixed_types(test: &mut Test) -> Result<()> {
 
     // Update only the i64 field (offset 2). With the old bug this value could
     // land in the String column at offset 1, causing a type error.
-    widget.update().count(99).exec(&mut db).await?;
+    w.update().count(99).exec(&mut db).await?;
 
-    assert_eq!(widget.count, 99);
-    assert_eq!(widget.label, "w1");
-    assert_eq!(widget.active, true);
-    assert_eq!(widget.description, "original");
+    assert_struct!(w, _ { label: "w1", count: 99, active: true, description: "original", .. });
 
-    let reloaded = Widget::get_by_id(&mut db, &widget.id).await?;
-    assert_eq!(reloaded.count, 99);
-    assert_eq!(reloaded.label, "w1");
+    let reloaded = Widget::get_by_id(&mut db, &w.id).await?;
+    assert_struct!(reloaded, _ { label: "w1", count: 99, .. });
 
     Ok(())
 }
 
 /// Query-based update with fields in non-declaration order. Exercises the
 /// filter_by path rather than the instance-update path.
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::widget_mixed_types))]
 pub async fn query_update_non_declaration_order(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Entry {
-        #[key]
-        #[auto]
-        id: ID,
+    let mut db = setup(test).await;
 
-        title: String,
-        priority: i64,
-        note: String,
-    }
-
-    let mut db = test.setup_db(models!(Entry)).await;
-
-    let entry = Entry::create()
-        .title("task")
-        .priority(1)
-        .note("n/a")
+    let w = Widget::create()
+        .label("task")
+        .count(1)
+        .active(false)
+        .description("n/a")
         .exec(&mut db)
         .await?;
 
     // Update via query in reverse order
-    Entry::filter_by_id(entry.id)
+    Widget::filter_by_id(w.id)
         .update()
-        .note("important")
-        .priority(5)
-        .title("urgent task")
+        .description("important")
+        .active(true)
+        .count(5)
+        .label("urgent")
         .exec(&mut db)
         .await?;
 
-    let reloaded = Entry::get_by_id(&mut db, &entry.id).await?;
-    assert_eq!(reloaded.title, "urgent task");
-    assert_eq!(reloaded.priority, 5);
-    assert_eq!(reloaded.note, "important");
+    let reloaded = Widget::get_by_id(&mut db, &w.id).await?;
+    assert_struct!(
+        reloaded,
+        _ { label: "urgent", count: 5, active: true, description: "important", .. }
+    );
 
     Ok(())
 }
 
 /// Successive single-field updates targeting different offsets each time.
 /// Ensures that each individual update routes to the correct column.
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::widget_mixed_types))]
 pub async fn successive_single_field_updates(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Item {
-        #[key]
-        #[auto]
-        id: ID,
+    let mut db = setup(test).await;
 
-        a: String,
-        b: i64,
-        c: String,
-        d: i64,
-    }
-
-    let mut db = test.setup_db(models!(Item)).await;
-
-    let mut item = Item::create()
-        .a("a0")
-        .b(0)
-        .c("c0")
-        .d(0)
+    let mut w = Widget::create()
+        .label("a0")
+        .count(0)
+        .active(false)
+        .description("d0")
         .exec(&mut db)
         .await?;
 
     // Update each field individually, in non-declaration order
-    item.update().d(4).exec(&mut db).await?;
-    assert_eq!(item.d, 4);
+    w.update().description("d1").exec(&mut db).await?;
+    assert_eq!(w.description, "d1");
 
-    item.update().b(2).exec(&mut db).await?;
-    assert_eq!(item.b, 2);
+    w.update().count(2).exec(&mut db).await?;
+    assert_eq!(w.count, 2);
 
-    item.update().c("c1").exec(&mut db).await?;
-    assert_eq!(item.c, "c1");
+    w.update().active(true).exec(&mut db).await?;
+    assert_eq!(w.active, true);
 
-    item.update().a("a1").exec(&mut db).await?;
-    assert_eq!(item.a, "a1");
+    w.update().label("a1").exec(&mut db).await?;
+    assert_eq!(w.label, "a1");
 
-    let reloaded = Item::get_by_id(&mut db, &item.id).await?;
-    assert_struct!(reloaded, _ { a: "a1", b: 2, c: "c1", d: 4, .. });
+    let reloaded = Widget::get_by_id(&mut db, &w.id).await?;
+    assert_struct!(reloaded, _ { label: "a1", count: 2, active: true, description: "d1", .. });
 
     Ok(())
 }
