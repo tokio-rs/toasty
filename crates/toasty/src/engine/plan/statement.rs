@@ -95,7 +95,7 @@ use toasty_core::stmt::{self, Condition, visit_mut};
 use crate::{
     Result,
     engine::{
-        SelectItem, SelectItems, exec, eval,
+        SelectItem, SelectItems, eval, exec,
         hir::{self},
         index::{self, IndexPlan},
         mir,

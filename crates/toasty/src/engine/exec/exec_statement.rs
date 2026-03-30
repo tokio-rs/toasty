@@ -111,7 +111,7 @@ impl Exec<'_> {
                 action.output.output.num_uses,
                 ExecResponse::from_rows(rows),
             );
-            
+
             return Ok(());
         }
 

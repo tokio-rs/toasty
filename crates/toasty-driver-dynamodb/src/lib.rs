@@ -258,10 +258,10 @@ fn deserialize_ddb_cursor(cursor: &stmt::Value) -> HashMap<String, AttributeValu
     if let stmt::Value::Record(fields) = cursor {
         // Process pairs: [name, value, name, value, ...]
         for chunk in fields.chunks(2) {
-            if chunk.len() == 2 {
-                if let (stmt::Value::String(name), value) = (&chunk[0], &chunk[1]) {
-                    ret.insert(name.clone(), Value::from(value.clone()).to_ddb());
-                }
+            if chunk.len() == 2
+                && let (stmt::Value::String(name), value) = (&chunk[0], &chunk[1])
+            {
+                ret.insert(name.clone(), Value::from(value.clone()).to_ddb());
             }
         }
     }
