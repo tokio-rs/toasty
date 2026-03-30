@@ -162,13 +162,12 @@ impl Simplify<'_> {
                     // Mark all other `Ge`/`Le` bounds on the same (lhs, rhs)
                     // for removal
                     for k in (i + 1)..expr.operands.len() {
-                        if let Expr::BinaryOp(op_k) = &expr.operands[k] {
-                            if matches!(op_k.op, BinaryOp::Ge | BinaryOp::Le)
-                                && op_k.lhs == lhs
-                                && op_k.rhs == rhs
-                            {
-                                expr.operands[k] = true.into();
-                            }
+                        if let Expr::BinaryOp(op_k) = &expr.operands[k]
+                            && matches!(op_k.op, BinaryOp::Ge | BinaryOp::Le)
+                            && op_k.lhs == lhs
+                            && op_k.rhs == rhs
+                        {
+                            expr.operands[k] = true.into();
                         }
                     }
                     break;
@@ -291,12 +290,11 @@ fn is_contradicting_eq_constraints(a: &[Expr], b: &[Expr]) -> bool {
 /// Extracts `(lhs, op, rhs_value)` from an `Expr::BinaryOp` if it is an
 /// `==` or `!=` with a constant value on the right.
 fn extract_eq_ne(expr: &Expr) -> Option<(&Expr, BinaryOp, &stmt::Value)> {
-    if let Expr::BinaryOp(binop) = expr {
-        if let Expr::Value(val) = binop.rhs.as_ref() {
-            if matches!(binop.op, BinaryOp::Eq | BinaryOp::Ne) {
-                return Some((binop.lhs.as_ref(), binop.op, val));
-            }
-        }
+    if let Expr::BinaryOp(binop) = expr
+        && let Expr::Value(val) = binop.rhs.as_ref()
+        && matches!(binop.op, BinaryOp::Eq | BinaryOp::Ne)
+    {
+        return Some((binop.lhs.as_ref(), binop.op, val));
     }
     None
 }

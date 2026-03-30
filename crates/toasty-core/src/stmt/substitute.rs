@@ -30,10 +30,10 @@ fn assert_only_local_args(expr: &Expr, msg: &str) {
         {
             let mut ok = true;
             visit::for_each_expr(expr, |e| {
-                if let Expr::Arg(a) = e {
-                    if a.nesting != 0 {
-                        ok = false;
-                    }
+                if let Expr::Arg(a) = e
+                    && a.nesting != 0
+                {
+                    ok = false;
                 }
             });
             ok

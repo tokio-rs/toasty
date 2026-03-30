@@ -77,26 +77,25 @@ impl Exec<'_> {
         let mysql_insert_returning = self.process_stmt_insert_with_returning_on_mysql(&mut stmt);
 
         // Short circuit if we can statically determine there are no results
-        if let stmt::Statement::Query(query) = &stmt {
-            if let stmt::ExprSet::Values(values) = &query.body {
-                if values.is_empty() {
-                    assert!(!action.conditional_update_with_no_returning);
+        if let stmt::Statement::Query(query) = &stmt
+            && let stmt::ExprSet::Values(values) = &query.body
+            && values.is_empty()
+        {
+            assert!(!action.conditional_update_with_no_returning);
 
-                    let rows = if action.output.ty.is_some() {
-                        Rows::Stream(stmt::ValueStream::default())
-                    } else {
-                        Rows::Count(0)
-                    };
+            let rows = if action.output.ty.is_some() {
+                Rows::Stream(stmt::ValueStream::default())
+            } else {
+                Rows::Count(0)
+            };
 
-                    self.vars.store(
-                        action.output.output.var,
-                        action.output.output.num_uses,
-                        rows,
-                    );
+            self.vars.store(
+                action.output.output.var,
+                action.output.output.num_uses,
+                rows,
+            );
 
-                    return Ok(());
-                }
-            }
+            return Ok(());
         }
 
         let op = operation::QuerySql {

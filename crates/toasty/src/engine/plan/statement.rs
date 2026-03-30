@@ -185,17 +185,16 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         // For single VALUES queries (e.g., batch queries), the VALUES body is
         // the output expression. Extract it as a returning value so the planner
         // can wire up sub-statement dependencies.
-        if returning.is_none() {
-            if let stmt::Statement::Query(query) = &mut stmt {
-                if let stmt::ExprSet::Values(values) = &mut query.body {
-                    returning = Some(stmt::Returning::Value(if query.single {
-                        assert_eq!(1, values.rows.len());
-                        values.rows.drain(..).next().unwrap()
-                    } else {
-                        stmt::Expr::list(std::mem::take(&mut values.rows))
-                    }));
-                }
-            }
+        if returning.is_none()
+            && let stmt::Statement::Query(query) = &mut stmt
+            && let stmt::ExprSet::Values(values) = &mut query.body
+        {
+            returning = Some(stmt::Returning::Value(if query.single {
+                assert_eq!(1, values.rows.len());
+                values.rows.drain(..).next().unwrap()
+            } else {
+                stmt::Expr::list(std::mem::take(&mut values.rows))
+            }));
         }
 
         // No queries are single at this point.
@@ -1305,13 +1304,14 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         // If fetching rows using GetByKey, some databases do not support
         // applying additional filters to the rows before returning results.
         // In this case, the result_filter needs to be applied in-memory.
-        if stmt.is_query() && (index_plan.has_pk_keys || !index_plan.index.primary_key) {
-            if let Some(result_filter) = index_plan.result_filter.take() {
-                post_filter = Some(match post_filter {
-                    Some(post_filter) => stmt::Expr::and(result_filter, post_filter),
-                    None => result_filter,
-                });
-            }
+        if stmt.is_query()
+            && (index_plan.has_pk_keys || !index_plan.index.primary_key)
+            && let Some(result_filter) = index_plan.result_filter.take()
+        {
+            post_filter = Some(match post_filter {
+                Some(post_filter) => stmt::Expr::and(result_filter, post_filter),
+                None => result_filter,
+            });
         }
 
         debug_assert!(

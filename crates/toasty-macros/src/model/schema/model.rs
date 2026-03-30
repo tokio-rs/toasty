@@ -159,13 +159,13 @@ impl Model {
         for (index, node) in node.named.iter().enumerate() {
             match Field::from_ast(node, &ast.ident, index, &names) {
                 Ok(field) => {
-                    if model_attr.key.is_some() {
-                        if let Some(field) = &field.attrs.key {
-                            errs.push(syn::Error::new_spanned(
-                                field,
-                                "field cannot have #[key] attribute when model has #[key] attribute",
-                            ));
-                        }
+                    if model_attr.key.is_some()
+                        && let Some(field) = &field.attrs.key
+                    {
+                        errs.push(syn::Error::new_spanned(
+                            field,
+                            "field cannot have #[key] attribute when model has #[key] attribute",
+                        ));
                     }
 
                     fields.push(field);

@@ -73,11 +73,9 @@ fn generate_variant(
     let mut variant = input.clone();
 
     // Update function name based on whether we're inside a module
-    if use_expansion_name {
-        if let Some(expansion_ident) = expansion.to_ident() {
-            // Inside a module: use just the expansion name (e.g., "id_uuid")
-            variant.sig.ident = expansion_ident;
-        }
+    if use_expansion_name && let Some(expansion_ident) = expansion.to_ident() {
+        // Inside a module: use just the expansion name (e.g., "id_uuid")
+        variant.sig.ident = expansion_ident;
     }
     // Otherwise keep the original function name
 
@@ -304,43 +302,43 @@ fn rewrite_driver_test_cfg_macros(func: &mut ItemFn, expansion: &Expansion) {
     impl<'a> VisitMut for MacroRewriter<'a> {
         fn visit_expr_mut(&mut self, expr: &mut syn::Expr) {
             // Check if this is a macro call to driver_test_cfg!
-            if let syn::Expr::Macro(expr_macro) = expr {
-                if expr_macro.mac.path.is_ident("driver_test_cfg") {
-                    // Parse the boolean expression from the macro tokens
-                    let tokens = expr_macro.mac.tokens.clone();
-                    if let Ok(bool_expr) = syn::parse::Parser::parse2(
-                        |input: syn::parse::ParseStream| BoolExpr::parse(input),
-                        tokens,
-                    ) {
-                        // Evaluate the expression for this expansion
-                        let result = self.expansion.evaluate_predicate(&bool_expr, &|_ident| {
-                            // Database capabilities are unknown at compile time
-                            // Return Unknown, which should not affect evaluation of
-                            // compile-time known values (matrix and ID variants)
-                            crate::parse::ThreeValuedBool::Unknown
-                        });
+            if let syn::Expr::Macro(expr_macro) = expr
+                && expr_macro.mac.path.is_ident("driver_test_cfg")
+            {
+                // Parse the boolean expression from the macro tokens
+                let tokens = expr_macro.mac.tokens.clone();
+                if let Ok(bool_expr) = syn::parse::Parser::parse2(
+                    |input: syn::parse::ParseStream| BoolExpr::parse(input),
+                    tokens,
+                ) {
+                    // Evaluate the expression for this expansion
+                    let result = self.expansion.evaluate_predicate(&bool_expr, &|_ident| {
+                        // Database capabilities are unknown at compile time
+                        // Return Unknown, which should not affect evaluation of
+                        // compile-time known values (matrix and ID variants)
+                        crate::parse::ThreeValuedBool::Unknown
+                    });
 
-                        // Convert to boolean literal
-                        let bool_value = match result {
-                            crate::parse::ThreeValuedBool::True => true,
-                            crate::parse::ThreeValuedBool::False => false,
-                            crate::parse::ThreeValuedBool::Unknown => {
-                                // Unknown means the expression references database capabilities,
-                                // which can only be checked at runtime, not compile time.
-                                // This is a compile error - driver_test_cfg! should only be used
-                                // for compile-time known values (ID variants, matrix dimensions).
-                                panic!(
-                                    "driver_test_cfg! can only be used with compile-time known values \
+                    // Convert to boolean literal
+                    let bool_value = match result {
+                        crate::parse::ThreeValuedBool::True => true,
+                        crate::parse::ThreeValuedBool::False => false,
+                        crate::parse::ThreeValuedBool::Unknown => {
+                            // Unknown means the expression references database capabilities,
+                            // which can only be checked at runtime, not compile time.
+                            // This is a compile error - driver_test_cfg! should only be used
+                            // for compile-time known values (ID variants, matrix dimensions).
+                            panic!(
+                                "driver_test_cfg! can only be used with compile-time known values \
                                      (id_u64, id_uuid, matrix dimensions). Database capabilities must \
                                      be checked at runtime using test.capability()"
-                                );
-                            }
-                        };
+                            );
+                        }
+                    };
 
-                        // Replace the macro call with a boolean literal
-                        *expr = syn::parse_quote!(#bool_value);
-                        return;
-                    }
+                    // Replace the macro call with a boolean literal
+                    *expr = syn::parse_quote!(#bool_value);
+                    return;
                 }
             }
 

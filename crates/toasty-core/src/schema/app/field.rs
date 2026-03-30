@@ -245,10 +245,10 @@ impl Field {
     }
 
     pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
-        if let FieldTy::Primitive(primitive) = &self.ty {
-            if let Some(storage_ty) = &primitive.storage_ty {
-                storage_ty.verify(db)?;
-            }
+        if let FieldTy::Primitive(primitive) = &self.ty
+            && let Some(storage_ty) = &primitive.storage_ty
+        {
+            storage_ty.verify(db)?;
         }
 
         Ok(())

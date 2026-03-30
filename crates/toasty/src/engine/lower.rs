@@ -507,13 +507,13 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         // For multi-row INSERT returning, visit each row with its row index so
         // that sub-statements (e.g., child INSERTs for HasOne relations) capture
         // the correct parent row index via scope_statement.
-        if matches!(&self.cx, LoweringContext::Insert(..)) {
-            if let stmt::Returning::Value(stmt::Expr::List(list)) = i {
-                for (index, item) in list.items.iter_mut().enumerate() {
-                    self.lower_returning_for_row(index).visit_expr_mut(item);
-                }
-                return;
+        if matches!(&self.cx, LoweringContext::Insert(..))
+            && let stmt::Returning::Value(stmt::Expr::List(list)) = i
+        {
+            for (index, item) in list.items.iter_mut().enumerate() {
+                self.lower_returning_for_row(index).visit_expr_mut(item);
             }
+            return;
         }
 
         stmt::visit_mut::visit_returning_mut(&mut self.lower_returning(), i);
@@ -560,13 +560,13 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             lower.visit_returning_mut(returning);
             lower.constantize_insert_returning(returning, &stmt.source);
 
-            if stmt.source.single {
-                if let stmt::Returning::Value(expr) = &returning {
-                    // Not strictly true, but there is nothing that needs to
-                    // return a list at this point for a "single" query. If this
-                    // is ever needed, remove the assertion.
-                    debug_assert!(!expr.is_list());
-                }
+            if stmt.source.single
+                && let stmt::Returning::Value(expr) = &returning
+            {
+                // Not strictly true, but there is nothing that needs to
+                // return a list at this point for a "single" query. If this
+                // is ever needed, remove the assertion.
+                debug_assert!(!expr.is_list());
             }
         }
 
@@ -610,30 +610,30 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
         // Before lowering children, convert the "Changed" returning statement
         // to an expression referencing changed fields.
-        if let Some(returning) = &mut stmt.returning {
-            if returning.is_changed() {
-                returning_changed = true;
+        if let Some(returning) = &mut stmt.returning
+            && returning.is_changed()
+        {
+            returning_changed = true;
 
-                if let Some(model) = lower.model() {
-                    let mapping = lower.mapping_unwrap();
+            if let Some(model) = lower.model() {
+                let mapping = lower.mapping_unwrap();
 
-                    // Step 1 — build a mask of all primitives being changed by
-                    // OR-ing each assigned field's coverage mask together.
-                    let mut changed_bits = stmt::PathFieldSet::new();
-                    for projection in stmt.assignments.keys() {
-                        if let Some(mf) = mapping.resolve_field_mapping(projection) {
-                            changed_bits |= mf.field_mask();
-                        }
+                // Step 1 — build a mask of all primitives being changed by
+                // OR-ing each assigned field's coverage mask together.
+                let mut changed_bits = stmt::PathFieldSet::new();
+                for projection in stmt.assignments.keys() {
+                    if let Some(mf) = mapping.resolve_field_mapping(projection) {
+                        changed_bits |= mf.field_mask();
                     }
-
-                    // Step 2 — build the returning expression.
-                    *returning = stmt::Returning::Expr(build_update_returning(
-                        model.id,
-                        None,
-                        &mapping.fields,
-                        &changed_bits,
-                    ));
                 }
+
+                // Step 2 — build the returning expression.
+                *returning = stmt::Returning::Expr(build_update_returning(
+                    model.id,
+                    None,
+                    &mapping.fields,
+                    &changed_bits,
+                ));
             }
         }
 
@@ -671,18 +671,18 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     }
 
     fn visit_values_mut(&mut self, stmt: &mut stmt::Values) {
-        if self.cx.is_insert() {
-            if let Some(mapping) = self.mapping() {
-                for row in &mut stmt.rows {
-                    let mut lowered = mapping.model_to_table.clone();
-                    self.lower_insert_row(row)
-                        .visit_expr_record_mut(&mut lowered);
+        if self.cx.is_insert()
+            && let Some(mapping) = self.mapping()
+        {
+            for row in &mut stmt.rows {
+                let mut lowered = mapping.model_to_table.clone();
+                self.lower_insert_row(row)
+                    .visit_expr_record_mut(&mut lowered);
 
-                    *row = lowered.into();
-                }
-
-                return;
+                *row = lowered.into();
             }
+
+            return;
         }
 
         visit_mut::visit_values_mut(self, stmt);
