@@ -1,6 +1,6 @@
 [package]
 name = "toasty-cli"
-version = "0.1.0"
+version = "0.2.0"
 description = "Command-line interface for Toasty schema management"
 authors.workspace = true
 edition.workspace = true
@@ -18,7 +18,7 @@ toasty.workspace = true
 toasty-core = { workspace = true, features = ["serde"] }
 toasty-sql.workspace = true
 
-anyhow = "1.0.100"
+anyhow = "1.0.102"
 clap.workspace = true
 console.workspace = true
 dialoguer.workspace = true
