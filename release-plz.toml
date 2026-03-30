@@ -2,4 +2,4 @@
 git_release_draft = true
 pr_draft = true
 pr_labels = ["release"]
-release_always = false
+release_always = true
