@@ -1,6 +1,7 @@
 [package]
 name = "toasty-sql"
 version = "0.1.0"
+description = "SQL serialization layer for Toasty database drivers"
 authors.workspace = true
 edition.workspace = true
 homepage.workspace = true
@@ -9,7 +10,8 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 categories.workspace = true
-publish = false
+readme.workspace = true
+documentation = "https://docs.rs/toasty-sql"
 
 [dependencies]
 toasty-core.workspace = true
