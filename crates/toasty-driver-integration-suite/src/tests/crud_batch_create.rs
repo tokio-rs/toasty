@@ -3,7 +3,7 @@
 use crate::prelude::*;
 
 use toasty::Executor;
-use toasty_core::driver::{operation::Transaction, Operation};
+use toasty_core::driver::{Operation, operation::Transaction};
 
 #[driver_test(id(ID))]
 pub async fn batch_create_empty(test: &mut Test) -> Result<()> {

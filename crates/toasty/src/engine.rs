@@ -17,9 +17,9 @@ mod verify;
 use crate::Result;
 use std::sync::Arc;
 use toasty_core::{
+    Connection, Schema,
     driver::Capability,
     stmt::{self, Statement, ValueStream},
-    Connection, Schema,
 };
 
 /// The query execution engine.

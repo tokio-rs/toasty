@@ -1,4 +1,4 @@
-use crate::{isolation::TestIsolation, Setup};
+use crate::{Setup, isolation::TestIsolation};
 use std::collections::HashMap;
 use toasty_core::driver::{Capability, Driver};
 use toasty_driver_dynamodb::DynamoDb;

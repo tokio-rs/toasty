@@ -49,18 +49,20 @@ impl<M: Model> Insert<M> {
         Self {
             untyped: stmt::Insert {
                 target: stmt::InsertTarget::Model(M::id()),
-                source: stmt::Query::new_single(vec![stmt::ExprRecord::from_vec(
-                    M::schema()
-                        .as_root_unwrap()
-                        .fields
-                        .iter()
-                        .map(|field| match field.auto() {
-                            Some(_) => stmt::Expr::Default,
-                            None => stmt::Expr::Value(stmt::Value::Null),
-                        })
-                        .collect(),
-                )
-                .into()]),
+                source: stmt::Query::new_single(vec![
+                    stmt::ExprRecord::from_vec(
+                        M::schema()
+                            .as_root_unwrap()
+                            .fields
+                            .iter()
+                            .map(|field| match field.auto() {
+                                Some(_) => stmt::Expr::Default,
+                                None => stmt::Expr::Value(stmt::Value::Null),
+                            })
+                            .collect(),
+                    )
+                    .into(),
+                ]),
                 returning: Some(stmt::Returning::Model { include: vec![] }),
             },
             _p: PhantomData,

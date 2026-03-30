@@ -1,6 +1,6 @@
 use super::*;
 use toasty_core::{
-    schema::{app, Builder},
+    schema::{Builder, app},
     stmt,
 };
 

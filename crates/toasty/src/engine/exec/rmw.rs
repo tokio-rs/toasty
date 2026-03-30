@@ -1,11 +1,11 @@
 use crate::{
-    engine::exec::{Action, Exec, Output, VarId},
     Result,
+    engine::exec::{Action, Exec, Output, VarId},
 };
 use toasty_core::{
     driver::{
-        operation::{self, Transaction},
         Rows,
+        operation::{self, Transaction},
     },
     stmt::{self, ValueStream},
 };

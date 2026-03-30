@@ -1,4 +1,4 @@
-use syn::{visit_mut::VisitMut, Type, TypePath};
+use syn::{Type, TypePath, visit_mut::VisitMut};
 
 /// Visitor that rewrites type references to a configurable target type
 pub(crate) struct IdRewriter {

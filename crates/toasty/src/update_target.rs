@@ -1,4 +1,4 @@
-use crate::{schema::Load, Result};
+use crate::{Result, schema::Load};
 use toasty_core::stmt::{self, Value};
 
 /// Trait for types that can serve as the target of an update operation.

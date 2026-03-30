@@ -16,15 +16,15 @@ pub(super) fn index_filter_to_any_map(expr: stmt::Expr) -> stmt::Expr {
     // `col IN [v1, v2, ...]` is equivalent to `v1 = col OR v2 = col OR ...`.
     // Expand it directly to the canonical fan-out form so the DNF step doesn't
     // need to handle InList as a leaf.
-    if let stmt::Expr::InList(ref in_list) = expr {
-        if matches!(*in_list.list, stmt::Expr::Value(stmt::Value::List(_))) {
-            let shape = stmt::Expr::from(stmt::ExprBinaryOp {
-                lhs: in_list.expr.clone(),
-                op: stmt::BinaryOp::Eq,
-                rhs: Box::new(stmt::Expr::arg(0)),
-            });
-            return stmt::Expr::any(stmt::Expr::map(*in_list.list.clone(), shape));
-        }
+    if let stmt::Expr::InList(ref in_list) = expr
+        && matches!(*in_list.list, stmt::Expr::Value(stmt::Value::List(_)))
+    {
+        let shape = stmt::Expr::from(stmt::ExprBinaryOp {
+            lhs: in_list.expr.clone(),
+            op: stmt::BinaryOp::Eq,
+            rhs: Box::new(stmt::Expr::arg(0)),
+        });
+        return stmt::Expr::any(stmt::Expr::map(*in_list.list.clone(), shape));
     }
 
     let branches = flatten_to_dnf(expr);

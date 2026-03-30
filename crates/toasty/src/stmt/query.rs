@@ -1,7 +1,7 @@
 use super::{Delete, Expr, IntoStatement, List, Statement, Value};
 use crate::{
-    schema::{Load, Model},
     Executor, Result,
+    schema::{Load, Model},
 };
 use std::{fmt, marker::PhantomData};
 use toasty_core::stmt::{self, Offset, Returning};

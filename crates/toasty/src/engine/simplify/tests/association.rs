@@ -3,7 +3,7 @@ use crate::engine::simplify::Simplify;
 use crate::schema::Register;
 use toasty_core::{
     driver::Capability,
-    schema::{app, app::FieldId, app::ModelId, Builder},
+    schema::{Builder, app, app::FieldId, app::ModelId},
     stmt::{self, Association, Expr, ExprInSubquery, Path, Query, SourceModel, Value},
 };
 
@@ -103,10 +103,10 @@ fn has_many_via_becomes_in_subquery() {
     };
 
     let mut query = Query::new_select(s.post_model, Expr::Value(Value::Bool(true)));
-    if let stmt::ExprSet::Select(select) = &mut query.body {
-        if let stmt::Source::Model(model) = &mut select.source {
-            model.via = Some(association);
-        }
+    if let stmt::ExprSet::Select(select) = &mut query.body
+        && let stmt::Source::Model(model) = &mut select.source
+    {
+        model.via = Some(association);
     }
 
     simplify.simplify_via_association_for_query(&mut query);

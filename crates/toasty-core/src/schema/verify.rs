@@ -1,9 +1,9 @@
 mod relations_are_indexed;
 
 use super::{
+    Result, Schema,
     app::{FieldId, ModelId},
     db::{ColumnId, IndexId},
-    Result, Schema,
 };
 use crate::stmt;
 
@@ -170,9 +170,7 @@ impl Verify<'_> {
                     if !column.ty.is_numeric() {
                         return Err(crate::Error::invalid_schema(format!(
                             "auto_increment column `{}` in table `{}` must have a numeric type, found {:?}",
-                            column.name,
-                            table.name,
-                            column.ty
+                            column.name, table.name, column.ty
                         )));
                     }
 
@@ -180,8 +178,7 @@ impl Verify<'_> {
                     if table.primary_key.columns.len() != 1 {
                         return Err(crate::Error::invalid_schema(format!(
                             "auto_increment column `{}` in table `{}` cannot be used with composite primary keys (partition/local keys). Use UUID or remove the composite key.",
-                            column.name,
-                            table.name
+                            column.name, table.name
                         )));
                     }
 
@@ -190,8 +187,7 @@ impl Verify<'_> {
                     if pk_column.id != column.id {
                         return Err(crate::Error::invalid_schema(format!(
                             "auto_increment column `{}` in table `{}` must be part of the primary key",
-                            column.name,
-                            table.name
+                            column.name, table.name
                         )));
                     }
                 }

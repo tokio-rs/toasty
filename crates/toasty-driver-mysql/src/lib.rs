@@ -17,15 +17,15 @@ pub(crate) use value::Value;
 
 use async_trait::async_trait;
 use mysql_async::{
-    prelude::{Queryable, ToValue},
     Conn, OptsBuilder,
+    prelude::{Queryable, ToValue},
 };
 use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
+    Result, Schema,
     driver::{Capability, Driver, Operation, Response},
     schema::db::{self, Migration, SchemaDiff, Table},
     stmt::{self, ValueRecord},
-    Result, Schema,
 };
 use toasty_sql::{self as sql, TypedValue};
 use url::Url;

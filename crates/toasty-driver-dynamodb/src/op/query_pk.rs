@@ -1,5 +1,5 @@
 use super::{
-    ddb_expression, ddb_key, item_to_record, operation, stmt, Connection, ExprAttrs, Result, Schema,
+    Connection, ExprAttrs, Result, Schema, ddb_expression, ddb_key, item_to_record, operation, stmt,
 };
 use std::sync::Arc;
 use toasty_core::{driver::Response, stmt::ExprContext};

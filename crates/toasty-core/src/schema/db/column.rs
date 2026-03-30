@@ -1,4 +1,4 @@
-use super::{table, DiffContext, TableId, Type};
+use super::{DiffContext, TableId, Type, table};
 use crate::stmt;
 
 use std::{

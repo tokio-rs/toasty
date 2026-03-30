@@ -1,8 +1,8 @@
 use super::{List, Query};
 
-use crate::{engine::eval::Func, schema::Load, stmt::IntoStatement, Executor, Result};
+use crate::{Executor, Result, engine::eval::Func, schema::Load, stmt::IntoStatement};
 
-use toasty_core::stmt::{self, visit_mut, Expr, ExprRecord, OrderBy, Projection, Value, VisitMut};
+use toasty_core::stmt::{self, Expr, ExprRecord, OrderBy, Projection, Value, VisitMut, visit_mut};
 
 /// Cursor-based pagination over a [`Query`].
 ///

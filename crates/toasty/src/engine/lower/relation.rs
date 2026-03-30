@@ -455,37 +455,37 @@ impl LowerStatement<'_, '_> {
         source: &mut dyn RelationSource,
     ) {
         let dependencies = self.collect_dependencies(|lower| {
-            if let Some(pair_id) = field.pair() {
-                if lower.field(pair_id).ty.is_has_one() {
-                    // Disassociate an existing HasOne. This handles the case where
-                    // if the HasOne association is required (i.e. *not* `Option`),
-                    // then the record gets deleted.
-                    lower.plan_mut_belongs_to_disassociate(field, false, source);
+            if let Some(pair_id) = field.pair()
+                && lower.field(pair_id).ty.is_has_one()
+            {
+                // Disassociate an existing HasOne. This handles the case where
+                // if the HasOne association is required (i.e. *not* `Option`),
+                // then the record gets deleted.
+                lower.plan_mut_belongs_to_disassociate(field, false, source);
 
-                    // This handles disassociating any *other* instances of the current
-                    // model that already are associated with the target model being
-                    // passed it. This is necessary because of the 1-1 relation
-                    // mapping.
-                    if field.nullable {
-                        lower.relation_step(field, |planner| {
-                            assert!(expr.is_value());
+                // This handles disassociating any *other* instances of the current
+                // model that already are associated with the target model being
+                // passed it. This is necessary because of the 1-1 relation
+                // mapping.
+                if field.nullable {
+                    lower.relation_step(field, |planner| {
+                        assert!(expr.is_value());
 
-                            let scope = stmt::Query::new_select(
-                                field.id.model,
-                                stmt::Expr::eq(stmt::Expr::ref_self_field(field), expr.clone()),
-                            );
+                        let scope = stmt::Query::new_select(
+                            field.id.model,
+                            stmt::Expr::eq(stmt::Expr::ref_self_field(field), expr.clone()),
+                        );
 
-                            if field.nullable {
-                                let mut stmt = scope.update();
-                                stmt.assignments.set(field.id, stmt::Value::Null);
-                                planner.new_dependency(stmt);
-                            } else {
-                                todo!();
-                            }
-                        });
-                    } else {
-                        todo!()
-                    }
+                        if field.nullable {
+                            let mut stmt = scope.update();
+                            stmt.assignments.set(field.id, stmt::Value::Null);
+                            planner.new_dependency(stmt);
+                        } else {
+                            todo!();
+                        }
+                    });
+                } else {
+                    todo!()
                 }
             }
         });
@@ -716,10 +716,10 @@ impl LowerStatement<'_, '_> {
     }
 
     fn relation_step(&mut self, field: &Field, f: impl FnOnce(&mut LowerStatement)) {
-        if let Some(pair) = field.pair() {
-            if self.state.relations.last().copied() == Some(pair) {
-                return;
-            }
+        if let Some(pair) = field.pair()
+            && self.state.relations.last().copied() == Some(pair)
+        {
+            return;
         }
 
         self.state.relations.push(field.id);

@@ -6,12 +6,13 @@ mod or_rewrite;
 mod index_plan;
 pub(crate) use index_plan::IndexPlan;
 
-use crate::{engine::Engine, Result};
+use crate::{Result, engine::Engine};
 use std::collections::HashMap;
 use toasty_core::{
+    Schema,
     driver::Capability,
     schema::db::{Index, Table},
-    stmt, Schema,
+    stmt,
 };
 
 impl Engine {
@@ -255,7 +256,7 @@ fn extract_key_record(
                 return None;
             };
             Some(stmt::Value::Record(stmt::ValueRecord::from_vec(vec![
-                v.clone()
+                v.clone(),
             ])))
         }
         stmt::Expr::And(and) if and.operands.len() == index.columns.len() => {

@@ -1,8 +1,8 @@
 use jiff::tz::TimeZone;
 
 use crate::{
-    stmt::{Type, Value},
     Result,
+    stmt::{Type, Value},
 };
 
 impl Type {

@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, visit_mut::VisitMut, ItemFn};
+use syn::{ItemFn, parse_macro_input, visit_mut::VisitMut};
 
 use crate::id_rewriter::IdRewriter;
 use crate::parse::{BoolExpr, DriverTest, DriverTestAttr, Expansion, ExpansionList};
@@ -73,11 +73,9 @@ fn generate_variant(
     let mut variant = input.clone();
 
     // Update function name based on whether we're inside a module
-    if use_expansion_name {
-        if let Some(expansion_ident) = expansion.to_ident() {
-            // Inside a module: use just the expansion name (e.g., "id_uuid")
-            variant.sig.ident = expansion_ident;
-        }
+    if use_expansion_name && let Some(expansion_ident) = expansion.to_ident() {
+        // Inside a module: use just the expansion name (e.g., "id_uuid")
+        variant.sig.ident = expansion_ident;
     }
     // Otherwise keep the original function name
 
@@ -92,8 +90,7 @@ fn generate_variant(
     rewrite_driver_test_cfg_macros(&mut variant, expansion);
 
     // Rewrite ID types if expansion has an ID variant
-    if let (Some(ref id_ident), Some(ref id_variant)) = (&expansion.id_ident, &expansion.id_variant)
-    {
+    if let (Some(id_ident), Some(id_variant)) = (&expansion.id_ident, &expansion.id_variant) {
         let target_type = match id_variant {
             crate::parse::KindVariant::IdU64 => syn::parse_quote!(u64),
             crate::parse::KindVariant::IdUuid => syn::parse_quote!(uuid::Uuid),
@@ -118,7 +115,7 @@ fn generate_variant(
     }
 
     // Add capability checks at the beginning of the function if there are requires
-    if let Some(ref requires_expr) = requires {
+    if let Some(requires_expr) = requires {
         add_capability_checks_from_expr(&mut variant, requires_expr, expansion);
     }
 
@@ -193,7 +190,7 @@ fn add_capability_checks_from_expr(
     requires_expr: &BoolExpr,
     expansion: &Expansion,
 ) {
-    use syn::{parse_quote, Ident, Stmt};
+    use syn::{Ident, Stmt, parse_quote};
 
     // Extract database capability identifiers from the expression
     let db_capabilities = extract_db_capabilities(requires_expr, expansion);
@@ -305,43 +302,43 @@ fn rewrite_driver_test_cfg_macros(func: &mut ItemFn, expansion: &Expansion) {
     impl<'a> VisitMut for MacroRewriter<'a> {
         fn visit_expr_mut(&mut self, expr: &mut syn::Expr) {
             // Check if this is a macro call to driver_test_cfg!
-            if let syn::Expr::Macro(expr_macro) = expr {
-                if expr_macro.mac.path.is_ident("driver_test_cfg") {
-                    // Parse the boolean expression from the macro tokens
-                    let tokens = expr_macro.mac.tokens.clone();
-                    if let Ok(bool_expr) = syn::parse::Parser::parse2(
-                        |input: syn::parse::ParseStream| BoolExpr::parse(input),
-                        tokens,
-                    ) {
-                        // Evaluate the expression for this expansion
-                        let result = self.expansion.evaluate_predicate(&bool_expr, &|_ident| {
-                            // Database capabilities are unknown at compile time
-                            // Return Unknown, which should not affect evaluation of
-                            // compile-time known values (matrix and ID variants)
-                            crate::parse::ThreeValuedBool::Unknown
-                        });
+            if let syn::Expr::Macro(expr_macro) = expr
+                && expr_macro.mac.path.is_ident("driver_test_cfg")
+            {
+                // Parse the boolean expression from the macro tokens
+                let tokens = expr_macro.mac.tokens.clone();
+                if let Ok(bool_expr) = syn::parse::Parser::parse2(
+                    |input: syn::parse::ParseStream| BoolExpr::parse(input),
+                    tokens,
+                ) {
+                    // Evaluate the expression for this expansion
+                    let result = self.expansion.evaluate_predicate(&bool_expr, &|_ident| {
+                        // Database capabilities are unknown at compile time
+                        // Return Unknown, which should not affect evaluation of
+                        // compile-time known values (matrix and ID variants)
+                        crate::parse::ThreeValuedBool::Unknown
+                    });
 
-                        // Convert to boolean literal
-                        let bool_value = match result {
-                            crate::parse::ThreeValuedBool::True => true,
-                            crate::parse::ThreeValuedBool::False => false,
-                            crate::parse::ThreeValuedBool::Unknown => {
-                                // Unknown means the expression references database capabilities,
-                                // which can only be checked at runtime, not compile time.
-                                // This is a compile error - driver_test_cfg! should only be used
-                                // for compile-time known values (ID variants, matrix dimensions).
-                                panic!(
-                                    "driver_test_cfg! can only be used with compile-time known values \
+                    // Convert to boolean literal
+                    let bool_value = match result {
+                        crate::parse::ThreeValuedBool::True => true,
+                        crate::parse::ThreeValuedBool::False => false,
+                        crate::parse::ThreeValuedBool::Unknown => {
+                            // Unknown means the expression references database capabilities,
+                            // which can only be checked at runtime, not compile time.
+                            // This is a compile error - driver_test_cfg! should only be used
+                            // for compile-time known values (ID variants, matrix dimensions).
+                            panic!(
+                                "driver_test_cfg! can only be used with compile-time known values \
                                      (id_u64, id_uuid, matrix dimensions). Database capabilities must \
                                      be checked at runtime using test.capability()"
-                                );
-                            }
-                        };
+                            );
+                        }
+                    };
 
-                        // Replace the macro call with a boolean literal
-                        *expr = syn::parse_quote!(#bool_value);
-                        return;
-                    }
+                    // Replace the macro call with a boolean literal
+                    *expr = syn::parse_quote!(#bool_value);
+                    return;
                 }
             }
 

@@ -1,4 +1,4 @@
-use super::{schema, util, Expand};
+use super::{Expand, schema, util};
 use crate::model::schema::{FieldTy, VariantValue};
 
 use proc_macro2::TokenStream;

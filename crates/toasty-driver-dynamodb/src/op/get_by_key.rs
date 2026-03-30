@@ -1,5 +1,5 @@
 use super::{
-    ddb_key, item_to_record, operation, stmt, Connection, KeysAndAttributes, Result, Schema,
+    Connection, KeysAndAttributes, Result, Schema, ddb_key, item_to_record, operation, stmt,
 };
 use std::{collections::HashMap, sync::Arc};
 use toasty_core::driver::Response;

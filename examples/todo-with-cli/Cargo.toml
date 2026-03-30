@@ -1,7 +1,9 @@
 [package]
 name = "example-todo-with-cli"
 version = "0.1.0"
-edition = "2024"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
 publish = false
 default-run = "todo-app"
 

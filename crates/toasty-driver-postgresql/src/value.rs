@@ -1,6 +1,6 @@
 use postgres::{
-    types::{accepts, private::BytesMut, to_sql_checked, IsNull, ToSql, Type},
     Column, Row,
+    types::{IsNull, ToSql, Type, accepts, private::BytesMut, to_sql_checked},
 };
 use toasty_core::stmt::{self, Value as CoreValue};
 

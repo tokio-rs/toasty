@@ -1,4 +1,4 @@
-use super::{projection, Projection};
+use super::{Projection, projection};
 
 /// A path that can be used to navigate into a composite [`Value`](super::Value)
 /// or [`Expr`](super::Expr).

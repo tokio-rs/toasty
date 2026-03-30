@@ -2,6 +2,7 @@
 //! `ExprReference` variants (Column, Field, Model) in each relevant
 //! `ExprTarget` context, at both nesting=0 and nesting>0.
 
+use toasty_core::schema::Name;
 use toasty_core::schema::app::IndexId as AppIndexId;
 use toasty_core::schema::app::{
     Field, FieldName, FieldPrimitive, FieldTy, ModelId, ModelRoot, PrimaryKey as AppPrimaryKey,
@@ -10,7 +11,6 @@ use toasty_core::schema::db::Type as DbType;
 use toasty_core::schema::db::{
     Column, ColumnId, IndexId as DbIndexId, PrimaryKey as DbPrimaryKey, Schema, Table, TableId,
 };
-use toasty_core::schema::Name;
 use toasty_core::stmt::{Expr, ExprColumn, ExprContext, ExprReference, ExprTarget, Type};
 
 // ---------------------------------------------------------------------------

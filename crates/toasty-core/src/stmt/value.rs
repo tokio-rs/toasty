@@ -1,4 +1,4 @@
-use super::{sparse_record::SparseRecord, Entry, EntryPath, Type, TypeUnion, ValueRecord};
+use super::{Entry, EntryPath, Type, TypeUnion, ValueRecord, sparse_record::SparseRecord};
 use std::cmp::Ordering;
 use std::hash::Hash;
 

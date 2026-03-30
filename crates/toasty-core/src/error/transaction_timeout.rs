@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::{error::ErrorKind, Error};
+use crate::{Error, error::ErrorKind};
 
 /// Error when a transaction exceeds its configured timeout.
 ///

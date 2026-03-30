@@ -1,6 +1,6 @@
 use super::{
-    db, ddb_key_schema, AttributeDefinition, Connection, GlobalSecondaryIndex, Projection,
-    ProjectionType, ProvisionedThroughput, Result, Table, TypeExt,
+    AttributeDefinition, Connection, GlobalSecondaryIndex, Projection, ProjectionType,
+    ProvisionedThroughput, Result, Table, TypeExt, db, ddb_key_schema,
 };
 
 impl Connection {

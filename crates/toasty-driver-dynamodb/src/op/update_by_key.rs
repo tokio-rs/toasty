@@ -1,7 +1,7 @@
 use super::{
-    db, ddb_expression, ddb_key, operation, stmt, Connection, Delete, ExprAttrs, Put, Result,
-    ReturnValuesOnConditionCheckFailure, SdkError, TransactWriteItem, Update, UpdateItemError,
-    Value,
+    Connection, Delete, ExprAttrs, Put, Result, ReturnValuesOnConditionCheckFailure, SdkError,
+    TransactWriteItem, Update, UpdateItemError, Value, db, ddb_expression, ddb_key, operation,
+    stmt,
 };
 use std::{collections::HashMap, fmt::Write};
 use toasty_core::{driver::Response, stmt::ExprContext};
@@ -243,7 +243,9 @@ impl Connection {
                         if *projection == column.id.index {
                             if let Some(prev) = curr_unique_values.remove(&column.name) {
                                 let stmt::Assignment::Set(expr) = assignment else {
-                                    todo!("only SET supported in DynamoDB unique check; got {assignment:#?}");
+                                    todo!(
+                                        "only SET supported in DynamoDB unique check; got {assignment:#?}"
+                                    );
                                 };
                                 let stmt::Expr::Value(value) = expr else {
                                     todo!()
@@ -336,7 +338,9 @@ impl Connection {
                                 .unwrap();
 
                             let stmt::Assignment::Set(expr) = assignment else {
-                                todo!("only SET supported in DynamoDB index insert; got {assignment:#?}");
+                                todo!(
+                                    "only SET supported in DynamoDB index insert; got {assignment:#?}"
+                                );
                             };
                             let stmt::Expr::Value(value) = expr else {
                                 todo!()

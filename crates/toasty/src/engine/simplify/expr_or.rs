@@ -250,22 +250,21 @@ impl Simplify<'_> {
         let mut other_operands: Vec<stmt::Expr> = Vec::new();
 
         for operand in mem::take(&mut expr.operands) {
-            if let stmt::Expr::BinaryOp(bin_op) = &operand {
-                if bin_op.op.is_eq() {
-                    if let stmt::Expr::Value(value) = bin_op.rhs.as_ref() {
-                        // Find or create index for this LHS
-                        let lhs_idx = lhs_exprs
-                            .iter()
-                            .position(|e| e == bin_op.lhs.as_ref())
-                            .unwrap_or_else(|| {
-                                lhs_exprs.push(bin_op.lhs.as_ref().clone());
-                                lhs_exprs.len() - 1
-                            });
+            if let stmt::Expr::BinaryOp(bin_op) = &operand
+                && bin_op.op.is_eq()
+                && let stmt::Expr::Value(value) = bin_op.rhs.as_ref()
+            {
+                // Find or create index for this LHS
+                let lhs_idx = lhs_exprs
+                    .iter()
+                    .position(|e| e == bin_op.lhs.as_ref())
+                    .unwrap_or_else(|| {
+                        lhs_exprs.push(bin_op.lhs.as_ref().clone());
+                        lhs_exprs.len() - 1
+                    });
 
-                        groups.entry(lhs_idx).or_default().push(value.clone());
-                        continue;
-                    }
-                }
+                groups.entry(lhs_idx).or_default().push(value.clone());
+                continue;
             }
 
             // Non-equality or non-constant RHS - keep as is

@@ -1,6 +1,6 @@
 use crate::{
-    stmt::{Expr, ExprArg, ExprContext, ExprReference, Project, Projection, Resolve, Type, Value},
     Schema,
+    stmt::{Expr, ExprArg, ExprContext, ExprReference, Project, Projection, Resolve, Type, Value},
 };
 
 /// Provides runtime argument and reference resolution for expression
@@ -106,7 +106,10 @@ impl<I: Input, T: Resolve> Input for TypedInput<'_, I, T> {
                 };
             }
 
-            assert!(actual_ty.is_subtype_of(ty), "resolved input did not match requested argument type; expected={ty:#?}; actual={actual_ty:#?}")
+            assert!(
+                actual_ty.is_subtype_of(ty),
+                "resolved input did not match requested argument type; expected={ty:#?}; actual={actual_ty:#?}"
+            )
         }
 
         Some(expr)
