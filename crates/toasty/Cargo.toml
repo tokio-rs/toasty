@@ -12,20 +12,20 @@ sqlite = ["dep:toasty-driver-sqlite"]
 rust_decimal = [
 	"dep:rust_decimal",
 	"toasty-core/rust_decimal",
-	"toasty-driver-postgresql/rust_decimal",
-	"toasty-driver-mysql/rust_decimal",
+	"toasty-driver-postgresql?/rust_decimal",
+	"toasty-driver-mysql?/rust_decimal",
 ]
 bigdecimal = [
 	"dep:bigdecimal",
 	"toasty-core/bigdecimal",
-	"toasty-driver-postgresql/bigdecimal",
-	"toasty-driver-mysql/bigdecimal",
+	"toasty-driver-postgresql?/bigdecimal",
+	"toasty-driver-mysql?/bigdecimal",
 ]
 jiff = [
 	"dep:jiff",
 	"toasty-core/jiff",
-	"toasty-driver-postgresql/jiff",
-	"toasty-driver-mysql/jiff",
+	"toasty-driver-postgresql?/jiff",
+	"toasty-driver-mysql?/jiff",
 ]
 serde = ["dep:serde_core", "dep:serde_json"]
 
