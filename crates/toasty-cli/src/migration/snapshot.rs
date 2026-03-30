@@ -5,6 +5,11 @@ use clap::Parser;
 use console::style;
 use toasty::Db;
 
+/// Prints the current schema as a TOML snapshot to stdout.
+///
+/// Reads the schema registered on the [`Db`] and formats it as a
+/// [`SnapshotFile`]. Table headers, key-value pairs, and whitespace are
+/// syntax-highlighted for terminal display.
 #[derive(Parser, Debug)]
 pub struct SnapshotCommand {
     // Future options can be added here
