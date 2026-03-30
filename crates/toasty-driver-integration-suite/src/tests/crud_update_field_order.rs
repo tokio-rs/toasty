@@ -1,14 +1,14 @@
 use crate::prelude::*;
 
-/// Regression tests for https://github.com/tokio-rs/toasty/issues/200
-///
-/// The bug: when Assignments used IndexMap keyed by field offset, updating
-/// fields in an order different from declaration order could cause values to be
-/// assigned to the wrong column, producing type-parsing errors (e.g. writing a
-/// String into an i64 column).
+// Regression tests for https://github.com/tokio-rs/toasty/issues/200
+//
+// The bug: when Assignments used IndexMap keyed by field offset, updating
+// fields in an order different from declaration order could cause values to be
+// assigned to the wrong column, producing type-parsing errors (e.g. writing a
+// String into an i64 column).
 
-/// Update only the last declared field, leaving earlier fields untouched.
-/// With offset-based IndexMap this could assign the value to field 0 instead.
+// Update only the last declared field, leaving earlier fields untouched.
+// With offset-based IndexMap this could assign the value to field 0 instead.
 #[driver_test(id(ID), scenario(crate::scenarios::widget_mixed_types))]
 pub async fn update_last_field_only(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
@@ -31,8 +31,8 @@ pub async fn update_last_field_only(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// Update fields in reverse declaration order. If offset mapping is wrong, the
-/// String value ends up in the i64 column (or vice versa), causing a parse error.
+// Update fields in reverse declaration order. If offset mapping is wrong, the
+// String value ends up in the i64 column (or vice versa), causing a parse error.
 #[driver_test(id(ID), scenario(crate::scenarios::widget_mixed_types))]
 pub async fn update_fields_reverse_order(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
@@ -62,9 +62,9 @@ pub async fn update_fields_reverse_order(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// Update a single middle field among many typed fields. This is the simplest
-/// trigger for the original bug: a single assignment at a high offset gets
-/// misrouted to offset 0.
+// Update a single middle field among many typed fields. This is the simplest
+// trigger for the original bug: a single assignment at a high offset gets
+// misrouted to offset 0.
 #[driver_test(id(ID), scenario(crate::scenarios::widget_mixed_types))]
 pub async fn update_middle_field_mixed_types(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
@@ -89,8 +89,8 @@ pub async fn update_middle_field_mixed_types(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// Query-based update with fields in non-declaration order. Exercises the
-/// filter_by path rather than the instance-update path.
+// Query-based update with fields in non-declaration order. Exercises the
+// filter_by path rather than the instance-update path.
 #[driver_test(id(ID), scenario(crate::scenarios::widget_mixed_types))]
 pub async fn query_update_non_declaration_order(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
@@ -122,8 +122,8 @@ pub async fn query_update_non_declaration_order(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// Successive single-field updates targeting different offsets each time.
-/// Ensures that each individual update routes to the correct column.
+// Successive single-field updates targeting different offsets each time.
+// Ensures that each individual update routes to the correct column.
 #[driver_test(id(ID), scenario(crate::scenarios::widget_mixed_types))]
 pub async fn successive_single_field_updates(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
@@ -144,7 +144,7 @@ pub async fn successive_single_field_updates(test: &mut Test) -> Result<()> {
     assert_eq!(w.count, 2);
 
     w.update().active(true).exec(&mut db).await?;
-    assert_eq!(w.active, true);
+    assert!(w.active);
 
     w.update().label("a1").exec(&mut db).await?;
     assert_eq!(w.label, "a1");
