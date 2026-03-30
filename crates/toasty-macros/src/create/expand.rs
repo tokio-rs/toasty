@@ -14,7 +14,7 @@ pub(crate) fn expand(item: &CreateItem) -> TokenStream {
             let nested_assertions = expand_nested_assertions(path, fields);
             quote_spanned! { span=>
                 {
-                    const _: () = {
+                    const _CREATE: () = {
                         toasty::codegen_support::assert_create_fields(
                             &<#path as toasty::codegen_support::Model>::CREATE_META,
                             &[ #( #field_names ),* ],
@@ -102,7 +102,7 @@ fn expand_typed_batch(path: &syn::Path, items: &[FieldSet]) -> TokenStream {
             let nested_assertions = expand_nested_assertions(path, fields);
             quote_spanned! { span=>
                 {
-                    const _: () = {
+                    const _CREATE: () = {
                         toasty::codegen_support::assert_create_fields(
                             &<#path as toasty::codegen_support::Model>::CREATE_META,
                             &[ #( #field_names ),* ],

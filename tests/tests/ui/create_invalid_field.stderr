@@ -11,7 +11,7 @@ error[E0080]: evaluation panicked: missing required field `name` in create! for 
   --> tests/ui/create_invalid_field.rs:11:29
    |
 11 |     let _ = toasty::create!(User { nonexistent: "value" });
-   |                             ^^^^ evaluation of `main::_` failed inside this call
+   |                             ^^^^ evaluation of `main::_CREATE` failed inside this call
    |
 note: inside `assert_create_fields`
   --> $WORKSPACE/crates/toasty/src/schema/create_meta.rs
