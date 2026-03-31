@@ -588,18 +588,16 @@ impl Expand<'_> {
 
 /// Check if a relation type (e.g. `HasMany<Person>`) references the same model.
 fn is_self_referential_type(ty: &syn::Type, model_ident: &syn::Ident) -> bool {
-    if let syn::Type::Path(type_path) = ty {
-        if let Some(last_seg) = type_path.path.segments.last() {
-            if let syn::PathArguments::AngleBracketed(args) = &last_seg.arguments {
-                for arg in &args.args {
-                    if let syn::GenericArgument::Type(syn::Type::Path(inner_path)) = arg {
-                        if let Some(inner_seg) = inner_path.path.segments.last() {
-                            if inner_seg.ident == *model_ident {
-                                return true;
-                            }
-                        }
-                    }
-                }
+    if let syn::Type::Path(type_path) = ty
+        && let Some(last_seg) = type_path.path.segments.last()
+        && let syn::PathArguments::AngleBracketed(args) = &last_seg.arguments
+    {
+        for arg in &args.args {
+            if let syn::GenericArgument::Type(syn::Type::Path(inner_path)) = arg
+                && let Some(inner_seg) = inner_path.path.segments.last()
+                && inner_seg.ident == *model_ident
+            {
+                return true;
             }
         }
     }

@@ -57,19 +57,22 @@ fn expand_scoped(expr: &syn::Expr, fields: &FieldSet) -> TokenStream {
         {
             let __scope = #expr;
 
-            struct __Check<__S: toasty::codegen_support::Scope>(
-                std::marker::PhantomData<__S>,
-            );
-            impl<__S: toasty::codegen_support::Scope> __Check<__S> {
-                const __ASSERT: () = toasty::codegen_support::assert_create_fields(
-                    __S::CREATE_META,
-                    &[ #( #field_names ),* ],
+            #[allow(clippy::let_unit_value)]
+            let __force = {
+                struct __Check<__S: toasty::codegen_support::Scope>(
+                    std::marker::PhantomData<__S>,
                 );
-            }
-            fn __force_check<__S: toasty::codegen_support::Scope>(_: &__S) {
-                let _ = __Check::<__S>::__ASSERT;
-            }
-            __force_check(&__scope);
+                impl<__S: toasty::codegen_support::Scope> __Check<__S> {
+                    const __ASSERT: () = toasty::codegen_support::assert_create_fields(
+                        __S::CREATE_META,
+                        &[ #( #field_names ),* ],
+                    );
+                }
+                fn __force_check<__S: toasty::codegen_support::Scope>(_: &__S) {
+                    let _ = __Check::<__S>::__ASSERT;
+                }
+                __force_check(&__scope);
+            };
 
             let __scope_fields = #scope_fields_call;
             #create_call #(#field_calls)*
