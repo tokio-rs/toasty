@@ -652,3 +652,58 @@ pub async fn query_macro_partition_key_with_or(test: &mut Test) -> Result<()> {
 
     Ok(())
 }
+
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+pub async fn query_macro_filter_in_list(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    toasty::create!(User::[{ name: "Alice" }, { name: "Bob" }, { name: "Carl" }])
+        .exec(&mut db)
+        .await?;
+
+    // Literal list
+    let users = toasty::query!(User filter .name IN ["Alice", "Carl"])
+        .exec(&mut db)
+        .await?;
+
+    assert_struct!(users, #({ name: "Alice" }, { name: "Carl" }));
+
+    Ok(())
+}
+
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+pub async fn query_macro_filter_in_list_external_ref(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    toasty::create!(User::[{ name: "Alice" }, { name: "Bob" }, { name: "Carl" }])
+        .exec(&mut db)
+        .await?;
+
+    // External variable reference
+    let names = vec!["Alice", "Bob"];
+    let users = toasty::query!(User filter .name IN #names)
+        .exec(&mut db)
+        .await?;
+
+    assert_struct!(users, #({ name: "Alice" }, { name: "Bob" }));
+
+    Ok(())
+}
+
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+pub async fn query_macro_filter_in_list_with_and(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    toasty::create!(User::[{ name: "Alice" }, { name: "Bob" }, { name: "Carl" }])
+        .exec(&mut db)
+        .await?;
+
+    // IN combined with AND
+    let users = toasty::query!(User filter .name IN ["Alice", "Bob", "Carl"] and .name != "Bob")
+        .exec(&mut db)
+        .await?;
+
+    assert_struct!(users, #({ name: "Alice" }, { name: "Carl" }));
+
+    Ok(())
+}

@@ -1,5 +1,6 @@
 use super::parse::{
-    CompareOpKind, Expr, ExprBinaryOp, FieldPath, OrderByClause, OrderDirection, QueryInput,
+    CompareOpKind, Expr, ExprBinaryOp, ExprInList, FieldPath, InListRhs, OrderByClause,
+    OrderDirection, QueryInput,
 };
 
 use proc_macro2::TokenStream;
@@ -70,11 +71,30 @@ fn expand_filter(source: &syn::Path, expr: &Expr) -> TokenStream {
             quote! { (#inner).not() }
         }
         Expr::BinaryOp(cmp) => expand_binary_op(source, cmp),
+        Expr::InList(in_list) => expand_in_list(source, in_list),
         Expr::Paren(inner) => expand_filter(source, inner),
         Expr::Field(path) => expand_field_path(source, path),
         Expr::Lit(lit) => quote! { #lit },
         Expr::Var(ident) => quote! { #ident },
         Expr::RustExpr(expr) => quote! { #expr },
+    }
+}
+
+/// Expand an IN-list: `.field IN [a, b, c]` → `Source::fields().field().in_list([a, b, c])`.
+fn expand_in_list(source: &syn::Path, in_list: &ExprInList) -> TokenStream {
+    let lhs = expand_filter(source, &in_list.lhs);
+    match &in_list.rhs {
+        InListRhs::List(items) => {
+            let items: Vec<TokenStream> = items
+                .iter()
+                .map(|item| expand_filter(source, item))
+                .collect();
+            quote! { #lhs.in_list([#(#items),*]) }
+        }
+        InListRhs::Expr(expr) => {
+            let rhs = expand_filter(source, expr);
+            quote! { #lhs.in_list(#rhs) }
+        }
     }
 }
 
