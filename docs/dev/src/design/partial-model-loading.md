@@ -6,9 +6,10 @@ Some model fields are expensive to load — a blog post's `body`, an image's
 `blob`, a document's `content`. Partial model loading lets you skip these
 columns by default and fetch them only when needed.
 
-Fields opt in with the `#[deferred]` attribute and use the `Deferred<T>` wrapper
-type. Queries exclude deferred columns unless the caller explicitly includes
-them.
+Fields opt in by using the `Deferred<T>` wrapper type. The derive macro
+recognizes `Deferred<T>` the same way it recognizes `HasMany<T>` and
+`BelongsTo<T>` — by the type path. No extra attribute is needed. Queries
+exclude deferred columns unless the caller explicitly includes them.
 
 ```rust
 #[derive(Debug, toasty::Model)]
@@ -22,7 +23,6 @@ struct Article {
     #[belongs_to]
     author: BelongsTo<User>,
 
-    #[deferred]
     body: Deferred<String>,
 }
 ```
@@ -65,8 +65,8 @@ instead of its inner value, matching the behavior of `HasMany` and `BelongsTo`.
 
 ## Defining Deferred Fields
 
-Mark a field as deferred with the `#[deferred]` attribute. The field's type must
-be `Deferred<T>`:
+Wrap the field type in `Deferred<T>`. The derive macro detects this and marks
+the field as deferred in the schema:
 
 ```rust
 #[derive(Debug, toasty::Model)]
@@ -77,19 +77,14 @@ struct Document {
 
     title: String,
 
-    #[deferred]
     content: Deferred<String>,
 
-    #[deferred]
     metadata: Deferred<DocMetadata>,
 }
 ```
 
 A model can have any number of deferred fields. Non-deferred fields are always
 loaded.
-
-Using `#[deferred]` without `Deferred<T>` (or `Deferred<T>` without
-`#[deferred]`) is a compile-time error.
 
 ## Querying
 
@@ -165,8 +160,7 @@ let articles = Article::filter_by_author_id(user.id)
 ### Creating records
 
 `Deferred<T>` fields are set through the create builder like any other field.
-The `#[deferred]` attribute only affects reads — writes always include the
-column:
+The deferred behavior only affects reads — writes always include the column:
 
 ```rust
 let article = Article::create()
@@ -217,7 +211,6 @@ struct Article {
 
     title: String,
 
-    #[deferred]
     subtitle: Deferred<Option<String>>,
 }
 ```
