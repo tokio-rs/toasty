@@ -9,8 +9,8 @@
 [crates-url]: https://crates.io/crates/toasty
 [mit-badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [mit-url]: https://github.com/tokio-rs/toasty/blob/main/LICENSE
-[actions-badge]: https://github.com/tokio-rs/toasty/workflows/CI/badge.svg
-[actions-url]: https://github.com/tokio-rs/toasty/actions?query=workflow%3ACI+branch%3Amain
+[actions-badge]: https://github.com/tokio-rs/toasty/workflows/Cargo%20Build%20%26%20Test/badge.svg
+[actions-url]: https://github.com/tokio-rs/toasty/actions?query=workflow%3A%22Cargo+Build+%26+Test%22+branch%3Amain
 [discord-badge]: https://img.shields.io/discord/500028886025895936.svg?logo=discord&style=flat-square
 [discord-url]: https://discord.gg/tokio
 
