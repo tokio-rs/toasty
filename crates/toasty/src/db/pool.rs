@@ -65,7 +65,7 @@ pub(crate) enum ConnectionOperation {
     ExecStatement {
         stmt: Box<toasty_core::stmt::Statement>,
         in_transaction: bool,
-        tx: oneshot::Sender<crate::Result<toasty_core::stmt::ValueStream>>,
+        tx: oneshot::Sender<crate::Result<toasty_core::stmt::Value>>,
     },
     /// Execute a statement and return pagination metadata.
     ExecStatementPaginated {
@@ -186,28 +186,38 @@ impl deadpool::managed::Manager for Manager {
                         stmt,
                         in_transaction,
                         tx,
-                    } => match engine.exec(&mut *connection, *stmt, in_transaction).await {
-                        Ok(mut value_stream) => {
-                            let (row_tx, mut row_rx) = mpsc::unbounded_channel::<
-                                crate::Result<toasty_core::stmt::Value>,
-                            >();
+                    } => {
+                        use toasty_core::stmt::{self, Value};
 
-                            let _ = tx.send(Ok(toasty_core::stmt::ValueStream::from_stream(
-                                async_stream::stream! {
-                                    while let Some(res) = row_rx.recv().await {
-                                        yield res
-                                    }
-                                },
-                            )));
+                        let returns_list = match stmt.as_ref() {
+                            stmt::Statement::Query(q) => !q.single,
+                            stmt::Statement::Insert(i) => !i.source.single,
+                            stmt::Statement::Update(i) => match &i.target {
+                                stmt::UpdateTarget::Query(q) => !q.single,
+                                stmt::UpdateTarget::Model(_) => false,
+                                _ => true,
+                            },
+                            stmt::Statement::Delete(d) => !d.selection().single,
+                        };
 
-                            while let Some(res) = value_stream.next().await {
-                                let _ = row_tx.send(res);
+                        let result = async {
+                            let mut stream =
+                                engine.exec(&mut *connection, *stmt, in_transaction).await?;
+
+                            if returns_list {
+                                let values = stream.collect().await?;
+                                Ok(Value::List(values))
+                            } else {
+                                match stream.next().await {
+                                    Some(value) => value,
+                                    None => Ok(Value::Null),
+                                }
                             }
                         }
-                        Err(err) => {
-                            let _ = tx.send(Err(err));
-                        }
-                    },
+                        .await;
+
+                        let _ = tx.send(result);
+                    }
                     ConnectionOperation::ExecStatementPaginated {
                         stmt,
                         in_transaction,

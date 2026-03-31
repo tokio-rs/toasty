@@ -41,17 +41,6 @@ impl Connection {
         stmt: stmt::Statement,
         in_transaction: bool,
     ) -> crate::Result<Value> {
-        let returns_list = match &stmt {
-            stmt::Statement::Query(q) => !q.single,
-            stmt::Statement::Insert(i) => !i.source.single,
-            stmt::Statement::Update(i) => match &i.target {
-                stmt::UpdateTarget::Query(q) => !q.single,
-                stmt::UpdateTarget::Model(_) => false,
-                _ => true,
-            },
-            stmt::Statement::Delete(d) => !d.selection().single,
-        };
-
         let (tx, rx) = oneshot::channel();
 
         self.handle()
@@ -63,17 +52,7 @@ impl Connection {
             })
             .unwrap();
 
-        let mut stream = rx.await.unwrap()?;
-
-        if returns_list {
-            let values = stream.collect().await?;
-            Ok(Value::List(values))
-        } else {
-            match stream.next().await {
-                Some(value) => value,
-                None => Ok(Value::Null),
-            }
-        }
+        rx.await.unwrap()
     }
 
     pub(crate) async fn exec_operation(&self, operation: Operation) -> crate::Result<Response> {
