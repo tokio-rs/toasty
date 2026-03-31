@@ -7,9 +7,9 @@ use toasty_core::{
     stmt as core_stmt,
 };
 use toasty_sql::{
+    Serializer,
     migration::MigrationStatement,
     serializer::{Params, Placeholder},
-    Serializer,
 };
 
 struct NoParams;
@@ -559,14 +559,17 @@ fn alter_column_change_nullability_sqlite() {
     let stmts = MigrationStatement::from_diff(&diff, &Capability::SQLITE);
     let sql = serialize_migration(&stmts, "sqlite");
 
-    assert_eq!(sql, vec![
-        "PRAGMA foreign_keys = OFF;",
-        "CREATE TABLE \"_toasty_new_users\" (\n    \"id\" BIGINT NOT NULL,\n    \"email\" TEXT NOT NULL,\n    PRIMARY KEY (\"id\")\n);",
-        "INSERT INTO \"_toasty_new_users\" (\"id\", \"email\") SELECT \"id\", \"email\" FROM \"users\";",
-        "DROP TABLE \"users\";",
-        "ALTER TABLE \"_toasty_new_users\" RENAME TO \"users\";",
-        "PRAGMA foreign_keys = ON;",
-    ]);
+    assert_eq!(
+        sql,
+        vec![
+            "PRAGMA foreign_keys = OFF;",
+            "CREATE TABLE \"_toasty_new_users\" (\n    \"id\" BIGINT NOT NULL,\n    \"email\" TEXT NOT NULL,\n    PRIMARY KEY (\"id\")\n);",
+            "INSERT INTO \"_toasty_new_users\" (\"id\", \"email\") SELECT \"id\", \"email\" FROM \"users\";",
+            "DROP TABLE \"users\";",
+            "ALTER TABLE \"_toasty_new_users\" RENAME TO \"users\";",
+            "PRAGMA foreign_keys = ON;",
+        ]
+    );
 }
 
 #[test]
@@ -598,14 +601,17 @@ fn alter_column_change_type_sqlite() {
     let stmts = MigrationStatement::from_diff(&diff, &Capability::SQLITE);
     let sql = serialize_migration(&stmts, "sqlite");
 
-    assert_eq!(sql, vec![
-        "PRAGMA foreign_keys = OFF;",
-        "CREATE TABLE \"_toasty_new_users\" (\n    \"id\" BIGINT NOT NULL,\n    \"value\" TEXT NOT NULL,\n    PRIMARY KEY (\"id\")\n);",
-        "INSERT INTO \"_toasty_new_users\" (\"id\", \"value\") SELECT \"id\", \"value\" FROM \"users\";",
-        "DROP TABLE \"users\";",
-        "ALTER TABLE \"_toasty_new_users\" RENAME TO \"users\";",
-        "PRAGMA foreign_keys = ON;",
-    ]);
+    assert_eq!(
+        sql,
+        vec![
+            "PRAGMA foreign_keys = OFF;",
+            "CREATE TABLE \"_toasty_new_users\" (\n    \"id\" BIGINT NOT NULL,\n    \"value\" TEXT NOT NULL,\n    PRIMARY KEY (\"id\")\n);",
+            "INSERT INTO \"_toasty_new_users\" (\"id\", \"value\") SELECT \"id\", \"value\" FROM \"users\";",
+            "DROP TABLE \"users\";",
+            "ALTER TABLE \"_toasty_new_users\" RENAME TO \"users\";",
+            "PRAGMA foreign_keys = ON;",
+        ]
+    );
 }
 
 #[test]
@@ -640,15 +646,18 @@ fn alter_column_change_nullability_with_table_rename_sqlite() {
     let sql = serialize_migration(&stmts, "sqlite");
 
     // The table rename happens first, then recreation uses the new name
-    assert_eq!(sql, vec![
-        "ALTER TABLE \"users\" RENAME TO \"accounts\";",
-        "PRAGMA foreign_keys = OFF;",
-        "CREATE TABLE \"_toasty_new_accounts\" (\n    \"id\" BIGINT NOT NULL,\n    \"email\" TEXT NOT NULL,\n    PRIMARY KEY (\"id\")\n);",
-        "INSERT INTO \"_toasty_new_accounts\" (\"id\", \"email\") SELECT \"id\", \"email\" FROM \"accounts\";",
-        "DROP TABLE \"accounts\";",
-        "ALTER TABLE \"_toasty_new_accounts\" RENAME TO \"accounts\";",
-        "PRAGMA foreign_keys = ON;",
-    ]);
+    assert_eq!(
+        sql,
+        vec![
+            "ALTER TABLE \"users\" RENAME TO \"accounts\";",
+            "PRAGMA foreign_keys = OFF;",
+            "CREATE TABLE \"_toasty_new_accounts\" (\n    \"id\" BIGINT NOT NULL,\n    \"email\" TEXT NOT NULL,\n    PRIMARY KEY (\"id\")\n);",
+            "INSERT INTO \"_toasty_new_accounts\" (\"id\", \"email\") SELECT \"id\", \"email\" FROM \"accounts\";",
+            "DROP TABLE \"accounts\";",
+            "ALTER TABLE \"_toasty_new_accounts\" RENAME TO \"accounts\";",
+            "PRAGMA foreign_keys = ON;",
+        ]
+    );
 }
 
 #[test]
@@ -694,12 +703,15 @@ fn alter_column_rename_and_change_type_sqlite() {
     let sql = serialize_migration(&stmts, "sqlite");
 
     // Column rename + type change → table recreation with new column name
-    assert_eq!(sql, vec![
-        "PRAGMA foreign_keys = OFF;",
-        "CREATE TABLE \"_toasty_new_users\" (\n    \"id\" BIGINT NOT NULL,\n    \"full_name\" TEXT NOT NULL,\n    PRIMARY KEY (\"id\")\n);",
-        "INSERT INTO \"_toasty_new_users\" (\"id\", \"full_name\") SELECT \"id\", \"name\" FROM \"users\";",
-        "DROP TABLE \"users\";",
-        "ALTER TABLE \"_toasty_new_users\" RENAME TO \"users\";",
-        "PRAGMA foreign_keys = ON;",
-    ]);
+    assert_eq!(
+        sql,
+        vec![
+            "PRAGMA foreign_keys = OFF;",
+            "CREATE TABLE \"_toasty_new_users\" (\n    \"id\" BIGINT NOT NULL,\n    \"full_name\" TEXT NOT NULL,\n    PRIMARY KEY (\"id\")\n);",
+            "INSERT INTO \"_toasty_new_users\" (\"id\", \"full_name\") SELECT \"id\", \"name\" FROM \"users\";",
+            "DROP TABLE \"users\";",
+            "ALTER TABLE \"_toasty_new_users\" RENAME TO \"users\";",
+            "PRAGMA foreign_keys = ON;",
+        ]
+    );
 }

@@ -1,4 +1,4 @@
-use crate::{driver, stmt, Result};
+use crate::{Result, driver, stmt};
 
 /// Database-level storage types representing how values are stored in the target database.
 ///

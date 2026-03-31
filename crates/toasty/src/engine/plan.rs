@@ -3,12 +3,12 @@ mod nested_merge;
 mod statement;
 
 use crate::{
+    Result,
     engine::{
+        Engine, HirStatement,
         exec::{self, ExecPlan, VarDecls},
         mir::{self, LogicalPlan},
-        Engine, HirStatement,
     },
-    Result,
 };
 
 #[derive(Debug)]

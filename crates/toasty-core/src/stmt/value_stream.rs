@@ -274,13 +274,13 @@ impl Stream for ValueStream {
             Poll::Ready(Some(Ok(next)))
         } else if let Some(stream) = self.stream.as_mut() {
             let next = Pin::new(stream).poll_next(cx);
-            if let Poll::Ready(Some(Ok(value))) = &next {
-                if let Some((ty, location)) = &self.ty {
-                    assert!(
-                        value.is_a(ty),
-                        "expected `{ty:?}`; was={value:#?}; origin={location}"
-                    );
-                }
+            if let Poll::Ready(Some(Ok(value))) = &next
+                && let Some((ty, location)) = &self.ty
+            {
+                assert!(
+                    value.is_a(ty),
+                    "expected `{ty:?}`; was={value:#?}; origin={location}"
+                );
             }
             next
         } else {

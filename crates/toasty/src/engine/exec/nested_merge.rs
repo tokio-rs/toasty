@@ -1,9 +1,9 @@
 use toasty_core::driver::Rows;
 use toasty_core::stmt;
 
+use crate::Result;
 use crate::engine::eval;
 use crate::engine::exec::{Action, Exec, Output, VarId};
-use crate::Result;
 
 /// Combines parent and child data into nested structures.
 ///

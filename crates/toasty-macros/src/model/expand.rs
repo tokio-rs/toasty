@@ -177,12 +177,15 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     let variant_tokens = e.expand_enum_variants();
     let field_tokens = e.expand_enum_schema_fields();
     let indices = e.expand_model_indices();
-    let unit_load_arms = e.expand_enum_unit_load_arms();
-    let data_load_arms = e.expand_enum_data_load_arms();
     let into_expr_arms = e.expand_enum_into_expr_arms();
-    let ty_expr = e.expand_enum_primitive_ty();
+    let load_impl = e.expand_enum_load_impl();
 
     let embedded_enum = model.kind.as_embedded_enum_unwrap();
+    let disc_ty = if embedded_enum.uses_string_discriminants() {
+        quote! { #toasty::core::stmt::Type::String }
+    } else {
+        quote! { #toasty::core::stmt::Type::I64 }
+    };
     let field_struct_ident = &embedded_enum.field_struct_ident;
     let field_list_struct_ident = &embedded_enum.field_list_struct_ident;
     let enum_field_struct = e.expand_enum_field_struct();
@@ -205,7 +208,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
                         id,
                         name: #name,
                         discriminant: #toasty::core::schema::app::FieldPrimitive {
-                            ty: #toasty::core::stmt::Type::I64,
+                            ty: #disc_ty,
                             storage_ty: ::std::option::Option::None,
                             serialize: ::std::option::Option::None,
                         },
@@ -219,44 +222,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
 
         impl #toasty::Embed for #model_ident {}
 
-        impl #toasty::Load for #model_ident {
-            type Output = Self;
-
-            fn ty() -> #toasty::core::stmt::Type {
-                #ty_expr
-            }
-
-            fn load(value: #toasty::core::stmt::Value) -> #toasty::Result<Self> {
-                match value {
-                    #toasty::core::stmt::Value::I64(d) => match d {
-                        #( #unit_load_arms )*
-                        _ => Err(#toasty::Error::type_conversion(
-                            #toasty::core::stmt::Value::I64(d),
-                            stringify!(#model_ident),
-                        )),
-                    },
-                    #toasty::core::stmt::Value::Record(mut record) => match record[0].take() {
-                        #toasty::core::stmt::Value::I64(d) => match d {
-                            #( #data_load_arms )*
-                            _ => Err(#toasty::Error::type_conversion(
-                                #toasty::core::stmt::Value::I64(d),
-                                stringify!(#model_ident),
-                            )),
-                        },
-                        other => Err(#toasty::Error::type_conversion(
-                            other,
-                            stringify!(#model_ident),
-                        )),
-                    },
-                    value => Err(#toasty::Error::type_conversion(value, stringify!(#model_ident))),
-                }
-            }
-
-            fn reload(target: &mut Self, value: #toasty::core::stmt::Value) -> #toasty::Result<()> {
-                *target = Self::load(value)?;
-                Ok(())
-            }
-        }
+        #load_impl
 
         impl #toasty::Field for #model_ident {
             type Path<__Origin> = #field_struct_ident<__Origin>;

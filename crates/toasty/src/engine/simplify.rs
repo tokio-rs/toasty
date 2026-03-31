@@ -180,10 +180,10 @@ impl VisitMut for Simplify<'_> {
     }
 
     fn visit_stmt_select_mut(&mut self, stmt: &mut stmt::Select) {
-        if let stmt::Source::Model(model) = &mut stmt.source {
-            if let Some(via) = model.via.take() {
-                todo!("via={via:#?}");
-            }
+        if let stmt::Source::Model(model) = &mut stmt.source
+            && let Some(via) = model.via.take()
+        {
+            todo!("via={via:#?}");
         }
 
         // Simplify the source first

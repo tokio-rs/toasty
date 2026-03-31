@@ -1,12 +1,12 @@
 use toasty_core::{
-    driver::{operation, Rows},
+    driver::{Rows, operation},
     schema::db::{IndexId, TableId},
     stmt,
 };
 
 use crate::{
-    engine::exec::{Action, Exec, Output, VarId},
     Result,
+    engine::exec::{Action, Exec, Output, VarId},
 };
 
 /// Schema: `self` references [index-fields, input-fields] flattened

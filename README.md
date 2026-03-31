@@ -1,12 +1,13 @@
 # Toasty
 
-**Current status: Incubating - Toasty is not ready for production usage. The API
-is still evolving and documentation is lacking.**
-
 Toasty is an ORM for the Rust programming language that prioritizes ease-of-use.
 It currently supports SQL databases (SQLite, PostgreSQL, MySQL) and DynamoDB.
 Note that Toasty does not hide database capabilities. Instead, Toasty exposes
 features based on the target database.
+
+Current status: Preview — Most major features are in place and Toasty should be
+complete enough to build applications with. The API is not yet stable and
+breaking changes may still occur. Contributions are welcome.
 
 [User guide](https://tokio-rs.github.io/toasty/nightly/guide/): Explore Toasty in depth.
 
@@ -96,18 +97,10 @@ default, a toasty application schema will map 1-1 with a database schema.
 However, additional annotations may be specified to customize how the
 application data model maps to the database schema.
 
-## Current status and roadmap
+## Roadmap
 
-Toasty is still in the early development stages and is considered
-**incubating**. There is no commitment to on-going maintenance or development.
-At some point in the future, as the project evolves, this may change. As such,
-we encourage you to explore, experiment, and contribute to Toasty, but do not
-try using it in production.
-
-Immediate next steps for the project are to fill obvious gaps, such as implement
-error handling, remove panics throughout the code base, support additional data
-types, and write documentation. After that, development will be based on
-feedback and contribution.
+Development priorities are based on feedback and contributions. If you run into
+missing features or rough edges, please open an issue or submit a pull request.
 
 ## License
 

@@ -32,7 +32,7 @@ pub use model::Model;
 mod option;
 
 mod register;
-pub use register::{generate_unique_id, Register};
+pub use register::{Register, generate_unique_id};
 
 mod num;
 

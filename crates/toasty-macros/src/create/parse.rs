@@ -181,18 +181,8 @@ impl Parse for FieldValue {
             let items = Punctuated::<FieldValue, syn::Token![,]>::parse_terminated(&content)?;
             Ok(FieldValue::List(items.into_iter().collect()))
         } else {
-            // Plain expression — guard against struct literals with a type prefix
+            // Plain expression (variables, function calls, enum constructors, etc.)
             let expr = input.parse::<syn::Expr>()?;
-            if let syn::Expr::Struct(ref s) = expr {
-                let path = &s.path;
-                return Err(syn::Error::new_spanned(
-                    path,
-                    format!(
-                        "remove the type prefix `{}` — use `{{ ... }}` without a type name",
-                        quote::quote!(#path)
-                    ),
-                ));
-            }
             Ok(FieldValue::Expr(Box::new(expr)))
         }
     }

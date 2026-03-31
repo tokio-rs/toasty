@@ -1,7 +1,10 @@
 [package]
 name = "example-todo-with-cli"
 version = "0.1.0"
-edition = "2024"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
 publish = false
 default-run = "todo-app"
 
@@ -16,7 +19,7 @@ sqlite = [ "toasty/sqlite" ]
 toasty.workspace = true
 toasty-cli.workspace = true
 tokio.workspace = true
-anyhow = "1.0.100"
+anyhow = "1.0.102"
 uuid.workspace = true
 
 [[bin]]

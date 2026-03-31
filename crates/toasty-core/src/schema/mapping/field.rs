@@ -221,7 +221,7 @@ pub struct FieldStruct {
 
 /// Maps an embedded enum field to its discriminant column and per-variant data columns.
 ///
-/// The discriminant column always stores the active variant's integer discriminant.
+/// The discriminant column stores the active variant's discriminant (integer or string).
 /// Each data variant additionally has nullable columns for its fields; unit variants
 /// have no extra columns (all variant-field columns are NULL for them).
 ///
@@ -262,8 +262,8 @@ pub struct FieldEnum {
 /// ```
 #[derive(Debug, Clone)]
 pub struct EnumVariant {
-    /// The discriminant value for this variant.
-    pub discriminant: i64,
+    /// The discriminant value for this variant (`Value::I64` or `Value::String`).
+    pub discriminant: crate::stmt::Value,
 
     /// Field mappings for this variant's data fields, in declaration order.
     /// Empty for unit variants. Supports nesting (each entry is a full `Field`).

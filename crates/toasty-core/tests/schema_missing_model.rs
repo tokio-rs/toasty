@@ -1,5 +1,5 @@
-use toasty_core::schema::app::*;
 use toasty_core::schema::Name;
+use toasty_core::schema::app::*;
 use toasty_core::stmt;
 
 const MISSING: ModelId = ModelId(99);

@@ -24,11 +24,11 @@ impl Simplify<'_> {
         }
 
         // Negation of comparisons, `not(x = y)` → `x != y`, etc.
-        if let Expr::BinaryOp(binary_op) = expr_not.expr.as_mut() {
-            if let Some(negated_op) = binary_op.op.negate() {
-                binary_op.op = negated_op;
-                return Some(expr_not.expr.take());
-            }
+        if let Expr::BinaryOp(binary_op) = expr_not.expr.as_mut()
+            && let Some(negated_op) = binary_op.op.negate()
+        {
+            binary_op.op = negated_op;
+            return Some(expr_not.expr.take());
         }
 
         // De Morgan's law, `not(a and b)` → `not(a) or not(b)`
@@ -52,10 +52,10 @@ impl Simplify<'_> {
         }
 
         // `not(x in ())` → `true` (x NOT IN empty list is always true)
-        if let Expr::InList(expr_in_list) = expr_not.expr.as_ref() {
-            if expr_in_list.list.is_list_empty() {
-                return Some(true.into());
-            }
+        if let Expr::InList(expr_in_list) = expr_not.expr.as_ref()
+            && expr_in_list.list.is_list_empty()
+        {
+            return Some(true.into());
         }
 
         None

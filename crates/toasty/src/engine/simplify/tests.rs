@@ -1,8 +1,8 @@
 use toasty_core::{
     driver::Capability,
     schema::{
-        app::{self, Model},
         Builder,
+        app::{self, Model},
     },
 };
 

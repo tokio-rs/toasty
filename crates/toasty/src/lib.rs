@@ -106,7 +106,7 @@ mod update_target;
 pub use update_target::UpdateTarget;
 
 // `Batch`, `batch()`, and `CreateMany` live in `stmt`.
-pub use stmt::{batch, Batch};
+pub use stmt::{Batch, batch};
 
 /// Database handle, connection pool, executor trait, and transaction support.
 pub mod db;
@@ -124,25 +124,25 @@ pub use schema::{BelongsTo, HasMany, HasOne};
 pub mod stmt;
 pub use stmt::Statement;
 
-pub use toasty_macros::{create, query, Embed, Model};
+pub use toasty_macros::{Embed, Model, create, query};
 
 pub use toasty_core::{Error, Result};
 
 #[doc(hidden)]
 pub mod codegen_support {
     pub use crate::{
+        Db, Error, Executor, Result, Statement,
         schema::{
+            Auto, BelongsTo, Embed, Field, HasMany, HasOne, Load, Model, Register, Relation, Scope,
             create_meta::{
-                assert_create_fields, assert_nested_create_fields, CreateBelongsTo, CreateField,
-                CreateMeta, CreateNested,
+                CreateBelongsTo, CreateField, CreateMeta, CreateNested, assert_create_fields,
+                assert_nested_create_fields,
             },
-            generate_unique_id, Auto, BelongsTo, Embed, Field, HasMany, HasOne, Load, Model,
-            Register, Relation, Scope,
+            generate_unique_id,
         },
         stmt::CreateMany,
         stmt::{self, Assign, IntoExpr, IntoInsert, IntoStatement, List, Path},
         update_target::UpdateTarget,
-        Db, Error, Executor, Result, Statement,
     };
     #[cfg(feature = "serde")]
     pub use serde_json;

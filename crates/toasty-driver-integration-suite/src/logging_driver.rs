@@ -4,9 +4,9 @@ use std::{
     sync::{Arc, Mutex},
 };
 use toasty_core::{
+    Result, Schema,
     driver::{Capability, Connection, Driver, Operation, Response, Rows},
     schema::db::{AppliedMigration, Migration, SchemaDiff},
-    Result, Schema,
 };
 
 #[derive(Debug)]

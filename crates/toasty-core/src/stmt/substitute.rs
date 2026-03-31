@@ -6,7 +6,7 @@
 //! functions are not recursed into (their local args must remain intact).
 
 use crate::stmt::{
-    visit, visit_mut, ExprSet, Input, Projection, Query, TableDerived, TableRef, Values,
+    ExprSet, Input, Projection, Query, TableDerived, TableRef, Values, visit, visit_mut,
 };
 
 use super::{Expr, Value};
@@ -30,10 +30,10 @@ fn assert_only_local_args(expr: &Expr, msg: &str) {
         {
             let mut ok = true;
             visit::for_each_expr(expr, |e| {
-                if let Expr::Arg(a) = e {
-                    if a.nesting != 0 {
-                        ok = false;
-                    }
+                if let Expr::Arg(a) = e
+                    && a.nesting != 0
+                {
+                    ok = false;
                 }
             });
             ok

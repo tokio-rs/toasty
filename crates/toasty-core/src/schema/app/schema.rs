@@ -1,6 +1,6 @@
 use super::{EnumVariant, Field, FieldId, FieldTy, Model, ModelId, VariantId};
 
-use crate::{stmt, Result};
+use crate::{Result, stmt};
 use indexmap::IndexMap;
 
 /// The result of resolving a [`stmt::Projection`] through the application
@@ -150,10 +150,7 @@ impl Schema {
                             current_field = s.fields.get(*step)?;
                         }
                         Model::EmbeddedEnum(e) => {
-                            let variant = e
-                                .variants
-                                .iter()
-                                .find(|v| v.discriminant as usize == *step)?;
+                            let variant = e.variants.get(*step)?;
 
                             // Check if there's a field index step after the variant
                             if let Some(field_step) = steps.next() {

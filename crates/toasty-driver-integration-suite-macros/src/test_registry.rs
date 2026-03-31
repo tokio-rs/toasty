@@ -4,7 +4,7 @@ use quote::quote;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use syn::{parse_macro_input, visit::Visit, Ident, ItemFn, LitStr};
+use syn::{Ident, ItemFn, LitStr, parse_macro_input, visit::Visit};
 
 use crate::parse::{BoolExpr, DriverTest, DriverTestAttr};
 

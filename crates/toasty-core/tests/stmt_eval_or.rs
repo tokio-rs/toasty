@@ -108,9 +108,11 @@ fn or_non_bool_operand_is_error() {
 #[test]
 fn or_null_operand_is_error() {
     // false OR null → error (null is not a valid boolean)
-    assert!(or(vec![false.into(), Expr::from(Value::Null)])
-        .eval_const()
-        .is_err());
+    assert!(
+        or(vec![false.into(), Expr::from(Value::Null)])
+            .eval_const()
+            .is_err()
+    );
 }
 
 #[test]

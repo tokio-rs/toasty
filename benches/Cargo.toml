@@ -1,7 +1,10 @@
 [package]
 name = "benches"
 version = "0.1.0"
-edition = "2021"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
 publish = false
 
 [features]
@@ -16,7 +19,7 @@ toasty.workspace = true
 uuid.workspace = true
 toasty-core.workspace = true
 tokio.workspace = true
-criterion = "0.7.0"
+criterion = "0.8.2"
 
 # Database clients for setup/teardown
 tokio-postgres.workspace = true

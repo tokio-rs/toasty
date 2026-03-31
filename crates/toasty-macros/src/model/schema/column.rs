@@ -1,11 +1,36 @@
 use quote::quote;
 use syn::parenthesized;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum VariantValue {
+    Integer(i64),
+    String(String),
+}
+
+impl VariantValue {
+    pub(crate) fn is_integer(&self) -> bool {
+        matches!(self, Self::Integer(_))
+    }
+
+    pub(crate) fn is_string(&self) -> bool {
+        matches!(self, Self::String(_))
+    }
+}
+
+impl std::fmt::Display for VariantValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Integer(n) => write!(f, "{n}"),
+            Self::String(s) => write!(f, "\"{s}\""),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct Column {
     pub(crate) name: Option<syn::LitStr>,
     pub(crate) ty: Option<ColumnType>,
-    pub(crate) variant: Option<i64>,
+    pub(crate) variant: Option<VariantValue>,
 }
 
 impl Column {
@@ -47,8 +72,24 @@ impl syn::parse::Parse for Column {
                 }
                 let _variant_token: kw::variant = input.parse()?;
                 let _eq_token: syn::Token![=] = input.parse()?;
-                let lit: syn::LitInt = input.parse()?;
-                result.variant = Some(lit.base10_parse()?);
+                // Accept either an integer literal or a string literal
+                let lookahead2 = input.lookahead1();
+                if lookahead2.peek(syn::LitInt) {
+                    let lit: syn::LitInt = input.parse()?;
+                    result.variant = Some(VariantValue::Integer(lit.base10_parse()?));
+                } else if lookahead2.peek(syn::LitStr) {
+                    let lit: syn::LitStr = input.parse()?;
+                    let value = lit.value();
+                    if value.is_empty() {
+                        return Err(syn::Error::new_spanned(
+                            lit,
+                            "variant label must not be empty",
+                        ));
+                    }
+                    result.variant = Some(VariantValue::String(value));
+                } else {
+                    return Err(lookahead2.error());
+                }
             } else if lookahead.peek(syn::Token![type]) {
                 if result.ty.is_some() {
                     return Err(syn::Error::new(input.span(), "duplicate column type"));

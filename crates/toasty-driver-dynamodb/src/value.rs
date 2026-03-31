@@ -18,8 +18,8 @@ impl Value {
 
     /// Converts a DynamoDB AttributeValue to a Toasty value.
     pub fn from_ddb(ty: &stmt::Type, val: &AttributeValue) -> Self {
-        use stmt::Type;
         use AttributeValue as AV;
+        use stmt::Type;
 
         let core_value = match (ty, val) {
             (Type::Bool, AV::Bool(val)) => stmt::Value::from(*val),

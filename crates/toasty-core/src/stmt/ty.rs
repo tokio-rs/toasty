@@ -1,7 +1,8 @@
 use super::{PathFieldSet, TypeUnion, Value};
 use crate::{
+    Result,
     schema::app::{FieldId, ModelId},
-    stmt, Result,
+    stmt,
 };
 
 /// Statement-level type system for values and expressions within Toasty's query engine.
