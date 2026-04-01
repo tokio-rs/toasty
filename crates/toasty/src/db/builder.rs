@@ -43,7 +43,7 @@ pub struct Builder {
     ///
     /// TODO: move this into `core::schema::Builder` after old schema file
     /// implementatin is removed.
-    models: Vec<app::Model>,
+    models: app::ModelSet,
 
     /// Schema builder
     core: schema::Builder,
@@ -72,7 +72,7 @@ impl Builder {
     pub fn register<T: Register>(&mut self) -> &mut Self {
         let schema = T::schema();
         tracing::debug!(model = %schema.name(), "registering model");
-        self.models.push(schema);
+        self.models.add(schema);
         self
     }
 
@@ -88,7 +88,7 @@ impl Builder {
     /// This is useful for tooling that needs the schema without a running
     /// database (e.g., migration generators).
     pub fn build_app_schema(&self) -> Result<app::Schema> {
-        app::Schema::from_macro(&self.models)
+        app::Schema::from_macro(self.models.clone())
     }
 
     /// Open a database connection using a URL string.

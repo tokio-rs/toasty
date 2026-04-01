@@ -47,6 +47,6 @@ pub use toasty_core::schema::{app, db, mapping};
 ///
 /// This is a thin wrapper around [`app::Schema::from_macro`] exposed for
 /// use by generated code.
-pub fn from_macro(models: &[app::Model]) -> Result<app::Schema> {
+pub fn from_macro(models: impl IntoIterator<Item = app::Model>) -> Result<app::Schema> {
     app::Schema::from_macro(models)
 }

@@ -62,6 +62,16 @@ impl ModelSet {
         Self::default()
     }
 
+    /// Returns the number of models in the set.
+    pub fn len(&self) -> usize {
+        self.models.len()
+    }
+
+    /// Returns `true` if the set contains no models.
+    pub fn is_empty(&self) -> bool {
+        self.models.is_empty()
+    }
+
     /// Appends a model to the end of the set.
     pub fn add(&mut self, model: Model) {
         self.models.push(model);
