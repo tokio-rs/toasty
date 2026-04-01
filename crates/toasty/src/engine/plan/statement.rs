@@ -754,85 +754,11 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     // ===== SQL execution =====
 
-    /// Phase 1: Detects pagination and adds ORDER BY columns to load_data.
-    /// Returns (page_size, cursor_column_indices) for use in phase 2.
-    fn detect_pagination_sql(
-        &mut self,
-        stmt: &stmt::Statement,
-    ) -> Option<(i64, Vec<usize>)> {
-        let stmt::Statement::Query(query) = stmt else {
-            return None;
-        };
-
-        // Detect pagination based on LIMIT + ORDER BY presence
-        // Cursor (Offset::After) is optional - only present on subsequent pages
-
-        // Extract page_size from limit
-        let page_size = query.limit.as_ref().and_then(|l| match &l.limit {
-            stmt::Expr::Value(stmt::Value::I64(n)) => Some(*n),
-            _ => None,
-        })?;
-
-        let order_by = query.order_by.as_ref()?;
-
-        // Add ORDER BY columns to load_data so they're available for cursor extraction
-        let mut cursor_column_indices = Vec::new();
-
-        for order_expr in &order_by.exprs {
-            // Try to convert the ORDER BY expression to an ExprReference
-            if let Some(expr_ref) = self.expr_to_reference(&order_expr.expr) {
-                // Add to load_data if not already present
-                let (index, _) = self
-                    .load_data
-                    .select_items
-                    .insert_full(SelectItem::from(expr_ref));
-                cursor_column_indices.push(index);
-            } else {
-                // Complex expression in ORDER BY - can't handle yet
-                return None;
-            }
-        }
-
-        Some((page_size, cursor_column_indices))
-    }
-
-    /// Phase 2: Builds extract_cursor function using the inferred row type.
-    /// Called after type inference in plan_data_loading_sql.
-    fn build_extract_cursor(
-        &self,
-        page_size: i64,
-        cursor_column_indices: Vec<usize>,
-        row_ty: &stmt::Type,
-    ) -> exec::PaginationConfig {
-        // Build extract_cursor expression: projects ORDER BY column positions from the row
-        let extract_cursor = stmt::Expr::record(
-            cursor_column_indices
-                .into_iter()
-                .map(|index| stmt::Expr::arg_project(0, [index])),
-        );
-
-        // Build eval::Func with the actual row type as input
-        let extract_cursor_func = eval::Func::from_stmt(extract_cursor, vec![row_ty.clone()]);
-
-        exec::PaginationConfig {
-            page_size,
-            extract_cursor: Some(extract_cursor_func),
-        }
-    }
-
-    /// Converts an expression to an ExprReference if possible.
-    fn expr_to_reference(&self, expr: &stmt::Expr) -> Option<stmt::ExprReference> {
-        match expr {
-            stmt::Expr::Reference(expr_ref) => Some(*expr_ref),
-            _ => None,
-        }
-    }
-
     fn plan_data_loading_sql(&mut self, mut stmt: stmt::Statement) -> mir::NodeId {
         let const_returning = self.extract_insert_returning_as_const(&stmt);
 
         // Phase 1: Detect pagination and add ORDER BY columns to load_data
-        let pagination_info = self.detect_pagination_sql(&stmt);
+        let pagination_info = self.plan_pagination_sql(&stmt);
 
         // Set returning clause with all columns (including added ORDER BY columns)
         if !self.load_data.select_items.is_empty() {
@@ -978,6 +904,75 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             .infer_record_list_ty(&self.planner.engine.expr_cx_for(stmt));
 
         Some((stmt::Value::List(result), ty))
+    }
+
+    fn plan_pagination_sql(&mut self, stmt: &stmt::Statement) -> Option<(i64, Vec<usize>)> {
+        let stmt::Statement::Query(query) = stmt else {
+            return None;
+        };
+
+        // Detect pagination based on LIMIT + ORDER BY presence
+        // Cursor (Offset::After) is optional - only present on subsequent pages
+
+        // Extract page_size from limit
+        let page_size = query.limit.as_ref().and_then(|l| match &l.limit {
+            stmt::Expr::Value(stmt::Value::I64(n)) => Some(*n),
+            _ => None,
+        })?;
+
+        let order_by = query.order_by.as_ref()?;
+
+        // Add ORDER BY columns to load_data so they're available for cursor extraction
+        let mut cursor_column_indices = Vec::new();
+
+        for order_expr in &order_by.exprs {
+            // Try to convert the ORDER BY expression to an ExprReference
+            if let Some(expr_ref) = self.expr_to_reference(&order_expr.expr) {
+                // Add to load_data if not already present
+                let (index, _) = self
+                    .load_data
+                    .select_items
+                    .insert_full(SelectItem::from(expr_ref));
+                cursor_column_indices.push(index);
+            } else {
+                // Complex expression in ORDER BY - can't handle yet
+                return None;
+            }
+        }
+
+        Some((page_size, cursor_column_indices))
+    }
+
+    /// Phase 2: Builds extract_cursor function using the inferred row type.
+    /// Called after type inference in plan_data_loading_sql.
+    fn build_extract_cursor(
+        &self,
+        page_size: i64,
+        cursor_column_indices: Vec<usize>,
+        row_ty: &stmt::Type,
+    ) -> exec::PaginationConfig {
+        // Build extract_cursor expression: projects ORDER BY column positions from the row
+        let extract_cursor = stmt::Expr::record(
+            cursor_column_indices
+                .into_iter()
+                .map(|index| stmt::Expr::arg_project(0, [index])),
+        );
+
+        // Build eval::Func with the actual row type as input
+        let extract_cursor_func = eval::Func::from_stmt(extract_cursor, vec![row_ty.clone()]);
+
+        exec::PaginationConfig {
+            page_size,
+            extract_cursor: Some(extract_cursor_func),
+        }
+    }
+
+    /// Converts an expression to an ExprReference if possible.
+    fn expr_to_reference(&self, expr: &stmt::Expr) -> Option<stmt::ExprReference> {
+        match expr {
+            stmt::Expr::Reference(expr_ref) => Some(*expr_ref),
+            _ => None,
+        }
     }
 
     fn plan_conditional_sql_query_as_cte(
