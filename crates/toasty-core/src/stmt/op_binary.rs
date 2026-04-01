@@ -47,18 +47,6 @@ impl BinaryOp {
         matches!(self, Self::Ne)
     }
 
-    /// Reverses the operator in place (currently only supports `Eq`).
-    ///
-    /// # Panics
-    ///
-    /// Panics (via `todo!()`) for operators other than `Eq`.
-    pub fn reverse(&mut self) {
-        match *self {
-            Self::Eq => {}
-            _ => todo!(),
-        }
-    }
-
     /// Returns the logical negation of this operator, if one exists.
     ///
     /// - `=` → `!=`
