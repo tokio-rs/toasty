@@ -19,8 +19,7 @@
 use crate::{
     Result,
     stmt::{
-        BinaryOp, ConstInput, Expr, ExprArg, ExprSet, Input, Limit, Offset, Projection, Statement,
-        Value,
+        BinaryOp, ConstInput, Expr, ExprArg, ExprSet, Input, Limit, Projection, Statement, Value,
     },
 };
 use std::cmp::Ordering;
@@ -107,9 +106,14 @@ impl Limit {
             ));
         };
 
-        if let Some(offset) = &self.offset {
-            match offset {
-                Offset::Count(offset_expr) => {
+        match self {
+            Limit::Cursor(_) => {
+                return Err(crate::Error::expression_evaluation_failed(
+                    "cursor-based pagination cannot be evaluated client-side",
+                ));
+            }
+            Limit::Offset(limit_offset) => {
+                if let Some(offset_expr) = &limit_offset.offset {
                     let skip = offset_expr.eval_ref_usize(scope, input)?;
                     if skip >= items.len() {
                         items.clear();
@@ -117,16 +121,11 @@ impl Limit {
                         items.drain(..skip);
                     }
                 }
-                Offset::After(_) => {
-                    return Err(crate::Error::expression_evaluation_failed(
-                        "keyset-based OFFSET cannot be evaluated client-side",
-                    ));
-                }
+
+                let n = limit_offset.limit.eval_ref_usize(scope, input)?;
+                items.truncate(n);
             }
         }
-
-        let n = self.limit.eval_ref_usize(scope, input)?;
-        items.truncate(n);
         Ok(())
     }
 }

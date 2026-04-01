@@ -83,10 +83,10 @@ impl<M> Paginate<M> {
             "pagination requires an order_by clause"
         );
 
-        query.untyped.limit = Some(stmt::Limit {
-            limit: stmt::Value::from(per_page as i64).into(),
-            offset: None,
-        });
+        query.untyped.limit = Some(stmt::Limit::Cursor(stmt::LimitCursor {
+            page_size: stmt::Value::from(per_page as i64).into(),
+            after: None,
+        }));
 
         Self {
             query,
@@ -121,10 +121,10 @@ impl<M> Paginate<M> {
     ///     .after(toasty_core::stmt::Value::from(42_i64));
     /// ```
     pub fn after(mut self, key: impl Into<stmt::Expr>) -> Self {
-        let Some(limit) = self.query.untyped.limit.as_mut() else {
-            panic!("pagination requires a limit clause");
+        let Some(stmt::Limit::Cursor(cursor)) = self.query.untyped.limit.as_mut() else {
+            panic!("pagination requires a cursor limit clause");
         };
-        limit.offset = Some(stmt::Offset::After(key.into()));
+        cursor.after = Some(key.into());
         self.reverse = false;
         self
     }
@@ -157,10 +157,10 @@ impl<M> Paginate<M> {
     ///     .before(toasty_core::stmt::Value::from(100_i64));
     /// ```
     pub fn before(mut self, key: impl Into<stmt::Expr>) -> Self {
-        let Some(limit) = self.query.untyped.limit.as_mut() else {
-            panic!("pagination requires a limit clause");
+        let Some(stmt::Limit::Cursor(cursor)) = self.query.untyped.limit.as_mut() else {
+            panic!("pagination requires a cursor limit clause");
         };
-        limit.offset = Some(stmt::Offset::After(key.into()));
+        cursor.after = Some(key.into());
         self.reverse = true;
         self
     }

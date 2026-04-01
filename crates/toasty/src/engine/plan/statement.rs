@@ -911,14 +911,16 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             return None;
         };
 
-        // Detect pagination based on LIMIT + ORDER BY presence
-        // Cursor (Offset::After) is optional - only present on subsequent pages
+        // Only cursor-based limits trigger pagination planning
+        let stmt::Limit::Cursor(cursor) = query.limit.as_ref()? else {
+            return None;
+        };
 
-        // Extract page_size from limit
-        let page_size = query.limit.as_ref().and_then(|l| match &l.limit {
-            stmt::Expr::Value(stmt::Value::I64(n)) => Some(*n),
-            _ => None,
-        })?;
+        // Extract page_size
+        let page_size = match &cursor.page_size {
+            stmt::Expr::Value(stmt::Value::I64(n)) => *n,
+            _ => return None,
+        };
 
         let order_by = query.order_by.as_ref()?;
 
@@ -1242,9 +1244,12 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 // Extract pagination fields from the query statement.
                 let (limit, order, cursor) = Self::extract_query_pk_pagination(&stmt);
 
-                // Build pagination config for NoSQL
-                // NoSQL drivers (DynamoDB) provide their own cursor, so extract_cursor is None
-                let pagination = if cursor.is_some() {
+                // Build pagination config for NoSQL when using cursor-based pagination
+                let is_cursor = matches!(
+                    stmt.as_query().and_then(|q| q.limit.as_ref()),
+                    Some(stmt::Limit::Cursor(_))
+                );
+                let pagination = if is_cursor {
                     limit.map(|page_size| exec::PaginationConfig {
                         page_size,
                         extract_cursor: None, // Driver provides cursor
@@ -1314,10 +1319,27 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             None => return (None, None, None),
         };
 
-        let limit = query.limit.as_ref().and_then(|l| match &l.limit {
-            stmt::Expr::Value(stmt::Value::I64(n)) => Some(*n),
-            _ => None,
-        });
+        let (limit, cursor) = match query.limit.as_ref() {
+            Some(stmt::Limit::Cursor(c)) => {
+                let page_size = match &c.page_size {
+                    stmt::Expr::Value(stmt::Value::I64(n)) => Some(*n),
+                    _ => None,
+                };
+                let after = c.after.as_ref().and_then(|expr| match expr {
+                    stmt::Expr::Value(v) => Some(v.clone()),
+                    _ => None,
+                });
+                (page_size, after)
+            }
+            Some(stmt::Limit::Offset(lo)) => {
+                let limit = match &lo.limit {
+                    stmt::Expr::Value(stmt::Value::I64(n)) => Some(*n),
+                    _ => None,
+                };
+                (limit, None)
+            }
+            None => (None, None),
+        };
 
         let order = query.order_by.as_ref().and_then(|ob| {
             ob.exprs.first().map(|e| match e.order {
@@ -1325,15 +1347,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 _ => stmt::Direction::Asc,
             })
         });
-
-        let cursor = query
-            .limit
-            .as_ref()
-            .and_then(|l| l.offset.as_ref())
-            .and_then(|offset| match offset {
-                stmt::Offset::After(stmt::Expr::Value(v)) => Some(v.clone()),
-                _ => None,
-            });
 
         (limit, order, cursor)
     }
@@ -1365,8 +1378,12 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             // Extract pagination fields from the query statement.
             let (limit, order, cursor) = Self::extract_query_pk_pagination(&stmt);
 
-            // Build pagination config for NoSQL
-            let pagination = if cursor.is_some() {
+            // Build pagination config for NoSQL when using cursor-based pagination
+            let is_cursor = matches!(
+                stmt.as_query().and_then(|q| q.limit.as_ref()),
+                Some(stmt::Limit::Cursor(_))
+            );
+            let pagination = if is_cursor {
                 limit.map(|page_size| exec::PaginationConfig {
                     page_size,
                     extract_cursor: None, // Driver provides cursor

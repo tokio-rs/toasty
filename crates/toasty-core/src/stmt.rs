@@ -166,7 +166,7 @@ mod join;
 pub use join::{Join, JoinOp};
 
 mod limit;
-pub use limit::Limit;
+pub use limit::{Limit, LimitCursor, LimitOffset};
 
 #[cfg(feature = "assert-struct")]
 mod like;
@@ -175,9 +175,6 @@ mod node;
 pub use node::Node;
 
 mod num;
-
-mod offset;
-pub use offset::Offset;
 
 mod op_binary;
 pub use op_binary::BinaryOp;

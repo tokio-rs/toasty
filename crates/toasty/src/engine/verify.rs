@@ -89,11 +89,11 @@ impl stmt::Visit for Verify<'_> {
 
 impl Verify<'_> {
     fn verify_offset_key_matches_order_by(&self, i: &stmt::Query) {
-        let Some(limit) = i.limit.as_ref() else {
+        let Some(stmt::Limit::Cursor(cursor)) = i.limit.as_ref() else {
             return;
         };
 
-        let Some(stmt::Offset::After(offset)) = limit.offset.as_ref() else {
+        let Some(after) = cursor.after.as_ref() else {
             return;
         };
 
@@ -101,7 +101,7 @@ impl Verify<'_> {
             todo!("specified offset but no order; stmt={i:#?}");
         };
 
-        match offset {
+        match after {
             stmt::Expr::Value(stmt::Value::Record(record)) => {
                 if self.capability.sql {
                     assert!(

@@ -354,20 +354,20 @@ impl ToSql for &stmt::InsertTarget {
 
 impl ToSql for &stmt::Limit {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
-        fmt!(cx, f, "LIMIT " self.limit);
-        if let Some(offset) = self.offset.as_ref() {
-            fmt!(cx, f, " " offset);
-        }
-    }
-}
-
-impl ToSql for &stmt::Offset {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
         match self {
-            stmt::Offset::After(_) => panic!(
-                "Offset::After cannot be serialized to SQL, should already be lowered to a different representation"
-            ),
-            stmt::Offset::Count(count) => fmt!(cx, f, "OFFSET " count),
+            stmt::Limit::Cursor(cursor) => {
+                assert!(
+                    cursor.after.is_none(),
+                    "Limit::Cursor with after cannot be serialized to SQL, should already be lowered"
+                );
+                fmt!(cx, f, "LIMIT " cursor.page_size);
+            }
+            stmt::Limit::Offset(limit_offset) => {
+                fmt!(cx, f, "LIMIT " limit_offset.limit);
+                if let Some(offset) = limit_offset.offset.as_ref() {
+                    fmt!(cx, f, " OFFSET " offset);
+                }
+            }
         }
     }
 }
