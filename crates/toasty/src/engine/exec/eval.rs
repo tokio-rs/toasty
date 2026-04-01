@@ -5,7 +5,7 @@ use crate::{
         exec::{Action, Exec, Output, VarId},
     },
 };
-use toasty_core::driver::{Response, Rows};
+use toasty_core::driver::{ExecResponse, Rows};
 
 #[derive(Debug)]
 pub(crate) struct Eval {
@@ -48,7 +48,7 @@ impl Exec<'_> {
         self.vars.store(
             action.output.var,
             action.output.num_uses,
-            Response {
+            ExecResponse {
                 values: Rows::Value(result),
                 next_cursor,
                 prev_cursor,

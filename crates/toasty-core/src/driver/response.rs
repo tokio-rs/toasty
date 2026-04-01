@@ -2,21 +2,21 @@ use crate::{Result, stmt};
 
 /// The result of a database operation.
 ///
-/// Every database operation produces a `Response` containing [`Rows`], which
-/// may be a row count, a single value, or a stream of result rows. Paginated
-/// queries may also include cursors for fetching subsequent pages.
+/// Every database operation produces an `ExecResponse` containing [`Rows`],
+/// which may be a row count, a single value, or a stream of result rows.
+/// Paginated queries may also include cursors for fetching subsequent pages.
 ///
 /// # Examples
 ///
 /// ```
-/// use toasty_core::driver::Response;
+/// use toasty_core::driver::ExecResponse;
 ///
 /// // Create a count response (e.g., from a DELETE that affected 3 rows)
-/// let resp = Response::count(3);
+/// let resp = ExecResponse::count(3);
 /// assert_eq!(resp.values.into_count(), 3);
 /// ```
 #[derive(Debug)]
-pub struct Response {
+pub struct ExecResponse {
     /// The result values (rows, count, or stream).
     pub values: Rows,
     /// Cursor to the next page (if paginated and more data exists).
@@ -25,7 +25,7 @@ pub struct Response {
     pub prev_cursor: Option<stmt::Value>,
 }
 
-/// The payload of a [`Response`].
+/// The payload of an [`ExecResponse`].
 ///
 /// Operations that modify rows typically return [`Count`](Self::Count).
 /// Queries return either a single [`Value`](Self::Value) or a
@@ -42,7 +42,7 @@ pub enum Rows {
     Stream(stmt::ValueStream),
 }
 
-impl Response {
+impl ExecResponse {
     /// Creates a response indicating that `count` rows were affected.
     pub fn count(count: u64) -> Self {
         Self {

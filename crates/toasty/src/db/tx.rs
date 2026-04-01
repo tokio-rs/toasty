@@ -243,7 +243,7 @@ impl<'a> Executor for Transaction<'a> {
     async fn exec_untyped(
         &mut self,
         stmt: toasty_core::stmt::Statement,
-    ) -> Result<toasty_core::driver::Response> {
+    ) -> Result<toasty_core::driver::ExecResponse> {
         self.conn.exec_stmt(stmt, true).await
     }
 

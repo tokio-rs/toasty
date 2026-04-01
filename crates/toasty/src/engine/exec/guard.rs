@@ -6,7 +6,7 @@ use crate::{
     },
 };
 use toasty_core::{
-    driver::{Response, Rows},
+    driver::{ExecResponse, Rows},
     stmt::ValueStream,
 };
 
@@ -49,7 +49,7 @@ impl Exec<'_> {
             self.vars.load(action.input).await?
         } else {
             // Guard failed — produce an empty stream.
-            Response {
+            ExecResponse {
                 values: Rows::value_stream(ValueStream::default()),
                 prev_cursor: None,
                 next_cursor: None,

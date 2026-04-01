@@ -1,4 +1,4 @@
-use toasty_core::driver::{Response, Rows};
+use toasty_core::driver::{ExecResponse, Rows};
 use toasty_core::stmt;
 
 use crate::Result;
@@ -253,7 +253,7 @@ impl Exec<'_> {
         self.vars.store(
             action.output.var,
             action.output.num_uses,
-            Response::from_rows(Rows::value_stream(merged_rows)),
+            ExecResponse::from_rows(Rows::value_stream(merged_rows)),
         );
 
         Ok(())

@@ -1,5 +1,5 @@
 use toasty_core::{
-    driver::{Response, Rows, operation},
+    driver::{ExecResponse, Rows, operation},
     schema::db::TableId,
     stmt,
 };
@@ -61,7 +61,7 @@ impl Exec<'_> {
         self.vars.store(
             action.output.var,
             action.output.num_uses,
-            Response::from_rows(res),
+            ExecResponse::from_rows(res),
         );
 
         Ok(())

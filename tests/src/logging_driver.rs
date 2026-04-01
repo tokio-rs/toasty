@@ -5,7 +5,7 @@ use std::{
 };
 use toasty_core::{
     Result, Schema,
-    driver::{Capability, Connection, Driver, Operation, Response, Rows},
+    driver::{Capability, Connection, Driver, ExecResponse, Operation, Rows},
     schema::db::{AppliedMigration, Migration, SchemaDiff},
 };
 
@@ -61,7 +61,7 @@ impl Driver for LoggingDriver {
 #[derive(Debug)]
 pub struct DriverOp {
     pub operation: Operation,
-    pub response: Response,
+    pub response: ExecResponse,
 }
 
 /// A driver wrapper that logs all operations for testing purposes
@@ -77,7 +77,7 @@ pub struct LoggingConnection {
 
 #[async_trait]
 impl Connection for LoggingConnection {
-    async fn exec(&mut self, schema: &Arc<Schema>, operation: Operation) -> Result<Response> {
+    async fn exec(&mut self, schema: &Arc<Schema>, operation: Operation) -> Result<ExecResponse> {
         // Clone the operation for logging
         let operation_clone = operation.clone();
 
@@ -119,9 +119,9 @@ impl Connection for LoggingConnection {
     }
 }
 
-/// Duplicate a Response, using ValueStream::dup() for value streams
+/// Duplicate an ExecResponse, using ValueStream::dup() for value streams
 /// This version takes a mutable reference so we can call dup() on the ValueStream
-async fn duplicate_response_mut(response: &mut Response) -> Result<Response> {
+async fn duplicate_response_mut(response: &mut ExecResponse) -> Result<ExecResponse> {
     let values = match &mut response.values {
         Rows::Count(count) => Rows::Count(*count),
         Rows::Value(_) => todo!(),
@@ -132,5 +132,5 @@ async fn duplicate_response_mut(response: &mut Response) -> Result<Response> {
         }
     };
 
-    Ok(Response::from_rows(values))
+    Ok(ExecResponse::from_rows(values))
 }

@@ -4,7 +4,7 @@ use crate::{
 };
 use toasty_core::{
     driver::{
-        Response, Rows,
+        ExecResponse, Rows,
         operation::{self, Transaction},
     },
     stmt::{self, ValueStream},
@@ -71,7 +71,7 @@ impl Exec<'_> {
         if let Some(output) = &action.output {
             let rows = Rows::value_stream(ValueStream::default());
             self.vars
-                .store(output.var, output.num_uses, Response::from_rows(rows));
+                .store(output.var, output.num_uses, ExecResponse::from_rows(rows));
         }
 
         Ok(())

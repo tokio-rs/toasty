@@ -3,7 +3,7 @@ use crate::{
     engine::exec::{Action, Exec, Output, PaginationConfig, VarId},
 };
 use toasty_core::{
-    driver::{Response, Rows, operation},
+    driver::{ExecResponse, Rows, operation},
     schema::db::{ColumnId, IndexId, TableId},
     stmt,
 };
@@ -98,7 +98,7 @@ impl Exec<'_> {
         self.vars.store(
             action.output.var,
             action.output.num_uses,
-            Response {
+            ExecResponse {
                 values: Rows::Stream(stmt::ValueStream::from_vec(all_rows)),
                 next_cursor: response_cursor,
                 prev_cursor: None,

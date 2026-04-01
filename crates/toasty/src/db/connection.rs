@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use toasty_core::{
     Schema,
-    driver::{Response, operation::Operation},
+    driver::{ExecResponse, operation::Operation},
     stmt,
 };
 use tokio::sync::oneshot;
@@ -38,7 +38,7 @@ impl Connection {
         &self,
         stmt: stmt::Statement,
         in_transaction: bool,
-    ) -> crate::Result<Response> {
+    ) -> crate::Result<ExecResponse> {
         let (tx, rx) = oneshot::channel();
 
         self.handle()
@@ -53,7 +53,7 @@ impl Connection {
         rx.await.unwrap()
     }
 
-    pub(crate) async fn exec_operation(&self, operation: Operation) -> crate::Result<Response> {
+    pub(crate) async fn exec_operation(&self, operation: Operation) -> crate::Result<ExecResponse> {
         let (tx, rx) = oneshot::channel();
 
         self.handle()
@@ -96,7 +96,7 @@ impl super::Executor for Connection {
     async fn exec_untyped(
         &mut self,
         stmt: toasty_core::stmt::Statement,
-    ) -> crate::Result<Response> {
+    ) -> crate::Result<ExecResponse> {
         self.exec_stmt(stmt, false).await
     }
 

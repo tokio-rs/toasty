@@ -1,5 +1,5 @@
 use toasty_core::{
-    driver::{Response, Rows, operation},
+    driver::{ExecResponse, Rows, operation},
     stmt,
 };
 
@@ -109,7 +109,7 @@ impl Exec<'_> {
             self.vars.store(
                 action.output.output.var,
                 action.output.output.num_uses,
-                Response::from_rows(rows),
+                ExecResponse::from_rows(rows),
             );
 
             return Ok(());
@@ -167,7 +167,7 @@ impl Exec<'_> {
             self.apply_sql_pagination(res.values, res.next_cursor, pagination, &action.stmt)
                 .await?
         } else {
-            Response {
+            ExecResponse {
                 values: res.values,
                 next_cursor: res.next_cursor,
                 prev_cursor: None,
@@ -192,10 +192,10 @@ impl Exec<'_> {
         driver_cursor: Option<stmt::Value>,
         pagination: &PaginationConfig,
         _original_stmt: &stmt::Statement,
-    ) -> Result<Response> {
+    ) -> Result<ExecResponse> {
         // If driver provided a cursor (shouldn't happen for SQL), use it
         if driver_cursor.is_some() {
-            return Ok(Response {
+            return Ok(ExecResponse {
                 values: rows,
                 next_cursor: driver_cursor,
                 prev_cursor: None,
@@ -204,7 +204,7 @@ impl Exec<'_> {
 
         // If no extract_cursor function, can't do SQL pagination
         let Some(extract_cursor) = &pagination.extract_cursor else {
-            return Ok(Response::from_rows(rows));
+            return Ok(ExecResponse::from_rows(rows));
         };
 
         // Convert rows to vector
@@ -213,7 +213,7 @@ impl Exec<'_> {
             Rows::Value(stmt::Value::List(items)) => items,
             other => {
                 // Not a list of rows, can't paginate
-                return Ok(Response::from_rows(other));
+                return Ok(ExecResponse::from_rows(other));
             }
         };
 
@@ -238,7 +238,7 @@ impl Exec<'_> {
             None
         };
 
-        Ok(Response {
+        Ok(ExecResponse {
             values: Rows::Value(stmt::Value::List(row_vec)),
             next_cursor,
             prev_cursor,

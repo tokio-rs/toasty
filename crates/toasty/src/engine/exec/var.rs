@@ -1,5 +1,5 @@
 use toasty_core::{
-    driver::{Response, Rows},
+    driver::{ExecResponse, Rows},
     stmt,
 };
 
@@ -33,7 +33,7 @@ pub(crate) struct VarId(pub(crate) usize);
 
 #[derive(Debug)]
 struct Entry {
-    response: Response,
+    response: ExecResponse,
     count: usize,
 }
 
@@ -45,7 +45,7 @@ impl VarStore {
         }
     }
 
-    pub(crate) async fn load(&mut self, var: VarId) -> crate::Result<Response> {
+    pub(crate) async fn load(&mut self, var: VarId) -> crate::Result<ExecResponse> {
         let Some(entry) = &mut self.slots[var.0] else {
             panic!("no stream at slot {}; store={:#?}", var.0, self)
         };
@@ -55,7 +55,7 @@ impl VarStore {
         }
 
         entry.count -= 1;
-        Ok(Response {
+        Ok(ExecResponse {
             values: entry.response.values.dup().await?,
             next_cursor: entry.response.next_cursor.clone(),
             prev_cursor: entry.response.prev_cursor.clone(),
@@ -63,7 +63,7 @@ impl VarStore {
     }
 
     #[track_caller]
-    pub(crate) fn store(&mut self, var: VarId, count: usize, response: Response) {
+    pub(crate) fn store(&mut self, var: VarId, count: usize, response: ExecResponse) {
         while self.slots.len() <= var.0 {
             self.slots.push(None);
         }
@@ -89,7 +89,7 @@ impl VarStore {
                 Rows::Stream(value_stream.typed((**item_tys).clone()))
             }
         };
-        let response = Response {
+        let response = ExecResponse {
             values,
             next_cursor: response.next_cursor,
             prev_cursor: response.prev_cursor,

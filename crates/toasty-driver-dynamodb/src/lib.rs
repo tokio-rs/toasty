@@ -24,7 +24,7 @@ pub(crate) use value::Value;
 use async_trait::async_trait;
 use toasty_core::{
     Error, Result, Schema,
-    driver::{Capability, Driver, Response, operation::Operation},
+    driver::{Capability, Driver, ExecResponse, operation::Operation},
     schema::db::{self, Column, ColumnId, Migration, SchemaDiff, Table},
     stmt::{self, ExprContext},
 };
@@ -147,7 +147,7 @@ impl Connection {
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
-    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
+    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         self.exec2(schema, op).await
     }
 
@@ -176,7 +176,7 @@ impl toasty_core::driver::Connection for Connection {
 }
 
 impl Connection {
-    async fn exec2(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
+    async fn exec2(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         match op {
             Operation::GetByKey(op) => self.exec_get_by_key(schema, op).await,
             Operation::QueryPk(op) => self.exec_query_pk(schema, op).await,

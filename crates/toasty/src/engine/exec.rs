@@ -56,7 +56,7 @@ pub(crate) use var::{VarDecls, VarId, VarStore};
 use crate::{Result, engine::Engine};
 use toasty_core::{
     Connection,
-    driver::{Response, Rows, operation::Transaction},
+    driver::{ExecResponse, Rows, operation::Transaction},
     stmt::{self, ValueStream},
 };
 
@@ -76,7 +76,7 @@ impl Engine {
         connection: &mut dyn Connection,
         plan: ExecPlan,
         in_transaction: bool,
-    ) -> Result<Response> {
+    ) -> Result<ExecResponse> {
         let mut exec = Exec {
             engine: self,
             connection,
@@ -139,13 +139,13 @@ impl Engine {
                 Rows::Stream(value_stream) => value_stream,
             };
 
-            Response {
+            ExecResponse {
                 values: Rows::Stream(value_stream),
                 next_cursor: response.next_cursor,
                 prev_cursor: response.prev_cursor,
             }
         } else {
-            Response::from_rows(Rows::Stream(ValueStream::default()))
+            ExecResponse::from_rows(Rows::Stream(ValueStream::default()))
         };
 
         Ok(result)

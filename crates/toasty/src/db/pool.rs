@@ -66,11 +66,11 @@ pub(crate) enum ConnectionOperation {
     ExecStatement {
         stmt: Box<toasty_core::stmt::Statement>,
         in_transaction: bool,
-        tx: oneshot::Sender<crate::Result<toasty_core::driver::Response>>,
+        tx: oneshot::Sender<crate::Result<toasty_core::driver::ExecResponse>>,
     },
     ExecOperation {
         operation: Box<toasty_core::driver::operation::Operation>,
-        tx: oneshot::Sender<crate::Result<toasty_core::driver::Response>>,
+        tx: oneshot::Sender<crate::Result<toasty_core::driver::ExecResponse>>,
     },
     /// Push schema to the database.
     PushSchema {

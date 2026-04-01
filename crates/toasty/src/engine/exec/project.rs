@@ -6,7 +6,7 @@ use crate::{
     },
 };
 use toasty_core::{
-    driver::{Response, Rows},
+    driver::{ExecResponse, Rows},
     stmt,
 };
 
@@ -65,7 +65,7 @@ impl Exec<'_> {
         self.vars.store(
             action.output.var,
             action.output.num_uses,
-            Response {
+            ExecResponse {
                 values: Rows::value_stream(projected_rows),
                 next_cursor: input_response.next_cursor,
                 prev_cursor: input_response.prev_cursor,

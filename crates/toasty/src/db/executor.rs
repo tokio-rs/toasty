@@ -2,7 +2,7 @@ use crate::{Result, Statement, db::Transaction, schema::Load};
 
 use async_trait::async_trait;
 use std::sync::Arc;
-use toasty_core::{Schema, driver::Response};
+use toasty_core::{Schema, driver::ExecResponse};
 
 /// Anything that can execute queries — [`Db`](crate::Db) or
 /// [`Transaction`](crate::db::Transaction).
@@ -17,7 +17,7 @@ pub trait Executor: Send + Sync {
 
     /// Execute an untyped statement, returning the full execution response.
     #[doc(hidden)]
-    async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> Result<Response>;
+    async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> Result<ExecResponse>;
 
     /// Returns the schema associated with this executor.
     #[doc(hidden)]

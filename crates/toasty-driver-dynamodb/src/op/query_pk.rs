@@ -3,14 +3,14 @@ use super::{
     item_to_record, operation, serialize_ddb_cursor, stmt,
 };
 use std::sync::Arc;
-use toasty_core::{driver::Response, stmt::ExprContext};
+use toasty_core::{driver::ExecResponse, stmt::ExprContext};
 
 impl Connection {
     pub(crate) async fn exec_query_pk(
         &mut self,
         schema: &Arc<Schema>,
         op: operation::QueryPk,
-    ) -> Result<Response> {
+    ) -> Result<ExecResponse> {
         let table = schema.db.table(op.table);
         let cx = ExprContext::new_with_target(&schema.db, table);
 
@@ -125,7 +125,7 @@ impl Connection {
             )
         }));
 
-        Ok(Response {
+        Ok(ExecResponse {
             values: toasty_core::driver::Rows::Stream(rows),
             next_cursor: cursor,
             prev_cursor: None,

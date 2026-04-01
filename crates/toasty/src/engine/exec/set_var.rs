@@ -3,7 +3,7 @@ use crate::{
     engine::exec::{Action, Exec, Output},
 };
 use toasty_core::{
-    driver::{Response, Rows},
+    driver::{ExecResponse, Rows},
     stmt,
 };
 
@@ -19,7 +19,7 @@ impl Exec<'_> {
         self.vars.store(
             action.output.var,
             action.output.num_uses,
-            Response::from_rows(Rows::Value(action.value.clone())),
+            ExecResponse::from_rows(Rows::Value(action.value.clone())),
         );
 
         Ok(())
