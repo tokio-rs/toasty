@@ -136,7 +136,6 @@ struct QueryPkPagination {
     limit: Option<i64>,
     order: Option<stmt::Direction>,
     cursor: Option<stmt::Value>,
-    pagination: Option<exec::PaginationConfig>,
 }
 
 struct PlanStatement<'a, 'b> {
@@ -1261,7 +1260,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     limit: qp.limit,
                     order: qp.order,
                     cursor: qp.cursor,
-                    pagination: qp.pagination,
                 })
             } else {
                 // For mutations (UPDATE/DELETE) with a partial primary-key filter,
@@ -1292,7 +1290,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     limit: None,
                     order: None,
                     cursor: None,
-                    pagination: None, // Not paginated
                 });
 
                 self.build_key_operation(&stmt, index_plan, query_pk_node, ty)
@@ -1339,7 +1336,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 limit: qp.limit,
                 order: qp.order,
                 cursor: qp.cursor,
-                pagination: qp.pagination,
             });
         }
 
@@ -1741,11 +1737,10 @@ fn extract_query_pk_pagination(stmt: &stmt::Statement) -> QueryPkPagination {
             limit: None,
             order: None,
             cursor: None,
-            pagination: None,
         };
     };
 
-    let (limit, cursor, pagination) = match query.limit.as_ref() {
+    let (limit, cursor) = match query.limit.as_ref() {
         Some(stmt::Limit::Cursor(c)) => {
             let page_size = match &c.page_size {
                 stmt::Expr::Value(stmt::Value::I64(n)) => Some(*n),
@@ -1755,20 +1750,16 @@ fn extract_query_pk_pagination(stmt: &stmt::Statement) -> QueryPkPagination {
                 stmt::Expr::Value(v) => Some(v.clone()),
                 _ => None,
             });
-            let pagination = page_size.map(|page_size| exec::PaginationConfig {
-                page_size,
-                extract_cursor: None, // NoSQL driver provides cursor
-            });
-            (page_size, cursor, pagination)
+            (page_size, cursor)
         }
         Some(stmt::Limit::Offset(lo)) => {
             let limit = match &lo.limit {
                 stmt::Expr::Value(stmt::Value::I64(n)) => Some(*n),
                 _ => None,
             };
-            (limit, None, None)
+            (limit, None)
         }
-        None => (None, None, None),
+        None => (None, None),
     };
 
     let order = query.order_by.as_ref().and_then(|ob| {
@@ -1782,6 +1773,5 @@ fn extract_query_pk_pagination(stmt: &stmt::Statement) -> QueryPkPagination {
         limit,
         order,
         cursor,
-        pagination,
     }
 }

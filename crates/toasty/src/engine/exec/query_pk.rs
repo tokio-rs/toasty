@@ -1,6 +1,6 @@
 use crate::{
     Result,
-    engine::exec::{Action, Exec, Output, PaginationConfig, VarId},
+    engine::exec::{Action, Exec, Output, VarId},
 };
 use toasty_core::{
     driver::{ExecResponse, Rows, operation},
@@ -39,9 +39,6 @@ pub(crate) struct QueryPk {
 
     /// Cursor for resuming a paginated query.
     pub cursor: Option<stmt::Value>,
-
-    /// Pagination configuration (None if not paginated)
-    pub pagination: Option<PaginationConfig>,
 }
 
 impl Exec<'_> {
