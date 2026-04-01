@@ -126,6 +126,11 @@ struct ReturningInfo {
     inputs: IndexSet<mir::NodeId>,
 }
 
+struct PaginationInfo {
+    page_size: i64,
+    cursor_column_indices: Vec<usize>,
+}
+
 struct PlanStatement<'a, 'b> {
     planner: &'a mut HirPlanner<'b>,
     stmt_id: hir::StmtId,
@@ -784,15 +789,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         let ty = self.planner.engine.infer_ty(&stmt, &input_args[..]);
 
         // Phase 2: Build extract_cursor function using the inferred type
-        let pagination_config = pagination_info.map(|(page_size, cursor_column_indices)| {
-            // Extract row type from List<Row>
-            let row_ty = if let stmt::Type::List(item_ty) = &ty {
-                (**item_ty).clone()
-            } else {
-                stmt::Type::Unit
-            };
-            self.build_extract_cursor(page_size, cursor_column_indices, &row_ty)
-        });
+        let pagination_config = pagination_info.map(|info| self.build_extract_cursor(info, &ty));
 
         let node = if stmt.condition().is_some() {
             if let stmt::Statement::Update(stmt) = stmt {
@@ -906,7 +903,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         Some((stmt::Value::List(result), ty))
     }
 
-    fn plan_pagination_sql(&mut self, stmt: &stmt::Statement) -> Option<(i64, Vec<usize>)> {
+    fn plan_pagination_sql(&mut self, stmt: &stmt::Statement) -> Option<PaginationInfo> {
         let stmt::Statement::Query(query) = stmt else {
             return None;
         };
@@ -929,7 +926,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         for order_expr in &order_by.exprs {
             // Try to convert the ORDER BY expression to an ExprReference
-            if let Some(expr_ref) = self.expr_to_reference(&order_expr.expr) {
+            if let Some(expr_ref) = order_expr.expr.as_expr_reference().copied() {
                 // Add to load_data if not already present
                 let (index, _) = self
                     .load_data
@@ -942,40 +939,38 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             }
         }
 
-        Some((page_size, cursor_column_indices))
+        Some(PaginationInfo {
+            page_size,
+            cursor_column_indices,
+        })
     }
 
-    /// Phase 2: Builds extract_cursor function using the inferred row type.
+    /// Builds extract_cursor function using the inferred row type.
     /// Called after type inference in plan_data_loading_sql.
-    fn build_extract_cursor(
-        &self,
-        page_size: i64,
-        cursor_column_indices: Vec<usize>,
-        row_ty: &stmt::Type,
-    ) -> exec::PaginationConfig {
+    fn build_extract_cursor(&self, info: PaginationInfo, ty: &stmt::Type) -> exec::PaginationConfig {
+        // Extract row type from List<Row>
+        let row_ty = if let stmt::Type::List(item_ty) = ty {
+            (**item_ty).clone()
+        } else {
+            stmt::Type::Unit
+        };
+
         // Build extract_cursor expression: projects ORDER BY column positions from the row
         let extract_cursor = stmt::Expr::record(
-            cursor_column_indices
+            info.cursor_column_indices
                 .into_iter()
                 .map(|index| stmt::Expr::arg_project(0, [index])),
         );
 
         // Build eval::Func with the actual row type as input
-        let extract_cursor_func = eval::Func::from_stmt(extract_cursor, vec![row_ty.clone()]);
+        let extract_cursor_func = eval::Func::from_stmt(extract_cursor, vec![row_ty]);
 
         exec::PaginationConfig {
-            page_size,
+            page_size: info.page_size,
             extract_cursor: Some(extract_cursor_func),
         }
     }
 
-    /// Converts an expression to an ExprReference if possible.
-    fn expr_to_reference(&self, expr: &stmt::Expr) -> Option<stmt::ExprReference> {
-        match expr {
-            stmt::Expr::Reference(expr_ref) => Some(*expr_ref),
-            _ => None,
-        }
-    }
 
     fn plan_conditional_sql_query_as_cte(
         &mut self,
