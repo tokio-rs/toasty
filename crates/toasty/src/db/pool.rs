@@ -2,7 +2,8 @@
 
 pub use deadpool::managed::Timeouts;
 use std::sync::Arc;
-use toasty_core::driver::{Capability, Driver};
+use toasty_core::driver::{Capability, Driver, Rows};
+use toasty_core::stmt::Value;
 use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
@@ -186,7 +187,20 @@ impl deadpool::managed::Manager for Manager {
                             let mut response = engine
                                 .exec_with_metadata(&mut *connection, *stmt, in_transaction)
                                 .await?;
-                            response.values.buffer(single).await?;
+                            response.values.buffer().await?;
+
+                            if single {
+                                let Rows::Value(Value::List(mut items)) = response.values else {
+                                    unreachable!()
+                                };
+                                assert!(
+                                    items.len() <= 1,
+                                    "expected at most 1 row for single statement, got {}",
+                                    items.len()
+                                );
+                                response.values = Rows::Value(items.pop().unwrap_or(Value::Null));
+                            }
+
                             Ok(response)
                         }
                         .await;

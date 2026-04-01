@@ -76,27 +76,15 @@ impl Rows {
         matches!(self, Self::Count(_))
     }
 
-    /// Collects a [`Stream`](Self::Stream) into a [`Value`](Self::Value).
-    ///
-    /// When `single` is true, extracts the first row (or [`Value::Null`](stmt::Value::Null)
-    /// if empty). When `single` is false, wraps all rows in a
-    /// [`Value::List`](stmt::Value::List). Other variants are left unchanged.
-    pub async fn buffer(&mut self, single: bool) -> Result<()> {
+    /// If this is a [`Stream`](Self::Stream), collects all values and converts
+    /// it to a [`Value`](Self::Value) containing a [`Value::List`](stmt::Value::List).
+    /// Other variants are left unchanged.
+    pub async fn buffer(&mut self) -> Result<()> {
         if matches!(self, Rows::Stream(_)) {
-            let Rows::Stream(mut stream) = std::mem::replace(self, Rows::Count(0)) else {
+            let Rows::Stream(stream) = std::mem::replace(self, Rows::Count(0)) else {
                 unreachable!()
             };
-
-            let value = if single {
-                match stream.next().await {
-                    Some(value) => value?,
-                    None => stmt::Value::Null,
-                }
-            } else {
-                stmt::Value::List(stream.collect().await?)
-            };
-
-            *self = Rows::Value(value);
+            *self = Rows::Value(stmt::Value::List(stream.collect().await?));
         }
         Ok(())
     }
