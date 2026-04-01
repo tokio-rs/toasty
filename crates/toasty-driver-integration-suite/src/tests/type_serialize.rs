@@ -55,7 +55,7 @@ pub async fn serialize_vec_string(t: &mut Test) -> Result<(), BoxError> {
             assignments: #{ [1]: Assignment::Set(== expected_json)},
         }));
     }
-    assert_struct!(resp, { rows: Rows::Count(1) });
+    assert_struct!(resp, { values: Rows::Count(1) });
 
     assert_eq!(Item::get_by_id(&mut db, &record.id).await?.tags, new_tags);
 

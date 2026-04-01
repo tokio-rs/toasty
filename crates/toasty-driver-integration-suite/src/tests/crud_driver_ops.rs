@@ -55,7 +55,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
             last_insert_id_hack: None,
         }));
 
-        let rows = resp.rows.collect_as_value().await?;
+        let rows = resp.values.collect_as_value().await?;
 
         // Check response
         assert_struct!(rows, == [(1u64,)]);
@@ -65,7 +65,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
             last_insert_id_hack: Some(1),
         }));
 
-        let rows = resp.rows.collect_as_value().await?;
+        let rows = resp.values.collect_as_value().await?;
 
         // Check response
         assert_struct!(rows, == [(1u64,)]);
@@ -76,7 +76,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
 
         // Check response
         assert_struct!(resp, {
-            rows: Rows::Count(1),
+            values: Rows::Count(1),
         });
     }
 
@@ -118,7 +118,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
         }));
     }
 
-    assert_struct!(resp.rows, Rows::Stream(_));
+    assert_struct!(resp.values, Rows::Stream(_));
 
     // ========== UPDATE ==========
     User::filter_by_id(user_id)
@@ -158,7 +158,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
     }
 
     assert_struct!(resp, {
-        rows: Rows::Count(1),
+        values: Rows::Count(1),
     });
 
     // ========== DELETE ==========
@@ -194,7 +194,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
 
     // Check response
     assert_struct!(resp, {
-        rows: Rows::Count(1),
+        values: Rows::Count(1),
     });
 
     // ========== VERIFY LOG IS EMPTY ==========

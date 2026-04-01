@@ -13,16 +13,16 @@ pub use pool::{Pool, PoolConfig, PoolStatus, Timeouts};
 pub use toasty_core::driver::{Capability, Driver};
 pub use tx::{Transaction, TransactionBuilder};
 
+/// Response from executing a statement, including pagination metadata.
+pub use toasty_core::driver::ExecResponse;
+
 pub(crate) use pool::ConnectionOperation;
 pub(crate) use tx::ConnRef;
 
 use crate::{Result, engine::Engine};
 
 use async_trait::async_trait;
-use toasty_core::{
-    Schema,
-    stmt::{self, Value},
-};
+use toasty_core::{Schema, stmt};
 
 use std::sync::Arc;
 
@@ -93,7 +93,7 @@ impl Db {
         &self,
         stmt: stmt::Statement,
         in_transaction: bool,
-    ) -> Result<Value> {
+    ) -> Result<ExecResponse> {
         let conn = self.connection().await?;
         conn.exec_stmt(stmt, in_transaction).await
     }
@@ -177,7 +177,7 @@ impl Executor for Db {
         Transaction::begin(ConnRef::owned(conn)).await
     }
 
-    async fn exec_untyped(&mut self, stmt: stmt::Statement) -> Result<Value> {
+    async fn exec_untyped(&mut self, stmt: stmt::Statement) -> Result<ExecResponse> {
         self.exec_stmt(stmt, false).await
     }
 

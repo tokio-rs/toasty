@@ -1,4 +1,7 @@
-use toasty_core::{driver::Rows, stmt};
+use toasty_core::{
+    driver::{ExecResponse, Rows},
+    stmt,
+};
 
 /// Tracks variable declarations during planning. Each variable has a type and
 /// is assigned a unique VarId. This is converted into a VarStore for execution.
@@ -30,7 +33,7 @@ pub(crate) struct VarId(pub(crate) usize);
 
 #[derive(Debug)]
 struct Entry {
-    rows: Rows,
+    response: ExecResponse,
     count: usize,
 }
 
@@ -42,29 +45,33 @@ impl VarStore {
         }
     }
 
-    pub(crate) async fn load(&mut self, var: VarId) -> crate::Result<Rows> {
+    pub(crate) async fn load(&mut self, var: VarId) -> crate::Result<ExecResponse> {
         let Some(entry) = &mut self.slots[var.0] else {
             panic!("no stream at slot {}; store={:#?}", var.0, self)
         };
 
         if entry.count == 1 {
-            return Ok(self.slots[var.0].take().unwrap().rows);
+            return Ok(self.slots[var.0].take().unwrap().response);
         }
 
         entry.count -= 1;
-        entry.rows.dup().await
+        Ok(ExecResponse {
+            values: entry.response.values.dup().await?,
+            next_cursor: entry.response.next_cursor.clone(),
+            prev_cursor: entry.response.prev_cursor.clone(),
+        })
     }
 
     #[track_caller]
-    pub(crate) fn store(&mut self, var: VarId, count: usize, rows: Rows) {
+    pub(crate) fn store(&mut self, var: VarId, count: usize, response: ExecResponse) {
         while self.slots.len() <= var.0 {
             self.slots.push(None);
         }
 
-        let rows = match rows {
+        let values = match response.values {
             Rows::Count(_) => {
                 assert!(self.tys[var.0].is_unit());
-                rows
+                response.values
             }
             Rows::Value(value) => {
                 assert!(
@@ -82,7 +89,12 @@ impl VarStore {
                 Rows::Stream(value_stream.typed((**item_tys).clone()))
             }
         };
+        let response = ExecResponse {
+            values,
+            next_cursor: response.next_cursor,
+            prev_cursor: response.prev_cursor,
+        };
 
-        self.slots[var.0] = Some(Entry { rows, count });
+        self.slots[var.0] = Some(Entry { response, count });
     }
 }
