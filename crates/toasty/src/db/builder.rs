@@ -7,7 +7,10 @@ use crate::{
 
 use toasty_core::{
     driver::Driver,
-    schema::{self, app},
+    schema::{
+        self,
+        app::{self, ModelSet},
+    },
 };
 
 use std::sync::Arc;
@@ -73,6 +76,11 @@ impl Builder {
         let schema = T::schema();
         tracing::debug!(model = %schema.name(), "registering model");
         self.models.add(schema);
+        self
+    }
+
+    pub fn models(&mut self, models: ModelSet) -> &mut Self {
+        self.models = models;
         self
     }
 

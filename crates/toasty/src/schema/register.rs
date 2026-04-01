@@ -28,3 +28,13 @@ pub trait Register {
     /// Returns the schema definition for this type.
     fn schema() -> app::Model;
 }
+
+/// Creates a [`ModelSet`] with the provided models already registered, similar to `vec![]`.
+#[macro_export]
+macro_rules! models {
+    ($($model:ident),*) => {{
+        let mut model_set = ::toasty::ModelSet::new();
+        $(model_set.add(<$model as ::toasty::schema::Register>::schema());)*
+        model_set
+    }};
+}
