@@ -1,6 +1,6 @@
 use super::{
-    Connection, ExprAttrs, Result, Schema, ddb_expression, ddb_key, deserialize_ddb_cursor,
-    item_to_record, operation, serialize_ddb_cursor, stmt,
+    Connection, ExprAttrs, Result, Schema, ddb_expression, deserialize_ddb_cursor, item_to_record,
+    operation, serialize_ddb_cursor, stmt,
 };
 use std::sync::Arc;
 use toasty_core::{driver::ExecResponse, stmt::ExprContext};
@@ -52,8 +52,8 @@ impl Connection {
                     query = query.limit(limit as i32);
                 }
                 if let Some(ref cursor_value) = op.cursor {
-                    query = query
-                        .set_exclusive_start_key(Some(deserialize_ddb_cursor(cursor_value)));
+                    query =
+                        query.set_exclusive_start_key(Some(deserialize_ddb_cursor(cursor_value)));
                 }
                 if let Some(ref direction) = op.order {
                     query = query.scan_index_forward(*direction == stmt::Direction::Asc);
@@ -79,8 +79,7 @@ impl Connection {
                 query = query.limit(limit as i32);
             }
             if let Some(ref cursor_value) = op.cursor {
-                query =
-                    query.set_exclusive_start_key(Some(deserialize_ddb_cursor(cursor_value)));
+                query = query.set_exclusive_start_key(Some(deserialize_ddb_cursor(cursor_value)));
             }
             if let Some(ref direction) = op.order {
                 query = query.scan_index_forward(*direction == stmt::Direction::Asc);

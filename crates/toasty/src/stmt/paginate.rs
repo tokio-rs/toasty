@@ -2,7 +2,7 @@ use super::{List, Query};
 
 use crate::{Executor, Result, schema::Load};
 
-use toasty_core::stmt::{self, Value};
+use toasty_core::stmt;
 
 /// Cursor-based pagination over a [`Query`].
 ///

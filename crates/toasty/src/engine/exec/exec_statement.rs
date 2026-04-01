@@ -169,11 +169,8 @@ impl Exec<'_> {
             self.apply_sql_pagination(&mut res, pagination)?;
         }
 
-        self.vars.store(
-            action.output.output.var,
-            action.output.output.num_uses,
-            res,
-        );
+        self.vars
+            .store(action.output.output.var, action.output.output.num_uses, res);
 
         Ok(())
     }
