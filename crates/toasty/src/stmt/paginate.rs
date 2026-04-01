@@ -208,7 +208,7 @@ impl<M: Load> Paginate<M> {
 
         // Execute with pagination - engine handles cursor extraction
         let response = executor
-            .exec_paginated(stmt::Statement::Query(self.query.untyped.clone()))
+            .exec_untyped(stmt::Statement::Query(self.query.untyped.clone()))
             .await?;
 
         // Collect values from response

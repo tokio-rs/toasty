@@ -13,16 +13,16 @@ pub use pool::{Pool, PoolConfig, PoolStatus, Timeouts};
 pub use toasty_core::driver::{Capability, Driver};
 pub use tx::{Transaction, TransactionBuilder};
 
+/// Response from executing a statement, including pagination metadata.
+pub use crate::engine::exec::ExecResponse;
+
 pub(crate) use pool::ConnectionOperation;
 pub(crate) use tx::ConnRef;
 
 use crate::{Result, engine::Engine};
 
 use async_trait::async_trait;
-use toasty_core::{
-    Schema,
-    stmt::{self, Value},
-};
+use toasty_core::{Schema, stmt};
 
 use std::sync::Arc;
 
@@ -177,27 +177,11 @@ impl Executor for Db {
         Transaction::begin(ConnRef::owned(conn)).await
     }
 
-    async fn exec_untyped(&mut self, stmt: stmt::Statement) -> Result<Value> {
-        let single = stmt.is_single();
-        let response = self.exec_stmt(stmt, false).await?;
-        let value = response.values.collect_as_value().await?;
-
-        if single {
-            match value {
-                Value::List(mut items) => Ok(items.pop().unwrap_or(Value::Null)),
-                other => Ok(other),
-            }
-        } else {
-            Ok(value)
-        }
-    }
-
-    async fn exec_paginated(
+    async fn exec_untyped(
         &mut self,
-        stmt: toasty_core::stmt::Statement,
+        stmt: stmt::Statement,
     ) -> Result<crate::engine::exec::ExecResponse> {
-        let conn = self.connection().await?;
-        conn.exec_stmt(stmt, false).await
+        self.exec_stmt(stmt, false).await
     }
 
     fn schema(&mut self) -> &Arc<Schema> {

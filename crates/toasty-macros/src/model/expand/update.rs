@@ -232,7 +232,20 @@ impl Expand<'_> {
                 #vis async fn exec(mut self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<()> {
                     use #toasty::UpdateTarget as _;
                     let stmt = self.target.to_update_stmt(self.assignments);
-                    let value = executor.exec_untyped(stmt.into_untyped()).await?;
+                    let untyped = stmt.into_untyped();
+                    let single = untyped.is_single();
+                    let response = executor.exec_untyped(untyped).await?;
+                    let value = response.values.collect_as_value().await?;
+                    let value = if single {
+                        match value {
+                            #toasty::core::stmt::Value::List(mut items) => {
+                                items.pop().unwrap_or(#toasty::core::stmt::Value::Null)
+                            }
+                            other => other,
+                        }
+                    } else {
+                        value
+                    };
                     self.target.apply_result(value)?;
                     Ok(())
                 }

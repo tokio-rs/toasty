@@ -8,7 +8,6 @@ use async_trait::async_trait;
 use toasty_core::{
     Schema,
     driver::operation::{self, IsolationLevel},
-    stmt::Value,
 };
 use tokio::sync::oneshot;
 
@@ -241,26 +240,11 @@ impl<'a> Executor for Transaction<'a> {
         Ok(transaction)
     }
 
-    async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> Result<Value> {
-        let single = stmt.is_single();
-        let response = self.conn.exec_stmt(stmt, true).await?;
-        let value = response.values.collect_as_value().await?;
-
-        if single {
-            match value {
-                Value::List(mut items) => Ok(items.pop().unwrap_or(Value::Null)),
-                other => Ok(other),
-            }
-        } else {
-            Ok(value)
-        }
-    }
-
-    async fn exec_paginated(
+    async fn exec_untyped(
         &mut self,
         stmt: toasty_core::stmt::Statement,
     ) -> Result<crate::engine::exec::ExecResponse> {
-        self.conn.exec_stmt(stmt, false).await
+        self.conn.exec_stmt(stmt, true).await
     }
 
     fn schema(&mut self) -> &Arc<Schema> {

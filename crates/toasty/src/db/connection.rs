@@ -5,11 +5,10 @@ use super::tx::ConnRef;
 use crate::engine::exec::ExecResponse;
 use async_trait::async_trait;
 use std::sync::Arc;
-use toasty_core::stmt::Statement;
 use toasty_core::{
     Schema,
     driver::{Response, operation::Operation},
-    stmt::{self, Value},
+    stmt,
 };
 use tokio::sync::oneshot;
 
@@ -95,23 +94,10 @@ impl super::Executor for Connection {
         Transaction::begin(ConnRef::Borrowed(self)).await
     }
 
-    async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> crate::Result<Value> {
-        let single = stmt.is_single();
-        let response = self.exec_stmt(stmt, false).await?;
-        let value = response.values.collect_as_value().await?;
-
-        if single {
-            // Single-value query: unwrap from the list
-            match value {
-                Value::List(mut items) => Ok(items.pop().unwrap_or(Value::Null)),
-                other => Ok(other),
-            }
-        } else {
-            Ok(value)
-        }
-    }
-
-    async fn exec_paginated(&mut self, stmt: Statement) -> toasty_core::Result<ExecResponse> {
+    async fn exec_untyped(
+        &mut self,
+        stmt: toasty_core::stmt::Statement,
+    ) -> crate::Result<ExecResponse> {
         self.exec_stmt(stmt, false).await
     }
 
