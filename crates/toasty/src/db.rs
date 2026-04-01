@@ -22,7 +22,7 @@ pub(crate) use tx::ConnRef;
 use crate::{Result, engine::Engine};
 
 use async_trait::async_trait;
-use toasty_core::{Schema, stmt};
+use toasty_core::{Schema, driver::ExecResponse, stmt};
 
 use std::sync::Arc;
 
@@ -93,7 +93,7 @@ impl Db {
         &self,
         stmt: stmt::Statement,
         in_transaction: bool,
-    ) -> Result<toasty_core::driver::ExecResponse> {
+    ) -> Result<ExecResponse> {
         let conn = self.connection().await?;
         conn.exec_stmt(stmt, in_transaction).await
     }
@@ -177,10 +177,7 @@ impl Executor for Db {
         Transaction::begin(ConnRef::owned(conn)).await
     }
 
-    async fn exec_untyped(
-        &mut self,
-        stmt: stmt::Statement,
-    ) -> Result<toasty_core::driver::ExecResponse> {
+    async fn exec_untyped(&mut self, stmt: stmt::Statement) -> Result<ExecResponse> {
         self.exec_stmt(stmt, false).await
     }
 
