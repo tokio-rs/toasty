@@ -9,7 +9,6 @@ use crate::engine::{
     mir::{self, LogicalPlan},
 };
 
-
 /// Queries records using a primary key filter.
 ///
 /// Used with NoSQL drivers to query a table's primary key index with optional
