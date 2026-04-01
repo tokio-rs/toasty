@@ -57,16 +57,6 @@ impl Exec<'_> {
         let mut all_rows = Vec::new();
         let mut response_cursor = None;
 
-        // Build PaginationRequest from PaginationConfig if present
-        let pagination_request =
-            action
-                .pagination
-                .as_ref()
-                .map(|config| operation::PaginationRequest {
-                    page_size: config.page_size,
-                    cursor: action.cursor.clone(),
-                });
-
         for f in filters {
             let res = self
                 .connection
@@ -81,7 +71,6 @@ impl Exec<'_> {
                         limit: action.limit,
                         order: action.order,
                         cursor: action.cursor.clone(),
-                        pagination: pagination_request.clone(),
                     }
                     .into(),
                 )

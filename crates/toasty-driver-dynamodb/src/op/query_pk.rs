@@ -48,21 +48,12 @@ impl Connection {
                     .set_expression_attribute_names(Some(expr_attrs.attr_names))
                     .set_expression_attribute_values(Some(expr_attrs.attr_values));
 
-                // Apply pagination parameters.
-                // If op.pagination is present, use it; otherwise fall back to op.limit/cursor
-                if let Some(ref pagination) = op.pagination {
-                    query = query.limit(pagination.page_size as i32);
-                    if let Some(ref cursor_value) = pagination.cursor {
-                        query = query
-                            .set_exclusive_start_key(Some(deserialize_ddb_cursor(cursor_value)));
-                    }
-                } else {
-                    if let Some(limit) = op.limit {
-                        query = query.limit(limit as i32);
-                    }
-                    if let Some(ref start_key) = op.cursor {
-                        query = query.set_exclusive_start_key(Some(ddb_key(table, start_key)));
-                    }
+                if let Some(limit) = op.limit {
+                    query = query.limit(limit as i32);
+                }
+                if let Some(ref cursor_value) = op.cursor {
+                    query = query
+                        .set_exclusive_start_key(Some(deserialize_ddb_cursor(cursor_value)));
                 }
                 if let Some(ref direction) = op.order {
                     query = query.scan_index_forward(*direction == stmt::Direction::Asc);
@@ -84,21 +75,12 @@ impl Connection {
                 .set_expression_attribute_names(Some(expr_attrs.attr_names))
                 .set_expression_attribute_values(Some(expr_attrs.attr_values));
 
-            // Apply pagination parameters.
-            // If op.pagination is present, use it; otherwise fall back to op.limit/cursor
-            if let Some(ref pagination) = op.pagination {
-                query = query.limit(pagination.page_size as i32);
-                if let Some(ref cursor_value) = pagination.cursor {
-                    query =
-                        query.set_exclusive_start_key(Some(deserialize_ddb_cursor(cursor_value)));
-                }
-            } else {
-                if let Some(limit) = op.limit {
-                    query = query.limit(limit as i32);
-                }
-                if let Some(ref start_key) = op.cursor {
-                    query = query.set_exclusive_start_key(Some(ddb_key(table, start_key)));
-                }
+            if let Some(limit) = op.limit {
+                query = query.limit(limit as i32);
+            }
+            if let Some(ref cursor_value) = op.cursor {
+                query =
+                    query.set_exclusive_start_key(Some(deserialize_ddb_cursor(cursor_value)));
             }
             if let Some(ref direction) = op.order {
                 query = query.scan_index_forward(*direction == stmt::Direction::Asc);

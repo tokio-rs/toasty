@@ -4,15 +4,6 @@ use crate::{
     stmt,
 };
 
-/// Pagination request for QueryPk operations.
-#[derive(Debug, Clone)]
-pub struct PaginationRequest {
-    /// Number of items per page
-    pub page_size: i64,
-    /// Cursor from previous page (driver-specific serialization)
-    pub cursor: Option<stmt::Value>,
-}
-
 /// Queries a table by primary key (or secondary index) with optional filtering,
 /// ordering, and pagination.
 ///
@@ -66,9 +57,6 @@ pub struct QueryPk {
     /// Pagination cursor. Contains the serialized key of the last item from a
     /// previous page of results. When set, the query resumes after this key.
     pub cursor: Option<stmt::Value>,
-
-    /// Pagination configuration (when present, indicates this is a paginated query)
-    pub pagination: Option<PaginationRequest>,
 }
 
 impl From<QueryPk> for Operation {
