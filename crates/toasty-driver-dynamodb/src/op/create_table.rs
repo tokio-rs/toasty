@@ -1,6 +1,6 @@
 use super::{
-    AttributeDefinition, Connection, GlobalSecondaryIndex, Projection, ProjectionType,
-    ProvisionedThroughput, Result, Table, TypeExt, db, ddb_key_schema,
+    AttributeDefinition, BillingMode, Connection, GlobalSecondaryIndex, Projection, ProjectionType,
+    Result, Table, TypeExt, db, ddb_key_schema,
 };
 
 impl Connection {
@@ -29,12 +29,6 @@ impl Connection {
                 }
             }
         }
-
-        let pt = ProvisionedThroughput::builder()
-            .read_capacity_units(10)
-            .write_capacity_units(5)
-            .build()
-            .unwrap();
 
         // Calculate which attributes need to be defined
         let mut defined_attributes = std::collections::HashSet::new();
@@ -76,7 +70,6 @@ impl Connection {
                             .projection_type(ProjectionType::All)
                             .build(),
                     )
-                    .provisioned_throughput(pt.clone())
                     .build()
                     .unwrap(),
             );
@@ -102,7 +95,7 @@ impl Connection {
             .set_attribute_definitions(Some(attribute_definitions))
             .set_key_schema(Some(ddb_key_schema(partition_column, range_column)))
             .set_global_secondary_indexes(if gsis.is_empty() { None } else { Some(gsis) })
-            .provisioned_throughput(pt.clone())
+            .billing_mode(BillingMode::PayPerRequest)
             .send()
             .await
             .map_err(toasty_core::Error::driver_operation_failed)?;
@@ -125,7 +118,7 @@ impl Connection {
                         .build()
                         .unwrap(),
                 )
-                .provisioned_throughput(pt.clone())
+                .billing_mode(BillingMode::PayPerRequest)
                 .send()
                 .await
                 .map_err(toasty_core::Error::driver_operation_failed)?;
