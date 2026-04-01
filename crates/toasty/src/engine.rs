@@ -19,7 +19,7 @@ use std::sync::Arc;
 use toasty_core::{
     Connection, Schema,
     driver::Capability,
-    stmt::{self, Statement, ValueStream},
+    stmt::{self, Statement},
 };
 
 /// The query execution engine.
@@ -55,29 +55,11 @@ impl Engine {
         self.capability
     }
 
-    /// Executes a statement on the given connection and returns the result as a
-    /// value stream.
-    ///
-    /// This is the main entry point for query execution. The statement passes
-    /// through the full compilation pipeline (lowering → planning → execution)
-    /// before being sent to the database driver via the provided connection.
-    pub(crate) async fn exec(
-        &self,
-        connection: &mut dyn Connection,
-        stmt: Statement,
-        in_transaction: bool,
-    ) -> Result<ValueStream> {
-        let response = self
-            .exec_with_metadata(connection, stmt, in_transaction)
-            .await?;
-        Ok(response.values.into_value_stream())
-    }
-
     /// Executes a statement and returns the full response including pagination metadata.
     ///
-    /// Unlike [`exec`](Self::exec), this method preserves pagination cursors in the
-    /// response. It follows the same compilation pipeline but returns the complete
-    /// `ExecResponse` instead of just the value stream.
+    /// The statement passes through the full compilation pipeline
+    /// (lowering -> planning -> execution) before being sent to the database
+    /// driver via the provided connection.
     pub(crate) async fn exec_with_metadata(
         &self,
         connection: &mut dyn Connection,

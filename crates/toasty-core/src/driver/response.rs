@@ -76,6 +76,20 @@ impl Rows {
         matches!(self, Self::Count(_))
     }
 
+    /// If this is a [`Stream`](Self::Stream), collects all values and converts
+    /// it to a [`Value`](Self::Value) containing a [`Value::List`](stmt::Value::List).
+    /// Other variants are left unchanged.
+    pub async fn buffer(&mut self) -> Result<()> {
+        if matches!(self, Rows::Stream(_)) {
+            let Rows::Stream(stream) = std::mem::replace(self, Rows::Count(0)) else {
+                unreachable!()
+            };
+            let items = stream.collect().await?;
+            *self = Rows::Value(stmt::Value::List(items));
+        }
+        Ok(())
+    }
+
     /// Creates a duplicate of this `Rows` value.
     ///
     /// For streams, this buffers the stream contents so both the original and

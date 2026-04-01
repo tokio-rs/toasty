@@ -93,7 +93,7 @@ impl Db {
         &self,
         stmt: stmt::Statement,
         in_transaction: bool,
-    ) -> Result<Value> {
+    ) -> Result<crate::engine::exec::ExecResponse> {
         let conn = self.connection().await?;
         conn.exec_stmt(stmt, in_transaction).await
     }
@@ -178,14 +178,26 @@ impl Executor for Db {
     }
 
     async fn exec_untyped(&mut self, stmt: stmt::Statement) -> Result<Value> {
-        self.exec_stmt(stmt, false).await
+        let single = stmt.is_single();
+        let response = self.exec_stmt(stmt, false).await?;
+        let value = response.values.collect_as_value().await?;
+
+        if single {
+            match value {
+                Value::List(mut items) => Ok(items.pop().unwrap_or(Value::Null)),
+                other => Ok(other),
+            }
+        } else {
+            Ok(value)
+        }
     }
 
     async fn exec_paginated(
         &mut self,
         stmt: toasty_core::stmt::Statement,
     ) -> Result<crate::engine::exec::ExecResponse> {
-        self.connection().await?.exec_paginated(stmt).await
+        let conn = self.connection().await?;
+        conn.exec_stmt(stmt, false).await
     }
 
     fn schema(&mut self) -> &Arc<Schema> {

@@ -368,6 +368,20 @@ impl Statement {
         }
     }
 
+    /// Returns `true` if this statement expects at most one result row.
+    pub fn is_single(&self) -> bool {
+        match self {
+            Statement::Query(q) => q.single,
+            Statement::Insert(i) => i.source.single,
+            Statement::Update(i) => match &i.target {
+                UpdateTarget::Query(q) => q.single,
+                UpdateTarget::Model(_) => true,
+                _ => false,
+            },
+            Statement::Delete(d) => d.selection().single,
+        }
+    }
+
     /// Consumes `self` and returns the inner [`Update`].
     ///
     /// # Panics

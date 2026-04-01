@@ -65,12 +65,6 @@ pub(crate) enum ConnectionOperation {
     ExecStatement {
         stmt: Box<toasty_core::stmt::Statement>,
         in_transaction: bool,
-        tx: oneshot::Sender<crate::Result<toasty_core::stmt::Value>>,
-    },
-    /// Execute a statement and return pagination metadata.
-    ExecStatementPaginated {
-        stmt: Box<toasty_core::stmt::Statement>,
-        in_transaction: bool,
         tx: oneshot::Sender<crate::Result<crate::engine::exec::ExecResponse>>,
     },
     ExecOperation {
@@ -187,45 +181,15 @@ impl deadpool::managed::Manager for Manager {
                         in_transaction,
                         tx,
                     } => {
-                        use toasty_core::stmt::{self, Value};
-
-                        let returns_list = match stmt.as_ref() {
-                            stmt::Statement::Query(q) => !q.single,
-                            stmt::Statement::Insert(i) => !i.source.single,
-                            stmt::Statement::Update(i) => match &i.target {
-                                stmt::UpdateTarget::Query(q) => !q.single,
-                                stmt::UpdateTarget::Model(_) => false,
-                                _ => true,
-                            },
-                            stmt::Statement::Delete(d) => !d.selection().single,
-                        };
-
                         let result = async {
-                            let mut stream =
-                                engine.exec(&mut *connection, *stmt, in_transaction).await?;
-
-                            if returns_list {
-                                let values = stream.collect().await?;
-                                Ok(Value::List(values))
-                            } else {
-                                match stream.next().await {
-                                    Some(value) => value,
-                                    None => Ok(Value::Null),
-                                }
-                            }
+                            let mut response = engine
+                                .exec_with_metadata(&mut *connection, *stmt, in_transaction)
+                                .await?;
+                            response.values.buffer().await?;
+                            Ok(response)
                         }
                         .await;
 
-                        let _ = tx.send(result);
-                    }
-                    ConnectionOperation::ExecStatementPaginated {
-                        stmt,
-                        in_transaction,
-                        tx,
-                    } => {
-                        let result = engine
-                            .exec_with_metadata(&mut *connection, *stmt, in_transaction)
-                            .await;
                         let _ = tx.send(result);
                     }
                     ConnectionOperation::ExecOperation { operation, tx } => {

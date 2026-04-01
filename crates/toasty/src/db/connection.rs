@@ -40,7 +40,7 @@ impl Connection {
         &self,
         stmt: stmt::Statement,
         in_transaction: bool,
-    ) -> crate::Result<Value> {
+    ) -> crate::Result<ExecResponse> {
         let (tx, rx) = oneshot::channel();
 
         self.handle()
@@ -79,24 +79,6 @@ impl Connection {
             .unwrap();
         rx.await.unwrap()
     }
-
-    async fn exec_paginated(
-        &mut self,
-        stmt: toasty_core::stmt::Statement,
-    ) -> toasty_core::Result<crate::engine::exec::ExecResponse> {
-        let (tx, rx) = oneshot::channel();
-
-        self.handle()
-            .in_tx
-            .send(ConnectionOperation::ExecStatementPaginated {
-                stmt: Box::new(stmt),
-                in_transaction: false,
-                tx,
-            })
-            .unwrap();
-
-        rx.await.unwrap()
-    }
 }
 
 impl Connection {
@@ -114,11 +96,23 @@ impl super::Executor for Connection {
     }
 
     async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> crate::Result<Value> {
-        self.exec_stmt(stmt, false).await
+        let single = stmt.is_single();
+        let response = self.exec_stmt(stmt, false).await?;
+        let value = response.values.collect_as_value().await?;
+
+        if single {
+            // Single-value query: unwrap from the list
+            match value {
+                Value::List(mut items) => Ok(items.pop().unwrap_or(Value::Null)),
+                other => Ok(other),
+            }
+        } else {
+            Ok(value)
+        }
     }
 
     async fn exec_paginated(&mut self, stmt: Statement) -> toasty_core::Result<ExecResponse> {
-        Connection::exec_paginated(self, stmt).await
+        self.exec_stmt(stmt, false).await
     }
 
     fn schema(&mut self) -> &Arc<Schema> {
