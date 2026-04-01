@@ -456,6 +456,68 @@ fn composite_pk_or_becomes_any_map_for_dynamodb() -> Result<()> {
     Ok(())
 }
 
+// ── column-on-RHS commutation ─────────────────────────────────────────────────
+
+#[test]
+fn reversed_gt_column_on_rhs_is_commuted() -> Result<()> {
+    // Composite PK: col[0] = partition, col[1] = local (sort).
+    // Construct: partition = "u1" AND Value("s2") > col[1]  (column on the RHS).
+    // The index matcher must commute Gt to Lt when normalizing.
+    // Before the fix, `BinaryOp::reverse()` panicked for non-Eq operators.
+    let cx = ddb_test_cx_composite();
+
+    let filter = stmt::Expr::And(stmt::ExprAnd {
+        operands: vec![
+            stmt::Expr::eq(
+                stmt::Expr::Reference(stmt::ExprReference::column(0, 0)),
+                stmt::Expr::Value(stmt::Value::String("u1".to_string())),
+            ),
+            stmt::Expr::BinaryOp(stmt::ExprBinaryOp {
+                lhs: Box::new(stmt::Expr::Value(stmt::Value::String("s2".to_string()))),
+                op: stmt::BinaryOp::Gt,
+                rhs: Box::new(stmt::Expr::Reference(stmt::ExprReference::column(0, 1))),
+            }),
+        ],
+    });
+
+    let plan = cx.plan_basic_query_with_filter(filter)?;
+
+    assert!(
+        plan.index.primary_key,
+        "should select the primary key index"
+    );
+    // Range predicate means no exact key record can be formed.
+    assert_eq!(plan.key_values, None);
+    Ok(())
+}
+
+#[test]
+fn reversed_le_column_on_rhs_is_commuted() -> Result<()> {
+    // Composite PK: col[0] = partition, col[1] = local (sort).
+    // `Value("s2") <= col[1]` should commute to `col[1] >= Value("s2")`.
+    let cx = ddb_test_cx_composite();
+
+    let filter = stmt::Expr::And(stmt::ExprAnd {
+        operands: vec![
+            stmt::Expr::eq(
+                stmt::Expr::Reference(stmt::ExprReference::column(0, 0)),
+                stmt::Expr::Value(stmt::Value::String("u1".to_string())),
+            ),
+            stmt::Expr::BinaryOp(stmt::ExprBinaryOp {
+                lhs: Box::new(stmt::Expr::Value(stmt::Value::String("s2".to_string()))),
+                op: stmt::BinaryOp::Le,
+                rhs: Box::new(stmt::Expr::Reference(stmt::ExprReference::column(0, 1))),
+            }),
+        ],
+    });
+
+    let plan = cx.plan_basic_query_with_filter(filter)?;
+
+    assert!(plan.index.primary_key);
+    assert_eq!(plan.key_values, None);
+    Ok(())
+}
+
 struct TestCx {
     schema: toasty_core::Schema,
     capability: &'static Capability,
