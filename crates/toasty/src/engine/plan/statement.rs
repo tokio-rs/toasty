@@ -755,11 +755,11 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     // ===== SQL execution =====
 
     /// Phase 1: Detects pagination and adds ORDER BY columns to load_data.
-    /// Returns (page_size, original_column_count, cursor_column_indices) for use in phase 2.
+    /// Returns (page_size, cursor_column_indices) for use in phase 2.
     fn detect_pagination_sql(
         &mut self,
         stmt: &stmt::Statement,
-    ) -> Option<(i64, usize, Vec<usize>)> {
+    ) -> Option<(i64, Vec<usize>)> {
         let stmt::Statement::Query(query) = stmt else {
             return None;
         };
@@ -774,9 +774,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         })?;
 
         let order_by = query.order_by.as_ref()?;
-
-        // Remember original column count before adding ORDER BY columns
-        let original_column_count = self.load_data.select_items.len();
 
         // Add ORDER BY columns to load_data so they're available for cursor extraction
         let mut cursor_column_indices = Vec::new();
@@ -796,7 +793,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             }
         }
 
-        Some((page_size, original_column_count, cursor_column_indices))
+        Some((page_size, cursor_column_indices))
     }
 
     /// Phase 2: Builds extract_cursor function using the inferred row type.
@@ -804,10 +801,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     fn build_extract_cursor(
         &self,
         page_size: i64,
-        original_column_count: usize,
         cursor_column_indices: Vec<usize>,
         row_ty: &stmt::Type,
-    ) -> (exec::PaginationConfig, usize) {
+    ) -> exec::PaginationConfig {
         // Build extract_cursor expression: projects ORDER BY column positions from the row
         let extract_cursor = stmt::Expr::record(
             cursor_column_indices
@@ -818,13 +814,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         // Build eval::Func with the actual row type as input
         let extract_cursor_func = eval::Func::from_stmt(extract_cursor, vec![row_ty.clone()]);
 
-        (
-            exec::PaginationConfig {
-                page_size,
-                extract_cursor: Some(extract_cursor_func),
-            },
-            original_column_count,
-        )
+        exec::PaginationConfig {
+            page_size,
+            extract_cursor: Some(extract_cursor_func),
+        }
     }
 
     /// Converts an expression to an ExprReference if possible.
@@ -865,22 +858,15 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         let ty = self.planner.engine.infer_ty(&stmt, &input_args[..]);
 
         // Phase 2: Build extract_cursor function using the inferred type
-        let pagination_info = pagination_info.map(
-            |(page_size, original_column_count, cursor_column_indices)| {
-                // Extract row type from List<Row>
-                let row_ty = if let stmt::Type::List(item_ty) = &ty {
-                    (**item_ty).clone()
-                } else {
-                    stmt::Type::Unit
-                };
-                self.build_extract_cursor(
-                    page_size,
-                    original_column_count,
-                    cursor_column_indices,
-                    &row_ty,
-                )
-            },
-        );
+        let pagination_config = pagination_info.map(|(page_size, cursor_column_indices)| {
+            // Extract row type from List<Row>
+            let row_ty = if let stmt::Type::List(item_ty) = &ty {
+                (**item_ty).clone()
+            } else {
+                stmt::Type::Unit
+            };
+            self.build_extract_cursor(page_size, cursor_column_indices, &row_ty)
+        });
 
         let node = if stmt.condition().is_some() {
             if let stmt::Statement::Update(stmt) = stmt {
@@ -913,7 +899,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 stmt,
                 ty,
                 conditional_update_with_no_returning: false,
-                pagination: pagination_info.as_ref().map(|(config, _)| config.clone()),
+                pagination: pagination_config.clone(),
             }))
         };
 
@@ -929,43 +915,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 },
                 [exec_statement_node],
             );
-        }
-
-        // If we added extra ORDER BY columns for pagination, insert a Project
-        // to strip them from the output (keep only the original columns)
-        if let Some((_, original_column_count)) = pagination_info {
-            let total_columns = self.load_data.select_items.len();
-            if original_column_count < total_columns {
-                // Build projection to keep only the first original_column_count columns
-                let projection_expr = stmt::Expr::record(
-                    (0..original_column_count).map(|index| stmt::Expr::arg_project(0, [index])),
-                );
-
-                // Get the type from the exec_statement_node and project it
-                let exec_ty = self.planner.mir[exec_statement_node].ty().clone();
-                let projected_ty = if let stmt::Type::List(item_ty) = &exec_ty {
-                    if let stmt::Type::Record(fields) = &**item_ty {
-                        // Keep only the first original_column_count fields
-                        let projected_fields: Vec<_> =
-                            fields.iter().take(original_column_count).cloned().collect();
-                        stmt::Type::list(stmt::Type::Record(projected_fields))
-                    } else {
-                        exec_ty.clone()
-                    }
-                } else {
-                    exec_ty.clone()
-                };
-
-                // Convert projection expression to eval::Func
-                let projection_func =
-                    eval::Func::from_stmt_typed(projection_expr, vec![], projected_ty.clone());
-
-                exec_statement_node = self.planner.mir.insert(mir::Project {
-                    input: exec_statement_node,
-                    projection: projection_func,
-                    ty: projected_ty,
-                });
-            }
         }
 
         exec_statement_node
