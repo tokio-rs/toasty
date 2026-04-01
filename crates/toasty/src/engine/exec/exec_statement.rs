@@ -163,21 +163,16 @@ impl Exec<'_> {
         }
 
         // Apply pagination if configured
-        let exec_response = if let Some(pagination) = &action.pagination {
-            self.apply_sql_pagination(res.values, res.next_cursor, pagination, &action.stmt)
-                .await?
-        } else {
-            ExecResponse {
-                values: res.values,
-                next_cursor: res.next_cursor,
-                prev_cursor: None,
-            }
-        };
+        if let Some(pagination) = &action.pagination {
+            assert!(res.next_cursor.is_none() && res.prev_cursor.is_none());
+            res.values.buffer().await?;
+            self.apply_sql_pagination(&mut res, pagination)?;
+        }
 
         self.vars.store(
             action.output.output.var,
             action.output.output.num_uses,
-            exec_response,
+            res,
         );
 
         Ok(())
@@ -186,63 +181,41 @@ impl Exec<'_> {
     /// Apply SQL pagination by extracting cursor from last row.
     /// If we got a full page (page_size rows), extract cursor for potential next page.
     /// The client will naturally discover there's no more data when the next request returns empty.
-    async fn apply_sql_pagination(
+    ///
+    /// The response values must already be buffered (via `Rows::buffer()`).
+    fn apply_sql_pagination(
         &mut self,
-        rows: Rows,
-        driver_cursor: Option<stmt::Value>,
+        res: &mut ExecResponse,
         pagination: &PaginationConfig,
-        _original_stmt: &stmt::Statement,
-    ) -> Result<ExecResponse> {
-        // If driver provided a cursor (shouldn't happen for SQL), use it
-        if driver_cursor.is_some() {
-            return Ok(ExecResponse {
-                values: rows,
-                next_cursor: driver_cursor,
-                prev_cursor: None,
-            });
-        }
-
-        // If no extract_cursor function, can't do SQL pagination
+    ) -> Result<()> {
         let Some(extract_cursor) = &pagination.extract_cursor else {
-            return Ok(ExecResponse::from_rows(rows));
+            return Ok(());
         };
 
-        // Convert rows to vector
-        let row_vec = match rows {
-            Rows::Stream(stream) => stream.collect().await?,
-            Rows::Value(stmt::Value::List(items)) => items,
-            other => {
-                // Not a list of rows, can't paginate
-                return Ok(ExecResponse::from_rows(other));
-            }
+        let Rows::Value(stmt::Value::List(ref row_vec)) = res.values else {
+            return Ok(());
         };
 
         let page_size = pagination.page_size as usize;
 
         // Extract cursors for potential next/prev pages
-        let next_cursor = if row_vec.len() == page_size {
+        res.next_cursor = if row_vec.len() == page_size {
             let cursor_row = &row_vec[page_size - 1];
-            let cursor_value = extract_cursor.eval(std::slice::from_ref(cursor_row))?;
-            Some(cursor_value)
+            Some(extract_cursor.eval(std::slice::from_ref(cursor_row))?)
         } else {
             // Got fewer than page_size rows, no more data
             None
         };
 
         // Extract prev cursor from first row (for backward pagination)
-        let prev_cursor = if !row_vec.is_empty() {
+        res.prev_cursor = if !row_vec.is_empty() {
             let cursor_row = &row_vec[0];
-            let cursor_value = extract_cursor.eval(std::slice::from_ref(cursor_row))?;
-            Some(cursor_value)
+            Some(extract_cursor.eval(std::slice::from_ref(cursor_row))?)
         } else {
             None
         };
 
-        Ok(ExecResponse {
-            values: Rows::Value(stmt::Value::List(row_vec)),
-            next_cursor,
-            prev_cursor,
-        })
+        Ok(())
     }
 }
 
