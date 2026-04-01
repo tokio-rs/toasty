@@ -181,11 +181,12 @@ impl deadpool::managed::Manager for Manager {
                         in_transaction,
                         tx,
                     } => {
+                        let single = stmt.is_single();
                         let result = async {
                             let mut response = engine
                                 .exec_with_metadata(&mut *connection, *stmt, in_transaction)
                                 .await?;
-                            response.values.buffer().await?;
+                            response.values.buffer(single).await?;
                             Ok(response)
                         }
                         .await;

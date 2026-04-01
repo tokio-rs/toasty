@@ -2,7 +2,7 @@ use crate::{Result, Statement, db::Transaction, engine::exec::ExecResponse, sche
 
 use async_trait::async_trait;
 use std::sync::Arc;
-use toasty_core::{Schema, stmt::Value};
+use toasty_core::Schema;
 
 /// Anything that can execute queries — [`Db`](crate::Db) or
 /// [`Transaction`](crate::db::Transaction).
@@ -63,19 +63,8 @@ impl dyn Executor + '_ {
     /// # });
     /// ```
     pub async fn exec<T: Load>(&mut self, stmt: Statement<T>) -> Result<T::Output> {
-        let single = stmt.untyped.is_single();
         let response = self.exec_untyped(stmt.untyped).await?;
         let value = response.values.collect_as_value().await?;
-
-        let value = if single {
-            match value {
-                Value::List(mut items) => items.pop().unwrap_or(Value::Null),
-                other => other,
-            }
-        } else {
-            value
-        };
-
         T::load(value)
     }
 }
