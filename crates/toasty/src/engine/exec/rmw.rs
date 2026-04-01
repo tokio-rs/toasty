@@ -89,6 +89,7 @@ impl Exec<'_> {
                 operation::QuerySql {
                     stmt: action.read.clone().into(),
                     ret: ty,
+                    params: vec![],
                     last_insert_id_hack: None,
                 }
                 .into(),
@@ -126,6 +127,7 @@ impl Exec<'_> {
                 operation::QuerySql {
                     stmt: action.write.clone(),
                     ret: None,
+                    params: vec![],
                     last_insert_id_hack: None,
                 }
                 .into(),

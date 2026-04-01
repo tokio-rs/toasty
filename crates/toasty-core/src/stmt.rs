@@ -174,6 +174,9 @@ mod like;
 mod node;
 pub use node::Node;
 
+mod param;
+pub use param::Param;
+
 mod num;
 
 mod offset;

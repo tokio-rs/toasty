@@ -31,6 +31,14 @@ pub struct QuerySql {
     /// not return rows (e.g., `DELETE` without `RETURNING`).
     pub ret: Option<Vec<stmt::Type>>,
 
+    /// Typed parameter values that were substituted into the statement.
+    ///
+    /// Each entry pairs a value with its inferred type. Drivers may use this
+    /// list instead of re-extracting parameters during SQL serialization.
+    /// The order matches the positional arguments that were resolved during
+    /// statement substitution.
+    pub params: Vec<stmt::Param>,
+
     /// **Temporary MySQL workaround** for `RETURNING` from `INSERT`.
     ///
     /// When set, the driver should fetch `LAST_INSERT_ID()` to simulate
