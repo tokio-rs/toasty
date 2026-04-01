@@ -43,13 +43,13 @@ struct User {
 # async fn __example() -> toasty::Result<()> {
 #[tokio::main]
 async fn main() -> toasty::Result<()> {
-    // Build a Db handle, registering all models
+    // Build a Db handle, discovering all models
     let mut db = toasty::Db::builder()
-        .register::<User>()
+        .discover()
         .connect("sqlite::memory:")
         .await?;
 
-    // Create tables based on registered models
+    // Create tables based on discovered models
     db.push_schema().await?;
 
     // Create a user
@@ -102,10 +102,20 @@ rest of this guide shows everything the macro can generate and how to use it.
 
 ## Connecting to a database
 
-`Db::builder()` creates a builder where you register your models and then
-connect to a database. Every model must be registered before connecting so that
-Toasty can infer the full database schema — tables, columns, indexes, and
-relationships between models.
+`Db::builder()` creates a builder that configures and connects to a database.
+The easiest way to register your models is with `.discover()`, which
+automatically finds every `#[derive(Model)]` and `#[derive(Embed)]` type in
+your binary:
+
+```rust,ignore
+let mut db = toasty::Db::builder()
+    .discover()
+    .connect("sqlite::memory:")
+    .await?;
+```
+
+If you need more control — for example, to register only a subset of models —
+you can use `.register::<T>()` instead:
 
 ```rust,ignore
 let mut db = toasty::Db::builder()
@@ -115,12 +125,15 @@ let mut db = toasty::Db::builder()
     .await?;
 ```
 
+Every model must be registered (via `.discover()` or `.register()`) before
+connecting so that Toasty can infer the full database schema — tables, columns,
+indexes, and relationships between models.
+
 The connection URL determines which database driver to use. See
 [Database Setup](./database-setup.md) for connection URLs for each
 supported database.
 
 ## Creating tables
 
-`db.push_schema()` creates all tables and indexes defined by your registered
-models. See [Schema Management](./schema-management.md) for more on managing
+`db.push_schema()` creates all tables and indexes defined by your models. See [Schema Management](./schema-management.md) for more on managing
 your database schema.
