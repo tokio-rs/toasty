@@ -60,7 +60,7 @@ impl Engine {
     /// The statement passes through the full compilation pipeline
     /// (lowering -> planning -> execution) before being sent to the database
     /// driver via the provided connection.
-    pub(crate) async fn exec_with_metadata(
+    pub(crate) async fn exec(
         &self,
         connection: &mut dyn Connection,
         stmt: Statement,
