@@ -44,7 +44,10 @@ impl Expand<'_> {
         let inventory_submit = if cfg!(feature = "discover") {
             quote! {
                 #toasty::inventory::submit! {
-                    #toasty::RegisterFn(|builder| { builder.register::<#model_ident>(); })
+                    #toasty::DiscoverItem::new(
+                        env!("CARGO_PKG_NAME"),
+                        |builder| { builder.register::<#model_ident>(); },
+                    )
                 }
             }
         } else {

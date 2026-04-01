@@ -133,13 +133,15 @@ pub mod codegen_support {
     pub use crate::{
         Db, Error, Executor, Result, Statement,
         schema::{
-            Auto, BelongsTo, Embed, Field, HasMany, HasOne, Load, Model, Register, RegisterFn,
-            Relation, Scope, generate_unique_id, inventory,
+            Auto, BelongsTo, DiscoverItem, Embed, Field, HasMany, HasOne, Load, Model, Register,
+            Relation, Scope, generate_unique_id,
         },
         stmt::CreateMany,
         stmt::{self, Assign, IntoExpr, IntoInsert, IntoStatement, List, Path},
         update_target::UpdateTarget,
     };
+    #[cfg(feature = "discover")]
+    pub use crate::schema::inventory;
     #[cfg(feature = "serde")]
     pub use serde_json;
     pub use std::{convert::Into, default::Default, option::Option};

@@ -87,7 +87,10 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let inventory_submit = if cfg!(feature = "discover") {
         quote! {
             #toasty::inventory::submit! {
-                #toasty::RegisterFn(|builder| { builder.register::<#model_ident>(); })
+                #toasty::DiscoverItem::new(
+                    env!("CARGO_PKG_NAME"),
+                    |builder| { builder.register::<#model_ident>(); },
+                )
             }
         }
     } else {
@@ -206,7 +209,10 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     let inventory_submit = if cfg!(feature = "discover") {
         quote! {
             #toasty::inventory::submit! {
-                #toasty::RegisterFn(|builder| { builder.register::<#model_ident>(); })
+                #toasty::DiscoverItem::new(
+                    env!("CARGO_PKG_NAME"),
+                    |builder| { builder.register::<#model_ident>(); },
+                )
             }
         }
     } else {

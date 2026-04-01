@@ -30,7 +30,7 @@ mod option;
 mod register;
 #[cfg(feature = "discover")]
 pub use register::inventory;
-pub use register::{Register, RegisterFn, generate_unique_id};
+pub use register::{DiscoverItem, Register, generate_unique_id};
 
 mod num;
 

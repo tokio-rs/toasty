@@ -2,7 +2,7 @@ use crate::{
     Db, Result,
     db::{Connect, Pool, Shared},
     engine::Engine,
-    schema::{Register, RegisterFn},
+    schema::{DiscoverItem, Register},
 };
 
 use toasty_core::{
@@ -97,8 +97,8 @@ impl Builder {
     /// ```
     #[cfg(feature = "discover")]
     pub fn discover(&mut self) -> &mut Self {
-        for register_fn in inventory::iter::<RegisterFn>() {
-            register_fn.0(self);
+        for item in inventory::iter::<DiscoverItem>() {
+            item.register(self);
         }
         self
     }

@@ -31,20 +31,41 @@ pub trait Register {
     fn schema() -> app::Model;
 }
 
-/// A function that registers a single type with a [`Builder`].
+/// An item discovered at compile time by the `#[derive(Model)]` or
+/// `#[derive(Embed)]` macros.
 ///
-/// The `#[derive(Model)]` and `#[derive(Embed)]` macros emit an
-/// `inventory::submit!` call for each type, wrapping its
-/// [`Builder::register`] call in a `RegisterFn`. When the `discover`
-/// feature is enabled, [`Builder::discover`] iterates over all submitted
-/// `RegisterFn` values to register every type in the binary automatically.
+/// Each derived type emits an `inventory::submit!` call that creates a
+/// `DiscoverItem` carrying the originating crate name (via
+/// `env!("CARGO_PKG_NAME")`) and a registration function. When the
+/// `discover` feature is enabled, [`Builder::discover`] and
+/// [`Builder::discover_crate`] iterate over all submitted items.
 #[doc(hidden)]
-pub struct RegisterFn(pub fn(&mut Builder));
+pub struct DiscoverItem {
+    crate_name: &'static str,
+    register_fn: fn(&mut Builder),
+}
 
-// Collect all `RegisterFn` instances submitted by derive macros so they
-// can be iterated by `Builder::discover`.
+impl DiscoverItem {
+    pub const fn new(crate_name: &'static str, register_fn: fn(&mut Builder)) -> Self {
+        Self {
+            crate_name,
+            register_fn,
+        }
+    }
+
+    pub fn crate_name(&self) -> &'static str {
+        self.crate_name
+    }
+
+    pub fn register(&self, builder: &mut Builder) {
+        (self.register_fn)(builder)
+    }
+}
+
+// Collect all `DiscoverItem` instances submitted by derive macros so they
+// can be iterated by `Builder::discover` / `Builder::discover_crate`.
 #[cfg(feature = "discover")]
-inventory::collect!(RegisterFn);
+inventory::collect!(DiscoverItem);
 
 // Re-exported so that generated `inventory::submit!` calls can reference
 // the crate without requiring users to depend on it directly.
