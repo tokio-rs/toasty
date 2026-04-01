@@ -36,6 +36,7 @@ pub mod infra_connection_per_clone;
 pub mod infra_missing_registrations;
 pub mod infra_reset_db;
 pub mod infra_sync_send;
+pub mod key_unsigned;
 pub mod query_count;
 pub mod record_not_found;
 pub mod relation_belongs_to_configured;
