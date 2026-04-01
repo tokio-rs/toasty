@@ -22,7 +22,7 @@ pub(crate) use tx::ConnRef;
 use crate::{Result, engine::Engine};
 
 use async_trait::async_trait;
-use toasty_core::{Schema, driver::ExecResponse, stmt};
+use toasty_core::{Schema, stmt};
 
 use std::sync::Arc;
 
