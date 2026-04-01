@@ -65,7 +65,7 @@ impl Engine {
         connection: &mut dyn Connection,
         stmt: Statement,
         in_transaction: bool,
-    ) -> Result<exec::ExecResponse> {
+    ) -> Result<toasty_core::driver::Response> {
         tracing::debug!(stmt.kind = stmt.name(), "executing statement");
 
         if cfg!(debug_assertions) {

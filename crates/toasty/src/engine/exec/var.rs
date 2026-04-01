@@ -1,6 +1,7 @@
-use toasty_core::{driver::Rows, stmt};
-
-use super::ExecResponse;
+use toasty_core::{
+    driver::{Response, Rows},
+    stmt,
+};
 
 /// Tracks variable declarations during planning. Each variable has a type and
 /// is assigned a unique VarId. This is converted into a VarStore for execution.
@@ -32,7 +33,7 @@ pub(crate) struct VarId(pub(crate) usize);
 
 #[derive(Debug)]
 struct Entry {
-    response: ExecResponse,
+    response: Response,
     count: usize,
 }
 
@@ -44,7 +45,7 @@ impl VarStore {
         }
     }
 
-    pub(crate) async fn load(&mut self, var: VarId) -> crate::Result<ExecResponse> {
+    pub(crate) async fn load(&mut self, var: VarId) -> crate::Result<Response> {
         let Some(entry) = &mut self.slots[var.0] else {
             panic!("no stream at slot {}; store={:#?}", var.0, self)
         };
@@ -54,7 +55,7 @@ impl VarStore {
         }
 
         entry.count -= 1;
-        Ok(ExecResponse {
+        Ok(Response {
             values: entry.response.values.dup().await?,
             next_cursor: entry.response.next_cursor.clone(),
             prev_cursor: entry.response.prev_cursor.clone(),
@@ -62,7 +63,7 @@ impl VarStore {
     }
 
     #[track_caller]
-    pub(crate) fn store(&mut self, var: VarId, count: usize, response: ExecResponse) {
+    pub(crate) fn store(&mut self, var: VarId, count: usize, response: Response) {
         while self.slots.len() <= var.0 {
             self.slots.push(None);
         }
@@ -88,7 +89,7 @@ impl VarStore {
                 Rows::Stream(value_stream.typed((**item_tys).clone()))
             }
         };
-        let response = ExecResponse {
+        let response = Response {
             values,
             next_cursor: response.next_cursor,
             prev_cursor: response.prev_cursor,

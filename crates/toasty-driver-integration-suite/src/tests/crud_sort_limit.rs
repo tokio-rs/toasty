@@ -46,7 +46,7 @@ pub async fn sort_asc(test: &mut Test) -> Result<()> {
             order_by: Some(_),
         }),
     }));
-    assert_struct!(resp.rows, Rows::Stream(_));
+    assert_struct!(resp.values, Rows::Stream(_));
 
     test.log().clear();
 
@@ -68,7 +68,7 @@ pub async fn sort_asc(test: &mut Test) -> Result<()> {
             order_by: Some(_),
         }),
     }));
-    assert_struct!(resp.rows, Rows::Stream(_));
+    assert_struct!(resp.values, Rows::Stream(_));
 
     Ok(())
 }
@@ -113,7 +113,7 @@ pub async fn paginate(test: &mut Test) -> Result<()> {
             limit: Some(_),
         }),
     }));
-    assert_struct!(resp.rows, Rows::Stream(_));
+    assert_struct!(resp.values, Rows::Stream(_));
 
     test.log().clear();
 

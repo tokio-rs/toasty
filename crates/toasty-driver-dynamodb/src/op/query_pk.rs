@@ -126,8 +126,9 @@ impl Connection {
         }));
 
         Ok(Response {
-            rows: toasty_core::driver::Rows::Stream(rows),
-            cursor,
+            values: toasty_core::driver::Rows::Stream(rows),
+            next_cursor: cursor,
+            prev_cursor: None,
         })
     }
 }

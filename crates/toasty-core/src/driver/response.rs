@@ -1,9 +1,10 @@
 use crate::{Result, stmt};
 
-/// The result returned by [`Connection::exec`](super::Connection::exec).
+/// The result of a database operation.
 ///
 /// Every database operation produces a `Response` containing [`Rows`], which
-/// may be a row count, a single value, or a stream of result rows.
+/// may be a row count, a single value, or a stream of result rows. Paginated
+/// queries may also include cursors for fetching subsequent pages.
 ///
 /// # Examples
 ///
@@ -12,14 +13,16 @@ use crate::{Result, stmt};
 ///
 /// // Create a count response (e.g., from a DELETE that affected 3 rows)
 /// let resp = Response::count(3);
-/// assert_eq!(resp.rows.into_count(), 3);
+/// assert_eq!(resp.values.into_count(), 3);
 /// ```
 #[derive(Debug)]
 pub struct Response {
-    /// The rows produced by the operation.
-    pub rows: Rows,
-    /// Opaque cursor for pagination. Driver-specific format.
-    pub cursor: Option<stmt::Value>,
+    /// The result values (rows, count, or stream).
+    pub values: Rows,
+    /// Cursor to the next page (if paginated and more data exists).
+    pub next_cursor: Option<stmt::Value>,
+    /// Cursor to the previous page (if backward pagination is supported).
+    pub prev_cursor: Option<stmt::Value>,
 }
 
 /// The payload of a [`Response`].
@@ -43,24 +46,36 @@ impl Response {
     /// Creates a response indicating that `count` rows were affected.
     pub fn count(count: u64) -> Self {
         Self {
-            rows: Rows::Count(count),
-            cursor: None,
+            values: Rows::Count(count),
+            next_cursor: None,
+            prev_cursor: None,
         }
     }
 
     /// Creates a response wrapping a stream of values.
     pub fn value_stream(values: impl Into<stmt::ValueStream>) -> Self {
         Self {
-            rows: Rows::value_stream(values),
-            cursor: None,
+            values: Rows::value_stream(values),
+            next_cursor: None,
+            prev_cursor: None,
         }
     }
 
     /// Creates a response with an empty value stream (no rows).
     pub fn empty_value_stream() -> Self {
         Self {
-            rows: Rows::Stream(stmt::ValueStream::default()),
-            cursor: None,
+            values: Rows::Stream(stmt::ValueStream::default()),
+            next_cursor: None,
+            prev_cursor: None,
+        }
+    }
+
+    /// Create a response from rows with no pagination cursors.
+    pub fn from_rows(rows: Rows) -> Self {
+        Self {
+            values: rows,
+            next_cursor: None,
+            prev_cursor: None,
         }
     }
 }

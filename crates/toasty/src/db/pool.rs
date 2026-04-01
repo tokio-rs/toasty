@@ -66,7 +66,7 @@ pub(crate) enum ConnectionOperation {
     ExecStatement {
         stmt: Box<toasty_core::stmt::Statement>,
         in_transaction: bool,
-        tx: oneshot::Sender<crate::Result<crate::engine::exec::ExecResponse>>,
+        tx: oneshot::Sender<crate::Result<toasty_core::driver::Response>>,
     },
     ExecOperation {
         operation: Box<toasty_core::driver::operation::Operation>,

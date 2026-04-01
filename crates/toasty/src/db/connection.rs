@@ -2,7 +2,6 @@ use super::Transaction;
 use super::pool::{ConnectionHandle, ConnectionOperation, Manager};
 use super::tx::ConnRef;
 
-use crate::engine::exec::ExecResponse;
 use async_trait::async_trait;
 use std::sync::Arc;
 use toasty_core::{
@@ -39,7 +38,7 @@ impl Connection {
         &self,
         stmt: stmt::Statement,
         in_transaction: bool,
-    ) -> crate::Result<ExecResponse> {
+    ) -> crate::Result<Response> {
         let (tx, rx) = oneshot::channel();
 
         self.handle()
@@ -97,7 +96,7 @@ impl super::Executor for Connection {
     async fn exec_untyped(
         &mut self,
         stmt: toasty_core::stmt::Statement,
-    ) -> crate::Result<ExecResponse> {
+    ) -> crate::Result<Response> {
         self.exec_stmt(stmt, false).await
     }
 

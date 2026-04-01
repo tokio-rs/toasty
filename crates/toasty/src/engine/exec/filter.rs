@@ -2,10 +2,10 @@ use crate::{
     Result,
     engine::{
         eval,
-        exec::{Action, Exec, ExecResponse, Output, VarId},
+        exec::{Action, Exec, Output, VarId},
     },
 };
-use toasty_core::driver::Rows;
+use toasty_core::driver::{Response, Rows};
 
 #[derive(Debug)]
 pub(crate) struct Filter {
@@ -40,7 +40,7 @@ impl Exec<'_> {
         self.vars.store(
             action.output.var,
             action.output.num_uses,
-            ExecResponse {
+            Response {
                 values: Rows::value_stream(filtered_rows),
                 next_cursor: input_response.next_cursor,
                 prev_cursor: input_response.prev_cursor,

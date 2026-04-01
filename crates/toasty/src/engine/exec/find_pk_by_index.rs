@@ -1,12 +1,12 @@
 use toasty_core::{
-    driver::{Rows, operation},
+    driver::{Response, Rows, operation},
     schema::db::{IndexId, TableId},
     stmt,
 };
 
 use crate::{
     Result,
-    engine::exec::{Action, Exec, ExecResponse, Output, VarId},
+    engine::exec::{Action, Exec, Output, VarId},
 };
 
 /// Schema: `self` references [index-fields, input-fields] flattened
@@ -55,13 +55,13 @@ impl Exec<'_> {
                 )
                 .await?;
 
-            all_rows.extend(res.rows.into_value_stream().collect().await?);
+            all_rows.extend(res.values.into_value_stream().collect().await?);
         }
 
         self.vars.store(
             action.output.var,
             action.output.num_uses,
-            ExecResponse::from_rows(Rows::Stream(stmt::ValueStream::from_vec(all_rows))),
+            Response::from_rows(Rows::Stream(stmt::ValueStream::from_vec(all_rows))),
         );
 
         Ok(())

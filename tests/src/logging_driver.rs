@@ -122,7 +122,7 @@ impl Connection for LoggingConnection {
 /// Duplicate a Response, using ValueStream::dup() for value streams
 /// This version takes a mutable reference so we can call dup() on the ValueStream
 async fn duplicate_response_mut(response: &mut Response) -> Result<Response> {
-    let rows = match &mut response.rows {
+    let values = match &mut response.values {
         Rows::Count(count) => Rows::Count(*count),
         Rows::Value(_) => todo!(),
         Rows::Stream(stream) => {
@@ -132,5 +132,5 @@ async fn duplicate_response_mut(response: &mut Response) -> Result<Response> {
         }
     };
 
-    Ok(Response { rows, cursor: None })
+    Ok(Response::from_rows(values))
 }

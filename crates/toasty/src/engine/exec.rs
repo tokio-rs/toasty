@@ -56,32 +56,9 @@ pub(crate) use var::{VarDecls, VarId, VarStore};
 use crate::{Result, engine::Engine};
 use toasty_core::{
     Connection,
-    driver::{Rows, operation::Transaction},
+    driver::{Response, Rows, operation::Transaction},
     stmt::{self, ValueStream},
 };
-
-/// Response from executing an action in the engine pipeline.
-/// Carries both the result values and optional pagination metadata.
-#[derive(Debug)]
-pub struct ExecResponse {
-    /// The result values (rows, count, or stream)
-    pub values: Rows,
-    /// Cursor to the next page (if paginated and more data exists)
-    pub next_cursor: Option<stmt::Value>,
-    /// Cursor to the previous page (if backward pagination is supported)
-    pub prev_cursor: Option<stmt::Value>,
-}
-
-impl ExecResponse {
-    /// Create a response from rows with no pagination cursors
-    pub fn from_rows(rows: Rows) -> Self {
-        Self {
-            values: rows,
-            next_cursor: None,
-            prev_cursor: None,
-        }
-    }
-}
 
 struct Exec<'a> {
     engine: &'a Engine,
@@ -99,7 +76,7 @@ impl Engine {
         connection: &mut dyn Connection,
         plan: ExecPlan,
         in_transaction: bool,
-    ) -> Result<ExecResponse> {
+    ) -> Result<Response> {
         let mut exec = Exec {
             engine: self,
             connection,
@@ -162,13 +139,13 @@ impl Engine {
                 Rows::Stream(value_stream) => value_stream,
             };
 
-            ExecResponse {
+            Response {
                 values: Rows::Stream(value_stream),
                 next_cursor: response.next_cursor,
                 prev_cursor: response.prev_cursor,
             }
         } else {
-            ExecResponse::from_rows(Rows::Stream(ValueStream::default()))
+            Response::from_rows(Rows::Stream(ValueStream::default()))
         };
 
         Ok(result)

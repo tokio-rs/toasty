@@ -1,5 +1,5 @@
 use toasty_core::{
-    driver::{Rows, operation},
+    driver::{Response, Rows, operation},
     stmt,
 };
 
@@ -7,7 +7,7 @@ use crate::{
     Result,
     engine::{
         eval,
-        exec::{Action, Exec, ExecResponse, Output, VarId},
+        exec::{Action, Exec, Output, VarId},
     },
 };
 
@@ -109,7 +109,7 @@ impl Exec<'_> {
             self.vars.store(
                 action.output.output.var,
                 action.output.output.num_uses,
-                ExecResponse::from_rows(rows),
+                Response::from_rows(rows),
             );
 
             return Ok(());
@@ -132,10 +132,10 @@ impl Exec<'_> {
         let mut res = self.connection.exec(&self.engine.schema, op.into()).await?;
 
         if action.conditional_update_with_no_returning {
-            let Rows::Stream(rows) = res.rows else {
+            let Rows::Stream(rows) = res.values else {
                 return Err(toasty_core::Error::invalid_result(format!(
                     "conditional update expected Stream, got {:?}",
-                    res.rows
+                    res.values
                 )));
             };
 
@@ -157,19 +157,19 @@ impl Exec<'_> {
                 ));
             }
 
-            res.rows = Rows::Count(record[0].to_u64_unwrap());
+            res.values = Rows::Count(record[0].to_u64_unwrap());
         } else if let Some(mysql_info) = mysql_insert_returning {
-            res.rows = mysql_info.reconstruct_returning(res.rows).await?;
+            res.values = mysql_info.reconstruct_returning(res.values).await?;
         }
 
         // Apply pagination if configured
         let exec_response = if let Some(pagination) = &action.pagination {
-            self.apply_sql_pagination(res.rows, res.cursor, pagination, &action.stmt)
+            self.apply_sql_pagination(res.values, res.next_cursor, pagination, &action.stmt)
                 .await?
         } else {
-            ExecResponse {
-                values: res.rows,
-                next_cursor: res.cursor,
+            Response {
+                values: res.values,
+                next_cursor: res.next_cursor,
                 prev_cursor: None,
             }
         };
@@ -192,10 +192,10 @@ impl Exec<'_> {
         driver_cursor: Option<stmt::Value>,
         pagination: &PaginationConfig,
         _original_stmt: &stmt::Statement,
-    ) -> Result<ExecResponse> {
+    ) -> Result<Response> {
         // If driver provided a cursor (shouldn't happen for SQL), use it
         if driver_cursor.is_some() {
-            return Ok(ExecResponse {
+            return Ok(Response {
                 values: rows,
                 next_cursor: driver_cursor,
                 prev_cursor: None,
@@ -204,7 +204,7 @@ impl Exec<'_> {
 
         // If no extract_cursor function, can't do SQL pagination
         let Some(extract_cursor) = &pagination.extract_cursor else {
-            return Ok(ExecResponse::from_rows(rows));
+            return Ok(Response::from_rows(rows));
         };
 
         // Convert rows to vector
@@ -213,7 +213,7 @@ impl Exec<'_> {
             Rows::Value(stmt::Value::List(items)) => items,
             other => {
                 // Not a list of rows, can't paginate
-                return Ok(ExecResponse::from_rows(other));
+                return Ok(Response::from_rows(other));
             }
         };
 
@@ -238,7 +238,7 @@ impl Exec<'_> {
             None
         };
 
-        Ok(ExecResponse {
+        Ok(Response {
             values: Rows::Value(stmt::Value::List(row_vec)),
             next_cursor,
             prev_cursor,

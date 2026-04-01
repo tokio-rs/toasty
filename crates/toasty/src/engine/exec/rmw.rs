@@ -1,10 +1,10 @@
 use crate::{
     Result,
-    engine::exec::{Action, Exec, ExecResponse, Output, VarId},
+    engine::exec::{Action, Exec, Output, VarId},
 };
 use toasty_core::{
     driver::{
-        Rows,
+        Response, Rows,
         operation::{self, Transaction},
     },
     stmt::{self, ValueStream},
@@ -71,7 +71,7 @@ impl Exec<'_> {
         if let Some(output) = &action.output {
             let rows = Rows::value_stream(ValueStream::default());
             self.vars
-                .store(output.var, output.num_uses, ExecResponse::from_rows(rows));
+                .store(output.var, output.num_uses, Response::from_rows(rows));
         }
 
         Ok(())
@@ -96,7 +96,7 @@ impl Exec<'_> {
             )
             .await?;
 
-        let Rows::Stream(rows) = res.rows else {
+        let Rows::Stream(rows) = res.values else {
             return Err(toasty_core::Error::invalid_result(
                 "expected Stream, got Count",
             ));
@@ -133,7 +133,7 @@ impl Exec<'_> {
             )
             .await?;
 
-        let Rows::Count(actual) = res.rows else {
+        let Rows::Count(actual) = res.values else {
             return Err(toasty_core::Error::invalid_result(
                 "expected Count, got Stream",
             ));

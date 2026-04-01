@@ -1,10 +1,10 @@
 use toasty_core::{
-    driver::{Rows, operation},
+    driver::{Response, Rows, operation},
     schema::db::TableId,
     stmt,
 };
 
-use crate::engine::exec::{Action, ExecResponse, Output, VarId};
+use crate::engine::exec::{Action, Output, VarId};
 
 use super::{Exec, Result};
 
@@ -49,7 +49,7 @@ impl Exec<'_> {
 
                 let res = self.connection.exec(&self.engine.schema, op.into()).await?;
 
-                match res.rows {
+                match res.values {
                     Rows::Count(n) => total_count += n,
                     _ => panic!("expected Count from DeleteByKey"),
                 }
@@ -61,7 +61,7 @@ impl Exec<'_> {
         self.vars.store(
             action.output.var,
             action.output.num_uses,
-            ExecResponse::from_rows(res),
+            Response::from_rows(res),
         );
 
         Ok(())

@@ -1,4 +1,3 @@
-use crate::engine::exec::ExecResponse;
 use crate::{
     Result,
     engine::{
@@ -6,7 +5,10 @@ use crate::{
         exec::{Action, Exec, Output, VarId},
     },
 };
-use toasty_core::{driver::Rows, stmt::ValueStream};
+use toasty_core::{
+    driver::{Response, Rows},
+    stmt::ValueStream,
+};
 
 /// Gates a data stream with a boolean condition evaluated against separate
 /// inputs. When the guard is `false`, an empty stream is produced.
@@ -47,7 +49,7 @@ impl Exec<'_> {
             self.vars.load(action.input).await?
         } else {
             // Guard failed — produce an empty stream.
-            ExecResponse {
+            Response {
                 values: Rows::value_stream(ValueStream::default()),
                 prev_cursor: None,
                 next_cursor: None,

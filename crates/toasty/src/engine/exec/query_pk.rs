@@ -1,9 +1,9 @@
 use crate::{
     Result,
-    engine::exec::{Action, Exec, ExecResponse, Output, PaginationConfig, VarId},
+    engine::exec::{Action, Exec, Output, PaginationConfig, VarId},
 };
 use toasty_core::{
-    driver::{Rows, operation},
+    driver::{Response, Rows, operation},
     schema::db::{ColumnId, IndexId, TableId},
     stmt,
 };
@@ -88,17 +88,17 @@ impl Exec<'_> {
                 .await?;
 
             // Capture cursor from driver response (for DynamoDB)
-            if res.cursor.is_some() {
-                response_cursor = res.cursor;
+            if res.next_cursor.is_some() {
+                response_cursor = res.next_cursor;
             }
 
-            all_rows.extend(res.rows.into_value_stream().collect().await?);
+            all_rows.extend(res.values.into_value_stream().collect().await?);
         }
 
         self.vars.store(
             action.output.var,
             action.output.num_uses,
-            ExecResponse {
+            Response {
                 values: Rows::Stream(stmt::ValueStream::from_vec(all_rows)),
                 next_cursor: response_cursor,
                 prev_cursor: None,

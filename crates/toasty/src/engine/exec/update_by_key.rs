@@ -1,9 +1,9 @@
 use crate::{
     Result,
-    engine::exec::{Action, Exec, ExecResponse, Output, VarId},
+    engine::exec::{Action, Exec, Output, VarId},
 };
 use toasty_core::{
-    driver::{Rows, operation},
+    driver::{Response, Rows, operation},
     schema::db::TableId,
     stmt::{self, ValueStream},
 };
@@ -62,15 +62,15 @@ impl Exec<'_> {
 
             let res = self.connection.exec(&self.engine.schema, op.into()).await?;
 
-            debug_assert_eq!(!res.rows.is_count(), action.returning);
+            debug_assert_eq!(!res.values.is_count(), action.returning);
 
-            res.rows
+            res.values
         };
 
         self.vars.store(
             action.output.var,
             action.output.num_uses,
-            ExecResponse::from_rows(res),
+            Response::from_rows(res),
         );
 
         Ok(())

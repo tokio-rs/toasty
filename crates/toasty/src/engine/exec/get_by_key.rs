@@ -1,9 +1,9 @@
 use crate::{
     Result,
-    engine::exec::{Action, Exec, ExecResponse, Output, VarId},
+    engine::exec::{Action, Exec, Output, VarId},
 };
 use toasty_core::{
-    driver::{Rows, operation},
+    driver::{Response, Rows, operation},
     schema::db::{ColumnId, TableId},
     stmt::ValueStream,
 };
@@ -48,13 +48,13 @@ impl Exec<'_> {
             };
 
             let res = self.connection.exec(&self.engine.schema, op.into()).await?;
-            res.rows
+            res.values
         };
 
         self.vars.store(
             action.output.var,
             action.output.num_uses,
-            ExecResponse::from_rows(res),
+            Response::from_rows(res),
         );
         Ok(())
     }

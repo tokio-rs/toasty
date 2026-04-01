@@ -14,7 +14,7 @@ pub use toasty_core::driver::{Capability, Driver};
 pub use tx::{Transaction, TransactionBuilder};
 
 /// Response from executing a statement, including pagination metadata.
-pub use crate::engine::exec::ExecResponse;
+pub use toasty_core::driver::Response;
 
 pub(crate) use pool::ConnectionOperation;
 pub(crate) use tx::ConnRef;
@@ -93,7 +93,7 @@ impl Db {
         &self,
         stmt: stmt::Statement,
         in_transaction: bool,
-    ) -> Result<crate::engine::exec::ExecResponse> {
+    ) -> Result<toasty_core::driver::Response> {
         let conn = self.connection().await?;
         conn.exec_stmt(stmt, in_transaction).await
     }
@@ -180,7 +180,7 @@ impl Executor for Db {
     async fn exec_untyped(
         &mut self,
         stmt: stmt::Statement,
-    ) -> Result<crate::engine::exec::ExecResponse> {
+    ) -> Result<toasty_core::driver::Response> {
         self.exec_stmt(stmt, false).await
     }
 
