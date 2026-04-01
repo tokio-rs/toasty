@@ -51,11 +51,15 @@ impl Exec<'_> {
     pub(super) async fn action_exec_statement(&mut self, action: &ExecStatement) -> Result<()> {
         let mut stmt = action.stmt.clone();
 
-        // Collect input values and substitute into the statement
+        // Collect input values, record them as typed parameters, and
+        // substitute into the statement.
+        let mut params: Vec<stmt::Param> = Vec::new();
+
         if !action.input.is_empty() {
             let mut input_values = Vec::new();
             for var_id in &action.input {
                 let values = self.vars.load(*var_id).await?.collect_as_value().await?;
+                params.push(stmt::Param::from(values.clone()));
                 input_values.push(values);
             }
             stmt.substitute(&input_values);
@@ -109,6 +113,7 @@ impl Exec<'_> {
             } else {
                 action.output.ty.clone()
             },
+            params,
             last_insert_id_hack: mysql_insert_returning.as_ref().map(|info| info.num_rows),
         };
 

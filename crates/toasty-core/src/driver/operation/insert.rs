@@ -28,6 +28,12 @@ pub struct Insert {
     /// should return the inserted row(s) projected to these types (e.g.,
     /// auto-increment IDs). When `None`, no rows are returned.
     pub ret: Option<Vec<stmt::Type>>,
+
+    /// Typed parameter values that were substituted into the statement.
+    ///
+    /// Each entry pairs a value with its inferred type. Drivers may use this
+    /// list instead of re-extracting parameters during SQL serialization.
+    pub params: Vec<stmt::Param>,
 }
 
 impl From<Insert> for Operation {

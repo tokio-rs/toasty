@@ -63,6 +63,15 @@ impl TypedValue {
     }
 }
 
+impl From<stmt::Param> for TypedValue {
+    fn from(param: stmt::Param) -> Self {
+        Self {
+            value: param.value,
+            type_hint: param.type_hint,
+        }
+    }
+}
+
 impl Params for Vec<stmt::Value> {
     fn push(&mut self, value: &stmt::Value, _type_hint: Option<&stmt::Type>) -> Placeholder {
         self.push(value.clone());
