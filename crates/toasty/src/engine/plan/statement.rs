@@ -1746,6 +1746,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         let node_id = self.insert_mir_with_deps(mir::Eval {
                             inputs: returning.inputs,
                             eval,
+                            metadata: None,
                         });
 
                         if !self.stmt().is_query() {
@@ -1763,6 +1764,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                                 stmt::Expr::map(stmt::Expr::arg(position), projection),
                                 returning_arg_tys,
                             ),
+                            metadata: Some(position),
                         })
                     } else {
                         // TODO: figure out how to handle repeating a number of times vs. projecting results
