@@ -212,7 +212,11 @@ impl<M: Load> Paginate<M> {
             .await?;
 
         // Collect values from response
-        let mut items: Vec<Value> = response.values.into_value_stream().collect().await?;
+        let stmt::Value::List(mut items) = response.values.collect_as_value().await? else {
+            return Err(crate::Error::invalid_result(
+                "paginated query expected a list of rows",
+            ));
+        };
 
         // Reverse result set if paginating backward
         if self.reverse {
