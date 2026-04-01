@@ -41,6 +41,16 @@ impl Expand<'_> {
         let into_expr_body_val = self.expand_model_into_expr_body(false);
         let reload_trait_method = self.expand_reload_trait_method();
 
+        let inventory_submit = if cfg!(feature = "discover") {
+            quote! {
+                #toasty::inventory::submit! {
+                    #toasty::RegisterFn(|builder| { builder.register::<#model_ident>(); })
+                }
+            }
+        } else {
+            quote! {}
+        };
+
         quote! {
             impl #model_ident {
                 #model_fields
@@ -85,6 +95,8 @@ impl Expand<'_> {
 
                 #model_schema
             }
+
+            #inventory_submit
 
             impl #toasty::Load for #model_ident {
                 type Output = Self;

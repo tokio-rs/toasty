@@ -1,5 +1,7 @@
 use toasty_core::schema::app::{self, ModelId};
 
+use crate::db::Builder;
+
 /// Generate a unique model ID at runtime.
 ///
 /// This function uses a global atomic counter to ensure each call returns
@@ -28,3 +30,23 @@ pub trait Register {
     /// Returns the schema definition for this type.
     fn schema() -> app::Model;
 }
+
+/// A function that registers a single type with a [`Builder`].
+///
+/// The `#[derive(Model)]` and `#[derive(Embed)]` macros emit an
+/// `inventory::submit!` call for each type, wrapping its
+/// [`Builder::register`] call in a `RegisterFn`. When the `discover`
+/// feature is enabled, [`Builder::discover`] iterates over all submitted
+/// `RegisterFn` values to register every type in the binary automatically.
+#[doc(hidden)]
+pub struct RegisterFn(pub fn(&mut Builder));
+
+/// Collects all [`RegisterFn`] instances submitted by derive macros so they
+/// can be iterated by [`Builder::discover`].
+#[cfg(feature = "discover")]
+inventory::collect!(RegisterFn);
+
+/// Re-exported so that generated `inventory::submit!` calls can reference
+/// the crate without requiring users to depend on it directly.
+#[cfg(feature = "discover")]
+pub use inventory;

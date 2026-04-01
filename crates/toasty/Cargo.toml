@@ -14,7 +14,7 @@ readme.workspace = true
 documentation = "https://docs.rs/toasty"
 
 [features]
-default = []
+default = ["discover"]
 dynamodb = ["dep:toasty-driver-dynamodb"]
 mysql = ["dep:toasty-driver-mysql"]
 postgresql = ["dep:toasty-driver-postgresql"]
@@ -38,7 +38,7 @@ jiff = [
 	"toasty-driver-mysql?/jiff",
 ]
 serde = ["dep:serde_core", "dep:serde_json"]
-
+discover = ["dep:inventory", "toasty-macros/discover"]
 
 [dependencies]
 async-trait.workspace = true
@@ -64,6 +64,7 @@ tokio-stream.workspace = true
 uuid.workspace = true
 indexmap.workspace = true
 index_vec.workspace = true
+inventory = { workspace = true, optional = true }
 tokio.workspace = true
 tracing.workspace = true
 url.workspace = true

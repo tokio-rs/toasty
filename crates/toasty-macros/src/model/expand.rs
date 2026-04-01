@@ -84,6 +84,16 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let embedded_update_builder = expand.expand_embedded_update_builder();
     let field_list_struct_ident = &embedded.field_list_struct_ident;
 
+    let inventory_submit = if cfg!(feature = "discover") {
+        quote! {
+            #toasty::inventory::submit! {
+                #toasty::RegisterFn(|builder| { builder.register::<#model_ident>(); })
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     wrap_in_const(quote! {
         #embedded_field_struct
         #embedded_field_list_struct
@@ -100,6 +110,8 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
 
             #model_schema
         }
+
+        #inventory_submit
 
         impl #toasty::Embed for #model_ident {}
 
@@ -191,6 +203,16 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     let enum_field_struct = e.expand_enum_field_struct();
     let enum_field_list_struct = e.expand_field_list_struct();
 
+    let inventory_submit = if cfg!(feature = "discover") {
+        quote! {
+            #toasty::inventory::submit! {
+                #toasty::RegisterFn(|builder| { builder.register::<#model_ident>(); })
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     wrap_in_const(quote! {
         #enum_field_struct
         #enum_field_list_struct
@@ -219,6 +241,8 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
                 )
             }
         }
+
+        #inventory_submit
 
         impl #toasty::Embed for #model_ident {}
 

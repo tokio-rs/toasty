@@ -2,7 +2,7 @@ use crate::{
     Db, Result,
     db::{Connect, Pool, Shared},
     engine::Engine,
-    schema::Register,
+    schema::{Register, RegisterFn},
 };
 
 use toasty_core::{
@@ -72,7 +72,34 @@ impl Builder {
     pub fn register<T: Register>(&mut self) -> &mut Self {
         let schema = T::schema();
         tracing::debug!(model = %schema.name(), "registering model");
+        println!("reigstered model {}", schema.name());
         self.models.push(schema);
+        self
+    }
+
+    /// Automatically register all types that implement [`Register`] in the
+    /// binary, removing the need to call [`register`](Self::register) for
+    /// each one individually.
+    ///
+    /// Every `#[derive(Model)]` and `#[derive(Embed)]` type is collected at
+    /// compile time and registered in a single call.
+    ///
+    /// Requires the `discover` feature flag (enabled by default).
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// let db = toasty::Db::builder()
+    ///     .discover()
+    ///     .connect("sqlite://memory")
+    ///     .await
+    ///     .unwrap();
+    /// ```
+    #[cfg(feature = "discover")]
+    pub fn discover(&mut self) -> &mut Self {
+        for register_fn in inventory::iter::<RegisterFn>() {
+            register_fn.0(self);
+        }
         self
     }
 
