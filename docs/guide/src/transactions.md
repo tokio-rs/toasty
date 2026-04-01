@@ -173,16 +173,15 @@ transactions.
 
 ## Transaction options
 
-Use `db.transaction_builder()` to configure a transaction before starting it:
+Use `TransactionBuilder::new()` to configure a transaction before starting it:
 
 ```rust,ignore
-use toasty::IsolationLevel;
+use toasty::{TransactionBuilder, IsolationLevel};
 
-let mut tx = db
-    .transaction_builder()
+let mut tx = TransactionBuilder::new()
     .isolation(IsolationLevel::Serializable)
     .read_only(true)
-    .begin()
+    .begin(&mut conn)
     .await?;
 ```
 
