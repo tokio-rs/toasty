@@ -41,12 +41,12 @@ pub trait Register {
 #[doc(hidden)]
 pub struct RegisterFn(pub fn(&mut Builder));
 
-/// Collects all [`RegisterFn`] instances submitted by derive macros so they
-/// can be iterated by [`Builder::discover`].
+// Collect all `RegisterFn` instances submitted by derive macros so they
+// can be iterated by `Builder::discover`.
 #[cfg(feature = "discover")]
 inventory::collect!(RegisterFn);
 
-/// Re-exported so that generated `inventory::submit!` calls can reference
-/// the crate without requiring users to depend on it directly.
+// Re-exported so that generated `inventory::submit!` calls can reference
+// the crate without requiring users to depend on it directly.
 #[cfg(feature = "discover")]
 pub use inventory;

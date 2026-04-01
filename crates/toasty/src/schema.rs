@@ -28,9 +28,9 @@ pub use model::Model;
 mod option;
 
 mod register;
-pub use register::{Register, RegisterFn, generate_unique_id};
 #[cfg(feature = "discover")]
 pub use register::inventory;
+pub use register::{Register, RegisterFn, generate_unique_id};
 
 mod num;
 
