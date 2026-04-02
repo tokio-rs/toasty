@@ -143,7 +143,7 @@ macro_rules! models {
     (@internal $set:ident) => {};
 
     ($($tokens:tt)*) => {{
-        let mut model_set = ::toasty::ModelSet::new();
+        let mut model_set = ::toasty::schema::ModelSet::new();
         $crate::models!(@internal model_set $($tokens)*);
         model_set
     }};
