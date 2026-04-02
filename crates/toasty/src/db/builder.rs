@@ -53,6 +53,24 @@ pub struct Builder {
 }
 
 impl Builder {
+    /// Set the models whose schemas will be included when the database is
+    /// built.
+    ///
+    /// Use the [`models!`](crate::models!) macro to build a [`ModelSet`] from
+    /// your `#[derive(Model)]` types.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// let mut builder = toasty::Db::builder();
+    /// builder.models(toasty::models!(User));
+    /// ```
     pub fn models(&mut self, models: ModelSet) -> &mut Self {
         self.models = models;
         self
