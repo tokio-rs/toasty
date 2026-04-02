@@ -22,7 +22,7 @@ pub async fn crud_user_optional_profile_one_direction(test: &mut Test) -> Result
         id: ID,
     }
 
-    let mut db = test.setup_db(toasty::models!(User, Profile)).await;
+    let mut db = test.setup_db(models!(User, Profile)).await;
 
     // Create a user
     let user = User::create()

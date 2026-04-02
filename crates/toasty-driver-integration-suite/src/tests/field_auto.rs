@@ -12,7 +12,7 @@ pub async fn auto_uuid_v4(test: &mut Test) -> Result<()> {
         auto_field: uuid::Uuid,
     }
 
-    let mut db = test.setup_db(toasty::models!(Item)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     let u = Item::create().exec(&mut db).await?;
     // Sanity check that it actually generated a UUID
@@ -32,7 +32,7 @@ pub async fn auto_uuid_v7(test: &mut Test) -> Result<()> {
         auto_field: uuid::Uuid,
     }
 
-    let mut db = test.setup_db(toasty::models!(Item)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     let u = Item::create().exec(&mut db).await?;
     // Sanity check that it actually generated a UUID
@@ -49,7 +49,7 @@ pub async fn auto_increment_explicit(test: &mut Test) -> Result<()> {
         auto_field: u32,
     }
 
-    let mut db = test.setup_db(toasty::models!(Item)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     for i in 1..10 {
         let u = Item::create().exec(&mut db).await?;
@@ -67,7 +67,7 @@ pub async fn auto_increment_implicit(test: &mut Test) -> Result<()> {
         auto_field: u32,
     }
 
-    let mut db = test.setup_db(toasty::models!(Item)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     for i in 1..10 {
         let u = Item::create().exec(&mut db).await?;
@@ -90,7 +90,7 @@ pub async fn auto_increment_with_composite_key_errors(test: &mut Test) {
     }
 
     // This should fail during schema setup
-    let result = test.try_setup_db(toasty::models!(InvalidModel)).await;
+    let result = test.try_setup_db(models!(InvalidModel)).await;
 
     assert!(result.is_err(), "Expected schema setup to fail");
     let err = result.unwrap_err();
@@ -130,7 +130,7 @@ pub async fn auto_increment_with_associations(test: &mut Test) -> Result<()> {
         parent: toasty::BelongsTo<Parent>,
     }
 
-    let mut db = test.setup_db(toasty::models!(Parent, Child)).await;
+    let mut db = test.setup_db(models!(Parent, Child)).await;
 
     for i in 1..10 {
         let u = Parent::create()

@@ -17,7 +17,7 @@ pub async fn batch_create_empty(test: &mut Test) -> Result<()> {
         title: String,
     }
 
-    let mut db = test.setup_db(toasty::models!(Todo)).await;
+    let mut db = test.setup_db(models!(Todo)).await;
 
     let res = Todo::create_many().exec(&mut db).await?;
     assert!(res.is_empty());
@@ -35,7 +35,7 @@ pub async fn batch_create_one(test: &mut Test) -> Result<()> {
         title: String,
     }
 
-    let mut db = test.setup_db(toasty::models!(Todo)).await;
+    let mut db = test.setup_db(models!(Todo)).await;
 
     test.log().clear();
     let res = Todo::create_many()
@@ -69,7 +69,7 @@ pub async fn batch_create_many(test: &mut Test) -> Result<()> {
         title: String,
     }
 
-    let mut db = test.setup_db(toasty::models!(Todo)).await;
+    let mut db = test.setup_db(models!(Todo)).await;
 
     test.log().clear();
     let res = Todo::create_many()
@@ -110,7 +110,7 @@ pub async fn batch_create_fails_if_any_record_missing_fields(test: &mut Test) ->
         name: String,
     }
 
-    let mut db = test.setup_db(toasty::models!(User)).await;
+    let mut db = test.setup_db(models!(User)).await;
 
     let res = User::create_many()
         .item(User::create().email("user1@example.com").name("User 1"))
@@ -214,7 +214,7 @@ pub async fn batch_create_inside_transaction_uses_savepoints(t: &mut Test) -> Re
         title: String,
     }
 
-    let mut db = t.setup_db(toasty::models!(Todo)).await;
+    let mut db = t.setup_db(models!(Todo)).await;
 
     t.log().clear();
     let mut tx = db.transaction().await?;

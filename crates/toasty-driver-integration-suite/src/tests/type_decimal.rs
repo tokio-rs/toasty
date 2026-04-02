@@ -13,7 +13,7 @@ pub async fn ty_decimal(test: &mut Test) -> Result<(), BoxError> {
         val: Decimal,
     }
 
-    let mut db = test.setup_db(toasty::models!(Item)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     let test_values = vec![
         Decimal::from_str("0")?,
@@ -50,7 +50,7 @@ pub async fn ty_decimal_as_text(test: &mut Test) -> Result<(), BoxError> {
         val: Decimal,
     }
 
-    let mut db = test.setup_db(toasty::models!(Item)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     let test_values = vec![
         Decimal::from_str("0")?,
@@ -78,7 +78,7 @@ pub async fn ty_decimal_as_numeric_arbitrary_precision(test: &mut Test) -> Resul
         val: Decimal,
     }
 
-    let mut db = test.setup_db(toasty::models!(Item)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     let test_values = vec![
         Decimal::from_str("0")?,
@@ -107,7 +107,7 @@ pub async fn ty_decimal_as_numeric_fixed_precision(test: &mut Test) -> Result<()
         val: Decimal,
     }
 
-    let mut db = test.setup_db(toasty::models!(Item)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     let test_values = vec![
         Decimal::from_str("0")?,

@@ -11,7 +11,7 @@ pub async fn filter_composite_key_in_list(test: &mut Test) -> Result<()> {
         two: String,
     }
 
-    let mut db = test.setup_db(toasty::models!(Item)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     for i in 0..5 {
         Item::create()
@@ -52,7 +52,7 @@ pub async fn filter_composite_key_in_list_empty(test: &mut Test) -> Result<()> {
         two: String,
     }
 
-    let mut db = test.setup_db(toasty::models!(Item)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     Item::create().one("a").two("b").exec(&mut db).await?;
 

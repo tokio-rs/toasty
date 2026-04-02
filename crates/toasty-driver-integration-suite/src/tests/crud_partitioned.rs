@@ -25,7 +25,7 @@ pub async fn update_by_partition_key(test: &mut Test) {
         title: String,
     }
 
-    let mut db = test.setup_db(toasty::models!(Todo)).await;
+    let mut db = test.setup_db(models!(Todo)).await;
 
     let todo_table_id = table_id(&db, "todos");
     let is_sql = test.capability().sql;
@@ -129,7 +129,7 @@ pub async fn delete_by_partition_key(test: &mut Test) {
         title: String,
     }
 
-    let mut db = test.setup_db(toasty::models!(Todo)).await;
+    let mut db = test.setup_db(models!(Todo)).await;
 
     let todo_table_id = table_id(&db, "todos");
     let is_sql = test.capability().sql;

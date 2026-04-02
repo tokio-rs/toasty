@@ -17,7 +17,7 @@ pub async fn basic_embedded_struct(test: &mut Test) {
         city: String,
     }
 
-    let db = test.setup_db(toasty::models!(Address)).await;
+    let db = test.setup_db(models!(Address)).await;
     let schema = db.schema();
 
     // Embedded models exist in app schema as Model::EmbeddedStruct
@@ -55,7 +55,7 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
         address: Address,
     }
 
-    let db = test.setup_db(toasty::models!(User, Address)).await;
+    let db = test.setup_db(models!(User, Address)).await;
     let schema = db.schema();
 
     // Both embedded and root models exist in app schema
@@ -178,7 +178,7 @@ pub async fn create_and_query_embedded(t: &mut Test) -> Result<()> {
         address: Address,
     }
 
-    let mut db = t.setup_db(toasty::models!(User, Address)).await;
+    let mut db = t.setup_db(models!(User, Address)).await;
 
     let mut user = User::create()
         .name("Alice")
@@ -250,7 +250,7 @@ pub async fn embedded_struct_fields_codegen(test: &mut Test) {
         address: Address,
     }
 
-    let _db = test.setup_db(toasty::models!(User, Address)).await;
+    let _db = test.setup_db(models!(User, Address)).await;
 
     // Direct chaining: User::fields().address().city()
     let _city_path = User::fields().address().city();
@@ -292,7 +292,7 @@ pub async fn query_embedded_struct_fields(t: &mut Test) -> Result<()> {
         address: Address,
     }
 
-    let mut db = t.setup_db(toasty::models!(User, Address)).await;
+    let mut db = t.setup_db(models!(User, Address)).await;
 
     // Create users in different countries and cities
     let users_data = [
@@ -392,7 +392,7 @@ pub async fn query_embedded_fields_comparison_ops(t: &mut Test) -> Result<()> {
         stats: Stats,
     }
 
-    let mut db = t.setup_db(toasty::models!(Player, Stats)).await;
+    let mut db = t.setup_db(models!(Player, Stats)).await;
 
     for (name, score, rank) in [
         ("Alice", 100, 1),
@@ -456,7 +456,7 @@ pub async fn query_embedded_multiple_fields(t: &mut Test) -> Result<()> {
         coords: Coordinates,
     }
 
-    let mut db = t.setup_db(toasty::models!(Location, Coordinates)).await;
+    let mut db = t.setup_db(models!(Location, Coordinates)).await;
 
     for (name, x, y, z) in [
         ("Origin", 0, 0, 0),
@@ -527,7 +527,7 @@ pub async fn update_with_embedded_field_filter(t: &mut Test) -> Result<()> {
         meta: Metadata,
     }
 
-    let mut db = t.setup_db(toasty::models!(Document, Metadata)).await;
+    let mut db = t.setup_db(models!(Document, Metadata)).await;
 
     // Setup: Doc A (v1, draft), Doc B (v2, draft), Doc C (v1, published)
     for (title, version, status) in [
@@ -603,7 +603,7 @@ pub async fn partial_update_embedded_fields(t: &mut Test) -> Result<()> {
         address: Address,
     }
 
-    let mut db = t.setup_db(toasty::models!(User, Address)).await;
+    let mut db = t.setup_db(models!(User, Address)).await;
 
     // Create a user with initial address
     let mut user = User::create()
@@ -733,9 +733,7 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
         address: Address,
     }
 
-    let db = test
-        .setup_db(toasty::models!(User, Address, City, Location))
-        .await;
+    let db = test.setup_db(models!(User, Address, City, Location)).await;
     let schema = db.schema();
 
     // All embedded models should exist in app schema
@@ -1034,7 +1032,7 @@ pub async fn crud_nested_embedded(t: &mut Test) -> Result<()> {
         headquarters: Office,
     }
 
-    let mut db = t.setup_db(toasty::models!(Company, Office, Address)).await;
+    let mut db = t.setup_db(models!(Company, Office, Address)).await;
 
     // Create: nested embedded structs are flattened into a single row
     let mut company = Company::create()
@@ -1144,7 +1142,7 @@ pub async fn partial_update_nested_embedded(t: &mut Test) -> Result<()> {
         headquarters: Office,
     }
 
-    let mut db = t.setup_db(toasty::models!(Company, Office, Address)).await;
+    let mut db = t.setup_db(models!(Company, Office, Address)).await;
 
     let mut company = Company::create()
         .name("Acme")
@@ -1242,7 +1240,7 @@ pub async fn query_based_partial_update_embedded(t: &mut Test) -> Result<()> {
         address: Address,
     }
 
-    let mut db = t.setup_db(toasty::models!(User, Address)).await;
+    let mut db = t.setup_db(models!(User, Address)).await;
 
     let user = User::create()
         .name("Alice")
@@ -1310,7 +1308,7 @@ pub async fn embedded_struct_with_jiff_fields(t: &mut Test) -> Result<()> {
         schedule: Schedule,
     }
 
-    let mut db = t.setup_db(toasty::models!(Event, Schedule)).await;
+    let mut db = t.setup_db(models!(Event, Schedule)).await;
 
     let starts_at = jiff::Timestamp::from_second(1_700_000_000).unwrap();
     let due_date = jiff::civil::date(2025, 6, 15);
@@ -1366,7 +1364,7 @@ pub async fn unit_enum_in_embedded_struct(t: &mut Test) -> Result<()> {
         meta: Meta,
     }
 
-    let mut db = t.setup_db(toasty::models!(Task, Meta, Priority)).await;
+    let mut db = t.setup_db(models!(Task, Meta, Priority)).await;
 
     let mut task = Task::create()
         .meta(Meta {
@@ -1414,7 +1412,7 @@ pub async fn embedded_struct_with_uuid_field(t: &mut Test) -> Result<()> {
         meta: Meta,
     }
 
-    let mut db = t.setup_db(toasty::models!(Item, Meta)).await;
+    let mut db = t.setup_db(models!(Item, Meta)).await;
 
     let ref_id = Uuid::new_v4();
 

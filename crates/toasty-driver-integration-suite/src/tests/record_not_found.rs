@@ -10,7 +10,7 @@ pub async fn not_found(t: &mut Test) -> Result<()> {
         val: String,
     }
 
-    let mut db = t.setup_db(toasty::models!(Item)).await;
+    let mut db = t.setup_db(models!(Item)).await;
 
     let err = Item::all().get(&mut db).await.unwrap_err();
     assert!(

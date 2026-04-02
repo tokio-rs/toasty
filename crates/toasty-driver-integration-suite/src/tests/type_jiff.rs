@@ -18,7 +18,7 @@ pub async fn ty_timestamp(test: &mut Test) -> Result<(), BoxError> {
         val: Timestamp,
     }
 
-    let mut db = test.setup_db(toasty::models!(Item)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     let ts = Timestamp::from_second(946684800)?; // 2000-01-01T00:00:00Z
 
@@ -78,7 +78,7 @@ pub async fn ty_zoned(test: &mut Test) -> Result<(), BoxError> {
         val: Zoned,
     }
 
-    let mut db = test.setup_db(toasty::models!(Item)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     let test_values = vec![
         "2000-01-01T00:00:00+00:00[UTC]".parse::<Zoned>()?,
@@ -109,7 +109,7 @@ pub async fn ty_date(test: &mut Test) -> Result<()> {
         val: Date,
     }
 
-    let mut db = test.setup_db(toasty::models!(Item)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     let test_values = vec![
         Date::constant(2000, 1, 1),
@@ -143,7 +143,7 @@ pub async fn ty_time(test: &mut Test) -> Result<()> {
         val: Time,
     }
 
-    let mut db = test.setup_db(toasty::models!(Item)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     let test_values = vec![
         Time::constant(0, 0, 0, 0),
@@ -175,7 +175,7 @@ pub async fn ty_datetime(test: &mut Test) -> Result<()> {
         val: DateTime,
     }
 
-    let mut db = test.setup_db(toasty::models!(Item)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     let test_values = vec![
         DateTime::constant(2000, 1, 1, 0, 0, 0, 0),
@@ -210,7 +210,7 @@ pub async fn ty_timestamp_precision_2(test: &mut Test) -> Result<(), BoxError> {
         val: Timestamp,
     }
 
-    let mut db = test.setup_db(toasty::models!(Item)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     // Test value with nanosecond precision
     let original = Timestamp::from_second(946684800)?
@@ -246,7 +246,7 @@ pub async fn ty_time_precision_2(test: &mut Test) -> Result<()> {
         val: Time,
     }
 
-    let mut db = test.setup_db(toasty::models!(Item)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     // Test value with nanosecond precision
     let original = Time::constant(14, 30, 45, 123_456_789);
@@ -280,7 +280,7 @@ pub async fn ty_datetime_precision_2(test: &mut Test) -> Result<()> {
         val: DateTime,
     }
 
-    let mut db = test.setup_db(toasty::models!(Item)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     // Test value with nanosecond precision
     let original = DateTime::constant(2024, 6, 15, 14, 30, 45, 123_456_789);
@@ -314,7 +314,7 @@ pub async fn ty_timestamp_as_text(test: &mut Test) -> Result<(), BoxError> {
         val: Timestamp,
     }
 
-    let mut db = test.setup_db(toasty::models!(Item)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     let ts = Timestamp::from_second(946684800)?; // 2000-01-01T00:00:00Z
     let ts_text = format!("{ts:.9}");
@@ -359,7 +359,7 @@ pub async fn ty_date_as_text(test: &mut Test) -> Result<()> {
         val: Date,
     }
 
-    let mut db = test.setup_db(toasty::models!(Item)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     let test_values = vec![
         Date::constant(2000, 1, 1),
@@ -389,7 +389,7 @@ pub async fn ty_time_as_text(test: &mut Test) -> Result<()> {
         val: Time,
     }
 
-    let mut db = test.setup_db(toasty::models!(Item)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     let test_values = vec![
         Time::constant(0, 0, 0, 0),
@@ -420,7 +420,7 @@ pub async fn ty_datetime_as_text(test: &mut Test) -> Result<()> {
         val: DateTime,
     }
 
-    let mut db = test.setup_db(toasty::models!(Item)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     let test_values = vec![
         DateTime::constant(2000, 1, 1, 0, 0, 0, 0),
@@ -451,7 +451,7 @@ pub async fn order_by_timestamp(test: &mut Test) -> Result<(), BoxError> {
         val: Timestamp,
     }
 
-    let mut db = test.setup_db(toasty::models!(Item)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     let timestamps = vec![
         Timestamp::from_second(1609459200)?, // 2021-01-01
@@ -499,7 +499,7 @@ pub async fn filter_by_timestamp(test: &mut Test) -> Result<(), BoxError> {
         name: String,
     }
 
-    let mut db = test.setup_db(toasty::models!(Event)).await;
+    let mut db = test.setup_db(models!(Event)).await;
 
     let ts1 = Timestamp::from_second(946684800)?; // 2000-01-01T00:00:00Z
     let ts2 = Timestamp::from_second(1609459200)?; // 2021-01-01T00:00:00Z

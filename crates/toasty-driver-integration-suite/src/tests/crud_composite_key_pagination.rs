@@ -18,7 +18,7 @@ pub async fn paginate_composite_key(test: &mut Test) -> Result<()> {
         seq: i64,
     }
 
-    let mut db = test.setup_db(toasty::models!(Event)).await;
+    let mut db = test.setup_db(models!(Event)).await;
 
     // Seed 20 events under the same partition key so we can paginate over them.
     for i in 0..20 {
@@ -74,7 +74,7 @@ pub async fn paginate_composite_key_asc(test: &mut Test) -> Result<()> {
         seq: i64,
     }
 
-    let mut db = test.setup_db(toasty::models!(Event)).await;
+    let mut db = test.setup_db(models!(Event)).await;
 
     for i in 0..20 {
         Event::create().kind("info").seq(i).exec(&mut db).await?;
@@ -123,7 +123,7 @@ pub async fn limit_composite_key(test: &mut Test) -> Result<()> {
         seq: i64,
     }
 
-    let mut db = test.setup_db(toasty::models!(Event)).await;
+    let mut db = test.setup_db(models!(Event)).await;
 
     for i in 0..20 {
         Event::create().kind("info").seq(i).exec(&mut db).await?;
@@ -178,7 +178,7 @@ pub async fn sort_composite_key(test: &mut Test) -> Result<()> {
         seq: i64,
     }
 
-    let mut db = test.setup_db(toasty::models!(Event)).await;
+    let mut db = test.setup_db(models!(Event)).await;
 
     for i in 0..20 {
         Event::create().kind("info").seq(i).exec(&mut db).await?;

@@ -22,7 +22,7 @@ pub async fn filter_data_enum(t: &mut Test) -> Result<()> {
         contact: ContactInfo,
     }
 
-    let mut db = t.setup_db(toasty::models!(User, ContactInfo)).await;
+    let mut db = t.setup_db(models!(User, ContactInfo)).await;
 
     User::create()
         .name("Alice")
@@ -73,7 +73,7 @@ pub async fn filter_data_enum_by_variant(t: &mut Test) -> Result<()> {
         contact: ContactInfo,
     }
 
-    let mut db = t.setup_db(toasty::models!(User, ContactInfo)).await;
+    let mut db = t.setup_db(models!(User, ContactInfo)).await;
 
     User::create()
         .name("Alice")
@@ -138,7 +138,7 @@ pub async fn filter_unit_enum_by_variant(t: &mut Test) -> Result<()> {
         status: Status,
     }
 
-    let mut db = t.setup_db(toasty::models!(Task, Status)).await;
+    let mut db = t.setup_db(models!(Task, Status)).await;
 
     Task::create()
         .name("A")
@@ -210,7 +210,7 @@ pub async fn filter_enum_variant_with_partition_key(t: &mut Test) -> Result<()> 
         status: Status,
     }
 
-    let mut db = t.setup_db(toasty::models!(Task, Status)).await;
+    let mut db = t.setup_db(models!(Task, Status)).await;
 
     for (owner, title, status) in [
         ("alice", "Task A", Status::Pending),
@@ -290,7 +290,7 @@ pub async fn create_and_get_data_enum(t: &mut Test) -> Result<()> {
         contact: ContactInfo,
     }
 
-    let mut db = t.setup_db(toasty::models!(User, ContactInfo)).await;
+    let mut db = t.setup_db(models!(User, ContactInfo)).await;
 
     let alice = User::create()
         .name("Alice")

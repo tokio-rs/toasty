@@ -174,7 +174,7 @@ pub async fn user_batch_create_todos_with_optional_field(test: &mut Test) -> Res
         title: String,
     }
 
-    let mut db = test.setup_db(toasty::models!(User, Todo)).await;
+    let mut db = test.setup_db(models!(User, Todo)).await;
 
     // This operation currently panics due to unimplemented code path
     let user = User::create()
@@ -229,7 +229,7 @@ pub async fn user_batch_create_two_todos_simple(test: &mut Test) -> Result<()> {
         title: String,
     }
 
-    let mut db = test.setup_db(toasty::models!(User, Todo)).await;
+    let mut db = test.setup_db(models!(User, Todo)).await;
 
     // Create a user with two todos in a single operation
     let user = User::create()

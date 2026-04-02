@@ -568,7 +568,7 @@ fn ddb_test_cx_composite() -> TestCx {
 
 fn sqlite_test_cx_ranked() -> TestCx {
     let app_schema =
-        app::Schema::from_macro(&[Ranked::schema()]).expect("schema should build from macro");
+        app::Schema::from_macro([Ranked::schema()]).expect("schema should build from macro");
     let schema = Builder::new()
         .build(app_schema, &Capability::SQLITE)
         .expect("schema should build");

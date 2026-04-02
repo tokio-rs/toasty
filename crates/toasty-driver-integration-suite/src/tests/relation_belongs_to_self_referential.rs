@@ -21,7 +21,7 @@ pub async fn crud_person_self_referential(t: &mut Test) -> Result<()> {
         children: toasty::HasMany<Person>,
     }
 
-    let mut db = t.setup_db(toasty::models!(Person)).await;
+    let mut db = t.setup_db(models!(Person)).await;
 
     let p1 = Person::create().name("person 1").exec(&mut db).await?;
 

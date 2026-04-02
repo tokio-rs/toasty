@@ -10,7 +10,7 @@ pub async fn reset_db_and_recreate(t: &mut Test) -> Result<()> {
     }
 
     // Setup and insert data
-    let mut db = t.setup_db(toasty::models!(User)).await;
+    let mut db = t.setup_db(models!(User)).await;
     User::create().id(1).name("Alice").exec(&mut db).await?;
     User::create().id(2).name("Bob").exec(&mut db).await?;
 
@@ -24,7 +24,7 @@ pub async fn reset_db_and_recreate(t: &mut Test) -> Result<()> {
     db.reset_db().await?;
 
     // Re-setup (tables were dropped along with the database)
-    let mut db = t.setup_db(toasty::models!(User)).await;
+    let mut db = t.setup_db(models!(User)).await;
 
     // Verify the data is gone — lookups by known keys should return nothing
     assert_err!(User::get_by_id(&mut db, &1).await);

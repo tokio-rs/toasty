@@ -33,7 +33,7 @@ pub async fn scoped_query_eq(test: &mut Test) -> Result<()> {
         order: i64,
     }
 
-    let mut db = test.setup_db(toasty::models!(User, Todo)).await;
+    let mut db = test.setup_db(models!(User, Todo)).await;
 
     // Create some users
     let u1 = User::create().exec(&mut db).await?;
@@ -159,7 +159,7 @@ pub async fn scoped_query_gt(test: &mut Test) -> Result<()> {
         order: i64,
     }
 
-    let mut db = test.setup_db(toasty::models!(User, Todo)).await;
+    let mut db = test.setup_db(models!(User, Todo)).await;
 
     let user = User::create().exec(&mut db).await?;
 

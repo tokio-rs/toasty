@@ -13,7 +13,7 @@ pub async fn db_does_not_hold_connection(t: &mut Test) -> Result<()> {
         id: ID,
     }
 
-    let mut db = t.setup_db(toasty::models!(Item)).await;
+    let mut db = t.setup_db(models!(Item)).await;
 
     // Db is stateless — after setup_db, the connection used for push_schema has
     // been returned to the pool, so it should be available.
@@ -67,7 +67,7 @@ pub async fn dedicated_connection_holds_pool_slot(t: &mut Test) -> Result<()> {
         id: ID,
     }
 
-    let db = t.setup_db(toasty::models!(Item)).await;
+    let db = t.setup_db(models!(Item)).await;
 
     // All connections available since Db is stateless.
     let status = db.pool().status();
@@ -120,7 +120,7 @@ pub async fn write_visible_on_same_handle(t: &mut Test) -> Result<()> {
         body: String,
     }
 
-    let mut db = t.setup_db(toasty::models!(Note)).await;
+    let mut db = t.setup_db(models!(Note)).await;
 
     // Write and immediately read on the same handle — must see the write.
     let created = Note::create().body("hello").exec(&mut db).await?;

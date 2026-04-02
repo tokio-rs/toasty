@@ -18,7 +18,7 @@ pub async fn serialize_vec_string(t: &mut Test) -> Result<(), BoxError> {
         tags: Vec<String>,
     }
 
-    let mut db = t.setup_db(toasty::models!(Item)).await;
+    let mut db = t.setup_db(models!(Item)).await;
 
     // Insert — driver receives JSON string
     t.log().clear();
@@ -73,7 +73,7 @@ pub async fn serialize_nullable(t: &mut Test) -> Result<(), BoxError> {
         data: Option<HashMap<String, String>>,
     }
 
-    let mut db = t.setup_db(toasty::models!(Item)).await;
+    let mut db = t.setup_db(models!(Item)).await;
 
     // Some — driver receives JSON string
     t.log().clear();
@@ -121,7 +121,7 @@ pub async fn serialize_non_nullable_option(t: &mut Test) -> Result<(), BoxError>
         extra: Option<String>,
     }
 
-    let mut db = t.setup_db(toasty::models!(Item)).await;
+    let mut db = t.setup_db(models!(Item)).await;
 
     // None → JSON text "null", not SQL NULL
     t.log().clear();
@@ -183,7 +183,7 @@ pub async fn serialize_custom_struct(t: &mut Test) -> Result<(), BoxError> {
         meta: Metadata,
     }
 
-    let mut db = t.setup_db(toasty::models!(Item)).await;
+    let mut db = t.setup_db(models!(Item)).await;
     t.log().clear();
 
     let meta = Metadata {

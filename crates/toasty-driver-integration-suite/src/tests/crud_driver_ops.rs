@@ -18,7 +18,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
         age: i32,
     }
 
-    let mut db = test.setup_db(toasty::models!(User)).await;
+    let mut db = test.setup_db(models!(User)).await;
 
     // Helper to get the table ID (handles database-specific prefixes automatically)
     let user_table_id = table_id(&db, "users");

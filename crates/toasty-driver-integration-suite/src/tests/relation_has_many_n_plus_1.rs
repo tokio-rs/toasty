@@ -54,7 +54,7 @@ pub async fn query_by_index_optimization(test: &mut Test) -> Result<()> {
         board: toasty::BelongsTo<Board>,
     }
 
-    let mut db = test.setup_db(toasty::models!(Board, User)).await;
+    let mut db = test.setup_db(models!(Board, User)).await;
     if db.capability().sql {
         // Statement count is correct for DDB, but not MySQL
         return Ok(());

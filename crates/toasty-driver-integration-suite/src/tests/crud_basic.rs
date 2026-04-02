@@ -16,7 +16,7 @@ pub async fn crud_no_fields(t: &mut Test) -> Result<()> {
         id: ID,
     }
 
-    let mut db = t.setup_db(toasty::models!(Item)).await;
+    let mut db = t.setup_db(models!(Item)).await;
 
     let created = Item::create().exec(&mut db).await?;
 
@@ -84,7 +84,7 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
         val: String,
     }
 
-    let mut db = test.setup_db(toasty::models!(Item)).await;
+    let mut db = test.setup_db(models!(Item)).await;
 
     let item_table_id = table_id(&db, "items");
     let is_sql = test.capability().sql;
@@ -208,7 +208,7 @@ pub async fn required_field_create_without_setting(test: &mut Test) {
         name: String,
     }
 
-    let mut db = test.setup_db(toasty::models!(User)).await;
+    let mut db = test.setup_db(models!(User)).await;
 
     // Try creating a user without setting the name field results in an error
     assert_err!(User::create().exec(&mut db).await);
@@ -331,7 +331,7 @@ pub async fn unique_index_nullable_field_update(test: &mut Test) -> Result<()> {
         email: Option<String>,
     }
 
-    let mut db = test.setup_db(toasty::models!(User)).await;
+    let mut db = test.setup_db(models!(User)).await;
 
     // Create a user without an email address
     let mut u1 = User::create().exec(&mut db).await?;
@@ -415,7 +415,7 @@ pub async fn unique_index_no_update(test: &mut Test) -> Result<()> {
         name: String,
     }
 
-    let mut db = test.setup_db(toasty::models!(User)).await;
+    let mut db = test.setup_db(models!(User)).await;
 
     let mut user = User::create()
         .email("user@example.com")
@@ -452,7 +452,7 @@ pub async fn update_multiple_fields(test: &mut Test) -> Result<()> {
         email: String,
     }
 
-    let mut db = test.setup_db(toasty::models!(User)).await;
+    let mut db = test.setup_db(models!(User)).await;
 
     let mut user = User::create()
         .name("John Doe")
@@ -500,7 +500,7 @@ pub async fn update_and_delete_snippets(test: &mut Test) -> Result<()> {
         name: String,
     }
 
-    let mut db = test.setup_db(toasty::models!(User)).await;
+    let mut db = test.setup_db(models!(User)).await;
 
     let user = User::create().name("John Doe").exec(&mut db).await?;
 

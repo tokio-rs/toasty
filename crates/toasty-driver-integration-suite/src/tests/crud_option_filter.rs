@@ -15,7 +15,7 @@ pub async fn filter_option_is_none(test: &mut Test) -> Result<()> {
         bio: Option<String>,
     }
 
-    let mut db = test.setup_db(toasty::models!(User)).await;
+    let mut db = test.setup_db(models!(User)).await;
 
     // Create users with and without bio
     User::create()
@@ -56,7 +56,7 @@ pub async fn filter_option_is_some(test: &mut Test) -> Result<()> {
         bio: Option<String>,
     }
 
-    let mut db = test.setup_db(toasty::models!(User)).await;
+    let mut db = test.setup_db(models!(User)).await;
 
     // Create users with and without bio
     User::create()
@@ -102,7 +102,7 @@ pub async fn filter_option_combined_with_other_filters(test: &mut Test) -> Resul
         age: i64,
     }
 
-    let mut db = test.setup_db(toasty::models!(User)).await;
+    let mut db = test.setup_db(models!(User)).await;
 
     User::create()
         .name("Alice")
@@ -166,7 +166,7 @@ pub async fn filter_option_multiple_nullable_fields(test: &mut Test) -> Result<(
         summary: Option<String>,
     }
 
-    let mut db = test.setup_db(toasty::models!(Article)).await;
+    let mut db = test.setup_db(models!(Article)).await;
 
     // Both set
     Article::create()
@@ -234,7 +234,7 @@ pub async fn filter_option_with_partition_key(test: &mut Test) -> Result<()> {
         description: Option<String>,
     }
 
-    let mut db = test.setup_db(toasty::models!(Product)).await;
+    let mut db = test.setup_db(models!(Product)).await;
 
     // Create products in the "Electronics" category
     Product::create()
@@ -333,7 +333,7 @@ pub async fn filter_option_id_is_none(test: &mut Test) -> Result<()> {
         user_id: Option<ID>,
     }
 
-    let mut db = test.setup_db(toasty::models!(Player)).await;
+    let mut db = test.setup_db(models!(Player)).await;
 
     toasty::create!(Player::[{ name: "Alice" }, { name: "Bob" }])
         .exec(&mut db)
