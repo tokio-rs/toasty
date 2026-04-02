@@ -206,7 +206,7 @@ impl<T: IntoExpr<T>> IntoExpr<T> for &Option<T> {
         }
     }
 }
-// NOTE: no Assign impl for &Option<T> => T — would conflict with &T => T.
+impl_assign_via_expr!({T: IntoExpr<T>} &Option<T> => T);
 
 impl IntoExpr<String> for &str {
     fn into_expr(self) -> Expr<String> {
@@ -294,8 +294,7 @@ where
         ))
     }
 }
-// NOTE: no Assign impl for [U; N] => List<T> — would conflict with
-// [Assignment<T>; N]: Assign<T>. Use stmt::set([...]) for list replacement.
+impl_assign_via_expr!({T, U: IntoExpr<T>, const N: usize} [U; N] => List<T>);
 
 impl<T, U, const N: usize> IntoExpr<List<T>> for &[U; N]
 where
@@ -313,7 +312,7 @@ where
         ))
     }
 }
-// NOTE: no Assign impl for &[U; N] => List<T> — same reason as [U; N].
+impl_assign_via_expr!({T, U: IntoExpr<T>, const N: usize} &[U; N] => List<T>);
 
 impl<T, E: IntoExpr<T>> IntoExpr<List<T>> for &[E] {
     fn into_expr(self) -> Expr<List<T>> {
@@ -328,7 +327,7 @@ impl<T, E: IntoExpr<T>> IntoExpr<List<T>> for &[E] {
         ))
     }
 }
-// NOTE: no Assign impl for &[E] => List<T> — same reason as [U; N].
+impl_assign_via_expr!({T, E: IntoExpr<T>} &[E] => List<T>);
 
 impl<T, U> IntoExpr<List<T>> for Vec<U>
 where
@@ -346,8 +345,7 @@ where
         ))
     }
 }
-// NOTE: no Assign impl for Vec<U> => List<T> — would conflict with
-// Vec<Assignment<T>>: Assign<T>. Use stmt::set(vec) for list replacement.
+impl_assign_via_expr!({T, U: IntoExpr<T>} Vec<U> => List<T>);
 
 macro_rules! forward_impl {
     ( $( $ty:ty ,) *) => {
@@ -369,8 +367,9 @@ macro_rules! forward_impl {
 }
 
 forward_impl!(Arc<T>, Box<T>, Rc<T>,);
-// NOTE: no Assign impls for Arc<T>/Box<T>/Rc<T> — they would conflict with
-// the T => T impls since T could be Arc<U>, Box<U>, or Rc<U>.
+impl_assign_via_expr!({T: IntoExpr<T>} T => Arc<T>);
+impl_assign_via_expr!({T: IntoExpr<T>} T => Box<T>);
+impl_assign_via_expr!({T: IntoExpr<T>} T => Rc<T>);
 
 macro_rules! impl_into_expr_for_tuple {
     (! $( $n:tt $t:ident $e:ident )* ) => {

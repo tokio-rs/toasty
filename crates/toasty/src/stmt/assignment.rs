@@ -4,28 +4,13 @@ use toasty_core::stmt;
 
 /// Apply a field mutation to an update statement's [`Assignments`] map.
 ///
-/// This trait unifies all update mutations behind a single bound. Every
-/// update builder setter accepts `impl Assign<T>`.
+/// Every update builder setter accepts `impl Assign<T>`. All types that
+/// implement [`IntoExpr<T>`] also implement `Assign<T>` with set semantics,
+/// so update setters accept the same types as create setters.
 ///
-/// All types that implement [`IntoExpr<T>`] also implement `Assign<T>`,
-/// defaulting to set semantics. This means plain values work everywhere.
-/// For collection fields, a single item (`impl IntoExpr<Todo>`) won't
-/// satisfy `Assign<List<Todo>>` — callers must use an explicit combinator
-/// ([`insert`], [`remove`]) to specify intent.
-///
-/// Arrays and [`Vec`]s of [`Assignment<T>`] implement `Assign<T>`,
-/// allowing multiple operations in a single setter call:
-///
-/// ```ignore
-/// user.update()
-///     .todos([
-///         stmt::insert(Todo::create().title("Buy groceries")),
-///         stmt::insert(Todo::create().title("Walk the dog")),
-///         stmt::remove(&old_todo),
-///     ])
-///     .exec(&mut db)
-///     .await?;
-/// ```
+/// For has-many fields, arrays and [`Vec`]s implement
+/// `Assign<List<T>>` with set (replace) semantics. Use [`insert`],
+/// [`remove`], or [`apply`] for incremental mutations.
 ///
 /// [`Assignments`]: toasty_core::stmt::Assignments
 pub trait Assign<T> {
@@ -63,24 +48,6 @@ impl<T> Assign<T> for Assignment<T> {
             AssignmentKind::Remove(expr) => assignments.remove(projection, expr),
             AssignmentKind::Patch(f) => f(assignments, projection),
             AssignmentKind::Apply(f) => f(assignments, projection),
-        }
-    }
-}
-
-// Arrays of Assignment<T>
-impl<T, const N: usize> Assign<T> for [Assignment<T>; N] {
-    fn assign(self, assignments: &mut stmt::Assignments, projection: stmt::Projection) {
-        for item in self {
-            item.assign(assignments, projection.clone());
-        }
-    }
-}
-
-// Vec of Assignment<T>
-impl<T> Assign<T> for Vec<Assignment<T>> {
-    fn assign(self, assignments: &mut stmt::Assignments, projection: stmt::Projection) {
-        for item in self {
-            item.assign(assignments, projection.clone());
         }
     }
 }
@@ -237,9 +204,7 @@ pub fn patch<T, U>(path: Path<T, U>, value: impl Assign<U> + 'static) -> Assignm
 
 /// Apply multiple operations to a single field.
 ///
-/// Wraps an `impl Assign<T>` (typically an array or `Vec` of
-/// [`Assignment<T>`]) into a single [`Assignment<T>`]. Each inner operation
-/// is applied in order when the assignment is executed.
+/// Takes an array or [`Vec`] of [`Assignment<T>`] and applies each in order.
 ///
 /// # Examples
 ///
@@ -253,10 +218,13 @@ pub fn patch<T, U>(path: Path<T, U>, value: impl Assign<U> + 'static) -> Assignm
 ///     .exec(&mut db)
 ///     .await?;
 /// ```
-pub fn apply<T>(ops: impl Assign<T> + 'static) -> Assignment<T> {
+pub fn apply<T: 'static>(ops: impl IntoIterator<Item = Assignment<T>>) -> Assignment<T> {
+    let ops: Vec<Assignment<T>> = ops.into_iter().collect();
     Assignment {
         kind: AssignmentKind::Apply(Box::new(move |assignments, projection| {
-            ops.assign(assignments, projection);
+            for op in ops {
+                op.assign(assignments, projection.clone());
+            }
         })),
         _p: PhantomData,
     }
