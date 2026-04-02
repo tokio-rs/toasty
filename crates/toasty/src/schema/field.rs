@@ -149,11 +149,11 @@ impl Field for Vec<u8> {
     }
 }
 
-impl<T: Field<Inner = T>> Field for Option<T> {
+impl<T: Field> Field for Option<T> {
     type Path<Origin> = stmt::Path<Origin, Self>;
     type ListPath<Origin> = stmt::Path<Origin, List<Self>>;
     type Update<'a> = ();
-    type Inner = T;
+    type Inner = T::Inner;
     const NULLABLE: bool = true;
 
     fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
