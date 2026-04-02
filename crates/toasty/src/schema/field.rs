@@ -23,8 +23,9 @@ pub trait Field: Load {
     /// For primitives, this will be {Type}Update<'a> once implemented.
     type Update<'a>;
 
-    /// The non-optional inner type for foreign key filter expressions.
-    /// For `T`, this is `T`. For `Option<T>`, this is `T`.
+    /// The unwrapped type used for foreign key filter expressions.
+    /// Primitives map to themselves. Wrappers like `Option<T>`, `Box<T>`,
+    /// `Arc<T>`, and `Rc<T>` map to `T::Inner`.
     type Inner;
 
     /// Whether or not the type is nullable
