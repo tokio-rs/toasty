@@ -97,7 +97,7 @@ fn has_many_target_not_registered() {
         )],
     )];
 
-    let err = Schema::from_macro(&models).unwrap_err();
+    let err = Schema::from_macro(models).unwrap_err();
     assert_missing_model_error(&err, "Conference", "talks");
 }
 
@@ -122,7 +122,7 @@ fn has_one_target_not_registered() {
         )],
     )];
 
-    let err = Schema::from_macro(&models).unwrap_err();
+    let err = Schema::from_macro(models).unwrap_err();
     assert_missing_model_error(&err, "User", "profile");
 }
 
@@ -150,6 +150,6 @@ fn belongs_to_target_not_registered() {
         )],
     )];
 
-    let err = Schema::from_macro(&models).unwrap_err();
+    let err = Schema::from_macro(models).unwrap_err();
     assert_missing_model_error(&err, "Talk", "speaker");
 }

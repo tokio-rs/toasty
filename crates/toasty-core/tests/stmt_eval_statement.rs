@@ -1,5 +1,5 @@
 use toasty_core::stmt::{
-    Expr, Limit, Offset, OrderBy, OrderByExpr, Query, Statement, Value, Values,
+    Expr, Limit, LimitCursor, LimitOffset, OrderBy, OrderByExpr, Query, Statement, Value, Values,
 };
 
 fn values_query(items: Vec<i64>) -> Query {
@@ -32,10 +32,10 @@ fn query_with_order_by_is_error() {
 #[test]
 fn limit_returns_first_n_items() {
     let mut query = values_query(vec![1, 2, 3, 4, 5]);
-    query.limit = Some(Limit {
+    query.limit = Some(Limit::Offset(LimitOffset {
         limit: Expr::from(3i64),
         offset: None,
-    });
+    }));
     let result = Statement::Query(query).eval_const().unwrap();
     assert_eq!(
         result,
@@ -46,10 +46,10 @@ fn limit_returns_first_n_items() {
 #[test]
 fn limit_larger_than_list_returns_all() {
     let mut query = values_query(vec![1, 2]);
-    query.limit = Some(Limit {
+    query.limit = Some(Limit::Offset(LimitOffset {
         limit: Expr::from(10i64),
         offset: None,
-    });
+    }));
     let result = Statement::Query(query).eval_const().unwrap();
     assert_eq!(result, Value::List(vec![Value::I64(1), Value::I64(2)]));
 }
@@ -57,10 +57,10 @@ fn limit_larger_than_list_returns_all() {
 #[test]
 fn limit_zero_returns_empty_list() {
     let mut query = values_query(vec![1, 2, 3]);
-    query.limit = Some(Limit {
+    query.limit = Some(Limit::Offset(LimitOffset {
         limit: Expr::from(0i64),
         offset: None,
-    });
+    }));
     let result = Statement::Query(query).eval_const().unwrap();
     assert_eq!(result, Value::List(vec![]));
 }
@@ -68,10 +68,10 @@ fn limit_zero_returns_empty_list() {
 #[test]
 fn limit_with_count_offset_skips_then_takes() {
     let mut query = values_query(vec![1, 2, 3, 4, 5]);
-    query.limit = Some(Limit {
+    query.limit = Some(Limit::Offset(LimitOffset {
         limit: Expr::from(2i64),
-        offset: Some(Offset::Count(Expr::from(2i64))),
-    });
+        offset: Some(Expr::from(2i64)),
+    }));
     let result = Statement::Query(query).eval_const().unwrap();
     assert_eq!(result, Value::List(vec![Value::I64(3), Value::I64(4)]));
 }
@@ -79,21 +79,21 @@ fn limit_with_count_offset_skips_then_takes() {
 #[test]
 fn limit_with_count_offset_larger_than_list_returns_empty() {
     let mut query = values_query(vec![1, 2]);
-    query.limit = Some(Limit {
+    query.limit = Some(Limit::Offset(LimitOffset {
         limit: Expr::from(5i64),
-        offset: Some(Offset::Count(Expr::from(10i64))),
-    });
+        offset: Some(Expr::from(10i64)),
+    }));
     let result = Statement::Query(query).eval_const().unwrap();
     assert_eq!(result, Value::List(vec![]));
 }
 
 #[test]
-fn limit_with_keyset_offset_is_error() {
+fn limit_with_cursor_is_error() {
     let mut query = values_query(vec![1, 2, 3]);
-    query.limit = Some(Limit {
-        limit: Expr::from(2i64),
-        offset: Some(Offset::After(Expr::from(1i64))),
-    });
+    query.limit = Some(Limit::Cursor(LimitCursor {
+        page_size: Expr::from(2i64),
+        after: Some(Expr::from(1i64)),
+    }));
     assert!(Statement::Query(query).eval_const().is_err());
 }
 

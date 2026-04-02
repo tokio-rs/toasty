@@ -1,15 +1,16 @@
 use super::{
-    Connection, ExprAttrs, Result, Schema, ddb_expression, ddb_key, item_to_record, operation, stmt,
+    Connection, ExprAttrs, Result, Schema, ddb_expression, deserialize_ddb_cursor, item_to_record,
+    operation, serialize_ddb_cursor, stmt,
 };
 use std::sync::Arc;
-use toasty_core::{driver::Response, stmt::ExprContext};
+use toasty_core::{driver::ExecResponse, stmt::ExprContext};
 
 impl Connection {
     pub(crate) async fn exec_query_pk(
         &mut self,
         schema: &Arc<Schema>,
         op: operation::QueryPk,
-    ) -> Result<Response> {
+    ) -> Result<ExecResponse> {
         let table = schema.db.table(op.table);
         let cx = ExprContext::new_with_target(&schema.db, table);
 
@@ -47,15 +48,15 @@ impl Connection {
                     .set_expression_attribute_names(Some(expr_attrs.attr_names))
                     .set_expression_attribute_values(Some(expr_attrs.attr_values));
 
-                // Apply pagination parameters when present.
                 if let Some(limit) = op.limit {
                     query = query.limit(limit as i32);
                 }
+                if let Some(ref cursor_value) = op.cursor {
+                    query =
+                        query.set_exclusive_start_key(Some(deserialize_ddb_cursor(cursor_value)));
+                }
                 if let Some(ref direction) = op.order {
                     query = query.scan_index_forward(*direction == stmt::Direction::Asc);
-                }
-                if let Some(ref start_key) = op.cursor {
-                    query = query.set_exclusive_start_key(Some(ddb_key(table, start_key)));
                 }
 
                 query
@@ -74,15 +75,14 @@ impl Connection {
                 .set_expression_attribute_names(Some(expr_attrs.attr_names))
                 .set_expression_attribute_values(Some(expr_attrs.attr_values));
 
-            // Apply pagination parameters when present.
             if let Some(limit) = op.limit {
                 query = query.limit(limit as i32);
             }
+            if let Some(ref cursor_value) = op.cursor {
+                query = query.set_exclusive_start_key(Some(deserialize_ddb_cursor(cursor_value)));
+            }
             if let Some(ref direction) = op.order {
                 query = query.scan_index_forward(*direction == stmt::Direction::Asc);
-            }
-            if let Some(ref start_key) = op.cursor {
-                query = query.set_exclusive_start_key(Some(ddb_key(table, start_key)));
             }
 
             query
@@ -93,15 +93,23 @@ impl Connection {
 
         let schema = schema.clone();
         let res = result?;
-        Ok(Response::value_stream(stmt::ValueStream::from_iter(
-            res.items.into_iter().flatten().map(move |item| {
-                item_to_record(
-                    &item,
-                    op.select
-                        .iter()
-                        .map(|column_id| schema.db.column(*column_id)),
-                )
-            }),
-        )))
+
+        // Capture LastEvaluatedKey for pagination
+        let cursor = res.last_evaluated_key.as_ref().map(serialize_ddb_cursor);
+
+        let rows = stmt::ValueStream::from_iter(res.items.into_iter().flatten().map(move |item| {
+            item_to_record(
+                &item,
+                op.select
+                    .iter()
+                    .map(|column_id| schema.db.column(*column_id)),
+            )
+        }));
+
+        Ok(ExecResponse {
+            values: toasty_core::driver::Rows::Stream(rows),
+            next_cursor: cursor,
+            prev_cursor: None,
+        })
     }
 }

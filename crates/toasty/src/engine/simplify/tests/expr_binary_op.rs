@@ -18,7 +18,7 @@ struct User {
 
 fn test_schema() -> toasty_core::Schema {
     let app_schema =
-        app::Schema::from_macro(&[User::schema()]).expect("schema should build from macro");
+        app::Schema::from_macro([User::schema()]).expect("schema should build from macro");
 
     Builder::new()
         .build(app_schema, &Capability::SQLITE)

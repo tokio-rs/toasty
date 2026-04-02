@@ -37,6 +37,70 @@ pub enum Model {
     EmbeddedEnum(EmbeddedEnum),
 }
 
+/// An ordered collection of [`Model`] definitions.
+///
+/// `ModelSet` is the primary container used to hold all models in a schema.
+/// Models are stored in insertion order and can be iterated over by reference
+/// or by value.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::schema::app::{Model, ModelSet};
+///
+/// let mut set = ModelSet::new();
+/// assert_eq!(set.iter().len(), 0);
+/// ```
+#[derive(Debug, Clone, Default)]
+pub struct ModelSet {
+    models: Vec<Model>,
+}
+
+impl ModelSet {
+    /// Creates an empty `ModelSet`.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Returns the number of models in the set.
+    pub fn len(&self) -> usize {
+        self.models.len()
+    }
+
+    /// Returns `true` if the set contains no models.
+    pub fn is_empty(&self) -> bool {
+        self.models.is_empty()
+    }
+
+    /// Appends a model to the end of the set.
+    pub fn add(&mut self, model: Model) {
+        self.models.push(model);
+    }
+
+    /// Returns an iterator over the models in insertion order.
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = &Model> {
+        self.models.iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a ModelSet {
+    type Item = &'a Model;
+    type IntoIter = std::slice::Iter<'a, Model>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.models.iter()
+    }
+}
+
+impl IntoIterator for ModelSet {
+    type Item = Model;
+    type IntoIter = std::vec::IntoIter<Model>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.models.into_iter()
+    }
+}
+
 /// A root model backed by its own database table.
 ///
 /// Root models have a primary key, may define indices, and are the only model

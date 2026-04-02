@@ -2,7 +2,10 @@ use crate::{
     Result,
     engine::exec::{Action, Exec, Output},
 };
-use toasty_core::{driver::Rows, stmt};
+use toasty_core::{
+    driver::{ExecResponse, Rows},
+    stmt,
+};
 
 #[derive(Debug)]
 pub(crate) struct SetVar {
@@ -16,7 +19,7 @@ impl Exec<'_> {
         self.vars.store(
             action.output.var,
             action.output.num_uses,
-            Rows::Value(action.value.clone()),
+            ExecResponse::from_rows(Rows::Value(action.value.clone())),
         );
 
         Ok(())

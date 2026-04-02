@@ -1,6 +1,6 @@
 use super::test_schema;
 use crate::engine::simplify::Simplify;
-use toasty_core::stmt::{self, Direction, Limit, OrderBy, OrderByExpr, Query, Values};
+use toasty_core::stmt::{self, Direction, Limit, LimitOffset, OrderBy, OrderByExpr, Query, Values};
 
 #[test]
 fn empty_values_query_is_empty() {
@@ -38,10 +38,10 @@ fn simplify_clears_order_by_and_limit() {
             order: Some(Direction::Asc),
         }],
     });
-    query.limit = Some(Limit {
+    query.limit = Some(Limit::Offset(LimitOffset {
         limit: stmt::Expr::Value(stmt::Value::from(10i64)),
         offset: None,
-    });
+    }));
 
     simplify.simplify_stmt_query_when_empty(&mut query);
 
@@ -65,10 +65,10 @@ fn non_empty_query_keeps_order_by_and_limit() {
             order: Some(Direction::Desc),
         }],
     });
-    query.limit = Some(Limit {
+    query.limit = Some(Limit::Offset(LimitOffset {
         limit: stmt::Expr::Value(stmt::Value::from(10i64)),
         offset: None,
-    });
+    }));
 
     simplify.simplify_stmt_query_when_empty(&mut query);
 

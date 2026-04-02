@@ -30,7 +30,7 @@ use std::{
 use toasty_core::{
     Result, Schema,
     driver::{
-        Capability, Driver, Response,
+        Capability, Driver, ExecResponse,
         operation::{IsolationLevel, Operation, Transaction},
     },
     schema::db::{self, Migration, SchemaDiff, Table},
@@ -175,7 +175,7 @@ impl Connection {
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
-    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
+    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         tracing::trace!(driver = "sqlite", op = %op.name(), "driver exec");
 
         let (sql, ret_tys): (sql::Statement, _) = match op {
@@ -200,7 +200,7 @@ impl toasty_core::driver::Connection for Connection {
                 self.connection
                     .execute(&sql, [])
                     .map_err(toasty_core::Error::driver_operation_failed)?;
-                return Ok(Response::count(0));
+                return Ok(ExecResponse::count(0));
             }
             _ => todo!("op={:#?}", op),
         };
@@ -246,7 +246,7 @@ impl toasty_core::driver::Connection for Connection {
                 .execute(rusqlite::params_from_iter(params.iter()))
                 .map_err(toasty_core::Error::driver_operation_failed)?;
 
-            return Ok(Response::count(count as _));
+            return Ok(ExecResponse::count(count as _));
         }
 
         let mut rows = stmt
@@ -277,7 +277,7 @@ impl toasty_core::driver::Connection for Connection {
             }
         }
 
-        Ok(Response::value_stream(stmt::ValueStream::from_vec(ret)))
+        Ok(ExecResponse::value_stream(stmt::ValueStream::from_vec(ret)))
     }
 
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {

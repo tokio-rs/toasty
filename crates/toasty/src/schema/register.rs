@@ -71,3 +71,13 @@ inventory::collect!(DiscoverItem);
 // the crate without requiring users to depend on it directly.
 #[cfg(feature = "discover")]
 pub use inventory;
+
+/// Creates a [`ModelSet`] with the provided models already registered, similar to `vec![]`.
+#[macro_export]
+macro_rules! models {
+    ($($model:ty),*) => {{
+        let mut model_set = ::toasty::ModelSet::new();
+        $(model_set.add(<$model as ::toasty::schema::Register>::schema());)*
+        model_set
+    }};
+}

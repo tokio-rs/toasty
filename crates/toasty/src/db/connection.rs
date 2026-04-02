@@ -6,8 +6,8 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use toasty_core::{
     Schema,
-    driver::{Response, operation::Operation},
-    stmt::{self, Value},
+    driver::{ExecResponse, operation::Operation},
+    stmt,
 };
 use tokio::sync::oneshot;
 
@@ -38,18 +38,7 @@ impl Connection {
         &self,
         stmt: stmt::Statement,
         in_transaction: bool,
-    ) -> crate::Result<Value> {
-        let returns_list = match &stmt {
-            stmt::Statement::Query(q) => !q.single,
-            stmt::Statement::Insert(i) => !i.source.single,
-            stmt::Statement::Update(i) => match &i.target {
-                stmt::UpdateTarget::Query(q) => !q.single,
-                stmt::UpdateTarget::Model(_) => false,
-                _ => true,
-            },
-            stmt::Statement::Delete(d) => !d.selection().single,
-        };
-
+    ) -> crate::Result<ExecResponse> {
         let (tx, rx) = oneshot::channel();
 
         self.handle()
@@ -61,20 +50,10 @@ impl Connection {
             })
             .unwrap();
 
-        let mut stream = rx.await.unwrap()?;
-
-        if returns_list {
-            let values = stream.collect().await?;
-            Ok(Value::List(values))
-        } else {
-            match stream.next().await {
-                Some(value) => value,
-                None => Ok(Value::Null),
-            }
-        }
+        rx.await.unwrap()
     }
 
-    pub(crate) async fn exec_operation(&self, operation: Operation) -> crate::Result<Response> {
+    pub(crate) async fn exec_operation(&self, operation: Operation) -> crate::Result<ExecResponse> {
         let (tx, rx) = oneshot::channel();
 
         self.handle()
@@ -114,7 +93,10 @@ impl super::Executor for Connection {
         Transaction::begin(ConnRef::Borrowed(self)).await
     }
 
-    async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> crate::Result<Value> {
+    async fn exec_untyped(
+        &mut self,
+        stmt: toasty_core::stmt::Statement,
+    ) -> crate::Result<ExecResponse> {
         self.exec_stmt(stmt, false).await
     }
 

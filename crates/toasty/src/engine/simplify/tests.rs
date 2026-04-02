@@ -33,7 +33,8 @@ pub fn test_schema() -> toasty_core::Schema {
 }
 
 pub fn test_schema_with(models: &[Model]) -> toasty_core::Schema {
-    let app_schema = app::Schema::from_macro(models).expect("schema should build from macro");
+    let app_schema =
+        app::Schema::from_macro(models.iter().cloned()).expect("schema should build from macro");
 
     Builder::new()
         .build(app_schema, &Capability::SQLITE)

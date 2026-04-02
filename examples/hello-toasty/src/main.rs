@@ -33,7 +33,7 @@ struct Todo {
 #[tokio::main]
 async fn main() -> toasty::Result<()> {
     let mut db = toasty::Db::builder()
-        .discover()
+        .models(toasty::models!(User, Todo))
         .connect(
             std::env::var("TOASTY_CONNECTION_URL")
                 .as_deref()

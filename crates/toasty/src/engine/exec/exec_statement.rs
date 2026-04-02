@@ -1,12 +1,25 @@
 use toasty_core::{
-    driver::{Rows, operation},
+    driver::{ExecResponse, Rows, operation},
     stmt,
 };
 
 use crate::{
     Result,
-    engine::exec::{Action, Exec, Output, VarId},
+    engine::{
+        eval,
+        exec::{Action, Exec, Output, VarId},
+    },
 };
+
+/// Configuration for pagination at the execution level.
+#[derive(Debug, Clone)]
+pub(crate) struct PaginationConfig {
+    /// Number of items per page
+    pub page_size: i64,
+    /// Function to extract cursor from a row (SQL only).
+    /// For NoSQL drivers, this is None (driver provides cursor).
+    pub extract_cursor: Option<eval::Func>,
+}
 
 /// Information about a MySQL INSERT with RETURNING that needs special handling.
 ///
@@ -37,6 +50,9 @@ pub(crate) struct ExecStatement {
 
     /// When true, the statement is a conditional update without any returning.
     pub conditional_update_with_no_returning: bool,
+
+    /// Pagination configuration (None if not paginated)
+    pub pagination: Option<PaginationConfig>,
 }
 
 #[derive(Debug)]
@@ -55,7 +71,8 @@ impl Exec<'_> {
         if !action.input.is_empty() {
             let mut input_values = Vec::new();
             for var_id in &action.input {
-                let values = self.vars.load(*var_id).await?.collect_as_value().await?;
+                let response = self.vars.load(*var_id).await?;
+                let values = response.values.collect_as_value().await?;
                 input_values.push(values);
             }
             stmt.substitute(&input_values);
@@ -92,7 +109,7 @@ impl Exec<'_> {
             self.vars.store(
                 action.output.output.var,
                 action.output.output.num_uses,
-                rows,
+                ExecResponse::from_rows(rows),
             );
 
             return Ok(());
@@ -115,10 +132,10 @@ impl Exec<'_> {
         let mut res = self.connection.exec(&self.engine.schema, op.into()).await?;
 
         if action.conditional_update_with_no_returning {
-            let Rows::Stream(rows) = res.rows else {
+            let Rows::Stream(rows) = res.values else {
                 return Err(toasty_core::Error::invalid_result(format!(
                     "conditional update expected Stream, got {:?}",
-                    res.rows
+                    res.values
                 )));
             };
 
@@ -140,20 +157,66 @@ impl Exec<'_> {
                 ));
             }
 
-            res.rows = Rows::Count(record[0].to_u64_unwrap());
+            res.values = Rows::Count(record[0].to_u64_unwrap());
         } else if let Some(mysql_info) = mysql_insert_returning {
-            res.rows = mysql_info.reconstruct_returning(res.rows).await?;
+            res.values = mysql_info.reconstruct_returning(res.values).await?;
         }
 
-        self.vars.store(
-            action.output.output.var,
-            action.output.output.num_uses,
-            res.rows,
-        );
+        // Apply pagination if configured
+        if let Some(pagination) = &action.pagination {
+            assert!(res.next_cursor.is_none() && res.prev_cursor.is_none());
+            res.values.buffer().await?;
+            self.apply_sql_pagination(&mut res, pagination)?;
+        }
+
+        self.vars
+            .store(action.output.output.var, action.output.output.num_uses, res);
 
         Ok(())
     }
 
+    /// Apply SQL pagination by extracting cursor from last row.
+    /// If we got a full page (page_size rows), extract cursor for potential next page.
+    /// The client will naturally discover there's no more data when the next request returns empty.
+    ///
+    /// The response values must already be buffered (via `Rows::buffer()`).
+    fn apply_sql_pagination(
+        &mut self,
+        res: &mut ExecResponse,
+        pagination: &PaginationConfig,
+    ) -> Result<()> {
+        let Some(extract_cursor) = &pagination.extract_cursor else {
+            return Ok(());
+        };
+
+        let Rows::Value(stmt::Value::List(ref row_vec)) = res.values else {
+            return Ok(());
+        };
+
+        let page_size = pagination.page_size as usize;
+
+        // Extract cursors for potential next/prev pages
+        res.next_cursor = if row_vec.len() == page_size {
+            let cursor_row = &row_vec[page_size - 1];
+            Some(extract_cursor.eval(std::slice::from_ref(cursor_row))?)
+        } else {
+            // Got fewer than page_size rows, no more data
+            None
+        };
+
+        // Extract prev cursor from first row (for backward pagination)
+        res.prev_cursor = if !row_vec.is_empty() {
+            let cursor_row = &row_vec[0];
+            Some(extract_cursor.eval(std::slice::from_ref(cursor_row))?)
+        } else {
+            None
+        };
+
+        Ok(())
+    }
+}
+
+impl Exec<'_> {
     /// Processes INSERT statements with RETURNING on MySQL, which doesn't support RETURNING.
     ///
     /// Returns information needed to reconstruct the RETURNING results using LAST_INSERT_ID()

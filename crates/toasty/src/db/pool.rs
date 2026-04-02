@@ -2,7 +2,8 @@
 
 pub use deadpool::managed::Timeouts;
 use std::sync::Arc;
-use toasty_core::driver::{Capability, Driver};
+use toasty_core::driver::{Capability, Driver, Rows};
+use toasty_core::stmt::Value;
 use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
@@ -65,11 +66,11 @@ pub(crate) enum ConnectionOperation {
     ExecStatement {
         stmt: Box<toasty_core::stmt::Statement>,
         in_transaction: bool,
-        tx: oneshot::Sender<crate::Result<toasty_core::stmt::ValueStream>>,
+        tx: oneshot::Sender<crate::Result<toasty_core::driver::ExecResponse>>,
     },
     ExecOperation {
         operation: Box<toasty_core::driver::operation::Operation>,
-        tx: oneshot::Sender<crate::Result<toasty_core::driver::Response>>,
+        tx: oneshot::Sender<crate::Result<toasty_core::driver::ExecResponse>>,
     },
     /// Push schema to the database.
     PushSchema {
@@ -180,28 +181,31 @@ impl deadpool::managed::Manager for Manager {
                         stmt,
                         in_transaction,
                         tx,
-                    } => match engine.exec(&mut *connection, *stmt, in_transaction).await {
-                        Ok(mut value_stream) => {
-                            let (row_tx, mut row_rx) = mpsc::unbounded_channel::<
-                                crate::Result<toasty_core::stmt::Value>,
-                            >();
+                    } => {
+                        let single = stmt.is_single();
+                        let result = async {
+                            let mut response =
+                                engine.exec(&mut *connection, *stmt, in_transaction).await?;
+                            response.values.buffer().await?;
 
-                            let _ = tx.send(Ok(toasty_core::stmt::ValueStream::from_stream(
-                                async_stream::stream! {
-                                    while let Some(res) = row_rx.recv().await {
-                                        yield res
-                                    }
-                                },
-                            )));
-
-                            while let Some(res) = value_stream.next().await {
-                                let _ = row_tx.send(res);
+                            if single {
+                                let Rows::Value(Value::List(mut items)) = response.values else {
+                                    unreachable!()
+                                };
+                                assert!(
+                                    items.len() <= 1,
+                                    "expected at most 1 row for single statement, got {}",
+                                    items.len()
+                                );
+                                response.values = Rows::Value(items.pop().unwrap_or(Value::Null));
                             }
+
+                            Ok(response)
                         }
-                        Err(err) => {
-                            let _ = tx.send(Err(err));
-                        }
-                    },
+                        .await;
+
+                        let _ = tx.send(result);
+                    }
                     ConnectionOperation::ExecOperation { operation, tx } => {
                         let result = connection.exec(&engine.schema, *operation).await;
                         let _ = tx.send(result);
