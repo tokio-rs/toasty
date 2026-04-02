@@ -151,7 +151,6 @@ impl<T: IntoExpr<T>> IntoExpr<List<T>> for &T {
         (*self).by_ref().cast()
     }
 }
-impl_assign_via_expr!({T: IntoExpr<T>} &T => List<T>);
 
 impl<T: IntoExpr<T>> IntoExpr<Self> for Option<T> {
     fn into_expr(self) -> Expr<Self> {
