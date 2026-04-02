@@ -179,7 +179,7 @@ impl<T: IntoExpr<T>> IntoExpr<Option<T>> for T {
         self.by_ref().cast()
     }
 }
-// NOTE: no Assign impl for T => Option<T> — it would conflict with T => T.
+impl_assign_via_expr!({T: IntoExpr<T>} T => Option<T>);
 
 impl<T: IntoExpr<T>> IntoExpr<Option<T>> for &T {
     fn into_expr(self) -> Expr<Option<T>> {
@@ -190,7 +190,7 @@ impl<T: IntoExpr<T>> IntoExpr<Option<T>> for &T {
         (*self).by_ref().cast()
     }
 }
-// NOTE: no Assign impl for &T => Option<T> — would conflict with &T => T.
+impl_assign_via_expr!({T: IntoExpr<T>} &T => Option<T>);
 
 impl<T: IntoExpr<T>> IntoExpr<T> for &Option<T> {
     fn into_expr(self) -> Expr<T> {
