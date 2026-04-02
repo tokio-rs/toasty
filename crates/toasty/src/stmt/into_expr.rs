@@ -206,7 +206,6 @@ impl<T: IntoExpr<T>> IntoExpr<T> for &Option<T> {
         }
     }
 }
-impl_assign_via_expr!({T: IntoExpr<T>} &Option<T> => T);
 
 impl IntoExpr<String> for &str {
     fn into_expr(self) -> Expr<String> {
