@@ -173,7 +173,7 @@ fn schema() -> Schema {
         indices: vec![],
     });
 
-    Schema::from_macro(&[user, status, contact, address]).unwrap()
+    Schema::from_macro([user, status, contact, address]).unwrap()
 }
 
 // === Primitive fields ===

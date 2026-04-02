@@ -10,7 +10,7 @@ pub use crate::helpers::{column, columns, table_id};
 pub use crate::DbTest;
 
 // Re-export macros
-pub use crate::{models, tests};
+pub use crate::tests;
 
 // Re-export extension traits
 pub use crate::stmt::ValueStreamExt;

@@ -556,7 +556,7 @@ fn ddb_test_cx() -> TestCx {
 
 fn ddb_test_cx_composite() -> TestCx {
     let app_schema =
-        app::Schema::from_macro(&[Todo::schema()]).expect("schema should build from macro");
+        app::Schema::from_macro([Todo::schema()]).expect("schema should build from macro");
     let schema = Builder::new()
         .build(app_schema, &Capability::DYNAMODB)
         .expect("schema should build");
@@ -568,7 +568,7 @@ fn ddb_test_cx_composite() -> TestCx {
 
 fn sqlite_test_cx_ranked() -> TestCx {
     let app_schema =
-        app::Schema::from_macro(&[Ranked::schema()]).expect("schema should build from macro");
+        app::Schema::from_macro([Ranked::schema()]).expect("schema should build from macro");
     let schema = Builder::new()
         .build(app_schema, &Capability::SQLITE)
         .expect("schema should build");
@@ -580,7 +580,7 @@ fn sqlite_test_cx_ranked() -> TestCx {
 
 fn test_cx_with_capability(capability: &'static Capability) -> TestCx {
     let app_schema =
-        app::Schema::from_macro(&[User::schema()]).expect("schema should build from macro");
+        app::Schema::from_macro([User::schema()]).expect("schema should build from macro");
     let schema = Builder::new()
         .build(app_schema, capability)
         .expect("schema should build");

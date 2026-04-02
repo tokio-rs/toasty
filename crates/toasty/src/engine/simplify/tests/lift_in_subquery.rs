@@ -45,7 +45,7 @@ struct UserPostSchema {
 
 impl UserPostSchema {
     fn new() -> Self {
-        let app_schema = app::Schema::from_macro(&[User::schema(), Post::schema()])
+        let app_schema = app::Schema::from_macro([User::schema(), Post::schema()])
             .expect("schema should build from macro");
 
         let schema = Builder::new()

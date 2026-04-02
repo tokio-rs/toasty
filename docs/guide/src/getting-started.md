@@ -45,7 +45,7 @@ struct User {
 async fn main() -> toasty::Result<()> {
     // Build a Db handle, registering all models
     let mut db = toasty::Db::builder()
-        .register::<User>()
+        .models(toasty::models!(User))
         .connect("sqlite::memory:")
         .await?;
 
@@ -102,15 +102,14 @@ rest of this guide shows everything the macro can generate and how to use it.
 
 ## Connecting to a database
 
-`Db::builder()` creates a builder where you register your models and then
-connect to a database. Every model must be registered before connecting so that
+`Db::builder()` creates a builder where you provide your models and then
+connect to a database. Every model must be included before connecting so that
 Toasty can infer the full database schema — tables, columns, indexes, and
 relationships between models.
 
 ```rust,ignore
 let mut db = toasty::Db::builder()
-    .register::<User>()
-    .register::<Post>()
+    .models(toasty::models!(User, Post))
     .connect("sqlite::memory:")
     .await?;
 ```

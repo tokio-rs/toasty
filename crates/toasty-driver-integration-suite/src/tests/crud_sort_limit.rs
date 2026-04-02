@@ -162,6 +162,7 @@ pub async fn limit_offset(t: &mut Test) -> Result<()> {
     }
 
     let mut db = t.setup_db(models!(Item)).await;
+
     for i in 0..20 {
         Item::create().order(i).exec(&mut db).await?;
     }
