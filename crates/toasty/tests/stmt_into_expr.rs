@@ -277,21 +277,6 @@ fn into_expr_slice_to_list() {
 }
 
 // ---------------------------------------------------------------------------
-// &T -> List<T> (single-element via cast)
-// ---------------------------------------------------------------------------
-
-#[test]
-fn into_expr_ref_to_list() {
-    let val = 42i64;
-    let expr: Expr<List<i64>> = (&val).into_expr();
-    // &T -> Expr<List<T>> uses by_ref().cast()
-    assert_eq!(
-        untyped(expr),
-        core_stmt::Expr::Value(core_stmt::Value::I64(42))
-    );
-}
-
-// ---------------------------------------------------------------------------
 // Tuple impls
 // ---------------------------------------------------------------------------
 

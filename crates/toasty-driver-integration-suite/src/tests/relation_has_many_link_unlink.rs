@@ -170,7 +170,9 @@ pub async fn add_remove_multiple_relation_option_belongs_to(test: &mut Test) -> 
     let ids = vec![t1.id, t2.id, t3.id];
 
     // Associate the todos with the user
-    user.todos().insert(&mut db, &[t1, t2, t3]).await?;
+    user.todos().insert(&mut db, &t1).await?;
+    user.todos().insert(&mut db, &t2).await?;
+    user.todos().insert(&mut db, &t3).await?;
 
     let todos_reloaded: Vec<_> = user.todos().exec(&mut db).await?;
     assert_eq!(todos_reloaded.len(), 3);
