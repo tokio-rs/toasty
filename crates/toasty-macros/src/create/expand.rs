@@ -6,25 +6,7 @@ use syn::spanned::Spanned;
 
 pub(crate) fn expand(item: &CreateItem) -> TokenStream {
     match item {
-        CreateItem::Typed { path, fields } => {
-            let span = path.span();
-            let fields_path = quote_spanned! { span=> #path::fields() };
-            let field_calls = expand_field_set(fields, &fields_path);
-            let field_names = collect_field_names(fields);
-            let nested_assertions = expand_nested_assertions(path, fields);
-            quote_spanned! { span=>
-                {
-                    const _CREATE: () = {
-                        toasty::codegen_support::assert_create_fields(
-                            &<#path as toasty::codegen_support::Model>::CREATE_META,
-                            &[ #( #field_names ),* ],
-                        );
-                        #( #nested_assertions )*
-                    };
-                    #path::create() #(#field_calls)*
-                }
-            }
-        }
+        CreateItem::Typed { path, fields } => expand_typed(path, fields),
         CreateItem::Scoped { expr, fields } => expand_scoped(expr, fields),
         CreateItem::TypedBatch { path, items } => {
             let batch = expand_typed_batch(path, items);
@@ -33,6 +15,27 @@ pub(crate) fn expand(item: &CreateItem) -> TokenStream {
         CreateItem::Tuple { items } => {
             let elements: Vec<_> = items.iter().map(expand_as_element).collect();
             quote! { toasty::batch(( #( #elements, )* )) }
+        }
+    }
+}
+
+/// Expand a typed creation (`Path { fields }`).
+fn expand_typed(path: &syn::Path, fields: &FieldSet) -> TokenStream {
+    let span = path.span();
+    let fields_path = quote_spanned! { span=> #path::fields() };
+    let field_calls = expand_field_set(fields, &fields_path);
+    let field_names = collect_field_names(fields);
+    let nested_assertions = expand_nested_assertions(path, fields);
+    quote_spanned! { span=>
+        {
+            const _CREATE: () = {
+                toasty::codegen_support::assert_create_fields(
+                    &<#path as toasty::codegen_support::Model>::CREATE_META,
+                    &[ #( #field_names ),* ],
+                );
+                #( #nested_assertions )*
+            };
+            #path::create() #(#field_calls)*
         }
     }
 }
@@ -95,27 +98,9 @@ fn expand_as_element(item: &CreateItem) -> TokenStream {
 
 /// Expand a `TypedBatch` into `[ builder1, builder2, ... ]`.
 fn expand_typed_batch(path: &syn::Path, items: &[FieldSet]) -> TokenStream {
-    let span = path.span();
-    let fields_path = quote_spanned! { span=> #path::fields() };
     let builders: Vec<_> = items
         .iter()
-        .map(|fields| {
-            let field_calls = expand_field_set(fields, &fields_path);
-            let field_names = collect_field_names(fields);
-            let nested_assertions = expand_nested_assertions(path, fields);
-            quote_spanned! { span=>
-                {
-                    const _CREATE: () = {
-                        toasty::codegen_support::assert_create_fields(
-                            &<#path as toasty::codegen_support::Model>::CREATE_META,
-                            &[ #( #field_names ),* ],
-                        );
-                        #( #nested_assertions )*
-                    };
-                    #path::create() #(#field_calls)*
-                }
-            }
-        })
+        .map(|fields| expand_typed(path, fields))
         .collect();
     quote! { [ #( #builders, )* ] }
 }

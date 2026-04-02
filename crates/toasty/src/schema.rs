@@ -4,7 +4,7 @@ pub use auto::Auto;
 mod belongs_to;
 pub use belongs_to::BelongsTo;
 
-/// Compile-time metadata for `create!` field validation.
+#[doc(hidden)]
 pub mod create_meta;
 pub use create_meta::{CreateBelongsTo, CreateField, CreateMeta, CreateNested};
 
