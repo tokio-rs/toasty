@@ -130,7 +130,6 @@ pub use toasty_core::{Error, Result};
 
 #[doc(hidden)]
 pub mod codegen_support {
-    #[cfg(feature = "discover")]
     pub use crate::schema::inventory;
     pub use crate::{
         Db, Error, Executor, Result, Statement,

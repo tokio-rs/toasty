@@ -28,7 +28,6 @@ pub use model::Model;
 mod option;
 
 mod register;
-#[cfg(feature = "discover")]
 pub use register::inventory;
 pub use register::{DiscoverItem, Register, generate_unique_id};
 

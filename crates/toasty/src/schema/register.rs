@@ -34,9 +34,9 @@ pub trait Register {
 ///
 /// Each derived type emits an `inventory::submit!` call that creates a
 /// `DiscoverItem` carrying the originating crate name (via
-/// `env!("CARGO_PKG_NAME")`) and a registration function. When the
-/// `discover` feature is enabled, [`toasty::models!`] and iterates over
-/// all submitted items filtered by crate name.
+/// `env!("CARGO_PKG_NAME")`) and a registration function.
+/// [`toasty::models!`] iterates over all submitted items filtered by crate
+/// name.
 #[doc(hidden)]
 pub struct DiscoverItem {
     crate_name: &'static str,
@@ -56,7 +56,6 @@ impl DiscoverItem {
         (self.add_fn)(model_set)
     }
 
-    #[cfg(feature = "discover")]
     pub fn add_all_from_crate_to(model_set: &mut ModelSet, crate_name: &str) {
         // Normalize all crate names to use `_` instead of `-` for `models!` invocation
         // which has to use `_` to be a valid crate identifier.
@@ -71,12 +70,10 @@ impl DiscoverItem {
 
 // Collect all `DiscoverItem` instances submitted by derive macros so they
 // can be iterated by [`toasty::models!`].
-#[cfg(feature = "discover")]
 inventory::collect!(DiscoverItem);
 
 // Re-exported so that generated `inventory::submit!` calls can reference
 // the crate without requiring users to depend on it directly.
-#[cfg(feature = "discover")]
 pub use inventory;
 
 /// Creates a [`ModelSet`] containing the specified models.
@@ -98,10 +95,9 @@ pub use inventory;
 ///
 /// - **Individual models** — a type path to a struct that derives `Model` or
 ///   `Embed`. Module paths are supported (e.g. `my_module::MyModel`).
-/// - **`crate::*`** — registers every model discovered in the current crate
-///   (requires the `discover` feature).
+/// - **`crate::*`** — registers every model discovered in the current crate.
 /// - **`some_crate::*`** — registers every model discovered in the named
-///   external crate (requires the `discover` feature).
+///   external crate.
 ///
 /// These forms can be freely combined:
 ///

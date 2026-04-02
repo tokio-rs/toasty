@@ -84,19 +84,6 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let embedded_update_builder = expand.expand_embedded_update_builder();
     let field_list_struct_ident = &embedded.field_list_struct_ident;
 
-    let inventory_submit = if cfg!(feature = "discover") {
-        quote! {
-            #toasty::inventory::submit! {
-                #toasty::DiscoverItem::new(
-                    env!("CARGO_PKG_NAME"),
-                    |model_set| { model_set.add(<#model_ident as #toasty::Register>::schema()); },
-                )
-            }
-        }
-    } else {
-        quote! {}
-    };
-
     wrap_in_const(quote! {
         #embedded_field_struct
         #embedded_field_list_struct
@@ -114,7 +101,12 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
             #model_schema
         }
 
-        #inventory_submit
+        #toasty::inventory::submit! {
+            #toasty::DiscoverItem::new(
+                env!("CARGO_PKG_NAME"),
+                |model_set| { model_set.add(<#model_ident as #toasty::Register>::schema()); },
+            )
+        }
 
         impl #toasty::Embed for #model_ident {}
 
@@ -212,19 +204,6 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     let enum_field_struct = e.expand_enum_field_struct();
     let enum_field_list_struct = e.expand_field_list_struct();
 
-    let inventory_submit = if cfg!(feature = "discover") {
-        quote! {
-            #toasty::inventory::submit! {
-                #toasty::DiscoverItem::new(
-                    env!("CARGO_PKG_NAME"),
-                    |model_set| { model_set.add(<#model_ident as #toasty::Register>::schema()); },
-                )
-            }
-        }
-    } else {
-        quote! {}
-    };
-
     wrap_in_const(quote! {
         #enum_field_struct
         #enum_field_list_struct
@@ -254,7 +233,12 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
             }
         }
 
-        #inventory_submit
+        #toasty::inventory::submit! {
+            #toasty::DiscoverItem::new(
+                env!("CARGO_PKG_NAME"),
+                |model_set| { model_set.add(<#model_ident as #toasty::Register>::schema()); },
+            )
+        }
 
         impl #toasty::Embed for #model_ident {}
 

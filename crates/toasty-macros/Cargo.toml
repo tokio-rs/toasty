@@ -13,9 +13,6 @@ categories.workspace = true
 readme.workspace = true
 documentation = "https://docs.rs/toasty-macros"
 
-[features]
-discover = []
-
 [lib]
 proc-macro = true
 
