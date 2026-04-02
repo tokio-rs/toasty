@@ -17,7 +17,7 @@ mod insert;
 pub use insert::Insert;
 
 mod assignment;
-pub use assignment::{Assign, Assignment, insert, remove, set};
+pub use assignment::{Assign, Assignment, apply, insert, patch, remove, set};
 
 mod into_expr;
 pub use into_expr::IntoExpr;
@@ -166,7 +166,7 @@ impl<T: Load> Statement<T> {
     /// #     name: String,
     /// # }
     /// # let driver = toasty_driver_sqlite::Sqlite::in_memory();
-    /// # let mut db = toasty::Db::builder().register::<User>().build(driver).await.unwrap();
+    /// # let mut db = toasty::Db::builder().models(toasty::models!(User)).build(driver).await.unwrap();
     /// # db.push_schema().await.unwrap();
     /// use toasty::stmt::{IntoStatement, List, Query};
     ///

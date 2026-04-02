@@ -221,7 +221,10 @@ impl Expand<'_> {
             let target = &fk_field.target;
 
             quote! {
-                <#ty as #toasty::Relation>::Model::fields().#target().eq(&self.#source_field_ident)
+                #toasty::Field::key_constraint(
+                    &self.#source_field_ident,
+                    <#ty as #toasty::Relation>::Model::fields().#target(),
+                )
             }
         });
 

@@ -16,17 +16,6 @@ macro_rules! assert_eq_unordered {
 }
 
 #[macro_export]
-macro_rules! models {
-    (
-        $( $model:ident ),*
-    ) => {{
-        let mut builder = toasty::Db::builder();
-        $( builder.register::<$model>(); )*
-        builder
-    }};
-}
-
-#[macro_export]
 macro_rules! tests {
     (
         $(

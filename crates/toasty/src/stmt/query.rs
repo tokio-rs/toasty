@@ -4,7 +4,7 @@ use crate::{
     schema::{Load, Model},
 };
 use std::{fmt, marker::PhantomData};
-use toasty_core::stmt::{self, Offset, Returning};
+use toasty_core::stmt::{self, Returning};
 
 /// A typed query that selects records from the database.
 ///
@@ -190,10 +190,10 @@ impl<T> Query<T> {
     /// q.limit(10);
     /// ```
     pub fn limit(&mut self, n: usize) -> &mut Self {
-        self.untyped.limit = Some(stmt::Limit {
+        self.untyped.limit = Some(stmt::Limit::Offset(stmt::LimitOffset {
             limit: stmt::Value::from(n as i64).into(),
             offset: None,
-        });
+        }));
         self
     }
 
@@ -220,10 +220,15 @@ impl<T> Query<T> {
     /// ```
     pub fn offset(&mut self, n: usize) -> &mut Self {
         self.untyped.limit = match self.untyped.limit.take() {
-            Some(limit) => Some(stmt::Limit {
-                limit: limit.limit,
-                offset: Some(Offset::Count(stmt::Expr::Value(Value::from(n)))),
-            }),
+            Some(stmt::Limit::Offset(limit_offset)) => {
+                Some(stmt::Limit::Offset(stmt::LimitOffset {
+                    limit: limit_offset.limit,
+                    offset: Some(stmt::Expr::Value(Value::from(n))),
+                }))
+            }
+            Some(stmt::Limit::Cursor(_)) => {
+                panic!("cannot use offset with cursor-based pagination")
+            }
             None => panic!("limit required for offset"),
         };
         self
@@ -367,7 +372,7 @@ impl<T: Load> Query<T> {
     /// #     name: String,
     /// # }
     /// # let driver = toasty_driver_sqlite::Sqlite::in_memory();
-    /// # let mut db = toasty::Db::builder().register::<User>().build(driver).await.unwrap();
+    /// # let mut db = toasty::Db::builder().models(toasty::models!(User)).build(driver).await.unwrap();
     /// # db.push_schema().await.unwrap();
     /// use toasty::stmt::{List, Query};
     ///

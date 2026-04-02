@@ -87,6 +87,13 @@ impl Expand<'_> {
                 #model_schema
             }
 
+            #toasty::inventory::submit! {
+                #toasty::DiscoverItem::new(
+                    env!("CARGO_PKG_NAME"),
+                    |model_set| { model_set.add(<#model_ident as #toasty::Register>::schema()); },
+                )
+            }
+
             impl #toasty::Load for #model_ident {
                 type Output = Self;
 
@@ -144,6 +151,12 @@ impl Expand<'_> {
 
                 fn by_ref(&self) -> #toasty::stmt::Expr<#model_ident> {
                     #into_expr_body_ref
+                }
+            }
+
+            impl #toasty::Assign<#model_ident> for #model_ident {
+                fn assign(self, assignments: &mut #toasty::core::stmt::Assignments, projection: #toasty::stmt::Projection) {
+                    assignments.set(projection, <Self as #toasty::IntoExpr<#model_ident>>::into_expr(self));
                 }
             }
 

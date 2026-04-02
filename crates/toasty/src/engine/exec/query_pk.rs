@@ -3,7 +3,7 @@ use crate::{
     engine::exec::{Action, Exec, Output, VarId},
 };
 use toasty_core::{
-    driver::{Rows, operation},
+    driver::{ExecResponse, Rows, operation},
     schema::db::{ColumnId, IndexId, TableId},
     stmt,
 };
@@ -52,6 +52,18 @@ impl Exec<'_> {
 
         let filters = self.split_filter(pk_filter, action.table);
         let mut all_rows = Vec::new();
+        let mut response_cursor = None;
+
+        // Pagination with multiple filters is not supported — a cursor is only
+        // meaningful for a single partition key query.
+        assert!(
+            action.cursor.is_none() || filters.len() <= 1,
+            "cursor-based pagination with multiple partition filters is not supported"
+        );
+
+        // When there are multiple filters, discard the response cursor since it
+        // would only apply to the last filter's result set.
+        let paginated = filters.len() <= 1;
 
         for f in filters {
             let res = self
@@ -72,13 +84,22 @@ impl Exec<'_> {
                 )
                 .await?;
 
-            all_rows.extend(res.rows.into_value_stream().collect().await?);
+            // Only capture cursor when paginating a single filter
+            if paginated && res.next_cursor.is_some() {
+                response_cursor = res.next_cursor;
+            }
+
+            all_rows.extend(res.values.into_value_stream().collect().await?);
         }
 
         self.vars.store(
             action.output.var,
             action.output.num_uses,
-            Rows::Stream(stmt::ValueStream::from_vec(all_rows)),
+            ExecResponse {
+                values: Rows::Stream(stmt::ValueStream::from_vec(all_rows)),
+                next_cursor: response_cursor,
+                prev_cursor: None,
+            },
         );
 
         Ok(())

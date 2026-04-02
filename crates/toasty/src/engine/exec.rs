@@ -8,7 +8,7 @@ mod eval;
 pub(crate) use eval::Eval;
 
 mod exec_statement;
-pub(crate) use exec_statement::{ExecStatement, ExecStatementOutput};
+pub(crate) use exec_statement::{ExecStatement, ExecStatementOutput, PaginationConfig};
 
 mod filter;
 pub(crate) use filter::Filter;
@@ -56,7 +56,7 @@ pub(crate) use var::{VarDecls, VarId, VarStore};
 use crate::{Result, engine::Engine};
 use toasty_core::{
     Connection,
-    driver::{Rows, operation::Transaction},
+    driver::{ExecResponse, Rows, operation::Transaction},
     stmt::{self, ValueStream},
 };
 
@@ -76,7 +76,7 @@ impl Engine {
         connection: &mut dyn Connection,
         plan: ExecPlan,
         in_transaction: bool,
-    ) -> Result<ValueStream> {
+    ) -> Result<ExecResponse> {
         let mut exec = Exec {
             engine: self,
             connection,
@@ -127,17 +127,28 @@ impl Engine {
             exec.connection.exec(&self.schema, commit.into()).await?;
         }
 
-        Ok(if let Some(returning) = plan.returning {
-            match exec.vars.load(returning).await? {
+        let result = if let Some(returning) = plan.returning {
+            let response = exec.vars.load(returning).await?;
+            tracing::debug!("Final result from var {:?}:\n{:#?}", returning, response);
+
+            let value_stream = match response.values {
                 Rows::Count(_) => ValueStream::default(),
                 Rows::Value(stmt::Value::List(items)) => ValueStream::from_vec(items),
                 // TODO have the public API be able to handle single rows
                 Rows::Value(value) => ValueStream::from_vec(vec![value]),
                 Rows::Stream(value_stream) => value_stream,
+            };
+
+            ExecResponse {
+                values: Rows::Stream(value_stream),
+                next_cursor: response.next_cursor,
+                prev_cursor: response.prev_cursor,
             }
         } else {
-            ValueStream::default()
-        })
+            ExecResponse::from_rows(Rows::Stream(ValueStream::default()))
+        };
+
+        Ok(result)
     }
 }
 
@@ -164,7 +175,8 @@ impl Exec<'_> {
         let mut ret = Vec::new();
 
         for var_id in input {
-            let value = self.vars.load(*var_id).await?.collect_as_value().await?;
+            let response = self.vars.load(*var_id).await?;
+            let value = response.values.collect_as_value().await?;
             ret.push(value);
         }
 

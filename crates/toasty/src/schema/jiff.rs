@@ -1,5 +1,5 @@
 use super::{Field, Load};
-use crate::stmt::{List, Path};
+use crate::stmt::{Expr, List, Path};
 use toasty_core::{
     Result,
     stmt::{Type, Value},
@@ -31,6 +31,7 @@ macro_rules! impl_jiff_field {
             type Path<Origin> = Path<Origin, Self>;
             type ListPath<Origin> = Path<Origin, List<Self>>;
             type Update<'a> = ();
+            type Inner = Self;
 
             fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
                 path
@@ -44,6 +45,10 @@ macro_rules! impl_jiff_field {
                 _assignments: &'a mut toasty_core::stmt::Assignments,
                 _projection: toasty_core::stmt::Projection,
             ) -> Self::Update<'a> {
+            }
+
+            fn key_constraint<Origin>(&self, target: Path<Origin, Self::Inner>) -> Expr<bool> {
+                target.eq(self)
             }
         }
     };

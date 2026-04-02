@@ -22,7 +22,7 @@ use postgres::{Socket, tls::MakeTlsConnect, types::ToSql};
 use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     Result, Schema,
-    driver::{Capability, Driver, Operation, Response},
+    driver::{Capability, Driver, ExecResponse, Operation},
     schema::db::{self, Migration, SchemaDiff, Table},
     stmt,
     stmt::ValueRecord,
@@ -289,7 +289,7 @@ impl From<Client> for Connection {
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
-    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
+    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         tracing::trace!(driver = "postgresql", op = %op.name(), "driver exec");
 
         if let Operation::Transaction(ref t) = op {
@@ -305,7 +305,7 @@ impl toasty_core::driver::Connection for Connection {
                     toasty_core::Error::driver_operation_failed(e)
                 }
             })?;
-            return Ok(Response::count(0));
+            return Ok(ExecResponse::count(0));
         }
 
         let (sql, ret_tys): (sql::Statement, _) = match op {
@@ -350,7 +350,7 @@ impl toasty_core::driver::Connection for Connection {
                 .execute(&statement, &params)
                 .await
                 .map_err(toasty_core::Error::driver_operation_failed)?;
-            return Ok(Response::count(count));
+            return Ok(ExecResponse::count(count));
         }
 
         let rows = self
@@ -365,7 +365,7 @@ impl toasty_core::driver::Connection for Connection {
             let condition_matched = row.get::<usize, i64>(1);
 
             if total == condition_matched {
-                Ok(Response::count(total as _))
+                Ok(ExecResponse::count(total as _))
             } else {
                 Err(toasty_core::Error::condition_failed(
                     "update condition did not match",
@@ -382,7 +382,7 @@ impl toasty_core::driver::Connection for Connection {
                 Ok(ValueRecord::from_vec(results))
             });
 
-            Ok(Response::value_stream(stmt::ValueStream::from_iter(
+            Ok(ExecResponse::value_stream(stmt::ValueStream::from_iter(
                 results,
             )))
         }

@@ -1,5 +1,19 @@
 # Toasty
 
+[![Crates.io][crates-badge]][crates-url]
+[![MIT licensed][mit-badge]][mit-url]
+[![Build Status][actions-badge]][actions-url]
+[![Discord chat][discord-badge]][discord-url]
+
+[crates-badge]: https://img.shields.io/crates/v/toasty.svg
+[crates-url]: https://crates.io/crates/toasty
+[mit-badge]: https://img.shields.io/badge/license-MIT-blue.svg
+[mit-url]: https://github.com/tokio-rs/toasty/blob/main/LICENSE
+[actions-badge]: https://github.com/tokio-rs/toasty/workflows/Cargo%20Build%20%26%20Test/badge.svg
+[actions-url]: https://github.com/tokio-rs/toasty/actions?query=workflow%3A%22Cargo+Build+%26+Test%22+branch%3Amain
+[discord-badge]: https://img.shields.io/discord/500028886025895936.svg?logo=discord&style=flat-square
+[discord-url]: https://discord.gg/tokio
+
 Toasty is an ORM for the Rust programming language that prioritizes ease-of-use.
 It currently supports SQL databases (SQLite, PostgreSQL, MySQL) and DynamoDB.
 Note that Toasty does not hide database capabilities. Instead, Toasty exposes
@@ -55,14 +69,15 @@ Then, you can easily work with the data model:
 
 ```rust
 // Create a new user and give them some todos.
-let user = User::create()
-    .name("John Doe")
-    .email("john@example.com")
-    .todo(Todo::create().title("Make pizza"))
-    .todo(Todo::create().title("Finish Toasty"))
-    .todo(Todo::create().title("Sleep"))
-    .exec(&mut db)
-    .await?;
+let user = toasty::create!(User {
+    name: "John Doe",
+    email: "john@example.com",
+    todos: [
+        { title: "Make pizza" },
+        { title: "Finish Toasty" },
+        { title: "Sleep" },
+    ],
+}).exec(&mut db).await?;
 
 // Load the user from the database
 let user = User::get_by_id(&mut db, &user.id).await?;

@@ -1,7 +1,7 @@
 use crate::{
     Result,
     schema::{Field, Load},
-    stmt::{List, Path},
+    stmt::{Expr, List, Path},
 };
 
 use toasty_core::stmt;
@@ -31,6 +31,7 @@ macro_rules! impl_field_numeric {
                 type Path<Origin> = Path<Origin, Self>;
                 type ListPath<Origin> = Path<Origin, List<Self>>;
                 type Update<'a> = ();
+                type Inner = Self;
 
                 fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
                     path
@@ -44,6 +45,13 @@ macro_rules! impl_field_numeric {
                     _assignments: &'a mut toasty_core::stmt::Assignments,
                     _projection: toasty_core::stmt::Projection,
                 ) -> Self::Update<'a> {
+                }
+
+                fn key_constraint<Origin>(
+                    &self,
+                    target: Path<Origin, Self::Inner>,
+                ) -> Expr<bool> {
+                    target.eq(self)
                 }
             }
         )*

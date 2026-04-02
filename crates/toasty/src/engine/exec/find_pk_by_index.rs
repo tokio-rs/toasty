@@ -1,5 +1,5 @@
 use toasty_core::{
-    driver::{Rows, operation},
+    driver::{ExecResponse, Rows, operation},
     schema::db::{IndexId, TableId},
     stmt,
 };
@@ -55,13 +55,13 @@ impl Exec<'_> {
                 )
                 .await?;
 
-            all_rows.extend(res.rows.into_value_stream().collect().await?);
+            all_rows.extend(res.values.into_value_stream().collect().await?);
         }
 
         self.vars.store(
             action.output.var,
             action.output.num_uses,
-            Rows::Stream(stmt::ValueStream::from_vec(all_rows)),
+            ExecResponse::from_rows(Rows::Stream(stmt::ValueStream::from_vec(all_rows))),
         );
 
         Ok(())

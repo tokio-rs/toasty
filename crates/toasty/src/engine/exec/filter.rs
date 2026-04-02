@@ -5,7 +5,7 @@ use crate::{
         exec::{Action, Exec, Output, VarId},
     },
 };
-use toasty_core::driver::Rows;
+use toasty_core::driver::{ExecResponse, Rows};
 
 #[derive(Debug)]
 pub(crate) struct Filter {
@@ -21,8 +21,9 @@ pub(crate) struct Filter {
 
 impl Exec<'_> {
     pub(super) async fn action_filter(&mut self, action: &Filter) -> Result<()> {
-        // Load the input variable
-        let mut input_stream = self.vars.load(action.input).await?.into_value_stream();
+        // Load the input variable with metadata
+        let input_response = self.vars.load(action.input).await?;
+        let mut input_stream = input_response.values.into_value_stream();
 
         let mut filtered_rows = vec![];
 
@@ -35,11 +36,15 @@ impl Exec<'_> {
             }
         }
 
-        // Store the filtered stream to the output variable
+        // Store the filtered stream with preserved pagination metadata
         self.vars.store(
             action.output.var,
             action.output.num_uses,
-            Rows::value_stream(filtered_rows),
+            ExecResponse {
+                values: Rows::value_stream(filtered_rows),
+                next_cursor: input_response.next_cursor,
+                prev_cursor: input_response.prev_cursor,
+            },
         );
 
         Ok(())

@@ -16,6 +16,11 @@ pub(crate) struct Eval {
 
     /// The function to evaluate
     pub(crate) eval: eval::Func,
+
+    /// The input from which meta-data should be forwarded. This includes the
+    /// pagination cursors. When `None`, do not forward any metadata. Note, all
+    /// other inputs must not have any metadata to forward.
+    pub(crate) metadata: Option<usize>,
 }
 
 impl Eval {
@@ -42,6 +47,7 @@ impl Eval {
                 num_uses: node.num_uses.get(),
             },
             eval: self.eval.clone(),
+            metadata: self.metadata,
         }
     }
 }

@@ -71,6 +71,18 @@ impl Expand<'_> {
                 }
             }
 
+            impl #toasty::Assign<#model_ident> for #create_struct_ident {
+                fn assign(self, assignments: &mut #toasty::core::stmt::Assignments, projection: #toasty::stmt::Projection) {
+                    assignments.set(projection, <Self as #toasty::IntoExpr<#model_ident>>::into_expr(self));
+                }
+            }
+
+            impl #toasty::Assign<Option<#model_ident>> for #create_struct_ident {
+                fn assign(self, assignments: &mut #toasty::core::stmt::Assignments, projection: #toasty::stmt::Projection) {
+                    assignments.set(projection, <Self as #toasty::IntoExpr<Option<#model_ident>>>::into_expr(self));
+                }
+            }
+
             impl Default for #create_struct_ident {
                 fn default() -> #create_struct_ident {
                     let mut s = #create_struct_ident {

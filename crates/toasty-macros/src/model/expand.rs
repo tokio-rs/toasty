@@ -101,6 +101,13 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
             #model_schema
         }
 
+        #toasty::inventory::submit! {
+            #toasty::DiscoverItem::new(
+                env!("CARGO_PKG_NAME"),
+                |model_set| { model_set.add(<#model_ident as #toasty::Register>::schema()); },
+            )
+        }
+
         impl #toasty::Embed for #model_ident {}
 
         impl #toasty::Load for #model_ident {
@@ -123,6 +130,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
             type Path<__Origin> = #field_struct_ident<__Origin>;
             type ListPath<__Origin> = #field_list_struct_ident<__Origin>;
             type Update<'a> = #update_struct_ident<'a>;
+            type Inner = Self;
 
             fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
                 #field_struct_ident { path }
@@ -149,6 +157,13 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
                     }
                 )
             }
+
+            fn key_constraint<__Origin>(
+                &self,
+                target: #toasty::Path<__Origin, Self::Inner>,
+            ) -> #toasty::stmt::Expr<bool> {
+                target.eq(self)
+            }
         }
 
         impl #toasty::stmt::IntoExpr<#model_ident> for #model_ident {
@@ -158,6 +173,12 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
 
             fn by_ref(&self) -> #toasty::stmt::Expr<#model_ident> {
                 #into_expr_body_ref
+            }
+        }
+
+        impl #toasty::Assign<#model_ident> for #model_ident {
+            fn assign(self, assignments: &mut #toasty::core::stmt::Assignments, projection: #toasty::stmt::Projection) {
+                assignments.set(projection, <Self as #toasty::IntoExpr<#model_ident>>::into_expr(self));
             }
         }
     })
@@ -220,6 +241,13 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
             }
         }
 
+        #toasty::inventory::submit! {
+            #toasty::DiscoverItem::new(
+                env!("CARGO_PKG_NAME"),
+                |model_set| { model_set.add(<#model_ident as #toasty::Register>::schema()); },
+            )
+        }
+
         impl #toasty::Embed for #model_ident {}
 
         #load_impl
@@ -228,6 +256,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
             type Path<__Origin> = #field_struct_ident<__Origin>;
             type ListPath<__Origin> = #field_list_struct_ident<__Origin>;
             type Update<'a> = ();
+            type Inner = Self;
 
             fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
                 #field_struct_ident { path }
@@ -253,6 +282,13 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
                     }
                 )
             }
+
+            fn key_constraint<__Origin>(
+                &self,
+                target: #toasty::Path<__Origin, Self::Inner>,
+            ) -> #toasty::stmt::Expr<bool> {
+                target.eq(self)
+            }
         }
 
         impl #toasty::stmt::IntoExpr<#model_ident> for #model_ident {
@@ -262,6 +298,12 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
 
             fn by_ref(&self) -> #toasty::stmt::Expr<#model_ident> {
                 match self { #( #into_expr_arms )* }
+            }
+        }
+
+        impl #toasty::Assign<#model_ident> for #model_ident {
+            fn assign(self, assignments: &mut #toasty::core::stmt::Assignments, projection: #toasty::stmt::Projection) {
+                assignments.set(projection, <Self as #toasty::IntoExpr<#model_ident>>::into_expr(self));
             }
         }
     })
