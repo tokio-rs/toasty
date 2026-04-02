@@ -388,14 +388,29 @@ error[E0080]: evaluation panicked: missing required field `title` in create! for
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `_` failed inside this call
 ```
 
-## Limitations
+## Limitations and future work
 
-- `BelongsTo` relation fields themselves are not checked. If you write
+- **Embedded model fields** are not included in `CreateMeta`. Fields whose
+  type implements `Embed` (via `#[derive(Embed)]`) are skipped because they
+  are not `FieldTy::Primitive`. A future enhancement should include them.
+
+- **`#[serialize]` fields** are excluded because their Rust types (e.g.
+  `Vec<String>`, `HashMap<K,V>`, custom structs) do not implement the
+  `Field` trait, so `<T as Field>::NULLABLE` cannot be evaluated. A future
+  enhancement could infer nullability syntactically or introduce a separate
+  trait bound for serialized fields.
+
+- **Self-referential relations** (e.g. `HasMany<Person>` on `Person`) are
+  excluded from `CreateNested` to avoid const evaluation cycles. Nested
+  creates on self-referential relations are not statically checked.
+
+- **`BelongsTo` relation fields** themselves are not checked. If you write
   `create!(Todo { title: "x" })` without providing `user` or `user_id`, it
   compiles but fails at the database. A future enhancement could add
   disjunction checking (require `user` OR `user_id` in top-level creates).
   In nested and scoped creates this is not a problem because the parent
   context provides the FK.
-- Error messages include the field name but not a file/line pointer to the model
-  definition. The Rust compiler's error output shows the `create!` call site,
-  which is the actionable location.
+
+- **Error messages** include the field name but not a file/line pointer to
+  the model definition. The Rust compiler's error output shows the `create!`
+  call site, which is the actionable location.

@@ -26,7 +26,6 @@ impl Expand<'_> {
             .fields
             .iter()
             .filter(|f| {
-                // TODO: support embedded model fields in CreateMeta
                 if !matches!(&f.ty, FieldTy::Primitive(_)) {
                     return false;
                 }
@@ -42,7 +41,6 @@ impl Expand<'_> {
                 if f.attrs.update_expr.is_some() {
                     return false;
                 }
-                // TODO: support #[serialize] fields in CreateMeta (type may not implement Field)
                 if f.attrs.serialize.is_some() {
                     return false;
                 }
