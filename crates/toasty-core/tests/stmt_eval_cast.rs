@@ -53,9 +53,11 @@ fn cast_i64_to_i8_out_of_range() {
 
 #[test]
 fn cast_i64_to_i32_out_of_range() {
-    assert!(Expr::cast(Value::I64(3_000_000_000), Type::I32)
-        .eval_const()
-        .is_err());
+    assert!(
+        Expr::cast(Value::I64(3_000_000_000), Type::I32)
+            .eval_const()
+            .is_err()
+    );
 }
 
 // ---------------------------------------------------------------------------

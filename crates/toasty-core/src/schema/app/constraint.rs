@@ -1,7 +1,7 @@
 mod length;
 pub use length::ConstraintLength;
 
-use crate::{stmt, Result};
+use crate::{Result, stmt};
 
 /// A validation constraint applied to a field.
 ///

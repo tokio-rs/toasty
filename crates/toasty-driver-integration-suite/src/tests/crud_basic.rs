@@ -130,26 +130,23 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
     let (op, resp) = test.log().pop();
     // Column index 1 = val (id=0, val=1).
     if is_sql {
-        assert_struct!(op, Operation::QuerySql(_ {
-            stmt: Statement::Update(_ {
+        assert_struct!(op, Operation::QuerySql({
+            stmt: Statement::Update({
                 target: UpdateTarget::Table(== item_table_id),
                 assignments: #{ [1]: Assignment::Set(== "updated!")},
-                ..
             }),
             ret: None,
-            ..
         }));
     } else {
-        assert_struct!(op, Operation::UpdateByKey(_ {
+        assert_struct!(op, Operation::UpdateByKey({
             table: == item_table_id,
             keys.len(): 1,
             assignments: #{ [1]: Assignment::Set(== "updated!")},
             filter: None,
             returning: false,
-            ..
         }));
     }
-    assert_struct!(resp, _ { rows: Rows::Count(1), .. });
+    assert_struct!(resp, { values: Rows::Count(1) });
     assert!(test.log().is_empty());
 
     test.log().clear();
@@ -171,25 +168,21 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
 
     let (op, resp) = test.log().pop();
     if is_sql {
-        assert_struct!(op, Operation::QuerySql(_ {
-            stmt: Statement::Delete(_ {
-                from: Source::Table(_ {
+        assert_struct!(op, Operation::QuerySql({
+            stmt: Statement::Delete({
+                from: Source::Table({
                     tables: [== item_table_id, ..],
-                    ..
                 }),
-                ..
             }),
-            ..
         }));
     } else {
-        assert_struct!(op, Operation::DeleteByKey(_ {
+        assert_struct!(op, Operation::DeleteByKey({
             table: == item_table_id,
             keys.len(): 1,
             filter: None,
-            ..
         }));
     }
-    assert_struct!(resp, _ { rows: Rows::Count(1), .. });
+    assert_struct!(resp, { values: Rows::Count(1) });
     assert!(test.log().is_empty());
 
     // It is gone

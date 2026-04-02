@@ -23,13 +23,14 @@ pub(crate) use value::Value;
 
 use async_trait::async_trait;
 use toasty_core::{
-    driver::{operation::Operation, Capability, Driver, Response},
+    Error, Result, Schema,
+    driver::{Capability, Driver, ExecResponse, operation::Operation},
     schema::db::{self, Column, ColumnId, Migration, SchemaDiff, Table},
     stmt::{self, ExprContext},
-    Error, Result, Schema,
 };
 
 use aws_sdk_dynamodb::{
+    Client,
     error::SdkError,
     operation::update_item::UpdateItemError,
     types::{
@@ -37,7 +38,6 @@ use aws_sdk_dynamodb::{
         KeyType, KeysAndAttributes, Projection, ProjectionType, ProvisionedThroughput, Put,
         PutRequest, ReturnValuesOnConditionCheckFailure, TransactWriteItem, Update, WriteRequest,
     },
-    Client,
 };
 use std::{borrow::Cow, collections::HashMap, sync::Arc};
 
@@ -91,7 +91,9 @@ impl Driver for DynamoDb {
     }
 
     fn generate_migration(&self, _schema_diff: &SchemaDiff<'_>) -> Migration {
-        unimplemented!("DynamoDB migrations are not yet supported. DynamoDB schema changes require manual table updates through the AWS console or SDK.")
+        unimplemented!(
+            "DynamoDB migrations are not yet supported. DynamoDB schema changes require manual table updates through the AWS console or SDK."
+        )
     }
 
     async fn reset_db(&self) -> toasty_core::Result<()> {
@@ -145,12 +147,13 @@ impl Connection {
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
-    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
+    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         self.exec2(schema, op).await
     }
 
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
         for table in &schema.db.tables {
+            tracing::debug!(table = %table.name, "creating table");
             self.create_table(&schema.db, table, true).await?;
         }
         Ok(())
@@ -173,7 +176,7 @@ impl toasty_core::driver::Connection for Connection {
 }
 
 impl Connection {
-    async fn exec2(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
+    async fn exec2(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         match op {
             Operation::GetByKey(op) => self.exec_get_by_key(schema, op).await,
             Operation::QueryPk(op) => self.exec_query_pk(schema, op).await,
@@ -208,6 +211,59 @@ fn ddb_key(table: &Table, key: &stmt::Value) -> HashMap<String, AttributeValue> 
         };
 
         ret.insert(column.name.clone(), Value::from(value.clone()).to_ddb());
+    }
+
+    ret
+}
+
+/// Convert a DynamoDB AttributeValue to stmt::Value (type-inferred).
+fn attr_value_to_stmt_value(attr: &AttributeValue) -> stmt::Value {
+    use AttributeValue as AV;
+
+    match attr {
+        AV::S(s) => stmt::Value::String(s.clone()),
+        AV::N(n) => {
+            // Try to parse as i64 first (most common), fallback to string
+            n.parse::<i64>()
+                .map(stmt::Value::I64)
+                .unwrap_or_else(|_| stmt::Value::String(n.clone()))
+        }
+        AV::Bool(b) => stmt::Value::Bool(*b),
+        AV::B(bytes) => stmt::Value::Bytes(bytes.clone().into_inner()),
+        AV::Null(_) => stmt::Value::Null,
+        // For complex types, convert to string representation
+        _ => stmt::Value::String(format!("{:?}", attr)),
+    }
+}
+
+/// Serialize a DynamoDB LastEvaluatedKey (for pagination) into stmt::Value.
+/// Format: flat record [name1, value1, name2, value2, ...]
+/// Example: { "pk": S("abc"), "sk": N("42") } → Record([String("pk"), String("abc"), String("sk"), I64(42)])
+fn serialize_ddb_cursor(last_key: &HashMap<String, AttributeValue>) -> stmt::Value {
+    let mut fields = Vec::with_capacity(last_key.len() * 2);
+
+    for (name, attr_value) in last_key {
+        fields.push(stmt::Value::String(name.clone()));
+        fields.push(attr_value_to_stmt_value(attr_value));
+    }
+
+    stmt::Value::Record(stmt::ValueRecord::from_vec(fields))
+}
+
+/// Deserialize a stmt::Value cursor into a DynamoDB ExclusiveStartKey.
+/// Expects flat record format: [name1, value1, name2, value2, ...]
+fn deserialize_ddb_cursor(cursor: &stmt::Value) -> HashMap<String, AttributeValue> {
+    let mut ret = HashMap::new();
+
+    if let stmt::Value::Record(fields) = cursor {
+        // Process pairs: [name, value, name, value, ...]
+        for chunk in fields.chunks(2) {
+            if chunk.len() == 2
+                && let (stmt::Value::String(name), value) = (&chunk[0], &chunk[1])
+            {
+                ret.insert(name.clone(), Value::from(value.clone()).to_ddb());
+            }
+        }
     }
 
     ret

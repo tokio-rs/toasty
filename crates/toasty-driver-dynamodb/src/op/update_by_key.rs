@@ -1,17 +1,17 @@
 use super::{
-    db, ddb_expression, ddb_key, operation, stmt, Connection, Delete, ExprAttrs, Put, Result,
-    ReturnValuesOnConditionCheckFailure, SdkError, TransactWriteItem, Update, UpdateItemError,
-    Value,
+    Connection, Delete, ExprAttrs, Put, Result, ReturnValuesOnConditionCheckFailure, SdkError,
+    TransactWriteItem, Update, UpdateItemError, Value, db, ddb_expression, ddb_key, operation,
+    stmt,
 };
 use std::{collections::HashMap, fmt::Write};
-use toasty_core::{driver::Response, stmt::ExprContext};
+use toasty_core::{driver::ExecResponse, stmt::ExprContext};
 
 impl Connection {
     pub(crate) async fn exec_update_by_key(
         &mut self,
         schema: &db::Schema,
         op: operation::UpdateByKey,
-    ) -> Result<Response> {
+    ) -> Result<ExecResponse> {
         let table = schema.table(op.table);
         let cx = ExprContext::new_with_target(schema, table);
 
@@ -131,9 +131,9 @@ impl Connection {
                                 }
                                 */
                                 return if op.returning {
-                                    Ok(Response::empty_value_stream())
+                                    Ok(ExecResponse::empty_value_stream())
                                 } else {
-                                    Ok(Response::count(0))
+                                    Ok(ExecResponse::count(0))
                                 };
                             }
 
@@ -243,7 +243,9 @@ impl Connection {
                         if *projection == column.id.index {
                             if let Some(prev) = curr_unique_values.remove(&column.name) {
                                 let stmt::Assignment::Set(expr) = assignment else {
-                                    todo!("only SET supported in DynamoDB unique check; got {assignment:#?}");
+                                    todo!(
+                                        "only SET supported in DynamoDB unique check; got {assignment:#?}"
+                                    );
                                 };
                                 let stmt::Expr::Value(value) = expr else {
                                     todo!()
@@ -336,7 +338,9 @@ impl Connection {
                                 .unwrap();
 
                             let stmt::Assignment::Set(expr) = assignment else {
-                                todo!("only SET supported in DynamoDB index insert; got {assignment:#?}");
+                                todo!(
+                                    "only SET supported in DynamoDB index insert; got {assignment:#?}"
+                                );
                             };
                             let stmt::Expr::Value(value) = expr else {
                                 todo!()
@@ -407,9 +411,9 @@ impl Connection {
         // If we get here, then returning should be false
         Ok(if op.returning {
             let values = stmt::ValueStream::from_value(stmt::Value::record_from_vec(ret));
-            Response::value_stream(values)
+            ExecResponse::value_stream(values)
         } else {
-            Response::count(op.keys.len() as _)
+            ExecResponse::count(op.keys.len() as _)
         })
     }
 }

@@ -1,7 +1,17 @@
 [package]
 name = "toasty"
-version = "0.1.0"
-edition = "2021"
+version = "0.2.0"
+description = "An async ORM for Rust supporting SQL and NoSQL databases"
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+categories.workspace = true
+readme.workspace = true
+documentation = "https://docs.rs/toasty"
 
 [features]
 default = []
@@ -12,20 +22,20 @@ sqlite = ["dep:toasty-driver-sqlite"]
 rust_decimal = [
 	"dep:rust_decimal",
 	"toasty-core/rust_decimal",
-	"toasty-driver-postgresql/rust_decimal",
-	"toasty-driver-mysql/rust_decimal",
+	"toasty-driver-postgresql?/rust_decimal",
+	"toasty-driver-mysql?/rust_decimal",
 ]
 bigdecimal = [
 	"dep:bigdecimal",
 	"toasty-core/bigdecimal",
-	"toasty-driver-postgresql/bigdecimal",
-	"toasty-driver-mysql/bigdecimal",
+	"toasty-driver-postgresql?/bigdecimal",
+	"toasty-driver-mysql?/bigdecimal",
 ]
 jiff = [
 	"dep:jiff",
 	"toasty-core/jiff",
-	"toasty-driver-postgresql/jiff",
-	"toasty-driver-mysql/jiff",
+	"toasty-driver-postgresql?/jiff",
+	"toasty-driver-mysql?/jiff",
 ]
 serde = ["dep:serde_core", "dep:serde_json"]
 
@@ -40,12 +50,11 @@ toasty-driver-dynamodb = { workspace = true, optional = true }
 toasty-driver-mysql = { workspace = true, optional = true }
 toasty-driver-postgresql = { workspace = true, optional = true }
 toasty-driver-sqlite = { workspace = true, optional = true }
-serde_core = { version = "1.0.221", optional = true }
+serde_core = { version = "1.0.228", optional = true }
 serde_json = { workspace = true, optional = true }
 
 bit-set.workspace = true
 by_address.workspace = true
-async-stream.workspace = true
 rust_decimal = { workspace = true, optional = true }
 bigdecimal = { workspace = true, optional = true }
 deadpool.workspace = true

@@ -17,11 +17,10 @@
 //! ```
 
 use crate::{
-    stmt::{
-        BinaryOp, ConstInput, Expr, ExprArg, ExprSet, Input, Limit, Offset, Projection, Statement,
-        Value,
-    },
     Result,
+    stmt::{
+        BinaryOp, ConstInput, Expr, ExprArg, ExprSet, Input, Limit, Projection, Statement, Value,
+    },
 };
 use std::cmp::Ordering;
 
@@ -101,15 +100,20 @@ impl Limit {
         scope: &ScopeStack<'_>,
         input: &mut impl Input,
     ) -> Result<()> {
-        let Value::List(ref mut items) = value else {
+        let Value::List(items) = value else {
             return Err(crate::Error::expression_evaluation_failed(
                 "LIMIT requires body to evaluate to a list",
             ));
         };
 
-        if let Some(offset) = &self.offset {
-            match offset {
-                Offset::Count(offset_expr) => {
+        match self {
+            Limit::Cursor(_) => {
+                return Err(crate::Error::expression_evaluation_failed(
+                    "cursor-based pagination cannot be evaluated client-side",
+                ));
+            }
+            Limit::Offset(limit_offset) => {
+                if let Some(offset_expr) = &limit_offset.offset {
                     let skip = offset_expr.eval_ref_usize(scope, input)?;
                     if skip >= items.len() {
                         items.clear();
@@ -117,16 +121,11 @@ impl Limit {
                         items.drain(..skip);
                     }
                 }
-                Offset::After(_) => {
-                    return Err(crate::Error::expression_evaluation_failed(
-                        "keyset-based OFFSET cannot be evaluated client-side",
-                    ));
-                }
+
+                let n = limit_offset.limit.eval_ref_usize(scope, input)?;
+                items.truncate(n);
             }
         }
-
-        let n = self.limit.eval_ref_usize(scope, input)?;
-        items.truncate(n);
         Ok(())
     }
 }
@@ -243,7 +242,7 @@ impl Expr {
             Expr::Map(expr_map) => {
                 let mut base = expr_map.base.eval_ref(scope, input)?;
 
-                let Value::List(ref mut items) = &mut base else {
+                let Value::List(items) = &mut base else {
                     return Err(crate::Error::expression_evaluation_failed(
                         "Map base must evaluate to a list",
                     ));
@@ -328,7 +327,7 @@ impl Expr {
                         _ => {
                             return Err(crate::Error::expression_evaluation_failed(
                                 "Any expression items must evaluate to bool",
-                            ))
+                            ));
                         }
                     }
                 }
@@ -426,7 +425,7 @@ impl ScopeStack<'_> {
 
         match scope {
             ScopeStack::Root => input.resolve_arg(expr_arg, projection),
-            ScopeStack::Scope { mut args, .. } => args.resolve_arg(expr_arg, projection),
+            &ScopeStack::Scope { mut args, .. } => args.resolve_arg(expr_arg, projection),
         }
     }
 

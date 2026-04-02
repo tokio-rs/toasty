@@ -58,47 +58,41 @@ pub async fn update_by_partition_key(test: &mut Test) {
         let (op, resp) = test.log().pop();
 
         // Column index 2 = title (id=0, user_id=1, title=2).
-        assert_struct!(op, Operation::QuerySql(_ {
-            stmt: Statement::Update(_ {
+        assert_struct!(op, Operation::QuerySql({
+            stmt: Statement::Update({
                 target: UpdateTarget::Table(== todo_table_id),
                 assignments: #{ [2]: Assignment::Set(== "updated")},
-                ..
             }),
             ret: None,
-            ..
         }));
 
-        assert_struct!(resp, _ {
-            rows: Rows::Count(_),
-            ..
+        assert_struct!(resp, {
+            values: Rows::Count(_),
         });
     } else {
         // NoSQL: first a QueryPk to collect all matching PKs, then UpdateByKey
         // for every matched record.
         let (op, _) = test.log().pop();
 
-        assert_struct!(op, Operation::QueryPk(_ {
+        assert_struct!(op, Operation::QueryPk({
             table: == todo_table_id,
             select.len(): 2,
             filter: None,
-            ..
         }));
 
         let (op, resp) = test.log().pop();
 
         // Column index 2 = title (id=0, user_id=1, title=2).
-        assert_struct!(op, Operation::UpdateByKey(_ {
+        assert_struct!(op, Operation::UpdateByKey({
             table: == todo_table_id,
             keys.len(): 2,
             assignments: #{ [2]: Assignment::Set(== "updated")},
             filter: None,
             returning: false,
-            ..
         }));
 
-        assert_struct!(resp, _ {
-            rows: Rows::Count(2),
-            ..
+        assert_struct!(resp, {
+            values: Rows::Count(2),
         });
     }
 
@@ -170,46 +164,39 @@ pub async fn delete_by_partition_key(test: &mut Test) {
     if is_sql {
         let (op, resp) = test.log().pop();
 
-        assert_struct!(op, Operation::QuerySql(_ {
-            stmt: Statement::Delete(_ {
-                from: Source::Table(_ {
+        assert_struct!(op, Operation::QuerySql({
+            stmt: Statement::Delete({
+                from: Source::Table({
                     tables: [== todo_table_id, ..],
-                    ..
                 }),
-                ..
             }),
-            ..
         }));
 
-        assert_struct!(resp, _ {
-            rows: Rows::Count(_),
-            ..
+        assert_struct!(resp, {
+            values: Rows::Count(_),
         });
     } else {
         // NoSQL: first a QueryPk to collect all matching PKs, then one
         // DeleteByKey per matched record (the engine fans out individually).
         let (op, _) = test.log().pop();
 
-        assert_struct!(op, Operation::QueryPk(_ {
+        assert_struct!(op, Operation::QueryPk({
             table: == todo_table_id,
             select.len(): 2,
             filter: None,
-            ..
         }));
 
         for _ in 0..2 {
             let (op, resp) = test.log().pop();
 
-            assert_struct!(op, Operation::DeleteByKey(_ {
+            assert_struct!(op, Operation::DeleteByKey({
                 table: == todo_table_id,
                 keys.len(): 1,
                 filter: None,
-                ..
             }));
 
-            assert_struct!(resp, _ {
-                rows: Rows::Count(1),
-                ..
+            assert_struct!(resp, {
+                values: Rows::Count(1),
             });
         }
     }

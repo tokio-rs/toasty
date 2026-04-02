@@ -1,5 +1,5 @@
 pub(crate) mod eval;
-mod exec;
+pub(crate) mod exec;
 
 mod hir;
 use hir::HirStatement;
@@ -17,9 +17,9 @@ mod verify;
 use crate::Result;
 use std::sync::Arc;
 use toasty_core::{
-    driver::Capability,
-    stmt::{self, Statement, ValueStream},
     Connection, Schema,
+    driver::Capability,
+    stmt::{self, Statement},
 };
 
 /// The query execution engine.
@@ -55,18 +55,19 @@ impl Engine {
         self.capability
     }
 
-    /// Executes a statement on the given connection and returns the result as a
-    /// value stream.
+    /// Executes a statement and returns the full response including pagination metadata.
     ///
-    /// This is the main entry point for query execution. The statement passes
-    /// through the full compilation pipeline (lowering → planning → execution)
-    /// before being sent to the database driver via the provided connection.
+    /// The statement passes through the full compilation pipeline
+    /// (lowering -> planning -> execution) before being sent to the database
+    /// driver via the provided connection.
     pub(crate) async fn exec(
         &self,
         connection: &mut dyn Connection,
         stmt: Statement,
         in_transaction: bool,
-    ) -> Result<ValueStream> {
+    ) -> Result<toasty_core::driver::ExecResponse> {
+        tracing::debug!(stmt.kind = stmt.name(), "executing statement");
+
         if cfg!(debug_assertions) {
             self.verify(&stmt);
         }
@@ -83,6 +84,12 @@ impl Engine {
 
         // Translate the optimized statement into a series of driver operations.
         let plan = self.plan_hir_statement(hir)?;
+
+        tracing::trace!(
+            actions = plan.actions.len(),
+            needs_transaction = plan.needs_transaction,
+            "execution plan ready"
+        );
 
         // The plan is called once (single entry record stream) with no arguments
         // (empty record).

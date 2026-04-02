@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, Token};
+use syn::{Token, parse_macro_input};
 
 use crate::parse::{DriverTestAttr, ExpansionList, ThreeValuedBool};
 

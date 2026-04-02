@@ -6,7 +6,38 @@ use std::str::FromStr;
 
 const HISTORY_FILE_VERSION: u32 = 1;
 
-/// History file containing the record of all applied migrations
+/// A TOML-serializable record of all migrations that have been generated.
+///
+/// The history file lives at `<migration_path>/history.toml` and is the
+/// source of truth for which migrations exist and what order they were
+/// created in. Each entry is a [`HistoryFileMigration`].
+///
+/// The file carries a version number. [`HistoryFile::load`] and the
+/// [`FromStr`] implementation reject files whose version does not match the
+/// current format.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_cli::{HistoryFile, HistoryFileMigration};
+///
+/// let mut history = HistoryFile::new();
+/// assert_eq!(history.next_migration_number(), 0);
+///
+/// history.add_migration(HistoryFileMigration {
+///     id: 100,
+///     name: "0000_init.sql".to_string(),
+///     snapshot_name: "0000_snapshot.toml".to_string(),
+///     checksum: None,
+/// });
+/// assert_eq!(history.next_migration_number(), 1);
+/// assert_eq!(history.migrations().len(), 1);
+///
+/// // Round-trip through TOML serialization
+/// let serialized = history.to_string();
+/// let restored: HistoryFile = serialized.parse().unwrap();
+/// assert_eq!(restored.migrations()[0].id, 100);
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HistoryFile {
     /// History file format version
@@ -16,6 +47,26 @@ pub struct HistoryFile {
     migrations: Vec<HistoryFileMigration>,
 }
 
+/// A single entry in the migration history.
+///
+/// Each entry records the randomly-assigned ID used by the database driver to
+/// track application status, the migration SQL file name, the companion
+/// snapshot file name, and an optional checksum.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_cli::HistoryFileMigration;
+///
+/// let entry = HistoryFileMigration {
+///     id: 42,
+///     name: "0001_create_users.sql".to_string(),
+///     snapshot_name: "0001_snapshot.toml".to_string(),
+///     checksum: None,
+/// };
+/// assert_eq!(entry.id, 42);
+/// assert_eq!(entry.name, "0001_create_users.sql");
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HistoryFileMigration {
     /// Random unique identifier for this migration.
@@ -61,6 +112,28 @@ impl HistoryFile {
         Ok(Self::default())
     }
 
+    /// Returns the ordered list of migrations in this history.
+    ///
+    /// Migrations appear in the order they were added. An empty slice means no
+    /// migrations have been recorded yet.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use toasty_cli::{HistoryFile, HistoryFileMigration};
+    ///
+    /// let mut history = HistoryFile::new();
+    /// assert!(history.migrations().is_empty());
+    ///
+    /// history.add_migration(HistoryFileMigration {
+    ///     id: 1,
+    ///     name: "0001_init.sql".to_string(),
+    ///     snapshot_name: "0001_snapshot.toml".to_string(),
+    ///     checksum: None,
+    /// });
+    /// assert_eq!(history.migrations().len(), 1);
+    /// assert_eq!(history.migrations()[0].name, "0001_init.sql");
+    /// ```
     pub fn migrations(&self) -> &[HistoryFileMigration] {
         &self.migrations
     }

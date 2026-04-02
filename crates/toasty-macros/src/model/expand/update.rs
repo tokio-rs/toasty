@@ -1,4 +1,4 @@
-use super::{util, Expand};
+use super::{Expand, util};
 use crate::model::schema::FieldTy;
 
 use proc_macro2::TokenStream;
@@ -232,7 +232,8 @@ impl Expand<'_> {
                 #vis async fn exec(mut self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<()> {
                     use #toasty::UpdateTarget as _;
                     let stmt = self.target.to_update_stmt(self.assignments);
-                    let value = executor.exec_untyped(stmt.into_untyped()).await?;
+                    let response = executor.exec_untyped(stmt.into_untyped()).await?;
+                    let value = response.values.collect_as_value().await?;
                     self.target.apply_result(value)?;
                     Ok(())
                 }

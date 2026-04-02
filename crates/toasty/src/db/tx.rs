@@ -2,13 +2,12 @@ use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
-use crate::{db::ConnectionOperation, db::Executor, Result};
+use crate::{Result, db::ConnectionOperation, db::Executor};
 
 use async_trait::async_trait;
 use toasty_core::{
-    driver::operation::{self, IsolationLevel},
-    stmt::Value,
     Schema,
+    driver::operation::{self, IsolationLevel},
 };
 use tokio::sync::oneshot;
 
@@ -126,6 +125,12 @@ impl<'a> Transaction<'a> {
         isolation: Option<IsolationLevel>,
         read_only: bool,
     ) -> Result<Transaction<'a>> {
+        tracing::debug!(
+            isolation = ?isolation,
+            read_only = read_only,
+            "beginning transaction"
+        );
+
         // We're creating the Transaction struct before actually starting the transaction. If the
         // future is cancelled while waiting on the response of the start command, the transaction
         // is still rolled back.
@@ -149,6 +154,7 @@ impl<'a> Transaction<'a> {
 
     /// Commit the transaction.
     pub async fn commit(mut self) -> Result<()> {
+        tracing::debug!("committing transaction");
         // Because driver operations are done in a background task, all the operations aren't
         // cancelled and will continue even if this future is dropped. Setting the finalized flag
         // to true early here makes sure that if the future is dropped we don't queue a rollback
@@ -168,6 +174,7 @@ impl<'a> Transaction<'a> {
 
     /// Roll back the transaction.
     pub async fn rollback(mut self) -> Result<()> {
+        tracing::debug!("rolling back transaction");
         // See `commit` why we're setting the finalized flag to true early.
         self.finalized = true;
         match self.savepoint {
@@ -213,13 +220,16 @@ impl Drop for Transaction<'_> {
 #[async_trait]
 impl<'a> Executor for Transaction<'a> {
     async fn transaction(&mut self) -> Result<Transaction<'_>> {
+        let depth = match self.savepoint {
+            Some(savepoint) => savepoint + 1,
+            None => 1,
+        };
+        tracing::debug!(depth = depth, "creating nested transaction (savepoint)");
+
         let transaction = Transaction {
             conn: ConnRef::Borrowed(&mut self.conn),
             finalized: false,
-            savepoint: Some(match self.savepoint {
-                Some(savepoint) => savepoint + 1,
-                None => 1,
-            }),
+            savepoint: Some(depth),
         };
 
         transaction
@@ -230,7 +240,10 @@ impl<'a> Executor for Transaction<'a> {
         Ok(transaction)
     }
 
-    async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> Result<Value> {
+    async fn exec_untyped(
+        &mut self,
+        stmt: toasty_core::stmt::Statement,
+    ) -> Result<toasty_core::driver::ExecResponse> {
         self.conn.exec_stmt(stmt, true).await
     }
 

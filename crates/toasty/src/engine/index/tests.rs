@@ -1,6 +1,6 @@
 use super::*;
 use toasty_core::{
-    schema::{app, Builder},
+    schema::{Builder, app},
     stmt,
 };
 
@@ -23,6 +23,15 @@ struct Todo {
     user_id: String,
     #[key]
     status: String,
+}
+
+/// Composite primary key with a local (sort) column that accepts range predicates.
+#[allow(dead_code)]
+#[derive(toasty::Model)]
+#[key(partition = id, local = rank)]
+struct Ranked {
+    id: String,
+    rank: i64,
 }
 
 #[test]
@@ -50,6 +59,82 @@ fn pk_equality_goes_to_index_filter() -> Result<()> {
         "no residual result filter expected"
     );
     assert!(plan.post_filter.is_none());
+    Ok(())
+}
+
+#[test]
+fn pk_equality_column_on_rhs_goes_to_index_filter() -> Result<()> {
+    let cx = sqlite_test_cx();
+
+    // 1 = col[0]  — pk column on RHS; index matching must commute the operator
+    let filter = stmt::Expr::eq(
+        stmt::Expr::Value(stmt::Value::from(1i64)),
+        stmt::Expr::Reference(stmt::ExprReference::column(0, 0)),
+    );
+
+    let plan = cx.plan_basic_query_with_filter(filter)?;
+
+    assert!(
+        plan.index.primary_key,
+        "should select the primary key index"
+    );
+    assert!(
+        plan.result_filter.is_none(),
+        "no residual result filter expected"
+    );
+    assert!(plan.post_filter.is_none());
+    Ok(())
+}
+
+#[test]
+fn pk_lt_column_on_rhs_commutes_to_gt() -> Result<()> {
+    // Schema: Ranked { id (partition), rank (local) }
+    // The local-scoped sort column accepts range predicates in the index.
+    let cx = sqlite_test_cx_ranked();
+
+    // id = "a" AND 10 < rank  — sort column on RHS with Lt
+    // Index matching must commute the second operand to rank > 10.
+    let filter = stmt::Expr::And(stmt::ExprAnd {
+        operands: vec![
+            stmt::Expr::eq(
+                stmt::Expr::Reference(stmt::ExprReference::column(0, 0)),
+                stmt::Expr::Value(stmt::Value::String("a".to_string())),
+            ),
+            stmt::Expr::BinaryOp(stmt::ExprBinaryOp {
+                lhs: Box::new(stmt::Expr::Value(stmt::Value::from(10i64))),
+                op: stmt::BinaryOp::Lt,
+                rhs: Box::new(stmt::Expr::Reference(stmt::ExprReference::column(0, 1))),
+            }),
+        ],
+    });
+
+    let plan = cx.plan_basic_query_with_filter(filter)?;
+
+    assert!(
+        plan.index.primary_key,
+        "should select the primary key index"
+    );
+
+    // The index filter should contain both conditions with the sort column
+    // commuted to col > 10 (not the original 10 < col).
+    let expected_index_filter = stmt::Expr::And(stmt::ExprAnd {
+        operands: vec![
+            stmt::Expr::eq(
+                stmt::Expr::Reference(stmt::ExprReference::column(0, 0)),
+                stmt::Expr::Value(stmt::Value::String("a".to_string())),
+            ),
+            stmt::Expr::BinaryOp(stmt::ExprBinaryOp {
+                lhs: Box::new(stmt::Expr::Reference(stmt::ExprReference::column(0, 1))),
+                op: stmt::BinaryOp::Gt,
+                rhs: Box::new(stmt::Expr::Value(stmt::Value::from(10i64))),
+            }),
+        ],
+    });
+    assert_eq!(plan.index_filter, expected_index_filter);
+    assert!(
+        plan.result_filter.is_none(),
+        "no residual result filter expected"
+    );
     Ok(())
 }
 
@@ -478,6 +563,18 @@ fn ddb_test_cx_composite() -> TestCx {
     TestCx {
         schema,
         capability: &Capability::DYNAMODB,
+    }
+}
+
+fn sqlite_test_cx_ranked() -> TestCx {
+    let app_schema =
+        app::Schema::from_macro(&[Ranked::schema()]).expect("schema should build from macro");
+    let schema = Builder::new()
+        .build(app_schema, &Capability::SQLITE)
+        .expect("schema should build");
+    TestCx {
+        schema,
+        capability: &Capability::SQLITE,
     }
 }
 

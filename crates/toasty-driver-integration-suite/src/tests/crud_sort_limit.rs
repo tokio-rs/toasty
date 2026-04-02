@@ -40,15 +40,13 @@ pub async fn sort_asc(test: &mut Test) -> Result<()> {
 
     // Verify the SQL query has an ORDER BY clause
     let (op, resp) = test.log().pop();
-    assert_struct!(op, Operation::QuerySql(_ {
-        stmt: Statement::Query(_ {
-            body: ExprSet::Select(_ { .. }),
+    assert_struct!(op, Operation::QuerySql({
+        stmt: Statement::Query({
+            body: ExprSet::Select({ .. }),
             order_by: Some(_),
-            ..
         }),
-        ..
     }));
-    assert_struct!(resp.rows, Rows::Stream(_));
+    assert_struct!(resp.values, Rows::Stream(_));
 
     test.log().clear();
 
@@ -64,15 +62,13 @@ pub async fn sort_asc(test: &mut Test) -> Result<()> {
     }
 
     let (op, resp) = test.log().pop();
-    assert_struct!(op, Operation::QuerySql(_ {
-        stmt: Statement::Query(_ {
-            body: ExprSet::Select(_ { .. }),
+    assert_struct!(op, Operation::QuerySql({
+        stmt: Statement::Query({
+            body: ExprSet::Select({ .. }),
             order_by: Some(_),
-            ..
         }),
-        ..
     }));
-    assert_struct!(resp.rows, Rows::Stream(_));
+    assert_struct!(resp.values, Rows::Stream(_));
 
     Ok(())
 }
@@ -110,16 +106,14 @@ pub async fn paginate(test: &mut Test) -> Result<()> {
 
     // First page: SQL query should have ORDER BY and LIMIT
     let (op, resp) = test.log().pop();
-    assert_struct!(op, Operation::QuerySql(_ {
-        stmt: Statement::Query(_ {
-            body: ExprSet::Select(_ { .. }),
+    assert_struct!(op, Operation::QuerySql({
+        stmt: Statement::Query({
+            body: ExprSet::Select({ .. }),
             order_by: Some(_),
             limit: Some(_),
-            ..
         }),
-        ..
     }));
-    assert_struct!(resp.rows, Rows::Stream(_));
+    assert_struct!(resp.values, Rows::Stream(_));
 
     test.log().clear();
 
@@ -168,7 +162,6 @@ pub async fn limit_offset(t: &mut Test) -> Result<()> {
     }
 
     let mut db = t.setup_db(models!(Item)).await;
-
     for i in 0..20 {
         Item::create().order(i).exec(&mut db).await?;
     }
@@ -180,13 +173,11 @@ pub async fn limit_offset(t: &mut Test) -> Result<()> {
     assert_eq!(items.len(), 5);
 
     let (op, _) = t.log().pop();
-    assert_struct!(op, Operation::QuerySql(_ {
-        stmt: Statement::Query(_ {
-            body: ExprSet::Select(_ { .. }),
+    assert_struct!(op, Operation::QuerySql({
+        stmt: Statement::Query({
+            body: ExprSet::Select({ .. }),
             limit: Some(_),
-            ..
         }),
-        ..
     }));
 
     t.log().clear();
@@ -203,14 +194,12 @@ pub async fn limit_offset(t: &mut Test) -> Result<()> {
     }
 
     let (op, _) = t.log().pop();
-    assert_struct!(op, Operation::QuerySql(_ {
-        stmt: Statement::Query(_ {
-            body: ExprSet::Select(_ { .. }),
+    assert_struct!(op, Operation::QuerySql({
+        stmt: Statement::Query({
+            body: ExprSet::Select({ .. }),
             order_by: Some(_),
             limit: Some(_),
-            ..
         }),
-        ..
     }));
 
     t.log().clear();
@@ -230,6 +219,68 @@ pub async fn limit_offset(t: &mut Test) -> Result<()> {
     // Limit larger than the result set returns all results
     let items: Vec<_> = Item::all().limit(100).exec(&mut db).await?;
     assert_eq!(items.len(), 20);
+
+    Ok(())
+}
+
+#[driver_test(requires(not(sql)))]
+pub async fn paginate_for_dynamodb(test: &mut Test) -> Result<()> {
+    #[derive(toasty::Model)]
+    #[key(id, order)]
+    struct Item {
+        id: i64,
+
+        order: i64,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+
+    for id in 0..2 {
+        for order in 0..50 {
+            Item::create().id(id).order(order).exec(&mut db).await?;
+        }
+    }
+
+    test.log().clear();
+
+    let items: Page<_> = Item::all()
+        .order_by(Item::fields().order().desc())
+        .filter(Item::fields().id().eq(0))
+        .paginate(10)
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(items.len(), 10);
+    for (i, order) in (40..50).rev().enumerate() {
+        assert_eq!(items[i].order, order);
+    }
+
+    let mut items: Page<_> = items.next(&mut db).await?.unwrap();
+    assert_eq!(items.len(), 10);
+    for (i, order) in (30..40).rev().enumerate() {
+        assert_eq!(items[i].order, order);
+    }
+
+    let mut count = 0;
+    while let Some(i) = items.next(&mut db).await? {
+        count += i.items.len();
+        items = i;
+    }
+    assert_eq!(count, 30);
+
+    let mut items: Page<_> = Item::all()
+        .order_by(Item::fields().order().asc())
+        .filter(Item::fields().id().eq(0))
+        .paginate(10)
+        .exec(&mut db)
+        .await?;
+
+    let mut count = items.items.len();
+    while let Some(i) = items.next(&mut db).await? {
+        count += i.items.len();
+        items = i;
+    }
+    assert_eq!(count, 50);
 
     Ok(())
 }

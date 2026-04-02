@@ -4,7 +4,29 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
-/// Configuration for Toasty CLI operations
+/// Configuration for Toasty CLI operations.
+///
+/// Holds all settings that control how the CLI behaves. Currently this is
+/// limited to [`MigrationConfig`]. A `Config` can be built programmatically
+/// with the builder methods or loaded from a `Toasty.toml` file via
+/// [`Config::load`].
+///
+/// # Examples
+///
+/// ```
+/// use toasty_cli::{Config, MigrationConfig, MigrationPrefixStyle};
+///
+/// let config = Config::new()
+///     .migration(
+///         MigrationConfig::new()
+///             .path("db")
+///             .prefix_style(MigrationPrefixStyle::Timestamp),
+///     );
+/// assert_eq!(
+///     config.migration.get_migrations_dir(),
+///     std::path::PathBuf::from("db/migrations"),
+/// );
+/// ```
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Config {
     /// Migration-related configuration

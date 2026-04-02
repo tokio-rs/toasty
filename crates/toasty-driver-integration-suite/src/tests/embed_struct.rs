@@ -22,13 +22,12 @@ pub async fn basic_embedded_struct(test: &mut Test) {
 
     // Embedded models exist in app schema as Model::EmbeddedStruct
     assert_struct!(schema.app.models, #{
-        Address::id(): toasty::schema::app::Model::EmbeddedStruct(_ {
+        Address::id(): toasty::schema::app::Model::EmbeddedStruct({
             name.upper_camel_case(): "Address",
             fields: [
-                _ { name.app_name: "street", .. },
-                _ { name.app_name: "city", .. },
+                { name.app_name: "street" },
+                { name.app_name: "city" },
             ],
-            ..
         }),
     });
 
@@ -61,42 +60,37 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
 
     // Both embedded and root models exist in app schema
     assert_struct!(schema.app.models, #{
-        Address::id(): toasty::schema::app::Model::EmbeddedStruct(_ {
+        Address::id(): toasty::schema::app::Model::EmbeddedStruct({
             name.upper_camel_case(): "Address",
             fields: [
-                _ { name.app_name: "street", .. },
-                _ { name.app_name: "city", .. },
+                { name.app_name: "street" },
+                { name.app_name: "city" },
             ],
-            ..
         }),
-        User::id(): toasty::schema::app::Model::Root(_ {
+        User::id(): toasty::schema::app::Model::Root({
             name.upper_camel_case(): "User",
             fields: [
-                _ { name.app_name: "id", .. },
-                _ {
+                { name.app_name: "id" },
+                {
                     name.app_name: "address",
-                    ty: FieldTy::Embedded(_ {
+                    ty: FieldTy::Embedded({
                         target: == Address::id(),
-                        ..
                     }),
-                    ..
                 },
             ],
-            ..
         }),
     });
 
     // Database table has flattened columns with prefix (address_street, address_city)
     // This is the key transformation: embedded struct fields become individual columns
     assert_struct!(schema.db.tables, [
-        _ {
+        {
             name: =~ r"users$",
             columns: [
-                _ { name: "id", .. },
-                _ { name: "address_street", .. },
-                _ { name: "address_city", .. },
+                { name: "id" },
+                { name: "address_street" },
+                { name: "address_city" },
             ],
-            ..
         },
     ]);
 
@@ -107,7 +101,7 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
     // Mapping contains projection expressions that extract embedded fields
     // Model -> Table (lowering): project(address_field, [0]) extracts street
     // This allows queries like User.address.city to become address_city column refs
-    assert_struct!(user_mapping, _ {
+    assert_struct!(user_mapping, {
         columns.len(): 3,
         fields: [
             mapping::Field::Primitive(FieldPrimitive {
@@ -142,7 +136,6 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
                 [1],
             ),
         ],
-        ..
     });
 
     // Table -> Model (lifting): columns are grouped back into record
@@ -624,11 +617,10 @@ pub async fn partial_update_embedded_fields(t: &mut Test) -> Result<()> {
         .await?;
 
     // Verify initial state
-    assert_struct!(user.address, _ {
+    assert_struct!(user.address, {
         street: "123 Main St",
         city: "Boston",
         zip: "02101",
-        ..
     });
 
     // Partial update: only change city, leave street and zip unchanged
@@ -640,20 +632,18 @@ pub async fn partial_update_embedded_fields(t: &mut Test) -> Result<()> {
         .await?;
 
     // Verify only city was updated
-    assert_struct!(user.address, _ {
+    assert_struct!(user.address, {
         street: "123 Main St",
         city: "Seattle",
         zip: "02101",
-        ..
     });
 
     // Verify the update persisted to database
     let found = User::get_by_id(&mut db, &user.id).await?;
-    assert_struct!(found.address, _ {
+    assert_struct!(found.address, {
         street: "123 Main St",
         city: "Seattle",
         zip: "02101",
-        ..
     });
 
     // Multiple field update in one call
@@ -665,20 +655,18 @@ pub async fn partial_update_embedded_fields(t: &mut Test) -> Result<()> {
         .await?;
 
     // Verify both fields were updated, street unchanged
-    assert_struct!(user.address, _ {
+    assert_struct!(user.address, {
         street: "123 Main St",
         city: "Portland",
         zip: "97201",
-        ..
     });
 
     // Verify the update persisted
     let found = User::get_by_id(&mut db, &user.id).await?;
-    assert_struct!(found.address, _ {
+    assert_struct!(found.address, {
         street: "123 Main St",
         city: "Portland",
         zip: "97201",
-        ..
     });
 
     // Multiple calls to with_address should accumulate
@@ -693,20 +681,18 @@ pub async fn partial_update_embedded_fields(t: &mut Test) -> Result<()> {
         .await?;
 
     // Verify all updates applied in memory
-    assert_struct!(user.address, _ {
+    assert_struct!(user.address, {
         street: "456 Oak Ave",
         city: "Portland",
         zip: "97202",
-        ..
     });
 
     // Verify both accumulated assignments persisted to the database
     let found = User::get_by_id(&mut db, &user.id).await?;
-    assert_struct!(found.address, _ {
+    assert_struct!(found.address, {
         street: "456 Oak Ave",
         city: "Portland",
         zip: "97202",
-        ..
     });
     Ok(())
 }
@@ -752,55 +738,45 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
 
     // All embedded models should exist in app schema
     assert_struct!(schema.app.models, #{
-        Location::id(): toasty::schema::app::Model::EmbeddedStruct(_ {
+        Location::id(): toasty::schema::app::Model::EmbeddedStruct({
             name.upper_camel_case(): "Location",
             fields.len(): 2,
-            ..
         }),
-        City::id(): toasty::schema::app::Model::EmbeddedStruct(_ {
+        City::id(): toasty::schema::app::Model::EmbeddedStruct({
             name.upper_camel_case(): "City",
             fields: [
-                _ { name.app_name: "name", .. },
-                _ {
+                { name.app_name: "name" },
+                {
                     name.app_name: "location",
-                    ty: FieldTy::Embedded(_ {
+                    ty: FieldTy::Embedded({
                         target: == Location::id(),
-                        ..
                     }),
-                    ..
                 },
             ],
-            ..
         }),
-        Address::id(): toasty::schema::app::Model::EmbeddedStruct(_ {
+        Address::id(): toasty::schema::app::Model::EmbeddedStruct({
             name.upper_camel_case(): "Address",
             fields: [
-                _ { name.app_name: "street", .. },
-                _ {
+                { name.app_name: "street" },
+                {
                     name.app_name: "city",
-                    ty: FieldTy::Embedded(_ {
+                    ty: FieldTy::Embedded({
                         target: == City::id(),
-                        ..
                     }),
-                    ..
                 },
             ],
-            ..
         }),
-        User::id(): toasty::schema::app::Model::Root(_ {
+        User::id(): toasty::schema::app::Model::Root({
             name.upper_camel_case(): "User",
             fields: [
-                _ { name.app_name: "id", .. },
-                _ {
+                { name.app_name: "id" },
+                {
                     name.app_name: "address",
-                    ty: FieldTy::Embedded(_ {
+                    ty: FieldTy::Embedded({
                         target: == Address::id(),
-                        ..
                     }),
-                    ..
                 },
             ],
-            ..
         }),
     });
 
@@ -812,16 +788,15 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
     // - address_city_location_lat
     // - address_city_location_lon
     assert_struct!(schema.db.tables, [
-        _ {
+        {
             name: =~ r"users$",
             columns: [
-                _ { name: "id", .. },
-                _ { name: "address_street", .. },
-                _ { name: "address_city_name", .. },
-                _ { name: "address_city_location_lat", .. },
-                _ { name: "address_city_location_lon", .. },
+                { name: "id" },
+                { name: "address_street" },
+                { name: "address_city_name" },
+                { name: "address_city_location_lat" },
+                { name: "address_city_location_lon" },
             ],
-            ..
         },
     ]);
 
@@ -1072,26 +1047,22 @@ pub async fn crud_nested_embedded(t: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
 
-    assert_struct!(company.headquarters, _ {
+    assert_struct!(company.headquarters, {
         name: "Main Office",
-        address: _ {
+        address: {
             street: "123 Main St",
             city: "Springfield",
-            ..
         },
-        ..
     });
 
     // Read: nested embedded struct is reconstructed from flattened columns
     let found = Company::get_by_id(&mut db, &company.id).await?;
-    assert_struct!(found.headquarters, _ {
+    assert_struct!(found.headquarters, {
         name: "Main Office",
-        address: _ {
+        address: {
             street: "123 Main St",
             city: "Springfield",
-            ..
         },
-        ..
     });
 
     // Update (instance): replace the entire nested embedded struct
@@ -1108,14 +1079,12 @@ pub async fn crud_nested_embedded(t: &mut Test) -> Result<()> {
         .await?;
 
     let found = Company::get_by_id(&mut db, &company.id).await?;
-    assert_struct!(found.headquarters, _ {
+    assert_struct!(found.headquarters, {
         name: "West Coast HQ",
-        address: _ {
+        address: {
             street: "456 Oak Ave",
             city: "Seattle",
-            ..
         },
-        ..
     });
 
     // Update (query-based): replace nested struct via filter
@@ -1132,14 +1101,12 @@ pub async fn crud_nested_embedded(t: &mut Test) -> Result<()> {
         .await?;
 
     let found = Company::get_by_id(&mut db, &company.id).await?;
-    assert_struct!(found.headquarters, _ {
+    assert_struct!(found.headquarters, {
         name: "East Coast HQ",
-        address: _ {
+        address: {
             street: "789 Pine Rd",
             city: "Boston",
-            ..
         },
-        ..
     });
 
     // Delete: cleanup
@@ -1202,14 +1169,12 @@ pub async fn partial_update_nested_embedded(t: &mut Test) -> Result<()> {
         .await?;
 
     let found = Company::get_by_id(&mut db, &company.id).await?;
-    assert_struct!(found.headquarters, _ {
+    assert_struct!(found.headquarters, {
         name: "Main Office",
-        address: _ {
+        address: {
             street: "123 Main St",
             city: "Seattle",
-            ..
         },
-        ..
     });
 
     // Partial update at the outer level: change only headquarters.name.
@@ -1223,14 +1188,12 @@ pub async fn partial_update_nested_embedded(t: &mut Test) -> Result<()> {
         .await?;
 
     let found = Company::get_by_id(&mut db, &company.id).await?;
-    assert_struct!(found.headquarters, _ {
+    assert_struct!(found.headquarters, {
         name: "West Coast HQ",
-        address: _ {
+        address: {
             street: "123 Main St",
             city: "Seattle",
-            ..
         },
-        ..
     });
 
     // Combined update: change headquarters.name and headquarters.address.city
@@ -1246,14 +1209,12 @@ pub async fn partial_update_nested_embedded(t: &mut Test) -> Result<()> {
         .await?;
 
     let found = Company::get_by_id(&mut db, &company.id).await?;
-    assert_struct!(found.headquarters, _ {
+    assert_struct!(found.headquarters, {
         name: "East Coast HQ",
-        address: _ {
+        address: {
             street: "123 Main St",
             city: "Boston",
-            ..
         },
-        ..
     });
     Ok(())
 }
@@ -1302,11 +1263,10 @@ pub async fn query_based_partial_update_embedded(t: &mut Test) -> Result<()> {
         .await?;
 
     let found = User::get_by_id(&mut db, &user.id).await?;
-    assert_struct!(found.address, _ {
+    assert_struct!(found.address, {
         street: "123 Main St",
         city: "Seattle",
         zip: "02101",
-        ..
     });
 
     // Multiple fields: update city and zip together, leave street unchanged.
@@ -1319,11 +1279,10 @@ pub async fn query_based_partial_update_embedded(t: &mut Test) -> Result<()> {
         .await?;
 
     let found = User::get_by_id(&mut db, &user.id).await?;
-    assert_struct!(found.address, _ {
+    assert_struct!(found.address, {
         street: "123 Main St",
         city: "Portland",
         zip: "97201",
-        ..
     });
     Ok(())
 }
@@ -1368,7 +1327,7 @@ pub async fn embedded_struct_with_jiff_fields(t: &mut Test) -> Result<()> {
         .await?;
 
     let found = Event::get_by_id(&mut db, &event.id).await?;
-    assert_struct!(found.schedule, _ {
+    assert_struct!(found.schedule, {
         starts_at: == starts_at,
         due_date: == due_date,
         reminder_time: == reminder_time,

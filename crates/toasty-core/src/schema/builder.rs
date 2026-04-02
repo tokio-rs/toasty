@@ -1,6 +1,6 @@
 mod table;
 
-use super::{app, db, mapping, Result};
+use super::{Result, app, db, mapping};
 use crate::schema::mapping::TableToModel;
 use crate::schema::{Mapping, Schema, Table, TableId};
 use crate::{driver, stmt};

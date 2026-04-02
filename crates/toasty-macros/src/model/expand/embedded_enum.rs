@@ -1,5 +1,5 @@
-use super::{schema, util, Expand};
-use crate::model::schema::FieldTy;
+use super::{Expand, schema, util};
+use crate::model::schema::{FieldTy, VariantValue};
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -18,6 +18,13 @@ impl Expand<'_> {
     /// what `Field::ty()` returns.
     pub(super) fn expand_enum_has_data_variants(&self) -> bool {
         !self.model.fields.is_empty()
+    }
+
+    fn uses_string_discriminants(&self) -> bool {
+        self.model
+            .kind
+            .as_embedded_enum_unwrap()
+            .uses_string_discriminants()
     }
 
     /// Generates tokens for an `is_variant(path, variant_id)` expression.
@@ -215,15 +222,42 @@ impl Expand<'_> {
             .iter()
             .map(|variant| {
                 let variant_name = schema::expand_name(toasty, &variant.name);
-                let discriminant = variant.attrs.discriminant;
+                let discriminant_expr =
+                    self.expand_discriminant_schema(&variant.attrs.discriminant);
                 quote! {
                     #toasty::core::schema::app::EnumVariant {
                         name: #variant_name,
-                        discriminant: #discriminant,
+                        discriminant: #discriminant_expr,
                     }
                 }
             })
             .collect()
+    }
+
+    /// Expands a `VariantValue` to a `Value` token for use in schema registration.
+    fn expand_discriminant_schema(&self, value: &VariantValue) -> TokenStream {
+        let toasty = &self.toasty;
+        match value {
+            VariantValue::Integer(n) => {
+                quote! { #toasty::core::stmt::Value::I64(#n) }
+            }
+            VariantValue::String(s) => {
+                quote! { #toasty::core::stmt::Value::String(#s.to_string()) }
+            }
+        }
+    }
+
+    /// Expands a discriminant value to a `Value::I64(n)` or `Value::String(s.into())` expression.
+    fn expand_discriminant_value_expr(&self, value: &VariantValue) -> TokenStream {
+        let toasty = &self.toasty;
+        match value {
+            VariantValue::Integer(n) => {
+                quote! { #toasty::core::stmt::Expr::Value(#toasty::core::stmt::Value::I64(#n)) }
+            }
+            VariantValue::String(s) => {
+                quote! { #toasty::core::stmt::Expr::Value(#toasty::core::stmt::Value::String(#s.into())) }
+            }
+        }
     }
 
     /// Generates the flat list of `Field` schema tokens for all variant fields,
@@ -265,30 +299,78 @@ impl Expand<'_> {
             .collect()
     }
 
-    /// Generates match arms for the `Value::I64(d)` branch of `Load::load`.
-    /// Only unit variants are emitted here; data variants appear in `expand_enum_data_load_arms`.
-    pub(super) fn expand_enum_unit_load_arms(&self) -> Vec<TokenStream> {
+    /// Generates the full `impl Load for Enum { ... }` block, adapting
+    /// discriminant matching based on whether integer or string discriminants are used.
+    pub(super) fn expand_enum_load_impl(&self) -> TokenStream {
+        let toasty = &self.toasty;
         let model_ident = &self.model.ident;
-        let embedded_enum = self.model.kind.as_embedded_enum_unwrap();
+        let ty_expr = self.expand_enum_primitive_ty();
 
-        embedded_enum
-            .variants
-            .iter()
-            .enumerate()
-            .filter(|(variant_index, _)| self.variant_fields(*variant_index).is_empty())
-            .map(|(_, variant)| {
-                let ident = &variant.ident;
-                let discriminant = variant.attrs.discriminant;
-                quote! { #discriminant => Ok(#model_ident::#ident), }
-            })
-            .collect()
+        let unit_load_arms = self.expand_enum_load_arms(true);
+        let data_load_arms = self.expand_enum_load_arms(false);
+
+        // Generate discriminant-specific match tokens. The outer match uses
+        // `ref` so `value` stays available for the error path. The inner
+        // (record) match owns the taken element.
+        let (ref_pattern, owned_pattern, match_expr) = if self.uses_string_discriminants() {
+            (
+                quote! { #toasty::core::stmt::Value::String(ref d) },
+                quote! { #toasty::core::stmt::Value::String(d) },
+                quote! { d.as_str() },
+            )
+        } else {
+            (
+                quote! { #toasty::core::stmt::Value::I64(ref d) },
+                quote! { #toasty::core::stmt::Value::I64(d) },
+                quote! { d },
+            )
+        };
+
+        quote! {
+            impl #toasty::Load for #model_ident {
+                type Output = Self;
+
+                fn ty() -> #toasty::core::stmt::Type {
+                    #ty_expr
+                }
+
+                fn load(value: #toasty::core::stmt::Value) -> #toasty::Result<Self> {
+                    match value {
+                        #ref_pattern => match #match_expr {
+                            #( #unit_load_arms )*
+                            _ => Err(#toasty::Error::type_conversion(
+                                value,
+                                stringify!(#model_ident),
+                            )),
+                        },
+                        #toasty::core::stmt::Value::Record(mut record) => match record[0].take() {
+                            #owned_pattern => match #match_expr {
+                                #( #data_load_arms )*
+                                _ => Err(#toasty::Error::type_conversion(
+                                    #owned_pattern,
+                                    stringify!(#model_ident),
+                                )),
+                            },
+                            other => Err(#toasty::Error::type_conversion(
+                                other,
+                                stringify!(#model_ident),
+                            )),
+                        },
+                        value => Err(#toasty::Error::type_conversion(value, stringify!(#model_ident))),
+                    }
+                }
+
+                fn reload(target: &mut Self, value: #toasty::core::stmt::Value) -> #toasty::Result<()> {
+                    *target = Self::load(value)?;
+                    Ok(())
+                }
+            }
+        }
     }
 
-    /// Generates match arms for the `Value::Record` branch of `Load::load`.
-    /// Only data variants are emitted; unit variants appear in `expand_enum_unit_load_arms`.
-    /// Record layout: `record[0]` is the discriminant, `record[1..]` are the variant's fields
-    /// in declaration order (local indices, not global).
-    pub(super) fn expand_enum_data_load_arms(&self) -> Vec<TokenStream> {
+    /// Generates match arms for Load. When `unit_only` is true, emits arms for
+    /// unit variants; otherwise emits arms for data-carrying variants.
+    fn expand_enum_load_arms(&self, unit_only: bool) -> Vec<TokenStream> {
         let toasty = &self.toasty;
         let model_ident = &self.model.ident;
         let embedded_enum = self.model.kind.as_embedded_enum_unwrap();
@@ -297,38 +379,43 @@ impl Expand<'_> {
             .variants
             .iter()
             .enumerate()
-            .filter(|(variant_index, _)| !self.variant_fields(*variant_index).is_empty())
+            .filter(|(variant_index, _)| {
+                self.variant_fields(*variant_index).is_empty() == unit_only
+            })
             .map(|(variant_index, variant)| {
                 let ident = &variant.ident;
-                let discriminant = variant.attrs.discriminant;
-                let fields = self.variant_fields(variant_index);
+                let pattern = expand_discriminant_match_pattern(&variant.attrs.discriminant);
 
-                let field_loads: Vec<_> = fields
-                    .iter()
-                    .enumerate()
-                    .map(|(i, field)| {
-                        let field_ident = &field.name.ident;
-                        let ty = primitive_ty_unwrap(field);
-                        let record_pos = util::int(i + 1);
-                        let load =
-                            quote! { <#ty as #toasty::Load>::load(record[#record_pos].take())? };
-                        if variant.fields_named {
-                            quote! { #field_ident: #load, }
-                        } else {
-                            quote! { #load, }
-                        }
-                    })
-                    .collect();
-
-                let construction = if variant.fields_named {
-                    quote! { #model_ident::#ident { #( #field_loads )* } }
+                let construction = if unit_only {
+                    quote! { #model_ident::#ident }
                 } else {
-                    quote! { #model_ident::#ident( #( #field_loads )* ) }
+                    let fields = self.variant_fields(variant_index);
+                    let field_loads: Vec<_> = fields
+                        .iter()
+                        .enumerate()
+                        .map(|(i, field)| {
+                            let field_ident = &field.name.ident;
+                            let ty = primitive_ty_unwrap(field);
+                            let record_pos = util::int(i + 1);
+                            let load = quote! {
+                                <#ty as #toasty::Load>::load(record[#record_pos].take())?
+                            };
+                            if variant.fields_named {
+                                quote! { #field_ident: #load, }
+                            } else {
+                                quote! { #load, }
+                            }
+                        })
+                        .collect();
+
+                    if variant.fields_named {
+                        quote! { #model_ident::#ident { #( #field_loads )* } }
+                    } else {
+                        quote! { #model_ident::#ident( #( #field_loads )* ) }
+                    }
                 };
 
-                quote! {
-                    #discriminant => Ok(#construction),
-                }
+                quote! { #pattern => Ok(#construction), }
             })
             .collect()
     }
@@ -349,12 +436,10 @@ impl Expand<'_> {
             .enumerate()
             .map(|(variant_index, variant)| {
                 let ident = &variant.ident;
-                let discriminant = variant.attrs.discriminant;
                 let fields = self.variant_fields(variant_index);
 
-                let discriminant_expr = quote!(#toasty::core::stmt::Expr::Value(
-                    #toasty::core::stmt::Value::I64(#discriminant)
-                ));
+                let discriminant_expr =
+                    self.expand_discriminant_value_expr(&variant.attrs.discriminant);
 
                 if fields.is_empty() {
                     // In a mixed enum (has_data_variants), the model value is always a
@@ -404,11 +489,13 @@ impl Expand<'_> {
     }
 
     /// Generates the `Field::ty()` return expression. Unit-only enums map to
-    /// `Type::I64`; enums with at least one data variant map to `Type::Model`.
+    /// `Type::I64` or `Type::String`; enums with at least one data variant map to `Type::Model`.
     pub(super) fn expand_enum_primitive_ty(&self) -> TokenStream {
         let toasty = &self.toasty;
         if self.expand_enum_has_data_variants() {
             quote! { #toasty::core::stmt::Type::Model(<Self as #toasty::Register>::id()) }
+        } else if self.uses_string_discriminants() {
+            quote! { #toasty::core::stmt::Type::String }
         } else {
             quote! { #toasty::core::stmt::Type::I64 }
         }
@@ -419,5 +506,14 @@ fn primitive_ty_unwrap(field: &crate::model::schema::Field) -> &syn::Type {
     match &field.ty {
         FieldTy::Primitive(ty) => ty,
         _ => panic!("expected primitive field type for enum variant field"),
+    }
+}
+
+/// Generates the match pattern token for a discriminant value:
+/// a string literal for `VariantValue::String`, an integer literal for `VariantValue::Integer`.
+fn expand_discriminant_match_pattern(value: &VariantValue) -> TokenStream {
+    match value {
+        VariantValue::String(s) => quote! { #s },
+        VariantValue::Integer(n) => quote! { #n },
     }
 }

@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
 use toasty_core::{
-    driver::{operation::Transaction, Operation},
+    driver::{Operation, operation::Transaction},
     stmt::Statement,
 };
 
@@ -27,13 +27,11 @@ pub async fn batch_two_creates_same_model(t: &mut Test) -> Result<()> {
             read_only: false
         })
     );
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
+    assert_struct!(t.log().pop_op(), Operation::QuerySql({
         stmt: Statement::Insert(_),
-        ..
     })); // INSERT alice
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
+    assert_struct!(t.log().pop_op(), Operation::QuerySql({
         stmt: Statement::Insert(_),
-        ..
     })); // INSERT bob
     assert!(t.log().pop_op().is_transaction_commit());
     assert!(t.log().is_empty());
@@ -69,13 +67,11 @@ pub async fn batch_two_creates_different_models(t: &mut Test) -> Result<()> {
             read_only: false
         })
     );
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
+    assert_struct!(t.log().pop_op(), Operation::QuerySql({
         stmt: Statement::Insert(_),
-        ..
     })); // INSERT user
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
+    assert_struct!(t.log().pop_op(), Operation::QuerySql({
         stmt: Statement::Insert(_),
-        ..
     })); // INSERT post
     assert!(t.log().pop_op().is_transaction_commit());
     assert!(t.log().is_empty());
@@ -96,7 +92,7 @@ pub async fn batch_query_and_create(t: &mut Test) -> Result<()> {
             .exec(&mut db)
             .await?;
 
-    assert_struct!(users, [_ { name: "Alice" }]);
+    assert_struct!(users, [{ name: "Alice" }]);
     assert_eq!(post.title, "Hello");
 
     // Two operations (query + create) → transaction-wrapped
@@ -107,13 +103,11 @@ pub async fn batch_query_and_create(t: &mut Test) -> Result<()> {
             read_only: false
         })
     );
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
+    assert_struct!(t.log().pop_op(), Operation::QuerySql({
         stmt: Statement::Query(_),
-        ..
     })); // SELECT
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
+    assert_struct!(t.log().pop_op(), Operation::QuerySql({
         stmt: Statement::Insert(_),
-        ..
     })); // INSERT
     assert!(t.log().pop_op().is_transaction_commit());
     assert!(t.log().is_empty());
@@ -134,7 +128,7 @@ pub async fn batch_create_then_query(t: &mut Test) -> Result<()> {
             .await?;
 
     assert_eq!(created.name, "Bob");
-    assert_struct!(existing, [_ { name: "Alice" }]);
+    assert_struct!(existing, [{ name: "Alice" }]);
 
     // Two operations (create + query) → transaction-wrapped
     assert_struct!(
@@ -144,13 +138,11 @@ pub async fn batch_create_then_query(t: &mut Test) -> Result<()> {
             read_only: false
         })
     );
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
+    assert_struct!(t.log().pop_op(), Operation::QuerySql({
         stmt: Statement::Insert(_),
-        ..
     })); // INSERT
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
+    assert_struct!(t.log().pop_op(), Operation::QuerySql({
         stmt: Statement::Query(_),
-        ..
     })); // SELECT
     assert!(t.log().pop_op().is_transaction_commit());
     assert!(t.log().is_empty());
@@ -174,7 +166,7 @@ pub async fn batch_create_query_create(t: &mut Test) -> Result<()> {
     .await?;
 
     assert_eq!(bob.name, "Bob");
-    assert_struct!(existing, [_ { name: "Alice" }]);
+    assert_struct!(existing, [{ name: "Alice" }]);
     assert_eq!(carol.name, "Carol");
 
     // Three operations → transaction-wrapped
@@ -185,17 +177,14 @@ pub async fn batch_create_query_create(t: &mut Test) -> Result<()> {
             read_only: false
         })
     );
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
+    assert_struct!(t.log().pop_op(), Operation::QuerySql({
         stmt: Statement::Insert(_),
-        ..
     })); // INSERT bob
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
+    assert_struct!(t.log().pop_op(), Operation::QuerySql({
         stmt: Statement::Query(_),
-        ..
     })); // SELECT alice
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
+    assert_struct!(t.log().pop_op(), Operation::QuerySql({
         stmt: Statement::Insert(_),
-        ..
     })); // INSERT carol
     assert!(t.log().pop_op().is_transaction_commit());
     assert!(t.log().is_empty());
@@ -228,9 +217,8 @@ pub async fn batch_creates_from_array(t: &mut Test) -> Result<()> {
         })
     );
     for _ in 0..3 {
-        assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
+        assert_struct!(t.log().pop_op(), Operation::QuerySql({
             stmt: Statement::Insert(_),
-            ..
         }));
     }
     assert!(t.log().pop_op().is_transaction_commit());
@@ -267,9 +255,8 @@ pub async fn batch_creates_from_vec(t: &mut Test) -> Result<()> {
         })
     );
     for _ in 0..3 {
-        assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
+        assert_struct!(t.log().pop_op(), Operation::QuerySql({
             stmt: Statement::Insert(_),
-            ..
         }));
     }
     assert!(t.log().pop_op().is_transaction_commit());

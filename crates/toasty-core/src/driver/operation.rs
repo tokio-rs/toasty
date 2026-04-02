@@ -76,3 +76,19 @@ pub enum Operation {
     /// Update one or more records identified by primary key.
     UpdateByKey(UpdateByKey),
 }
+
+impl Operation {
+    /// Returns the operation variant name for logging.
+    pub fn name(&self) -> &str {
+        match self {
+            Operation::Insert(_) => "insert",
+            Operation::DeleteByKey(_) => "delete_by_key",
+            Operation::FindPkByIndex(_) => "find_pk_by_index",
+            Operation::GetByKey(_) => "get_by_key",
+            Operation::QueryPk(_) => "query_pk",
+            Operation::QuerySql(_) => "query_sql",
+            Operation::Transaction(_) => "transaction",
+            Operation::UpdateByKey(_) => "update_by_key",
+        }
+    }
+}

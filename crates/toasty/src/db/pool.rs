@@ -2,7 +2,8 @@
 
 pub use deadpool::managed::Timeouts;
 use std::sync::Arc;
-use toasty_core::driver::{Capability, Driver};
+use toasty_core::driver::{Capability, Driver, Rows};
+use toasty_core::stmt::Value;
 use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
@@ -65,11 +66,11 @@ pub(crate) enum ConnectionOperation {
     ExecStatement {
         stmt: Box<toasty_core::stmt::Statement>,
         in_transaction: bool,
-        tx: oneshot::Sender<crate::Result<toasty_core::stmt::ValueStream>>,
+        tx: oneshot::Sender<crate::Result<toasty_core::driver::ExecResponse>>,
     },
     ExecOperation {
         operation: Box<toasty_core::driver::operation::Operation>,
-        tx: oneshot::Sender<crate::Result<toasty_core::driver::Response>>,
+        tx: oneshot::Sender<crate::Result<toasty_core::driver::ExecResponse>>,
     },
     /// Push schema to the database.
     PushSchema {
@@ -100,20 +101,20 @@ impl Pool {
             builder = builder.max_size(max_connections);
         }
 
-        let inner = builder
-            .build()
-            .map_err(toasty_core::Error::connection_pool)?;
+        let inner = builder.build().map_err(|e| {
+            tracing::error!(error = %e, "failed to build connection pool");
+            toasty_core::Error::connection_pool(e)
+        })?;
 
         Ok(Self { inner, capability })
     }
 
     /// Retrieves a connection from the pool.
     pub(crate) async fn get(&self, shared: Arc<super::Shared>) -> crate::Result<super::Connection> {
-        let connection = self
-            .inner
-            .get()
-            .await
-            .map_err(toasty_core::Error::connection_pool)?;
+        let connection = self.inner.get().await.map_err(|e| {
+            tracing::error!(error = %e, "failed to acquire connection from pool");
+            toasty_core::Error::connection_pool(e)
+        })?;
         Ok(super::Connection {
             inner: connection,
             shared,
@@ -161,7 +162,14 @@ impl deadpool::managed::Manager for Manager {
     type Error = crate::Error;
 
     async fn create(&self) -> Result<Self::Type, Self::Error> {
-        let mut connection = self.driver.connect().await?;
+        tracing::debug!("creating new pooled connection");
+        let mut connection = match self.driver.connect().await {
+            Ok(conn) => conn,
+            Err(e) => {
+                tracing::error!(error = %e, "failed to create database connection");
+                return Err(e);
+            }
+        };
         let engine = self.engine.clone();
 
         let (in_tx, mut in_rx) = mpsc::unbounded_channel::<ConnectionOperation>();
@@ -173,28 +181,31 @@ impl deadpool::managed::Manager for Manager {
                         stmt,
                         in_transaction,
                         tx,
-                    } => match engine.exec(&mut *connection, *stmt, in_transaction).await {
-                        Ok(mut value_stream) => {
-                            let (row_tx, mut row_rx) = mpsc::unbounded_channel::<
-                                crate::Result<toasty_core::stmt::Value>,
-                            >();
+                    } => {
+                        let single = stmt.is_single();
+                        let result = async {
+                            let mut response =
+                                engine.exec(&mut *connection, *stmt, in_transaction).await?;
+                            response.values.buffer().await?;
 
-                            let _ = tx.send(Ok(toasty_core::stmt::ValueStream::from_stream(
-                                async_stream::stream! {
-                                    while let Some(res) = row_rx.recv().await {
-                                        yield res
-                                    }
-                                },
-                            )));
-
-                            while let Some(res) = value_stream.next().await {
-                                let _ = row_tx.send(res);
+                            if single {
+                                let Rows::Value(Value::List(mut items)) = response.values else {
+                                    unreachable!()
+                                };
+                                assert!(
+                                    items.len() <= 1,
+                                    "expected at most 1 row for single statement, got {}",
+                                    items.len()
+                                );
+                                response.values = Rows::Value(items.pop().unwrap_or(Value::Null));
                             }
+
+                            Ok(response)
                         }
-                        Err(err) => {
-                            let _ = tx.send(Err(err));
-                        }
-                    },
+                        .await;
+
+                        let _ = tx.send(result);
+                    }
                     ConnectionOperation::ExecOperation { operation, tx } => {
                         let result = connection.exec(&engine.schema, *operation).await;
                         let _ = tx.send(result);
@@ -216,10 +227,12 @@ impl deadpool::managed::Manager for Manager {
         _metrics: &deadpool::managed::Metrics,
     ) -> deadpool::managed::RecycleResult<Self::Error> {
         if obj.in_tx.is_closed() || obj.join_handle.is_finished() {
+            tracing::debug!("discarding dead pooled connection");
             return Err(deadpool::managed::RecycleError::message(
                 "background task is no longer running",
             ));
         }
+        tracing::trace!("recycling pooled connection");
         Ok(())
     }
 }

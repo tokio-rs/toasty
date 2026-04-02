@@ -7,6 +7,11 @@ use console::style;
 use dialoguer::Confirm;
 use toasty::Db;
 
+/// Drops all tables in the database, then optionally re-applies migrations.
+///
+/// Prompts for confirmation before proceeding. After the reset, all
+/// migrations from the history file are re-applied unless `--skip-migrations`
+/// is passed.
 #[derive(Parser, Debug)]
 pub struct ResetCommand {
     /// Skip applying migrations after reset

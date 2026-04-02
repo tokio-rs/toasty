@@ -1,8 +1,8 @@
-use crate::{db::Transaction, schema::Load, Result, Statement};
+use crate::{Result, Statement, db::Transaction, schema::Load};
 
 use async_trait::async_trait;
 use std::sync::Arc;
-use toasty_core::{stmt::Value, Schema};
+use toasty_core::{Schema, driver::ExecResponse};
 
 /// Anything that can execute queries — [`Db`](crate::Db) or
 /// [`Transaction`](crate::db::Transaction).
@@ -15,9 +15,9 @@ pub trait Executor: Send + Sync {
     /// Starts a (potentially nested) transaction.
     async fn transaction(&mut self) -> Result<Transaction<'_>>;
 
-    /// Execute an untyped statement, returning a raw value stream.
+    /// Execute an untyped statement, returning the full execution response.
     #[doc(hidden)]
-    async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> Result<Value>;
+    async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> Result<ExecResponse>;
 
     /// Returns the schema associated with this executor.
     #[doc(hidden)]
@@ -63,7 +63,8 @@ impl dyn Executor + '_ {
     /// # });
     /// ```
     pub async fn exec<T: Load>(&mut self, stmt: Statement<T>) -> Result<T::Output> {
-        let res = self.exec_untyped(stmt.untyped).await?;
-        T::load(res)
+        let response = self.exec_untyped(stmt.untyped).await?;
+        let value = response.values.collect_as_value().await?;
+        T::load(value)
     }
 }

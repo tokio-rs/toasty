@@ -1,15 +1,15 @@
 use super::{
-    ddb_key, item_to_record, operation, stmt, Connection, KeysAndAttributes, Result, Schema,
+    Connection, KeysAndAttributes, Result, Schema, ddb_key, item_to_record, operation, stmt,
 };
 use std::{collections::HashMap, sync::Arc};
-use toasty_core::driver::Response;
+use toasty_core::driver::ExecResponse;
 
 impl Connection {
     pub(crate) async fn exec_get_by_key(
         &mut self,
         schema: &Arc<Schema>,
         op: operation::GetByKey,
-    ) -> Result<Response> {
+    ) -> Result<ExecResponse> {
         let table = schema.db.table(op.table);
 
         if op.keys.len() == 1 {
@@ -26,9 +26,11 @@ impl Connection {
 
             if let Some(item) = res.item() {
                 let row = item_to_record(item, op.select.iter().map(|id| schema.db.column(*id)))?;
-                Ok(Response::value_stream(stmt::ValueStream::from_value(row)))
+                Ok(ExecResponse::value_stream(stmt::ValueStream::from_value(
+                    row,
+                )))
             } else {
-                Ok(Response::empty_value_stream())
+                Ok(ExecResponse::empty_value_stream())
             }
         } else {
             if op.keys.len() > 100 {
@@ -61,15 +63,15 @@ impl Connection {
                 .map_err(toasty_core::Error::driver_operation_failed)?;
 
             let Some(mut responses) = res.responses else {
-                return Ok(Response::empty_value_stream());
+                return Ok(ExecResponse::empty_value_stream());
             };
             let Some(items) = responses.remove(&table.name) else {
-                return Ok(Response::empty_value_stream());
+                return Ok(ExecResponse::empty_value_stream());
             };
 
             let schema = schema.clone();
 
-            Ok(Response::value_stream(stmt::ValueStream::from_iter(
+            Ok(ExecResponse::value_stream(stmt::ValueStream::from_iter(
                 items.into_iter().map(move |item| {
                     item_to_record(
                         &item,

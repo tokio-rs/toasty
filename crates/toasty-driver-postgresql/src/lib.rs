@@ -18,20 +18,20 @@ mod value;
 pub(crate) use value::Value;
 
 use async_trait::async_trait;
-use postgres::{tls::MakeTlsConnect, types::ToSql, Socket};
+use postgres::{Socket, tls::MakeTlsConnect, types::ToSql};
 use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
-    driver::{Capability, Driver, Operation, Response},
+    Result, Schema,
+    driver::{Capability, Driver, ExecResponse, Operation},
     schema::db::{self, Migration, SchemaDiff, Table},
     stmt,
     stmt::ValueRecord,
-    Result, Schema,
 };
 use toasty_sql::{self as sql, TypedValue};
 use tokio_postgres::{Client, Config};
 use url::Url;
 
-use crate::{r#type::TypeExt, statement_cache::StatementCache};
+use crate::{statement_cache::StatementCache, r#type::TypeExt};
 
 /// A PostgreSQL [`Driver`] that connects via `tokio-postgres`.
 ///
@@ -289,7 +289,9 @@ impl From<Client> for Connection {
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
-    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
+    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
+        tracing::trace!(driver = "postgresql", op = %op.name(), "driver exec");
+
         if let Operation::Transaction(ref t) = op {
             let sql = sql::Serializer::postgresql(&schema.db).serialize_transaction(t);
             self.client.batch_execute(&sql).await.map_err(|e| {
@@ -303,7 +305,7 @@ impl toasty_core::driver::Connection for Connection {
                     toasty_core::Error::driver_operation_failed(e)
                 }
             })?;
-            return Ok(Response::count(0));
+            return Ok(ExecResponse::count(0));
         }
 
         let (sql, ret_tys): (sql::Statement, _) = match op {
@@ -322,6 +324,8 @@ impl toasty_core::driver::Connection for Connection {
 
         let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
         let sql_as_str = sql::Serializer::postgresql(&schema.db).serialize(&sql, &mut params);
+
+        tracing::debug!(db.system = "postgresql", db.statement = %sql_as_str, params = params.len(), "executing SQL");
 
         let param_types = params
             .iter()
@@ -346,7 +350,7 @@ impl toasty_core::driver::Connection for Connection {
                 .execute(&statement, &params)
                 .await
                 .map_err(toasty_core::Error::driver_operation_failed)?;
-            return Ok(Response::count(count));
+            return Ok(ExecResponse::count(count));
         }
 
         let rows = self
@@ -361,7 +365,7 @@ impl toasty_core::driver::Connection for Connection {
             let condition_matched = row.get::<usize, i64>(1);
 
             if total == condition_matched {
-                Ok(Response::count(total as _))
+                Ok(ExecResponse::count(total as _))
             } else {
                 Err(toasty_core::Error::condition_failed(
                     "update condition did not match",
@@ -378,7 +382,7 @@ impl toasty_core::driver::Connection for Connection {
                 Ok(ValueRecord::from_vec(results))
             });
 
-            Ok(Response::value_stream(stmt::ValueStream::from_iter(
+            Ok(ExecResponse::value_stream(stmt::ValueStream::from_iter(
                 results,
             )))
         }
@@ -386,6 +390,7 @@ impl toasty_core::driver::Connection for Connection {
 
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
         for table in &schema.db.tables {
+            tracing::debug!(table = %table.name, "creating table");
             self.create_table(&schema.db, table).await?;
         }
         Ok(())
@@ -432,6 +437,7 @@ impl toasty_core::driver::Connection for Connection {
         name: String,
         migration: &toasty_core::schema::db::Migration,
     ) -> Result<()> {
+        tracing::info!(id = id, name = %name, "applying migration");
         // Ensure the migrations table exists
         self.client
             .execute(

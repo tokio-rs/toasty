@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-use toasty_core::driver::{operation::Transaction, Operation};
+use toasty_core::driver::{Operation, operation::Transaction};
 
 // ===== Transaction wrapping =====
 
@@ -403,7 +403,7 @@ pub async fn rmw_condition_failure_issues_rollback_to_savepoint(t: &mut Test) ->
 
     // The todo is untouched — still belongs to user2
     let reloaded = Todo::get_by_id(&mut db, u2_todos[0].id).await?;
-    assert_struct!(reloaded, _ { user_id: Some(== user2.id), .. });
+    assert_struct!(reloaded, { user_id: Some(== user2.id) });
 
     Ok(())
 }

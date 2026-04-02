@@ -37,20 +37,16 @@ pub async fn ty_timestamp(test: &mut Test) -> Result<(), BoxError> {
         Value::String(format!("{ts:.9}"))
     };
 
-    assert_struct!(op, Operation::QuerySql(_ {
-        stmt: Statement::Insert(_ {
-            target: InsertTarget::Table(_ {
+    assert_struct!(op, Operation::QuerySql({
+        stmt: Statement::Insert({
+            target: InsertTarget::Table({
                 table: == table_id(&db, "items"),
                 columns: == columns(&db, "items", &["id", "val"]),
-                ..
             }),
-            source.body: ExprSet::Values(_ {
+            source.body: ExprSet::Values({
                 rows: [=~ (Any, expected_val)],
-                ..
             }),
-            ..
         }),
-        ..
     }));
 
     // Verify round-trip with more values
@@ -330,20 +326,16 @@ pub async fn ty_timestamp_as_text(test: &mut Test) -> Result<(), BoxError> {
     // Verify the INSERT encodes the timestamp as a fixed-precision text string.
     // The #[column(type = text)] forces text encoding on all drivers.
     let (op, _) = test.log().pop();
-    assert_struct!(op, Operation::QuerySql(_ {
-        stmt: Statement::Insert(_ {
-            target: InsertTarget::Table(_ {
+    assert_struct!(op, Operation::QuerySql({
+        stmt: Statement::Insert({
+            target: InsertTarget::Table({
                 table: == table_id(&db, "items"),
                 columns: == columns(&db, "items", &["id", "val"]),
-                ..
             }),
-            source.body: ExprSet::Values(_ {
+            source.body: ExprSet::Values({
                 rows: [=~ (Any, ts_text)],
-                ..
             }),
-            ..
         }),
-        ..
     }));
 
     // Verify round-trip

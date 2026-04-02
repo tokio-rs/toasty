@@ -13,7 +13,7 @@
 //! # Architecture
 //!
 //! ```text
-//! Query Engine  ──▶  Operation  ──▶  Connection::exec()  ──▶  Response
+//! Query Engine  ──▶  Operation  ──▶  Connection::exec()  ──▶  ExecResponse
 //!                        ▲
 //!                        │
 //!               Driver::capability()
@@ -23,14 +23,14 @@ mod capability;
 pub use capability::{Capability, StorageTypes};
 
 mod response;
-pub use response::{Response, Rows};
+pub use response::{ExecResponse, Rows};
 
 pub mod operation;
 pub use operation::{IsolationLevel, Operation};
 
 use crate::schema::{
-    db::{AppliedMigration, Migration, SchemaDiff},
     Schema,
+    db::{AppliedMigration, Migration, SchemaDiff},
 };
 
 use async_trait::async_trait;
@@ -90,12 +90,12 @@ pub trait Driver: Debug + Send + Sync + 'static {
 ///
 /// Connections are obtained from [`Driver::connect`] and are managed by the
 /// connection pool. All query execution flows through [`Connection::exec`],
-/// which accepts an [`Operation`] and returns a [`Response`].
+/// which accepts an [`Operation`] and returns an [`ExecResponse`].
 ///
 /// # Examples
 ///
 /// ```ignore
-/// use toasty_core::driver::{Connection, Operation, Response};
+/// use toasty_core::driver::{Connection, Operation, ExecResponse};
 /// use toasty_core::driver::operation::Transaction;
 ///
 /// // Execute a transaction start operation on a connection:
@@ -108,8 +108,8 @@ pub trait Connection: Debug + Send + 'static {
     /// This is the single entry point for all database interactions. The
     /// query engine compiles user queries into [`Operation`] values and
     /// dispatches them here. The driver translates each operation into
-    /// backend-specific calls and returns a [`Response`].
-    async fn exec(&mut self, schema: &Arc<Schema>, plan: Operation) -> crate::Result<Response>;
+    /// backend-specific calls and returns an [`ExecResponse`].
+    async fn exec(&mut self, schema: &Arc<Schema>, plan: Operation) -> crate::Result<ExecResponse>;
 
     /// Creates tables and indices defined in the schema on the database.
     /// TODO: This will probably use database introspection in the future.

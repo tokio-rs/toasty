@@ -1,9 +1,9 @@
-use toasty_core::driver::Rows;
+use toasty_core::driver::{ExecResponse, Rows};
 use toasty_core::stmt;
 
+use crate::Result;
 use crate::engine::eval;
 use crate::engine::exec::{Action, Exec, Output, VarId};
-use crate::Result;
 
 /// Combines parent and child data into nested structures.
 ///
@@ -175,7 +175,8 @@ impl Exec<'_> {
         let mut inputs = Vec::with_capacity(action.inputs.len());
 
         for var_id in &action.inputs {
-            inputs.push(match self.vars.load(*var_id).await? {
+            let response = self.vars.load(*var_id).await?;
+            inputs.push(match response.values {
                 Rows::Count(count) => Input::Count(count),
                 Rows::Value(value) => Input::Value(match value {
                     stmt::Value::List(items) => items,
@@ -252,7 +253,7 @@ impl Exec<'_> {
         self.vars.store(
             action.output.var,
             action.output.num_uses,
-            Rows::value_stream(merged_rows),
+            ExecResponse::from_rows(Rows::value_stream(merged_rows)),
         );
 
         Ok(())

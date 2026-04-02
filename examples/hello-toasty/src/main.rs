@@ -69,12 +69,14 @@ async fn main() -> toasty::Result<()> {
     let mut user = User::get_by_email(&mut db, &u1.email).await?;
     println!("USER = {user:#?}");
 
-    assert!(User::create()
-        .name("John Dos")
-        .email("john@example.com")
-        .exec(&mut db)
-        .await
-        .is_err());
+    assert!(
+        User::create()
+            .name("John Dos")
+            .email("john@example.com")
+            .exec(&mut db)
+            .await
+            .is_err()
+    );
 
     user.update().name("Foo bar").exec(&mut db).await?;
     assert_eq!(user.name, "Foo bar");

@@ -1,7 +1,17 @@
 [package]
 name = "toasty-driver-postgresql"
-version = "0.1.0"
-edition = "2021"
+version = "0.2.0"
+description = "PostgreSQL driver for Toasty"
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+categories.workspace = true
+readme.workspace = true
+documentation = "https://docs.rs/toasty-driver-postgresql"
 
 [features]
 rust_decimal = ["dep:rust_decimal", "toasty-core/rust_decimal"]
@@ -17,6 +27,7 @@ bigdecimal = { workspace = true, optional = true }
 jiff = { workspace = true, optional = true }
 lru.workspace = true
 postgres.workspace = true
+tracing.workspace = true
 postgres-types.workspace = true
 tokio.workspace = true
 tokio-postgres.workspace = true

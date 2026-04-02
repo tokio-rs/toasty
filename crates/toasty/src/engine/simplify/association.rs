@@ -3,15 +3,15 @@ use toasty_core::{schema::app, stmt};
 
 impl Simplify<'_> {
     pub(super) fn simplify_via_association_for_delete(&mut self, stmt: &mut stmt::Delete) {
-        if let stmt::Source::Model(model) = &mut stmt.from {
-            if let Some(via) = model.via.take() {
-                // Create a new scope to indicate we are operating in the
-                // context of stmt.from
-                let mut s = self.scope(&stmt.from);
+        if let stmt::Source::Model(model) = &mut stmt.from
+            && let Some(via) = model.via.take()
+        {
+            // Create a new scope to indicate we are operating in the
+            // context of stmt.from
+            let mut s = self.scope(&stmt.from);
 
-                let filter = s.rewrite_association_as_filter(via);
-                stmt.filter = stmt::Filter::and(stmt.filter.take(), filter);
-            }
+            let filter = s.rewrite_association_as_filter(via);
+            stmt.filter = stmt::Filter::and(stmt.filter.take(), filter);
         }
     }
 
@@ -22,17 +22,16 @@ impl Simplify<'_> {
     }
 
     pub(super) fn simplify_via_association_for_query(&mut self, stmt: &mut stmt::Query) {
-        if let stmt::ExprSet::Select(select) = &mut stmt.body {
-            if let stmt::Source::Model(model) = &mut select.source {
-                if let Some(via) = model.via.take() {
-                    // Create a new scope to indicate we are operating in the
-                    // context of stmt.target
-                    let mut s = self.scope(&select.source);
+        if let stmt::ExprSet::Select(select) = &mut stmt.body
+            && let stmt::Source::Model(model) = &mut select.source
+            && let Some(via) = model.via.take()
+        {
+            // Create a new scope to indicate we are operating in the
+            // context of stmt.target
+            let mut s = self.scope(&select.source);
 
-                    let filter = s.rewrite_association_as_filter(via);
-                    select.filter = stmt::Filter::and(select.filter.take(), filter);
-                }
-            }
+            let filter = s.rewrite_association_as_filter(via);
+            select.filter = stmt::Filter::and(select.filter.take(), filter);
         }
     }
 

@@ -16,7 +16,7 @@ pub async fn batch_vec_of_queries(t: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await?;
 
-    assert_struct!(results, [[_ { name: "Alice" }], [_ { name: "Bob" }], [_ { name: "Carol" }]]);
+    assert_struct!(results, [[{ name: "Alice" }], [{ name: "Bob" }], [{ name: "Carol" }]]);
 
     Ok(())
 }
@@ -33,7 +33,7 @@ pub async fn batch_array_of_queries(t: &mut Test) -> Result<()> {
             .exec(&mut db)
             .await?;
 
-    assert_struct!(results, [[_ { name: "Alice" }], [_ { name: "Bob" }]]);
+    assert_struct!(results, [[{ name: "Alice" }], [{ name: "Bob" }]]);
 
     Ok(())
 }
@@ -51,7 +51,7 @@ pub async fn batch_vec_some_empty(t: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await?;
 
-    assert_struct!(results, [[_ { name: "Alice" }], []]);
+    assert_struct!(results, [[{ name: "Alice" }], []]);
 
     Ok(())
 }
@@ -76,8 +76,8 @@ pub async fn batch_nested_tuple_with_vec(t: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await?;
 
-    assert_struct!(users, [[_ { name: "Alice" }], [_ { name: "Bob" }]]);
-    assert_struct!(posts, [[_ { title: "Hello" }], [_ { title: "World" }]]);
+    assert_struct!(users, [[{ name: "Alice" }], [{ name: "Bob" }]]);
+    assert_struct!(posts, [[{ title: "Hello" }], [{ title: "World" }]]);
 
     Ok(())
 }

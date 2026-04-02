@@ -1,7 +1,7 @@
 use crate::{
+    Result,
     schema::{Field, Load},
     stmt::{List, Path},
-    Result,
 };
 
 use toasty_core::stmt;

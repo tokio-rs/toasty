@@ -1,4 +1,4 @@
-use mysql_async::{prelude::ToValue, Column, Row};
+use mysql_async::{Column, Row, prelude::ToValue};
 use toasty_core::stmt::{self, Value as CoreValue};
 
 #[derive(Debug)]

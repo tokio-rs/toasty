@@ -28,12 +28,13 @@ use std::{
     sync::Arc,
 };
 use toasty_core::{
+    Result, Schema,
     driver::{
+        Capability, Driver, ExecResponse,
         operation::{IsolationLevel, Operation, Transaction},
-        Capability, Driver, Response,
     },
     schema::db::{self, Migration, SchemaDiff, Table},
-    stmt, Result, Schema,
+    stmt,
 };
 use toasty_sql::{self as sql, TypedValue};
 use url::Url;
@@ -174,7 +175,9 @@ impl Connection {
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
-    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
+    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
+        tracing::trace!(driver = "sqlite", op = %op.name(), "driver exec");
+
         let (sql, ret_tys): (sql::Statement, _) = match op {
             Operation::QuerySql(op) => {
                 assert!(
@@ -197,13 +200,15 @@ impl toasty_core::driver::Connection for Connection {
                 self.connection
                     .execute(&sql, [])
                     .map_err(toasty_core::Error::driver_operation_failed)?;
-                return Ok(Response::count(0));
+                return Ok(ExecResponse::count(0));
             }
             _ => todo!("op={:#?}", op),
         };
 
         let mut params: Vec<toasty_sql::TypedValue> = vec![];
         let sql_str = sql::Serializer::sqlite(&schema.db).serialize(&sql, &mut params);
+
+        tracing::debug!(db.system = "sqlite", db.statement = %sql_str, params = params.len(), "executing SQL");
 
         let mut stmt = self.connection.prepare_cached(&sql_str).unwrap();
 
@@ -241,7 +246,7 @@ impl toasty_core::driver::Connection for Connection {
                 .execute(rusqlite::params_from_iter(params.iter()))
                 .map_err(toasty_core::Error::driver_operation_failed)?;
 
-            return Ok(Response::count(count as _));
+            return Ok(ExecResponse::count(count as _));
         }
 
         let mut rows = stmt
@@ -272,11 +277,12 @@ impl toasty_core::driver::Connection for Connection {
             }
         }
 
-        Ok(Response::value_stream(stmt::ValueStream::from_vec(ret)))
+        Ok(ExecResponse::value_stream(stmt::ValueStream::from_vec(ret)))
     }
 
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
         for table in &schema.db.tables {
+            tracing::debug!(table = %table.name, "creating table");
             self.create_table(&schema.db, table)?;
         }
 
@@ -321,6 +327,7 @@ impl toasty_core::driver::Connection for Connection {
         name: String,
         migration: &toasty_core::schema::db::Migration,
     ) -> Result<()> {
+        tracing::info!(id = id, name = %name, "applying migration");
         // Ensure the migrations table exists
         self.connection
             .execute(

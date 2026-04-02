@@ -51,6 +51,25 @@ pub(crate) enum Action {
 }
 
 impl Action {
+    /// Returns the action variant name for logging.
+    pub(crate) fn name(&self) -> &'static str {
+        match self {
+            Action::DeleteByKey(_) => "delete_by_key",
+            Action::Eval(_) => "eval",
+            Action::ExecStatement(_) => "exec_statement",
+            Action::Filter(_) => "filter",
+            Action::FindPkByIndex(_) => "find_pk_by_index",
+            Action::GetByKey(_) => "get_by_key",
+            Action::Guard(_) => "guard",
+            Action::NestedMerge(_) => "nested_merge",
+            Action::Project(_) => "project",
+            Action::QueryPk(_) => "query_pk",
+            Action::ReadModifyWrite(_) => "read_modify_write",
+            Action::SetVar(_) => "set_var",
+            Action::UpdateByKey(_) => "update_by_key",
+        }
+    }
+
     /// Returns true if this action issues a database operation.
     ///
     /// Used to determine whether a plan needs to be wrapped in a transaction.

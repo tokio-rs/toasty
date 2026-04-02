@@ -2,11 +2,10 @@ use indexmap::IndexSet;
 use toasty_core::stmt::{self, visit_mut};
 
 use crate::engine::{
-    eval,
+    Engine, HirStatement, SelectItems, eval,
     exec::{MergeIndex, MergeQualification, NestedChild, NestedLevel},
     hir, mir,
     plan::HirPlanner,
-    Engine, HirStatement, SelectItems,
 };
 
 #[derive(Debug)]

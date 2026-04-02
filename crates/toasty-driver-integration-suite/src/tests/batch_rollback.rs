@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-use toasty_core::driver::{operation::Transaction, Operation};
+use toasty_core::driver::{Operation, operation::Transaction};
 
 /// When a batch of two creates fails on the second INSERT (unique constraint
 /// violation), the entire batch is rolled back — the first INSERT must not
