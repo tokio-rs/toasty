@@ -130,6 +130,8 @@ pub use toasty_core::{Error, Result, schema::app::ModelSet};
 
 #[doc(hidden)]
 pub mod codegen_support {
+    #[cfg(feature = "discover")]
+    pub use crate::schema::inventory;
     pub use crate::{
         Db, Error, Executor, Result, Statement,
         schema::{
@@ -140,8 +142,6 @@ pub mod codegen_support {
         stmt::{self, Assign, IntoExpr, IntoInsert, IntoStatement, List, Path},
         update_target::UpdateTarget,
     };
-    #[cfg(feature = "discover")]
-    pub use crate::schema::inventory;
     #[cfg(feature = "serde")]
     pub use serde_json;
     pub use std::{convert::Into, default::Default, option::Option};

@@ -2,7 +2,6 @@ use crate::{
     Db, Result,
     db::{Connect, Pool, Shared},
     engine::Engine,
-    schema::{DiscoverItem, Register},
 };
 
 use toasty_core::{

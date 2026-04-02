@@ -1,6 +1,4 @@
-use toasty_core::schema::app::{self, ModelId};
-
-use crate::db::Builder;
+use toasty_core::schema::app::{self, ModelId, ModelSet};
 
 /// Generate a unique model ID at runtime.
 ///
@@ -37,33 +35,42 @@ pub trait Register {
 /// Each derived type emits an `inventory::submit!` call that creates a
 /// `DiscoverItem` carrying the originating crate name (via
 /// `env!("CARGO_PKG_NAME")`) and a registration function. When the
-/// `discover` feature is enabled, [`Builder::discover`] and
-/// [`Builder::discover_crate`] iterate over all submitted items.
+/// `discover` feature is enabled, [`toasty::models!`] and iterates over
+/// all submitted items filtered by crate name.
 #[doc(hidden)]
 pub struct DiscoverItem {
     crate_name: &'static str,
-    register_fn: fn(&mut Builder),
+    add_fn: fn(&mut ModelSet),
 }
 
 impl DiscoverItem {
-    pub const fn new(crate_name: &'static str, register_fn: fn(&mut Builder)) -> Self {
-        Self {
-            crate_name,
-            register_fn,
-        }
+    pub const fn new(crate_name: &'static str, add_fn: fn(&mut ModelSet)) -> Self {
+        Self { crate_name, add_fn }
     }
 
     pub fn crate_name(&self) -> &'static str {
         self.crate_name
     }
 
-    pub fn register(&self, builder: &mut Builder) {
-        (self.register_fn)(builder)
+    pub fn add_to(&self, model_set: &mut ModelSet) {
+        (self.add_fn)(model_set)
+    }
+
+    #[cfg(feature = "discover")]
+    pub fn add_all_from_crate_to(model_set: &mut ModelSet, crate_name: &str) {
+        // Normalize all crate names to use `_` instead of `-` for `models!` invocation
+        // which has to use `_` to be a valid crate identifier.
+        let crate_name = crate_name.replace("-", "_");
+        for item in inventory::iter::<Self> {
+            if item.crate_name().replace("-", "_") == crate_name {
+                item.add_to(model_set);
+            }
+        }
     }
 }
 
 // Collect all `DiscoverItem` instances submitted by derive macros so they
-// can be iterated by `Builder::discover` / `Builder::discover_crate`.
+// can be iterated by [`toasty::models!`].
 #[cfg(feature = "discover")]
 inventory::collect!(DiscoverItem);
 
@@ -72,12 +79,72 @@ inventory::collect!(DiscoverItem);
 #[cfg(feature = "discover")]
 pub use inventory;
 
-/// Creates a [`ModelSet`] with the provided models already registered, similar to `vec![]`.
+/// Creates a [`ModelSet`] containing the specified models.
+///
+/// The resulting `ModelSet` is typically passed to
+/// [`Builder::models`](crate::Db::builder) when setting up a database
+/// connection:
+///
+/// ```ignore
+/// let db = toasty::Db::builder()
+///     .models(toasty::models!(User, Todo))
+///     .connect("sqlite::memory:")
+///     .await?;
+/// ```
+///
+/// # Syntax
+///
+/// The macro accepts a comma-separated list of any combination of:
+///
+/// - **Individual models** — a type path to a struct that derives `Model` or
+///   `Embed`. Module paths are supported (e.g. `my_module::MyModel`).
+/// - **`crate::*`** — registers every model discovered in the current crate
+///   (requires the `discover` feature).
+/// - **`some_crate::*`** — registers every model discovered in the named
+///   external crate (requires the `discover` feature).
+///
+/// These forms can be freely combined:
+///
+/// ```ignore
+/// toasty::models!(
+///     // All models from the current crate
+///     crate::*,
+///     // All models from an external crate
+///     third_party_models::*,
+///     // Individual models, with or without a module path
+///     MyModel,
+///     other::SpecificModel,
+/// )
+/// ```
+#[allow(clippy::crate_in_macro_def)]
 #[macro_export]
 macro_rules! models {
-    ($($model:ty),*) => {{
+    // Register all models from current crate with `models!(crate::*)`
+    (@internal $set:ident crate::* $(,$rest:ty)* $(,)?) => {{
+        ::toasty::codegen_support::DiscoverItem::add_all_from_crate_to(&mut $set, env!("CARGO_PKG_NAME"));
+        $crate::models!(@internal $set $($rest),*);
+    }};
+
+    // Register all models from a third party crate with `models!(third_party::*)`
+    (@internal $set:ident $crate_name:ident::* $(,$rest:ty)* $(,)?) => {{
+        // Make sure the provided crate actually exists.
+        { use ::$crate_name; }
+        ::toasty::codegen_support::DiscoverItem::add_all_from_crate_to(&mut $set, stringify!($crate_name));
+        $crate::models!(@internal $set $($rest),*);
+    }};
+
+    // Register single model with `models!(ModelName)`
+    (@internal $set:ident $model:ty $(,$rest:ty)* $(,)?) => {{
+        $set.add(<$model as ::toasty::schema::Register>::schema());
+        $crate::models!(@internal $set $($rest),*);
+    }};
+
+    // Empty list
+    (@internal $set:ident) => {};
+
+    ($($tokens:tt)*) => {{
         let mut model_set = ::toasty::ModelSet::new();
-        $(model_set.add(<$model as ::toasty::schema::Register>::schema());)*
+        $crate::models!(@internal model_set $($tokens)*);
         model_set
     }};
 }

@@ -43,9 +43,9 @@ struct User {
 # async fn __example() -> toasty::Result<()> {
 #[tokio::main]
 async fn main() -> toasty::Result<()> {
-    // Build a Db handle, registering all models
+    // Build a Db handle, registering all models in this crate
     let mut db = toasty::Db::builder()
-        .models(toasty::models!(User))
+        .models(toasty::models!(crate::*))
         .connect("sqlite::memory:")
         .await?;
 
@@ -103,19 +103,21 @@ rest of this guide shows everything the macro can generate and how to use it.
 ## Connecting to a database
 
 `Db::builder()` creates a builder where you provide your models and then
-connect to a database. Every model must be included before connecting so that
+connect to a database. Every model must be registered before connecting so that
 Toasty can infer the full database schema — tables, columns, indexes, and
 relationships between models.
 
 ```rust,ignore
 let mut db = toasty::Db::builder()
-    .models(toasty::models!(User, Post))
+    .models(toasty::models!(crate::*))
     .connect("sqlite::memory:")
     .await?;
 ```
 
-Every model must be registered before connecting so that Toasty can infer the
-full database schema — tables, columns, indexes, and relationships between models.
+`crate::*` automatically discovers all `#[derive(Model)]` and `#[derive(Embed)]`
+types in your crate. You can also list models individually
+(`toasty::models!(User, Post)`), register all models from an external crate
+(`toasty::models!(other_crate::*)`), or combine these forms freely.
 
 The connection URL determines which database driver to use. See
 [Database Setup](./database-setup.md) for connection URLs for each
