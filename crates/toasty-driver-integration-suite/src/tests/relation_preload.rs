@@ -298,7 +298,9 @@ pub async fn multiple_includes_with_has_one(test: &mut Test) -> Result<()> {
         user: toasty::BelongsTo<Option<User>>,
     }
 
-    let mut db = test.setup_db(toasty::models!(User, Profile, Settings)).await;
+    let mut db = test
+        .setup_db(toasty::models!(User, Profile, Settings))
+        .await;
 
     // Create a user with both profile and settings
     let user = User::create()
@@ -942,7 +944,9 @@ pub async fn nested_has_many_then_has_one_required(test: &mut Test) -> Result<()
         account: toasty::BelongsTo<Option<Account>>,
     }
 
-    let mut db = test.setup_db(toasty::models!(User, Account, Settings)).await;
+    let mut db = test
+        .setup_db(toasty::models!(User, Account, Settings))
+        .await;
 
     let user = User::create()
         .name("Bob")
@@ -1285,7 +1289,9 @@ pub async fn nested_has_one_required_then_has_many(test: &mut Test) -> Result<()
         invoice: toasty::BelongsTo<Invoice>,
     }
 
-    let mut db = test.setup_db(toasty::models!(Order, Invoice, LineItem)).await;
+    let mut db = test
+        .setup_db(toasty::models!(Order, Invoice, LineItem))
+        .await;
 
     let order = Order::create()
         .label("Order1")
@@ -1972,7 +1978,9 @@ pub async fn nested_belongs_to_optional_then_belongs_to_optional(test: &mut Test
         post: toasty::BelongsTo<Option<Post>>,
     }
 
-    let mut db = test.setup_db(toasty::models!(Category, Post, Comment)).await;
+    let mut db = test
+        .setup_db(toasty::models!(Category, Post, Comment))
+        .await;
 
     let cat = Category::create().name("Tech").exec(&mut db).await?;
     let post = Post::create()

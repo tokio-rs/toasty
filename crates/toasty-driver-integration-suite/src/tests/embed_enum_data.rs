@@ -366,7 +366,9 @@ pub async fn struct_in_data_variant(test: &mut Test) -> Result<()> {
         destination: Destination,
     }
 
-    let mut db = test.setup_db(toasty::models!(Shipment, Destination, Address)).await;
+    let mut db = test
+        .setup_db(toasty::models!(Shipment, Destination, Address))
+        .await;
 
     let digital = Shipment::create()
         .destination(Destination::Digital {
@@ -435,7 +437,9 @@ pub async fn enum_in_enum_roundtrip(test: &mut Test) -> Result<()> {
         notification: Notification,
     }
 
-    let mut db = test.setup_db(toasty::models!(Alert, Notification, Channel)).await;
+    let mut db = test
+        .setup_db(toasty::models!(Alert, Notification, Channel))
+        .await;
 
     let a1 = Alert::create()
         .notification(Notification::Send {

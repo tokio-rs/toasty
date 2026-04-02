@@ -733,7 +733,9 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
         address: Address,
     }
 
-    let db = test.setup_db(toasty::models!(User, Address, City, Location)).await;
+    let db = test
+        .setup_db(toasty::models!(User, Address, City, Location))
+        .await;
     let schema = db.schema();
 
     // All embedded models should exist in app schema
