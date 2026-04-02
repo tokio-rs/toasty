@@ -1,5 +1,5 @@
 use super::Load;
-use crate::stmt::{self, List};
+use crate::stmt::{self, Expr, List};
 
 /// Schema and runtime information for a field type.
 ///
@@ -22,6 +22,11 @@ pub trait Field: Load {
     /// For embedded types, this is {Type}Update<'a>.
     /// For primitives, this will be {Type}Update<'a> once implemented.
     type Update<'a>;
+
+    /// The unwrapped type used for foreign key filter expressions.
+    /// Primitives map to themselves. Wrappers like `Option<T>`, `Box<T>`,
+    /// `Arc<T>`, and `Rc<T>` map to `T::Inner`.
+    type Inner;
 
     /// Whether or not the type is nullable
     const NULLABLE: bool = false;
@@ -60,6 +65,14 @@ pub trait Field: Load {
             serialize: None,
         })
     }
+
+    /// Build a boolean filter expression comparing this field value against
+    /// a target path. Used by generated belongs-to accessors to build FK
+    /// lookups.
+    ///
+    /// For `T`, returns `target.eq(self)`. For `Option<T>`, returns
+    /// `target.eq(inner)` when `Some`, or `false` when `None`.
+    fn key_constraint<Origin>(&self, target: stmt::Path<Origin, Self::Inner>) -> Expr<bool>;
 }
 
 macro_rules! impl_field_primitive {
@@ -68,6 +81,7 @@ macro_rules! impl_field_primitive {
             type Path<Origin> = stmt::Path<Origin, Self>;
             type ListPath<Origin> = stmt::Path<Origin, List<Self>>;
             type Update<'a> = ();
+            type Inner = Self;
 
             fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
                 path
@@ -84,6 +98,13 @@ macro_rules! impl_field_primitive {
                 _projection: toasty_core::stmt::Projection,
             ) -> Self::Update<'a> {
             }
+
+            fn key_constraint<Origin>(
+                &self,
+                target: stmt::Path<Origin, Self::Inner>,
+            ) -> Expr<bool> {
+                target.eq(self)
+            }
         }
     };
 }
@@ -98,6 +119,7 @@ impl Field for Vec<u8> {
     type Path<Origin> = stmt::Path<Origin, Self>;
     type ListPath<Origin> = stmt::Path<Origin, List<Self>>;
     type Update<'a> = ();
+    type Inner = Self;
 
     fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
         path
@@ -122,12 +144,17 @@ impl Field for Vec<u8> {
             serialize: None,
         })
     }
+
+    fn key_constraint<Origin>(&self, target: stmt::Path<Origin, Self::Inner>) -> Expr<bool> {
+        target.eq(self)
+    }
 }
 
 impl<T: Field> Field for Option<T> {
     type Path<Origin> = stmt::Path<Origin, Self>;
     type ListPath<Origin> = stmt::Path<Origin, List<Self>>;
     type Update<'a> = ();
+    type Inner = T::Inner;
     const NULLABLE: bool = true;
 
     fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
@@ -143,29 +170,12 @@ impl<T: Field> Field for Option<T> {
         _projection: toasty_core::stmt::Projection,
     ) -> Self::Update<'a> {
     }
-}
 
-impl<T> Field for std::borrow::Cow<'_, T>
-where
-    T: ToOwned + ?Sized,
-    T::Owned: Field<Output = T::Owned>,
-{
-    type Path<Origin> = stmt::Path<Origin, Self>;
-    type ListPath<Origin> = stmt::Path<Origin, List<Self>>;
-    type Update<'a> = ();
-
-    fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
-        path
-    }
-
-    fn new_list_path<Origin>(path: stmt::Path<Origin, List<Self>>) -> Self::ListPath<Origin> {
-        path
-    }
-
-    fn new_update<'a>(
-        _assignments: &'a mut toasty_core::stmt::Assignments,
-        _projection: toasty_core::stmt::Projection,
-    ) -> Self::Update<'a> {
+    fn key_constraint<Origin>(&self, target: stmt::Path<Origin, Self::Inner>) -> Expr<bool> {
+        match self {
+            Some(value) => T::key_constraint(value, target),
+            None => Expr::from_value(toasty_core::stmt::Value::Bool(false)),
+        }
     }
 }
 
@@ -173,6 +183,7 @@ impl<T: Field<Output = T>> Field for std::sync::Arc<T> {
     type Path<Origin> = stmt::Path<Origin, Self>;
     type ListPath<Origin> = stmt::Path<Origin, List<Self>>;
     type Update<'a> = ();
+    type Inner = T::Inner;
 
     fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
         path
@@ -186,6 +197,10 @@ impl<T: Field<Output = T>> Field for std::sync::Arc<T> {
         _assignments: &'a mut toasty_core::stmt::Assignments,
         _projection: toasty_core::stmt::Projection,
     ) -> Self::Update<'a> {
+    }
+
+    fn key_constraint<Origin>(&self, target: stmt::Path<Origin, Self::Inner>) -> Expr<bool> {
+        T::key_constraint(self, target)
     }
 }
 
@@ -193,6 +208,7 @@ impl<T: Field<Output = T>> Field for std::rc::Rc<T> {
     type Path<Origin> = stmt::Path<Origin, Self>;
     type ListPath<Origin> = stmt::Path<Origin, List<Self>>;
     type Update<'a> = ();
+    type Inner = T::Inner;
 
     fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
         path
@@ -206,6 +222,10 @@ impl<T: Field<Output = T>> Field for std::rc::Rc<T> {
         _assignments: &'a mut toasty_core::stmt::Assignments,
         _projection: toasty_core::stmt::Projection,
     ) -> Self::Update<'a> {
+    }
+
+    fn key_constraint<Origin>(&self, target: stmt::Path<Origin, Self::Inner>) -> Expr<bool> {
+        T::key_constraint(self, target)
     }
 }
 
@@ -213,6 +233,7 @@ impl<T: Field<Output = T>> Field for Box<T> {
     type Path<Origin> = stmt::Path<Origin, Self>;
     type ListPath<Origin> = stmt::Path<Origin, List<Self>>;
     type Update<'a> = ();
+    type Inner = T::Inner;
 
     fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
         path
@@ -226,6 +247,10 @@ impl<T: Field<Output = T>> Field for Box<T> {
         _assignments: &'a mut toasty_core::stmt::Assignments,
         _projection: toasty_core::stmt::Projection,
     ) -> Self::Update<'a> {
+    }
+
+    fn key_constraint<Origin>(&self, target: stmt::Path<Origin, Self::Inner>) -> Expr<bool> {
+        T::key_constraint(self, target)
     }
 }
 

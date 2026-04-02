@@ -126,7 +126,7 @@ pub use stmt::Statement;
 
 pub use toasty_macros::{Embed, Model, create, query};
 
-pub use toasty_core::{Error, Result};
+pub use toasty_core::{Error, Result, schema::app::ModelSet};
 
 #[doc(hidden)]
 pub mod codegen_support {

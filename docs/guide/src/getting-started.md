@@ -103,7 +103,7 @@ rest of this guide shows everything the macro can generate and how to use it.
 ## Connecting to a database
 
 `Db::builder()` creates a builder where you provide your models and then
-connect to a database. Every model must be registered before connecting so that
+connect to a database. Every model must be included before connecting so that
 Toasty can infer the full database schema — tables, columns, indexes, and
 relationships between models.
 
