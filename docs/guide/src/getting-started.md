@@ -43,13 +43,13 @@ struct User {
 # async fn __example() -> toasty::Result<()> {
 #[tokio::main]
 async fn main() -> toasty::Result<()> {
-    // Build a Db handle, discovering all models
+    // Build a Db handle, registering all models
     let mut db = toasty::Db::builder()
         .models(toasty::models!(User))
         .connect("sqlite::memory:")
         .await?;
 
-    // Create tables based on discovered models
+    // Create tables based on registered models
     db.push_schema().await?;
 
     // Create a user
@@ -114,9 +114,8 @@ let mut db = toasty::Db::builder()
     .await?;
 ```
 
-Every model must be registered (via `.discover()` or `.register()`) before
-connecting so that Toasty can infer the full database schema — tables, columns,
-indexes, and relationships between models.
+Every model must be registered before connecting so that Toasty can infer the
+full database schema — tables, columns, indexes, and relationships between models.
 
 The connection URL determines which database driver to use. See
 [Database Setup](./database-setup.md) for connection URLs for each
