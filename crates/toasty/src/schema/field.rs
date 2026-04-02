@@ -179,35 +179,6 @@ impl<T: Field> Field for Option<T> {
     }
 }
 
-impl<T> Field for std::borrow::Cow<'_, T>
-where
-    T: ToOwned + ?Sized,
-    T::Owned: Field<Output = T::Owned>,
-{
-    type Path<Origin> = stmt::Path<Origin, Self>;
-    type ListPath<Origin> = stmt::Path<Origin, List<Self>>;
-    type Update<'a> = ();
-    type Inner = <T::Owned as Field>::Inner;
-
-    fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
-        path
-    }
-
-    fn new_list_path<Origin>(path: stmt::Path<Origin, List<Self>>) -> Self::ListPath<Origin> {
-        path
-    }
-
-    fn new_update<'a>(
-        _assignments: &'a mut toasty_core::stmt::Assignments,
-        _projection: toasty_core::stmt::Projection,
-    ) -> Self::Update<'a> {
-    }
-
-    fn key_constraint<Origin>(&self, _target: stmt::Path<Origin, Self::Inner>) -> Expr<bool> {
-        unimplemented!("Cow fields cannot be used as foreign keys")
-    }
-}
-
 impl<T: Field<Output = T>> Field for std::sync::Arc<T> {
     type Path<Origin> = stmt::Path<Origin, Self>;
     type ListPath<Origin> = stmt::Path<Origin, List<Self>>;
