@@ -17,7 +17,7 @@ mod insert;
 pub use insert::Insert;
 
 mod assignment;
-pub use assignment::{Assign, Assignment, insert, remove, set};
+pub use assignment::{Assign, Assignment, apply, insert, patch, remove, set};
 
 mod into_expr;
 pub use into_expr::IntoExpr;

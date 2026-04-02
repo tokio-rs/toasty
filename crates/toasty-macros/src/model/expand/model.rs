@@ -142,6 +142,12 @@ impl Expand<'_> {
                 }
             }
 
+            impl #toasty::Assign<#model_ident> for #model_ident {
+                fn assign(self, assignments: &mut #toasty::core::stmt::Assignments, projection: #toasty::stmt::Projection) {
+                    assignments.set(projection, <Self as #toasty::IntoExpr<#model_ident>>::into_expr(self));
+                }
+            }
+
             impl #toasty::IntoStatement for &#model_ident {
                 type Returning = #model_ident;
 
