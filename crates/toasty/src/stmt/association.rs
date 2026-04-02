@@ -106,7 +106,7 @@ impl<M: Model> Association<List<M>> {
         }
     }
 
-    /// Insert associated records into this has-many relation.
+    /// Insert an associated record into this has-many relation.
     ///
     /// Converts the association into an update statement that adds `expr` to
     /// the relation's field on the source model.
@@ -127,16 +127,18 @@ impl<M: Model> Association<List<M>> {
     /// #     user_id: i64,
     /// #     title: String,
     /// # }
-    /// use toasty::stmt::{Association, Insert, Path, List, Query};
+    /// use toasty::stmt::{Association, Expr, Path, List, Query};
     ///
     /// let source = Query::<List<User>>::filter(User::fields().id().eq(1));
     /// let path = Path::<User, List<Todo>>::from_field_index(2);
     /// let assoc = Association::many(source, path);
     ///
-    /// let new_todo = Insert::<Todo>::blank_single();
-    /// let _stmt = assoc.insert(new_todo.into_list_expr());
+    /// let todo_expr = Expr::<Todo>::from_untyped(
+    ///     toasty_core::stmt::Value::from(42_i64),
+    /// );
+    /// let _stmt = assoc.insert(todo_expr);
     /// ```
-    pub fn insert(self, expr: impl IntoExpr<List<M>>) -> Statement<()> {
+    pub fn insert(self, expr: impl IntoExpr<M>) -> Statement<()> {
         let [index] = self.untyped.path.projection.as_slice() else {
             todo!()
         };

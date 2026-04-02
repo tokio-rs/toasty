@@ -135,16 +135,6 @@ impl<T: IntoExpr<T>> IntoExpr<T> for &T {
     }
 }
 
-impl<T: IntoExpr<T>> IntoExpr<List<T>> for &T {
-    fn into_expr(self) -> Expr<List<T>> {
-        self.by_ref().cast()
-    }
-
-    fn by_ref(&self) -> Expr<List<T>> {
-        (*self).by_ref().cast()
-    }
-}
-
 impl<T: IntoExpr<T>> IntoExpr<Self> for Option<T> {
     fn into_expr(self) -> Expr<Self> {
         match self {
