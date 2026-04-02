@@ -51,6 +51,7 @@ enum AssignmentKind {
     Insert(stmt::Expr),
     Remove(stmt::Expr),
     Patch(PatchFn),
+    Apply(PatchFn),
 }
 
 // Assignment<T> implements Assign<T>
@@ -61,6 +62,7 @@ impl<T> Assign<T> for Assignment<T> {
             AssignmentKind::Insert(expr) => assignments.insert(projection, expr),
             AssignmentKind::Remove(expr) => assignments.remove(projection, expr),
             AssignmentKind::Patch(f) => f(assignments, projection),
+            AssignmentKind::Apply(f) => f(assignments, projection),
         }
     }
 }
@@ -228,6 +230,33 @@ pub fn patch<T, U>(path: Path<T, U>, value: impl Assign<U> + 'static) -> Assignm
                 projection.push(step);
             }
             value.assign(assignments, projection);
+        })),
+        _p: PhantomData,
+    }
+}
+
+/// Apply multiple operations to a single field.
+///
+/// Wraps an `impl Assign<T>` (typically an array or `Vec` of
+/// [`Assignment<T>`]) into a single [`Assignment<T>`]. Each inner operation
+/// is applied in order when the assignment is executed.
+///
+/// # Examples
+///
+/// ```ignore
+/// user.update()
+///     .todos(stmt::apply([
+///         stmt::insert(Todo::create().title("Buy groceries")),
+///         stmt::insert(Todo::create().title("Walk the dog")),
+///         stmt::remove(&old_todo),
+///     ]))
+///     .exec(&mut db)
+///     .await?;
+/// ```
+pub fn apply<T>(ops: impl Assign<T> + 'static) -> Assignment<T> {
+    Assignment {
+        kind: AssignmentKind::Apply(Box::new(move |assignments, projection| {
+            ops.assign(assignments, projection);
         })),
         _p: PhantomData,
     }
