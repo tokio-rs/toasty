@@ -38,7 +38,9 @@ async fn main() -> toasty::Result<()> {
     db.push_schema().await?;
 
     // Create a user without a profile
-    let user = User::create().name("John Doe").exec(&mut db).await?;
+    let user = toasty::create!(User { name: "John Doe" })
+        .exec(&mut db)
+        .await?;
 
     println!("created user; name={:?}", user.name);
 

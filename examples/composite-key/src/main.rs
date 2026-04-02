@@ -43,20 +43,17 @@ async fn main() -> toasty::Result<()> {
     // For now, reset!s
     db.push_schema().await?;
 
-    let user = User::create()
-        .name("John Doe")
-        .email("john@example.com")
-        .exec(&mut db)
-        .await?;
+    let user = toasty::create!(User {
+        name: "John Doe",
+        email: "john@example.com",
+    })
+    .exec(&mut db)
+    .await?;
 
     println!("created user; name={:?}; email={:?}", user.name, user.email);
 
     for (i, title) in ["finish toasty", "retire", "play golf"].iter().enumerate() {
-        let todo = user
-            .todos()
-            .create()
-            .title(*title)
-            .order(i as i64)
+        let todo = toasty::create!(in user.todos() { title: *title, order: i as i64 })
             .exec(&mut db)
             .await?;
 
