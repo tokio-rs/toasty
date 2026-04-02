@@ -20,7 +20,7 @@ macro_rules! num_ty_test_body {
         }
 
         let test = $test;
-        let mut db = test.setup_db(models!(Item)).await;
+        let mut db = test.setup_db(toasty::models!(Item)).await;
         let mut test_values: Vec<$ty> = (*$test_values).to_vec();
 
         // Filter test values based on database capabilities for unsigned integers
@@ -235,7 +235,7 @@ pub async fn ty_str(test: &mut Test) -> Result<()> {
         val: String,
     }
 
-    let mut db = test.setup_db(models!(Item)).await;
+    let mut db = test.setup_db(toasty::models!(Item)).await;
 
     let test_values: Vec<_> = [
         gen_string(0, "empty"),
@@ -338,7 +338,7 @@ pub async fn ty_bytes(test: &mut Test) -> Result<()> {
         val: Vec<u8>,
     }
 
-    let mut db = test.setup_db(models!(Item)).await;
+    let mut db = test.setup_db(toasty::models!(Item)).await;
 
     let test_values: Vec<Vec<u8>> = vec![
         vec![],
@@ -418,7 +418,7 @@ pub async fn ty_uuid(test: &mut Test) -> Result<()> {
         val: uuid::Uuid,
     }
 
-    let mut db = test.setup_db(models!(Item)).await;
+    let mut db = test.setup_db(toasty::models!(Item)).await;
 
     // Clear setup operations
     test.log().clear();
@@ -489,7 +489,7 @@ pub async fn ty_smart_ptrs(test: &mut Test) -> Result<()> {
         boxed: Box<i32>,
     }
 
-    let mut db = test.setup_db(models!(Item)).await;
+    let mut db = test.setup_db(toasty::models!(Item)).await;
 
     // Clear setup operations
     test.log().clear();

@@ -273,7 +273,7 @@ pub async fn has_many_when_fk_is_composite(test: &mut Test) -> Result<()> {
         title: String,
     }
 
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = test.setup_db(toasty::models!(User, Todo)).await;
 
     // Create a user
     let user = User::create().exec(&mut db).await?;
@@ -457,7 +457,7 @@ pub async fn delete_when_belongs_to_optional(test: &mut Test) -> Result<()> {
         user: toasty::BelongsTo<Option<User>>,
     }
 
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = test.setup_db(toasty::models!(User, Todo)).await;
 
     let user = User::create().exec(&mut db).await?;
     let mut ids = vec![];
@@ -557,7 +557,7 @@ pub async fn update_user_with_null_todo_is_err(test: &mut Test) -> Result<()> {
 
     use toasty::stmt::{self, IntoExpr};
 
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = test.setup_db(toasty::models!(User, Todo)).await;
 
     // Create a user with a todo
     let u1 = User::create().todo(Todo::create()).exec(&mut db).await?;
@@ -723,7 +723,7 @@ pub async fn has_many_when_fk_is_composite_with_snippets(test: &mut Test) -> Res
         title: String,
     }
 
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = test.setup_db(toasty::models!(User, Todo)).await;
 
     // Create users
     let user1 = User::create().exec(&mut db).await?;

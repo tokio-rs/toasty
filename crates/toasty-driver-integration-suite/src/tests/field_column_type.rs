@@ -17,7 +17,7 @@ pub async fn specify_constrained_string_field(test: &mut Test) -> Result<()> {
         name: String,
     }
 
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = test.setup_db(toasty::models!(User)).await;
 
     let u = User::create().name("alice").exec(&mut db).await?;
     assert_eq!(u.name, "alice");
@@ -50,7 +50,7 @@ pub async fn specify_invalid_varchar_size(test: &mut Test) {
     }
 
     // Try to setup a database with an invalid varchar size
-    let err = assert_err!(test.try_setup_db(models!(User)).await);
+    let err = assert_err!(test.try_setup_db(toasty::models!(User)).await);
     assert_eq!(
         err.to_string(),
         format!("unsupported feature: VARCHAR(1000000000000) exceeds database maximum of {max}")
@@ -71,7 +71,7 @@ pub async fn specify_varchar_ty_when_not_supported(test: &mut Test) {
     }
 
     // Try to setup a database with varchar when not supported
-    let err = assert_err!(test.try_setup_db(models!(User)).await);
+    let err = assert_err!(test.try_setup_db(toasty::models!(User)).await);
     assert_eq!(
         err.to_string(),
         "unsupported feature: VARCHAR type is not supported by this database"
@@ -90,7 +90,7 @@ pub async fn specify_uuid_as_text(test: &mut Test) -> Result<()> {
         val: uuid::Uuid,
     }
 
-    let mut db = test.setup_db(models!(Item)).await;
+    let mut db = test.setup_db(toasty::models!(Item)).await;
 
     for _ in 0..16 {
         let val = uuid::Uuid::new_v4();
@@ -142,7 +142,7 @@ pub async fn specify_uuid_as_bytes(test: &mut Test) -> Result<()> {
         val: uuid::Uuid,
     }
 
-    let mut db = test.setup_db(models!(Item)).await;
+    let mut db = test.setup_db(toasty::models!(Item)).await;
 
     for _ in 0..16 {
         let val = uuid::Uuid::new_v4();

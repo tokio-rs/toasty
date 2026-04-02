@@ -93,7 +93,7 @@ pub async fn create_with_has_many_rolls_back_on_failure(t: &mut Test) -> Result<
         title: String,
     }
 
-    let mut db = t.setup_db(models!(User, Todo)).await;
+    let mut db = t.setup_db(toasty::models!(User, Todo)).await;
 
     // Seed the title that will cause the second INSERT to fail.
     User::create()
@@ -167,7 +167,7 @@ pub async fn create_with_has_one_rolls_back_on_failure(t: &mut Test) -> Result<(
         user: toasty::BelongsTo<User>,
     }
 
-    let mut db = t.setup_db(models!(User, Profile)).await;
+    let mut db = t.setup_db(toasty::models!(User, Profile)).await;
 
     // Seed the bio that will cause the second INSERT to fail.
     User::create()
@@ -241,7 +241,7 @@ pub async fn update_with_new_association_rolls_back_on_failure(t: &mut Test) -> 
         title: String,
     }
 
-    let mut db = t.setup_db(models!(User, Todo)).await;
+    let mut db = t.setup_db(toasty::models!(User, Todo)).await;
 
     let mut user = User::create().name("original").exec(&mut db).await?;
     // Seed the name collision — this user's name will be duplicated by the failing UPDATE.
@@ -310,7 +310,7 @@ pub async fn rmw_uses_savepoints(t: &mut Test) -> Result<()> {
         user: toasty::BelongsTo<Option<User>>,
     }
 
-    let mut db = t.setup_db(models!(User, Todo)).await;
+    let mut db = t.setup_db(toasty::models!(User, Todo)).await;
 
     let user = User::create().todo(Todo::create()).exec(&mut db).await?;
     let todos: Vec<_> = user.todos().exec(&mut db).await?;
@@ -370,7 +370,7 @@ pub async fn rmw_condition_failure_issues_rollback_to_savepoint(t: &mut Test) ->
         user: toasty::BelongsTo<Option<User>>,
     }
 
-    let mut db = t.setup_db(models!(User, Todo)).await;
+    let mut db = t.setup_db(toasty::models!(User, Todo)).await;
 
     let user1 = User::create().exec(&mut db).await?;
     let user2 = User::create().todo(Todo::create()).exec(&mut db).await?;

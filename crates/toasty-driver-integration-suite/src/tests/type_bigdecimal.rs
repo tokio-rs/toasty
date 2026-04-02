@@ -13,7 +13,7 @@ pub async fn ty_bigdecimal(test: &mut Test) -> Result<(), BoxError> {
         val: BigDecimal,
     }
 
-    let mut db = test.setup_db(models!(Item)).await;
+    let mut db = test.setup_db(toasty::models!(Item)).await;
 
     let test_values = vec![
         BigDecimal::from_str("0")?,
@@ -48,7 +48,7 @@ pub async fn ty_bigdecimal_as_text(test: &mut Test) -> Result<(), BoxError> {
         val: BigDecimal,
     }
 
-    let mut db = test.setup_db(models!(Item)).await;
+    let mut db = test.setup_db(toasty::models!(Item)).await;
 
     let test_values = vec![
         BigDecimal::from_str("0")?,
@@ -79,7 +79,7 @@ pub async fn ty_bigdecimal_as_numeric_arbitrary_precision(test: &mut Test) -> Re
         val: BigDecimal,
     }
 
-    let mut db = test.setup_db(models!(Item)).await;
+    let mut db = test.setup_db(toasty::models!(Item)).await;
 
     let test_values = vec![
         BigDecimal::from_str("0")?,
@@ -108,7 +108,7 @@ pub async fn ty_bigdecimal_as_numeric_fixed_precision(test: &mut Test) -> Result
         val: BigDecimal,
     }
 
-    let mut db = test.setup_db(models!(Item)).await;
+    let mut db = test.setup_db(toasty::models!(Item)).await;
 
     let test_values = vec![
         BigDecimal::from_str("0")?,

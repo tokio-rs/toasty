@@ -67,7 +67,7 @@ impl Db {
     /// # }
     /// let driver = toasty_driver_sqlite::Sqlite::in_memory();
     /// let db = toasty::Db::builder()
-    ///     .register::<User>()
+    ///     .models(toasty::models!(User))
     ///     .build(driver)
     ///     .await
     ///     .unwrap();
@@ -112,7 +112,7 @@ impl Db {
     /// #     name: String,
     /// # }
     /// # let driver = toasty_driver_sqlite::Sqlite::in_memory();
-    /// # let mut db = toasty::Db::builder().register::<User>().build(driver).await.unwrap();
+    /// # let mut db = toasty::Db::builder().models(toasty::models!(User)).build(driver).await.unwrap();
     /// let mut conn = db.connection().await.unwrap();
     /// let tx = toasty::TransactionBuilder::new()
     ///     .read_only(true)

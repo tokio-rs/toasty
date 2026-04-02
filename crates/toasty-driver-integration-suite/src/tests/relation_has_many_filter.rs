@@ -33,7 +33,7 @@ pub async fn filter_parent_by_child_field(test: &mut Test) -> Result<()> {
         complete: bool,
     }
 
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = test.setup_db(toasty::models!(User, Todo)).await;
 
     // Create users
     let alice = User::create().name("Alice").exec(&mut db).await?;
@@ -129,7 +129,7 @@ pub async fn filter_parent_no_matching_children(test: &mut Test) -> Result<()> {
         priority: i64,
     }
 
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = test.setup_db(toasty::models!(User, Todo)).await;
 
     let user = User::create().name("Alice").exec(&mut db).await?;
     user.todos()

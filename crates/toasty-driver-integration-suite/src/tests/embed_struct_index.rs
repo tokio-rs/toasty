@@ -21,7 +21,7 @@ pub async fn embedded_struct_index_schema(test: &mut Test) {
         contact: Contact,
     }
 
-    let db = test.setup_db(models!(User, Contact)).await;
+    let db = test.setup_db(toasty::models!(User, Contact)).await;
     let schema = db.schema();
 
     // The embedded struct should carry its indices in the app schema
@@ -84,7 +84,7 @@ pub async fn embedded_struct_unique_index_enforced(test: &mut Test) -> Result<()
         contact: Contact,
     }
 
-    let mut db = test.setup_db(models!(User, Contact)).await;
+    let mut db = test.setup_db(toasty::models!(User, Contact)).await;
 
     // Create a user with a contact email
     User::create()
@@ -155,7 +155,7 @@ pub async fn nested_embedded_struct_index(test: &mut Test) {
         address: Address,
     }
 
-    let db = test.setup_db(models!(User, Address, Geo)).await;
+    let db = test.setup_db(toasty::models!(User, Address, Geo)).await;
     let schema = db.schema();
 
     let table = &schema.db.tables[0];

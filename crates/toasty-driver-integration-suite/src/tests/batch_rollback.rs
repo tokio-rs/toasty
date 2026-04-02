@@ -226,7 +226,7 @@ pub async fn batch_different_models_rolls_back_on_failure(t: &mut Test) -> Resul
         title: String,
     }
 
-    let mut db = t.setup_db(models!(User, Post)).await;
+    let mut db = t.setup_db(toasty::models!(User, Post)).await;
 
     // Seed the collision
     Post::create().title("taken").exec(&mut db).await?;

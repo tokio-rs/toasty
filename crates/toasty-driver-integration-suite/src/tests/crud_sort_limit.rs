@@ -19,7 +19,7 @@ pub async fn sort_asc(test: &mut Test) -> Result<()> {
         order: i64,
     }
 
-    let mut db = test.setup_db(models!(Item)).await;
+    let mut db = test.setup_db(toasty::models!(Item)).await;
 
     for i in 0..100 {
         Item::create().order(i).exec(&mut db).await?;
@@ -85,7 +85,7 @@ pub async fn paginate(test: &mut Test) -> Result<()> {
         order: i64,
     }
 
-    let mut db = test.setup_db(models!(Item)).await;
+    let mut db = test.setup_db(toasty::models!(Item)).await;
 
     for i in 0..100 {
         Item::create().order(i).exec(&mut db).await?;
@@ -161,7 +161,7 @@ pub async fn limit_offset(t: &mut Test) -> Result<()> {
         order: i64,
     }
 
-    let mut db = t.setup_db(models!(Item)).await;
+    let mut db = t.setup_db(toasty::models!(Item)).await;
 
     for i in 0..20 {
         Item::create().order(i).exec(&mut db).await?;

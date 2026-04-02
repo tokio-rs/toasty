@@ -14,7 +14,7 @@ pub async fn default_expr_on_create(test: &mut Test) -> Result<()> {
         view_count: i64,
     }
 
-    let mut db = test.setup_db(models!(Item)).await;
+    let mut db = test.setup_db(toasty::models!(Item)).await;
 
     // Create without setting view_count — should get the default
     let created = Item::create().title("hello").exec(&mut db).await?;
@@ -41,7 +41,7 @@ pub async fn default_expr_override(test: &mut Test) -> Result<()> {
         view_count: i64,
     }
 
-    let mut db = test.setup_db(models!(Item)).await;
+    let mut db = test.setup_db(toasty::models!(Item)).await;
 
     // Override the default by explicitly setting view_count
     let created = Item::create()
@@ -73,7 +73,7 @@ pub async fn update_expr_on_create(test: &mut Test) -> Result<()> {
         updated_at: Timestamp,
     }
 
-    let mut db = test.setup_db(models!(Item)).await;
+    let mut db = test.setup_db(toasty::models!(Item)).await;
 
     let before = Timestamp::now();
     let created = Item::create().title("hello").exec(&mut db).await?;
@@ -102,7 +102,7 @@ pub async fn update_expr_on_update(test: &mut Test) -> Result<()> {
         updated_at: Timestamp,
     }
 
-    let mut db = test.setup_db(models!(Item)).await;
+    let mut db = test.setup_db(toasty::models!(Item)).await;
 
     let mut item = Item::create().title("hello").exec(&mut db).await?;
     let created_ts = item.updated_at;
@@ -138,7 +138,7 @@ pub async fn update_expr_override_on_update(test: &mut Test) -> Result<()> {
         updated_at: Timestamp,
     }
 
-    let mut db = test.setup_db(models!(Item)).await;
+    let mut db = test.setup_db(toasty::models!(Item)).await;
 
     let mut item = Item::create().title("hello").exec(&mut db).await?;
 
@@ -174,7 +174,7 @@ pub async fn default_and_update_on_same_field(test: &mut Test) -> Result<()> {
         status: String,
     }
 
-    let mut db = test.setup_db(models!(Item)).await;
+    let mut db = test.setup_db(toasty::models!(Item)).await;
 
     // On create, #[default] takes priority
     let mut item = Item::create().title("hello").exec(&mut db).await?;
@@ -223,7 +223,7 @@ pub async fn auto_on_timestamp_fields(test: &mut Test) -> Result<()> {
         updated_at: Timestamp,
     }
 
-    let mut db = test.setup_db(models!(Item)).await;
+    let mut db = test.setup_db(toasty::models!(Item)).await;
 
     let before = Timestamp::now();
     let mut item = Item::create().title("hello").exec(&mut db).await?;

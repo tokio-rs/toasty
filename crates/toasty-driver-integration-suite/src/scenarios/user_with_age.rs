@@ -17,6 +17,6 @@ scenario! {
     }
 
     async fn setup(test: &mut Test) -> toasty::Db {
-        test.setup_db(models!(User)).await
+        test.setup_db(toasty::models!(User)).await
     }
 }

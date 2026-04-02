@@ -13,7 +13,7 @@ pub async fn data_carrying_enum_schema(test: &mut Test) {
         Phone { number: String },
     }
 
-    let db = test.setup_db(models!(ContactInfo)).await;
+    let db = test.setup_db(toasty::models!(ContactInfo)).await;
     let schema = db.schema();
 
     assert_struct!(schema.app.models, #{
@@ -55,7 +55,7 @@ pub async fn mixed_enum_schema(test: &mut Test) {
         Done,
     }
 
-    let db = test.setup_db(models!(Status)).await;
+    let db = test.setup_db(toasty::models!(Status)).await;
     let schema = db.schema();
 
     assert_struct!(schema.app.models, #{
@@ -105,7 +105,7 @@ pub async fn data_carrying_enum_db_schema(test: &mut Test) {
         contact: ContactInfo,
     }
 
-    let db = test.setup_db(models!(User, ContactInfo)).await;
+    let db = test.setup_db(toasty::models!(User, ContactInfo)).await;
     let schema = db.schema();
 
     // The DB table has disc col + one col per variant field (2 variants × 1 field each).
@@ -143,7 +143,7 @@ pub async fn data_variant_roundtrip(test: &mut Test) -> Result<()> {
         contact: ContactInfo,
     }
 
-    let mut db = test.setup_db(models!(User, ContactInfo)).await;
+    let mut db = test.setup_db(toasty::models!(User, ContactInfo)).await;
 
     let alice = User::create()
         .name("Alice")
@@ -207,7 +207,7 @@ pub async fn mixed_enum_roundtrip(test: &mut Test) -> Result<()> {
         status: Status,
     }
 
-    let mut db = test.setup_db(models!(Task, Status)).await;
+    let mut db = test.setup_db(toasty::models!(Task, Status)).await;
 
     let pending = Task::create()
         .title("Pending task")
@@ -266,7 +266,7 @@ pub async fn data_variant_with_uuid_field(test: &mut Test) -> Result<()> {
         order_ref: OrderRef,
     }
 
-    let mut db = test.setup_db(models!(Order, OrderRef)).await;
+    let mut db = test.setup_db(toasty::models!(Order, OrderRef)).await;
 
     let internal_id = uuid::Uuid::new_v4();
 
@@ -317,7 +317,7 @@ pub async fn data_variant_with_jiff_timestamp(test: &mut Test) -> Result<()> {
         time: EventTime,
     }
 
-    let mut db = test.setup_db(models!(Event, EventTime)).await;
+    let mut db = test.setup_db(toasty::models!(Event, EventTime)).await;
 
     let ts = jiff::Timestamp::from_second(1_700_000_000).unwrap();
 
@@ -366,7 +366,7 @@ pub async fn struct_in_data_variant(test: &mut Test) -> Result<()> {
         destination: Destination,
     }
 
-    let mut db = test.setup_db(models!(Shipment, Destination, Address)).await;
+    let mut db = test.setup_db(toasty::models!(Shipment, Destination, Address)).await;
 
     let digital = Shipment::create()
         .destination(Destination::Digital {
@@ -435,7 +435,7 @@ pub async fn enum_in_enum_roundtrip(test: &mut Test) -> Result<()> {
         notification: Notification,
     }
 
-    let mut db = test.setup_db(models!(Alert, Notification, Channel)).await;
+    let mut db = test.setup_db(toasty::models!(Alert, Notification, Channel)).await;
 
     let a1 = Alert::create()
         .notification(Notification::Send {
@@ -495,7 +495,7 @@ pub async fn global_field_indices(test: &mut Test) {
         Purchase { item_id: String, amount: i64 },
     }
 
-    let db = test.setup_db(models!(Event)).await;
+    let db = test.setup_db(toasty::models!(Event)).await;
     let schema = db.schema();
 
     assert_struct!(schema.app.models, #{

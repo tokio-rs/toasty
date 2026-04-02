@@ -124,7 +124,7 @@ pub async fn multiple_includes_same_model(test: &mut Test) -> Result<()> {
         user: toasty::BelongsTo<User>,
     }
 
-    let mut db = test.setup_db(models!(User, Post, Comment)).await;
+    let mut db = test.setup_db(toasty::models!(User, Post, Comment)).await;
 
     // Create a user
     let user = User::create().name("Test User").exec(&mut db).await?;
@@ -215,7 +215,7 @@ pub async fn basic_has_one_and_belongs_to_preload(test: &mut Test) -> Result<()>
         user: toasty::BelongsTo<Option<User>>,
     }
 
-    let mut db = test.setup_db(models!(User, Profile)).await;
+    let mut db = test.setup_db(toasty::models!(User, Profile)).await;
 
     // Create a user with a profile
     let user = User::create()
@@ -298,7 +298,7 @@ pub async fn multiple_includes_with_has_one(test: &mut Test) -> Result<()> {
         user: toasty::BelongsTo<Option<User>>,
     }
 
-    let mut db = test.setup_db(models!(User, Profile, Settings)).await;
+    let mut db = test.setup_db(toasty::models!(User, Profile, Settings)).await;
 
     // Create a user with both profile and settings
     let user = User::create()
@@ -396,7 +396,7 @@ pub async fn combined_has_many_and_has_one_preload(test: &mut Test) -> Result<()
         user: toasty::BelongsTo<User>,
     }
 
-    let mut db = test.setup_db(models!(User, Profile, Todo)).await;
+    let mut db = test.setup_db(toasty::models!(User, Profile, Todo)).await;
 
     // Create a user with a profile and multiple todos
     let user = User::create()
@@ -479,7 +479,7 @@ pub async fn preload_on_empty_query(test: &mut Test) -> Result<()> {
         user: toasty::BelongsTo<User>,
     }
 
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = test.setup_db(toasty::models!(User, Todo)).await;
 
     // Query with include on empty table - should return empty result, not SQL error
     let users: Vec<User> = User::filter_by_name("foo")
@@ -523,7 +523,7 @@ pub async fn preload_has_many_with_optional_belongs_to(test: &mut Test) -> Resul
         user: toasty::BelongsTo<Option<User>>,
     }
 
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = test.setup_db(toasty::models!(User, Todo)).await;
 
     // Create a user with linked todos
     let user = User::create()
@@ -597,7 +597,7 @@ pub async fn preload_has_one_optional_with_required_belongs_to(test: &mut Test) 
         user: toasty::BelongsTo<User>,
     }
 
-    let mut db = test.setup_db(models!(User, Profile)).await;
+    let mut db = test.setup_db(toasty::models!(User, Profile)).await;
 
     // Create a user WITH a profile
     let user_with = User::create()
@@ -671,7 +671,7 @@ pub async fn preload_has_one_required_with_optional_belongs_to(test: &mut Test) 
         user: toasty::BelongsTo<Option<User>>,
     }
 
-    let mut db = test.setup_db(models!(User, Profile)).await;
+    let mut db = test.setup_db(toasty::models!(User, Profile)).await;
 
     // Create a user (must provide a profile since HasOne<T> is required)
     let user = User::create()
@@ -752,7 +752,7 @@ pub async fn nested_has_many_preload(test: &mut Test) {
         todo: toasty::BelongsTo<Todo>,
     }
 
-    let mut db = test.setup_db(models!(User, Todo, Step)).await;
+    let mut db = test.setup_db(toasty::models!(User, Todo, Step)).await;
 
     // Create a user with todos, each with steps
     let user = User::create()
@@ -852,7 +852,7 @@ pub async fn nested_has_many_then_has_one_optional(test: &mut Test) -> Result<()
         post: toasty::BelongsTo<Option<Post>>,
     }
 
-    let mut db = test.setup_db(models!(User, Post, Detail)).await;
+    let mut db = test.setup_db(toasty::models!(User, Post, Detail)).await;
 
     let user = User::create()
         .name("Alice")
@@ -942,7 +942,7 @@ pub async fn nested_has_many_then_has_one_required(test: &mut Test) -> Result<()
         account: toasty::BelongsTo<Option<Account>>,
     }
 
-    let mut db = test.setup_db(models!(User, Account, Settings)).await;
+    let mut db = test.setup_db(toasty::models!(User, Account, Settings)).await;
 
     let user = User::create()
         .name("Bob")
@@ -1026,7 +1026,7 @@ pub async fn nested_has_many_then_belongs_to_required(test: &mut Test) -> Result
         brand: toasty::BelongsTo<Brand>,
     }
 
-    let mut db = test.setup_db(models!(Category, Brand, Item)).await;
+    let mut db = test.setup_db(toasty::models!(Category, Brand, Item)).await;
 
     let brand_a = Brand::create().name("BrandA").exec(&mut db).await?;
     let brand_b = Brand::create().name("BrandB").exec(&mut db).await?;
@@ -1102,7 +1102,7 @@ pub async fn nested_has_many_then_belongs_to_optional(test: &mut Test) -> Result
         assignee: toasty::BelongsTo<Option<Assignee>>,
     }
 
-    let mut db = test.setup_db(models!(Team, Assignee, Task)).await;
+    let mut db = test.setup_db(toasty::models!(Team, Assignee, Task)).await;
 
     let person = Assignee::create().name("Alice").exec(&mut db).await?;
 
@@ -1190,7 +1190,7 @@ pub async fn nested_has_one_optional_then_has_many(test: &mut Test) -> Result<()
         profile: toasty::BelongsTo<Profile>,
     }
 
-    let mut db = test.setup_db(models!(User, Profile, Badge)).await;
+    let mut db = test.setup_db(toasty::models!(User, Profile, Badge)).await;
 
     // User with profile and badges
     let user = User::create()
@@ -1285,7 +1285,7 @@ pub async fn nested_has_one_required_then_has_many(test: &mut Test) -> Result<()
         invoice: toasty::BelongsTo<Invoice>,
     }
 
-    let mut db = test.setup_db(models!(Order, Invoice, LineItem)).await;
+    let mut db = test.setup_db(toasty::models!(Order, Invoice, LineItem)).await;
 
     let order = Order::create()
         .label("Order1")
@@ -1369,7 +1369,7 @@ pub async fn nested_has_one_optional_then_has_one_optional(test: &mut Test) -> R
         profile: toasty::BelongsTo<Option<Profile>>,
     }
 
-    let mut db = test.setup_db(models!(User, Profile, Avatar)).await;
+    let mut db = test.setup_db(toasty::models!(User, Profile, Avatar)).await;
 
     // User -> Profile -> Avatar (all present)
     let user = User::create()
@@ -1473,7 +1473,7 @@ pub async fn nested_has_one_required_then_has_one_required(test: &mut Test) -> R
         profile: toasty::BelongsTo<Option<Profile>>,
     }
 
-    let mut db = test.setup_db(models!(User, Profile, Avatar)).await;
+    let mut db = test.setup_db(toasty::models!(User, Profile, Avatar)).await;
 
     let user = User::create()
         .name("Alice")
@@ -1547,7 +1547,7 @@ pub async fn nested_has_one_optional_then_belongs_to_required(test: &mut Test) -
         product: toasty::BelongsTo<Product>,
     }
 
-    let mut db = test.setup_db(models!(User, Product, Review)).await;
+    let mut db = test.setup_db(toasty::models!(User, Product, Review)).await;
 
     let product = Product::create().name("Widget").exec(&mut db).await?;
 
@@ -1629,7 +1629,7 @@ pub async fn nested_belongs_to_required_then_has_many(test: &mut Test) -> Result
         post: toasty::BelongsTo<Post>,
     }
 
-    let mut db = test.setup_db(models!(Post, Tag, Comment)).await;
+    let mut db = test.setup_db(toasty::models!(Post, Tag, Comment)).await;
 
     let post = Post::create()
         .title("Hello")
@@ -1717,7 +1717,7 @@ pub async fn nested_belongs_to_required_then_has_one_optional(test: &mut Test) -
         user: toasty::BelongsTo<User>,
     }
 
-    let mut db = test.setup_db(models!(User, Profile, Todo)).await;
+    let mut db = test.setup_db(toasty::models!(User, Profile, Todo)).await;
 
     // User with profile
     let user = User::create()
@@ -1810,7 +1810,7 @@ pub async fn nested_belongs_to_required_then_belongs_to_required(test: &mut Test
         todo: toasty::BelongsTo<Todo>,
     }
 
-    let mut db = test.setup_db(models!(User, Todo, Step)).await;
+    let mut db = test.setup_db(toasty::models!(User, Todo, Step)).await;
 
     let user = User::create()
         .name("Alice")
@@ -1886,7 +1886,7 @@ pub async fn nested_belongs_to_optional_then_has_many(test: &mut Test) -> Result
         project: toasty::BelongsTo<Option<Project>>,
     }
 
-    let mut db = test.setup_db(models!(Project, Member, Task)).await;
+    let mut db = test.setup_db(toasty::models!(Project, Member, Task)).await;
 
     let project = Project::create()
         .name("Proj1")
@@ -1972,7 +1972,7 @@ pub async fn nested_belongs_to_optional_then_belongs_to_optional(test: &mut Test
         post: toasty::BelongsTo<Option<Post>>,
     }
 
-    let mut db = test.setup_db(models!(Category, Post, Comment)).await;
+    let mut db = test.setup_db(toasty::models!(Category, Post, Comment)).await;
 
     let cat = Category::create().name("Tech").exec(&mut db).await?;
     let post = Post::create()
@@ -2080,7 +2080,7 @@ pub async fn nested_belongs_to_required_then_has_one_required(test: &mut Test) -
         user: toasty::BelongsTo<User>,
     }
 
-    let mut db = test.setup_db(models!(User, Config, Todo)).await;
+    let mut db = test.setup_db(toasty::models!(User, Config, Todo)).await;
 
     let user = User::create()
         .name("Alice")
@@ -2155,7 +2155,7 @@ pub async fn nested_has_many_then_has_many_with_empty_leaves(test: &mut Test) {
         todo: toasty::BelongsTo<Todo>,
     }
 
-    let mut db = test.setup_db(models!(User, Todo, Step)).await;
+    let mut db = test.setup_db(toasty::models!(User, Todo, Step)).await;
 
     let user = User::create()
         .name("Alice")

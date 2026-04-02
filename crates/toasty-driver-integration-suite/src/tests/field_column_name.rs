@@ -17,7 +17,7 @@ pub async fn specify_custom_column_name(test: &mut Test) -> Result<()> {
         name: String,
     }
 
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = test.setup_db(toasty::models!(User)).await;
 
     let u = User::create().name("foo").exec(&mut db).await?;
     assert_eq!(u.name, "foo");
@@ -57,7 +57,7 @@ pub async fn specify_custom_column_name_with_type(test: &mut Test) -> Result<()>
         name: String,
     }
 
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = test.setup_db(toasty::models!(User)).await;
 
     let u = User::create().name("foo").exec(&mut db).await?;
     assert_eq!(u.name, "foo");

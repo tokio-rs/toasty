@@ -11,7 +11,7 @@ pub async fn model_level_single_key(test: &mut Test) -> Result<()> {
         value: i64,
     }
 
-    let mut db = test.setup_db(models!(Widget)).await;
+    let mut db = test.setup_db(toasty::models!(Widget)).await;
 
     let widget = Widget::create()
         .name("sprocket")
@@ -40,7 +40,7 @@ pub async fn model_level_composite_key(test: &mut Test) -> Result<()> {
         two: String,
     }
 
-    let mut db = test.setup_db(models!(Pair)).await;
+    let mut db = test.setup_db(toasty::models!(Pair)).await;
 
     Pair::create()
         .one("hello")

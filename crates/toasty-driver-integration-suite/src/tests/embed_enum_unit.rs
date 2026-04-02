@@ -36,7 +36,7 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
         status: Status,
     }
 
-    let mut db = t.setup_db(models!(User, Status)).await;
+    let mut db = t.setup_db(toasty::models!(User, Status)).await;
     let user_table = table_id(&db, "users");
 
     // Create: enum variant is stored as its discriminant (1 = Pending)
@@ -135,7 +135,7 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
         status: Status,
     }
 
-    let mut db = t.setup_db(models!(Task, Status)).await;
+    let mut db = t.setup_db(toasty::models!(Task, Status)).await;
 
     // Create tasks with different statuses: 1 pending, 2 active, 1 done
     for (name, status) in [
@@ -233,7 +233,7 @@ pub async fn basic_embedded_enum(test: &mut Test) {
         Done,
     }
 
-    let db = test.setup_db(models!(Status)).await;
+    let db = test.setup_db(toasty::models!(Status)).await;
     let schema = db.schema();
 
     // Embedded enums exist in app schema as Model::EmbeddedEnum
@@ -276,7 +276,7 @@ pub async fn root_model_with_embedded_enum_field(test: &mut Test) {
         status: Status,
     }
 
-    let db = test.setup_db(models!(User, Status)).await;
+    let db = test.setup_db(toasty::models!(User, Status)).await;
     let schema = db.schema();
 
     // Both embedded enum and root model exist in app schema

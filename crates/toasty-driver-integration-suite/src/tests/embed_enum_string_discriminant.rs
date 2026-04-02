@@ -22,7 +22,7 @@ pub async fn string_discriminant_unit_enum(t: &mut Test) -> Result<()> {
         status: Status,
     }
 
-    let mut db = t.setup_db(models!(Task, Status)).await;
+    let mut db = t.setup_db(toasty::models!(Task, Status)).await;
 
     let task = toasty::create!(Task {
         title: "Ship it",
@@ -63,7 +63,7 @@ pub async fn default_string_labels(t: &mut Test) -> Result<()> {
         priority: Priority,
     }
 
-    let mut db = t.setup_db(models!(Task, Priority)).await;
+    let mut db = t.setup_db(toasty::models!(Task, Priority)).await;
 
     let task = toasty::create!(Task {
         title: "Fix bug",
@@ -98,7 +98,7 @@ pub async fn mixed_explicit_and_default_labels(t: &mut Test) -> Result<()> {
         status: Status,
     }
 
-    let mut db = t.setup_db(models!(Task, Status)).await;
+    let mut db = t.setup_db(toasty::models!(Task, Status)).await;
 
     // "waiting" is the explicit label for Pending
     let t1 = toasty::create!(Task {
@@ -144,7 +144,7 @@ pub async fn string_discriminant_data_enum(t: &mut Test) -> Result<()> {
         contact: ContactMethod,
     }
 
-    let mut db = t.setup_db(models!(User, ContactMethod)).await;
+    let mut db = t.setup_db(toasty::models!(User, ContactMethod)).await;
 
     let user = toasty::create!(User {
         name: "Alice",
@@ -202,7 +202,7 @@ pub async fn default_string_labels_data_enum(t: &mut Test) -> Result<()> {
         contact: ContactMethod,
     }
 
-    let mut db = t.setup_db(models!(User, ContactMethod)).await;
+    let mut db = t.setup_db(toasty::models!(User, ContactMethod)).await;
 
     let user = toasty::create!(User {
         name: "Alice",
@@ -265,7 +265,7 @@ pub async fn mixed_string_labels_data_enum(t: &mut Test) -> Result<()> {
         contact: ContactMethod,
     }
 
-    let mut db = t.setup_db(models!(User, ContactMethod)).await;
+    let mut db = t.setup_db(toasty::models!(User, ContactMethod)).await;
 
     // Create with the explicit-label variant
     let u1 = toasty::create!(User {
@@ -344,7 +344,7 @@ pub async fn filter_by_string_variant(t: &mut Test) -> Result<()> {
         status: Status,
     }
 
-    let mut db = t.setup_db(models!(Task, Status)).await;
+    let mut db = t.setup_db(toasty::models!(Task, Status)).await;
 
     toasty::create!(Task {
         title: "A",
@@ -382,7 +382,7 @@ pub async fn string_discriminant_schema_registration(t: &mut Test) {
         Blue,
     }
 
-    let db = t.setup_db(models!(Color)).await;
+    let db = t.setup_db(toasty::models!(Color)).await;
     let schema = db.schema();
 
     let color_model = schema.app.model(Color::id()).as_embedded_enum_unwrap();

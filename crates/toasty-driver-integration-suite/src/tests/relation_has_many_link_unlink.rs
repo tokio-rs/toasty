@@ -27,7 +27,7 @@ pub async fn remove_add_single_relation_option_belongs_to(test: &mut Test) -> Re
         user: toasty::BelongsTo<Option<User>>,
     }
 
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = test.setup_db(toasty::models!(User, Todo)).await;
 
     // Create a user with some todos
     let user = User::create()
@@ -157,7 +157,7 @@ pub async fn add_remove_multiple_relation_option_belongs_to(test: &mut Test) -> 
         user: toasty::BelongsTo<Option<User>>,
     }
 
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = test.setup_db(toasty::models!(User, Todo)).await;
 
     // Create a user with no todos
     let user = User::create().exec(&mut db).await?;

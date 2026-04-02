@@ -28,7 +28,7 @@ pub async fn create_macro_multiple_fields(test: &mut Test) -> Result<()> {
         email: String,
     }
 
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = test.setup_db(toasty::models!(User)).await;
 
     // Create with multiple fields
     let user = toasty::create!(User {
@@ -238,7 +238,7 @@ pub async fn create_macro_deeply_nested(test: &mut Test) -> Result<()> {
         name: String,
     }
 
-    let mut db = test.setup_db(models!(User, Todo, Tag)).await;
+    let mut db = test.setup_db(toasty::models!(User, Todo, Tag)).await;
 
     // Three levels deep: User → Todo → Tag
     let user = toasty::create!(User {

@@ -20,7 +20,7 @@ pub async fn query_index_eq(test: &mut Test) -> Result<()> {
         email: String,
     }
 
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = test.setup_db(toasty::models!(User)).await;
 
     // Create a few users
     for &(name, email) in &[
@@ -69,7 +69,7 @@ pub async fn query_partition_key_string_eq(test: &mut Test) -> Result<()> {
         founded: i64,
     }
 
-    let mut db = test.setup_db(models!(Team)).await;
+    let mut db = test.setup_db(toasty::models!(Team)).await;
 
     // Create some teams
     for (league, name, founded) in [
@@ -185,7 +185,7 @@ pub async fn query_local_key_cmp(test: &mut Test) -> Result<()> {
         timestamp: i64,
     }
 
-    let mut db = test.setup_db(models!(Event)).await;
+    let mut db = test.setup_db(toasty::models!(Event)).await;
 
     // Create a bunch of entries
     for (kind, ts) in [
@@ -283,7 +283,7 @@ pub async fn query_or_basic(test: &mut Test) -> Result<()> {
         age: i64,
     }
 
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = test.setup_db(toasty::models!(User)).await;
     let _name_column = db.schema().table_for(User::id()).columns[1].id;
     let _age_column = db.schema().table_for(User::id()).columns[2].id;
 
@@ -363,7 +363,7 @@ pub async fn query_or_multiple(test: &mut Test) -> Result<()> {
         age: i64,
     }
 
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = test.setup_db(toasty::models!(User)).await;
 
     // Create some users
     for (name, age) in [("Alice", 25), ("Bob", 30), ("Charlie", 35), ("Diana", 40)] {
@@ -415,7 +415,7 @@ pub async fn query_or_and_combined(test: &mut Test) -> Result<()> {
         active: bool,
     }
 
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = test.setup_db(toasty::models!(User)).await;
 
     // Create some users
     for (name, age, active) in [
@@ -477,7 +477,7 @@ pub async fn query_or_with_index(test: &mut Test) -> Result<()> {
         number: i64,
     }
 
-    let mut db = test.setup_db(models!(Player)).await;
+    let mut db = test.setup_db(toasty::models!(Player)).await;
 
     // Create some players on different teams
     for (team, name, position, number) in [
@@ -555,7 +555,7 @@ pub async fn query_or_on_partition_key(test: &mut Test) -> Result<()> {
         position: String,
     }
 
-    let mut db = test.setup_db(models!(Player)).await;
+    let mut db = test.setup_db(toasty::models!(Player)).await;
 
     for (team, name, position) in [
         ("Timbers", "Diego Valeri", "Midfielder"),
@@ -615,7 +615,7 @@ pub async fn query_or_on_composite_pk(test: &mut Test) -> Result<()> {
         position: String,
     }
 
-    let mut db = test.setup_db(models!(Player)).await;
+    let mut db = test.setup_db(toasty::models!(Player)).await;
 
     for (team, name, position) in [
         ("Timbers", "Diego Valeri", "Midfielder"),
@@ -668,7 +668,7 @@ pub async fn query_or_with_comparisons(test: &mut Test) -> Result<()> {
         number: i64,
     }
 
-    let mut db = test.setup_db(models!(Player)).await;
+    let mut db = test.setup_db(toasty::models!(Player)).await;
 
     // Create some players on different teams
     for (team, name, position, number) in [
@@ -724,7 +724,7 @@ pub async fn query_arbitrary_constraint(test: &mut Test) -> Result<()> {
         timestamp: i64,
     }
 
-    let mut db = test.setup_db(models!(Event)).await;
+    let mut db = test.setup_db(toasty::models!(Event)).await;
 
     // Create a bunch of entries
     for (kind, ts) in [
@@ -867,7 +867,7 @@ pub async fn query_not_basic(test: &mut Test) -> Result<()> {
         age: i64,
     }
 
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = test.setup_db(toasty::models!(User)).await;
 
     // Create some users
     for (name, age) in [("Alice", 25), ("Bob", 30), ("Charlie", 35), ("Diana", 40)] {
@@ -916,7 +916,7 @@ pub async fn query_not_and_combined(test: &mut Test) -> Result<()> {
         active: bool,
     }
 
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = test.setup_db(toasty::models!(User)).await;
 
     // Create some users
     for (name, age, active) in [
@@ -972,7 +972,7 @@ pub async fn query_not_or_combined(test: &mut Test) -> Result<()> {
         age: i64,
     }
 
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = test.setup_db(toasty::models!(User)).await;
 
     // Create some users
     for (name, age) in [("Alice", 25), ("Bob", 30), ("Charlie", 35), ("Diana", 40)] {
@@ -1022,7 +1022,7 @@ pub async fn query_not_with_index(test: &mut Test) -> Result<()> {
         number: i64,
     }
 
-    let mut db = test.setup_db(models!(Player)).await;
+    let mut db = test.setup_db(toasty::models!(Player)).await;
 
     // Create some players
     for (team, name, position, number) in [
@@ -1096,7 +1096,7 @@ pub async fn query_not_operator_syntax(test: &mut Test) -> Result<()> {
         number: i64,
     }
 
-    let mut db = test.setup_db(models!(Player)).await;
+    let mut db = test.setup_db(toasty::models!(Player)).await;
 
     for (team, name, position, number) in [
         ("Timbers", "Diego Valeri", "Midfielder", 8),

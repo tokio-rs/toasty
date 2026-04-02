@@ -23,7 +23,7 @@ pub async fn filter_unit_enum_ne(t: &mut Test) -> Result<()> {
         status: Status,
     }
 
-    let mut db = t.setup_db(models!(Task, Status)).await;
+    let mut db = t.setup_db(toasty::models!(Task, Status)).await;
 
     for (name, status) in [
         ("A", Status::Pending),
@@ -72,7 +72,7 @@ pub async fn filter_unit_enum_in_list(t: &mut Test) -> Result<()> {
         status: Status,
     }
 
-    let mut db = t.setup_db(models!(Task, Status)).await;
+    let mut db = t.setup_db(toasty::models!(Task, Status)).await;
 
     for (name, status) in [
         ("A", Status::Pending),
@@ -123,7 +123,7 @@ pub async fn filter_data_enum_ne(t: &mut Test) -> Result<()> {
         contact: ContactInfo,
     }
 
-    let mut db = t.setup_db(models!(User, ContactInfo)).await;
+    let mut db = t.setup_db(toasty::models!(User, ContactInfo)).await;
 
     User::create()
         .name("Alice")

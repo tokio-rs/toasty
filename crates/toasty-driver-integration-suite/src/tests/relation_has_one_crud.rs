@@ -118,7 +118,7 @@ pub async fn crud_has_one_required_belongs_to_optional(test: &mut Test) -> Resul
         bio: String,
     }
 
-    let mut db = test.setup_db(models!(User, Profile)).await;
+    let mut db = test.setup_db(toasty::models!(User, Profile)).await;
 
     // Create a new user with a profile
     let user = User::create()
@@ -169,7 +169,7 @@ pub async fn update_belongs_to_with_required_has_one_pair(test: &mut Test) -> Re
         bio: String,
     }
 
-    let mut db = test.setup_db(models!(User, Profile)).await;
+    let mut db = test.setup_db(toasty::models!(User, Profile)).await;
 
     // Create a user with a profile
     let u1 = User::create()
@@ -275,7 +275,7 @@ pub async fn crud_has_one_optional_belongs_to_required(test: &mut Test) -> Resul
         bio: String,
     }
 
-    let mut db = test.setup_db(models!(User, Profile)).await;
+    let mut db = test.setup_db(toasty::models!(User, Profile)).await;
 
     // Create a new user with a profile
     let user = User::create()
@@ -320,7 +320,7 @@ pub async fn set_has_one_by_value_in_update_query(test: &mut Test) -> Result<()>
         user: toasty::BelongsTo<Option<User>>,
     }
 
-    let mut db = test.setup_db(models!(User, Profile)).await;
+    let mut db = test.setup_db(toasty::models!(User, Profile)).await;
 
     let user = User::create().exec(&mut db).await?;
     let profile = Profile::create().exec(&mut db).await?;
@@ -366,7 +366,7 @@ pub async fn unset_has_one_in_batch_update(test: &mut Test) -> Result<()> {
         user: toasty::BelongsTo<User>,
     }
 
-    let mut db = test.setup_db(models!(User, Profile)).await;
+    let mut db = test.setup_db(toasty::models!(User, Profile)).await;
 
     // Create two users with the same name, each with a profile
     let u1 = User::create()
@@ -433,7 +433,7 @@ pub async fn unset_has_one_with_required_pair_in_pk_query_update(test: &mut Test
         user: toasty::BelongsTo<User>,
     }
 
-    let mut db = test.setup_db(models!(User, Profile)).await;
+    let mut db = test.setup_db(toasty::models!(User, Profile)).await;
 
     let user = User::create()
         .profile(Profile::create())
@@ -484,7 +484,7 @@ pub async fn unset_has_one_with_required_pair_in_non_pk_query_update(
         user: toasty::BelongsTo<User>,
     }
 
-    let mut db = test.setup_db(models!(User, Profile)).await;
+    let mut db = test.setup_db(toasty::models!(User, Profile)).await;
 
     let user = User::create()
         .email("foo@example.com")
@@ -532,7 +532,7 @@ pub async fn associate_has_one_by_val_on_insert(test: &mut Test) -> Result<()> {
         bio: String,
     }
 
-    let mut db = test.setup_db(models!(User, Profile)).await;
+    let mut db = test.setup_db(toasty::models!(User, Profile)).await;
 
     // Create a profile
     let profile = Profile::create().bio("hello world").exec(&mut db).await?;

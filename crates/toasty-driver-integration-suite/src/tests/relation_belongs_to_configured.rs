@@ -27,7 +27,7 @@ pub async fn different_field_name(test: &mut Test) -> Result<()> {
         title: String,
     }
 
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = test.setup_db(toasty::models!(User, Todo)).await;
 
     // Create a user
     let user = User::create().exec(&mut db).await?;

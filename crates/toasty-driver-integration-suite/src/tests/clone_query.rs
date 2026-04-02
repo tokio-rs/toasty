@@ -15,7 +15,7 @@ pub async fn clone_query_with_different_modifiers(t: &mut Test) -> Result<()> {
         name: String,
     }
 
-    let mut db = t.setup_db(models!(Item)).await;
+    let mut db = t.setup_db(toasty::models!(Item)).await;
 
     for _ in 0..10 {
         Item::create().name("a").exec(&mut db).await?;
@@ -44,7 +44,7 @@ pub async fn clone_create_builder(t: &mut Test) -> Result<()> {
         name: String,
     }
 
-    let mut db = t.setup_db(models!(Item)).await;
+    let mut db = t.setup_db(toasty::models!(Item)).await;
 
     let builder = Item::create().name("original");
     let a = builder.clone().exec(&mut db).await?;
@@ -69,7 +69,7 @@ pub async fn clone_update_builder(t: &mut Test) -> Result<()> {
         name: String,
     }
 
-    let mut db = t.setup_db(models!(Item)).await;
+    let mut db = t.setup_db(toasty::models!(Item)).await;
 
     let a = Item::create().name("a").exec(&mut db).await?;
     Item::create().name("b").exec(&mut db).await?;

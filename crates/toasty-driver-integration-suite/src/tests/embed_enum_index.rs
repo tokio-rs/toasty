@@ -27,7 +27,7 @@ pub async fn embedded_enum_index_schema(test: &mut Test) {
         contact: ContactInfo,
     }
 
-    let db = test.setup_db(models!(User, ContactInfo)).await;
+    let db = test.setup_db(toasty::models!(User, ContactInfo)).await;
     let schema = db.schema();
 
     // The embedded enum should carry its indices in the app schema
@@ -79,7 +79,7 @@ pub async fn embedded_enum_unique_index_enforced(test: &mut Test) -> Result<()> 
         contact: ContactInfo,
     }
 
-    let mut db = test.setup_db(models!(User, ContactInfo)).await;
+    let mut db = test.setup_db(toasty::models!(User, ContactInfo)).await;
 
     // Create a user with an email contact
     User::create()

@@ -259,7 +259,7 @@ pub async fn query_macro_filter_bool_literal(test: &mut Test) -> Result<()> {
         active: bool,
     }
 
-    let mut db = test.setup_db(models!(Item)).await;
+    let mut db = test.setup_db(toasty::models!(Item)).await;
 
     toasty::create!(Item::[
         { name: "on", active: true },
@@ -417,7 +417,7 @@ pub async fn query_macro_partition_key_eq(test: &mut Test) -> Result<()> {
         founded: i64,
     }
 
-    let mut db = test.setup_db(models!(Team)).await;
+    let mut db = test.setup_db(toasty::models!(Team)).await;
 
     for (league, name, founded) in [
         ("MLS", "Portland Timbers", 2009),
@@ -456,7 +456,7 @@ pub async fn query_macro_partition_and_local_key(test: &mut Test) -> Result<()> 
         founded: i64,
     }
 
-    let mut db = test.setup_db(models!(Team)).await;
+    let mut db = test.setup_db(toasty::models!(Team)).await;
 
     for (league, name, founded) in [
         ("MLS", "Portland Timbers", 2009),
@@ -493,7 +493,7 @@ pub async fn query_macro_local_key_comparison(test: &mut Test) -> Result<()> {
         timestamp: i64,
     }
 
-    let mut db = test.setup_db(models!(Event)).await;
+    let mut db = test.setup_db(toasty::models!(Event)).await;
 
     for (kind, ts) in [
         ("info", 0),
@@ -543,7 +543,7 @@ pub async fn query_macro_partition_key_external_ref(test: &mut Test) -> Result<(
         founded: i64,
     }
 
-    let mut db = test.setup_db(models!(Team)).await;
+    let mut db = test.setup_db(toasty::models!(Team)).await;
 
     for (league, name, founded) in [
         ("MLS", "Portland Timbers", 2009),
@@ -582,7 +582,7 @@ pub async fn query_macro_partition_key_with_not(test: &mut Test) -> Result<()> {
         position: String,
     }
 
-    let mut db = test.setup_db(models!(Player)).await;
+    let mut db = test.setup_db(toasty::models!(Player)).await;
 
     for (team, name, position) in [
         ("Timbers", "Diego Valeri", "Midfielder"),
@@ -624,7 +624,7 @@ pub async fn query_macro_partition_key_with_or(test: &mut Test) -> Result<()> {
         number: i64,
     }
 
-    let mut db = test.setup_db(models!(Player)).await;
+    let mut db = test.setup_db(toasty::models!(Player)).await;
 
     for (team, name, position, number) in [
         ("Timbers", "Diego Valeri", "Midfielder", 8),

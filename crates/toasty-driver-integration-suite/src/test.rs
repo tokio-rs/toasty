@@ -53,7 +53,10 @@ impl Test {
     }
 
     /// Try to setup a database with models, returns Result for error handling
-    pub async fn try_setup_db(&mut self, mut builder: toasty::db::Builder) -> toasty::Result<Db> {
+    pub async fn try_setup_db(&mut self, models: toasty::ModelSet) -> toasty::Result<Db> {
+        let mut builder = toasty::Db::builder();
+        builder.models(models);
+
         // Set the table prefix
         builder.table_name_prefix(&self.isolate.table_prefix());
 
@@ -74,8 +77,8 @@ impl Test {
     }
 
     /// Setup a database with models, always with logging enabled
-    pub async fn setup_db(&mut self, builder: toasty::db::Builder) -> Db {
-        self.try_setup_db(builder).await.unwrap()
+    pub async fn setup_db(&mut self, models: toasty::ModelSet) -> Db {
+        self.try_setup_db(models).await.unwrap()
     }
 
     /// Get the driver capability

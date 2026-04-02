@@ -173,7 +173,7 @@ pub async fn batch_scoped_across_relations(t: &mut Test) -> Result<()> {
         body: String,
     }
 
-    let mut db = t.setup_db(models!(User, Todo, Post)).await;
+    let mut db = t.setup_db(toasty::models!(User, Todo, Post)).await;
     let user = User::create().exec(&mut db).await?;
 
     // Create across two different relations in one batch
@@ -230,7 +230,7 @@ pub async fn batch_query_across_relations(t: &mut Test) -> Result<()> {
         body: String,
     }
 
-    let mut db = t.setup_db(models!(User, Todo, Post)).await;
+    let mut db = t.setup_db(toasty::models!(User, Todo, Post)).await;
     let user = User::create().exec(&mut db).await?;
     user.todos().create().title("t1").exec(&mut db).await?;
     user.todos().create().title("t2").exec(&mut db).await?;
