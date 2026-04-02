@@ -86,6 +86,13 @@ impl Expand<'_> {
                 #model_schema
             }
 
+            #toasty::inventory::submit! {
+                #toasty::DiscoverItem::new(
+                    env!("CARGO_PKG_NAME"),
+                    |model_set| { model_set.add(<#model_ident as #toasty::Register>::schema()); },
+                )
+            }
+
             impl #toasty::Load for #model_ident {
                 type Output = Self;
 

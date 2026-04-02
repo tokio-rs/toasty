@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex, RwLock},
 };
 
-use toasty::Db;
+use toasty::{Db, schema::ModelSet};
 use tokio::runtime::Runtime;
 
 use crate::{ExecLog, Isolate, LoggingDriver, Setup};
@@ -53,7 +53,7 @@ impl Test {
     }
 
     /// Try to setup a database with models, returns Result for error handling
-    pub async fn try_setup_db(&mut self, models: toasty::ModelSet) -> toasty::Result<Db> {
+    pub async fn try_setup_db(&mut self, models: ModelSet) -> toasty::Result<Db> {
         let mut builder = toasty::Db::builder();
         builder.models(models);
 
@@ -77,7 +77,7 @@ impl Test {
     }
 
     /// Setup a database with models, always with logging enabled
-    pub async fn setup_db(&mut self, models: toasty::ModelSet) -> Db {
+    pub async fn setup_db(&mut self, models: ModelSet) -> Db {
         self.try_setup_db(models).await.unwrap()
     }
 

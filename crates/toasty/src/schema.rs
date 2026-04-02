@@ -28,7 +28,8 @@ pub use model::Model;
 mod option;
 
 mod register;
-pub use register::{Register, generate_unique_id};
+pub use register::inventory;
+pub use register::{DiscoverItem, Register, generate_unique_id};
 
 mod num;
 
@@ -40,7 +41,7 @@ pub use scope::Scope;
 
 use crate::Result;
 
-pub use toasty_core::schema::{app, db, mapping};
+pub use toasty_core::schema::{app, app::ModelSet, db, mapping};
 
 /// Build an [`app::Schema`] from a slice of model definitions produced by
 /// `#[derive(Model)]`.

@@ -26,7 +26,7 @@ struct Profile {
 #[tokio::main]
 async fn main() -> toasty::Result<()> {
     let mut db = toasty::Db::builder()
-        .models(toasty::models!(User, Profile))
+        .models(toasty::models!(crate::*))
         .connect(
             std::env::var("TOASTY_CONNECTION_URL")
                 .as_deref()

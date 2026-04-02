@@ -101,6 +101,13 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
             #model_schema
         }
 
+        #toasty::inventory::submit! {
+            #toasty::DiscoverItem::new(
+                env!("CARGO_PKG_NAME"),
+                |model_set| { model_set.add(<#model_ident as #toasty::Register>::schema()); },
+            )
+        }
+
         impl #toasty::Embed for #model_ident {}
 
         impl #toasty::Load for #model_ident {
@@ -232,6 +239,13 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
                     }
                 )
             }
+        }
+
+        #toasty::inventory::submit! {
+            #toasty::DiscoverItem::new(
+                env!("CARGO_PKG_NAME"),
+                |model_set| { model_set.add(<#model_ident as #toasty::Register>::schema()); },
+            )
         }
 
         impl #toasty::Embed for #model_ident {}
