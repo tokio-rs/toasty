@@ -44,7 +44,7 @@ pub struct UpdateByKey {
     pub condition: Option<stmt::Expr>,
 
     /// When `true`, the driver returns the full record for each updated row
-    /// in the [`Response`](super::super::Response).
+    /// in the [`ExecResponse`](super::super::ExecResponse).
     pub returning: bool,
 }
 

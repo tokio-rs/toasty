@@ -67,7 +67,7 @@ pub async fn update_by_partition_key(test: &mut Test) {
         }));
 
         assert_struct!(resp, {
-            rows: Rows::Count(_),
+            values: Rows::Count(_),
         });
     } else {
         // NoSQL: first a QueryPk to collect all matching PKs, then UpdateByKey
@@ -92,7 +92,7 @@ pub async fn update_by_partition_key(test: &mut Test) {
         }));
 
         assert_struct!(resp, {
-            rows: Rows::Count(2),
+            values: Rows::Count(2),
         });
     }
 
@@ -173,7 +173,7 @@ pub async fn delete_by_partition_key(test: &mut Test) {
         }));
 
         assert_struct!(resp, {
-            rows: Rows::Count(_),
+            values: Rows::Count(_),
         });
     } else {
         // NoSQL: first a QueryPk to collect all matching PKs, then one
@@ -196,7 +196,7 @@ pub async fn delete_by_partition_key(test: &mut Test) {
             }));
 
             assert_struct!(resp, {
-                rows: Rows::Count(1),
+                values: Rows::Count(1),
             });
         }
     }

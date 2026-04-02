@@ -3,7 +3,7 @@ use std::{
     fmt,
     sync::{Arc, Mutex},
 };
-use toasty_core::driver::{Operation, Response};
+use toasty_core::driver::{ExecResponse, Operation};
 
 /// A wrapper around the operations log that provides a clean API for tests
 pub struct ExecLog {
@@ -33,7 +33,7 @@ impl ExecLog {
     /// Remove and return the first operation from the log
     /// Returns None if the log is empty
     #[track_caller]
-    pub fn pop(&mut self) -> (Operation, Response) {
+    pub fn pop(&mut self) -> (Operation, ExecResponse) {
         let mut ops = self.ops.lock().unwrap();
         if ops.is_empty() {
             panic!("no operations in log");

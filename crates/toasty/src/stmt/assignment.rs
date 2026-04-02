@@ -1,38 +1,26 @@
-use super::{IntoExpr, List};
+use super::{IntoExpr, List, Path};
 use std::marker::PhantomData;
 use toasty_core::stmt;
 
 /// Apply a field mutation to an update statement's [`Assignments`] map.
 ///
-/// This trait is used for field types where the mutation semantics are
-/// ambiguous from a plain value alone — primarily **has-many** collection
-/// fields. For these fields, callers must use an explicit combinator
-/// ([`insert`], [`remove`], or [`set`]) to specify the intent.
+/// Every update builder setter accepts `impl Assign<T>`. All types that
+/// implement [`IntoExpr<T>`] also implement `Assign<T>` with set semantics,
+/// so update setters accept the same types as create setters.
 ///
-/// Scalar fields continue to accept `impl IntoExpr<T>` directly (a plain
-/// value means "set"). Only collection setters use `Assign`.
+/// For has-many fields, arrays and [`Vec`]s implement
+/// `Assign<List<T>>` with set (replace) semantics. Use [`insert`],
+/// [`remove`], or [`apply`] for incremental mutations.
 ///
-/// Arrays and [`Vec`]s of assignments implement `Assign<T>` when their
-/// elements do, allowing multiple operations in a single setter call:
-///
-/// ```ignore
-/// user.update()
-///     .todos([
-///         stmt::insert(Todo::create().title("Buy groceries")),
-///         stmt::insert(Todo::create().title("Walk the dog")),
-///         stmt::remove(&old_todo),
-///     ])
-///     .exec(&mut db)
-///     .await?;
-/// ```
+/// [`Assignments`]: toasty_core::stmt::Assignments
 pub trait Assign<T> {
     /// Record one or more assignments into the given [`Assignments`] map at
     /// the specified projection.
     fn assign(self, assignments: &mut stmt::Assignments, projection: stmt::Projection);
 }
 
-/// A typed assignment produced by the [`insert`], [`remove`], and [`set`]
-/// combinators.
+/// A typed assignment produced by the [`insert`], [`remove`], [`set`], and
+/// [`patch`] combinators.
 ///
 /// `Assignment<T>` implements `Assign<T>`, so it can be passed directly
 /// to any update builder setter that accepts `impl Assign<T>`.
@@ -41,10 +29,14 @@ pub struct Assignment<T> {
     _p: PhantomData<T>,
 }
 
+type AssignFn = Box<dyn FnOnce(&mut stmt::Assignments, stmt::Projection)>;
+
 enum AssignmentKind {
     Set(stmt::Expr),
     Insert(stmt::Expr),
     Remove(stmt::Expr),
+    Patch(AssignFn),
+    Apply(AssignFn),
 }
 
 // Assignment<T> implements Assign<T>
@@ -54,27 +46,37 @@ impl<T> Assign<T> for Assignment<T> {
             AssignmentKind::Set(expr) => assignments.set(projection, expr),
             AssignmentKind::Insert(expr) => assignments.insert(projection, expr),
             AssignmentKind::Remove(expr) => assignments.remove(projection, expr),
+            AssignmentKind::Patch(f) => f(assignments, projection),
+            AssignmentKind::Apply(f) => f(assignments, projection),
         }
     }
 }
 
-// Arrays of assignments: [Q; N] implements Assign<T> when Q does.
-impl<T, Q: Assign<T>, const N: usize> Assign<T> for [Q; N] {
-    fn assign(self, assignments: &mut stmt::Assignments, projection: stmt::Projection) {
-        for item in self {
-            item.assign(assignments, projection.clone());
+/// Helper macro: generates `impl Assign<$target> for $source` with set
+/// semantics by delegating to `IntoExpr`. Used alongside every `IntoExpr`
+/// impl to keep the two traits in sync.
+macro_rules! impl_assign_via_expr {
+    // Simple: impl Assign<T> for S
+    ($source:ty => $target:ty) => {
+        impl super::assignment::Assign<$target> for $source {
+            fn assign(self, assignments: &mut toasty_core::stmt::Assignments, projection: toasty_core::stmt::Projection) {
+                assignments.set(projection, super::IntoExpr::<$target>::into_expr(self).untyped);
+            }
         }
-    }
+    };
+    // Generic: impl<generics> Assign<Target> for Source where bounds
+    // Uses { } instead of [ ] to avoid parsing ambiguity with array types.
+    ({ $($gen:tt)* } $source:ty => $target:ty) => {
+        impl<$($gen)*> super::assignment::Assign<$target> for $source {
+            fn assign(self, assignments: &mut toasty_core::stmt::Assignments, projection: toasty_core::stmt::Projection) {
+                assignments.set(projection, super::IntoExpr::<$target>::into_expr(self).untyped);
+            }
+        }
+    };
 }
 
-// Vec of assignments
-impl<T, Q: Assign<T>> Assign<T> for Vec<Q> {
-    fn assign(self, assignments: &mut stmt::Assignments, projection: stmt::Projection) {
-        for item in self {
-            item.assign(assignments, projection.clone());
-        }
-    }
-}
+// Make the macro available to into_expr.rs (sibling module)
+pub(super) use impl_assign_via_expr;
 
 /// Insert a value into a collection field.
 ///
@@ -155,6 +157,75 @@ pub fn remove<T>(expr: impl IntoExpr<T>) -> Assignment<List<T>> {
 pub fn set<T>(expr: impl IntoExpr<T>) -> Assignment<T> {
     Assignment {
         kind: AssignmentKind::Set(expr.into_expr().untyped),
+        _p: PhantomData,
+    }
+}
+
+/// Partially update a sub-field of an embedded type.
+///
+/// Takes a [`Path<T, U>`] (identifying which sub-field to update) and a
+/// value (`impl Assign<U>` — either a plain value or a nested
+/// [`Assignment<U>`] for deeper patching). Returns an [`Assignment<T>`]
+/// that can be passed to the parent field's setter.
+///
+/// # Examples
+///
+/// ```ignore
+/// // Update a single sub-field
+/// user.update()
+///     .critter(stmt::patch(Creature::fields().human().profession(), "doctor"))
+///     .exec(&mut db)
+///     .await?;
+///
+/// // Nested patching
+/// user.update()
+///     .kind(stmt::patch(
+///         Kind::variants().admin().perm(),
+///         stmt::patch(Permission::fields().everything(), true),
+///     ))
+///     .exec(&mut db)
+///     .await?;
+/// ```
+pub fn patch<T, U>(path: Path<T, U>, value: impl Assign<U> + 'static) -> Assignment<T> {
+    let path_projection = path.untyped.projection;
+
+    Assignment {
+        kind: AssignmentKind::Patch(Box::new(move |assignments, mut projection| {
+            // Append the path's field steps to the parent projection,
+            // so the inner assignment lands at the correct nested key.
+            for &step in path_projection.as_slice() {
+                projection.push(step);
+            }
+            value.assign(assignments, projection);
+        })),
+        _p: PhantomData,
+    }
+}
+
+/// Apply multiple operations to a single field.
+///
+/// Takes an array or [`Vec`] of [`Assignment<T>`] and applies each in order.
+///
+/// # Examples
+///
+/// ```ignore
+/// user.update()
+///     .todos(stmt::apply([
+///         stmt::insert(Todo::create().title("Buy groceries")),
+///         stmt::insert(Todo::create().title("Walk the dog")),
+///         stmt::remove(&old_todo),
+///     ]))
+///     .exec(&mut db)
+///     .await?;
+/// ```
+pub fn apply<T: 'static>(ops: impl IntoIterator<Item = Assignment<T>>) -> Assignment<T> {
+    let ops: Vec<Assignment<T>> = ops.into_iter().collect();
+    Assignment {
+        kind: AssignmentKind::Apply(Box::new(move |assignments, projection| {
+            for op in ops {
+                op.assign(assignments, projection.clone());
+            }
+        })),
         _p: PhantomData,
     }
 }

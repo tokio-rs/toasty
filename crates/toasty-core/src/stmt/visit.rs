@@ -5,10 +5,10 @@ use super::{
     ExprBinaryOp, ExprCast, ExprColumn, ExprError, ExprExists, ExprFunc, ExprInList,
     ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprList, ExprMap, ExprMatch, ExprNot,
     ExprOr, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, Filter,
-    FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset, OrderBy,
-    OrderByExpr, Path, Projection, Query, Returning, Select, Source, SourceModel, SourceTable,
-    SourceTableId, Statement, TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update,
-    UpdateTarget, Value, ValueRecord, Values, With,
+    FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, LimitCursor,
+    LimitOffset, Node, OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select, Source,
+    SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor, TableRef,
+    TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
 };
 
 /// Immutable visitor trait for the statement AST.
@@ -307,11 +307,18 @@ pub trait Visit {
         visit_limit(self, i);
     }
 
-    /// Visits an [`Offset`] node.
+    /// Visits a [`LimitCursor`] node.
     ///
-    /// The default implementation delegates to [`visit_offset`].
-    fn visit_offset(&mut self, i: &Offset) {
-        visit_offset(self, i);
+    /// The default implementation delegates to [`visit_limit_cursor`].
+    fn visit_limit_cursor(&mut self, i: &LimitCursor) {
+        visit_limit_cursor(self, i);
+    }
+
+    /// Visits a [`LimitOffset`] node.
+    ///
+    /// The default implementation delegates to [`visit_limit_offset`].
+    fn visit_limit_offset(&mut self, i: &LimitOffset) {
+        visit_limit_offset(self, i);
     }
 
     /// Visits an [`OrderBy`] node.
@@ -635,8 +642,12 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_limit(&mut **self, i);
     }
 
-    fn visit_offset(&mut self, i: &Offset) {
-        Visit::visit_offset(&mut **self, i);
+    fn visit_limit_cursor(&mut self, i: &LimitCursor) {
+        Visit::visit_limit_cursor(&mut **self, i);
+    }
+
+    fn visit_limit_offset(&mut self, i: &LimitOffset) {
+        Visit::visit_limit_offset(&mut **self, i);
     }
 
     fn visit_order_by(&mut self, i: &OrderBy) {
@@ -1120,26 +1131,36 @@ where
     }
 }
 
-/// Default traversal for [`Limit`] nodes. Visits the limit expression and optional offset.
+/// Default traversal for [`Limit`] nodes.
 pub fn visit_limit<V>(v: &mut V, node: &Limit)
 where
     V: Visit + ?Sized,
 {
-    v.visit_expr(&node.limit);
-
-    if let Some(offset) = &node.offset {
-        v.visit_offset(offset);
+    match node {
+        Limit::Cursor(cursor) => v.visit_limit_cursor(cursor),
+        Limit::Offset(offset) => v.visit_limit_offset(offset),
     }
 }
 
-/// Default traversal for [`Offset`] nodes. Visits the offset expression.
-pub fn visit_offset<V>(v: &mut V, node: &Offset)
+/// Default traversal for [`LimitCursor`] nodes.
+pub fn visit_limit_cursor<V>(v: &mut V, node: &LimitCursor)
 where
     V: Visit + ?Sized,
 {
-    match node {
-        Offset::After(expr) => v.visit_expr(expr),
-        Offset::Count(expr) => v.visit_expr(expr),
+    v.visit_expr(&node.page_size);
+    if let Some(after) = &node.after {
+        v.visit_expr(after);
+    }
+}
+
+/// Default traversal for [`LimitOffset`] nodes.
+pub fn visit_limit_offset<V>(v: &mut V, node: &LimitOffset)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_expr(&node.limit);
+    if let Some(offset) = &node.offset {
+        v.visit_expr(offset);
     }
 }
 

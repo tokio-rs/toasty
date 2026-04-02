@@ -2,14 +2,14 @@ use super::{
     Connection, ExprAttrs, Result, Schema, ddb_expression, item_to_record, operation, stmt,
 };
 use std::sync::Arc;
-use toasty_core::{driver::Response, stmt::ExprContext};
+use toasty_core::{driver::ExecResponse, stmt::ExprContext};
 
 impl Connection {
     pub(crate) async fn exec_find_pk_by_index(
         &mut self,
         schema: &Arc<Schema>,
         op: operation::FindPkByIndex,
-    ) -> Result<Response> {
+    ) -> Result<ExecResponse> {
         let table = schema.db.table(op.table);
         let index = schema.db.index(op.index);
         let cx = ExprContext::new_with_target(&schema.db, table);
@@ -44,7 +44,7 @@ impl Connection {
 
         let schema = schema.clone();
 
-        Ok(Response::value_stream(stmt::ValueStream::from_iter(
+        Ok(ExecResponse::value_stream(stmt::ValueStream::from_iter(
             res.items.into_iter().flatten().map(move |item| {
                 let table = schema.db.table(op.table);
                 item_to_record(&item, table.primary_key_columns())
