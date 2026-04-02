@@ -191,21 +191,8 @@ impl<T: IntoExpr<T>> IntoExpr<Option<T>> for &T {
 }
 impl_assign_via_expr!({T: IntoExpr<T>} &T => Option<T>);
 
-impl<T: IntoExpr<T>> IntoExpr<T> for &Option<T> {
-    fn into_expr(self) -> Expr<T> {
-        match self {
-            Some(value) => value.into_expr(),
-            None => Expr::from_value(Value::Null),
-        }
-    }
-
-    fn by_ref(&self) -> Expr<T> {
-        match self {
-            Some(value) => value.by_ref(),
-            None => Expr::from_value(Value::Null),
-        }
-    }
-}
+// No IntoExpr<T> for &Option<T> — use Field::key_constraint for FK lookups
+// where the source field may be optional.
 
 impl IntoExpr<String> for &str {
     fn into_expr(self) -> Expr<String> {

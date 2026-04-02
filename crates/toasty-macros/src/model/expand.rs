@@ -123,6 +123,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
             type Path<__Origin> = #field_struct_ident<__Origin>;
             type ListPath<__Origin> = #field_list_struct_ident<__Origin>;
             type Update<'a> = #update_struct_ident<'a>;
+            type Inner = Self;
 
             fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
                 #field_struct_ident { path }
@@ -148,6 +149,13 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
                         expr_ty: <Self as #toasty::Load>::ty(),
                     }
                 )
+            }
+
+            fn key_constraint<__Origin>(
+                &self,
+                target: #toasty::Path<__Origin, Self::Inner>,
+            ) -> #toasty::stmt::Expr<bool> {
+                target.eq(self)
             }
         }
 
@@ -234,6 +242,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
             type Path<__Origin> = #field_struct_ident<__Origin>;
             type ListPath<__Origin> = #field_list_struct_ident<__Origin>;
             type Update<'a> = ();
+            type Inner = Self;
 
             fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
                 #field_struct_ident { path }
@@ -258,6 +267,13 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
                         expr_ty: <Self as #toasty::Load>::ty(),
                     }
                 )
+            }
+
+            fn key_constraint<__Origin>(
+                &self,
+                target: #toasty::Path<__Origin, Self::Inner>,
+            ) -> #toasty::stmt::Expr<bool> {
+                target.eq(self)
             }
         }
 
