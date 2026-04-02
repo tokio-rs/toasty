@@ -44,14 +44,14 @@ pub struct Assignment<T> {
     _p: PhantomData<T>,
 }
 
-type PatchFn = Box<dyn FnOnce(&mut stmt::Assignments, stmt::Projection)>;
+type AssignFn = Box<dyn FnOnce(&mut stmt::Assignments, stmt::Projection)>;
 
 enum AssignmentKind {
     Set(stmt::Expr),
     Insert(stmt::Expr),
     Remove(stmt::Expr),
-    Patch(PatchFn),
-    Apply(PatchFn),
+    Patch(AssignFn),
+    Apply(AssignFn),
 }
 
 // Assignment<T> implements Assign<T>
