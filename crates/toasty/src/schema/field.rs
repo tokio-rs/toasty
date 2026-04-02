@@ -203,7 +203,7 @@ where
     ) -> Self::Update<'a> {
     }
 
-    fn key_constraint<Origin>(&self, target: stmt::Path<Origin, Self::Inner>) -> Expr<bool> {
+    fn key_constraint<Origin>(&self, _target: stmt::Path<Origin, Self::Inner>) -> Expr<bool> {
         unimplemented!("Cow fields cannot be used as foreign keys")
     }
 }
