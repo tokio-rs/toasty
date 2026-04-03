@@ -430,3 +430,86 @@ fn filter_source_model_matches_user_id() {
     let source_model = sel.source.as_model_unwrap();
     assert_eq!(source_model.id, <User as Register>::id());
 }
+
+// ---------------------------------------------------------------------------
+// IN list
+// ---------------------------------------------------------------------------
+
+#[test]
+fn filter_in_list_integers() {
+    let expr = filter_expr(toasty::query!(User filter .id IN [1, 2, 3]));
+
+    assert_eq!(
+        expr,
+        core_stmt::Expr::in_list(
+            field_ref(0),
+            core_stmt::Expr::List(core_stmt::ExprList {
+                items: vec![i64_val(1), i64_val(2), i64_val(3)],
+            }),
+        )
+    );
+}
+
+#[test]
+fn filter_in_list_strings() {
+    let expr = filter_expr(toasty::query!(User filter .name IN ["Alice", "Bob"]));
+
+    assert_eq!(
+        expr,
+        core_stmt::Expr::in_list(
+            field_ref(1),
+            core_stmt::Expr::List(core_stmt::ExprList {
+                items: vec![str_val("Alice"), str_val("Bob")],
+            }),
+        )
+    );
+}
+
+#[test]
+fn filter_in_list_external_variable() {
+    let ids = vec![1_i64, 2, 3];
+    let expr = filter_expr(toasty::query!(User filter .id IN #ids));
+
+    assert_eq!(
+        expr,
+        core_stmt::Expr::in_list(
+            field_ref(0),
+            core_stmt::Expr::List(core_stmt::ExprList {
+                items: vec![i64_val(1), i64_val(2), i64_val(3)],
+            }),
+        )
+    );
+}
+
+#[test]
+fn filter_in_list_with_and() {
+    let expr = filter_expr(toasty::query!(User filter .id IN [1, 2] and .active == true));
+
+    assert_eq!(
+        expr,
+        core_stmt::Expr::and(
+            core_stmt::Expr::in_list(
+                field_ref(0),
+                core_stmt::Expr::List(core_stmt::ExprList {
+                    items: vec![i64_val(1), i64_val(2)],
+                }),
+            ),
+            core_stmt::Expr::eq(field_ref(3), bool_val(true)),
+        )
+    );
+}
+
+#[test]
+fn filter_in_list_case_insensitive() {
+    let expr = filter_expr(toasty::query!(User filter .id in [1, 2, 3]));
+
+    assert_eq!(
+        expr,
+        core_stmt::Expr::in_list(
+            field_ref(0),
+            core_stmt::Expr::List(core_stmt::ExprList {
+                items: vec![i64_val(1), i64_val(2), i64_val(3)],
+            }),
+        )
+    );
+}

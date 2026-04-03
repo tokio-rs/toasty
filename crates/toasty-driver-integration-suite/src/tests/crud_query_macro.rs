@@ -652,3 +652,90 @@ pub async fn query_macro_partition_key_with_or(test: &mut Test) -> Result<()> {
 
     Ok(())
 }
+
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+pub async fn query_macro_filter_in_list(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    toasty::create!(User::[{ name: "Alice" }, { name: "Bob" }, { name: "Carl" }])
+        .exec(&mut db)
+        .await?;
+
+    // Literal list
+    let users = toasty::query!(User filter .name IN ["Alice", "Carl"])
+        .exec(&mut db)
+        .await?;
+
+    assert_struct!(users, #({ name: "Alice" }, { name: "Carl" }));
+
+    Ok(())
+}
+
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+pub async fn query_macro_filter_in_list_external_ref(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    toasty::create!(User::[{ name: "Alice" }, { name: "Bob" }, { name: "Carl" }])
+        .exec(&mut db)
+        .await?;
+
+    // External variable reference
+    let names = vec!["Alice", "Bob"];
+    let users = toasty::query!(User filter .name IN #names)
+        .exec(&mut db)
+        .await?;
+
+    assert_struct!(users, #({ name: "Alice" }, { name: "Bob" }));
+
+    Ok(())
+}
+
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+pub async fn query_macro_filter_in_list_with_and(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    toasty::create!(User::[{ name: "Alice" }, { name: "Bob" }, { name: "Carl" }])
+        .exec(&mut db)
+        .await?;
+
+    // IN combined with AND
+    let users = toasty::query!(User filter .name IN ["Alice", "Bob", "Carl"] and .name != "Bob")
+        .exec(&mut db)
+        .await?;
+
+    assert_struct!(users, #({ name: "Alice" }, { name: "Carl" }));
+
+    Ok(())
+}
+
+#[driver_test(id(ID))]
+pub async fn query_macro_filter_in_list_by_pk(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+
+    // Create several items and collect their IDs
+    let mut ids = Vec::new();
+    for name in ["Alice", "Bob", "Carl", "Diana"] {
+        let item = Item::create().name(name).exec(&mut db).await?;
+        ids.push(item.id);
+    }
+
+    // Batch fetch a subset by primary key using IN
+    let target_ids = vec![ids[0], ids[2]]; // Alice and Carl
+    let items = toasty::query!(Item filter .id IN #target_ids)
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(items.len(), 2);
+    assert_struct!(items, #({ name: "Alice" }, { name: "Carl" }));
+
+    Ok(())
+}

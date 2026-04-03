@@ -57,12 +57,30 @@ pub(crate) enum Expr {
     Paren(Box<Expr>),
     /// A dot-prefixed field path: `.name`, `.profile.bio`, etc.
     Field(FieldPath),
+    /// `lhs IN [a, b, c]` — membership test against a list of values.
+    InList(ExprInList),
     /// A literal: string, integer, float, bool.
     Lit(syn::Lit),
     /// `#ident` — a variable from the surrounding scope.
     Var(syn::Ident),
     /// `#(expr)` — an arbitrary Rust expression.
     RustExpr(Box<syn::Expr>),
+}
+
+/// An IN-list expression: `lhs IN [a, b, c]` or `lhs IN #var`.
+#[derive(Debug)]
+pub(crate) struct ExprInList {
+    pub lhs: Box<Expr>,
+    pub rhs: InListRhs,
+}
+
+/// The right-hand side of an `IN` expression.
+#[derive(Debug)]
+pub(crate) enum InListRhs {
+    /// A bracketed list of literal values: `[a, b, c]`.
+    List(Vec<Expr>),
+    /// An external reference: `#ident` or `#(expr)`.
+    Expr(Box<Expr>),
 }
 
 /// A binary comparison: `lhs op rhs`.
@@ -213,6 +231,20 @@ fn parse_atom(input: ParseStream) -> syn::Result<Expr> {
                 op,
                 rhs: Box::new(rhs),
             }))
+        } else if is_keyword(input, "in") || input.peek(syn::Token![in]) {
+            // `.field IN [a, b, c]` or `.field IN #var`
+            // Note: `in` is a Rust keyword, so we need to handle both
+            // the ident form (IN, In) and the keyword token form (in).
+            if input.peek(syn::Token![in]) {
+                input.parse::<syn::Token![in]>()?;
+            } else {
+                consume_ident(input)?;
+            }
+            let rhs = parse_in_rhs(input)?;
+            Ok(Expr::InList(ExprInList {
+                lhs: Box::new(lhs),
+                rhs,
+            }))
         } else {
             Ok(lhs)
         }
@@ -334,6 +366,32 @@ fn parse_compare_op(input: ParseStream) -> syn::Result<CompareOp> {
         })
     } else {
         Err(input.error("expected comparison operator (==, !=, >, >=, <, <=)"))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// IN list
+// ---------------------------------------------------------------------------
+
+/// Parse the RHS of an `IN` expression: `[a, b, c]`, `#ident`, or `#(expr)`.
+fn parse_in_rhs(input: ParseStream) -> syn::Result<InListRhs> {
+    if input.peek(token::Bracket) {
+        let content;
+        syn::bracketed!(content in input);
+
+        let mut items = Vec::new();
+        while !content.is_empty() {
+            items.push(parse_primary(&content)?);
+            if !content.is_empty() {
+                content.parse::<syn::Token![,]>()?;
+            }
+        }
+        Ok(InListRhs::List(items))
+    } else if input.peek(syn::Token![#]) {
+        let expr = parse_primary(input)?;
+        Ok(InListRhs::Expr(Box::new(expr)))
+    } else {
+        Err(input.error("expected `[values]`, `#variable`, or `#(expression)` after `IN`"))
     }
 }
 
