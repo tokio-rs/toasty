@@ -17,6 +17,9 @@ pub trait Assign<T> {
     /// Record one or more assignments into the given [`Assignments`] map at
     /// the specified projection.
     fn assign(self, assignments: &mut stmt::Assignments, projection: stmt::Projection);
+
+    /// Convert this value into an [`Assignment<T>`].
+    fn to_assignment(self) -> Assignment<T>;
 }
 
 /// A typed assignment produced by the [`insert`], [`remove`], [`set`], and
@@ -27,6 +30,19 @@ pub trait Assign<T> {
 pub struct Assignment<T> {
     kind: AssignmentKind,
     _p: PhantomData<T>,
+}
+
+impl<T> Assignment<T> {
+    /// Create an `Assignment` with set semantics from a raw expression.
+    ///
+    /// This is used internally by `impl_assign_via_expr!` where the source and
+    /// target types may differ (e.g. `T` → `Option<T>`).
+    pub(super) fn new_set(expr: stmt::Expr) -> Self {
+        Assignment {
+            kind: AssignmentKind::Set(expr),
+            _p: PhantomData,
+        }
+    }
 }
 
 enum AssignmentKind {
@@ -69,6 +85,10 @@ impl<T> Assign<T> for Assignment<T> {
     fn assign(self, assignments: &mut stmt::Assignments, projection: stmt::Projection) {
         apply_kind(self.kind, assignments, projection);
     }
+
+    fn to_assignment(self) -> Assignment<T> {
+        self
+    }
 }
 
 /// Helper macro: generates `impl Assign<$target> for $source` with set
@@ -81,6 +101,10 @@ macro_rules! impl_assign_via_expr {
             fn assign(self, assignments: &mut toasty_core::stmt::Assignments, projection: toasty_core::stmt::Projection) {
                 assignments.set(projection, super::IntoExpr::<$target>::into_expr(self).untyped);
             }
+
+            fn to_assignment(self) -> super::assignment::Assignment<$target> {
+                super::assignment::Assignment::new_set(super::IntoExpr::<$target>::into_expr(self).untyped)
+            }
         }
     };
     // Generic: impl<generics> Assign<Target> for Source where bounds
@@ -89,6 +113,10 @@ macro_rules! impl_assign_via_expr {
         impl<$($gen)*> super::assignment::Assign<$target> for $source {
             fn assign(self, assignments: &mut toasty_core::stmt::Assignments, projection: toasty_core::stmt::Projection) {
                 assignments.set(projection, super::IntoExpr::<$target>::into_expr(self).untyped);
+            }
+
+            fn to_assignment(self) -> super::assignment::Assignment<$target> {
+                super::assignment::Assignment::new_set(super::IntoExpr::<$target>::into_expr(self).untyped)
             }
         }
     };
@@ -182,22 +210,17 @@ pub fn set<T>(expr: impl IntoExpr<T>) -> Assignment<T> {
 
 /// Partially update a sub-field of an embedded type.
 ///
-/// Takes a [`Path<T, U>`] (identifying which sub-field to update) and an
-/// [`Assignment<U>`] (the operation to apply at that sub-field). Returns an
-/// [`Assignment<T>`] that can be passed to the parent field's setter.
-///
-/// For plain values, wrap with [`set`] first:
-/// `stmt::patch(path, stmt::set("doctor"))`.
+/// Takes a [`Path<T, U>`] (identifying which sub-field to update) and a
+/// value (`impl Assign<U>` — either a plain value or a nested
+/// [`Assignment<U>`] for deeper patching). Returns an [`Assignment<T>`]
+/// that can be passed to the parent field's setter.
 ///
 /// # Examples
 ///
 /// ```ignore
 /// // Update a single sub-field
 /// user.update()
-///     .critter(stmt::patch(
-///         Creature::fields().human().profession(),
-///         stmt::set("doctor"),
-///     ))
+///     .critter(stmt::patch(Creature::fields().human().profession(), "doctor"))
 ///     .exec(&mut db)
 ///     .await?;
 ///
@@ -205,16 +228,17 @@ pub fn set<T>(expr: impl IntoExpr<T>) -> Assignment<T> {
 /// user.update()
 ///     .kind(stmt::patch(
 ///         Kind::variants().admin().perm(),
-///         stmt::patch(Permission::fields().everything(), stmt::set(true)),
+///         stmt::patch(Permission::fields().everything(), true),
 ///     ))
 ///     .exec(&mut db)
 ///     .await?;
 /// ```
-pub fn patch<T, U>(path: Path<T, U>, value: Assignment<U>) -> Assignment<T> {
+pub fn patch<T, U>(path: Path<T, U>, value: impl Assign<U>) -> Assignment<T> {
+    let inner = value.to_assignment();
     Assignment {
         kind: AssignmentKind::Patch {
             path: path.untyped.projection,
-            inner: Box::new(value.kind),
+            inner: Box::new(inner.kind),
         },
         _p: PhantomData,
     }

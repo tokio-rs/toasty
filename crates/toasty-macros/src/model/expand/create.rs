@@ -75,11 +75,19 @@ impl Expand<'_> {
                 fn assign(self, assignments: &mut #toasty::core::stmt::Assignments, projection: #toasty::stmt::Projection) {
                     assignments.set(projection, <Self as #toasty::IntoExpr<#model_ident>>::into_expr(self));
                 }
+
+                fn to_assignment(self) -> #toasty::stmt::Assignment<#model_ident> {
+                    #toasty::stmt::set(self)
+                }
             }
 
             impl #toasty::Assign<Option<#model_ident>> for #create_struct_ident {
                 fn assign(self, assignments: &mut #toasty::core::stmt::Assignments, projection: #toasty::stmt::Projection) {
                     assignments.set(projection, <Self as #toasty::IntoExpr<Option<#model_ident>>>::into_expr(self));
+                }
+
+                fn to_assignment(self) -> #toasty::stmt::Assignment<Option<#model_ident>> {
+                    #toasty::stmt::set(self)
                 }
             }
 

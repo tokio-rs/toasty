@@ -302,13 +302,13 @@ and the leaf type `U` (the field being set). The origin type is what makes
 `patch` return `Assignment<Creature>` — no extra type information needed at the
 call site. `Path<T, U>` is already implemented in `toasty::stmt::Path`.
 
-The value accepts `Assignment<U>`, so plain values must be wrapped with
-`stmt::set`. Nested patches also work because `stmt::patch` returns
-`Assignment<U>`.
+The value accepts `impl Assign<U>`, so plain values work directly (they
+implement `Assign` via `impl_assign_via_expr!`). Nested patches also work
+because `Assignment<U>` implements `Assign<U>`.
 
 ```rust
 user.update()
-    .critter(stmt::patch(Creature::fields().human().profession(), stmt::set("doctor")))
+    .critter(stmt::patch(Creature::fields().human().profession(), "doctor"))
     .exec(&mut db)
     .await?;
 ```
@@ -321,8 +321,8 @@ Multiple sub-field mutations use `stmt::apply`:
 ```rust
 user.update()
     .critter(stmt::apply([
-        stmt::patch(Creature::fields().human().profession(), stmt::set("doctor")),
-        stmt::patch(Creature::fields().human().age(), stmt::set(35)),
+        stmt::patch(Creature::fields().human().profession(), "doctor"),
+        stmt::patch(Creature::fields().human().age(), 35),
     ]))
     .exec(&mut db)
     .await?;
@@ -342,16 +342,16 @@ user.update()
     .kind(
         stmt::patch(
             Kind::variants().admin().perm(),
-            stmt::patch(Permission::fields().everything(), stmt::set(true)),
+            stmt::patch(Permission::fields().everything(), true),
         ),
     )
     .exec(&mut db)
     .await?;
 ```
 
-Here `stmt::patch(Permission::fields().everything(), stmt::set(true))` returns
-`Assignment<Permission>`. The outer `stmt::patch` accepts it as the value for
-the `perm` path, returning
+Here `stmt::patch(Permission::fields().everything(), true)` returns
+`Assignment<Permission>`, which implements `Assign<Permission>`. The outer
+`stmt::patch` accepts it as the value for the `perm` path, returning
 `Assignment<Kind>`. The nesting works to arbitrary depth — each layer resolves
 one level of the field path.
 
@@ -391,5 +391,5 @@ for now alongside `stmt::patch`.
 | _not possible_ | `.todos([create_a, create_b])` (replace) |
 | _not possible_ | `.todos(stmt::apply([stmt::insert(a), stmt::remove(b)]))` |
 | `.critter(value)` | `.critter(value)` (unchanged, plain value = full replace) |
-| `.with_critter(\|c\| c.profession("x"))` | `.critter(stmt::patch(path, stmt::set("x")))` |
-| _not possible_ | `.kind(stmt::patch(path, stmt::patch(inner_path, stmt::set(val))))` |
+| `.with_critter(\|c\| c.profession("x"))` | `.critter(stmt::patch(path, "x"))` |
+| _not possible_ | `.kind(stmt::patch(path, stmt::patch(inner_path, val)))` |
