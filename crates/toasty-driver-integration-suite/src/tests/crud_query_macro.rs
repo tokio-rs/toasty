@@ -707,3 +707,35 @@ pub async fn query_macro_filter_in_list_with_and(test: &mut Test) -> Result<()> 
 
     Ok(())
 }
+
+#[driver_test(id(ID))]
+pub async fn query_macro_filter_in_list_by_pk(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+
+    // Create several items and collect their IDs
+    let mut ids = Vec::new();
+    for name in ["Alice", "Bob", "Carl", "Diana"] {
+        let item = Item::create().name(name).exec(&mut db).await?;
+        ids.push(item.id);
+    }
+
+    // Batch fetch a subset by primary key using IN
+    let target_ids = vec![ids[0], ids[2]]; // Alice and Carl
+    let items = toasty::query!(Item filter .id IN #target_ids)
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(items.len(), 2);
+    assert_struct!(items, #({ name: "Alice" }, { name: "Carl" }));
+
+    Ok(())
+}
