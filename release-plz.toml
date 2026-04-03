@@ -37,7 +37,7 @@ name = "toasty-driver-postgresql"
 version_group = "toasty"
 
 [[package]]
-name = "toasty-sqlite"
+name = "toasty-driver-sqlite"
 version_group = "toasty"
 
 [[package]]
