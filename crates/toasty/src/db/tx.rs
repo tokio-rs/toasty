@@ -11,21 +11,29 @@ use toasty_core::{
 };
 use tokio::sync::oneshot;
 
+/// Either a `&mut Db` or `&mut Connection`, used by [`TransactionBuilder`] to
+/// defer connection acquisition until [`begin`](TransactionBuilder::begin).
+pub(crate) enum TxSource<'a> {
+    Db(&'a mut super::Db),
+    Connection(&'a mut super::Connection),
+}
+
 /// Builder for configuring a transaction before starting it.
 ///
-/// Collect isolation level and read-only settings, then call
-/// [`begin`](Self::begin) with a [`Connection`](super::Connection) or
-/// [`Db`](super::Db) to start the transaction.
-pub struct TransactionBuilder {
+/// Obtain one via [`Db::transaction_builder`](super::Db::transaction_builder)
+/// or [`Connection::transaction_builder`](super::Connection::transaction_builder),
+/// configure isolation level and read-only settings, then call
+/// [`begin`](Self::begin) to start the transaction.
+pub struct TransactionBuilder<'a> {
+    source: TxSource<'a>,
     isolation: Option<IsolationLevel>,
     read_only: bool,
 }
 
-impl TransactionBuilder {
-    /// Create a new builder with default settings (no explicit isolation
-    /// level, read-write mode).
-    pub fn new() -> Self {
+impl<'a> TransactionBuilder<'a> {
+    pub(crate) fn new(source: TxSource<'a>) -> Self {
         TransactionBuilder {
+            source,
             isolation: None,
             read_only: false,
         }
@@ -43,24 +51,17 @@ impl TransactionBuilder {
         self
     }
 
-    /// Begin the transaction on the given connection.
-    pub async fn begin(self, conn: &mut super::Connection) -> Result<Transaction<'_>> {
-        Transaction::begin_with(ConnRef::Borrowed(conn), self.isolation, self.read_only).await
-    }
-
-    /// Begin the transaction on a freshly acquired connection from the pool.
+    /// Begin the transaction.
     ///
-    /// The connection is owned by the returned [`Transaction`] and will be
-    /// returned to the pool when the transaction is dropped.
-    pub async fn begin_on_db(self, db: &mut super::Db) -> Result<Transaction<'_>> {
-        let conn = db.connection().await?;
-        Transaction::begin_with(ConnRef::owned(conn), self.isolation, self.read_only).await
-    }
-}
-
-impl Default for TransactionBuilder {
-    fn default() -> Self {
-        Self::new()
+    /// When built from a [`Db`](super::Db), this acquires a connection from
+    /// the pool. The connection is owned by the returned [`Transaction`] and
+    /// will be returned to the pool when the transaction is dropped.
+    pub async fn begin(self) -> Result<Transaction<'a>> {
+        let conn = match self.source {
+            TxSource::Db(db) => ConnRef::owned(db.connection().await?),
+            TxSource::Connection(conn) => ConnRef::Borrowed(conn),
+        };
+        Transaction::begin_with(conn, self.isolation, self.read_only).await
     }
 }
 
@@ -150,6 +151,11 @@ impl<'a> Transaction<'a> {
             )
             .await?;
         Ok(tx)
+    }
+
+    /// Create a nested transaction (savepoint).
+    pub async fn transaction(&mut self) -> Result<Transaction<'_>> {
+        <Self as Executor>::transaction(self).await
     }
 
     /// Commit the transaction.
