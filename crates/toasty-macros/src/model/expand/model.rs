@@ -3,6 +3,7 @@ use crate::model::schema::{FieldTy, ModelKind};
 
 use proc_macro2::TokenStream;
 use quote::quote;
+use std::collections::HashSet;
 
 impl Expand<'_> {
     pub(super) fn expand_model_impls(&self) -> TokenStream {
@@ -40,6 +41,7 @@ impl Expand<'_> {
         let into_expr_body_ref = self.expand_model_into_expr_body(true);
         let into_expr_body_val = self.expand_model_into_expr_body(false);
         let reload_trait_method = self.expand_reload_trait_method();
+        let create_meta_fields = self.expand_create_meta_fields();
 
         quote! {
             impl #model_ident {
@@ -113,6 +115,11 @@ impl Expand<'_> {
                 type Update<'a> = #update_struct_ident<&'a mut Self>;
                 type UpdateQuery = #update_struct_ident;
                 type Path<__Origin> = #field_struct_ident<__Origin>;
+
+                const CREATE_META: #toasty::CreateMeta = #toasty::CreateMeta {
+                    fields: &[ #create_meta_fields ],
+                    model_name: stringify!(#model_ident),
+                };
 
                 fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
                     #field_struct_ident::from_path(path)
@@ -447,5 +454,58 @@ impl Expand<'_> {
                 }
             }
         }
+    }
+
+    /// Generate the `CreateField` entries for `CREATE_META`.
+    ///
+    /// Includes primitive fields that are not auto, default, update, serialize,
+    /// or FK source fields. Each field's `required` flag uses
+    /// `!<T as Field>::NULLABLE` to defer nullability to the type system.
+    fn expand_create_meta_fields(&self) -> TokenStream {
+        let toasty = &self.toasty;
+
+        // Collect all FK source field indices (fields referenced by belongs_to keys)
+        let fk_sources: HashSet<usize> = self
+            .model
+            .fields
+            .iter()
+            .filter_map(|f| match &f.ty {
+                FieldTy::BelongsTo(rel) => Some(rel.foreign_key.iter().map(|fk| fk.source)),
+                _ => None,
+            })
+            .flatten()
+            .collect();
+
+        let fields = self.model.fields.iter().filter_map(|field| {
+            // Only include primitive fields
+            let ty = match &field.ty {
+                FieldTy::Primitive(ty) => ty,
+                _ => return None,
+            };
+
+            // Exclude auto, default, update, serialize fields
+            if field.attrs.auto.is_some()
+                || field.attrs.default_expr.is_some()
+                || field.attrs.update_expr.is_some()
+                || field.attrs.serialize.is_some()
+            {
+                return None;
+            }
+
+            // Exclude FK source fields
+            if fk_sources.contains(&field.id) {
+                return None;
+            }
+
+            let name = field.name.ident.to_string();
+            Some(quote! {
+                #toasty::CreateField {
+                    name: #name,
+                    required: !<#ty as #toasty::Field>::NULLABLE,
+                },
+            })
+        });
+
+        quote! { #( #fields )* }
     }
 }
