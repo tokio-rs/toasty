@@ -14,9 +14,17 @@ use toasty_core::stmt;
 ///
 /// [`Assignments`]: toasty_core::stmt::Assignments
 pub trait Assign<T> {
+    /// Convert into an [`Assignment<T>`] value.
+    fn into_assignment(self) -> Assignment<T>;
+
     /// Record one or more assignments into the given [`Assignments`] map at
     /// the specified projection.
-    fn assign(self, assignments: &mut stmt::Assignments, projection: stmt::Projection);
+    fn assign(self, assignments: &mut stmt::Assignments, projection: stmt::Projection)
+    where
+        Self: Sized,
+    {
+        self.into_assignment().kind.apply(assignments, projection);
+    }
 }
 
 /// A typed assignment produced by the [`insert`], [`remove`], [`set`], and
@@ -29,26 +37,46 @@ pub struct Assignment<T> {
     _p: PhantomData<T>,
 }
 
-type AssignFn = Box<dyn FnOnce(&mut stmt::Assignments, stmt::Projection)>;
-
 enum AssignmentKind {
     Set(stmt::Expr),
     Insert(stmt::Expr),
     Remove(stmt::Expr),
-    Patch(AssignFn),
-    Apply(AssignFn),
+    Patch {
+        path_projection: stmt::Projection,
+        inner: Box<AssignmentKind>,
+    },
+    Apply(Vec<AssignmentKind>),
+}
+
+impl AssignmentKind {
+    fn apply(self, assignments: &mut stmt::Assignments, projection: stmt::Projection) {
+        match self {
+            AssignmentKind::Set(expr) => assignments.set(projection, expr),
+            AssignmentKind::Insert(expr) => assignments.insert(projection, expr),
+            AssignmentKind::Remove(expr) => assignments.remove(projection, expr),
+            AssignmentKind::Patch {
+                path_projection,
+                inner,
+            } => {
+                let mut projection = projection;
+                for &step in path_projection.as_slice() {
+                    projection.push(step);
+                }
+                inner.apply(assignments, projection);
+            }
+            AssignmentKind::Apply(ops) => {
+                for op in ops {
+                    op.apply(assignments, projection.clone());
+                }
+            }
+        }
+    }
 }
 
 // Assignment<T> implements Assign<T>
 impl<T> Assign<T> for Assignment<T> {
-    fn assign(self, assignments: &mut stmt::Assignments, projection: stmt::Projection) {
-        match self.kind {
-            AssignmentKind::Set(expr) => assignments.set(projection, expr),
-            AssignmentKind::Insert(expr) => assignments.insert(projection, expr),
-            AssignmentKind::Remove(expr) => assignments.remove(projection, expr),
-            AssignmentKind::Patch(f) => f(assignments, projection),
-            AssignmentKind::Apply(f) => f(assignments, projection),
-        }
+    fn into_assignment(self) -> Assignment<T> {
+        self
     }
 }
 
@@ -59,8 +87,10 @@ macro_rules! impl_assign_via_expr {
     // Simple: impl Assign<T> for S
     ($source:ty => $target:ty) => {
         impl super::assignment::Assign<$target> for $source {
-            fn assign(self, assignments: &mut toasty_core::stmt::Assignments, projection: toasty_core::stmt::Projection) {
-                assignments.set(projection, super::IntoExpr::<$target>::into_expr(self).untyped);
+            fn into_assignment(self) -> super::assignment::Assignment<$target> {
+                $crate::stmt::set(
+                    super::IntoExpr::<$target>::into_expr(self),
+                )
             }
         }
     };
@@ -68,8 +98,10 @@ macro_rules! impl_assign_via_expr {
     // Uses { } instead of [ ] to avoid parsing ambiguity with array types.
     ({ $($gen:tt)* } $source:ty => $target:ty) => {
         impl<$($gen)*> super::assignment::Assign<$target> for $source {
-            fn assign(self, assignments: &mut toasty_core::stmt::Assignments, projection: toasty_core::stmt::Projection) {
-                assignments.set(projection, super::IntoExpr::<$target>::into_expr(self).untyped);
+            fn into_assignment(self) -> super::assignment::Assignment<$target> {
+                $crate::stmt::set(
+                    super::IntoExpr::<$target>::into_expr(self),
+                )
             }
         }
     };
@@ -186,18 +218,14 @@ pub fn set<T>(expr: impl IntoExpr<T>) -> Assignment<T> {
 ///     .exec(&mut db)
 ///     .await?;
 /// ```
-pub fn patch<T, U>(path: Path<T, U>, value: impl Assign<U> + 'static) -> Assignment<T> {
-    let path_projection = path.untyped.projection;
+pub fn patch<T, U>(path: Path<T, U>, value: impl Assign<U>) -> Assignment<T> {
+    let inner = value.into_assignment();
 
     Assignment {
-        kind: AssignmentKind::Patch(Box::new(move |assignments, mut projection| {
-            // Append the path's field steps to the parent projection,
-            // so the inner assignment lands at the correct nested key.
-            for &step in path_projection.as_slice() {
-                projection.push(step);
-            }
-            value.assign(assignments, projection);
-        })),
+        kind: AssignmentKind::Patch {
+            path_projection: path.untyped.projection,
+            inner: Box::new(inner.kind),
+        },
         _p: PhantomData,
     }
 }
@@ -218,14 +246,10 @@ pub fn patch<T, U>(path: Path<T, U>, value: impl Assign<U> + 'static) -> Assignm
 ///     .exec(&mut db)
 ///     .await?;
 /// ```
-pub fn apply<T: 'static>(ops: impl IntoIterator<Item = Assignment<T>>) -> Assignment<T> {
-    let ops: Vec<Assignment<T>> = ops.into_iter().collect();
+pub fn apply<T>(ops: impl IntoIterator<Item = Assignment<T>>) -> Assignment<T> {
+    let ops: Vec<AssignmentKind> = ops.into_iter().map(|a| a.kind).collect();
     Assignment {
-        kind: AssignmentKind::Apply(Box::new(move |assignments, projection| {
-            for op in ops {
-                op.assign(assignments, projection.clone());
-            }
-        })),
+        kind: AssignmentKind::Apply(ops),
         _p: PhantomData,
     }
 }

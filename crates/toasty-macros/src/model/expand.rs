@@ -177,8 +177,10 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
         }
 
         impl #toasty::Assign<#model_ident> for #model_ident {
-            fn assign(self, assignments: &mut #toasty::core::stmt::Assignments, projection: #toasty::stmt::Projection) {
-                assignments.set(projection, <Self as #toasty::IntoExpr<#model_ident>>::into_expr(self));
+            fn into_assignment(self) -> #toasty::stmt::Assignment<#model_ident> {
+                #toasty::stmt::set(
+                    <Self as #toasty::IntoExpr<#model_ident>>::into_expr(self)
+                )
             }
         }
     })
@@ -302,8 +304,10 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
         }
 
         impl #toasty::Assign<#model_ident> for #model_ident {
-            fn assign(self, assignments: &mut #toasty::core::stmt::Assignments, projection: #toasty::stmt::Projection) {
-                assignments.set(projection, <Self as #toasty::IntoExpr<#model_ident>>::into_expr(self));
+            fn into_assignment(self) -> #toasty::stmt::Assignment<#model_ident> {
+                #toasty::stmt::set(
+                    <Self as #toasty::IntoExpr<#model_ident>>::into_expr(self)
+                )
             }
         }
     })
