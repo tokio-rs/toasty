@@ -434,7 +434,7 @@ impl toasty_core::driver::Connection for Connection {
     async fn apply_migration(
         &mut self,
         id: u64,
-        name: String,
+        name: &str,
         migration: &toasty_core::schema::db::Migration,
     ) -> Result<()> {
         tracing::info!(id = id, name = %name, "applying migration");

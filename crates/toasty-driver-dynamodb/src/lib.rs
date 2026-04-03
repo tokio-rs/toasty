@@ -168,7 +168,7 @@ impl toasty_core::driver::Connection for Connection {
     async fn apply_migration(
         &mut self,
         _id: u64,
-        _name: String,
+        _name: &str,
         _migration: &toasty_core::schema::db::Migration,
     ) -> Result<()> {
         todo!("DynamoDB migrations are not yet implemented")
