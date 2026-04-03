@@ -175,26 +175,6 @@ fn into_expr_value_as_option() {
 // &Option<T> -> T
 // ---------------------------------------------------------------------------
 
-#[test]
-fn into_expr_ref_option_some() {
-    let val: Option<i64> = Some(3);
-    let expr: Expr<i64> = (&val).into_expr();
-    assert_eq!(
-        untyped(expr),
-        core_stmt::Expr::Value(core_stmt::Value::I64(3))
-    );
-}
-
-#[test]
-fn into_expr_ref_option_none() {
-    let val: Option<i64> = None;
-    let expr: Expr<i64> = (&val).into_expr();
-    assert_eq!(
-        untyped(expr),
-        core_stmt::Expr::Value(core_stmt::Value::Null)
-    );
-}
-
 // ---------------------------------------------------------------------------
 // Arrays [U; N] -> List<T>
 // ---------------------------------------------------------------------------
@@ -294,21 +274,6 @@ fn into_expr_slice_to_list() {
         core_stmt::Expr::Value(core_stmt::Value::I64(200)),
     ]);
     assert_eq!(untyped(expr), expected);
-}
-
-// ---------------------------------------------------------------------------
-// &T -> List<T> (single-element via cast)
-// ---------------------------------------------------------------------------
-
-#[test]
-fn into_expr_ref_to_list() {
-    let val = 42i64;
-    let expr: Expr<List<i64>> = (&val).into_expr();
-    // &T -> Expr<List<T>> uses by_ref().cast()
-    assert_eq!(
-        untyped(expr),
-        core_stmt::Expr::Value(core_stmt::Value::I64(42))
-    );
 }
 
 // ---------------------------------------------------------------------------

@@ -33,8 +33,7 @@ struct Todo {
 #[tokio::main]
 async fn main() -> toasty::Result<()> {
     let mut db = toasty::Db::builder()
-        .register::<User>()
-        .register::<Todo>()
+        .models(toasty::models!(crate::*))
         .connect(
             std::env::var("TOASTY_CONNECTION_URL")
                 .as_deref()
@@ -45,19 +44,21 @@ async fn main() -> toasty::Result<()> {
     // For now, reset!s
     db.push_schema().await?;
 
-    println!("==> let u1 = User::create()");
-    let u1 = User::create()
-        .name("John Doe")
-        .email("john@example.com")
-        .exec(&mut db)
-        .await?;
+    println!("==> let u1 = create!(User)");
+    let u1 = toasty::create!(User {
+        name: "John Doe",
+        email: "john@example.com",
+    })
+    .exec(&mut db)
+    .await?;
 
-    println!("==> let u2 = User::create()");
-    let u2 = User::create()
-        .name("Nancy Huerta")
-        .email("nancy@example.com")
-        .exec(&mut db)
-        .await?;
+    println!("==> let u2 = create!(User)");
+    let u2 = toasty::create!(User {
+        name: "Nancy Huerta",
+        email: "nancy@example.com",
+    })
+    .exec(&mut db)
+    .await?;
 
     // Find by ID
     println!("==> let user = User::find_by_id(&u1.id)");
@@ -70,12 +71,13 @@ async fn main() -> toasty::Result<()> {
     println!("USER = {user:#?}");
 
     assert!(
-        User::create()
-            .name("John Dos")
-            .email("john@example.com")
-            .exec(&mut db)
-            .await
-            .is_err()
+        toasty::create!(User {
+            name: "John Dos",
+            email: "john@example.com",
+        })
+        .exec(&mut db)
+        .await
+        .is_err()
     );
 
     user.update().name("Foo bar").exec(&mut db).await?;
@@ -88,10 +90,7 @@ async fn main() -> toasty::Result<()> {
 
     println!(" ~~~~~~~~~~~ CREATE TODOs ~~~~~~~~~~~~");
 
-    let todo = u2
-        .todos()
-        .create()
-        .title("finish toasty")
+    let todo = toasty::create!(in u2.todos() { title: "finish toasty" })
         .exec(&mut db)
         .await?;
 
@@ -110,26 +109,27 @@ async fn main() -> toasty::Result<()> {
     assert!(User::get_by_id(&mut db, &u2.id).await.is_err());
 
     // Create a batch of users
-    User::create_many()
-        .item(User::create().email("foo@example.com").name("User Foo"))
-        .item(User::create().email("bar@example.com").name("User Bar"))
-        .exec(&mut db)
-        .await?;
+    toasty::create!(User::[
+        { email: "foo@example.com", name: "User Foo" },
+        { email: "bar@example.com", name: "User Bar" },
+    ])
+    .exec(&mut db)
+    .await?;
 
     // Lets create a new user. This time, we will batch create todos for the
     // user
-    let mut user = User::create()
-        .name("Ann Chovey")
-        .email("ann.chovey@example.com")
-        .todo(Todo::create().title("Make pizza"))
-        .todo(Todo::create().title("Sleep"))
-        .exec(&mut db)
-        .await?;
+    let mut user = toasty::create!(User {
+        name: "Ann Chovey",
+        email: "ann.chovey@example.com",
+        todos: [{ title: "Make pizza" }, { title: "Sleep" }],
+    })
+    .exec(&mut db)
+    .await?;
 
     user.update()
-        .todos(toasty::stmt::insert(
-            Todo::create().title("might delete later"),
-        ))
+        .todos(toasty::stmt::insert(toasty::create!(Todo {
+            title: "might delete later",
+        })))
         .exec(&mut db)
         .await?;
 

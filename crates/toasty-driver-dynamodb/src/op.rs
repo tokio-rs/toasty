@@ -10,7 +10,8 @@ use super::{
     AttributeDefinition, Connection, Delete, ExprAttrs, GlobalSecondaryIndex, KeysAndAttributes,
     Projection, ProjectionType, ProvisionedThroughput, Put, PutRequest,
     ReturnValuesOnConditionCheckFailure, SdkError, TransactWriteItem, TypeExt, Update,
-    UpdateItemError, Value, WriteRequest, ddb_expression, ddb_key, ddb_key_schema, item_to_record,
+    UpdateItemError, Value, WriteRequest, ddb_expression, ddb_key, ddb_key_schema,
+    deserialize_ddb_cursor, item_to_record, serialize_ddb_cursor,
 };
 use toasty_core::{
     Result, Schema,

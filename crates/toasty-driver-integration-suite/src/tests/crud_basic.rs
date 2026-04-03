@@ -146,7 +146,7 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
             returning: false,
         }));
     }
-    assert_struct!(resp, { rows: Rows::Count(1) });
+    assert_struct!(resp, { values: Rows::Count(1) });
     assert!(test.log().is_empty());
 
     test.log().clear();
@@ -182,7 +182,7 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
             filter: None,
         }));
     }
-    assert_struct!(resp, { rows: Rows::Count(1) });
+    assert_struct!(resp, { values: Rows::Count(1) });
     assert!(test.log().is_empty());
 
     // It is gone

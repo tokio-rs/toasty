@@ -3,14 +3,14 @@ use super::{
     ddb_key, operation,
 };
 use std::collections::HashMap;
-use toasty_core::{driver::Response, stmt::ExprContext};
+use toasty_core::{driver::ExecResponse, stmt::ExprContext};
 
 impl Connection {
     pub(crate) async fn exec_delete_by_key(
         &mut self,
         schema: &db::Schema,
         op: operation::DeleteByKey,
-    ) -> Result<Response> {
+    ) -> Result<ExecResponse> {
         use aws_sdk_dynamodb::operation::delete_item::DeleteItemError;
 
         let table = schema.table(op.table);
@@ -58,7 +58,7 @@ impl Connection {
 
                 if let Err(SdkError::ServiceError(e)) = res {
                     if let DeleteItemError::ConditionalCheckFailedException(_) = e.err() {
-                        return Ok(Response::count(0));
+                        return Ok(ExecResponse::count(0));
                     }
 
                     return Err(toasty_core::Error::driver_operation_failed(
@@ -68,7 +68,7 @@ impl Connection {
 
                 assert!(res.is_ok());
 
-                return Ok(Response::count(1));
+                return Ok(ExecResponse::count(1));
             } else {
                 let mut transact_items = vec![];
 
@@ -112,7 +112,7 @@ impl Connection {
                     todo!("err={:#?}", e);
                 }
 
-                return Ok(Response::count(op.keys.len() as _));
+                return Ok(ExecResponse::count(op.keys.len() as _));
             }
         }
 
@@ -147,7 +147,7 @@ impl Connection {
             .map_err(toasty_core::Error::driver_operation_failed)?;
 
         let Some(curr_unique_values) = res.item else {
-            return Ok(Response::count(0));
+            return Ok(ExecResponse::count(0));
         };
 
         // Now we must both delete from the main table **and** the unique index
@@ -202,6 +202,6 @@ impl Connection {
             .await
             .map_err(toasty_core::Error::driver_operation_failed)?;
 
-        Ok(Response::count(1))
+        Ok(ExecResponse::count(1))
     }
 }

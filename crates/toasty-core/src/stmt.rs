@@ -166,7 +166,7 @@ mod join;
 pub use join::{Join, JoinOp};
 
 mod limit;
-pub use limit::Limit;
+pub use limit::{Limit, LimitCursor, LimitOffset};
 
 #[cfg(feature = "assert-struct")]
 mod like;
@@ -175,9 +175,6 @@ mod node;
 pub use node::Node;
 
 mod num;
-
-mod offset;
-pub use offset::Offset;
 
 mod op_binary;
 pub use op_binary::BinaryOp;
@@ -365,6 +362,20 @@ impl Statement {
         match self {
             Self::Update(update) => Some(update),
             _ => None,
+        }
+    }
+
+    /// Returns `true` if this statement expects at most one result row.
+    pub fn is_single(&self) -> bool {
+        match self {
+            Statement::Query(q) => q.single,
+            Statement::Insert(i) => i.source.single,
+            Statement::Update(i) => match &i.target {
+                UpdateTarget::Query(q) => q.single,
+                UpdateTarget::Model(_) => true,
+                _ => false,
+            },
+            Statement::Delete(d) => d.selection().single,
         }
     }
 

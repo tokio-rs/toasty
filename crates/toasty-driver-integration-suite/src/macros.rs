@@ -14,13 +14,3 @@ macro_rules! assert_eq_unordered {
         assert!(vals.is_empty());
     };
 }
-
-macro_rules! models {
-    (
-        $( $model:ident ),*
-    ) => {{
-        let mut builder = toasty::Db::builder();
-        $( builder.register::<$model>(); )*
-        builder
-    }};
-}

@@ -2,14 +2,14 @@ use super::{
     Connection, Put, PutRequest, Result, TransactWriteItem, Value, WriteRequest, db, stmt,
 };
 use std::collections::HashMap;
-use toasty_core::driver::Response;
+use toasty_core::driver::ExecResponse;
 
 impl Connection {
     pub(crate) async fn exec_insert(
         &mut self,
         schema: &db::Schema,
         insert: stmt::Insert,
-    ) -> Result<Response> {
+    ) -> Result<ExecResponse> {
         assert!(insert.returning.is_none());
 
         let insert_table = insert.target.as_table_unwrap();
@@ -166,6 +166,6 @@ impl Connection {
             _ => todo!(),
         }
 
-        Ok(Response::count(count as _))
+        Ok(ExecResponse::count(count as _))
     }
 }

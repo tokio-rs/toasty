@@ -46,7 +46,7 @@ pub async fn paginate_composite_key(test: &mut Test) -> Result<()> {
     } else {
         assert_struct!(op, Operation::QueryPk(_));
     }
-    assert_struct!(resp.rows, Rows::Stream(_));
+    assert_struct!(resp.values, Rows::Stream(_));
 
     // Second page via .next()
     let page: Page<_> = page.next(&mut db).await?.unwrap();
@@ -203,7 +203,7 @@ pub async fn sort_composite_key(test: &mut Test) -> Result<()> {
     } else {
         assert_struct!(op, Operation::QueryPk(_));
     }
-    assert_struct!(resp.rows, Rows::Stream(_));
+    assert_struct!(resp.values, Rows::Stream(_));
 
     test.log().clear();
 
@@ -224,7 +224,7 @@ pub async fn sort_composite_key(test: &mut Test) -> Result<()> {
     } else {
         assert_struct!(op, Operation::QueryPk(_));
     }
-    assert_struct!(resp.rows, Rows::Stream(_));
+    assert_struct!(resp.values, Rows::Stream(_));
 
     Ok(())
 }

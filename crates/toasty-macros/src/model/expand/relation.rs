@@ -58,7 +58,7 @@ impl Expand<'_> {
                 }
 
                 /// Add an item to the association
-                #vis async fn insert(self, executor: &mut dyn #toasty::Executor, item: impl #toasty::IntoExpr<#toasty::List<#model_ident>>) -> #toasty::Result<()> {
+                #vis async fn insert(self, executor: &mut dyn #toasty::Executor, item: impl #toasty::IntoExpr<#model_ident>) -> #toasty::Result<()> {
                     executor.exec(self.stmt.insert(item)).await
                 }
 
@@ -212,7 +212,10 @@ impl Expand<'_> {
             let target = &fk_field.target;
 
             quote! {
-                <#ty as #toasty::Relation>::Model::fields().#target().eq(&self.#source_field_ident)
+                #toasty::Field::key_constraint(
+                    &self.#source_field_ident,
+                    <#ty as #toasty::Relation>::Model::fields().#target(),
+                )
             }
         });
 

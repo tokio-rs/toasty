@@ -5,44 +5,43 @@ async fn main() -> toasty::Result<()> {
     let mut db = create_db().await?;
 
     println!("==> Creating users...");
-    let user1 = User::create()
-        .name("Alice")
-        .email("alice@example.com")
-        .exec(&mut db)
-        .await?;
+    let user1 = toasty::create!(User {
+        name: "Alice",
+        email: "alice@example.com",
+    })
+    .exec(&mut db)
+    .await?;
 
-    let user2 = User::create()
-        .name("Bob")
-        .email("bob@example.com")
-        .exec(&mut db)
-        .await?;
+    let user2 = toasty::create!(User {
+        name: "Bob",
+        email: "bob@example.com",
+    })
+    .exec(&mut db)
+    .await?;
 
     println!("Created users: {} and {}", user1.name, user2.name);
 
     println!("\n==> Creating todos...");
-    let todo1 = user1
-        .todos()
-        .create()
-        .title("Learn Rust")
-        .completed(false)
-        .exec(&mut db)
-        .await?;
+    let todo1 = toasty::create!(in user1.todos() {
+        title: "Learn Rust",
+        completed: false,
+    })
+    .exec(&mut db)
+    .await?;
 
-    let todo2 = user1
-        .todos()
-        .create()
-        .title("Build a web app")
-        .completed(false)
-        .exec(&mut db)
-        .await?;
+    let todo2 = toasty::create!(in user1.todos() {
+        title: "Build a web app",
+        completed: false,
+    })
+    .exec(&mut db)
+    .await?;
 
-    let _todo3 = user2
-        .todos()
-        .create()
-        .title("Write documentation")
-        .completed(true)
-        .exec(&mut db)
-        .await?;
+    let _todo3 = toasty::create!(in user2.todos() {
+        title: "Write documentation",
+        completed: true,
+    })
+    .exec(&mut db)
+    .await?;
 
     println!("Created {} todos", 3);
 

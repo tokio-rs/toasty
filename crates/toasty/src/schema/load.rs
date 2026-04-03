@@ -205,27 +205,6 @@ impl Load for bool {
     }
 }
 
-impl<T> Load for std::borrow::Cow<'_, T>
-where
-    T: ToOwned + ?Sized,
-    T::Owned: Load<Output = T::Owned>,
-{
-    type Output = Self;
-
-    fn ty() -> stmt::Type {
-        <T::Owned as Load>::ty()
-    }
-
-    fn load(value: stmt::Value) -> Result<Self::Output, Error> {
-        <T::Owned as Load>::load(value).map(std::borrow::Cow::Owned)
-    }
-
-    fn reload(target: &mut Self, value: stmt::Value) -> Result<(), Error> {
-        *target = Self::load(value)?;
-        Ok(())
-    }
-}
-
 impl<T: Load<Output = T>> Load for std::sync::Arc<T> {
     type Output = Self;
 

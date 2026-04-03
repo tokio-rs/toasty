@@ -2,22 +2,25 @@ use crate::{
     Db, Result,
     db::{Connect, Pool, Shared},
     engine::Engine,
-    schema::Register,
 };
 
 use toasty_core::{
     driver::Driver,
-    schema::{self, app},
+    schema::{
+        self,
+        app::{self, ModelSet},
+    },
 };
 
 use std::sync::Arc;
 
 /// Configures the schema and driver for a [`Db`] instance.
 ///
-/// Register each model type with [`register`](Self::register), optionally set
-/// a table name prefix with [`table_name_prefix`](Self::table_name_prefix),
-/// then call [`connect`](Self::connect) (URL-based) or [`build`](Self::build)
-/// (driver instance) to open the database.
+/// Provide model types with [`models`](Self::models) (using the
+/// [`models!`](crate::models!) macro), optionally set a table name prefix with
+/// [`table_name_prefix`](Self::table_name_prefix), then call
+/// [`connect`](Self::connect) (URL-based) or [`build`](Self::build) (driver
+/// instance) to open the database.
 ///
 /// # Examples
 ///
@@ -31,7 +34,7 @@ use std::sync::Arc;
 /// # }
 /// let driver = toasty_driver_sqlite::Sqlite::in_memory();
 /// let db = toasty::Db::builder()
-///     .register::<User>()
+///     .models(toasty::models!(User))
 ///     .build(driver)
 ///     .await
 ///     .unwrap();
@@ -43,19 +46,18 @@ pub struct Builder {
     ///
     /// TODO: move this into `core::schema::Builder` after old schema file
     /// implementatin is removed.
-    models: Vec<app::Model>,
+    models: app::ModelSet,
 
     /// Schema builder
     core: schema::Builder,
 }
 
 impl Builder {
-    /// Register a model type so its schema is included when the database is
+    /// Set the models whose schemas will be included when the database is
     /// built.
     ///
-    /// Call this once for each `#[derive(Model)]` type before calling
-    /// [`connect`](Self::connect) or [`build`](Self::build). Registration
-    /// order does not matter.
+    /// Use the [`models!`](crate::models!) macro to build a [`ModelSet`] from
+    /// your `#[derive(Model)]` types.
     ///
     /// # Examples
     ///
@@ -67,12 +69,10 @@ impl Builder {
     /// #     name: String,
     /// # }
     /// let mut builder = toasty::Db::builder();
-    /// builder.register::<User>();
+    /// builder.models(toasty::models!(User));
     /// ```
-    pub fn register<T: Register>(&mut self) -> &mut Self {
-        let schema = T::schema();
-        tracing::debug!(model = %schema.name(), "registering model");
-        self.models.push(schema);
+    pub fn models(&mut self, models: ModelSet) -> &mut Self {
+        self.models = models;
         self
     }
 
@@ -88,7 +88,7 @@ impl Builder {
     /// This is useful for tooling that needs the schema without a running
     /// database (e.g., migration generators).
     pub fn build_app_schema(&self) -> Result<app::Schema> {
-        app::Schema::from_macro(&self.models)
+        app::Schema::from_macro(self.models.clone())
     }
 
     /// Open a database connection using a URL string.
@@ -114,7 +114,7 @@ impl Builder {
     /// #     name: String,
     /// # }
     /// let db = toasty::Db::builder()
-    ///     .register::<User>()
+    ///     .models(toasty::models!(User))
     ///     .connect("sqlite://memory")
     ///     .await
     ///     .unwrap();
@@ -148,7 +148,7 @@ impl Builder {
     /// # }
     /// let driver = toasty_driver_sqlite::Sqlite::in_memory();
     /// let db = toasty::Db::builder()
-    ///     .register::<User>()
+    ///     .models(toasty::models!(User))
     ///     .build(driver)
     ///     .await
     ///     .unwrap();

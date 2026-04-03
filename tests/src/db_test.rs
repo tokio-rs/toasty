@@ -3,7 +3,7 @@ use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
-use toasty::Db;
+use toasty::{Db, schema::ModelSet};
 use toasty_core::stmt;
 
 /// Internal wrapper that manages the Tokio runtime and ensures cleanup happens.
@@ -35,8 +35,11 @@ impl DbTest {
     }
 
     /// Try to setup a database with models, returns Result for error handling
-    pub async fn try_setup_db(&mut self, mut builder: toasty::db::Builder) -> toasty::Result<Db> {
+    pub async fn try_setup_db(&mut self, models: ModelSet) -> toasty::Result<Db> {
         let setup = self.setup.as_ref().expect("Setup already consumed");
+
+        let mut builder = toasty::Db::builder();
+        builder.models(models);
 
         // Let the setup configure the builder
         setup.configure_builder(&mut builder);
@@ -55,8 +58,8 @@ impl DbTest {
     }
 
     /// Setup a database with models, always with logging enabled
-    pub async fn setup_db(&mut self, builder: toasty::db::Builder) -> Db {
-        self.try_setup_db(builder).await.unwrap()
+    pub async fn setup_db(&mut self, models: ModelSet) -> Db {
+        self.try_setup_db(models).await.unwrap()
     }
 
     /// Get the execution log for assertions

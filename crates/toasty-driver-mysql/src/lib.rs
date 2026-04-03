@@ -23,7 +23,7 @@ use mysql_async::{
 use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     Result, Schema,
-    driver::{Capability, Driver, Operation, Response},
+    driver::{Capability, Driver, ExecResponse, Operation},
     schema::db::{self, Migration, SchemaDiff, Table},
     stmt::{self, ValueRecord},
 };
@@ -212,7 +212,7 @@ impl From<Conn> for Connection {
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
-    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
+    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         tracing::trace!(driver = "mysql", op = %op.name(), "driver exec");
 
         let (sql, ret, last_insert_id_hack): (sql::Statement, _, _) = match op {
@@ -229,7 +229,7 @@ impl toasty_core::driver::Connection for Connection {
                     },
                     other => toasty_core::Error::driver_operation_failed(other),
                 })?;
-                return Ok(Response::count(0));
+                return Ok(ExecResponse::count(0));
             }
             op => todo!("op={:#?}", op),
         };
@@ -290,12 +290,12 @@ impl toasty_core::driver::Connection for Connection {
                     Ok(ValueRecord::from_vec(vec![stmt::Value::U64(id)]))
                 });
 
-                return Ok(Response::value_stream(stmt::ValueStream::from_iter(
+                return Ok(ExecResponse::value_stream(stmt::ValueStream::from_iter(
                     results,
                 )));
             }
 
-            return Ok(Response::count(count));
+            return Ok(ExecResponse::count(count));
         }
 
         let rows: Vec<mysql_async::Row> = self
@@ -321,7 +321,7 @@ impl toasty_core::driver::Connection for Connection {
                 Ok(ValueRecord::from_vec(results))
             });
 
-            Ok(Response::value_stream(stmt::ValueStream::from_iter(
+            Ok(ExecResponse::value_stream(stmt::ValueStream::from_iter(
                 results,
             )))
         } else {
@@ -330,7 +330,7 @@ impl toasty_core::driver::Connection for Connection {
             let condition_matched = row.get::<i64, usize>(1).unwrap();
 
             if total == condition_matched {
-                Ok(Response::count(total as _))
+                Ok(ExecResponse::count(total as _))
             } else {
                 Err(toasty_core::Error::condition_failed(
                     "update condition did not match",

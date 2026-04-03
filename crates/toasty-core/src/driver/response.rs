@@ -1,26 +1,31 @@
 use crate::{Result, stmt};
 
-/// The result returned by [`Connection::exec`](super::Connection::exec).
+/// The result of a database operation.
 ///
-/// Every database operation produces a `Response` containing [`Rows`], which
-/// may be a row count, a single value, or a stream of result rows.
+/// Every database operation produces an `ExecResponse` containing [`Rows`],
+/// which may be a row count, a single value, or a stream of result rows.
+/// Paginated queries may also include cursors for fetching subsequent pages.
 ///
 /// # Examples
 ///
 /// ```
-/// use toasty_core::driver::Response;
+/// use toasty_core::driver::ExecResponse;
 ///
 /// // Create a count response (e.g., from a DELETE that affected 3 rows)
-/// let resp = Response::count(3);
-/// assert_eq!(resp.rows.into_count(), 3);
+/// let resp = ExecResponse::count(3);
+/// assert_eq!(resp.values.into_count(), 3);
 /// ```
 #[derive(Debug)]
-pub struct Response {
-    /// The rows produced by the operation.
-    pub rows: Rows,
+pub struct ExecResponse {
+    /// The result values (rows, count, or stream).
+    pub values: Rows,
+    /// Cursor to the next page (if paginated and more data exists).
+    pub next_cursor: Option<stmt::Value>,
+    /// Cursor to the previous page (if backward pagination is supported).
+    pub prev_cursor: Option<stmt::Value>,
 }
 
-/// The payload of a [`Response`].
+/// The payload of an [`ExecResponse`].
 ///
 /// Operations that modify rows typically return [`Count`](Self::Count).
 /// Queries return either a single [`Value`](Self::Value) or a
@@ -37,25 +42,40 @@ pub enum Rows {
     Stream(stmt::ValueStream),
 }
 
-impl Response {
+impl ExecResponse {
     /// Creates a response indicating that `count` rows were affected.
     pub fn count(count: u64) -> Self {
         Self {
-            rows: Rows::Count(count),
+            values: Rows::Count(count),
+            next_cursor: None,
+            prev_cursor: None,
         }
     }
 
     /// Creates a response wrapping a stream of values.
     pub fn value_stream(values: impl Into<stmt::ValueStream>) -> Self {
         Self {
-            rows: Rows::value_stream(values),
+            values: Rows::value_stream(values),
+            next_cursor: None,
+            prev_cursor: None,
         }
     }
 
     /// Creates a response with an empty value stream (no rows).
     pub fn empty_value_stream() -> Self {
         Self {
-            rows: Rows::Stream(stmt::ValueStream::default()),
+            values: Rows::Stream(stmt::ValueStream::default()),
+            next_cursor: None,
+            prev_cursor: None,
+        }
+    }
+
+    /// Create a response from rows with no pagination cursors.
+    pub fn from_rows(rows: Rows) -> Self {
+        Self {
+            values: rows,
+            next_cursor: None,
+            prev_cursor: None,
         }
     }
 }
@@ -69,6 +89,19 @@ impl Rows {
     /// Returns `true` if this is a [`Count`](Self::Count) variant.
     pub fn is_count(&self) -> bool {
         matches!(self, Self::Count(_))
+    }
+
+    /// If this is a [`Stream`](Self::Stream), collects all values and converts
+    /// it to a [`Value`](Self::Value) containing a [`Value::List`](stmt::Value::List).
+    /// Other variants are left unchanged.
+    pub async fn buffer(&mut self) -> Result<()> {
+        if matches!(self, Rows::Stream(_)) {
+            let Rows::Stream(stream) = std::mem::replace(self, Rows::Count(0)) else {
+                unreachable!()
+            };
+            *self = Rows::Value(stmt::Value::List(stream.collect().await?));
+        }
+        Ok(())
     }
 
     /// Creates a duplicate of this `Rows` value.

@@ -126,15 +126,16 @@ pub use stmt::Statement;
 
 pub use toasty_macros::{Embed, Model, create, query};
 
-pub use toasty_core::{Error, Result};
+pub use toasty_core::{Error, Result, schema::app::ModelSet};
 
 #[doc(hidden)]
 pub mod codegen_support {
+    pub use crate::schema::inventory;
     pub use crate::{
         Db, Error, Executor, Result, Statement,
         schema::{
-            Auto, BelongsTo, Embed, Field, HasMany, HasOne, Load, Model, Register, Relation, Scope,
-            generate_unique_id,
+            Auto, BelongsTo, DiscoverItem, Embed, Field, HasMany, HasOne, Load, Model, Register,
+            Relation, Scope, generate_unique_id,
         },
         stmt::CreateMany,
         stmt::{self, Assign, IntoExpr, IntoInsert, IntoStatement, List, Path},

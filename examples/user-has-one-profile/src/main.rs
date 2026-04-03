@@ -26,8 +26,7 @@ struct Profile {
 #[tokio::main]
 async fn main() -> toasty::Result<()> {
     let mut db = toasty::Db::builder()
-        .register::<User>()
-        .register::<Profile>()
+        .models(toasty::models!(crate::*))
         .connect(
             std::env::var("TOASTY_CONNECTION_URL")
                 .as_deref()
@@ -39,7 +38,9 @@ async fn main() -> toasty::Result<()> {
     db.push_schema().await?;
 
     // Create a user without a profile
-    let user = User::create().name("John Doe").exec(&mut db).await?;
+    let user = toasty::create!(User { name: "John Doe" })
+        .exec(&mut db)
+        .await?;
 
     println!("created user; name={:?}", user.name);
 

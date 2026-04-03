@@ -893,8 +893,8 @@ fn lookup_embedded_model<'a>(
 
         Error::invalid_schema(format!(
             "field `{parent_name}::{}` references an embedded type that is not registered \
-             in the schema; did you forget to call `Db::builder().register::<T>()` for \
-             the embedded type?",
+             in the schema; did you forget to include the embedded type in \
+             `toasty::models!(..)`?",
             field.name.app_name,
         ))
     })

@@ -44,10 +44,7 @@ impl<'stmt> IndexMatch<'stmt> {
                     self.match_expr_binary_op_column(cx, lhs, expr, e.op)
                 }
                 (_, stmt::Expr::Reference(rhs @ stmt::ExprReference::Column(_))) => {
-                    let mut op = e.op;
-                    op.reverse();
-
-                    self.match_expr_binary_op_column(cx, rhs, expr, op)
+                    self.match_expr_binary_op_column(cx, rhs, expr, e.op.commute())
                 }
                 _ => todo!("expr={:#?}", expr),
             },
@@ -310,17 +307,12 @@ impl<'stmt> IndexMatch<'stmt> {
                         (
                             lhs,
                             stmt::Expr::Reference(column_ref @ stmt::ExprReference::Column(_)),
-                        ) => {
-                            let mut op = binary_op.op;
-                            op.reverse();
-
-                            stmt::ExprBinaryOp {
-                                lhs: Box::new(stmt::Expr::Reference(*column_ref)),
-                                rhs: Box::new(lhs.clone()),
-                                op,
-                            }
-                            .into()
+                        ) => stmt::ExprBinaryOp {
+                            lhs: Box::new(stmt::Expr::Reference(*column_ref)),
+                            rhs: Box::new(lhs.clone()),
+                            op: binary_op.op.commute(),
                         }
+                        .into(),
                         _ => todo!("binary_op={binary_op:#?}"),
                     };
 

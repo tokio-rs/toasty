@@ -34,8 +34,7 @@ pub struct Todo {
 /// Helper function to create a database instance with the schema
 pub async fn create_db() -> toasty::Result<toasty::Db> {
     let db = toasty::Db::builder()
-        .register::<User>()
-        .register::<Todo>()
+        .models(toasty::models!(crate::*))
         .connect("sqlite:./test.db")
         .await?;
 
