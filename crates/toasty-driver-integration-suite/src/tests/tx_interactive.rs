@@ -595,3 +595,20 @@ pub async fn builder_drop_rolls_back(t: &mut Test) -> Result<()> {
 
     Ok(())
 }
+
+/// Calling `.transaction()` through `&mut dyn Executor` works.
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+pub async fn transaction_via_dyn_executor(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    let executor: &mut dyn toasty::Executor = &mut db;
+    let mut tx = executor.transaction().await?;
+    User::create().name("Alice").exec(&mut tx).await?;
+    tx.commit().await?;
+
+    let users = User::all().exec(&mut db).await?;
+    assert_eq!(users.len(), 1);
+    assert_eq!(users[0].name, "Alice");
+
+    Ok(())
+}
