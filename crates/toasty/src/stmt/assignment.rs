@@ -73,16 +73,6 @@ impl AssignmentKind {
     }
 }
 
-impl<T> Assignment<T> {
-    // #[doc(hidden)]
-    // pub fn from_expr<U>(expr: super::Expr<U>) -> Self {
-    //     Assignment {
-    //         kind: AssignmentKind::Set(expr.untyped),
-    //         _p: PhantomData,
-    //     }
-    // }
-}
-
 // Assignment<T> implements Assign<T>
 impl<T> Assign<T> for Assignment<T> {
     fn into_assignment(self) -> Assignment<T> {
