@@ -2,7 +2,6 @@
 
 use crate::prelude::*;
 
-use toasty::Executor;
 use toasty_core::driver::{Operation, operation::Transaction};
 
 #[driver_test(id(ID))]

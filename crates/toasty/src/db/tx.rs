@@ -153,6 +153,11 @@ impl<'a> Transaction<'a> {
         Ok(tx)
     }
 
+    /// Create a nested transaction (savepoint).
+    pub async fn transaction(&mut self) -> Result<Transaction<'_>> {
+        <Self as Executor>::transaction(self).await
+    }
+
     /// Commit the transaction.
     pub async fn commit(mut self) -> Result<()> {
         tracing::debug!("committing transaction");

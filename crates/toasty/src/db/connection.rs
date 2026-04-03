@@ -67,6 +67,11 @@ impl Connection {
         rx.await.unwrap()
     }
 
+    /// Begin a transaction on this connection.
+    pub async fn transaction(&mut self) -> crate::Result<super::Transaction<'_>> {
+        <Self as super::Executor>::transaction(self).await
+    }
+
     /// Returns a [`TransactionBuilder`](super::TransactionBuilder) that will
     /// use this connection.
     pub fn transaction_builder(&mut self) -> super::TransactionBuilder<'_> {

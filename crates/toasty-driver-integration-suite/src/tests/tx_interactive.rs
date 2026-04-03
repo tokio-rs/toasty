@@ -1,6 +1,5 @@
 use crate::prelude::*;
 
-use toasty::Executor;
 use toasty_core::driver::{Operation, operation::Transaction};
 
 // ===== Basic commit / rollback =====

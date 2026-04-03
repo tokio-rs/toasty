@@ -127,6 +127,11 @@ impl Db {
         self.shared.engine.capability()
     }
 
+    /// Begin a transaction, acquiring a connection from the pool.
+    pub async fn transaction(&mut self) -> Result<Transaction<'_>> {
+        <Self as Executor>::transaction(self).await
+    }
+
     /// Returns a [`TransactionBuilder`] that will acquire a connection from
     /// the pool when [`begin`](TransactionBuilder::begin) is called.
     pub fn transaction_builder(&mut self) -> TransactionBuilder<'_> {
