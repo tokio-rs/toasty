@@ -563,7 +563,7 @@ pub async fn builder_with_all_options(t: &mut Test) -> Result<()> {
 
     let tx = db
         .transaction_builder()
-        .isolation(IsolationLevel::RepeatableRead)
+        .isolation(IsolationLevel::Serializable)
         .read_only(true)
         .begin()
         .await?;
@@ -572,7 +572,7 @@ pub async fn builder_with_all_options(t: &mut Test) -> Result<()> {
     assert_struct!(
         t.log().pop_op(),
         Operation::Transaction(Transaction::Start {
-            isolation: Some(IsolationLevel::RepeatableRead),
+            isolation: Some(IsolationLevel::Serializable),
             read_only: true
         })
     );
