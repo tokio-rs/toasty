@@ -67,6 +67,12 @@ impl Connection {
         rx.await.unwrap()
     }
 
+    /// Returns a [`TransactionBuilder`](super::TransactionBuilder) that will
+    /// use this connection.
+    pub fn transaction_builder(&mut self) -> super::TransactionBuilder<'_> {
+        super::TransactionBuilder::new(super::tx::TxSource::Connection(self))
+    }
+
     /// Creates tables and indices defined in the schema on the database.
     pub async fn push_schema(&self) -> crate::Result<()> {
         tracing::info!("pushing schema to database");

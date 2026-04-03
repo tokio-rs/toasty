@@ -127,6 +127,12 @@ impl Db {
         self.shared.engine.capability()
     }
 
+    /// Returns a [`TransactionBuilder`] that will acquire a connection from
+    /// the pool when [`begin`](TransactionBuilder::begin) is called.
+    pub fn transaction_builder(&mut self) -> TransactionBuilder<'_> {
+        TransactionBuilder::new(tx::TxSource::Db(self))
+    }
+
     /// Returns a reference to the connection pool backing this handle.
     #[doc(hidden)]
     pub fn pool(&self) -> &Pool {
