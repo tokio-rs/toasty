@@ -79,14 +79,6 @@ impl Connection {
     }
 }
 
-impl Connection {
-    /// Create a [`super::TransactionBuilder`] for configuring transaction
-    /// options (isolation level, read-only) before starting it.
-    pub fn transaction_builder(&self) -> super::TransactionBuilder {
-        super::TransactionBuilder::new()
-    }
-}
-
 #[async_trait]
 impl super::Executor for Connection {
     async fn transaction(&mut self) -> crate::Result<Transaction<'_>> {
