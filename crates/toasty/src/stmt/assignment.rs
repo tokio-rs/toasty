@@ -29,7 +29,7 @@ pub struct Assignment<T> {
     _p: PhantomData<T>,
 }
 
-type AssignFn = Box<dyn FnOnce(&mut stmt::Assignments, stmt::Projection)>;
+type AssignFn = Box<dyn FnOnce(&mut stmt::Assignments, stmt::Projection) + Send + Sync>;
 
 enum AssignmentKind {
     Set(stmt::Expr),
@@ -186,7 +186,10 @@ pub fn set<T>(expr: impl IntoExpr<T>) -> Assignment<T> {
 ///     .exec(&mut db)
 ///     .await?;
 /// ```
-pub fn patch<T, U>(path: Path<T, U>, value: impl Assign<U> + 'static) -> Assignment<T> {
+pub fn patch<T, U>(
+    path: Path<T, U>,
+    value: impl Assign<U> + Send + Sync + 'static,
+) -> Assignment<T> {
     let path_projection = path.untyped.projection;
 
     Assignment {
@@ -218,7 +221,9 @@ pub fn patch<T, U>(path: Path<T, U>, value: impl Assign<U> + 'static) -> Assignm
 ///     .exec(&mut db)
 ///     .await?;
 /// ```
-pub fn apply<T: 'static>(ops: impl IntoIterator<Item = Assignment<T>>) -> Assignment<T> {
+pub fn apply<T: Send + Sync + 'static>(
+    ops: impl IntoIterator<Item = Assignment<T>>,
+) -> Assignment<T> {
     let ops: Vec<Assignment<T>> = ops.into_iter().collect();
     Assignment {
         kind: AssignmentKind::Apply(Box::new(move |assignments, projection| {
