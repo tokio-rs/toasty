@@ -29,26 +29,45 @@ pub struct Assignment<T> {
     _p: PhantomData<T>,
 }
 
-type AssignFn = Box<dyn FnOnce(&mut stmt::Assignments, stmt::Projection) + Send + Sync>;
-
 enum AssignmentKind {
     Set(stmt::Expr),
     Insert(stmt::Expr),
     Remove(stmt::Expr),
-    Patch(AssignFn),
-    Apply(AssignFn),
+    Patch {
+        path: stmt::Projection,
+        inner: Box<AssignmentKind>,
+    },
+    Apply(Vec<AssignmentKind>),
+}
+
+fn apply_kind(
+    kind: AssignmentKind,
+    assignments: &mut stmt::Assignments,
+    projection: stmt::Projection,
+) {
+    match kind {
+        AssignmentKind::Set(expr) => assignments.set(projection, expr),
+        AssignmentKind::Insert(expr) => assignments.insert(projection, expr),
+        AssignmentKind::Remove(expr) => assignments.remove(projection, expr),
+        AssignmentKind::Patch { path, inner } => {
+            let mut full_projection = projection;
+            for &step in path.as_slice() {
+                full_projection.push(step);
+            }
+            apply_kind(*inner, assignments, full_projection);
+        }
+        AssignmentKind::Apply(ops) => {
+            for kind in ops {
+                apply_kind(kind, assignments, projection.clone());
+            }
+        }
+    }
 }
 
 // Assignment<T> implements Assign<T>
 impl<T> Assign<T> for Assignment<T> {
     fn assign(self, assignments: &mut stmt::Assignments, projection: stmt::Projection) {
-        match self.kind {
-            AssignmentKind::Set(expr) => assignments.set(projection, expr),
-            AssignmentKind::Insert(expr) => assignments.insert(projection, expr),
-            AssignmentKind::Remove(expr) => assignments.remove(projection, expr),
-            AssignmentKind::Patch(f) => f(assignments, projection),
-            AssignmentKind::Apply(f) => f(assignments, projection),
-        }
+        apply_kind(self.kind, assignments, projection);
     }
 }
 
@@ -163,17 +182,22 @@ pub fn set<T>(expr: impl IntoExpr<T>) -> Assignment<T> {
 
 /// Partially update a sub-field of an embedded type.
 ///
-/// Takes a [`Path<T, U>`] (identifying which sub-field to update) and a
-/// value (`impl Assign<U>` — either a plain value or a nested
-/// [`Assignment<U>`] for deeper patching). Returns an [`Assignment<T>`]
-/// that can be passed to the parent field's setter.
+/// Takes a [`Path<T, U>`] (identifying which sub-field to update) and an
+/// [`Assignment<U>`] (the operation to apply at that sub-field). Returns an
+/// [`Assignment<T>`] that can be passed to the parent field's setter.
+///
+/// For plain values, wrap with [`set`] first:
+/// `stmt::patch(path, stmt::set("doctor"))`.
 ///
 /// # Examples
 ///
 /// ```ignore
 /// // Update a single sub-field
 /// user.update()
-///     .critter(stmt::patch(Creature::fields().human().profession(), "doctor"))
+///     .critter(stmt::patch(
+///         Creature::fields().human().profession(),
+///         stmt::set("doctor"),
+///     ))
 ///     .exec(&mut db)
 ///     .await?;
 ///
@@ -181,26 +205,17 @@ pub fn set<T>(expr: impl IntoExpr<T>) -> Assignment<T> {
 /// user.update()
 ///     .kind(stmt::patch(
 ///         Kind::variants().admin().perm(),
-///         stmt::patch(Permission::fields().everything(), true),
+///         stmt::patch(Permission::fields().everything(), stmt::set(true)),
 ///     ))
 ///     .exec(&mut db)
 ///     .await?;
 /// ```
-pub fn patch<T, U>(
-    path: Path<T, U>,
-    value: impl Assign<U> + Send + Sync + 'static,
-) -> Assignment<T> {
-    let path_projection = path.untyped.projection;
-
+pub fn patch<T, U>(path: Path<T, U>, value: Assignment<U>) -> Assignment<T> {
     Assignment {
-        kind: AssignmentKind::Patch(Box::new(move |assignments, mut projection| {
-            // Append the path's field steps to the parent projection,
-            // so the inner assignment lands at the correct nested key.
-            for &step in path_projection.as_slice() {
-                projection.push(step);
-            }
-            value.assign(assignments, projection);
-        })),
+        kind: AssignmentKind::Patch {
+            path: path.untyped.projection,
+            inner: Box::new(value.kind),
+        },
         _p: PhantomData,
     }
 }
@@ -221,16 +236,10 @@ pub fn patch<T, U>(
 ///     .exec(&mut db)
 ///     .await?;
 /// ```
-pub fn apply<T: Send + Sync + 'static>(
-    ops: impl IntoIterator<Item = Assignment<T>>,
-) -> Assignment<T> {
-    let ops: Vec<Assignment<T>> = ops.into_iter().collect();
+pub fn apply<T>(ops: impl IntoIterator<Item = Assignment<T>>) -> Assignment<T> {
+    let ops: Vec<AssignmentKind> = ops.into_iter().map(|a| a.kind).collect();
     Assignment {
-        kind: AssignmentKind::Apply(Box::new(move |assignments, projection| {
-            for op in ops {
-                op.assign(assignments, projection.clone());
-            }
-        })),
+        kind: AssignmentKind::Apply(ops),
         _p: PhantomData,
     }
 }
