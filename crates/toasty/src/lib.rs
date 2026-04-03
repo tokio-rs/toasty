@@ -135,12 +135,7 @@ pub mod codegen_support {
         Db, Error, Executor, Result, Statement,
         schema::{
             Auto, BelongsTo, DiscoverItem, Embed, Field, HasMany, HasOne, Load, Model, Register,
-            Relation, Scope,
-            create_meta::{
-                CreateBelongsTo, CreateField, CreateMeta, CreateNested, assert_create_fields,
-                assert_nested_create_fields,
-            },
-            generate_unique_id,
+            Relation, Scope, generate_unique_id,
         },
         stmt::CreateMany,
         stmt::{self, Assign, IntoExpr, IntoInsert, IntoStatement, List, Path},

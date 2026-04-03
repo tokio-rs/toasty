@@ -1,5 +1,4 @@
 use super::{Load, Register};
-use crate::schema::create_meta::CreateMeta;
 use crate::stmt::{IntoExpr, IntoInsert, Path};
 
 /// Trait for root models that map to database tables and can be queried.
@@ -22,9 +21,6 @@ pub trait Model: Register + Load<Output = Self> + Sized {
 
     /// A typed path from `Origin` into this model.
     type Path<Origin>;
-
-    /// Compile-time metadata describing the fields available for creation.
-    const CREATE_META: CreateMeta;
 
     /// Construct a model path from a [`Path`] targeting this model.
     fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin>;

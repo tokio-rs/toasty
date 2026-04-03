@@ -6,15 +6,3 @@ error[E0599]: no method named `nonexistent` found for struct `UserCreate` in the
 ...
 11 |     let _ = toasty::create!(User { nonexistent: "value" });
    |                                    ^^^^^^^^^^^ method not found in `UserCreate`
-
-error[E0080]: evaluation panicked: missing required field `name` in create! for `User`
-  --> tests/ui/create_invalid_field.rs:11:29
-   |
-11 |     let _ = toasty::create!(User { nonexistent: "value" });
-   |                             ^^^^ evaluation of `main::_CREATE` failed inside this call
-   |
-note: inside `assert_create_fields`
-  --> $WORKSPACE/crates/toasty/src/schema/create_meta.rs
-   |
-   |             missing_field_panic(meta.model_name, field.name);
-   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the failure occurred here

@@ -4,10 +4,6 @@ pub use auto::Auto;
 mod belongs_to;
 pub use belongs_to::BelongsTo;
 
-#[doc(hidden)]
-pub mod create_meta;
-pub use create_meta::{CreateBelongsTo, CreateField, CreateMeta, CreateNested};
-
 mod embed;
 pub use embed::Embed;
 

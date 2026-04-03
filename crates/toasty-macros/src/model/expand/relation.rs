@@ -126,9 +126,6 @@ impl Expand<'_> {
                 type Path<__Origin> = #field_list_struct_ident<__Origin>;
                 type Create = #create_builder_ident;
 
-                const CREATE_META: &'static #toasty::CreateMeta =
-                    &<#model_ident as #toasty::Model>::CREATE_META;
-
                 fn new_path<__Origin>(path: #toasty::Path<__Origin, Self::Item>) -> Self::Path<__Origin> {
                     #field_list_struct_ident::from_path(path)
                 }
@@ -148,9 +145,6 @@ impl Expand<'_> {
                 type Path<__Origin> = #field_struct_ident<__Origin>;
                 type Create = #create_builder_ident;
 
-                const CREATE_META: &'static #toasty::CreateMeta =
-                    &<#model_ident as #toasty::Model>::CREATE_META;
-
                 fn new_path<__Origin>(path: #toasty::Path<__Origin, Self::Item>) -> Self::Path<__Origin> {
                     #field_struct_ident::from_path(path)
                 }
@@ -169,9 +163,6 @@ impl Expand<'_> {
                 type Item = #model_ident;
                 type Path<__Origin> = #field_struct_ident<__Origin>;
                 type Create = #create_builder_ident;
-
-                const CREATE_META: &'static #toasty::CreateMeta =
-                    &<#model_ident as #toasty::Model>::CREATE_META;
 
                 fn new_path<__Origin>(path: #toasty::Path<__Origin, Self::Item>) -> Self::Path<__Origin> {
                     #field_struct_ident::from_path(path)

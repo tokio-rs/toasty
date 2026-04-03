@@ -100,9 +100,6 @@ impl<T: Relation> Scope for HasMany<T> {
     type Path<Origin> = T::ManyField<Origin>;
     type Create = T::Create;
 
-    const CREATE_META: &'static crate::schema::create_meta::CreateMeta =
-        &<T::Model as super::Model>::CREATE_META;
-
     fn new_path<Origin>(path: crate::stmt::Path<Origin, Self::Item>) -> Self::Path<Origin> {
         T::new_many_field(path)
     }
