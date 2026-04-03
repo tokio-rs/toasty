@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.2.0...toasty-core-v0.3.0) - 2026-04-03
+
+### Added
+
+- [**breaking**] add `ModelSet` and `models!` macro to replace `.register::<T>()` ([#615](https://github.com/tokio-rs/toasty/pull/615))
+
+### Fixed
+
+- replace broken BinaryOp::reverse with commute in index matching ([#611](https://github.com/tokio-rs/toasty/pull/611))
+
+### Other
+
+- signature change on Connection trait ([#626](https://github.com/tokio-rs/toasty/pull/626))
+- push pagination handling into engine ([#610](https://github.com/tokio-rs/toasty/pull/610))
+- add badges to README ([#606](https://github.com/tokio-rs/toasty/pull/606))
+- update README examples to use create! macro syntax ([#603](https://github.com/tokio-rs/toasty/pull/603))
+
 ## [0.2.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.0.0...toasty-core-v0.2.0) - 2026-03-30
 
 ### Added

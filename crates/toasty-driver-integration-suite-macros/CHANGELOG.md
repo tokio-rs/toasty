@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-macros-v0.2.0...toasty-driver-integration-suite-macros-v0.3.0) - 2026-04-03
+
+### Other
+
+- add badges to README ([#606](https://github.com/tokio-rs/toasty/pull/606))
+- update README examples to use create! macro syntax ([#603](https://github.com/tokio-rs/toasty/pull/603))
+
 ## [0.2.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-macros-v0.0.0...toasty-driver-integration-suite-macros-v0.2.0) - 2026-03-30
 
 ### Added
