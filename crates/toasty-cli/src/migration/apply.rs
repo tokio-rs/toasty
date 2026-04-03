@@ -106,7 +106,7 @@ pub(crate) async fn apply_migrations(db: &Db, config: &Config) -> Result<()> {
         let migration = Migration::new_sql(sql);
 
         // Apply the migration
-        conn.apply_migration(migration_entry.id, migration_entry.name.clone(), &migration)
+        conn.apply_migration(migration_entry.id, &migration_entry.name, &migration)
             .await?;
 
         println!(
