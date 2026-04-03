@@ -1,5 +1,7 @@
 use crate::prelude::*;
 
+use std::{rc::Rc, sync::Arc};
+
 #[driver_test]
 pub async fn boxed_u64_fk_crud(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -164,6 +166,145 @@ pub async fn boxed_u64_fk_delete_and_update(test: &mut Test) -> Result<()> {
 
     let todos: Vec<_> = user.todos().exec(&mut db).await?;
     assert!(todos.is_empty());
+
+    Ok(())
+}
+
+#[driver_test]
+pub async fn arc_u64_fk_crud(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: u64,
+        name: String,
+        #[has_many]
+        todos: toasty::HasMany<Todo>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: u64,
+        #[index]
+        user_id: Arc<u64>,
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::BelongsTo<User>,
+        title: String,
+    }
+
+    let mut db = test.setup_db(models!(User, Todo)).await;
+
+    let user = toasty::create!(User { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+
+    // Create via association
+    let todo = user
+        .todos()
+        .create()
+        .title("Arc task")
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(*todo.user_id, user.id);
+
+    // Query back by FK
+    let todos: Vec<_> = Todo::filter_by_user_id(user.id).exec(&mut db).await?;
+    assert_eq!(todos.len(), 1);
+    assert_eq!(todos[0].title, "Arc task");
+
+    // Create directly
+    let todo2 = Todo::create()
+        .user(&user)
+        .title("Arc task 2")
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(*todo2.user_id, user.id);
+
+    // Batch create
+    let user2 = User::create()
+        .name("Bob")
+        .todo(Todo::create().title("Batch 1"))
+        .todo(Todo::create().title("Batch 2"))
+        .exec(&mut db)
+        .await?;
+
+    let todos: Vec<_> = user2.todos().exec(&mut db).await?;
+    assert_eq!(todos.len(), 2);
+
+    for todo in &todos {
+        assert_eq!(*todo.user_id, user2.id);
+    }
+
+    Ok(())
+}
+
+#[driver_test]
+pub async fn rc_u64_fk_crud(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: u64,
+        name: String,
+        #[has_many]
+        todos: toasty::HasMany<Todo>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: u64,
+        #[index]
+        user_id: Rc<u64>,
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::BelongsTo<User>,
+        title: String,
+    }
+
+    let mut db = test.setup_db(models!(User, Todo)).await;
+
+    let user = toasty::create!(User { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+
+    // Create via association
+    let todo = user.todos().create().title("Rc task").exec(&mut db).await?;
+
+    assert_eq!(*todo.user_id, user.id);
+
+    // Query back by FK
+    let todos: Vec<_> = Todo::filter_by_user_id(user.id).exec(&mut db).await?;
+    assert_eq!(todos.len(), 1);
+    assert_eq!(todos[0].title, "Rc task");
+
+    // Create directly
+    let todo2 = Todo::create()
+        .user(&user)
+        .title("Rc task 2")
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(*todo2.user_id, user.id);
+
+    // Batch create
+    let user2 = User::create()
+        .name("Bob")
+        .todo(Todo::create().title("Batch 1"))
+        .todo(Todo::create().title("Batch 2"))
+        .exec(&mut db)
+        .await?;
+
+    let todos: Vec<_> = user2.todos().exec(&mut db).await?;
+    assert_eq!(todos.len(), 2);
+
+    for todo in &todos {
+        assert_eq!(*todo.user_id, user2.id);
+    }
 
     Ok(())
 }
