@@ -294,8 +294,9 @@ impl Model {
 
         let attrs = FieldAttr::from_attrs(&inner.attrs)?;
 
-        // Use a synthetic ident `_0` for code generation purposes (setter
-        // methods, etc.), but the schema will record `app: None`.
+        // Use a synthetic ident `_0` for code generation purposes. The schema
+        // will record `app: None`. set/with idents are required by the Field
+        // struct but unused — newtypes don't generate an update builder.
         let span = ast.ident.span();
         let name = Name {
             parts: vec!["_0".to_string()],
