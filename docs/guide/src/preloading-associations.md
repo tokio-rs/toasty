@@ -3,6 +3,20 @@
 Preloading (also called eager loading) loads related records alongside the main
 query, avoiding extra database round-trips when you access associations.
 
+## Async means a query, always
+
+Toasty's API follows one rule for associations: **if you `.await` it, it hits
+the database.** There are no hidden or implicit queries. The two ways to access
+an association make this visible in the code:
+
+- `user.posts().exec(&mut db).await?` — async, executes a query.
+- `user.posts.get()` — not async, reads already-loaded data in memory.
+
+Because `.get()` is a plain (non-async) method, the compiler won't let you
+confuse the two. You can scan any code path for `.await` to know exactly where
+database round-trips happen. This makes N+1 problems easy to spot and impossible
+to introduce by accident.
+
 ## The N+1 problem
 
 Without preloading, accessing a relation on each record in a list causes one
@@ -19,8 +33,10 @@ for user in &users {
 }
 ```
 
-If there are 100 users, this executes 101 queries. Preloading reduces this to a
-fixed number of queries regardless of how many records you load.
+If there are 100 users, this executes 101 queries. The `.await` on each
+`user.posts().exec()` call is a clear signal that a query runs on every
+iteration. Preloading reduces this to a fixed number of queries regardless of
+how many records you load.
 
 ## Using `.include()`
 
@@ -58,7 +74,7 @@ let user = User::filter_by_id(user.id)
     .get(&mut db)
     .await?;
 
-// Access preloaded posts — no additional query
+// Access preloaded posts — .get() is not async, so no query happens
 let posts: &[Post] = user.posts.get();
 assert_eq!(1, posts.len());
 # Ok(())
@@ -66,17 +82,24 @@ assert_eq!(1, posts.len());
 ```
 
 The `.include()` call tells Toasty to load the associated posts as part of the
-query. After preloading, access the data through the field directly
-(`user.posts.get()`) instead of the method (`user.posts().exec()`).
+query. After preloading, access the data through the field directly with
+`user.posts.get()` — a synchronous call that reads from memory. Compare this
+with `user.posts().exec(&mut db).await?`, which is async and always runs a
+query. The presence or absence of `.await` tells you whether code touches the
+database.
 
 ## Preloaded vs unloaded access
 
 There are two ways to access a relation, depending on whether it was preloaded:
 
-| Access pattern | When to use | Queries |
-|---|---|---|
-| `user.posts().exec(&mut db)` | Relation was not preloaded | Executes a query |
-| `user.posts.get()` | Relation was preloaded with `.include()` | No query |
+| Access pattern | Async | When to use | Queries |
+|---|---|---|---|
+| `user.posts().exec(&mut db).await?` | Yes | Relation was not preloaded | Executes a query |
+| `user.posts.get()` | No | Relation was preloaded with `.include()` | No query |
+
+Because `.get()` is synchronous, you can never accidentally trigger a database
+query by calling it. Conversely, every database round-trip requires `.await`, so
+N+1 problems are always visible in the code.
 
 Calling `.get()` on an unloaded relation panics. Only use `.get()` when you know
 the relation was preloaded.
@@ -244,7 +267,7 @@ let users = User::all()
     .await?;
 
 for user in &users {
-    // No additional query per user
+    // .get() is not async — no query per user, no N+1
     let posts: &[Post] = user.posts.get();
     println!("{}: {} posts", user.name, posts.len());
 }
