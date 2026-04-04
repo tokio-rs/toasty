@@ -1,7 +1,10 @@
+//! Tests that models referenced by registered models are automatically
+//! discovered and registered via the global inventory.
+
 use crate::prelude::*;
 
 #[driver_test(id(ID))]
-pub async fn missing_registration_belongs_to(t: &mut Test) -> Result<()> {
+pub async fn auto_register_belongs_to(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Parent {
         #[key]
@@ -20,15 +23,14 @@ pub async fn missing_registration_belongs_to(t: &mut Test) -> Result<()> {
         id: ID,
     }
 
-    let error = t.try_setup_db(models!(Parent)).await.unwrap_err();
-    assert!(error.is_invalid_schema());
-    assert!(format!("{error}").contains("Parent::child"));
+    // Only register Parent — Child should be auto-discovered
+    let _db = t.setup_db(models!(Parent)).await;
 
     Ok(())
 }
 
 #[driver_test(id(ID))]
-pub async fn missing_registration_has_one(t: &mut Test) -> Result<()> {
+pub async fn auto_register_has_one(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Parent {
         #[key]
@@ -45,20 +47,20 @@ pub async fn missing_registration_has_one(t: &mut Test) -> Result<()> {
         #[auto]
         id: ID,
 
+        #[unique]
         parent_id: ID,
         #[belongs_to(key = parent_id, references = id)]
         parent: toasty::BelongsTo<Parent>,
     }
 
-    let error = t.try_setup_db(models!(Parent)).await.unwrap_err();
-    assert!(error.is_invalid_schema());
-    assert!(format!("{error}").contains("Parent::child"));
+    // Only register Parent — Child should be auto-discovered
+    let _db = t.setup_db(models!(Parent)).await;
 
     Ok(())
 }
 
 #[driver_test(id(ID))]
-pub async fn missing_registration_has_many(t: &mut Test) -> Result<()> {
+pub async fn auto_register_has_many(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Parent {
         #[key]
@@ -81,15 +83,14 @@ pub async fn missing_registration_has_many(t: &mut Test) -> Result<()> {
         parent: toasty::BelongsTo<Parent>,
     }
 
-    let error = t.try_setup_db(models!(Parent)).await.unwrap_err();
-    assert!(error.is_invalid_schema());
-    assert!(format!("{error}").contains("Parent::child"));
+    // Only register Parent — Child should be auto-discovered
+    let _db = t.setup_db(models!(Parent)).await;
 
     Ok(())
 }
 
 #[driver_test(id(ID))]
-pub async fn missing_registration_embedded(t: &mut Test) -> Result<()> {
+pub async fn auto_register_embedded(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Parent {
         #[key]
@@ -104,9 +105,8 @@ pub async fn missing_registration_embedded(t: &mut Test) -> Result<()> {
         x: i32,
     }
 
-    let error = t.try_setup_db(models!(Parent)).await.unwrap_err();
-    assert!(error.is_invalid_schema());
-    assert!(format!("{error}").contains("Parent::detail"));
+    // Only register Parent — Detail should be auto-discovered
+    let _db = t.setup_db(models!(Parent)).await;
 
     Ok(())
 }

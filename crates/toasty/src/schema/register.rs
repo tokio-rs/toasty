@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use toasty_core::schema::app::{self, ModelId, ModelSet};
 
 /// Generate a unique model ID at runtime.
@@ -40,16 +41,29 @@ pub trait Register {
 #[doc(hidden)]
 pub struct DiscoverItem {
     crate_name: &'static str,
+    model_id: fn() -> ModelId,
     add_fn: fn(&mut ModelSet),
 }
 
 impl DiscoverItem {
-    pub const fn new(crate_name: &'static str, add_fn: fn(&mut ModelSet)) -> Self {
-        Self { crate_name, add_fn }
+    pub const fn new(
+        crate_name: &'static str,
+        model_id: fn() -> ModelId,
+        add_fn: fn(&mut ModelSet),
+    ) -> Self {
+        Self {
+            crate_name,
+            model_id,
+            add_fn,
+        }
     }
 
     pub fn crate_name(&self) -> &'static str {
         self.crate_name
+    }
+
+    pub fn model_id(&self) -> ModelId {
+        (self.model_id)()
     }
 
     pub fn add_to(&self, model_set: &mut ModelSet) {
@@ -65,6 +79,17 @@ impl DiscoverItem {
                 item.add_to(model_set);
             }
         }
+    }
+
+    /// Build a lookup from ModelId to add_fn from all inventory items.
+    ///
+    /// This enables transitive discovery: given a ModelId referenced by
+    /// a relation or embedded field, we can find and register the
+    /// corresponding model even if it wasn't explicitly listed.
+    pub fn global_registry() -> HashMap<ModelId, fn(&mut ModelSet)> {
+        inventory::iter::<Self>()
+            .map(|item| (item.model_id(), item.add_fn))
+            .collect()
     }
 }
 

@@ -1,5 +1,6 @@
-use super::{Field, FieldId, FieldPrimitive, Index, Name, PrimaryKey};
+use super::{Field, FieldId, FieldPrimitive, FieldTy, Index, Name, PrimaryKey};
 use crate::{Result, driver, stmt};
+use std::collections::HashSet;
 use std::fmt;
 
 /// A model in the application schema.
@@ -77,9 +78,31 @@ impl ModelSet {
         self.models.push(model);
     }
 
+    /// Returns `true` if the set contains a model with the given ID.
+    pub fn contains(&self, id: ModelId) -> bool {
+        self.models.iter().any(|m| m.id() == id)
+    }
+
     /// Returns an iterator over the models in insertion order.
     pub fn iter(&self) -> impl ExactSizeIterator<Item = &Model> {
         self.models.iter()
+    }
+
+    /// Collects the [`ModelId`]s of all models referenced by fields in this
+    /// set (via relations or embedded types) that are not already present.
+    pub fn missing_referenced_ids(&self) -> HashSet<ModelId> {
+        let present: HashSet<ModelId> = self.models.iter().map(|m| m.id()).collect();
+        let mut missing = HashSet::new();
+
+        for model in &self.models {
+            for id in model.referenced_model_ids() {
+                if !present.contains(&id) {
+                    missing.insert(id);
+                }
+            }
+        }
+
+        missing
     }
 }
 
@@ -424,6 +447,28 @@ impl Model {
             Model::Root(_) => panic!("expected embedded enum, found root model"),
             Model::EmbeddedStruct(_) => panic!("expected embedded enum, found embedded struct"),
         }
+    }
+
+    /// Returns the [`ModelId`]s of all models referenced by this model's
+    /// fields (via relations or embedded types).
+    pub fn referenced_model_ids(&self) -> Vec<ModelId> {
+        let fields: &[Field] = match self {
+            Model::Root(root) => &root.fields,
+            Model::EmbeddedStruct(s) => &s.fields,
+            Model::EmbeddedEnum(e) => &e.fields,
+        };
+
+        let mut ids = Vec::new();
+        for field in fields {
+            match &field.ty {
+                FieldTy::BelongsTo(r) => ids.push(r.target),
+                FieldTy::HasMany(r) => ids.push(r.target),
+                FieldTy::HasOne(r) => ids.push(r.target),
+                FieldTy::Embedded(e) => ids.push(e.target),
+                FieldTy::Primitive(_) => {}
+            }
+        }
+        ids
     }
 
     pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {

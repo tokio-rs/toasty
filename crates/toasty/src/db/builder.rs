@@ -87,8 +87,40 @@ impl Builder {
     ///
     /// This is useful for tooling that needs the schema without a running
     /// database (e.g., migration generators).
+    ///
+    /// Any models referenced by registered models (via relations or embedded
+    /// types) are automatically discovered from the global inventory and
+    /// added to the schema. This process is transitive: if model A references
+    /// model B which references model C, all three will be included.
     pub fn build_app_schema(&self) -> Result<app::Schema> {
-        app::Schema::from_macro(self.models.clone())
+        use crate::schema::DiscoverItem;
+
+        let mut models = self.models.clone();
+
+        // Transitively discover referenced models from the global inventory.
+        let registry = DiscoverItem::global_registry();
+        loop {
+            let missing = models.missing_referenced_ids();
+            if missing.is_empty() {
+                break;
+            }
+
+            let mut found_any = false;
+            for id in &missing {
+                if let Some(add_fn) = registry.get(id) {
+                    add_fn(&mut models);
+                    found_any = true;
+                }
+            }
+
+            if !found_any {
+                // Referenced models not in inventory — let Schema::from_macro
+                // produce the appropriate error message.
+                break;
+            }
+        }
+
+        app::Schema::from_macro(models)
     }
 
     /// Open a database connection using a URL string.
