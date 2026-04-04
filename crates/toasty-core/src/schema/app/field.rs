@@ -138,20 +138,26 @@ impl FieldName {
         self.app.as_deref().unwrap()
     }
 
+    /// Returns the storage (database column) name for this field, if one can
+    /// be determined.
+    ///
+    /// Returns `storage` if set, otherwise falls back to `app`. Returns `None`
+    /// only when both fields are `None`.
+    pub fn storage_name(&self) -> Option<&str> {
+        self.storage.as_deref().or(self.app.as_deref())
+    }
+
     /// Returns the storage (database column) name for this field.
     ///
-    /// Falls back to [`app`](FieldName::app) when no explicit storage name is
-    /// set.
+    /// This is a convenience wrapper around [`storage_name`](FieldName::storage_name)
+    /// for callers that expect a name to always be present.
     ///
     /// # Panics
     ///
     /// Panics if both `storage` and `app` are `None`.
-    #[track_caller]
-    pub fn storage_name(&self) -> &str {
-        self.storage
-            .as_deref()
-            .or(self.app.as_deref())
-            .expect("FieldName must have at least one of app or storage")
+    pub fn storage_name_unwrap(&self) -> &str {
+        self.storage_name()
+            .expect("must specify app name or storage name")
     }
 }
 

@@ -716,7 +716,9 @@ impl<'a, 'b> MapField<'a, 'b> {
     /// applied here — never stored in `self.prefix` — it is always applied
     /// exactly once regardless of nesting depth.
     fn column_name(&self, field: &app::Field) -> String {
-        let field_name = field.name.storage_name();
+        let Some(field_name) = field.name.storage_name() else {
+            todo!()
+        };
         let embed = if self.prefix.is_empty() {
             field_name.to_owned()
         } else {
@@ -858,7 +860,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             }],
             stmt::Expr::null(),
         );
-        let mut child = self.with_prefix(field.name.storage_name());
+        let mut child = self.with_prefix(field.name.storage_name_unwrap());
         child.in_enum_variant = true;
         child.field_base = Some(field_base);
         child.field_expr_base.substitute(&[field_expr_base]);
@@ -873,7 +875,7 @@ impl<'a, 'b> MapField<'a, 'b> {
     /// `field_index`.
     fn for_struct(&mut self, field: &app::Field, field_index: usize) -> MapField<'_, 'b> {
         let field_base = self.extend_field_base(field, field_index);
-        let mut child = self.with_prefix(field.name.storage_name());
+        let mut child = self.with_prefix(field.name.storage_name_unwrap());
         child.field_base = Some(field_base);
         child
     }
