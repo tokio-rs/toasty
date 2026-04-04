@@ -95,11 +95,12 @@ pub async fn crud_newtype_embed(t: &mut Test) -> Result<()> {
     let mut db = t.setup_db(models!(User, Email)).await;
 
     // Create
-    let user = User::create()
-        .name("Alice")
-        .email(Email("alice@example.com".into()))
-        .exec(&mut db)
-        .await?;
+    let user = toasty::create!(User {
+        name: "Alice",
+        email: Email("alice@example.com".into()),
+    })
+    .exec(&mut db)
+    .await?;
 
     assert_eq!(user.name, "Alice");
     assert_eq!(user.email.0, "alice@example.com");
