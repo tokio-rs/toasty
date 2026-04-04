@@ -92,13 +92,13 @@ pub struct FieldId {
 ///     app: Some("user_name".to_string()),
 ///     storage: Some("username".to_string()),
 /// };
-/// assert_eq!(name.storage_name(), "username");
+/// assert_eq!(name.storage_name(), Some("username"));
 ///
 /// let default_name = FieldName {
 ///     app: Some("email".to_string()),
 ///     storage: None,
 /// };
-/// assert_eq!(default_name.storage_name(), "email");
+/// assert_eq!(default_name.storage_name(), Some("email"));
 /// ```
 #[derive(Debug, Clone)]
 pub struct FieldName {
