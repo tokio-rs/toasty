@@ -97,10 +97,6 @@ There are two ways to access a relation, depending on whether it was preloaded:
 | `user.posts().exec(&mut db).await?` | Yes | Relation was not preloaded | Executes a query |
 | `user.posts.get()` | No | Relation was preloaded with `.include()` | No query |
 
-Because `.get()` is synchronous, you can never accidentally trigger a database
-query by calling it. Conversely, every database round-trip requires `.await`, so
-N+1 problems are always visible in the code.
-
 Calling `.get()` on an unloaded relation panics. Only use `.get()` when you know
 the relation was preloaded.
 
