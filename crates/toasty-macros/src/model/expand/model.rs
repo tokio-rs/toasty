@@ -282,20 +282,30 @@ impl Expand<'_> {
 
     pub(super) fn expand_embedded_into_expr_body(&self, by_ref: bool) -> TokenStream {
         let toasty = &self.toasty;
+        let is_newtype = self.model.is_newtype();
 
         // For embedded types, create a record expression from all fields
         // Currently only primitive fields are supported in embedded types
-        let field_exprs = self.model.fields.iter().map(|field| {
-            let field_ident = &field.name.ident;
+        let field_exprs = self.model.fields.iter().enumerate().map(|(index, field)| {
             let ty = match &field.ty {
                 FieldTy::Primitive(ty) => ty,
                 _ => panic!("only primitive fields are supported in embedded types"),
             };
 
-            let value = if by_ref {
-                quote!((&self.#field_ident))
+            let value = if is_newtype {
+                let idx = syn::Index::from(index);
+                if by_ref {
+                    quote!((&self.#idx))
+                } else {
+                    quote!(self.#idx)
+                }
             } else {
-                quote!(self.#field_ident)
+                let field_ident = &field.name.ident;
+                if by_ref {
+                    quote!((&self.#field_ident))
+                } else {
+                    quote!(self.#field_ident)
+                }
             };
 
             self.expand_into_untyped_expr(ty, value)
@@ -321,6 +331,7 @@ impl Expand<'_> {
     pub(super) fn expand_load_body(&self) -> TokenStream {
         let toasty = &self.toasty;
         let model_ident = &self.model.ident;
+        let is_newtype = self.model.is_newtype();
 
         // Generate field loading expressions
         let field_loads = self.model.fields.iter().enumerate().map(|(index, field)| {
@@ -370,15 +381,34 @@ impl Expand<'_> {
             }
         });
 
+        let construct = if is_newtype {
+            // For newtypes, construct as `Model(value)` — extract just the
+            // value expression from the single field.
+            let field = &self.model.fields[0];
+            let ty = match &field.ty {
+                FieldTy::Primitive(ty) => ty,
+                _ => panic!("newtype inner field must be primitive"),
+            };
+            quote! {
+                Ok(#model_ident(
+                    <#ty as #toasty::Load>::load(record[0].take())?
+                ))
+            }
+        } else {
+            quote! {
+                Ok(#model_ident {
+                    #( #field_loads )*
+                })
+            }
+        };
+
         quote! {
             match value {
                 #toasty::core::stmt::Value::Null => {
                     Err(#toasty::Error::record_not_found(stringify!(#model_ident)))
                 }
                 #toasty::core::stmt::Value::Record(mut record) => {
-                    Ok(#model_ident {
-                        #( #field_loads )*
-                    })
+                    #construct
                 }
                 value => Err(#toasty::Error::type_conversion(value, stringify!(#model_ident))),
             }
@@ -391,11 +421,20 @@ impl Expand<'_> {
     /// sub-fields, and falls back to full `load` for complete record values.
     pub(super) fn expand_embedded_reload_body(&self) -> TokenStream {
         let toasty = &self.toasty;
+        let is_newtype = self.model.is_newtype();
 
         let reload_arms = self.model.fields.iter().enumerate().map(|(index, field)| {
-            let field_ident = &field.name.ident;
             let i = util::int(index);
             let field_name_str = field.name.ident.to_string();
+
+            // For newtypes, access via tuple index (target.0); otherwise by name
+            let field_access = if is_newtype {
+                let idx = syn::Index::from(index);
+                quote!(target.#idx)
+            } else {
+                let field_ident = &field.name.ident;
+                quote!(target.#field_ident)
+            };
 
             match &field.ty {
                 FieldTy::Primitive(_ty) if field.attrs.serialize.is_some() => {
@@ -419,15 +458,15 @@ impl Expand<'_> {
 
                     quote! {
                         #i => {
-                            target.#field_ident = #assign;
+                            #field_access = #assign;
                         }
                     }
                 }
                 FieldTy::Primitive(ty) => {
-                    quote!(#i => <#ty as #toasty::Load>::reload(&mut target.#field_ident, value)?,)
+                    quote!(#i => <#ty as #toasty::Load>::reload(&mut #field_access, value)?,)
                 }
                 _ => {
-                    quote!(#i => target.#field_ident.unload(),)
+                    quote!(#i => #field_access.unload(),)
                 }
             }
         });

@@ -716,13 +716,25 @@ impl<'a, 'b> MapField<'a, 'b> {
     /// applied here — never stored in `self.prefix` — it is always applied
     /// exactly once regardless of nesting depth.
     fn column_name(&self, field: &app::Field) -> String {
-        let Some(field_name) = field.name.storage_name() else {
-            todo!()
-        };
-        let embed = if self.prefix.is_empty() {
-            field_name.to_owned()
-        } else {
-            format!("{}_{field_name}", self.prefix.join("_"))
+        let embed = match field.name.storage_name() {
+            Some(field_name) => {
+                if self.prefix.is_empty() {
+                    field_name.to_owned()
+                } else {
+                    format!("{}_{field_name}", self.prefix.join("_"))
+                }
+            }
+            None => {
+                // Unnamed field (newtype wrapper) — use just the prefix
+                // components so the column name is identical to the parent
+                // field's name.
+                assert!(
+                    !self.prefix.is_empty(),
+                    "unnamed field with empty prefix; a newtype field must be \
+                     nested inside a parent field"
+                );
+                self.prefix.join("_")
+            }
         };
         match self.build.schema_prefix.as_deref() {
             None => embed,
@@ -836,6 +848,21 @@ impl<'a, 'b> MapField<'a, 'b> {
         }
     }
 
+    /// Creates a child `MapField` that inherits the current prefix unchanged.
+    ///
+    /// Used for newtype wrappers whose inner field is unnamed — the column
+    /// name should collapse to the parent field's name without adding an
+    /// extra segment.
+    fn with_prefix_unchanged(&mut self) -> MapField<'_, 'b> {
+        MapField {
+            build: self.build,
+            prefix: self.prefix.clone(),
+            in_enum_variant: self.in_enum_variant,
+            field_base: self.field_base.clone(),
+            field_expr_base: self.field_expr_base.clone(),
+        }
+    }
+
     /// Creates a variant-specific child `MapField`.
     ///
     /// Sets `field_base` so that `field_expr` on the child projects from the
@@ -875,7 +902,12 @@ impl<'a, 'b> MapField<'a, 'b> {
     /// `field_index`.
     fn for_struct(&mut self, field: &app::Field, field_index: usize) -> MapField<'_, 'b> {
         let field_base = self.extend_field_base(field, field_index);
-        let mut child = self.with_prefix(field.name.storage_name_unwrap());
+        let mut child = match field.name.storage_name() {
+            Some(name) => self.with_prefix(name),
+            // Unnamed field (newtype) — don't extend prefix so the child
+            // inherits the current prefix unchanged.
+            None => self.with_prefix_unchanged(),
+        };
         child.field_base = Some(field_base);
         child
     }

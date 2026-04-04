@@ -387,7 +387,7 @@ impl Field {
     }
 }
 
-fn rewrite_self(ty: &mut syn::Type, model: &syn::Ident) {
+pub(crate) fn rewrite_self(ty: &mut syn::Type, model: &syn::Ident) {
     use syn::visit_mut::VisitMut;
 
     struct RewriteSelf<'a>(&'a syn::Ident);

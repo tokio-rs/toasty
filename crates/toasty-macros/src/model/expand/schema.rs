@@ -68,14 +68,19 @@ impl Expand<'_> {
             let nullable;
 
             let name = {
-                let app_name = field.name.ident.to_string();
+                let app_name = if self.model.is_newtype() {
+                    quote! { None }
+                } else {
+                    let n = field.name.ident.to_string();
+                    quote! { Some(#n.to_string()) }
+                };
                 let storage_name = match field.attrs.column.as_ref().and_then(|column| column.name.as_ref()) {
                     Some(name) => quote! { Some(#name.to_string()) },
                     None => quote! { None },
                 };
                 quote! {
                     #toasty::core::schema::app::FieldName {
-                        app: Some(#app_name.to_string()),
+                        app: #app_name,
                         storage: #storage_name,
                     }
                 }

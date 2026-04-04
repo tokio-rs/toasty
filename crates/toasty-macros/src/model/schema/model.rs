@@ -1,6 +1,6 @@
 use super::{
     ErrorSet, Field, FieldAttr, FieldTy, Index, IndexField, IndexScope, ModelAttr, Name,
-    PrimaryKey, Variant, VariantValue,
+    PrimaryKey, Variant, VariantValue, rewrite_self,
 };
 
 #[derive(Debug)]
@@ -70,6 +70,9 @@ pub(crate) struct ModelEmbeddedStruct {
 
     /// Update builder struct identifier
     pub(crate) update_struct_ident: syn::Ident,
+
+    /// True when the embedded struct is a newtype wrapper: `struct Foo(Bar)`
+    pub(crate) is_newtype: bool,
 }
 
 #[derive(Debug)]
@@ -120,6 +123,23 @@ pub(crate) struct Model {
 
 impl Model {
     pub(crate) fn from_ast(ast: &syn::ItemStruct, is_embedded: bool) -> syn::Result<Self> {
+        // Check for newtype pattern: `struct Foo(Bar)` — only allowed for embedded structs
+        if let syn::Fields::Unnamed(unnamed) = &ast.fields {
+            if !is_embedded {
+                return Err(syn::Error::new_spanned(
+                    &ast.fields,
+                    "root models must have named fields",
+                ));
+            }
+            if unnamed.unnamed.len() != 1 {
+                return Err(syn::Error::new_spanned(
+                    &ast.fields,
+                    "embedded newtype structs must have exactly one field",
+                ));
+            }
+            return Self::from_newtype_ast(ast, &unnamed.unnamed[0]);
+        }
+
         let syn::Fields::Named(node) = &ast.fields else {
             return Err(syn::Error::new_spanned(
                 &ast.fields,
@@ -219,6 +239,7 @@ impl Model {
                 field_struct_ident: struct_ident("Fields", ast),
                 field_list_struct_ident: struct_list_ident("ListFields", ast),
                 update_struct_ident: struct_ident("Update", ast),
+                is_newtype: false,
             })
         } else {
             let pk_fields = pk_index_fields
@@ -257,6 +278,63 @@ impl Model {
         })
     }
 
+    /// Parse a newtype embedded struct: `struct Foo(Bar)`.
+    ///
+    /// Creates a single field with no application-level name (`app: None` in
+    /// the schema) so that the column name collapses to the parent field's
+    /// name — e.g. `email: Email` where `struct Email(String)` produces a
+    /// column named `email` rather than `email_0`.
+    fn from_newtype_ast(ast: &syn::ItemStruct, inner: &syn::Field) -> syn::Result<Self> {
+        if !ast.generics.params.is_empty() {
+            return Err(syn::Error::new_spanned(
+                &ast.generics,
+                "model generics are not supported",
+            ));
+        }
+
+        let attrs = FieldAttr::from_attrs(&inner.attrs)?;
+
+        // Use a synthetic ident `_0` for code generation purposes (setter
+        // methods, etc.), but the schema will record `app: None`.
+        let span = ast.ident.span();
+        let name = Name {
+            parts: vec!["_0".to_string()],
+            ident: syn::Ident::new("_0", span),
+        };
+        let set_ident = syn::Ident::new("set__0", span);
+        let with_ident = syn::Ident::new("with__0", span);
+
+        let mut ty = FieldTy::Primitive(inner.ty.clone());
+        if let FieldTy::Primitive(ref mut t) = ty {
+            rewrite_self(t, &ast.ident);
+        }
+
+        let field = Field {
+            id: 0,
+            attrs,
+            name,
+            ty,
+            set_ident,
+            with_ident,
+            variant: None,
+        };
+
+        Ok(Self {
+            vis: ast.vis.clone(),
+            name: Name::from_ident(&ast.ident),
+            ident: ast.ident.clone(),
+            fields: vec![field],
+            kind: ModelKind::EmbeddedStruct(ModelEmbeddedStruct {
+                field_struct_ident: struct_ident("Fields", ast),
+                field_list_struct_ident: struct_list_ident("ListFields", ast),
+                update_struct_ident: struct_ident("Update", ast),
+                is_newtype: true,
+            }),
+            indices: vec![],
+            table: None,
+        })
+    }
+
     pub fn primary_key_fields(&self) -> Option<impl ExactSizeIterator<Item = &'_ Field>> {
         match &self.kind {
             ModelKind::Root(root) => Some(
@@ -267,6 +345,10 @@ impl Model {
             ),
             ModelKind::EmbeddedStruct(_) | ModelKind::EmbeddedEnum(_) => None,
         }
+    }
+
+    pub(crate) fn is_newtype(&self) -> bool {
+        matches!(&self.kind, ModelKind::EmbeddedStruct(e) if e.is_newtype)
     }
 
     pub(crate) fn has_associations(&self) -> bool {
