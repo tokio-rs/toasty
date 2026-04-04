@@ -27,6 +27,15 @@ pub trait Register {
 
     /// Returns the schema definition for this type.
     fn schema() -> app::Model;
+
+    /// Register this model and all models reachable through its fields into the
+    /// given [`ModelSet`].
+    ///
+    /// If this model is already present in the set (checked via
+    /// [`ModelSet::contains`]), the method returns immediately. Otherwise it
+    /// inserts the model and recursively registers any models referenced by
+    /// embedded or relation fields.
+    fn register(model_set: &mut ModelSet);
 }
 
 /// An item discovered at compile time by the `#[derive(Model)]` or
@@ -131,7 +140,7 @@ macro_rules! models {
 
     // Register single model with `models!(ModelName)`
     (@internal $set:ident $model:ty $(,$rest:ty)* $(,)?) => {{
-        $set.add(<$model as ::toasty::schema::Register>::schema());
+        <$model as ::toasty::schema::Register>::register(&mut $set);
         $crate::models!(@internal $set $($rest),*);
     }};
 

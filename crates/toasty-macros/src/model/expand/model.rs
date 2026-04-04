@@ -30,6 +30,7 @@ impl Expand<'_> {
             }
         };
         let model_schema = self.expand_model_schema();
+        let field_register_calls = self.expand_field_register_calls();
         let model_fields = self.expand_model_field_struct_init();
         let load_body = self.expand_load_body();
         let filter_methods = self.expand_model_filter_methods();
@@ -84,12 +85,20 @@ impl Expand<'_> {
                 }
 
                 #model_schema
+
+                fn register(model_set: &mut #toasty::core::schema::app::ModelSet) {
+                    if model_set.contains(Self::id()) {
+                        return;
+                    }
+                    model_set.add(Self::schema());
+                    #( #field_register_calls )*
+                }
             }
 
             #toasty::inventory::submit! {
                 #toasty::DiscoverItem::new(
                     env!("CARGO_PKG_NAME"),
-                    |model_set| { model_set.add(<#model_ident as #toasty::Register>::schema()); },
+                    |model_set| { <#model_ident as #toasty::Register>::register(model_set); },
                 )
             }
 
