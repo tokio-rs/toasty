@@ -30,11 +30,18 @@ impl Simplify<'_> {
                         FieldTy::Primitive(_) => {}
                         FieldTy::Embedded(embedded) => {
                             let target = self.schema().app.model(embedded.target);
-                            if matches!(target, Model::EmbeddedEnum(_)) {
-                                // EmbeddedEnum fields are stored as a single integer
-                                // column, so the field reference is already valid as-is.
-                            } else {
-                                todo!("embedded struct field in binary op")
+                            match target {
+                                Model::EmbeddedEnum(_) => {
+                                    // EmbeddedEnum fields are stored as a single integer
+                                    // column, so the field reference is already valid as-is.
+                                }
+                                Model::EmbeddedStruct(s) if s.fields.len() == 1 => {
+                                    // Single-field embedded structs (newtypes) map to a
+                                    // single column, so the field reference is valid as-is.
+                                }
+                                _ => {
+                                    todo!("multi-field embedded struct in binary op")
+                                }
                             }
                         }
                         FieldTy::HasMany(_) | FieldTy::HasOne(_) => todo!(),

@@ -16,7 +16,7 @@ pub async fn newtype_crud(t: &mut Test) -> Result<()> {
         email: Email,
     }
 
-    let mut db = t.setup_db(models!(User)).await;
+    let mut db = t.setup_db(models!(User, Email)).await;
 
     // Create
     let mut user = toasty::create!(User {
@@ -63,7 +63,7 @@ pub async fn newtype_schema_single_column(test: &mut Test) {
         email: Email,
     }
 
-    let db = test.setup_db(models!(User)).await;
+    let db = test.setup_db(models!(User, Email)).await;
     let schema = db.schema();
 
     // The newtype field maps to a single column named "email" (not "email_field0")
@@ -92,7 +92,7 @@ pub async fn newtype_filter(t: &mut Test) -> Result<()> {
         email: Email,
     }
 
-    let mut db = t.setup_db(models!(User)).await;
+    let mut db = t.setup_db(models!(User, Email)).await;
 
     toasty::create!(User {
         email: Email("a@example.com".to_string()),

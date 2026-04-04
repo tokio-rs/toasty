@@ -89,6 +89,11 @@ struct MapField<'a, 'b> {
     /// Used by variant-specific `MapField` instances to automatically wrap
     /// field expressions in the discriminant match guard.
     field_expr_base: stmt::Expr,
+
+    /// When set, `column_name` uses this instead of the field's own storage name.
+    /// Used by single-field embedded structs (newtypes) so the column takes the
+    /// parent field's name rather than the inner field's name.
+    field_name_override: Option<String>,
 }
 
 impl BuildSchema<'_> {
@@ -553,6 +558,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             in_enum_variant: false,
             field_base: None,
             field_expr_base: stmt::Expr::arg(0),
+            field_name_override: None,
         }
     }
 
@@ -691,9 +697,16 @@ impl<'a, 'b> MapField<'a, 'b> {
     ) -> Result<mapping::Field> {
         let sub_projection = self.sub_projection(field_index);
 
-        let nested_fields = self
-            .for_struct(field, field_index)
-            .map_fields(&embedded_struct.fields)?;
+        // For single-field embedded structs (newtypes), use the parent field's
+        // name directly instead of prefixing with "parent_inner". This makes
+        // `struct Email(String)` map to column "email" rather than "email_value".
+        let nested_fields = if embedded_struct.fields.len() == 1 {
+            self.for_passthrough_struct(field, field_index)
+                .map_fields(&embedded_struct.fields)?
+        } else {
+            self.for_struct(field, field_index)
+                .map_fields(&embedded_struct.fields)?
+        };
 
         let columns: indexmap::IndexMap<ColumnId, usize> =
             nested_fields.iter().flat_map(|f| f.columns()).collect();
@@ -716,7 +729,10 @@ impl<'a, 'b> MapField<'a, 'b> {
     /// applied here — never stored in `self.prefix` — it is always applied
     /// exactly once regardless of nesting depth.
     fn column_name(&self, field: &app::Field) -> String {
-        let field_name = field.name.storage_name();
+        let field_name = self
+            .field_name_override
+            .as_deref()
+            .unwrap_or_else(|| field.name.storage_name());
         let embed = if self.prefix.is_empty() {
             field_name.to_owned()
         } else {
@@ -831,6 +847,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             in_enum_variant: self.in_enum_variant,
             field_base: self.field_base.clone(),
             field_expr_base: self.field_expr_base.clone(),
+            field_name_override: None,
         }
     }
 
@@ -876,6 +893,31 @@ impl<'a, 'b> MapField<'a, 'b> {
         let mut child = self.with_prefix(field.name.storage_name());
         child.field_base = Some(field_base);
         child
+    }
+
+    /// Creates a child `MapField` for a single-field embedded struct (newtype).
+    ///
+    /// Like `for_struct`, but uses the parent field's storage name directly as
+    /// the column name instead of prefixing it. For `email: Email(String)`, the
+    /// column is named `email` rather than `email_value`.
+    fn for_passthrough_struct(
+        &mut self,
+        field: &app::Field,
+        field_index: usize,
+    ) -> MapField<'_, 'b> {
+        let field_base = self.extend_field_base(field, field_index);
+        // Override the inner field's storage name so column_name() produces the
+        // parent field's name. We achieve this by keeping the current prefix
+        // unchanged and letting the inner field use the parent's storage name
+        // via field_name_override.
+        MapField {
+            build: self.build,
+            prefix: self.prefix.clone(),
+            in_enum_variant: self.in_enum_variant,
+            field_base: Some(field_base),
+            field_expr_base: self.field_expr_base.clone(),
+            field_name_override: Some(field.name.storage_name().to_owned()),
+        }
     }
 }
 

@@ -12,10 +12,7 @@ pub(crate) fn generate_model(input: TokenStream) -> syn::Result<TokenStream> {
 pub(crate) fn generate_embed(input: TokenStream) -> syn::Result<TokenStream> {
     if let Ok(item) = syn::parse2::<syn::ItemStruct>(input.clone()) {
         let model = schema::Model::from_ast(&item, true)?;
-        return match &model.kind {
-            schema::ModelKind::Newtype => Ok(expand::newtype_model(&model)),
-            _ => Ok(expand::embedded_model(&model)),
-        };
+        return Ok(expand::embedded_model(&model));
     }
     let item: syn::ItemEnum = syn::parse2(input)?;
     let model = schema::Model::from_enum_ast(&item)?;

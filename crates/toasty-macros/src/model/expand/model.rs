@@ -24,7 +24,7 @@ impl Expand<'_> {
                 &root.create_struct_ident,
                 &root.update_struct_ident,
             ),
-            ModelKind::EmbeddedStruct(_) | ModelKind::EmbeddedEnum(_) | ModelKind::Newtype => {
+            ModelKind::EmbeddedStruct(_) | ModelKind::EmbeddedEnum(_) => {
                 // Embedded models don't generate CRUD methods, just return early
                 return TokenStream::new();
             }
@@ -282,20 +282,30 @@ impl Expand<'_> {
 
     pub(super) fn expand_embedded_into_expr_body(&self, by_ref: bool) -> TokenStream {
         let toasty = &self.toasty;
+        let is_tuple = self.model.is_tuple();
 
         // For embedded types, create a record expression from all fields
         // Currently only primitive fields are supported in embedded types
-        let field_exprs = self.model.fields.iter().map(|field| {
-            let field_ident = &field.name.ident;
+        let field_exprs = self.model.fields.iter().enumerate().map(|(index, field)| {
             let ty = match &field.ty {
                 FieldTy::Primitive(ty) => ty,
                 _ => panic!("only primitive fields are supported in embedded types"),
             };
 
-            let value = if by_ref {
-                quote!((&self.#field_ident))
+            let value = if is_tuple {
+                let idx = syn::Index::from(index);
+                if by_ref {
+                    quote!((&self.#idx))
+                } else {
+                    quote!(self.#idx)
+                }
             } else {
-                quote!(self.#field_ident)
+                let field_ident = &field.name.ident;
+                if by_ref {
+                    quote!((&self.#field_ident))
+                } else {
+                    quote!(self.#field_ident)
+                }
             };
 
             self.expand_into_untyped_expr(ty, value)
@@ -321,6 +331,7 @@ impl Expand<'_> {
     pub(super) fn expand_load_body(&self) -> TokenStream {
         let toasty = &self.toasty;
         let model_ident = &self.model.ident;
+        let is_tuple = self.model.is_tuple();
 
         // Generate field loading expressions
         let field_loads = self.model.fields.iter().enumerate().map(|(index, field)| {
@@ -348,15 +359,26 @@ impl Expand<'_> {
                         json_deserialize
                     };
 
-                    quote! {
-                        #field_ident: {
+                    if is_tuple {
+                        quote! {{
                             let value = record[#index_tokenized].take();
                             #field_value
-                        },
+                        },}
+                    } else {
+                        quote! {
+                            #field_ident: {
+                                let value = record[#index_tokenized].take();
+                                #field_value
+                            },
+                        }
                     }
                 }
                 FieldTy::Primitive(ty) => {
-                    quote!(#field_ident: <#ty as #toasty::Load>::load(record[#index_tokenized].take())?,)
+                    if is_tuple {
+                        quote!(<#ty as #toasty::Load>::load(record[#index_tokenized].take())?,)
+                    } else {
+                        quote!(#field_ident: <#ty as #toasty::Load>::load(record[#index_tokenized].take())?,)
+                    }
                 }
                 FieldTy::BelongsTo(_) => {
                     quote!(#field_ident: #toasty::BelongsTo::load(record[#index].take())?,)
@@ -370,15 +392,19 @@ impl Expand<'_> {
             }
         });
 
+        let constructor = if is_tuple {
+            quote! { #model_ident( #( #field_loads )* ) }
+        } else {
+            quote! { #model_ident { #( #field_loads )* } }
+        };
+
         quote! {
             match value {
                 #toasty::core::stmt::Value::Null => {
                     Err(#toasty::Error::record_not_found(stringify!(#model_ident)))
                 }
                 #toasty::core::stmt::Value::Record(mut record) => {
-                    Ok(#model_ident {
-                        #( #field_loads )*
-                    })
+                    Ok(#constructor)
                 }
                 value => Err(#toasty::Error::type_conversion(value, stringify!(#model_ident))),
             }
@@ -391,11 +417,20 @@ impl Expand<'_> {
     /// sub-fields, and falls back to full `load` for complete record values.
     pub(super) fn expand_embedded_reload_body(&self) -> TokenStream {
         let toasty = &self.toasty;
+        let is_tuple = self.model.is_tuple();
 
         let reload_arms = self.model.fields.iter().enumerate().map(|(index, field)| {
-            let field_ident = &field.name.ident;
             let i = util::int(index);
             let field_name_str = field.name.ident.to_string();
+
+            // For tuple structs, access by index (target.0); for named structs, by name
+            let field_access: TokenStream = if is_tuple {
+                let idx = syn::Index::from(index);
+                quote!(#idx)
+            } else {
+                let field_ident = &field.name.ident;
+                quote!(#field_ident)
+            };
 
             match &field.ty {
                 FieldTy::Primitive(_ty) if field.attrs.serialize.is_some() => {
@@ -419,15 +454,15 @@ impl Expand<'_> {
 
                     quote! {
                         #i => {
-                            target.#field_ident = #assign;
+                            target.#field_access = #assign;
                         }
                     }
                 }
                 FieldTy::Primitive(ty) => {
-                    quote!(#i => <#ty as #toasty::Load>::reload(&mut target.#field_ident, value)?,)
+                    quote!(#i => <#ty as #toasty::Load>::reload(&mut target.#field_access, value)?,)
                 }
                 _ => {
-                    quote!(#i => target.#field_ident.unload(),)
+                    quote!(#i => target.#field_access.unload(),)
                 }
             }
         });

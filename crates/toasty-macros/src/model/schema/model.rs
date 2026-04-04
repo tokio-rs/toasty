@@ -11,9 +11,6 @@ pub(crate) enum ModelKind {
     EmbeddedStruct(ModelEmbeddedStruct),
     /// Embedded enum stored as a discriminant column (integer or string)
     EmbeddedEnum(ModelEmbeddedEnum),
-    /// A single-field tuple struct (newtype) that is transparent to the database
-    /// layer. The inner type's Field/Load impls are delegated to directly.
-    Newtype,
 }
 
 impl ModelKind {
@@ -70,6 +67,11 @@ pub(crate) struct ModelEmbeddedStruct {
 
     /// Update builder struct identifier
     pub(crate) update_struct_ident: syn::Ident,
+
+    /// True when the source type is a tuple struct (e.g., `struct Email(String)`).
+    /// Affects construction syntax (`.0` vs `.field`) and column naming (no suffix
+    /// for single-field tuple structs).
+    pub(crate) is_tuple: bool,
 }
 
 #[derive(Debug)]
@@ -119,6 +121,11 @@ pub(crate) struct Model {
 }
 
 impl Model {
+    /// Returns true if this model is a tuple struct (newtype pattern).
+    pub(crate) fn is_tuple(&self) -> bool {
+        matches!(&self.kind, ModelKind::EmbeddedStruct(e) if e.is_tuple)
+    }
+
     pub(crate) fn from_ast(ast: &syn::ItemStruct, is_embedded: bool) -> syn::Result<Self> {
         // Handle newtype tuple structs: #[derive(Embed)] struct Foo(InnerType);
         if is_embedded {
@@ -155,7 +162,12 @@ impl Model {
                         with_ident: syn::Ident::new("with_value", ast.ident.span()),
                         variant: None,
                     }],
-                    kind: ModelKind::Newtype,
+                    kind: ModelKind::EmbeddedStruct(ModelEmbeddedStruct {
+                        field_struct_ident: struct_ident("Fields", ast),
+                        field_list_struct_ident: struct_list_ident("ListFields", ast),
+                        update_struct_ident: struct_ident("Update", ast),
+                        is_tuple: true,
+                    }),
                     indices: vec![],
                     table: None,
                 });
@@ -261,6 +273,7 @@ impl Model {
                 field_struct_ident: struct_ident("Fields", ast),
                 field_list_struct_ident: struct_list_ident("ListFields", ast),
                 update_struct_ident: struct_ident("Update", ast),
+                is_tuple: false,
             })
         } else {
             let pk_fields = pk_index_fields
@@ -307,7 +320,7 @@ impl Model {
                     .iter()
                     .map(|index| &self.fields[*index]),
             ),
-            ModelKind::EmbeddedStruct(_) | ModelKind::EmbeddedEnum(_) | ModelKind::Newtype => None,
+            ModelKind::EmbeddedStruct(_) | ModelKind::EmbeddedEnum(_) => None,
         }
     }
 
