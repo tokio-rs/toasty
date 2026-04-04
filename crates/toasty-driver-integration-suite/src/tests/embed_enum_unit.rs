@@ -288,9 +288,9 @@ pub async fn root_model_with_embedded_enum_field(test: &mut Test) {
         User::id(): toasty::schema::app::Model::Root({
             name.upper_camel_case(): "User",
             fields: [
-                { name.app_name: Some("id") },
+                { name.app: Some("id") },
                 {
-                    name.app_name: Some("status"),
+                    name.app: Some("status"),
                     ty: FieldTy::Embedded({
                         target: == Status::id(),
                     }),

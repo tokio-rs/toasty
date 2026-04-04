@@ -11,8 +11,8 @@ fn id_field(model: ModelId) -> Field {
     Field {
         id: model.field(0),
         name: FieldName {
-            app_name: Some("id".to_string()),
-            storage_name: None,
+            app: Some("id".to_string()),
+            storage: None,
         },
         ty: FieldTy::Primitive(FieldPrimitive {
             ty: stmt::Type::String,
@@ -31,8 +31,8 @@ fn prim_field(model: ModelId, index: usize, name: &str) -> Field {
     Field {
         id: model.field(index),
         name: FieldName {
-            app_name: Some(name.to_string()),
-            storage_name: None,
+            app: Some(name.to_string()),
+            storage: None,
         },
         ty: FieldTy::Primitive(FieldPrimitive {
             ty: stmt::Type::String,
@@ -51,8 +51,8 @@ fn variant_field(model: ModelId, index: usize, name: &str, variant_index: usize)
     Field {
         id: model.field(index),
         name: FieldName {
-            app_name: Some(name.to_string()),
-            storage_name: None,
+            app: Some(name.to_string()),
+            storage: None,
         },
         ty: FieldTy::Primitive(FieldPrimitive {
             ty: stmt::Type::String,
@@ -74,8 +74,8 @@ fn embedded_field(model: ModelId, index: usize, name: &str, target: ModelId) -> 
     Field {
         id: model.field(index),
         name: FieldName {
-            app_name: Some(name.to_string()),
-            storage_name: None,
+            app: Some(name.to_string()),
+            storage: None,
         },
         ty: FieldTy::Embedded(Embedded {
             target,
@@ -185,7 +185,7 @@ fn resolve_primitive_field() {
 
     // User.name => field at index 1
     let field = s.resolve_field(root, &stmt::Projection::from([1])).unwrap();
-    assert_eq!(field.name.app_name.as_deref(), Some("name"));
+    assert_eq!(field.name.app.as_deref(), Some("name"));
 }
 
 #[test]
@@ -230,13 +230,13 @@ fn resolve_embedded_struct_field() {
     let field = s
         .resolve_field(root, &stmt::Projection::from([4, 0]))
         .unwrap();
-    assert_eq!(field.name.app_name.as_deref(), Some("street"));
+    assert_eq!(field.name.app.as_deref(), Some("street"));
 
     // User.address.city => [4, 1]
     let field = s
         .resolve_field(root, &stmt::Projection::from([4, 1]))
         .unwrap();
-    assert_eq!(field.name.app_name.as_deref(), Some("city"));
+    assert_eq!(field.name.app.as_deref(), Some("city"));
 }
 
 // === Embedded enum (data-carrying) — valid two-step projection ===
@@ -250,13 +250,13 @@ fn resolve_data_enum_variant_field() {
     let field = s
         .resolve_field(root, &stmt::Projection::from([3, 0, 0]))
         .unwrap();
-    assert_eq!(field.name.app_name.as_deref(), Some("address"));
+    assert_eq!(field.name.app.as_deref(), Some("address"));
 
     // User.contact -> Phone(disc=1) -> number(global index=1) => [3, 1, 1]
     let field = s
         .resolve_field(root, &stmt::Projection::from([3, 1, 1]))
         .unwrap();
-    assert_eq!(field.name.app_name.as_deref(), Some("number"));
+    assert_eq!(field.name.app.as_deref(), Some("number"));
 }
 
 // === Embedded enum — single step is NOT a valid field resolution ===
@@ -337,9 +337,7 @@ fn resolve_returns_field_for_enum_variant_field() {
 
     // Two steps into data-carrying enum — variant field access
     let resolved = s.resolve(root, &stmt::Projection::from([3, 0, 0])).unwrap();
-    assert!(
-        matches!(resolved, Resolved::Field(f) if f.name.app_name.as_deref() == Some("address"))
-    );
+    assert!(matches!(resolved, Resolved::Field(f) if f.name.app.as_deref() == Some("address")));
 }
 
 #[test]
