@@ -301,8 +301,8 @@ impl Model {
             parts: vec!["_0".to_string()],
             ident: syn::Ident::new("_0", span),
         };
-        let set_ident = syn::Ident::new("set__0", span);
-        let with_ident = syn::Ident::new("with__0", span);
+        let set_ident = syn::Ident::new("set_0", span);
+        let with_ident = syn::Ident::new("with_0", span);
 
         let mut ty = FieldTy::Primitive(inner.ty.clone());
         if let FieldTy::Primitive(ref mut t) = ty {

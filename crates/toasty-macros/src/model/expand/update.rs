@@ -13,13 +13,11 @@ impl Expand<'_> {
         let builder_methods = self.expand_update_field_methods(true);
 
         quote! {
-            #[allow(non_snake_case)]
             #vis struct #update_struct_ident<'a> {
                 assignments: &'a mut #toasty::core::stmt::Assignments,
                 projection: #toasty::stmt::Projection,
             }
 
-            #[allow(non_snake_case)]
             impl<'a> #update_struct_ident<'a> {
                 #builder_methods
             }
