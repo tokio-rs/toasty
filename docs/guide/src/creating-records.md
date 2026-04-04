@@ -33,7 +33,7 @@ println!("Created user with id: {}", user.id);
 # }
 ```
 
-This expands to the equivalent builder code:
+The macro expands to an equivalent code block as:
 
 ```rust
 # use toasty::Model;
@@ -172,7 +172,7 @@ assert_eq!(todo.user_id, user.id);
 # }
 ```
 
-This expands to the equivalent builder code:
+The macro expands to an equivalent code block as:
 
 ```rust,ignore
 let todo = user.todos().create()
@@ -226,14 +226,14 @@ assert_eq!(2, todos.len());
 # }
 ```
 
-This expands to:
+The macro expands to an equivalent code block as:
 
 ```rust,ignore
 User::create()
     .name("Alice")
     .todos([
-        User::fields().todos().create().title("Buy groceries"),
-        User::fields().todos().create().title("Write docs"),
+        Todo::create().title("Buy groceries"),
+        Todo::create().title("Write docs"),
     ])
     .exec(&mut db)
     .await?;
@@ -268,7 +268,7 @@ let users = toasty::create!(User::[
 .await?;
 ```
 
-This expands to `toasty::batch([ ... ])` with an array of builders:
+The macro expands to an equivalent code block as:
 
 ```rust,ignore
 toasty::batch([
@@ -294,7 +294,7 @@ let (user, post) = toasty::create!((
 .await?;
 ```
 
-This expands to `toasty::batch(( ... ))` with a tuple of builders:
+The macro expands to an equivalent code block as:
 
 ```rust,ignore
 toasty::batch((
@@ -369,8 +369,8 @@ Each macro form has a direct builder equivalent:
 |---|---|
 | `toasty::create!(User { name: "Alice" })` | `User::create().name("Alice")` |
 | `toasty::create!(in user.todos() { title: "Buy milk" })` | `user.todos().create().title("Buy milk")` |
-| Nested `{ ... }` for BelongsTo/HasOne | `.field(Model::fields().field().create().field_calls)` |
-| Nested `[{ ... }]` for HasMany | `.fields([Model::fields().field().create()...])` |
+| Nested `{ ... }` for BelongsTo/HasOne | `.field(ChildModel::create().field_calls)` |
+| Nested `[{ ... }]` for HasMany | `.fields([ChildModel::create()...])` |
 | `toasty::create!(User::[{ ... }, { ... }])` | `toasty::batch([User::create()...])` → `Vec<User>` |
 | `toasty::create!((User { ... }, Post { ... }))` | `toasty::batch((User::create()..., Post::create()...))` → tuple |
 
