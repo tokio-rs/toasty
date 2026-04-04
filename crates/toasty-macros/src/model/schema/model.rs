@@ -11,30 +11,30 @@ pub(crate) enum ModelKind {
     EmbeddedStruct(ModelEmbeddedStruct),
     /// Embedded enum stored as a discriminant column (integer or string)
     EmbeddedEnum(ModelEmbeddedEnum),
+    /// A single-field tuple struct (newtype) that is transparent to the database
+    /// layer. The inner type's Field/Load impls are delegated to directly.
+    Newtype,
 }
 
 impl ModelKind {
     pub(crate) fn as_root_unwrap(&self) -> &ModelRoot {
         match self {
             ModelKind::Root(root) => root,
-            ModelKind::EmbeddedStruct(_) => panic!("expected root model, found embedded struct"),
-            ModelKind::EmbeddedEnum(_) => panic!("expected root model, found embedded enum"),
+            _ => panic!("expected root model"),
         }
     }
 
     pub(crate) fn as_embedded_unwrap(&self) -> &ModelEmbeddedStruct {
         match self {
             ModelKind::EmbeddedStruct(embedded) => embedded,
-            ModelKind::Root(_) => panic!("expected embedded struct, found root model"),
-            ModelKind::EmbeddedEnum(_) => panic!("expected embedded struct, found embedded enum"),
+            _ => panic!("expected embedded struct"),
         }
     }
 
     pub(crate) fn as_embedded_enum_unwrap(&self) -> &ModelEmbeddedEnum {
         match self {
             ModelKind::EmbeddedEnum(e) => e,
-            ModelKind::Root(_) => panic!("expected embedded enum, found root model"),
-            ModelKind::EmbeddedStruct(_) => panic!("expected embedded enum, found embedded struct"),
+            _ => panic!("expected embedded enum"),
         }
     }
 }
@@ -120,6 +120,48 @@ pub(crate) struct Model {
 
 impl Model {
     pub(crate) fn from_ast(ast: &syn::ItemStruct, is_embedded: bool) -> syn::Result<Self> {
+        // Handle newtype tuple structs: #[derive(Embed)] struct Foo(InnerType);
+        if is_embedded {
+            if let syn::Fields::Unnamed(unnamed) = &ast.fields {
+                if unnamed.unnamed.len() != 1 {
+                    return Err(syn::Error::new_spanned(
+                        &ast.fields,
+                        "only single-field tuple structs (newtypes) are supported",
+                    ));
+                }
+
+                if !ast.generics.params.is_empty() {
+                    return Err(syn::Error::new_spanned(
+                        &ast.generics,
+                        "model generics are not supported",
+                    ));
+                }
+
+                let inner_field = unnamed.unnamed.first().unwrap();
+                let inner_ty = inner_field.ty.clone();
+
+                let inner_ident = syn::Ident::new("value", ast.ident.span());
+
+                return Ok(Self {
+                    vis: ast.vis.clone(),
+                    name: Name::from_ident(&ast.ident),
+                    ident: ast.ident.clone(),
+                    fields: vec![Field {
+                        id: 0,
+                        attrs: FieldAttr::from_attrs(&inner_field.attrs)?,
+                        name: Name::from_ident(&inner_ident),
+                        ty: FieldTy::Primitive(inner_ty),
+                        set_ident: syn::Ident::new("set_value", ast.ident.span()),
+                        with_ident: syn::Ident::new("with_value", ast.ident.span()),
+                        variant: None,
+                    }],
+                    kind: ModelKind::Newtype,
+                    indices: vec![],
+                    table: None,
+                });
+            }
+        }
+
         let syn::Fields::Named(node) = &ast.fields else {
             return Err(syn::Error::new_spanned(
                 &ast.fields,
@@ -265,7 +307,7 @@ impl Model {
                     .iter()
                     .map(|index| &self.fields[*index]),
             ),
-            ModelKind::EmbeddedStruct(_) | ModelKind::EmbeddedEnum(_) => None,
+            ModelKind::EmbeddedStruct(_) | ModelKind::EmbeddedEnum(_) | ModelKind::Newtype => None,
         }
     }
 

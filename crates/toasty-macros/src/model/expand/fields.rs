@@ -226,6 +226,7 @@ impl Expand<'_> {
             ModelKind::Root(root) => &root.field_struct_ident,
             ModelKind::EmbeddedStruct(embedded) => &embedded.field_struct_ident,
             ModelKind::EmbeddedEnum(e) => &e.field_struct_ident,
+            ModelKind::Newtype => panic!("newtypes do not have a field struct"),
         }
     }
 
@@ -236,6 +237,7 @@ impl Expand<'_> {
             ModelKind::Root(root) => &root.field_list_struct_ident,
             ModelKind::EmbeddedStruct(embedded) => &embedded.field_list_struct_ident,
             ModelKind::EmbeddedEnum(e) => &e.field_list_struct_ident,
+            ModelKind::Newtype => panic!("newtypes do not have a list field struct"),
         }
     }
 

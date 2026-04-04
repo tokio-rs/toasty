@@ -47,6 +47,9 @@ impl Expand<'_> {
             ModelKind::EmbeddedEnum(_) => {
                 panic!("expand_model_schema called on EmbeddedEnum; use embedded_enum() instead")
             }
+            ModelKind::Newtype => {
+                panic!("expand_model_schema called on Newtype; use newtype_model() instead")
+            }
         };
 
         quote! {
@@ -225,6 +228,7 @@ impl Expand<'_> {
             ModelKind::Root(root) => &root.primary_key,
             ModelKind::EmbeddedStruct(_) => panic!("expand_primary_key called on embedded struct"),
             ModelKind::EmbeddedEnum(_) => panic!("expand_primary_key called on embedded enum"),
+            ModelKind::Newtype => panic!("expand_primary_key called on newtype"),
         };
 
         let fields = primary_key

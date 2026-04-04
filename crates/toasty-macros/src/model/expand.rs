@@ -186,6 +186,93 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     })
 }
 
+pub(super) fn newtype_model(model: &Model) -> TokenStream {
+    let toasty = quote!(_toasty::codegen_support);
+    let model_ident = &model.ident;
+
+    // The single inner type from the tuple struct
+    let inner_ty = match &model.fields[0].ty {
+        crate::model::schema::FieldTy::Primitive(ty) => ty,
+        _ => panic!("newtype inner field must be a primitive type"),
+    };
+
+    wrap_in_const(quote! {
+        impl #toasty::Load for #model_ident {
+            type Output = Self;
+
+            fn ty() -> #toasty::core::stmt::Type {
+                <#inner_ty as #toasty::Load>::ty()
+            }
+
+            fn load(value: #toasty::core::stmt::Value) -> #toasty::Result<Self> {
+                Ok(#model_ident(<#inner_ty as #toasty::Load>::load(value)?))
+            }
+
+            fn reload(target: &mut Self, value: #toasty::core::stmt::Value) -> #toasty::Result<()> {
+                <#inner_ty as #toasty::Load>::reload(&mut target.0, value)
+            }
+        }
+
+        impl #toasty::Field for #model_ident {
+            type Path<__Origin> = #toasty::Path<__Origin, Self>;
+            type ListPath<__Origin> = #toasty::Path<__Origin, #toasty::List<Self>>;
+            type Update<'a> = ();
+            type Inner = Self;
+
+            fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
+                path
+            }
+
+            fn new_list_path<__Origin>(
+                path: #toasty::Path<__Origin, #toasty::List<Self>>,
+            ) -> Self::ListPath<__Origin> {
+                path
+            }
+
+            fn new_update<'a>(
+                _assignments: &'a mut #toasty::core::stmt::Assignments,
+                _projection: #toasty::core::stmt::Projection,
+            ) -> Self::Update<'a> {
+            }
+
+            fn field_ty(
+                storage_ty: Option<#toasty::core::schema::db::Type>,
+            ) -> #toasty::core::schema::app::FieldTy {
+                <#inner_ty as #toasty::Field>::field_ty(storage_ty)
+            }
+
+            fn key_constraint<__Origin>(
+                &self,
+                target: #toasty::Path<__Origin, Self::Inner>,
+            ) -> #toasty::stmt::Expr<bool> {
+                target.eq(self)
+            }
+        }
+
+        impl #toasty::stmt::IntoExpr<#model_ident> for #model_ident {
+            fn into_expr(self) -> #toasty::stmt::Expr<#model_ident> {
+                let expr: #toasty::stmt::Expr<#inner_ty> =
+                    #toasty::stmt::IntoExpr::into_expr(self.0);
+                expr.cast()
+            }
+
+            fn by_ref(&self) -> #toasty::stmt::Expr<#model_ident> {
+                let expr: #toasty::stmt::Expr<#inner_ty> =
+                    #toasty::stmt::IntoExpr::into_expr(&self.0);
+                expr.cast()
+            }
+        }
+
+        impl #toasty::Assign<#model_ident> for #model_ident {
+            fn into_assignment(self) -> #toasty::stmt::Assignment<#model_ident> {
+                #toasty::stmt::set(
+                    <Self as #toasty::IntoExpr<#model_ident>>::into_expr(self)
+                )
+            }
+        }
+    })
+}
+
 pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     let toasty = quote!(_toasty::codegen_support);
     let model_ident = &model.ident;
