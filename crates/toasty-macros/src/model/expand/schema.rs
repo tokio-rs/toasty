@@ -75,7 +75,7 @@ impl Expand<'_> {
                 };
                 quote! {
                     #toasty::core::schema::app::FieldName {
-                        app_name: #app_name.to_string(),
+                        app_name: Some(#app_name.to_string()),
                         storage_name: #storage_name,
                     }
                 }

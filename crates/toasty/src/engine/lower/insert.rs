@@ -215,7 +215,7 @@ impl LowerStatement<'_, '_> {
                         .errors
                         .push(toasty_core::Error::validation_failed(format!(
                             "insert missing non-nullable field `{}` in model `{}`",
-                            field.name.app_name,
+                            field.name.app_name_or_unnamed(),
                             model.name.upper_camel_case()
                         )));
                 }

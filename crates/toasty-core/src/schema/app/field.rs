@@ -23,7 +23,7 @@ use std::fmt;
 /// let schema: Schema = /* ... */;
 /// let model = schema.model(model_id).as_root_unwrap();
 /// for field in &model.fields {
-///     println!("{}: primary_key={}", field.name.app_name, field.primary_key);
+///     println!("{}: primary_key={}", field.name.app_name_or_unnamed(), field.primary_key);
 /// }
 /// ```
 #[derive(Debug, Clone)]
@@ -78,9 +78,10 @@ pub struct FieldId {
 
 /// The name of a field, with separate application and storage representations.
 ///
-/// The `app_name` is the Rust-facing name (e.g., `user_name`). The optional
-/// `storage_name` overrides the column name used in the database; when `None`,
-/// the `app_name` is used as the storage name.
+/// The `app_name` is the Rust-facing name (e.g., `user_name`). It is
+/// `Option<String>` to support unnamed (tuple) fields in the future; for now it
+/// is always `Some`. The optional `storage_name` overrides the column name used
+/// in the database; when `None`, the `app_name` is used as the storage name.
 ///
 /// # Examples
 ///
@@ -88,33 +89,47 @@ pub struct FieldId {
 /// use toasty_core::schema::app::FieldName;
 ///
 /// let name = FieldName {
-///     app_name: "user_name".to_string(),
+///     app_name: Some("user_name".to_string()),
 ///     storage_name: Some("username".to_string()),
 /// };
 /// assert_eq!(name.storage_name(), "username");
 ///
 /// let default_name = FieldName {
-///     app_name: "email".to_string(),
+///     app_name: Some("email".to_string()),
 ///     storage_name: None,
 /// };
 /// assert_eq!(default_name.storage_name(), "email");
 /// ```
 #[derive(Debug, Clone)]
 pub struct FieldName {
-    /// The application-level (Rust) name of the field.
-    pub app_name: String,
+    /// The application-level (Rust) name of the field. `None` for unnamed
+    /// (tuple) fields.
+    pub app_name: Option<String>,
     /// Optional override for the database column name. When `None`, `app_name`
     /// is used.
     pub storage_name: Option<String>,
 }
 
 impl FieldName {
+    /// Returns the application-level name, or `"<unnamed>"` when the field has
+    /// no app name (unnamed / tuple field).
+    pub fn app_name_or_unnamed(&self) -> &str {
+        self.app_name.as_deref().unwrap_or("<unnamed>")
+    }
+
     /// Returns the storage (database column) name for this field.
     ///
     /// Falls back to [`app_name`](FieldName::app_name) when no explicit
     /// storage name is set.
+    ///
+    /// # Panics
+    ///
+    /// Panics if both `storage_name` and `app_name` are `None`.
     pub fn storage_name(&self) -> &str {
-        self.storage_name.as_ref().unwrap_or(&self.app_name)
+        self.storage_name
+            .as_deref()
+            .or(self.app_name.as_deref())
+            .expect("FieldName must have at least one of app_name or storage_name")
     }
 }
 
@@ -197,7 +212,7 @@ impl Field {
         format!(
             "{}::{}",
             model.name().upper_camel_case(),
-            self.name.app_name
+            self.name.app_name_or_unnamed()
         )
     }
 

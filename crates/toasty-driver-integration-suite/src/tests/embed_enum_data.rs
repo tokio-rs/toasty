@@ -32,8 +32,8 @@ pub async fn data_carrying_enum_schema(test: &mut Test) {
                 },
             ],
             fields: [
-                { id.index: 0, name.app_name: "address" },
-                { id.index: 1, name.app_name: "number" },
+                { id.index: 0, name.app_name: Some("address") },
+                { id.index: 1, name.app_name: Some("number") },
             ],
         }),
     });
@@ -78,7 +78,7 @@ pub async fn mixed_enum_schema(test: &mut Test) {
                 },
             ],
             fields: [
-                { id.index: 0, name.app_name: "reason" },
+                { id.index: 0, name.app_name: Some("reason") },
             ],
         }),
     });
@@ -501,10 +501,10 @@ pub async fn global_field_indices(test: &mut Test) {
     assert_struct!(schema.app.models, #{
         Event::id(): toasty::schema::app::Model::EmbeddedEnum({
             fields: [
-                { id.index: 0, name.app_name: "user_id" },
-                { id.index: 1, name.app_name: "ip" },
-                { id.index: 2, name.app_name: "item_id" },
-                { id.index: 3, name.app_name: "amount" },
+                { id.index: 0, name.app_name: Some("user_id") },
+                { id.index: 1, name.app_name: Some("ip") },
+                { id.index: 2, name.app_name: Some("item_id") },
+                { id.index: 3, name.app_name: Some("amount") },
             ],
         }),
     });

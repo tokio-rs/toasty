@@ -895,7 +895,7 @@ fn lookup_embedded_model<'a>(
             "field `{parent_name}::{}` references an embedded type that is not registered \
              in the schema; did you forget to include the embedded type in \
              `toasty::models!(..)`?",
-            field.name.app_name,
+            field.name.app_name_or_unnamed(),
         ))
     })
 }
