@@ -15,7 +15,7 @@ documentation = "https://docs.rs/toasty-cli"
 
 [dependencies]
 toasty.workspace = true
-toasty-core = { workspace = true, features = ["serde"] }
+toasty-core = { workspace = true, features = ["serde", "migrate"] }
 toasty-sql.workspace = true
 
 anyhow = "1.0.102"

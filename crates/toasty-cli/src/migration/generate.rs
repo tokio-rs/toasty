@@ -1,4 +1,4 @@
-use super::{HistoryFile, HistoryFileMigration, SnapshotFile};
+use super::SnapshotFile;
 use crate::{Config, theme::dialoguer_theme};
 use anyhow::Result;
 use clap::Parser;
@@ -14,6 +14,7 @@ use toasty::{
         SchemaDiff, TableId, TablesDiffItem,
     },
 };
+use toasty_core::migrate::{HistoryFile, HistoryFileMigration};
 
 /// Generates a new SQL migration from the current schema diff.
 ///

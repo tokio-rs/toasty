@@ -1,4 +1,3 @@
-use super::HistoryFile;
 use crate::Config;
 use anyhow::Result;
 use clap::Parser;
@@ -7,6 +6,7 @@ use std::collections::HashSet;
 use std::fs;
 use toasty::Db;
 use toasty::schema::db::Migration;
+use toasty_core::migrate::HistoryFile;
 
 /// Applies pending migrations to the database.
 ///

@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 /// Configuration for migration operations.
@@ -14,7 +13,7 @@ use std::path::PathBuf;
 /// # Examples
 ///
 /// ```
-/// use toasty_cli::{MigrationConfig, MigrationPrefixStyle};
+/// use toasty_core::migrate::{MigrationConfig, MigrationPrefixStyle};
 ///
 /// let config = MigrationConfig::new()
 ///     .path("my_app/db")
@@ -33,7 +32,8 @@ use std::path::PathBuf;
 ///     std::path::PathBuf::from("my_app/db/history.toml"),
 /// );
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MigrationConfig {
     /// Path to the migrations folder
     pub path: PathBuf,
@@ -61,13 +61,14 @@ pub struct MigrationConfig {
 /// # Examples
 ///
 /// ```
-/// use toasty_cli::MigrationPrefixStyle;
+/// use toasty_core::migrate::MigrationPrefixStyle;
 ///
 /// // Default is sequential
 /// let style = MigrationPrefixStyle::Sequential;
 /// assert_eq!(style, MigrationPrefixStyle::Sequential);
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum MigrationPrefixStyle {
     /// Sequential numbering (e.g., 0001_, 0002_, 0003_)
     Sequential,

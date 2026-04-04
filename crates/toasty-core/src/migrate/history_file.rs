@@ -1,9 +1,3 @@
-use anyhow::{Result, bail};
-use serde::{Deserialize, Serialize};
-use std::fmt;
-use std::path::Path;
-use std::str::FromStr;
-
 const HISTORY_FILE_VERSION: u32 = 1;
 
 /// A TOML-serializable record of all migrations that have been generated.
@@ -19,7 +13,7 @@ const HISTORY_FILE_VERSION: u32 = 1;
 /// # Examples
 ///
 /// ```
-/// use toasty_cli::{HistoryFile, HistoryFileMigration};
+/// use toasty_core::migrate::{HistoryFile, HistoryFileMigration};
 ///
 /// let mut history = HistoryFile::new();
 /// assert_eq!(history.next_migration_number(), 0);
@@ -32,15 +26,12 @@ const HISTORY_FILE_VERSION: u32 = 1;
 /// });
 /// assert_eq!(history.next_migration_number(), 1);
 /// assert_eq!(history.migrations().len(), 1);
-///
-/// // Round-trip through TOML serialization
-/// let serialized = history.to_string();
-/// let restored: HistoryFile = serialized.parse().unwrap();
-/// assert_eq!(restored.migrations()[0].id, 100);
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HistoryFile {
     /// History file format version
+    #[cfg_attr(not(feature = "migrate"), allow(dead_code))]
     version: u32,
 
     /// Migration history
@@ -56,7 +47,7 @@ pub struct HistoryFile {
 /// # Examples
 ///
 /// ```
-/// use toasty_cli::HistoryFileMigration;
+/// use toasty_core::migrate::HistoryFileMigration;
 ///
 /// let entry = HistoryFileMigration {
 ///     id: 42,
@@ -67,7 +58,8 @@ pub struct HistoryFile {
 /// assert_eq!(entry.id, 42);
 /// assert_eq!(entry.name, "0001_create_users.sql");
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HistoryFileMigration {
     /// Random unique identifier for this migration.
     pub id: u64,
@@ -79,7 +71,10 @@ pub struct HistoryFileMigration {
     pub snapshot_name: String,
 
     /// Optional checksum of the migration file to detect changes
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        feature = "serde",
+        serde(default, skip_serializing_if = "Option::is_none")
+    )]
     pub checksum: Option<String>,
 }
 
@@ -92,26 +87,6 @@ impl HistoryFile {
         }
     }
 
-    /// Load a history file from a TOML file
-    pub fn load(path: impl AsRef<Path>) -> Result<Self> {
-        let contents = std::fs::read_to_string(path.as_ref())?;
-        contents.parse()
-    }
-
-    /// Save the history file to a TOML file
-    pub fn save(&self, path: impl AsRef<Path>) -> Result<()> {
-        std::fs::write(path.as_ref(), self.to_string())?;
-        Ok(())
-    }
-
-    /// Loads the history file, or returns an empty one if it does not exist
-    pub fn load_or_default(path: impl AsRef<Path>) -> Result<Self> {
-        if std::fs::exists(&path)? {
-            return Self::load(path);
-        }
-        Ok(Self::default())
-    }
-
     /// Returns the ordered list of migrations in this history.
     ///
     /// Migrations appear in the order they were added. An empty slice means no
@@ -120,7 +95,7 @@ impl HistoryFile {
     /// # Examples
     ///
     /// ```
-    /// use toasty_cli::{HistoryFile, HistoryFileMigration};
+    /// use toasty_core::migrate::{HistoryFile, HistoryFileMigration};
     ///
     /// let mut history = HistoryFile::new();
     /// assert!(history.migrations().is_empty());
@@ -161,34 +136,63 @@ impl HistoryFile {
     }
 }
 
+#[cfg(feature = "migrate")]
+impl HistoryFile {
+    /// Load a history file from a TOML file
+    pub fn load(path: impl AsRef<std::path::Path>) -> crate::Result<Self> {
+        use crate::Error;
+        let contents = std::fs::read_to_string(path.as_ref())
+            .map_err(|e| Error::from_args(format_args!("migration file load failed: {e}")))?;
+        contents.parse()
+    }
+
+    /// Save the history file to a TOML file
+    pub fn save(&self, path: impl AsRef<std::path::Path>) -> crate::Result<()> {
+        use crate::Error;
+        std::fs::write(path.as_ref(), self.to_string())
+            .map_err(|e| Error::from_args(format_args!("migration file save failed: {e}")))?;
+        Ok(())
+    }
+
+    /// Loads the history file, or returns an empty one if it does not exist
+    pub fn load_or_default(path: impl AsRef<std::path::Path>) -> crate::Result<Self> {
+        if path.as_ref().exists() {
+            return Self::load(path);
+        }
+        Ok(Self::default())
+    }
+}
+
 impl Default for HistoryFile {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl FromStr for HistoryFile {
-    type Err = anyhow::Error;
+#[cfg(feature = "migrate")]
+impl std::str::FromStr for HistoryFile {
+    type Err = crate::Error;
 
-    fn from_str(s: &str) -> Result<Self> {
-        let file: HistoryFile = toml::from_str(s)?;
+    fn from_str(s: &str) -> crate::Result<Self> {
+        use crate::Error;
+        let file: HistoryFile = toml::from_str(s)
+            .map_err(|e| Error::from_args(format_args!("migration file load failed: {e}")))?;
 
-        // Validate version
         if file.version != HISTORY_FILE_VERSION {
-            bail!(
-                "Unsupported history file version: {}. Expected version {}",
+            return Err(Error::unsupported_migration_version(
                 file.version,
-                HISTORY_FILE_VERSION
-            );
+                HISTORY_FILE_VERSION,
+            ));
         }
 
         Ok(file)
     }
 }
 
-impl fmt::Display for HistoryFile {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let toml_str = toml::to_string_pretty(self).map_err(|_| fmt::Error)?;
+#[cfg(feature = "migrate")]
+impl std::fmt::Display for HistoryFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let toml_str = toml::to_string_pretty(self).map_err(|_| std::fmt::Error)?;
         write!(f, "{}", toml_str)
     }
 }

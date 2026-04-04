@@ -38,6 +38,9 @@ mod utility;
 
 pub use config::*;
 pub use migration::*;
+pub use toasty_core::migrate::{
+    HistoryFile, HistoryFileMigration, MigrationConfig, MigrationPrefixStyle,
+};
 
 use anyhow::Result;
 use clap::Parser;

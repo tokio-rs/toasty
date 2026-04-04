@@ -1,8 +1,8 @@
-use crate::migration::MigrationConfig;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
+use toasty_core::migrate::MigrationConfig;
 
 /// Configuration for Toasty CLI operations.
 ///

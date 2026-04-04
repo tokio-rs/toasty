@@ -1,4 +1,3 @@
-use super::HistoryFile;
 use crate::{Config, theme::dialoguer_theme};
 use anyhow::Result;
 use clap::Parser;
@@ -6,6 +5,7 @@ use console::style;
 use dialoguer::Select;
 use std::fs;
 use toasty::Db;
+use toasty_core::migrate::HistoryFile;
 
 /// Removes a migration from the history and deletes its files on disk.
 ///

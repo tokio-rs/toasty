@@ -23,6 +23,7 @@ mod record_not_found;
 mod serialization_failure;
 mod transaction_timeout;
 mod unsupported_feature;
+mod unsupported_migration_version;
 mod validation;
 
 use adhoc::Adhoc;
@@ -43,6 +44,7 @@ use serialization_failure::SerializationFailure;
 use std::sync::Arc;
 use transaction_timeout::TransactionTimeout;
 use unsupported_feature::UnsupportedFeature;
+use unsupported_migration_version::UnsupportedMigrationVersion;
 use validation::ValidationFailed;
 
 /// The error type used throughout Toasty.
@@ -118,6 +120,7 @@ enum ErrorKind {
     SerializationFailure(SerializationFailure),
     TransactionTimeout(TransactionTimeout),
     UnsupportedFeature(UnsupportedFeature),
+    UnsupportedMigrationVersion(UnsupportedMigrationVersion),
     ValidationFailed(ValidationFailed),
     ConditionFailed(ConditionFailed),
 }
@@ -230,6 +233,7 @@ impl core::fmt::Display for ErrorKind {
             SerializationFailure(err) => core::fmt::Display::fmt(err, f),
             TransactionTimeout(err) => core::fmt::Display::fmt(err, f),
             UnsupportedFeature(err) => core::fmt::Display::fmt(err, f),
+            UnsupportedMigrationVersion(err) => core::fmt::Display::fmt(err, f),
             ValidationFailed(err) => core::fmt::Display::fmt(err, f),
             ConditionFailed(err) => core::fmt::Display::fmt(err, f),
         }

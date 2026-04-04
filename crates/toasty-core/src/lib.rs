@@ -34,6 +34,9 @@ mod error;
 /// The error type returned by Toasty operations.
 pub use error::Error;
 
+/// Migration types for schema management.
+pub mod migrate;
+
 /// Schema definitions spanning the app layer, database layer, and the mapping
 /// between them.
 pub mod schema;
