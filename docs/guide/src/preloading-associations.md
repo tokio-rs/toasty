@@ -3,10 +3,10 @@
 Preloading (also called eager loading) loads related records alongside the main
 query, avoiding extra database round-trips when you access associations.
 
-## Async means a query, always
+## Async means a query
 
 Toasty's API follows one rule for associations: **if you `.await` it, it hits
-the database.** There are no hidden or implicit queries. The two ways to access
+the database.** The two ways to access
 an association make this visible in the code:
 
 - `user.posts().exec(&mut db).await?` — async, executes a query.
