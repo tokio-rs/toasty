@@ -216,7 +216,7 @@ impl Verify<'_> {
                 assert!(
                     field_ty.is_numeric(),
                     "field `{}` has Auto::Increment but type is not numeric: {:?}",
-                    field.name.app_name,
+                    field.name,
                     field_ty
                 );
             }
@@ -224,7 +224,7 @@ impl Verify<'_> {
                 assert!(
                     field_ty.is_uuid(),
                     "field `{}` has Auto::Uuid but type is not Uuid: {:?}",
-                    field.name.app_name,
+                    field.name,
                     field_ty
                 );
             }

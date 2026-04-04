@@ -177,7 +177,9 @@ impl ModelRoot {
     ///
     /// Returns `None` if no field with that name exists on this model.
     pub fn field_by_name(&self, name: &str) -> Option<&Field> {
-        self.fields.iter().find(|field| field.name.app_name == name)
+        self.fields
+            .iter()
+            .find(|field| field.name.app.as_deref() == Some(name))
     }
 
     pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
@@ -201,7 +203,7 @@ impl ModelRoot {
 /// ```ignore
 /// let embedded = model.as_embedded_struct_unwrap();
 /// for field in &embedded.fields {
-///     println!("  embedded field: {}", field.name.app_name);
+///     println!("  embedded field: {}", field.name);
 /// }
 /// ```
 #[derive(Debug, Clone)]
