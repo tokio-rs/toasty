@@ -118,14 +118,9 @@ types in your crate. You can also list models individually
 (`toasty::models!(User, Post)`), register all models from an external crate
 (`toasty::models!(other_crate::*)`), or combine these forms freely.
 
-You don't need to list every model explicitly. When a model is registered, Toasty
-traverses its fields and automatically registers any related or embedded models it
-finds. For example, `toasty::models!(User)` also registers any models that `User`
-references through `BelongsTo`, `HasMany`, `HasOne`, or embedded fields.
-
 The connection URL determines which database driver to use. See
-[Database Setup](./database-setup.md) for connection URLs for each
-supported database.
+[Database Setup](./database-setup.md) for more on model registration,
+connection URLs, and supported databases.
 
 ## Creating tables
 
