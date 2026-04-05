@@ -5,6 +5,11 @@ authors = ["Toasty Contributors"]
 [build]
 build-dir = "book"
 
+[preprocessor.variables]
+
+[preprocessor.variables.variables]
+toasty_version = "0.3"
+
 [output.html]
 
 [output.linkcheck2]
