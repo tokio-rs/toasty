@@ -1,5 +1,7 @@
 use crate::prelude::*;
 
+/// Registering only the Parent model should auto-discover the Child model
+/// through the BelongsTo relation.
 #[driver_test(id(ID))]
 pub async fn missing_registration_belongs_to(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -20,13 +22,14 @@ pub async fn missing_registration_belongs_to(t: &mut Test) -> Result<()> {
         id: ID,
     }
 
-    let error = t.try_setup_db(models!(Parent)).await.unwrap_err();
-    assert!(error.is_invalid_schema());
-    assert!(format!("{error}").contains("Parent::child"));
+    // Auto-discovery should find Child through the BelongsTo relation.
+    t.try_setup_db(models!(Parent)).await?;
 
     Ok(())
 }
 
+/// Registering only the Parent model should auto-discover the Child model
+/// through the HasOne relation.
 #[driver_test(id(ID))]
 pub async fn missing_registration_has_one(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -45,18 +48,20 @@ pub async fn missing_registration_has_one(t: &mut Test) -> Result<()> {
         #[auto]
         id: ID,
 
+        #[index]
         parent_id: ID,
         #[belongs_to(key = parent_id, references = id)]
         parent: toasty::BelongsTo<Parent>,
     }
 
-    let error = t.try_setup_db(models!(Parent)).await.unwrap_err();
-    assert!(error.is_invalid_schema());
-    assert!(format!("{error}").contains("Parent::child"));
+    // Auto-discovery should find Child through the HasOne relation.
+    t.try_setup_db(models!(Parent)).await?;
 
     Ok(())
 }
 
+/// Registering only the Parent model should auto-discover the Child model
+/// through the HasMany relation.
 #[driver_test(id(ID))]
 pub async fn missing_registration_has_many(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -81,13 +86,14 @@ pub async fn missing_registration_has_many(t: &mut Test) -> Result<()> {
         parent: toasty::BelongsTo<Parent>,
     }
 
-    let error = t.try_setup_db(models!(Parent)).await.unwrap_err();
-    assert!(error.is_invalid_schema());
-    assert!(format!("{error}").contains("Parent::child"));
+    // Auto-discovery should find Child through the HasMany relation.
+    t.try_setup_db(models!(Parent)).await?;
 
     Ok(())
 }
 
+/// Registering only the Parent model should auto-discover the Detail embedded
+/// model through the embedded field.
 #[driver_test(id(ID))]
 pub async fn missing_registration_embedded(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -104,9 +110,8 @@ pub async fn missing_registration_embedded(t: &mut Test) -> Result<()> {
         x: i32,
     }
 
-    let error = t.try_setup_db(models!(Parent)).await.unwrap_err();
-    assert!(error.is_invalid_schema());
-    assert!(format!("{error}").contains("Parent::detail"));
+    // Auto-discovery should find Detail through the embedded field.
+    t.try_setup_db(models!(Parent)).await?;
 
     Ok(())
 }

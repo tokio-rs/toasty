@@ -269,7 +269,7 @@ enum Status {
 }
 ```
 
-**Registration**: Automatic. Including `User` in `toasty::models!(User)` transitively registers all nested embedded types.
+**Registration**: Automatic. Registering a model transitively registers all models reachable through its fields, including nested embedded types and relation targets.
 
 **Relations**: Forbidden in embedded types (compile error).
 
