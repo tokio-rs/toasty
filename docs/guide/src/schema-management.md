@@ -29,8 +29,11 @@ snapshot of the previous schema. It computes the diff and generates a SQL
 migration file containing only the changes (new tables, altered columns, dropped
 indexes, etc.).
 
-Migrations are managed through the `toasty-cli` crate, which provides a CLI
-tool with these subcommands:
+Migrations are managed through a small CLI binary that you create in your
+project using the `toasty-cli` library crate. Toasty cannot ship a ready-made
+CLI tool because the tool needs access to your model types to compute the
+schema. The `toasty-cli` crate provides `ToastyCli`, which handles argument
+parsing and all migration subcommands:
 
 | Command | What it does |
 |---|---|
