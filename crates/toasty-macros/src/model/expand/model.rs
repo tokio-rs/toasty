@@ -296,18 +296,18 @@ impl Expand<'_> {
             };
 
             let value = if fields_named {
-                let idx = syn::Index::from(index);
-                if by_ref {
-                    quote!((&self.#idx))
-                } else {
-                    quote!(self.#idx)
-                }
-            } else {
                 let field_ident = &field.name.ident;
                 if by_ref {
                     quote!((&self.#field_ident))
                 } else {
                     quote!(self.#field_ident)
+                }
+            } else {
+                let idx = syn::Index::from(index);
+                if by_ref {
+                    quote!((&self.#idx))
+                } else {
+                    quote!(self.#idx)
                 }
             };
 
