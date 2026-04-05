@@ -35,6 +35,7 @@ mod error;
 pub use error::Error;
 
 /// Migration types for schema management.
+#[cfg(feature = "migrate")]
 pub mod migrate;
 
 /// Schema definitions spanning the app layer, database layer, and the mapping

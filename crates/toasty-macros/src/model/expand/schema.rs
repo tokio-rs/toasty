@@ -317,6 +317,55 @@ impl Expand<'_> {
     }
 }
 
+impl Expand<'_> {
+    /// Generate calls to register all models reachable from this model's fields.
+    ///
+    /// For primitive fields, no call is emitted (the default `Field::register`
+    /// is a no-op). For embedded fields, `<Type as Field>::register` is called.
+    /// For relation fields (BelongsTo, HasMany, HasOne), `<TargetType as
+    /// Register>::register` is called directly.
+    pub(super) fn expand_field_register_calls(&self) -> Vec<TokenStream> {
+        let toasty = &self.toasty;
+
+        self.model
+            .fields
+            .iter()
+            .filter_map(|field| match &field.ty {
+                FieldTy::Primitive(ty) => {
+                    // Fields with #[serialize] store arbitrary types as JSON
+                    // strings — they don't implement Field.
+                    if field.attrs.serialize.is_some() {
+                        return None;
+                    }
+                    // Primitives use Field::register which delegates to inner
+                    // type if it's an embedded type (via the Field impl).
+                    Some(quote! {
+                        <#ty as #toasty::Field>::register(model_set);
+                    })
+                }
+                FieldTy::BelongsTo(rel) => {
+                    let ty = &rel.ty;
+                    Some(quote! {
+                        <<#ty as #toasty::Relation>::Model as #toasty::Register>::register(model_set);
+                    })
+                }
+                FieldTy::HasMany(rel) => {
+                    let ty = &rel.ty;
+                    Some(quote! {
+                        <<#ty as #toasty::Relation>::Model as #toasty::Register>::register(model_set);
+                    })
+                }
+                FieldTy::HasOne(rel) => {
+                    let ty = &rel.ty;
+                    Some(quote! {
+                        <<#ty as #toasty::Relation>::Model as #toasty::Register>::register(model_set);
+                    })
+                }
+            })
+            .collect()
+    }
+}
+
 pub(super) fn expand_name(toasty: &TokenStream, name: &Name) -> TokenStream {
     let parts = name.parts.iter().map(|part| {
         let part = part.to_string();

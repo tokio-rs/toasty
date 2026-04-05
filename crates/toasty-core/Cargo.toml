@@ -35,7 +35,7 @@ rust_decimal = ["dep:rust_decimal"]
 bigdecimal = ["dep:bigdecimal"]
 jiff = ["dep:jiff"]
 serde = ["dep:serde", "bit-set/serde"]
-migrate = ["dep:toml", "serde"]
+migrate = ["dep:toml", "dep:serde"]
 
 [dev-dependencies]
 jiff.workspace = true
