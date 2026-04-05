@@ -242,19 +242,31 @@ impl BuildTableFromModels<'_> {
                 // index.
                 let column = match mapping {
                     mapping::Field::Primitive(p) => p.column,
-                    mapping::Field::Struct(s) if s.fields.len() == 1 => {
+                    mapping::Field::Struct(s) => {
+                        // Look up the app-level embedded struct to verify this
+                        // is a true newtype: exactly one unnamed field.
+                        let embedded_struct = self.app.model(s.id).as_embedded_struct_unwrap();
+
+                        assert!(
+                            embedded_struct.fields.len() == 1
+                                && embedded_struct.fields[0].name.app.is_none(),
+                            "only newtype embedded structs (single unnamed \
+                             field) can be indexed; multi-field or named-field \
+                             embedded structs require explicit index field \
+                             ordering"
+                        );
+
                         s.fields[0]
                             .as_primitive()
                             .expect(
-                                "single-field embedded struct should contain \
-                                 a primitive for indexing",
+                                "newtype embedded struct should contain a \
+                                 primitive for indexing",
                             )
                             .column
                     }
                     _ => panic!(
-                        "only primitive and single-field newtype embedded \
-                         structs can be indexed; multi-field or named-field \
-                         embedded structs require explicit index field ordering"
+                        "only primitive and newtype embedded structs can be \
+                         indexed"
                     ),
                 };
 
