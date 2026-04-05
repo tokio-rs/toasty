@@ -28,7 +28,7 @@ pub async fn basic_newtype_embed(test: &mut Test) {
 /// Tests that a newtype field produces a single column whose name matches the
 /// parent field — `email: Email` where `struct Email(String)` produces column
 /// `email`, not `email_0`.
-#[driver_test]
+#[driver_test(requires(sql))]
 pub async fn newtype_column_name(test: &mut Test) {
     #[derive(Debug, toasty::Embed)]
     struct Email(String);
@@ -80,7 +80,7 @@ pub async fn newtype_column_name(test: &mut Test) {
 
 /// Tests create, read-back, eq filter, update, delete-by-filter, and batch
 /// create — all with the same `Email(String)` newtype model.
-#[driver_test(id(ID))]
+#[driver_test(id(ID), requires(sql))]
 pub async fn crud_newtype_embed(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     struct Email(String);
@@ -169,7 +169,7 @@ pub async fn crud_newtype_embed(t: &mut Test) -> Result<()> {
 
 /// Tests `#[unique]` on a newtype field generates `get_by_*` and enforces
 /// uniqueness.
-#[driver_test(id(ID))]
+#[driver_test(id(ID), requires(sql))]
 pub async fn newtype_unique_constraint(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     struct Email(String);
@@ -211,7 +211,7 @@ pub async fn newtype_unique_constraint(t: &mut Test) -> Result<()> {
 }
 
 /// Tests `#[index]` on a newtype field generates `filter_by_*`.
-#[driver_test(id(ID))]
+#[driver_test(id(ID), requires(sql))]
 pub async fn newtype_index(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     struct Email(String);
@@ -253,7 +253,7 @@ pub async fn newtype_index(t: &mut Test) -> Result<()> {
 }
 
 /// Tests a newtype wrapping a numeric type with CRUD and eq filter.
-#[driver_test(id(ID))]
+#[driver_test(id(ID), requires(sql))]
 pub async fn newtype_numeric(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     struct Score(i64);
@@ -292,7 +292,7 @@ pub async fn newtype_numeric(t: &mut Test) -> Result<()> {
 }
 
 /// Tests using a newtype as the primary key field.
-#[driver_test]
+#[driver_test(requires(sql))]
 pub async fn newtype_as_primary_key(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     struct UserId(String);
@@ -323,7 +323,7 @@ pub async fn newtype_as_primary_key(t: &mut Test) -> Result<()> {
 
 /// Tests newtype nested inside an embedded struct: create, read-back, and
 /// filter by the nested newtype field.
-#[driver_test(id(ID))]
+#[driver_test(id(ID), requires(sql))]
 pub async fn nested_newtype(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     struct ZipCode(String);
