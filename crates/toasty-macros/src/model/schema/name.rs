@@ -33,4 +33,15 @@ impl Name {
 
         Self { parts, ident }
     }
+
+    pub(crate) fn with_prefix(&self, prefix: &str) -> String {
+        // Another hack (handling the same case as described in from_str).
+        let name = self.ident.to_string();
+
+        if name.starts_with("_") {
+            format!("{prefix}{name}")
+        } else {
+            format!("{prefix}_{name}")
+        }
+    }
 }

@@ -256,8 +256,8 @@ impl Field {
             }
         };
 
-        let set_ident = syn::Ident::new(&format!("set_{}", name.ident), span);
-        let with_ident = syn::Ident::new(&format!("with_{}", name.ident), span);
+        let set_ident = syn::Ident::new(&name.with_prefix("set"), span);
+        let with_ident = syn::Ident::new(&name.with_prefix("with"), span);
 
         let mut attrs = FieldAttr::from_attrs(&field.attrs)?;
 
