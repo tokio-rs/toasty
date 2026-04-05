@@ -14,7 +14,7 @@ Add the following dependencies to `Cargo.toml`:
 
 ```toml
 [dependencies]
-toasty = { version = "0.1", features = ["sqlite"] }
+toasty = { version = "{{toasty_version}}", features = ["sqlite"] }
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -124,5 +124,6 @@ connection URLs, and supported databases.
 
 ## Creating tables
 
-`db.push_schema()` creates all tables and indexes defined by your models. See [Schema Management](./schema-management.md) for more on managing
+`db.push_schema()` creates all tables and indexes defined by your models. See
+[Migrations and Schema Management](./schema-management.md) for more on managing
 your database schema.

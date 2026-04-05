@@ -6,7 +6,6 @@
 - [Getting Started](./getting-started.md)
 - [Defining Models](./defining-models.md)
 - [Keys and Auto-Generation](./keys-and-auto-generation.md)
-- [Schema Management](./schema-management.md)
 
 # CRUD Operations
 
@@ -39,3 +38,4 @@
 - [Batch Operations](./batch-operations.md)
 - [Transactions](./transactions.md)
 - [Database Setup](./database-setup.md)
+- [Migrations and Schema Management](./schema-management.md)
