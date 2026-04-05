@@ -1,5 +1,6 @@
 use super::Load;
 use crate::stmt::{self, Expr, List};
+use toasty_core::schema::app::ModelSet;
 
 /// Schema and runtime information for a field type.
 ///
@@ -73,6 +74,14 @@ pub trait Field: Load {
     /// For `T`, returns `target.eq(self)`. For `Option<T>`, returns
     /// `target.eq(inner)` when `Some`, or `false` when `None`.
     fn key_constraint<Origin>(&self, target: stmt::Path<Origin, Self::Inner>) -> Expr<bool>;
+
+    /// Register any models referenced by this field type into the given
+    /// [`ModelSet`].
+    ///
+    /// The default implementation is a no-op, suitable for primitive types.
+    /// Embedded types override this to call their own
+    /// [`Register::register`](super::Register::register).
+    fn register(_model_set: &mut ModelSet) {}
 }
 
 macro_rules! impl_field_primitive {
@@ -177,6 +186,10 @@ impl<T: Field> Field for Option<T> {
             None => Expr::from_value(toasty_core::stmt::Value::Bool(false)),
         }
     }
+
+    fn register(model_set: &mut ModelSet) {
+        T::register(model_set);
+    }
 }
 
 impl<T: Field<Output = T>> Field for std::sync::Arc<T> {
@@ -201,6 +214,10 @@ impl<T: Field<Output = T>> Field for std::sync::Arc<T> {
 
     fn key_constraint<Origin>(&self, target: stmt::Path<Origin, Self::Inner>) -> Expr<bool> {
         T::key_constraint(self, target)
+    }
+
+    fn register(model_set: &mut ModelSet) {
+        T::register(model_set);
     }
 }
 
@@ -227,6 +244,10 @@ impl<T: Field<Output = T>> Field for std::rc::Rc<T> {
     fn key_constraint<Origin>(&self, target: stmt::Path<Origin, Self::Inner>) -> Expr<bool> {
         T::key_constraint(self, target)
     }
+
+    fn register(model_set: &mut ModelSet) {
+        T::register(model_set);
+    }
 }
 
 impl<T: Field<Output = T>> Field for Box<T> {
@@ -251,6 +272,10 @@ impl<T: Field<Output = T>> Field for Box<T> {
 
     fn key_constraint<Origin>(&self, target: stmt::Path<Origin, Self::Inner>) -> Expr<bool> {
         T::key_constraint(self, target)
+    }
+
+    fn register(model_set: &mut ModelSet) {
+        T::register(model_set);
     }
 }
 
