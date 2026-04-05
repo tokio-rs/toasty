@@ -2,8 +2,8 @@ use super::Error;
 
 /// Error when a migration file has an unsupported format version.
 ///
-/// This occurs when loading a history file or snapshot file whose version
-/// number does not match the version expected by this build of Toasty.
+/// This occurs when loading a history file version number does not match the version expected by
+/// this build of Toasty.
 #[derive(Debug)]
 pub(super) struct UnsupportedMigrationVersion {
     found: u32,
