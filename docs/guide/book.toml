@@ -5,7 +5,8 @@ authors = ["Toasty Contributors"]
 [build]
 build-dir = "book"
 
-[preprocessor.cmdrun]
+[preprocessor.toasty-version]
+command = "./mdbook-toasty-version"
 
 [output.html]
 

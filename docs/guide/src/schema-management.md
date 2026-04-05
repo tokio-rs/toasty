@@ -49,8 +49,8 @@ Add `toasty-cli` to your project:
 
 ```toml
 [dependencies]
-toasty = { version = "<!-- cmdrun ../toasty-version.sh -->", features = ["sqlite"] }
-toasty-cli = "<!-- cmdrun ../toasty-version.sh -->"
+toasty = { version = "{{toasty_version}}", features = ["sqlite"] }
+toasty-cli = "{{toasty_version}}"
 tokio = { version = "1", features = ["full"] }
 anyhow = "1"
 ```
