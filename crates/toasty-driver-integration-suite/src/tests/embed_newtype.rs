@@ -111,3 +111,48 @@ pub async fn crud_newtype_embed(t: &mut Test) -> Result<()> {
 
     Ok(())
 }
+
+/// Tests filtering by a newtype embedded field using `==` comparison.
+#[driver_test(id(ID))]
+pub async fn filter_newtype_embed_eq(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Embed)]
+    struct Email(String);
+
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+        name: String,
+        email: Email,
+    }
+
+    let mut db = t.setup_db(models!(User, Email)).await;
+
+    toasty::create!(User {
+        name: "Alice",
+        email: Email("alice@example.com".into()),
+    })
+    .exec(&mut db)
+    .await?;
+
+    toasty::create!(User {
+        name: "Bob",
+        email: Email("bob@example.com".into()),
+    })
+    .exec(&mut db)
+    .await?;
+
+    let users = User::filter(
+        User::fields()
+            .email()
+            .eq(Email("alice@example.com".into())),
+    )
+    .exec(&mut db)
+    .await?;
+
+    assert_eq!(users.len(), 1);
+    assert_eq!(users[0].name, "Alice");
+
+    Ok(())
+}

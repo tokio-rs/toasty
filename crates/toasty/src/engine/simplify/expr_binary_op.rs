@@ -1,7 +1,7 @@
 use std::cmp::PartialOrd;
 
 use super::Simplify;
-use toasty_core::schema::app::{FieldTy, Model};
+use toasty_core::schema::app::FieldTy;
 use toasty_core::stmt::{self, Expr, ResolvedRef, VisitMut};
 
 impl Simplify<'_> {
@@ -27,16 +27,7 @@ impl Simplify<'_> {
                         .as_field_unwrap();
 
                     match &field.ty {
-                        FieldTy::Primitive(_) => {}
-                        FieldTy::Embedded(embedded) => {
-                            let target = self.schema().app.model(embedded.target);
-                            if matches!(target, Model::EmbeddedEnum(_)) {
-                                // EmbeddedEnum fields are stored as a single integer
-                                // column, so the field reference is already valid as-is.
-                            } else {
-                                todo!("embedded struct field in binary op")
-                            }
-                        }
+                        FieldTy::Primitive(_) | FieldTy::Embedded(_) => {}
                         FieldTy::HasMany(_) | FieldTy::HasOne(_) => todo!(),
                         FieldTy::BelongsTo(rel) => {
                             let [fk_field] = &rel.foreign_key.fields[..] else {
