@@ -602,7 +602,7 @@ impl<'a, 'b> MapField<'a, 'b> {
                         self.map_field_enum(index, field, embedded_enum)
                     }
                     app::Model::EmbeddedStruct(embedded_struct) => {
-                        self.map_field_struct(index, field, embedded_struct)
+                        self.map_field_struct(index, field, embedded.target, embedded_struct)
                     }
                     _ => unreachable!(),
                 }
@@ -712,6 +712,7 @@ impl<'a, 'b> MapField<'a, 'b> {
         &mut self,
         field_index: usize,
         field: &app::Field,
+        model_id: ModelId,
         embedded_struct: &app::EmbeddedStruct,
     ) -> Result<mapping::Field> {
         let sub_projection = self.sub_projection(field_index);
@@ -727,6 +728,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             .fold(stmt::PathFieldSet::new(), |acc, f| acc | f.field_mask());
 
         Ok(mapping::Field::Struct(mapping::FieldStruct {
+            id: model_id,
             fields: nested_fields,
             columns,
             field_mask,
