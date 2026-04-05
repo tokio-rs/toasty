@@ -43,6 +43,7 @@ Toasty supports these Rust types as model fields:
 | `uuid::Uuid` | UUID |
 | `Vec<u8>` | Binary / Blob |
 | `Option<T>` | Nullable version of `T` |
+| Embedded types (`#[derive(toasty::Embed)]`) | Flattened into parent table columns (see [Embedded Types](./embedded-types.md)) |
 
 With optional feature flags:
 

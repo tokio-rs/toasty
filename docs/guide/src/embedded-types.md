@@ -6,6 +6,130 @@ are stored inline in the parent model's table.
 
 Use embedded types to group related fields without creating a separate table.
 
+## Newtype structs
+
+A newtype struct is a single-field tuple struct like `struct Email(String)`.
+Annotate it with `#[derive(toasty::Embed)]` to use it as a model field:
+
+```rust
+# use toasty::Model;
+#[derive(Debug, toasty::Embed)]
+struct Email(String);
+
+#[derive(Debug, toasty::Model)]
+struct User {
+    #[key]
+    #[auto]
+    id: u64,
+
+    name: String,
+    email: Email,
+}
+```
+
+Unlike multi-field embedded structs, a newtype maps to a single column with the
+parent field's name — no prefix is added:
+
+```sql
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL     -- not "email_0"
+);
+```
+
+Use newtypes to add type safety to primitive fields. An `Email` and a `Username`
+are both strings, but the type system prevents mixing them up:
+
+```rust,ignore
+let user = toasty::create!(User {
+    name: "Alice",
+    email: Email("alice@example.com".into()),
+})
+.exec(&mut db)
+.await?;
+
+assert_eq!(user.email.0, "alice@example.com");
+```
+
+Newtypes support the same operations as primitive fields — filtering, updating,
+`#[key]`, `#[unique]`, and `#[index]` all work:
+
+```rust,ignore
+// Filter by newtype field
+let users = User::filter(User::fields().email().eq(Email("alice@example.com".into())))
+    .exec(&mut db)
+    .await?;
+
+// Update a newtype field
+user.update()
+    .email(Email("new@example.com".into()))
+    .exec(&mut db)
+    .await?;
+```
+
+A newtype can also be used as a primary key:
+
+```rust,ignore
+#[derive(Debug, toasty::Embed)]
+struct UserId(String);
+
+#[derive(Debug, toasty::Model)]
+struct User {
+    #[key]
+    id: UserId,
+    name: String,
+}
+```
+
+### Newtype with `#[unique]` and `#[index]`
+
+Place `#[unique]` or `#[index]` on the model field (not inside the newtype):
+
+```rust,ignore
+#[derive(Debug, toasty::Embed)]
+struct Email(String);
+
+#[derive(Debug, toasty::Model)]
+struct User {
+    #[key]
+    #[auto]
+    id: u64,
+
+    name: String,
+
+    #[unique]
+    email: Email,
+}
+```
+
+This generates the same methods as a primitive unique field —
+`User::get_by_email()`, `User::filter_by_email()`, etc.
+
+### Newtypes inside embedded structs
+
+Newtypes can be nested inside multi-field embedded structs:
+
+```rust,ignore
+#[derive(Debug, toasty::Embed)]
+struct ZipCode(String);
+
+#[derive(Debug, toasty::Embed)]
+struct Address {
+    city: String,
+    zip: ZipCode,
+}
+```
+
+The `ZipCode` field inside `Address` produces a single column (`address_zip`,
+not `address_zip_0`). Filtering works through the normal chained accessors:
+
+```rust,ignore
+let users = User::filter(User::fields().address().zip().eq(ZipCode("98101".into())))
+    .exec(&mut db)
+    .await?;
+```
+
 ## Embedded structs
 
 Define a struct with `#[derive(toasty::Embed)]` and use it as a field in a

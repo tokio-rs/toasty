@@ -92,6 +92,25 @@ When `#[auto]` is used on a `uuid::Uuid` field, Toasty generates a UUID v7
 (time-ordered) by default. See [auto strategies](#auto-strategies) for other
 options.
 
+A newtype embedded struct can also be used as a key. The newtype wraps a
+primitive and maps to a single column, so it works like any other key type while
+adding type safety:
+
+```rust,ignore
+#[derive(Debug, toasty::Embed)]
+struct UserId(String);
+
+#[derive(Debug, toasty::Model)]
+struct User {
+    #[key]
+    id: UserId,
+    name: String,
+}
+```
+
+See [Embedded Types — Newtype structs](./embedded-types.md#newtype-structs) for
+more on newtypes.
+
 ## Auto-generated values
 
 The `#[auto]` attribute tells Toasty to generate the field's value
