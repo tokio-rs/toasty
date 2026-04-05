@@ -54,7 +54,8 @@ pub struct Builder {
 
 impl Builder {
     /// Set the models whose schemas will be included when the database is
-    /// built.
+    /// built. Related and embedded models are discovered automatically through
+    /// field traversal, so you only need to list your entry-point models.
     ///
     /// Use the [`models!`](crate::models!) macro to build a [`ModelSet`] from
     /// your `#[derive(Model)]` types.

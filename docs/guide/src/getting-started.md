@@ -103,9 +103,8 @@ rest of this guide shows everything the macro can generate and how to use it.
 ## Connecting to a database
 
 `Db::builder()` creates a builder where you provide your models and then
-connect to a database. Every model must be included before connecting so that
-Toasty can infer the full database schema — tables, columns, indexes, and
-relationships between models.
+connect to a database. Toasty uses the registered models to infer the full
+database schema — tables, columns, indexes, and relationships between models.
 
 ```rust,ignore
 let mut db = toasty::Db::builder()
@@ -118,6 +117,11 @@ let mut db = toasty::Db::builder()
 types in your crate. You can also list models individually
 (`toasty::models!(User, Post)`), register all models from an external crate
 (`toasty::models!(other_crate::*)`), or combine these forms freely.
+
+You don't need to list every model explicitly. When a model is registered, Toasty
+traverses its fields and automatically registers any related or embedded models it
+finds. For example, `toasty::models!(User)` also registers any models that `User`
+references through `BelongsTo`, `HasMany`, `HasOne`, or embedded fields.
 
 The connection URL determines which database driver to use. See
 [Database Setup](./database-setup.md) for connection URLs for each

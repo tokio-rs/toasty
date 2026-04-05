@@ -98,6 +98,11 @@ pub use inventory;
 ///     .await?;
 /// ```
 ///
+/// Each registered model automatically discovers any models reachable through
+/// its fields — embedded types, `BelongsTo`, `HasMany`, and `HasOne` targets
+/// are all registered transitively. You only need to list the entry-point
+/// models.
+///
 /// # Syntax
 ///
 /// The macro accepts a comma-separated list of any combination of:
