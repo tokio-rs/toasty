@@ -243,15 +243,21 @@ impl Field {
         field: &syn::Field,
         model_ident: &syn::Ident,
         id: usize,
+        index: usize,
         names: &[syn::Ident],
     ) -> syn::Result<Self> {
-        let Some(ident) = &field.ident else {
-            return Err(syn::Error::new_spanned(field, "model fields must be named"));
+        let (name, span) = match &field.ident {
+            Some(ident) => (Name::from_ident(ident), ident.span()),
+            None => {
+                let span = field.ty.span();
+                let ident = syn::Ident::new(&format!("_{index}"), span);
+                let name = Name::from_ident(&ident);
+                (name, span)
+            }
         };
 
-        let name = Name::from_ident(ident);
-        let set_ident = syn::Ident::new(&format!("set_{}", name.ident), ident.span());
-        let with_ident = syn::Ident::new(&format!("with_{}", name.ident), ident.span());
+        let set_ident = syn::Ident::new(&name.with_prefix("set"), span);
+        let with_ident = syn::Ident::new(&name.with_prefix("with"), span);
 
         let mut attrs = FieldAttr::from_attrs(&field.attrs)?;
 
@@ -279,7 +285,7 @@ impl Field {
                 } else {
                     ty = Some(FieldTy::HasMany(HasMany::from_ast(
                         attr,
-                        ident,
+                        field.ident.as_ref().unwrap(),
                         &field.ty,
                         field.span(),
                     )?));
@@ -299,7 +305,9 @@ impl Field {
         // Expand #[auto] on timestamp fields:
         //   created_at → #[default(jiff::Timestamp::now())]
         //   updated_at → #[update(jiff::Timestamp::now())]
-        if matches!(&attrs.auto, Some(AutoStrategy::Unspecified)) {
+        if matches!(&attrs.auto, Some(AutoStrategy::Unspecified))
+            && let Some(ident) = &field.ident
+        {
             let field_name = ident.to_string();
             let now_expr: syn::Expr = syn::parse_quote!(jiff::Timestamp::now());
 
@@ -387,7 +395,7 @@ impl Field {
     }
 }
 
-fn rewrite_self(ty: &mut syn::Type, model: &syn::Ident) {
+pub(crate) fn rewrite_self(ty: &mut syn::Type, model: &syn::Ident) {
     use syn::visit_mut::VisitMut;
 
     struct RewriteSelf<'a>(&'a syn::Ident);

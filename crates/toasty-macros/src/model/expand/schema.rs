@@ -67,15 +67,31 @@ impl Expand<'_> {
             let field_ty;
             let nullable;
 
+            let field_named = match &self.model.kind {
+                ModelKind::Root(_) => true,
+                ModelKind::EmbeddedStruct(model_embedded_struct) => model_embedded_struct.fields_named,
+                ModelKind::EmbeddedEnum(model_embedded_enum) => {
+                    let variant = field.variant.unwrap();
+                    model_embedded_enum.variants[variant].fields_named
+                }
+            };
+
             let name = {
-                let app_name = field.name.ident.to_string();
+                let app_name = if field_named {
+                    let n = field.name.ident.to_string();
+                    quote! { Some(#n.to_string()) }
+                } else {
+                    quote! { None }
+                };
+
                 let storage_name = match field.attrs.column.as_ref().and_then(|column| column.name.as_ref()) {
                     Some(name) => quote! { Some(#name.to_string()) },
                     None => quote! { None },
                 };
+
                 quote! {
                     #toasty::core::schema::app::FieldName {
-                        app: Some(#app_name.to_string()),
+                        app: #app_name,
                         storage: #storage_name,
                     }
                 }

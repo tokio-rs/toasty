@@ -66,6 +66,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let embedded = model.kind.as_embedded_unwrap();
     let field_struct_ident = &embedded.field_struct_ident;
     let update_struct_ident = &embedded.update_struct_ident;
+    let fields_named = embedded.fields_named;
 
     let expand = Expand {
         model,
@@ -75,10 +76,10 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
 
     let model_schema = expand.expand_model_schema();
     let field_register_calls = expand.expand_field_register_calls();
-    let into_expr_body_val = expand.expand_embedded_into_expr_body(false);
-    let into_expr_body_ref = expand.expand_embedded_into_expr_body(true);
-    let load_body = expand.expand_load_body();
-    let reload_body = expand.expand_embedded_reload_body();
+    let into_expr_body_val = expand.expand_embedded_into_expr_body(fields_named, false);
+    let into_expr_body_ref = expand.expand_embedded_into_expr_body(fields_named, true);
+    let load_body = expand.expand_load_body(fields_named);
+    let reload_body = expand.expand_embedded_reload_body(embedded.fields_named);
     let embedded_field_struct = expand.expand_field_struct();
     let embedded_field_list_struct = expand.expand_field_list_struct();
     let embedded_model_impls = expand.expand_embedded_model_impls();

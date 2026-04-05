@@ -11,8 +11,8 @@ pub(crate) struct Variant {
     /// Variant attributes
     pub(crate) attrs: VariantAttr,
 
-    /// True when variant fields are named (struct-like `Foo { a: T }`),
-    /// false for tuple-like (`Foo(T)`). Unused when `fields` is empty.
+    /// True when variant fields are named (struct-like `Foo { a: T }`), false
+    /// for tuple-like (`Foo(T)`). Unused when `fields` is empty.
     pub(crate) fields_named: bool,
 
     /// Ident for the `is_{variant}()` method (e.g., `is_email`)

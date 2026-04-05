@@ -214,6 +214,41 @@ let user = User::get_by_country(&mut db, "US").await?;
 # }
 ```
 
+## Indexing newtype fields
+
+Newtype embedded structs (single unnamed field, e.g., `struct Email(String)`)
+support `#[unique]` and `#[index]` on the model field. The newtype maps to a
+single column, so the index works the same as on a primitive:
+
+```rust,ignore
+#[derive(Debug, toasty::Embed)]
+struct Email(String);
+
+#[derive(Debug, toasty::Model)]
+struct User {
+    #[key]
+    #[auto]
+    id: u64,
+
+    name: String,
+
+    #[unique]
+    email: Email,
+}
+```
+
+This generates `User::get_by_email()`, `User::filter_by_email()`, and the other
+index methods. The argument type is the newtype itself:
+
+```rust,ignore
+let user = User::get_by_email(&mut db, Email("alice@example.com".into())).await?;
+```
+
+Multi-field embedded structs do not support `#[unique]` or `#[index]` on the
+parent field because the column ordering within the index is ambiguous. Index
+individual fields inside the embedded struct instead (see
+[Embedded Types — Indexing embedded fields](./embedded-types.md#indexing-embedded-fields)).
+
 ## Choosing between `#[unique]` and `#[index]`
 
 Both attributes tell Toasty that a field is a query target and generate the same

@@ -1,5 +1,5 @@
 use crate::{
-    schema::db::ColumnId,
+    schema::{app::ModelId, db::ColumnId},
     stmt::{PathFieldSet, Projection},
 };
 use indexmap::IndexMap;
@@ -197,6 +197,9 @@ pub struct FieldPrimitive {
 /// ```
 #[derive(Debug, Clone)]
 pub struct FieldStruct {
+    /// The [`ModelId`] of the embedded struct model this mapping corresponds to.
+    pub id: ModelId,
+
     /// Per-field mappings for the embedded struct's fields.
     ///
     /// Indexed by field index within the embedded model.
