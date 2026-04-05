@@ -71,8 +71,9 @@ pub(crate) struct ModelEmbeddedStruct {
     /// Update builder struct identifier
     pub(crate) update_struct_ident: syn::Ident,
 
-    /// True when the embedded struct is a newtype wrapper: `struct Foo(Bar)`
-    pub(crate) is_newtype: bool,
+    /// True when variant fields are named (struct-like `Foo { a: T }`), false
+    /// for tuple-like (`Foo(T)`). Unused when `fields` is empty.
+    pub(crate) fields_named: bool,
 }
 
 #[derive(Debug)]
@@ -123,29 +124,7 @@ pub(crate) struct Model {
 
 impl Model {
     pub(crate) fn from_ast(ast: &syn::ItemStruct, is_embedded: bool) -> syn::Result<Self> {
-        // Check for newtype pattern: `struct Foo(Bar)` — only allowed for embedded structs
-        if let syn::Fields::Unnamed(unnamed) = &ast.fields {
-            if !is_embedded {
-                return Err(syn::Error::new_spanned(
-                    &ast.fields,
-                    "root models must have named fields",
-                ));
-            }
-            if unnamed.unnamed.len() != 1 {
-                return Err(syn::Error::new_spanned(
-                    &ast.fields,
-                    "embedded newtype structs must have exactly one field",
-                ));
-            }
-            return Self::from_newtype_ast(ast, &unnamed.unnamed[0]);
-        }
-
-        let syn::Fields::Named(node) = &ast.fields else {
-            return Err(syn::Error::new_spanned(
-                &ast.fields,
-                "model fields must be named",
-            ));
-        };
+        let ast_fields = collect_ast_fields(&ast.fields)?;
 
         // Generics are not supported yet
         if !ast.generics.params.is_empty() {
@@ -158,11 +137,9 @@ impl Model {
         // First, map field names to identifiers
         let mut names = vec![];
 
-        for field in node.named.iter() {
+        for field in &ast_fields {
             if let Some(ident) = &field.ident {
                 names.push(ident.clone());
-            } else {
-                return Err(syn::Error::new_spanned(field, "model fields must be named"));
             }
         }
 
@@ -176,8 +153,8 @@ impl Model {
             errs.push(err);
         }
 
-        for (index, node) in node.named.iter().enumerate() {
-            match Field::from_ast(node, &ast.ident, index, &names) {
+        for (index, node) in ast_fields.iter().enumerate() {
+            match Field::from_ast(node, &ast.ident, index, index, &names) {
                 Ok(field) => {
                     if model_attr.key.is_some()
                         && let Some(field) = &field.attrs.key
@@ -239,7 +216,7 @@ impl Model {
                 field_struct_ident: struct_ident("Fields", ast),
                 field_list_struct_ident: struct_list_ident("ListFields", ast),
                 update_struct_ident: struct_ident("Update", ast),
-                is_newtype: false,
+                fields_named: matches!(ast.fields, syn::Fields::Named(_)),
             })
         } else {
             let pk_fields = pk_index_fields
@@ -278,64 +255,6 @@ impl Model {
         })
     }
 
-    /// Parse a newtype embedded struct: `struct Foo(Bar)`.
-    ///
-    /// Creates a single field with no application-level name (`app: None` in
-    /// the schema) so that the column name collapses to the parent field's
-    /// name — e.g. `email: Email` where `struct Email(String)` produces a
-    /// column named `email` rather than `email_0`.
-    fn from_newtype_ast(ast: &syn::ItemStruct, inner: &syn::Field) -> syn::Result<Self> {
-        if !ast.generics.params.is_empty() {
-            return Err(syn::Error::new_spanned(
-                &ast.generics,
-                "model generics are not supported",
-            ));
-        }
-
-        let attrs = FieldAttr::from_attrs(&inner.attrs)?;
-
-        // Use a synthetic ident `_0` for code generation purposes. The schema
-        // will record `app: None`. set/with idents are required by the Field
-        // struct but unused — newtypes don't generate an update builder.
-        let span = ast.ident.span();
-        let name = Name {
-            parts: vec!["_0".to_string()],
-            ident: syn::Ident::new("_0", span),
-        };
-        let set_ident = syn::Ident::new("set_0", span);
-        let with_ident = syn::Ident::new("with_0", span);
-
-        let mut ty = FieldTy::Primitive(inner.ty.clone());
-        if let FieldTy::Primitive(ref mut t) = ty {
-            rewrite_self(t, &ast.ident);
-        }
-
-        let field = Field {
-            id: 0,
-            attrs,
-            name,
-            ty,
-            set_ident,
-            with_ident,
-            variant: None,
-        };
-
-        Ok(Self {
-            vis: ast.vis.clone(),
-            name: Name::from_ident(&ast.ident),
-            ident: ast.ident.clone(),
-            fields: vec![field],
-            kind: ModelKind::EmbeddedStruct(ModelEmbeddedStruct {
-                field_struct_ident: struct_ident("Fields", ast),
-                field_list_struct_ident: struct_list_ident("ListFields", ast),
-                update_struct_ident: struct_ident("Update", ast),
-                is_newtype: true,
-            }),
-            indices: vec![],
-            table: None,
-        })
-    }
-
     pub fn primary_key_fields(&self) -> Option<impl ExactSizeIterator<Item = &'_ Field>> {
         match &self.kind {
             ModelKind::Root(root) => Some(
@@ -346,10 +265,6 @@ impl Model {
             ),
             ModelKind::EmbeddedStruct(_) | ModelKind::EmbeddedEnum(_) => None,
         }
-    }
-
-    pub(crate) fn is_newtype(&self) -> bool {
-        matches!(&self.kind, ModelKind::EmbeddedStruct(e) if e.is_newtype)
     }
 
     pub(crate) fn has_associations(&self) -> bool {
@@ -370,6 +285,7 @@ impl Model {
         let mut all_fields: Vec<Field> = vec![];
         let mut errs = ErrorSet::new();
         let mut global_field_index = 0usize;
+        let model_ident = ast.ident.clone();
 
         // Parse all variants in a single pass, defaulting omitted discriminants
         // to string labels using the variant identifier.
@@ -393,48 +309,20 @@ impl Model {
                 },
             };
 
-            // Collect variant data fields
-            let field_pairs: Vec<_> = match &variant.fields {
-                syn::Fields::Unit => vec![],
-                syn::Fields::Named(named) => named
-                    .named
-                    .iter()
-                    .map(|f| (f.ident.as_ref().unwrap().clone(), f))
-                    .collect(),
-                syn::Fields::Unnamed(unnamed) => unnamed
-                    .unnamed
-                    .iter()
-                    .enumerate()
-                    .map(|(i, f)| {
-                        (
-                            syn::Ident::new(&format!("field{i}"), variant.ident.span()),
-                            f,
-                        )
-                    })
-                    .collect(),
-            };
+            let ast_fields = collect_ast_fields(&variant.fields)?;
+            let names = ast_fields
+                .iter()
+                .filter_map(|ast_field| ast_field.ident.clone())
+                .collect::<Vec<_>>();
 
-            for (ident, f) in &field_pairs {
-                let attrs = match FieldAttr::from_attrs(&f.attrs) {
-                    Ok(a) => a,
-                    Err(e) => {
-                        errs.push(e);
-                        continue;
-                    }
-                };
-                let name = Name::from_ident(ident);
-                let set_ident = syn::Ident::new(&format!("set_{}", name.ident), ident.span());
-                let with_ident = syn::Ident::new(&format!("with_{}", name.ident), ident.span());
-
-                all_fields.push(Field {
-                    id: global_field_index,
-                    attrs,
-                    name,
-                    ty: FieldTy::Primitive(f.ty.clone()),
-                    set_ident,
-                    with_ident,
-                    variant: Some(variant_index),
-                });
+            for (index, ast_field) in ast_fields.iter().enumerate() {
+                all_fields.push(Field::from_ast(
+                    ast_field,
+                    &model_ident,
+                    global_field_index,
+                    index,
+                    &names,
+                )?);
                 global_field_index += 1;
             }
 
@@ -481,7 +369,7 @@ impl Model {
         Ok(Self {
             vis: ast.vis.clone(),
             name: Name::from_ident(&ast.ident),
-            ident: ast.ident.clone(),
+            ident: model_ident,
             fields: all_fields,
             kind: ModelKind::EmbeddedEnum(ModelEmbeddedEnum {
                 field_struct_ident: enum_ident("Fields", ast),
@@ -492,6 +380,23 @@ impl Model {
             table: None,
         })
     }
+}
+
+fn collect_ast_fields(ast: &syn::Fields) -> syn::Result<Vec<&syn::Field>> {
+    Ok(match ast {
+        syn::Fields::Named(f) => f.named.iter().collect::<Vec<_>>(),
+        syn::Fields::Unnamed(f) => {
+            if f.unnamed.len() > 1 {
+                return Err(syn::Error::new_spanned(
+                    ast,
+                    "tuple structs (besides new-type) are not supported",
+                ));
+            }
+
+            f.unnamed.iter().collect::<Vec<_>>()
+        }
+        _ => vec![],
+    })
 }
 
 fn collect_field_indices(fields: &[Field], indices: &mut Vec<Index>) {

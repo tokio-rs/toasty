@@ -65,7 +65,8 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let model_ident = &model.ident;
     let embedded = model.kind.as_embedded_unwrap();
     let field_struct_ident = &embedded.field_struct_ident;
-    let is_newtype = embedded.is_newtype;
+    let update_struct_ident = &embedded.update_struct_ident;
+    let fields_named = embedded.fields_named;
 
     let expand = Expand {
         model,
@@ -74,27 +75,15 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     };
 
     let model_schema = expand.expand_model_schema();
-    let into_expr_body_val = expand.expand_embedded_into_expr_body(false);
-    let into_expr_body_ref = expand.expand_embedded_into_expr_body(true);
-    let load_body = expand.expand_load_body();
-    let reload_body = expand.expand_embedded_reload_body();
+    let into_expr_body_val = expand.expand_embedded_into_expr_body(fields_named, false);
+    let into_expr_body_ref = expand.expand_embedded_into_expr_body(fields_named, true);
+    let load_body = expand.expand_load_body(fields_named);
+    let reload_body = expand.expand_embedded_reload_body(embedded.fields_named);
     let embedded_field_struct = expand.expand_field_struct();
     let embedded_field_list_struct = expand.expand_field_list_struct();
     let embedded_model_impls = expand.expand_embedded_model_impls();
+    let embedded_update_builder = expand.expand_embedded_update_builder();
     let field_list_struct_ident = &embedded.field_list_struct_ident;
-
-    // Newtypes use `()` for the update type (like enums and primitives) since
-    // partial field-level updates don't apply to a single-field wrapper.
-    let (embedded_update_builder, update_type, new_update_body) = if is_newtype {
-        (TokenStream::new(), quote!(()), quote! {})
-    } else {
-        let update_struct_ident = &embedded.update_struct_ident;
-        (
-            expand.expand_embedded_update_builder(),
-            quote!(#update_struct_ident<'a>),
-            quote! { #update_struct_ident { assignments, projection } },
-        )
-    };
 
     wrap_in_const(quote! {
         #embedded_field_struct
@@ -141,7 +130,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
         impl #toasty::Field for #model_ident {
             type Path<__Origin> = #field_struct_ident<__Origin>;
             type ListPath<__Origin> = #field_list_struct_ident<__Origin>;
-            type Update<'a> = #update_type;
+            type Update<'a> = #update_struct_ident<'a>;
             type Inner = Self;
 
             fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
@@ -156,7 +145,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
                 assignments: &'a mut #toasty::core::stmt::Assignments,
                 projection: #toasty::core::stmt::Projection,
             ) -> Self::Update<'a> {
-                #new_update_body
+                #update_struct_ident { assignments, projection }
             }
 
             fn field_ty(

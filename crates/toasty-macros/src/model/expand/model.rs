@@ -31,7 +31,7 @@ impl Expand<'_> {
         };
         let model_schema = self.expand_model_schema();
         let model_fields = self.expand_model_field_struct_init();
-        let load_body = self.expand_load_body();
+        let load_body = self.expand_load_body(true);
         let filter_methods = self.expand_model_filter_methods();
         let field_name_to_id = self.expand_field_name_to_id();
         let relation_methods = self.expand_model_relation_methods();
@@ -280,9 +280,12 @@ impl Expand<'_> {
         }
     }
 
-    pub(super) fn expand_embedded_into_expr_body(&self, by_ref: bool) -> TokenStream {
+    pub(super) fn expand_embedded_into_expr_body(
+        &self,
+        fields_named: bool,
+        by_ref: bool,
+    ) -> TokenStream {
         let toasty = &self.toasty;
-        let is_newtype = self.model.is_newtype();
 
         // For embedded types, create a record expression from all fields
         // Currently only primitive fields are supported in embedded types
@@ -292,7 +295,7 @@ impl Expand<'_> {
                 _ => panic!("only primitive fields are supported in embedded types"),
             };
 
-            let value = if is_newtype {
+            let value = if fields_named {
                 let idx = syn::Index::from(index);
                 if by_ref {
                     quote!((&self.#idx))
@@ -328,16 +331,21 @@ impl Expand<'_> {
     ///
     /// The generated code pattern matches on `Value::Record`, extracts fields,
     /// and constructs the struct.
-    pub(super) fn expand_load_body(&self) -> TokenStream {
+    pub(super) fn expand_load_body(&self, fields_named: bool) -> TokenStream {
         let toasty = &self.toasty;
         let model_ident = &self.model.ident;
-        let is_newtype = self.model.is_newtype();
 
         // Generate field loading expressions
         let field_loads = self.model.fields.iter().enumerate().map(|(index, field)| {
             let field_ident = &field.name.ident;
             let index_tokenized = util::int(index);
             let field_name_str = field.name.ident.to_string();
+
+            let field_name = if fields_named {
+                quote!(#field_ident:)
+            } else {
+                quote!()
+            };
 
             match &field.ty {
                 FieldTy::Primitive(_ty) if field.attrs.serialize.is_some() => {
@@ -360,46 +368,33 @@ impl Expand<'_> {
                     };
 
                     quote! {
-                        #field_ident: {
+                        #field_name {
                             let value = record[#index_tokenized].take();
                             #field_value
                         },
                     }
                 }
                 FieldTy::Primitive(ty) => {
-                    quote!(#field_ident: <#ty as #toasty::Load>::load(record[#index_tokenized].take())?,)
+                    quote!(#field_name <#ty as #toasty::Load>::load(record[#index_tokenized].take())?,)
                 }
                 FieldTy::BelongsTo(_) => {
-                    quote!(#field_ident: #toasty::BelongsTo::load(record[#index].take())?,)
+                    quote!(#field_name #toasty::BelongsTo::load(record[#index].take())?,)
                 }
                 FieldTy::HasMany(_) => {
-                    quote!(#field_ident: #toasty::HasMany::load(record[#index].take())?,)
+                    quote!(#field_name #toasty::HasMany::load(record[#index].take())?,)
                 }
                 FieldTy::HasOne(_) => {
-                    quote!(#field_ident: #toasty::HasOne::load(record[#index].take())?,)
+                    quote!(#field_name #toasty::HasOne::load(record[#index].take())?,)
                 }
             }
         });
 
-        let construct = if is_newtype {
-            // For newtypes, construct as `Model(value)` — extract just the
-            // value expression from the single field.
-            let field = &self.model.fields[0];
-            let ty = match &field.ty {
-                FieldTy::Primitive(ty) => ty,
-                _ => panic!("newtype inner field must be primitive"),
-            };
-            quote! {
-                Ok(#model_ident(
-                    <#ty as #toasty::Load>::load(record[0].take())?
-                ))
-            }
+        let model_load = if fields_named {
+            quote!(#model_ident {
+                #( #field_loads )*
+            })
         } else {
-            quote! {
-                Ok(#model_ident {
-                    #( #field_loads )*
-                })
-            }
+            quote!(#model_ident( #( #field_loads )* ))
         };
 
         quote! {
@@ -408,7 +403,7 @@ impl Expand<'_> {
                     Err(#toasty::Error::record_not_found(stringify!(#model_ident)))
                 }
                 #toasty::core::stmt::Value::Record(mut record) => {
-                    #construct
+                    Ok(#model_load)
                 }
                 value => Err(#toasty::Error::type_conversion(value, stringify!(#model_ident))),
             }
@@ -419,21 +414,20 @@ impl Expand<'_> {
     ///
     /// Handles `SparseRecord` values (partial updates) by reloading only the specified
     /// sub-fields, and falls back to full `load` for complete record values.
-    pub(super) fn expand_embedded_reload_body(&self) -> TokenStream {
+    pub(super) fn expand_embedded_reload_body(&self, fields_named: bool) -> TokenStream {
         let toasty = &self.toasty;
-        let is_newtype = self.model.is_newtype();
 
         let reload_arms = self.model.fields.iter().enumerate().map(|(index, field)| {
             let i = util::int(index);
             let field_name_str = field.name.ident.to_string();
 
             // For newtypes, access via tuple index (target.0); otherwise by name
-            let field_access = if is_newtype {
-                let idx = syn::Index::from(index);
-                quote!(target.#idx)
-            } else {
+            let field_access = if fields_named {
                 let field_ident = &field.name.ident;
                 quote!(target.#field_ident)
+            } else {
+                let idx = syn::Index::from(index);
+                quote!(target.#idx)
             };
 
             match &field.ty {
