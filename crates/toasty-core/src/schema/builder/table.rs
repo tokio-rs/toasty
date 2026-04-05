@@ -228,10 +228,35 @@ impl BuildTableFromModels<'_> {
             };
 
             for index_field in &app_index.fields {
-                let column = field_mappings[index_field.field.index]
-                    .as_primitive()
-                    .expect("indexed field should map to a primitive column")
-                    .column;
+                let mapping = &field_mappings[index_field.field.index];
+
+                // Resolve the mapped column for this indexed field. Primitive
+                // fields map directly. Newtype embedded structs (a single
+                // unnamed field) are transparent wrappers around a primitive, so
+                // we unwrap one level.
+                //
+                // Multi-field or named-field embedded structs are not yet
+                // supported in indices because the column ordering within the
+                // index matters and there is no syntax to specify it. That will
+                // likely require an explicit field-order annotation on the
+                // index.
+                let column = match mapping {
+                    mapping::Field::Primitive(p) => p.column,
+                    mapping::Field::Struct(s) if s.fields.len() == 1 => {
+                        s.fields[0]
+                            .as_primitive()
+                            .expect(
+                                "single-field embedded struct should contain \
+                                 a primitive for indexing",
+                            )
+                            .column
+                    }
+                    _ => panic!(
+                        "only primitive and single-field newtype embedded \
+                         structs can be indexed; multi-field or named-field \
+                         embedded structs require explicit index field ordering"
+                    ),
+                };
 
                 index.columns.push(db::IndexColumn {
                     column,

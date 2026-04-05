@@ -169,7 +169,6 @@ pub async fn crud_newtype_embed(t: &mut Test) -> Result<()> {
 
 /// Tests `#[unique]` on a newtype field generates `get_by_*` and enforces
 /// uniqueness.
-#[ignore] // indexed field should map to a primitive column
 #[driver_test(id(ID))]
 pub async fn newtype_unique_constraint(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
@@ -212,7 +211,6 @@ pub async fn newtype_unique_constraint(t: &mut Test) -> Result<()> {
 }
 
 /// Tests `#[index]` on a newtype field generates `filter_by_*`.
-#[ignore] // indexed field should map to a primitive column
 #[driver_test(id(ID))]
 pub async fn newtype_index(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
@@ -294,7 +292,6 @@ pub async fn newtype_numeric(t: &mut Test) -> Result<()> {
 }
 
 /// Tests using a newtype as the primary key field.
-#[ignore] // indexed field should map to a primitive column
 #[driver_test]
 pub async fn newtype_as_primary_key(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
