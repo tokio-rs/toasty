@@ -380,3 +380,55 @@ pub async fn nested_newtype(t: &mut Test) -> Result<()> {
 
     Ok(())
 }
+
+/// Tests a newtype used as the partition key and in a filter predicate.
+/// No `requires(sql)` — this must work on all drivers including DynamoDB.
+#[driver_test]
+pub async fn newtype_key_and_predicate(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Embed)]
+    struct Region(String);
+
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = region, local = id)]
+    struct Item {
+        #[auto]
+        id: uuid::Uuid,
+        region: Region,
+        name: String,
+    }
+
+    let mut db = t.setup_db(models!(Item, Region)).await;
+
+    toasty::create!(Item {
+        region: Region("us-east".into()),
+        name: "Alpha",
+    })
+    .exec(&mut db)
+    .await?;
+
+    toasty::create!(Item {
+        region: Region("us-east".into()),
+        name: "Beta",
+    })
+    .exec(&mut db)
+    .await?;
+
+    toasty::create!(Item {
+        region: Region("eu-west".into()),
+        name: "Gamma",
+    })
+    .exec(&mut db)
+    .await?;
+
+    // Filter by newtype partition key
+    let items = Item::filter(Item::fields().region().eq(Region("us-east".into())))
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(items.len(), 2);
+    let mut names: Vec<_> = items.iter().map(|i| i.name.as_str()).collect();
+    names.sort();
+    assert_eq!(names, ["Alpha", "Beta"]);
+
+    Ok(())
+}
