@@ -305,18 +305,18 @@ impl Field {
         // Expand #[auto] on timestamp fields:
         //   created_at → #[default(jiff::Timestamp::now())]
         //   updated_at → #[update(jiff::Timestamp::now())]
-        if matches!(&attrs.auto, Some(AutoStrategy::Unspecified)) {
-            if let Some(ident) = &field.ident {
-                let field_name = ident.to_string();
-                let now_expr: syn::Expr = syn::parse_quote!(jiff::Timestamp::now());
+        if matches!(&attrs.auto, Some(AutoStrategy::Unspecified))
+            && let Some(ident) = &field.ident
+        {
+            let field_name = ident.to_string();
+            let now_expr: syn::Expr = syn::parse_quote!(jiff::Timestamp::now());
 
-                if field_name == "created_at" {
-                    attrs.auto = None;
-                    attrs.default_expr = Some(now_expr);
-                } else if field_name == "updated_at" {
-                    attrs.auto = None;
-                    attrs.update_expr = Some(now_expr);
-                }
+            if field_name == "created_at" {
+                attrs.auto = None;
+                attrs.default_expr = Some(now_expr);
+            } else if field_name == "updated_at" {
+                attrs.auto = None;
+                attrs.update_expr = Some(now_expr);
             }
         }
 

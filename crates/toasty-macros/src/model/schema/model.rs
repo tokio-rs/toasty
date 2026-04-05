@@ -1,6 +1,6 @@
 use super::{
-    ErrorSet, Field, FieldAttr, FieldTy, Index, IndexField, IndexScope, ModelAttr, Name,
-    PrimaryKey, Variant, VariantValue, rewrite_self,
+    ErrorSet, Field, Index, IndexField, IndexScope, ModelAttr, Name, PrimaryKey, Variant,
+    VariantValue,
 };
 
 #[derive(Debug)]
@@ -316,13 +316,8 @@ impl Model {
                 .collect::<Vec<_>>();
 
             for (index, ast_field) in ast_fields.iter().enumerate() {
-                let mut field = Field::from_ast(
-                    ast_field,
-                    &model_ident,
-                    global_field_index,
-                    index,
-                    &names,
-                )?;
+                let mut field =
+                    Field::from_ast(ast_field, &model_ident, global_field_index, index, &names)?;
                 field.variant = Some(variant_index);
                 all_fields.push(field);
                 global_field_index += 1;
