@@ -45,28 +45,8 @@ jobs:
       - *checkout
       - *install-rust
       - name: Run release-plz
-        id: release-plz
         uses: release-plz/action@v0.5
         with:
           command: release-pr
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
-      - name: Update book.toml version
-        if: steps.release-plz.outputs.prs_created == 'true'
-        env:
-          PR_JSON: ${{ steps.release-plz.outputs.pr }}
-        run: |
-          HEAD_BRANCH=$(echo "$PR_JSON" | jq -r '.head_branch')
-          VERSION=$(echo "$PR_JSON" | jq -r '.releases[0].version')
-          # Strip patch version to get minor version (e.g. "0.3.1" -> "0.3")
-          MINOR_VERSION=$(echo "$VERSION" | sed 's/\.[0-9]*$//')
-          git fetch origin "$HEAD_BRANCH"
-          git checkout "$HEAD_BRANCH"
-          sed -i "s/^toasty_version = \".*\"/toasty_version = \"$MINOR_VERSION\"/" docs/guide/book.toml
-          if git diff --quiet docs/guide/book.toml; then
-            echo "book.toml already up to date"
-          else
-            git add docs/guide/book.toml
-            git commit -m "chore: update guide toasty_version to $MINOR_VERSION"
-            git push origin "$HEAD_BRANCH"
-          fi

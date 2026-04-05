@@ -14,7 +14,7 @@ Add the following dependencies to `Cargo.toml`:
 
 ```toml
 [dependencies]
-toasty = { version = "{{toasty_version}}", features = ["sqlite"] }
+toasty = { version = "<!-- cmdrun ../toasty-version.sh -->", features = ["sqlite"] }
 tokio = { version = "1", features = ["full"] }
 ```
 

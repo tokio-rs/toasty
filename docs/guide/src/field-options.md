@@ -311,7 +311,7 @@ Timestamp fields require the `jiff` feature:
 
 ```toml
 [dependencies]
-toasty = { version = "{{toasty_version}}", features = ["sqlite", "jiff"] }
+toasty = { version = "<!-- cmdrun ../toasty-version.sh -->", features = ["sqlite", "jiff"] }
 ```
 
 ## Date and time fields
