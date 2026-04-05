@@ -34,9 +34,9 @@ use aws_sdk_dynamodb::{
     error::SdkError,
     operation::update_item::UpdateItemError,
     types::{
-        AttributeDefinition, AttributeValue, Delete, GlobalSecondaryIndex, KeySchemaElement,
-        KeyType, KeysAndAttributes, Projection, ProjectionType, ProvisionedThroughput, Put,
-        PutRequest, ReturnValuesOnConditionCheckFailure, TransactWriteItem, Update, WriteRequest,
+        AttributeDefinition, AttributeValue, BillingMode, Delete, GlobalSecondaryIndex,
+        KeySchemaElement, KeyType, KeysAndAttributes, Projection, ProjectionType, Put, PutRequest,
+        ReturnValuesOnConditionCheckFailure, TransactWriteItem, Update, WriteRequest,
     },
 };
 use std::{borrow::Cow, collections::HashMap, sync::Arc};
