@@ -1284,6 +1284,21 @@ pub fn query(input: TokenStream) -> TokenStream {
 ///
 /// # Syntax forms
 ///
+/// ## Field syntax
+///
+/// Fields inside `{ ... }` can use either explicit or shorthand syntax:
+///
+/// - **Explicit:** `field: expr` — sets the field to the given expression.
+/// - **Shorthand:** `field` — equivalent to `field: field`, using a variable
+///   with the same name as the field.
+///
+/// These can be mixed freely, just like Rust struct literals:
+///
+/// ```ignore
+/// let name = "Alice".to_string();
+/// toasty::create!(User { name, email: "alice@example.com" })
+/// ```
+///
 /// ## Single creation
 ///
 /// ```ignore
@@ -1458,7 +1473,8 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// ## Expressions
 ///
 /// Any Rust expression is valid as a field value — literals, variables, and
-/// function calls all work.
+/// function calls all work. When a variable has the same name as the field,
+/// you can use the shorthand syntax (just `name` instead of `name: name`):
 ///
 /// ```
 /// # #[derive(toasty::Model)]
@@ -1470,7 +1486,22 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     email: String,
 /// # }
 /// let name = "Alice";
-/// let _ = toasty::create!(User { name: name, email: format!("{}@example.com", name) });
+/// let _ = toasty::create!(User { name, email: format!("{}@example.com", name) });
+/// ```
+///
+/// When the variable name differs from the field name, use the explicit
+/// `field: expr` form:
+///
+/// ```
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     name: String,
+/// # }
+/// let user_name = "Alice";
+/// let _ = toasty::create!(User { name: user_name });
 /// ```
 ///
 /// ## Nested struct (BelongsTo / HasOne)
