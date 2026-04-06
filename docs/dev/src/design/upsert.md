@@ -1,228 +1,191 @@
 # Upsert
 
+## Overview
+
+Upsert is an atomic insert-or-update operation. Given a record and a conflict
+target, it inserts the record if no matching record exists, or updates the
+existing record if one does. The operation executes as a single atomic
+statement — there is no window where a concurrent writer can interleave between
+a check and a write.
+
 ## Capabilities
 
-- **Upsert (insert-or-update)**: atomically insert a record or update it if a
-  matching record exists, based on a conflict target (unique column or
+**Core:**
+
+- Atomic insert-or-update keyed on a conflict target (unique column or
   composite key).
-- **Conflict target**: specify which unique column(s) determine whether a
-  record already exists.
-- **Update control**: choose which fields to update on conflict — all
-  non-key fields, a named subset, or expressions referencing the proposed
-  values.
-- **Insert-or-ignore**: on `create()`, skip the insert when a conflicting
-  record exists instead of returning an error.
-- **Bulk upsert**: upsert multiple records in a single operation.
-- **Relationship-scoped upsert**: upsert within a has-many relationship scope.
+- Control over which fields are updated on conflict: all fields, a subset, or
+  expressions that reference the existing row.
+- Insert-or-ignore: insert the record or silently do nothing on conflict.
+- Bulk upsert: upsert multiple records in a single operation.
 
-## Upsert
+**SQL backends (PostgreSQL, SQLite, MySQL):**
 
-### Basic usage
+- `INSERT ... ON CONFLICT (col) DO UPDATE SET ...` (PostgreSQL, SQLite).
+- `INSERT ... ON DUPLICATE KEY UPDATE ...` (MySQL).
+- Conflict target can be any unique column(s) or constraint, not just the
+  primary key.
+- The `EXCLUDED` pseudo-table lets the update clause reference proposed values
+  from the `VALUES` row.
+- Conditional update: a `WHERE` clause on the `DO UPDATE` can skip the update
+  for rows that don't meet a predicate.
+- Bulk upsert maps to a single multi-row `INSERT ... VALUES` statement.
 
-`upsert()` inserts a new record or updates an existing one. The conflict target
-tells Toasty which unique field(s) to match on. If a record with that value
-exists, the specified fields are updated. Otherwise, a new record is inserted.
+**DynamoDB:**
 
-```rust
-#[derive(Debug, toasty::Model)]
-struct User {
-    #[key]
-    #[auto]
-    id: Id<User>,
+- `PutItem`: unconditional full-item replace keyed on the primary key. Inserts
+  a new item or replaces all attributes of an existing item.
+- `UpdateItem`: partial upsert keyed on the primary key. Updates specified
+  attributes if the item exists, creates a new item with those attributes if it
+  doesn't. Supports atomic expressions: `SET login_count =
+  if_not_exists(login_count, 0) + 1`.
+- Conflict target is always the primary key — DynamoDB does not support
+  conflict on arbitrary unique columns.
+- No bulk `UpdateItem`. `BatchWriteItem` supports `PutItem` only.
+- `ConditionExpression` can gate the entire operation (both the insert and
+  update paths), unlike SQL where `WHERE` only gates the update.
 
-    #[unique]
-    email: String,
+## Upsert patterns
 
-    name: String,
+Upsert use cases fall into four patterns based on how the update path relates
+to the insert path.
 
-    login_count: i64,
-}
+### Replace
+
+Insert the record if new. If it exists, replace all fields with the proposed
+values. The update is identical to the insert — no field needs special
+handling.
+
+```
+UPSERT INTO users (email, name, login_count)
+VALUES ('alice@example.com', 'Alice', 1)
+ON CONFLICT (email)
+DO UPDATE SET name = EXCLUDED.name,
+              login_count = EXCLUDED.login_count
 ```
 
-The simplest form sets all fields and updates all non-key fields on conflict:
+DynamoDB equivalent: `PutItem` — writes the full item unconditionally.
 
-```rust
-let user = User::upsert()
-    .on(User::EMAIL)
-    .email("alice@example.com")
-    .name("Alice")
-    .login_count(1)
-    .exec(&mut db)
-    .await?;
+This is the most common pattern. Syncing data from an external source,
+idempotent event handlers, and cache warming all follow this shape.
+
+### Replace with field tweaks
+
+Insert the record if new. If it exists, replace most fields with the proposed
+values, but apply expressions to a small number of fields that reference the
+existing row.
+
+```
+UPSERT INTO users (email, name, login_count)
+VALUES ('alice@example.com', 'Alice', 1)
+ON CONFLICT (email)
+DO UPDATE SET name = EXCLUDED.name,
+              login_count = users.login_count + 1
 ```
 
-If no record with `email = "alice@example.com"` exists, Toasty inserts one. If
-a record exists, Toasty updates `name` and `login_count` to the given values.
+DynamoDB equivalent: `UpdateItem` with a mix of `SET name = :name` and
+`SET login_count = if_not_exists(login_count, :zero) + :one`.
 
-### Choosing which fields to update
+The typical case is a counter or timestamp: insert with an initial value,
+increment or refresh on subsequent writes. Most fields are still plain
+replacement; only a few need the existing value.
 
-By default, every non-key field set on the builder is updated on conflict. To
-update only specific fields, use `update()` with a closure:
+### Divergent insert and update
 
-```rust
-let user = User::upsert()
-    .on(User::EMAIL)
-    .email("alice@example.com")
-    .name("Alice")
-    .login_count(1)
-    .update(|u| {
-        u.login_count(1)
-    })
-    .exec(&mut db)
-    .await?;
+Insert and update set mostly different fields. The insert path populates
+fields like `created_at` or `status` with initial values, while the update
+path touches a different set of fields and ignores the initial values entirely.
+
+```
+UPSERT INTO users (email, name, login_count, status)
+VALUES ('alice@example.com', 'Alice', 0, 'active')
+ON CONFLICT (email)
+DO UPDATE SET login_count = users.login_count + 1
+-- name and status are NOT updated
 ```
 
-This inserts the full record when new, but only updates `login_count` when the
-record already exists. The `name` field is left unchanged on an existing record.
+On insert: all four columns are written. On conflict: only `login_count`
+changes. `name` and `status` keep their existing values.
 
-### Expressions in updates
+### Conditional upsert
 
-The update closure accepts the same expressions as a normal update builder. To
-increment a counter instead of replacing it:
+Insert the record if new. If it exists, only update when a predicate on the
+existing row holds. Rows that fail the predicate are left unchanged — the
+operation silently skips them.
 
-```rust
-let user = User::upsert()
-    .on(User::EMAIL)
-    .email("alice@example.com")
-    .name("Alice")
-    .login_count(1)
-    .update(|u| {
-        u.login_count(User::LOGIN_COUNT + 1)
-    })
-    .exec(&mut db)
-    .await?;
+```
+UPSERT INTO users (email, name, role)
+VALUES ('alice@example.com', 'Alice', 'member')
+ON CONFLICT (email)
+DO UPDATE SET name = EXCLUDED.name
+WHERE users.role != 'admin'
 ```
 
-On insert, `login_count` is set to `1`. On conflict, the existing
-`login_count` is incremented by 1.
+This protects certain rows from being overwritten. The insert always happens
+(there is no existing row to check), but the update path is gated.
 
-### Composite conflict targets
+DynamoDB equivalent: `ConditionExpression` on `UpdateItem`. One difference:
+DynamoDB's condition gates *both* the insert and update paths, so it can also
+prevent inserts. SQL's `WHERE` on `DO UPDATE` only gates the update.
 
-When uniqueness spans multiple columns, pass them as a tuple:
+### Insert-or-ignore
 
-```rust
-#[derive(Debug, toasty::Model)]
-struct Membership {
-    #[key]
-    #[auto]
-    id: Id<Membership>,
+A degenerate case: insert the record if new, do nothing if it exists. No
+fields are updated. This is not an upsert in the traditional sense, but it
+shares the same conflict-detection mechanism.
 
-    #[unique(composite("membership_key"))]
-    org_id: Id<Org>,
-
-    #[unique(composite("membership_key"))]
-    user_id: Id<User>,
-
-    role: String,
-}
-
-let membership = Membership::upsert()
-    .on((Membership::ORG_ID, Membership::USER_ID))
-    .org_id(&org.id)
-    .user_id(&user.id)
-    .role("admin")
-    .exec(&mut db)
-    .await?;
+```
+INSERT INTO users (email, name)
+VALUES ('alice@example.com', 'Alice')
+ON CONFLICT (email) DO NOTHING
 ```
 
-### Return value
+DynamoDB equivalent: `PutItem` with
+`ConditionExpression: attribute_not_exists(pk)`.
 
-`upsert()` returns the record. Callers that need to know whether the record was
-inserted or updated can use `exec_with_result()`:
+## Bulk upsert
 
-```rust
-let result = User::upsert()
-    .on(User::EMAIL)
-    .email("alice@example.com")
-    .name("Alice")
-    .login_count(1)
-    .exec_with_result(&mut db)
-    .await?;
+All patterns above extend to multiple rows. SQL handles this with a single
+multi-row `VALUES` clause:
 
-if result.was_inserted() {
-    println!("created new user: {:?}", result.into_inner());
-} else {
-    println!("updated existing user: {:?}", result.into_inner());
-}
+```
+UPSERT INTO users (email, name, login_count) VALUES
+  ('alice@example.com', 'Alice', 1),
+  ('bob@example.com', 'Bob', 1),
+  ('carol@example.com', 'Carol', 1)
+ON CONFLICT (email)
+DO UPDATE SET name = EXCLUDED.name,
+              login_count = users.login_count + 1
 ```
 
-### Bulk upsert
+Each conflicting row is updated using its own proposed values via `EXCLUDED`.
+The update clause is shared across all rows — per-row update logic is not
+possible in a single SQL statement.
 
-To upsert multiple records in one operation:
+DynamoDB does not support bulk `UpdateItem`. A bulk upsert against DynamoDB
+requires issuing one `UpdateItem` per item. `BatchWriteItem` supports
+`PutItem` (replace pattern) but not `UpdateItem`.
 
-```rust
-User::upsert_many()
-    .on(User::EMAIL)
-    .item(User::upsert()
-        .email("alice@example.com")
-        .name("Alice")
-        .login_count(1))
-    .item(User::upsert()
-        .email("bob@example.com")
-        .name("Bob")
-        .login_count(1))
-    .exec(&mut db)
-    .await?;
+## Conflict target
+
+The conflict target identifies which unique constraint determines whether a
+record "already exists."
+
+**SQL:** The conflict target can be any unique column, composite unique
+columns, or a named constraint. A table may have multiple unique constraints,
+so the conflict target must be specified explicitly.
+
+```
+-- Single column
+ON CONFLICT (email)
+
+-- Composite
+ON CONFLICT (org_id, user_id)
+
+-- Named constraint (PostgreSQL)
+ON CONFLICT ON CONSTRAINT users_email_key
 ```
 
-### Relationship-scoped upsert
-
-Upsert works within relationship scopes, just like `create()`:
-
-```rust
-let todo = user.todos()
-    .upsert()
-    .on(Todo::TITLE)
-    .title("Buy groceries")
-    .completed(false)
-    .exec(&mut db)
-    .await?;
-```
-
-The `user_id` foreign key is set automatically from the scope.
-
-## Insert-or-ignore
-
-Insert-or-ignore lives on the `create()` builder. It inserts the record if no
-conflict exists and silently does nothing if it does. The record is not updated.
-
-### Basic usage
-
-```rust
-User::create()
-    .email("alice@example.com")
-    .name("Alice")
-    .login_count(0)
-    .on_conflict_ignore()
-    .exec(&mut db)
-    .await?;
-```
-
-If a user with this email exists, the insert is skipped. No error is raised and
-no fields are modified.
-
-### Batch insert-or-ignore
-
-```rust
-User::create_many()
-    .item(User::create().email("alice@example.com").name("Alice").login_count(0))
-    .item(User::create().email("bob@example.com").name("Bob").login_count(0))
-    .on_conflict_ignore()
-    .exec(&mut db)
-    .await?;
-```
-
-Records that conflict with existing rows are skipped. Records that do not
-conflict are inserted.
-
-### Macro syntax
-
-The `create!` macro supports insert-or-ignore with the `ignore_conflict` option:
-
-```rust
-toasty::create!(User {
-    email: "alice@example.com",
-    name: "Alice",
-    login_count: 0,
-} on_conflict: ignore).exec(&mut db).await?;
-```
+**DynamoDB:** The conflict target is always the primary key (partition key, or
+partition key + sort key). There is no way to upsert on an arbitrary unique
+attribute — DynamoDB does not enforce uniqueness on non-key attributes.
