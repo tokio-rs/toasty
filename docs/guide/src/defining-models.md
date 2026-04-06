@@ -267,10 +267,10 @@ through Toasty's `IntoExpr` trait, which handles the conversion automatically.
 # let _ =
 toasty::create!(User { name: "Alice" });
 
-// Owned String
+// Owned String — shorthand since the variable matches the field name
 let name = "Bob".to_string();
 # let _ =
-toasty::create!(User { name: name });
+toasty::create!(User { name });
 
 // Reference to a String
 let name = "Carol".to_string();
