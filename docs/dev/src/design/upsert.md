@@ -45,6 +45,19 @@ a check and a write.
 - `ConditionExpression` can gate the entire operation (both the insert and
   update paths), unlike SQL where `WHERE` only gates the update.
 
+**MongoDB:**
+
+- `updateOne` with `upsert: true`: if the filter matches a document, update
+  it. If no document matches, create one from the filter fields merged with
+  the update fields.
+- Conflict target is the query filter, which can match on any field — not
+  limited to unique fields or the primary key.
+- Rich atomic update operators: `$set`, `$inc`, `$push`, `$addToSet`, `$min`,
+  `$max`.
+- `$setOnInsert` sets fields only when inserting, not when updating. This is a
+  native primitive for the divergent pattern.
+- Bulk upsert via `bulkWrite` with `updateOne` operations.
+
 ## Upsert patterns
 
 Upsert use cases fall into four patterns based on how the update path relates
@@ -65,6 +78,8 @@ DO UPDATE SET name = EXCLUDED.name,
 ```
 
 DynamoDB equivalent: `PutItem` — writes the full item unconditionally.
+MongoDB equivalent: `updateOne({ email }, { $set: { name, login_count } },
+{ upsert: true })`.
 
 This is the most common pattern. Syncing data from an external source,
 idempotent event handlers, and cache warming all follow this shape.
@@ -85,6 +100,8 @@ DO UPDATE SET name = EXCLUDED.name,
 
 DynamoDB equivalent: `UpdateItem` with a mix of `SET name = :name` and
 `SET login_count = if_not_exists(login_count, :zero) + :one`.
+MongoDB equivalent: `updateOne({ email }, { $set: { name }, $inc:
+{ login_count: 1 } }, { upsert: true })`.
 
 The typical case is a counter or timestamp: insert with an initial value,
 increment or refresh on subsequent writes. Most fields are still plain
@@ -106,6 +123,12 @@ DO UPDATE SET login_count = users.login_count + 1
 
 On insert: all four columns are written. On conflict: only `login_count`
 changes. `name` and `status` keep their existing values.
+
+MongoDB handles this natively with `$setOnInsert`:
+`updateOne({ email }, { $setOnInsert: { name: "Alice", status: "active" },
+$inc: { login_count: 1 } }, { upsert: true })`. Fields in `$setOnInsert`
+are written only on insert. SQL and DynamoDB have no equivalent — the insert
+and update column lists must be constructed to achieve the same effect.
 
 ### Conditional upsert
 
@@ -166,6 +189,10 @@ DynamoDB does not support bulk `UpdateItem`. A bulk upsert against DynamoDB
 requires issuing one `UpdateItem` per item. `BatchWriteItem` supports
 `PutItem` (replace pattern) but not `UpdateItem`.
 
+MongoDB supports bulk upsert via `bulkWrite` with individual `updateOne`
+operations, each with `upsert: true`. Unlike SQL, each operation in the batch
+can have its own filter and update logic.
+
 ## Conflict target
 
 The conflict target identifies which unique constraint determines whether a
@@ -189,3 +216,10 @@ ON CONFLICT ON CONSTRAINT users_email_key
 **DynamoDB:** The conflict target is always the primary key (partition key, or
 partition key + sort key). There is no way to upsert on an arbitrary unique
 attribute — DynamoDB does not enforce uniqueness on non-key attributes.
+
+**MongoDB:** The conflict target is a query filter passed to `updateOne`. This
+can match on any field, not just unique ones. If no document matches, MongoDB
+creates one by merging the filter fields with the update. MongoDB also provides
+`$setOnInsert` — a native way to specify fields that are written only on
+insert, not on update — which maps directly to the divergent pattern without
+requiring the update clause to explicitly omit fields.
