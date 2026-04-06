@@ -50,8 +50,24 @@ pub async fn create_macro_with_variable(test: &mut Test) -> Result<()> {
 
     let name = "Carl";
 
-    // Value can be a variable expression — shorthand `name` is equivalent to `name: name`
-    let user = toasty::create!(User { name }).exec(&mut db).await?;
+    // Explicit `name: name` — field and variable have the same identifier
+    let user = toasty::create!(User { name: name }).exec(&mut db).await?;
+
+    assert_eq!(user.name, "Carl");
+
+    Ok(())
+}
+
+#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
+pub async fn create_macro_with_different_variable(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let user_name = "Carl";
+
+    // Explicit `name: expr` where the expression differs from the field name
+    let user = toasty::create!(User { name: user_name })
+        .exec(&mut db)
+        .await?;
 
     assert_eq!(user.name, "Carl");
 
