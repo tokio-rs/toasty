@@ -20,5 +20,7 @@ note: inside `assert_create_fields`
    |
   ::: $WORKSPACE/crates/toasty/src/schema/create_meta.rs
    |
-   |             panic!("missing required field in create! macro — check model definition for required fields");
-   |             ---------------------------------------------------------------------------------------------- in this macro invocation
+   | /             panic!(
+   | |                 "missing required field in create! macro — check model definition for required fields"
+   | |             );
+   | |_____________- in this macro invocation
