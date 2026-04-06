@@ -122,7 +122,7 @@ pub trait Connection: Debug + Send + 'static {
     async fn apply_migration(
         &mut self,
         id: u64,
-        name: String,
+        name: &str,
         migration: &Migration,
     ) -> crate::Result<()>;
 }

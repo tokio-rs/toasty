@@ -34,9 +34,9 @@ use aws_sdk_dynamodb::{
     error::SdkError,
     operation::update_item::UpdateItemError,
     types::{
-        AttributeDefinition, AttributeValue, Delete, GlobalSecondaryIndex, KeySchemaElement,
-        KeyType, KeysAndAttributes, Projection, ProjectionType, ProvisionedThroughput, Put,
-        PutRequest, ReturnValuesOnConditionCheckFailure, TransactWriteItem, Update, WriteRequest,
+        AttributeDefinition, AttributeValue, BillingMode, Delete, GlobalSecondaryIndex,
+        KeySchemaElement, KeyType, KeysAndAttributes, Projection, ProjectionType, Put, PutRequest,
+        ReturnValuesOnConditionCheckFailure, TransactWriteItem, Update, WriteRequest,
     },
 };
 use std::{borrow::Cow, collections::HashMap, sync::Arc};
@@ -168,7 +168,7 @@ impl toasty_core::driver::Connection for Connection {
     async fn apply_migration(
         &mut self,
         _id: u64,
-        _name: String,
+        _name: &str,
         _migration: &toasty_core::schema::db::Migration,
     ) -> Result<()> {
         todo!("DynamoDB migrations are not yet implemented")

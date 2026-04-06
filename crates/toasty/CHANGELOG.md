@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0](https://github.com/tokio-rs/toasty/compare/toasty-v0.2.0...toasty-v0.3.0) - 2026-04-03
+
+### Added
+
+- [**breaking**] bring back `db.transaction_builder()` API, add non-trait methods for `executor.transaction()` ([#625](https://github.com/tokio-rs/toasty/pull/625))
+- add IN list support to query macro filter expressions ([#605](https://github.com/tokio-rs/toasty/pull/605))
+- automatic global model discovery with `models!(crate::*)` using the `inventory` crate ([#614](https://github.com/tokio-rs/toasty/pull/614))
+- [**breaking**] add `ModelSet` and `models!` macro to replace `.register::<T>()` ([#615](https://github.com/tokio-rs/toasty/pull/615))
+- add Assign<T> trait and stmt combinators for unified update mutations ([#607](https://github.com/tokio-rs/toasty/pull/607))
+- eliminate redundant casts when field type matches target ([#612](https://github.com/tokio-rs/toasty/pull/612))
+
+### Fixed
+
+- make Assignment<T> Send + Sync by removing boxed closures ([#627](https://github.com/tokio-rs/toasty/pull/627))
+- remove bogus `impl<T: IntoExpr<T>> IntoExpr<List<T>> for &T` ([#621](https://github.com/tokio-rs/toasty/pull/621))
+- replace broken BinaryOp::reverse with commute in index matching ([#611](https://github.com/tokio-rs/toasty/pull/611))
+
+### Other
+
+- remove transaction_builder() from Db and Connection ([#622](https://github.com/tokio-rs/toasty/pull/622))
+- replace IntoExpr<T> for &Option<T> with Field::key_constraint ([#619](https://github.com/tokio-rs/toasty/pull/619))
+- push pagination handling into engine ([#610](https://github.com/tokio-rs/toasty/pull/610))
+- add badges to README ([#606](https://github.com/tokio-rs/toasty/pull/606))
+- update README examples to use create! macro syntax ([#603](https://github.com/tokio-rs/toasty/pull/603))
+
 ## [0.2.0](https://github.com/tokio-rs/toasty/compare/toasty-v0.1.1...toasty-v0.2.0) - 2026-03-30
 
 ### Added

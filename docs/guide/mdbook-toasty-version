@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+"""mdbook preprocessor that replaces {{toasty_version}} with the current version.
+
+Reads the version from crates/toasty/Cargo.toml (relative to the book root)
+and substitutes all occurrences of {{toasty_version}} in chapter content.
+"""
+import json
+import re
+import sys
+from pathlib import Path
+
+def get_version(book_root):
+    cargo_toml = Path(book_root) / "../../crates/toasty/Cargo.toml"
+    text = cargo_toml.read_text()
+    match = re.search(r'^version\s*=\s*"(\d+\.\d+)', text, re.MULTILINE)
+    if not match:
+        sys.exit("could not parse version from Cargo.toml")
+    return match.group(1)
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "supports":
+        sys.exit(0)
+
+    context, book = json.load(sys.stdin)
+    version = get_version(context["root"])
+
+    def replace_in_items(items):
+        for item in items:
+            if "Chapter" in item:
+                chapter = item["Chapter"]
+                chapter["content"] = chapter["content"].replace(
+                    "{{toasty_version}}", version
+                )
+                if chapter.get("sub_items"):
+                    replace_in_items(chapter["sub_items"])
+
+    replace_in_items(book["sections"])
+    print(json.dumps(book))

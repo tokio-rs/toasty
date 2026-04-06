@@ -14,7 +14,7 @@ Add the following dependencies to `Cargo.toml`:
 
 ```toml
 [dependencies]
-toasty = { version = "0.1", features = ["sqlite"] }
+toasty = { version = "{{toasty_version}}", features = ["sqlite"] }
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -103,9 +103,8 @@ rest of this guide shows everything the macro can generate and how to use it.
 ## Connecting to a database
 
 `Db::builder()` creates a builder where you provide your models and then
-connect to a database. Every model must be included before connecting so that
-Toasty can infer the full database schema — tables, columns, indexes, and
-relationships between models.
+connect to a database. Toasty uses the registered models to infer the full
+database schema — tables, columns, indexes, and relationships between models.
 
 ```rust,ignore
 let mut db = toasty::Db::builder()
@@ -120,10 +119,11 @@ types in your crate. You can also list models individually
 (`toasty::models!(other_crate::*)`), or combine these forms freely.
 
 The connection URL determines which database driver to use. See
-[Database Setup](./database-setup.md) for connection URLs for each
-supported database.
+[Database Setup](./database-setup.md) for more on model registration,
+connection URLs, and supported databases.
 
 ## Creating tables
 
-`db.push_schema()` creates all tables and indexes defined by your models. See [Schema Management](./schema-management.md) for more on managing
+`db.push_schema()` creates all tables and indexes defined by your models. See
+[Migrations and Schema Management](./schema-management.md) for more on managing
 your database schema.

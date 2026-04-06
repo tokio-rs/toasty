@@ -67,16 +67,32 @@ impl Expand<'_> {
             let field_ty;
             let nullable;
 
+            let field_named = match &self.model.kind {
+                ModelKind::Root(_) => true,
+                ModelKind::EmbeddedStruct(model_embedded_struct) => model_embedded_struct.fields_named,
+                ModelKind::EmbeddedEnum(model_embedded_enum) => {
+                    let variant = field.variant.unwrap();
+                    model_embedded_enum.variants[variant].fields_named
+                }
+            };
+
             let name = {
-                let app_name = field.name.ident.to_string();
+                let app_name = if field_named {
+                    let n = field.name.ident.to_string();
+                    quote! { Some(#n.to_string()) }
+                } else {
+                    quote! { None }
+                };
+
                 let storage_name = match field.attrs.column.as_ref().and_then(|column| column.name.as_ref()) {
                     Some(name) => quote! { Some(#name.to_string()) },
                     None => quote! { None },
                 };
+
                 quote! {
                     #toasty::core::schema::app::FieldName {
-                        app_name: #app_name.to_string(),
-                        storage_name: #storage_name,
+                        app: #app_name,
+                        storage: #storage_name,
                     }
                 }
             };
@@ -191,7 +207,7 @@ impl Expand<'_> {
                             quote! { Some(<#ty as #toasty::Auto>::STRATEGY) }
                          }
                         AutoStrategy::Uuid(UuidVersion::V4) => quote! { Some(#toasty::core::schema::app::AutoStrategy::Uuid(#toasty::core::schema::app::UuidVersion::V4)) },
-                        AutoStrategy::Uuid(UuidVersion::V7) => quote! { Some(#toasty::core::schema::app::AutoStrategy::Uuid(#toasty::core::schema::app::UuidVersion::V4)) },
+                        AutoStrategy::Uuid(UuidVersion::V7) => quote! { Some(#toasty::core::schema::app::AutoStrategy::Uuid(#toasty::core::schema::app::UuidVersion::V7)) },
                         AutoStrategy::Increment => quote! { Some(#toasty::core::schema::app::AutoStrategy::Increment) },
                     }
                 }
@@ -314,6 +330,55 @@ impl Expand<'_> {
         } else {
             quote! { None }
         }
+    }
+}
+
+impl Expand<'_> {
+    /// Generate calls to register all models reachable from this model's fields.
+    ///
+    /// For primitive fields, no call is emitted (the default `Field::register`
+    /// is a no-op). For embedded fields, `<Type as Field>::register` is called.
+    /// For relation fields (BelongsTo, HasMany, HasOne), `<TargetType as
+    /// Register>::register` is called directly.
+    pub(super) fn expand_field_register_calls(&self) -> Vec<TokenStream> {
+        let toasty = &self.toasty;
+
+        self.model
+            .fields
+            .iter()
+            .filter_map(|field| match &field.ty {
+                FieldTy::Primitive(ty) => {
+                    // Fields with #[serialize] store arbitrary types as JSON
+                    // strings — they don't implement Field.
+                    if field.attrs.serialize.is_some() {
+                        return None;
+                    }
+                    // Primitives use Field::register which delegates to inner
+                    // type if it's an embedded type (via the Field impl).
+                    Some(quote! {
+                        <#ty as #toasty::Field>::register(model_set);
+                    })
+                }
+                FieldTy::BelongsTo(rel) => {
+                    let ty = &rel.ty;
+                    Some(quote! {
+                        <<#ty as #toasty::Relation>::Model as #toasty::Register>::register(model_set);
+                    })
+                }
+                FieldTy::HasMany(rel) => {
+                    let ty = &rel.ty;
+                    Some(quote! {
+                        <<#ty as #toasty::Relation>::Model as #toasty::Register>::register(model_set);
+                    })
+                }
+                FieldTy::HasOne(rel) => {
+                    let ty = &rel.ty;
+                    Some(quote! {
+                        <<#ty as #toasty::Relation>::Model as #toasty::Register>::register(model_set);
+                    })
+                }
+            })
+            .collect()
     }
 }
 

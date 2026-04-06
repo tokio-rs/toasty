@@ -1,7 +1,6 @@
 use crate::prelude::*;
 
-use toasty::Executor;
-use toasty_core::driver::{Operation, operation::Transaction};
+use toasty_core::driver::{Operation, operation::IsolationLevel, operation::Transaction};
 
 // ===== Basic commit / rollback =====
 
@@ -469,6 +468,147 @@ pub async fn multi_op_inside_tx_uses_savepoints(t: &mut Test) -> Result<()> {
     let todos = user.todos().exec(&mut db).await?;
     assert_eq!(todos.len(), 1);
     assert_eq!(todos[0].title, "task");
+
+    Ok(())
+}
+
+// ===== TransactionBuilder API =====
+
+/// TransactionBuilder from Db commits data like a regular transaction.
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+pub async fn builder_on_db_commit(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    let mut tx = db.transaction_builder().begin().await?;
+    User::create().name("Alice").exec(&mut tx).await?;
+    tx.commit().await?;
+
+    let users = User::all().exec(&mut db).await?;
+    assert_eq!(users.len(), 1);
+    assert_eq!(users[0].name, "Alice");
+
+    Ok(())
+}
+
+/// TransactionBuilder from Connection commits data like a regular transaction.
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+pub async fn builder_on_connection_commit(t: &mut Test) -> Result<()> {
+    let db = setup(t).await;
+    let mut conn = db.connection().await?;
+
+    let mut tx = conn.transaction_builder().begin().await?;
+    User::create().name("Alice").exec(&mut tx).await?;
+    tx.commit().await?;
+
+    let users = User::all().exec(&mut conn).await?;
+    assert_eq!(users.len(), 1);
+    assert_eq!(users[0].name, "Alice");
+
+    Ok(())
+}
+
+/// TransactionBuilder with isolation level sends the correct option to the driver.
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+pub async fn builder_with_isolation_level(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    t.log().clear();
+
+    let mut tx = db
+        .transaction_builder()
+        .isolation(IsolationLevel::Serializable)
+        .begin()
+        .await?;
+    User::create().name("Alice").exec(&mut tx).await?;
+    tx.commit().await?;
+
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Start {
+            isolation: Some(IsolationLevel::Serializable),
+            read_only: false
+        })
+    );
+
+    Ok(())
+}
+
+/// TransactionBuilder with read_only sends the correct option to the driver.
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+pub async fn builder_with_read_only(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    t.log().clear();
+
+    let tx = db.transaction_builder().read_only(true).begin().await?;
+    tx.commit().await?;
+
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Start {
+            isolation: None,
+            read_only: true
+        })
+    );
+
+    Ok(())
+}
+
+/// TransactionBuilder with both isolation and read_only sends both options.
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+pub async fn builder_with_all_options(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    t.log().clear();
+
+    let tx = db
+        .transaction_builder()
+        .isolation(IsolationLevel::Serializable)
+        .read_only(true)
+        .begin()
+        .await?;
+    tx.commit().await?;
+
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Start {
+            isolation: Some(IsolationLevel::Serializable),
+            read_only: true
+        })
+    );
+
+    Ok(())
+}
+
+/// TransactionBuilder auto-rolls back on drop just like a regular transaction.
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+pub async fn builder_drop_rolls_back(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    {
+        let mut tx = db.transaction_builder().begin().await?;
+        User::create().name("Ghost").exec(&mut tx).await?;
+    }
+
+    let users = User::all().exec(&mut db).await?;
+    assert!(users.is_empty());
+
+    Ok(())
+}
+
+/// Calling `.transaction()` through `&mut dyn Executor` works.
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+pub async fn transaction_via_dyn_executor(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    let executor: &mut dyn toasty::Executor = &mut db;
+    let mut tx = executor.transaction().await?;
+    User::create().name("Alice").exec(&mut tx).await?;
+    tx.commit().await?;
+
+    let users = User::all().exec(&mut db).await?;
+    assert_eq!(users.len(), 1);
+    assert_eq!(users[0].name, "Alice");
 
     Ok(())
 }

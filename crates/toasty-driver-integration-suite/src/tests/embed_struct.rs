@@ -25,8 +25,8 @@ pub async fn basic_embedded_struct(test: &mut Test) {
         Address::id(): toasty::schema::app::Model::EmbeddedStruct({
             name.upper_camel_case(): "Address",
             fields: [
-                { name.app_name: "street" },
-                { name.app_name: "city" },
+                { name.app: Some("street") },
+                { name.app: Some("city") },
             ],
         }),
     });
@@ -63,16 +63,16 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
         Address::id(): toasty::schema::app::Model::EmbeddedStruct({
             name.upper_camel_case(): "Address",
             fields: [
-                { name.app_name: "street" },
-                { name.app_name: "city" },
+                { name.app: Some("street") },
+                { name.app: Some("city") },
             ],
         }),
         User::id(): toasty::schema::app::Model::Root({
             name.upper_camel_case(): "User",
             fields: [
-                { name.app_name: "id" },
+                { name.app: Some("id") },
                 {
-                    name.app_name: "address",
+                    name.app: Some("address"),
                     ty: FieldTy::Embedded({
                         target: == Address::id(),
                     }),
@@ -745,9 +745,9 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
         City::id(): toasty::schema::app::Model::EmbeddedStruct({
             name.upper_camel_case(): "City",
             fields: [
-                { name.app_name: "name" },
+                { name.app: Some("name") },
                 {
-                    name.app_name: "location",
+                    name.app: Some("location"),
                     ty: FieldTy::Embedded({
                         target: == Location::id(),
                     }),
@@ -757,9 +757,9 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
         Address::id(): toasty::schema::app::Model::EmbeddedStruct({
             name.upper_camel_case(): "Address",
             fields: [
-                { name.app_name: "street" },
+                { name.app: Some("street") },
                 {
-                    name.app_name: "city",
+                    name.app: Some("city"),
                     ty: FieldTy::Embedded({
                         target: == City::id(),
                     }),
@@ -769,9 +769,9 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
         User::id(): toasty::schema::app::Model::Root({
             name.upper_camel_case(): "User",
             fields: [
-                { name.app_name: "id" },
+                { name.app: Some("id") },
                 {
-                    name.app_name: "address",
+                    name.app: Some("address"),
                     ty: FieldTy::Embedded({
                         target: == Address::id(),
                     }),

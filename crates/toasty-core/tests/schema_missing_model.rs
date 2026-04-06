@@ -8,8 +8,8 @@ fn make_id_field(model_id: ModelId) -> Field {
     Field {
         id: model_id.field(0),
         name: FieldName {
-            app_name: "id".to_string(),
-            storage_name: None,
+            app: Some("id".to_string()),
+            storage: None,
         },
         ty: FieldTy::Primitive(FieldPrimitive {
             ty: stmt::Type::String,
@@ -47,8 +47,8 @@ fn make_relation_field(model_id: ModelId, index: usize, name: &str, ty: FieldTy)
     Field {
         id: model_id.field(index),
         name: FieldName {
-            app_name: name.to_string(),
-            storage_name: None,
+            app: Some(name.to_string()),
+            storage: None,
         },
         ty,
         nullable: false,

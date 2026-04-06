@@ -17,6 +17,9 @@ Both use `#[derive(toasty::Embed)]`.
   - INTEGER discriminator with required `#[column(variant = N)]` on each variant
   - Works uniformly across all databases (PostgreSQL, MySQL, SQLite, DynamoDB)
 - **Embedded structs**: No discriminator, just flattened fields
+- **Newtype structs** (`struct Email(String)`): Single unnamed field, maps to one
+  column with the parent field's name (no prefix). Supports `#[key]`, `#[unique]`,
+  and `#[index]` on the parent model field.
 
 **Unit-only enums**: No columns - stored as the INTEGER value itself.
 
@@ -24,7 +27,14 @@ Both use `#[derive(toasty::Embed)]`.
 
 ## Column Naming
 
-Pattern: `{field}_{variant}_{name}`
+**Newtype structs**: `{field}` — no suffix. A newtype has one unnamed field, so
+the column uses the parent field name directly (e.g., `email: Email` → column
+`email`).
+
+**Multi-field embedded structs**: `{field}_{name}` (e.g., `address: Address` with
+field `city` → column `address_city`).
+
+**Enums**: `{field}_{variant}_{name}`
 
 ```rust
 #[derive(Model)]
@@ -259,7 +269,7 @@ enum Status {
 }
 ```
 
-**Registration**: Automatic. Including `User` in `toasty::models!(User)` transitively registers all nested embedded types.
+**Registration**: Automatic. Registering a model transitively registers all models reachable through its fields, including nested embedded types and relation targets.
 
 **Relations**: Forbidden in embedded types (compile error).
 

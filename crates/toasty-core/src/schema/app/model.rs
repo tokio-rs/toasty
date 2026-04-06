@@ -1,5 +1,6 @@
 use super::{Field, FieldId, FieldPrimitive, Index, Name, PrimaryKey};
 use crate::{Result, driver, stmt};
+use indexmap::IndexMap;
 use std::fmt;
 
 /// A model in the application schema.
@@ -53,7 +54,7 @@ pub enum Model {
 /// ```
 #[derive(Debug, Clone, Default)]
 pub struct ModelSet {
-    models: Vec<Model>,
+    models: IndexMap<ModelId, Model>,
 }
 
 impl ModelSet {
@@ -72,34 +73,62 @@ impl ModelSet {
         self.models.is_empty()
     }
 
-    /// Appends a model to the end of the set.
+    /// Returns `true` if the set contains a model with the given ID.
+    pub fn contains(&self, id: ModelId) -> bool {
+        self.models.contains_key(&id)
+    }
+
+    /// Inserts a model into the set, keyed by its [`ModelId`].
+    ///
+    /// If a model with the same ID already exists, it is replaced.
     pub fn add(&mut self, model: Model) {
-        self.models.push(model);
+        self.models.insert(model.id(), model);
     }
 
     /// Returns an iterator over the models in insertion order.
     pub fn iter(&self) -> impl ExactSizeIterator<Item = &Model> {
-        self.models.iter()
+        self.models.values()
     }
 }
 
 impl<'a> IntoIterator for &'a ModelSet {
     type Item = &'a Model;
-    type IntoIter = std::slice::Iter<'a, Model>;
+    type IntoIter = indexmap::map::Values<'a, ModelId, Model>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.models.iter()
+        self.models.values()
     }
 }
 
 impl IntoIterator for ModelSet {
     type Item = Model;
-    type IntoIter = std::vec::IntoIter<Model>;
+    type IntoIter = ModelSetIntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.models.into_iter()
+        ModelSetIntoIter {
+            inner: self.models.into_iter(),
+        }
     }
 }
+
+/// An owning iterator over the models in a [`ModelSet`].
+pub struct ModelSetIntoIter {
+    inner: indexmap::map::IntoIter<ModelId, Model>,
+}
+
+impl Iterator for ModelSetIntoIter {
+    type Item = Model;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(|(_, model)| model)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
+}
+
+impl ExactSizeIterator for ModelSetIntoIter {}
 
 /// A root model backed by its own database table.
 ///
@@ -177,7 +206,9 @@ impl ModelRoot {
     ///
     /// Returns `None` if no field with that name exists on this model.
     pub fn field_by_name(&self, name: &str) -> Option<&Field> {
-        self.fields.iter().find(|field| field.name.app_name == name)
+        self.fields
+            .iter()
+            .find(|field| field.name.app.as_deref() == Some(name))
     }
 
     pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
@@ -201,7 +232,7 @@ impl ModelRoot {
 /// ```ignore
 /// let embedded = model.as_embedded_struct_unwrap();
 /// for field in &embedded.fields {
-///     println!("  embedded field: {}", field.name.app_name);
+///     println!("  embedded field: {}", field.name);
 /// }
 /// ```
 #[derive(Debug, Clone)]

@@ -43,6 +43,7 @@ Toasty supports these Rust types as model fields:
 | `uuid::Uuid` | UUID |
 | `Vec<u8>` | Binary / Blob |
 | `Option<T>` | Nullable version of `T` |
+| Embedded types (`#[derive(toasty::Embed)]`) | Flattened into parent table columns (see [Embedded Types](./embedded-types.md)) |
 
 With optional feature flags:
 
@@ -59,7 +60,7 @@ Enable feature flags in your `Cargo.toml`:
 
 ```toml
 [dependencies]
-toasty = { version = "0.1", features = ["sqlite", "jiff"] }
+toasty = { version = "{{toasty_version}}", features = ["sqlite", "jiff"] }
 ```
 
 ## Optional fields

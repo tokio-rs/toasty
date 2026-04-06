@@ -16,7 +16,7 @@ use indexmap::IndexMap;
 /// use toasty_core::schema::app::Resolved;
 ///
 /// match schema.resolve(root_model, &projection) {
-///     Some(Resolved::Field(f)) => println!("field: {}", f.name.app_name),
+///     Some(Resolved::Field(f)) => println!("field: {}", f.name),
 ///     Some(Resolved::Variant(v)) => println!("variant: {}", v.discriminant),
 ///     None => println!("could not resolve"),
 /// }
@@ -248,7 +248,7 @@ impl Builder {
 
                 if let FieldTy::HasMany(has_many) = &field.ty {
                     let target = has_many.target;
-                    let field_name = field.name.app_name.clone();
+                    let field_name = field.name.app_unwrap().to_string();
                     let pair = self.find_has_many_pair(src, target, &field_name)?;
                     self.models[curr].as_root_mut_unwrap().fields[index]
                         .ty
@@ -271,7 +271,7 @@ impl Builder {
                 match &field.ty {
                     FieldTy::HasOne(has_one) => {
                         let target = has_one.target;
-                        let field_name = field.name.app_name.clone();
+                        let field_name = field.name.app_unwrap().to_string();
                         let pair = match self.find_belongs_to_pair(src, target, &field_name)? {
                             Some(pair) => pair,
                             None => {
@@ -317,7 +317,7 @@ impl Builder {
                                     "field `{}::{}` references a model that was not registered \
                                      with the schema; did you forget to register it with `Db::builder()`?",
                                     model.name().upper_camel_case(),
-                                    model.as_root_unwrap().fields[index].name.app_name,
+                                    model.as_root_unwrap().fields[index].name(),
                                 )));
                             }
                         };

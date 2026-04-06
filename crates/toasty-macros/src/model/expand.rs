@@ -68,6 +68,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let embedded = model.kind.as_embedded_unwrap();
     let field_struct_ident = &embedded.field_struct_ident;
     let update_struct_ident = &embedded.update_struct_ident;
+    let fields_named = embedded.fields_named;
 
     let expand = Expand {
         model,
@@ -76,10 +77,11 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     };
 
     let model_schema = expand.expand_model_schema();
-    let into_expr_body_val = expand.expand_embedded_into_expr_body(false);
-    let into_expr_body_ref = expand.expand_embedded_into_expr_body(true);
-    let load_body = expand.expand_load_body();
-    let reload_body = expand.expand_embedded_reload_body();
+    let field_register_calls = expand.expand_field_register_calls();
+    let into_expr_body_val = expand.expand_embedded_into_expr_body(fields_named, false);
+    let into_expr_body_ref = expand.expand_embedded_into_expr_body(fields_named, true);
+    let load_body = expand.expand_load_body(fields_named);
+    let reload_body = expand.expand_embedded_reload_body(embedded.fields_named);
     let embedded_field_struct = expand.expand_field_struct();
     let embedded_field_list_struct = expand.expand_field_list_struct();
     let embedded_model_impls = expand.expand_embedded_model_impls();
@@ -101,12 +103,20 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
             }
 
             #model_schema
+
+            fn register(model_set: &mut #toasty::core::schema::app::ModelSet) {
+                if model_set.contains(Self::id()) {
+                    return;
+                }
+                model_set.add(Self::schema());
+                #( #field_register_calls )*
+            }
         }
 
         #toasty::inventory::submit! {
             #toasty::DiscoverItem::new(
                 env!("CARGO_PKG_NAME"),
-                |model_set| { model_set.add(<#model_ident as #toasty::Register>::schema()); },
+                |model_set| { <#model_ident as #toasty::Register>::register(model_set); },
             )
         }
 
@@ -166,6 +176,10 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
             ) -> #toasty::stmt::Expr<bool> {
                 target.eq(self)
             }
+
+            fn register(model_set: &mut #toasty::core::schema::app::ModelSet) {
+                <Self as #toasty::Register>::register(model_set);
+            }
         }
 
         impl #toasty::stmt::IntoExpr<#model_ident> for #model_ident {
@@ -179,8 +193,10 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
         }
 
         impl #toasty::Assign<#model_ident> for #model_ident {
-            fn assign(self, assignments: &mut #toasty::core::stmt::Assignments, projection: #toasty::stmt::Projection) {
-                assignments.set(projection, <Self as #toasty::IntoExpr<#model_ident>>::into_expr(self));
+            fn into_assignment(self) -> #toasty::stmt::Assignment<#model_ident> {
+                #toasty::stmt::set(
+                    <Self as #toasty::IntoExpr<#model_ident>>::into_expr(self)
+                )
             }
         }
     })
@@ -213,6 +229,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     let field_list_struct_ident = &embedded_enum.field_list_struct_ident;
     let enum_field_struct = e.expand_enum_field_struct();
     let enum_field_list_struct = e.expand_field_list_struct();
+    let field_register_calls = e.expand_field_register_calls();
 
     wrap_in_const(quote! {
         #enum_field_struct
@@ -241,12 +258,20 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
                     }
                 )
             }
+
+            fn register(model_set: &mut #toasty::core::schema::app::ModelSet) {
+                if model_set.contains(Self::id()) {
+                    return;
+                }
+                model_set.add(Self::schema());
+                #( #field_register_calls )*
+            }
         }
 
         #toasty::inventory::submit! {
             #toasty::DiscoverItem::new(
                 env!("CARGO_PKG_NAME"),
-                |model_set| { model_set.add(<#model_ident as #toasty::Register>::schema()); },
+                |model_set| { <#model_ident as #toasty::Register>::register(model_set); },
             )
         }
 
@@ -291,6 +316,10 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
             ) -> #toasty::stmt::Expr<bool> {
                 target.eq(self)
             }
+
+            fn register(model_set: &mut #toasty::core::schema::app::ModelSet) {
+                <Self as #toasty::Register>::register(model_set);
+            }
         }
 
         impl #toasty::stmt::IntoExpr<#model_ident> for #model_ident {
@@ -304,8 +333,10 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
         }
 
         impl #toasty::Assign<#model_ident> for #model_ident {
-            fn assign(self, assignments: &mut #toasty::core::stmt::Assignments, projection: #toasty::stmt::Projection) {
-                assignments.set(projection, <Self as #toasty::IntoExpr<#model_ident>>::into_expr(self));
+            fn into_assignment(self) -> #toasty::stmt::Assignment<#model_ident> {
+                #toasty::stmt::set(
+                    <Self as #toasty::IntoExpr<#model_ident>>::into_expr(self)
+                )
             }
         }
     })

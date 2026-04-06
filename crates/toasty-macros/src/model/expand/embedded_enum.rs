@@ -281,8 +281,8 @@ impl Expand<'_> {
                             index: #index,
                         },
                         name: #toasty::core::schema::app::FieldName {
-                            app_name: #app_name.to_string(),
-                            storage_name: None,
+                            app: Some(#app_name.to_string()),
+                            storage: None,
                         },
                         ty: <#ty as #toasty::Field>::field_ty(None),
                         nullable: <#ty as #toasty::Field>::NULLABLE,

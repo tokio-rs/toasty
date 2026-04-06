@@ -228,10 +228,47 @@ impl BuildTableFromModels<'_> {
             };
 
             for index_field in &app_index.fields {
-                let column = field_mappings[index_field.field.index]
-                    .as_primitive()
-                    .expect("indexed field should map to a primitive column")
-                    .column;
+                let mapping = &field_mappings[index_field.field.index];
+
+                // Resolve the mapped column for this indexed field. Primitive
+                // fields map directly. Newtype embedded structs (a single
+                // unnamed field) are transparent wrappers around a primitive, so
+                // we unwrap one level.
+                //
+                // Multi-field or named-field embedded structs are not yet
+                // supported in indices because the column ordering within the
+                // index matters and there is no syntax to specify it. That will
+                // likely require an explicit field-order annotation on the
+                // index.
+                let column = match mapping {
+                    mapping::Field::Primitive(p) => p.column,
+                    mapping::Field::Struct(s) => {
+                        // Look up the app-level embedded struct to verify this
+                        // is a true newtype: exactly one unnamed field.
+                        let embedded_struct = self.app.model(s.id).as_embedded_struct_unwrap();
+
+                        assert!(
+                            embedded_struct.fields.len() == 1
+                                && embedded_struct.fields[0].name.app.is_none(),
+                            "only newtype embedded structs (single unnamed \
+                             field) can be indexed; multi-field or named-field \
+                             embedded structs require explicit index field \
+                             ordering"
+                        );
+
+                        s.fields[0]
+                            .as_primitive()
+                            .expect(
+                                "newtype embedded struct should contain a \
+                                 primitive for indexing",
+                            )
+                            .column
+                    }
+                    _ => panic!(
+                        "only primitive and newtype embedded structs can be \
+                         indexed"
+                    ),
+                };
 
                 index.columns.push(db::IndexColumn {
                     column,
@@ -577,7 +614,7 @@ impl<'a, 'b> MapField<'a, 'b> {
                         self.map_field_enum(index, field, embedded_enum)
                     }
                     app::Model::EmbeddedStruct(embedded_struct) => {
-                        self.map_field_struct(index, field, embedded_struct)
+                        self.map_field_struct(index, field, embedded.target, embedded_struct)
                     }
                     _ => unreachable!(),
                 }
@@ -687,6 +724,7 @@ impl<'a, 'b> MapField<'a, 'b> {
         &mut self,
         field_index: usize,
         field: &app::Field,
+        model_id: ModelId,
         embedded_struct: &app::EmbeddedStruct,
     ) -> Result<mapping::Field> {
         let sub_projection = self.sub_projection(field_index);
@@ -702,6 +740,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             .fold(stmt::PathFieldSet::new(), |acc, f| acc | f.field_mask());
 
         Ok(mapping::Field::Struct(mapping::FieldStruct {
+            id: model_id,
             fields: nested_fields,
             columns,
             field_mask,
@@ -716,11 +755,25 @@ impl<'a, 'b> MapField<'a, 'b> {
     /// applied here — never stored in `self.prefix` — it is always applied
     /// exactly once regardless of nesting depth.
     fn column_name(&self, field: &app::Field) -> String {
-        let field_name = field.name.storage_name();
-        let embed = if self.prefix.is_empty() {
-            field_name.to_owned()
-        } else {
-            format!("{}_{field_name}", self.prefix.join("_"))
+        let embed = match field.name.storage_name() {
+            Some(field_name) => {
+                if self.prefix.is_empty() {
+                    field_name.to_owned()
+                } else {
+                    format!("{}_{field_name}", self.prefix.join("_"))
+                }
+            }
+            None => {
+                // Unnamed field (newtype wrapper) — use just the prefix
+                // components so the column name is identical to the parent
+                // field's name.
+                assert!(
+                    !self.prefix.is_empty(),
+                    "unnamed field with empty prefix; a newtype field must be \
+                     nested inside a parent field"
+                );
+                self.prefix.join("_")
+            }
         };
         match self.build.schema_prefix.as_deref() {
             None => embed,
@@ -858,7 +911,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             }],
             stmt::Expr::null(),
         );
-        let mut child = self.with_prefix(field.name.storage_name());
+        let mut child = self.with_prefix(field.name.storage_name_unwrap());
         child.in_enum_variant = true;
         child.field_base = Some(field_base);
         child.field_expr_base.substitute(&[field_expr_base]);
@@ -873,7 +926,7 @@ impl<'a, 'b> MapField<'a, 'b> {
     /// `field_index`.
     fn for_struct(&mut self, field: &app::Field, field_index: usize) -> MapField<'_, 'b> {
         let field_base = self.extend_field_base(field, field_index);
-        let mut child = self.with_prefix(field.name.storage_name());
+        let mut child = self.with_prefix(field.name.storage_name_unwrap());
         child.field_base = Some(field_base);
         child
     }
@@ -895,7 +948,7 @@ fn lookup_embedded_model<'a>(
             "field `{parent_name}::{}` references an embedded type that is not registered \
              in the schema; did you forget to include the embedded type in \
              `toasty::models!(..)`?",
-            field.name.app_name,
+            field.name,
         ))
     })
 }

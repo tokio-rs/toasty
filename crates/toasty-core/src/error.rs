@@ -69,6 +69,7 @@ use validation::ValidationFailed;
 /// assert_eq!(wrapped.to_string(), "while loading user: something went wrong");
 /// ```
 #[derive(Clone)]
+#[non_exhaustive]
 pub struct Error {
     inner: Arc<ErrorInner>,
 }

@@ -300,7 +300,7 @@ heuristic based on the field name and type to determine the behavior:
 | `updated_at` | `jiff::Timestamp` | `#[update(jiff::Timestamp::now())]` — refreshed on every create and update |
 
 On key fields, bare `#[auto]` defers to the type's default auto-generation
-strategy (e.g., auto-increment for integers, UUID v4 for `uuid::Uuid`). See
+strategy (e.g., auto-increment for integers, UUID v7 for `uuid::Uuid`). See
 [Keys and Auto-Generation](./keys-and-auto-generation.md) for details.
 
 This is the recommended way to add timestamps to your models. The `created_at`
@@ -311,7 +311,7 @@ Timestamp fields require the `jiff` feature:
 
 ```toml
 [dependencies]
-toasty = { version = "0.1", features = ["sqlite", "jiff"] }
+toasty = { version = "{{toasty_version}}", features = ["sqlite", "jiff"] }
 ```
 
 ## Date and time fields

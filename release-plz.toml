@@ -3,3 +3,47 @@ git_release_draft = true
 pr_draft = true
 pr_labels = ["release"]
 release_always = true
+
+[[package]]
+name = "toasty"
+version_group = "toasty"
+
+[[package]]
+name = "toasty-cli"
+version_group = "toasty"
+
+[[package]]
+name = "toasty-core"
+version_group = "toasty"
+
+[[package]]
+name = "toasty-macros"
+version_group = "toasty"
+
+[[package]]
+name = "toasty-sql"
+version_group = "toasty"
+
+[[package]]
+name = "toasty-driver-dynamodb"
+version_group = "toasty"
+
+[[package]]
+name = "toasty-driver-mysql"
+version_group = "toasty"
+
+[[package]]
+name = "toasty-driver-postgresql"
+version_group = "toasty"
+
+[[package]]
+name = "toasty-driver-sqlite"
+version_group = "toasty"
+
+[[package]]
+name = "toasty-driver-integration-suite"
+version_group = "toasty"
+
+[[package]]
+name = "toasty-driver-integration-suite-macros"
+version_group = "toasty"

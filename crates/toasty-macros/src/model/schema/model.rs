@@ -1,6 +1,6 @@
 use super::{
-    ErrorSet, Field, FieldAttr, FieldTy, Index, IndexField, IndexScope, ModelAttr, Name,
-    PrimaryKey, Variant, VariantValue,
+    ErrorSet, Field, Index, IndexField, IndexScope, ModelAttr, Name, PrimaryKey, Variant,
+    VariantValue,
 };
 
 #[derive(Debug)]
@@ -70,6 +70,10 @@ pub(crate) struct ModelEmbeddedStruct {
 
     /// Update builder struct identifier
     pub(crate) update_struct_ident: syn::Ident,
+
+    /// True when variant fields are named (struct-like `Foo { a: T }`), false
+    /// for tuple-like (`Foo(T)`). Unused when `fields` is empty.
+    pub(crate) fields_named: bool,
 }
 
 #[derive(Debug)]
@@ -120,12 +124,7 @@ pub(crate) struct Model {
 
 impl Model {
     pub(crate) fn from_ast(ast: &syn::ItemStruct, is_embedded: bool) -> syn::Result<Self> {
-        let syn::Fields::Named(node) = &ast.fields else {
-            return Err(syn::Error::new_spanned(
-                &ast.fields,
-                "model fields must be named",
-            ));
-        };
+        let ast_fields = collect_ast_fields(&ast.fields)?;
 
         // Generics are not supported yet
         if !ast.generics.params.is_empty() {
@@ -138,11 +137,9 @@ impl Model {
         // First, map field names to identifiers
         let mut names = vec![];
 
-        for field in node.named.iter() {
+        for field in &ast_fields {
             if let Some(ident) = &field.ident {
                 names.push(ident.clone());
-            } else {
-                return Err(syn::Error::new_spanned(field, "model fields must be named"));
             }
         }
 
@@ -156,8 +153,8 @@ impl Model {
             errs.push(err);
         }
 
-        for (index, node) in node.named.iter().enumerate() {
-            match Field::from_ast(node, &ast.ident, index, &names) {
+        for (index, node) in ast_fields.iter().enumerate() {
+            match Field::from_ast(node, &ast.ident, index, index, &names) {
                 Ok(field) => {
                     if model_attr.key.is_some()
                         && let Some(field) = &field.attrs.key
@@ -219,6 +216,7 @@ impl Model {
                 field_struct_ident: struct_ident("Fields", ast),
                 field_list_struct_ident: struct_list_ident("ListFields", ast),
                 update_struct_ident: struct_ident("Update", ast),
+                fields_named: matches!(ast.fields, syn::Fields::Named(_)),
             })
         } else {
             let pk_fields = pk_index_fields
@@ -287,6 +285,7 @@ impl Model {
         let mut all_fields: Vec<Field> = vec![];
         let mut errs = ErrorSet::new();
         let mut global_field_index = 0usize;
+        let model_ident = ast.ident.clone();
 
         // Parse all variants in a single pass, defaulting omitted discriminants
         // to string labels using the variant identifier.
@@ -310,48 +309,17 @@ impl Model {
                 },
             };
 
-            // Collect variant data fields
-            let field_pairs: Vec<_> = match &variant.fields {
-                syn::Fields::Unit => vec![],
-                syn::Fields::Named(named) => named
-                    .named
-                    .iter()
-                    .map(|f| (f.ident.as_ref().unwrap().clone(), f))
-                    .collect(),
-                syn::Fields::Unnamed(unnamed) => unnamed
-                    .unnamed
-                    .iter()
-                    .enumerate()
-                    .map(|(i, f)| {
-                        (
-                            syn::Ident::new(&format!("field{i}"), variant.ident.span()),
-                            f,
-                        )
-                    })
-                    .collect(),
-            };
+            let ast_fields = collect_ast_fields(&variant.fields)?;
+            let names = ast_fields
+                .iter()
+                .filter_map(|ast_field| ast_field.ident.clone())
+                .collect::<Vec<_>>();
 
-            for (ident, f) in &field_pairs {
-                let attrs = match FieldAttr::from_attrs(&f.attrs) {
-                    Ok(a) => a,
-                    Err(e) => {
-                        errs.push(e);
-                        continue;
-                    }
-                };
-                let name = Name::from_ident(ident);
-                let set_ident = syn::Ident::new(&format!("set_{}", name.ident), ident.span());
-                let with_ident = syn::Ident::new(&format!("with_{}", name.ident), ident.span());
-
-                all_fields.push(Field {
-                    id: global_field_index,
-                    attrs,
-                    name,
-                    ty: FieldTy::Primitive(f.ty.clone()),
-                    set_ident,
-                    with_ident,
-                    variant: Some(variant_index),
-                });
+            for (index, ast_field) in ast_fields.iter().enumerate() {
+                let mut field =
+                    Field::from_ast(ast_field, &model_ident, global_field_index, index, &names)?;
+                field.variant = Some(variant_index);
+                all_fields.push(field);
                 global_field_index += 1;
             }
 
@@ -398,7 +366,7 @@ impl Model {
         Ok(Self {
             vis: ast.vis.clone(),
             name: Name::from_ident(&ast.ident),
-            ident: ast.ident.clone(),
+            ident: model_ident,
             fields: all_fields,
             kind: ModelKind::EmbeddedEnum(ModelEmbeddedEnum {
                 field_struct_ident: enum_ident("Fields", ast),
@@ -409,6 +377,23 @@ impl Model {
             table: None,
         })
     }
+}
+
+fn collect_ast_fields(ast: &syn::Fields) -> syn::Result<Vec<&syn::Field>> {
+    Ok(match ast {
+        syn::Fields::Named(f) => f.named.iter().collect::<Vec<_>>(),
+        syn::Fields::Unnamed(f) => {
+            if f.unnamed.len() > 1 {
+                return Err(syn::Error::new_spanned(
+                    ast,
+                    "tuple structs (besides new-type) are not supported",
+                ));
+            }
+
+            f.unnamed.iter().collect::<Vec<_>>()
+        }
+        _ => vec![],
+    })
 }
 
 fn collect_field_indices(fields: &[Field], indices: &mut Vec<Index>) {

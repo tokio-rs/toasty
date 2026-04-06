@@ -31,8 +31,9 @@ impl Expand<'_> {
             }
         };
         let model_schema = self.expand_model_schema();
+        let field_register_calls = self.expand_field_register_calls();
         let model_fields = self.expand_model_field_struct_init();
-        let load_body = self.expand_load_body();
+        let load_body = self.expand_load_body(true);
         let filter_methods = self.expand_model_filter_methods();
         let field_name_to_id = self.expand_field_name_to_id();
         let relation_methods = self.expand_model_relation_methods();
@@ -86,12 +87,20 @@ impl Expand<'_> {
                 }
 
                 #model_schema
+
+                fn register(model_set: &mut #toasty::core::schema::app::ModelSet) {
+                    if model_set.contains(Self::id()) {
+                        return;
+                    }
+                    model_set.add(Self::schema());
+                    #( #field_register_calls )*
+                }
             }
 
             #toasty::inventory::submit! {
                 #toasty::DiscoverItem::new(
                     env!("CARGO_PKG_NAME"),
-                    |model_set| { model_set.add(<#model_ident as #toasty::Register>::schema()); },
+                    |model_set| { <#model_ident as #toasty::Register>::register(model_set); },
                 )
             }
 
@@ -157,8 +166,10 @@ impl Expand<'_> {
             }
 
             impl #toasty::Assign<#model_ident> for #model_ident {
-                fn assign(self, assignments: &mut #toasty::core::stmt::Assignments, projection: #toasty::stmt::Projection) {
-                    assignments.set(projection, <Self as #toasty::IntoExpr<#model_ident>>::into_expr(self));
+                fn into_assignment(self) -> #toasty::stmt::Assignment<#model_ident> {
+                    #toasty::stmt::set(
+                        <Self as #toasty::IntoExpr<#model_ident>>::into_expr(self)
+                    )
                 }
             }
 
@@ -285,22 +296,35 @@ impl Expand<'_> {
         }
     }
 
-    pub(super) fn expand_embedded_into_expr_body(&self, by_ref: bool) -> TokenStream {
+    pub(super) fn expand_embedded_into_expr_body(
+        &self,
+        fields_named: bool,
+        by_ref: bool,
+    ) -> TokenStream {
         let toasty = &self.toasty;
 
         // For embedded types, create a record expression from all fields
         // Currently only primitive fields are supported in embedded types
-        let field_exprs = self.model.fields.iter().map(|field| {
-            let field_ident = &field.name.ident;
+        let field_exprs = self.model.fields.iter().enumerate().map(|(index, field)| {
             let ty = match &field.ty {
                 FieldTy::Primitive(ty) => ty,
                 _ => panic!("only primitive fields are supported in embedded types"),
             };
 
-            let value = if by_ref {
-                quote!((&self.#field_ident))
+            let value = if fields_named {
+                let field_ident = &field.name.ident;
+                if by_ref {
+                    quote!((&self.#field_ident))
+                } else {
+                    quote!(self.#field_ident)
+                }
             } else {
-                quote!(self.#field_ident)
+                let idx = syn::Index::from(index);
+                if by_ref {
+                    quote!((&self.#idx))
+                } else {
+                    quote!(self.#idx)
+                }
             };
 
             self.expand_into_untyped_expr(ty, value)
@@ -323,7 +347,7 @@ impl Expand<'_> {
     ///
     /// The generated code pattern matches on `Value::Record`, extracts fields,
     /// and constructs the struct.
-    pub(super) fn expand_load_body(&self) -> TokenStream {
+    pub(super) fn expand_load_body(&self, fields_named: bool) -> TokenStream {
         let toasty = &self.toasty;
         let model_ident = &self.model.ident;
 
@@ -332,6 +356,12 @@ impl Expand<'_> {
             let field_ident = &field.name.ident;
             let index_tokenized = util::int(index);
             let field_name_str = field.name.ident.to_string();
+
+            let field_name = if fields_named {
+                quote!(#field_ident:)
+            } else {
+                quote!()
+            };
 
             match &field.ty {
                 FieldTy::Primitive(_ty) if field.attrs.serialize.is_some() => {
@@ -354,26 +384,34 @@ impl Expand<'_> {
                     };
 
                     quote! {
-                        #field_ident: {
+                        #field_name {
                             let value = record[#index_tokenized].take();
                             #field_value
                         },
                     }
                 }
                 FieldTy::Primitive(ty) => {
-                    quote!(#field_ident: <#ty as #toasty::Load>::load(record[#index_tokenized].take())?,)
+                    quote!(#field_name <#ty as #toasty::Load>::load(record[#index_tokenized].take())?,)
                 }
                 FieldTy::BelongsTo(_) => {
-                    quote!(#field_ident: #toasty::BelongsTo::load(record[#index].take())?,)
+                    quote!(#field_name #toasty::BelongsTo::load(record[#index].take())?,)
                 }
                 FieldTy::HasMany(_) => {
-                    quote!(#field_ident: #toasty::HasMany::load(record[#index].take())?,)
+                    quote!(#field_name #toasty::HasMany::load(record[#index].take())?,)
                 }
                 FieldTy::HasOne(_) => {
-                    quote!(#field_ident: #toasty::HasOne::load(record[#index].take())?,)
+                    quote!(#field_name #toasty::HasOne::load(record[#index].take())?,)
                 }
             }
         });
+
+        let model_load = if fields_named {
+            quote!(#model_ident {
+                #( #field_loads )*
+            })
+        } else {
+            quote!(#model_ident( #( #field_loads )* ))
+        };
 
         quote! {
             match value {
@@ -381,9 +419,7 @@ impl Expand<'_> {
                     Err(#toasty::Error::record_not_found(stringify!(#model_ident)))
                 }
                 #toasty::core::stmt::Value::Record(mut record) => {
-                    Ok(#model_ident {
-                        #( #field_loads )*
-                    })
+                    Ok(#model_load)
                 }
                 value => Err(#toasty::Error::type_conversion(value, stringify!(#model_ident))),
             }
@@ -394,13 +430,21 @@ impl Expand<'_> {
     ///
     /// Handles `SparseRecord` values (partial updates) by reloading only the specified
     /// sub-fields, and falls back to full `load` for complete record values.
-    pub(super) fn expand_embedded_reload_body(&self) -> TokenStream {
+    pub(super) fn expand_embedded_reload_body(&self, fields_named: bool) -> TokenStream {
         let toasty = &self.toasty;
 
         let reload_arms = self.model.fields.iter().enumerate().map(|(index, field)| {
-            let field_ident = &field.name.ident;
             let i = util::int(index);
             let field_name_str = field.name.ident.to_string();
+
+            // For newtypes, access via tuple index (target.0); otherwise by name
+            let field_access = if fields_named {
+                let field_ident = &field.name.ident;
+                quote!(target.#field_ident)
+            } else {
+                let idx = syn::Index::from(index);
+                quote!(target.#idx)
+            };
 
             match &field.ty {
                 FieldTy::Primitive(_ty) if field.attrs.serialize.is_some() => {
@@ -424,15 +468,15 @@ impl Expand<'_> {
 
                     quote! {
                         #i => {
-                            target.#field_ident = #assign;
+                            #field_access = #assign;
                         }
                     }
                 }
                 FieldTy::Primitive(ty) => {
-                    quote!(#i => <#ty as #toasty::Load>::reload(&mut target.#field_ident, value)?,)
+                    quote!(#i => <#ty as #toasty::Load>::reload(&mut #field_access, value)?,)
                 }
                 _ => {
-                    quote!(#i => target.#field_ident.unload(),)
+                    quote!(#i => #field_access.unload(),)
                 }
             }
         });

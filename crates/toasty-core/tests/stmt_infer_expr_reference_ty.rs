@@ -71,8 +71,8 @@ fn model_root(id: usize, field_types: &[(Type, &str)]) -> ModelRoot {
         .map(|(i, (ty, name))| Field {
             id: model_id.field(i),
             name: FieldName {
-                app_name: name.to_string(),
-                storage_name: None,
+                app: Some(name.to_string()),
+                storage: None,
             },
             ty: FieldTy::Primitive(FieldPrimitive {
                 ty: ty.clone(),

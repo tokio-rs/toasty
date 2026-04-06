@@ -109,12 +109,7 @@ impl Connection for LoggingConnection {
         self.inner.applied_migrations().await
     }
 
-    async fn apply_migration(
-        &mut self,
-        id: u64,
-        name: String,
-        migration: &Migration,
-    ) -> Result<()> {
+    async fn apply_migration(&mut self, id: u64, name: &str, migration: &Migration) -> Result<()> {
         self.inner.apply_migration(id, name, migration).await
     }
 }

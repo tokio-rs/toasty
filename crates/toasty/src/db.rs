@@ -98,34 +98,6 @@ impl Db {
         conn.exec_stmt(stmt, in_transaction).await
     }
 
-    /// Create a [`TransactionBuilder`] for configuring transaction options
-    /// (isolation level, read-only) before starting it.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
-    /// # #[derive(Debug, toasty::Model)]
-    /// # struct User {
-    /// #     #[key]
-    /// #     id: i64,
-    /// #     name: String,
-    /// # }
-    /// # let driver = toasty_driver_sqlite::Sqlite::in_memory();
-    /// # let mut db = toasty::Db::builder().models(toasty::models!(User)).build(driver).await.unwrap();
-    /// let mut conn = db.connection().await.unwrap();
-    /// let tx = toasty::TransactionBuilder::new()
-    ///     .read_only(true)
-    ///     .begin(&mut conn)
-    ///     .await
-    ///     .unwrap();
-    /// tx.commit().await.unwrap();
-    /// # });
-    /// ```
-    pub fn transaction_builder(&self) -> TransactionBuilder {
-        TransactionBuilder::new()
-    }
-
     /// Creates tables and indices defined in the schema on the database.
     pub async fn push_schema(&self) -> Result<()> {
         let conn = self.connection().await?;
@@ -153,6 +125,17 @@ impl Db {
     /// (e.g., SQL vs. key-value).
     pub fn capability(&self) -> &Capability {
         self.shared.engine.capability()
+    }
+
+    /// Begin a transaction, acquiring a connection from the pool.
+    pub async fn transaction(&mut self) -> Result<Transaction<'_>> {
+        <Self as Executor>::transaction(self).await
+    }
+
+    /// Returns a [`TransactionBuilder`] that will acquire a connection from
+    /// the pool when [`begin`](TransactionBuilder::begin) is called.
+    pub fn transaction_builder(&mut self) -> TransactionBuilder<'_> {
+        TransactionBuilder::new(tx::TxSource::Db(self))
     }
 
     /// Returns a reference to the connection pool backing this handle.

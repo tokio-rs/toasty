@@ -46,13 +46,13 @@ transactions.
 - **[Getting Started](./getting-started.md)** — set up a project and run your first query
 - **[Defining Models](./defining-models.md)** — struct fields, types, and table mapping
 - **[Keys and Auto-Generation](./keys-and-auto-generation.md)** — primary keys, auto-generated values, composite keys
-- **[Schema Management](./schema-management.md)** — create and reset database tables
 - **[Creating Records](./creating-records.md)** — insert one or many records
 - **[Querying Records](./querying-records.md)** — find, filter, and iterate over results
 - **[Updating Records](./updating-records.md)** — modify existing records
 - **[Deleting Records](./deleting-records.md)** — remove records
 - **[Indexes and Unique Constraints](./indexes-and-unique-constraints.md)** — add indexes and unique constraints
 - **[Field Options](./field-options.md)** — column names, types, defaults, and JSON serialization
+- **[Relationships](./relationships.md)** — overview of how models connect to each other
 - **[BelongsTo](./belongs-to.md)** — define and use many-to-one relationships
 - **[HasMany](./has-many.md)** — define and use one-to-many relationships
 - **[HasOne](./has-one.md)** — define and use one-to-one relationships
@@ -63,3 +63,4 @@ transactions.
 - **[Batch Operations](./batch-operations.md)** — multiple queries in one round-trip
 - **[Transactions](./transactions.md)** — atomic operations
 - **[Database Setup](./database-setup.md)** — connection URLs, table creation, and supported databases
+- **[Migrations and Schema Management](./schema-management.md)** — create and reset database tables
