@@ -34,7 +34,5 @@ if __name__ == "__main__":
                 if chapter.get("sub_items"):
                     replace_in_items(chapter["sub_items"])
 
-    # mdbook 0.5+ uses "items"; older versions use "sections"
-    key = "items" if "items" in book else "sections"
-    replace_in_items(book[key])
+    replace_in_items(book["items"])
     print(json.dumps(book))
