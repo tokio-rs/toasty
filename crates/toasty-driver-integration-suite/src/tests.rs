@@ -33,6 +33,7 @@ pub mod field_auto;
 pub mod field_column_name;
 pub mod field_column_type;
 pub mod field_default_and_update;
+pub mod gsi_composite;
 pub mod infra_connection_per_clone;
 pub mod infra_missing_registrations;
 pub mod infra_reset_db;
