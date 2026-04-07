@@ -1,13 +1,17 @@
-# Native Database Enum Types
+# Database Enum Types
 
 ## Overview
 
-Toasty stores embedded enum discriminants as INTEGER or VARCHAR columns. Databases
-that support native enum types — PostgreSQL (`CREATE TYPE ... AS ENUM`) and MySQL
-(inline `ENUM(...)` columns) — can store discriminants as typed enum values instead.
-This gives the database awareness of valid values, produces more readable data,
-and avoids storing raw integers or unbounded strings for what is a fixed set of
-choices.
+Toasty stores embedded enum discriminants as INTEGER or VARCHAR columns by
+default. `#[column(type = enum)]` tells Toasty to use the best available enum
+representation for the target database. On databases with native enum types,
+this uses them. On databases without native enums, Toasty falls back to string
+columns with constraints where possible, or plain string columns as a last
+resort.
+
+This means `#[column(type = enum)]` is portable across all backends — you can
+develop against SQLite locally and deploy to PostgreSQL without changing the
+enum definition.
 
 ## Syntax
 
@@ -86,23 +90,47 @@ enum Status {
 
 ## Database Support
 
+`#[column(type = enum)]` adapts to each backend's capabilities:
+
+| Backend | Representation | Validation |
+|---|---|---|
+| PostgreSQL | `CREATE TYPE ... AS ENUM` (named type) | Database rejects invalid values |
+| MySQL | Inline `ENUM('a', 'b', 'c')` column type | Database rejects invalid values |
+| SQLite | `TEXT` column + `CHECK` constraint | Database rejects invalid values |
+| DynamoDB | String attribute | No database-level validation (Toasty validates at the application level) |
+
 ### PostgreSQL
 
-PostgreSQL uses named enum types. Toasty creates a standalone type with
-`CREATE TYPE ... AS ENUM` and references it from column definitions.
+Toasty creates a standalone named type with `CREATE TYPE ... AS ENUM` and
+references it from column definitions.
 
 ### MySQL
 
-MySQL defines enum values inline on the column. There is no standalone named
-type. Toasty generates `ENUM('a', 'b', 'c')` as the column type. When the
-same Rust enum is used in multiple tables, each table gets its own inline
-`ENUM(...)` definition.
+Toasty generates `ENUM('a', 'b', 'c')` as the column type. There is no
+standalone named type. When the same Rust enum is used in multiple tables,
+each table gets its own inline `ENUM(...)` definition.
 
-### Unsupported backends
+### SQLite
 
-SQLite and DynamoDB have no enum type. Using `#[column(type = enum)]` with
-these backends produces a runtime error when Toasty builds the schema, the
-same as using any other unsupported column type (e.g., `varchar` on SQLite).
+SQLite has no native enum type. Toasty stores the discriminant as a `TEXT`
+column with a `CHECK` constraint that restricts values to the declared
+labels:
+
+```sql
+CREATE TABLE tasks (
+    id INTEGER PRIMARY KEY,
+    status TEXT NOT NULL CHECK (status IN ('pending', 'active', 'done'))
+);
+```
+
+This gives database-level validation while remaining compatible with
+SQLite's type system.
+
+### DynamoDB
+
+DynamoDB has no column type system or constraint mechanism. Toasty stores the
+discriminant as a string attribute. Validation happens at the Toasty
+application level only — the database itself accepts any string value.
 
 ## Generated SQL Schema
 
@@ -196,10 +224,22 @@ CREATE TABLE orders (
 The `enum("name")` syntax is ignored on MySQL since there is no standalone
 type to name.
 
+### SQLite
+
+SQLite uses a TEXT column with a CHECK constraint:
+
+```sql
+CREATE TABLE orders (
+    id INTEGER PRIMARY KEY,
+    state TEXT NOT NULL CHECK (state IN ('new', 'shipped', 'delivered'))
+);
+```
+
 ### Data-carrying enums
 
-Data-carrying enums work the same way on both backends. The discriminant
-column uses the enum type; variant fields remain as separate nullable columns:
+Data-carrying enums work the same way on all backends. The discriminant
+column uses the enum representation; variant fields remain as separate
+nullable columns:
 
 ```rust
 #[derive(toasty::Embed)]
@@ -236,6 +276,17 @@ CREATE TABLE users (
 );
 ```
 
+SQLite:
+```sql
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY,
+    contact TEXT NOT NULL CHECK (contact IN ('email', 'phone')),
+    contact_email_address TEXT,
+    contact_phone_country TEXT,
+    contact_phone_number TEXT
+);
+```
+
 ## Migrations
 
 ### Creating a new enum
@@ -260,6 +311,14 @@ CREATE TABLE tasks (
 );
 ```
 
+SQLite:
+```sql
+CREATE TABLE tasks (
+    id INTEGER PRIMARY KEY,
+    status TEXT NOT NULL CHECK (status IN ('pending', 'active', 'done'))
+);
+```
+
 ### Label ordering
 
 Database enum types have a declaration order that affects `ORDER BY` behavior.
@@ -273,9 +332,7 @@ Toasty manages this order with two rules:
    not change the database label order.
 
 This means the label order is a one-time decision made at creation. If you
-need to change the order later, you must do so manually outside of Toasty
-(by recreating the type on PostgreSQL, or running a `MODIFY COLUMN` on
-MySQL).
+need to change the order later, you must do so manually outside of Toasty.
 
 ### Adding a variant
 
@@ -303,9 +360,15 @@ ALTER TABLE tasks MODIFY COLUMN status
     ENUM('pending', 'active', 'done', 'cancelled') NOT NULL;
 ```
 
-MySQL requires rewriting the full enum definition on every change. Toasty
-handles this automatically, preserving the existing label order and
-appending the new label at the end.
+SQLite:
+
+SQLite does not support `ALTER TABLE ... ALTER COLUMN`. Toasty uses its
+existing table recreation strategy (create new table, copy data, drop old,
+rename) to update the CHECK constraint with the new label list.
+
+MySQL requires rewriting the full enum definition on every change. Both
+MySQL and SQLite rewrites are handled automatically, preserving the existing
+label order and appending the new label at the end.
 
 ### Renaming a variant
 
@@ -381,9 +444,7 @@ Task::filter(Task::fields().status().in_list([Status::Pending, Status::Active]))
 
 ### SQL generated for queries
 
-Queries compare against the enum label as a string literal. Both PostgreSQL
-and MySQL handle the cast from the string literal to the enum type
-automatically:
+Queries compare against the enum label as a string literal:
 
 ```sql
 -- .eq(Status::Active)
@@ -393,24 +454,24 @@ SELECT * FROM tasks WHERE status = 'Active';
 SELECT * FROM tasks WHERE status IN ('Pending', 'Active');
 ```
 
-No explicit cast is needed in WHERE clauses because the database infers the
-type from the column.
+This works across all backends. On PostgreSQL and MySQL the database casts
+the string literal to the enum type automatically. On SQLite and DynamoDB
+the column is already a string.
 
 ### Ordering
 
 Toasty does not support ordering comparisons (`>`, `<`, etc.) on enum fields.
 The query API provides `eq`, `ne`, `in_list`, and variant checks only.
 
-Both PostgreSQL and MySQL define a sort order for enum values based on their
-position in the type definition, not alphabetically. Toasty does not expose
+PostgreSQL and MySQL define a sort order for enum values based on their
+position in the type definition, not alphabetically. SQLite and DynamoDB
+sort enum columns as plain strings (lexicographic). Toasty does not expose
 or manage this ordering. Users who query the database directly should be
-aware that `ORDER BY` on an enum column uses declaration order, not
-lexicographic order.
+aware that `ORDER BY` behavior on enum columns varies by backend.
 
 ## Inserting
 
-Inserts supply the label as a string literal. The database casts it to the
-enum type:
+Inserts supply the label as a string literal on all backends:
 
 ```sql
 INSERT INTO tasks (status) VALUES ('pending');
@@ -424,15 +485,19 @@ INSERT INTO tasks (status) VALUES ('pending');
 | `#[column(type = enum)]` with integer variant values | Compile error |
 | Duplicate labels (including derived defaults) | Compile error |
 | Empty string label `#[column(variant = "")]` | Compile error |
-| Label longer than 63 bytes (PostgreSQL limit) | Compile error |
+| Label longer than 63 bytes | Compile error (PostgreSQL's `NAMEDATALEN` limit) |
 
 ## Portability
 
-`#[column(type = enum)]` works with PostgreSQL and MySQL. Using it with SQLite
-or DynamoDB produces a runtime error when Toasty builds the schema.
+`#[column(type = enum)]` works across all backends. Each backend uses its best
+available representation (see [Database Support](#database-support)). You can
+develop against SQLite locally and deploy to PostgreSQL or MySQL without
+changing the enum definition.
 
-If you need your enum to work across all backends, use string discriminants
-instead (`#[column(variant = "label")]` without `#[column(type = enum)]`).
+The difference between `#[column(type = enum)]` and plain string discriminants
+(`#[column(variant = "label")]`) is that `type = enum` adds database-level
+validation where the backend supports it. The stored values are string labels
+in both cases — there is no data incompatibility between them.
 
 ## Shared enum types
 
