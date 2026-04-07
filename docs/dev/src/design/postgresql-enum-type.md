@@ -309,35 +309,10 @@ appending the new label at the end.
 
 ### Renaming a variant
 
-Use `#[column(rename_from = "old_label")]` to tell Toasty about the rename:
-
-```rust
-#[derive(toasty::Embed)]
-#[column(type = enum)]
-enum Status {
-    #[column(variant = "waiting", rename_from = "pending")]
-    Pending,
-    Active,
-    Done,
-}
-```
-
-PostgreSQL (requires PostgreSQL 10+):
-```sql
-ALTER TYPE status RENAME VALUE 'pending' TO 'waiting';
-```
-
-MySQL:
-```sql
-ALTER TABLE tasks MODIFY COLUMN status
-    ENUM('waiting', 'active', 'done') NOT NULL;
-```
-
-On MySQL, the `MODIFY COLUMN` preserves the existing label order, substituting
-the renamed label in its original position.
-
-The `rename_from` attribute is only needed during the migration that performs
-the rename. It can be removed afterward.
+Toasty does not support renaming enum variant labels. Changing a variant's
+`#[column(variant = "...")]` label is a migration error. To rename a label,
+add the new variant, migrate existing data manually, then remove the old
+variant (once variant removal is supported).
 
 ### Removing a variant
 
