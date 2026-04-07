@@ -42,9 +42,9 @@ When an enum uses string labels (either default identifiers or explicit
 ```rust
 #[derive(toasty::Embed)]
 enum Status {
-    Pending,          // label: 'Pending'
-    Active,           // label: 'Active'
-    Done,             // label: 'Done'
+    Pending,          // label: 'pending'
+    Active,           // label: 'active'
+    Done,             // label: 'done'
 }
 ```
 
@@ -92,8 +92,17 @@ discriminants cannot be mixed in the same enum.
 
 ## Variant labels
 
-By default, the label is the Rust variant's identifier. Use
-`#[column(variant = "label")]` on individual variants to set explicit labels:
+Toasty converts Rust variant identifiers to snake_case for database labels by
+default, following the same convention used for table and column names:
+
+| Rust variant | Default label |
+|---|---|
+| `Pending` | `'pending'` |
+| `InProgress` | `'in_progress'` |
+| `AlmostDone` | `'almost_done'` |
+
+Use `#[column(variant = "label")]` on individual variants to override the
+default:
 
 ```rust
 #[derive(toasty::Embed)]
@@ -113,8 +122,8 @@ Explicit labels and defaults can coexist:
 #[derive(toasty::Embed)]
 enum Status {
     #[column(variant = "in_progress")]
-    InProgress,      // stored as 'in_progress'
-    Done,            // stored as 'Done' (default)
+    InProgress,      // stored as 'in_progress' (explicit)
+    Done,            // stored as 'done' (default snake_case)
 }
 ```
 
@@ -219,7 +228,7 @@ enum OrderState {
 ```
 
 ```sql
-CREATE TYPE order_status AS ENUM ('New', 'Shipped', 'Delivered');
+CREATE TYPE order_status AS ENUM ('new', 'shipped', 'delivered');
 ```
 
 Without this attribute, Toasty derives the type name from the Rust enum
@@ -365,7 +374,7 @@ they appear in the Rust enum definition.
 
 PostgreSQL:
 ```sql
-ALTER TYPE status ADD VALUE 'Cancelled';
+ALTER TYPE status ADD VALUE 'cancelled';
 ```
 
 MySQL:
@@ -469,10 +478,10 @@ Queries compare against the enum label as a string literal:
 
 ```sql
 -- .eq(Status::Active)
-SELECT * FROM tasks WHERE status = 'Active';
+SELECT * FROM tasks WHERE status = 'active';
 
 -- .in_list([Status::Pending, Status::Active])
-SELECT * FROM tasks WHERE status IN ('Pending', 'Active');
+SELECT * FROM tasks WHERE status IN ('pending', 'active');
 ```
 
 This works across all backends. On PostgreSQL and MySQL the database casts
@@ -548,7 +557,7 @@ struct Bug {
 
 PostgreSQL:
 ```sql
-CREATE TYPE priority AS ENUM ('Low', 'Medium', 'High');
+CREATE TYPE priority AS ENUM ('low', 'medium', 'high');
 
 CREATE TABLE tasks (
     id BIGSERIAL PRIMARY KEY,
@@ -565,12 +574,12 @@ MySQL:
 ```sql
 CREATE TABLE tasks (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    priority ENUM('Low', 'Medium', 'High') NOT NULL
+    priority ENUM('low', 'medium', 'high') NOT NULL
 );
 
 CREATE TABLE bugs (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    priority ENUM('Low', 'Medium', 'High') NOT NULL
+    priority ENUM('low', 'medium', 'high') NOT NULL
 );
 ```
 
@@ -602,7 +611,7 @@ struct Widget {
 
 PostgreSQL:
 ```sql
-CREATE TYPE color AS ENUM ('Red', 'Green', 'Blue');
+CREATE TYPE color AS ENUM ('red', 'green', 'blue');
 
 CREATE TABLE widgets (
     id BIGSERIAL PRIMARY KEY,
@@ -611,10 +620,10 @@ CREATE TABLE widgets (
 );
 
 -- Insert
-INSERT INTO widgets (name, color) VALUES ('Sprocket', 'Red');
+INSERT INTO widgets (name, color) VALUES ('Sprocket', 'red');
 
 -- Query
-SELECT * FROM widgets WHERE color = 'Green';
+SELECT * FROM widgets WHERE color = 'green';
 ```
 
 ### Unit enum with explicit labels

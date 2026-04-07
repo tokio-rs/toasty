@@ -33,32 +33,33 @@ The discriminant column stores `"pending"`, `"active"`, or `"done"` as VARCHAR(2
 
 ### Default labels (omit variant attribute)
 
-When all variants omit `#[column(variant = ...)]`, Toasty uses the Rust variant
-identifier as the label:
+When all variants omit `#[column(variant = ...)]`, Toasty converts the Rust
+variant identifier to snake_case, following the same convention used for table
+and column names:
 
 ```rust
 #[derive(toasty::Embed)]
 enum Status {
-    Pending,        // → "Pending"
-    Active,         // → "Active"
-    AlmostDone,     // → "AlmostDone"
+    Pending,        // → "pending"
+    Active,         // → "active"
+    AlmostDone,     // → "almost_done"
 }
 ```
 
-This is equivalent to writing `#[column(variant = "Pending")]` on each variant.
+This is equivalent to writing `#[column(variant = "pending")]` on each variant.
 
 ### Mixing explicit and default labels
 
 Variants with explicit string labels and variants without any label can coexist.
-Unlabeled variants use the Rust identifier as the default:
+Unlabeled variants use the snake_case form of the Rust identifier:
 
 ```rust
 #[derive(toasty::Embed)]
 enum Status {
     #[column(variant = "waiting")]
     Pending,          // stored as "waiting"
-    Active,           // stored as "Active" (default)
-    Done,             // stored as "Done" (default)
+    Active,           // stored as "active" (default)
+    Done,             // stored as "done" (default)
 }
 ```
 
@@ -170,7 +171,7 @@ to the database:
 Task::create()
     .status(Status::Pending)
     .exec(&db).await?;
-// Inserts status = 'Pending' (string) instead of status = 1 (integer)
+// Inserts status = 'pending' (string) instead of status = 1 (integer)
 ```
 
 ## Updating
@@ -202,8 +203,8 @@ compile time.
 |---|---|
 | All variants have `#[column(variant = N)]` (integer) | Integer discriminants |
 | All variants have `#[column(variant = "label")]` (string) | String discriminants |
-| All variants omit `#[column(variant = ...)]` | String discriminants (labels match variant identifiers) |
-| Some variants have string labels, others omit the attribute | String discriminants (omitted variants use identifier as label) |
+| All variants omit `#[column(variant = ...)]` | String discriminants (labels are snake_case of variant identifiers) |
+| Some variants have string labels, others omit the attribute | String discriminants (omitted variants use snake_case identifier as label) |
 | Mix of integer and string `variant` values | Compile error |
 | Duplicate integer discriminant values | Compile error |
 | Duplicate string labels (including derived defaults) | Compile error |
@@ -235,7 +236,7 @@ CREATE TABLE task (
     id INTEGER PRIMARY KEY,
     status VARCHAR(255) NOT NULL
 );
--- Values: 'Pending', 'Active', 'Done'
+-- Values: 'pending', 'active', 'done'
 ```
 
 ### Unit enum with explicit string labels
