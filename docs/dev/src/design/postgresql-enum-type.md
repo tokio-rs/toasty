@@ -260,6 +260,23 @@ CREATE TABLE tasks (
 );
 ```
 
+### Label ordering
+
+Database enum types have a declaration order that affects `ORDER BY` behavior.
+Toasty manages this order with two rules:
+
+1. **Initial creation**: Labels are ordered by the Rust enum's variant
+   declaration order.
+2. **Subsequent migrations**: Toasty preserves the existing label order from
+   the previous schema snapshot. New variants are appended at the end.
+   Reordering variants in the Rust source does not trigger any DDL and does
+   not change the database label order.
+
+This means the label order is a one-time decision made at creation. If you
+need to change the order later, you must do so manually outside of Toasty
+(by recreating the type on PostgreSQL, or running a `MODIFY COLUMN` on
+MySQL).
+
 ### Adding a variant
 
 Adding a new variant to the Rust enum:
@@ -271,6 +288,9 @@ enum Status { Pending, Active, Done }
 // After
 enum Status { Pending, Active, Done, Cancelled }
 ```
+
+New variants are appended after all existing labels, regardless of where
+they appear in the Rust enum definition.
 
 PostgreSQL:
 ```sql
@@ -284,12 +304,13 @@ ALTER TABLE tasks MODIFY COLUMN status
 ```
 
 MySQL requires rewriting the full enum definition on every change. Toasty
-handles this automatically.
+handles this automatically, preserving the existing label order and
+appending the new label at the end.
 
-#### Controlling variant order (PostgreSQL)
+#### Controlling insertion position (PostgreSQL)
 
-PostgreSQL appends new values at the end by default. To control ordering, use
-the `#[column(after = "label")]` attribute:
+On PostgreSQL, you can control where a new label is inserted relative to
+existing labels using the `#[column(after = "label")]` attribute:
 
 ```rust
 enum Status {
@@ -306,8 +327,9 @@ enum Status {
 ALTER TYPE status ADD VALUE 'OnHold' AFTER 'Active';
 ```
 
-This attribute has no effect on MySQL, where the column is rewritten with
-the full label list in the order they appear in the Rust enum.
+This attribute only affects the initial `ADD VALUE` migration for that
+variant. It has no effect on MySQL (where Toasty always preserves the
+existing order and appends new labels at the end).
 
 ### Renaming a variant
 
@@ -334,6 +356,9 @@ MySQL:
 ALTER TABLE tasks MODIFY COLUMN status
     ENUM('waiting', 'active', 'done') NOT NULL;
 ```
+
+On MySQL, the `MODIFY COLUMN` preserves the existing label order, substituting
+the renamed label in its original position.
 
 The `rename_from` attribute is only needed during the migration that performs
 the rename. It can be removed afterward.
@@ -426,19 +451,9 @@ type from the column.
 
 ### Ordering
 
-Database enum values have a sort order that differs from plain strings:
-
-**PostgreSQL**: Enum values sort by their position in the `CREATE TYPE`
-statement, not alphabetically. Reordering variants in the Rust source does not
-change the sort order (which is fixed at type creation time). Adding a new
-variant with `ALTER TYPE ... ADD VALUE` places it at the end unless `AFTER`
-or `BEFORE` is specified.
-
-**MySQL**: Enum values sort by their index number (position in the `ENUM(...)`
-definition), not alphabetically. Rewriting the column with `MODIFY COLUMN`
-can change the sort order.
-
-In both cases, `ORDER BY` on an enum column sorts by declaration order:
+Both PostgreSQL and MySQL sort enum values by declaration order, not
+alphabetically. `ORDER BY` on an enum column sorts by the position of each
+label in the type definition:
 
 ```sql
 CREATE TYPE status AS ENUM ('pending', 'active', 'done');
@@ -447,8 +462,11 @@ CREATE TYPE status AS ENUM ('pending', 'active', 'done');
 SELECT * FROM tasks ORDER BY status;
 ```
 
-This matches the order of variants in the Rust enum definition, assuming the
-database type was created from the current Rust definition.
+This matches the Rust enum's variant order at the time the type was created.
+Reordering variants in Rust does not change the database sort order (see
+[Label ordering](#label-ordering) in the Migrations section). New variants
+added later are appended at the end of the sort order unless `#[column(after
+= "...")]` is used on PostgreSQL.
 
 ## Inserting
 
