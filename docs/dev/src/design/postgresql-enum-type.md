@@ -307,30 +307,6 @@ MySQL requires rewriting the full enum definition on every change. Toasty
 handles this automatically, preserving the existing label order and
 appending the new label at the end.
 
-#### Controlling insertion position (PostgreSQL)
-
-On PostgreSQL, you can control where a new label is inserted relative to
-existing labels using the `#[column(after = "label")]` attribute:
-
-```rust
-enum Status {
-    Pending,
-    Active,
-    #[column(after = "Active")]
-    OnHold,
-    Done,
-    Cancelled,
-}
-```
-
-```sql
-ALTER TYPE status ADD VALUE 'OnHold' AFTER 'Active';
-```
-
-This attribute only affects the initial `ADD VALUE` migration for that
-variant. It has no effect on MySQL (where Toasty always preserves the
-existing order and appends new labels at the end).
-
 ### Renaming a variant
 
 Use `#[column(rename_from = "old_label")]` to tell Toasty about the rename:
