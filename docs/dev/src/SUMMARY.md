@@ -12,7 +12,6 @@
   - [Pagination](./design/pagination.md)
   - [Serialize Fields](./design/serialize-fields.md)
   - [Static Assertions for create! Required Fields](./design/static-assertions-create-macro.md)
-  - [String Discriminants](./design/string-discriminants.md)
   - [Database Enum Types](./design/postgresql-enum-type.md)
 - [Roadmap](./roadmap/README.md)
   - [Composite Keys](./roadmap/composite-keys.md)
