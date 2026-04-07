@@ -17,10 +17,8 @@ pub(crate) fn expand(item: &CreateItem) -> TokenStream {
 
             quote_spanned! { span=>
                 {
-                    const _CREATE: () = toasty::codegen_support::assert_create_fields(
-                        &<#path as toasty::codegen_support::Model>::CREATE_META,
-                        &[ #( #field_names ),* ],
-                    );
+                    const _CREATE: () =
+                        #path::__check_create_fields(&[ #( #field_names ),* ]);
                     #nested_checks
                     #path::create() #(#field_calls)*
                 }
@@ -97,10 +95,8 @@ fn expand_typed_batch(path: &syn::Path, items: &[FieldSet]) -> TokenStream {
 
             quote_spanned! { span=>
                 {
-                    const _CREATE: () = toasty::codegen_support::assert_create_fields(
-                        &<#path as toasty::codegen_support::Model>::CREATE_META,
-                        &[ #( #field_names ),* ],
-                    );
+                    const _CREATE: () =
+                        #path::__check_create_fields(&[ #( #field_names ),* ]);
                     #nested_checks
                     #path::create() #(#field_calls)*
                 }
@@ -176,16 +172,10 @@ fn field_name_strs(fields: &FieldSet) -> Vec<String> {
 
 /// Generate a monomorphization-based const check struct and impl.
 ///
-/// Produces:
-/// ```ignore
-/// struct __Check<__S: ValidateCreate>(std::marker::PhantomData<__S>);
-/// impl<__S: ValidateCreate> __Check<__S> {
-///     const __ASSERT: () = assert_create_fields(__S::CREATE_META, &[...]);
-/// }
-/// ```
-///
-/// The caller must also emit a `__force_check` function and call it to
-/// trigger monomorphization.
+/// Uses `assert_create_fields` (a `const fn`) for the check. This produces
+/// a generic error message because `const fn` on stable Rust cannot panic
+/// with formatted strings. For typed creates, the macro calls the per-model
+/// `__check_create_fields` method instead, which has field-specific messages.
 fn expand_monomorphize_check(field_names: &[String]) -> TokenStream {
     quote! {
         struct __Check<__S: toasty::codegen_support::ValidateCreate>(

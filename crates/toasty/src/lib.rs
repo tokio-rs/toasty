@@ -133,7 +133,7 @@ pub mod codegen_support {
     pub use crate::schema::inventory;
     pub use crate::{
         Db, Error, Executor, Result, Statement,
-        schema::create_meta::assert_create_fields,
+        schema::create_meta::{assert_create_fields, const_contains},
         schema::{
             Auto, BelongsTo, CreateField, CreateMeta, DiscoverItem, Embed, Field, HasMany, HasOne,
             Load, Model, Register, Relation, Scope, ValidateCreate, generate_unique_id,

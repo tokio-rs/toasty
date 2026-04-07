@@ -28,6 +28,11 @@ pub trait ValidateCreate {
 ///
 /// Uses byte-level string comparison because `const fn` cannot call trait methods
 /// like `PartialEq`.
+///
+/// This is used in monomorphization-based validation (scoped and nested creates)
+/// where the concrete model type is not known at macro expansion time.
+/// For typed creates, the `create!` macro calls a per-model `const fn` that
+/// produces field-specific panic messages instead.
 pub const fn assert_create_fields(meta: &CreateMeta, provided: &[&str]) {
     let mut i = 0;
     while i < meta.fields.len() {
@@ -41,7 +46,10 @@ pub const fn assert_create_fields(meta: &CreateMeta, provided: &[&str]) {
     }
 }
 
-const fn const_contains(haystack: &[&str], needle: &str) -> bool {
+/// Byte-level string containment check usable in `const fn`.
+///
+/// Returns `true` if any element of `haystack` equals `needle`.
+pub const fn const_contains(haystack: &[&str], needle: &str) -> bool {
     let mut i = 0;
     while i < haystack.len() {
         if const_str_eq(haystack[i], needle) {

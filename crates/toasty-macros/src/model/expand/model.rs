@@ -43,12 +43,16 @@ impl Expand<'_> {
         let into_expr_body_val = self.expand_model_into_expr_body(false);
         let reload_trait_method = self.expand_reload_trait_method();
         let create_meta_fields = self.expand_create_meta_fields();
+        let check_required_fn = self.expand_check_required_fn();
 
         quote! {
             impl #model_ident {
                 #model_fields
                 #filter_methods
                 #relation_methods
+
+                #[doc(hidden)]
+                #check_required_fn
 
                 #vis fn create() -> #create_struct_ident {
                     #create_struct_ident::default()
@@ -500,15 +504,11 @@ impl Expand<'_> {
         }
     }
 
-    /// Generate the `CreateField` entries for `CREATE_META`.
+    /// Collect the fields that participate in `CREATE_META`.
     ///
-    /// Includes primitive fields that are not auto, default, update, serialize,
-    /// or FK source fields. Each field's `required` flag uses
-    /// `!<T as Field>::NULLABLE` to defer nullability to the type system.
-    fn expand_create_meta_fields(&self) -> TokenStream {
-        let toasty = &self.toasty;
-
-        // Collect all FK source field indices (fields referenced by belongs_to keys)
+    /// Returns `(field_ident_name_str, field_rust_type)` pairs for primitive
+    /// fields that are not auto, default, update, serialize, or FK source.
+    fn create_meta_field_entries(&self) -> Vec<(String, &syn::Type)> {
         let fk_sources: HashSet<usize> = self
             .model
             .fields
@@ -520,36 +520,74 @@ impl Expand<'_> {
             .flatten()
             .collect();
 
-        let fields = self.model.fields.iter().filter_map(|field| {
-            // Only include primitive fields
-            let ty = match &field.ty {
-                FieldTy::Primitive(ty) => ty,
-                _ => return None,
-            };
+        self.model
+            .fields
+            .iter()
+            .filter_map(|field| {
+                let ty = match &field.ty {
+                    FieldTy::Primitive(ty) => ty,
+                    _ => return None,
+                };
 
-            // Exclude auto, default, update, serialize fields
-            if field.attrs.auto.is_some()
-                || field.attrs.default_expr.is_some()
-                || field.attrs.update_expr.is_some()
-                || field.attrs.serialize.is_some()
-            {
-                return None;
-            }
+                if field.attrs.auto.is_some()
+                    || field.attrs.default_expr.is_some()
+                    || field.attrs.update_expr.is_some()
+                    || field.attrs.serialize.is_some()
+                {
+                    return None;
+                }
 
-            // Exclude FK source fields
-            if fk_sources.contains(&field.id) {
-                return None;
-            }
+                if fk_sources.contains(&field.id) {
+                    return None;
+                }
 
-            let name = field.name.ident.to_string();
-            Some(quote! {
+                Some((field.name.ident.to_string(), ty))
+            })
+            .collect()
+    }
+
+    /// Generate the `CreateField` entries for `CREATE_META`.
+    fn expand_create_meta_fields(&self) -> TokenStream {
+        let toasty = &self.toasty;
+        let entries = self.create_meta_field_entries();
+
+        let fields = entries.iter().map(|(name, ty)| {
+            quote! {
                 #toasty::CreateField {
                     name: #name,
                     required: !<#ty as #toasty::Field>::NULLABLE,
                 },
-            })
+            }
         });
 
         quote! { #( #fields )* }
+    }
+
+    /// Generate a `pub const fn __check_create_fields(provided: &[&str])` that
+    /// panics with a field-specific literal message for each missing required field.
+    ///
+    /// Each `panic!` uses a pre-formatted string literal so it works in const
+    /// context (where formatted panics are unavailable on stable Rust).
+    fn expand_check_required_fn(&self) -> TokenStream {
+        let toasty = &self.toasty;
+        let model_name = self.model.ident.to_string();
+        let entries = self.create_meta_field_entries();
+
+        let checks = entries.iter().map(|(name, ty)| {
+            let msg = format!("missing required field `{name}` in create! for `{model_name}`");
+            quote! {
+                if !<#ty as #toasty::Field>::NULLABLE
+                    && !#toasty::const_contains(__provided, #name)
+                {
+                    panic!(#msg);
+                }
+            }
+        });
+
+        quote! {
+            pub const fn __check_create_fields(__provided: &[&str]) {
+                #( #checks )*
+            }
+        }
     }
 }
