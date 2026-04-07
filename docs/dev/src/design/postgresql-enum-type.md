@@ -13,6 +13,29 @@ This means `#[column(type = enum)]` is portable across all backends — you can
 develop against SQLite locally and deploy to PostgreSQL without changing the
 enum definition.
 
+## Relationship to string discriminants
+
+String discriminants (`#[column(variant = "label")]` without `#[column(type =
+enum)]`) and `#[column(type = enum)]` both store labels as strings, but they
+serve different purposes:
+
+- **String discriminants**: Always store the discriminant as a plain VARCHAR
+  column. No database-level type or constraint is created. The column accepts
+  any string; Toasty is responsible for writing correct values. Use this when
+  you want predictable, uniform storage across all backends with no
+  database-level enum machinery.
+
+- **`#[column(type = enum)]`**: Tells Toasty to use the best native
+  representation available. On PostgreSQL this creates a named enum type. On
+  MySQL this uses an inline ENUM column. On SQLite this adds a CHECK
+  constraint. On DynamoDB it falls back to a plain string. Use this when you
+  want the database to enforce valid values where it can.
+
+Both use string labels as variant values and produce identical query syntax.
+You can switch between them — see [Converting from string or integer
+discriminants](#converting-from-string-or-integer-discriminants) in the
+Migrations section.
+
 ## Syntax
 
 Use `#[column(type = enum)]` on the enum definition to opt into native database
