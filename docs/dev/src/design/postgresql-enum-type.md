@@ -447,22 +447,14 @@ type from the column.
 
 ### Ordering
 
-Both PostgreSQL and MySQL sort enum values by declaration order, not
-alphabetically. `ORDER BY` on an enum column sorts by the position of each
-label in the type definition:
+Toasty does not support ordering comparisons (`>`, `<`, etc.) on enum fields.
+The query API provides `eq`, `ne`, `in_list`, and variant checks only.
 
-```sql
-CREATE TYPE status AS ENUM ('pending', 'active', 'done');
-
--- ORDER BY status sorts as: pending, active, done
-SELECT * FROM tasks ORDER BY status;
-```
-
-This matches the Rust enum's variant order at the time the type was created.
-Reordering variants in Rust does not change the database sort order (see
-[Label ordering](#label-ordering) in the Migrations section). New variants
-added later are appended at the end of the sort order unless `#[column(after
-= "...")]` is used on PostgreSQL.
+Both PostgreSQL and MySQL define a sort order for enum values based on their
+position in the type definition, not alphabetically. Toasty does not expose
+or manage this ordering. Users who query the database directly should be
+aware that `ORDER BY` on an enum column uses declaration order, not
+lexicographic order.
 
 ## Inserting
 
