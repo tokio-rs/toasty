@@ -383,7 +383,13 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let span = field_ident.span();
 
+        let doc = format!(
+            "Access the `{field}` relation path for building filter expressions.",
+            field = field_ident,
+        );
+
         quote_spanned! { span=>
+            #[doc = #doc]
             #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::OneField<__Origin> {
                 <#ty as #toasty::Relation>::OneField::from_path(
                     self.path().chain(
@@ -407,7 +413,13 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let span = field_ident.span();
 
+        let doc = format!(
+            "Access the `{field}` field path for building filter expressions.",
+            field = field_ident,
+        );
+
         quote_spanned! { span=>
+            #[doc = #doc]
             #vis fn #field_ident(&self) -> <#ty as #toasty::Field>::Path<__Origin> {
                 <#ty as #toasty::Field>::new_path(
                     self.path().chain(

@@ -42,20 +42,69 @@ impl Expand<'_> {
         let into_expr_body_val = self.expand_model_into_expr_body(false);
         let reload_trait_method = self.expand_reload_trait_method();
 
+        let doc_create = format!(
+            "Return a builder for creating a new [`{model_name}`] record.\n\
+             \n\
+             Set field values on the returned builder, then call\n\
+             [`.exec()`]({create_name}::exec) to insert the record.\n\
+             \n\
+             See the [Toasty guide](https://docs.rs/toasty/latest/toasty/#derive-macros) for more on create builders.",
+            model_name = model_ident,
+            create_name = create_struct_ident,
+        );
+        let doc_create_many = format!(
+            "Return a builder for inserting multiple [`{model_name}`] records in a single operation.",
+            model_name = model_ident,
+        );
+        let doc_update = format!(
+            "Return a builder for updating this [`{model_name}`] record.\n\
+             \n\
+             Set field values on the returned builder, then call\n\
+             [`.exec()`]({update_name}::exec) to apply the changes.\n\
+             After execution, `self` is reloaded with the updated values.",
+            model_name = model_ident,
+            update_name = update_struct_ident,
+        );
+        let doc_all = format!(
+            "Return a query that selects all [`{model_name}`] records.\n\
+             \n\
+             Chain [`.filter()`]({query_name}::filter), [`.order_by()`]({query_name}::order_by),\n\
+             [`.limit()`]({query_name}::limit), or other methods on the returned\n\
+             query to narrow results before calling [`.exec()`]({query_name}::exec).",
+            model_name = model_ident,
+            query_name = query_struct_ident,
+        );
+        let doc_filter = format!(
+            "Return a query for [`{model_name}`] records matching the given filter expression.\n\
+             \n\
+             Build filter expressions using [`{model_name}::fields()`].",
+            model_name = model_ident,
+        );
+        let doc_delete = format!(
+            "Delete this [`{model_name}`] record from the database.\n\
+             \n\
+             Call [`.exec()`](toasty::stmt::Delete::exec) on the returned\n\
+             statement to execute the deletion.",
+            model_name = model_ident,
+        );
+
         quote! {
             impl #model_ident {
                 #model_fields
                 #filter_methods
                 #relation_methods
 
+                #[doc = #doc_create]
                 #vis fn create() -> #create_struct_ident {
                     #create_struct_ident::default()
                 }
 
+                #[doc = #doc_create_many]
                 #vis fn create_many() -> #toasty::stmt::CreateMany<#model_ident> {
                     #toasty::stmt::CreateMany::default()
                 }
 
+                #[doc = #doc_update]
                 #vis fn update(&mut self) -> #update_struct_ident<&mut Self> {
                     let mut s = #update_struct_ident {
                         assignments: #toasty::core::stmt::Assignments::default(),
@@ -65,14 +114,17 @@ impl Expand<'_> {
                     s
                 }
 
+                #[doc = #doc_all]
                 #vis fn all() -> #query_struct_ident {
                     #query_struct_ident::default()
                 }
 
+                #[doc = #doc_filter]
                 #vis fn filter(expr: #toasty::stmt::Expr<bool>) -> #query_struct_ident {
                     #query_struct_ident::from_stmt(#toasty::stmt::Query::filter(expr))
                 }
 
+                #[doc = #doc_delete]
                 #vis fn delete(self) -> #toasty::stmt::Delete<()> {
                     #into_delete_body
                 }

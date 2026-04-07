@@ -61,6 +61,31 @@ impl Expand<'_> {
         let arg_idents: Vec<_> = self.expand_filter_arg_idents(filter).collect();
         let update_query_struct_ident = &self.model.kind.as_root_unwrap().update_struct_ident;
 
+        let field_names: Vec<String> = filter
+            .fields
+            .iter()
+            .map(|idx| self.model.fields[*idx].name.ident.to_string())
+            .collect();
+        let fields_desc = field_names.join("` and `");
+
+        let doc_get = format!(
+            "Find and return a single [`{model_name}`] by `{fields}`.\n\
+             \n\
+             Returns an error if no matching record exists.",
+            model_name = model_ident,
+            fields = fields_desc,
+        );
+        let doc_update = format!(
+            "Return an update builder for [`{model_name}`] records matching `{fields}`.",
+            model_name = model_ident,
+            fields = fields_desc,
+        );
+        let doc_delete = format!(
+            "Delete [`{model_name}`] records matching `{fields}`.",
+            model_name = model_ident,
+            fields = fields_desc,
+        );
+
         let self_arg;
         let base;
 
@@ -73,16 +98,19 @@ impl Expand<'_> {
         }
 
         quote! {
+            #[doc = #doc_get]
             #vis async fn #get_method_ident(#self_arg executor: &mut dyn #toasty::Executor, #( #args ),* ) -> #toasty::Result<#model_ident> {
                 #base #filter_method_ident( #( #arg_idents ),* )
                     .get(executor)
                     .await
             }
 
+            #[doc = #doc_update]
             #vis fn #update_method_ident(#self_arg #( #args ),* ) -> #update_query_struct_ident {
                 #base #filter_method_ident( #( #arg_idents ),* ).update()
             }
 
+            #[doc = #doc_delete]
             #vis async fn #delete_method_ident(#self_arg executor: &mut dyn #toasty::Executor, #( #args ),* ) -> #toasty::Result<()> {
                 #base #filter_method_ident( #( #arg_idents ),* )
                     .delete()
@@ -95,10 +123,25 @@ impl Expand<'_> {
     fn expand_model_filter_method(&self, filter: &Filter, self_into_query: bool) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
+        let model_ident = &self.model.ident;
         let query_struct_ident = &self.model.kind.as_root_unwrap().query_struct_ident;
         let filter_method_ident = &filter.filter_method_ident;
         let args = self.expand_filter_args(filter);
         let arg_idents = self.expand_filter_arg_idents(filter);
+
+        let field_names: Vec<String> = filter
+            .fields
+            .iter()
+            .map(|idx| self.model.fields[*idx].name.ident.to_string())
+            .collect();
+        let fields_desc = field_names.join("` and `");
+
+        let doc_filter = format!(
+            "Return a query for [`{model_name}`] records matching `{fields}`.",
+            model_name = model_ident,
+            fields = fields_desc,
+        );
+
         let self_arg;
         let body;
 
@@ -118,6 +161,7 @@ impl Expand<'_> {
         }
 
         quote! {
+            #[doc = #doc_filter]
             #vis fn #filter_method_ident( #self_arg #( #args ),* ) -> #query_struct_ident {
                 #body
             }
@@ -157,12 +201,27 @@ impl Expand<'_> {
 
     fn expand_query_filter_method(&self, filter: &Filter) -> TokenStream {
         let vis = &self.model.vis;
+        let model_ident = &self.model.ident;
         let query_struct_ident = &self.model.kind.as_root_unwrap().query_struct_ident;
         let filter_method_ident = &filter.filter_method_ident;
         let args = self.expand_filter_args(filter);
         let expr = self.expand_query_filter_expr(filter);
 
+        let field_names: Vec<String> = filter
+            .fields
+            .iter()
+            .map(|idx| self.model.fields[*idx].name.ident.to_string())
+            .collect();
+        let fields_desc = field_names.join("` and `");
+
+        let doc = format!(
+            "Add a filter for `{fields}` to this [`{model_name}`] query.",
+            model_name = model_ident,
+            fields = fields_desc,
+        );
+
         quote! {
+            #[doc = #doc]
             #vis fn #filter_method_ident(self, #( #args ),* ) -> #query_struct_ident {
                 self.filter(#expr)
             }

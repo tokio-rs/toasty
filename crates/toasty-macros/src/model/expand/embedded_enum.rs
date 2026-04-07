@@ -57,18 +57,37 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
 
-        let methods = ["eq", "ne"].iter().map(|name| {
+        let docs = [
+            format!(
+                "Return a filter expression that is `true` when this [`{}`] equals `rhs`.",
+                model_ident,
+            ),
+            format!(
+                "Return a filter expression that is `true` when this [`{}`] does not equal `rhs`.",
+                model_ident,
+            ),
+        ];
+
+        let methods = ["eq", "ne"].iter().zip(docs.iter()).map(|(name, doc)| {
             let method_ident = syn::Ident::new(name, proc_macro2::Span::call_site());
             quote! {
+                #[doc = #doc]
                 #vis fn #method_ident(&self, rhs: impl #toasty::stmt::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
                     self.path().#method_ident(rhs)
                 }
             }
         });
 
+        let doc_in_list = format!(
+            "Return a filter expression that is `true` when this [`{}`]\n\
+             is contained in `rhs`.",
+            model_ident,
+        );
+
         quote! {
             #( #methods )*
 
+            #[doc = #doc_in_list]
             #vis fn in_list(&self, rhs: impl #toasty::stmt::IntoExpr<#toasty::List<#model_ident>>) -> #toasty::stmt::Expr<bool> {
                 self.path().in_list(rhs)
             }
@@ -86,6 +105,14 @@ impl Expand<'_> {
         let embedded_enum = self.model.kind.as_embedded_enum_unwrap();
         let field_struct_ident = &embedded_enum.field_struct_ident;
 
+        let doc_struct = format!(
+            "Typed field paths for the [`{model_name}`] enum.\n\
+             \n\
+             Provides `is_<variant>()` methods for filtering by variant and\n\
+             accessor methods for navigating into data-carrying variant fields.",
+            model_name = model_ident,
+        );
+
         let is_variant_methods: Vec<_> = embedded_enum
             .variants
             .iter()
@@ -95,7 +122,15 @@ impl Expand<'_> {
                 let variant_idx = util::int(variant_index);
                 let is_variant_check = self.expand_is_variant_expr(&variant_idx);
 
+                let doc = format!(
+                    "Return a filter expression that is `true` when this\n\
+                     [`{model_name}`] is the `{variant}` variant.",
+                    model_name = model_ident,
+                    variant = variant.ident,
+                );
+
                 quote! {
+                    #[doc = #doc]
                     #vis fn #method_name(&self) -> #toasty::stmt::Expr<bool> {
                         #is_variant_check
                     }
@@ -112,7 +147,17 @@ impl Expand<'_> {
                 let method_name = &variant.name.ident;
                 let variant_handle_ident = variant.variant_handle_ident.as_ref().unwrap();
 
+                let doc = format!(
+                    "Access the `{variant}` variant's field paths.\n\
+                     \n\
+                     Use [`.matches()`]({handle}::matches) on the returned handle to\n\
+                     build filters that match the variant and its field values.",
+                    variant = variant.ident,
+                    handle = variant_handle_ident,
+                );
+
                 quote! {
+                    #[doc = #doc]
                     #vis fn #method_name(&self) -> #variant_handle_ident<__Origin> {
                         #variant_handle_ident {
                             path: self.path()
@@ -134,6 +179,30 @@ impl Expand<'_> {
                 let variant_idx = util::int(variant_index);
                 let is_variant_check = self.expand_is_variant_expr(&variant_idx);
 
+                let doc_handle = format!(
+                    "A handle to the `{variant}` variant of [`{model_name}`].\n\
+                     \n\
+                     Provides a [`matches()`](Self::matches) method for building\n\
+                     filters that check both the variant discriminant and field values.",
+                    variant = variant.ident,
+                    model_name = model_ident,
+                );
+                let doc_matches = format!(
+                    "Build a filter that matches the `{variant}` variant with\n\
+                     additional field-level conditions.\n\
+                     \n\
+                     The closure receives a [`{fields_struct}`] for building\n\
+                     comparisons on the variant's fields. The returned expression\n\
+                     combines the variant check with the field conditions.",
+                    variant = variant.ident,
+                    fields_struct = variant_field_struct_ident,
+                );
+                let doc_field_struct = format!(
+                    "Typed field paths for the `{variant}` variant of [`{model_name}`].",
+                    variant = variant.ident,
+                    model_name = model_ident,
+                );
+
                 let field_methods: Vec<_> = self
                     .variant_fields(variant_index)
                     .iter()
@@ -147,6 +216,7 @@ impl Expand<'_> {
                     .collect();
 
                 quote! {
+                    #[doc = #doc_handle]
                     #vis struct #variant_handle_ident<__Origin> {
                         path: #toasty::Path<__Origin, #model_ident>,
                     }
@@ -156,6 +226,7 @@ impl Expand<'_> {
                             self.path.clone()
                         }
 
+                        #[doc = #doc_matches]
                         #vis fn matches(
                             &self,
                             f: impl FnOnce(#variant_field_struct_ident<__Origin>) -> #toasty::stmt::Expr<bool>,
@@ -173,6 +244,7 @@ impl Expand<'_> {
                         }
                     }
 
+                    #[doc = #doc_field_struct]
                     #vis struct #variant_field_struct_ident<__Origin> {
                         path: #toasty::Path<__Origin, #model_ident>,
                     }
@@ -191,6 +263,7 @@ impl Expand<'_> {
         let comparison_methods = self.expand_comparison_methods();
 
         quote! {
+            #[doc = #doc_struct]
             #vis struct #field_struct_ident<__Origin> {
                 path: #toasty::Path<__Origin, #model_ident>,
             }

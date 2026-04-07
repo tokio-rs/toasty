@@ -16,15 +16,89 @@ impl Expand<'_> {
         let field_list_struct_ident = &root.field_list_struct_ident;
         let filter_methods = self.expand_relation_filter_methods();
 
+        let doc_many = format!(
+            "A has-many association handle for [`{model_name}`].\n\
+             \n\
+             Obtained by calling a has-many accessor on a model instance\n\
+             (e.g. `user.{example}()`). Provides methods to query, create,\n\
+             insert, and remove associated records.",
+            model_name = model_ident,
+            example = self
+                .model
+                .fields
+                .iter()
+                .find(|f| matches!(&f.ty, FieldTy::HasMany(_)))
+                .map(|f| f.name.ident.to_string())
+                .unwrap_or_else(|| "items".to_string()),
+        );
+        let doc_one = format!(
+            "A has-one or belongs-to association handle for [`{model_name}`].\n\
+             \n\
+             Obtained by calling a has-one or belongs-to accessor on a model\n\
+             instance. Provides methods to load or create the associated record.",
+            model_name = model_ident,
+        );
+        let doc_option_one = format!(
+            "An optional association handle for [`{model_name}`].\n\
+             \n\
+             Like [`One`], but [`.exec()`](Self::exec) returns `Option<{model_name}>`\n\
+             instead of returning an error when no associated record exists.",
+            model_name = model_ident,
+        );
+
+        let doc_many_exec = format!(
+            "Load all associated [`{model_name}`] records.",
+            model_name = model_ident,
+        );
+        let doc_many_query = format!(
+            "Return a query over the associated [`{model_name}`] records\n\
+             with an additional filter.",
+            model_name = model_ident,
+        );
+        let doc_many_create = format!(
+            "Create a new [`{model_name}`] record scoped to this association.",
+            model_name = model_ident,
+        );
+        let doc_many_insert = format!(
+            "Add an existing [`{model_name}`] to this association.",
+            model_name = model_ident,
+        );
+        let doc_many_remove = format!(
+            "Remove a [`{model_name}`] from this association.",
+            model_name = model_ident,
+        );
+
+        let doc_one_create = format!(
+            "Create a new associated [`{model_name}`] record.",
+            model_name = model_ident,
+        );
+        let doc_one_exec = format!(
+            "Load the associated [`{model_name}`] record.\n\
+             \n\
+             Returns an error if the associated record does not exist.",
+            model_name = model_ident,
+        );
+        let doc_option_one_create = format!(
+            "Create a new associated [`{model_name}`] record.",
+            model_name = model_ident,
+        );
+        let doc_option_one_exec = format!(
+            "Load the associated [`{model_name}`] record, if it exists.",
+            model_name = model_ident,
+        );
+
         quote! {
+            #[doc = #doc_many]
             #vis struct Many {
                 stmt: #toasty::stmt::Association<#toasty::List<#model_ident>>,
             }
 
+            #[doc = #doc_one]
             #vis struct One {
                 stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>,
             }
 
+            #[doc = #doc_option_one]
             #vis struct OptionOne {
                 stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>,
             }
@@ -36,12 +110,13 @@ impl Expand<'_> {
 
                 #filter_methods
 
-                /// Iterate all entries in the relation
+                #[doc = #doc_many_exec]
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<Vec<#model_ident>> {
                     use #toasty::IntoStatement;
                     self.into_statement().exec(executor).await
                 }
 
+                #[doc = #doc_many_query]
                 #vis fn query(
                     self,
                     filter: #toasty::stmt::Expr<bool>
@@ -51,18 +126,19 @@ impl Expand<'_> {
                     #query_ident::from_stmt(select.and(filter))
                 }
 
+                #[doc = #doc_many_create]
                 #vis fn create(self) -> #create_builder_ident {
                     let mut builder = #create_builder_ident::default();
                     builder.stmt.set_scope(self.stmt);
                     builder
                 }
 
-                /// Add an item to the association
+                #[doc = #doc_many_insert]
                 #vis async fn insert(self, executor: &mut dyn #toasty::Executor, item: impl #toasty::IntoExpr<#model_ident>) -> #toasty::Result<()> {
                     executor.exec(self.stmt.insert(item)).await
                 }
 
-                /// Remove items from the association
+                #[doc = #doc_many_remove]
                 #vis async fn remove(self, executor: &mut dyn #toasty::Executor, item: impl #toasty::IntoExpr<#model_ident>) -> #toasty::Result<()> {
                     executor.exec(self.stmt.remove(item)).await
                 }
@@ -82,13 +158,14 @@ impl Expand<'_> {
                     One { stmt }
                 }
 
-                /// Create a new associated record
+                #[doc = #doc_one_create]
                 #vis fn create(self) -> #create_builder_ident {
                     let mut builder = #create_builder_ident::default();
                     builder.stmt.set_scope(self.stmt);
                     builder
                 }
 
+                #[doc = #doc_one_exec]
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
                     self.stmt.one().exec(executor).await
                 }
@@ -108,13 +185,14 @@ impl Expand<'_> {
                     OptionOne { stmt }
                 }
 
-                /// Create a new associated record
+                #[doc = #doc_option_one_create]
                 #vis fn create(self) -> #create_builder_ident {
                     let mut builder = #create_builder_ident::default();
                     builder.stmt.set_scope(self.stmt);
                     builder
                 }
 
+                #[doc = #doc_option_one_exec]
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#toasty::Option<#model_ident>> {
                     self.stmt.first().exec(executor).await
                 }
@@ -234,12 +312,20 @@ impl Expand<'_> {
             quote!( #toasty::stmt::Expr::and_all([ #(#operands),* ]) )
         };
 
+        let doc = format!(
+            "Access the `{field}` belongs-to association for this record.\n\
+             \n\
+             Returns a handle for loading or creating the associated record.",
+            field = field_ident,
+        );
+
         let verify_pair_belongs_to_exists = syn::Ident::new(
             &format!("verify_pair_belongs_to_exists_for_{field_ident}"),
             field_ident.span(),
         );
 
         quote! {
+            #[doc = #doc]
             #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::One {
                 // Suppress the unused field warning
                 if false {
@@ -270,6 +356,14 @@ impl Expand<'_> {
         let field_ident = &field.name.ident;
         let ty = &rel.ty;
         let model_ident = &self.model.ident;
+
+        let doc = format!(
+            "Access the `{field}` has-many association for this record.\n\
+             \n\
+             Returns a handle for querying, creating, inserting, and\n\
+             removing associated records.",
+            field = field_ident,
+        );
         let pair_ident = rel.pair.clone().unwrap_or(syn::Ident::new(
             &self.model.name.ident.to_string(),
             rel.span,
@@ -323,6 +417,7 @@ impl Expand<'_> {
         };
 
         quote! {
+            #[doc = #doc]
             #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::Many {
                 // Suppress the unused field warning
                 if false {
@@ -351,6 +446,13 @@ impl Expand<'_> {
         let ty = &rel.ty;
         let model_ident = &self.model.ident;
         let pair_ident = syn::Ident::new(&self.model.name.ident.to_string(), rel.span);
+
+        let doc = format!(
+            "Access the `{field}` has-one association for this record.\n\
+             \n\
+             Returns a handle for loading or creating the associated record.",
+            field = field_ident,
+        );
 
         let verify_pair_belongs_to_exists_for_field = syn::Ident::new(
             &format!("verify_pair_belongs_to_exists_for_{pair_ident}"),
@@ -400,6 +502,7 @@ impl Expand<'_> {
         };
 
         quote! {
+            #[doc = #doc]
             #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::One {
                 // Suppress the unused field warning
                 if false {
