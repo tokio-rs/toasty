@@ -2,48 +2,17 @@
 
 ## Overview
 
-Toasty stores embedded enum discriminants as INTEGER or VARCHAR columns by
-default. `#[column(type = enum)]` tells Toasty to use the best available enum
-representation for the target database. On databases with native enum types,
-this uses them. On databases without native enums, Toasty falls back to string
+Embedded enums with string labels use the best available enum representation
+for the target database by default. On databases with native enum types, Toasty
+uses them. On databases without native enums, Toasty falls back to string
 columns with constraints where possible, or plain string columns as a last
 resort.
 
-This means `#[column(type = enum)]` is portable across all backends — you can
-develop against SQLite locally and deploy to PostgreSQL without changing the
-enum definition.
-
-## Relationship to string discriminants
-
-String discriminants (`#[column(variant = "label")]` without `#[column(type =
-enum)]`) and `#[column(type = enum)]` both store labels as strings, but they
-serve different purposes:
-
-- **String discriminants**: Always store the discriminant as a plain VARCHAR
-  column. No database-level type or constraint is created. The column accepts
-  any string; Toasty is responsible for writing correct values. Use this when
-  you want predictable, uniform storage across all backends with no
-  database-level enum machinery.
-
-- **`#[column(type = enum)]`**: Tells Toasty to use the best native
-  representation available. On PostgreSQL this creates a named enum type. On
-  MySQL this uses an inline ENUM column. On SQLite this adds a CHECK
-  constraint. On DynamoDB it falls back to a plain string. Use this when you
-  want the database to enforce valid values where it can.
-
-Both use string labels as variant values and produce identical query syntax.
-You can switch between them — see [Converting from string or integer
-discriminants](#converting-from-string-or-integer-discriminants) in the
-Migrations section.
-
-## Syntax
-
-Use `#[column(type = enum)]` on the enum definition to opt into native database
-enum storage:
+No annotation is needed to get this behavior — the simplest enum definition
+gets the best storage automatically:
 
 ```rust
 #[derive(toasty::Embed)]
-#[column(type = enum)]
 enum Status {
     Pending,
     Active,
@@ -51,25 +20,83 @@ enum Status {
 }
 ```
 
-Each variant maps to a database enum label. By default the label is the Rust
-variant's identifier: `'Pending'`, `'Active'`, `'Done'`.
+On PostgreSQL this creates a `CREATE TYPE status AS ENUM` type. On MySQL it
+uses an inline `ENUM(...)` column. On SQLite it uses a `TEXT` column with a
+`CHECK` constraint. On DynamoDB it stores a plain string.
 
-This follows the same pattern as other explicit column types in Toasty:
+## Discriminant types
 
-```rust
-#[column(type = varchar(100))]   // explicit VARCHAR
-#[column(type = numeric(28, 10))] // explicit NUMERIC
-#[column(type = enum)]            // native database enum
-```
+Toasty supports three discriminant storage strategies for embedded enums:
 
-### Explicit labels
+| Enum definition | Storage strategy |
+|---|---|
+| String labels (default or explicit) | Native enum representation per backend |
+| `#[column(type = varchar)]` or `#[column(type = text)]` | Plain string column, no DB-level enum enforcement |
+| `#[column(variant = N)]` with integers | INTEGER column |
 
-Use `#[column(variant = "label")]` on individual variants to control the
-database enum label:
+### Default: native enum
+
+When an enum uses string labels (either default identifiers or explicit
+`#[column(variant = "label")]`), Toasty uses native enum storage:
 
 ```rust
 #[derive(toasty::Embed)]
-#[column(type = enum)]
+enum Status {
+    Pending,          // label: 'Pending'
+    Active,           // label: 'Active'
+    Done,             // label: 'Done'
+}
+```
+
+This is equivalent to writing `#[column(type = enum)]` explicitly.
+
+### Opting out: plain string column
+
+Use `#[column(type = varchar)]` or `#[column(type = text)]` to store the
+discriminant as a plain string column with no database-level enum type or
+constraint:
+
+```rust
+#[derive(toasty::Embed)]
+#[column(type = text)]
+enum Status {
+    Pending,
+    Active,
+    Done,
+}
+```
+
+This stores discriminants in a TEXT column. The database accepts any string
+value; Toasty is responsible for writing correct values. Use this when you
+need to interoperate with external tools that write directly to the table, or
+when you want to avoid database-level enum machinery for any reason.
+
+### Integer discriminants
+
+Integer discriminants remain unchanged from existing behavior:
+
+```rust
+#[derive(toasty::Embed)]
+enum Status {
+    #[column(variant = 1)]
+    Pending,
+    #[column(variant = 2)]
+    Active,
+    #[column(variant = 3)]
+    Done,
+}
+```
+
+This stores discriminants as an INTEGER column. Integer and string
+discriminants cannot be mixed in the same enum.
+
+## Variant labels
+
+By default, the label is the Rust variant's identifier. Use
+`#[column(variant = "label")]` on individual variants to set explicit labels:
+
+```rust
+#[derive(toasty::Embed)]
 enum Status {
     #[column(variant = "pending")]
     Pending,
@@ -80,15 +107,10 @@ enum Status {
 }
 ```
 
-This stores `'pending'`, `'active'`, `'done'` as the enum labels.
-
-### Mixing explicit and default labels
-
-Like string discriminants, explicit labels and defaults can coexist:
+Explicit labels and defaults can coexist:
 
 ```rust
 #[derive(toasty::Embed)]
-#[column(type = enum)]
 enum Status {
     #[column(variant = "in_progress")]
     InProgress,      // stored as 'in_progress'
@@ -96,24 +118,9 @@ enum Status {
 }
 ```
 
-### Integer discriminants are not allowed
-
-Combining `#[column(type = enum)]` with integer variant values is a compile
-error. Database enum labels are always strings.
-
-```rust
-// Compile error: enum type variants must use string labels
-#[derive(toasty::Embed)]
-#[column(type = enum)]
-enum Status {
-    #[column(variant = 1)]  // ERROR
-    Pending,
-}
-```
-
 ## Database Support
 
-`#[column(type = enum)]` adapts to each backend's capabilities:
+The default native enum strategy adapts to each backend's capabilities:
 
 | Backend | Representation | Validation |
 |---|---|---|
@@ -163,7 +170,6 @@ Toasty creates a PostgreSQL enum type named after the Rust enum in snake_case:
 
 ```rust
 #[derive(toasty::Embed)]
-#[column(type = enum)]
 enum OrderState {
     #[column(variant = "new")]
     New,
@@ -178,7 +184,7 @@ enum OrderState {
 CREATE TYPE order_state AS ENUM ('new', 'shipped', 'delivered');
 ```
 
-The discriminant column uses the enum type instead of INTEGER or VARCHAR:
+The discriminant column uses the enum type:
 
 ```rust
 #[derive(toasty::Model)]
@@ -199,9 +205,8 @@ CREATE TABLE orders (
 
 #### Customizing the PostgreSQL type name
 
-The `#[column(type = ...)]` attribute already controls the database type. To
-specify a custom name for the PostgreSQL enum type, use `enum` with a name
-argument:
+To specify a custom name for the PostgreSQL enum type, use `enum` with a name
+argument in the `#[column(type = ...)]` attribute:
 
 ```rust
 #[derive(toasty::Embed)]
@@ -217,25 +222,12 @@ enum OrderState {
 CREATE TYPE order_status AS ENUM ('New', 'Shipped', 'Delivered');
 ```
 
-Without a name argument, Toasty derives the type name from the Rust enum
+Without this attribute, Toasty derives the type name from the Rust enum
 name in snake_case.
 
 ### MySQL
 
 MySQL enum types are defined inline on the column:
-
-```rust
-#[derive(toasty::Embed)]
-#[column(type = enum)]
-enum OrderState {
-    #[column(variant = "new")]
-    New,
-    #[column(variant = "shipped")]
-    Shipped,
-    #[column(variant = "delivered")]
-    Delivered,
-}
-```
 
 ```sql
 CREATE TABLE orders (
@@ -266,7 +258,6 @@ nullable columns:
 
 ```rust
 #[derive(toasty::Embed)]
-#[column(type = enum)]
 enum ContactMethod {
     #[column(variant = "email")]
     Email { address: String },
@@ -314,8 +305,8 @@ CREATE TABLE users (
 
 ### Creating a new enum
 
-When a model using `#[column(type = enum)]` is first migrated, Toasty issues
-the appropriate DDL before `CREATE TABLE`.
+When a model with a string-label enum is first migrated, Toasty issues the
+appropriate DDL.
 
 PostgreSQL:
 ```sql
@@ -407,20 +398,12 @@ Rust enum while the label still exists in the database schema is a migration
 error. Destructive schema changes like this require a broader design for
 handling data loss scenarios and are out of scope for this feature.
 
-### Converting from string or integer discriminants
+### Converting from integer discriminants
 
-Switching an existing enum from `#[column(variant = "label")]` (VARCHAR) or
-`#[column(variant = N)]` (INTEGER) to `#[column(type = enum)]` requires a
-migration that creates the enum type and converts the column.
+Switching an existing enum from `#[column(variant = N)]` (INTEGER) to string
+labels requires a migration that converts the column.
 
-PostgreSQL — converting from VARCHAR:
-```sql
-CREATE TYPE status AS ENUM ('pending', 'active', 'done');
-ALTER TABLE tasks
-    ALTER COLUMN status TYPE status USING status::status;
-```
-
-PostgreSQL — converting from INTEGER:
+PostgreSQL:
 ```sql
 CREATE TYPE status AS ENUM ('pending', 'active', 'done');
 ALTER TABLE tasks
@@ -436,13 +419,7 @@ ALTER TABLE tasks
 The integer-to-label mapping comes from the previous schema snapshot stored
 in the migration state.
 
-MySQL — converting from VARCHAR:
-```sql
-ALTER TABLE tasks MODIFY COLUMN status
-    ENUM('pending', 'active', 'done') NOT NULL;
-```
-
-MySQL — converting from INTEGER:
+MySQL:
 ```sql
 ALTER TABLE tasks MODIFY COLUMN status
     ENUM('pending', 'active', 'done') NOT NULL;
@@ -452,13 +429,34 @@ MySQL's `MODIFY COLUMN` handles the type change. For integer conversions,
 Toasty issues an intermediate step to map integers to their label strings
 before converting the column type.
 
+### Converting from plain string to native enum
+
+Switching from `#[column(type = text)]` (plain string) to native enum
+storage (removing the `type` override) requires converting the column.
+
+PostgreSQL:
+```sql
+CREATE TYPE status AS ENUM ('pending', 'active', 'done');
+ALTER TABLE tasks
+    ALTER COLUMN status TYPE status USING status::status;
+```
+
+MySQL:
+```sql
+ALTER TABLE tasks MODIFY COLUMN status
+    ENUM('pending', 'active', 'done') NOT NULL;
+```
+
+SQLite uses its table recreation strategy to replace the TEXT column with a
+TEXT + CHECK column.
+
 ## Querying
 
-The query API is the same as for string and integer discriminants. Toasty
-handles the type casting internally:
+The query API is the same regardless of discriminant type. Toasty handles
+the type casting internally:
 
 ```rust
-// All of these work identically to string/integer discriminants
+// All of these work identically across all discriminant types
 Task::filter(Task::fields().status().eq(Status::Active))
 Task::filter(Task::fields().status().is_pending())
 Task::filter(Task::fields().status().ne(Status::Done))
@@ -504,34 +502,35 @@ INSERT INTO tasks (status) VALUES ('pending');
 
 | Condition | Result |
 |---|---|
-| `#[column(type = enum)]` with all string or default labels | Valid |
-| `#[column(type = enum)]` with integer variant values | Compile error |
+| All string or default labels | Valid (native enum storage) |
+| `#[column(type = text)]` or `#[column(type = varchar)]` | Valid (plain string storage) |
+| `#[column(variant = N)]` with integers | Valid (integer storage) |
+| Mix of integer and string variant values | Compile error |
 | Duplicate labels (including derived defaults) | Compile error |
 | Empty string label `#[column(variant = "")]` | Compile error |
 | Label longer than 63 bytes | Compile error (PostgreSQL's `NAMEDATALEN` limit) |
 
 ## Portability
 
-`#[column(type = enum)]` works across all backends. Each backend uses its best
+Native enum storage works across all backends. Each backend uses its best
 available representation (see [Database Support](#database-support)). You can
 develop against SQLite locally and deploy to PostgreSQL or MySQL without
 changing the enum definition.
 
-The difference between `#[column(type = enum)]` and plain string discriminants
-(`#[column(variant = "label")]`) is that `type = enum` adds database-level
-validation where the backend supports it. The stored values are string labels
-in both cases — there is no data incompatibility between them.
+The difference between native enum storage and plain string storage
+(`#[column(type = text)]`) is that native enum adds database-level validation
+where the backend supports it. The stored values are string labels in both
+cases — there is no data incompatibility between them.
 
 ## Shared enum types
 
-Multiple models can reference the same `#[column(type = enum)]` enum.
+Multiple models can reference the same enum.
 
 On PostgreSQL, Toasty creates the `CREATE TYPE` once and reuses it across
 tables:
 
 ```rust
 #[derive(toasty::Embed)]
-#[column(type = enum)]
 enum Priority { Low, Medium, High }
 
 #[derive(toasty::Model)]
@@ -585,7 +584,6 @@ definition.
 
 ```rust
 #[derive(Debug, PartialEq, toasty::Embed)]
-#[column(type = enum)]
 enum Color {
     Red,
     Green,
@@ -623,7 +621,6 @@ SELECT * FROM widgets WHERE color = 'Green';
 
 ```rust
 #[derive(Debug, PartialEq, toasty::Embed)]
-#[column(type = enum)]
 enum Status {
     #[column(variant = "pending")]
     Pending,
@@ -663,11 +660,35 @@ CREATE TABLE tasks (
 );
 ```
 
+### Unit enum with plain string storage
+
+```rust
+#[derive(Debug, PartialEq, toasty::Embed)]
+#[column(type = text)]
+enum Status {
+    #[column(variant = "pending")]
+    Pending,
+    #[column(variant = "active")]
+    Active,
+    #[column(variant = "done")]
+    Done,
+}
+```
+
+```sql
+-- Same on all SQL backends
+CREATE TABLE tasks (
+    id ... PRIMARY KEY,
+    status TEXT NOT NULL
+);
+```
+
+No enum type or CHECK constraint is created. The column is a plain TEXT.
+
 ### Data-carrying enum
 
 ```rust
 #[derive(Debug, PartialEq, toasty::Embed)]
-#[column(type = enum)]
 enum ContactMethod {
     #[column(variant = "email")]
     Email { address: String },
