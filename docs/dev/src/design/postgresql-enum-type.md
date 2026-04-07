@@ -365,14 +365,10 @@ the rename. It can be removed afterward.
 
 ### Removing a variant
 
-PostgreSQL does not support `ALTER TYPE ... DROP VALUE`. Removing a variant
-from the Rust enum does not remove the label from the PostgreSQL type. Toasty
-does not issue any DDL for removed variants on PostgreSQL. If you need to
-remove a label, you must recreate the type manually outside of Toasty.
-
-MySQL does support removing values by rewriting the column definition. Toasty
-generates the appropriate `ALTER TABLE ... MODIFY COLUMN` with the updated
-label list.
+Toasty does not support removing enum variants. Removing a variant from the
+Rust enum while the label still exists in the database schema is a migration
+error. Destructive schema changes like this require a broader design for
+handling data loss scenarios and are out of scope for this feature.
 
 ### Converting from string or integer discriminants
 
