@@ -1,22 +1,22 @@
-# PostgreSQL Native Enum Type
+# Native Database Enum Types
 
 ## Overview
 
-Toasty stores embedded enum discriminants as INTEGER or VARCHAR columns. PostgreSQL
-users can instead store discriminants using PostgreSQL's native `CREATE TYPE ... AS ENUM`
-type. This gives the database awareness of valid values, produces more readable data,
-and avoids storing raw integers or unbounded strings for what is a fixed set of choices.
-
-This feature is PostgreSQL-only. Other backends continue to use INTEGER or VARCHAR
-discriminants.
+Toasty stores embedded enum discriminants as INTEGER or VARCHAR columns. Databases
+that support native enum types — PostgreSQL (`CREATE TYPE ... AS ENUM`) and MySQL
+(inline `ENUM(...)` columns) — can store discriminants as typed enum values instead.
+This gives the database awareness of valid values, produces more readable data,
+and avoids storing raw integers or unbounded strings for what is a fixed set of
+choices.
 
 ## Syntax
 
-Add `variant = "pg_enum"` to the enum-level `#[column]` attribute:
+Use `#[column(type = enum)]` on the enum definition to opt into native database
+enum storage:
 
 ```rust
 #[derive(toasty::Embed)]
-#[column(variant = "pg_enum")]
+#[column(type = enum)]
 enum Status {
     Pending,
     Active,
@@ -24,17 +24,25 @@ enum Status {
 }
 ```
 
-Each variant maps to a PostgreSQL enum label. By default the label is the Rust
+Each variant maps to a database enum label. By default the label is the Rust
 variant's identifier: `'Pending'`, `'Active'`, `'Done'`.
+
+This follows the same pattern as other explicit column types in Toasty:
+
+```rust
+#[column(type = varchar(100))]   // explicit VARCHAR
+#[column(type = numeric(28, 10))] // explicit NUMERIC
+#[column(type = enum)]            // native database enum
+```
 
 ### Explicit labels
 
 Use `#[column(variant = "label")]` on individual variants to control the
-PostgreSQL enum label:
+database enum label:
 
 ```rust
 #[derive(toasty::Embed)]
-#[column(variant = "pg_enum")]
+#[column(type = enum)]
 enum Status {
     #[column(variant = "pending")]
     Pending,
@@ -45,7 +53,7 @@ enum Status {
 }
 ```
 
-This stores `'pending'`, `'active'`, `'done'` as the enum labels in PostgreSQL.
+This stores `'pending'`, `'active'`, `'done'` as the enum labels.
 
 ### Mixing explicit and default labels
 
@@ -53,7 +61,7 @@ Like string discriminants, explicit labels and defaults can coexist:
 
 ```rust
 #[derive(toasty::Embed)]
-#[column(variant = "pg_enum")]
+#[column(type = enum)]
 enum Status {
     #[column(variant = "in_progress")]
     InProgress,      // stored as 'in_progress'
@@ -63,28 +71,48 @@ enum Status {
 
 ### Integer discriminants are not allowed
 
-Combining `#[column(variant = "pg_enum")]` with integer variant values is a
-compile error. PostgreSQL enum labels are always strings.
+Combining `#[column(type = enum)]` with integer variant values is a compile
+error. Database enum labels are always strings.
 
 ```rust
-// Compile error: pg_enum variants must use string labels
+// Compile error: enum type variants must use string labels
 #[derive(toasty::Embed)]
-#[column(variant = "pg_enum")]
+#[column(type = enum)]
 enum Status {
     #[column(variant = 1)]  // ERROR
     Pending,
 }
 ```
 
+## Database Support
+
+### PostgreSQL
+
+PostgreSQL uses named enum types. Toasty creates a standalone type with
+`CREATE TYPE ... AS ENUM` and references it from column definitions.
+
+### MySQL
+
+MySQL defines enum values inline on the column. There is no standalone named
+type. Toasty generates `ENUM('a', 'b', 'c')` as the column type. When the
+same Rust enum is used in multiple tables, each table gets its own inline
+`ENUM(...)` definition.
+
+### Unsupported backends
+
+SQLite and DynamoDB have no enum type. Using `#[column(type = enum)]` with
+these backends produces a runtime error when Toasty builds the schema, the
+same as using any other unsupported column type (e.g., `varchar` on SQLite).
+
 ## Generated SQL Schema
 
-### Type definition
+### PostgreSQL
 
 Toasty creates a PostgreSQL enum type named after the Rust enum in snake_case:
 
 ```rust
 #[derive(toasty::Embed)]
-#[column(variant = "pg_enum")]
+#[column(type = enum)]
 enum OrderState {
     #[column(variant = "new")]
     New,
@@ -98,8 +126,6 @@ enum OrderState {
 ```sql
 CREATE TYPE order_state AS ENUM ('new', 'shipped', 'delivered');
 ```
-
-### Column definition
 
 The discriminant column uses the enum type instead of INTEGER or VARCHAR:
 
@@ -120,13 +146,15 @@ CREATE TABLE orders (
 );
 ```
 
-### Customizing the type name
+#### Customizing the PostgreSQL type name
 
-Use `#[column(type = "name")]` on the enum to override the PostgreSQL type name:
+The `#[column(type = ...)]` attribute already controls the database type. To
+specify a custom name for the PostgreSQL enum type, use `enum` with a name
+argument:
 
 ```rust
 #[derive(toasty::Embed)]
-#[column(variant = "pg_enum", type = "order_status")]
+#[column(type = enum("order_status"))]
 enum OrderState {
     New,
     Shipped,
@@ -138,14 +166,44 @@ enum OrderState {
 CREATE TYPE order_status AS ENUM ('New', 'Shipped', 'Delivered');
 ```
 
-### Data-carrying enums
+Without a name argument, Toasty derives the type name from the Rust enum
+name in snake_case.
 
-Data-carrying enums work the same way. The discriminant column uses the enum
-type; variant fields remain as separate nullable columns:
+### MySQL
+
+MySQL enum types are defined inline on the column:
 
 ```rust
 #[derive(toasty::Embed)]
-#[column(variant = "pg_enum")]
+#[column(type = enum)]
+enum OrderState {
+    #[column(variant = "new")]
+    New,
+    #[column(variant = "shipped")]
+    Shipped,
+    #[column(variant = "delivered")]
+    Delivered,
+}
+```
+
+```sql
+CREATE TABLE orders (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    state ENUM('new', 'shipped', 'delivered') NOT NULL
+);
+```
+
+The `enum("name")` syntax is ignored on MySQL since there is no standalone
+type to name.
+
+### Data-carrying enums
+
+Data-carrying enums work the same way on both backends. The discriminant
+column uses the enum type; variant fields remain as separate nullable columns:
+
+```rust
+#[derive(toasty::Embed)]
+#[column(type = enum)]
 enum ContactMethod {
     #[column(variant = "email")]
     Email { address: String },
@@ -154,6 +212,7 @@ enum ContactMethod {
 }
 ```
 
+PostgreSQL:
 ```sql
 CREATE TYPE contact_method AS ENUM ('email', 'phone');
 
@@ -166,13 +225,25 @@ CREATE TABLE users (
 );
 ```
 
+MySQL:
+```sql
+CREATE TABLE users (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    contact ENUM('email', 'phone') NOT NULL,
+    contact_email_address TEXT,
+    contact_phone_country TEXT,
+    contact_phone_number TEXT
+);
+```
+
 ## Migrations
 
 ### Creating a new enum
 
-When a model using a `pg_enum` is first migrated, Toasty issues `CREATE TYPE`
-before `CREATE TABLE`:
+When a model using `#[column(type = enum)]` is first migrated, Toasty issues
+the appropriate DDL before `CREATE TABLE`.
 
+PostgreSQL:
 ```sql
 CREATE TYPE status AS ENUM ('pending', 'active', 'done');
 CREATE TABLE tasks (
@@ -181,9 +252,17 @@ CREATE TABLE tasks (
 );
 ```
 
+MySQL:
+```sql
+CREATE TABLE tasks (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    status ENUM('pending', 'active', 'done') NOT NULL
+);
+```
+
 ### Adding a variant
 
-Adding a new variant to the Rust enum triggers `ALTER TYPE ... ADD VALUE`:
+Adding a new variant to the Rust enum:
 
 ```rust
 // Before
@@ -193,9 +272,21 @@ enum Status { Pending, Active, Done }
 enum Status { Pending, Active, Done, Cancelled }
 ```
 
+PostgreSQL:
 ```sql
 ALTER TYPE status ADD VALUE 'Cancelled';
 ```
+
+MySQL:
+```sql
+ALTER TABLE tasks MODIFY COLUMN status
+    ENUM('pending', 'active', 'done', 'cancelled') NOT NULL;
+```
+
+MySQL requires rewriting the full enum definition on every change. Toasty
+handles this automatically.
+
+#### Controlling variant order (PostgreSQL)
 
 PostgreSQL appends new values at the end by default. To control ordering, use
 the `#[column(after = "label")]` attribute:
@@ -215,15 +306,16 @@ enum Status {
 ALTER TYPE status ADD VALUE 'OnHold' AFTER 'Active';
 ```
 
+This attribute has no effect on MySQL, where the column is rewritten with
+the full label list in the order they appear in the Rust enum.
+
 ### Renaming a variant
 
-Renaming a variant label requires PostgreSQL 10+. Toasty detects when a variant's
-`#[column(variant = "...")]` label changes and the old variant name no longer exists.
 Use `#[column(rename_from = "old_label")]` to tell Toasty about the rename:
 
 ```rust
 #[derive(toasty::Embed)]
-#[column(variant = "pg_enum")]
+#[column(type = enum)]
 enum Status {
     #[column(variant = "waiting", rename_from = "pending")]
     Pending,
@@ -232,43 +324,45 @@ enum Status {
 }
 ```
 
+PostgreSQL (requires PostgreSQL 10+):
 ```sql
 ALTER TYPE status RENAME VALUE 'pending' TO 'waiting';
 ```
 
-The `rename_from` attribute is only needed during the migration that performs the
-rename. It can be removed afterward.
+MySQL:
+```sql
+ALTER TABLE tasks MODIFY COLUMN status
+    ENUM('waiting', 'active', 'done') NOT NULL;
+```
+
+The `rename_from` attribute is only needed during the migration that performs
+the rename. It can be removed afterward.
 
 ### Removing a variant
 
-PostgreSQL does not support `ALTER TYPE ... DROP VALUE`. Removing a variant from
-the Rust enum does not remove the label from the PostgreSQL type. Toasty does not
-issue any DDL for removed variants.
+PostgreSQL does not support `ALTER TYPE ... DROP VALUE`. Removing a variant
+from the Rust enum does not remove the label from the PostgreSQL type. Toasty
+does not issue any DDL for removed variants on PostgreSQL. If you need to
+remove a label, you must recreate the type manually outside of Toasty.
 
-If you need to remove a label, you must recreate the type manually outside of
-Toasty. This is a PostgreSQL limitation.
+MySQL does support removing values by rewriting the column definition. Toasty
+generates the appropriate `ALTER TABLE ... MODIFY COLUMN` with the updated
+label list.
 
 ### Converting from string or integer discriminants
 
 Switching an existing enum from `#[column(variant = "label")]` (VARCHAR) or
-`#[column(variant = N)]` (INTEGER) to `#[column(variant = "pg_enum")]` requires
-a migration that:
+`#[column(variant = N)]` (INTEGER) to `#[column(type = enum)]` requires a
+migration that creates the enum type and converts the column.
 
-1. Creates the new enum type
-2. Alters the column to use the new type with a USING clause
-
-Toasty generates this migration automatically when the discriminant storage
-kind changes:
-
+PostgreSQL — converting from VARCHAR:
 ```sql
 CREATE TYPE status AS ENUM ('pending', 'active', 'done');
 ALTER TABLE tasks
     ALTER COLUMN status TYPE status USING status::status;
 ```
 
-For integer-to-pg_enum conversions, the USING clause maps integer values to
-labels. Toasty generates a CASE expression:
-
+PostgreSQL — converting from INTEGER:
 ```sql
 CREATE TYPE status AS ENUM ('pending', 'active', 'done');
 ALTER TABLE tasks
@@ -281,8 +375,24 @@ ALTER TABLE tasks
     )::status;
 ```
 
-This requires that the old integer-to-label mapping is available. Toasty reads
-it from the previous schema snapshot stored in the migration state.
+The integer-to-label mapping comes from the previous schema snapshot stored
+in the migration state.
+
+MySQL — converting from VARCHAR:
+```sql
+ALTER TABLE tasks MODIFY COLUMN status
+    ENUM('pending', 'active', 'done') NOT NULL;
+```
+
+MySQL — converting from INTEGER:
+```sql
+ALTER TABLE tasks MODIFY COLUMN status
+    ENUM('pending', 'active', 'done') NOT NULL;
+```
+
+MySQL's `MODIFY COLUMN` handles the type change. For integer conversions,
+Toasty issues an intermediate step to map integers to their label strings
+before converting the column type.
 
 ## Querying
 
@@ -299,8 +409,9 @@ Task::filter(Task::fields().status().in_list([Status::Pending, Status::Active]))
 
 ### SQL generated for queries
 
-Queries compare against the enum label as a string literal. PostgreSQL
-handles the cast from the string literal to the enum type automatically:
+Queries compare against the enum label as a string literal. Both PostgreSQL
+and MySQL handle the cast from the string literal to the enum type
+automatically:
 
 ```sql
 -- .eq(Status::Active)
@@ -310,14 +421,24 @@ SELECT * FROM tasks WHERE status = 'Active';
 SELECT * FROM tasks WHERE status IN ('Pending', 'Active');
 ```
 
-No explicit `::status` cast is needed in WHERE clauses because PostgreSQL
-infers the type from the column.
+No explicit cast is needed in WHERE clauses because the database infers the
+type from the column.
 
 ### Ordering
 
-PostgreSQL enum values have a sort order defined by their position in the
-`CREATE TYPE` statement, not alphabetical order. If you `ORDER BY` an enum
-column, rows sort by the declaration order of the labels:
+Database enum values have a sort order that differs from plain strings:
+
+**PostgreSQL**: Enum values sort by their position in the `CREATE TYPE`
+statement, not alphabetically. Reordering variants in the Rust source does not
+change the sort order (which is fixed at type creation time). Adding a new
+variant with `ALTER TYPE ... ADD VALUE` places it at the end unless `AFTER`
+or `BEFORE` is specified.
+
+**MySQL**: Enum values sort by their index number (position in the `ENUM(...)`
+definition), not alphabetically. Rewriting the column with `MODIFY COLUMN`
+can change the sort order.
+
+In both cases, `ORDER BY` on an enum column sorts by declaration order:
 
 ```sql
 CREATE TYPE status AS ENUM ('pending', 'active', 'done');
@@ -326,15 +447,12 @@ CREATE TYPE status AS ENUM ('pending', 'active', 'done');
 SELECT * FROM tasks ORDER BY status;
 ```
 
-This matches the order of variants in the Rust enum definition. Reordering
-variants in the Rust source does not change the PostgreSQL sort order
-(which is fixed at type creation time). Adding a new variant with
-`ALTER TYPE ... ADD VALUE` places it at the end unless `AFTER` or `BEFORE`
-is specified.
+This matches the order of variants in the Rust enum definition, assuming the
+database type was created from the current Rust definition.
 
 ## Inserting
 
-Inserts supply the label as a string literal. PostgreSQL casts it to the
+Inserts supply the label as a string literal. The database casts it to the
 enum type:
 
 ```sql
@@ -345,31 +463,30 @@ INSERT INTO tasks (status) VALUES ('pending');
 
 | Condition | Result |
 |---|---|
-| `#[column(variant = "pg_enum")]` with all string or default labels | Valid |
-| `#[column(variant = "pg_enum")]` with integer variant values | Compile error |
+| `#[column(type = enum)]` with all string or default labels | Valid |
+| `#[column(type = enum)]` with integer variant values | Compile error |
 | Duplicate labels (including derived defaults) | Compile error |
 | Empty string label `#[column(variant = "")]` | Compile error |
+| Label longer than 63 bytes (PostgreSQL limit) | Compile error |
 
 ## Portability
 
-An enum defined with `#[column(variant = "pg_enum")]` only works with the
-PostgreSQL driver. Using it with SQLite, MySQL, or DynamoDB produces a runtime
-error when Toasty builds the schema. If you need your enum to work across
-multiple backends, use string discriminants instead.
+`#[column(type = enum)]` works with PostgreSQL and MySQL. Using it with SQLite
+or DynamoDB produces a runtime error when Toasty builds the schema.
 
-To write backend-portable code that still uses `pg_enum` on PostgreSQL, you
-could maintain separate enum definitions per backend. However, the simpler
-approach for most applications is to pick one backend and use the discriminant
-type that fits it.
+If you need your enum to work across all backends, use string discriminants
+instead (`#[column(variant = "label")]` without `#[column(type = enum)]`).
 
 ## Shared enum types
 
-Multiple models can reference the same `#[column(variant = "pg_enum")]` enum.
-Toasty creates the `CREATE TYPE` once and reuses it across tables:
+Multiple models can reference the same `#[column(type = enum)]` enum.
+
+On PostgreSQL, Toasty creates the `CREATE TYPE` once and reuses it across
+tables:
 
 ```rust
 #[derive(toasty::Embed)]
-#[column(variant = "pg_enum")]
+#[column(type = enum)]
 enum Priority { Low, Medium, High }
 
 #[derive(toasty::Model)]
@@ -385,6 +502,7 @@ struct Bug {
 }
 ```
 
+PostgreSQL:
 ```sql
 CREATE TYPE priority AS ENUM ('Low', 'Medium', 'High');
 
@@ -399,8 +517,22 @@ CREATE TABLE bugs (
 );
 ```
 
-Toasty tracks that the type already exists and does not attempt to create it
-twice during migrations.
+MySQL:
+```sql
+CREATE TABLE tasks (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    priority ENUM('Low', 'Medium', 'High') NOT NULL
+);
+
+CREATE TABLE bugs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    priority ENUM('Low', 'Medium', 'High') NOT NULL
+);
+```
+
+Toasty tracks that the PostgreSQL type already exists and does not attempt to
+create it twice during migrations. On MySQL each table carries its own inline
+definition.
 
 ## Examples
 
@@ -408,7 +540,7 @@ twice during migrations.
 
 ```rust
 #[derive(Debug, PartialEq, toasty::Embed)]
-#[column(variant = "pg_enum")]
+#[column(type = enum)]
 enum Color {
     Red,
     Green,
@@ -425,6 +557,7 @@ struct Widget {
 }
 ```
 
+PostgreSQL:
 ```sql
 CREATE TYPE color AS ENUM ('Red', 'Green', 'Blue');
 
@@ -445,7 +578,7 @@ SELECT * FROM widgets WHERE color = 'Green';
 
 ```rust
 #[derive(Debug, PartialEq, toasty::Embed)]
-#[column(variant = "pg_enum")]
+#[column(type = enum)]
 enum Status {
     #[column(variant = "pending")]
     Pending,
@@ -465,6 +598,7 @@ struct Task {
 }
 ```
 
+PostgreSQL:
 ```sql
 CREATE TYPE status AS ENUM ('pending', 'active', 'done');
 
@@ -475,11 +609,20 @@ CREATE TABLE tasks (
 );
 ```
 
+MySQL:
+```sql
+CREATE TABLE tasks (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    title TEXT NOT NULL,
+    status ENUM('pending', 'active', 'done') NOT NULL
+);
+```
+
 ### Data-carrying enum
 
 ```rust
 #[derive(Debug, PartialEq, toasty::Embed)]
-#[column(variant = "pg_enum")]
+#[column(type = enum)]
 enum ContactMethod {
     #[column(variant = "email")]
     Email { address: String },
@@ -495,19 +638,6 @@ struct User {
     name: String,
     contact: ContactMethod,
 }
-```
-
-```sql
-CREATE TYPE contact_method AS ENUM ('email', 'phone');
-
-CREATE TABLE users (
-    id BIGSERIAL PRIMARY KEY,
-    name TEXT NOT NULL,
-    contact contact_method NOT NULL,
-    contact_email_address TEXT,
-    contact_phone_country TEXT,
-    contact_phone_number TEXT
-);
 ```
 
 ```rust
