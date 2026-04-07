@@ -52,8 +52,6 @@ impl Expand<'_> {
             quote!(&mut self.assignments)
         };
 
-        let model_ident = &self.model.ident;
-
         self.model.fields.iter().enumerate().map(|(field_index, field)| {
             let field_ident = &field.name.ident;
             let set_field_ident = &field.set_ident;
