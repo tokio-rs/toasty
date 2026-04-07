@@ -241,6 +241,44 @@ impl Model {
             })
         };
 
+        // Create indices for model-level #[index(...)] attributes
+        for index_attr in &model_attr.indices {
+            let mut index_fields = vec![];
+
+            // Simple mode (e.g. `#[index(a, b)]`): all fields land in `partition`.
+            // Treat the first as the partition (hash) key and the rest as local (sort) keys,
+            // which matches DynamoDB GSI semantics.
+            let mut partition_iter = index_attr.partition.iter();
+            if let Some(first) = partition_iter.next() {
+                let idx = names.iter().position(|n| n == first).unwrap();
+                index_fields.push(IndexField {
+                    field: idx,
+                    scope: IndexScope::Partition,
+                });
+                for field in partition_iter {
+                    let idx = names.iter().position(|n| n == field).unwrap();
+                    index_fields.push(IndexField {
+                        field: idx,
+                        scope: IndexScope::Local,
+                    });
+                }
+            }
+            // Named mode (e.g. `#[index(partition = a, local = b)]`): respect explicit scopes.
+            for field in &index_attr.local {
+                let idx = names.iter().position(|n| n == field).unwrap();
+                index_fields.push(IndexField {
+                    field: idx,
+                    scope: IndexScope::Local,
+                });
+            }
+
+            indices.push(Index {
+                fields: index_fields,
+                unique: false,
+                primary_key: false,
+            });
+        }
+
         // Create indices for all fields annotated with unique or index
         collect_field_indices(&fields, &mut indices);
 
