@@ -13,8 +13,7 @@
 //! let driver = PostgreSQL::new("postgresql://localhost/mydb").unwrap();
 //! ```
 //!
-//! Connecting with TLS using [`native-tls`](https://docs.rs/native-tls) (requires
-//! the `native-tls` feature):
+//! Connecting with TLS using [`native-tls`](https://docs.rs/native-tls):
 //!
 //! ```no_run,ignore
 //! use toasty_driver_postgresql::PostgreSQL;
@@ -30,8 +29,7 @@
 //! let driver = PostgreSQL::with_tls("postgresql://localhost/mydb", tls).unwrap();
 //! ```
 //!
-//! Connecting with TLS using [`rustls`](https://docs.rs/rustls) (requires the
-//! `rustls` feature):
+//! Connecting with TLS using [`rustls`](https://docs.rs/rustls):
 //!
 //! ```no_run,ignore
 //! use toasty_driver_postgresql::PostgreSQL;
@@ -51,12 +49,6 @@ mod r#type;
 mod value;
 
 pub(crate) use value::Value;
-
-#[cfg(feature = "native-tls")]
-pub use postgres_native_tls;
-
-#[cfg(feature = "rustls")]
-pub use tokio_postgres_rustls;
 
 use async_trait::async_trait;
 use postgres::{Socket, tls::MakeTlsConnect, tls::TlsConnect, types::ToSql};
@@ -122,10 +114,10 @@ impl<Tls> PostgreSQL<Tls> {
     ///
     /// - [`tokio_postgres::NoTls`] — no encryption (the default with
     ///   [`PostgreSQL::new`])
-    /// - [`postgres_native_tls::MakeTlsConnector`] — TLS via the system's
-    ///   native TLS library (requires the `native-tls` feature)
-    /// - [`tokio_postgres_rustls::MakeRustlsConnect`] — TLS via
-    ///   [`rustls`](https://docs.rs/rustls) (requires the `rustls` feature)
+    /// - `postgres_native_tls::MakeTlsConnector` — TLS via the system's
+    ///   native TLS library (from the [`postgres-native-tls`](https://docs.rs/postgres-native-tls) crate)
+    /// - `tokio_postgres_rustls::MakeRustlsConnect` — TLS via
+    ///   [`rustls`](https://docs.rs/tokio-postgres-rustls)
     ///
     /// # Examples
     ///
