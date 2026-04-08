@@ -7,7 +7,7 @@ use super::{
 };
 use crate::stmt;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 struct Verify<'a> {
     schema: &'a Schema,
@@ -39,6 +39,7 @@ impl Verify<'_> {
         self.verify_index_names_are_unique()?;
         self.verify_table_indices_and_nullable();
         self.verify_auto_increment_columns()?;
+        self.verify_enum_type_names_are_unique()?;
 
         Ok(())
     }
@@ -189,6 +190,35 @@ impl Verify<'_> {
                             "auto_increment column `{}` in table `{}` must be part of the primary key",
                             column.name, table.name
                         )));
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn verify_enum_type_names_are_unique(&self) -> Result<()> {
+        // Collect all enum type names across all columns. If two columns share
+        // the same enum type name, their label sets must match exactly.
+        let mut seen: HashMap<&str, &[String]> = HashMap::new();
+
+        for table in &self.schema.db.tables {
+            for column in &table.columns {
+                if let super::db::Type::Enum { name, labels } = &column.storage_ty {
+                    match seen.get(name.as_str()) {
+                        Some(existing_labels) if *existing_labels != labels.as_slice() => {
+                            return Err(crate::Error::invalid_schema(format!(
+                                "conflicting enum type name `{name}`: multiple embedded enums \
+                                 resolve to the same database type name with different labels; \
+                                 use `#[column(type = enum(\"custom_name\"))]` on one of them \
+                                 to disambiguate"
+                            )));
+                        }
+                        None => {
+                            seen.insert(name, labels);
+                        }
+                        _ => {} // Same name, same labels — shared type, OK.
                     }
                 }
             }

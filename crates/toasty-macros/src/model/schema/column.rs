@@ -161,6 +161,14 @@ pub enum ColumnType {
     Custom(syn::LitStr),
 }
 
+impl ColumnType {
+    /// Returns `true` for `Text` and `VarChar` — the plain string storage types
+    /// that opt out of native enum representation.
+    pub(crate) fn is_string_like(&self) -> bool {
+        matches!(self, Self::Text | Self::VarChar(_))
+    }
+}
+
 impl syn::parse::Parse for ColumnType {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let lookahead = input.lookahead1();

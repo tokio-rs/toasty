@@ -388,7 +388,7 @@ impl Model {
             }
         }
 
-        // Validate string label lengths (PostgreSQL NAMEDATALEN limit = 63 bytes).
+        // Validate string label lengths (max 63 bytes).
         for v in &variants {
             if let VariantValue::String(s) = &v.attrs.discriminant
                 && s.len() > 63
@@ -396,8 +396,7 @@ impl Model {
                 errs.push(syn::Error::new_spanned(
                     &v.ident,
                     format!(
-                        "variant label \"{}\" is {} bytes; \
-                         maximum is 63 (PostgreSQL NAMEDATALEN limit)",
+                        "variant label \"{}\" is {} bytes; maximum is 63",
                         s,
                         s.len()
                     ),
@@ -417,12 +416,9 @@ impl Model {
 
         let storage_strategy = if uses_strings {
             match enum_column_type {
-                // Explicit `#[column(type = text)]` or `#[column(type = varchar)]`
+                // Explicit `#[column(type = text)]` or `#[column(type = varchar(N))]`
                 // opts out of native enum storage.
-                Some(ColumnType::Text) => Some(EnumStorageStrategy::PlainString(ColumnType::Text)),
-                Some(ColumnType::VarChar(n)) => {
-                    Some(EnumStorageStrategy::PlainString(ColumnType::VarChar(n)))
-                }
+                Some(ty) if ty.is_string_like() => Some(EnumStorageStrategy::PlainString(ty)),
                 // Explicit `#[column(type = enum)]` or `#[column(type = enum("name"))]`
                 Some(ColumnType::Enum(custom_name)) => {
                     Some(EnumStorageStrategy::NativeEnum(custom_name))

@@ -176,6 +176,7 @@ impl ToSql for &stmt::AlterColumn {
                         .changes
                         .new_auto_increment
                         .unwrap_or(self.column_def.auto_increment),
+                    check: self.column_def.check.clone(),
                 };
                 fmt!(&cx, f, "ALTER TABLE " table_name " CHANGE COLUMN " column_name " " new_column_def)
             }

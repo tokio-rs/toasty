@@ -109,7 +109,7 @@ pub enum Type {
     /// - On SQLite, this maps to `TEXT` with a `CHECK` constraint.
     /// - On DynamoDB, this is stored as a plain string attribute.
     ///
-    /// The `name` field is the PostgreSQL type name (snake_case of the Rust enum).
+    /// The `name` field is by default the snake_case of the Rust enum name.
     /// The `labels` are the allowed values in declaration order.
     Enum {
         /// The type name used by PostgreSQL (`CREATE TYPE <name> AS ENUM`).

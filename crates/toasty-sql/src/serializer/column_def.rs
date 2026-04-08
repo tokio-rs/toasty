@@ -4,7 +4,6 @@ use crate::{
     serializer::{ExprContext, Flavor},
     stmt,
 };
-use toasty_core::schema::db;
 
 impl ToSql for &stmt::ColumnDef {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
@@ -28,22 +27,8 @@ impl ToSql for &stmt::ColumnDef {
             }
         }
 
-        // SQLite: append CHECK constraint for enum columns.
-        if let db::Type::Enum { labels, .. } = &self.ty
-            && matches!(f.serializer.flavor, Flavor::Sqlite)
-        {
-            f.dst.push_str(" CHECK (");
-            f.dst.push_str(&self.name);
-            f.dst.push_str(" IN (");
-            for (i, label) in labels.iter().enumerate() {
-                if i > 0 {
-                    f.dst.push_str(", ");
-                }
-                f.dst.push('\'');
-                f.dst.push_str(label);
-                f.dst.push('\'');
-            }
-            f.dst.push_str("))");
+        if let Some(check) = &self.check {
+            fmt!(cx, f, " CHECK (" check.as_str() ")");
         }
     }
 }
