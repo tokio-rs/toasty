@@ -1,11 +1,10 @@
 use crate::prelude::*;
 use toasty_core::driver::Operation;
 
-/// A model with a composite primary key and a composite GSI (partition + sort key).
-/// This tests that model-level `#[index(field_a, field_b)]` creates a proper two-column
-/// GSI on DynamoDB (hash key + range key), not just a single-column index.
+/// Basic composite index: model-level `#[index(field_a, field_b)]` creates a two-column
+/// index on SQL and a GSI (hash + range key) on DynamoDB.
 #[driver_test]
-pub async fn gsi_composite_query(t: &mut Test) -> Result<()> {
+pub async fn composite_index_basic(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(user_id, game_title)]
     #[index(game_title, top_score)]
@@ -37,13 +36,12 @@ pub async fn gsi_composite_query(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// Test A: single-column model-level index (cross-driver).
+/// Struct-level `#[index(field)]` is equivalent to field-level `#[index]` (cross-driver).
 ///
-/// A model with `#[index(user_id)]` at the struct level — equivalent to placing
-/// `#[index]` on the `user_id` field directly. Verifies that `filter_by_user_id()`
-/// returns the correct records.
+/// Verifies that `filter_by_user_id()` returns the correct records and issues an
+/// indexed operation rather than a full scan.
 #[driver_test]
-pub async fn gsi_single_column_model_level(t: &mut Test) -> Result<()> {
+pub async fn composite_index_struct_level(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(id, name)]
     #[index(user_id)]
@@ -84,15 +82,15 @@ pub async fn gsi_single_column_model_level(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// Test B: two-column index with prefix queries (cross-driver).
+/// Two-column index generates prefix query methods for each valid column prefix (cross-driver).
 ///
-/// A model with `#[index(game_title, top_score)]` generates two filter methods:
-/// - `filter_by_game_title()` — uses partition key only
-/// - `filter_by_game_title_and_top_score()` — uses both partition and sort key
+/// `#[index(game_title, top_score)]` generates:
+/// - `filter_by_game_title()` — partition key only
+/// - `filter_by_game_title_and_top_score()` — both columns
 ///
-/// Verifies both methods issue the correct indexed operation type.
+/// Verifies both methods issue an indexed operation.
 #[driver_test]
-pub async fn gsi_two_column_prefix_queries(t: &mut Test) -> Result<()> {
+pub async fn composite_index_prefix_queries(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(user_id, game_title)]
     #[index(game_title, top_score)]
@@ -147,14 +145,12 @@ pub async fn gsi_two_column_prefix_queries(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// Test C: multi-attribute partition key (DDB-only).
+/// Multi-attribute partition key: `#[index(partition = a, partition = b, local = c)]`
+/// creates a GSI with 2 HASH + 1 RANGE attributes (DDB-only).
 ///
-/// A model with `#[index(partition = tournament_id, partition = region, local = round)]`
-/// creates a GSI with 2 HASH + 1 RANGE attributes. Verifies that:
-/// - `filter_by_tournament_id_and_region()` issues `QueryPk` (with index)
-/// - `filter_by_tournament_id_and_region_and_round()` issues `QueryPk` (with index)
+/// Verifies prefix queries for all valid access patterns.
 #[driver_test(requires(not(sql)))]
-pub async fn gsi_multi_attribute_partition_key(t: &mut Test) -> Result<()> {
+pub async fn composite_index_multi_hash(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(id)]
     #[index(partition = tournament_id, partition = region, local = round)]
@@ -210,16 +206,12 @@ pub async fn gsi_multi_attribute_partition_key(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// Test D: multi-attribute sort key (DDB-only).
+/// Multi-attribute sort key: `#[index(partition = a, local = b, local = c)]`
+/// creates a GSI with 1 HASH + 2 RANGE attributes (DDB-only).
 ///
-/// A model with `#[index(partition = player_id, local = match_date, local = round)]`
-/// creates a GSI with 1 HASH + 2 RANGE attributes. Verifies all valid prefix queries
-/// each issue `QueryPk` (with index):
-/// - `filter_by_player_id()`
-/// - `filter_by_player_id_and_match_date()`
-/// - `filter_by_player_id_and_match_date_and_round()`
+/// Verifies all three prefix query methods issue indexed operations.
 #[driver_test(requires(not(sql)))]
-pub async fn gsi_multi_attribute_sort_key(t: &mut Test) -> Result<()> {
+pub async fn composite_index_multi_range(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(id)]
     #[index(partition = player_id, local = match_date, local = round)]
@@ -285,15 +277,11 @@ pub async fn gsi_multi_attribute_sort_key(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// Test E: SQL 3-column composite index (SQL-only).
+/// Three-column composite index on SQL: `#[index(country, city, zip_code)]` (SQL-only).
 ///
-/// A model with `#[index(country, city, zip_code)]` on a SQL driver creates a
-/// composite index with 3 columns. Verifies all three prefix query methods:
-/// - `filter_by_country()`
-/// - `filter_by_country_and_city()`
-/// - `filter_by_country_and_city_and_zip_code()`
+/// Verifies all three prefix query methods return correct results.
 #[driver_test(requires(sql))]
-pub async fn gsi_sql_three_column(t: &mut Test) -> Result<()> {
+pub async fn composite_index_three_columns(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(id)]
     #[index(country, city, zip_code)]
