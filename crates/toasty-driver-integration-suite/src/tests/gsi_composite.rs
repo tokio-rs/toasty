@@ -106,7 +106,7 @@ pub async fn gsi_single_column_model_level(t: &mut Test) -> Result<()> {
     if t.capability().sql {
         assert_struct!(op, Operation::QuerySql(_));
     } else {
-        assert_struct!(op, Operation::FindPkByIndex(_));
+        assert_struct!(op, Operation::QueryPk(_));
     }
 
     Ok(())
@@ -173,7 +173,7 @@ pub async fn gsi_two_column_prefix_queries(t: &mut Test) -> Result<()> {
     if t.capability().sql {
         assert_struct!(op, Operation::QuerySql(_));
     } else {
-        assert_struct!(op, Operation::FindPkByIndex(_));
+        assert_struct!(op, Operation::QueryPk(_));
     }
 
     t.log().clear();
@@ -189,7 +189,7 @@ pub async fn gsi_two_column_prefix_queries(t: &mut Test) -> Result<()> {
     if t.capability().sql {
         assert_struct!(op, Operation::QuerySql(_));
     } else {
-        assert_struct!(op, Operation::FindPkByIndex(_));
+        assert_struct!(op, Operation::QueryPk(_));
     }
 
     Ok(())
@@ -199,8 +199,8 @@ pub async fn gsi_two_column_prefix_queries(t: &mut Test) -> Result<()> {
 ///
 /// A model with `#[index(partition = tournament_id, partition = region, local = round)]`
 /// creates a GSI with 2 HASH + 1 RANGE attributes. Verifies that:
-/// - `filter_by_tournament_id_and_region()` issues `FindPkByIndex`
-/// - `filter_by_tournament_id_and_region_and_round()` issues `FindPkByIndex`
+/// - `filter_by_tournament_id_and_region()` issues `QueryPk` (with index)
+/// - `filter_by_tournament_id_and_region_and_round()` issues `QueryPk` (with index)
 #[driver_test(requires(not(sql)))]
 pub async fn gsi_multi_attribute_partition_key(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -259,7 +259,7 @@ pub async fn gsi_multi_attribute_partition_key(t: &mut Test) -> Result<()> {
     assert_eq!(matches[1].round, "FINALS");
 
     let op = t.log().pop_op();
-    assert_struct!(op, Operation::FindPkByIndex(_));
+    assert_struct!(op, Operation::QueryPk(_));
 
     t.log().clear();
 
@@ -273,7 +273,7 @@ pub async fn gsi_multi_attribute_partition_key(t: &mut Test) -> Result<()> {
     assert_eq!(matches[0].player1_id, "alice");
 
     let op = t.log().pop_op();
-    assert_struct!(op, Operation::FindPkByIndex(_));
+    assert_struct!(op, Operation::QueryPk(_));
 
     Ok(())
 }
@@ -281,7 +281,8 @@ pub async fn gsi_multi_attribute_partition_key(t: &mut Test) -> Result<()> {
 /// Test D: multi-attribute sort key (DDB-only).
 ///
 /// A model with `#[index(partition = player_id, local = match_date, local = round)]`
-/// creates a GSI with 1 HASH + 2 RANGE attributes. Verifies all valid prefix queries:
+/// creates a GSI with 1 HASH + 2 RANGE attributes. Verifies all valid prefix queries
+/// each issue `QueryPk` (with index):
 /// - `filter_by_player_id()`
 /// - `filter_by_player_id_and_match_date()`
 /// - `filter_by_player_id_and_match_date_and_round()`
@@ -347,7 +348,7 @@ pub async fn gsi_multi_attribute_sort_key(t: &mut Test) -> Result<()> {
     assert_eq!(matches.len(), 3);
 
     let op = t.log().pop_op();
-    assert_struct!(op, Operation::FindPkByIndex(_));
+    assert_struct!(op, Operation::QueryPk(_));
 
     t.log().clear();
 
@@ -359,7 +360,7 @@ pub async fn gsi_multi_attribute_sort_key(t: &mut Test) -> Result<()> {
     assert_eq!(matches.len(), 2);
 
     let op = t.log().pop_op();
-    assert_struct!(op, Operation::FindPkByIndex(_));
+    assert_struct!(op, Operation::QueryPk(_));
 
     t.log().clear();
 
@@ -375,7 +376,7 @@ pub async fn gsi_multi_attribute_sort_key(t: &mut Test) -> Result<()> {
     assert_eq!(matches[0].opponent_id, "102");
 
     let op = t.log().pop_op();
-    assert_struct!(op, Operation::FindPkByIndex(_));
+    assert_struct!(op, Operation::QueryPk(_));
 
     Ok(())
 }
