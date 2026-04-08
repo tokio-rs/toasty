@@ -134,3 +134,39 @@ async fn require_without_sslrootcert() {
     let driver = PostgreSQL::new(&url).expect("driver creation failed");
     smoke_query(&driver).await;
 }
+
+#[tokio::test]
+async fn client_cert_auth() {
+    let dir = certs_dir();
+    let url = format!(
+        "{}?sslmode=verify-full&sslrootcert={}/ca.crt&sslcert={}/client.crt&sslkey={}/client.key",
+        tls_url(),
+        dir,
+        dir,
+        dir
+    );
+    let driver = PostgreSQL::new(&url).expect("driver creation failed");
+    smoke_query(&driver).await;
+}
+
+#[test]
+fn missing_sslkey() {
+    let dir = certs_dir();
+    let url = format!("{}?sslcert={}/client.crt", tls_url(), dir);
+    let result = PostgreSQL::new(&url);
+    assert!(
+        result.is_err(),
+        "expected error when sslcert set without sslkey"
+    );
+}
+
+#[test]
+fn missing_sslcert() {
+    let dir = certs_dir();
+    let url = format!("{}?sslkey={}/client.key", tls_url(), dir);
+    let result = PostgreSQL::new(&url);
+    assert!(
+        result.is_err(),
+        "expected error when sslkey set without sslcert"
+    );
+}
