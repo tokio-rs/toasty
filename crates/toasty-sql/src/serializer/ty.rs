@@ -88,6 +88,25 @@ impl ToSql for &db::Type {
                 Flavor::Mysql => fmt!(cx, f, "DATETIME(" precision ")"),
                 Flavor::Sqlite => todo!("SQLite does not support DateTime"),
             },
+            db::Type::Enum { name, labels } => match f.serializer.flavor {
+                // PostgreSQL: reference the named enum type created with CREATE TYPE.
+                Flavor::Postgresql => fmt!(cx, f, name.as_str()),
+                // MySQL: inline ENUM('label1', 'label2', ...) column type.
+                Flavor::Mysql => {
+                    f.dst.push_str("ENUM(");
+                    for (i, label) in labels.iter().enumerate() {
+                        if i > 0 {
+                            f.dst.push_str(", ");
+                        }
+                        f.dst.push('\'');
+                        f.dst.push_str(label);
+                        f.dst.push('\'');
+                    }
+                    f.dst.push(')');
+                }
+                // SQLite: TEXT column (CHECK constraint added separately).
+                Flavor::Sqlite => fmt!(cx, f, "TEXT"),
+            },
             db::Type::Custom(custom) => fmt!(cx, f, custom.as_str()),
         }
     }

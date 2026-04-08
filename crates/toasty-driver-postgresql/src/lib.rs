@@ -389,6 +389,28 @@ impl toasty_core::driver::Connection for Connection {
     }
 
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
+        // Create PostgreSQL enum types before creating tables.
+        // Collect unique enum types across all columns.
+        let mut created_enum_types = std::collections::HashSet::new();
+        for table in &schema.db.tables {
+            for column in &table.columns {
+                if let toasty_core::schema::db::Type::Enum { name, labels } = &column.storage_ty
+                    && created_enum_types.insert(name.clone())
+                {
+                    let labels_sql: Vec<String> = labels
+                        .iter()
+                        .map(|l| format!("'{}'", l.replace('\'', "''")))
+                        .collect();
+                    let sql = format!("CREATE TYPE {} AS ENUM ({})", name, labels_sql.join(", "));
+                    tracing::debug!(enum_type = %name, "creating enum type");
+                    self.client
+                        .execute(&sql, &[])
+                        .await
+                        .map_err(toasty_core::Error::driver_operation_failed)?;
+                }
+            }
+        }
+
         for table in &schema.db.tables {
             tracing::debug!(table = %table.name, "creating table");
             self.create_table(&schema.db, table).await?;

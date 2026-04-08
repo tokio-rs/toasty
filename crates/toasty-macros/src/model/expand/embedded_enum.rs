@@ -1,5 +1,5 @@
 use super::{Expand, schema, util};
-use crate::model::schema::{FieldTy, VariantValue};
+use crate::model::schema::{EnumStorageStrategy, FieldTy, VariantValue};
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -498,6 +498,56 @@ impl Expand<'_> {
             quote! { #toasty::core::stmt::Type::String }
         } else {
             quote! { #toasty::core::stmt::Type::I64 }
+        }
+    }
+
+    /// Generates the `storage_ty` token for the discriminant `FieldPrimitive`.
+    ///
+    /// - Native enum: `Some(db::Type::Enum { name, labels })`
+    /// - Plain string (`#[column(type = text)]`): `Some(db::Type::Text)`
+    /// - Integer discriminants: `None`
+    pub(super) fn expand_enum_storage_ty(&self) -> TokenStream {
+        let toasty = &self.toasty;
+        let embedded_enum = self.model.kind.as_embedded_enum_unwrap();
+
+        match &embedded_enum.storage_strategy {
+            Some(EnumStorageStrategy::NativeEnum(custom_name)) => {
+                // Determine the type name: custom name or default snake_case of enum ident.
+                let type_name = match custom_name {
+                    Some(name) => name.clone(),
+                    None => {
+                        use heck::ToSnakeCase;
+                        self.model.ident.to_string().to_snake_case()
+                    }
+                };
+
+                // Collect labels in declaration order.
+                let labels: Vec<&str> = embedded_enum
+                    .variants
+                    .iter()
+                    .map(|v| match &v.attrs.discriminant {
+                        VariantValue::String(s) => s.as_str(),
+                        _ => unreachable!("native enum requires string discriminants"),
+                    })
+                    .collect();
+
+                quote! {
+                    ::std::option::Option::Some(
+                        #toasty::core::schema::db::Type::Enum {
+                            name: #type_name.to_string(),
+                            labels: vec![ #( #labels.to_string() ),* ],
+                        }
+                    )
+                }
+            }
+            Some(EnumStorageStrategy::PlainString(col_ty)) => {
+                let ty_tokens = col_ty.expand_with(toasty);
+                quote! { ::std::option::Option::Some(#ty_tokens) }
+            }
+            None => {
+                // Integer discriminants: no storage type hint.
+                quote! { ::std::option::Option::None }
+            }
         }
     }
 }
