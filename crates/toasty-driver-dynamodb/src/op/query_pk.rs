@@ -25,74 +25,45 @@ impl Connection {
             .as_ref()
             .map(|expr| ddb_expression(&cx, &mut expr_attrs, false, expr));
 
-        // Build the query based on whether we're querying primary key or an index
-        let result = if let Some(index_id) = op.index {
-            let index = schema.db.index(index_id);
+        // Build base query, then conditionally attach an index
+        let mut query = self
+            .client
+            .query()
+            .table_name(&table.name)
+            .key_condition_expression(key_expression)
+            .set_filter_expression(filter_expression)
+            .set_expression_attribute_names(Some(expr_attrs.attr_names))
+            .set_expression_attribute_values(Some(expr_attrs.attr_values));
 
+        if let Some(index_id) = op.index {
+            let index = schema.db.index(index_id);
             if index.unique {
-                use toasty_core::Error;
-                let err = Error::from_args(format_args!(
+                return Err(toasty_core::Error::from_args(format_args!(
                     "Unique index {} doesn't have fields.",
                     index.name
-                ));
-                Err(err)
-            } else {
-                tracing::trace!(table_name = %table.name, index_name = %index.name, "querying secondary index");
-                let mut query = self
-                    .client
-                    .query()
-                    .table_name(&table.name)
-                    .index_name(&index.name)
-                    .key_condition_expression(key_expression)
-                    .set_filter_expression(filter_expression)
-                    .set_expression_attribute_names(Some(expr_attrs.attr_names))
-                    .set_expression_attribute_values(Some(expr_attrs.attr_values));
-
-                if let Some(limit) = op.limit {
-                    query = query.limit(limit as i32);
-                }
-                if let Some(ref cursor_value) = op.cursor {
-                    query =
-                        query.set_exclusive_start_key(Some(deserialize_ddb_cursor(cursor_value)));
-                }
-                if let Some(ref direction) = op.order {
-                    query = query.scan_index_forward(*direction == stmt::Direction::Asc);
-                }
-
-                query
-                    .send()
-                    .await
-                    .map_err(toasty_core::Error::driver_operation_failed)
+                )));
             }
+            tracing::trace!(table_name = %table.name, index_name = %index.name, "querying secondary index");
+            query = query.index_name(&index.name);
         } else {
             tracing::trace!(table_name = %table.name, "querying primary key");
-            let mut query = self
-                .client
-                .query()
-                .table_name(&table.name)
-                .key_condition_expression(key_expression)
-                .set_filter_expression(filter_expression)
-                .set_expression_attribute_names(Some(expr_attrs.attr_names))
-                .set_expression_attribute_values(Some(expr_attrs.attr_values));
+        }
 
-            if let Some(limit) = op.limit {
-                query = query.limit(limit as i32);
-            }
-            if let Some(ref cursor_value) = op.cursor {
-                query = query.set_exclusive_start_key(Some(deserialize_ddb_cursor(cursor_value)));
-            }
-            if let Some(ref direction) = op.order {
-                query = query.scan_index_forward(*direction == stmt::Direction::Asc);
-            }
-
-            query
-                .send()
-                .await
-                .map_err(toasty_core::Error::driver_operation_failed)
-        };
+        if let Some(limit) = op.limit {
+            query = query.limit(limit as i32);
+        }
+        if let Some(ref cursor_value) = op.cursor {
+            query = query.set_exclusive_start_key(Some(deserialize_ddb_cursor(cursor_value)));
+        }
+        if let Some(ref direction) = op.order {
+            query = query.scan_index_forward(*direction == stmt::Direction::Asc);
+        }
 
         let schema = schema.clone();
-        let res = result?;
+        let res = query
+            .send()
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
 
         // Capture LastEvaluatedKey for pagination
         let cursor = res.last_evaluated_key.as_ref().map(serialize_ddb_cursor);
