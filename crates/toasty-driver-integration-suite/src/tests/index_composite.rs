@@ -558,3 +558,47 @@ pub async fn composite_index_too_many_range_columns(t: &mut Test) -> Result<()> 
 
     Ok(())
 }
+
+/// Range filter chained onto a composite index partition query (cross-driver).
+///
+/// `filter_by_game_title("chess")` uses the index to scope by partition key,
+/// then `.filter(GameScore::fields().top_score().gt(150))` applies a range
+/// condition on the sort key.
+#[driver_test]
+pub async fn composite_index_sort_key_range_filter(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[key(user_id, game_title)]
+    #[index(game_title, top_score)]
+    struct GameScore {
+        user_id: String,
+        game_title: String,
+        top_score: i64,
+    }
+
+    let mut db = t.setup_db(models!(GameScore)).await;
+
+    toasty::create!(GameScore::[
+        { user_id: "u1", game_title: "chess", top_score: 100_i64 },
+        { user_id: "u2", game_title: "chess", top_score: 200_i64 },
+        { user_id: "u3", game_title: "chess", top_score: 1500_i64 },
+        { user_id: "u4", game_title: "chess", top_score: 50_i64 },
+        { user_id: "u1", game_title: "go", top_score: 9999_i64 },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let mut scores: Vec<GameScore> = GameScore::filter_by_game_title("chess")
+        .filter(GameScore::fields().top_score().gt(150))
+        .exec(&mut db)
+        .await?;
+    scores.sort_by_key(|s| s.top_score);
+
+    assert_eq!(scores.len(), 2);
+    assert_eq!(scores[0].top_score, 200);
+    assert_eq!(scores[1].top_score, 1500);
+
+    // go scores must not appear despite having top_score > 150
+    assert!(scores.iter().all(|s| s.game_title == "chess"));
+
+    Ok(())
+}
