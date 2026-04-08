@@ -5,10 +5,45 @@
 //!
 //! # Examples
 //!
+//! Connecting without TLS:
+//!
 //! ```no_run
 //! use toasty_driver_postgresql::PostgreSQL;
 //!
 //! let driver = PostgreSQL::new("postgresql://localhost/mydb").unwrap();
+//! ```
+//!
+//! Connecting with TLS using [`native-tls`](https://docs.rs/native-tls) (requires
+//! the `native-tls` feature):
+//!
+//! ```no_run,ignore
+//! use toasty_driver_postgresql::PostgreSQL;
+//! use postgres_native_tls::MakeTlsConnector;
+//! use native_tls::TlsConnector;
+//!
+//! let connector = TlsConnector::builder()
+//!     .danger_accept_invalid_certs(true) // for development only
+//!     .build()
+//!     .unwrap();
+//! let tls = MakeTlsConnector::new(connector);
+//!
+//! let driver = PostgreSQL::with_tls("postgresql://localhost/mydb", tls).unwrap();
+//! ```
+//!
+//! Connecting with TLS using [`rustls`](https://docs.rs/rustls) (requires the
+//! `rustls` feature):
+//!
+//! ```no_run,ignore
+//! use toasty_driver_postgresql::PostgreSQL;
+//! use tokio_postgres_rustls::MakeRustlsConnect;
+//! use std::sync::Arc;
+//!
+//! let config = rustls::ClientConfig::builder()
+//!     .with_root_certificates(root_store)
+//!     .with_no_client_auth();
+//! let tls = MakeRustlsConnect::new(config);
+//!
+//! let driver = PostgreSQL::with_tls("postgresql://localhost/mydb", tls).unwrap();
 //! ```
 
 mod statement_cache;
@@ -17,9 +52,15 @@ mod value;
 
 pub(crate) use value::Value;
 
+#[cfg(feature = "native-tls")]
+pub use postgres_native_tls;
+
+#[cfg(feature = "rustls")]
+pub use tokio_postgres_rustls;
+
 use async_trait::async_trait;
-use postgres::{Socket, tls::MakeTlsConnect, types::ToSql};
-use std::{borrow::Cow, sync::Arc};
+use postgres::{Socket, tls::MakeTlsConnect, tls::TlsConnect, types::ToSql};
+use std::{borrow::Cow, fmt, sync::Arc};
 use toasty_core::{
     Result, Schema,
     driver::{Capability, Driver, ExecResponse, Operation},
@@ -35,6 +76,11 @@ use crate::{statement_cache::StatementCache, r#type::TypeExt};
 
 /// A PostgreSQL [`Driver`] that connects via `tokio-postgres`.
 ///
+/// The type parameter `Tls` controls the TLS connector used for connections.
+/// It defaults to [`tokio_postgres::NoTls`] for unencrypted connections. To
+/// connect over TLS, use [`PostgreSQL::with_tls`] with a connector that
+/// implements [`MakeTlsConnect`].
+///
 /// # Examples
 ///
 /// ```no_run
@@ -42,15 +88,61 @@ use crate::{statement_cache::StatementCache, r#type::TypeExt};
 ///
 /// let driver = PostgreSQL::new("postgresql://localhost/mydb").unwrap();
 /// ```
-#[derive(Debug)]
-pub struct PostgreSQL {
+pub struct PostgreSQL<Tls = tokio_postgres::NoTls> {
     url: String,
     config: Config,
+    tls: Tls,
+}
+
+impl<Tls> fmt::Debug for PostgreSQL<Tls> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PostgreSQL")
+            .field("url", &self.url)
+            .finish()
+    }
 }
 
 impl PostgreSQL {
-    /// Create a new PostgreSQL driver from a connection URL
+    /// Create a new PostgreSQL driver from a connection URL without TLS.
+    ///
+    /// This is equivalent to calling [`PostgreSQL::with_tls`] with
+    /// [`tokio_postgres::NoTls`].
     pub fn new(url: impl Into<String>) -> Result<Self> {
+        Self::with_tls(url, tokio_postgres::NoTls)
+    }
+}
+
+impl<Tls> PostgreSQL<Tls> {
+    /// Create a new PostgreSQL driver from a connection URL with a custom TLS
+    /// connector.
+    ///
+    /// The `tls` parameter accepts any type that implements
+    /// [`MakeTlsConnect<Socket>`](postgres::tls::MakeTlsConnect). Common
+    /// choices include:
+    ///
+    /// - [`tokio_postgres::NoTls`] — no encryption (the default with
+    ///   [`PostgreSQL::new`])
+    /// - [`postgres_native_tls::MakeTlsConnector`] — TLS via the system's
+    ///   native TLS library (requires the `native-tls` feature)
+    /// - [`tokio_postgres_rustls::MakeRustlsConnect`] — TLS via
+    ///   [`rustls`](https://docs.rs/rustls) (requires the `rustls` feature)
+    ///
+    /// # Examples
+    ///
+    /// ```no_run,ignore
+    /// use toasty_driver_postgresql::PostgreSQL;
+    /// use postgres_native_tls::MakeTlsConnector;
+    /// use native_tls::TlsConnector;
+    ///
+    /// let connector = TlsConnector::builder()
+    ///     .danger_accept_invalid_certs(true) // for development only
+    ///     .build()
+    ///     .unwrap();
+    /// let tls = MakeTlsConnector::new(connector);
+    ///
+    /// let driver = PostgreSQL::with_tls("postgresql://rds-host/mydb", tls).unwrap();
+    /// ```
+    pub fn with_tls(url: impl Into<String>, tls: Tls) -> Result<Self> {
         let url_str = url.into();
         let url = Url::parse(&url_str).map_err(toasty_core::Error::driver_operation_failed)?;
 
@@ -94,12 +186,19 @@ impl PostgreSQL {
         Ok(Self {
             url: url_str,
             config,
+            tls,
         })
     }
 }
 
 #[async_trait]
-impl Driver for PostgreSQL {
+impl<Tls> Driver for PostgreSQL<Tls>
+where
+    Tls: MakeTlsConnect<Socket> + Clone + Send + Sync + 'static,
+    Tls::Stream: Send + Sync,
+    Tls::TlsConnect: Send,
+    <Tls::TlsConnect as TlsConnect<Socket>>::Future: Send,
+{
     fn url(&self) -> Cow<'_, str> {
         Cow::Borrowed(&self.url)
     }
@@ -110,7 +209,7 @@ impl Driver for PostgreSQL {
 
     async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::driver::Connection>> {
         Ok(Box::new(
-            Connection::connect(self.config.clone(), tokio_postgres::NoTls).await?,
+            Connection::connect(self.config.clone(), self.tls.clone()).await?,
         ))
     }
 
@@ -149,7 +248,7 @@ impl Driver for PostgreSQL {
         let connect = |dbname: &str| {
             let mut config = self.config.clone();
             config.dbname(dbname);
-            Connection::connect(config, tokio_postgres::NoTls)
+            Connection::connect(config, self.tls.clone())
         };
 
         // Step 1: Connect to the target DB and create a temp DB

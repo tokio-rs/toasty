@@ -88,6 +88,7 @@ mysql_async = { version = "0.36.2", default-features = false, features = [
 pulldown-cmark = { version = "0.13", default-features = false }
 pluralizer = "0.5.0"
 postgres = "0.19.13"
+postgres-native-tls = "0.5.0"
 postgres-types = { version = "0.2.13", features = ["with-uuid-1", "array-impls"] }
 pretty_assertions = "1.4.1"
 proc-macro2 = "1.0.106"
@@ -105,6 +106,7 @@ tempfile = "3.27"
 proptest = "1"
 tokio = { version = "1.50", features = ["full"] }
 tokio-postgres = "0.7.17"
+tokio-postgres-rustls = "0.13.0"
 tokio-stream = { version = "0.1.18", default-features = false }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
