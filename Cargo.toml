@@ -87,7 +87,6 @@ mysql_async = { version = "0.36.2", default-features = false, features = [
 ] }
 pulldown-cmark = { version = "0.13", default-features = false }
 pluralizer = "0.5.0"
-postgres = "0.19.13"
 postgres-types = { version = "0.2.13", features = ["with-uuid-1", "array-impls"] }
 pretty_assertions = "1.4.1"
 proc-macro2 = "1.0.106"

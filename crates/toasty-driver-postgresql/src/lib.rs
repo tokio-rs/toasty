@@ -18,7 +18,6 @@ mod value;
 pub(crate) use value::Value;
 
 use async_trait::async_trait;
-use postgres::{Socket, tls::MakeTlsConnect, types::ToSql};
 use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     Result, Schema,
@@ -28,7 +27,7 @@ use toasty_core::{
     stmt::ValueRecord,
 };
 use toasty_sql::{self as sql, TypedValue};
-use tokio_postgres::{Client, Config};
+use tokio_postgres::{Client, Config, Socket, tls::MakeTlsConnect, types::ToSql};
 use url::Url;
 
 use crate::{statement_cache::StatementCache, r#type::TypeExt};
