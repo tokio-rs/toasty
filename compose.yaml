@@ -10,6 +10,7 @@
 #
 # TOASTY_TEST_MYSQL_URL = "mysql://toasty:toasty@localhost:3306/toasty"
 # TOASTY_TEST_POSTGRES_URL = "postgresql://toasty:toasty@localhost:5432/toasty"
+# TOASTY_TEST_POSTGRES_TLS_URL = "postgresql://toasty:toasty@localhost:5433/toasty"
 # TOASTY_TEST_DYNAMODB_URL = "dynamodb://localhost:8000"
 #
 # # DynamoDB specific environment variables
@@ -49,6 +50,39 @@ services:
       POSTGRES_DB: toasty
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "toasty"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgresql-tls:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: toasty
+      POSTGRES_PASSWORD: toasty
+      POSTGRES_DB: toasty
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./tests/tls/certs:/certs:ro
+      - ./tests/tls/pg_hba.conf:/etc/pg_hba.conf:ro
+      - ./tests/tls/setup-ssl.sh:/usr/local/bin/setup-ssl.sh:ro
+    entrypoint: ["/usr/local/bin/setup-ssl.sh"]
+    command:
+      - postgres
+      - -c
+      - ssl=on
+      - -c
+      - ssl_cert_file=/var/lib/postgresql/server.crt
+      - -c
+      - ssl_key_file=/var/lib/postgresql/server.key
+      - -c
+      - ssl_ca_file=/var/lib/postgresql/ca.crt
+      - -c
+      - hba_file=/var/lib/postgresql/pg_hba.conf
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "toasty"]
       interval: 10s
