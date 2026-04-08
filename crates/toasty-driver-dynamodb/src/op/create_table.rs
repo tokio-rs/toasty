@@ -35,10 +35,13 @@ impl Connection {
 
         let pk_cols: Vec<&db::Column> = table.primary_key_columns().collect();
 
-        assert!(
-            !pk_cols.is_empty() && pk_cols.len() <= 2,
-            "TABLE={table:#?}"
-        );
+        if pk_cols.is_empty() || pk_cols.len() > 2 {
+            return Err(toasty_core::Error::invalid_schema(format!(
+                "table '{}' primary key must have 1 or 2 columns, got {}",
+                table.name,
+                pk_cols.len()
+            )));
+        }
 
         for col in &pk_cols {
             defined_attributes.insert(col.id);
@@ -72,19 +75,21 @@ impl Connection {
                 .map(|ic| table.column(ic.column))
                 .collect();
 
-            assert!(
-                !partition_cols.is_empty() && partition_cols.len() <= 4,
-                "GSI '{}' must have 1 to 4 partition (HASH) columns, got {}",
-                index.name,
-                partition_cols.len()
-            );
+            if partition_cols.is_empty() || partition_cols.len() > 4 {
+                return Err(toasty_core::Error::invalid_schema(format!(
+                    "GSI '{}' must have 1 to 4 partition (HASH) columns, got {}",
+                    index.name,
+                    partition_cols.len()
+                )));
+            }
 
-            assert!(
-                range_cols.len() <= 4,
-                "GSI '{}' must have at most 4 range (RANGE) columns, got {}",
-                index.name,
-                range_cols.len()
-            );
+            if range_cols.len() > 4 {
+                return Err(toasty_core::Error::invalid_schema(format!(
+                    "GSI '{}' must have at most 4 range (RANGE) columns, got {}",
+                    index.name,
+                    range_cols.len()
+                )));
+            }
 
             for col in &partition_cols {
                 defined_attributes.insert(col.id);
