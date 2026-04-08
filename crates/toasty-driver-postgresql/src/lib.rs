@@ -12,6 +12,8 @@
 //! ```
 
 mod statement_cache;
+#[cfg(feature = "tls")]
+mod tls;
 mod r#type;
 mod value;
 

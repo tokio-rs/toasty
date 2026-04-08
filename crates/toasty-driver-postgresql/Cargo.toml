@@ -14,6 +14,14 @@ readme.workspace = true
 documentation = "https://docs.rs/toasty-driver-postgresql"
 
 [features]
+default = ["tls"]
+tls = [
+    "dep:rustls",
+    "dep:tokio-rustls",
+    "dep:const-oid",
+    "dep:sha2",
+    "dep:x509-cert",
+]
 rust_decimal = ["dep:rust_decimal", "toasty-core/rust_decimal"]
 bigdecimal = ["dep:bigdecimal", "toasty-core/bigdecimal"]
 jiff = ["dep:jiff", "toasty-core/jiff", "postgres-types/with-jiff-0_2"]
@@ -32,6 +40,11 @@ tokio.workspace = true
 tokio-postgres.workspace = true
 uuid.workspace = true
 url.workspace = true
+rustls = { workspace = true, optional = true }
+tokio-rustls = { workspace = true, optional = true }
+const-oid = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+x509-cert = { workspace = true, optional = true }
 
 [lints]
 workspace = true
