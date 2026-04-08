@@ -340,3 +340,221 @@ pub async fn composite_index_three_columns(t: &mut Test) -> Result<()> {
 
     Ok(())
 }
+
+/// Three-column simple-mode index on DynamoDB: `#[index(country, city, zip_code)]` (DDB-only).
+///
+/// In simple mode, the first field becomes HASH and the rest become RANGE.
+/// Verifies all three prefix query methods issue `QueryPk` and return correct results.
+#[driver_test(requires(not(sql)))]
+pub async fn composite_index_simple_three_column_ddb(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[key(id)]
+    #[index(country, city, zip_code)]
+    struct Address {
+        id: String,
+        country: String,
+        city: String,
+        zip_code: String,
+        street: String,
+    }
+
+    let mut db = t.setup_db(models!(Address)).await;
+
+    toasty::create!(Address::[
+        { id: "a1", country: "US", city: "Seattle", zip_code: "98101", street: "1st Ave" },
+        { id: "a2", country: "US", city: "Seattle", zip_code: "98102", street: "2nd Ave" },
+        { id: "a3", country: "US", city: "Portland", zip_code: "97201", street: "Oak St" },
+        { id: "a4", country: "CA", city: "Toronto", zip_code: "M5V", street: "King St" },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    t.log().clear();
+
+    // 1-column prefix: HASH key only
+    let addrs: Vec<Address> = Address::filter_by_country("US").exec(&mut db).await?;
+    assert_eq!(addrs.len(), 3);
+
+    let op = t.log().pop_op();
+    assert_struct!(op, Operation::QueryPk(_));
+
+    t.log().clear();
+
+    // 2-column prefix: HASH + first RANGE key
+    let addrs: Vec<Address> = Address::filter_by_country_and_city("US", "Seattle")
+        .exec(&mut db)
+        .await?;
+    assert_eq!(addrs.len(), 2);
+
+    let op = t.log().pop_op();
+    assert_struct!(op, Operation::QueryPk(_));
+
+    t.log().clear();
+
+    // 3-column full key: HASH + both RANGE keys
+    let addrs: Vec<Address> =
+        Address::filter_by_country_and_city_and_zip_code("US", "Seattle", "98101")
+            .exec(&mut db)
+            .await?;
+    assert_eq!(addrs.len(), 1);
+    assert_eq!(addrs[0].street, "1st Ave");
+
+    let op = t.log().pop_op();
+    assert_struct!(op, Operation::QueryPk(_));
+
+    Ok(())
+}
+
+/// Multiple indexes on the same model: verifies the query planner selects the correct
+/// index when a model defines two `#[index]` attributes (cross-driver).
+///
+/// A bug in index selection could silently route queries through the wrong index,
+/// returning incorrect results.
+#[driver_test]
+pub async fn composite_index_multiple_indexes(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[key(id)]
+    #[index(category)]
+    #[index(brand)]
+    struct Product {
+        id: String,
+        category: String,
+        brand: String,
+        name: String,
+    }
+
+    let mut db = t.setup_db(models!(Product)).await;
+
+    toasty::create!(Product::[
+        { id: "p1", category: "electronics", brand: "acme", name: "Widget A" },
+        { id: "p2", category: "electronics", brand: "globex", name: "Widget B" },
+        { id: "p3", category: "clothing", brand: "acme", name: "Shirt C" },
+        { id: "p4", category: "clothing", brand: "initech", name: "Pants D" },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    t.log().clear();
+
+    // Query via the first index (category)
+    let mut products: Vec<Product> = Product::filter_by_category("electronics")
+        .exec(&mut db)
+        .await?;
+    products.sort_by(|a, b| a.id.cmp(&b.id));
+
+    assert_eq!(products.len(), 2);
+    assert_eq!(products[0].name, "Widget A");
+    assert_eq!(products[1].name, "Widget B");
+
+    let op = t.log().pop_op();
+    if t.capability().sql {
+        assert_struct!(op, Operation::QuerySql(_));
+    } else {
+        assert_struct!(op, Operation::QueryPk(_));
+    }
+
+    t.log().clear();
+
+    // Query via the second index (brand) — must not use the category index
+    let mut products: Vec<Product> = Product::filter_by_brand("acme").exec(&mut db).await?;
+    products.sort_by(|a, b| a.id.cmp(&b.id));
+
+    assert_eq!(products.len(), 2);
+    assert_eq!(products[0].name, "Widget A");
+    assert_eq!(products[1].name, "Shirt C");
+
+    let op = t.log().pop_op();
+    if t.capability().sql {
+        assert_struct!(op, Operation::QuerySql(_));
+    } else {
+        assert_struct!(op, Operation::QueryPk(_));
+    }
+
+    Ok(())
+}
+
+/// Maximum attribute boundary: `#[index(partition = f1..f4, local = f5..f8)]` (DDB-only).
+///
+/// DynamoDB allows up to 4 HASH + 4 RANGE attributes in a GSI KeySchema.
+/// Verifies that `setup_db()` succeeds at the limit and that a query using all
+/// 4 partition key attributes returns correct results.
+#[driver_test(requires(not(sql)))]
+pub async fn composite_index_max_attributes(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[key(id)]
+    #[index(partition = f1, partition = f2, partition = f3, partition = f4, local = f5, local = f6, local = f7, local = f8)]
+    struct MaxIndex {
+        id: String,
+        f1: String,
+        f2: String,
+        f3: String,
+        f4: String,
+        f5: String,
+        f6: String,
+        f7: String,
+        f8: String,
+        value: String,
+    }
+
+    // setup_db must succeed at the 4+4 boundary
+    let mut db = t.setup_db(models!(MaxIndex)).await;
+
+    toasty::create!(MaxIndex::[
+        { id: "r1", f1: "a1", f2: "b1", f3: "c1", f4: "d1", f5: "e1", f6: "g1", f7: "h1", f8: "i1", value: "found" },
+        { id: "r2", f1: "a1", f2: "b1", f3: "c1", f4: "d2", f5: "e1", f6: "g1", f7: "h1", f8: "i1", value: "other" },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    t.log().clear();
+
+    // Query using all 4 partition key attributes (required for DDB multi-attribute HASH key)
+    let records: Vec<MaxIndex> =
+        MaxIndex::filter_by_f1_and_f2_and_f3_and_f4("a1", "b1", "c1", "d1")
+            .exec(&mut db)
+            .await?;
+
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].value, "found");
+
+    let op = t.log().pop_op();
+    assert_struct!(op, Operation::QueryPk(_));
+
+    Ok(())
+}
+
+/// Error condition: more than 4 RANGE columns in simple-mode index (DDB-only).
+///
+/// `#[index(a, b, c, d, e, f)]` in simple mode produces 1 HASH + 5 RANGE, which
+/// exceeds the DynamoDB limit of 4. The driver must return `Err(invalid_schema)`
+/// rather than panicking.
+#[driver_test(requires(not(sql)))]
+pub async fn composite_index_too_many_range_columns(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[key(id)]
+    #[index(a, b, c, d, e, f)]
+    struct TooManyRange {
+        id: String,
+        a: String,
+        b: String,
+        c: String,
+        d: String,
+        e: String,
+        f: String,
+    }
+
+    // Do NOT use `?` — capture the error instead of propagating it
+    let result = t.try_setup_db(models!(TooManyRange)).await;
+
+    assert!(
+        result.is_err(),
+        "expected setup_db to fail for 1 HASH + 5 RANGE index"
+    );
+    let err = result.unwrap_err();
+    assert!(
+        err.is_invalid_schema(),
+        "expected invalid_schema error, got: {err}"
+    );
+
+    Ok(())
+}
