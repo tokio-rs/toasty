@@ -479,6 +479,7 @@ pub async fn composite_index_multiple_indexes(t: &mut Test) -> Result<()> {
 /// Verifies that `setup_db()` succeeds at the limit and that a query using all
 /// 4 partition key attributes returns correct results.
 #[driver_test(requires(not(sql)))]
+#[allow(clippy::too_many_arguments)]
 pub async fn composite_index_max_attributes(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(id)]
@@ -529,6 +530,7 @@ pub async fn composite_index_max_attributes(t: &mut Test) -> Result<()> {
 /// exceeds the DynamoDB limit of 4. The driver must return `Err(invalid_schema)`
 /// rather than panicking.
 #[driver_test(requires(not(sql)))]
+#[allow(clippy::too_many_arguments)]
 pub async fn composite_index_too_many_range_columns(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(id)]
