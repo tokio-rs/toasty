@@ -21,6 +21,7 @@ tls = [
     "dep:const-oid",
     "dep:sha2",
     "dep:x509-cert",
+    "dep:rustls-platform-verifier",
 ]
 rust_decimal = ["dep:rust_decimal", "toasty-core/rust_decimal"]
 bigdecimal = ["dep:bigdecimal", "toasty-core/bigdecimal"]
@@ -45,6 +46,7 @@ tokio-rustls = { workspace = true, optional = true }
 const-oid = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
 x509-cert = { workspace = true, optional = true }
+rustls-platform-verifier = { workspace = true, optional = true }
 
 [lints]
 workspace = true

@@ -47,6 +47,8 @@ use crate::{statement_cache::StatementCache, r#type::TypeExt};
 pub struct PostgreSQL {
     url: String,
     config: Config,
+    #[cfg(feature = "tls")]
+    tls: Option<tls::MakeRustlsConnect>,
 }
 
 impl PostgreSQL {
@@ -92,10 +94,76 @@ impl PostgreSQL {
             config.password(password);
         }
 
+        for (key, value) in url.query_pairs() {
+            match key.as_ref() {
+                "sslmode" => {
+                    let mode = match value.as_ref() {
+                        "disable" => tokio_postgres::config::SslMode::Disable,
+                        "prefer" => tokio_postgres::config::SslMode::Prefer,
+                        "require" | "verify-ca" | "verify-full" => {
+                            tokio_postgres::config::SslMode::Require
+                        }
+                        other => {
+                            return Err(toasty_core::Error::invalid_connection_url(format!(
+                                "unsupported sslmode: {other}"
+                            )));
+                        }
+                    };
+                    config.ssl_mode(mode);
+                }
+                "channel_binding" => {
+                    let cb = match value.as_ref() {
+                        "disable" => tokio_postgres::config::ChannelBinding::Disable,
+                        "prefer" => tokio_postgres::config::ChannelBinding::Prefer,
+                        "require" => tokio_postgres::config::ChannelBinding::Require,
+                        other => {
+                            return Err(toasty_core::Error::invalid_connection_url(format!(
+                                "unsupported channel_binding: {other}"
+                            )));
+                        }
+                    };
+                    config.channel_binding(cb);
+                }
+                "sslnegotiation" => {
+                    let neg = match value.as_ref() {
+                        "postgres" => tokio_postgres::config::SslNegotiation::Postgres,
+                        "direct" => tokio_postgres::config::SslNegotiation::Direct,
+                        other => {
+                            return Err(toasty_core::Error::invalid_connection_url(format!(
+                                "unsupported sslnegotiation: {other}"
+                            )));
+                        }
+                    };
+                    config.ssl_negotiation(neg);
+                }
+                _ => {}
+            }
+        }
+
+        #[cfg(feature = "tls")]
+        let tls = if config.get_ssl_mode() != tokio_postgres::config::SslMode::Disable {
+            use rustls_platform_verifier::ConfigVerifierExt;
+            let rustls_config = rustls::ClientConfig::with_platform_verifier()
+                .map_err(toasty_core::Error::driver_operation_failed)?;
+            Some(tls::MakeRustlsConnect::new(rustls_config))
+        } else {
+            None
+        };
+
         Ok(Self {
             url: url_str,
             config,
+            #[cfg(feature = "tls")]
+            tls,
         })
+    }
+
+    async fn connect_with_config(&self, config: Config) -> Result<Connection> {
+        #[cfg(feature = "tls")]
+        if let Some(ref tls) = self.tls {
+            return Connection::connect(config, tls.clone()).await;
+        }
+        Connection::connect(config, tokio_postgres::NoTls).await
     }
 }
 
@@ -111,7 +179,7 @@ impl Driver for PostgreSQL {
 
     async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::driver::Connection>> {
         Ok(Box::new(
-            Connection::connect(self.config.clone(), tokio_postgres::NoTls).await?,
+            self.connect_with_config(self.config.clone()).await?,
         ))
     }
 
@@ -150,7 +218,7 @@ impl Driver for PostgreSQL {
         let connect = |dbname: &str| {
             let mut config = self.config.clone();
             config.dbname(dbname);
-            Connection::connect(config, tokio_postgres::NoTls)
+            self.connect_with_config(config)
         };
 
         // Step 1: Connect to the target DB and create a temp DB

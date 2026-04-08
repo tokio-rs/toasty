@@ -168,7 +168,7 @@ where
 }
 
 /// A `MakeTlsConnect` implementation using `rustls`.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct MakeRustlsConnect {
     config: Arc<ClientConfig>,
 }
