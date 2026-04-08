@@ -70,27 +70,30 @@ pub async fn gsi_single_column_model_level(t: &mut Test) -> Result<()> {
 
     let mut db = t.setup_db(models!(Post)).await;
 
-    Post::create()
-        .id("p1")
-        .name("first")
-        .user_id("alice")
-        .title("Hello World")
-        .exec(&mut db)
-        .await?;
-    Post::create()
-        .id("p2")
-        .name("second")
-        .user_id("alice")
-        .title("Another Post")
-        .exec(&mut db)
-        .await?;
-    Post::create()
-        .id("p3")
-        .name("third")
-        .user_id("bob")
-        .title("Bob's Post")
-        .exec(&mut db)
-        .await?;
+    toasty::create!(Post {
+        id: "p1",
+        name: "first",
+        user_id: "alice",
+        title: "Hello World",
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(Post {
+        id: "p2",
+        name: "second",
+        user_id: "alice",
+        title: "Another Post",
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(Post {
+        id: "p3",
+        name: "third",
+        user_id: "bob",
+        title: "Bob's Post",
+    })
+    .exec(&mut db)
+    .await?;
 
     t.log().clear();
 
@@ -217,33 +220,36 @@ pub async fn gsi_multi_attribute_partition_key(t: &mut Test) -> Result<()> {
 
     let mut db = t.setup_db(models!(Match)).await;
 
-    Match::create()
-        .id("m1")
-        .tournament_id("WINTER2024")
-        .region("NA-EAST")
-        .round("SEMIFINALS")
-        .player1_id("alice")
-        .player2_id("bob")
-        .exec(&mut db)
-        .await?;
-    Match::create()
-        .id("m2")
-        .tournament_id("WINTER2024")
-        .region("NA-EAST")
-        .round("FINALS")
-        .player1_id("charlie")
-        .player2_id("dave")
-        .exec(&mut db)
-        .await?;
-    Match::create()
-        .id("m3")
-        .tournament_id("WINTER2024")
-        .region("EU-WEST")
-        .round("SEMIFINALS")
-        .player1_id("eve")
-        .player2_id("frank")
-        .exec(&mut db)
-        .await?;
+    toasty::create!(Match {
+        id: "m1",
+        tournament_id: "WINTER2024",
+        region: "NA-EAST",
+        round: "SEMIFINALS",
+        player1_id: "alice",
+        player2_id: "bob",
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(Match {
+        id: "m2",
+        tournament_id: "WINTER2024",
+        region: "NA-EAST",
+        round: "FINALS",
+        player1_id: "charlie",
+        player2_id: "dave",
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(Match {
+        id: "m3",
+        tournament_id: "WINTER2024",
+        region: "EU-WEST",
+        round: "SEMIFINALS",
+        player1_id: "eve",
+        player2_id: "frank",
+    })
+    .exec(&mut db)
+    .await?;
 
     t.log().clear();
 
@@ -302,42 +308,46 @@ pub async fn gsi_multi_attribute_sort_key(t: &mut Test) -> Result<()> {
 
     let mut db = t.setup_db(models!(PlayerMatch)).await;
 
-    PlayerMatch::create()
-        .id("pm1")
-        .player_id("101")
-        .match_date("2024-01-18")
-        .round("SEMIFINALS")
-        .opponent_id("102")
-        .score("3-1")
-        .exec(&mut db)
-        .await?;
-    PlayerMatch::create()
-        .id("pm2")
-        .player_id("101")
-        .match_date("2024-01-18")
-        .round("FINALS")
-        .opponent_id("103")
-        .score("2-1")
-        .exec(&mut db)
-        .await?;
-    PlayerMatch::create()
-        .id("pm3")
-        .player_id("101")
-        .match_date("2024-01-25")
-        .round("SEMIFINALS")
-        .opponent_id("104")
-        .score("3-0")
-        .exec(&mut db)
-        .await?;
-    PlayerMatch::create()
-        .id("pm4")
-        .player_id("999")
-        .match_date("2024-01-18")
-        .round("QUARTERFINALS")
-        .opponent_id("101")
-        .score("1-3")
-        .exec(&mut db)
-        .await?;
+    toasty::create!(PlayerMatch {
+        id: "pm1",
+        player_id: "101",
+        match_date: "2024-01-18",
+        round: "SEMIFINALS",
+        opponent_id: "102",
+        score: "3-1",
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(PlayerMatch {
+        id: "pm2",
+        player_id: "101",
+        match_date: "2024-01-18",
+        round: "FINALS",
+        opponent_id: "103",
+        score: "2-1",
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(PlayerMatch {
+        id: "pm3",
+        player_id: "101",
+        match_date: "2024-01-25",
+        round: "SEMIFINALS",
+        opponent_id: "104",
+        score: "3-0",
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(PlayerMatch {
+        id: "pm4",
+        player_id: "999",
+        match_date: "2024-01-18",
+        round: "QUARTERFINALS",
+        opponent_id: "101",
+        score: "1-3",
+    })
+    .exec(&mut db)
+    .await?;
 
     t.log().clear();
 
@@ -404,34 +414,38 @@ pub async fn gsi_sql_three_column(t: &mut Test) -> Result<()> {
 
     let mut db = t.setup_db(models!(Address)).await;
 
-    Address::create()
-        .country("US")
-        .city("Seattle")
-        .zip_code("98101")
-        .street("1st Ave")
-        .exec(&mut db)
-        .await?;
-    Address::create()
-        .country("US")
-        .city("Seattle")
-        .zip_code("98102")
-        .street("2nd Ave")
-        .exec(&mut db)
-        .await?;
-    Address::create()
-        .country("US")
-        .city("Portland")
-        .zip_code("97201")
-        .street("Oak St")
-        .exec(&mut db)
-        .await?;
-    Address::create()
-        .country("CA")
-        .city("Toronto")
-        .zip_code("M5V")
-        .street("King St")
-        .exec(&mut db)
-        .await?;
+    toasty::create!(Address {
+        country: "US",
+        city: "Seattle",
+        zip_code: "98101",
+        street: "1st Ave",
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(Address {
+        country: "US",
+        city: "Seattle",
+        zip_code: "98102",
+        street: "2nd Ave",
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(Address {
+        country: "US",
+        city: "Portland",
+        zip_code: "97201",
+        street: "Oak St",
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(Address {
+        country: "CA",
+        city: "Toronto",
+        zip_code: "M5V",
+        street: "King St",
+    })
+    .exec(&mut db)
+    .await?;
 
     t.log().clear();
 
