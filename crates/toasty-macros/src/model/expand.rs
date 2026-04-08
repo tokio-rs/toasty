@@ -1,4 +1,5 @@
 mod create;
+mod docs;
 mod embedded_enum;
 mod fields;
 mod filters;
@@ -383,10 +384,7 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let span = field_ident.span();
 
-        let doc = format!(
-            "Access the `{field}` relation path for building filter expressions.",
-            field = field_ident,
-        );
+        let doc = docs::relation_field_accessor(&field_ident.to_string());
 
         quote_spanned! { span=>
             #[doc = #doc]
@@ -413,10 +411,7 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let span = field_ident.span();
 
-        let doc = format!(
-            "Access the `{field}` field path for building filter expressions.",
-            field = field_ident,
-        );
+        let doc = docs::field_accessor(&field_ident.to_string());
 
         quote_spanned! { span=>
             #[doc = #doc]

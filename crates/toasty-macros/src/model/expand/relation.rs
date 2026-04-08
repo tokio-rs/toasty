@@ -1,4 +1,4 @@
-use super::{Expand, util};
+use super::{Expand, docs, util};
 use crate::model::schema::{BelongsTo, Field, FieldTy, HasMany, HasOne};
 
 use proc_macro2::TokenStream;
@@ -16,76 +16,28 @@ impl Expand<'_> {
         let field_list_struct_ident = &root.field_list_struct_ident;
         let filter_methods = self.expand_relation_filter_methods();
 
-        let doc_many = format!(
-            "A has-many association handle for [`{model_name}`].\n\
-             \n\
-             Obtained by calling a has-many accessor on a model instance\n\
-             (e.g. `user.{example}()`). Provides methods to query, create,\n\
-             insert, and remove associated records.",
-            model_name = model_ident,
-            example = self
-                .model
-                .fields
-                .iter()
-                .find(|f| matches!(&f.ty, FieldTy::HasMany(_)))
-                .map(|f| f.name.ident.to_string())
-                .unwrap_or_else(|| "items".to_string()),
-        );
-        let doc_one = format!(
-            "A has-one or belongs-to association handle for [`{model_name}`].\n\
-             \n\
-             Obtained by calling a has-one or belongs-to accessor on a model\n\
-             instance. Provides methods to load or create the associated record.",
-            model_name = model_ident,
-        );
-        let doc_option_one = format!(
-            "An optional association handle for [`{model_name}`].\n\
-             \n\
-             Like [`One`], but [`.exec()`](Self::exec) returns `Option<{model_name}>`\n\
-             instead of returning an error when no associated record exists.",
-            model_name = model_ident,
-        );
+        let model_name = model_ident.to_string();
+        let example = self
+            .model
+            .fields
+            .iter()
+            .find(|f| matches!(&f.ty, FieldTy::HasMany(_)))
+            .map(|f| f.name.ident.to_string())
+            .unwrap_or_else(|| "items".to_string());
+        let doc_many = docs::relation_many(&model_name, &example);
+        let doc_one = docs::relation_one(&model_name);
+        let doc_option_one = docs::relation_option_one(&model_name);
 
-        let doc_many_exec = format!(
-            "Load all associated [`{model_name}`] records.",
-            model_name = model_ident,
-        );
-        let doc_many_query = format!(
-            "Return a query over the associated [`{model_name}`] records\n\
-             with an additional filter.",
-            model_name = model_ident,
-        );
-        let doc_many_create = format!(
-            "Create a new [`{model_name}`] record scoped to this association.",
-            model_name = model_ident,
-        );
-        let doc_many_insert = format!(
-            "Add an existing [`{model_name}`] to this association.",
-            model_name = model_ident,
-        );
-        let doc_many_remove = format!(
-            "Remove a [`{model_name}`] from this association.",
-            model_name = model_ident,
-        );
+        let doc_many_exec = docs::many_exec(&model_name);
+        let doc_many_query = docs::many_query(&model_name);
+        let doc_many_create = docs::many_create(&model_name);
+        let doc_many_insert = docs::many_insert(&model_name);
+        let doc_many_remove = docs::many_remove(&model_name);
 
-        let doc_one_create = format!(
-            "Create a new associated [`{model_name}`] record.",
-            model_name = model_ident,
-        );
-        let doc_one_exec = format!(
-            "Load the associated [`{model_name}`] record.\n\
-             \n\
-             Returns an error if the associated record does not exist.",
-            model_name = model_ident,
-        );
-        let doc_option_one_create = format!(
-            "Create a new associated [`{model_name}`] record.",
-            model_name = model_ident,
-        );
-        let doc_option_one_exec = format!(
-            "Load the associated [`{model_name}`] record, if it exists.",
-            model_name = model_ident,
-        );
+        let doc_one_create = docs::one_create(&model_name);
+        let doc_one_exec = docs::one_exec(&model_name);
+        let doc_option_one_create = docs::one_create(&model_name);
+        let doc_option_one_exec = docs::option_one_exec(&model_name);
 
         quote! {
             #[doc = #doc_many]
@@ -312,12 +264,7 @@ impl Expand<'_> {
             quote!( #toasty::stmt::Expr::and_all([ #(#operands),* ]) )
         };
 
-        let doc = format!(
-            "Access the `{field}` belongs-to association for this record.\n\
-             \n\
-             Returns a handle for loading or creating the associated record.",
-            field = field_ident,
-        );
+        let doc = docs::model_belongs_to(&field_ident.to_string());
 
         let verify_pair_belongs_to_exists = syn::Ident::new(
             &format!("verify_pair_belongs_to_exists_for_{field_ident}"),
@@ -357,13 +304,7 @@ impl Expand<'_> {
         let ty = &rel.ty;
         let model_ident = &self.model.ident;
 
-        let doc = format!(
-            "Access the `{field}` has-many association for this record.\n\
-             \n\
-             Returns a handle for querying, creating, inserting, and\n\
-             removing associated records.",
-            field = field_ident,
-        );
+        let doc = docs::model_has_many(&field_ident.to_string());
         let pair_ident = rel.pair.clone().unwrap_or(syn::Ident::new(
             &self.model.name.ident.to_string(),
             rel.span,
@@ -447,12 +388,7 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let pair_ident = syn::Ident::new(&self.model.name.ident.to_string(), rel.span);
 
-        let doc = format!(
-            "Access the `{field}` has-one association for this record.\n\
-             \n\
-             Returns a handle for loading or creating the associated record.",
-            field = field_ident,
-        );
+        let doc = docs::model_has_one(&field_ident.to_string());
 
         let verify_pair_belongs_to_exists_for_field = syn::Ident::new(
             &format!("verify_pair_belongs_to_exists_for_{pair_ident}"),

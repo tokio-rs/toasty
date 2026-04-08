@@ -1,4 +1,4 @@
-use super::{Expand, util};
+use super::{Expand, docs, util};
 use crate::model::schema::FieldTy;
 
 use proc_macro2::TokenStream;
@@ -13,13 +13,7 @@ impl Expand<'_> {
         let update_struct_ident = &self.model.kind.as_embedded_unwrap().update_struct_ident;
         let builder_methods = self.expand_update_field_methods(true);
 
-        let doc_struct = format!(
-            "An update builder for the embedded [`{model_name}`] type.\n\
-             \n\
-             Set individual fields on the embedded struct without replacing the\n\
-             entire value.",
-            model_name = model_ident,
-        );
+        let doc_struct = docs::update_embedded_struct(&model_ident.to_string());
 
         quote! {
             #[doc = #doc_struct]
@@ -57,21 +51,10 @@ impl Expand<'_> {
             let set_field_ident = &field.set_ident;
             let with_field_ident = &field.with_ident;
 
-            let doc_consuming = format!(
-                "Set the `{field_name}` field (consuming builder).",
-                field_name = field_ident,
-            );
-            let doc_by_ref = format!(
-                "Set the `{field_name}` field (by mutable reference).",
-                field_name = field_ident,
-            );
-            let doc_with = format!(
-                "Update the nested `{field_name}` embedded field.\n\
-                 \n\
-                 The closure receives an update builder scoped to the embedded\n\
-                 type, allowing individual sub-fields to be set.",
-                field_name = field_ident,
-            );
+            let field_name = field_ident.to_string();
+            let doc_consuming = docs::update_field_consuming(&field_name);
+            let doc_by_ref = docs::update_field_by_ref(&field_name);
+            let doc_with = docs::update_field_with(&field_name);
 
             let index = util::int(field_index);
             let projection = if is_embedded {
@@ -248,23 +231,9 @@ impl Expand<'_> {
         let builder_methods = self.expand_update_field_methods(false);
         let update_default_stmts = self.expand_update_default_stmts();
 
-        let doc_struct = format!(
-            "An update builder for [`{model_name}`] records.\n\
-             \n\
-             Returned by [`{model_name}::update()`] (instance update) or\n\
-             [`{query_name}::update()`] (query-based batch update). Set\n\
-             field values using the builder methods, then call\n\
-             [`.exec()`](Self::exec) to apply the changes.",
-            model_name = model_ident,
-            query_name = query_struct_ident,
-        );
-        let doc_exec = format!(
-            "Execute the update statement.\n\
-             \n\
-             For instance updates ([`{model_name}::update()`]), the model is\n\
-             reloaded with the new values after the update completes.",
-            model_name = model_ident,
-        );
+        let model_name = model_ident.to_string();
+        let doc_struct = docs::update_struct(&model_name, &query_struct_ident.to_string());
+        let doc_exec = docs::update_exec(&model_name);
 
         quote! {
             #[doc = #doc_struct]

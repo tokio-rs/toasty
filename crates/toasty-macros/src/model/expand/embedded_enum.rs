@@ -1,4 +1,4 @@
-use super::{Expand, schema, util};
+use super::{Expand, docs, schema, util};
 use crate::model::schema::{FieldTy, VariantValue};
 
 use proc_macro2::TokenStream;
@@ -57,18 +57,10 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
 
-        let docs = [
-            format!(
-                "Return a filter expression that is `true` when this [`{}`] equals `rhs`.",
-                model_ident,
-            ),
-            format!(
-                "Return a filter expression that is `true` when this [`{}`] does not equal `rhs`.",
-                model_ident,
-            ),
-        ];
+        let model_name = model_ident.to_string();
+        let doc_strings = [docs::enum_eq(&model_name), docs::enum_ne(&model_name)];
 
-        let methods = ["eq", "ne"].iter().zip(docs.iter()).map(|(name, doc)| {
+        let methods = ["eq", "ne"].iter().zip(doc_strings.iter()).map(|(name, doc)| {
             let method_ident = syn::Ident::new(name, proc_macro2::Span::call_site());
             quote! {
                 #[doc = #doc]
@@ -78,11 +70,7 @@ impl Expand<'_> {
             }
         });
 
-        let doc_in_list = format!(
-            "Return a filter expression that is `true` when this [`{}`]\n\
-             is contained in `rhs`.",
-            model_ident,
-        );
+        let doc_in_list = docs::enum_in_list(&model_name);
 
         quote! {
             #( #methods )*
@@ -105,13 +93,8 @@ impl Expand<'_> {
         let embedded_enum = self.model.kind.as_embedded_enum_unwrap();
         let field_struct_ident = &embedded_enum.field_struct_ident;
 
-        let doc_struct = format!(
-            "Typed field paths for the [`{model_name}`] enum.\n\
-             \n\
-             Provides `is_<variant>()` methods for filtering by variant and\n\
-             accessor methods for navigating into data-carrying variant fields.",
-            model_name = model_ident,
-        );
+        let model_name = model_ident.to_string();
+        let doc_struct = docs::enum_field_struct(&model_name);
 
         let is_variant_methods: Vec<_> = embedded_enum
             .variants
@@ -122,12 +105,7 @@ impl Expand<'_> {
                 let variant_idx = util::int(variant_index);
                 let is_variant_check = self.expand_is_variant_expr(&variant_idx);
 
-                let doc = format!(
-                    "Return a filter expression that is `true` when this\n\
-                     [`{model_name}`] is the `{variant}` variant.",
-                    model_name = model_ident,
-                    variant = variant.ident,
-                );
+                let doc = docs::enum_is_variant(&model_name, &variant.ident.to_string());
 
                 quote! {
                     #[doc = #doc]
@@ -147,13 +125,9 @@ impl Expand<'_> {
                 let method_name = &variant.name.ident;
                 let variant_handle_ident = variant.variant_handle_ident.as_ref().unwrap();
 
-                let doc = format!(
-                    "Access the `{variant}` variant's field paths.\n\
-                     \n\
-                     Use [`.matches()`]({handle}::matches) on the returned handle to\n\
-                     build filters that match the variant and its field values.",
-                    variant = variant.ident,
-                    handle = variant_handle_ident,
+                let doc = docs::enum_variant_accessor(
+                    &variant.ident.to_string(),
+                    &variant_handle_ident.to_string(),
                 );
 
                 quote! {
@@ -179,29 +153,13 @@ impl Expand<'_> {
                 let variant_idx = util::int(variant_index);
                 let is_variant_check = self.expand_is_variant_expr(&variant_idx);
 
-                let doc_handle = format!(
-                    "A handle to the `{variant}` variant of [`{model_name}`].\n\
-                     \n\
-                     Provides a [`matches()`](Self::matches) method for building\n\
-                     filters that check both the variant discriminant and field values.",
-                    variant = variant.ident,
-                    model_name = model_ident,
+                let variant_name = variant.ident.to_string();
+                let doc_handle = docs::enum_variant_handle(&model_name, &variant_name);
+                let doc_matches = docs::enum_variant_matches(
+                    &variant_name,
+                    &variant_field_struct_ident.to_string(),
                 );
-                let doc_matches = format!(
-                    "Build a filter that matches the `{variant}` variant with\n\
-                     additional field-level conditions.\n\
-                     \n\
-                     The closure receives a [`{fields_struct}`] for building\n\
-                     comparisons on the variant's fields. The returned expression\n\
-                     combines the variant check with the field conditions.",
-                    variant = variant.ident,
-                    fields_struct = variant_field_struct_ident,
-                );
-                let doc_field_struct = format!(
-                    "Typed field paths for the `{variant}` variant of [`{model_name}`].",
-                    variant = variant.ident,
-                    model_name = model_ident,
-                );
+                let doc_field_struct = docs::enum_variant_field_struct(&model_name, &variant_name);
 
                 let field_methods: Vec<_> = self
                     .variant_fields(variant_index)

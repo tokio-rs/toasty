@@ -1,4 +1,4 @@
-use super::Expand;
+use super::{Expand, docs};
 use crate::model::schema::{FieldTy, Index, Model};
 
 use proc_macro2::{Span, TokenStream};
@@ -61,30 +61,17 @@ impl Expand<'_> {
         let arg_idents: Vec<_> = self.expand_filter_arg_idents(filter).collect();
         let update_query_struct_ident = &self.model.kind.as_root_unwrap().update_struct_ident;
 
-        let field_names: Vec<String> = filter
+        let model_name = model_ident.to_string();
+        let fields_desc = filter
             .fields
             .iter()
             .map(|idx| self.model.fields[*idx].name.ident.to_string())
-            .collect();
-        let fields_desc = field_names.join("` and `");
+            .collect::<Vec<_>>()
+            .join("` and `");
 
-        let doc_get = format!(
-            "Find and return a single [`{model_name}`] by `{fields}`.\n\
-             \n\
-             Returns an error if no matching record exists.",
-            model_name = model_ident,
-            fields = fields_desc,
-        );
-        let doc_update = format!(
-            "Return an update builder for [`{model_name}`] records matching `{fields}`.",
-            model_name = model_ident,
-            fields = fields_desc,
-        );
-        let doc_delete = format!(
-            "Delete [`{model_name}`] records matching `{fields}`.",
-            model_name = model_ident,
-            fields = fields_desc,
-        );
+        let doc_get = docs::filter_get(&model_name, &fields_desc);
+        let doc_update = docs::filter_update(&model_name, &fields_desc);
+        let doc_delete = docs::filter_delete(&model_name, &fields_desc);
 
         let self_arg;
         let base;
@@ -129,18 +116,14 @@ impl Expand<'_> {
         let args = self.expand_filter_args(filter);
         let arg_idents = self.expand_filter_arg_idents(filter);
 
-        let field_names: Vec<String> = filter
+        let fields_desc = filter
             .fields
             .iter()
             .map(|idx| self.model.fields[*idx].name.ident.to_string())
-            .collect();
-        let fields_desc = field_names.join("` and `");
+            .collect::<Vec<_>>()
+            .join("` and `");
 
-        let doc_filter = format!(
-            "Return a query for [`{model_name}`] records matching `{fields}`.",
-            model_name = model_ident,
-            fields = fields_desc,
-        );
+        let doc_filter = docs::filter_by(&model_ident.to_string(), &fields_desc);
 
         let self_arg;
         let body;
@@ -207,18 +190,14 @@ impl Expand<'_> {
         let args = self.expand_filter_args(filter);
         let expr = self.expand_query_filter_expr(filter);
 
-        let field_names: Vec<String> = filter
+        let fields_desc = filter
             .fields
             .iter()
             .map(|idx| self.model.fields[*idx].name.ident.to_string())
-            .collect();
-        let fields_desc = field_names.join("` and `");
+            .collect::<Vec<_>>()
+            .join("` and `");
 
-        let doc = format!(
-            "Add a filter for `{fields}` to this [`{model_name}`] query.",
-            model_name = model_ident,
-            fields = fields_desc,
-        );
+        let doc = docs::filter_query_by(&model_ident.to_string(), &fields_desc);
 
         quote! {
             #[doc = #doc]

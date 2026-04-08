@@ -1,4 +1,4 @@
-use super::{Expand, util};
+use super::{Expand, docs, util};
 use crate::model::schema::{BelongsTo, Field, FieldTy, HasMany, HasOne};
 
 use proc_macro2::TokenStream;
@@ -16,58 +16,21 @@ impl Expand<'_> {
         let relation_methods = self.expand_relation_methods();
         let include = self.expand_include_method(&include_ty);
 
-        let doc_struct = format!(
-            "A query builder for [`{model_name}`] records.\n\
-             \n\
-             Returned by [`{model_name}::all()`] and [`{model_name}::filter()`].\n\
-             Chain methods to narrow results, then execute with [`.exec()`](Self::exec)\n\
-             or [`.get()`](Self::get).",
-            model_name = model_ident,
-        );
-        let doc_from_stmt = format!(
-            "Create a [`{query_name}`] from a raw query statement.",
-            query_name = query_struct_ident,
-        );
-        let doc_exec = format!(
-            "Execute the query and return all matching [`{model_name}`] records.",
-            model_name = model_ident,
-        );
-        let doc_first = format!(
-            "Expect at most one result. Returns `None` if no [`{model_name}`] matches.",
-            model_name = model_ident,
-        );
-        let doc_one = format!(
-            "Expect exactly one result. Returns an error if no [`{model_name}`] matches.",
-            model_name = model_ident,
-        );
-        let doc_get = format!(
-            "Execute the query and return exactly one [`{model_name}`].\n\
-             \n\
-             Shorthand for `.one().exec(executor)`.",
-            model_name = model_ident,
-        );
-        let doc_update = format!(
-            "Convert this query into an update builder.\n\
-             \n\
-             All [`{model_name}`] records matching the current filters will be updated.",
-            model_name = model_ident,
-        );
-        let doc_count = format!(
-            "Count the [`{model_name}`] records matching the current filters.",
-            model_name = model_ident,
-        );
-        let doc_delete = format!(
-            "Delete all [`{model_name}`] records matching the current filters.",
-            model_name = model_ident,
-        );
-        let doc_paginate = format!(
-            "Paginate results, returning `per_page` [`{model_name}`] records at a time.",
-            model_name = model_ident,
-        );
-        let doc_filter = "Add a filter expression to this query, narrowing the result set.";
-        let doc_order_by = "Set the sort order for the query results.";
-        let doc_limit = "Limit the number of records returned.";
-        let doc_offset = "Skip the first `n` matching records.";
+        let model_name = model_ident.to_string();
+        let doc_struct = docs::query_struct(&model_name);
+        let doc_from_stmt = docs::query_from_stmt(&query_struct_ident.to_string());
+        let doc_exec = docs::query_exec(&model_name);
+        let doc_first = docs::query_first(&model_name);
+        let doc_one = docs::query_one(&model_name);
+        let doc_get = docs::query_get(&model_name);
+        let doc_update = docs::query_update(&model_name);
+        let doc_count = docs::query_count(&model_name);
+        let doc_delete = docs::query_delete(&model_name);
+        let doc_paginate = docs::query_paginate(&model_name);
+        let doc_filter = docs::QUERY_FILTER;
+        let doc_order_by = docs::QUERY_ORDER_BY;
+        let doc_limit = docs::QUERY_LIMIT;
+        let doc_offset = docs::QUERY_OFFSET;
 
         quote! {
             #[doc = #doc_struct]
@@ -199,11 +162,7 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let field_ident = &field.name.ident;
 
-        let doc = format!(
-            "Navigate from the selected [`{model_name}`] records to their associated `{field}` records.",
-            model_name = model_ident,
-            field = field_ident,
-        );
+        let doc = docs::query_relation_navigate(&model_ident.to_string(), &field_ident.to_string());
 
         quote! {
             #[doc = #doc]
@@ -225,11 +184,7 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let field_ident = &field.name.ident;
 
-        let doc = format!(
-            "Navigate from the selected [`{model_name}`] records to their associated `{field}` records.",
-            model_name = model_ident,
-            field = field_ident,
-        );
+        let doc = docs::query_relation_navigate(&model_ident.to_string(), &field_ident.to_string());
 
         quote! {
             #[doc = #doc]
@@ -251,11 +206,8 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let field_ident = &field.name.ident;
 
-        let doc = format!(
-            "Navigate from the selected [`{model_name}`] records to their associated `{field}` record.",
-            model_name = model_ident,
-            field = field_ident,
-        );
+        let doc =
+            docs::query_relation_navigate_one(&model_ident.to_string(), &field_ident.to_string());
 
         quote! {
             #[doc = #doc]
@@ -276,20 +228,14 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let query_struct_ident = &self.model.kind.as_root_unwrap().query_struct_ident;
 
-        let doc_include = format!(
-            "Eagerly load an association so it is available without a separate query.\n\
-             \n\
-             Pass a field path obtained from [`{model_name}::fields()`], such as\n\
-             `{model_name}::fields().{example}`, to specify which association to load.",
-            model_name = model_ident,
-            example = self
-                .model
-                .fields
-                .iter()
-                .find(|f| f.ty.is_relation())
-                .map(|f| f.name.ident.to_string())
-                .unwrap_or_else(|| "relation_name".to_string()),
-        );
+        let example_relation = self
+            .model
+            .fields
+            .iter()
+            .find(|f| f.ty.is_relation())
+            .map(|f| f.name.ident.to_string())
+            .unwrap_or_else(|| "relation_name".to_string());
+        let doc_include = docs::query_include(&model_ident.to_string(), &example_relation);
 
         if self.model.has_associations() {
             Some(quote! {

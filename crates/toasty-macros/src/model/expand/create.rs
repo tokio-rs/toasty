@@ -1,4 +1,4 @@
-use super::{Expand, util};
+use super::{Expand, docs, util};
 use crate::model::schema::FieldTy;
 
 use proc_macro2::TokenStream;
@@ -14,18 +14,9 @@ impl Expand<'_> {
         let create_methods = self.expand_create_methods();
         let default_stmts = self.expand_create_default_stmts();
 
-        let doc_struct = format!(
-            "A create builder for inserting a new [`{model_name}`] record.\n\
-             \n\
-             Returned by [`{model_name}::create()`]. Set field values using the\n\
-             builder methods, then call [`.exec()`](Self::exec) to insert the record\n\
-             and get back the created [`{model_name}`].",
-            model_name = model_ident,
-        );
-        let doc_exec = format!(
-            "Execute the insert and return the newly created [`{model_name}`].",
-            model_name = model_ident,
-        );
+        let model_name = model_ident.to_string();
+        let doc_struct = docs::create_struct(&model_name);
+        let doc_exec = docs::create_exec(&model_name);
 
         // Span the struct definition to the model ident so that "method not
         // found for this struct" errors point at `struct User`, not the derive
@@ -151,11 +142,8 @@ impl Expand<'_> {
             .map(move |(index, field)| {
                 let name = &field.name.ident;
                 let index_tokenized = util::int(index);
-                let doc_setter = format!(
-                    "Set the `{field_name}` field for the new [`{model_name}`] record.",
-                    field_name = name,
-                    model_name = model_ident,
-                );
+                let model_name = model_ident.to_string();
+                let doc_setter = docs::create_field_setter(&model_name, &name.to_string());
 
                 match &field.ty {
                     FieldTy::BelongsTo(rel) => {
@@ -180,16 +168,8 @@ impl Expand<'_> {
                         let plural = name;
                         let ty = &rel.ty;
 
-                        let doc_singular = format!(
-                            "Add a single associated `{field}` record to the new [`{model_name}`].",
-                            field = singular,
-                            model_name = model_ident,
-                        );
-                        let doc_plural = format!(
-                            "Add multiple associated `{field}` records to the new [`{model_name}`].",
-                            field = plural,
-                            model_name = model_ident,
-                        );
+                        let doc_singular = docs::create_has_many_singular(&model_name, &singular.to_string());
+                        let doc_plural = docs::create_has_many_plural(&model_name, &plural.to_string());
 
                         quote! {
                             #[doc = #doc_singular]

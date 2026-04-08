@@ -1,4 +1,4 @@
-use super::{Expand, util};
+use super::{Expand, docs, util};
 use crate::model::schema::FieldTy::{BelongsTo, HasMany, HasOne, Primitive};
 use crate::model::schema::ModelKind;
 use proc_macro2::TokenStream;
@@ -11,33 +11,14 @@ impl Expand<'_> {
         let field_struct_ident = self.field_struct_ident();
         let model_ident = &self.model.ident;
 
-        let doc_struct = format!(
-            "Typed field paths for [`{model_name}`].\n\
-             \n\
-             Returned by [`{model_name}::fields()`]. Use the accessor methods\n\
-             to build filter expressions and navigate to related models.\n\
-             \n\
-             See the [Toasty guide](https://docs.rs/toasty/latest/toasty/) for\n\
-             examples of building queries with field paths.",
-            model_name = model_ident,
-        );
-        let doc_eq = format!(
-            "Return a filter expression that matches [`{model_name}`] records\n\
-             equal to `rhs` (compared by primary key).",
-            model_name = model_ident,
-        );
-        let doc_in_query = format!(
-            "Return a filter expression that matches [`{model_name}`] records\n\
-             whose primary key appears in the result set of `rhs`.",
-            model_name = model_ident,
-        );
+        let model_name = model_ident.to_string();
+        let doc_struct = docs::field_struct(&model_name);
+        let doc_eq = docs::field_struct_eq(&model_name);
+        let doc_in_query = docs::field_struct_in_query(&model_name);
 
         let create_method = if let ModelKind::Root(root) = &self.model.kind {
             let create_struct_ident = &root.create_struct_ident;
-            let doc_create = format!(
-                "Return a new create builder for [`{model_name}`].",
-                model_name = model_ident,
-            );
+            let doc_create = docs::field_struct_create(&model_name);
             quote! {
                 #[doc = #doc_create]
                 #vis fn create(&self) -> #create_struct_ident {
@@ -79,10 +60,7 @@ impl Expand<'_> {
                             self.path().chain(#toasty::Path::<#model_ident, _>::from_field_index(#field_offset))
                         };
 
-                        let doc = format!(
-                            "Access the `{field}` has-many relation path.",
-                            field = field_ident,
-                        );
+                        let doc = docs::has_many_field_accessor(&field_ident.to_string());
 
                         quote_spanned! { span=>
                             #[doc = #doc]
@@ -147,13 +125,8 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let is_root = matches!(self.model.kind, ModelKind::Root(_));
 
-        let doc_list_struct = format!(
-            "Typed field paths for a list of [`{model_name}`] records.\n\
-             \n\
-             Used when navigating from a has-many association to build\n\
-             sub-filters and access nested fields.",
-            model_name = model_ident,
-        );
+        let model_name = model_ident.to_string();
+        let doc_list_struct = docs::field_list_struct(&model_name);
 
         // Generate methods that return list field paths
         let methods = self
@@ -188,10 +161,7 @@ impl Expand<'_> {
 
         let create_method = if let ModelKind::Root(root) = &self.model.kind {
             let create_struct_ident = &root.create_struct_ident;
-            let doc_create = format!(
-                "Return a new create builder for [`{model_name}`].",
-                model_name = model_ident,
-            );
+            let doc_create = docs::field_struct_create(&model_name);
             quote! {
                 #[doc = #doc_create]
                 #vis fn create(&self) -> #create_struct_ident {
@@ -203,13 +173,7 @@ impl Expand<'_> {
         };
 
         // any() is only available on root models (requires Model trait bound)
-        let doc_any = format!(
-            "Return a filter expression that is `true` when **any** associated\n\
-             [`{model_name}`] record satisfies `filter`.\n\
-             \n\
-             Use this to filter a parent model by a condition on its children.",
-            model_name = model_ident,
-        );
+        let doc_any = docs::field_list_any(&model_name);
         let any_method = if is_root {
             quote! {
                 #[doc = #doc_any]
@@ -262,20 +226,16 @@ impl Expand<'_> {
         let field_struct_ident = self.field_struct_ident();
         let model_ident = &self.model.ident;
 
-        let doc_fields = format!(
-            "Return typed field paths for building filter expressions.\n\
-             \n\
-             Each accessor on the returned [`{fields_name}`] corresponds to a\n\
-             field on [`{model_name}`] and can be used to build comparisons,\n\
-             e.g. `{model_name}::fields().{example}.eq(value)`.",
-            model_name = model_ident,
-            fields_name = field_struct_ident,
-            example = self
-                .model
-                .fields
-                .first()
-                .map(|f| f.name.ident.to_string())
-                .unwrap_or_else(|| "field_name".to_string()),
+        let example_field = self
+            .model
+            .fields
+            .first()
+            .map(|f| f.name.ident.to_string())
+            .unwrap_or_else(|| "field_name".to_string());
+        let doc_fields = docs::model_fields(
+            &model_ident.to_string(),
+            &field_struct_ident.to_string(),
+            &example_field,
         );
 
         // Generate fields() as a method instead of const to avoid const initialization issues
@@ -350,10 +310,7 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let span = field_ident.span();
 
-        let doc = format!(
-            "Access the `{field}` field path within this list context.",
-            field = field_ident,
-        );
+        let doc = docs::list_field_accessor(&field_ident.to_string());
 
         quote_spanned! { span=>
             #[doc = #doc]
@@ -380,10 +337,7 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let span = field_ident.span();
 
-        let doc = format!(
-            "Access the `{field}` relation path within this list context.",
-            field = field_ident,
-        );
+        let doc = docs::list_relation_accessor(&field_ident.to_string());
 
         quote_spanned! { span=>
             #[doc = #doc]
