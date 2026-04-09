@@ -28,6 +28,9 @@
 // - Removed test module
 // - Removed module-level doc include
 // - Adjusted lint attributes to match workspace conventions
+// - Fixed channel binding hash selection: explicitly match known OIDs
+//   and return None for unsupported algorithms (e.g. Ed25519) instead
+//   of incorrectly using SHA-512
 
 use std::{convert::TryFrom, sync::Arc};
 
@@ -42,13 +45,10 @@ use std::{
     task::{Context, Poll},
 };
 
-use const_oid::db::{
-    rfc5912::{
-        ECDSA_WITH_SHA_256, ECDSA_WITH_SHA_384, ID_SHA_1, ID_SHA_256, ID_SHA_384, ID_SHA_512,
-        SHA_1_WITH_RSA_ENCRYPTION, SHA_256_WITH_RSA_ENCRYPTION, SHA_384_WITH_RSA_ENCRYPTION,
-        SHA_512_WITH_RSA_ENCRYPTION,
-    },
-    rfc8410::ID_ED_25519,
+use const_oid::db::rfc5912::{
+    ECDSA_WITH_SHA_256, ECDSA_WITH_SHA_384, ID_SHA_1, ID_SHA_256, ID_SHA_384, ID_SHA_512,
+    SHA_1_WITH_RSA_ENCRYPTION, SHA_256_WITH_RSA_ENCRYPTION, SHA_384_WITH_RSA_ENCRYPTION,
+    SHA_512_WITH_RSA_ENCRYPTION,
 };
 use sha2::{Digest, Sha256, Sha384, Sha512};
 use tokio::io::ReadBuf;
@@ -105,22 +105,38 @@ where
             Some(certs) if !certs.is_empty() => Certificate::from_der(&certs[0])
                 .ok()
                 .and_then(|cert| {
-                    let hash: Vec<u8> = match cert.signature_algorithm.oid {
-                        // SHA1 is upgraded to SHA256 per https://datatracker.ietf.org/doc/html/rfc5929#section-4.1
+                    // tls-server-end-point channel binding (RFC 5929 §4.1):
+                    // hash the certificate using the digest from its signature
+                    // algorithm, upgrading MD5/SHA-1 to SHA-256.
+                    //
+                    // For algorithms with no associated digest (Ed25519, ML-DSA,
+                    // etc.) RFC 5929 leaves channel binding undefined. Both
+                    // libpq and the PostgreSQL server error out in this case
+                    // ("could not find digest for NID UNDEF"). We return None
+                    // to disable channel binding, matching libpq. See the
+                    // pgsql-hackers thread "Channel binding for post-quantum
+                    // cryptography" (Oct 2025) for ongoing discussion.
+                    match cert.signature_algorithm.oid {
                         ID_SHA_1
                         | ID_SHA_256
                         | SHA_1_WITH_RSA_ENCRYPTION
                         | SHA_256_WITH_RSA_ENCRYPTION
-                        | ECDSA_WITH_SHA_256 => Sha256::digest(certs[0].as_ref()).to_vec(),
+                        | ECDSA_WITH_SHA_256 => Some(Sha256::digest(certs[0].as_ref()).to_vec()),
                         ID_SHA_384 | SHA_384_WITH_RSA_ENCRYPTION | ECDSA_WITH_SHA_384 => {
-                            Sha384::digest(certs[0].as_ref()).to_vec()
+                            Some(Sha384::digest(certs[0].as_ref()).to_vec())
                         }
-                        ID_SHA_512 | SHA_512_WITH_RSA_ENCRYPTION | ID_ED_25519 => {
-                            Sha512::digest(certs[0].as_ref()).to_vec()
+                        ID_SHA_512 | SHA_512_WITH_RSA_ENCRYPTION => {
+                            Some(Sha512::digest(certs[0].as_ref()).to_vec())
                         }
-                        _ => return None,
-                    };
-                    Some(hash)
+                        oid => {
+                            tracing::warn!(
+                                %oid,
+                                "server certificate uses unsupported signature algorithm for \
+                                 tls-server-end-point channel binding; channel binding disabled"
+                            );
+                            None
+                        }
+                    }
                 })
                 .map_or_else(ChannelBinding::none, |hash| {
                     ChannelBinding::tls_server_end_point(hash)
