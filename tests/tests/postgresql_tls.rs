@@ -107,25 +107,65 @@ async fn verify_full() {
 async fn verify_full_hostname_mismatch() {
     use toasty_core::driver::Driver;
 
-    // Connect via 127.0.0.1 instead of localhost. The cert SAN has
-    // DNS:localhost,IP:127.0.0.1 -- but tokio-postgres resolves the host to
-    // an IP and uses it for TLS. We override the host to force a mismatch
-    // by using a hostname not in the cert.
+    // test.localtest.me resolves to 127.0.0.1 but is not in the certificate
+    // SAN (DNS:localhost,IP:127.0.0.1), so verify-full should reject it.
     let base = tls_url();
-    let url = base.replace("localhost", "127.0.0.2");
+    let url = base.replace("localhost", "test.localtest.me");
     let url = format!("{}?sslmode=verify-full&sslrootcert={}", url, ca_cert_path());
 
-    match PostgreSQL::new(&url) {
-        Ok(driver) => {
-            let result =
-                tokio::time::timeout(std::time::Duration::from_secs(5), driver.connect()).await;
-            match result {
-                Ok(Ok(_)) => panic!("expected connection to fail with hostname mismatch"),
-                Ok(Err(_)) | Err(_) => {} // TLS error or timeout, both acceptable
-            }
-        }
-        Err(_) => {} // acceptable: hostname resolution failure
-    }
+    let driver = PostgreSQL::new(&url).expect("driver creation failed");
+    let result = driver.connect().await;
+    assert!(
+        result.is_err(),
+        "expected connection to fail with hostname mismatch"
+    );
+}
+
+#[tokio::test]
+async fn verify_ca_hostname_mismatch() {
+    // test.localtest.me resolves to 127.0.0.1 but is not in the certificate
+    // SAN (DNS:localhost,IP:127.0.0.1). verify-ca should still accept this
+    // because it does not check the hostname.
+    let base = tls_url();
+    let url = base.replace("localhost", "test.localtest.me");
+    let url = format!("{}?sslmode=verify-ca&sslrootcert={}", url, ca_cert_path());
+
+    let driver = PostgreSQL::new(&url).expect("driver creation failed");
+    smoke_query(&driver).await;
+}
+
+#[tokio::test]
+async fn verify_ca_wrong_ca() {
+    use toasty_core::driver::Driver;
+
+    let wrong_ca = format!("{}/client.crt", certs_dir());
+    let url = format!("{}?sslmode=verify-ca&sslrootcert={}", tls_url(), wrong_ca);
+    let driver = PostgreSQL::new(&url).expect("driver creation failed");
+    let result = driver.connect().await;
+    assert!(
+        result.is_err(),
+        "expected verify-ca to reject certificate signed by untrusted CA"
+    );
+}
+
+#[test]
+fn verify_ca_requires_sslrootcert() {
+    let url = format!("{}?sslmode=verify-ca", tls_url());
+    let result = PostgreSQL::new(&url);
+    assert!(
+        result.is_err(),
+        "expected error when verify-ca used without sslrootcert"
+    );
+}
+
+#[test]
+fn verify_full_requires_sslrootcert() {
+    let url = format!("{}?sslmode=verify-full", tls_url());
+    let result = PostgreSQL::new(&url);
+    assert!(
+        result.is_err(),
+        "expected error when verify-full used without sslrootcert"
+    );
 }
 
 #[tokio::test]

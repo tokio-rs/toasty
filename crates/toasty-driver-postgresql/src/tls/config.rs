@@ -1,7 +1,7 @@
-use std::{fmt, sync::Arc};
+use std::sync::Arc;
 
 use rustls::{
-    ClientConfig, DigitallySignedStruct, Error, RootCertStore, SignatureScheme,
+    ClientConfig, DigitallySignedStruct, Error, OtherError, RootCertStore, SignatureScheme,
     client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier},
     crypto::CryptoProvider,
     pki_types::{CertificateDer, ServerName, UnixTime},
@@ -62,44 +62,37 @@ pub(crate) fn build_client_config(
 
         SslVerifyMode::Prefer | SslVerifyMode::Require => {
             if let Some(roots) = roots {
-                let webpki = rustls::client::WebPkiServerVerifier::builder_with_provider(
-                    Arc::new(roots),
-                    provider.clone(),
-                )
-                .build()
-                .map_err(toasty_core::Error::driver_operation_failed)?;
-                Arc::new(CaOnlyVerifier(webpki))
+                Arc::new(CaOnlyVerifier {
+                    roots: Arc::new(roots),
+                    provider: provider.clone(),
+                })
             } else {
                 Arc::new(NoVerification(provider.clone()))
             }
         }
 
         SslVerifyMode::VerifyCa => {
-            if let Some(roots) = roots {
-                let webpki = rustls::client::WebPkiServerVerifier::builder_with_provider(
-                    Arc::new(roots),
-                    provider.clone(),
-                )
-                .build()
-                .map_err(toasty_core::Error::driver_operation_failed)?;
-                Arc::new(CaOnlyVerifier(webpki))
-            } else {
-                let platform = platform_verifier(&provider)?;
-                Arc::new(CaOnlyVerifier(platform))
-            }
+            let roots = roots.ok_or_else(|| {
+                toasty_core::Error::invalid_connection_url("sslmode=verify-ca requires sslrootcert")
+            })?;
+            Arc::new(CaOnlyVerifier {
+                roots: Arc::new(roots),
+                provider: provider.clone(),
+            })
         }
 
         SslVerifyMode::VerifyFull => {
-            if let Some(roots) = roots {
-                rustls::client::WebPkiServerVerifier::builder_with_provider(
-                    Arc::new(roots),
-                    provider.clone(),
+            let roots = roots.ok_or_else(|| {
+                toasty_core::Error::invalid_connection_url(
+                    "sslmode=verify-full requires sslrootcert (use sslrootcert=system for OS trust store)",
                 )
-                .build()
-                .map_err(toasty_core::Error::driver_operation_failed)?
-            } else {
-                platform_verifier(&provider)?
-            }
+            })?;
+            rustls::client::WebPkiServerVerifier::builder_with_provider(
+                Arc::new(roots),
+                provider.clone(),
+            )
+            .build()
+            .map_err(toasty_core::Error::driver_operation_failed)?
         }
     };
 
@@ -164,13 +157,16 @@ impl ServerCertVerifier for NoVerification {
 
 /// Verifies the server certificate chain against trusted roots but does NOT
 /// check that the server hostname matches the certificate.
+///
+/// Uses `webpki::EndEntityCert::verify_for_usage()` directly rather than
+/// delegating to `WebPkiServerVerifier` and suppressing hostname errors,
+/// which would rely on rustls's internal validation ordering.
+///
 /// Used for sslmode=verify-ca and sslmode=require with sslrootcert.
-struct CaOnlyVerifier(Arc<dyn ServerCertVerifier>);
-
-impl fmt::Debug for CaOnlyVerifier {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("CaOnlyVerifier").finish()
-    }
+#[derive(Debug)]
+struct CaOnlyVerifier {
+    roots: Arc<RootCertStore>,
+    provider: Arc<CryptoProvider>,
 }
 
 impl ServerCertVerifier for CaOnlyVerifier {
@@ -178,20 +174,22 @@ impl ServerCertVerifier for CaOnlyVerifier {
         &self,
         end_entity: &CertificateDer<'_>,
         intermediates: &[CertificateDer<'_>],
-        server_name: &ServerName<'_>,
-        ocsp_response: &[u8],
+        _server_name: &ServerName<'_>,
+        _ocsp_response: &[u8],
         now: UnixTime,
     ) -> Result<ServerCertVerified, Error> {
-        match self
-            .0
-            .verify_server_cert(end_entity, intermediates, server_name, ocsp_response, now)
-        {
-            Ok(v) => Ok(v),
-            Err(Error::InvalidCertificate(rustls::CertificateError::NotValidForName)) => {
-                Ok(ServerCertVerified::assertion())
-            }
-            Err(e) => Err(e),
-        }
+        let cert = webpki::EndEntityCert::try_from(end_entity).map_err(pki_error)?;
+        cert.verify_for_usage(
+            self.provider.signature_verification_algorithms.all,
+            &self.roots.roots,
+            intermediates,
+            now,
+            webpki::KeyUsage::server_auth(),
+            None,
+            None,
+        )
+        .map_err(pki_error)?;
+        Ok(ServerCertVerified::assertion())
     }
 
     fn verify_tls12_signature(
@@ -200,7 +198,12 @@ impl ServerCertVerifier for CaOnlyVerifier {
         cert: &CertificateDer<'_>,
         dss: &DigitallySignedStruct,
     ) -> Result<HandshakeSignatureValid, Error> {
-        self.0.verify_tls12_signature(message, cert, dss)
+        rustls::crypto::verify_tls12_signature(
+            message,
+            cert,
+            dss,
+            &self.provider.signature_verification_algorithms,
+        )
     }
 
     fn verify_tls13_signature(
@@ -209,11 +212,41 @@ impl ServerCertVerifier for CaOnlyVerifier {
         cert: &CertificateDer<'_>,
         dss: &DigitallySignedStruct,
     ) -> Result<HandshakeSignatureValid, Error> {
-        self.0.verify_tls13_signature(message, cert, dss)
+        rustls::crypto::verify_tls13_signature(
+            message,
+            cert,
+            dss,
+            &self.provider.signature_verification_algorithms,
+        )
     }
 
     fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-        self.0.supported_verify_schemes()
+        self.provider
+            .signature_verification_algorithms
+            .supported_schemes()
+    }
+}
+
+fn pki_error(e: webpki::Error) -> Error {
+    use rustls::CertificateError;
+    use webpki::Error::*;
+    match e {
+        BadDer | BadDerTime | TrailingData(_) => CertificateError::BadEncoding.into(),
+        CertNotValidYet { time, not_before } => {
+            CertificateError::NotValidYetContext { time, not_before }.into()
+        }
+        CertExpired { time, not_after } => {
+            CertificateError::ExpiredContext { time, not_after }.into()
+        }
+        InvalidCertValidity => CertificateError::Expired.into(),
+        UnknownIssuer => CertificateError::UnknownIssuer.into(),
+        CertRevoked => CertificateError::Revoked.into(),
+        InvalidSignatureForPublicKey => CertificateError::BadSignature.into(),
+        #[allow(deprecated)]
+        UnsupportedSignatureAlgorithm | UnsupportedSignatureAlgorithmForPublicKey => {
+            CertificateError::UnsupportedSignatureAlgorithm.into()
+        }
+        _ => CertificateError::Other(OtherError(Arc::new(e))).into(),
     }
 }
 

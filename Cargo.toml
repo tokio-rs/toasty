@@ -111,6 +111,7 @@ sha2 = { version = "0.11", default-features = false }
 x509-cert = { version = "0.2.5", default-features = false, features = ["std"] }
 rustls-platform-verifier = "0.6"
 rustls-pemfile = "2"
+rustls-webpki = { version = "0.103", default-features = false, features = ["alloc", "std"] }
 tokio-stream = { version = "0.1.18", default-features = false }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
