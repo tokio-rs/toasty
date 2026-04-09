@@ -7,7 +7,13 @@ use rustls::{
     pki_types::{CertificateDer, ServerName, UnixTime},
 };
 
-/// SSL verification mode parsed from the connection URL.
+/// SSL verification mode parsed from the `sslmode` query parameter.
+///
+/// Matches libpq's modes, with one notable difference: libpq falls back to
+/// `~/.postgresql/root.crt` (or the system CA file) when `sslrootcert` is
+/// not specified for `verify-ca` / `verify-full`. We don't implement that
+/// file lookup, so both modes require an explicit `sslrootcert` parameter.
+/// Use `sslrootcert=system` for the OS trust store with `verify-full`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SslVerifyMode {
     Disable,
