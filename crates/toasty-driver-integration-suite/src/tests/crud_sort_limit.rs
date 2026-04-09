@@ -285,3 +285,33 @@ pub async fn paginate_for_dynamodb(test: &mut Test) -> Result<()> {
 
     Ok(())
 }
+
+#[driver_test(requires(not(sql)))]
+pub async fn limit_not_supported_on_nosql(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[key(id, order)]
+    struct Item {
+        id: i64,
+        order: i64,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+
+    for order in 0..10 {
+        Item::create().id(0).order(order).exec(&mut db).await?;
+    }
+
+    let err = Item::all()
+        .filter(Item::fields().id().eq(0))
+        .limit(5)
+        .exec(&mut db)
+        .await
+        .unwrap_err();
+
+    assert!(
+        err.is_unsupported_feature(),
+        "expected UnsupportedFeature error, got: {err}"
+    );
+
+    Ok(())
+}

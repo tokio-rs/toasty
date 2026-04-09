@@ -1192,6 +1192,15 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             debug_assert!(self.load_data.select_items.is_empty());
         }
 
+        // Limit::Offset (query.limit(n)) is not supported on NoSQL drivers. DynamoDB's
+        // Limit parameter caps evaluated items, not returned items, so results would be
+        // silently incorrect when a filter is active. Use paginate() instead.
+        if let Some(stmt::Limit::Offset(_)) = stmt.as_query().and_then(|q| q.limit.as_ref()) {
+            return Err(toasty_core::Error::unsupported_feature(
+                "limit() is not supported on NoSQL drivers; use paginate() for cursor-based pagination",
+            ));
+        }
+
         // Without SQL capability, we have to plan the execution of the
         // statement based on available indices.
         let mut index_plan = self.planner.engine.plan_index_path(&stmt)?;

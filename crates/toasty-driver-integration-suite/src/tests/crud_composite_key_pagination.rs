@@ -114,7 +114,7 @@ pub async fn paginate_composite_key_asc(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test]
+#[driver_test(requires(sql))]
 pub async fn limit_composite_key(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(partition = kind, local = seq)]
