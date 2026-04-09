@@ -95,104 +95,16 @@ impl PostgreSQL {
         }
 
         #[cfg(feature = "tls")]
-        let mut sslmode = tls::SslVerifyMode::Prefer;
-        #[cfg(feature = "tls")]
-        let mut sslrootcert: Option<String> = None;
-        #[cfg(feature = "tls")]
-        let mut sslcert: Option<String> = None;
-        #[cfg(feature = "tls")]
-        let mut sslkey: Option<String> = None;
+        let tls = tls::configure_tls(&url, &mut config)?;
 
+        #[cfg(not(feature = "tls"))]
         for (key, value) in url.query_pairs() {
-            match key.as_ref() {
-                #[cfg(feature = "tls")]
-                "sslmode" => {
-                    sslmode = match value.as_ref() {
-                        "disable" => tls::SslVerifyMode::Disable,
-                        "prefer" => tls::SslVerifyMode::Prefer,
-                        "require" => tls::SslVerifyMode::Require,
-                        "verify-ca" => tls::SslVerifyMode::VerifyCa,
-                        "verify-full" => tls::SslVerifyMode::VerifyFull,
-                        other => {
-                            return Err(toasty_core::Error::invalid_connection_url(format!(
-                                "unsupported sslmode: {other}"
-                            )));
-                        }
-                    };
-                }
-                #[cfg(not(feature = "tls"))]
-                "sslmode" => {
-                    if value.as_ref() != "disable" {
-                        return Err(toasty_core::Error::invalid_connection_url(
-                            "TLS not available: compile with the `tls` feature",
-                        ));
-                    }
-                }
-                #[cfg(feature = "tls")]
-                "sslrootcert" => {
-                    sslrootcert = Some(value.into_owned());
-                }
-                #[cfg(feature = "tls")]
-                "sslcert" => {
-                    sslcert = Some(value.into_owned());
-                }
-                #[cfg(feature = "tls")]
-                "sslkey" => {
-                    sslkey = Some(value.into_owned());
-                }
-                "channel_binding" => {
-                    let cb = match value.as_ref() {
-                        "disable" => tokio_postgres::config::ChannelBinding::Disable,
-                        "prefer" => tokio_postgres::config::ChannelBinding::Prefer,
-                        "require" => tokio_postgres::config::ChannelBinding::Require,
-                        other => {
-                            return Err(toasty_core::Error::invalid_connection_url(format!(
-                                "unsupported channel_binding: {other}"
-                            )));
-                        }
-                    };
-                    config.channel_binding(cb);
-                }
-                "sslnegotiation" => {
-                    let neg = match value.as_ref() {
-                        "postgres" => tokio_postgres::config::SslNegotiation::Postgres,
-                        "direct" => tokio_postgres::config::SslNegotiation::Direct,
-                        other => {
-                            return Err(toasty_core::Error::invalid_connection_url(format!(
-                                "unsupported sslnegotiation: {other}"
-                            )));
-                        }
-                    };
-                    config.ssl_negotiation(neg);
-                }
-                _ => {}
+            if key == "sslmode" && value != "disable" {
+                return Err(toasty_core::Error::invalid_connection_url(
+                    "TLS not available: compile with the `tls` feature",
+                ));
             }
         }
-
-        #[cfg(feature = "tls")]
-        {
-            let tp_ssl_mode = match sslmode {
-                tls::SslVerifyMode::Disable => tokio_postgres::config::SslMode::Disable,
-                tls::SslVerifyMode::Prefer => tokio_postgres::config::SslMode::Prefer,
-                tls::SslVerifyMode::Require
-                | tls::SslVerifyMode::VerifyCa
-                | tls::SslVerifyMode::VerifyFull => tokio_postgres::config::SslMode::Require,
-            };
-            config.ssl_mode(tp_ssl_mode);
-        }
-
-        #[cfg(feature = "tls")]
-        let tls = if sslmode != tls::SslVerifyMode::Disable {
-            let rustls_config = tls::build_client_config(
-                sslmode,
-                sslrootcert.as_deref(),
-                sslcert.as_deref(),
-                sslkey.as_deref(),
-            )?;
-            Some(tls::MakeRustlsConnect::new(rustls_config))
-        } else {
-            None
-        };
 
         Ok(Self {
             url: url_str,
