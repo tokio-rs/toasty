@@ -60,23 +60,17 @@ pub(crate) fn build_client_config(
     let verifier: Arc<dyn ServerCertVerifier> = match mode {
         SslVerifyMode::Disable => unreachable!("TLS should not be built for sslmode=disable"),
 
-        SslVerifyMode::Prefer | SslVerifyMode::Require => {
-            if let Some(roots) = roots {
-                Arc::new(CaOnlyVerifier {
-                    roots: Arc::new(roots),
-                    provider: provider.clone(),
-                })
-            } else {
-                Arc::new(NoVerification(provider.clone()))
-            }
-        }
+        SslVerifyMode::Prefer | SslVerifyMode::Require => Arc::new(CaOnlyVerifier {
+            roots: roots.map(Arc::new),
+            provider: provider.clone(),
+        }),
 
         SslVerifyMode::VerifyCa => {
             let roots = roots.ok_or_else(|| {
                 toasty_core::Error::invalid_connection_url("sslmode=verify-ca requires sslrootcert")
             })?;
             Arc::new(CaOnlyVerifier {
-                roots: Arc::new(roots),
+                roots: Some(Arc::new(roots)),
                 provider: provider.clone(),
             })
         }
@@ -105,67 +99,18 @@ pub(crate) fn build_client_config(
     apply_client_auth(builder, client_auth)
 }
 
-/// Accepts any server certificate (encryption only, no verification).
-/// Used for sslmode=require/prefer without sslrootcert.
-#[derive(Debug)]
-struct NoVerification(Arc<CryptoProvider>);
-
-impl ServerCertVerifier for NoVerification {
-    fn verify_server_cert(
-        &self,
-        _end_entity: &CertificateDer<'_>,
-        _intermediates: &[CertificateDer<'_>],
-        _server_name: &ServerName<'_>,
-        _ocsp_response: &[u8],
-        _now: UnixTime,
-    ) -> Result<ServerCertVerified, Error> {
-        Ok(ServerCertVerified::assertion())
-    }
-
-    fn verify_tls12_signature(
-        &self,
-        message: &[u8],
-        cert: &CertificateDer<'_>,
-        dss: &DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, Error> {
-        rustls::crypto::verify_tls12_signature(
-            message,
-            cert,
-            dss,
-            &self.0.signature_verification_algorithms,
-        )
-    }
-
-    fn verify_tls13_signature(
-        &self,
-        message: &[u8],
-        cert: &CertificateDer<'_>,
-        dss: &DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, Error> {
-        rustls::crypto::verify_tls13_signature(
-            message,
-            cert,
-            dss,
-            &self.0.signature_verification_algorithms,
-        )
-    }
-
-    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-        self.0.signature_verification_algorithms.supported_schemes()
-    }
-}
-
 /// Verifies the server certificate chain against trusted roots but does NOT
 /// check that the server hostname matches the certificate.
 ///
-/// Uses `webpki::EndEntityCert::verify_for_usage()` directly rather than
-/// delegating to `WebPkiServerVerifier` and suppressing hostname errors,
-/// which would rely on rustls's internal validation ordering.
+/// When `roots` is `None`, accepts any certificate (encryption only).
+/// When `roots` is `Some`, uses `webpki::EndEntityCert::verify_for_usage()`
+/// directly to validate the chain without hostname checking.
 ///
-/// Used for sslmode=verify-ca and sslmode=require with sslrootcert.
+/// Used for sslmode=prefer/require (with optional sslrootcert) and
+/// sslmode=verify-ca (requires sslrootcert).
 #[derive(Debug)]
 struct CaOnlyVerifier {
-    roots: Arc<RootCertStore>,
+    roots: Option<Arc<RootCertStore>>,
     provider: Arc<CryptoProvider>,
 }
 
@@ -178,17 +123,19 @@ impl ServerCertVerifier for CaOnlyVerifier {
         _ocsp_response: &[u8],
         now: UnixTime,
     ) -> Result<ServerCertVerified, Error> {
-        let cert = webpki::EndEntityCert::try_from(end_entity).map_err(pki_error)?;
-        cert.verify_for_usage(
-            self.provider.signature_verification_algorithms.all,
-            &self.roots.roots,
-            intermediates,
-            now,
-            webpki::KeyUsage::server_auth(),
-            None,
-            None,
-        )
-        .map_err(pki_error)?;
+        if let Some(roots) = &self.roots {
+            let cert = webpki::EndEntityCert::try_from(end_entity).map_err(pki_error)?;
+            cert.verify_for_usage(
+                self.provider.signature_verification_algorithms.all,
+                &roots.roots,
+                intermediates,
+                now,
+                webpki::KeyUsage::server_auth(),
+                None,
+                None,
+            )
+            .map_err(pki_error)?;
+        }
         Ok(ServerCertVerified::assertion())
     }
 
