@@ -41,7 +41,8 @@ openssl x509 -req \
     -CAkey "$DIR/ca.key" \
     -CAcreateserial \
     -days 36500 \
-    -out "$DIR/client.crt"
+    -out "$DIR/client.crt" \
+    -extfile <(printf "extendedKeyUsage=clientAuth")
 
 # Cleanup CSRs and serial files
 rm -f "$DIR"/*.csr "$DIR"/*.srl
