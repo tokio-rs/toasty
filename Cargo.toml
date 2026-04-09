@@ -116,6 +116,7 @@ tokio-stream = { version = "0.1.18", default-features = false }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 trybuild = { version = "1.0.116", features = ["diff"] }
+percent-encoding = "2.3.2"
 url = "2.5.8"
 uuid = { version = "1.23.0", features = ["v4", "v7", "fast-rng"] }
 

@@ -42,6 +42,7 @@ postgres-types.workspace = true
 tokio.workspace = true
 tokio-postgres.workspace = true
 uuid.workspace = true
+percent-encoding.workspace = true
 url.workspace = true
 rustls = { workspace = true, optional = true }
 tokio-rustls = { workspace = true, optional = true }

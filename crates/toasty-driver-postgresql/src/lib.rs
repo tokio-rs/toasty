@@ -20,6 +20,7 @@ mod value;
 pub(crate) use value::Value;
 
 use async_trait::async_trait;
+use percent_encoding::percent_decode_str;
 use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     Result, Schema,
@@ -80,18 +81,28 @@ impl PostgreSQL {
 
         let mut config = Config::new();
         config.host(host);
-        config.dbname(url.path().trim_start_matches('/'));
+
+        let dbname = percent_decode_str(url.path().trim_start_matches('/'))
+            .decode_utf8()
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+        config.dbname(&*dbname);
 
         if let Some(port) = url.port() {
             config.port(port);
         }
 
         if !url.username().is_empty() {
-            config.user(url.username());
+            let user = percent_decode_str(url.username())
+                .decode_utf8()
+                .map_err(toasty_core::Error::driver_operation_failed)?;
+            config.user(&*user);
         }
 
         if let Some(password) = url.password() {
-            config.password(password);
+            let password = percent_decode_str(password)
+                .decode_utf8()
+                .map_err(toasty_core::Error::driver_operation_failed)?;
+            config.password(&*password);
         }
 
         #[cfg(feature = "tls")]
@@ -520,5 +531,37 @@ impl toasty_core::driver::Connection for Connection {
             .await
             .map_err(toasty_core::Error::driver_operation_failed)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn url_percent_decodes_password() {
+        // Password "p@ss:w0rd" is encoded as "p%40ss%3Aw0rd" in URLs
+        let pg = PostgreSQL::new("postgresql://user:p%40ss%3Aw0rd@localhost/mydb").unwrap();
+        assert_eq!(pg.config.get_password(), Some(b"p@ss:w0rd".as_slice()));
+    }
+
+    #[test]
+    fn url_percent_decodes_username() {
+        let pg = PostgreSQL::new("postgresql://user%40name:pass@localhost/mydb").unwrap();
+        assert_eq!(pg.config.get_user(), Some("user@name"));
+    }
+
+    #[test]
+    fn url_percent_decodes_dbname() {
+        let pg = PostgreSQL::new("postgresql://user:pass@localhost/my%20db").unwrap();
+        assert_eq!(pg.config.get_dbname(), Some("my db"));
+    }
+
+    #[test]
+    fn url_without_encoding_still_works() {
+        let pg = PostgreSQL::new("postgresql://user:pass@localhost/mydb").unwrap();
+        assert_eq!(pg.config.get_user(), Some("user"));
+        assert_eq!(pg.config.get_password(), Some(b"pass".as_slice()));
+        assert_eq!(pg.config.get_dbname(), Some("mydb"));
     }
 }
