@@ -3,6 +3,7 @@ use crate::{
     engine::exec::{Action, Exec, Output, VarId},
 };
 use toasty_core::{
+    driver::operation::QueryPkLimit,
     driver::{ExecResponse, Rows, operation},
     schema::db::{ColumnId, IndexId, TableId},
     stmt,
@@ -31,14 +32,11 @@ pub(crate) struct QueryPk {
     /// Filter to pass to the database
     pub row_filter: Option<stmt::Expr>,
 
-    /// Maximum number of items to return.
-    pub limit: Option<i64>,
+    /// Pagination bounds for this query. `None` means no limit or cursor.
+    pub pagination: Option<QueryPkLimit>,
 
     /// Sort key ordering direction.
     pub order: Option<stmt::Direction>,
-
-    /// Cursor for resuming a paginated query.
-    pub cursor: Option<stmt::Value>,
 }
 
 impl Exec<'_> {
@@ -56,8 +54,12 @@ impl Exec<'_> {
 
         // Pagination with multiple filters is not supported — a cursor is only
         // meaningful for a single partition key query.
+        let has_cursor = matches!(
+            &action.pagination,
+            Some(QueryPkLimit::Cursor { after: Some(_), .. })
+        );
         assert!(
-            action.cursor.is_none() || filters.len() <= 1,
+            !has_cursor || filters.len() <= 1,
             "cursor-based pagination with multiple partition filters is not supported"
         );
 
@@ -76,9 +78,8 @@ impl Exec<'_> {
                         select: action.columns.clone(),
                         pk_filter: f,
                         filter: action.row_filter.clone(),
-                        limit: action.limit,
+                        pagination: action.pagination.clone(),
                         order: action.order,
-                        cursor: action.cursor.clone(),
                     }
                     .into(),
                 )

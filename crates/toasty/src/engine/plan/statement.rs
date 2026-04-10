@@ -92,6 +92,8 @@ use std::mem;
 use indexmap::{IndexMap, IndexSet};
 use toasty_core::stmt::{self, Condition, visit_mut};
 
+use toasty_core::driver::operation::QueryPkLimit;
+
 use crate::{
     Result,
     engine::{
@@ -129,13 +131,6 @@ struct ReturningInfo {
 struct PaginationInfo {
     page_size: i64,
     cursor_column_indices: Vec<usize>,
-}
-
-/// Extracted pagination parameters for NoSQL `QueryPk` operations.
-struct QueryPkPagination {
-    limit: Option<i64>,
-    order: Option<stmt::Direction>,
-    cursor: Option<stmt::Value>,
 }
 
 struct PlanStatement<'a, 'b> {
@@ -1246,7 +1241,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             };
 
             if stmt.is_query() {
-                let qp = extract_query_pk_pagination(&stmt);
+                let pagination = extract_query_pk_pagination(&stmt);
+                let order = extract_query_pk_order(&stmt);
 
                 // For queries, stream all matching records with the requested columns.
                 self.insert_mir_with_deps(mir::QueryPk {
@@ -1257,9 +1253,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     pk_filter: index_plan.index_filter.take(),
                     row_filter: index_plan.result_filter.take(),
                     ty: ty.clone(),
-                    limit: qp.limit,
-                    order: qp.order,
-                    cursor: qp.cursor,
+                    pagination,
+                    order,
                 })
             } else {
                 // For mutations (UPDATE/DELETE) with a partial primary-key filter,
@@ -1287,9 +1282,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     pk_filter: index_plan.index_filter.take(),
                     row_filter: index_plan.result_filter.take(),
                     ty: index_key_ty,
-                    limit: None,
+                    pagination: None,
                     order: None,
-                    cursor: None,
                 });
 
                 self.build_key_operation(&stmt, index_plan, query_pk_node, ty)
@@ -1321,7 +1315,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 Some(inputs[0])
             };
 
-            let qp = extract_query_pk_pagination(&stmt);
+            let pagination = extract_query_pk_pagination(&stmt);
+            let order = extract_query_pk_order(&stmt);
 
             // Use QueryPk with index to query the secondary index and return full records
             // This eliminates the N+1 pattern of FindPkByIndex + GetByKey
@@ -1333,9 +1328,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 pk_filter: index_plan.index_filter.take(),
                 row_filter: index_plan.result_filter.take(),
                 ty: ty.clone(), // Full record type, not just PKs
-                limit: qp.limit,
-                order: qp.order,
-                cursor: qp.cursor,
+                pagination,
+                order,
             });
         }
 
@@ -1729,49 +1723,45 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     }
 }
 
-/// Extract pagination parameters (limit, sort direction, cursor) from a
-/// query statement for use with `QueryPk` on NoSQL drivers.
-fn extract_query_pk_pagination(stmt: &stmt::Statement) -> QueryPkPagination {
-    let Some(query) = stmt.as_query() else {
-        return QueryPkPagination {
-            limit: None,
-            order: None,
-            cursor: None,
-        };
-    };
-
-    let (limit, cursor) = match query.limit.as_ref() {
-        Some(stmt::Limit::Cursor(c)) => {
+/// Extract pagination bounds from a query statement for use with `QueryPk` on
+/// NoSQL drivers. Returns `None` when the statement has no limit clause.
+fn extract_query_pk_pagination(stmt: &stmt::Statement) -> Option<QueryPkLimit> {
+    let query = stmt.as_query()?;
+    match query.limit.as_ref()? {
+        stmt::Limit::Cursor(c) => {
             let page_size = match &c.page_size {
-                stmt::Expr::Value(stmt::Value::I64(n)) => Some(*n),
-                _ => None,
+                stmt::Expr::Value(stmt::Value::I64(n)) => *n,
+                _ => return None,
             };
-            let cursor = c.after.as_ref().and_then(|expr| match expr {
+            let after = c.after.as_ref().and_then(|e| match e {
                 stmt::Expr::Value(v) => Some(v.clone()),
                 _ => None,
             });
-            (page_size, cursor)
+            Some(QueryPkLimit::Cursor { page_size, after })
         }
-        Some(stmt::Limit::Offset(lo)) => {
+        stmt::Limit::Offset(lo) => {
             let limit = match &lo.limit {
-                stmt::Expr::Value(stmt::Value::I64(n)) => Some(*n),
-                _ => None,
+                stmt::Expr::Value(stmt::Value::I64(n)) => *n,
+                _ => return None,
             };
-            (limit, None)
+            let offset = lo.offset.as_ref().and_then(|e| match e {
+                stmt::Expr::Value(stmt::Value::I64(n)) => Some(*n),
+                stmt::Expr::Value(stmt::Value::U64(n)) => Some(*n as i64),
+                _ => None,
+            });
+            Some(QueryPkLimit::Offset { limit, offset })
         }
-        None => (None, None),
-    };
+    }
+}
 
-    let order = query.order_by.as_ref().and_then(|ob| {
+/// Extract the sort direction from a query statement's ORDER BY clause for use
+/// with `QueryPk` on NoSQL drivers.
+fn extract_query_pk_order(stmt: &stmt::Statement) -> Option<stmt::Direction> {
+    let query = stmt.as_query()?;
+    query.order_by.as_ref().and_then(|ob| {
         ob.exprs.first().map(|e| match e.order {
             Some(stmt::Direction::Desc) => stmt::Direction::Desc,
             _ => stmt::Direction::Asc,
         })
-    });
-
-    QueryPkPagination {
-        limit,
-        order,
-        cursor,
-    }
+    })
 }

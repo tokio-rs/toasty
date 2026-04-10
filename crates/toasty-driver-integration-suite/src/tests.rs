@@ -19,6 +19,7 @@ pub mod crud_query;
 pub mod crud_query_macro;
 pub mod crud_sort_limit;
 pub mod crud_update_field_order;
+pub mod dynamodb_limit_boundary;
 pub mod embed_enum_data;
 pub mod embed_enum_filter;
 pub mod embed_enum_filter_comparison;
