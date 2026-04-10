@@ -1,8 +1,8 @@
-use postgres::{
+use toasty_core::stmt::{self, Value as CoreValue};
+use tokio_postgres::{
     Column, Row,
     types::{IsNull, ToSql, Type, accepts, private::BytesMut, to_sql_checked},
 };
-use toasty_core::stmt::{self, Value as CoreValue};
 
 #[derive(Debug)]
 pub struct Value(pub(crate) CoreValue);

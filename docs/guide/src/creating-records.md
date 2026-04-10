@@ -62,6 +62,10 @@ builder to insert the row, or continue working with the builder value (for
 example, to conditionally set additional fields). The returned `User`
 instance has all fields set, including auto-generated ones like `id`.
 
+Like Rust struct literals, the macro supports field shorthand — writing just
+`name` instead of `name: name` when the variable matches the field name. You
+can mix shorthand and explicit fields freely.
+
 The generated SQL looks like:
 
 ```sql
@@ -69,7 +73,9 @@ INSERT INTO users (name, email) VALUES ('Alice', 'alice@example.com');
 ```
 
 Field values in the macro can be any Rust expression — literals, variables, or
-function calls:
+function calls. When a variable has the same name as the field, you can use the
+shorthand syntax (just `name` instead of `name: name`), the same way Rust
+struct literals work:
 
 ```rust
 # use toasty::Model;
@@ -85,8 +91,34 @@ function calls:
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
 let name = "Bob";
 let user = toasty::create!(User {
-    name: name,
+    name,
     email: format!("{}@example.com", name.to_lowercase()),
+})
+.exec(&mut db)
+.await?;
+# Ok(())
+# }
+```
+
+When the variable name differs from the field name, use the explicit
+`field: expr` form:
+
+```rust
+# use toasty::Model;
+# #[derive(Debug, toasty::Model)]
+# struct User {
+#     #[key]
+#     #[auto]
+#     id: u64,
+#     name: String,
+#     #[unique]
+#     email: String,
+# }
+# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
+let user_name = "Bob";
+let user = toasty::create!(User {
+    name: user_name,
+    email: format!("{}@example.com", user_name.to_lowercase()),
 })
 .exec(&mut db)
 .await?;
@@ -325,7 +357,7 @@ let names = get_names_from_csv();
 let mut insertions = vec![];
 for (i, name) in names.iter().enumerate() {
     insertions.push(toasty::create!(User {
-        name: name,
+        name,
         email: format!("user{i}@example.com"),
     }));
 }

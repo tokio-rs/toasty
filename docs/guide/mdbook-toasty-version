@@ -34,5 +34,5 @@ if __name__ == "__main__":
                 if chapter.get("sub_items"):
                     replace_in_items(chapter["sub_items"])
 
-    replace_in_items(book["sections"])
+    replace_in_items(book["items"])
     print(json.dumps(book))
