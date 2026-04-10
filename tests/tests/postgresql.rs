@@ -59,3 +59,81 @@ impl toasty_driver_integration_suite::Setup for PostgreSqlSetup {
 
 // Generate all driver tests
 toasty_driver_integration_suite::generate_driver_tests!(PostgreSqlSetup::new(), bigdecimal_implemented: false);
+
+#[tokio::test]
+async fn url_encoding() {
+    let admin_url = std::env::var("TOASTY_TEST_POSTGRES_URL")
+        .unwrap_or_else(|_| "postgresql://localhost:5432/toasty_test".to_string());
+    let (admin_client, connection) = tokio_postgres::connect(&admin_url, NoTls)
+        .await
+        .expect("failed to connect as admin");
+    tokio::spawn(async move {
+        if let Err(e) = connection.await {
+            eprintln!("connection error: {e}");
+        }
+    });
+
+    let role = "url_encoding#role";
+    let dbname = "url_encoding#db";
+    let password = "p@ss#word";
+
+    // Idempotent setup: drop if leftover from a previous run
+    admin_client
+        .execute(&format!("DROP DATABASE IF EXISTS \"{}\"", dbname), &[])
+        .await
+        .expect("failed to drop test database");
+    admin_client
+        .execute(&format!("DROP ROLE IF EXISTS \"{}\"", role), &[])
+        .await
+        .expect("failed to drop test role");
+
+    admin_client
+        .execute(
+            &format!(
+                "CREATE ROLE \"{}\" WITH LOGIN PASSWORD '{}'",
+                role, password
+            ),
+            &[],
+        )
+        .await
+        .expect("failed to create test role");
+    admin_client
+        .execute(
+            &format!("CREATE DATABASE \"{}\" OWNER \"{}\"", dbname, role),
+            &[],
+        )
+        .await
+        .expect("failed to create test database");
+
+    // Parse the admin URL to extract host/port
+    let parsed = url::Url::parse(&admin_url).expect("failed to parse admin URL");
+    let host = parsed.host_str().unwrap_or("localhost");
+    let port = parsed.port().unwrap_or(5432);
+
+    let encoded_role = url::form_urlencoded::byte_serialize(role.as_bytes()).collect::<String>();
+    let encoded_password =
+        url::form_urlencoded::byte_serialize(password.as_bytes()).collect::<String>();
+    let encoded_dbname =
+        url::form_urlencoded::byte_serialize(dbname.as_bytes()).collect::<String>();
+
+    let test_url = format!(
+        "postgresql://{}:{}@{}:{}/{}",
+        encoded_role, encoded_password, host, port, encoded_dbname
+    );
+
+    let driver = PostgreSQL::new(&test_url).expect("driver creation failed");
+    let conn = toasty_core::driver::Driver::connect(&driver)
+        .await
+        .expect("connection with percent-encoded URL failed");
+    drop(conn);
+
+    // Cleanup
+    admin_client
+        .execute(&format!("DROP DATABASE IF EXISTS \"{}\"", dbname), &[])
+        .await
+        .expect("failed to drop test database");
+    admin_client
+        .execute(&format!("DROP ROLE IF EXISTS \"{}\"", role), &[])
+        .await
+        .expect("failed to drop test role");
+}
