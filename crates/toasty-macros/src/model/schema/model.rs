@@ -241,6 +241,54 @@ impl Model {
             })
         };
 
+        // Create indices for model-level #[index(...)] attributes
+        for index_attr in &model_attr.indices {
+            let mut index_fields = vec![];
+
+            if index_attr.local.is_empty() {
+                // Simple mode (e.g. `#[index(a, b, c)]`): all fields land in `partition`.
+                // First field is the partition (hash) key, rest are local (sort) keys.
+                let mut partition_iter = index_attr.partition.iter();
+                if let Some(first) = partition_iter.next() {
+                    let idx = names.iter().position(|n| n == first).unwrap();
+                    index_fields.push(IndexField {
+                        field: idx,
+                        scope: IndexScope::Partition,
+                    });
+                    for field in partition_iter {
+                        let idx = names.iter().position(|n| n == field).unwrap();
+                        index_fields.push(IndexField {
+                            field: idx,
+                            scope: IndexScope::Local,
+                        });
+                    }
+                }
+            } else {
+                // Named mode (e.g. `#[index(partition = a, partition = b, local = c)]`):
+                // all `partition` fields are hash keys, all `local` fields are sort keys.
+                for field in &index_attr.partition {
+                    let idx = names.iter().position(|n| n == field).unwrap();
+                    index_fields.push(IndexField {
+                        field: idx,
+                        scope: IndexScope::Partition,
+                    });
+                }
+                for field in &index_attr.local {
+                    let idx = names.iter().position(|n| n == field).unwrap();
+                    index_fields.push(IndexField {
+                        field: idx,
+                        scope: IndexScope::Local,
+                    });
+                }
+            }
+
+            indices.push(Index {
+                fields: index_fields,
+                unique: false,
+                primary_key: false,
+            });
+        }
+
         // Create indices for all fields annotated with unique or index
         collect_field_indices(&fields, &mut indices);
 
