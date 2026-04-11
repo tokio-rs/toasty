@@ -17,18 +17,27 @@ pub trait Params {
 
 /// A positional bind-parameter placeholder.
 ///
-/// The inner `usize` is the 1-based parameter index. The serializer renders
+/// The `index` is the 1-based parameter index. The serializer renders
 /// it in the target dialect's format (`$1`, `?1`, or `?`).
+///
+/// When `cast` is set, PostgreSQL placeholders are rendered with a type
+/// cast (e.g. `$1::my_enum`). This is needed for native enum types where
+/// PostgreSQL rejects a bare TEXT parameter.
 ///
 /// # Example
 ///
 /// ```
 /// use toasty_sql::serializer::Placeholder;
 ///
-/// let p = Placeholder(3);
-/// assert_eq!(p.0, 3);
+/// let p = Placeholder { index: 3, cast: None };
+/// assert_eq!(p.index, 3);
 /// ```
-pub struct Placeholder(pub usize);
+pub struct Placeholder {
+    /// 1-based parameter index.
+    pub index: usize,
+    /// Optional SQL type cast (e.g. enum type name for PostgreSQL).
+    pub cast: Option<String>,
+}
 
 /// A parameter value paired with an optional type hint.
 ///
@@ -66,7 +75,10 @@ impl TypedValue {
 impl Params for Vec<stmt::Value> {
     fn push(&mut self, value: &stmt::Value, _type_hint: Option<&stmt::Type>) -> Placeholder {
         self.push(value.clone());
-        Placeholder(self.len())
+        Placeholder {
+            index: self.len(),
+            cast: None,
+        }
     }
 }
 
@@ -76,7 +88,10 @@ impl Params for Vec<TypedValue> {
             value: value.clone(),
             type_hint: type_hint.cloned(),
         });
-        Placeholder(self.len())
+        Placeholder {
+            index: self.len(),
+            cast: None,
+        }
     }
 }
 
@@ -86,8 +101,13 @@ impl ToSql for Placeholder {
 
         match f.serializer.flavor {
             Flavor::Mysql => write!(&mut f.dst, "?").unwrap(),
-            Flavor::Postgresql => write!(&mut f.dst, "${}", self.0).unwrap(),
-            Flavor::Sqlite => write!(&mut f.dst, "?{}", self.0).unwrap(),
+            Flavor::Postgresql => {
+                write!(&mut f.dst, "${}", self.index).unwrap();
+                if let Some(ref cast) = self.cast {
+                    write!(&mut f.dst, "::{}", cast).unwrap();
+                }
+            }
+            Flavor::Sqlite => write!(&mut f.dst, "?{}", self.index).unwrap(),
         }
     }
 }

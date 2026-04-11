@@ -706,7 +706,15 @@ impl ToSql for (&db::Table, &stmt::Assignments) {
             };
             if let stmt::Expr::Value(value) = expr {
                 let type_hint = Some(&column.ty);
-                let placeholder = f.params.push(value, type_hint);
+                let mut placeholder = f.params.push(value, type_hint);
+                // PostgreSQL native enums need a cast from TEXT to the enum type
+                if matches!(f.serializer.flavor, Flavor::Postgresql) {
+                    if let db::Type::Enum(ref type_enum) = column.storage_ty {
+                        if let Some(ref name) = type_enum.name {
+                            placeholder.cast = Some(name.clone());
+                        }
+                    }
+                }
                 placeholder.to_sql(cx, f);
             } else {
                 expr.to_sql(cx, f);
