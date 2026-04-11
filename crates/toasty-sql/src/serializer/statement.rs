@@ -230,6 +230,33 @@ impl ToSql for &stmt::CreateTable {
     }
 }
 
+impl ToSql for &stmt::CreateType {
+    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+        use toasty_core::stmt::Value;
+
+        let name = self
+            .ty
+            .name
+            .as_deref()
+            .expect("CREATE TYPE requires a type name");
+        let name = Ident(name);
+
+        let prev = f.bind_params;
+        f.bind_params = false;
+
+        fmt!(cx, f, "CREATE TYPE " name " AS ENUM (");
+        for (i, variant) in self.ty.variants.iter().enumerate() {
+            if i > 0 {
+                f.dst.push_str(", ");
+            }
+            Value::String(variant.name.clone()).to_sql(cx, f);
+        }
+        f.dst.push(')');
+
+        f.bind_params = prev;
+    }
+}
+
 impl ToSql for &stmt::Delete {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
         let prev = mem::replace(&mut f.alias, true);
@@ -512,6 +539,7 @@ impl ToSql for &stmt::Statement {
             stmt::Statement::CopyTable(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::CreateIndex(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::CreateTable(stmt) => stmt.to_sql(cx, f),
+            stmt::Statement::CreateType(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::DropColumn(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::DropIndex(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::DropTable(stmt) => stmt.to_sql(cx, f),

@@ -84,13 +84,53 @@ struct Formatter<'a, T> {
 /// Expression context bound to a database-level schema.
 pub type ExprContext<'a> = toasty_core::stmt::ExprContext<'a, db::Schema>;
 
+/// A no-op [`Params`] implementation for DDL serialization where bind
+/// parameters are not used.
+struct NoParams;
+
+impl Params for NoParams {
+    fn push(
+        &mut self,
+        _: &toasty_core::stmt::Value,
+        _: Option<&toasty_core::stmt::Type>,
+    ) -> params::Placeholder {
+        unreachable!("DDL serialization should not produce bind parameters")
+    }
+}
+
 impl<'a> Serializer<'a> {
+    /// Serializes a [`Statement`] to a SQL string with all values inlined as
+    /// literals (no bind parameters). Appends a trailing semicolon.
+    ///
+    /// Use this for DDL statements (`CREATE TABLE`, `CREATE TYPE`, etc.) where
+    /// bind parameters are not supported.
+    pub fn serialize(&self, stmt: &Statement) -> String {
+        let mut ret = String::new();
+
+        let mut fmt = Formatter {
+            serializer: self,
+            dst: &mut ret,
+            params: &mut NoParams,
+            depth: 0,
+            alias: false,
+            bind_params: false,
+            insert_context: None,
+        };
+
+        let cx = ExprContext::new(self.schema);
+
+        stmt.to_sql(&cx, &mut fmt);
+
+        ret.push(';');
+        ret
+    }
+
     /// Serializes a [`Statement`] to a SQL string, appending a trailing semicolon.
     ///
     /// Parameter placeholders are written in the dialect's native format
     /// (`$1` for PostgreSQL, `?1` for SQLite, `?` for MySQL) and the
     /// corresponding values are pushed into `params`.
-    pub fn serialize(&self, stmt: &Statement, params: &mut impl Params) -> String {
+    pub fn serialize_with_params(&self, stmt: &Statement, params: &mut impl Params) -> String {
         let mut ret = String::new();
 
         let mut fmt = Formatter {

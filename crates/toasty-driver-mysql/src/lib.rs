@@ -27,7 +27,7 @@ use toasty_core::{
     schema::db::{self, Migration, SchemaDiff, Table},
     stmt::{self, ValueRecord},
 };
-use toasty_sql::{self as sql, TypedValue};
+use toasty_sql::{self as sql};
 use url::Url;
 
 /// A MySQL [`Driver`] that connects via `mysql_async`.
@@ -105,16 +105,7 @@ impl Driver for MySQL {
 
         let sql_strings: Vec<String> = statements
             .iter()
-            .map(|stmt| {
-                let mut params = Vec::<TypedValue>::new();
-                let sql =
-                    sql::Serializer::mysql(stmt.schema()).serialize(stmt.statement(), &mut params);
-                assert!(
-                    params.is_empty(),
-                    "migration statements should not have parameters"
-                );
-                sql
-            })
+            .map(|stmt| sql::Serializer::mysql(stmt.schema()).serialize(stmt.statement()))
             .collect();
 
         Migration::new_sql_with_breakpoints(&sql_strings)
@@ -165,17 +156,7 @@ impl Connection {
     pub async fn create_table(&mut self, schema: &db::Schema, table: &Table) -> Result<()> {
         let serializer = sql::Serializer::mysql(schema);
 
-        let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
-
-        let sql = serializer.serialize(
-            &sql::Statement::create_table(table, &Capability::MYSQL),
-            &mut params,
-        );
-
-        assert!(
-            params.is_empty(),
-            "creating a table shouldn't involve any parameters"
-        );
+        let sql = serializer.serialize(&sql::Statement::create_table(table, &Capability::MYSQL));
 
         self.conn
             .exec_drop(&sql, ())
@@ -187,12 +168,7 @@ impl Connection {
                 continue;
             }
 
-            let sql = serializer.serialize(&sql::Statement::create_index(index), &mut params);
-
-            assert!(
-                params.is_empty(),
-                "creating an index shouldn't involve any parameters"
-            );
+            let sql = serializer.serialize(&sql::Statement::create_index(index));
 
             self.conn
                 .exec_drop(&sql, ())
@@ -236,7 +212,8 @@ impl toasty_core::driver::Connection for Connection {
 
         let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
 
-        let sql_as_str = sql::Serializer::mysql(&schema.db).serialize(&sql, &mut params);
+        let sql_as_str =
+            sql::Serializer::mysql(&schema.db).serialize_with_params(&sql, &mut params);
 
         tracing::debug!(db.system = "mysql", db.statement = %sql_as_str, params = params.len(), "executing SQL");
 

@@ -22,6 +22,9 @@ pub use create_index::CreateIndex;
 mod create_table;
 pub use create_table::CreateTable;
 
+mod create_type;
+pub use create_type::CreateType;
+
 mod drop_column;
 pub use drop_column::DropColumn;
 
@@ -60,6 +63,8 @@ pub enum Statement {
     CreateIndex(CreateIndex),
     /// Create a table.
     CreateTable(CreateTable),
+    /// Create a type (e.g. `CREATE TYPE ... AS ENUM (...)`).
+    CreateType(CreateType),
     /// Drop a column from an existing table.
     DropColumn(DropColumn),
     /// Drop a table.

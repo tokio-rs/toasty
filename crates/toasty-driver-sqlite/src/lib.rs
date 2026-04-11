@@ -36,7 +36,7 @@ use toasty_core::{
     schema::db::{self, Migration, SchemaDiff, Table},
     stmt,
 };
-use toasty_sql::{self as sql, TypedValue};
+use toasty_sql::{self as sql};
 use url::Url;
 
 /// A SQLite [`Driver`] that opens connections to a file or in-memory database.
@@ -117,16 +117,7 @@ impl Driver for Sqlite {
 
         let sql_strings: Vec<String> = statements
             .iter()
-            .map(|stmt| {
-                let mut params = Vec::<TypedValue>::new();
-                let sql =
-                    sql::Serializer::sqlite(stmt.schema()).serialize(stmt.statement(), &mut params);
-                assert!(
-                    params.is_empty(),
-                    "migration statements should not have parameters"
-                );
-                sql
-            })
+            .map(|stmt| sql::Serializer::sqlite(stmt.schema()).serialize(stmt.statement()))
             .collect();
 
         Migration::new_sql_with_breakpoints(&sql_strings)
@@ -206,7 +197,7 @@ impl toasty_core::driver::Connection for Connection {
         };
 
         let mut params: Vec<toasty_sql::TypedValue> = vec![];
-        let sql_str = sql::Serializer::sqlite(&schema.db).serialize(&sql, &mut params);
+        let sql_str = sql::Serializer::sqlite(&schema.db).serialize_with_params(&sql, &mut params);
 
         tracing::debug!(db.system = "sqlite", db.statement = %sql_str, params = params.len(), "executing SQL");
 
@@ -380,12 +371,7 @@ impl Connection {
     fn create_table(&mut self, schema: &db::Schema, table: &Table) -> Result<()> {
         let serializer = sql::Serializer::sqlite(schema);
 
-        let mut params: Vec<toasty_sql::TypedValue> = vec![];
-        let stmt = serializer.serialize(
-            &sql::Statement::create_table(table, &Capability::SQLITE),
-            &mut params,
-        );
-        assert!(params.is_empty());
+        let stmt = serializer.serialize(&sql::Statement::create_table(table, &Capability::SQLITE));
 
         self.connection
             .execute(&stmt, [])
@@ -398,8 +384,7 @@ impl Connection {
                 continue;
             }
 
-            let stmt = serializer.serialize(&sql::Statement::create_index(index), &mut params);
-            assert!(params.is_empty());
+            let stmt = serializer.serialize(&sql::Statement::create_index(index));
 
             self.connection
                 .execute(&stmt, [])
