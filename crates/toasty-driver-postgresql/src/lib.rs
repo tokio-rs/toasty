@@ -12,13 +12,15 @@
 //! ```
 
 mod statement_cache;
+#[cfg(feature = "tls")]
+mod tls;
 mod r#type;
 mod value;
 
 pub(crate) use value::Value;
 
 use async_trait::async_trait;
-use postgres::{Socket, tls::MakeTlsConnect, types::ToSql};
+use percent_encoding::percent_decode_str;
 use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     Result, Schema,
@@ -28,7 +30,7 @@ use toasty_core::{
     stmt::ValueRecord,
 };
 use toasty_sql::{self as sql, TypedValue};
-use tokio_postgres::{Client, Config};
+use tokio_postgres::{Client, Config, Socket, tls::MakeTlsConnect, types::ToSql};
 use url::Url;
 
 use crate::{statement_cache::StatementCache, r#type::TypeExt};
@@ -46,6 +48,8 @@ use crate::{statement_cache::StatementCache, r#type::TypeExt};
 pub struct PostgreSQL {
     url: String,
     config: Config,
+    #[cfg(feature = "tls")]
+    tls: Option<tls::MakeRustlsConnect>,
 }
 
 impl PostgreSQL {
@@ -77,24 +81,57 @@ impl PostgreSQL {
 
         let mut config = Config::new();
         config.host(host);
-        config.dbname(url.path().trim_start_matches('/'));
+
+        let dbname = percent_decode_str(url.path().trim_start_matches('/'))
+            .decode_utf8()
+            .map_err(|_| {
+                toasty_core::Error::invalid_connection_url("database name is not valid UTF-8")
+            })?;
+        config.dbname(&*dbname);
 
         if let Some(port) = url.port() {
             config.port(port);
         }
 
         if !url.username().is_empty() {
-            config.user(url.username());
+            let user = percent_decode_str(url.username())
+                .decode_utf8()
+                .map_err(|_| {
+                    toasty_core::Error::invalid_connection_url("username is not valid UTF-8")
+                })?;
+            config.user(&*user);
         }
 
         if let Some(password) = url.password() {
-            config.password(password);
+            config.password(percent_decode_str(password).collect::<Vec<u8>>());
+        }
+
+        #[cfg(feature = "tls")]
+        let tls = tls::configure_tls(&url, &mut config)?;
+
+        #[cfg(not(feature = "tls"))]
+        for (key, value) in url.query_pairs() {
+            if key == "sslmode" && value != "disable" {
+                return Err(toasty_core::Error::invalid_connection_url(
+                    "TLS not available: compile with the `tls` feature",
+                ));
+            }
         }
 
         Ok(Self {
             url: url_str,
             config,
+            #[cfg(feature = "tls")]
+            tls,
         })
+    }
+
+    async fn connect_with_config(&self, config: Config) -> Result<Connection> {
+        #[cfg(feature = "tls")]
+        if let Some(ref tls) = self.tls {
+            return Connection::connect(config, tls.clone()).await;
+        }
+        Connection::connect(config, tokio_postgres::NoTls).await
     }
 }
 
@@ -110,7 +147,7 @@ impl Driver for PostgreSQL {
 
     async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::driver::Connection>> {
         Ok(Box::new(
-            Connection::connect(self.config.clone(), tokio_postgres::NoTls).await?,
+            self.connect_with_config(self.config.clone()).await?,
         ))
     }
 
@@ -149,7 +186,7 @@ impl Driver for PostgreSQL {
         let connect = |dbname: &str| {
             let mut config = self.config.clone();
             config.dbname(dbname);
-            Connection::connect(config, tokio_postgres::NoTls)
+            self.connect_with_config(config)
         };
 
         // Step 1: Connect to the target DB and create a temp DB

@@ -107,12 +107,23 @@ jobs:
             options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
         env:
             TOASTY_CONNECTION_URL: postgresql://toasty:toasty@localhost/toasty
+            TOASTY_TEST_POSTGRES_TLS_URL: postgresql://toasty:toasty@localhost:5433/toasty
         steps:
         - uses: actions/checkout@v4
         - uses: dtolnay/rust-toolchain@stable
         - uses: Swatinem/rust-cache@v2
           with:
             save-if: ${{ github.ref == 'refs/heads/main' }}
+        - name: Generate TLS certificates
+          run: mkdir -p tests/tls/certs && tests/tls/generate-certs.sh
+        - name: Start TLS PostgreSQL
+          run: docker compose up -d postgresql-tls
+        - name: Wait for TLS PostgreSQL
+          run: |
+            for i in $(seq 1 30); do
+              docker compose exec postgresql-tls pg_isready -U toasty && break
+              sleep 1
+            done
         - name: cargo test
           run: cargo test --workspace --no-default-features --features postgresql
         - name: cargo run --bin example-hello-toasty

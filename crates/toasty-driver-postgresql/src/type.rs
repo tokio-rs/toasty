@@ -1,5 +1,5 @@
-use postgres::types::Type;
 use toasty_core::stmt;
+use tokio_postgres::types::Type;
 
 pub trait TypeExt {
     /// Converts a Toasty type to a PostgreSQL type.
