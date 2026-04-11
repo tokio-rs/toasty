@@ -1,4 +1,4 @@
-use super::{Expand, util};
+use super::{Expand, docs, util};
 use crate::model::schema::FieldTy;
 
 use proc_macro2::TokenStream;
@@ -9,10 +9,14 @@ impl Expand<'_> {
     pub(super) fn expand_embedded_update_builder(&self) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
+        let model_ident = &self.model.ident;
         let update_struct_ident = &self.model.kind.as_embedded_unwrap().update_struct_ident;
         let builder_methods = self.expand_update_field_methods(true);
 
+        let doc_struct = docs::update_embedded_struct(&model_ident.to_string());
+
         quote! {
+            #[doc = #doc_struct]
             #vis struct #update_struct_ident<'a> {
                 assignments: &'a mut #toasty::core::stmt::Assignments,
                 projection: #toasty::stmt::Projection,
@@ -47,6 +51,11 @@ impl Expand<'_> {
             let set_field_ident = &field.set_ident;
             let with_field_ident = &field.with_ident;
 
+            let field_name = field_ident.to_string();
+            let doc_consuming = docs::update_field_consuming(&field_name);
+            let doc_by_ref = docs::update_field_by_ref(&field_name);
+            let doc_with = docs::update_field_with(&field_name);
+
             let index = util::int(field_index);
             let projection = if is_embedded {
                 quote! {{
@@ -65,11 +74,13 @@ impl Expand<'_> {
                 let ty = &rel.ty;
 
                 quote! {
+                    #[doc = #doc_consuming]
                     #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::Relation>::Expr>) -> Self {
                         self.#set_field_ident(#field_ident);
                         self
                     }
 
+                    #[doc = #doc_by_ref]
                     #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::Relation>::Expr>) -> &mut Self {
                         let projection = #projection;
                         #field_ident.assign(&mut self.assignments, projection);
@@ -81,11 +92,13 @@ impl Expand<'_> {
                 let ty = &rel.ty;
 
                 quote! {
+                    #[doc = #doc_consuming]
                     #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<#toasty::List<<#ty as #toasty::Relation>::Expr>>) -> Self {
                         self.#set_field_ident(#field_ident);
                         self
                     }
 
+                    #[doc = #doc_by_ref]
                     #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<#toasty::List<<#ty as #toasty::Relation>::Expr>>) -> &mut Self {
                         let projection = #projection;
                         #field_ident.assign(&mut self.assignments, projection);
@@ -97,11 +110,13 @@ impl Expand<'_> {
                 let ty = &rel.ty;
 
                 quote! {
+                    #[doc = #doc_consuming]
                     #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::Relation>::Expr>) -> Self {
                         self.#set_field_ident(#field_ident);
                         self
                     }
 
+                    #[doc = #doc_by_ref]
                     #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::Relation>::Expr>) -> &mut Self {
                         let projection = #projection;
                         #field_ident.assign(&mut self.assignments, projection);
@@ -113,11 +128,13 @@ impl Expand<'_> {
                 let serialize_attr = field.attrs.serialize.as_ref().unwrap();
                 if serialize_attr.nullable {
                     quote! {
+                        #[doc = #doc_consuming]
                         #vis fn #field_ident(mut self, #field_ident: #ty) -> Self {
                             self.#set_field_ident(#field_ident);
                             self
                         }
 
+                        #[doc = #doc_by_ref]
                         #vis fn #set_field_ident(&mut self, #field_ident: #ty) -> &mut Self {
                             let projection = #projection;
                             match &#field_ident {
@@ -134,11 +151,13 @@ impl Expand<'_> {
                     }
                 } else {
                     quote! {
+                        #[doc = #doc_consuming]
                         #vis fn #field_ident(mut self, #field_ident: #ty) -> Self {
                             self.#set_field_ident(#field_ident);
                             self
                         }
 
+                        #[doc = #doc_by_ref]
                         #vis fn #set_field_ident(&mut self, #field_ident: #ty) -> &mut Self {
                             let projection = #projection;
                             let json = #toasty::serde_json::to_string(&#field_ident).expect("failed to serialize");
@@ -150,17 +169,20 @@ impl Expand<'_> {
             }
             FieldTy::Primitive(ty) => {
                 quote! {
+                    #[doc = #doc_consuming]
                     #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<#ty>) -> Self {
                         self.#set_field_ident(#field_ident);
                         self
                     }
 
+                    #[doc = #doc_by_ref]
                     #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<#ty>) -> &mut Self {
                         let projection = #projection;
                         #field_ident.assign(&mut self.assignments, projection);
                         self
                     }
 
+                    #[doc = #doc_with]
                     #vis fn #with_field_ident(
                         mut self,
                         f: impl FnOnce(<#ty as #toasty::Field>::Update<'_>)
@@ -209,13 +231,12 @@ impl Expand<'_> {
         let builder_methods = self.expand_update_field_methods(false);
         let update_default_stmts = self.expand_update_default_stmts();
 
+        let model_name = model_ident.to_string();
+        let doc_struct = docs::update_struct(&model_name, &query_struct_ident.to_string());
+        let doc_exec = docs::update_exec(&model_name);
+
         quote! {
-            // Unified update builder generic over the update target.
-            //
-            // The builder holds assignments and a target. The target knows how
-            // to build the final update statement:
-            // - `T = GeneratedQuery`: query-based update, `Returning = List<Model>`
-            // - `T = &mut Model`: instance update, `Returning = Model`
+            #[doc = #doc_struct]
             #[derive(Clone)]
             #vis struct #update_struct_ident<#target_ty: #toasty::UpdateTarget = #query_struct_ident> {
                 assignments: #toasty::core::stmt::Assignments,
@@ -229,6 +250,7 @@ impl Expand<'_> {
 
                 #builder_methods
 
+                #[doc = #doc_exec]
                 #vis async fn exec(mut self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<()> {
                     use #toasty::UpdateTarget as _;
                     let stmt = self.target.to_update_stmt(self.assignments);

@@ -1,4 +1,4 @@
-use super::{Expand, util};
+use super::{Expand, docs, util};
 use crate::model::schema::{FieldTy, ModelKind};
 
 use proc_macro2::TokenStream;
@@ -42,20 +42,31 @@ impl Expand<'_> {
         let into_expr_body_val = self.expand_model_into_expr_body(false);
         let reload_trait_method = self.expand_reload_trait_method();
 
+        let model_name = model_ident.to_string();
+        let doc_create = docs::model_create(&model_name, &create_struct_ident.to_string());
+        let doc_create_many = docs::model_create_many(&model_name);
+        let doc_update = docs::model_update(&model_name, &update_struct_ident.to_string());
+        let doc_all = docs::model_all(&model_name, &query_struct_ident.to_string());
+        let doc_filter = docs::model_filter(&model_name);
+        let doc_delete = docs::model_delete(&model_name);
+
         quote! {
             impl #model_ident {
                 #model_fields
                 #filter_methods
                 #relation_methods
 
+                #[doc = #doc_create]
                 #vis fn create() -> #create_struct_ident {
                     #create_struct_ident::default()
                 }
 
+                #[doc = #doc_create_many]
                 #vis fn create_many() -> #toasty::stmt::CreateMany<#model_ident> {
                     #toasty::stmt::CreateMany::default()
                 }
 
+                #[doc = #doc_update]
                 #vis fn update(&mut self) -> #update_struct_ident<&mut Self> {
                     let mut s = #update_struct_ident {
                         assignments: #toasty::core::stmt::Assignments::default(),
@@ -65,14 +76,17 @@ impl Expand<'_> {
                     s
                 }
 
+                #[doc = #doc_all]
                 #vis fn all() -> #query_struct_ident {
                     #query_struct_ident::default()
                 }
 
+                #[doc = #doc_filter]
                 #vis fn filter(expr: #toasty::stmt::Expr<bool>) -> #query_struct_ident {
                     #query_struct_ident::from_stmt(#toasty::stmt::Query::filter(expr))
                 }
 
+                #[doc = #doc_delete]
                 #vis fn delete(self) -> #toasty::stmt::Delete<()> {
                     #into_delete_body
                 }

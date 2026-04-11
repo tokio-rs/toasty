@@ -1,4 +1,4 @@
-use super::{Expand, schema, util};
+use super::{Expand, docs, schema, util};
 use crate::model::schema::{FieldTy, VariantValue};
 
 use proc_macro2::TokenStream;
@@ -57,18 +57,25 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
 
-        let methods = ["eq", "ne"].iter().map(|name| {
+        let model_name = model_ident.to_string();
+        let doc_strings = [docs::enum_eq(&model_name), docs::enum_ne(&model_name)];
+
+        let methods = ["eq", "ne"].iter().zip(doc_strings.iter()).map(|(name, doc)| {
             let method_ident = syn::Ident::new(name, proc_macro2::Span::call_site());
             quote! {
+                #[doc = #doc]
                 #vis fn #method_ident(&self, rhs: impl #toasty::stmt::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
                     self.path().#method_ident(rhs)
                 }
             }
         });
 
+        let doc_in_list = docs::enum_in_list(&model_name);
+
         quote! {
             #( #methods )*
 
+            #[doc = #doc_in_list]
             #vis fn in_list(&self, rhs: impl #toasty::stmt::IntoExpr<#toasty::List<#model_ident>>) -> #toasty::stmt::Expr<bool> {
                 self.path().in_list(rhs)
             }
@@ -86,6 +93,9 @@ impl Expand<'_> {
         let embedded_enum = self.model.kind.as_embedded_enum_unwrap();
         let field_struct_ident = &embedded_enum.field_struct_ident;
 
+        let model_name = model_ident.to_string();
+        let doc_struct = docs::enum_field_struct(&model_name);
+
         let is_variant_methods: Vec<_> = embedded_enum
             .variants
             .iter()
@@ -95,7 +105,10 @@ impl Expand<'_> {
                 let variant_idx = util::int(variant_index);
                 let is_variant_check = self.expand_is_variant_expr(&variant_idx);
 
+                let doc = docs::enum_is_variant(&model_name, &variant.ident.to_string());
+
                 quote! {
+                    #[doc = #doc]
                     #vis fn #method_name(&self) -> #toasty::stmt::Expr<bool> {
                         #is_variant_check
                     }
@@ -112,7 +125,13 @@ impl Expand<'_> {
                 let method_name = &variant.name.ident;
                 let variant_handle_ident = variant.variant_handle_ident.as_ref().unwrap();
 
+                let doc = docs::enum_variant_accessor(
+                    &variant.ident.to_string(),
+                    &variant_handle_ident.to_string(),
+                );
+
                 quote! {
+                    #[doc = #doc]
                     #vis fn #method_name(&self) -> #variant_handle_ident<__Origin> {
                         #variant_handle_ident {
                             path: self.path()
@@ -134,6 +153,14 @@ impl Expand<'_> {
                 let variant_idx = util::int(variant_index);
                 let is_variant_check = self.expand_is_variant_expr(&variant_idx);
 
+                let variant_name = variant.ident.to_string();
+                let doc_handle = docs::enum_variant_handle(&model_name, &variant_name);
+                let doc_matches = docs::enum_variant_matches(
+                    &variant_name,
+                    &variant_field_struct_ident.to_string(),
+                );
+                let doc_field_struct = docs::enum_variant_field_struct(&model_name, &variant_name);
+
                 let field_methods: Vec<_> = self
                     .variant_fields(variant_index)
                     .iter()
@@ -147,6 +174,7 @@ impl Expand<'_> {
                     .collect();
 
                 quote! {
+                    #[doc = #doc_handle]
                     #vis struct #variant_handle_ident<__Origin> {
                         path: #toasty::Path<__Origin, #model_ident>,
                     }
@@ -156,6 +184,7 @@ impl Expand<'_> {
                             self.path.clone()
                         }
 
+                        #[doc = #doc_matches]
                         #vis fn matches(
                             &self,
                             f: impl FnOnce(#variant_field_struct_ident<__Origin>) -> #toasty::stmt::Expr<bool>,
@@ -173,6 +202,7 @@ impl Expand<'_> {
                         }
                     }
 
+                    #[doc = #doc_field_struct]
                     #vis struct #variant_field_struct_ident<__Origin> {
                         path: #toasty::Path<__Origin, #model_ident>,
                     }
@@ -191,6 +221,7 @@ impl Expand<'_> {
         let comparison_methods = self.expand_comparison_methods();
 
         quote! {
+            #[doc = #doc_struct]
             #vis struct #field_struct_ident<__Origin> {
                 path: #toasty::Path<__Origin, #model_ident>,
             }
