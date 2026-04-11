@@ -28,7 +28,25 @@ impl ToSql for &stmt::ColumnDef {
         }
 
         if let Some(check) = &self.check {
-            fmt!(cx, f, " CHECK (" check.as_str() ")");
+            fmt!(cx, f, " ");
+            check.to_sql(cx, f);
         }
+    }
+}
+
+impl ToSql for &stmt::CheckConstraint {
+    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+        if let Some(name) = &self.name {
+            fmt!(cx, f, "CONSTRAINT " Ident(&name.0) " ");
+        }
+
+        // CHECK expressions are DDL — disable bind parameters so values are
+        // inlined as SQL literals.
+        let prev = f.bind_params;
+        f.bind_params = false;
+
+        fmt!(cx, f, "CHECK (" self.expr ")");
+
+        f.bind_params = prev;
     }
 }

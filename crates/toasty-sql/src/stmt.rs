@@ -7,6 +7,9 @@ pub use alter_column::{AlterColumn, AlterColumnChanges};
 mod alter_table;
 pub use alter_table::{AlterTable, AlterTableAction};
 
+mod check;
+pub use check::CheckConstraint;
+
 mod column_def;
 pub use column_def::ColumnDef;
 

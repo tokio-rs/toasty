@@ -44,15 +44,17 @@ impl ToSql for ColumnsWithConstraints<'_> {
             true
         };
 
+        let has_trailing_pk = self.0.primary_key.is_some() && trailing_pk;
+
         for (index, column) in self.0.columns.iter().enumerate() {
             fmt!(cx, f, "\n    " column);
-            if index < self.0.columns.len() - 1 {
+            if index < self.0.columns.len() - 1 || has_trailing_pk {
                 fmt!(cx, f, ",");
             }
         }
 
         match &self.0.primary_key {
-            Some(pk) if trailing_pk => fmt!(cx, f, ",\n    PRIMARY KEY " pk "\n"),
+            Some(pk) if trailing_pk => fmt!(cx, f, "\n    PRIMARY KEY " pk "\n"),
             _ => fmt!(cx, f, "\n"),
         }
     }

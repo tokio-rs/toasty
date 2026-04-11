@@ -1,6 +1,9 @@
+use super::CheckConstraint;
+
 use toasty_core::{
     driver::{self, Capability},
     schema::db::{self, Column},
+    stmt::Expr,
 };
 
 /// A column definition used in `CREATE TABLE` and `ADD COLUMN` statements.
@@ -14,8 +17,8 @@ pub struct ColumnDef {
     pub not_null: bool,
     /// When `true`, the column auto-increments.
     pub auto_increment: bool,
-    /// Optional CHECK constraint expression (e.g. `col IN ('a', 'b')`).
-    pub check: Option<String>,
+    /// Optional CHECK constraint on this column.
+    pub check: Option<CheckConstraint>,
 }
 
 impl ColumnDef {
@@ -30,14 +33,18 @@ impl ColumnDef {
         if let db::Type::Enum { labels, .. } = &column.storage_ty
             && !capability.native_enum
         {
-            let values: Vec<String> = labels.iter().map(|l| format!("'{l}'")).collect();
-            let check = format!("{} IN ({})", column.name, values.join(", "));
             return Self {
                 name: column.name.clone(),
                 ty: db::Type::Text,
                 not_null: !column.nullable,
                 auto_increment: column.auto_increment,
-                check: Some(check),
+                check: Some(CheckConstraint {
+                    name: None,
+                    expr: Box::new(Expr::in_list(
+                        Expr::Ident(column.name.clone()),
+                        Expr::list(labels.iter().map(|l| Expr::from(l.clone()))),
+                    )),
+                }),
             };
         }
 

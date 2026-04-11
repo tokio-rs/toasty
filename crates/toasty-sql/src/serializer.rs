@@ -71,6 +71,12 @@ struct Formatter<'a, T> {
     /// True when table names should be aliased.
     alias: bool,
 
+    /// When `true`, values are emitted as bind-parameter placeholders and
+    /// pushed into `params`. When `false`, values are inlined as SQL literals.
+    /// DDL statements (CREATE TABLE, etc.) set this to `false` because they
+    /// do not support bind parameters.
+    bind_params: bool,
+
     /// Context when serializing VALUES in an INSERT statement
     insert_context: Option<InsertContext>,
 }
@@ -93,6 +99,7 @@ impl<'a> Serializer<'a> {
             params,
             depth: 0,
             alias: false,
+            bind_params: true,
             insert_context: None,
         };
 
@@ -117,6 +124,7 @@ impl<'a> Serializer<'a> {
             params: &mut Vec::<TypedValue>::new(),
             depth: 0,
             alias: false,
+            bind_params: false,
             insert_context: None,
         };
 

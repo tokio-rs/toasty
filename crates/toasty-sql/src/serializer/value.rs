@@ -72,8 +72,33 @@ impl ToSql for &stmt::Value {
                 f.dst.push_str("NULL");
             }
             value => {
-                let placeholder = f.params.push(value, None);
-                fmt!(cx, f, placeholder)
+                if f.bind_params {
+                    let placeholder = f.params.push(value, None);
+                    fmt!(cx, f, placeholder)
+                } else {
+                    // Inline as a SQL literal (used in DDL contexts like CHECK).
+                    match value {
+                        stmt::Value::String(s) => {
+                            f.dst.push('\'');
+                            // Escape single quotes by doubling them.
+                            for ch in s.chars() {
+                                if ch == '\'' {
+                                    f.dst.push('\'');
+                                }
+                                f.dst.push(ch);
+                            }
+                            f.dst.push('\'');
+                        }
+                        stmt::Value::I64(n) => {
+                            use std::fmt::Write;
+                            write!(f.dst, "{n}").unwrap();
+                        }
+                        stmt::Value::Bool(b) => {
+                            f.dst.push_str(if *b { "TRUE" } else { "FALSE" });
+                        }
+                        _ => todo!("inline SQL literal for value: {value:?}"),
+                    }
+                }
             }
         }
     }
