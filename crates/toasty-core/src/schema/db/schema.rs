@@ -128,6 +128,11 @@ impl<'a> SchemaDiff<'a> {
         }
     }
 
+    /// Computes the enum type diff between the two schemas.
+    pub fn types(&self) -> super::TypesDiff<'a> {
+        super::TypesDiff::from(self.previous, self.next)
+    }
+
     /// Returns the table-level diff.
     pub fn tables(&self) -> &TablesDiff<'a> {
         &self.tables

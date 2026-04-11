@@ -7,6 +7,9 @@ pub use alter_column::{AlterColumn, AlterColumnChanges};
 mod alter_table;
 pub use alter_table::{AlterTable, AlterTableAction};
 
+mod alter_type;
+pub use alter_type::AlterType;
+
 mod check;
 pub use check::CheckConstraint;
 
@@ -57,6 +60,8 @@ pub enum Statement {
     AlterColumn(AlterColumn),
     /// Alter an existing table (e.g. rename).
     AlterTable(AlterTable),
+    /// Alter a type (e.g. `ALTER TYPE ... ADD VALUE '...'`).
+    AlterType(AlterType),
     /// Copy rows from one table to another.
     CopyTable(CopyTable),
     /// Create an index.

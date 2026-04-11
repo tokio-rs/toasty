@@ -257,6 +257,22 @@ impl ToSql for &stmt::CreateType {
     }
 }
 
+impl ToSql for &stmt::AlterType {
+    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+        use toasty_core::stmt::Value;
+
+        let name = Ident(&self.type_name);
+
+        let prev = f.bind_params;
+        f.bind_params = false;
+
+        fmt!(cx, f, "ALTER TYPE " name " ADD VALUE ");
+        Value::String(self.variant.name.clone()).to_sql(cx, f);
+
+        f.bind_params = prev;
+    }
+}
+
 impl ToSql for &stmt::Delete {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
         let prev = mem::replace(&mut f.alias, true);
@@ -536,6 +552,7 @@ impl ToSql for &stmt::Statement {
             stmt::Statement::AddColumn(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::AlterColumn(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::AlterTable(stmt) => stmt.to_sql(cx, f),
+            stmt::Statement::AlterType(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::CopyTable(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::CreateIndex(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::CreateTable(stmt) => stmt.to_sql(cx, f),

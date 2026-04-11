@@ -49,4 +49,7 @@ mod ty;
 mod ty_enum;
 pub use ty_enum::{EnumVariant, TypeEnum};
 
+mod ty_enum_diff;
+pub use ty_enum_diff::{TypesDiff, TypesDiffItem};
+
 pub use ty::Type;
