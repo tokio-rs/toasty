@@ -20,6 +20,7 @@ mod value;
 pub(crate) use value::Value;
 
 use async_trait::async_trait;
+use percent_encoding::percent_decode_str;
 use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     Result, Schema,
@@ -80,18 +81,29 @@ impl PostgreSQL {
 
         let mut config = Config::new();
         config.host(host);
-        config.dbname(url.path().trim_start_matches('/'));
+
+        let dbname = percent_decode_str(url.path().trim_start_matches('/'))
+            .decode_utf8()
+            .map_err(|_| {
+                toasty_core::Error::invalid_connection_url("database name is not valid UTF-8")
+            })?;
+        config.dbname(&*dbname);
 
         if let Some(port) = url.port() {
             config.port(port);
         }
 
         if !url.username().is_empty() {
-            config.user(url.username());
+            let user = percent_decode_str(url.username())
+                .decode_utf8()
+                .map_err(|_| {
+                    toasty_core::Error::invalid_connection_url("username is not valid UTF-8")
+                })?;
+            config.user(&*user);
         }
 
         if let Some(password) = url.password() {
-            config.password(password);
+            config.password(percent_decode_str(password).collect::<Vec<u8>>());
         }
 
         #[cfg(feature = "tls")]
