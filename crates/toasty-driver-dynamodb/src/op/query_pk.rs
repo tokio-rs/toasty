@@ -73,7 +73,7 @@ impl Connection {
                                 .iter()
                                 .map(|column_id| schema.db.column(*column_id)),
                         )
-                        .map(|r| stmt::Value::from(r))
+                        .map(stmt::Value::from)
                     },
                 ));
 
@@ -108,7 +108,7 @@ impl Connection {
                                 .iter()
                                 .map(|column_id| schema.db.column(*column_id)),
                         )
-                        .map(|r| stmt::Value::from(r))
+                        .map(stmt::Value::from)
                     },
                 ));
 
@@ -125,8 +125,8 @@ impl Connection {
                 let skip = offset.unwrap_or(0) as usize;
                 let need = limit as usize + skip;
                 // This may process unneeded item - if offset is large relative to limit, or if the
-                // filter expression does not filter many items server side. For minimal extra reads, use 
-                // pagination instead. 
+                // filter expression does not filter many items server side. For minimal extra reads, use
+                // pagination instead.
                 let mut stream = query.into_paginator().page_size(need as i32).items().send();
 
                 // Discard offset items without storing them.
@@ -159,7 +159,7 @@ impl Connection {
                                     .iter()
                                     .map(|column_id| schema.db.column(*column_id)),
                             )
-                            .map(|r| stmt::Value::from(r))?;
+                            .map(stmt::Value::from)?;
                             rows.push(value);
                         }
                         None => break,
