@@ -503,7 +503,7 @@ impl Expand<'_> {
 
     /// Generates the `storage_ty` token for the discriminant `FieldPrimitive`.
     ///
-    /// - Native enum: `Some(db::Type::Enum { name, labels })`
+    /// - Native enum: `Some(db::Type::Enum(TypeEnum { ... }))`
     /// - Plain string (`#[column(type = text)]`): `Some(db::Type::Text)`
     /// - Integer discriminants: `None`
     pub(super) fn expand_enum_storage_ty(&self) -> TokenStream {
@@ -521,8 +521,8 @@ impl Expand<'_> {
                     }
                 };
 
-                // Collect labels in declaration order.
-                let labels: Vec<&str> = embedded_enum
+                // Collect variant names in declaration order.
+                let variant_names: Vec<&str> = embedded_enum
                     .variants
                     .iter()
                     .map(|v| match &v.attrs.discriminant {
@@ -533,10 +533,16 @@ impl Expand<'_> {
 
                 quote! {
                     ::std::option::Option::Some(
-                        #toasty::core::schema::db::Type::Enum {
-                            name: #type_name.to_string(),
-                            labels: vec![ #( #labels.to_string() ),* ],
-                        }
+                        #toasty::core::schema::db::Type::Enum(
+                            #toasty::core::schema::db::TypeEnum {
+                                name: ::std::option::Option::Some(#type_name.to_string()),
+                                variants: vec![
+                                    #( #toasty::core::schema::db::EnumVariant {
+                                        name: #variant_names.to_string(),
+                                    } ),*
+                                ],
+                            }
+                        )
                     )
                 }
             }

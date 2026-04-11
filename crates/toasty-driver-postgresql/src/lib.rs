@@ -431,12 +431,14 @@ impl toasty_core::driver::Connection for Connection {
         let mut created_enum_types = std::collections::HashSet::new();
         for table in &schema.db.tables {
             for column in &table.columns {
-                if let toasty_core::schema::db::Type::Enum { name, labels } = &column.storage_ty
+                if let toasty_core::schema::db::Type::Enum(type_enum) = &column.storage_ty
+                    && let Some(name) = &type_enum.name
                     && created_enum_types.insert(name.clone())
                 {
-                    let labels_sql: Vec<String> = labels
+                    let labels_sql: Vec<String> = type_enum
+                        .variants
                         .iter()
-                        .map(|l| format!("'{}'", l.replace('\'', "''")))
+                        .map(|v| format!("'{}'", v.name.replace('\'', "''")))
                         .collect();
                     let sql = format!("CREATE TYPE {} AS ENUM ({})", name, labels_sql.join(", "));
                     tracing::debug!(enum_type = %name, "creating enum type");

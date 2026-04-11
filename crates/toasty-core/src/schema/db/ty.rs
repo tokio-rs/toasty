@@ -1,3 +1,4 @@
+use super::TypeEnum;
 use crate::{Result, driver, stmt};
 
 /// Database-level storage types representing how values are stored in the target database.
@@ -102,22 +103,8 @@ pub enum Type {
     /// A representation of a civil datetime in the Gregorian calendar with fractional seconds precision (0-9 digits).
     DateTime(u8),
 
-    /// A database enum type with a set of allowed string labels.
-    ///
-    /// - On PostgreSQL, this maps to a `CREATE TYPE <name> AS ENUM (...)` named type.
-    /// - On MySQL, this maps to an inline `ENUM('a', 'b', ...)` column type.
-    /// - On SQLite, this maps to `TEXT` with a `CHECK` constraint.
-    /// - On DynamoDB, this is stored as a plain string attribute.
-    ///
-    /// The `name` field is by default the snake_case of the Rust enum name.
-    /// The `labels` are the allowed values in declaration order.
-    Enum {
-        /// The type name used by PostgreSQL (`CREATE TYPE <name> AS ENUM`).
-        /// Ignored by MySQL (inline) and SQLite (CHECK constraint).
-        name: String,
-        /// Allowed enum labels in declaration order.
-        labels: Vec<String>,
-    },
+    /// A database enum type. See [`TypeEnum`].
+    Enum(TypeEnum),
 
     /// User-specified unrecognized type
     Custom(String),
@@ -177,8 +164,8 @@ impl Type {
         match (self, ty) {
             (Self::Blob | Self::Binary(_), stmt::Type::Uuid) => stmt::Type::Bytes,
             (Self::Text | Self::VarChar(_), _) => stmt::Type::String,
-            // Enum labels are always strings at the application level
-            (Self::Enum { .. }, _) => stmt::Type::String,
+            // Enum values are always strings at the application level
+            (Self::Enum(_), _) => stmt::Type::String,
             // Let engine handle UTC conversion
             #[cfg(feature = "jiff")]
             (Self::Timestamp(_) | Self::DateTime(_), stmt::Type::Zoned) => stmt::Type::Timestamp,

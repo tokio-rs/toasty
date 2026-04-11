@@ -29,8 +29,8 @@ impl ColumnDef {
     ) -> Self {
         // For SQLite enum columns: store as TEXT with a CHECK constraint instead
         // of db::Type::Enum. The CHECK constraint restricts values to the
-        // declared labels.
-        if let db::Type::Enum { labels, .. } = &column.storage_ty
+        // declared variants.
+        if let db::Type::Enum(type_enum) = &column.storage_ty
             && !capability.native_enum
         {
             return Self {
@@ -42,7 +42,12 @@ impl ColumnDef {
                     name: None,
                     expr: Box::new(Expr::in_list(
                         Expr::Ident(column.name.clone()),
-                        Expr::list(labels.iter().map(|l| Expr::from(l.clone()))),
+                        Expr::list(
+                            type_enum
+                                .variants
+                                .iter()
+                                .map(|v| Expr::from(v.name.clone())),
+                        ),
                     )),
                 }),
             };

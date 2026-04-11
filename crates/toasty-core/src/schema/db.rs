@@ -46,4 +46,7 @@ mod table;
 pub use table::{Table, TableId, TablesDiff, TablesDiffItem};
 
 mod ty;
+mod ty_enum;
+pub use ty_enum::{EnumVariant, TypeEnum};
+
 pub use ty::Type;
