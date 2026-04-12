@@ -704,7 +704,9 @@ impl ToSql for (&db::Table, &stmt::Assignments) {
             let stmt::Assignment::Set(expr) = assignment else {
                 todo!("only SET supported in SQL serialization; got {assignment:#?}");
             };
-            if let stmt::Expr::Value(value) = expr {
+            if let stmt::Expr::Value(stmt::Value::Null) = expr {
+                f.dst.push_str("NULL");
+            } else if let stmt::Expr::Value(value) = expr {
                 let placeholder = f.params.push(value, Some(&column.storage_ty));
                 placeholder.to_sql(cx, f);
             } else {

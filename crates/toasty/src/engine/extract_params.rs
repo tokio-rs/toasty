@@ -22,6 +22,7 @@ pub(crate) fn extract_params(stmt: &mut stmt::Statement, schema: &Schema) -> Vec
     // Phase 2+3: Extract values and replace with Arg placeholders.
     let mut params = Vec::new();
     extract_and_replace(stmt, &db_types, &schema.db, &mut params);
+
     params
 }
 

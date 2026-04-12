@@ -22,10 +22,15 @@ impl<'a> ToSql for TypeHintedField<'a> {
             f.insert_column(self.field_index, cx.schema())
         };
 
-        // If this is a Value expr with column context, serialize with hints
+        // If this is a non-null Value expr with column context, serialize as a
+        // bind parameter. NULL is always inlined as a literal.
         if let (stmt::Expr::Value(value), Some(col)) = (self.expr, col) {
-            let placeholder = f.params.push(value, Some(&col.storage_ty));
-            fmt!(cx, f, placeholder);
+            if matches!(value, stmt::Value::Null) {
+                f.dst.push_str("NULL");
+            } else {
+                let placeholder = f.params.push(value, Some(&col.storage_ty));
+                fmt!(cx, f, placeholder);
+            }
         } else {
             // Other expr types (including Default) serialize normally
             self.expr.to_sql(cx, f);
