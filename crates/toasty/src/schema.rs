@@ -4,6 +4,10 @@ pub use auto::Auto;
 mod belongs_to;
 pub use belongs_to::BelongsTo;
 
+/// Compile-time metadata and validation for `create!` macro field checking.
+pub mod create_meta;
+pub use create_meta::{CreateField, CreateMeta, ValidateCreate};
+
 mod embed;
 pub use embed::Embed;
 

@@ -36,6 +36,7 @@ impl Expand<'_> {
         let create_builder = self.expand_create_builder();
         let update_builder = self.expand_update_builder();
         let relation_structs = self.expand_relation_structs();
+        let validate_create_impls = self.expand_validate_create_impls();
 
         wrap_in_const(quote! {
             #model_impls
@@ -45,6 +46,7 @@ impl Expand<'_> {
             #create_builder
             #update_builder
             #relation_structs
+            #validate_create_impls
         })
     }
 }
