@@ -119,13 +119,19 @@ impl<T> Formatter<'_, T> {
 /// Expression context bound to a database-level schema.
 pub type ExprContext<'a> = toasty_core::stmt::ExprContext<'a, db::Schema>;
 
-/// A no-op [`Params`] implementation for DDL serialization where bind
-/// parameters are not used.
-struct NoParams;
+/// A sink [`Params`] implementation that discards pushed values.
+///
+/// Used by `serialize()` which renders values as inline SQL literals (DDL)
+/// or renders `Expr::Arg` placeholders (pre-extracted DML). Any remaining
+/// `Expr::Value` nodes (e.g., inside `Value::Record`) are rendered as
+/// positional placeholders but the values are discarded — the real params
+/// come from the operation's `TypedValue` vec.
+struct SinkParams(usize);
 
-impl Params for NoParams {
+impl Params for SinkParams {
     fn push(&mut self, _: &toasty_core::stmt::Value, _: Option<&db::Type>) -> params::Placeholder {
-        unreachable!("DDL serialization should not produce bind parameters")
+        self.0 += 1;
+        params::Placeholder(self.0)
     }
 }
 
@@ -141,7 +147,7 @@ impl<'a> Serializer<'a> {
         let mut fmt = Formatter {
             serializer: self,
             dst: &mut ret,
-            params: &mut NoParams,
+            params: &mut SinkParams(0),
             depth: 0,
             alias: false,
             bind_params: false,

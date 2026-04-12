@@ -297,49 +297,49 @@ fn extract_and_replace(
     schema: &db::Schema,
     params: &mut Vec<TypedValue>,
 ) {
-    match stmt {
-        stmt::Statement::Insert(insert) => {
-            // Get column types for INSERT value extraction
-            let col_types: Vec<db::Type> = match &insert.target {
-                stmt::InsertTarget::Table(table) => {
-                    let db_table = &schema.tables[table.table.0];
-                    table
-                        .columns
-                        .iter()
-                        .map(|col_id| db_table.columns[col_id.index].storage_ty.clone())
-                        .collect()
-                }
-                _ => vec![],
-            };
+    // Walk ALL expressions in the statement using the visitor infrastructure.
+    // This catches values everywhere: INSERT rows, filters, subqueries, CTEs, etc.
+    stmt::visit_mut::for_each_expr_mut(stmt, |expr| {
+        let inferred_ty = db_types.get(expr).cloned();
 
-            if let stmt::ExprSet::Values(values) = &mut insert.source.body {
-                for row in &mut values.rows {
-                    extract_insert_row(row, &col_types, db_types, params);
-                }
+        match expr {
+            stmt::Expr::Value(value) if is_extractable_scalar(value) => {
+                let ty = inferred_ty.unwrap_or_else(|| infer_db_type_from_value(value));
+                let position = params.len();
+                let value = std::mem::replace(value, stmt::Value::Null);
+                params.push(TypedValue { value, ty });
+                *expr = stmt::Expr::arg(position);
+            }
+            stmt::Expr::Value(stmt::Value::List(values)) => {
+                *expr = value_to_expr_with_extraction(&stmt::Value::List(values.clone()), params);
+            }
+            stmt::Expr::Value(stmt::Value::Record(record)) => {
+                *expr = value_to_expr_with_extraction(&stmt::Value::Record(record.clone()), params);
+            }
+            _ => {}
+        }
+    });
+}
+
+/// Extract from all variants of a query body.
+fn extract_from_query_body(
+    body: &mut stmt::ExprSet,
+    db_types: &DbTypes,
+    schema: &db::Schema,
+    params: &mut Vec<TypedValue>,
+) {
+    match body {
+        stmt::ExprSet::Select(select) => {
+            if let Some(expr) = &mut select.filter.expr {
+                extract_expr(expr, db_types, schema, params);
             }
         }
-        stmt::Statement::Update(update) => {
-            for (_proj, assignment) in update.assignments.iter_mut() {
-                if let stmt::Assignment::Set(expr) = assignment {
-                    extract_expr(expr, db_types, params);
-                }
-            }
-            if let Some(expr) = &mut update.filter.expr {
-                extract_expr(expr, db_types, params);
+        stmt::ExprSet::Values(values) => {
+            for row in &mut values.rows {
+                extract_expr(row, db_types, schema, params);
             }
         }
-        stmt::Statement::Delete(delete) => {
-            if let Some(expr) = &mut delete.filter.expr {
-                extract_expr(expr, db_types, params);
-            }
-        }
-        stmt::Statement::Query(query) => {
-            if let stmt::ExprSet::Select(select) = &mut query.body {
-                if let Some(expr) = &mut select.filter.expr {
-                    extract_expr(expr, db_types, params);
-                }
-            }
-        }
+        _ => {}
     }
 }
 
@@ -348,12 +348,13 @@ fn extract_insert_row(
     expr: &mut stmt::Expr,
     col_types: &[db::Type],
     db_types: &DbTypes,
+    schema: &db::Schema,
     params: &mut Vec<TypedValue>,
 ) {
     match expr {
         stmt::Expr::Record(record) => {
             for (i, field) in record.fields.iter_mut().enumerate() {
-                extract_with_col_type(field, col_types.get(i), db_types, params);
+                extract_with_col_type(field, col_types.get(i), db_types, schema, params);
             }
         }
         stmt::Expr::Value(stmt::Value::Record(record)) => {
@@ -363,12 +364,12 @@ fn extract_insert_row(
                 .map(|v| stmt::Expr::Value(v.clone()))
                 .collect();
             for (i, field) in fields.iter_mut().enumerate() {
-                extract_with_col_type(field, col_types.get(i), db_types, params);
+                extract_with_col_type(field, col_types.get(i), db_types, schema, params);
             }
             *expr = stmt::Expr::Record(stmt::ExprRecord::from_vec(fields));
         }
         _ => {
-            extract_with_col_type(expr, col_types.first(), db_types, params);
+            extract_with_col_type(expr, col_types.first(), db_types, schema, params);
         }
     }
 }
@@ -378,6 +379,7 @@ fn extract_with_col_type(
     expr: &mut stmt::Expr,
     col_type: Option<&db::Type>,
     db_types: &DbTypes,
+    schema: &db::Schema,
     params: &mut Vec<TypedValue>,
 ) {
     let inferred = db_types.get(expr).cloned();
@@ -397,11 +399,16 @@ fn extract_with_col_type(
         }
     }
     // Fall back to general extraction
-    extract_expr(expr, db_types, params);
+    extract_expr(expr, db_types, schema, params);
 }
 
 /// Extract scalar values from an expression, replacing them with `Expr::Arg(n)`.
-fn extract_expr(expr: &mut stmt::Expr, db_types: &DbTypes, params: &mut Vec<TypedValue>) {
+fn extract_expr(
+    expr: &mut stmt::Expr,
+    db_types: &DbTypes,
+    schema: &db::Schema,
+    params: &mut Vec<TypedValue>,
+) {
     // Look up the inferred type before we borrow expr mutably
     let inferred_ty = db_types.get(expr).cloned();
 
@@ -446,60 +453,68 @@ fn extract_expr(expr: &mut stmt::Expr, db_types: &DbTypes, params: &mut Vec<Type
         // Record expression — recurse into fields
         stmt::Expr::Record(record) => {
             for field in &mut record.fields {
-                extract_expr(field, db_types, params);
+                extract_expr(field, db_types, schema, params);
             }
         }
 
         // List expression — recurse into items
         stmt::Expr::List(list) => {
             for item in &mut list.items {
-                extract_expr(item, db_types, params);
+                extract_expr(item, db_types, schema, params);
             }
         }
 
         // Binary op
         stmt::Expr::BinaryOp(binary) => {
-            extract_expr(&mut binary.lhs, db_types, params);
-            extract_expr(&mut binary.rhs, db_types, params);
+            extract_expr(&mut binary.lhs, db_types, schema, params);
+            extract_expr(&mut binary.rhs, db_types, schema, params);
         }
 
         // Logical operators
         stmt::Expr::And(and) => {
             for op in &mut and.operands {
-                extract_expr(op, db_types, params);
+                extract_expr(op, db_types, schema, params);
             }
         }
         stmt::Expr::Or(or) => {
             for op in &mut or.operands {
-                extract_expr(op, db_types, params);
+                extract_expr(op, db_types, schema, params);
             }
         }
         stmt::Expr::Not(not) => {
-            extract_expr(&mut not.expr, db_types, params);
+            extract_expr(&mut not.expr, db_types, schema, params);
         }
 
         // IN list
         stmt::Expr::InList(in_list) => {
-            extract_expr(&mut in_list.expr, db_types, params);
-            extract_expr(&mut in_list.list, db_types, params);
+            extract_expr(&mut in_list.expr, db_types, schema, params);
+            extract_expr(&mut in_list.list, db_types, schema, params);
         }
 
         // Subquery
         stmt::Expr::InSubquery(in_sub) => {
-            extract_expr(&mut in_sub.expr, db_types, params);
-            // Subquery filter will be handled when that query is processed
+            extract_expr(&mut in_sub.expr, db_types, schema, params);
+            let mut query_stmt = stmt::Statement::Query(*in_sub.query.clone());
+            extract_and_replace(&mut query_stmt, db_types, schema, params);
+            if let stmt::Statement::Query(q) = query_stmt {
+                in_sub.query = Box::new(q);
+            }
         }
 
         stmt::Expr::IsNull(is_null) => {
-            extract_expr(&mut is_null.expr, db_types, params);
+            extract_expr(&mut is_null.expr, db_types, schema, params);
         }
 
-        stmt::Expr::Exists(_exists) => {
-            // TODO: extract from subqueries — requires passing schema through
+        stmt::Expr::Exists(exists) => {
+            let mut query_stmt = stmt::Statement::Query(*exists.subquery.clone());
+            extract_and_replace(&mut query_stmt, db_types, schema, params);
+            if let stmt::Statement::Query(q) = query_stmt {
+                exists.subquery = Box::new(q);
+            }
         }
 
-        stmt::Expr::Stmt(_expr_stmt) => {
-            // TODO: extract from nested statements
+        stmt::Expr::Stmt(expr_stmt) => {
+            extract_and_replace(&mut expr_stmt.stmt, db_types, schema, params);
         }
 
         // Leaf nodes that don't contain extractable values
@@ -513,13 +528,45 @@ fn extract_expr(expr: &mut stmt::Expr, db_types: &DbTypes, params: &mut Vec<Type
                 .map(|v| stmt::Expr::Value(v.clone()))
                 .collect();
             for field in &mut fields {
-                extract_expr(field, db_types, params);
+                extract_expr(field, db_types, schema, params);
             }
             *expr = stmt::Expr::Record(stmt::ExprRecord::from_vec(fields));
         }
 
         // Catch-all
         _ => {}
+    }
+}
+
+/// Recursively convert a `Value` into an `Expr`, extracting scalar values
+/// as bind parameters. Handles nested Record and List values.
+fn value_to_expr_with_extraction(value: &stmt::Value, params: &mut Vec<TypedValue>) -> stmt::Expr {
+    match value {
+        stmt::Value::Null => stmt::Expr::Value(stmt::Value::Null),
+        stmt::Value::Record(record) => {
+            let fields = record
+                .fields
+                .iter()
+                .map(|f| value_to_expr_with_extraction(f, params))
+                .collect();
+            stmt::Expr::Record(stmt::ExprRecord::from_vec(fields))
+        }
+        stmt::Value::List(values) => {
+            let items = values
+                .iter()
+                .map(|v| value_to_expr_with_extraction(v, params))
+                .collect();
+            stmt::Expr::List(stmt::ExprList { items })
+        }
+        scalar => {
+            let ty = infer_db_type_from_value(scalar);
+            let position = params.len();
+            params.push(TypedValue {
+                value: scalar.clone(),
+                ty,
+            });
+            stmt::Expr::arg(position)
+        }
     }
 }
 
