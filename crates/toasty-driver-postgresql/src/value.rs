@@ -51,6 +51,13 @@ impl Value {
                 stmt::Type::Json => stmt::Value::String(v.to_string()),
                 _ => stmt::Value::String(v.to_string()),
             }
+        } else if column.type_() == &Type::JSONB {
+            // tokio_postgres + postgres-types with serde_json support
+            let v = get_or_return_null!(serde_json::Value);
+            match expected_ty {
+                stmt::Type::Jsonb => stmt::Value::String(v.to_string()),
+                _ => stmt::Value::String(v.to_string()),
+            }
         } else if column.type_() == &Type::BOOL {
             stmt::Value::Bool(get_or_return_null!(bool))
         } else if column.type_() == &Type::INT2 {
@@ -201,6 +208,15 @@ impl ToSql for Value {
             }
             (stmt::Value::Null, _) => Ok(IsNull::Yes),
             (stmt::Value::String(value), &Type::JSON) => value.to_sql(ty, out),
+            (stmt::Value::String(value), &Type::JSONB) => {
+                // JSONB requires binary format; parse as serde_json::Value first
+                // so tokio_postgres can serialize it correctly
+                let json_value: serde_json::Value =
+                    serde_json::from_str(value).map_err(|e| {
+                        format!("failed to parse JSON for JSONB column: {e}")
+                    })?;
+                json_value.to_sql(ty, out)
+            }
             (stmt::Value::String(value), _) => value.to_sql(ty, out),
             (stmt::Value::Bytes(value), &Type::BYTEA) => value.to_sql(ty, out),
             (stmt::Value::Uuid(value), &Type::UUID) => value.to_sql(ty, out),
@@ -226,6 +242,7 @@ impl ToSql for Value {
         TEXT,
         VARCHAR,
         JSON,
+        JSONB,
         BYTEA,
         UUID,
         NUMERIC,

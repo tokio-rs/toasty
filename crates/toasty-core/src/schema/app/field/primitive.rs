@@ -17,6 +17,10 @@ use crate::{schema::db, stmt};
 pub enum SerializeFormat {
     /// Serialize the value as JSON using `serde_json`.
     Json,
+    /// Serialize the value as JSONB (binary JSON) using `serde_json`.
+    /// JSONB is a PostgreSQL-specific binary format that supports indexing
+    /// and more efficient operations.
+    Jsonb,
 }
 
 /// A primitive (non-relation, non-embedded) field type.

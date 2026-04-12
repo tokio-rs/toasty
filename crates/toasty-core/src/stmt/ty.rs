@@ -124,6 +124,12 @@ pub enum Type {
     /// Used for fields with `#[serialize(json)]` attribute.
     Json,
 
+    /// A JSONB-encoded string stored as a database JSONB column.
+    /// Used for fields with `#[serialize(jsonb)]` attribute.
+    /// JSONB is a PostgreSQL-specific binary format that supports
+    /// indexing and more efficient operations.
+    Jsonb,
+
     /// A fixed-precision decimal number.
     /// See [`rust_decimal::Decimal`].
     #[cfg(feature = "rust_decimal")]
@@ -251,6 +257,11 @@ impl Type {
         matches!(self, Self::Json)
     }
 
+    /// Returns `true` if this is [`Type::Jsonb`].
+    pub fn is_jsonb(&self) -> bool {
+        matches!(self, Self::Jsonb)
+    }
+
     /// Returns `true` if this is [`Type::Decimal`] (requires `rust_decimal` feature).
     pub fn is_decimal(&self) -> bool {
         #[cfg(feature = "rust_decimal")]
@@ -343,6 +354,8 @@ impl Type {
             (value @ Value::String(_), Self::String) => value,
             // String is compatible with Json (identity cast)
             (value @ Value::String(_), Self::Json) => value,
+            // String is compatible with Jsonb (identity cast)
+            (value @ Value::String(_), Self::Jsonb) => value,
             // String <-> Uuid
             (Value::Uuid(value), Self::String) => Value::String(value.to_string()),
             (Value::String(value), Self::Uuid) => {
@@ -421,6 +434,8 @@ impl Type {
             (Type::String, Type::String) => true,
             // A JSON-encoded string is assignable to a Json type
             (Type::String, Type::Json) => true,
+            // A JSONB-encoded string is assignable to a Jsonb type
+            (Type::String, Type::Jsonb) => true,
             (Type::I8, Type::I8) => true,
             (Type::I16, Type::I16) => true,
             (Type::I32, Type::I32) => true,
@@ -432,6 +447,7 @@ impl Type {
             (Type::Uuid, Type::Uuid) => true,
             (Type::Bytes, Type::Bytes) => true,
             (Type::Json, Type::Json) => true,
+            (Type::Jsonb, Type::Jsonb) => true,
             (Type::Unit, Type::Unit) => true,
             (Type::Unknown, Type::Unknown) => true,
 

@@ -113,14 +113,28 @@ impl Expand<'_> {
                                 SerializeFormat::Json => {
                                     quote!(Some(#toasty::core::schema::app::SerializeFormat::Json))
                                 }
+                                SerializeFormat::Jsonb => {
+                                    quote!(Some(#toasty::core::schema::app::SerializeFormat::Jsonb))
+                                }
                             };
                             let nullable_lit = *serialize_nullable;
+
+                            let (stmt_ty, storage_ty) = match format {
+                                SerializeFormat::Json => (
+                                    quote!(#toasty::core::stmt::Type::Json),
+                                    quote!(Some(#toasty::core::schema::db::Type::Custom("JSON".to_string()))),
+                                ),
+                                SerializeFormat::Jsonb => (
+                                    quote!(#toasty::core::stmt::Type::Jsonb),
+                                    quote!(Some(#toasty::core::schema::db::Type::Custom("JSONB".to_string()))),
+                                ),
+                            };
 
                             nullable = quote!(#nullable_lit);
                             field_ty = quote!(#toasty::core::schema::app::FieldTy::Primitive(
                                 #toasty::core::schema::app::FieldPrimitive {
-                                    ty: #toasty::core::stmt::Type::Json,
-                                    storage_ty: Some(#toasty::core::schema::db::Type::Custom("JSON".to_string())),
+                                    ty: #stmt_ty,
+                                    storage_ty: #storage_ty,
                                     serialize: #serialize_format,
                                 }
                             ));

@@ -34,7 +34,7 @@ struct ToastyJsonbUser {
     age: Option<u8>,
 
     // #[column(type = jsonb)]
-    #[serialize(json, nullable)]
+    #[serialize(jsonb, nullable)]
     meta: Option<Metadata>,
 }
 

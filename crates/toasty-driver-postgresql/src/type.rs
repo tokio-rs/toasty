@@ -22,6 +22,7 @@ impl TypeExt for stmt::Type {
             stmt::Type::U64 => Type::INT8,
             stmt::Type::String => Type::TEXT,
             stmt::Type::Json => Type::JSON,
+            stmt::Type::Jsonb => Type::JSONB,
             stmt::Type::Uuid => Type::UUID,
             stmt::Type::Bytes => Type::BYTEA,
             #[cfg(feature = "rust_decimal")]

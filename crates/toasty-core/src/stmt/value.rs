@@ -287,7 +287,7 @@ impl Value {
                 Type::SparseRecord(fields) => value.fields == *fields,
                 _ => false,
             },
-            Self::String(_) => ty.is_string() || ty.is_json(),
+            Self::String(_) => ty.is_string() || ty.is_json() || ty.is_jsonb(),
             Self::Bytes(_) => ty.is_bytes(),
             Self::Uuid(_) => ty.is_uuid(),
             #[cfg(feature = "rust_decimal")]

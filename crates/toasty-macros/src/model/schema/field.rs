@@ -8,6 +8,7 @@ use syn::spanned::Spanned;
 #[derive(Debug, Clone)]
 pub(crate) enum SerializeFormat {
     Json,
+    Jsonb,
 }
 
 /// Parsed `#[serialize(...)]` attribute data.
@@ -202,12 +203,21 @@ impl FieldAttr {
                                     } else {
                                         format = Some(SerializeFormat::Json);
                                     }
+                                } else if arg == "jsonb" {
+                                    if format.is_some() {
+                                        errs.push(syn::Error::new_spanned(
+                                            arg,
+                                            "duplicate format specifier",
+                                        ));
+                                    } else {
+                                        format = Some(SerializeFormat::Jsonb);
+                                    }
                                 } else if arg == "nullable" {
                                     nullable = true;
                                 } else {
                                     errs.push(syn::Error::new_spanned(
                                         arg,
-                                        "unsupported serialize argument; expected `json` or `nullable`",
+                                        "unsupported serialize argument; expected `json`, `jsonb`, or `nullable`",
                                     ));
                                 }
                             }
@@ -219,7 +229,7 @@ impl FieldAttr {
                                 None => {
                                     errs.push(syn::Error::new_spanned(
                                         attr,
-                                        "missing serialization format; expected `json`",
+                                        "missing serialization format; expected `json` or `jsonb`",
                                     ));
                                 }
                             }

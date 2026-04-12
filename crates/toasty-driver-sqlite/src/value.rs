@@ -40,6 +40,7 @@ impl Value {
             Some(SqlValue::Text(value)) => match ty {
                 stmt::Type::Uuid => stmt::Value::Uuid(value.parse().expect("text is a valid uuid")),
                 stmt::Type::Json => stmt::Value::String(value),
+                stmt::Type::Jsonb => stmt::Value::String(value),
                 _ => stmt::Value::String(value),
             },
             Some(SqlValue::Blob(value)) => match ty {

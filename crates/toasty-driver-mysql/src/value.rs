@@ -47,6 +47,7 @@ impl Value {
             | CT::MYSQL_TYPE_BLOB => match ty {
                 stmt::Type::String => extract_or_null(row, i, stmt::Value::String),
                 stmt::Type::Json => extract_or_null(row, i, stmt::Value::String),
+                stmt::Type::Jsonb => extract_or_null(row, i, stmt::Value::String),
                 stmt::Type::Uuid => extract_or_null(row, i, stmt::Value::Uuid),
                 stmt::Type::Bytes => extract_or_null(row, i, stmt::Value::Bytes),
                 _ => todo!("ty={ty:#?}"),
