@@ -215,14 +215,17 @@ impl toasty_core::driver::Connection for Connection {
             op => todo!("op={:#?}", op),
         };
 
-        let sql_as_str = sql::Serializer::mysql(&schema.db).serialize(&sql);
+        let (sql_as_str, arg_order) =
+            sql::Serializer::mysql(&schema.db).serialize_with_arg_order(&sql);
 
         tracing::debug!(db.system = "mysql", db.statement = %sql_as_str, params = typed_params.len(), "executing SQL");
 
-        let params = typed_params
-            .into_iter()
-            .map(|tv| Value::from(tv.value))
-            .collect::<Vec<_>>();
+        // MySQL uses positional `?` without indices, so params must be reordered
+        // to match the order `Expr::Arg(n)` placeholders appear in the SQL.
+        let params: Vec<_> = arg_order
+            .iter()
+            .map(|&pos| Value::from(typed_params[pos].value.clone()))
+            .collect();
         let args = params
             .iter()
             .map(|param| param.to_value())

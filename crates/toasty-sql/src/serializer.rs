@@ -63,6 +63,11 @@ struct Formatter<'a> {
     /// VALUES rows need the ROW() wrapper (required in subqueries but not in
     /// INSERT).
     in_insert: bool,
+
+    /// Collects `Expr::Arg(n)` positions in the order they appear in the SQL.
+    /// Used by MySQL (which uses positional `?` without indices) to reorder
+    /// the params vec to match placeholder occurrence order.
+    arg_positions: Vec<usize>,
 }
 
 /// Expression context bound to a database-level schema.
@@ -85,6 +90,7 @@ impl<'a> Serializer<'a> {
             depth: 0,
             alias: false,
             in_insert: false,
+            arg_positions: Vec::new(),
         };
 
         let cx = ExprContext::new(self.schema);
@@ -93,6 +99,32 @@ impl<'a> Serializer<'a> {
 
         ret.push(';');
         ret
+    }
+
+    /// Serializes a [`Statement`] and returns both the SQL string and the order
+    /// in which `Expr::Arg(n)` placeholders appear in the SQL.
+    ///
+    /// This is needed by MySQL which uses positional `?` without indices — the
+    /// caller must reorder its params vec to match the occurrence order.
+    pub fn serialize_with_arg_order(&self, stmt: &Statement) -> (String, Vec<usize>) {
+        let mut ret = String::new();
+
+        let mut fmt = Formatter {
+            serializer: self,
+            dst: &mut ret,
+            depth: 0,
+            alias: false,
+            in_insert: false,
+            arg_positions: Vec::new(),
+        };
+
+        let cx = ExprContext::new(self.schema);
+
+        stmt.to_sql(&cx, &mut fmt);
+
+        let arg_positions = fmt.arg_positions;
+        ret.push(';');
+        (ret, arg_positions)
     }
 
     /// Serialize a transaction control operation to a SQL string.
@@ -108,6 +140,7 @@ impl<'a> Serializer<'a> {
             depth: 0,
             alias: false,
             in_insert: false,
+            arg_positions: Vec::new(),
         };
 
         let cx = ExprContext::new(self.schema);

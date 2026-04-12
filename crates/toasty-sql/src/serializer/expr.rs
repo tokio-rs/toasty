@@ -95,6 +95,7 @@ impl ToSql for &stmt::Expr {
                 // Pre-extracted bind parameter placeholder — render as a
                 // positional parameter. The arg position is 0-based; the
                 // placeholder is 1-based.
+                f.arg_positions.push(arg.position);
                 let placeholder = super::Placeholder(arg.position + 1);
                 fmt!(cx, f, placeholder);
             }
