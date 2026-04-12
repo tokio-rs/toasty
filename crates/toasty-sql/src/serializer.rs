@@ -32,6 +32,7 @@ use crate::stmt::Statement;
 use toasty_core::{
     driver::operation::{IsolationLevel, Transaction},
     schema::db::{self, Index, Table},
+    stmt,
 };
 
 /// Context information when serializing VALUES in an INSERT statement.
@@ -79,6 +80,24 @@ struct Formatter<'a, T> {
 
     /// Context when serializing VALUES in an INSERT statement
     insert_context: Option<InsertContext>,
+}
+
+impl<T> Formatter<'_, T> {
+    /// Returns the column type hint for the given field index in the current
+    /// INSERT context, if one is available.
+    fn insert_column_type_hint(
+        &self,
+        field_index: usize,
+        schema: &db::Schema,
+    ) -> Option<stmt::Type> {
+        let insert_ctx = self.insert_context.as_ref()?;
+        if field_index >= insert_ctx.columns.len() {
+            return None;
+        }
+        let col_id = insert_ctx.columns[field_index];
+        let table = &schema.tables[insert_ctx.table_id.0];
+        Some(table.columns[col_id.index].ty.clone())
+    }
 }
 
 /// Expression context bound to a database-level schema.

@@ -10,16 +10,7 @@ struct TypeHintedValue<'a> {
 
 impl<'a> ToSql for TypeHintedValue<'a> {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
-        // Get type hint from insert context if available
-        let type_hint = f.insert_context.as_ref().and_then(|insert_ctx| {
-            if self.field_index < insert_ctx.columns.len() {
-                let col_id = insert_ctx.columns[self.field_index];
-                let table = &cx.schema().tables[insert_ctx.table_id.0];
-                Some(table.columns[col_id.index].ty.clone())
-            } else {
-                None
-            }
-        });
+        let type_hint = f.insert_column_type_hint(self.field_index, cx.schema());
 
         if matches!(self.value, stmt::Value::Null) {
             // Write NULL as a literal — see ToSql for &stmt::Value

@@ -15,18 +15,12 @@ struct TypeHintedField<'a> {
 
 impl<'a> ToSql for TypeHintedField<'a> {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
-        // Get type hint from insert context if available
-        let type_hint = f.insert_context.as_ref().and_then(|insert_ctx| {
-            if self.field_index < insert_ctx.columns.len()
-                && !matches!(self.expr, stmt::Expr::Default)
-            {
-                let col_id = insert_ctx.columns[self.field_index];
-                let table = &cx.schema().tables[insert_ctx.table_id.0];
-                Some(table.columns[col_id.index].ty.clone())
-            } else {
-                None
-            }
-        });
+        // Skip type hint for DEFAULT expressions — they don't need one.
+        let type_hint = if matches!(self.expr, stmt::Expr::Default) {
+            None
+        } else {
+            f.insert_column_type_hint(self.field_index, cx.schema())
+        };
 
         // If this is a Value expr with a type hint, serialize with the hint
         if let (stmt::Expr::Value(value), Some(type_hint)) = (self.expr, type_hint) {
