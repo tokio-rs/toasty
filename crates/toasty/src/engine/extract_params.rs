@@ -76,14 +76,11 @@ fn extract_values(stmt: &mut stmt::Statement, params: &mut Vec<TypedValue>) {
                 *expr = stmt::Expr::arg(position);
             }
 
-            // Value::Record → convert to Expr::Record with extracted fields
-            stmt::Expr::Value(stmt::Value::Record(record)) => {
-                *expr = value_to_extracted_expr(&stmt::Value::Record(record.clone()), params);
-            }
-
-            // Value::List → convert to Expr::List with extracted items
-            stmt::Expr::Value(stmt::Value::List(values)) => {
-                *expr = value_to_extracted_expr(&stmt::Value::List(values.clone()), params);
+            // Value::Record or Value::List → take ownership, convert to
+            // Expr::Record/Expr::List with extracted fields
+            stmt::Expr::Value(value @ (stmt::Value::Record(_) | stmt::Value::List(_))) => {
+                let owned = std::mem::replace(value, stmt::Value::Null);
+                *expr = value_to_extracted_expr(owned, params);
             }
 
             // Null, Default, and everything else: leave as-is
@@ -93,31 +90,29 @@ fn extract_values(stmt: &mut stmt::Statement, params: &mut Vec<TypedValue>) {
 }
 
 /// Recursively convert a `Value` into an `Expr`, extracting scalar values.
-fn value_to_extracted_expr(value: &stmt::Value, params: &mut Vec<TypedValue>) -> stmt::Expr {
+/// Takes ownership to avoid cloning.
+fn value_to_extracted_expr(value: stmt::Value, params: &mut Vec<TypedValue>) -> stmt::Expr {
     match value {
         stmt::Value::Null => stmt::Expr::Value(stmt::Value::Null),
         stmt::Value::Record(record) => {
             let fields = record
                 .fields
-                .iter()
+                .into_iter()
                 .map(|f| value_to_extracted_expr(f, params))
                 .collect();
             stmt::Expr::Record(stmt::ExprRecord::from_vec(fields))
         }
         stmt::Value::List(values) => {
             let items = values
-                .iter()
+                .into_iter()
                 .map(|v| value_to_extracted_expr(v, params))
                 .collect();
             stmt::Expr::List(stmt::ExprList { items })
         }
         scalar => {
-            let ty = db::Type::from_value(scalar);
+            let ty = db::Type::from_value(&scalar);
             let position = params.len();
-            params.push(TypedValue {
-                value: scalar.clone(),
-                ty,
-            });
+            params.push(TypedValue { value: scalar, ty });
             stmt::Expr::arg(position)
         }
     }
