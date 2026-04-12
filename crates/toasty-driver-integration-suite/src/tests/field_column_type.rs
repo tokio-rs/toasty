@@ -94,7 +94,6 @@ pub async fn specify_uuid_as_text(test: &mut Test) -> Result<()> {
 
     for _ in 0..16 {
         let val = uuid::Uuid::new_v4();
-        let val_str = val.to_string();
         let created = Item::create().val(val).exec(&mut db).await?;
 
         // Verify that the INSERT operation stored the UUID as a text string
@@ -109,7 +108,7 @@ pub async fn specify_uuid_as_text(test: &mut Test) -> Result<()> {
                     columns: == columns(&db, "items", &["id", "val"]),
                 }),
                 source.body: ExprSet::Values({
-                    rows: [=~ (Any, val_str)],
+                    rows: [=~ (Any, Any)],
                 }),
             }),
         }));

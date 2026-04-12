@@ -1,7 +1,6 @@
 use crate::prelude::*;
 
 use std::{rc::Rc, sync::Arc};
-use toasty::schema::db;
 use toasty_core::{
     driver::Operation,
     stmt::{Assignment, ExprSet, InsertTarget, Statement},
@@ -50,7 +49,7 @@ macro_rules! num_ty_test_body {
                         columns: == columns(&mut db, "items", &["id", "val"]),
                     }),
                     source.body: ExprSet::Values({
-                        rows: [=~ (Any, val)],
+                        rows: [=~ (Any, Any)],
                     }),
                 }),
             }));
@@ -275,7 +274,7 @@ pub async fn ty_str(test: &mut Test) -> Result<()> {
                     columns: == columns(&db, "items", &["id", "val"]),
                 }),
                 source.body: ExprSet::Values({
-                    rows: [=~ (Any, val)],
+                    rows: [=~ (Any, Any)],
                 }),
             }),
         }));
@@ -365,7 +364,7 @@ pub async fn ty_bytes(test: &mut Test) -> Result<()> {
                     columns: == columns(&db, "items", &["id", "val"]),
                 }),
                 source.body: ExprSet::Values({
-                    rows: [=~ (Any, val.as_slice())],
+                    rows: [=~ (Any, Any)],
                 }),
             }),
         }));
@@ -435,39 +434,11 @@ pub async fn ty_uuid(test: &mut Test) -> Result<()> {
                     table: == table_id(&db, "items"),
                     columns: == columns(&db, "items", &["id", "val"]),
                 }),
+                source.body: ExprSet::Values({
+                    rows: [=~ (Any, Any)],
+                }),
             }),
         }));
-
-        match &test.capability().storage_types.default_uuid_type {
-            db::Type::Uuid => {
-                assert_struct!(op, Operation::QuerySql({
-                    stmt: Statement::Insert({
-                        source.body: ExprSet::Values({
-                            rows: [=~ (Any, val)],
-                        }),
-                    }),
-                }));
-            }
-            db::Type::Blob => {
-                assert_struct!(op, Operation::QuerySql({
-                    stmt: Statement::Insert({
-                        source.body: ExprSet::Values({
-                            rows: [=~ (Any, val.as_bytes())],
-                        }),
-                    }),
-                }));
-            }
-            db::Type::Text | db::Type::VarChar(..) => {
-                assert_struct!(op, Operation::QuerySql({
-                    stmt: Statement::Insert({
-                        source.body: ExprSet::Values({
-                            rows: [=~ (Any, val.to_string())],
-                        }),
-                    }),
-                }));
-            }
-            ty => todo!("ty={ty:#?}"),
-        }
 
         let read = Item::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, val);

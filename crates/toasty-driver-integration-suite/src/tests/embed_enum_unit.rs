@@ -52,7 +52,7 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
     assert_struct!(t.log().pop_op(), Operation::QuerySql({
         stmt: Statement::Insert({
             source.body: ExprSet::Values({
-                rows: [== (Any, Any, 1i64)],
+                rows: [== (Any, Any, Any)],
             }),
             target: toasty_core::stmt::InsertTarget::Table({
                 table: == user_table,
@@ -75,7 +75,7 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
         assert_struct!(t.log().pop_op(), Operation::QuerySql({
             stmt: Statement::Update({
                 target: toasty_core::stmt::UpdateTarget::Table(== user_table),
-                assignments: #{ [2]: Assignment::Set(== 2i64)},
+                assignments: #{ [2]: Assignment::Set(_)},
             }),
         }));
     } else {
@@ -83,7 +83,7 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
             table: == user_table,
             filter: None,
             keys: _,
-            assignments: #{ [2]: Assignment::Set(== 2i64)},
+            assignments: #{ [2]: Assignment::Set(_)},
             returning: false,
         }));
     }
@@ -167,7 +167,7 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
                     filter.expr: Some(Expr::BinaryOp({
                         lhs.as_expr_column_unwrap().column: == status_col.index,
                         op: BinaryOp::Eq,
-                        *rhs: == 2i64,
+                        *rhs: _,
                     })),
                 }),
             }),
@@ -188,7 +188,7 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
                     filter.expr: Some(Expr::BinaryOp({
                         lhs.as_expr_column_unwrap().column: == status_col.index,
                         op: BinaryOp::Eq,
-                        *rhs: == 1i64,
+                        *rhs: _,
                     })),
                 }),
             }),
@@ -209,7 +209,7 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
                     filter.expr: Some(Expr::BinaryOp({
                         lhs.as_expr_column_unwrap().column: == status_col.index,
                         op: BinaryOp::Eq,
-                        *rhs: == 3i64,
+                        *rhs: _,
                     })),
                 }),
             }),

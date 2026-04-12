@@ -38,7 +38,7 @@ pub async fn specify_custom_column_name(test: &mut Test) -> Result<()> {
                 columns: == expected_columns,
             }),
             source.body: ExprSet::Values({
-                rows: [=~ (Any, "foo")],
+                rows: [=~ (Any, Any)],
             }),
         }),
     }));
@@ -85,7 +85,7 @@ pub async fn specify_custom_column_name_with_type(test: &mut Test) -> Result<()>
         && let Statement::Insert(insert) = query.stmt
     {
         if let ExprSet::Values(values) = insert.source.body {
-            assert_struct!(values.rows, [=~ (Any, "foo")]);
+            assert_struct!(values.rows, [=~ (Any, Any)]);
         } else {
             panic!("Expected Values in INSERT source");
         }

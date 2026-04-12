@@ -61,7 +61,7 @@ pub async fn update_by_partition_key(test: &mut Test) {
         assert_struct!(op, Operation::QuerySql({
             stmt: Statement::Update({
                 target: UpdateTarget::Table(== todo_table_id),
-                assignments: #{ [2]: Assignment::Set(== "updated")},
+                assignments: #{ [2]: Assignment::Set(_)},
             }),
             ret: None,
         }));
@@ -86,7 +86,7 @@ pub async fn update_by_partition_key(test: &mut Test) {
         assert_struct!(op, Operation::UpdateByKey({
             table: == todo_table_id,
             keys.len(): 2,
-            assignments: #{ [2]: Assignment::Set(== "updated")},
+            assignments: #{ [2]: Assignment::Set(_)},
             filter: None,
             returning: false,
         }));

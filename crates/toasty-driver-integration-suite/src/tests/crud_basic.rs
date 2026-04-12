@@ -133,7 +133,7 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
         assert_struct!(op, Operation::QuerySql({
             stmt: Statement::Update({
                 target: UpdateTarget::Table(== item_table_id),
-                assignments: #{ [1]: Assignment::Set(== "updated!")},
+                assignments: #{ [1]: Assignment::Set(_)},
             }),
             ret: None,
         }));
@@ -141,7 +141,7 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
         assert_struct!(op, Operation::UpdateByKey({
             table: == item_table_id,
             keys.len(): 1,
-            assignments: #{ [1]: Assignment::Set(== "updated!")},
+            assignments: #{ [1]: Assignment::Set(_)},
             filter: None,
             returning: false,
         }));

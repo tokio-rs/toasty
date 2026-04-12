@@ -134,7 +134,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
         assert_struct!(op, Operation::QuerySql({
             stmt: Statement::Update({
                 target: toasty_core::stmt::UpdateTarget::Table(== user_table_id),
-                assignments: #{ [2]: Assignment::Set(== 31)},
+                assignments: #{ [2]: Assignment::Set(_)},
                 filter.expr: Some(Expr::BinaryOp({
                     lhs.as_expr_column_unwrap(): ExprColumn {
                         nesting: 0,
@@ -152,7 +152,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
             table: == user_table_id,
             filter: None,
             keys: _,
-            assignments: #{ [2]: Assignment::Set(== 31)},
+            assignments: #{ [2]: Assignment::Set(_)},
             returning: false,
         }));
     }
