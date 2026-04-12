@@ -351,15 +351,19 @@ impl toasty_core::driver::Connection for Connection {
         let param_types = params
             .iter()
             .map(|tv| {
-                // If the column has a native enum storage type with a known OID, use it.
-                if let Some(toasty_core::schema::db::Type::Enum(ref type_enum)) = tv.storage_ty {
-                    if let Some(ref name) = type_enum.name {
-                        if let Some(pg_type) = self.enum_types.get(name) {
-                            return pg_type.clone();
+                if let Some(ref storage_ty) = tv.storage_ty {
+                    // If this is a native enum with a cached OID, use it.
+                    if let toasty_core::schema::db::Type::Enum(type_enum) = storage_ty {
+                        if let Some(ref name) = type_enum.name {
+                            if let Some(pg_type) = self.enum_types.get(name) {
+                                return pg_type.clone();
+                            }
                         }
                     }
+                    storage_ty.to_postgres_type()
+                } else {
+                    r#type::postgres_type_from_value(&tv.value)
                 }
-                tv.infer_ty().to_postgres_type()
             })
             .collect::<Vec<_>>();
 

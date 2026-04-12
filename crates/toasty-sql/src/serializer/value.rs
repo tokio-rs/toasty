@@ -19,10 +19,8 @@ impl<'a> ToSql for TypeHintedValue<'a> {
             // For nested records/lists, recurse normally (they handle their own fields)
             self.value.to_sql(cx, f);
         } else {
-            // For scalar values, pass the column's type hint and storage type
-            let placeholder =
-                f.params
-                    .push(self.value, col.map(|c| &c.ty), col.map(|c| &c.storage_ty));
+            // For scalar values, pass the column's storage type
+            let placeholder = f.params.push(self.value, col.map(|c| &c.storage_ty));
             fmt!(cx, f, placeholder);
         }
     }
@@ -66,7 +64,7 @@ impl ToSql for &stmt::Value {
             }
             value => {
                 if f.bind_params {
-                    let placeholder = f.params.push(value, None, None);
+                    let placeholder = f.params.push(value, None);
                     fmt!(cx, f, placeholder)
                 } else {
                     // Inline as a SQL literal (used in DDL contexts like CHECK).

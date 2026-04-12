@@ -24,7 +24,7 @@ impl<'a> ToSql for TypeHintedField<'a> {
 
         // If this is a Value expr with column context, serialize with hints
         if let (stmt::Expr::Value(value), Some(col)) = (self.expr, col) {
-            let placeholder = f.params.push(value, Some(&col.ty), Some(&col.storage_ty));
+            let placeholder = f.params.push(value, Some(&col.storage_ty));
             fmt!(cx, f, placeholder);
         } else {
             // Other expr types (including Default) serialize normally
@@ -51,11 +51,11 @@ impl ToSql for &stmt::Expr {
 
                 if let (Some(col), stmt::Expr::Value(value)) = (rhs_col, &*expr.lhs) {
                     // RHS is column, LHS is value → bind LHS with RHS column info
-                    let placeholder = f.params.push(value, Some(&col.ty), Some(&col.storage_ty));
+                    let placeholder = f.params.push(value, Some(&col.storage_ty));
                     fmt!(cx, f, placeholder " " expr.op " " expr.rhs);
                 } else if let (Some(col), stmt::Expr::Value(value)) = (lhs_col, &*expr.rhs) {
                     // LHS is column, RHS is value → bind RHS with LHS column info
-                    let placeholder = f.params.push(value, Some(&col.ty), Some(&col.storage_ty));
+                    let placeholder = f.params.push(value, Some(&col.storage_ty));
                     fmt!(cx, f, expr.lhs " " expr.op " " placeholder);
                 } else {
                     fmt!(cx, f, expr.lhs " " expr.op " " expr.rhs);
@@ -178,7 +178,7 @@ fn serialize_list_with_storage_ty<P: Params>(
                     f.dst.push_str(", ");
                 }
                 if let stmt::Expr::Value(value) = item {
-                    let placeholder = f.params.push(value, Some(&col.ty), Some(&col.storage_ty));
+                    let placeholder = f.params.push(value, Some(&col.storage_ty));
                     fmt!(cx, f, placeholder);
                 } else {
                     item.to_sql(cx, f);
@@ -192,7 +192,7 @@ fn serialize_list_with_storage_ty<P: Params>(
                 if i > 0 {
                     f.dst.push_str(", ");
                 }
-                let placeholder = f.params.push(value, Some(&col.ty), Some(&col.storage_ty));
+                let placeholder = f.params.push(value, Some(&col.storage_ty));
                 fmt!(cx, f, placeholder);
             }
             f.dst.push(')');

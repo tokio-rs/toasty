@@ -124,12 +124,7 @@ pub type ExprContext<'a> = toasty_core::stmt::ExprContext<'a, db::Schema>;
 struct NoParams;
 
 impl Params for NoParams {
-    fn push(
-        &mut self,
-        _: &toasty_core::stmt::Value,
-        _: Option<&toasty_core::stmt::Type>,
-        _: Option<&db::Type>,
-    ) -> params::Placeholder {
+    fn push(&mut self, _: &toasty_core::stmt::Value, _: Option<&db::Type>) -> params::Placeholder {
         unreachable!("DDL serialization should not produce bind parameters")
     }
 }

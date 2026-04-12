@@ -11,13 +11,8 @@ use toasty_core::{schema::db, stmt};
 /// that should be sent as a bind parameter rather than inlined into the SQL
 /// string.
 pub trait Params {
-    /// Appends a value (with optional type and storage-type hints) and returns its [`Placeholder`].
-    fn push(
-        &mut self,
-        param: &stmt::Value,
-        type_hint: Option<&stmt::Type>,
-        storage_ty: Option<&db::Type>,
-    ) -> Placeholder;
+    /// Appends a value (with an optional storage type) and returns its [`Placeholder`].
+    fn push(&mut self, param: &stmt::Value, storage_ty: Option<&db::Type>) -> Placeholder;
 }
 
 /// A positional bind-parameter placeholder.
@@ -35,12 +30,12 @@ pub trait Params {
 /// ```
 pub struct Placeholder(pub usize);
 
-/// A parameter value paired with optional type hints.
+/// A parameter value paired with an optional database storage type.
 ///
-/// Type hints let drivers pick the right wire format when the value alone
-/// is ambiguous (e.g. distinguishing `INTEGER` from `BIGINT`). The storage
-/// type lets drivers use the correct database-specific type (e.g. a native
-/// enum OID instead of `TEXT`).
+/// The storage type lets drivers pick the right wire format. For example,
+/// `db::Type::Integer(8)` maps to PostgreSQL `INT8`, `db::Type::Enum(..)`
+/// maps to the cached enum OID, etc. When `None`, the driver infers the
+/// type from the value itself.
 ///
 /// # Example
 ///
@@ -49,52 +44,29 @@ pub struct Placeholder(pub usize);
 ///
 /// let tv = TypedValue {
 ///     value: toasty_core::stmt::Value::Null,
-///     type_hint: None,
 ///     storage_ty: None,
 /// };
-/// assert!(tv.type_hint.is_none());
+/// assert!(tv.storage_ty.is_none());
 /// ```
 #[derive(Debug, Clone)]
 pub struct TypedValue {
     /// The parameter value.
     pub value: stmt::Value,
-    /// An optional type hint for the value.
-    pub type_hint: Option<stmt::Type>,
     /// The database storage type of the target column, if known.
     pub storage_ty: Option<db::Type>,
 }
 
-impl TypedValue {
-    /// Infers the type of this value, using the type hint if available
-    pub fn infer_ty(&self) -> stmt::Type {
-        self.type_hint
-            .clone()
-            .unwrap_or_else(|| self.value.infer_ty())
-    }
-}
-
 impl Params for Vec<stmt::Value> {
-    fn push(
-        &mut self,
-        value: &stmt::Value,
-        _type_hint: Option<&stmt::Type>,
-        _storage_ty: Option<&db::Type>,
-    ) -> Placeholder {
+    fn push(&mut self, value: &stmt::Value, _storage_ty: Option<&db::Type>) -> Placeholder {
         self.push(value.clone());
         Placeholder(self.len())
     }
 }
 
 impl Params for Vec<TypedValue> {
-    fn push(
-        &mut self,
-        value: &stmt::Value,
-        type_hint: Option<&stmt::Type>,
-        storage_ty: Option<&db::Type>,
-    ) -> Placeholder {
+    fn push(&mut self, value: &stmt::Value, storage_ty: Option<&db::Type>) -> Placeholder {
         self.push(TypedValue {
             value: value.clone(),
-            type_hint: type_hint.cloned(),
             storage_ty: storage_ty.cloned(),
         });
         Placeholder(self.len())
