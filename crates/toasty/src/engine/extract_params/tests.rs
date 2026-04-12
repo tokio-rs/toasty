@@ -255,6 +255,91 @@ fn synthesize_multi_step_projection() {
 }
 
 // ============================================================================
+// Invalid state panics
+// ============================================================================
+
+#[test]
+#[should_panic(expected = "index out of bounds")]
+fn synthesize_arg_out_of_range_panics() {
+    use super::synthesize;
+
+    let schema = test_schema();
+    let cx = stmt::ExprContext::new(&schema.db);
+    let mut params = vec![];
+
+    // Arg(5) but params is empty
+    synthesize(&Expr::arg(5), &cx, &mut params);
+}
+
+#[test]
+#[should_panic(expected = "out of range")]
+fn synthesize_project_step_out_of_bounds_panics() {
+    use super::synthesize;
+
+    let schema = test_schema();
+    let cx = stmt::ExprContext::new(&schema.db);
+    let mut params = vec![TypedValue {
+        value: Value::from("a"),
+        ty: db::Type::Text,
+    }];
+
+    // Record with 1 field, projecting step 5
+    let expr = Expr::Project(stmt::ExprProject {
+        base: Box::new(Expr::Record(stmt::ExprRecord::from_vec(vec![Expr::arg(0)]))),
+        projection: stmt::Projection::single(5),
+    });
+
+    synthesize(&expr, &cx, &mut params);
+}
+
+#[test]
+#[should_panic(expected = "non-record")]
+fn synthesize_project_from_scalar_panics() {
+    use super::synthesize;
+
+    let schema = test_schema();
+    let cx = stmt::ExprContext::new(&schema.db);
+    let mut params = vec![TypedValue {
+        value: Value::from(42i64),
+        ty: db::Type::Integer(8),
+    }];
+
+    // Project from a scalar Arg (not a record)
+    let expr = Expr::Project(stmt::ExprProject {
+        base: Box::new(Expr::arg(0)),
+        projection: stmt::Projection::single(0),
+    });
+
+    synthesize(&expr, &cx, &mut params);
+}
+
+#[test]
+#[should_panic(expected = "incompatible")]
+fn merge_incompatible_structures_panics() {
+    use super::{InferredType, merge};
+
+    // Record vs Scalar
+    let a = InferredType::Record(vec![InferredType::Scalar(db::Type::Text)]);
+    let b = InferredType::Scalar(db::Type::Integer(8));
+
+    merge(&a, &b);
+}
+
+#[test]
+#[should_panic(expected = "incompatible")]
+fn merge_records_different_lengths_panics() {
+    use super::{InferredType, merge};
+
+    let a = InferredType::Record(vec![InferredType::Scalar(db::Type::Text)]);
+    let b = InferredType::Record(vec![
+        InferredType::Scalar(db::Type::Text),
+        InferredType::Scalar(db::Type::Integer(8)),
+    ]);
+
+    merge(&a, &b);
+}
+
+// ============================================================================
 // Helpers
 // ============================================================================
 

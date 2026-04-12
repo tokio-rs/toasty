@@ -256,11 +256,8 @@ fn synthesize(expr: &stmt::Expr, cx: &Cx<'_>, params: &mut [TypedValue]) -> Infe
     match expr {
         // Arg — type comes from the extracted param
         stmt::Expr::Arg(arg) => {
-            if let Some(tv) = params.get(arg.position) {
-                InferredType::Scalar(tv.ty.clone())
-            } else {
-                InferredType::Unknown
-            }
+            let tv = &params[arg.position]; // panics if out of range
+            InferredType::Scalar(tv.ty.clone())
         }
 
         // Column reference — resolve from schema
@@ -276,13 +273,15 @@ fn synthesize(expr: &stmt::Expr, cx: &Cx<'_>, params: &mut [TypedValue]) -> Infe
             let mut ty = synthesize(&project.base, cx, params);
             for &step in project.projection.as_slice() {
                 ty = match ty {
-                    InferredType::Record(fields) => fields
-                        .into_iter()
-                        .nth(step)
-                        .unwrap_or(InferredType::Unknown),
-                    // Projecting from a non-record (e.g., scalar enum column)
-                    // — keep the type as-is
-                    other => other,
+                    InferredType::Record(fields) => {
+                        assert!(
+                            step < fields.len(),
+                            "projection step {step} out of range for record with {} fields",
+                            fields.len()
+                        );
+                        fields.into_iter().nth(step).unwrap()
+                    }
+                    other => panic!("cannot project from non-record type: {other:?}"),
                 };
             }
             ty
@@ -441,8 +440,7 @@ fn merge(a: &InferredType, b: &InferredType) -> InferredType {
             InferredType::Record(a.iter().zip(b).map(|(a, b)| merge(a, b)).collect())
         }
         (InferredType::List(a), InferredType::List(b)) => InferredType::List(Box::new(merge(a, b))),
-        // Incompatible structures — keep the first
-        _ => a.clone(),
+        _ => panic!("cannot merge incompatible types: {a:?} and {b:?}"),
     }
 }
 
