@@ -191,8 +191,13 @@ impl toasty_core::driver::Connection for Connection {
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         tracing::trace!(driver = "mysql", op = %op.name(), "driver exec");
 
-        let (sql, ret, last_insert_id_hack): (sql::Statement, _, _) = match op {
-            Operation::QuerySql(op) => (op.stmt.into(), op.ret, op.last_insert_id_hack),
+        let (sql, typed_params, ret, last_insert_id_hack): (
+            sql::Statement,
+            Vec<toasty_core::driver::operation::TypedValue>,
+            _,
+            _,
+        ) = match op {
+            Operation::QuerySql(op) => (op.stmt.into(), op.params, op.ret, op.last_insert_id_hack),
             Operation::Transaction(op) => {
                 let sql = sql::Serializer::mysql(&schema.db).serialize_transaction(&op);
                 self.conn.query_drop(sql).await.map_err(|e| match e {
@@ -210,14 +215,11 @@ impl toasty_core::driver::Connection for Connection {
             op => todo!("op={:#?}", op),
         };
 
-        let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
+        let sql_as_str = sql::Serializer::mysql(&schema.db).serialize(&sql);
 
-        let sql_as_str =
-            sql::Serializer::mysql(&schema.db).serialize_with_params(&sql, &mut params);
+        tracing::debug!(db.system = "mysql", db.statement = %sql_as_str, params = typed_params.len(), "executing SQL");
 
-        tracing::debug!(db.system = "mysql", db.statement = %sql_as_str, params = params.len(), "executing SQL");
-
-        let params = params
+        let params = typed_params
             .into_iter()
             .map(|tv| Value::from(tv.value))
             .collect::<Vec<_>>();

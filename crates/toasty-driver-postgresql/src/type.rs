@@ -1,4 +1,4 @@
-use toasty_core::{schema::db, stmt};
+use toasty_core::schema::db;
 use tokio_postgres::types::Type;
 
 pub trait TypeExt {
@@ -31,33 +31,5 @@ impl TypeExt for db::Type {
             db::Type::Enum(_) => Type::TEXT,
             _ => todo!("to_postgres_type; db_ty={:#?}", self),
         }
-    }
-}
-
-/// Infers a PostgreSQL wire type from a `stmt::Value` when no storage type
-/// is available (e.g. parameters without column context).
-pub fn postgres_type_from_value(value: &stmt::Value) -> Type {
-    match value {
-        stmt::Value::Bool(_) => Type::BOOL,
-        stmt::Value::I8(_) | stmt::Value::I16(_) => Type::INT2,
-        stmt::Value::I32(_) => Type::INT4,
-        stmt::Value::I64(_) => Type::INT8,
-        stmt::Value::U8(_) | stmt::Value::U16(_) => Type::INT4,
-        stmt::Value::U32(_) | stmt::Value::U64(_) => Type::INT8,
-        stmt::Value::String(_) => Type::TEXT,
-        stmt::Value::Uuid(_) => Type::UUID,
-        stmt::Value::Bytes(_) => Type::BYTEA,
-        #[cfg(feature = "rust_decimal")]
-        stmt::Value::Decimal(_) => Type::NUMERIC,
-        #[cfg(feature = "jiff")]
-        stmt::Value::Timestamp(_) => Type::TIMESTAMPTZ,
-        #[cfg(feature = "jiff")]
-        stmt::Value::Date(_) => Type::DATE,
-        #[cfg(feature = "jiff")]
-        stmt::Value::Time(_) => Type::TIME,
-        #[cfg(feature = "jiff")]
-        stmt::Value::DateTime(_) => Type::TIMESTAMP,
-        stmt::Value::Null => Type::TEXT,
-        _ => todo!("postgres_type_from_value; value={:#?}", value),
     }
 }

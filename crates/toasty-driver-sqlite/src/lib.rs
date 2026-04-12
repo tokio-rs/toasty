@@ -169,13 +169,17 @@ impl toasty_core::driver::Connection for Connection {
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         tracing::trace!(driver = "sqlite", op = %op.name(), "driver exec");
 
-        let (sql, ret_tys): (sql::Statement, _) = match op {
+        let (sql, typed_params, ret_tys): (
+            sql::Statement,
+            Vec<toasty_core::driver::operation::TypedValue>,
+            _,
+        ) = match op {
             Operation::QuerySql(op) => {
                 assert!(
                     op.last_insert_id_hack.is_none(),
                     "last_insert_id_hack is MySQL-specific and should not be set for SQLite"
                 );
-                (op.stmt.into(), op.ret)
+                (op.stmt.into(), op.params, op.ret)
             }
             // Operation::Insert(op) => op.stmt.into(),
             Operation::Transaction(mut op) => {
@@ -196,10 +200,9 @@ impl toasty_core::driver::Connection for Connection {
             _ => todo!("op={:#?}", op),
         };
 
-        let mut params: Vec<toasty_sql::TypedValue> = vec![];
-        let sql_str = sql::Serializer::sqlite(&schema.db).serialize_with_params(&sql, &mut params);
+        let sql_str = sql::Serializer::sqlite(&schema.db).serialize(&sql);
 
-        tracing::debug!(db.system = "sqlite", db.statement = %sql_str, params = params.len(), "executing SQL");
+        tracing::debug!(db.system = "sqlite", db.statement = %sql_str, params = typed_params.len(), "executing SQL");
 
         let mut stmt = self.connection.prepare_cached(&sql_str).unwrap();
 
@@ -227,7 +230,7 @@ impl toasty_core::driver::Connection for Connection {
             _ => None,
         };
 
-        let params = params
+        let params = typed_params
             .into_iter()
             .map(|tv| Value::from(tv.value))
             .collect::<Vec<_>>();

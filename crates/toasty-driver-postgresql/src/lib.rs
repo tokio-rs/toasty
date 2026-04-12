@@ -24,7 +24,7 @@ use percent_encoding::percent_decode_str;
 use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     Result, Schema,
-    driver::{Capability, Driver, ExecResponse, Operation},
+    driver::{Capability, Driver, ExecResponse, Operation, operation},
     schema::db::{self, Migration, SchemaDiff, Table},
     stmt,
     stmt::ValueRecord,
@@ -328,46 +328,44 @@ impl toasty_core::driver::Connection for Connection {
             return Ok(ExecResponse::count(0));
         }
 
-        let (sql, ret_tys): (sql::Statement, _) = match op {
-            Operation::Insert(op) => (op.stmt.into(), None),
+        let (sql, typed_params, ret_tys): (sql::Statement, Vec<operation::TypedValue>, _) = match op
+        {
+            Operation::Insert(op) => (op.stmt.into(), op.params, None),
             Operation::QuerySql(query) => {
                 assert!(
                     query.last_insert_id_hack.is_none(),
                     "last_insert_id_hack is MySQL-specific and should not be set for PostgreSQL"
                 );
-                (query.stmt.into(), query.ret)
+                (query.stmt.into(), query.params, query.ret)
             }
             op => todo!("op={:#?}", op),
         };
 
         let width = sql.returning_len();
 
-        let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
-        let sql_as_str =
-            sql::Serializer::postgresql(&schema.db).serialize_with_params(&sql, &mut params);
+        let sql_as_str = sql::Serializer::postgresql(&schema.db).serialize(&sql);
 
-        tracing::debug!(db.system = "postgresql", db.statement = %sql_as_str, params = params.len(), "executing SQL");
+        tracing::debug!(db.system = "postgresql", db.statement = %sql_as_str, params = typed_params.len(), "executing SQL");
 
-        let param_types = params
+        let param_types = typed_params
             .iter()
             .map(|tv| {
-                if let Some(ref storage_ty) = tv.storage_ty {
-                    // If this is a native enum with a cached OID, use it.
-                    if let toasty_core::schema::db::Type::Enum(type_enum) = storage_ty {
-                        if let Some(ref name) = type_enum.name {
-                            if let Some(pg_type) = self.enum_types.get(name) {
-                                return pg_type.clone();
-                            }
+                // If the column has a native enum storage type with a known OID, use it.
+                if let toasty_core::schema::db::Type::Enum(ref type_enum) = tv.ty {
+                    if let Some(ref name) = type_enum.name {
+                        if let Some(pg_type) = self.enum_types.get(name) {
+                            return pg_type.clone();
                         }
                     }
-                    storage_ty.to_postgres_type()
-                } else {
-                    r#type::postgres_type_from_value(&tv.value)
                 }
+                tv.ty.to_postgres_type()
             })
             .collect::<Vec<_>>();
 
-        let values: Vec<_> = params.into_iter().map(|tv| Value::from(tv.value)).collect();
+        let values: Vec<_> = typed_params
+            .into_iter()
+            .map(|tv| Value::from(tv.value))
+            .collect();
         let params = values
             .iter()
             .map(|param| param as &(dyn ToSql + Sync))

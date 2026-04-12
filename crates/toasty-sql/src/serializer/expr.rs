@@ -152,6 +152,13 @@ impl ToSql for &stmt::Expr {
                 fmt!(cx, f, "(" items ")");
             }
             stmt::Expr::Value(expr) => expr.to_sql(cx, f),
+            stmt::Expr::Arg(arg) => {
+                // Pre-extracted bind parameter placeholder — render as a
+                // positional parameter. The arg position is 0-based; the
+                // placeholder is 1-based.
+                let placeholder = super::Placeholder(arg.position + 1);
+                fmt!(cx, f, placeholder);
+            }
             stmt::Expr::Default => match f.serializer.flavor {
                 Flavor::Postgresql | Flavor::Mysql => fmt!(cx, f, "DEFAULT"),
                 // SQLite does not support the DEFAULT keyword but NULL acts similarly.

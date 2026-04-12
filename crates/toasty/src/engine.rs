@@ -1,6 +1,8 @@
 pub(crate) mod eval;
 pub(crate) mod exec;
 
+mod extract_params;
+
 mod hir;
 use hir::HirStatement;
 
