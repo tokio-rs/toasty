@@ -271,25 +271,21 @@ fn synthesize(expr: &stmt::Expr, cx: &Cx<'_>, params: &mut [TypedValue]) -> Infe
             }
         }
 
-        // Projection — type of the projected field
+        // Projection — walk each step to reach the projected field's type
         stmt::Expr::Project(project) => {
-            let base_ty = synthesize(&project.base, cx, params);
-            match base_ty {
-                InferredType::Record(fields) => {
-                    let idx = project.projection.as_slice();
-                    if let Some(&step) = idx.first() {
-                        fields
-                            .into_iter()
-                            .nth(step)
-                            .unwrap_or(InferredType::Unknown)
-                    } else {
-                        InferredType::Unknown
-                    }
-                }
-                // Projecting from a scalar (e.g., discriminant from enum column)
-                // — the result has the same type as the base
-                ty => ty,
+            let mut ty = synthesize(&project.base, cx, params);
+            for &step in project.projection.as_slice() {
+                ty = match ty {
+                    InferredType::Record(fields) => fields
+                        .into_iter()
+                        .nth(step)
+                        .unwrap_or(InferredType::Unknown),
+                    // Projecting from a non-record (e.g., scalar enum column)
+                    // — keep the type as-is
+                    other => other,
+                };
             }
+            ty
         }
 
         // Record — synthesize each field

@@ -2,6 +2,7 @@ use crate as toasty;
 use crate::engine::test_util::*;
 use crate::schema::Register;
 use toasty_core::{
+    driver::operation::TypedValue,
     schema::db,
     stmt::{self, Expr, Value},
 };
@@ -168,6 +169,89 @@ fn non_enum_insert_keeps_default_types() {
     assert_eq!(params.len(), 2);
     assert!(matches!(&params[0].ty, db::Type::Text));
     assert!(matches!(&params[1].ty, db::Type::Integer(8)));
+}
+
+// ============================================================================
+// Projection type inference
+// ============================================================================
+
+#[test]
+fn synthesize_multi_step_projection() {
+    // Test that a multi-step projection like project(record, [1, 0])
+    // correctly walks through nested record types.
+    //
+    // Given: Record([Text, Record([Integer(4), Boolean])])
+    // Project [1, 0] should yield Integer(4)
+
+    use super::{InferredType, merge, synthesize};
+
+    let schema = test_schema();
+    let cx = stmt::ExprContext::new(&schema.db);
+
+    // Build: project(project(arg(0), [1]), [0])
+    // This is how multi-step projections are typically represented:
+    // chained Project expressions, each with a single step.
+    // But let's also test a single Project with multiple steps.
+
+    // First, test the chained case (typical):
+    // inner = Record([String("a"), Record([I32(1), Bool(true)])])
+    let inner_record = Value::Record(stmt::ValueRecord::from_vec(vec![
+        Value::from(1i32),
+        Value::from(true),
+    ]));
+    let outer_record = Value::Record(stmt::ValueRecord::from_vec(vec![
+        Value::from("a"),
+        inner_record,
+    ]));
+
+    // Extract params from: INSERT INTO ... VALUES (outer_record)
+    // This gives us Arg positions for the scalar values
+    #[derive(toasty::Model)]
+    struct Dummy {
+        #[key]
+        id: String,
+    }
+    let schema = test_schema_with(&[Dummy::schema()]);
+
+    // Directly test the synthesize function with a constructed expression
+    // that has a multi-step projection
+    let mut params = vec![
+        TypedValue {
+            value: Value::from("a"),
+            ty: db::Type::Text,
+        },
+        TypedValue {
+            value: Value::from(1i32),
+            ty: db::Type::Integer(4),
+        },
+        TypedValue {
+            value: Value::from(true),
+            ty: db::Type::Boolean,
+        },
+    ];
+
+    // Build: Record([Arg(0), Record([Arg(1), Arg(2)])])
+    let expr = Expr::Record(stmt::ExprRecord::from_vec(vec![
+        Expr::arg(0),
+        Expr::Record(stmt::ExprRecord::from_vec(vec![Expr::arg(1), Expr::arg(2)])),
+    ]));
+
+    // Project with steps [1, 0] — field 1 of outer (inner record), then field 0 (Integer)
+    let mut projection = stmt::Projection::single(1);
+    projection.push(0);
+    let project_expr = Expr::Project(stmt::ExprProject {
+        base: Box::new(expr),
+        projection,
+    });
+
+    let cx = stmt::ExprContext::new(&schema.db);
+    let ty = synthesize(&project_expr, &cx, &mut params);
+
+    assert!(
+        matches!(ty, InferredType::Scalar(db::Type::Integer(4))),
+        "expected Integer(4), got {:?}",
+        ty
+    );
 }
 
 // ============================================================================
