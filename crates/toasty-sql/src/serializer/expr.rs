@@ -7,8 +7,6 @@ use crate::{
     stmt,
 };
 
-use toasty_core::schema::db;
-
 /// Wrapper for serializing a field within an INSERT VALUES record with type hints
 struct TypeHintedField<'a> {
     field_index: usize,
@@ -17,35 +15,22 @@ struct TypeHintedField<'a> {
 
 impl<'a> ToSql for TypeHintedField<'a> {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
-        // Get type hint and storage type from insert context if available
-        let (type_hint, storage_ty) = f
-            .insert_context
-            .as_ref()
-            .and_then(|insert_ctx| {
-                if self.field_index < insert_ctx.columns.len()
-                    && !matches!(self.expr, stmt::Expr::Default)
-                {
-                    let col_id = insert_ctx.columns[self.field_index];
-                    let table = &cx.schema().tables[insert_ctx.table_id.0];
-                    let col = &table.columns[col_id.index];
-                    Some((Some(col.ty.clone()), Some(col.storage_ty.clone())))
-                } else {
-                    None
-                }
-            })
-            .unwrap_or((None, None));
+        // Get type hint from insert context if available
+        let type_hint = f.insert_context.as_ref().and_then(|insert_ctx| {
+            if self.field_index < insert_ctx.columns.len()
+                && !matches!(self.expr, stmt::Expr::Default)
+            {
+                let col_id = insert_ctx.columns[self.field_index];
+                let table = &cx.schema().tables[insert_ctx.table_id.0];
+                Some(table.columns[col_id.index].ty.clone())
+            } else {
+                None
+            }
+        });
 
         // If this is a Value expr with a type hint, serialize with the hint
         if let (stmt::Expr::Value(value), Some(type_hint)) = (self.expr, type_hint) {
-            let mut placeholder = f.params.push(value, Some(&type_hint));
-            // PostgreSQL native enums need a cast from TEXT to the enum type
-            if matches!(f.serializer.flavor, Flavor::Postgresql) {
-                if let Some(db::Type::Enum(ref type_enum)) = storage_ty {
-                    if let Some(ref name) = type_enum.name {
-                        placeholder.cast = Some(name.clone());
-                    }
-                }
-            }
+            let placeholder = f.params.push(value, Some(&type_hint));
             fmt!(cx, f, placeholder);
         } else {
             // Other expr types (including Default) serialize normally

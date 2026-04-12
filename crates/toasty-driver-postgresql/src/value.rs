@@ -1,7 +1,7 @@
 use toasty_core::stmt::{self, Value as CoreValue};
 use tokio_postgres::{
     Column, Row,
-    types::{IsNull, ToSql, Type, accepts, private::BytesMut, to_sql_checked},
+    types::{IsNull, Kind, ToSql, Type, private::BytesMut, to_sql_checked},
 };
 
 #[derive(Debug)]
@@ -141,6 +141,10 @@ impl Value {
             {
                 panic!("NUMERIC requires rust_decimal feature to be enabled")
             }
+        } else if matches!(column.type_().kind(), Kind::Enum(_)) {
+            // Native database enum types (CREATE TYPE ... AS ENUM) are read as strings.
+            let v = get_or_return_null!(String);
+            stmt::Value::String(v)
         } else {
             todo!(
                 "implement PostgreSQL to toasty conversion for `{:#?}`",
@@ -210,20 +214,23 @@ impl ToSql for Value {
         }
     }
 
-    accepts!(
-        BOOL,
-        INT2,
-        INT4,
-        INT8,
-        TEXT,
-        VARCHAR,
-        BYTEA,
-        UUID,
-        NUMERIC,
-        TIMESTAMP,
-        TIMESTAMPTZ,
-        DATE,
-        TIME
-    );
+    fn accepts(ty: &Type) -> bool {
+        matches!(
+            *ty,
+            Type::BOOL
+                | Type::INT2
+                | Type::INT4
+                | Type::INT8
+                | Type::TEXT
+                | Type::VARCHAR
+                | Type::BYTEA
+                | Type::UUID
+                | Type::NUMERIC
+                | Type::TIMESTAMP
+                | Type::TIMESTAMPTZ
+                | Type::DATE
+                | Type::TIME
+        ) || matches!(ty.kind(), Kind::Enum(_))
+    }
     to_sql_checked!();
 }

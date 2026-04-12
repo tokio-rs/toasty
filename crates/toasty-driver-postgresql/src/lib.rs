@@ -14,7 +14,6 @@
 mod statement_cache;
 #[cfg(feature = "tls")]
 mod tls;
-mod r#type;
 mod value;
 
 pub(crate) use value::Value;
@@ -33,7 +32,7 @@ use toasty_sql::{self as sql};
 use tokio_postgres::{Client, Config, Socket, tls::MakeTlsConnect, types::ToSql};
 use url::Url;
 
-use crate::{statement_cache::StatementCache, r#type::TypeExt};
+use crate::statement_cache::StatementCache;
 
 /// A PostgreSQL [`Driver`] that connects via `tokio-postgres`.
 ///
@@ -337,18 +336,13 @@ impl toasty_core::driver::Connection for Connection {
 
         let width = sql.returning_len();
 
-        let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
+        let mut param_values: Vec<toasty_core::stmt::Value> = Vec::new();
         let sql_as_str =
-            sql::Serializer::postgresql(&schema.db).serialize_with_params(&sql, &mut params);
+            sql::Serializer::postgresql(&schema.db).serialize_with_params(&sql, &mut param_values);
 
-        tracing::debug!(db.system = "postgresql", db.statement = %sql_as_str, params = params.len(), "executing SQL");
+        tracing::debug!(db.system = "postgresql", db.statement = %sql_as_str, params = param_values.len(), "executing SQL");
 
-        let param_types = params
-            .iter()
-            .map(|typed_value| typed_value.infer_ty().to_postgres_type())
-            .collect::<Vec<_>>();
-
-        let values: Vec<_> = params.into_iter().map(|tv| Value::from(tv.value)).collect();
+        let values: Vec<_> = param_values.into_iter().map(Value::from).collect();
         let params = values
             .iter()
             .map(|param| param as &(dyn ToSql + Sync))
@@ -356,7 +350,7 @@ impl toasty_core::driver::Connection for Connection {
 
         let statement = self
             .statement_cache
-            .prepare_typed(&mut self.client, &sql_as_str, &param_types)
+            .prepare(&mut self.client, &sql_as_str)
             .await
             .map_err(toasty_core::Error::driver_operation_failed)?;
 
