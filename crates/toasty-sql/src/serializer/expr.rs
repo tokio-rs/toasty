@@ -16,16 +16,15 @@ struct TypeHintedField<'a> {
 impl<'a> ToSql for TypeHintedField<'a> {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
         // Skip type hint for DEFAULT expressions — they don't need one.
-        let type_hint = if matches!(self.expr, stmt::Expr::Default) {
+        let col = if matches!(self.expr, stmt::Expr::Default) {
             None
         } else {
-            f.insert_column_type_hint(self.field_index, cx.schema())
+            f.insert_column(self.field_index, cx.schema())
         };
 
-        // If this is a Value expr with a type hint, serialize with the hint
-        if let (stmt::Expr::Value(value), Some(type_hint)) = (self.expr, type_hint) {
-            let mut placeholder = f.params.push(value, Some(&type_hint));
-            placeholder.cast = f.insert_column_enum_cast(self.field_index, cx.schema());
+        // If this is a Value expr with column context, serialize with hints
+        if let (stmt::Expr::Value(value), Some(col)) = (self.expr, col) {
+            let placeholder = f.params.push(value, Some(&col.ty), Some(&col.storage_ty));
             fmt!(cx, f, placeholder);
         } else {
             // Other expr types (including Default) serialize normally
@@ -44,22 +43,19 @@ impl ToSql for &stmt::Expr {
                 assert!(!expr.lhs.is_value_null());
                 assert!(!expr.rhs.is_value_null());
 
-                // For PostgreSQL native enums: if one side is an enum column and the
-                // other is a value, cast the value to the enum type.
-                // lhs_cast set → LHS is enum column → cast RHS value
-                // rhs_cast set → RHS is enum column → cast LHS value
-                let lhs_cast = f.enum_cast_for_column_ref(&expr.lhs, cx);
-                let rhs_cast = f.enum_cast_for_column_ref(&expr.rhs, cx);
+                // When one side is a column reference and the other is a value,
+                // pass the column's storage type so the driver can bind the
+                // parameter with the correct type (e.g. native enum OID).
+                let lhs_col = f.column_for_ref(&expr.lhs, cx);
+                let rhs_col = f.column_for_ref(&expr.rhs, cx);
 
-                if let (Some(cast), stmt::Expr::Value(value)) = (rhs_cast, &*expr.lhs) {
-                    // RHS is enum column, LHS is a value → cast LHS
-                    let mut placeholder = f.params.push(value, None);
-                    placeholder.cast = Some(cast);
+                if let (Some(col), stmt::Expr::Value(value)) = (rhs_col, &*expr.lhs) {
+                    // RHS is column, LHS is value → bind LHS with RHS column info
+                    let placeholder = f.params.push(value, Some(&col.ty), Some(&col.storage_ty));
                     fmt!(cx, f, placeholder " " expr.op " " expr.rhs);
-                } else if let (Some(cast), stmt::Expr::Value(value)) = (lhs_cast, &*expr.rhs) {
-                    // LHS is enum column, RHS is a value → cast RHS
-                    let mut placeholder = f.params.push(value, None);
-                    placeholder.cast = Some(cast);
+                } else if let (Some(col), stmt::Expr::Value(value)) = (lhs_col, &*expr.rhs) {
+                    // LHS is column, RHS is value → bind RHS with LHS column info
+                    let placeholder = f.params.push(value, Some(&col.ty), Some(&col.storage_ty));
                     fmt!(cx, f, expr.lhs " " expr.op " " placeholder);
                 } else {
                     fmt!(cx, f, expr.lhs " " expr.op " " expr.rhs);
@@ -86,38 +82,13 @@ impl ToSql for &stmt::Expr {
                 fmt!(cx, f, Ident(name));
             }
             stmt::Expr::InList(expr) => {
-                // For PostgreSQL native enums, cast each list item to the enum type.
-                let cast = f.enum_cast_for_column_ref(&expr.expr, cx);
-                if let (Some(cast), stmt::Expr::List(list)) = (&cast, &*expr.list) {
+                // When the expression is a column reference, pass storage type
+                // info for each list item so the driver can bind correctly.
+                let col = f.column_for_ref(&expr.expr, cx);
+                if let Some(col) = col {
                     fmt!(cx, f, expr.expr " IN ");
-                    f.dst.push('(');
-                    for (i, item) in list.items.iter().enumerate() {
-                        if i > 0 {
-                            f.dst.push_str(", ");
-                        }
-                        if let stmt::Expr::Value(value) = item {
-                            let mut placeholder = f.params.push(value, None);
-                            placeholder.cast = Some(cast.clone());
-                            fmt!(cx, f, placeholder);
-                        } else {
-                            item.to_sql(cx, f);
-                        }
-                    }
-                    f.dst.push(')');
-                } else if let (Some(cast), stmt::Expr::Value(stmt::Value::List(values))) =
-                    (&cast, &*expr.list)
-                {
-                    fmt!(cx, f, expr.expr " IN ");
-                    f.dst.push('(');
-                    for (i, value) in values.iter().enumerate() {
-                        if i > 0 {
-                            f.dst.push_str(", ");
-                        }
-                        let mut placeholder = f.params.push(value, None);
-                        placeholder.cast = Some(cast.clone());
-                        fmt!(cx, f, placeholder);
-                    }
-                    f.dst.push(')');
+                    // Serialize list items with column type info
+                    serialize_list_with_storage_ty(cx, f, &expr.list, col);
                 } else {
                     fmt!(cx, f, expr.expr " IN " expr.list);
                 }
@@ -188,6 +159,45 @@ impl ToSql for &stmt::Expr {
             },
             _ => todo!("expr={:#?}", self),
         }
+    }
+}
+
+/// Serializes a list expression, pushing each value item with the given
+/// column's storage type info.
+fn serialize_list_with_storage_ty<P: Params>(
+    cx: &ExprContext<'_>,
+    f: &mut super::Formatter<'_, P>,
+    list: &stmt::Expr,
+    col: &toasty_core::schema::db::Column,
+) {
+    match list {
+        stmt::Expr::List(list) => {
+            f.dst.push('(');
+            for (i, item) in list.items.iter().enumerate() {
+                if i > 0 {
+                    f.dst.push_str(", ");
+                }
+                if let stmt::Expr::Value(value) = item {
+                    let placeholder = f.params.push(value, Some(&col.ty), Some(&col.storage_ty));
+                    fmt!(cx, f, placeholder);
+                } else {
+                    item.to_sql(cx, f);
+                }
+            }
+            f.dst.push(')');
+        }
+        stmt::Expr::Value(stmt::Value::List(values)) => {
+            f.dst.push('(');
+            for (i, value) in values.iter().enumerate() {
+                if i > 0 {
+                    f.dst.push_str(", ");
+                }
+                let placeholder = f.params.push(value, Some(&col.ty), Some(&col.storage_ty));
+                fmt!(cx, f, placeholder);
+            }
+            f.dst.push(')');
+        }
+        other => other.to_sql(cx, f),
     }
 }
 

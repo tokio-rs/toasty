@@ -229,6 +229,9 @@ impl Driver for PostgreSQL {
 pub struct Connection {
     client: Client,
     statement_cache: StatementCache,
+    /// Cached PostgreSQL `Type` objects for native enum types, keyed by type name.
+    /// Populated during `push_schema` by querying `pg_type` for each enum's OID.
+    enum_types: std::collections::HashMap<String, tokio_postgres::types::Type>,
 }
 
 impl Connection {
@@ -237,6 +240,7 @@ impl Connection {
         Self {
             client,
             statement_cache: StatementCache::new(100),
+            enum_types: std::collections::HashMap::new(),
         }
     }
 
@@ -298,6 +302,7 @@ impl From<Client> for Connection {
         Self {
             client,
             statement_cache: StatementCache::new(100),
+            enum_types: std::collections::HashMap::new(),
         }
     }
 }
@@ -345,7 +350,17 @@ impl toasty_core::driver::Connection for Connection {
 
         let param_types = params
             .iter()
-            .map(|typed_value| typed_value.infer_ty().to_postgres_type())
+            .map(|tv| {
+                // If the column has a native enum storage type with a known OID, use it.
+                if let Some(toasty_core::schema::db::Type::Enum(ref type_enum)) = tv.storage_ty {
+                    if let Some(ref name) = type_enum.name {
+                        if let Some(pg_type) = self.enum_types.get(name) {
+                            return pg_type.clone();
+                        }
+                    }
+                }
+                tv.infer_ty().to_postgres_type()
+            })
             .collect::<Vec<_>>();
 
         let values: Vec<_> = params.into_iter().map(|tv| Value::from(tv.value)).collect();
@@ -431,6 +446,24 @@ impl toasty_core::driver::Connection for Connection {
                         .execute(&sql, &[])
                         .await
                         .map_err(toasty_core::Error::driver_operation_failed)?;
+
+                    // Query pg_type for the OID and cache a custom Type so that
+                    // prepare_typed can bind enum parameters with the correct OID.
+                    let oid_row = self
+                        .client
+                        .query_one("SELECT oid FROM pg_type WHERE typname = $1", &[name])
+                        .await
+                        .map_err(toasty_core::Error::driver_operation_failed)?;
+                    let oid: u32 = oid_row.get(0);
+                    let variants: Vec<String> =
+                        type_enum.variants.iter().map(|v| v.name.clone()).collect();
+                    let pg_type = tokio_postgres::types::Type::new(
+                        name.clone(),
+                        oid,
+                        tokio_postgres::types::Kind::Enum(variants),
+                        "public".to_string(),
+                    );
+                    self.enum_types.insert(name.clone(), pg_type);
                 }
             }
         }

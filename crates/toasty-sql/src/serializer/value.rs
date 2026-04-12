@@ -10,7 +10,7 @@ struct TypeHintedValue<'a> {
 
 impl<'a> ToSql for TypeHintedValue<'a> {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
-        let type_hint = f.insert_column_type_hint(self.field_index, cx.schema());
+        let col = f.insert_column(self.field_index, cx.schema());
 
         if matches!(self.value, stmt::Value::Null) {
             // Write NULL as a literal — see ToSql for &stmt::Value
@@ -19,9 +19,10 @@ impl<'a> ToSql for TypeHintedValue<'a> {
             // For nested records/lists, recurse normally (they handle their own fields)
             self.value.to_sql(cx, f);
         } else {
-            // For scalar values, use the type hint and enum cast
-            let mut placeholder = f.params.push(self.value, type_hint.as_ref());
-            placeholder.cast = f.insert_column_enum_cast(self.field_index, cx.schema());
+            // For scalar values, pass the column's type hint and storage type
+            let placeholder =
+                f.params
+                    .push(self.value, col.map(|c| &c.ty), col.map(|c| &c.storage_ty));
             fmt!(cx, f, placeholder);
         }
     }
@@ -65,7 +66,7 @@ impl ToSql for &stmt::Value {
             }
             value => {
                 if f.bind_params {
-                    let placeholder = f.params.push(value, None);
+                    let placeholder = f.params.push(value, None, None);
                     fmt!(cx, f, placeholder)
                 } else {
                     // Inline as a SQL literal (used in DDL contexts like CHECK).

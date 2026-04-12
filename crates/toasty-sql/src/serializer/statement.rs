@@ -705,14 +705,9 @@ impl ToSql for (&db::Table, &stmt::Assignments) {
                 todo!("only SET supported in SQL serialization; got {assignment:#?}");
             };
             if let stmt::Expr::Value(value) = expr {
-                let type_hint = Some(&column.ty);
-                let mut placeholder = f.params.push(value, type_hint);
-                // PostgreSQL native enums need a cast from TEXT to the enum type
-                if matches!(f.serializer.flavor, Flavor::Postgresql) {
-                    if let db::Type::Enum(ref type_enum) = column.storage_ty {
-                        placeholder.cast = type_enum.name.clone();
-                    }
-                }
+                let placeholder = f
+                    .params
+                    .push(value, Some(&column.ty), Some(&column.storage_ty));
                 placeholder.to_sql(cx, f);
             } else {
                 expr.to_sql(cx, f);

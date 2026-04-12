@@ -83,29 +83,28 @@ struct Formatter<'a, T> {
 }
 
 impl<T> Formatter<'_, T> {
-    /// Returns the column type hint for the given field index in the current
-    /// INSERT context, if one is available.
-    fn insert_column_type_hint(
+    /// Returns the column for the given field index in the current INSERT
+    /// context, if one is available.
+    fn insert_column<'a>(
         &self,
         field_index: usize,
-        schema: &db::Schema,
-    ) -> Option<stmt::Type> {
+        schema: &'a db::Schema,
+    ) -> Option<&'a db::Column> {
         let insert_ctx = self.insert_context.as_ref()?;
         if field_index >= insert_ctx.columns.len() {
             return None;
         }
         let col_id = insert_ctx.columns[field_index];
         let table = &schema.tables[insert_ctx.table_id.0];
-        Some(table.columns[col_id.index].ty.clone())
+        Some(&table.columns[col_id.index])
     }
 
-    /// If the given expression refers to a column with a native enum storage
-    /// type, returns the enum type name for use as a SQL cast. Only applies
-    /// to PostgreSQL.
-    fn enum_cast_for_column_ref(&self, expr: &stmt::Expr, cx: &ExprContext<'_>) -> Option<String> {
-        if !matches!(self.serializer.flavor, Flavor::Postgresql) {
-            return None;
-        }
+    /// If the given expression refers to a column, returns that column.
+    fn column_for_ref<'a>(
+        &self,
+        expr: &stmt::Expr,
+        cx: &'a ExprContext<'_>,
+    ) -> Option<&'a db::Column> {
         let stmt::Expr::Reference(expr_ref @ stmt::ExprReference::Column(_)) = expr else {
             return None;
         };
@@ -113,31 +112,7 @@ impl<T> Formatter<'_, T> {
         let stmt::ResolvedRef::Column(column) = resolved else {
             return None;
         };
-        if let db::Type::Enum(ref type_enum) = column.storage_ty {
-            type_enum.name.clone()
-        } else {
-            None
-        }
-    }
-
-    /// If the column at `field_index` is a PostgreSQL native enum, returns the
-    /// enum type name to use as a SQL cast (e.g. `$1::my_enum`).
-    fn insert_column_enum_cast(&self, field_index: usize, schema: &db::Schema) -> Option<String> {
-        if !matches!(self.serializer.flavor, Flavor::Postgresql) {
-            return None;
-        }
-        let insert_ctx = self.insert_context.as_ref()?;
-        if field_index >= insert_ctx.columns.len() {
-            return None;
-        }
-        let col_id = insert_ctx.columns[field_index];
-        let table = &schema.tables[insert_ctx.table_id.0];
-        let col = &table.columns[col_id.index];
-        if let db::Type::Enum(ref type_enum) = col.storage_ty {
-            type_enum.name.clone()
-        } else {
-            None
-        }
+        Some(column)
     }
 }
 
@@ -153,6 +128,7 @@ impl Params for NoParams {
         &mut self,
         _: &toasty_core::stmt::Value,
         _: Option<&toasty_core::stmt::Type>,
+        _: Option<&db::Type>,
     ) -> params::Placeholder {
         unreachable!("DDL serialization should not produce bind parameters")
     }
