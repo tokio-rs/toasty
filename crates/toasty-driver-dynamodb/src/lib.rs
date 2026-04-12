@@ -188,15 +188,9 @@ impl Connection {
                     op.last_insert_id_hack.is_none(),
                     "last_insert_id_hack is MySQL-specific and should not be set for DynamoDB"
                 );
-                // Substitute Arg(n) placeholders back to values — DynamoDB reads
-                // values directly from the statement, not from bind parameters.
-                let mut stmt = op.stmt;
-                let param_values: Vec<stmt::Value> =
-                    op.params.into_iter().map(|tv| tv.value).collect();
-                stmt.substitute(&param_values);
-                match stmt {
+                match op.stmt {
                     stmt::Statement::Insert(insert) => self.exec_insert(&schema.db, insert).await,
-                    _ => todo!("op={:#?}", stmt),
+                    _ => todo!("op={:#?}", op.stmt),
                 }
             }
             Operation::Transaction(_) => Err(Error::unsupported_feature(

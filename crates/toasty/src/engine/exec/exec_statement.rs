@@ -115,7 +115,13 @@ impl Exec<'_> {
             return Ok(());
         }
 
-        let params = self.engine.extract_params(&mut stmt);
+        // Only extract bind parameters for SQL drivers. Key-value drivers
+        // (e.g., DynamoDB) read values directly from the statement.
+        let params = if self.engine.capability().sql {
+            self.engine.extract_params(&mut stmt)
+        } else {
+            vec![]
+        };
 
         let op = operation::QuerySql {
             stmt,

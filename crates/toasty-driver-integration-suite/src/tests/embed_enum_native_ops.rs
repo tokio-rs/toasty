@@ -83,7 +83,7 @@ pub async fn native_enum_crud_lifecycle(t: &mut Test) -> Result<()> {
     );
 
     // -- Delete and verify --
-    let t3_id = t3.id.clone();
+    let t3_id = t3.id;
     t3.delete().exec(&mut db).await?;
     assert!(Task::get_by_id(&mut db, &t3_id).await.is_err());
 

@@ -84,7 +84,11 @@ impl Exec<'_> {
         let ty = Some(vec![stmt::Type::I64, stmt::Type::I64]);
 
         let mut read_stmt: stmt::Statement = action.read.clone().into();
-        let read_params = self.engine.extract_params(&mut read_stmt);
+        let read_params = if self.engine.capability().sql {
+            self.engine.extract_params(&mut read_stmt)
+        } else {
+            vec![]
+        };
 
         let res = self
             .connection
@@ -125,7 +129,11 @@ impl Exec<'_> {
         }
 
         let mut write_stmt = action.write.clone();
-        let write_params = self.engine.extract_params(&mut write_stmt);
+        let write_params = if self.engine.capability().sql {
+            self.engine.extract_params(&mut write_stmt)
+        } else {
+            vec![]
+        };
 
         let res = self
             .connection
