@@ -1,5 +1,5 @@
 use super::{Load, Model};
-use crate::stmt::{IntoExpr, IntoInsert, List, Path};
+use crate::stmt::{IntoExpr, IntoInsert, List, Path, Query};
 
 use toasty_core::schema::app::FieldId;
 
@@ -41,6 +41,16 @@ pub trait Relation: Load<Output = Self> {
     /// The optional has-one relation wrapper type. Used when the foreign key
     /// is nullable, making the association optional.
     type OptionOne;
+
+    /// Construct a [`One`](Self::One) from a list query.
+    ///
+    /// Narrows via `.one()` and wraps in the `One` struct.
+    fn one_from_query(query: Query<List<Self::Model>>) -> Self::One;
+
+    /// Construct an [`OptionOne`](Self::OptionOne) from a list query.
+    ///
+    /// Narrows via `.first()` and wraps in the `OptionOne` struct.
+    fn option_one_from_query(query: Query<List<Self::Model>>) -> Self::OptionOne;
 
     /// Return a fresh, default-initialized create builder.
     fn new_create() -> Self::Create {
