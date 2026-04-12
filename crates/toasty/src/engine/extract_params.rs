@@ -157,7 +157,7 @@ fn refine_param_types(stmt: &stmt::Statement, db_schema: &db::Schema, params: &m
 
 fn refine_insert(
     insert: &stmt::Insert,
-    cx: &Cx<'_>,
+    _cx: &Cx<'_>,
     db_schema: &db::Schema,
     params: &mut [TypedValue],
 ) {
@@ -177,11 +177,9 @@ fn refine_insert(
         _ => InferredType::Unknown,
     };
 
-    // Check each VALUES row against the expected column types
+    // Push column types down into each VALUES row
     if let stmt::ExprSet::Values(values) = &insert.source.body {
         for row in &values.rows {
-            // Synthesize the row, then check against expected
-            let _synth = synthesize(row, cx, params);
             check(row, &expected, params);
         }
     }
@@ -204,7 +202,6 @@ fn refine_update(
                     && let Some(col) = db_table.columns.get(col_idx)
                 {
                     let expected = InferredType::Scalar(col.storage_ty.clone());
-                    let _synth = synthesize(expr, cx, params);
                     check(expr, &expected, params);
                 }
             }
