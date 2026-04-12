@@ -5,7 +5,7 @@ use crate::prelude::*;
 ///
 /// Exercises INSERT, SELECT, UPDATE (instance and query-based), and DELETE
 /// through the driver — the paths affected by parameter type inference.
-#[driver_test(id(ID))]
+#[driver_test(id(ID), requires(sql))]
 pub async fn native_enum_crud_lifecycle(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum Priority {
