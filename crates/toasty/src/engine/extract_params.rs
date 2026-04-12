@@ -17,8 +17,11 @@
 use toasty_core::{
     driver::operation::TypedValue,
     schema::{Schema, db},
-    stmt::{self, ExprContext, Resolve},
+    stmt,
 };
+
+/// Expression context bound to the database schema.
+type Cx<'a> = stmt::ExprContext<'a, db::Schema>;
 
 // ============================================================================
 // Public entry point
@@ -131,7 +134,7 @@ fn is_extractable_scalar(value: &stmt::Value) -> bool {
 
 /// Refine param types by walking the statement with synthesize + check.
 fn refine_param_types(stmt: &stmt::Statement, db_schema: &db::Schema, params: &mut [TypedValue]) {
-    let cx = ExprContext::new(db_schema);
+    let cx = stmt::ExprContext::new(db_schema);
 
     match stmt {
         stmt::Statement::Insert(insert) => {
@@ -152,9 +155,9 @@ fn refine_param_types(stmt: &stmt::Statement, db_schema: &db::Schema, params: &m
     }
 }
 
-fn refine_insert<T: std::fmt::Debug + Resolve>(
+fn refine_insert(
     insert: &stmt::Insert,
-    cx: &ExprContext<'_, T>,
+    cx: &Cx<'_>,
     db_schema: &db::Schema,
     params: &mut [TypedValue],
 ) {
@@ -184,9 +187,9 @@ fn refine_insert<T: std::fmt::Debug + Resolve>(
     }
 }
 
-fn refine_update<T: std::fmt::Debug + Resolve>(
+fn refine_update(
     update: &stmt::Update,
-    cx: &ExprContext<'_, T>,
+    cx: &Cx<'_>,
     db_schema: &db::Schema,
     params: &mut [TypedValue],
 ) {
@@ -212,11 +215,7 @@ fn refine_update<T: std::fmt::Debug + Resolve>(
     refine_filter(&update.filter, cx, params);
 }
 
-fn refine_query<T: std::fmt::Debug + Resolve>(
-    query: &stmt::Query,
-    cx: &ExprContext<'_, T>,
-    params: &mut [TypedValue],
-) {
+fn refine_query(query: &stmt::Query, cx: &Cx<'_>, params: &mut [TypedValue]) {
     let cx = cx.scope(query);
 
     match &query.body {
@@ -241,11 +240,7 @@ fn refine_query<T: std::fmt::Debug + Resolve>(
     }
 }
 
-fn refine_filter<T: std::fmt::Debug + Resolve>(
-    filter: &stmt::Filter,
-    cx: &ExprContext<'_, T>,
-    params: &mut [TypedValue],
-) {
+fn refine_filter(filter: &stmt::Filter, cx: &Cx<'_>, params: &mut [TypedValue]) {
     if let Some(expr) = &filter.expr {
         // Synthesize triggers check internally for BinaryOp, InList, etc.
         synthesize(expr, cx, params);
@@ -260,11 +255,7 @@ fn refine_filter<T: std::fmt::Debug + Resolve>(
 ///
 /// For comparison operators, this also triggers `check()` to push refined
 /// types down into both sides (bidirectional inference).
-fn synthesize<T: std::fmt::Debug + Resolve>(
-    expr: &stmt::Expr,
-    cx: &ExprContext<'_, T>,
-    params: &mut [TypedValue],
-) -> InferredType {
+fn synthesize(expr: &stmt::Expr, cx: &Cx<'_>, params: &mut [TypedValue]) -> InferredType {
     match expr {
         // Arg — type comes from the extracted param
         stmt::Expr::Arg(arg) => {
