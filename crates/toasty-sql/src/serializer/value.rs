@@ -10,16 +10,7 @@ struct TypeHintedValue<'a> {
 
 impl<'a> ToSql for TypeHintedValue<'a> {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
-        // Get type hint from insert context if available
-        let type_hint = f.insert_context.as_ref().and_then(|insert_ctx| {
-            if self.field_index < insert_ctx.columns.len() {
-                let col_id = insert_ctx.columns[self.field_index];
-                let table = &cx.schema().tables[insert_ctx.table_id.0];
-                Some(table.columns[col_id.index].ty.clone())
-            } else {
-                None
-            }
-        });
+        let col = f.insert_column(self.field_index, cx.schema());
 
         if matches!(self.value, stmt::Value::Null) {
             // Write NULL as a literal — see ToSql for &stmt::Value
@@ -28,8 +19,8 @@ impl<'a> ToSql for TypeHintedValue<'a> {
             // For nested records/lists, recurse normally (they handle their own fields)
             self.value.to_sql(cx, f);
         } else {
-            // For scalar values, use the type hint
-            let placeholder = f.params.push(self.value, type_hint.as_ref());
+            // For scalar values, pass the column's storage type
+            let placeholder = f.params.push(self.value, col.map(|c| &c.storage_ty));
             fmt!(cx, f, placeholder);
         }
     }
@@ -72,8 +63,33 @@ impl ToSql for &stmt::Value {
                 f.dst.push_str("NULL");
             }
             value => {
-                let placeholder = f.params.push(value, None);
-                fmt!(cx, f, placeholder)
+                if f.bind_params {
+                    let placeholder = f.params.push(value, None);
+                    fmt!(cx, f, placeholder)
+                } else {
+                    // Inline as a SQL literal (used in DDL contexts like CHECK).
+                    match value {
+                        stmt::Value::String(s) => {
+                            f.dst.push('\'');
+                            // Escape single quotes by doubling them.
+                            for ch in s.chars() {
+                                if ch == '\'' {
+                                    f.dst.push('\'');
+                                }
+                                f.dst.push(ch);
+                            }
+                            f.dst.push('\'');
+                        }
+                        stmt::Value::I64(n) => {
+                            use std::fmt::Write;
+                            write!(f.dst, "{n}").unwrap();
+                        }
+                        stmt::Value::Bool(b) => {
+                            f.dst.push_str(if *b { "TRUE" } else { "FALSE" });
+                        }
+                        _ => todo!("inline SQL literal for value: {value:?}"),
+                    }
+                }
             }
         }
     }

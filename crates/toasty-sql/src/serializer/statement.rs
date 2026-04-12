@@ -44,15 +44,17 @@ impl ToSql for ColumnsWithConstraints<'_> {
             true
         };
 
+        let has_trailing_pk = self.0.primary_key.is_some() && trailing_pk;
+
         for (index, column) in self.0.columns.iter().enumerate() {
             fmt!(cx, f, "\n    " column);
-            if index < self.0.columns.len() - 1 {
+            if index < self.0.columns.len() - 1 || has_trailing_pk {
                 fmt!(cx, f, ",");
             }
         }
 
         match &self.0.primary_key {
-            Some(pk) if trailing_pk => fmt!(cx, f, ",\n    PRIMARY KEY " pk "\n"),
+            Some(pk) if trailing_pk => fmt!(cx, f, "\n    PRIMARY KEY " pk "\n"),
             _ => fmt!(cx, f, "\n"),
         }
     }
@@ -176,6 +178,7 @@ impl ToSql for &stmt::AlterColumn {
                         .changes
                         .new_auto_increment
                         .unwrap_or(self.column_def.auto_increment),
+                    check: self.column_def.check.clone(),
                 };
                 fmt!(&cx, f, "ALTER TABLE " table_name " CHANGE COLUMN " column_name " " new_column_def)
             }
@@ -224,6 +227,49 @@ impl ToSql for &stmt::CreateTable {
         fmt!(
             &cx, f, "CREATE TABLE " name " (" columns ")"
         );
+    }
+}
+
+impl ToSql for &stmt::CreateType {
+    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+        use toasty_core::stmt::Value;
+
+        let name = self
+            .ty
+            .name
+            .as_deref()
+            .expect("CREATE TYPE requires a type name");
+        let name = Ident(name);
+
+        let prev = f.bind_params;
+        f.bind_params = false;
+
+        fmt!(cx, f, "CREATE TYPE " name " AS ENUM (");
+        for (i, variant) in self.ty.variants.iter().enumerate() {
+            if i > 0 {
+                f.dst.push_str(", ");
+            }
+            Value::String(variant.name.clone()).to_sql(cx, f);
+        }
+        f.dst.push(')');
+
+        f.bind_params = prev;
+    }
+}
+
+impl ToSql for &stmt::AlterType {
+    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+        use toasty_core::stmt::Value;
+
+        let name = Ident(&self.type_name);
+
+        let prev = f.bind_params;
+        f.bind_params = false;
+
+        fmt!(cx, f, "ALTER TYPE " name " ADD VALUE ");
+        Value::String(self.variant.name.clone()).to_sql(cx, f);
+
+        f.bind_params = prev;
     }
 }
 
@@ -506,9 +552,11 @@ impl ToSql for &stmt::Statement {
             stmt::Statement::AddColumn(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::AlterColumn(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::AlterTable(stmt) => stmt.to_sql(cx, f),
+            stmt::Statement::AlterType(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::CopyTable(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::CreateIndex(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::CreateTable(stmt) => stmt.to_sql(cx, f),
+            stmt::Statement::CreateType(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::DropColumn(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::DropIndex(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::DropTable(stmt) => stmt.to_sql(cx, f),
@@ -656,9 +704,10 @@ impl ToSql for (&db::Table, &stmt::Assignments) {
             let stmt::Assignment::Set(expr) = assignment else {
                 todo!("only SET supported in SQL serialization; got {assignment:#?}");
             };
-            if let stmt::Expr::Value(value) = expr {
-                let type_hint = Some(&column.ty);
-                let placeholder = f.params.push(value, type_hint);
+            if let stmt::Expr::Value(stmt::Value::Null) = expr {
+                f.dst.push_str("NULL");
+            } else if let stmt::Expr::Value(value) = expr {
+                let placeholder = f.params.push(value, Some(&column.storage_ty));
                 placeholder.to_sql(cx, f);
             } else {
                 expr.to_sql(cx, f);

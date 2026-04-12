@@ -115,8 +115,11 @@ impl Exec<'_> {
             return Ok(());
         }
 
+        let params = self.engine.extract_params(&mut stmt);
+
         let op = operation::QuerySql {
             stmt,
+            params,
             ret: if action.conditional_update_with_no_returning {
                 Some(vec![stmt::Type::I64, stmt::Type::I64])
             } else if mysql_insert_returning.is_some() {

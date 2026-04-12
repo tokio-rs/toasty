@@ -32,6 +32,7 @@ use crate::stmt::Statement;
 use toasty_core::{
     driver::operation::{IsolationLevel, Transaction},
     schema::db::{self, Index, Table},
+    stmt,
 };
 
 /// Context information when serializing VALUES in an INSERT statement.
@@ -71,20 +72,102 @@ struct Formatter<'a, T> {
     /// True when table names should be aliased.
     alias: bool,
 
+    /// When `true`, values are emitted as bind-parameter placeholders and
+    /// pushed into `params`. When `false`, values are inlined as SQL literals.
+    /// DDL statements (CREATE TABLE, etc.) set this to `false` because they
+    /// do not support bind parameters.
+    bind_params: bool,
+
     /// Context when serializing VALUES in an INSERT statement
     insert_context: Option<InsertContext>,
+}
+
+impl<T> Formatter<'_, T> {
+    /// Returns the column for the given field index in the current INSERT
+    /// context, if one is available.
+    fn insert_column<'a>(
+        &self,
+        field_index: usize,
+        schema: &'a db::Schema,
+    ) -> Option<&'a db::Column> {
+        let insert_ctx = self.insert_context.as_ref()?;
+        if field_index >= insert_ctx.columns.len() {
+            return None;
+        }
+        let col_id = insert_ctx.columns[field_index];
+        let table = &schema.tables[insert_ctx.table_id.0];
+        Some(&table.columns[col_id.index])
+    }
+
+    /// If the given expression refers to a column, returns that column.
+    fn column_for_ref<'a>(
+        &self,
+        expr: &stmt::Expr,
+        cx: &'a ExprContext<'_>,
+    ) -> Option<&'a db::Column> {
+        let stmt::Expr::Reference(expr_ref @ stmt::ExprReference::Column(_)) = expr else {
+            return None;
+        };
+        let resolved = cx.resolve_expr_reference(expr_ref);
+        let stmt::ResolvedRef::Column(column) = resolved else {
+            return None;
+        };
+        Some(column)
+    }
 }
 
 /// Expression context bound to a database-level schema.
 pub type ExprContext<'a> = toasty_core::stmt::ExprContext<'a, db::Schema>;
 
+/// A sink [`Params`] implementation that discards pushed values.
+///
+/// Used by `serialize()` which renders values as inline SQL literals (DDL)
+/// or renders `Expr::Arg` placeholders (pre-extracted DML). Any remaining
+/// `Expr::Value` nodes (e.g., inside `Value::Record`) are rendered as
+/// positional placeholders but the values are discarded — the real params
+/// come from the operation's `TypedValue` vec.
+struct SinkParams(usize);
+
+impl Params for SinkParams {
+    fn push(&mut self, _: &toasty_core::stmt::Value, _: Option<&db::Type>) -> params::Placeholder {
+        self.0 += 1;
+        params::Placeholder(self.0)
+    }
+}
+
 impl<'a> Serializer<'a> {
+    /// Serializes a [`Statement`] to a SQL string with all values inlined as
+    /// literals (no bind parameters). Appends a trailing semicolon.
+    ///
+    /// Use this for DDL statements (`CREATE TABLE`, `CREATE TYPE`, etc.) where
+    /// bind parameters are not supported.
+    pub fn serialize(&self, stmt: &Statement) -> String {
+        let mut ret = String::new();
+
+        let mut fmt = Formatter {
+            serializer: self,
+            dst: &mut ret,
+            params: &mut SinkParams(0),
+            depth: 0,
+            alias: false,
+            bind_params: false,
+            insert_context: None,
+        };
+
+        let cx = ExprContext::new(self.schema);
+
+        stmt.to_sql(&cx, &mut fmt);
+
+        ret.push(';');
+        ret
+    }
+
     /// Serializes a [`Statement`] to a SQL string, appending a trailing semicolon.
     ///
     /// Parameter placeholders are written in the dialect's native format
     /// (`$1` for PostgreSQL, `?1` for SQLite, `?` for MySQL) and the
     /// corresponding values are pushed into `params`.
-    pub fn serialize(&self, stmt: &Statement, params: &mut impl Params) -> String {
+    pub fn serialize_with_params(&self, stmt: &Statement, params: &mut impl Params) -> String {
         let mut ret = String::new();
 
         let mut fmt = Formatter {
@@ -93,6 +176,7 @@ impl<'a> Serializer<'a> {
             params,
             depth: 0,
             alias: false,
+            bind_params: true,
             insert_context: None,
         };
 
@@ -117,6 +201,7 @@ impl<'a> Serializer<'a> {
             params: &mut Vec::<TypedValue>::new(),
             depth: 0,
             alias: false,
+            bind_params: false,
             insert_context: None,
         };
 

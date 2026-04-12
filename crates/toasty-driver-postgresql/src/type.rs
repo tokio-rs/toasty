@@ -1,40 +1,35 @@
-use toasty_core::stmt;
+use toasty_core::schema::db;
 use tokio_postgres::types::Type;
 
 pub trait TypeExt {
-    /// Converts a Toasty type to a PostgreSQL type.
+    /// Converts a database storage type to a PostgreSQL wire type.
     fn to_postgres_type(&self) -> Type;
 }
 
-impl TypeExt for stmt::Type {
+impl TypeExt for db::Type {
     fn to_postgres_type(&self) -> Type {
         match self {
-            stmt::Type::Null => Type::TEXT, // Default for NULL values
-
-            stmt::Type::Bool => Type::BOOL,
-            stmt::Type::I8 => Type::INT2,
-            stmt::Type::I16 => Type::INT2,
-            stmt::Type::I32 => Type::INT4,
-            stmt::Type::I64 => Type::INT8,
-            stmt::Type::U8 => Type::INT2,
-            stmt::Type::U16 => Type::INT4,
-            stmt::Type::U32 => Type::INT8,
-            stmt::Type::U64 => Type::INT8,
-            stmt::Type::String => Type::TEXT,
-            stmt::Type::Uuid => Type::UUID,
-            stmt::Type::Bytes => Type::BYTEA,
-            #[cfg(feature = "rust_decimal")]
-            stmt::Type::Decimal => Type::NUMERIC,
-            #[cfg(feature = "jiff")]
-            stmt::Type::Timestamp => Type::TIMESTAMPTZ,
-            #[cfg(feature = "jiff")]
-            stmt::Type::Date => Type::DATE,
-            #[cfg(feature = "jiff")]
-            stmt::Type::Time => Type::TIME,
-            #[cfg(feature = "jiff")]
-            stmt::Type::DateTime => Type::TIMESTAMP,
-
-            _ => todo!("to_postgres_type; ty={:#?}", self),
+            db::Type::Boolean => Type::BOOL,
+            db::Type::Integer(1) => Type::INT2,
+            db::Type::Integer(2) => Type::INT2,
+            db::Type::Integer(4) => Type::INT4,
+            db::Type::Integer(8) => Type::INT8,
+            db::Type::UnsignedInteger(1) => Type::INT2,
+            db::Type::UnsignedInteger(2) => Type::INT4,
+            db::Type::UnsignedInteger(4) => Type::INT8,
+            db::Type::UnsignedInteger(8) => Type::INT8,
+            db::Type::Text | db::Type::VarChar(_) => Type::TEXT,
+            db::Type::Uuid => Type::UUID,
+            db::Type::Numeric(_) => Type::NUMERIC,
+            db::Type::Blob | db::Type::Binary(_) => Type::BYTEA,
+            db::Type::Timestamp(_) => Type::TIMESTAMPTZ,
+            db::Type::Date => Type::DATE,
+            db::Type::Time(_) => Type::TIME,
+            db::Type::DateTime(_) => Type::TIMESTAMP,
+            // Enum types are handled separately via the cached OID map;
+            // fall back to TEXT if we reach here (shouldn't happen in practice).
+            db::Type::Enum(_) => Type::TEXT,
+            _ => todo!("to_postgres_type; db_ty={:#?}", self),
         }
     }
 }

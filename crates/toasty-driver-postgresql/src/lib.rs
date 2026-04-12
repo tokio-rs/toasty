@@ -24,12 +24,12 @@ use percent_encoding::percent_decode_str;
 use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     Result, Schema,
-    driver::{Capability, Driver, ExecResponse, Operation},
+    driver::{Capability, Driver, ExecResponse, Operation, operation},
     schema::db::{self, Migration, SchemaDiff, Table},
     stmt,
     stmt::ValueRecord,
 };
-use toasty_sql::{self as sql, TypedValue};
+use toasty_sql::{self as sql};
 use tokio_postgres::{Client, Config, Socket, tls::MakeTlsConnect, types::ToSql};
 use url::Url;
 
@@ -156,16 +156,7 @@ impl Driver for PostgreSQL {
 
         let sql_strings: Vec<String> = statements
             .iter()
-            .map(|stmt| {
-                let mut params = Vec::<TypedValue>::new();
-                let sql = sql::Serializer::postgresql(stmt.schema())
-                    .serialize(stmt.statement(), &mut params);
-                assert!(
-                    params.is_empty(),
-                    "migration statements should not have parameters"
-                );
-                sql
-            })
+            .map(|stmt| sql::Serializer::postgresql(stmt.schema()).serialize(stmt.statement()))
             .collect();
 
         Migration::new_sql(sql_strings.join("\n"))
@@ -238,6 +229,9 @@ impl Driver for PostgreSQL {
 pub struct Connection {
     client: Client,
     statement_cache: StatementCache,
+    /// Cached PostgreSQL `Type` objects for native enum types, keyed by type name.
+    /// Populated during `push_schema` by querying `pg_type` for each enum's OID.
+    enum_types: std::collections::HashMap<String, tokio_postgres::types::Type>,
 }
 
 impl Connection {
@@ -246,6 +240,7 @@ impl Connection {
         Self {
             client,
             statement_cache: StatementCache::new(100),
+            enum_types: std::collections::HashMap::new(),
         }
     }
 
@@ -275,35 +270,22 @@ impl Connection {
     pub async fn create_table(&mut self, schema: &db::Schema, table: &Table) -> Result<()> {
         let serializer = sql::Serializer::postgresql(schema);
 
-        let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
-        let sql = serializer.serialize(
-            &sql::Statement::create_table(table, &Capability::POSTGRESQL),
-            &mut params,
-        );
-
-        assert!(
-            params.is_empty(),
-            "creating a table shouldn't involve any parameters"
-        );
+        let sql = serializer.serialize(&sql::Statement::create_table(
+            table,
+            &Capability::POSTGRESQL,
+        ));
 
         self.client
             .execute(&sql, &[])
             .await
             .map_err(toasty_core::Error::driver_operation_failed)?;
 
-        // NOTE: `params` is guaranteed to be empty based on the assertion above. If
-        // that changes, `params.clear()` should be called here.
         for index in &table.indices {
             if index.primary_key {
                 continue;
             }
 
-            let sql = serializer.serialize(&sql::Statement::create_index(index), &mut params);
-
-            assert!(
-                params.is_empty(),
-                "creating an index shouldn't involve any parameters"
-            );
+            let sql = serializer.serialize(&sql::Statement::create_index(index));
 
             self.client
                 .execute(&sql, &[])
@@ -320,6 +302,7 @@ impl From<Client> for Connection {
         Self {
             client,
             statement_cache: StatementCache::new(100),
+            enum_types: std::collections::HashMap::new(),
         }
     }
 }
@@ -345,31 +328,44 @@ impl toasty_core::driver::Connection for Connection {
             return Ok(ExecResponse::count(0));
         }
 
-        let (sql, ret_tys): (sql::Statement, _) = match op {
-            Operation::Insert(op) => (op.stmt.into(), None),
+        let (sql, typed_params, ret_tys): (sql::Statement, Vec<operation::TypedValue>, _) = match op
+        {
+            Operation::Insert(op) => (op.stmt.into(), op.params, None),
             Operation::QuerySql(query) => {
                 assert!(
                     query.last_insert_id_hack.is_none(),
                     "last_insert_id_hack is MySQL-specific and should not be set for PostgreSQL"
                 );
-                (query.stmt.into(), query.ret)
+                (query.stmt.into(), query.params, query.ret)
             }
             op => todo!("op={:#?}", op),
         };
 
         let width = sql.returning_len();
 
-        let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
-        let sql_as_str = sql::Serializer::postgresql(&schema.db).serialize(&sql, &mut params);
+        let sql_as_str = sql::Serializer::postgresql(&schema.db).serialize(&sql);
 
-        tracing::debug!(db.system = "postgresql", db.statement = %sql_as_str, params = params.len(), "executing SQL");
+        tracing::debug!(db.system = "postgresql", db.statement = %sql_as_str, params = typed_params.len(), "executing SQL");
 
-        let param_types = params
+        let param_types = typed_params
             .iter()
-            .map(|typed_value| typed_value.infer_ty().to_postgres_type())
+            .map(|tv| {
+                // If the column has a native enum storage type with a known OID, use it.
+                if let toasty_core::schema::db::Type::Enum(ref type_enum) = tv.ty {
+                    if let Some(ref name) = type_enum.name {
+                        if let Some(pg_type) = self.enum_types.get(name) {
+                            return pg_type.clone();
+                        }
+                    }
+                }
+                tv.ty.to_postgres_type()
+            })
             .collect::<Vec<_>>();
 
-        let values: Vec<_> = params.into_iter().map(|tv| Value::from(tv.value)).collect();
+        let values: Vec<_> = typed_params
+            .into_iter()
+            .map(|tv| Value::from(tv.value))
+            .collect();
         let params = values
             .iter()
             .map(|param| param as &(dyn ToSql + Sync))
@@ -426,6 +422,54 @@ impl toasty_core::driver::Connection for Connection {
     }
 
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
+        let serializer = sql::Serializer::postgresql(&schema.db);
+
+        // Create PostgreSQL enum types before creating tables.
+        // Collect unique enum types across all columns.
+        let mut created_enum_types = std::collections::HashSet::new();
+        for table in &schema.db.tables {
+            for column in &table.columns {
+                if let toasty_core::schema::db::Type::Enum(type_enum) = &column.storage_ty
+                    && let Some(name) = &type_enum.name
+                    && created_enum_types.insert(type_enum.name.clone())
+                {
+                    // Drop any existing enum type first to avoid "already exists" errors
+                    // during test runs or schema resets.
+                    let drop_sql = format!("DROP TYPE IF EXISTS \"{}\" CASCADE;", name);
+                    self.client
+                        .execute(&drop_sql, &[])
+                        .await
+                        .map_err(toasty_core::Error::driver_operation_failed)?;
+
+                    let sql = serializer.serialize(&sql::Statement::create_enum_type(type_enum));
+
+                    tracing::debug!(enum_type = ?type_enum.name, "creating enum type");
+                    self.client
+                        .execute(&sql, &[])
+                        .await
+                        .map_err(toasty_core::Error::driver_operation_failed)?;
+
+                    // Query pg_type for the OID and cache a custom Type so that
+                    // prepare_typed can bind enum parameters with the correct OID.
+                    let oid_row = self
+                        .client
+                        .query_one("SELECT oid FROM pg_type WHERE typname = $1", &[name])
+                        .await
+                        .map_err(toasty_core::Error::driver_operation_failed)?;
+                    let oid: u32 = oid_row.get(0);
+                    let variants: Vec<String> =
+                        type_enum.variants.iter().map(|v| v.name.clone()).collect();
+                    let pg_type = tokio_postgres::types::Type::new(
+                        name.clone(),
+                        oid,
+                        tokio_postgres::types::Kind::Enum(variants),
+                        "public".to_string(),
+                    );
+                    self.enum_types.insert(name.clone(), pg_type);
+                }
+            }
+        }
+
         for table in &schema.db.tables {
             tracing::debug!(table = %table.name, "creating table");
             self.create_table(&schema.db, table).await?;
