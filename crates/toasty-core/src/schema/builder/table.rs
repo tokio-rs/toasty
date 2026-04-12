@@ -26,6 +26,9 @@ struct BuildTableFromModels<'a> {
     /// When true, column names should be prefixed with their associated model
     /// names
     prefix_table_names: bool,
+
+    /// Optional prefix for database object names (tables, enum types).
+    name_prefix: Option<String>,
 }
 
 /// Computes a model's mapping, creating table columns and mapping expressions
@@ -43,6 +46,8 @@ struct BuildMapping<'a> {
     /// Model-name prefix used when multiple models share one table, separated
     /// from the rest of the column name with `__`. None for single-model tables.
     schema_prefix: Option<String>,
+    /// Optional prefix for database object names (enum types).
+    name_prefix: Option<String>,
     next_bit: usize,
     lowering_columns: Vec<ColumnId>,
     model_to_table: Vec<stmt::Expr>,
@@ -134,6 +139,7 @@ impl BuildSchema<'_> {
                 table,
                 mapping: &mut self.mapping,
                 prefix_table_names: models.len() > 1,
+                name_prefix: self.builder.table_name_prefix.clone(),
             }
             .build(models[0])?;
         }
@@ -183,6 +189,7 @@ impl BuildTableFromModels<'_> {
             table: self.table,
             mapping: self.mapping.model_mut(model),
             schema_prefix,
+            name_prefix: self.name_prefix.clone(),
             next_bit: 0,
             lowering_columns: vec![],
             model_to_table: vec![],
@@ -787,12 +794,20 @@ impl<'a, 'b> MapField<'a, 'b> {
     /// `field.nullable || self.in_enum_variant`, and auto-increment from
     /// `field.is_auto_increment()`.
     fn create_column(&mut self, field: &app::Field, primitive: &app::FieldPrimitive) -> ColumnId {
-        let storage_ty = db::Type::from_app(
+        let mut storage_ty = db::Type::from_app(
             &primitive.ty,
             primitive.storage_ty.as_ref(),
             &self.build.db.storage_types,
         )
         .expect("unsupported storage type");
+
+        // Prefix native enum type names so they don't collide across test runs
+        // or multi-tenant deployments.
+        if let db::Type::Enum(ref mut type_enum) = storage_ty {
+            if let (Some(prefix), Some(name)) = (&self.build.name_prefix, &mut type_enum.name) {
+                *name = format!("{prefix}{name}");
+            }
+        }
 
         let id = ColumnId {
             table: self.build.table.id,

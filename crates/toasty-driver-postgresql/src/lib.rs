@@ -14,6 +14,7 @@
 mod statement_cache;
 #[cfg(feature = "tls")]
 mod tls;
+mod r#type;
 mod value;
 
 pub(crate) use value::Value;
@@ -32,7 +33,7 @@ use toasty_sql::{self as sql};
 use tokio_postgres::{Client, Config, Socket, tls::MakeTlsConnect, types::ToSql};
 use url::Url;
 
-use crate::statement_cache::StatementCache;
+use crate::{statement_cache::StatementCache, r#type::TypeExt};
 
 /// A PostgreSQL [`Driver`] that connects via `tokio-postgres`.
 ///
@@ -336,13 +337,18 @@ impl toasty_core::driver::Connection for Connection {
 
         let width = sql.returning_len();
 
-        let mut param_values: Vec<toasty_core::stmt::Value> = Vec::new();
+        let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
         let sql_as_str =
-            sql::Serializer::postgresql(&schema.db).serialize_with_params(&sql, &mut param_values);
+            sql::Serializer::postgresql(&schema.db).serialize_with_params(&sql, &mut params);
 
-        tracing::debug!(db.system = "postgresql", db.statement = %sql_as_str, params = param_values.len(), "executing SQL");
+        tracing::debug!(db.system = "postgresql", db.statement = %sql_as_str, params = params.len(), "executing SQL");
 
-        let values: Vec<_> = param_values.into_iter().map(Value::from).collect();
+        let param_types = params
+            .iter()
+            .map(|typed_value| typed_value.infer_ty().to_postgres_type())
+            .collect::<Vec<_>>();
+
+        let values: Vec<_> = params.into_iter().map(|tv| Value::from(tv.value)).collect();
         let params = values
             .iter()
             .map(|param| param as &(dyn ToSql + Sync))
@@ -350,7 +356,7 @@ impl toasty_core::driver::Connection for Connection {
 
         let statement = self
             .statement_cache
-            .prepare(&mut self.client, &sql_as_str)
+            .prepare_typed(&mut self.client, &sql_as_str, &param_types)
             .await
             .map_err(toasty_core::Error::driver_operation_failed)?;
 
@@ -407,9 +413,17 @@ impl toasty_core::driver::Connection for Connection {
         for table in &schema.db.tables {
             for column in &table.columns {
                 if let toasty_core::schema::db::Type::Enum(type_enum) = &column.storage_ty
-                    && type_enum.name.is_some()
+                    && let Some(name) = &type_enum.name
                     && created_enum_types.insert(type_enum.name.clone())
                 {
+                    // Drop any existing enum type first to avoid "already exists" errors
+                    // during test runs or schema resets.
+                    let drop_sql = format!("DROP TYPE IF EXISTS \"{}\" CASCADE;", name);
+                    self.client
+                        .execute(&drop_sql, &[])
+                        .await
+                        .map_err(toasty_core::Error::driver_operation_failed)?;
+
                     let sql = serializer.serialize(&sql::Statement::create_enum_type(type_enum));
 
                     tracing::debug!(enum_type = ?type_enum.name, "creating enum type");

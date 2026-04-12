@@ -19,8 +19,9 @@ impl<'a> ToSql for TypeHintedValue<'a> {
             // For nested records/lists, recurse normally (they handle their own fields)
             self.value.to_sql(cx, f);
         } else {
-            // For scalar values, use the type hint
-            let placeholder = f.params.push(self.value, type_hint.as_ref());
+            // For scalar values, use the type hint and enum cast
+            let mut placeholder = f.params.push(self.value, type_hint.as_ref());
+            placeholder.cast = f.insert_column_enum_cast(self.field_index, cx.schema());
             fmt!(cx, f, placeholder);
         }
     }

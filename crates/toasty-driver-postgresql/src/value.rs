@@ -4,6 +4,29 @@ use tokio_postgres::{
     types::{IsNull, Kind, ToSql, Type, private::BytesMut, to_sql_checked},
 };
 
+/// Wrapper for reading string values from PostgreSQL enum columns.
+///
+/// The standard `String::FromSql::accepts()` rejects custom enum types.
+/// This wrapper accepts `Kind::Enum` types and reads the value as UTF-8 text.
+struct EnumString(String);
+
+impl<'a> postgres_types::FromSql<'a> for EnumString {
+    fn from_sql(
+        _ty: &Type,
+        raw: &'a [u8],
+    ) -> std::result::Result<Self, Box<dyn std::error::Error + Sync + Send>> {
+        Ok(EnumString(
+            std::str::from_utf8(raw)
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Sync + Send>)?
+                .to_string(),
+        ))
+    }
+
+    fn accepts(ty: &Type) -> bool {
+        matches!(ty.kind(), Kind::Enum(_))
+    }
+}
+
 #[derive(Debug)]
 pub struct Value(pub(crate) CoreValue);
 
@@ -143,8 +166,12 @@ impl Value {
             }
         } else if matches!(column.type_().kind(), Kind::Enum(_)) {
             // Native database enum types (CREATE TYPE ... AS ENUM) are read as strings.
-            let v = get_or_return_null!(String);
-            stmt::Value::String(v)
+            // We use EnumString instead of String because String::FromSql::accepts()
+            // rejects custom enum types.
+            match row.get::<usize, Option<EnumString>>(index) {
+                Some(EnumString(v)) => stmt::Value::String(v),
+                None => return Self(stmt::Value::Null),
+            }
         } else {
             todo!(
                 "implement PostgreSQL to toasty conversion for `{:#?}`",

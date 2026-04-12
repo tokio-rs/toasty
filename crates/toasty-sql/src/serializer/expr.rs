@@ -24,7 +24,8 @@ impl<'a> ToSql for TypeHintedField<'a> {
 
         // If this is a Value expr with a type hint, serialize with the hint
         if let (stmt::Expr::Value(value), Some(type_hint)) = (self.expr, type_hint) {
-            let placeholder = f.params.push(value, Some(&type_hint));
+            let mut placeholder = f.params.push(value, Some(&type_hint));
+            placeholder.cast = f.insert_column_enum_cast(self.field_index, cx.schema());
             fmt!(cx, f, placeholder);
         } else {
             // Other expr types (including Default) serialize normally
@@ -43,7 +44,26 @@ impl ToSql for &stmt::Expr {
                 assert!(!expr.lhs.is_value_null());
                 assert!(!expr.rhs.is_value_null());
 
-                fmt!(cx, f, expr.lhs " " expr.op " " expr.rhs);
+                // For PostgreSQL native enums: if one side is an enum column and the
+                // other is a value, cast the value to the enum type.
+                // lhs_cast set → LHS is enum column → cast RHS value
+                // rhs_cast set → RHS is enum column → cast LHS value
+                let lhs_cast = f.enum_cast_for_column_ref(&expr.lhs, cx);
+                let rhs_cast = f.enum_cast_for_column_ref(&expr.rhs, cx);
+
+                if let (Some(cast), stmt::Expr::Value(value)) = (rhs_cast, &*expr.lhs) {
+                    // RHS is enum column, LHS is a value → cast LHS
+                    let mut placeholder = f.params.push(value, None);
+                    placeholder.cast = Some(cast);
+                    fmt!(cx, f, placeholder " " expr.op " " expr.rhs);
+                } else if let (Some(cast), stmt::Expr::Value(value)) = (lhs_cast, &*expr.rhs) {
+                    // LHS is enum column, RHS is a value → cast RHS
+                    let mut placeholder = f.params.push(value, None);
+                    placeholder.cast = Some(cast);
+                    fmt!(cx, f, expr.lhs " " expr.op " " placeholder);
+                } else {
+                    fmt!(cx, f, expr.lhs " " expr.op " " expr.rhs);
+                }
             }
             stmt::Expr::Exists(expr) => {
                 f.depth += 1;
@@ -66,7 +86,41 @@ impl ToSql for &stmt::Expr {
                 fmt!(cx, f, Ident(name));
             }
             stmt::Expr::InList(expr) => {
-                fmt!(cx, f, expr.expr " IN " expr.list);
+                // For PostgreSQL native enums, cast each list item to the enum type.
+                let cast = f.enum_cast_for_column_ref(&expr.expr, cx);
+                if let (Some(cast), stmt::Expr::List(list)) = (&cast, &*expr.list) {
+                    fmt!(cx, f, expr.expr " IN ");
+                    f.dst.push('(');
+                    for (i, item) in list.items.iter().enumerate() {
+                        if i > 0 {
+                            f.dst.push_str(", ");
+                        }
+                        if let stmt::Expr::Value(value) = item {
+                            let mut placeholder = f.params.push(value, None);
+                            placeholder.cast = Some(cast.clone());
+                            fmt!(cx, f, placeholder);
+                        } else {
+                            item.to_sql(cx, f);
+                        }
+                    }
+                    f.dst.push(')');
+                } else if let (Some(cast), stmt::Expr::Value(stmt::Value::List(values))) =
+                    (&cast, &*expr.list)
+                {
+                    fmt!(cx, f, expr.expr " IN ");
+                    f.dst.push('(');
+                    for (i, value) in values.iter().enumerate() {
+                        if i > 0 {
+                            f.dst.push_str(", ");
+                        }
+                        let mut placeholder = f.params.push(value, None);
+                        placeholder.cast = Some(cast.clone());
+                        fmt!(cx, f, placeholder);
+                    }
+                    f.dst.push(')');
+                } else {
+                    fmt!(cx, f, expr.expr " IN " expr.list);
+                }
             }
             stmt::Expr::InSubquery(expr) => {
                 fmt!(cx, f, expr.expr " IN (" expr.query ")");
