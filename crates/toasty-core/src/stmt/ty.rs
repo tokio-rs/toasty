@@ -120,6 +120,10 @@ pub enum Type {
     /// A byte array, more efficient than `List(U8)`.
     Bytes,
 
+    /// A JSON-encoded string stored as a database JSON column.
+    /// Used for fields with `#[serialize(json)]` attribute.
+    Json,
+
     /// A fixed-precision decimal number.
     /// See [`rust_decimal::Decimal`].
     #[cfg(feature = "rust_decimal")]
@@ -242,6 +246,11 @@ impl Type {
         matches!(self, Self::Bytes)
     }
 
+    /// Returns `true` if this is [`Type::Json`].
+    pub fn is_json(&self) -> bool {
+        matches!(self, Self::Json)
+    }
+
     /// Returns `true` if this is [`Type::Decimal`] (requires `rust_decimal` feature).
     pub fn is_decimal(&self) -> bool {
         #[cfg(feature = "rust_decimal")]
@@ -332,6 +341,8 @@ impl Type {
         Ok(match (value, self) {
             // Identity
             (value @ Value::String(_), Self::String) => value,
+            // String is compatible with Json (identity cast)
+            (value @ Value::String(_), Self::Json) => value,
             // String <-> Uuid
             (Value::Uuid(value), Self::String) => Value::String(value.to_string()),
             (Value::String(value), Self::Uuid) => {
@@ -408,6 +419,8 @@ impl Type {
             // Simple types must match exactly
             (Type::Bool, Type::Bool) => true,
             (Type::String, Type::String) => true,
+            // A JSON-encoded string is assignable to a Json type
+            (Type::String, Type::Json) => true,
             (Type::I8, Type::I8) => true,
             (Type::I16, Type::I16) => true,
             (Type::I32, Type::I32) => true,
@@ -418,6 +431,7 @@ impl Type {
             (Type::U64, Type::U64) => true,
             (Type::Uuid, Type::Uuid) => true,
             (Type::Bytes, Type::Bytes) => true,
+            (Type::Json, Type::Json) => true,
             (Type::Unit, Type::Unit) => true,
             (Type::Unknown, Type::Unknown) => true,
 

@@ -39,9 +39,10 @@ jiff = { workspace = true, optional = true }
 lru.workspace = true
 tracing.workspace = true
 percent-encoding.workspace = true
-postgres-types.workspace = true
+postgres-types = { workspace = true, features = ["with-serde_json-1"] }
 tokio.workspace = true
 tokio-postgres.workspace = true
+serde_json.workspace = true
 uuid.workspace = true
 url.workspace = true
 rustls = { workspace = true, optional = true }

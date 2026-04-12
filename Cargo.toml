@@ -22,6 +22,7 @@ members = [
     "examples/hello-toasty",
     "examples/todo-with-cli",
     "examples/user-has-one-profile",
+    "examples/hi-jsonb",
 
     # Tests
     "tests",
@@ -88,7 +89,10 @@ mysql_async = { version = "0.36.2", default-features = false, features = [
 pulldown-cmark = { version = "0.13", default-features = false }
 pluralizer = "0.5.0"
 percent-encoding = "2.3.2"
-postgres-types = { version = "0.2.13", features = ["with-uuid-1", "array-impls"] }
+postgres-types = { version = "0.2.13", features = [
+    "with-uuid-1",
+    "array-impls",
+] }
 pretty_assertions = "1.4.1"
 proc-macro2 = "1.0.106"
 quote = "1.0.45"
@@ -106,13 +110,19 @@ proptest = "1"
 tokio = { version = "1.50", features = ["full"] }
 tokio-postgres = "0.7.17"
 tokio-rustls = { version = "0.26", default-features = false }
-rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }
+rustls = { version = "0.23", default-features = false, features = [
+    "std",
+    "ring",
+] }
 const-oid = { version = "0.9.6", default-features = false, features = ["db"] }
 sha2 = { version = "0.11", default-features = false }
 x509-cert = { version = "0.2.5", default-features = false, features = ["std"] }
 rustls-platform-verifier = "0.6"
 rustls-pemfile = "2"
-rustls-webpki = { version = "0.103", default-features = false, features = ["alloc", "std"] }
+rustls-webpki = { version = "0.103", default-features = false, features = [
+    "alloc",
+    "std",
+] }
 tokio-stream = { version = "0.1.18", default-features = false }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

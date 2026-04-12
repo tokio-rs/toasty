@@ -44,6 +44,13 @@ impl Value {
                 ),
                 _ => stmt::Value::String(v), // Default to string
             }
+        } else if column.type_() == &Type::JSON {
+            // tokio_postgres + postgres-types with serde_json support
+            let v = get_or_return_null!(serde_json::Value);
+            match expected_ty {
+                stmt::Type::Json => stmt::Value::String(v.to_string()),
+                _ => stmt::Value::String(v.to_string()),
+            }
         } else if column.type_() == &Type::BOOL {
             stmt::Value::Bool(get_or_return_null!(bool))
         } else if column.type_() == &Type::INT2 {
@@ -193,6 +200,7 @@ impl ToSql for Value {
                 (*value as i64).to_sql(ty, out)
             }
             (stmt::Value::Null, _) => Ok(IsNull::Yes),
+            (stmt::Value::String(value), &Type::JSON) => value.to_sql(ty, out),
             (stmt::Value::String(value), _) => value.to_sql(ty, out),
             (stmt::Value::Bytes(value), &Type::BYTEA) => value.to_sql(ty, out),
             (stmt::Value::Uuid(value), &Type::UUID) => value.to_sql(ty, out),
@@ -217,6 +225,7 @@ impl ToSql for Value {
         INT8,
         TEXT,
         VARCHAR,
+        JSON,
         BYTEA,
         UUID,
         NUMERIC,

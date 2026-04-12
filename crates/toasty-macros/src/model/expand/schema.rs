@@ -119,8 +119,8 @@ impl Expand<'_> {
                             nullable = quote!(#nullable_lit);
                             field_ty = quote!(#toasty::core::schema::app::FieldTy::Primitive(
                                 #toasty::core::schema::app::FieldPrimitive {
-                                    ty: #toasty::core::stmt::Type::String,
-                                    storage_ty: #storage_ty,
+                                    ty: #toasty::core::stmt::Type::Json,
+                                    storage_ty: Some(#toasty::core::schema::db::Type::Custom("JSON".to_string())),
                                     serialize: #serialize_format,
                                 }
                             ));

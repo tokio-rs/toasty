@@ -1,0 +1,23 @@
+[package]
+name = "example-hello-jsonb"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+publish = false
+
+
+[dependencies]
+toasty.workspace = true
+tokio.workspace = true
+
+serde = { version = "1", features = ["derive"] }
+jiff = { version = "0.2", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "v7", "fast-rng", "serde"] }
+
+
+toasty.features = ["postgresql", "jiff", "serde"]
+
+[lints]
+workspace = true
