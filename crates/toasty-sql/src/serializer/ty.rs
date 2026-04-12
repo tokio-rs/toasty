@@ -1,11 +1,11 @@
 use crate::serializer::ExprContext;
 
-use super::{Flavor, Params, ToSql};
+use super::{Flavor, ToSql};
 
 use toasty_core::schema::db;
 
 impl ToSql for &db::Type {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         match self {
             db::Type::Boolean => fmt!(cx, f, "BOOLEAN"),
             db::Type::Integer(1..=2) => fmt!(cx, f, "SMALLINT"),
@@ -101,9 +101,6 @@ impl ToSql for &db::Type {
                 Flavor::Mysql => {
                     use toasty_core::stmt::Value;
 
-                    let prev = f.bind_params;
-                    f.bind_params = false;
-
                     f.dst.push_str("ENUM(");
                     for (i, variant) in type_enum.variants.iter().enumerate() {
                         if i > 0 {
@@ -112,8 +109,6 @@ impl ToSql for &db::Type {
                         Value::String(variant.name.clone()).to_sql(cx, f);
                     }
                     f.dst.push(')');
-
-                    f.bind_params = prev;
                 }
                 // SQLite: TEXT column (CHECK constraint added in ColumnDef).
                 Flavor::Sqlite => fmt!(cx, f, "TEXT"),

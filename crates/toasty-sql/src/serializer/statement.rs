@@ -1,6 +1,6 @@
 use std::mem;
 
-use super::{ColumnAlias, Comma, Delimited, Ident, Params, ToSql};
+use super::{ColumnAlias, Comma, Delimited, Ident, ToSql};
 
 use crate::{
     serializer::{ExprContext, Flavor},
@@ -11,7 +11,7 @@ use toasty_core::{schema::db, stmt::SourceTableId};
 struct ColumnsWithConstraints<'a>(&'a stmt::CreateTable);
 
 impl ToSql for ColumnsWithConstraints<'_> {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         // SQLite needs the PK specified with the auto increment
         let trailing_pk = if f.serializer.is_sqlite() {
             // Sqlite only supports auto incrementing columns if they are the only primary key.
@@ -61,7 +61,7 @@ impl ToSql for ColumnsWithConstraints<'_> {
 }
 
 impl ToSql for &stmt::CreateIndex {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         let index = f.serializer.index(self.index);
         let table = f.serializer.table(self.on);
         let index_name = Ident(&index.name);
@@ -79,7 +79,7 @@ impl ToSql for &stmt::CreateIndex {
 }
 
 impl ToSql for &stmt::AddColumn {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         let table = f.serializer.table(self.table);
         let table_name = Ident(&table.name);
 
@@ -93,7 +93,7 @@ impl ToSql for &stmt::AddColumn {
 }
 
 impl ToSql for &stmt::AlterColumn {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         let table = f.serializer.table(self.id.table);
         let table_name = Ident(&table.name);
 
@@ -198,7 +198,7 @@ impl ToSql for &stmt::AlterColumn {
 }
 
 impl ToSql for &stmt::AlterTable {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         match &self.action {
             stmt::AlterTableAction::RenameTo(new_name) => {
                 fmt!(cx, f, "ALTER TABLE " self.name " RENAME TO " new_name);
@@ -208,7 +208,7 @@ impl ToSql for &stmt::AlterTable {
 }
 
 impl ToSql for &stmt::CopyTable {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         let target_cols = Comma(self.columns.iter().map(|(target, _)| target));
         let source_cols = Comma(self.columns.iter().map(|(_, source)| source));
         fmt!(cx, f, "INSERT INTO " self.target " (" target_cols ") SELECT " source_cols " FROM " self.source);
@@ -216,7 +216,7 @@ impl ToSql for &stmt::CopyTable {
 }
 
 impl ToSql for &stmt::CreateTable {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         let table = f.serializer.table(self.table);
         let name = Ident(&table.name);
         let columns = ColumnsWithConstraints(self);
@@ -231,7 +231,7 @@ impl ToSql for &stmt::CreateTable {
 }
 
 impl ToSql for &stmt::CreateType {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         use toasty_core::stmt::Value;
 
         let name = self
@@ -241,9 +241,6 @@ impl ToSql for &stmt::CreateType {
             .expect("CREATE TYPE requires a type name");
         let name = Ident(name);
 
-        let prev = f.bind_params;
-        f.bind_params = false;
-
         fmt!(cx, f, "CREATE TYPE " name " AS ENUM (");
         for (i, variant) in self.ty.variants.iter().enumerate() {
             if i > 0 {
@@ -252,29 +249,22 @@ impl ToSql for &stmt::CreateType {
             Value::String(variant.name.clone()).to_sql(cx, f);
         }
         f.dst.push(')');
-
-        f.bind_params = prev;
     }
 }
 
 impl ToSql for &stmt::AlterType {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         use toasty_core::stmt::Value;
 
         let name = Ident(&self.type_name);
 
-        let prev = f.bind_params;
-        f.bind_params = false;
-
         fmt!(cx, f, "ALTER TYPE " name " ADD VALUE ");
         Value::String(self.variant.name.clone()).to_sql(cx, f);
-
-        f.bind_params = prev;
     }
 }
 
 impl ToSql for &stmt::Delete {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         let prev = mem::replace(&mut f.alias, true);
 
         assert!(self.returning.is_none());
@@ -289,7 +279,7 @@ impl ToSql for &stmt::Delete {
 }
 
 impl ToSql for &stmt::Filter {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         if let Some(expr) = &self.expr {
             fmt!(&cx, f, " WHERE " expr);
         }
@@ -297,7 +287,7 @@ impl ToSql for &stmt::Filter {
 }
 
 impl ToSql for &stmt::Direction {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         match self {
             stmt::Direction::Asc => fmt!(cx, f, "ASC"),
             stmt::Direction::Desc => fmt!(cx, f, "DESC"),
@@ -306,7 +296,7 @@ impl ToSql for &stmt::Direction {
 }
 
 impl ToSql for &stmt::DropColumn {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         let table = f.serializer.table(self.table);
         let table_name = Ident(&table.name);
         let if_exists = if self.if_exists { "IF EXISTS " } else { "" };
@@ -319,14 +309,14 @@ impl ToSql for &stmt::DropColumn {
 }
 
 impl ToSql for &stmt::DropIndex {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         let if_exists = if self.if_exists { "IF EXISTS " } else { "" };
         fmt!(cx, f, "DROP INDEX " if_exists self.name);
     }
 }
 
 impl ToSql for &stmt::Pragma {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         if !f.serializer.is_sqlite() {
             panic!("\"PRAGMA\" statements only supported in SQLite");
         }
@@ -338,14 +328,14 @@ impl ToSql for &stmt::Pragma {
 }
 
 impl ToSql for &stmt::DropTable {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         let if_exists = if self.if_exists { "IF EXISTS " } else { "" };
         fmt!(cx, f, "DROP TABLE " if_exists self.name);
     }
 }
 
 impl ToSql for &stmt::Insert {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         // Create a new expression scope to serialize the statement
         let cx = cx.scope(self);
 
@@ -360,27 +350,19 @@ impl ToSql for &stmt::Insert {
             );
         }
 
-        // Set insert context to provide column type information for VALUES
-        let insert_ctx = match &self.target {
-            stmt::InsertTarget::Table(table) => Some(crate::serializer::InsertContext {
-                table_id: table.table,
-                columns: table.columns.clone(),
-            }),
-            _ => None,
-        };
-        let prev_insert_context = f.insert_context.take();
-        f.insert_context = insert_ctx;
+        let prev_in_insert = f.in_insert;
+        f.in_insert = true;
 
         fmt!(
             &cx, f, "INSERT INTO " self.target " " self.source returning
         );
 
-        f.insert_context = prev_insert_context;
+        f.in_insert = prev_in_insert;
     }
 }
 
 impl ToSql for &stmt::InsertTarget {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         match self {
             stmt::InsertTarget::Table(insert_table) => {
                 let table_name = f.serializer.table_name(insert_table);
@@ -399,7 +381,7 @@ impl ToSql for &stmt::InsertTarget {
 }
 
 impl ToSql for &stmt::Limit {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         match self {
             stmt::Limit::Cursor(cursor) => {
                 assert!(
@@ -419,7 +401,7 @@ impl ToSql for &stmt::Limit {
 }
 
 impl ToSql for &stmt::Query {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         let prev = mem::replace(&mut f.alias, true);
         // Create a new expression scope to serialize the statement
         let cx = cx.scope(self);
@@ -441,7 +423,7 @@ impl ToSql for &stmt::Query {
 }
 
 impl ToSql for &stmt::ExprSet {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         match self {
             stmt::ExprSet::Select(expr) => expr.to_sql(cx, f),
             stmt::ExprSet::Values(expr) => expr.to_sql(cx, f),
@@ -452,7 +434,7 @@ impl ToSql for &stmt::ExprSet {
 }
 
 impl ToSql for &stmt::OrderBy {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         let order_by = Comma(&self.exprs);
 
         fmt!(cx, f, "ORDER BY " order_by);
@@ -460,7 +442,7 @@ impl ToSql for &stmt::OrderBy {
 }
 
 impl ToSql for &stmt::OrderByExpr {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         if let Some(order) = &self.order {
             fmt!(cx, f, self.expr " " order);
         } else {
@@ -470,7 +452,7 @@ impl ToSql for &stmt::OrderByExpr {
 }
 
 impl ToSql for &stmt::Returning {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         match self {
             stmt::Returning::Expr(stmt::Expr::Record(expr_record)) => {
                 let fields = expr_record
@@ -495,7 +477,7 @@ impl ToSql for &stmt::Returning {
 }
 
 impl ToSql for &stmt::Select {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         let source_table = self.source.as_table_unwrap();
 
         if source_table.from.is_empty() {
@@ -510,7 +492,7 @@ impl ToSql for &stmt::Select {
 }
 
 impl ToSql for &stmt::Lock {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         match self {
             stmt::Lock::Update => fmt!(cx, f, "FOR UPDATE"),
             stmt::Lock::Share => fmt!(cx, f, "FOR SHARE"),
@@ -519,7 +501,7 @@ impl ToSql for &stmt::Lock {
 }
 
 impl ToSql for &stmt::Source {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         match self {
             stmt::Source::Table(source_table) => {
                 source_table.to_sql(cx, f);
@@ -530,7 +512,7 @@ impl ToSql for &stmt::Source {
 }
 
 impl ToSql for &toasty_core::stmt::Statement {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         use toasty_core::stmt::Statement::*;
 
         f.depth += 1;
@@ -547,7 +529,7 @@ impl ToSql for &toasty_core::stmt::Statement {
 }
 
 impl ToSql for &stmt::Statement {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         match self {
             stmt::Statement::AddColumn(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::AlterColumn(stmt) => stmt.to_sql(cx, f),
@@ -570,7 +552,7 @@ impl ToSql for &stmt::Statement {
 }
 
 impl ToSql for &stmt::SourceTable {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         // Iterate over each TableWithJoins in the from clause
         for (i, table_with_joins) in self.from.iter().enumerate() {
             if i > 0 {
@@ -608,7 +590,7 @@ impl ToSql for &stmt::SourceTable {
 }
 
 impl ToSql for &stmt::TableRef {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         match self {
             stmt::TableRef::Table(table_id) => {
                 let table_name = f.serializer.table_name(*table_id);
@@ -627,7 +609,7 @@ impl ToSql for &stmt::TableRef {
 }
 
 impl ToSql for &stmt::TableDerived {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         debug_assert!(f.alias);
 
         f.depth += 1;
@@ -642,13 +624,13 @@ struct TableAlias {
 }
 
 impl ToSql for &TableAlias {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         fmt!(cx, f, "tbl_" self.depth "_" self.table.0);
     }
 }
 
 impl ToSql for &stmt::Update {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         let prev = mem::replace(&mut f.alias, false);
 
         let table = f.serializer.schema.table(self.target.as_table_unwrap());
@@ -680,14 +662,9 @@ impl ToSql for &stmt::Update {
 }
 
 impl ToSql for (&db::Table, &stmt::Assignments) {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         let assignments: Vec<_> = self.1.iter().collect();
 
-        // TODO: ideally this could be used with TypeHintedField, but that is
-        // actually pretty brittle as it is tied to an insert context instead of
-        // being more generic. Being more generic would be ideal, but we really
-        // should extract a more generic "scope walker" kind of thing from the
-        // lowering logic.
         for (i, (projection, assignment)) in assignments.iter().enumerate() {
             if i > 0 {
                 f.dst.push_str(", ");
@@ -700,24 +677,16 @@ impl ToSql for (&db::Table, &stmt::Assignments) {
             column_name.to_sql(cx, f);
             f.dst.push_str(" = ");
 
-            // For value expressions, provide type hint from the column
             let stmt::Assignment::Set(expr) = assignment else {
                 todo!("only SET supported in SQL serialization; got {assignment:#?}");
             };
-            if let stmt::Expr::Value(stmt::Value::Null) = expr {
-                f.dst.push_str("NULL");
-            } else if let stmt::Expr::Value(value) = expr {
-                let placeholder = f.params.push(value, Some(&column.storage_ty));
-                placeholder.to_sql(cx, f);
-            } else {
-                expr.to_sql(cx, f);
-            }
+            expr.to_sql(cx, f);
         }
     }
 }
 
 impl ToSql for &stmt::UpdateTarget {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         match self {
             stmt::UpdateTarget::Table(table_id) => {
                 let table_name = f.serializer.table_name(*table_id);
@@ -734,10 +703,10 @@ impl ToSql for &stmt::UpdateTarget {
 }
 
 impl ToSql for &stmt::Values {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         // MySQL requires ROW() keyword for table value constructors when used
         // in subqueries, but NOT in INSERT statements
-        if f.serializer.is_mysql() && f.insert_context.is_none() {
+        if f.serializer.is_mysql() && !f.in_insert {
             let rows = Comma(self.rows.iter().map(|row| ("ROW(", row, ")")));
             fmt!(cx, f, "VALUES " rows)
         } else {

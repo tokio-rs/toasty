@@ -58,16 +58,6 @@ enum Ty {
     Unknown,
 }
 
-impl Ty {
-    /// Returns the scalar db::Type, if this is a Scalar variant.
-    fn as_scalar(&self) -> Option<&db::Type> {
-        match self {
-            Ty::Scalar(ty) => Some(ty),
-            _ => None,
-        }
-    }
-}
-
 /// Merge two inferred types, picking the more specific one at each position.
 fn merge(a: &Ty, b: &Ty) -> Ty {
     match (a, b) {
@@ -242,12 +232,12 @@ fn refine_update<T: std::fmt::Debug + Resolve>(
         for (projection, assignment) in update.assignments.iter() {
             if let stmt::Assignment::Set(expr) = assignment {
                 let steps = projection.as_slice();
-                if let Some(&col_idx) = steps.first() {
-                    if let Some(col) = db_table.columns.get(col_idx) {
-                        let expected = Ty::Scalar(col.storage_ty.clone());
-                        let _synth = synthesize(expr, cx, params);
-                        check(expr, &expected, params);
-                    }
+                if let Some(&col_idx) = steps.first()
+                    && let Some(col) = db_table.columns.get(col_idx)
+                {
+                    let expected = Ty::Scalar(col.storage_ty.clone());
+                    let _synth = synthesize(expr, cx, params);
+                    check(expr, &expected, params);
                 }
             }
         }

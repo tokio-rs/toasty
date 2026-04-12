@@ -72,7 +72,7 @@ pub async fn native_enum_crud_lifecycle(t: &mut Test) -> Result<()> {
     );
 
     // -- Update via query --
-    Task::filter_by_id(&t2.id)
+    Task::filter_by_id(t2.id)
         .update()
         .priority(Priority::Low)
         .exec(&mut db)

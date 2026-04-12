@@ -1,15 +1,15 @@
-use super::{Comma, Formatter, Params, ToSql};
+use super::{Comma, Formatter, ToSql};
 
 use crate::{serializer::ExprContext, stmt};
 
 impl ToSql for &stmt::With {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut Formatter<'_>) {
         fmt!(cx, f, "WITH " Comma(self.ctes.iter().enumerate()) " ");
     }
 }
 
 impl ToSql for (usize, &stmt::Cte) {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut Formatter<'_>) {
         let depth = f.depth;
 
         f.depth += 1;

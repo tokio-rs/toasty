@@ -803,10 +803,10 @@ impl<'a, 'b> MapField<'a, 'b> {
 
         // Prefix native enum type names so they don't collide across test runs
         // or multi-tenant deployments.
-        if let db::Type::Enum(ref mut type_enum) = storage_ty {
-            if let (Some(prefix), Some(name)) = (&self.build.name_prefix, &mut type_enum.name) {
-                *name = format!("{prefix}{name}");
-            }
+        if let db::Type::Enum(ref mut type_enum) = storage_ty
+            && let (Some(prefix), Some(name)) = (&self.build.name_prefix, &mut type_enum.name)
+        {
+            *name = format!("{prefix}{name}");
         }
 
         let id = ColumnId {

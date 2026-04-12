@@ -1,4 +1,4 @@
-use super::{Ident, Params, ToSql};
+use super::{Ident, ToSql};
 
 use crate::{
     serializer::{ExprContext, Flavor},
@@ -6,7 +6,7 @@ use crate::{
 };
 
 impl ToSql for &stmt::ColumnDef {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         let name = Ident(&self.name);
 
         fmt!(cx, f, name " " self.ty);
@@ -35,18 +35,11 @@ impl ToSql for &stmt::ColumnDef {
 }
 
 impl ToSql for &stmt::CheckConstraint {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         if let Some(name) = &self.name {
             fmt!(cx, f, "CONSTRAINT " Ident(&name.0) " ");
         }
 
-        // CHECK expressions are DDL — disable bind parameters so values are
-        // inlined as SQL literals.
-        let prev = f.bind_params;
-        f.bind_params = false;
-
         fmt!(cx, f, "CHECK (" self.expr ")");
-
-        f.bind_params = prev;
     }
 }
