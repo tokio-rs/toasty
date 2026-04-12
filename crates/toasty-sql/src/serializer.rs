@@ -82,30 +82,16 @@ impl<'a> Serializer<'a> {
     /// their parameters extracted (as `Expr::Arg` placeholders) before reaching
     /// the serializer.
     pub fn serialize(&self, stmt: &Statement) -> String {
-        let mut ret = String::new();
-
-        let mut fmt = Formatter {
-            serializer: self,
-            dst: &mut ret,
-            depth: 0,
-            alias: false,
-            in_insert: false,
-            arg_positions: Vec::new(),
-        };
-
-        let cx = ExprContext::new(self.schema);
-
-        stmt.to_sql(&cx, &mut fmt);
-
-        ret.push(';');
-        ret
+        self.serialize_with_arg_order(stmt).0
     }
 
     /// Serializes a [`Statement`] and returns both the SQL string and the order
     /// in which `Expr::Arg(n)` placeholders appear in the SQL.
     ///
-    /// This is needed by MySQL which uses positional `?` without indices — the
-    /// caller must reorder its params vec to match the occurrence order.
+    /// The arg order is needed by MySQL which uses positional `?` without
+    /// indices — the caller must reorder its params vec to match the occurrence
+    /// order. PostgreSQL and SQLite use indexed placeholders (`$1`, `?1`) so
+    /// they can ignore the arg order.
     pub fn serialize_with_arg_order(&self, stmt: &Statement) -> (String, Vec<usize>) {
         let mut ret = String::new();
 
