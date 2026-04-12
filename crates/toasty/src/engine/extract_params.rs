@@ -69,7 +69,7 @@ fn extract_values(stmt: &mut stmt::Statement, params: &mut Vec<TypedValue>) {
         match expr {
             // Scalar value → extract
             stmt::Expr::Value(value) if is_extractable_scalar(value) => {
-                let ty = db_type_from_value(value);
+                let ty = db::Type::from_value(value);
                 let position = params.len();
                 let value = std::mem::replace(value, stmt::Value::Null);
                 params.push(TypedValue { value, ty });
@@ -112,7 +112,7 @@ fn value_to_extracted_expr(value: &stmt::Value, params: &mut Vec<TypedValue>) ->
             stmt::Expr::List(stmt::ExprList { items })
         }
         scalar => {
-            let ty = db_type_from_value(scalar);
+            let ty = db::Type::from_value(scalar);
             let position = params.len();
             params.push(TypedValue {
                 value: scalar.clone(),
@@ -488,32 +488,3 @@ fn more_specific(a: &db::Type, b: &db::Type) -> db::Type {
 // ============================================================================
 // Helpers
 // ============================================================================
-
-/// Infer a `db::Type` from a `stmt::Value` (initial guess before refinement).
-fn db_type_from_value(value: &stmt::Value) -> db::Type {
-    match value {
-        stmt::Value::Bool(_) => db::Type::Boolean,
-        stmt::Value::I8(_) => db::Type::Integer(1),
-        stmt::Value::I16(_) => db::Type::Integer(2),
-        stmt::Value::I32(_) => db::Type::Integer(4),
-        stmt::Value::I64(_) => db::Type::Integer(8),
-        stmt::Value::U8(_) => db::Type::UnsignedInteger(1),
-        stmt::Value::U16(_) => db::Type::UnsignedInteger(2),
-        stmt::Value::U32(_) => db::Type::UnsignedInteger(4),
-        stmt::Value::U64(_) => db::Type::UnsignedInteger(8),
-        stmt::Value::String(_) => db::Type::Text,
-        stmt::Value::Uuid(_) => db::Type::Uuid,
-        stmt::Value::Bytes(_) => db::Type::Blob,
-        #[cfg(feature = "rust_decimal")]
-        stmt::Value::Decimal(_) => db::Type::Numeric(None),
-        #[cfg(feature = "jiff")]
-        stmt::Value::Timestamp(_) => db::Type::Timestamp(6),
-        #[cfg(feature = "jiff")]
-        stmt::Value::Date(_) => db::Type::Date,
-        #[cfg(feature = "jiff")]
-        stmt::Value::Time(_) => db::Type::Time(6),
-        #[cfg(feature = "jiff")]
-        stmt::Value::DateTime(_) => db::Type::DateTime(6),
-        _ => db::Type::Text,
-    }
-}
