@@ -80,6 +80,10 @@ pub struct Capability {
     /// PostgreSQL: true. SQLite/MySQL/DynamoDB: false (will fallback to TEXT).
     pub supports_jsonb: bool,
 
+    /// Whether the database supports JSON column type.
+    /// MySQL/PostgreSQL: true. SQLite/DynamoDB: false (will fallback to TEXT).
+    pub supports_json: bool,
+
     /// Whether the database's decimal type supports arbitrary precision.
     /// When false, the decimal type requires fixed precision and scale to be specified upfront.
     /// - PostgreSQL: true (NUMERIC supports arbitrary precision)
@@ -262,6 +266,7 @@ impl Capability {
         auto_increment: true,
         bigdecimal_implemented: false,
         supports_jsonb: false,
+        supports_json: false,
 
         native_varchar: true,
 
@@ -289,6 +294,7 @@ impl Capability {
         auto_increment: true,
         bigdecimal_implemented: false,
         supports_jsonb: true,
+        supports_json: true,
 
         // PostgreSQL has native date/time types
         native_timestamp: true,
@@ -315,6 +321,7 @@ impl Capability {
         auto_increment: true,
         bigdecimal_implemented: true,
         supports_jsonb: false,
+        supports_json: true,
 
         // MySQL has native date/time types
         native_timestamp: true,
@@ -343,6 +350,7 @@ impl Capability {
         auto_increment: false,
         bigdecimal_implemented: false,
         supports_jsonb: false,
+        supports_json: false,
         native_varchar: false,
 
         // DynamoDB does not have native date/time types

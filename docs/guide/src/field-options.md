@@ -354,8 +354,11 @@ in the database. The field type must implement `serde::Serialize` and
 
 ### JSON (text format)
 
-`#[serialize(json)]` serializes the value to a JSON text string. This works
-with all supported databases.
+`#[serialize(json)]` serializes the value to a JSON string. This works with
+databases that have native JSON column types (MySQL, PostgreSQL). For databases
+without native JSON support (SQLite, DynamoDB), Toasty automatically falls back
+to using `TEXT` instead, so the same model definition works across different
+databases.
 
 ```rust,ignore
 # use toasty::Model;
@@ -393,6 +396,10 @@ that support `varchar`.
 
 `#[serialize(jsonb)]` stores the value in PostgreSQL's `JSONB` column type.
 JSONB is a binary format that supports indexing and more efficient operations.
+
+For databases that don't support `JSONB`:
+- **MySQL**: Falls back to `JSON` column type (MySQL's native JSON support)
+- **SQLite/DynamoDB**: Falls back to `TEXT` column type
 
 ```rust,ignore
 # use toasty::Model;
@@ -450,9 +457,14 @@ assert_eq!(post.meta.version, 1);
 
 The default column type for `#[serialize(jsonb)]` is `JSONB`. When used with
 PostgreSQL, Toasty stores the value in a `JSONB` column (binary format with
-indexing support). For databases that don't support `JSONB` (SQLite, MySQL,
-DynamoDB), Toasty automatically falls back to using `TEXT` instead, so the
-same model definition works across different databases.
+indexing support). For databases that don't support `JSONB`, Toasty automatically
+falls back:
+
+- **MySQL**: Falls back to `JSON` column type
+- **SQLite/DynamoDB**: Falls back to `TEXT` column type
+
+Similarly, `#[serialize(json)]` uses `JSON` column type on MySQL and PostgreSQL,
+and falls back to `TEXT` on SQLite and DynamoDB.
 
 ```rust,ignore
 # use toasty::Model;
@@ -531,9 +543,11 @@ metadata: Option<HashMap<String, String>>,
 # }
 ```
 
-With databases that support `JSONB` (PostgreSQL), this creates a `JSONB` column.
-For databases that don't support `JSONB` (SQLite, MySQL, DynamoDB), Toasty
-falls back to `TEXT`. In both cases, the nullable behavior is the same.
+With databases that support `JSONB` (PostgreSQL), `#[serialize(jsonb)]`
+creates a `JSONB` column. With databases that support `JSON` but not `JSONB`
+(MySQL), `#[serialize(jsonb)]` falls back to `JSON`. For databases without
+native JSON/JSONB support (SQLite, DynamoDB), Toasty falls back to `TEXT`.
+In all cases, the nullable behavior is the same.
 
 With `nullable`:
 - `None` maps to SQL `NULL` in the database
@@ -553,7 +567,7 @@ Without `nullable`:
 | `#[update(expr)]` | Automatic value | Create and update |
 | `#[auto]` on `created_at` | Shorthand for `#[default(jiff::Timestamp::now())]` | Create only |
 | `#[auto]` on `updated_at` | Shorthand for `#[update(jiff::Timestamp::now())]` | Create and update |
-| `#[serialize(json)]` | Store as JSON text | Create and update |
+| `#[serialize(json)]` | Store as JSON (MySQL/PostgreSQL) or TEXT (fallback) | Create and update |
 | `#[serialize(jsonb)]` | Store as JSONB (PostgreSQL) or TEXT (fallback) | Create and update |
-| `#[serialize(json, nullable)]` | Store as JSON text with SQL NULL support | Create and update |
+| `#[serialize(json, nullable)]` | Store as JSON/TEXT with SQL NULL support | Create and update |
 | `#[serialize(jsonb, nullable)]` | Store as JSONB/TEXT with SQL NULL support | Create and update |

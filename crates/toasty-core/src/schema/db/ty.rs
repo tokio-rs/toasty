@@ -116,10 +116,18 @@ impl Type {
     ) -> Result<Type> {
         match hint {
             Some(ty) => {
-                // Handle JSONB fallback for databases that don't support it
+                // Handle JSON/JSONB fallback for databases that don't support them
                 if let Type::Custom(custom) = ty {
                     if custom == "JSONB" && !capability.supports_jsonb {
-                        // Fallback to TEXT for databases without JSONB support
+                        // For databases that support JSON (MySQL, PostgreSQL), fallback to JSON
+                        // For others (SQLite, DynamoDB), fallback to TEXT
+                        if capability.supports_json {
+                            return Ok(Type::Custom("JSON".to_string()));
+                        }
+                        return Ok(Type::Text);
+                    }
+                    if custom == "JSON" && !capability.supports_json {
+                        // Fallback to TEXT for databases without JSON support
                         return Ok(Type::Text);
                     }
                 }
