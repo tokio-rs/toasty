@@ -211,10 +211,8 @@ impl ToSql for Value {
             (stmt::Value::String(value), &Type::JSONB) => {
                 // JSONB requires binary format; parse as serde_json::Value first
                 // so tokio_postgres can serialize it correctly
-                let json_value: serde_json::Value =
-                    serde_json::from_str(value).map_err(|e| {
-                        format!("failed to parse JSON for JSONB column: {e}")
-                    })?;
+                let json_value: serde_json::Value = serde_json::from_str(value)
+                    .map_err(|e| format!("failed to parse JSON for JSONB column: {e}"))?;
                 json_value.to_sql(ty, out)
             }
             (stmt::Value::String(value), _) => value.to_sql(ty, out),
