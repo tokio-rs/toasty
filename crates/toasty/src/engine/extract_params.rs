@@ -198,9 +198,13 @@ fn refine_update(
         for (projection, assignment) in update.assignments.iter() {
             if let stmt::Assignment::Set(expr) = assignment {
                 let steps = projection.as_slice();
-                if let Some(&col_idx) = steps.first()
-                    && let Some(col) = db_table.columns.get(col_idx)
-                {
+                assert_eq!(
+                    steps.len(),
+                    1,
+                    "UPDATE assignment projection should be a single column index, got {steps:?}"
+                );
+                let col_idx = steps[0];
+                if let Some(col) = db_table.columns.get(col_idx) {
                     let expected = InferredType::Scalar(col.storage_ty.clone());
                     check(expr, &expected, params);
                 }
@@ -450,15 +454,33 @@ fn merge(a: &InferredType, b: &InferredType) -> InferredType {
 /// the value's natural type provides. For example, `Enum(..)` is more specific
 /// than `Text` because the value is a string but the column needs the enum OID.
 fn more_specific(a: &db::Type, b: &db::Type) -> db::Type {
+    if a == b {
+        return a.clone();
+    }
+
     match (a, b) {
         // Enum is more specific than Text (enum values are strings)
-        (db::Type::Enum(_), db::Type::Text) => a.clone(),
-        (db::Type::Text, db::Type::Enum(_)) => b.clone(),
+        (db::Type::Enum(_), db::Type::Text) | (db::Type::Text, db::Type::Enum(_)) => {
+            if matches!(a, db::Type::Enum(_)) { a } else { b }.clone()
+        }
         // VarChar is more specific than Text
-        (db::Type::VarChar(_), db::Type::Text) => a.clone(),
-        (db::Type::Text, db::Type::VarChar(_)) => b.clone(),
-        // Otherwise keep the first (they should be compatible)
-        _ => a.clone(),
+        (db::Type::VarChar(_), db::Type::Text) | (db::Type::Text, db::Type::VarChar(_)) => {
+            if matches!(a, db::Type::VarChar(_)) {
+                a
+            } else {
+                b
+            }
+            .clone()
+        }
+        // Numeric with precision is more specific than without
+        (db::Type::Numeric(Some(_)), db::Type::Numeric(None)) => a.clone(),
+        (db::Type::Numeric(None), db::Type::Numeric(Some(_))) => b.clone(),
+        // Timestamp/Time/DateTime — column precision overrides value default
+        (db::Type::Timestamp(_), db::Type::Timestamp(_)) => b.clone(),
+        (db::Type::Time(_), db::Type::Time(_)) => b.clone(),
+        (db::Type::DateTime(_), db::Type::DateTime(_)) => b.clone(),
+
+        _ => panic!("cannot pick more specific between incompatible types: {a:?} and {b:?}"),
     }
 }
 

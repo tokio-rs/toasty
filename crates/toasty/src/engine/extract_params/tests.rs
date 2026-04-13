@@ -339,6 +339,15 @@ fn merge_records_different_lengths_panics() {
     merge(&a, &b);
 }
 
+#[test]
+#[should_panic(expected = "incompatible types")]
+fn more_specific_incompatible_types_panics() {
+    use super::more_specific;
+
+    // Boolean and Integer are not compatible
+    more_specific(&db::Type::Boolean, &db::Type::Integer(8));
+}
+
 // ============================================================================
 // Helpers
 // ============================================================================
