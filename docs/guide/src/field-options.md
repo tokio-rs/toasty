@@ -348,8 +348,14 @@ struct Event {
 
 ## JSON serialization
 
-Use `#[serialize(json)]` to store a Rust value as a JSON string in the database.
-The field type must implement `serde::Serialize` and `serde::Deserialize`.
+Use `#[serialize(json)]` or `#[serialize(jsonb)]` to store a Rust value as JSON
+in the database. The field type must implement `serde::Serialize` and
+`serde::Deserialize`.
+
+### JSON (text format)
+
+`#[serialize(json)]` serializes the value to a JSON text string. This works
+with all supported databases.
 
 ```rust,ignore
 # use toasty::Model;
@@ -382,6 +388,69 @@ deserializes it back when reading. The default database column type is `TEXT`.
 You can override this with `#[column(type = ...)]` if needed — for example,
 `#[column(type = varchar(1000))]` to limit the stored JSON size on databases
 that support `varchar`.
+
+### JSONB (binary format, PostgreSQL only)
+
+`#[serialize(jsonb)]` stores the value in PostgreSQL's `JSONB` column type.
+JSONB is a binary format that supports indexing and more efficient operations.
+
+```rust,ignore
+# use toasty::Model;
+# use serde::{Serialize, Deserialize};
+# #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+# struct Metadata {
+#     version: u32,
+#     labels: Vec<String>,
+# }
+#[derive(Debug, toasty::Model)]
+struct Post {
+    #[key]
+    #[auto]
+    id: u64,
+
+    title: String,
+
+    #[serialize(jsonb)]
+    meta: Metadata,
+}
+```
+
+```rust,ignore
+# use toasty::Model;
+# use serde::{Serialize, Deserialize};
+# #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+# struct Metadata {
+#     version: u32,
+#     labels: Vec<String>,
+# }
+# #[derive(Debug, toasty::Model)]
+# struct Post {
+#     #[key]
+#     #[auto]
+#     id: u64,
+#     title: String,
+#     #[serialize(jsonb)]
+#     meta: Metadata,
+# }
+# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
+let post = toasty::create!(Post {
+    title: "Hello",
+    meta: Metadata {
+        version: 1,
+        labels: vec!["alpha".to_string()],
+    },
+})
+.exec(&mut db)
+.await?;
+
+assert_eq!(post.meta.version, 1);
+# Ok(())
+# }
+```
+
+The default column type for `#[serialize(jsonb)]` is `JSONB`. This format is
+PostgreSQL-specific — using it with SQLite or MySQL will fail during schema
+creation.
 
 ```rust,ignore
 # use toasty::Model;
@@ -422,9 +491,10 @@ assert_eq!(post.meta.version, 1);
 
 ### Nullable JSON fields
 
-By default, `#[serialize(json)]` creates a `NOT NULL` column. An `Option<T>`
-field with `#[serialize(json)]` serializes `None` as the JSON text `"null"` —
-the column still stores a non-null string.
+By default, `#[serialize(json)]` or `#[serialize(jsonb)]` creates a `NOT NULL`
+column. An `Option<T>` field with `#[serialize(json)]` or `#[serialize(jsonb)]`
+serializes `None` as the JSON text `"null"` — the column still stores a
+non-null string.
 
 To allow SQL `NULL` in the column, add the `nullable` modifier:
 
@@ -438,6 +508,23 @@ To allow SQL `NULL` in the column, add the `nullable` modifier:
 #     id: u64,
 #     title: String,
 #[serialize(json, nullable)]
+metadata: Option<HashMap<String, String>>,
+# }
+```
+
+You can combine `jsonb` with `nullable` for PostgreSQL:
+
+```rust,ignore
+# use toasty::Model;
+# use serde::{Serialize, Deserialize};
+# use std::collections::HashMap;
+# #[derive(Debug, toasty::Model)]
+# struct Post {
+#     #[key]
+#     #[auto]
+#     id: u64,
+#     title: String,
+#[serialize(jsonb, nullable)]
 metadata: Option<HashMap<String, String>>,
 # }
 ```
@@ -461,4 +548,6 @@ Without `nullable`:
 | `#[auto]` on `created_at` | Shorthand for `#[default(jiff::Timestamp::now())]` | Create only |
 | `#[auto]` on `updated_at` | Shorthand for `#[update(jiff::Timestamp::now())]` | Create and update |
 | `#[serialize(json)]` | Store as JSON text | Create and update |
+| `#[serialize(jsonb)]` | Store as PostgreSQL JSONB binary | Create and update |
 | `#[serialize(json, nullable)]` | Store as JSON text with SQL NULL support | Create and update |
+| `#[serialize(jsonb, nullable)]` | Store as JSONB with SQL NULL support (PostgreSQL) | Create and update |
