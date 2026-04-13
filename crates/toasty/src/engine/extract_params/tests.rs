@@ -183,7 +183,7 @@ fn synthesize_multi_step_projection() {
     // Given: Record([Text, Record([Integer(4), Boolean])])
     // Project [1, 0] should yield Integer(4)
 
-    use super::{InferredType, synthesize};
+    use super::{Ty, synthesize};
 
     let schema = test_schema();
 
@@ -222,8 +222,8 @@ fn synthesize_multi_step_projection() {
     let ty = synthesize(&project_expr, &cx, &mut params);
 
     assert!(
-        matches!(ty, InferredType::Scalar(db::Type::Integer(4))),
-        "expected Integer(4), got {:?}",
+        matches!(ty, Ty::Inferred(db::Type::Integer(4))),
+        "expected Inferred(Integer(4)), got {:?}",
         ty
     );
 }
@@ -290,11 +290,11 @@ fn synthesize_project_from_scalar_panics() {
 #[test]
 #[should_panic(expected = "incompatible")]
 fn merge_incompatible_structures_panics() {
-    use super::{InferredType, merge};
+    use super::{Ty, merge};
 
-    // Record vs Scalar
-    let a = InferredType::Record(vec![InferredType::Scalar(db::Type::Text)]);
-    let b = InferredType::Scalar(db::Type::Integer(8));
+    // Record vs Inferred scalar
+    let a = Ty::Record(vec![Ty::Inferred(db::Type::Text)]);
+    let b = Ty::Inferred(db::Type::Integer(8));
 
     merge(&a, &b);
 }
@@ -302,24 +302,33 @@ fn merge_incompatible_structures_panics() {
 #[test]
 #[should_panic(expected = "incompatible")]
 fn merge_records_different_lengths_panics() {
-    use super::{InferredType, merge};
+    use super::{Ty, merge};
 
-    let a = InferredType::Record(vec![InferredType::Scalar(db::Type::Text)]);
-    let b = InferredType::Record(vec![
-        InferredType::Scalar(db::Type::Text),
-        InferredType::Scalar(db::Type::Integer(8)),
+    let a = Ty::Record(vec![Ty::Inferred(db::Type::Text)]);
+    let b = Ty::Record(vec![
+        Ty::Inferred(db::Type::Text),
+        Ty::Inferred(db::Type::Integer(8)),
     ]);
 
     merge(&a, &b);
 }
 
 #[test]
-#[should_panic(expected = "incompatible types")]
-fn more_specific_incompatible_types_panics() {
-    use super::more_specific;
+fn merge_column_wins_over_inferred() {
+    use super::{Ty, merge};
 
-    // Boolean and Integer are not compatible
-    more_specific(&db::Type::Boolean, &db::Type::Integer(8));
+    let col = Ty::Column(db::Type::Enum(db::TypeEnum {
+        name: Some("status".to_string()),
+        variants: vec![],
+    }));
+    let inferred = Ty::Inferred(db::Type::Text);
+
+    // Column should win regardless of argument order
+    let result = merge(&col, &inferred);
+    assert!(result.is_column(), "expected Column, got {:?}", result);
+
+    let result = merge(&inferred, &col);
+    assert!(result.is_column(), "expected Column, got {:?}", result);
 }
 
 // ============================================================================

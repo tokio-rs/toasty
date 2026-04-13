@@ -13,6 +13,10 @@
 //! Synthesize and check happen together in a single recursive walk: each node
 //! synthesizes its children first, then comparison operators merge both sides
 //! and check them against the merged type.
+//!
+//! Types carry **provenance** (`Column` vs `Inferred`) so that schema-
+//! authoritative column types always win over value-inferred guesses during
+//! merging.
 
 use toasty_core::{
     driver::operation::TypedValue,
@@ -46,19 +50,36 @@ pub(crate) fn extract_params(stmt: &mut stmt::Statement, schema: &Schema) -> Vec
 
 /// The inferred database-level type of an expression node.
 ///
-/// Unlike `db::Type` which is scalar-only, this supports structured types
-/// (records, lists) so that type information can flow through composite
-/// expressions like `($value, $column) == ($column, $value)`.
+/// Each scalar type carries **provenance**: `Column` means the type came from
+/// the schema (authoritative), `Inferred` means it was guessed from the value.
+/// Column types always win when merging.
 #[derive(Debug, Clone)]
-enum InferredType {
-    /// A concrete scalar storage type.
-    Scalar(db::Type),
+enum Ty {
+    /// Type from a column reference or schema (authoritative).
+    Column(db::Type),
+    /// Type inferred from a value (initial guess — may be less specific).
+    Inferred(db::Type),
     /// A tuple of types (one per field).
-    Record(Vec<InferredType>),
+    Record(Vec<Ty>),
     /// A homogeneous list where all elements share a type.
-    List(Box<InferredType>),
+    List(Box<Ty>),
     /// Type could not be determined.
     Unknown,
+}
+
+impl Ty {
+    /// Extract the `db::Type`, regardless of provenance.
+    fn db_type(&self) -> Option<&db::Type> {
+        match self {
+            Ty::Column(ty) | Ty::Inferred(ty) => Some(ty),
+            _ => None,
+        }
+    }
+
+    /// Returns true if this type comes from the schema (authoritative).
+    fn is_column(&self) -> bool {
+        matches!(self, Ty::Column(_))
+    }
 }
 
 // ============================================================================
@@ -169,20 +190,18 @@ fn refine_insert(
     db_schema: &db::Schema,
     params: &mut [TypedValue],
 ) {
-    // Build expected type from column list
+    // Build expected type from column list (authoritative)
     let expected = match &insert.target {
         stmt::InsertTarget::Table(table) => {
             let db_table = &db_schema.tables[table.table.0];
-            let field_types: Vec<InferredType> = table
+            let field_types: Vec<Ty> = table
                 .columns
                 .iter()
-                .map(|col_id| {
-                    InferredType::Scalar(db_table.columns[col_id.index].storage_ty.clone())
-                })
+                .map(|col_id| Ty::Column(db_table.columns[col_id.index].storage_ty.clone()))
                 .collect();
-            InferredType::Record(field_types)
+            Ty::Record(field_types)
         }
-        _ => InferredType::Unknown,
+        _ => Ty::Unknown,
     };
 
     // Push column types down into each VALUES row
@@ -213,7 +232,7 @@ fn refine_update(
                 );
                 let col_idx = steps[0];
                 if let Some(col) = db_table.columns.get(col_idx) {
-                    let expected = InferredType::Scalar(col.storage_ty.clone());
+                    let expected = Ty::Column(col.storage_ty.clone());
                     check(expr, &expected, params);
                 }
             }
@@ -233,7 +252,6 @@ fn refine_query(query: &stmt::Query, cx: &Cx<'_>, params: &mut [TypedValue]) {
             refine_filter(&select.filter, &cx, params);
         }
         stmt::ExprSet::Values(values) => {
-            // Subquery VALUES (e.g., derived tables) — synthesize each row
             for row in &values.rows {
                 synthesize(row, &cx, params);
             }
@@ -251,32 +269,31 @@ fn refine_query(query: &stmt::Query, cx: &Cx<'_>, params: &mut [TypedValue]) {
 
 fn refine_filter(filter: &stmt::Filter, cx: &Cx<'_>, params: &mut [TypedValue]) {
     if let Some(expr) = &filter.expr {
-        // Synthesize triggers check internally for BinaryOp, InList, etc.
         synthesize(expr, cx, params);
     }
 }
 
 // ============================================================================
-// Synthesize (bottom-up) — returns the inferred type
+// Synthesize (bottom-up) — returns the inferred type with provenance
 // ============================================================================
 
 /// Compute the inferred type of an expression from its children.
 ///
 /// For comparison operators, this also triggers `check()` to push refined
 /// types down into both sides (bidirectional inference).
-fn synthesize(expr: &stmt::Expr, cx: &Cx<'_>, params: &mut [TypedValue]) -> InferredType {
+fn synthesize(expr: &stmt::Expr, cx: &Cx<'_>, params: &mut [TypedValue]) -> Ty {
     match expr {
-        // Arg — type comes from the extracted param
+        // Arg — type comes from the extracted param (inferred from value)
         stmt::Expr::Arg(arg) => {
-            let tv = &params[arg.position]; // panics if out of range
-            InferredType::Scalar(tv.ty.clone())
+            let tv = &params[arg.position];
+            Ty::Inferred(tv.ty.clone())
         }
 
-        // Column reference — resolve from schema
+        // Column reference — authoritative from schema
         stmt::Expr::Reference(expr_ref @ stmt::ExprReference::Column(_)) => {
             match cx.resolve_expr_reference(expr_ref) {
-                stmt::ResolvedRef::Column(col) => InferredType::Scalar(col.storage_ty.clone()),
-                _ => InferredType::Unknown,
+                stmt::ResolvedRef::Column(col) => Ty::Column(col.storage_ty.clone()),
+                _ => Ty::Unknown,
             }
         }
 
@@ -285,7 +302,7 @@ fn synthesize(expr: &stmt::Expr, cx: &Cx<'_>, params: &mut [TypedValue]) -> Infe
             let mut ty = synthesize(&project.base, cx, params);
             for &step in project.projection.as_slice() {
                 ty = match ty {
-                    InferredType::Record(fields) => {
+                    Ty::Record(fields) => {
                         assert!(
                             step < fields.len(),
                             "projection step {step} out of range for record with {} fields",
@@ -301,22 +318,22 @@ fn synthesize(expr: &stmt::Expr, cx: &Cx<'_>, params: &mut [TypedValue]) -> Infe
 
         // Record — synthesize each field
         stmt::Expr::Record(record) => {
-            let fields: Vec<InferredType> = record
+            let fields: Vec<Ty> = record
                 .fields
                 .iter()
                 .map(|f| synthesize(f, cx, params))
                 .collect();
-            InferredType::Record(fields)
+            Ty::Record(fields)
         }
 
         // List — synthesize each item, merge to a common type
         stmt::Expr::List(list) => {
-            let mut merged = InferredType::Unknown;
+            let mut merged = Ty::Unknown;
             for item in &list.items {
                 let item_ty = synthesize(item, cx, params);
                 merged = merge(&merged, &item_ty);
             }
-            InferredType::List(Box::new(merged))
+            Ty::List(Box::new(merged))
         }
 
         // BinaryOp (comparison) — synthesize both sides, merge, check both
@@ -326,35 +343,34 @@ fn synthesize(expr: &stmt::Expr, cx: &Cx<'_>, params: &mut [TypedValue]) -> Infe
             let merged = merge(&lhs_ty, &rhs_ty);
             check(&binary.lhs, &merged, params);
             check(&binary.rhs, &merged, params);
-            InferredType::Scalar(db::Type::Boolean)
+            Ty::Inferred(db::Type::Boolean)
         }
 
         // InList — synthesize expr, check list items against it
         stmt::Expr::InList(in_list) => {
             let expr_ty = synthesize(&in_list.expr, cx, params);
             synthesize(&in_list.list, cx, params);
-            // Check each list item against the expression's type
             check_list(&in_list.list, &expr_ty, params);
-            InferredType::Scalar(db::Type::Boolean)
+            Ty::Inferred(db::Type::Boolean)
         }
 
         // InSubquery — synthesize the expression, recurse into subquery
         stmt::Expr::InSubquery(in_sub) => {
             synthesize(&in_sub.expr, cx, params);
             refine_query(&in_sub.query, cx, params);
-            InferredType::Scalar(db::Type::Boolean)
+            Ty::Inferred(db::Type::Boolean)
         }
 
         // Exists — recurse into subquery
         stmt::Expr::Exists(exists) => {
             refine_query(&exists.subquery, cx, params);
-            InferredType::Scalar(db::Type::Boolean)
+            Ty::Inferred(db::Type::Boolean)
         }
 
-        // Nested statement — recurse into it for type refinement
+        // Nested statement
         stmt::Expr::Stmt(expr_stmt) => {
             refine_stmt(&expr_stmt.stmt, cx, cx.schema(), params);
-            InferredType::Unknown
+            Ty::Unknown
         }
 
         // Logical operators — recurse, return boolean
@@ -362,29 +378,29 @@ fn synthesize(expr: &stmt::Expr, cx: &Cx<'_>, params: &mut [TypedValue]) -> Infe
             for op in &and.operands {
                 synthesize(op, cx, params);
             }
-            InferredType::Scalar(db::Type::Boolean)
+            Ty::Inferred(db::Type::Boolean)
         }
         stmt::Expr::Or(or) => {
             for op in &or.operands {
                 synthesize(op, cx, params);
             }
-            InferredType::Scalar(db::Type::Boolean)
+            Ty::Inferred(db::Type::Boolean)
         }
         stmt::Expr::Not(not) => {
             synthesize(&not.expr, cx, params);
-            InferredType::Scalar(db::Type::Boolean)
+            Ty::Inferred(db::Type::Boolean)
         }
         stmt::Expr::IsNull(is_null) => {
             synthesize(&is_null.expr, cx, params);
-            InferredType::Scalar(db::Type::Boolean)
+            Ty::Inferred(db::Type::Boolean)
         }
 
         // Values that weren't extracted (Null, Default)
-        stmt::Expr::Value(stmt::Value::Null) => InferredType::Unknown,
-        stmt::Expr::Default => InferredType::Unknown,
+        stmt::Expr::Value(stmt::Value::Null) => Ty::Unknown,
+        stmt::Expr::Default => Ty::Unknown,
 
         // Anything else
-        _ => InferredType::Unknown,
+        _ => Ty::Unknown,
     }
 }
 
@@ -393,30 +409,35 @@ fn synthesize(expr: &stmt::Expr, cx: &Cx<'_>, params: &mut [TypedValue]) -> Infe
 // ============================================================================
 
 /// Push an expected type down into an expression. When it reaches `Arg(n)`,
-/// refine `params[n].ty` if the expected type is more specific.
-fn check(expr: &stmt::Expr, expected: &InferredType, params: &mut [TypedValue]) {
+/// update `params[n].ty` if the expected type has column provenance.
+fn check(expr: &stmt::Expr, expected: &Ty, params: &mut [TypedValue]) {
     match (expr, expected) {
-        // Arg — refine the param's type
-        (stmt::Expr::Arg(arg), InferredType::Scalar(expected_ty)) => {
+        // Arg — update the param's type if expected has column provenance
+        (stmt::Expr::Arg(arg), ty) if ty.db_type().is_some() => {
             if let Some(tv) = params.get_mut(arg.position) {
-                tv.ty = more_specific(&tv.ty, expected_ty);
+                if ty.is_column() {
+                    // Column type is authoritative — always use it
+                    tv.ty = ty.db_type().unwrap().clone();
+                }
+                // Inferred types don't override — the param's own inferred type
+                // from value extraction is just as good.
             }
         }
 
         // Record — check each field against its expected type
-        (stmt::Expr::Record(record), InferredType::Record(field_types)) => {
+        (stmt::Expr::Record(record), Ty::Record(field_types)) => {
             for (field, field_ty) in record.fields.iter().zip(field_types) {
                 check(field, field_ty, params);
             }
         }
 
         // List — check each item against the expected element type
-        (stmt::Expr::List(list), InferredType::List(elem_ty)) => {
+        (stmt::Expr::List(list), Ty::List(elem_ty)) => {
             for item in &list.items {
                 check(item, elem_ty, params);
             }
         }
-        (stmt::Expr::List(list), ty @ InferredType::Scalar(_)) => {
+        (stmt::Expr::List(list), ty) if ty.db_type().is_some() => {
             // Scalar expected for each item (e.g., from InList)
             for item in &list.items {
                 check(item, ty, params);
@@ -429,7 +450,7 @@ fn check(expr: &stmt::Expr, expected: &InferredType, params: &mut [TypedValue]) 
 }
 
 /// Check all items in a list expression against an expected element type.
-fn check_list(list_expr: &stmt::Expr, elem_ty: &InferredType, params: &mut [TypedValue]) {
+fn check_list(list_expr: &stmt::Expr, elem_ty: &Ty, params: &mut [TypedValue]) {
     match list_expr {
         stmt::Expr::List(list) => {
             for item in &list.items {
@@ -442,54 +463,48 @@ fn check_list(list_expr: &stmt::Expr, elem_ty: &InferredType, params: &mut [Type
     }
 }
 
-/// Merge two inferred types, picking the more specific one at each position.
-fn merge(a: &InferredType, b: &InferredType) -> InferredType {
+// ============================================================================
+// Merge — combines two types, column provenance wins
+// ============================================================================
+
+/// Merge two inferred types. Column provenance wins over Inferred.
+fn merge(a: &Ty, b: &Ty) -> Ty {
     match (a, b) {
-        (InferredType::Unknown, other) | (other, InferredType::Unknown) => other.clone(),
-        (InferredType::Scalar(a), InferredType::Scalar(b)) => {
-            InferredType::Scalar(more_specific(a, b))
+        (Ty::Unknown, other) | (other, Ty::Unknown) => other.clone(),
+
+        // Both are scalars — column provenance wins
+        (Ty::Column(a_ty), Ty::Column(b_ty)) => {
+            assert_eq!(
+                a_ty, b_ty,
+                "two column types in the same expression disagree: {a_ty:?} vs {b_ty:?}"
+            );
+            a.clone()
         }
-        (InferredType::Record(a), InferredType::Record(b)) if a.len() == b.len() => {
-            InferredType::Record(a.iter().zip(b).map(|(a, b)| merge(a, b)).collect())
+        (Ty::Column(_), Ty::Inferred(_)) => a.clone(),
+        (Ty::Inferred(_), Ty::Column(_)) => b.clone(),
+        (Ty::Inferred(a_ty), Ty::Inferred(b_ty)) => {
+            assert_eq!(
+                a_ty, b_ty,
+                "two inferred types in the same expression disagree: {a_ty:?} vs {b_ty:?}"
+            );
+            a.clone()
         }
-        (InferredType::List(a), InferredType::List(b)) => InferredType::List(Box::new(merge(a, b))),
+
+        // Records — merge field-by-field
+        (Ty::Record(a_fields), Ty::Record(b_fields)) if a_fields.len() == b_fields.len() => {
+            Ty::Record(
+                a_fields
+                    .iter()
+                    .zip(b_fields)
+                    .map(|(a, b)| merge(a, b))
+                    .collect(),
+            )
+        }
+
+        // Lists — merge element types
+        (Ty::List(a_elem), Ty::List(b_elem)) => Ty::List(Box::new(merge(a_elem, b_elem))),
+
         _ => panic!("cannot merge incompatible types: {a:?} and {b:?}"),
-    }
-}
-
-/// Pick the more specific of two scalar db::Types.
-///
-/// A type is "more specific" if it carries additional information beyond what
-/// the value's natural type provides. For example, `Enum(..)` is more specific
-/// than `Text` because the value is a string but the column needs the enum OID.
-fn more_specific(a: &db::Type, b: &db::Type) -> db::Type {
-    if a == b {
-        return a.clone();
-    }
-
-    match (a, b) {
-        // Enum is more specific than Text (enum values are strings)
-        (db::Type::Enum(_), db::Type::Text) | (db::Type::Text, db::Type::Enum(_)) => {
-            if matches!(a, db::Type::Enum(_)) { a } else { b }.clone()
-        }
-        // VarChar is more specific than Text
-        (db::Type::VarChar(_), db::Type::Text) | (db::Type::Text, db::Type::VarChar(_)) => {
-            if matches!(a, db::Type::VarChar(_)) {
-                a
-            } else {
-                b
-            }
-            .clone()
-        }
-        // Numeric with precision is more specific than without
-        (db::Type::Numeric(Some(_)), db::Type::Numeric(None)) => a.clone(),
-        (db::Type::Numeric(None), db::Type::Numeric(Some(_))) => b.clone(),
-        // Timestamp/Time/DateTime — column precision overrides value default
-        (db::Type::Timestamp(_), db::Type::Timestamp(_)) => b.clone(),
-        (db::Type::Time(_), db::Type::Time(_)) => b.clone(),
-        (db::Type::DateTime(_), db::Type::DateTime(_)) => b.clone(),
-
-        _ => panic!("cannot pick more specific between incompatible types: {a:?} and {b:?}"),
     }
 }
 
