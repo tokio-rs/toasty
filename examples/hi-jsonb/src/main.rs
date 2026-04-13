@@ -33,8 +33,7 @@ struct ToastyJsonbUser {
 
     age: Option<u8>,
 
-    // #[column(type = jsonb)]
-    #[serialize(jsonb, nullable)]
+    #[serialize(json, nullable)]
     meta: Option<Metadata>,
 }
 
@@ -61,17 +60,17 @@ async fn main() -> toasty::Result<()> {
     // Build a Db handle, registering all models in this crate
     let mut db = toasty::Db::builder()
         .models(toasty::models!(crate::*))
-        // .connect("sqlite::memory:")
         .connect(
             std::env::var("TOASTY_CONNECTION_URL")
                 .as_deref()
                 // .unwrap_or("sqlite::memory:"),
-                .unwrap_or("postgres://127.0.0.1/coder_coder?application_name=toasty-test"),
+                .unwrap_or("mysql://root:@127.0.0.1:3306/mydb"),
+            // .unwrap_or("postgres://127.0.0.1/mydb?application_name=toasty-test"),
         )
         .await?;
 
     // Create tables based on registered models
-    // db.push_schema().await?;
+    db.push_schema().await.unwrap_or_default();
 
     let a = ToastyJsonbUser::filter_by_email("alice@example.com")
         .first()

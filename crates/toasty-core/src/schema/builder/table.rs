@@ -791,6 +791,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             &primitive.ty,
             primitive.storage_ty.as_ref(),
             &self.build.db.storage_types,
+            &self.build.db,
         )
         .expect("unsupported storage type");
 

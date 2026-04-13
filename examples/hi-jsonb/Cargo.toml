@@ -17,7 +17,7 @@ jiff = { version = "0.2", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "v7", "fast-rng", "serde"] }
 
 
-toasty.features = ["postgresql", "jiff", "serde"]
+toasty.features = ["sqlite", "mysql", "postgresql", "jiff", "serde"]
 
 [lints]
 workspace = true

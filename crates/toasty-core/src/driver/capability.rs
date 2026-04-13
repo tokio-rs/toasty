@@ -76,6 +76,10 @@ pub struct Capability {
     /// Currently only MySQL has implemented BigDecimal driver support.
     pub bigdecimal_implemented: bool,
 
+    /// Whether the database supports JSONB (binary JSON) column type.
+    /// PostgreSQL: true. SQLite/MySQL/DynamoDB: false (will fallback to TEXT).
+    pub supports_jsonb: bool,
+
     /// Whether the database's decimal type supports arbitrary precision.
     /// When false, the decimal type requires fixed precision and scale to be specified upfront.
     /// - PostgreSQL: true (NUMERIC supports arbitrary precision)
@@ -257,6 +261,7 @@ impl Capability {
         primary_key_ne_predicate: true,
         auto_increment: true,
         bigdecimal_implemented: false,
+        supports_jsonb: false,
 
         native_varchar: true,
 
@@ -283,6 +288,7 @@ impl Capability {
         select_for_update: true,
         auto_increment: true,
         bigdecimal_implemented: false,
+        supports_jsonb: true,
 
         // PostgreSQL has native date/time types
         native_timestamp: true,
@@ -308,6 +314,7 @@ impl Capability {
         returning_from_mutation: false,
         auto_increment: true,
         bigdecimal_implemented: true,
+        supports_jsonb: false,
 
         // MySQL has native date/time types
         native_timestamp: true,
@@ -335,6 +342,7 @@ impl Capability {
         primary_key_ne_predicate: false,
         auto_increment: false,
         bigdecimal_implemented: false,
+        supports_jsonb: false,
         native_varchar: false,
 
         // DynamoDB does not have native date/time types

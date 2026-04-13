@@ -184,6 +184,7 @@ impl BuildSchema<'_> {
                     &primitive.ty,
                     primitive.storage_ty.as_ref(),
                     &self.db.storage_types,
+                    self.db,
                 )?;
 
                 if let db::Type::VarChar(size) = storage_ty {

@@ -112,9 +112,19 @@ impl Type {
         ty: &stmt::Type,
         hint: Option<&Type>,
         db: &driver::StorageTypes,
+        capability: &driver::Capability,
     ) -> Result<Type> {
         match hint {
-            Some(ty) => Ok(ty.clone()),
+            Some(ty) => {
+                // Handle JSONB fallback for databases that don't support it
+                if let Type::Custom(custom) = ty {
+                    if custom == "JSONB" && !capability.supports_jsonb {
+                        // Fallback to TEXT for databases without JSONB support
+                        return Ok(Type::Text);
+                    }
+                }
+                Ok(ty.clone())
+            }
             None => match ty {
                 stmt::Type::Bool => Ok(Type::Boolean),
                 stmt::Type::I8 => Ok(Type::Integer(1)),
