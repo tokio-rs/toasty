@@ -413,14 +413,9 @@ fn synthesize(expr: &stmt::Expr, cx: &Cx<'_>, params: &mut [TypedValue]) -> Ty {
 fn check(expr: &stmt::Expr, expected: &Ty, params: &mut [TypedValue]) {
     match (expr, expected) {
         // Arg — update the param's type if expected has column provenance
-        (stmt::Expr::Arg(arg), ty) if ty.db_type().is_some() => {
-            if let Some(tv) = params.get_mut(arg.position) {
-                if ty.is_column() {
-                    // Column type is authoritative — always use it
-                    tv.ty = ty.db_type().unwrap().clone();
-                }
-                // Inferred types don't override — the param's own inferred type
-                // from value extraction is just as good.
+        (stmt::Expr::Arg(arg), ty) if ty.is_column() => {
+            if let Some(db_ty) = ty.db_type() {
+                params[arg.position].ty = db_ty.clone();
             }
         }
 

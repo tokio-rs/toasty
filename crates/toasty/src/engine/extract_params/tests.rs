@@ -40,14 +40,14 @@ fn extract_scalar_from_simple_insert() {
     assert_eq!(params[1].value, Value::from("hello"));
 
     // Statement should have Arg placeholders
-    if let stmt::Statement::Insert(insert) = &stmt {
-        if let stmt::ExprSet::Values(values) = &insert.source.body {
-            let row = &values.rows[0];
-            assert!(matches!(row, Expr::Record(_)));
-            if let Expr::Record(record) = row {
-                assert!(matches!(record.fields[0], Expr::Arg(_)));
-                assert!(matches!(record.fields[1], Expr::Arg(_)));
-            }
+    if let stmt::Statement::Insert(insert) = &stmt
+        && let stmt::ExprSet::Values(values) = &insert.source.body
+    {
+        let row = &values.rows[0];
+        assert!(matches!(row, Expr::Record(_)));
+        if let Expr::Record(record) = row {
+            assert!(matches!(record.fields[0], Expr::Arg(_)));
+            assert!(matches!(record.fields[1], Expr::Arg(_)));
         }
     }
 }
