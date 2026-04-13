@@ -70,19 +70,19 @@ struct User {
 
 Supported type values:
 
-| Type syntax | Database type |
-|---|---|
-| `boolean` | Boolean |
-| `int`, `i8`, `i16`, `i32`, `i64` | Integer (various sizes) |
-| `uint`, `u8`, `u16`, `u32`, `u64` | Unsigned integer |
-| `text` | Text |
-| `varchar(N)` | Variable-length string with max length |
-| `numeric`, `numeric(P, S)` | Decimal with optional precision and scale |
-| `binary(N)`, `blob` | Binary data |
-| `timestamp(P)` | Timestamp with precision |
-| `date` | Date |
-| `time(P)` | Time with precision |
-| `datetime(P)` | Date and time with precision |
+| Type syntax                       | Database type                             |
+| --------------------------------- | ----------------------------------------- |
+| `boolean`                         | Boolean                                   |
+| `int`, `i8`, `i16`, `i32`, `i64`  | Integer (various sizes)                   |
+| `uint`, `u8`, `u16`, `u32`, `u64` | Unsigned integer                          |
+| `text`                            | Text                                      |
+| `varchar(N)`                      | Variable-length string with max length    |
+| `numeric`, `numeric(P, S)`        | Decimal with optional precision and scale |
+| `binary(N)`, `blob`               | Binary data                               |
+| `timestamp(P)`                    | Timestamp with precision                  |
+| `date`                            | Date                                      |
+| `time(P)`                         | Time with precision                       |
+| `datetime(P)`                     | Date and time with precision              |
 
 Not all databases support all column types. Toasty validates explicit column
 types against the database's capabilities when you call `db.push_schema()`. If a
@@ -294,9 +294,9 @@ struct Post {
 When `#[auto]` appears without arguments on a non-key field, Toasty uses a
 heuristic based on the field name and type to determine the behavior:
 
-| Field name | Field type | `#[auto]` expands to |
-|---|---|---|
-| `created_at` | `jiff::Timestamp` | `#[default(jiff::Timestamp::now())]` — set once on create |
+| Field name   | Field type        | `#[auto]` expands to                                                       |
+| ------------ | ----------------- | -------------------------------------------------------------------------- |
+| `created_at` | `jiff::Timestamp` | `#[default(jiff::Timestamp::now())]` — set once on create                  |
 | `updated_at` | `jiff::Timestamp` | `#[update(jiff::Timestamp::now())]` — refreshed on every create and update |
 
 On key fields, bare `#[auto]` defers to the type's default auto-generation
@@ -319,11 +319,11 @@ toasty = { version = "{{toasty_version}}", features = ["sqlite", "jiff"] }
 With the `jiff` feature enabled, you can use these types for date and time
 fields:
 
-| Rust type | Description |
-|---|---|
-| `jiff::Timestamp` | An instant in time (UTC) |
-| `jiff::civil::Date` | A date without time |
-| `jiff::civil::Time` | A time of day without date |
+| Rust type               | Description                      |
+| ----------------------- | -------------------------------- |
+| `jiff::Timestamp`       | An instant in time (UTC)         |
+| `jiff::civil::Date`     | A date without time              |
+| `jiff::civil::Time`     | A time of day without date       |
 | `jiff::civil::DateTime` | A date and time without timezone |
 
 You can control the storage precision with `#[column(type = ...)]`:
@@ -398,6 +398,7 @@ that support `varchar`.
 JSONB is a binary format that supports indexing and more efficient operations.
 
 For databases that don't support `JSONB`:
+
 - **MySQL**: Falls back to `JSON` column type (MySQL's native JSON support)
 - **SQLite/DynamoDB**: Falls back to `TEXT` column type
 
@@ -455,54 +456,6 @@ assert_eq!(post.meta.version, 1);
 # }
 ```
 
-The default column type for `#[serialize(jsonb)]` is `JSONB`. When used with
-PostgreSQL, Toasty stores the value in a `JSONB` column (binary format with
-indexing support). For databases that don't support `JSONB`, Toasty automatically
-falls back:
-
-- **MySQL**: Falls back to `JSON` column type
-- **SQLite/DynamoDB**: Falls back to `TEXT` column type
-
-Similarly, `#[serialize(json)]` uses `JSON` column type on MySQL and PostgreSQL,
-and falls back to `TEXT` on SQLite and DynamoDB.
-
-```rust,ignore
-# use toasty::Model;
-# use serde::{Serialize, Deserialize};
-# #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-# struct Metadata {
-#     version: u32,
-#     labels: Vec<String>,
-# }
-# #[derive(Debug, toasty::Model)]
-# struct Post {
-#     #[key]
-#     #[auto]
-#     id: u64,
-#     title: String,
-#     #[serialize(json)]
-#     tags: Vec<String>,
-#     #[serialize(json)]
-#     meta: Metadata,
-# }
-# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let post = toasty::create!(Post {
-    title: "Hello",
-    tags: vec!["rust".to_string(), "toasty".to_string()],
-    meta: Metadata {
-        version: 1,
-        labels: vec!["alpha".to_string()],
-    },
-})
-.exec(&mut db)
-.await?;
-
-assert_eq!(post.tags, vec!["rust", "toasty"]);
-assert_eq!(post.meta.version, 1);
-# Ok(())
-# }
-```
-
 ### Nullable JSON fields
 
 By default, `#[serialize(json)]` or `#[serialize(jsonb)]` creates a `NOT NULL`
@@ -550,24 +503,26 @@ native JSON/JSONB support (SQLite, DynamoDB), Toasty falls back to `TEXT`.
 In all cases, the nullable behavior is the same.
 
 With `nullable`:
+
 - `None` maps to SQL `NULL` in the database
 - `Some(value)` maps to the JSON string representation
 
 Without `nullable`:
+
 - `None` maps to the JSON text `"null"` (a non-null string)
 - `Some(value)` maps to the JSON string representation
 
 ## Attribute summary
 
-| Attribute | Purpose | Applies on |
-|---|---|---|
-| `#[column("name")]` | Custom column name | — |
-| `#[column(type = ...)]` | Explicit column type | — |
-| `#[default(expr)]` | Default value | Create only |
-| `#[update(expr)]` | Automatic value | Create and update |
-| `#[auto]` on `created_at` | Shorthand for `#[default(jiff::Timestamp::now())]` | Create only |
-| `#[auto]` on `updated_at` | Shorthand for `#[update(jiff::Timestamp::now())]` | Create and update |
-| `#[serialize(json)]` | Store as JSON (MySQL/PostgreSQL) or TEXT (fallback) | Create and update |
-| `#[serialize(jsonb)]` | Store as JSONB (PostgreSQL) or TEXT (fallback) | Create and update |
-| `#[serialize(json, nullable)]` | Store as JSON/TEXT with SQL NULL support | Create and update |
-| `#[serialize(jsonb, nullable)]` | Store as JSONB/TEXT with SQL NULL support | Create and update |
+| Attribute                       | Purpose                                             | Applies on        |
+| ------------------------------- | --------------------------------------------------- | ----------------- |
+| `#[column("name")]`             | Custom column name                                  | —                 |
+| `#[column(type = ...)]`         | Explicit column type                                | —                 |
+| `#[default(expr)]`              | Default value                                       | Create only       |
+| `#[update(expr)]`               | Automatic value                                     | Create and update |
+| `#[auto]` on `created_at`       | Shorthand for `#[default(jiff::Timestamp::now())]`  | Create only       |
+| `#[auto]` on `updated_at`       | Shorthand for `#[update(jiff::Timestamp::now())]`   | Create and update |
+| `#[serialize(json)]`            | Store as JSON (MySQL/PostgreSQL) or TEXT (fallback) | Create and update |
+| `#[serialize(jsonb)]`           | Store as JSONB (PostgreSQL) or TEXT (fallback)      | Create and update |
+| `#[serialize(json, nullable)]`  | Store as JSON/TEXT with SQL NULL support            | Create and update |
+| `#[serialize(jsonb, nullable)]` | Store as JSONB/TEXT with SQL NULL support           | Create and update |
