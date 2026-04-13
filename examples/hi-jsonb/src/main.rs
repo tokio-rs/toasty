@@ -33,7 +33,7 @@ struct ToastyJsonbUser {
 
     age: Option<u8>,
 
-    #[serialize(json, nullable)]
+    #[serialize(jsonb, nullable)]
     meta: Option<Metadata>,
 }
 
@@ -64,8 +64,8 @@ async fn main() -> toasty::Result<()> {
             std::env::var("TOASTY_CONNECTION_URL")
                 .as_deref()
                 // .unwrap_or("sqlite::memory:"),
-                .unwrap_or("mysql://root:@127.0.0.1:3306/mydb"),
-            // .unwrap_or("postgres://127.0.0.1/mydb?application_name=toasty-test"),
+                // .unwrap_or("mysql://root:@127.0.0.1:3306/mydb"),
+                .unwrap_or("postgres://127.0.0.1/mydb?application_name=toasty-test"),
         )
         .await?;
 

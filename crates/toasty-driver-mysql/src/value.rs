@@ -44,7 +44,8 @@ impl Value {
             CT::MYSQL_TYPE_VARCHAR
             | CT::MYSQL_TYPE_VAR_STRING
             | CT::MYSQL_TYPE_STRING
-            | CT::MYSQL_TYPE_BLOB => match ty {
+            | CT::MYSQL_TYPE_BLOB
+            | CT::MYSQL_TYPE_JSON => match ty {
                 stmt::Type::String => extract_or_null(row, i, stmt::Value::String),
                 stmt::Type::Json => extract_or_null(row, i, stmt::Value::String),
                 stmt::Type::Jsonb => extract_or_null(row, i, stmt::Value::String),
