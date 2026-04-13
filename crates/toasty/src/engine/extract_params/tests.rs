@@ -183,35 +183,9 @@ fn synthesize_multi_step_projection() {
     // Given: Record([Text, Record([Integer(4), Boolean])])
     // Project [1, 0] should yield Integer(4)
 
-    use super::{InferredType, merge, synthesize};
+    use super::{InferredType, synthesize};
 
     let schema = test_schema();
-    let cx = stmt::ExprContext::new(&schema.db);
-
-    // Build: project(project(arg(0), [1]), [0])
-    // This is how multi-step projections are typically represented:
-    // chained Project expressions, each with a single step.
-    // But let's also test a single Project with multiple steps.
-
-    // First, test the chained case (typical):
-    // inner = Record([String("a"), Record([I32(1), Bool(true)])])
-    let inner_record = Value::Record(stmt::ValueRecord::from_vec(vec![
-        Value::from(1i32),
-        Value::from(true),
-    ]));
-    let outer_record = Value::Record(stmt::ValueRecord::from_vec(vec![
-        Value::from("a"),
-        inner_record,
-    ]));
-
-    // Extract params from: INSERT INTO ... VALUES (outer_record)
-    // This gives us Arg positions for the scalar values
-    #[derive(toasty::Model)]
-    struct Dummy {
-        #[key]
-        id: String,
-    }
-    let schema = test_schema_with(&[Dummy::schema()]);
 
     // Directly test the synthesize function with a constructed expression
     // that has a multi-step projection

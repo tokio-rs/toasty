@@ -135,7 +135,15 @@ fn is_extractable_scalar(value: &stmt::Value) -> bool {
 /// Refine param types by walking the statement with synthesize + check.
 fn refine_param_types(stmt: &stmt::Statement, db_schema: &db::Schema, params: &mut [TypedValue]) {
     let cx = stmt::ExprContext::new(db_schema);
+    refine_stmt(stmt, &cx, db_schema, params);
+}
 
+fn refine_stmt(
+    stmt: &stmt::Statement,
+    cx: &Cx<'_>,
+    db_schema: &db::Schema,
+    params: &mut [TypedValue],
+) {
     match stmt {
         stmt::Statement::Insert(insert) => {
             let cx = cx.scope(insert);
@@ -150,7 +158,7 @@ fn refine_param_types(stmt: &stmt::Statement, db_schema: &db::Schema, params: &m
             refine_filter(&delete.filter, &cx, params);
         }
         stmt::Statement::Query(query) => {
-            refine_query(query, &cx, params);
+            refine_query(query, cx, params);
         }
     }
 }
@@ -343,10 +351,11 @@ fn synthesize(expr: &stmt::Expr, cx: &Cx<'_>, params: &mut [TypedValue]) -> Infe
             InferredType::Scalar(db::Type::Boolean)
         }
 
-        // Nested statement — we can't recurse with refine_param_types here
-        // because we don't have the db::Schema directly. Nested Stmt expressions
-        // are relatively rare; the values inside were already extracted in phase 1.
-        stmt::Expr::Stmt(_) => InferredType::Unknown,
+        // Nested statement — recurse into it for type refinement
+        stmt::Expr::Stmt(expr_stmt) => {
+            refine_stmt(&expr_stmt.stmt, cx, cx.schema(), params);
+            InferredType::Unknown
+        }
 
         // Logical operators — recurse, return boolean
         stmt::Expr::And(and) => {
