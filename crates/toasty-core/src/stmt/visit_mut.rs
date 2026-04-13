@@ -2,8 +2,8 @@
 
 use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAllOp, ExprAnd,
-    ExprAny, ExprAnyOp, ExprArg, ExprBinaryOp, ExprCast, ExprColumn, ExprError, ExprExists,
-    ExprFunc, ExprInList, ExprInSubquery, ExprIntersects, ExprIsNull, ExprIsSuperset,
+    ExprAny, ExprAnyOp, ExprArg, ExprBetween, ExprBinaryOp, ExprCast, ExprColumn, ExprError,
+    ExprExists, ExprFunc, ExprInList, ExprInSubquery, ExprIntersects, ExprIsNull, ExprIsSuperset,
     ExprIsVariant, ExprLength, ExprLet, ExprLike, ExprList, ExprMap, ExprMatch, ExprNot, ExprOr,
     ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStartsWith, ExprStmt, Filter,
     FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, LimitCursor,
@@ -112,6 +112,13 @@ pub trait VisitMut {
     /// The default implementation delegates to [`visit_expr_all_op_mut`].
     fn visit_expr_all_op_mut(&mut self, i: &mut ExprAllOp) {
         visit_expr_all_op_mut(self, i);
+    }
+
+    /// Visits an [`ExprBetween`] node mutably.
+    ///
+    /// The default implementation delegates to [`visit_expr_between_mut`].
+    fn visit_expr_between_mut(&mut self, i: &mut ExprBetween) {
+        visit_expr_between_mut(self, i);
     }
 
     /// Visits an [`ExprBinaryOp`] node mutably.
@@ -586,6 +593,10 @@ impl<V: VisitMut> VisitMut for &mut V {
         VisitMut::visit_expr_all_op_mut(&mut **self, i);
     }
 
+    fn visit_expr_between_mut(&mut self, i: &mut ExprBetween) {
+        VisitMut::visit_expr_between_mut(&mut **self, i);
+    }
+
     fn visit_expr_binary_op_mut(&mut self, i: &mut ExprBinaryOp) {
         VisitMut::visit_expr_binary_op_mut(&mut **self, i);
     }
@@ -892,6 +903,7 @@ where
         Expr::Any(expr) => v.visit_expr_any_mut(expr),
         Expr::AnyOp(expr) => v.visit_expr_any_op_mut(expr),
         Expr::Arg(expr) => v.visit_expr_arg_mut(expr),
+        Expr::Between(expr) => v.visit_expr_between_mut(expr),
         Expr::BinaryOp(expr) => v.visit_expr_binary_op_mut(expr),
         Expr::Cast(expr) => v.visit_expr_cast_mut(expr),
         Expr::Default => v.visit_expr_default_mut(),
@@ -1044,6 +1056,16 @@ where
     V: VisitMut + ?Sized,
 {
     // FuncLastInsertId has no fields to visit
+}
+
+/// Default mutable traversal for [`ExprBetween`] nodes. Visits the expression, low, and high bounds.
+pub fn visit_expr_between_mut<V>(v: &mut V, node: &mut ExprBetween)
+where
+    V: VisitMut + ?Sized,
+{
+    v.visit_expr_mut(&mut node.expr);
+    v.visit_expr_mut(&mut node.low);
+    v.visit_expr_mut(&mut node.high);
 }
 
 /// Default mutable traversal for [`ExprInList`] nodes. Visits the expression and the list expression.

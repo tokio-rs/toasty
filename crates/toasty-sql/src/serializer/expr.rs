@@ -10,6 +10,9 @@ impl ToSql for &stmt::Expr {
             stmt::Expr::And(expr) => {
                 fmt!(f, Delimited(&expr.operands, " AND "));
             }
+            stmt::Expr::Between(expr) => {
+                fmt!(f, expr.expr " BETWEEN " expr.low " AND " expr.high);
+            }
             stmt::Expr::BinaryOp(expr) => {
                 assert!(!expr.lhs.is_value_null());
                 assert!(!expr.rhs.is_value_null());

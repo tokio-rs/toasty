@@ -268,6 +268,33 @@ impl<T, U> Path<T, U> {
         self.build_filter(move |path| stmt::Expr::le(path, rhs))
     }
 
+    /// Test whether this field's value is in the inclusive range `[low, high]`.
+    ///
+    /// Generates a `BETWEEN low AND high` condition in SQL and a native
+    /// `BETWEEN` condition expression in DynamoDB.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// let filter = User::fields().id().between(18_i64, 65_i64);
+    /// ```
+    pub fn between(self, low: impl IntoExpr<U>, high: impl IntoExpr<U>) -> Expr<bool> {
+        Expr {
+            untyped: stmt::Expr::between(
+                self.untyped.into_stmt(),
+                low.into_expr().untyped,
+                high.into_expr().untyped,
+            ),
+            _p: PhantomData,
+        }
+    }
+
     /// Test whether this field's value is in `rhs`.
     ///
     /// `rhs` can be any collection that implements `IntoExpr<List<U>>`, such

@@ -79,6 +79,7 @@ fn fold_one(i: &mut Expr) -> Option<Expr> {
         | Expr::Any(_)
         | Expr::AnyOp(_)
         | Expr::Arg(_)
+        | Expr::Between(_)
         | Expr::Default
         | Expr::Error(_)
         | Expr::Exists(_)
