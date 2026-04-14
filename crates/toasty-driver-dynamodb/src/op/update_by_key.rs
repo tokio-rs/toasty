@@ -263,7 +263,47 @@ impl Connection {
                 }
 
                 if updated_unique_attrs.is_empty() && set_unique_attrs.is_empty() {
-                    todo!()
+                    // The unique column appears in the assignment but its value is
+                    // unchanged — no index table surgery needed; just update the
+                    // main table directly.
+                    let res = self
+                        .client
+                        .update_item()
+                        .table_name(&table.name)
+                        .set_key(Some(ddb_key(table, key)))
+                        .set_update_expression(Some(update_expression))
+                        .set_expression_attribute_names(Some(expr_attrs.attr_names))
+                        .set_expression_attribute_values(if !expr_attrs.attr_values.is_empty() {
+                            Some(expr_attrs.attr_values)
+                        } else {
+                            None
+                        })
+                        .set_condition_expression(filter_expression)
+                        .return_values_on_condition_check_failure(
+                            ReturnValuesOnConditionCheckFailure::AllOld,
+                        )
+                        .send()
+                        .await;
+
+                    if let Err(SdkError::ServiceError(e)) = res {
+                        if let UpdateItemError::ConditionalCheckFailedException(_e) = e.err() {
+                            if op.filter.is_some() {
+                                assert!(op.condition.is_none());
+                                return if op.returning {
+                                    Ok(ExecResponse::empty_value_stream())
+                                } else {
+                                    Ok(ExecResponse::count(0))
+                                };
+                            }
+                            assert!(op.condition.is_some());
+                            return Err(toasty_core::Error::condition_failed(
+                                "DynamoDB conditional check failed",
+                            ));
+                        }
+                        return Err(toasty_core::Error::driver_operation_failed(
+                            SdkError::ServiceError(e),
+                        ));
+                    }
                 } else {
                     assert!(
                         updated_unique_attrs.len() + set_unique_attrs.len() == 1,
