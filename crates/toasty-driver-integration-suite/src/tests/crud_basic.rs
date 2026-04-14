@@ -441,6 +441,51 @@ pub async fn unique_index_no_update(test: &mut Test) -> Result<()> {
 }
 
 #[driver_test(id(ID))]
+pub async fn unique_index_set_same_value(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        #[unique]
+        email: String,
+
+        name: String,
+    }
+
+    let mut db = test.setup_db(models!(User)).await;
+
+    let mut user = User::create()
+        .email("user@example.com")
+        .name("John Doe")
+        .exec(&mut db)
+        .await?;
+
+    // Update both fields, but set email to the same value it already has.
+    // This exercises the path where the unique column appears in op.assignments
+    // but its new value equals the current stored value.
+    user.update()
+        .email("user@example.com")
+        .name("Jane Doe")
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!("user@example.com", user.email);
+    assert_eq!("Jane Doe", user.name);
+
+    let u = User::get_by_id(&mut db, &user.id).await?;
+    assert_eq!(user.email, u.email);
+    assert_eq!(user.name, u.name);
+
+    // Lookup by email still works
+    let u = User::get_by_email(&mut db, &user.email).await?;
+    assert_eq!(user.name, u.name);
+
+    Ok(())
+}
+
+#[driver_test(id(ID))]
 pub async fn update_multiple_fields(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
