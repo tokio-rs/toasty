@@ -342,11 +342,13 @@ impl toasty_core::driver::Connection for Connection {
 
         tracing::debug!(db.system = "postgresql", db.statement = %sql_as_str, params = typed_params.len(), "executing SQL");
 
-        let mut param_types = Vec::with_capacity(typed_params.len());
-        for tv in &typed_params {
-            let pg_type = self.oid_cache.resolve(&self.client, &tv.ty).await?;
-            param_types.push(pg_type);
-        }
+        self.oid_cache
+            .preload(&self.client, typed_params.iter().map(|tv| &tv.ty))
+            .await?;
+        let param_types: Vec<_> = typed_params
+            .iter()
+            .map(|tv| self.oid_cache.get(&tv.ty))
+            .collect();
 
         let values: Vec<_> = typed_params
             .into_iter()
