@@ -230,7 +230,8 @@ pub struct Connection {
     client: Client,
     statement_cache: StatementCache,
     /// Cached PostgreSQL `Type` objects for native enum types, keyed by type name.
-    /// Populated during `push_schema` by querying `pg_type` for each enum's OID.
+    /// Cached PostgreSQL `Type` objects for native enum types, keyed by type name.
+    /// Lazily populated by querying `pg_type` on first use.
     enum_types: std::collections::HashMap<String, tokio_postgres::types::Type>,
 }
 
@@ -264,6 +265,41 @@ impl Connection {
         });
 
         Ok(Self::new(client))
+    }
+
+    /// Resolve a `db::Type` to a PostgreSQL wire type. For native enum types,
+    /// lazily queries `pg_type` for the OID and caches the result.
+    async fn resolve_param_type(
+        &mut self,
+        ty: &toasty_core::schema::db::Type,
+    ) -> Result<tokio_postgres::types::Type> {
+        if let toasty_core::schema::db::Type::Enum(type_enum) = ty
+            && let Some(name) = &type_enum.name
+        {
+            // Check cache first
+            if let Some(pg_type) = self.enum_types.get(name) {
+                return Ok(pg_type.clone());
+            }
+
+            // Query pg_type for the OID
+            let oid_row = self
+                .client
+                .query_one("SELECT oid FROM pg_type WHERE typname = $1", &[name])
+                .await
+                .map_err(toasty_core::Error::driver_operation_failed)?;
+            let oid: u32 = oid_row.get(0);
+            let variants: Vec<String> = type_enum.variants.iter().map(|v| v.name.clone()).collect();
+            let pg_type = tokio_postgres::types::Type::new(
+                name.clone(),
+                oid,
+                tokio_postgres::types::Kind::Enum(variants),
+                "public".to_string(),
+            );
+            self.enum_types.insert(name.clone(), pg_type.clone());
+            return Ok(pg_type);
+        }
+
+        Ok(ty.to_postgres_type())
     }
 
     /// Creates a table.
@@ -347,19 +383,11 @@ impl toasty_core::driver::Connection for Connection {
 
         tracing::debug!(db.system = "postgresql", db.statement = %sql_as_str, params = typed_params.len(), "executing SQL");
 
-        let param_types = typed_params
-            .iter()
-            .map(|tv| {
-                // If the column has a native enum storage type with a known OID, use it.
-                if let toasty_core::schema::db::Type::Enum(ref type_enum) = tv.ty
-                    && let Some(ref name) = type_enum.name
-                    && let Some(pg_type) = self.enum_types.get(name)
-                {
-                    return pg_type.clone();
-                }
-                tv.ty.to_postgres_type()
-            })
-            .collect::<Vec<_>>();
+        let mut param_types = Vec::with_capacity(typed_params.len());
+        for tv in &typed_params {
+            let pg_type = self.resolve_param_type(&tv.ty).await?;
+            param_types.push(pg_type);
+        }
 
         let values: Vec<_> = typed_params
             .into_iter()
@@ -447,24 +475,6 @@ impl toasty_core::driver::Connection for Connection {
                         .execute(&sql, &[])
                         .await
                         .map_err(toasty_core::Error::driver_operation_failed)?;
-
-                    // Query pg_type for the OID and cache a custom Type so that
-                    // prepare_typed can bind enum parameters with the correct OID.
-                    let oid_row = self
-                        .client
-                        .query_one("SELECT oid FROM pg_type WHERE typname = $1", &[name])
-                        .await
-                        .map_err(toasty_core::Error::driver_operation_failed)?;
-                    let oid: u32 = oid_row.get(0);
-                    let variants: Vec<String> =
-                        type_enum.variants.iter().map(|v| v.name.clone()).collect();
-                    let pg_type = tokio_postgres::types::Type::new(
-                        name.clone(),
-                        oid,
-                        tokio_postgres::types::Kind::Enum(variants),
-                        "public".to_string(),
-                    );
-                    self.enum_types.insert(name.clone(), pg_type);
                 }
             }
         }
