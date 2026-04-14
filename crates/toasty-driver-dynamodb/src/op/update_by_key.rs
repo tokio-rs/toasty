@@ -1,10 +1,64 @@
 use super::{
     Connection, Delete, ExprAttrs, Put, Result, ReturnValuesOnConditionCheckFailure, SdkError,
-    TransactWriteItem, Update, UpdateItemError, Value, db, ddb_expression, ddb_key, operation,
-    stmt,
+    TransactWriteItem, Update, UpdateItemError, Value, db, ddb_expression, ddb_key, item_to_record,
+    operation, stmt,
 };
+use aws_sdk_dynamodb::types::AttributeValue;
 use std::{collections::HashMap, fmt::Write};
 use toasty_core::{driver::ExecResponse, stmt::ExprContext};
+
+/// An [`stmt::Input`] that resolves column references into a record produced
+/// by `item_to_record`. After lowering, filter/condition expressions reference
+/// columns via `ExprReference::Column { column: i }` where `i` is the column's
+/// position in `table.columns`. `item_to_record` builds the record in that same
+/// order, so indexing by `col.column` gives the right field.
+struct RecordInput<'a>(&'a stmt::ValueRecord);
+
+impl stmt::Input for RecordInput<'_> {
+    fn resolve_ref(
+        &mut self,
+        expr_reference: &stmt::ExprReference,
+        projection: &stmt::Projection,
+    ) -> Option<stmt::Expr> {
+        match expr_reference {
+            stmt::ExprReference::Column(col) => {
+                Some(self.0.fields[col.column].entry(projection).to_expr())
+            }
+            _ => None,
+        }
+    }
+}
+
+/// Returns `true` when the DynamoDB `ConditionalCheckFailedException` was
+/// caused by the *filter* expression failing (→ return count 0), or `false`
+/// when it was caused by the *condition* expression failing (→ return an
+/// error).
+///
+/// Strategy: DynamoDB returns the item's pre-update state when
+/// `ReturnValuesOnConditionCheckFailure::AllOld` is set.  We evaluate the
+/// filter in-memory against that snapshot:
+///
+/// - No old item → the record didn't exist; the filter trivially didn't
+///   match → count 0.
+/// - Old item exists, filter evaluates to `false` → count 0.
+/// - Old item exists, filter evaluates to `true` (or there is no filter) →
+///   the condition must have been the failing part → error.
+fn filter_failed(
+    old_item: Option<&HashMap<String, AttributeValue>>,
+    table: &db::Table,
+    filter: Option<&stmt::Expr>,
+) -> bool {
+    let Some(filter) = filter else {
+        return false;
+    };
+
+    let Some(item) = old_item else {
+        return true;
+    };
+
+    let record = item_to_record(item, table.columns.iter()).unwrap();
+    !filter.eval_bool(RecordInput(&record)).unwrap_or(false)
+}
 
 impl Connection {
     pub(crate) async fn exec_update_by_key(
@@ -37,8 +91,10 @@ impl Connection {
         let filter_expression = match (&op.filter, &op.condition) {
             (Some(filter), None) => Some(ddb_expression(&cx, &mut expr_attrs, false, filter)),
             (None, Some(condition)) => Some(ddb_expression(&cx, &mut expr_attrs, false, condition)),
-            (Some(_), Some(_)) => {
-                todo!()
+            (Some(filter), Some(condition)) => {
+                let f = ddb_expression(&cx, &mut expr_attrs, false, filter);
+                let c = ddb_expression(&cx, &mut expr_attrs, false, condition);
+                Some(format!("({f}) AND ({c})"))
             }
             _ => None,
         };
@@ -112,38 +168,14 @@ impl Connection {
                         .await;
 
                     if let Err(SdkError::ServiceError(e)) = res {
-                        if let UpdateItemError::ConditionalCheckFailedException(_e) = e.err() {
-                            /*
-                            let record =
-                                item_to_record(e.item.as_ref().unwrap(), table.columns.iter())
-                                    .unwrap();
-                                */
-
-                            // First, if there is a filter, we need to check if the
-                            // filter matches it. If it doesn't, then the update did
-                            // not apply to the record.
-                            if op.filter.is_some() {
-                                // TODO: can't support both for now
-                                assert!(op.condition.is_none());
-                                /*
-                                if !filter.eval_bool(&record).unwrap() {
-                                    return Ok(stmt::ValueStream::new());
-                                }
-                                */
+                        if let UpdateItemError::ConditionalCheckFailedException(cce) = e.err() {
+                            if filter_failed(cce.item(), table, op.filter.as_ref()) {
                                 return if op.returning {
                                     Ok(ExecResponse::empty_value_stream())
                                 } else {
                                     Ok(ExecResponse::count(0))
                                 };
                             }
-
-                            // At this point, there should be a condition
-                            // let condition = op.condition.as_ref().unwrap();
-                            assert!(op.condition.is_some());
-
-                            // The condition must not have matched...
-                            // TODO: can we check?
-                            // assert!(!condition.eval_bool(&record).unwrap());
 
                             return Err(toasty_core::Error::condition_failed(
                                 "DynamoDB conditional check failed",
@@ -286,16 +318,15 @@ impl Connection {
                         .await;
 
                     if let Err(SdkError::ServiceError(e)) = res {
-                        if let UpdateItemError::ConditionalCheckFailedException(_e) = e.err() {
-                            if op.filter.is_some() {
-                                assert!(op.condition.is_none());
+                        if let UpdateItemError::ConditionalCheckFailedException(cce) = e.err() {
+                            if filter_failed(cce.item(), table, op.filter.as_ref()) {
                                 return if op.returning {
                                     Ok(ExecResponse::empty_value_stream())
                                 } else {
                                     Ok(ExecResponse::count(0))
                                 };
                             }
-                            assert!(op.condition.is_some());
+
                             return Err(toasty_core::Error::condition_failed(
                                 "DynamoDB conditional check failed",
                             ));
@@ -455,5 +486,97 @@ impl Connection {
         } else {
             ExecResponse::count(op.keys.len() as _)
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::filter_failed;
+    use crate::db;
+    use aws_sdk_dynamodb::types::AttributeValue;
+    use std::collections::HashMap;
+    use toasty_core::{
+        schema::db::{Column, ColumnId, IndexId, PrimaryKey, TableId, Type},
+        stmt::{self, BinaryOp, Expr, ExprBinaryOp, ExprColumn, ExprReference},
+    };
+
+    fn make_table() -> db::Table {
+        db::Table {
+            id: TableId(0),
+            name: "t".to_string(),
+            columns: vec![Column {
+                id: ColumnId {
+                    table: TableId(0),
+                    index: 0,
+                },
+                name: "status".to_string(),
+                ty: stmt::Type::String,
+                storage_ty: Type::Text,
+                nullable: false,
+                primary_key: false,
+                auto_increment: false,
+            }],
+            primary_key: PrimaryKey {
+                columns: vec![],
+                index: IndexId {
+                    table: TableId(0),
+                    index: 0,
+                },
+            },
+            indices: vec![],
+        }
+    }
+
+    /// Build `status = "active"` as a column-reference filter expression.
+    fn status_eq_active() -> Expr {
+        Expr::BinaryOp(ExprBinaryOp {
+            lhs: Box::new(Expr::Reference(ExprReference::Column(ExprColumn {
+                nesting: 0,
+                table: 0,
+                column: 0, // column 0 in the table → "status"
+            }))),
+            op: BinaryOp::Eq,
+            rhs: Box::new(Expr::Value(stmt::Value::String("active".to_string()))),
+        })
+    }
+
+    fn item_with_status(status: &str) -> HashMap<String, AttributeValue> {
+        HashMap::from([("status".to_string(), AttributeValue::S(status.to_string()))])
+    }
+
+    // No filter at all: the condition expression failed → caller should surface an error,
+    // not return count 0.  filter_failed must return false.
+    #[test]
+    fn no_filter_returns_false() {
+        let table = make_table();
+        assert!(!filter_failed(None, &table, None));
+    }
+
+    // Filter present but item is missing (record was deleted between read and check):
+    // treat as "filter didn't match" → count 0.
+    #[test]
+    fn missing_item_with_filter_returns_true() {
+        let table = make_table();
+        let filter = status_eq_active();
+        assert!(filter_failed(None, &table, Some(&filter)));
+    }
+
+    // Item present and filter matches: the filter was NOT the failing part, so the
+    // condition expression must have failed → return false (surface an error).
+    #[test]
+    fn matching_item_returns_false() {
+        let table = make_table();
+        let filter = status_eq_active();
+        let item = item_with_status("active");
+        assert!(!filter_failed(Some(&item), &table, Some(&filter)));
+    }
+
+    // Item present but filter does not match: the filter failed → count 0.
+    #[test]
+    fn non_matching_item_returns_true() {
+        let table = make_table();
+        let filter = status_eq_active();
+        let item = item_with_status("inactive");
+        assert!(filter_failed(Some(&item), &table, Some(&filter)));
     }
 }
