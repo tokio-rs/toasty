@@ -11,6 +11,7 @@
 //! let driver = PostgreSQL::new("postgresql://localhost/mydb").unwrap();
 //! ```
 
+mod oid_cache;
 mod statement_cache;
 #[cfg(feature = "tls")]
 mod tls;
@@ -33,7 +34,7 @@ use toasty_sql::{self as sql};
 use tokio_postgres::{Client, Config, Socket, tls::MakeTlsConnect, types::ToSql};
 use url::Url;
 
-use crate::{statement_cache::StatementCache, r#type::TypeExt};
+use crate::{oid_cache::OidCache, statement_cache::StatementCache};
 
 /// A PostgreSQL [`Driver`] that connects via `tokio-postgres`.
 ///
@@ -229,10 +230,7 @@ impl Driver for PostgreSQL {
 pub struct Connection {
     client: Client,
     statement_cache: StatementCache,
-    /// Cached PostgreSQL `Type` objects for native enum types, keyed by type name.
-    /// Cached PostgreSQL `Type` objects for native enum types, keyed by type name.
-    /// Lazily populated by querying `pg_type` on first use.
-    enum_types: std::collections::HashMap<String, tokio_postgres::types::Type>,
+    oid_cache: OidCache,
 }
 
 impl Connection {
@@ -241,7 +239,7 @@ impl Connection {
         Self {
             client,
             statement_cache: StatementCache::new(100),
-            enum_types: std::collections::HashMap::new(),
+            oid_cache: OidCache::new(),
         }
     }
 
@@ -265,41 +263,6 @@ impl Connection {
         });
 
         Ok(Self::new(client))
-    }
-
-    /// Resolve a `db::Type` to a PostgreSQL wire type. For native enum types,
-    /// lazily queries `pg_type` for the OID and caches the result.
-    async fn resolve_param_type(
-        &mut self,
-        ty: &toasty_core::schema::db::Type,
-    ) -> Result<tokio_postgres::types::Type> {
-        if let toasty_core::schema::db::Type::Enum(type_enum) = ty
-            && let Some(name) = &type_enum.name
-        {
-            // Check cache first
-            if let Some(pg_type) = self.enum_types.get(name) {
-                return Ok(pg_type.clone());
-            }
-
-            // Query pg_type for the OID
-            let oid_row = self
-                .client
-                .query_one("SELECT oid FROM pg_type WHERE typname = $1", &[name])
-                .await
-                .map_err(toasty_core::Error::driver_operation_failed)?;
-            let oid: u32 = oid_row.get(0);
-            let variants: Vec<String> = type_enum.variants.iter().map(|v| v.name.clone()).collect();
-            let pg_type = tokio_postgres::types::Type::new(
-                name.clone(),
-                oid,
-                tokio_postgres::types::Kind::Enum(variants),
-                "public".to_string(),
-            );
-            self.enum_types.insert(name.clone(), pg_type.clone());
-            return Ok(pg_type);
-        }
-
-        Ok(ty.to_postgres_type())
     }
 
     /// Creates a table.
@@ -335,11 +298,7 @@ impl Connection {
 
 impl From<Client> for Connection {
     fn from(client: Client) -> Self {
-        Self {
-            client,
-            statement_cache: StatementCache::new(100),
-            enum_types: std::collections::HashMap::new(),
-        }
+        Self::new(client)
     }
 }
 
@@ -385,7 +344,7 @@ impl toasty_core::driver::Connection for Connection {
 
         let mut param_types = Vec::with_capacity(typed_params.len());
         for tv in &typed_params {
-            let pg_type = self.resolve_param_type(&tv.ty).await?;
+            let pg_type = self.oid_cache.resolve(&self.client, &tv.ty).await?;
             param_types.push(pg_type);
         }
 
