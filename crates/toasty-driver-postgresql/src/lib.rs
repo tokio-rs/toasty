@@ -106,6 +106,12 @@ impl PostgreSQL {
             config.password(percent_decode_str(password).collect::<Vec<u8>>());
         }
 
+        for (key, value) in url.query_pairs() {
+            if key == "application_name" {
+                config.application_name(&*value);
+            }
+        }
+
         #[cfg(feature = "tls")]
         let tls = tls::configure_tls(&url, &mut config)?;
 
