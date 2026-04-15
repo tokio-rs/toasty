@@ -183,7 +183,7 @@ impl deadpool::managed::Manager for Manager {
                         tx,
                     } => {
                         let single = stmt.is_single();
-                        let result = async {
+                        let res = async {
                             let mut response =
                                 engine.exec(&mut *connection, *stmt, in_transaction).await?;
                             response.values.buffer().await?;
@@ -204,16 +204,20 @@ impl deadpool::managed::Manager for Manager {
                         }
                         .await;
 
-                        let _ = tx.send(result);
+                        let _ = tx.send(res);
                     }
                     ConnectionOperation::ExecOperation { operation, tx } => {
-                        let result = connection.exec(&engine.schema, *operation).await;
-                        let _ = tx.send(result);
+                        let res = connection.exec(&engine.schema, *operation).await;
+                        let _ = tx.send(res);
                     }
                     ConnectionOperation::PushSchema { tx } => {
-                        let result = connection.push_schema(&engine.schema).await;
-                        let _ = tx.send(result);
+                        let res = connection.push_schema(&engine.schema).await;
+                        _ = tx.send(res);
                     }
+                }
+
+                if !connection.is_valid() {
+                    break;
                 }
             }
         });

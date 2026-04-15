@@ -1,6 +1,8 @@
 #![cfg(feature = "postgresql")]
 
 use std::sync::Arc;
+use std::time::Duration;
+use toasty::Db;
 use toasty_driver_postgresql::PostgreSQL;
 use tokio::sync::OnceCell;
 use tokio_postgres::NoTls;
@@ -136,4 +138,67 @@ async fn url_encoding() {
         .execute(&format!("DROP ROLE IF EXISTS \"{}\"", role), &[])
         .await
         .expect("failed to drop test role");
+}
+
+#[tokio::test]
+async fn pool_recovers_db_crash() {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        id: i64,
+    }
+
+    let url = std::env::var("TOASTY_TEST_POSTGRES_URL")
+        .unwrap_or_else(|_| "postgresql://localhost:5432/toasty_test".to_string());
+    let (admin_client, connection) = tokio_postgres::connect(&url, NoTls)
+        .await
+        .expect("failed to connect as admin");
+    tokio::spawn(async move {
+        if let Err(e) = connection.await {
+            eprintln!("connection error: {e}");
+        }
+    });
+
+    // XXX: We're tagging this pool's connections so we can identifiy them for
+    // `pg_terminate_backend`. This allows us to simulate a connection closure
+    // without affecting other tests.
+    let app_name = "pool_reconnect_test";
+    let mut tagged_url = url::Url::parse(&url).expect("failed to parse URL");
+    tagged_url
+        .query_pairs_mut()
+        .append_pair("application_name", app_name);
+    let driver = PostgreSQL::new(tagged_url.as_str()).expect("driver creation failed");
+    let mut db = Db::builder()
+        .models(toasty::models!(User))
+        .build(driver)
+        .await
+        .expect("Db build failed");
+
+    db.push_schema().await.unwrap();
+
+    // Simulate connection closure by killing any backend with our app name
+    admin_client
+        .execute(
+            "SELECT pg_terminate_backend(pid) \
+             FROM pg_stat_activity \
+             WHERE application_name = $1",
+            &[&app_name],
+        )
+        .await
+        .expect("pg_terminate_backend failed");
+
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    // The connection gets closed when the backend gets terminated
+    assert!(User::filter_by_id(1)
+        .exec(&mut db)
+        .await
+        .is_err_and(|err| err.to_string().eq("connection closed")));
+
+    // After observing a broken connection the pool should discard it and
+    // open a fresh one.
+    assert!(
+        User::filter_by_id(1).exec(&mut db).await.is_ok(),
+        "pool did not recover: broken connection was recycled instead of replaced"
+    );
 }

@@ -147,6 +147,10 @@ impl Connection {
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
+    fn is_valid(&self) -> bool {
+        true
+    }
+
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         self.exec2(schema, op).await
     }

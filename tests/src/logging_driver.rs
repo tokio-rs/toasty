@@ -77,6 +77,10 @@ pub struct LoggingConnection {
 
 #[async_trait]
 impl Connection for LoggingConnection {
+    fn is_valid(&self) -> bool {
+        self.inner.is_valid()
+    }
+
     async fn exec(&mut self, schema: &Arc<Schema>, operation: Operation) -> Result<ExecResponse> {
         // Clone the operation for logging
         let operation_clone = operation.clone();

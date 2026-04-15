@@ -29,8 +29,8 @@ pub mod operation;
 pub use operation::{IsolationLevel, Operation};
 
 use crate::schema::{
-    Schema,
     db::{AppliedMigration, Migration, SchemaDiff},
+    Schema,
 };
 
 use async_trait::async_trait;
@@ -125,4 +125,10 @@ pub trait Connection: Debug + Send + 'static {
         name: &str,
         migration: &Migration,
     ) -> crate::Result<()>;
+
+    /// Is this [`Connection`] still valid?
+    ///
+    /// The connection pool will use this to determine whether or not to reuse
+    /// this connection.
+    fn is_valid(&self) -> bool;
 }
