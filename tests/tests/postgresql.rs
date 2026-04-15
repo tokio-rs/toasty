@@ -140,7 +140,61 @@ async fn url_encoding() {
         .expect("failed to drop test role");
 }
 
-#[tokio::test]
+/// A database cleanup guard.
+///
+/// Executes the provided queries at the end of the test - regardless of the
+/// outcome. Useful to ensure we don't leak schema objects which will cause
+/// problems for:
+///
+/// 1. Subsequent executions of the same test
+/// 2. Local disk space
+struct CleanupGuard {
+    client: Arc<tokio_postgres::Client>,
+    url: String,
+    /// A list of DDL to run on drop.
+    reset_ddl: Vec<String>,
+}
+
+impl std::ops::Deref for CleanupGuard {
+    type Target = tokio_postgres::Client;
+
+    fn deref(&self) -> &Self::Target {
+        &self.client
+    }
+}
+
+impl Drop for CleanupGuard {
+    fn drop(&mut self) {
+        tokio::task::block_in_place(|| {
+            let mut client = self.client.clone();
+            let reset_ddl = self.reset_ddl.clone();
+            let url = self.url.clone();
+            tokio::runtime::Handle::current().block_on(async move {
+                for ddl in reset_ddl {
+                    if let Err(_err) = client.simple_query(&ddl).await {
+                        let (new_client, connection) = tokio_postgres::connect(&url, NoTls)
+                            .await
+                            .expect("failed to reconnect during cleanup");
+                        tokio::spawn(async move {
+                            if let Err(e) = connection.await {
+                                eprintln!("cleanup connection error: {e}");
+                            }
+                        });
+
+                        client
+                            .simple_query(&ddl)
+                            .await
+                            .expect("cleanup retry failed");
+
+                        client = Arc::new(new_client);
+                    }
+                }
+            });
+        });
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn pool_recovers_db_crash() {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -150,7 +204,7 @@ async fn pool_recovers_db_crash() {
 
     let url = std::env::var("TOASTY_TEST_POSTGRES_URL")
         .unwrap_or_else(|_| "postgresql://localhost:5432/toasty_test".to_string());
-    let (admin_client, connection) = tokio_postgres::connect(&url, NoTls)
+    let (client, connection) = tokio_postgres::connect(&url, NoTls)
         .await
         .expect("failed to connect as admin");
     tokio::spawn(async move {
@@ -158,6 +212,11 @@ async fn pool_recovers_db_crash() {
             eprintln!("connection error: {e}");
         }
     });
+    let admin_client = CleanupGuard {
+        client: Arc::new(client),
+        url: url.clone(),
+        reset_ddl: vec!["DROP TABLE IF EXISTS users".into()],
+    };
 
     // XXX: We're tagging this pool's connections so we can identifiy them for
     // `pg_terminate_backend`. This allows us to simulate a connection closure
