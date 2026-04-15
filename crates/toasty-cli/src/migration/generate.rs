@@ -296,7 +296,7 @@ impl GenerateCommand {
         });
 
         let Migration::Sql(sql) = migration;
-        std::fs::write(migration_path, sql)?;
+        std::fs::write(&migration_path, format!("{sql}\n"))?;
         println!(
             "  {} {}",
             style("✓").green().bold(),
