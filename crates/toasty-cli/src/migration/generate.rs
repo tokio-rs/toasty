@@ -275,8 +275,12 @@ impl GenerateCommand {
 
         let snapshot = SnapshotFile::new(schema.clone());
         let migration_prefix = match config.migration.prefix_style {
-            crate::MigrationPrefixStyle::Sequential => format!("{:04}", history.next_migration_number()),
-            crate::MigrationPrefixStyle::Timestamp => jiff::Timestamp::now().strftime("%Y%m%d_%H%M%S").to_string(),
+            crate::MigrationPrefixStyle::Sequential => {
+                format!("{:04}", history.next_migration_number())
+            }
+            crate::MigrationPrefixStyle::Timestamp => {
+                jiff::Timestamp::now().strftime("%Y%m%d_%H%M%S").to_string()
+            }
         };
         let snapshot_name = format!("{:04}_snapshot.toml", &migration_prefix);
         let snapshot_path = config.migration.get_snapshots_dir().join(&snapshot_name);
