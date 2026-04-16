@@ -142,7 +142,7 @@ impl Value {
 
             CT::MYSQL_TYPE_DOUBLE => match ty {
                 stmt::Type::F64 => extract_or_null(row, i, stmt::Value::F64),
-                stmt::Type::F32 => extract_or_null(row, i, stmt::Value::F64),
+                stmt::Type::F32 => extract_or_null(row, i, |v: f64| stmt::Value::F32(v as f32)),
                 _ => todo!("ty={ty:#?}"),
             },
 
