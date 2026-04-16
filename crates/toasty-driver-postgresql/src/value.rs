@@ -142,7 +142,7 @@ impl Value {
         } else if column.type_() == &Type::FLOAT8 {
             let v = get_or_return_null!(f64);
             match expected_ty {
-                stmt::Type::F32 => stmt::Value::F64(v),
+                stmt::Type::F32 => stmt::Value::F32(v as f32),
                 stmt::Type::F64 => stmt::Value::F64(v),
                 _ => panic!("unexpected type for FLOAT8: {expected_ty:#?}"),
             }

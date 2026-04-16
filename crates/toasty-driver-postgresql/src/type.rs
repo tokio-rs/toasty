@@ -23,6 +23,8 @@ impl TypeExt for stmt::Type {
             stmt::Type::String => Type::TEXT,
             stmt::Type::Uuid => Type::UUID,
             stmt::Type::Bytes => Type::BYTEA,
+            stmt::Type::F32 => Type::FLOAT4,
+            stmt::Type::F64 => Type::FLOAT8,
             #[cfg(feature = "rust_decimal")]
             stmt::Type::Decimal => Type::NUMERIC,
             #[cfg(feature = "jiff")]
