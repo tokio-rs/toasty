@@ -148,6 +148,113 @@ macro_rules! impl_num {
     };
 }
 
+macro_rules! impl_float {
+    (
+        $(
+            $variant:ident($ty:ty) {
+                $to:ident
+                $to_unwrap:ident
+                $is:ident
+                $unwrap_msg:literal
+            }
+        )*
+    ) => {
+        impl Type {
+            $(
+                /// Returns `true` if this type matches the corresponding float variant.
+                pub fn $is(&self) -> bool {
+                    matches!(self, Self::$variant)
+                }
+            )*
+        }
+
+        $(
+            impl From<$ty> for Value {
+                fn from(value: $ty) -> Self {
+                    Self::$variant(value)
+                }
+            }
+
+            impl From<&$ty> for Value {
+                fn from(value: &$ty) -> Self {
+                    Self::$variant(*value)
+                }
+            }
+
+            impl Value {
+                /// Converts this value to the target float type, panicking on failure.
+                ///
+                /// # Panics
+                ///
+                /// Panics if the value is not a float variant or if a narrowing conversion
+                /// overflows.
+                #[track_caller]
+                pub fn $to_unwrap(&self) -> $ty {
+                    self.$to().expect($unwrap_msg)
+                }
+            }
+
+            impl TryFrom<Value> for $ty {
+                type Error = crate::Error;
+
+                fn try_from(value: Value) -> crate::Result<Self> {
+                    value.$to().ok_or_else(|| {
+                        crate::Error::type_conversion(value.clone(), stringify!($ty))
+                    })
+                }
+            }
+        )*
+    };
+}
+
+impl_float! {
+    F32(f32) {
+        to_f32
+        to_f32_unwrap
+        is_f32
+        "value is not a finite f32"
+    }
+    F64(f64) {
+        to_f64
+        to_f64_unwrap
+        is_f64
+        "value is not a float type"
+    }
+}
+
+impl Value {
+    /// Attempts to convert this value to `f32`.
+    ///
+    /// Returns `None` if the value is not a float variant, or if a `F64` value
+    /// overflows `f32` range (would produce infinity from a finite value).
+    pub fn to_f32(&self) -> Option<f32> {
+        match self {
+            Value::F32(v) => Some(*v),
+            Value::F64(v) => {
+                let converted = *v as f32;
+                if converted.is_infinite() && !v.is_infinite() {
+                    None
+                } else {
+                    Some(converted)
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// Attempts to convert this value to `f64`.
+    ///
+    /// Returns `None` if the value is not a float variant.
+    /// `F32 → f64` is always safe (widening conversion).
+    pub fn to_f64(&self) -> Option<f64> {
+        match self {
+            Value::F32(v) => Some(*v as f64),
+            Value::F64(v) => Some(*v),
+            _ => None,
+        }
+    }
+}
+
 impl_num! {
     I8(i8) {
         to_i8

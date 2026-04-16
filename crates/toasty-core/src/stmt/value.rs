@@ -1,6 +1,5 @@
 use super::{Entry, EntryPath, Type, TypeUnion, ValueRecord, sparse_record::SparseRecord};
 use std::cmp::Ordering;
-use std::hash::Hash;
 
 /// A dynamically typed value used throughout Toasty's query engine.
 ///
@@ -31,7 +30,7 @@ use std::hash::Hash;
 /// let v = Value::from(true);
 /// assert_eq!(v, true);
 /// ```
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone)]
 pub enum Value {
     /// Boolean value
     Bool(bool),
@@ -59,6 +58,12 @@ pub enum Value {
 
     /// Unsigned 64-bit integer
     U64(u64),
+
+    /// 32-bit floating point number
+    F32(f32),
+
+    /// 64-bit floating point number
+    F64(f64),
 
     /// A typed record
     SparseRecord(SparseRecord),
@@ -265,6 +270,8 @@ impl Value {
             Self::U16(_) => ty.is_u16(),
             Self::U32(_) => ty.is_u32(),
             Self::U64(_) => ty.is_u64(),
+            Self::F32(_) => ty.is_f32(),
+            Self::F64(_) => ty.is_f64(),
             Self::List(value) => match ty {
                 Type::List(ty) => {
                     if value.is_empty() {
@@ -340,6 +347,8 @@ impl Value {
             Value::U16(_) => Type::U16,
             Value::U32(_) => Type::U32,
             Value::U64(_) => Type::U64,
+            Value::F32(_) => Type::F32,
+            Value::F64(_) => Type::F64,
             Value::Bytes(_) => Type::Bytes,
             Value::Uuid(_) => Type::Uuid,
             #[cfg(feature = "rust_decimal")]
@@ -405,6 +414,89 @@ impl AsRef<Self> for Value {
     }
 }
 
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::Bool(a), Value::Bool(b)) => a == b,
+            (Value::I8(a), Value::I8(b)) => a == b,
+            (Value::I16(a), Value::I16(b)) => a == b,
+            (Value::I32(a), Value::I32(b)) => a == b,
+            (Value::I64(a), Value::I64(b)) => a == b,
+            (Value::U8(a), Value::U8(b)) => a == b,
+            (Value::U16(a), Value::U16(b)) => a == b,
+            (Value::U32(a), Value::U32(b)) => a == b,
+            (Value::U64(a), Value::U64(b)) => a == b,
+            // Use bit-level equality for floats so NaN == NaN and the impl is consistent with Hash
+            (Value::F32(a), Value::F32(b)) => a.to_bits() == b.to_bits(),
+            (Value::F64(a), Value::F64(b)) => a.to_bits() == b.to_bits(),
+            (Value::SparseRecord(a), Value::SparseRecord(b)) => a == b,
+            (Value::Null, Value::Null) => true,
+            (Value::Record(a), Value::Record(b)) => a == b,
+            (Value::List(a), Value::List(b)) => a == b,
+            (Value::String(a), Value::String(b)) => a == b,
+            (Value::Bytes(a), Value::Bytes(b)) => a == b,
+            (Value::Uuid(a), Value::Uuid(b)) => a == b,
+            #[cfg(feature = "rust_decimal")]
+            (Value::Decimal(a), Value::Decimal(b)) => a == b,
+            #[cfg(feature = "bigdecimal")]
+            (Value::BigDecimal(a), Value::BigDecimal(b)) => a == b,
+            #[cfg(feature = "jiff")]
+            (Value::Timestamp(a), Value::Timestamp(b)) => a == b,
+            #[cfg(feature = "jiff")]
+            (Value::Zoned(a), Value::Zoned(b)) => a == b,
+            #[cfg(feature = "jiff")]
+            (Value::Date(a), Value::Date(b)) => a == b,
+            #[cfg(feature = "jiff")]
+            (Value::Time(a), Value::Time(b)) => a == b,
+            #[cfg(feature = "jiff")]
+            (Value::DateTime(a), Value::DateTime(b)) => a == b,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for Value {}
+
+impl std::hash::Hash for Value {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::mem::discriminant(self).hash(state);
+        match self {
+            Value::Bool(v) => v.hash(state),
+            Value::I8(v) => v.hash(state),
+            Value::I16(v) => v.hash(state),
+            Value::I32(v) => v.hash(state),
+            Value::I64(v) => v.hash(state),
+            Value::U8(v) => v.hash(state),
+            Value::U16(v) => v.hash(state),
+            Value::U32(v) => v.hash(state),
+            Value::U64(v) => v.hash(state),
+            Value::F32(v) => v.to_bits().hash(state),
+            Value::F64(v) => v.to_bits().hash(state),
+            Value::SparseRecord(v) => v.hash(state),
+            Value::Null => {}
+            Value::Record(v) => v.hash(state),
+            Value::List(v) => v.hash(state),
+            Value::String(v) => v.hash(state),
+            Value::Bytes(v) => v.hash(state),
+            Value::Uuid(v) => v.hash(state),
+            #[cfg(feature = "rust_decimal")]
+            Value::Decimal(v) => v.hash(state),
+            #[cfg(feature = "bigdecimal")]
+            Value::BigDecimal(v) => v.hash(state),
+            #[cfg(feature = "jiff")]
+            Value::Timestamp(v) => v.hash(state),
+            #[cfg(feature = "jiff")]
+            Value::Zoned(v) => v.hash(state),
+            #[cfg(feature = "jiff")]
+            Value::Date(v) => v.hash(state),
+            #[cfg(feature = "jiff")]
+            Value::Time(v) => v.hash(state),
+            #[cfg(feature = "jiff")]
+            Value::DateTime(v) => v.hash(state),
+        }
+    }
+}
+
 impl PartialOrd for Value {
     /// Compares two values if they are of the same type.
     ///
@@ -432,6 +524,10 @@ impl PartialOrd for Value {
             (Value::U16(a), Value::U16(b)) => a.partial_cmp(b),
             (Value::U32(a), Value::U32(b)) => a.partial_cmp(b),
             (Value::U64(a), Value::U64(b)) => a.partial_cmp(b),
+
+            // Floating point.
+            (Value::F32(a), Value::F32(b)) => a.partial_cmp(b),
+            (Value::F64(a), Value::F64(b)) => a.partial_cmp(b),
 
             // Strings: lexicographic ordering.
             (Value::String(a), Value::String(b)) => a.partial_cmp(b),

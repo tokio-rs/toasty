@@ -70,6 +70,9 @@ pub enum Type {
     /// An unsigned integer of `n` bytes
     UnsignedInteger(u8),
 
+    /// A floating point number of `n` bytes
+    Float(u8),
+
     /// Unconstrained text type
     Text,
 
@@ -126,6 +129,8 @@ impl Type {
                 stmt::Type::U16 => Ok(Type::UnsignedInteger(2)),
                 stmt::Type::U32 => Ok(Type::UnsignedInteger(4)),
                 stmt::Type::U64 => Ok(Type::UnsignedInteger(8)),
+                stmt::Type::F32 => Ok(Type::Float(4)),
+                stmt::Type::F64 => Ok(Type::Float(8)),
                 stmt::Type::String => Ok(db.default_string_type.clone()),
                 stmt::Type::Uuid => Ok(db.default_uuid_type.clone()),
                 stmt::Type::Bytes => Ok(db.default_bytes_type.clone()),
