@@ -292,20 +292,18 @@ impl NestedMergePlanner<'_> {
                         match child_returning {
                             stmt::Returning::Value(returning_expr) if returning_expr.is_const() => {
                                 match child_stmt {
-                                    stmt::Statement::Query(query)
-                                        if query.single => {
-                                            let stmt::Expr::Value(v) = returning_expr else {
-                                                todo!()
-                                            };
-                                            assert!(!v.is_list());
-                                        }
-                                    stmt::Statement::Insert(insert)
-                                        if insert.source.single => {
-                                            let stmt::Expr::Value(v) = returning_expr else {
-                                                todo!()
-                                            };
-                                            assert!(!v.is_list());
-                                        }
+                                    stmt::Statement::Query(query) if query.single => {
+                                        let stmt::Expr::Value(v) = returning_expr else {
+                                            todo!()
+                                        };
+                                        assert!(!v.is_list());
+                                    }
+                                    stmt::Statement::Insert(insert) if insert.source.single => {
+                                        let stmt::Expr::Value(v) = returning_expr else {
+                                            todo!()
+                                        };
+                                        assert!(!v.is_list());
+                                    }
                                     _ => {}
                                 }
 
