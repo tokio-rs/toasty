@@ -46,6 +46,9 @@ pub struct Field {
     /// If set, Toasty automatically populates this field on insert.
     pub auto: Option<AutoStrategy>,
 
+    /// If `true`, this field tracks an OCC version counter.
+    pub versionable: bool,
+
     /// Validation constraints applied to this field's values.
     pub constraints: Vec<Constraint>,
 
@@ -232,6 +235,11 @@ impl Field {
     /// Returns `true` if this field uses auto-increment for value generation.
     pub fn is_auto_increment(&self) -> bool {
         self.auto().map(|auto| auto.is_increment()).unwrap_or(false)
+    }
+
+    /// Returns `true` if this field tracks an OCC version counter.
+    pub fn is_versionable(&self) -> bool {
+        self.versionable
     }
 
     /// Returns `true` if this field is a relation (`BelongsTo`, `HasMany`, or

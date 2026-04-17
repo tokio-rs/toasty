@@ -102,6 +102,16 @@ impl LowerStatement<'_, '_> {
             }
         }
 
+        // Initialize version fields to 1 if not already set by the user.
+        for field in &model.fields {
+            if field.is_versionable() {
+                let mut field_expr = expr.entry_mut(field.id.index);
+                if field_expr.is_default() || field_expr.is_value_null() {
+                    field_expr.insert(stmt::Value::U64(1).into());
+                }
+            }
+        }
+
         // We have to handle auto fields first because they are often the
         // identifier which may be referenced to handle associations.
         for field in &model.fields {

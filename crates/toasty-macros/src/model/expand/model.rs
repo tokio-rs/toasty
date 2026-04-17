@@ -41,6 +41,7 @@ impl Expand<'_> {
         let into_expr_body_ref = self.expand_model_into_expr_body(true);
         let into_expr_body_val = self.expand_model_into_expr_body(false);
         let reload_trait_method = self.expand_reload_trait_method();
+        let version_update_stmts = self.expand_version_update_stmts();
 
         quote! {
             impl #model_ident {
@@ -59,9 +60,11 @@ impl Expand<'_> {
                 #vis fn update(&mut self) -> #update_struct_ident<&mut Self> {
                     let mut s = #update_struct_ident {
                         assignments: #toasty::core::stmt::Assignments::default(),
+                        condition: None,
                         target: self,
                     };
                     s.apply_update_defaults();
+                    #version_update_stmts
                     s
                 }
 

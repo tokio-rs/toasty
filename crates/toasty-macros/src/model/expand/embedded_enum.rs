@@ -288,6 +288,7 @@ impl Expand<'_> {
                         nullable: <#ty as #toasty::Field>::NULLABLE,
                         primary_key: false,
                         auto: None,
+                        versionable: false,
                         constraints: vec![],
                         variant: Some(#toasty::core::schema::app::VariantId {
                             model: id,
