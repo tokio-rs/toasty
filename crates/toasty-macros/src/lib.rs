@@ -579,7 +579,7 @@ use proc_macro::TokenStream;
     Model,
     attributes(
         key, auto, default, update, column, index, unique, table, has_many, has_one, belongs_to,
-        serialize
+        serialize, version
     )
 )]
 pub fn derive_model(input: TokenStream) -> TokenStream {

@@ -17,8 +17,20 @@ impl Expand<'_> {
         let table_name = self.expand_table_name();
 
         let model = match &self.model.kind {
-            ModelKind::Root(_) => {
+            ModelKind::Root(root) => {
                 let primary_key = self.expand_primary_key();
+                let version_field = match root.version_field {
+                    Some(idx) => {
+                        let idx_tok = util::int(idx);
+                        quote! {
+                            Some(#toasty::core::schema::app::FieldId {
+                                model: id,
+                                index: #idx_tok,
+                            })
+                        }
+                    }
+                    None => quote! { None },
+                };
                 quote! {
                     #toasty::core::schema::app::Model::Root(
                         #toasty::core::schema::app::ModelRoot {
@@ -28,6 +40,7 @@ impl Expand<'_> {
                             primary_key: #primary_key,
                             table_name: #table_name,
                             indices: #indices,
+                            version_field: #version_field,
                         }
                     )
                 }
@@ -213,6 +226,8 @@ impl Expand<'_> {
                 }
             };
 
+            let versionable = field.attrs.versionable;
+
             quote! {
                 #toasty::core::schema::app::Field {
                     id: #toasty::core::schema::app::FieldId {
@@ -224,6 +239,7 @@ impl Expand<'_> {
                     nullable: #nullable,
                     primary_key: #primary_key,
                     auto: #auto,
+                    versionable: #versionable,
                     constraints: vec![],
                     variant: None,
                 }

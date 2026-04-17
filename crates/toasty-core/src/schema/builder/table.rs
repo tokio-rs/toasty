@@ -807,6 +807,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             nullable: field.nullable || self.in_enum_variant,
             primary_key: false,
             auto_increment: field.is_auto_increment() && self.build.db.auto_increment,
+            versionable: field.is_versionable(),
         });
 
         id
