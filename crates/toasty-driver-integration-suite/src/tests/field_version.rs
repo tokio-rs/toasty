@@ -277,3 +277,51 @@ pub async fn unique_index_stale_update_fails(test: &mut Test) -> Result<()> {
 
     Ok(())
 }
+
+/// Deleting a record checks the version — a fresh handle succeeds.
+#[driver_test(requires(not(sql)))]
+pub async fn delete_checks_version(test: &mut Test) -> Result<()> {
+    version_model!();
+
+    let mut db = test.setup_db(models!(Item)).await;
+
+    let item = Item::create().name("hello").exec(&mut db).await?;
+    assert_eq!(item.version, 1);
+    let id = item.id;
+
+    item.delete().exec(&mut db).await?;
+
+    // Item should be gone — get() should return not-found
+    let after_delete = Item::filter_by_id(id).get(&mut db).await;
+    assert!(after_delete.is_err(), "item should have been deleted");
+
+    Ok(())
+}
+
+/// Deleting from a stale snapshot (wrong version) should fail.
+#[driver_test(requires(not(sql)))]
+pub async fn stale_delete_fails(test: &mut Test) -> Result<()> {
+    version_model!();
+
+    let mut db = test.setup_db(models!(Item)).await;
+
+    let mut item = Item::create().name("hello").exec(&mut db).await?;
+    assert_eq!(item.version, 1);
+
+    // Load a stale copy and then advance item.version to 2.
+    let stale = Item::filter_by_id(item.id).get(&mut db).await?;
+    item.update().name("updated").exec(&mut db).await?;
+    assert_eq!(item.version, 2);
+
+    // stale.version == 1 — delete should fail.
+    let result: Result<()> = stale.delete().exec(&mut db).await;
+    assert!(result.is_err(), "expected stale delete to fail");
+
+    // Item should still exist.
+    let _ = Item::filter_by_id(item.id)
+        .get(&mut db)
+        .await
+        .expect("item should still exist");
+
+    Ok(())
+}

@@ -1,4 +1,4 @@
-use super::{Node, Query, Returning, Source, Statement, Visit, VisitMut};
+use super::{Condition, Node, Query, Returning, Source, Statement, Visit, VisitMut};
 use crate::stmt::{self, Filter};
 
 /// A `DELETE` statement that removes existing records.
@@ -28,6 +28,11 @@ pub struct Delete {
 
     /// Optional `RETURNING` clause.
     pub returning: Option<Returning>,
+
+    /// An optional condition that must hold for the delete to apply.
+    /// Unlike `filter`, a failing condition surfaces as an error rather than
+    /// silently skipping the record.
+    pub condition: Condition,
 }
 
 impl Delete {

@@ -1450,10 +1450,11 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     ty: ty.clone(),
                 })
             }
-            stmt::Statement::Delete(_) => self.insert_mir_with_deps(mir::DeleteByKey {
+            stmt::Statement::Delete(delete_stmt) => self.insert_mir_with_deps(mir::DeleteByKey {
                 input: get_by_key_input,
                 table: index_plan.table_id(),
                 filter: index_plan.result_filter.take(),
+                condition: delete_stmt.condition.expr.clone(),
                 ty: stmt::Type::Unit,
             }),
             stmt::Statement::Update(update_stmt) => {

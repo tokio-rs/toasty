@@ -22,6 +22,9 @@ pub(crate) struct DeleteByKey {
     /// Optional additional filter applied before deletion.
     pub(crate) filter: Option<stmt::Expr>,
 
+    /// Optional condition for optimistic locking (e.g., version check).
+    pub(crate) condition: Option<stmt::Expr>,
+
     /// The return type.
     pub(crate) ty: stmt::Type,
 }
@@ -45,6 +48,7 @@ impl DeleteByKey {
             },
             table: self.table,
             filter: self.filter.clone(),
+            condition: self.condition.clone(),
         }
     }
 }

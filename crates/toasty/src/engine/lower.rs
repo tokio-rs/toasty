@@ -529,6 +529,10 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
         lower.visit_filter_mut(&mut stmt.filter);
 
+        if let Some(expr) = &mut stmt.condition.expr {
+            lower.visit_expr_mut(expr);
+        }
+
         if let Some(returning) = &mut stmt.returning {
             lower.visit_returning_mut(returning);
         }

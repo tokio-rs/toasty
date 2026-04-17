@@ -1286,6 +1286,7 @@ where
 {
     v.visit_source(&node.from);
     v.visit_filter(&node.filter);
+    v.visit_condition(&node.condition);
 
     if let Some(returning) = &node.returning {
         v.visit_returning(returning);
