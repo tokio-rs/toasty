@@ -45,7 +45,7 @@ impl Value {
     pub fn sparse_record(fields: PathFieldSet, record: ValueRecord) -> Self {
         let mut values = vec![];
 
-        for (index, value) in fields.iter().zip(record.fields.into_iter()) {
+        for (index, value) in fields.iter().zip(record.fields) {
             while index >= values.len() {
                 values.push(Value::Null);
             }
