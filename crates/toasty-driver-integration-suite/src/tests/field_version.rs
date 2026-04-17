@@ -17,6 +17,44 @@ macro_rules! version_model {
     };
 }
 
+/// Model with a secondary index used for multi-key update tests.
+macro_rules! version_model_with_tag {
+    () => {
+        #[derive(Debug, toasty::Model)]
+        struct Item {
+            #[key]
+            #[auto]
+            id: uuid::Uuid,
+
+            #[index]
+            tag: String,
+
+            name: String,
+
+            #[version]
+            version: u64,
+        }
+    };
+}
+
+/// Model with a unique field used for unique-index update tests.
+macro_rules! version_model_with_unique {
+    () => {
+        #[derive(Debug, toasty::Model)]
+        struct User {
+            #[key]
+            #[auto]
+            id: uuid::Uuid,
+
+            #[unique]
+            email: String,
+
+            #[version]
+            version: u64,
+        }
+    };
+}
+
 /// A newly created record starts with version == 1.
 #[driver_test(requires(not(sql)))]
 pub async fn create_initializes_version(test: &mut Test) -> Result<()> {
@@ -131,6 +169,110 @@ pub async fn batch_insert_checks_version(test: &mut Test) -> Result<()> {
     assert!(
         result.is_err(),
         "expected batch create with duplicate to fail"
+    );
+
+    Ok(())
+}
+
+/// Query-based update on a versioned model: exercises update_by_key path 2
+/// (no unique index, N keys via transact_write_items on DDB).
+///
+/// Query-based updates don't carry a per-item version condition, so the version
+/// column is not incremented. The test verifies that the multi-key transact
+/// path executes without error and applies all assignments.
+#[driver_test(requires(not(sql)))]
+pub async fn query_update_multi_key_works(test: &mut Test) -> Result<()> {
+    version_model_with_tag!();
+
+    let mut db = test.setup_db(models!(Item)).await;
+
+    // Create two items sharing the same tag
+    let a = Item::create()
+        .tag("batch")
+        .name("alpha")
+        .exec(&mut db)
+        .await?;
+    let b = Item::create()
+        .tag("batch")
+        .name("beta")
+        .exec(&mut db)
+        .await?;
+
+    // Update all items with tag == "batch" in one query-based operation.
+    Item::filter_by_tag("batch")
+        .update()
+        .name("updated")
+        .exec(&mut db)
+        .await?;
+
+    let a2 = Item::filter_by_id(a.id).get(&mut db).await?;
+    let b2 = Item::filter_by_id(b.id).get(&mut db).await?;
+    assert_eq!(a2.name, "updated");
+    assert_eq!(b2.name, "updated");
+
+    Ok(())
+}
+
+/// Updating a record through the unique-index path (path 3) increments the
+/// version when the unique column changes.
+#[driver_test(requires(not(sql)))]
+pub async fn unique_index_update_increments_version(test: &mut Test) -> Result<()> {
+    version_model_with_unique!();
+
+    let mut db = test.setup_db(models!(User)).await;
+
+    let mut user = User::create()
+        .email("alice@example.com")
+        .exec(&mut db)
+        .await?;
+    assert_eq!(user.version, 1);
+
+    user.update()
+        .email("alice2@example.com")
+        .exec(&mut db)
+        .await?;
+    assert_eq!(user.version, 2);
+
+    user.update()
+        .email("alice3@example.com")
+        .exec(&mut db)
+        .await?;
+    assert_eq!(user.version, 3);
+
+    Ok(())
+}
+
+/// Stale update on a model with a unique index: the second update from a stale
+/// snapshot should fail.
+#[driver_test(requires(not(sql)))]
+pub async fn unique_index_stale_update_fails(test: &mut Test) -> Result<()> {
+    version_model_with_unique!();
+
+    let mut db = test.setup_db(models!(User)).await;
+
+    let mut user = User::create()
+        .email("bob@example.com")
+        .exec(&mut db)
+        .await?;
+    assert_eq!(user.version, 1);
+
+    let mut stale = User::filter_by_email("bob@example.com")
+        .get(&mut db)
+        .await?;
+    assert_eq!(stale.version, 1);
+
+    // Advance user.version to 2
+    user.update()
+        .email("bob2@example.com")
+        .exec(&mut db)
+        .await?;
+    assert_eq!(user.version, 2);
+
+    // Stale handle (version == 1) should fail
+    let result: Result<()> = stale.update().email("bob3@example.com").exec(&mut db).await;
+    assert!(
+        result.is_err(),
+        "expected stale unique-index update to fail"
     );
 
     Ok(())
