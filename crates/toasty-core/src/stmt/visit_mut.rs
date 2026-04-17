@@ -1289,6 +1289,7 @@ where
 {
     v.visit_source_mut(&mut node.from);
     v.visit_filter_mut(&mut node.filter);
+    v.visit_condition_mut(&mut node.condition);
 
     if let Some(returning) = &mut node.returning {
         v.visit_returning_mut(returning);

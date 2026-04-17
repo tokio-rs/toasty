@@ -229,10 +229,48 @@ impl Expand<'_> {
         let filter_method_ident = &filter.filter_method_ident;
         let arg_idents = self.expand_filter_arg_idents(filter);
 
+        let version_condition = self.expand_version_delete_condition();
+
         quote! {
-            #query_struct_ident::default()
-                .#filter_method_ident( #( & self.#arg_idents ),* )
-                .delete()
+            {
+                let __delete = #query_struct_ident::default()
+                    .#filter_method_ident( #( & self.#arg_idents ),* )
+                    .delete();
+                #version_condition
+            }
+        }
+    }
+
+    /// Generate the version condition to set on the delete statement, if the
+    /// model has a `#[version]` field. Returns a block that evaluates to
+    /// `toasty::stmt::Delete<()>`.
+    fn expand_version_delete_condition(&self) -> TokenStream {
+        let toasty = &self.toasty;
+
+        let Some(version_index) = self.model.kind.as_root().and_then(|r| r.version_field) else {
+            return quote! { __delete };
+        };
+
+        let field = &self.model.fields[version_index];
+        let index_tokenized = util::int(version_index);
+        let field_ident = &field.name.ident;
+
+        quote! {
+            __delete.set_condition(
+                #toasty::core::stmt::Condition::new(
+                    #toasty::core::stmt::Expr::eq(
+                        #toasty::core::stmt::Expr::Reference(
+                            #toasty::core::stmt::ExprReference::Field {
+                                nesting: 0,
+                                index: #index_tokenized,
+                            }
+                        ),
+                        #toasty::core::stmt::Expr::Value(
+                            #toasty::core::stmt::Value::U64(self.#field_ident)
+                        ),
+                    )
+                )
+            )
         }
     }
 
