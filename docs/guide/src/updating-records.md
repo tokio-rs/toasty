@@ -43,6 +43,12 @@ Only set the fields you want to change. Fields you don't set keep their current
 values. The `.update()` method takes `&mut self`, so you need a mutable binding.
 After `.exec()` completes, the instance reflects the new values.
 
+If the model has a [`#[version]`](./field-options.md#optimistic-concurrency-with-version)
+field, instance updates are version-guarded: Toasty conditions the write on the
+version the instance was last loaded with and increments it atomically. If a
+concurrent writer has modified the record in the meantime, `.exec()` returns an
+error.
+
 The generated SQL looks like:
 
 ```sql
