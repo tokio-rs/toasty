@@ -23,9 +23,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
         - uses: actions/checkout@v4
-        - uses: dtolnay/rust-toolchain@stable
-          with:
-            components: rustfmt
+        - uses: dtolnay/rust-toolchain@master
         - uses: Swatinem/rust-cache@v2
           with:
             save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -39,9 +37,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
         - uses: actions/checkout@v4
-        - uses: dtolnay/rust-toolchain@stable
-          with:
-            components: clippy
+        - uses: dtolnay/rust-toolchain@master
         - uses: Swatinem/rust-cache@v2
           with:
             save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -54,7 +50,7 @@ jobs:
       runs-on: ubuntu-latest
       steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
       - uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -82,7 +78,7 @@ jobs:
             TOASTY_CONNECTION_URL: mysql://toasty:toasty@localhost:3306/toasty
         steps:
         - uses: actions/checkout@v4
-        - uses: dtolnay/rust-toolchain@stable
+        - uses: dtolnay/rust-toolchain@master
         - uses: Swatinem/rust-cache@v2
           with:
             save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -110,7 +106,7 @@ jobs:
             TOASTY_TEST_POSTGRES_TLS_URL: postgresql://toasty:toasty@localhost:5433/toasty
         steps:
         - uses: actions/checkout@v4
-        - uses: dtolnay/rust-toolchain@stable
+        - uses: dtolnay/rust-toolchain@master
         - uses: Swatinem/rust-cache@v2
           with:
             save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -135,7 +131,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
         - uses: actions/checkout@v4
-        - uses: dtolnay/rust-toolchain@stable
+        - uses: dtolnay/rust-toolchain@master
         - uses: Swatinem/rust-cache@v2
           with:
             save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -156,7 +152,7 @@ jobs:
               - macos-latest
         steps:
         - uses: actions/checkout@v4
-        - uses: dtolnay/rust-toolchain@stable
+        - uses: dtolnay/rust-toolchain@master
         - uses: Swatinem/rust-cache@v2
           with:
             save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -171,7 +167,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
         - uses: actions/checkout@v4
-        - uses: dtolnay/rust-toolchain@stable
+        - uses: dtolnay/rust-toolchain@master
         - uses: Swatinem/rust-cache@v2
           with:
             save-if: ${{ github.ref == 'refs/heads/main' }}

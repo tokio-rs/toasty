@@ -1,0 +1,16 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "packageRules": [
+    {
+      "matchManagers": ["cargo"],
+      "groupName": "cargo dependencies",
+      "schedule": ["before 9am on Monday"]
+    },
+    {
+      "matchManagers": ["rust-toolchain"],
+      "groupName": "rust toolchain",
+      "schedule": ["before 9am on Monday"]
+    }
+  ]
+}
