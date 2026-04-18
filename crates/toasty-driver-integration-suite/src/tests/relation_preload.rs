@@ -2196,7 +2196,11 @@ pub async fn nested_has_many_then_has_many_with_empty_leaves(test: &mut Test) {
 // When several `.include()` calls share a common prefix (e.g. `todos()`), each
 // sibling nested include must be preserved — previously the second overwrote
 // the first at the shared field slot.
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_multi_relation))]
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::has_many_multi_relation)
+)]
 pub async fn sibling_nested_includes_on_shared_prefix(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -2229,7 +2233,11 @@ pub async fn sibling_nested_includes_on_shared_prefix(test: &mut Test) -> Result
 // Mirrors the exact pattern from issue #691: a bare top-level include plus
 // two sibling nested includes sharing that same top-level prefix. All three
 // paths must be honored.
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_multi_relation))]
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::has_many_multi_relation)
+)]
 pub async fn bare_and_nested_includes_on_shared_prefix(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -2251,6 +2259,85 @@ pub async fn bare_and_nested_includes_on_shared_prefix(test: &mut Test) -> Resul
     assert_eq!(1, todos.len());
     assert_eq!("Alice", todos[0].user.get().name);
     assert_eq!("Food", todos[0].category.get().name);
+
+    Ok(())
+}
+
+// DDB-compatible variant of the issue #691 repro. Same shared-prefix shape
+// (two sibling nested includes under `items()`) but using a schema pattern
+// known to work on all drivers including DynamoDB — mirrors the structure of
+// `nested_has_many_then_belongs_to_required` with an extra sibling BelongsTo.
+#[driver_test(id(ID))]
+pub async fn sibling_nested_includes_on_shared_prefix_non_sql(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Category {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        #[has_many]
+        items: toasty::HasMany<Item>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Brand {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+
+        title: String,
+
+        #[index]
+        category_id: ID,
+
+        #[belongs_to(key = category_id, references = id)]
+        category: toasty::BelongsTo<Category>,
+
+        #[index]
+        brand_id: ID,
+
+        #[belongs_to(key = brand_id, references = id)]
+        brand: toasty::BelongsTo<Brand>,
+    }
+
+    let mut db = test.setup_db(models!(Category, Brand, Item)).await;
+
+    let brand = Brand::create().name("BrandA").exec(&mut db).await?;
+    let cat = Category::create()
+        .name("Electronics")
+        .item(Item::create().title("Phone").brand(&brand))
+        .item(Item::create().title("Laptop").brand(&brand))
+        .exec(&mut db)
+        .await?;
+
+    // Two sibling nested includes under the `items()` prefix. Without the
+    // fix, the second would overwrite the first.
+    let loaded = Category::filter_by_id(cat.id)
+        .include(Category::fields().items().category())
+        .include(Category::fields().items().brand())
+        .get(&mut db)
+        .await?;
+
+    let items = loaded.items.get();
+    assert_eq!(2, items.len());
+    for item in items {
+        assert_eq!("Electronics", item.category.get().name);
+        assert_eq!("BrandA", item.brand.get().name);
+    }
 
     Ok(())
 }
