@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 use toasty_core::{
     driver::{Operation, Rows},
-    stmt::{Assignment, Source, Statement, UpdateTarget},
+    stmt::{Assignment, Expr, Source, Statement, UpdateTarget},
 };
 
 #[driver_test(id(ID))]
@@ -133,15 +133,16 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
         assert_struct!(op, Operation::QuerySql({
             stmt: Statement::Update({
                 target: UpdateTarget::Table(== item_table_id),
-                assignments: #{ [1]: Assignment::Set(_)},
+                assignments: #{ [1]: Assignment::Set(Expr::Arg({ position: 0 }))},
             }),
+            params: [{ value: == "updated!" }, ..],
             ret: None,
         }));
     } else {
         assert_struct!(op, Operation::UpdateByKey({
             table: == item_table_id,
             keys.len(): 1,
-            assignments: #{ [1]: Assignment::Set(_)},
+            assignments: #{ [1]: Assignment::Set(== "updated!")},
             filter: None,
             returning: false,
         }));

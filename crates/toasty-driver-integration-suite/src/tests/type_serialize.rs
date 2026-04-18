@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use toasty_core::{
     driver::{Operation, Rows},
-    stmt::{Assignment, ExprSet, Statement},
+    stmt::{Assignment, Expr, ExprSet, Statement, Value},
 };
 
 #[driver_test(id(ID))]
@@ -23,15 +23,17 @@ pub async fn serialize_vec_string(t: &mut Test) -> Result<(), BoxError> {
     // Insert — driver receives JSON string
     t.log().clear();
     let tags = vec!["rust".to_string(), "toasty".to_string()];
+    let expected_json = serde_json::to_string(&tags).unwrap();
     let mut record = Item::create().tags(tags.clone()).exec(&mut db).await?;
 
     let (op, _) = t.log().pop();
     assert_struct!(op, Operation::QuerySql({
         stmt: Statement::Insert({
             source.body: ExprSet::Values({
-                rows: [=~ (Any, Any)],
+                rows: [Expr::Record({ fields: [_, Expr::Arg(_)] })],
             }),
         }),
+        params: [.., { value: == expected_json }],
     }));
 
     assert_eq!(Item::get_by_id(&mut db, &record.id).await?.tags, tags);
@@ -39,18 +41,20 @@ pub async fn serialize_vec_string(t: &mut Test) -> Result<(), BoxError> {
     // Update — driver receives JSON string
     t.log().clear();
     let new_tags = vec!["b".to_string(), "c".to_string()];
+    let expected_json = serde_json::to_string(&new_tags).unwrap();
     record.update().tags(new_tags.clone()).exec(&mut db).await?;
 
     let (op, resp) = t.log().pop();
     if t.capability().sql {
         assert_struct!(op, Operation::QuerySql({
             stmt: Statement::Update({
-                assignments: #{ [1]: Assignment::Set(_)},
+                assignments: #{ [1]: Assignment::Set(Expr::Arg({ position: 0 }))},
             }),
+            params: [{ value: == expected_json }, ..],
         }));
     } else {
         assert_struct!(op, Operation::UpdateByKey({
-            assignments: #{ [1]: Assignment::Set(_)},
+            assignments: #{ [1]: Assignment::Set(== expected_json.as_str())},
         }));
     }
     assert_struct!(resp, { values: Rows::Count(1) });
@@ -76,20 +80,22 @@ pub async fn serialize_nullable(t: &mut Test) -> Result<(), BoxError> {
     // Some — driver receives JSON string
     t.log().clear();
     let map = HashMap::from([("key".to_string(), "value".to_string())]);
+    let expected_json = serde_json::to_string(&map).unwrap();
     let record = Item::create().data(Some(map.clone())).exec(&mut db).await?;
 
     let (op, _) = t.log().pop();
     assert_struct!(op, Operation::QuerySql({
         stmt: Statement::Insert({
             source.body: ExprSet::Values({
-                rows: [=~ (Any, Any)],
+                rows: [Expr::Record({ fields: [_, Expr::Arg(_)] })],
             }),
         }),
+        params: [.., { value: == expected_json }],
     }));
 
     assert_eq!(Item::get_by_id(&mut db, &record.id).await?.data, Some(map));
 
-    // None — driver receives SQL NULL
+    // None — driver receives SQL NULL. NULL stays inline (extractable scalars only).
     t.log().clear();
     let empty_record = Item::create().data(None).exec(&mut db).await?;
 
@@ -97,7 +103,7 @@ pub async fn serialize_nullable(t: &mut Test) -> Result<(), BoxError> {
     assert_struct!(op, Operation::QuerySql({
         stmt: Statement::Insert({
             source.body: ExprSet::Values({
-                rows: [=~ (Any, Any)],
+                rows: [Expr::Record({ fields: [_, Expr::Value(Value::Null)] })],
             }),
         }),
     }));
@@ -128,9 +134,10 @@ pub async fn serialize_non_nullable_option(t: &mut Test) -> Result<(), BoxError>
     assert_struct!(op, Operation::QuerySql({
         stmt: Statement::Insert({
             source.body: ExprSet::Values({
-                rows: [=~ (Any, Any)],
+                rows: [Expr::Record({ fields: [_, Expr::Arg(_)] })],
             }),
         }),
+        params: [.., { value: == "null" }],
     }));
 
     assert_eq!(
@@ -140,6 +147,7 @@ pub async fn serialize_non_nullable_option(t: &mut Test) -> Result<(), BoxError>
 
     // Some → JSON string with quotes
     t.log().clear();
+    let expected_json = serde_json::to_string(&Some("hello")).unwrap();
     let record = Item::create()
         .extra(Some("hello".to_string()))
         .exec(&mut db)
@@ -149,9 +157,10 @@ pub async fn serialize_non_nullable_option(t: &mut Test) -> Result<(), BoxError>
     assert_struct!(op, Operation::QuerySql({
         stmt: Statement::Insert({
             source.body: ExprSet::Values({
-                rows: [=~ (Any, Any)],
+                rows: [Expr::Record({ fields: [_, Expr::Arg(_)] })],
             }),
         }),
+        params: [.., { value: == expected_json }],
     }));
 
     assert_eq!(
@@ -186,15 +195,17 @@ pub async fn serialize_custom_struct(t: &mut Test) -> Result<(), BoxError> {
         version: 42,
         labels: vec!["alpha".to_string(), "beta".to_string()],
     };
+    let expected_json = serde_json::to_string(&meta).unwrap();
     let record = Item::create().meta(meta.clone()).exec(&mut db).await?;
 
     let (op, _) = t.log().pop();
     assert_struct!(op, Operation::QuerySql({
         stmt: Statement::Insert({
             source.body: ExprSet::Values({
-                rows: [=~ (Any, Any)],
+                rows: [Expr::Record({ fields: [_, Expr::Arg(_)] })],
             }),
         }),
+        params: [.., { value: == expected_json }],
     }));
 
     assert_eq!(Item::get_by_id(&mut db, &record.id).await?.meta, meta);

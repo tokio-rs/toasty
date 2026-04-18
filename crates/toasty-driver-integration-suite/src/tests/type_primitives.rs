@@ -1,9 +1,10 @@
 use crate::prelude::*;
 
 use std::{rc::Rc, sync::Arc};
+use toasty::schema::db;
 use toasty_core::{
     driver::Operation,
-    stmt::{Assignment, ExprSet, InsertTarget, Statement},
+    stmt::{Assignment, Expr, ExprSet, InsertTarget, Statement, Value},
 };
 
 /// Macro to generate the common test body for numeric types
@@ -49,9 +50,10 @@ macro_rules! num_ty_test_body {
                         columns: == columns(&mut db, "items", &["id", "val"]),
                     }),
                     source.body: ExprSet::Values({
-                        rows: [=~ (Any, Any)],
+                        rows: [Expr::Record({ fields: [_, Expr::Arg(_)] })],
                     }),
                 }),
+                params: [.., { value: =~ val }],
             }));
 
             let read = Item::get_by_id(&mut db, &created.id).await?;
@@ -274,9 +276,10 @@ pub async fn ty_str(test: &mut Test) -> Result<()> {
                     columns: == columns(&db, "items", &["id", "val"]),
                 }),
                 source.body: ExprSet::Values({
-                    rows: [=~ (Any, Any)],
+                    rows: [Expr::Record({ fields: [_, Expr::Arg(_)] })],
                 }),
             }),
+            params: [.., { value: == val.as_str() }],
         }));
 
         let read = Item::get_by_id(&mut db, &created.id).await?;
@@ -353,6 +356,7 @@ pub async fn ty_bytes(test: &mut Test) -> Result<()> {
 
     // Test 1: All test values round-trip
     for val in &test_values {
+        let expected = Value::Bytes(val.clone());
         let created = Item::create().val(val.clone()).exec(&mut db).await?;
 
         // Verify the INSERT operation stored the bytes value
@@ -364,9 +368,10 @@ pub async fn ty_bytes(test: &mut Test) -> Result<()> {
                     columns: == columns(&db, "items", &["id", "val"]),
                 }),
                 source.body: ExprSet::Values({
-                    rows: [=~ (Any, Any)],
+                    rows: [Expr::Record({ fields: [_, Expr::Arg(_)] })],
                 }),
             }),
+            params: [.., { value: == expected }],
         }));
 
         let read = Item::get_by_id(&mut db, &created.id).await?;
@@ -428,6 +433,12 @@ pub async fn ty_uuid(test: &mut Test) -> Result<()> {
 
         // Verify the INSERT operation - UUID should be stored in its native format
         let (op, _resp) = test.log().pop();
+        let expected = match &test.capability().storage_types.default_uuid_type {
+            db::Type::Uuid => Value::Uuid(val),
+            db::Type::Blob => Value::Bytes(val.as_bytes().to_vec()),
+            db::Type::Text | db::Type::VarChar(..) => Value::String(val.to_string()),
+            ty => todo!("ty={ty:#?}"),
+        };
         assert_struct!(op, Operation::QuerySql({
             stmt: Statement::Insert({
                 target: InsertTarget::Table({
@@ -435,9 +446,10 @@ pub async fn ty_uuid(test: &mut Test) -> Result<()> {
                     columns: == columns(&db, "items", &["id", "val"]),
                 }),
                 source.body: ExprSet::Values({
-                    rows: [=~ (Any, Any)],
+                    rows: [Expr::Record({ fields: [_, Expr::Arg(_)] })],
                 }),
             }),
+            params: [.., { value: == expected }],
         }));
 
         let read = Item::get_by_id(&mut db, &created.id).await?;

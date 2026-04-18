@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 use toasty_core::{
     driver::Operation,
-    stmt::{ExprSet, InsertTarget, Statement},
+    stmt::{Expr, ExprSet, InsertTarget, Statement},
 };
 
 #[driver_test(id(ID), requires(native_varchar))]
@@ -94,6 +94,7 @@ pub async fn specify_uuid_as_text(test: &mut Test) -> Result<()> {
 
     for _ in 0..16 {
         let val = uuid::Uuid::new_v4();
+        let val_str = val.to_string();
         let created = Item::create().val(val).exec(&mut db).await?;
 
         // Verify that the INSERT operation stored the UUID as a text string
@@ -108,9 +109,10 @@ pub async fn specify_uuid_as_text(test: &mut Test) -> Result<()> {
                     columns: == columns(&db, "items", &["id", "val"]),
                 }),
                 source.body: ExprSet::Values({
-                    rows: [=~ (Any, Any)],
+                    rows: [Expr::Record({ fields: [_, Expr::Arg(_)] })],
                 }),
             }),
+            params: [.., { value: == val_str }],
         }));
 
         let read = Item::get_by_id(&mut db, &created.id).await?;

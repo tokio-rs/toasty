@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 use toasty_core::{
     driver::Operation,
-    stmt::{ExprSet, InsertTarget, Statement},
+    stmt::{Expr, ExprSet, InsertTarget, Statement, Value},
 };
 
 #[driver_test(id(ID))]
@@ -31,6 +31,12 @@ pub async fn ty_timestamp(test: &mut Test) -> Result<(), BoxError> {
     // (SQLite, DynamoDB) encode it as a fixed-precision ISO 8601 text string.
     let (op, _) = test.log().pop();
 
+    let expected_val = if test.capability().native_timestamp {
+        Value::Timestamp(ts)
+    } else {
+        Value::String(format!("{ts:.9}"))
+    };
+
     assert_struct!(op, Operation::QuerySql({
         stmt: Statement::Insert({
             target: InsertTarget::Table({
@@ -38,9 +44,10 @@ pub async fn ty_timestamp(test: &mut Test) -> Result<(), BoxError> {
                 columns: == columns(&db, "items", &["id", "val"]),
             }),
             source.body: ExprSet::Values({
-                rows: [=~ (Any, Any)],
+                rows: [Expr::Record({ fields: [_, Expr::Arg(_)] })],
             }),
         }),
+        params: [.., { value: == expected_val }],
     }));
 
     // Verify round-trip with more values
@@ -311,6 +318,7 @@ pub async fn ty_timestamp_as_text(test: &mut Test) -> Result<(), BoxError> {
     let mut db = test.setup_db(models!(Item)).await;
 
     let ts = Timestamp::from_second(946684800)?; // 2000-01-01T00:00:00Z
+    let ts_text = format!("{ts:.9}");
 
     test.log().clear();
 
@@ -326,9 +334,10 @@ pub async fn ty_timestamp_as_text(test: &mut Test) -> Result<(), BoxError> {
                 columns: == columns(&db, "items", &["id", "val"]),
             }),
             source.body: ExprSet::Values({
-                rows: [=~ (Any, Any)],
+                rows: [Expr::Record({ fields: [_, Expr::Arg(_)] })],
             }),
         }),
+        params: [.., { value: == ts_text }],
     }));
 
     // Verify round-trip
