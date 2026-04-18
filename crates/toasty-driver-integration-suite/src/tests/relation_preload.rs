@@ -2204,13 +2204,18 @@ pub async fn nested_has_many_then_has_many_with_empty_leaves(test: &mut Test) {
 pub async fn sibling_nested_includes_on_shared_prefix(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
-    let category = Category::create().name("Food").exec(&mut db).await?;
-    let user = User::create()
-        .name("Alice")
-        .todo(Todo::create().title("T1").category(&category))
-        .todo(Todo::create().title("T2").category(&category))
+    let category = toasty::create!(Category { name: "Food" })
         .exec(&mut db)
         .await?;
+    let user = toasty::create!(User {
+        name: "Alice",
+        todos: [
+            { title: "T1", category: &category },
+            { title: "T2", category: &category },
+        ],
+    })
+    .exec(&mut db)
+    .await?;
 
     // Two sibling nested includes under the `todos()` prefix. Both must be
     // preloaded — neither should be silently clobbered by the other.
@@ -2241,12 +2246,15 @@ pub async fn sibling_nested_includes_on_shared_prefix(test: &mut Test) -> Result
 pub async fn bare_and_nested_includes_on_shared_prefix(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
-    let category = Category::create().name("Food").exec(&mut db).await?;
-    let user = User::create()
-        .name("Alice")
-        .todo(Todo::create().title("T1").category(&category))
+    let category = toasty::create!(Category { name: "Food" })
         .exec(&mut db)
         .await?;
+    let user = toasty::create!(User {
+        name: "Alice",
+        todos: [{ title: "T1", category: &category }],
+    })
+    .exec(&mut db)
+    .await?;
 
     let loaded = User::filter_by_id(user.id)
         .include(User::fields().todos()) // bare
@@ -2334,27 +2342,28 @@ pub async fn sibling_nested_includes_on_shared_prefix_non_sql(test: &mut Test) -
         .setup_db(models!(Category, Brand, Supplier, Item))
         .await;
 
-    let brand_a = Brand::create().name("BrandA").exec(&mut db).await?;
-    let brand_b = Brand::create().name("BrandB").exec(&mut db).await?;
-    let sup_a = Supplier::create().name("SupA").exec(&mut db).await?;
-    let sup_b = Supplier::create().name("SupB").exec(&mut db).await?;
-
-    let cat = Category::create()
-        .name("Electronics")
-        .item(
-            Item::create()
-                .title("Phone")
-                .brand(&brand_a)
-                .supplier(&sup_a),
-        )
-        .item(
-            Item::create()
-                .title("Laptop")
-                .brand(&brand_b)
-                .supplier(&sup_b),
-        )
+    let brand_a = toasty::create!(Brand { name: "BrandA" })
         .exec(&mut db)
         .await?;
+    let brand_b = toasty::create!(Brand { name: "BrandB" })
+        .exec(&mut db)
+        .await?;
+    let sup_a = toasty::create!(Supplier { name: "SupA" })
+        .exec(&mut db)
+        .await?;
+    let sup_b = toasty::create!(Supplier { name: "SupB" })
+        .exec(&mut db)
+        .await?;
+
+    let cat = toasty::create!(Category {
+        name: "Electronics",
+        items: [
+            { title: "Phone", brand: &brand_a, supplier: &sup_a },
+            { title: "Laptop", brand: &brand_b, supplier: &sup_b },
+        ],
+    })
+    .exec(&mut db)
+    .await?;
 
     // Two sibling nested includes under the `items()` prefix. Without the
     // fix, the second would overwrite the first.
