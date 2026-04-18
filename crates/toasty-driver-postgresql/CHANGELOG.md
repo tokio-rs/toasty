@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-postgresql-v0.3.0...toasty-driver-postgresql-v0.4.0) - 2026-04-11
+
+### Added
+
+- add opinionated support for postgres TLS using rustls ([#663](https://github.com/tokio-rs/toasty/pull/663))
+
+### Fixed
+
+- percent encoding in postgres connection strings ([#671](https://github.com/tokio-rs/toasty/pull/671))
+
 ## [0.3.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-postgresql-v0.2.0...toasty-driver-postgresql-v0.3.0) - 2026-04-03
 
 ### Other

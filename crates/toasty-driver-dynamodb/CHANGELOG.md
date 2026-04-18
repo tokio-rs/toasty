@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-dynamodb-v0.3.0...toasty-driver-dynamodb-v0.4.0) - 2026-04-11
+
+### Added
+
+- use on-demand billing for DynamoDB table and GSI creation ([#618](https://github.com/tokio-rs/toasty/pull/618))
+- support unsigned integer primary keys in DynamoDB ([#617](https://github.com/tokio-rs/toasty/pull/617))
+
 ## [0.3.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-dynamodb-v0.2.0...toasty-driver-dynamodb-v0.3.0) - 2026-04-03
 
 ### Other

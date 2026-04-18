@@ -5,6 +5,11 @@ on:
     branches:
       - main
 
+env:
+  # Pinned so a new Rust release cannot break release-plz on its own.
+  # Bumped automatically by Renovate; see .github/renovate.json5.
+  RUST_STABLE_VERSION: "1.95.0"
+
 jobs:
   release-plz-release:
     name: Release-plz release
@@ -23,7 +28,9 @@ jobs:
           token: ${{ secrets.RELEASE_PLZ_TOKEN }}
       - &install-rust
         name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_STABLE_VERSION }}
       - name: Run release-plz
         uses: release-plz/action@v0.5
         with:

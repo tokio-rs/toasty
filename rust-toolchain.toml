@@ -1,2 +1,5 @@
 [toolchain]
-channel = "stable"
+# Pinned so a new Rust release cannot break local development on its own.
+# Bumped automatically by Renovate in lockstep with `RUST_STABLE_VERSION`
+# in the workflow files; see .github/renovate.json5.
+channel = "1.95.0"
