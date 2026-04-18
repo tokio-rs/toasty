@@ -18,7 +18,8 @@ fn empty_set() {
 
     assert!(
         models.is_empty(),
-        "expected 0 models in model set, got: {:?}", models.len()
+        "expected 0 models in model set, got: {:?}",
+        models.len()
     );
 }
 
@@ -65,7 +66,8 @@ fn current_crate() {
     assert_eq!(
         models.len(),
         2,
-        "expected 2 models in model set, got: {:?}", models.len()
+        "expected 2 models in model set, got: {:?}",
+        models.len()
     );
 }
 
@@ -80,7 +82,8 @@ fn single_external_crate() {
     assert_eq!(
         models.len(),
         1,
-        "expected 1 model in model set, got: {:?}", models.len()
+        "expected 1 model in model set, got: {:?}",
+        models.len()
     );
 }
 
@@ -99,7 +102,8 @@ fn multiple_external_crates() {
     assert_eq!(
         models.len(),
         2,
-        "expected 2 models in model set, got: {:?}", models.len()
+        "expected 2 models in model set, got: {:?}",
+        models.len()
     );
 }
 
@@ -126,7 +130,8 @@ fn mixed_inputs() {
     assert_eq!(
         models.len(),
         4,
-        "expected 4 models in model set, got: {:?}", models.len()
+        "expected 4 models in model set, got: {:?}",
+        models.len()
     );
 }
 
@@ -137,13 +142,14 @@ fn duplicates() {
     assert_eq!(
         models.len(),
         1,
-        "expected 1 model in model set, got: {:?}", models.len()
+        "expected 1 model in model set, got: {:?}",
+        models.len()
     );
 }
 
 #[test]
 fn trailing_comma() {
-    let models = toasty::models!(ModelA, ModelB, );
+    let models = toasty::models!(ModelA, ModelB,);
 
     assert!(
         models.contains(ModelA::id()),
@@ -156,6 +162,7 @@ fn trailing_comma() {
     assert_eq!(
         models.len(),
         2,
-        "expected 2 models in model set, got: {:?}", models.len()
+        "expected 2 models in model set, got: {:?}",
+        models.len()
     );
 }
