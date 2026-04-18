@@ -1,4 +1,5 @@
 mod create;
+mod docs;
 mod embedded_enum;
 mod fields;
 mod filters;
@@ -383,7 +384,10 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let span = field_ident.span();
 
+        let doc = docs::relation_field_accessor(&field_ident.to_string());
+
         quote_spanned! { span=>
+            #[doc = #doc]
             #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::OneField<__Origin> {
                 <#ty as #toasty::Relation>::OneField::from_path(
                     self.path().chain(
@@ -407,7 +411,10 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let span = field_ident.span();
 
+        let doc = docs::field_accessor(&field_ident.to_string());
+
         quote_spanned! { span=>
+            #[doc = #doc]
             #vis fn #field_ident(&self) -> <#ty as #toasty::Field>::Path<__Origin> {
                 <#ty as #toasty::Field>::new_path(
                     self.path().chain(

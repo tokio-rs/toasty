@@ -1,4 +1,4 @@
-use super::{Expand, util};
+use super::{Expand, docs, util};
 use crate::model::schema::FieldTy;
 
 use proc_macro2::TokenStream;
@@ -14,10 +14,15 @@ impl Expand<'_> {
         let create_methods = self.expand_create_methods();
         let default_stmts = self.expand_create_default_stmts();
 
+        let model_name = model_ident.to_string();
+        let doc_struct = docs::create_struct(&model_name);
+        let doc_exec = docs::create_exec(&model_name);
+
         // Span the struct definition to the model ident so that "method not
         // found for this struct" errors point at `struct User`, not the derive
         // attribute.
         let struct_def = quote_spanned! { model_span=>
+            #[doc = #doc_struct]
             #[derive(Clone)]
             #vis struct #create_struct_ident {
                 stmt: #toasty::stmt::Insert<#model_ident>,
@@ -30,6 +35,7 @@ impl Expand<'_> {
             impl #create_struct_ident {
                 #create_methods
 
+                #[doc = #doc_exec]
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
                     executor.exec(self.stmt.into()).await
                 }
@@ -136,12 +142,15 @@ impl Expand<'_> {
             .map(move |(index, field)| {
                 let name = &field.name.ident;
                 let index_tokenized = util::int(index);
+                let model_name = model_ident.to_string();
+                let doc_setter = docs::create_field_setter(&model_name, &name.to_string());
 
                 match &field.ty {
                     FieldTy::BelongsTo(rel) => {
                         let ty = &rel.ty;
 
                         quote! {
+                            #[doc = #doc_setter]
                             #vis fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
                                 // Silences unused field warning when the field is set on creation.
                                 if false {
@@ -159,12 +168,17 @@ impl Expand<'_> {
                         let plural = name;
                         let ty = &rel.ty;
 
+                        let doc_singular = docs::create_has_many_singular(&model_name, &singular.to_string());
+                        let doc_plural = docs::create_has_many_plural(&model_name, &plural.to_string());
+
                         quote! {
+                            #[doc = #doc_singular]
                             #vis fn #singular(mut self, #singular: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
                                 self.stmt.insert(#index_tokenized, #singular.into_expr());
                                 self
                             }
 
+                            #[doc = #doc_plural]
                             #vis fn #plural(mut self, #plural: impl #toasty::IntoExpr<#toasty::List<<#ty as #toasty::Relation>::Model>>) -> Self {
                                 self.stmt.insert_all(#index_tokenized, #plural.into_expr());
                                 self
@@ -175,6 +189,7 @@ impl Expand<'_> {
                         let ty = &rel.ty;
 
                         quote! {
+                            #[doc = #doc_setter]
                             #vis fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
                                 self.stmt.set(#index_tokenized, #name.into_expr());
                                 self
@@ -187,6 +202,7 @@ impl Expand<'_> {
                             // For nullable serialized fields, extract the inner type from Option<T>
                             // Accept Option<InnerType>, serialize Some(v) as JSON, None as NULL
                             quote! {
+                                #[doc = #doc_setter]
                                 #vis fn #name(mut self, #name: #ty) -> Self {
                                     match &#name {
                                         Some(v) => {
@@ -203,6 +219,7 @@ impl Expand<'_> {
                         } else {
                             // Non-nullable serialized field: accept T directly, serialize to JSON
                             quote! {
+                                #[doc = #doc_setter]
                                 #vis fn #name(mut self, #name: #ty) -> Self {
                                     let json = #toasty::serde_json::to_string(&#name).expect("failed to serialize");
                                     self.stmt.set(#index_tokenized, <String as #toasty::IntoExpr<String>>::into_expr(json));
@@ -213,6 +230,7 @@ impl Expand<'_> {
                     }
                     FieldTy::Primitive(ty) => {
                         quote! {
+                            #[doc = #doc_setter]
                             #vis fn #name(mut self, #name: impl #toasty::IntoExpr<#ty>) -> Self {
                                 self.stmt.set(#index_tokenized, #name.into_expr());
                                 self

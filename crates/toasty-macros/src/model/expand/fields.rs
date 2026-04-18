@@ -1,4 +1,4 @@
-use super::{Expand, util};
+use super::{Expand, docs, util};
 use crate::model::schema::FieldTy::{BelongsTo, HasMany, HasOne, Primitive};
 use crate::model::schema::ModelKind;
 use proc_macro2::TokenStream;
@@ -11,9 +11,16 @@ impl Expand<'_> {
         let field_struct_ident = self.field_struct_ident();
         let model_ident = &self.model.ident;
 
+        let model_name = model_ident.to_string();
+        let doc_struct = docs::field_struct(&model_name);
+        let doc_eq = docs::field_struct_eq(&model_name);
+        let doc_in_query = docs::field_struct_in_query(&model_name);
+
         let create_method = if let ModelKind::Root(root) = &self.model.kind {
             let create_struct_ident = &root.create_struct_ident;
+            let doc_create = docs::field_struct_create(&model_name);
             quote! {
+                #[doc = #doc_create]
                 #vis fn create(&self) -> #create_struct_ident {
                     #create_struct_ident::default()
                 }
@@ -53,7 +60,10 @@ impl Expand<'_> {
                             self.path().chain(#toasty::Path::<#model_ident, _>::from_field_index(#field_offset))
                         };
 
+                        let doc = docs::has_many_field_accessor(&field_ident.to_string());
+
                         quote_spanned! { span=>
+                            #[doc = #doc]
                             #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::ManyField<__Origin> {
                                 <#ty as #toasty::Relation>::ManyField::from_path(#path)
                             }
@@ -66,6 +76,7 @@ impl Expand<'_> {
         // for this struct" errors point at `struct User`, not at the derive.
         let model_span = model_ident.span();
         let struct_def = quote_spanned! { model_span=>
+            #[doc = #doc_struct]
             #vis struct #field_struct_ident<__Origin> {
                 path: #toasty::Path<__Origin, #model_ident>,
             }
@@ -83,11 +94,13 @@ impl Expand<'_> {
                     self.path.clone()
                 }
 
+                #[doc = #doc_eq]
                 #vis fn eq(self, rhs: impl #toasty::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
                     use #toasty::IntoExpr;
                     self.path.eq(rhs.into_expr())
                 }
 
+                #[doc = #doc_in_query]
                 #vis fn in_query(self, rhs: impl #toasty::IntoStatement<Returning = #toasty::List<#model_ident>>) -> #toasty::stmt::Expr<bool> {
                     self.path.in_query(rhs)
                 }
@@ -111,6 +124,9 @@ impl Expand<'_> {
         let field_list_struct_ident = self.field_list_struct_ident();
         let model_ident = &self.model.ident;
         let is_root = matches!(self.model.kind, ModelKind::Root(_));
+
+        let model_name = model_ident.to_string();
+        let doc_list_struct = docs::field_list_struct(&model_name);
 
         // Generate methods that return list field paths
         let methods = self
@@ -145,7 +161,9 @@ impl Expand<'_> {
 
         let create_method = if let ModelKind::Root(root) = &self.model.kind {
             let create_struct_ident = &root.create_struct_ident;
+            let doc_create = docs::field_struct_create(&model_name);
             quote! {
+                #[doc = #doc_create]
                 #vis fn create(&self) -> #create_struct_ident {
                     #create_struct_ident::default()
                 }
@@ -155,11 +173,10 @@ impl Expand<'_> {
         };
 
         // any() is only available on root models (requires Model trait bound)
+        let doc_any = docs::field_list_any(&model_name);
         let any_method = if is_root {
             quote! {
-                /// Filter the parent model by a condition on the associated
-                /// (child) model. Returns `true` when **any** associated record
-                /// satisfies `filter`.
+                #[doc = #doc_any]
                 #vis fn any(self, filter: #toasty::stmt::Expr<bool>) -> #toasty::stmt::Expr<bool> {
                     self.path.any(filter)
                 }
@@ -170,6 +187,7 @@ impl Expand<'_> {
 
         let model_span = model_ident.span();
         let struct_def = quote_spanned! { model_span=>
+            #[doc = #doc_list_struct]
             #vis struct #field_list_struct_ident<__Origin> {
                 path: #toasty::Path<__Origin, #toasty::List<#model_ident>>,
             }
@@ -208,9 +226,22 @@ impl Expand<'_> {
         let field_struct_ident = self.field_struct_ident();
         let model_ident = &self.model.ident;
 
+        let example_field = self
+            .model
+            .fields
+            .first()
+            .map(|f| f.name.ident.to_string())
+            .unwrap_or_else(|| "field_name".to_string());
+        let doc_fields = docs::model_fields(
+            &model_ident.to_string(),
+            &field_struct_ident.to_string(),
+            &example_field,
+        );
+
         // Generate fields() as a method instead of const to avoid const initialization issues
         // This will be placed inside the existing impl block for the model
         quote!(
+            #[doc = #doc_fields]
             #vis fn fields() -> #field_struct_ident<#model_ident> {
                 #field_struct_ident {
                     path: #toasty::Path::root(),
@@ -279,7 +310,10 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let span = field_ident.span();
 
+        let doc = docs::list_field_accessor(&field_ident.to_string());
+
         quote_spanned! { span=>
+            #[doc = #doc]
             #vis fn #field_ident(&self) -> <#ty as #toasty::Field>::ListPath<__Origin> {
                 <#ty as #toasty::Field>::new_list_path(
                     self.path().chain(
@@ -303,7 +337,10 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let span = field_ident.span();
 
+        let doc = docs::list_relation_accessor(&field_ident.to_string());
+
         quote_spanned! { span=>
+            #[doc = #doc]
             #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::ManyField<__Origin> {
                 <#ty as #toasty::Relation>::ManyField::from_path(
                     self.path().chain(
