@@ -4,7 +4,7 @@ use std::{rc::Rc, sync::Arc};
 use toasty::schema::db;
 use toasty_core::{
     driver::Operation,
-    stmt::{Assignment, Expr, ExprSet, InsertTarget, Statement, Value},
+    stmt::{Assignment, ExprSet, InsertTarget, Statement, Value},
 };
 
 /// Macro to generate the common test body for numeric types
@@ -43,6 +43,8 @@ macro_rules! num_ty_test_body {
 
             // Verify the INSERT operation stored the correct value
             let (op, _resp) = test.log().pop();
+            let sql = test.capability().sql;
+            let val_pat = if sql { ArgOr::Arg(1) } else { ArgOr::Value(val) };
             assert_struct!(op, Operation::QuerySql({
                 stmt: Statement::Insert({
                     target: InsertTarget::Table({
@@ -50,11 +52,15 @@ macro_rules! num_ty_test_body {
                         columns: == columns(&mut db, "items", &["id", "val"]),
                     }),
                     source.body: ExprSet::Values({
-                        rows: [Expr::Record({ fields: [_, Expr::Arg(_)] })],
+                        rows: [=~ (Any, val_pat)],
                     }),
                 }),
-                params: [.., { value: =~ val }],
             }));
+            if sql {
+                assert_struct!(op, Operation::QuerySql({
+                    params[1].value: =~ val,
+                }));
+            }
 
             let read = Item::get_by_id(&mut db, &created.id).await?;
             assert_eq!(read.val, val, "Round-trip failed for: {}", val);
@@ -269,6 +275,12 @@ pub async fn ty_str(test: &mut Test) -> Result<()> {
 
         // Verify the INSERT operation stored the string value
         let (op, _resp) = test.log().pop();
+        let sql = test.capability().sql;
+        let val_pat = if sql {
+            ArgOr::Arg(1)
+        } else {
+            ArgOr::Value(val.as_str())
+        };
         assert_struct!(op, Operation::QuerySql({
             stmt: Statement::Insert({
                 target: InsertTarget::Table({
@@ -276,11 +288,15 @@ pub async fn ty_str(test: &mut Test) -> Result<()> {
                     columns: == columns(&db, "items", &["id", "val"]),
                 }),
                 source.body: ExprSet::Values({
-                    rows: [Expr::Record({ fields: [_, Expr::Arg(_)] })],
+                    rows: [=~ (Any, val_pat)],
                 }),
             }),
-            params: [.., { value: == val.as_str() }],
         }));
+        if sql {
+            assert_struct!(op, Operation::QuerySql({
+                params[1].value: == val.as_str(),
+            }));
+        }
 
         let read = Item::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val);
@@ -361,6 +377,12 @@ pub async fn ty_bytes(test: &mut Test) -> Result<()> {
 
         // Verify the INSERT operation stored the bytes value
         let (op, _resp) = test.log().pop();
+        let sql = test.capability().sql;
+        let val_pat = if sql {
+            ArgOr::Arg(1)
+        } else {
+            ArgOr::Value(expected.clone())
+        };
         assert_struct!(op, Operation::QuerySql({
             stmt: Statement::Insert({
                 target: InsertTarget::Table({
@@ -368,11 +390,15 @@ pub async fn ty_bytes(test: &mut Test) -> Result<()> {
                     columns: == columns(&db, "items", &["id", "val"]),
                 }),
                 source.body: ExprSet::Values({
-                    rows: [Expr::Record({ fields: [_, Expr::Arg(_)] })],
+                    rows: [=~ (Any, val_pat)],
                 }),
             }),
-            params: [.., { value: == expected }],
         }));
+        if sql {
+            assert_struct!(op, Operation::QuerySql({
+                params[1].value: == expected,
+            }));
+        }
 
         let read = Item::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, *val);
@@ -439,6 +465,12 @@ pub async fn ty_uuid(test: &mut Test) -> Result<()> {
             db::Type::Text | db::Type::VarChar(..) => Value::String(val.to_string()),
             ty => todo!("ty={ty:#?}"),
         };
+        let sql = test.capability().sql;
+        let val_pat = if sql {
+            ArgOr::Arg(1)
+        } else {
+            ArgOr::Value(expected.clone())
+        };
         assert_struct!(op, Operation::QuerySql({
             stmt: Statement::Insert({
                 target: InsertTarget::Table({
@@ -446,11 +478,15 @@ pub async fn ty_uuid(test: &mut Test) -> Result<()> {
                     columns: == columns(&db, "items", &["id", "val"]),
                 }),
                 source.body: ExprSet::Values({
-                    rows: [Expr::Record({ fields: [_, Expr::Arg(_)] })],
+                    rows: [=~ (Any, val_pat)],
                 }),
             }),
-            params: [.., { value: == expected }],
         }));
+        if sql {
+            assert_struct!(op, Operation::QuerySql({
+                params[1].value: == expected,
+            }));
+        }
 
         let read = Item::get_by_id(&mut db, &created.id).await?;
         assert_eq!(read.val, val);

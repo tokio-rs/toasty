@@ -37,7 +37,11 @@ pub use toasty_driver_integration_suite_macros::generate_driver_test_variants;
 toasty_driver_integration_suite_macros::generate_test_registry!("src/tests");
 
 mod prelude {
-    pub(crate) use crate::{Test, columns, stmt::Any, table_id};
+    pub(crate) use crate::{
+        Test, columns,
+        stmt::{Any, ArgOr},
+        table_id,
+    };
     pub(crate) use toasty::Result;
     pub(crate) use toasty::models;
     pub(crate) use toasty::schema::Register;

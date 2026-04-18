@@ -48,19 +48,35 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
 
-    // Verify column list and that the discriminant is stored as I64, not a string or record
-    assert_struct!(t.log().pop_op(), Operation::QuerySql({
+    // Verify column list and that the discriminant is stored as I64, not a string or record.
+    //
+    // Position: id_u64 uses Expr::Default (no param), so status is at
+    // params[1] (name, status). id_uuid adds the uuid at params[0], shifting
+    // status to params[2].
+    let sql = t.capability().sql;
+    let status_pos = if driver_test_cfg!(id_u64) { 1 } else { 2 };
+    let status_pat = if sql {
+        ArgOr::Arg(status_pos)
+    } else {
+        ArgOr::Value(1i64)
+    };
+    let op = t.log().pop_op();
+    assert_struct!(op, Operation::QuerySql({
         stmt: Statement::Insert({
             source.body: ExprSet::Values({
-                rows: [Expr::Record({ fields: [_, _, Expr::Arg(_)] })],
+                rows: [=~ (Any, Any, status_pat)],
             }),
             target: toasty_core::stmt::InsertTarget::Table({
                 table: == user_table,
                 columns: == columns(&db, "users", &["id", "name", "status"]),
             }),
         }),
-        params: [.., { value: == 1i64 }],
     }));
+    if sql {
+        assert_struct!(op, Operation::QuerySql({
+            params[status_pos].value: == 1i64,
+        }));
+    }
 
     // Read: discriminant is loaded back and converted to the enum variant
     let found = User::get_by_id(&mut db, &user.id).await?;

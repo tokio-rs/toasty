@@ -7,6 +7,30 @@ use toasty_core::{
     stmt::{Assignment, Expr, ExprSet, Statement, Value},
 };
 
+/// Assert the INSERT emitted a single row whose last column carries `expected`
+/// (as a JSON-serialized string). Covers both SQL (bind parameter at `pos`)
+/// and non-SQL (inline value) representations.
+fn assert_insert_serialized(t: &Test, op: &Operation, pos: usize, expected: &str) {
+    let sql = t.capability().sql;
+    let val_pat = if sql {
+        ArgOr::Arg(pos)
+    } else {
+        ArgOr::Value(expected)
+    };
+    assert_struct!(op, Operation::QuerySql({
+        stmt: Statement::Insert({
+            source.body: ExprSet::Values({
+                rows: [=~ (Any, val_pat)],
+            }),
+        }),
+    }));
+    if sql {
+        assert_struct!(op, Operation::QuerySql({
+            params[pos].value: == expected,
+        }));
+    }
+}
+
 #[driver_test(id(ID))]
 pub async fn serialize_vec_string(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
@@ -27,14 +51,8 @@ pub async fn serialize_vec_string(t: &mut Test) -> Result<(), BoxError> {
     let mut record = Item::create().tags(tags.clone()).exec(&mut db).await?;
 
     let (op, _) = t.log().pop();
-    assert_struct!(op, Operation::QuerySql({
-        stmt: Statement::Insert({
-            source.body: ExprSet::Values({
-                rows: [Expr::Record({ fields: [_, Expr::Arg(_)] })],
-            }),
-        }),
-        params: [.., { value: == expected_json }],
-    }));
+    let val_pos = if driver_test_cfg!(id_u64) { 0 } else { 1 };
+    assert_insert_serialized(t, &op, val_pos, &expected_json);
 
     assert_eq!(Item::get_by_id(&mut db, &record.id).await?.tags, tags);
 
@@ -50,7 +68,7 @@ pub async fn serialize_vec_string(t: &mut Test) -> Result<(), BoxError> {
             stmt: Statement::Update({
                 assignments: #{ [1]: Assignment::Set(Expr::Arg({ position: 0 }))},
             }),
-            params: [{ value: == expected_json }, ..],
+            params[0].value: == expected_json,
         }));
     } else {
         assert_struct!(op, Operation::UpdateByKey({
@@ -84,18 +102,13 @@ pub async fn serialize_nullable(t: &mut Test) -> Result<(), BoxError> {
     let record = Item::create().data(Some(map.clone())).exec(&mut db).await?;
 
     let (op, _) = t.log().pop();
-    assert_struct!(op, Operation::QuerySql({
-        stmt: Statement::Insert({
-            source.body: ExprSet::Values({
-                rows: [Expr::Record({ fields: [_, Expr::Arg(_)] })],
-            }),
-        }),
-        params: [.., { value: == expected_json }],
-    }));
+    let val_pos = if driver_test_cfg!(id_u64) { 0 } else { 1 };
+    assert_insert_serialized(t, &op, val_pos, &expected_json);
 
     assert_eq!(Item::get_by_id(&mut db, &record.id).await?.data, Some(map));
 
-    // None — driver receives SQL NULL. NULL stays inline (extractable scalars only).
+    // None — driver receives SQL NULL. NULL stays inline (extractable scalars
+    // only), so the row structure matches for both paths.
     t.log().clear();
     let empty_record = Item::create().data(None).exec(&mut db).await?;
 
@@ -103,7 +116,7 @@ pub async fn serialize_nullable(t: &mut Test) -> Result<(), BoxError> {
     assert_struct!(op, Operation::QuerySql({
         stmt: Statement::Insert({
             source.body: ExprSet::Values({
-                rows: [Expr::Record({ fields: [_, Expr::Value(Value::Null)] })],
+                rows: [=~ (Any, Value::Null)],
             }),
         }),
     }));
@@ -131,14 +144,8 @@ pub async fn serialize_non_nullable_option(t: &mut Test) -> Result<(), BoxError>
     let empty_record = Item::create().extra(None).exec(&mut db).await?;
 
     let (op, _) = t.log().pop();
-    assert_struct!(op, Operation::QuerySql({
-        stmt: Statement::Insert({
-            source.body: ExprSet::Values({
-                rows: [Expr::Record({ fields: [_, Expr::Arg(_)] })],
-            }),
-        }),
-        params: [.., { value: == "null" }],
-    }));
+    let val_pos = if driver_test_cfg!(id_u64) { 0 } else { 1 };
+    assert_insert_serialized(t, &op, val_pos, "null");
 
     assert_eq!(
         Item::get_by_id(&mut db, &empty_record.id).await?.extra,
@@ -154,14 +161,8 @@ pub async fn serialize_non_nullable_option(t: &mut Test) -> Result<(), BoxError>
         .await?;
 
     let (op, _) = t.log().pop();
-    assert_struct!(op, Operation::QuerySql({
-        stmt: Statement::Insert({
-            source.body: ExprSet::Values({
-                rows: [Expr::Record({ fields: [_, Expr::Arg(_)] })],
-            }),
-        }),
-        params: [.., { value: == expected_json }],
-    }));
+    let val_pos = if driver_test_cfg!(id_u64) { 0 } else { 1 };
+    assert_insert_serialized(t, &op, val_pos, &expected_json);
 
     assert_eq!(
         Item::get_by_id(&mut db, &record.id).await?.extra,
@@ -199,14 +200,8 @@ pub async fn serialize_custom_struct(t: &mut Test) -> Result<(), BoxError> {
     let record = Item::create().meta(meta.clone()).exec(&mut db).await?;
 
     let (op, _) = t.log().pop();
-    assert_struct!(op, Operation::QuerySql({
-        stmt: Statement::Insert({
-            source.body: ExprSet::Values({
-                rows: [Expr::Record({ fields: [_, Expr::Arg(_)] })],
-            }),
-        }),
-        params: [.., { value: == expected_json }],
-    }));
+    let val_pos = if driver_test_cfg!(id_u64) { 0 } else { 1 };
+    assert_insert_serialized(t, &op, val_pos, &expected_json);
 
     assert_eq!(Item::get_by_id(&mut db, &record.id).await?.meta, meta);
 

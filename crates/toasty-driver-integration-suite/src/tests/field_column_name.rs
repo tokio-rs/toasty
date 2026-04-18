@@ -30,7 +30,19 @@ pub async fn specify_custom_column_name(test: &mut Test) -> Result<()> {
     let user_table_id = table_id(&db, "users");
     let expected_columns = columns(&db, "users", &["id", "my_name"]);
 
-    // Verify the operation uses the correct table and column names
+    // Verify the operation uses the correct table and column names, and that
+    // the value is transmitted either as a bind parameter (SQL) or inline (DDB).
+    //
+    // Position: id_u64 uses Expr::Default for auto-increment (no param), so "foo"
+    // is at params[0]. id_uuid generates the uuid client-side, so "foo" is at
+    // params[1].
+    let sql = test.capability().sql;
+    let val_pos = if driver_test_cfg!(id_u64) { 0 } else { 1 };
+    let val = if sql {
+        ArgOr::Arg(val_pos)
+    } else {
+        ArgOr::Value("foo")
+    };
     assert_struct!(op, Operation::QuerySql({
         stmt: Statement::Insert({
             target: InsertTarget::Table({
@@ -38,11 +50,15 @@ pub async fn specify_custom_column_name(test: &mut Test) -> Result<()> {
                 columns: == expected_columns,
             }),
             source.body: ExprSet::Values({
-                rows: [Expr::Record({ fields: [_, Expr::Arg(_)] })],
+                rows: [=~ (Any, val)],
             }),
         }),
-        params: [.., { value: == "foo" }],
     }));
+    if sql {
+        assert_struct!(op, Operation::QuerySql({
+            params[val_pos].value: == "foo",
+        }));
+    }
     Ok(())
 }
 
@@ -72,7 +88,8 @@ pub async fn specify_custom_column_name_with_type(test: &mut Test) -> Result<()>
     let expected_columns = columns(&db, "users", &["id", "my_name"]);
 
     // Verify the operation uses the correct table and column names, and that the
-    // value "foo" is sent as a string bind parameter.
+    // value "foo" is sent as a string bind parameter. This test is SQL-only
+    // (requires native_varchar), so the value always becomes an Arg placeholder.
     assert_struct!(op, Operation::QuerySql({
         stmt: Statement::Insert({
             target: InsertTarget::Table({
