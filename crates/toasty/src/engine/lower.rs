@@ -497,8 +497,26 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
             let mut returning = self.mapping_unwrap().table_to_model.lower_returning_model();
 
-            for path in &include {
-                self.build_include_subquery(&mut returning, path);
+            // Group paths by their first field so includes sharing a prefix
+            // produce a single merged subquery. Without this, each `.include()`
+            // call would overwrite the previous subquery at the same field
+            // slot (see issue #691).
+            let mut groups: Vec<(usize, Vec<stmt::Projection>)> = vec![];
+            for path in include {
+                let (first, rest) = match path.projection.as_slice() {
+                    [] => panic!("Empty include path"),
+                    [first, rest @ ..] => (*first, stmt::Projection::from(rest)),
+                };
+
+                if let Some((_, rests)) = groups.iter_mut().find(|(f, _)| *f == first) {
+                    rests.push(rest);
+                } else {
+                    groups.push((first, vec![rest]));
+                }
+            }
+
+            for (field_index, nested) in groups {
+                self.build_include_subquery(&mut returning, field_index, &nested);
             }
 
             *i = stmt::Returning::Expr(returning);
@@ -816,14 +834,13 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         }
     }
 
-    fn build_include_subquery(&mut self, returning: &mut stmt::Expr, path: &stmt::Path) {
-        let projection = &path.projection[..];
-        let (field_index, rest) = match projection {
-            [] => panic!("Empty include path"),
-            [first, rest @ ..] => (first, rest),
-        };
-
-        let field = &self.model_unwrap().fields[*field_index];
+    fn build_include_subquery(
+        &mut self,
+        returning: &mut stmt::Expr,
+        field_index: usize,
+        nested: &[stmt::Projection],
+    ) {
+        let field = &self.model_unwrap().fields[field_index];
 
         let (mut stmt, target_model_id) = match &field.ty {
             FieldTy::HasMany(rel) => (
@@ -878,15 +895,18 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             _ => todo!(),
         };
 
-        // If there are remaining steps in the path, add them as nested includes
-        // on the subquery. The lowering pipeline will recursively process them
-        // when it encounters the Returning::Model on this subquery.
-        if !rest.is_empty() {
-            let remaining_path = stmt::Path {
-                root: stmt::PathRoot::Model(target_model_id),
-                projection: stmt::Projection::from(rest),
-            };
-            stmt.include(remaining_path);
+        // Attach each non-empty remainder as a nested include on the subquery.
+        // Empty remainders (from a bare `.include(posts())`) need no nested
+        // include — the subquery itself satisfies them. The lowering pipeline
+        // will recursively group and process the nested includes when it
+        // encounters `Returning::Model` on this subquery.
+        for rest in nested {
+            if !rest.is_empty() {
+                stmt.include(stmt::Path {
+                    root: stmt::PathRoot::Model(target_model_id),
+                    projection: rest.clone(),
+                });
+            }
         }
 
         // Simplify the new stmt to handle relations.
@@ -921,7 +941,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             });
         }
 
-        returning.entry_mut(*field_index).insert(sub_expr);
+        returning.entry_mut(field_index).insert(sub_expr);
     }
 
     /// Returns the ArgId for the new reference

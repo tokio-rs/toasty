@@ -2191,3 +2191,66 @@ pub async fn nested_has_many_then_has_many_with_empty_leaves(test: &mut Test) {
     }
     assert_eq!(1, total_steps);
 }
+
+// ===== Issue #691: multiple nested includes sharing a prefix =====
+// When several `.include()` calls share a common prefix (e.g. `todos()`), each
+// sibling nested include must be preserved — previously the second overwrote
+// the first at the shared field slot.
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_multi_relation))]
+pub async fn sibling_nested_includes_on_shared_prefix(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let category = Category::create().name("Food").exec(&mut db).await?;
+    let user = User::create()
+        .name("Alice")
+        .todo(Todo::create().title("T1").category(&category))
+        .todo(Todo::create().title("T2").category(&category))
+        .exec(&mut db)
+        .await?;
+
+    // Two sibling nested includes under the `todos()` prefix. Both must be
+    // preloaded — neither should be silently clobbered by the other.
+    let loaded = User::filter_by_id(user.id)
+        .include(User::fields().todos().user())
+        .include(User::fields().todos().category())
+        .get(&mut db)
+        .await?;
+
+    let todos = loaded.todos.get();
+    assert_eq!(2, todos.len());
+    for todo in todos {
+        assert_eq!("Alice", todo.user.get().name);
+        assert_eq!("Food", todo.category.get().name);
+    }
+
+    Ok(())
+}
+
+// Mirrors the exact pattern from issue #691: a bare top-level include plus
+// two sibling nested includes sharing that same top-level prefix. All three
+// paths must be honored.
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_multi_relation))]
+pub async fn bare_and_nested_includes_on_shared_prefix(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let category = Category::create().name("Food").exec(&mut db).await?;
+    let user = User::create()
+        .name("Alice")
+        .todo(Todo::create().title("T1").category(&category))
+        .exec(&mut db)
+        .await?;
+
+    let loaded = User::filter_by_id(user.id)
+        .include(User::fields().todos()) // bare
+        .include(User::fields().todos().user()) // sibling 1
+        .include(User::fields().todos().category()) // sibling 2
+        .get(&mut db)
+        .await?;
+
+    let todos = loaded.todos.get();
+    assert_eq!(1, todos.len());
+    assert_eq!("Alice", todos[0].user.get().name);
+    assert_eq!("Food", todos[0].category.get().name);
+
+    Ok(())
+}
