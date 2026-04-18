@@ -71,10 +71,7 @@ pub async fn shared_enum_crud(t: &mut Test) -> Result<()> {
     );
 
     let mut bug = bug;
-    bug.update()
-        .priority(Priority::High)
-        .exec(&mut db)
-        .await?;
+    bug.update().priority(Priority::High).exec(&mut db).await?;
     assert_eq!(
         Bug::get_by_id(&mut db, &bug.id).await?.priority,
         Priority::High
@@ -132,9 +129,12 @@ pub async fn shared_enum_filter(t: &mut Test) -> Result<()> {
         ("y", Priority::Low),
         ("z", Priority::Medium),
     ] {
-        toasty::create!(Bug { summary, priority: p })
-            .exec(&mut db)
-            .await?;
+        toasty::create!(Bug {
+            summary,
+            priority: p
+        })
+        .exec(&mut db)
+        .await?;
     }
 
     // Filter tasks by enum value
