@@ -75,6 +75,7 @@ clap = { version = "4.6.0", features = ["derive"] }
 console = "0.16"
 deadpool = { version = "0.13", features = ["rt_tokio_1"] }
 dialoguer = "0.12"
+hashbrown = "0.16"
 heck = "0.5.0"
 indexmap = "2.13.0"
 index_vec = "0.1.4"

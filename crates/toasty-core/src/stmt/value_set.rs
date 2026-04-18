@@ -1,6 +1,6 @@
 use super::{SparseRecord, Value, ValueRecord};
 
-use indexmap::{Equivalent, IndexSet};
+use hashbrown::{Equivalent, HashSet};
 use std::hash::{Hash, Hasher};
 
 /// A set of [`Value`]s.
@@ -12,21 +12,21 @@ use std::hash::{Hash, Hasher};
 /// context-dependent; `ValueSet` picks the policy suitable for deduplication.
 #[derive(Debug, Default, Clone)]
 pub struct ValueSet {
-    inner: IndexSet<HashableValue>,
+    inner: HashSet<HashableValue>,
 }
 
 impl ValueSet {
     /// Creates an empty set.
     pub fn new() -> Self {
         Self {
-            inner: IndexSet::new(),
+            inner: HashSet::new(),
         }
     }
 
     /// Creates an empty set with capacity for at least `capacity` values.
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            inner: IndexSet::with_capacity(capacity),
+            inner: HashSet::with_capacity(capacity),
         }
     }
 

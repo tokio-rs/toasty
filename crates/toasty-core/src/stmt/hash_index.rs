@@ -1,7 +1,7 @@
 use super::value_set::{HashableValue, HashableValueSlice};
 use super::{Entry, Projection, Value};
 
-use indexmap::IndexMap;
+use hashbrown::HashMap;
 
 /// A unique hash index over a borrowed slice of [`Value`]s.
 ///
@@ -34,7 +34,7 @@ use indexmap::IndexMap;
 /// assert!(found.is_some());
 /// ```
 pub struct HashIndex<'a> {
-    map: IndexMap<Vec<HashableValue>, &'a Value>,
+    map: HashMap<Vec<HashableValue>, &'a Value>,
 }
 
 impl<'a> HashIndex<'a> {
@@ -43,7 +43,7 @@ impl<'a> HashIndex<'a> {
     /// Each projection navigates into a value to extract one key component. Multiple
     /// projections produce a composite key compared lexicographically.
     pub fn new(values: &'a [Value], projections: &[Projection]) -> Self {
-        let mut map = IndexMap::with_capacity(values.len());
+        let mut map = HashMap::with_capacity(values.len());
 
         for value in values {
             let key = extract_key(value, projections);
