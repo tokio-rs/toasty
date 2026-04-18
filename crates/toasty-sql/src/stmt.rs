@@ -7,6 +7,12 @@ pub use alter_column::{AlterColumn, AlterColumnChanges};
 mod alter_table;
 pub use alter_table::{AlterTable, AlterTableAction};
 
+mod alter_type;
+pub use alter_type::AlterType;
+
+mod check;
+pub use check::CheckConstraint;
+
 mod column_def;
 pub use column_def::ColumnDef;
 
@@ -18,6 +24,9 @@ pub use create_index::CreateIndex;
 
 mod create_table;
 pub use create_table::CreateTable;
+
+mod create_type;
+pub use create_type::CreateType;
 
 mod drop_column;
 pub use drop_column::DropColumn;
@@ -51,12 +60,16 @@ pub enum Statement {
     AlterColumn(AlterColumn),
     /// Alter an existing table (e.g. rename).
     AlterTable(AlterTable),
+    /// Alter a type (e.g. `ALTER TYPE ... ADD VALUE '...'`).
+    AlterType(AlterType),
     /// Copy rows from one table to another.
     CopyTable(CopyTable),
     /// Create an index.
     CreateIndex(CreateIndex),
     /// Create a table.
     CreateTable(CreateTable),
+    /// Create a type (e.g. `CREATE TYPE ... AS ENUM (...)`).
+    CreateType(CreateType),
     /// Drop a column from an existing table.
     DropColumn(DropColumn),
     /// Drop a table.

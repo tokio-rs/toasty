@@ -62,6 +62,15 @@ pub enum Expr {
     /// Aggregate or scalar function call. See [`ExprFunc`].
     Func(ExprFunc),
 
+    /// An **unresolved** reference to a name (e.g. a column name in a DDL
+    /// context).
+    ///
+    /// Unlike [`Expr::Reference`] / [`ExprReference`], which hold **resolved**
+    /// index-based references into the schema, `Ident` carries only the raw
+    /// name string. It is used in contexts where schema resolution is not
+    /// applicable, such as CHECK constraints in CREATE TABLE statements.
+    Ident(String),
+
     /// `expr IN (list)` membership test. See [`ExprInList`].
     InList(ExprInList),
 
@@ -234,6 +243,9 @@ impl Expr {
             // Always stable - constant values
             Self::Value(_) => true,
 
+            // Unresolved identifiers refer to external state (e.g. a column)
+            Self::Ident(_) => false,
+
             // Never stable - generates new values each evaluation
             Self::Default => false,
 
@@ -295,6 +307,9 @@ impl Expr {
         match self {
             // Always constant
             Self::Value(_) => true,
+
+            // Unresolved identifiers reference external data
+            Self::Ident(_) => false,
 
             // Arg: local if nesting is within map_depth, otherwise external
             Self::Arg(arg) => arg.nesting < map_depth,
@@ -371,6 +386,9 @@ impl Expr {
         match self {
             // Always evaluable
             Self::Value(_) => true,
+
+            // Unresolved identifiers cannot be evaluated
+            Self::Ident(_) => false,
 
             // Args are OK for evaluation
             Self::Arg(_) => true,
@@ -565,6 +583,7 @@ impl fmt::Debug for Expr {
             Self::Error(e) => e.fmt(f),
             Self::Exists(e) => e.fmt(f),
             Self::Func(e) => e.fmt(f),
+            Self::Ident(e) => write!(f, "Ident({e:?})"),
             Self::InList(e) => e.fmt(f),
             Self::InSubquery(e) => e.fmt(f),
             Self::IsNull(e) => e.fmt(f),

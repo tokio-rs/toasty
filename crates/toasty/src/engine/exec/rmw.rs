@@ -83,12 +83,20 @@ impl Exec<'_> {
     async fn rmw_exec(&mut self, action: &ReadModifyWrite) -> Result<()> {
         let ty = Some(vec![stmt::Type::I64, stmt::Type::I64]);
 
+        let mut read_stmt: stmt::Statement = action.read.clone().into();
+        let read_params = if self.engine.capability().sql {
+            self.engine.extract_params(&mut read_stmt)
+        } else {
+            vec![]
+        };
+
         let res = self
             .connection
             .exec(
                 &self.engine.schema,
                 operation::QuerySql {
-                    stmt: action.read.clone().into(),
+                    stmt: read_stmt,
+                    params: read_params,
                     ret: ty,
                     last_insert_id_hack: None,
                 }
@@ -120,12 +128,20 @@ impl Exec<'_> {
             ));
         }
 
+        let mut write_stmt = action.write.clone();
+        let write_params = if self.engine.capability().sql {
+            self.engine.extract_params(&mut write_stmt)
+        } else {
+            vec![]
+        };
+
         let res = self
             .connection
             .exec(
                 &self.engine.schema,
                 operation::QuerySql {
-                    stmt: action.write.clone(),
+                    stmt: write_stmt,
+                    params: write_params,
                     ret: None,
                     last_insert_id_hack: None,
                 }

@@ -48,11 +48,23 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
 
-    // Verify column list and that the discriminant is stored as I64, not a string or record
-    assert_struct!(t.log().pop_op(), Operation::QuerySql({
+    // Verify column list and that the discriminant is stored as I64, not a string or record.
+    //
+    // Position: id_u64 uses Expr::Default (no param), so status is at
+    // params[1] (name, status). id_uuid adds the uuid at params[0], shifting
+    // status to params[2].
+    let sql = t.capability().sql;
+    let status_pos = if driver_test_cfg!(id_u64) { 1 } else { 2 };
+    let status_pat = if sql {
+        ArgOr::Arg(status_pos)
+    } else {
+        ArgOr::Value(1i64)
+    };
+    let op = t.log().pop_op();
+    assert_struct!(op, Operation::QuerySql({
         stmt: Statement::Insert({
             source.body: ExprSet::Values({
-                rows: [== (Any, Any, 1i64)],
+                rows: [=~ (Any, Any, status_pat)],
             }),
             target: toasty_core::stmt::InsertTarget::Table({
                 table: == user_table,
@@ -60,6 +72,11 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
             }),
         }),
     }));
+    if sql {
+        assert_struct!(op, Operation::QuerySql({
+            params[status_pos].value: == 1i64,
+        }));
+    }
 
     // Read: discriminant is loaded back and converted to the enum variant
     let found = User::get_by_id(&mut db, &user.id).await?;
@@ -75,8 +92,9 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
         assert_struct!(t.log().pop_op(), Operation::QuerySql({
             stmt: Statement::Update({
                 target: toasty_core::stmt::UpdateTarget::Table(== user_table),
-                assignments: #{ [2]: Assignment::Set(== 2i64)},
+                assignments: #{ [2]: Assignment::Set(Expr::Arg({ position: 0 }))},
             }),
+            params: [{ value: == 2i64 }, ..],
         }));
     } else {
         assert_struct!(t.log().pop_op(), Operation::UpdateByKey({
@@ -167,10 +185,11 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
                     filter.expr: Some(Expr::BinaryOp({
                         lhs.as_expr_column_unwrap().column: == status_col.index,
                         op: BinaryOp::Eq,
-                        *rhs: == 2i64,
+                        *rhs: Expr::Arg({ position: 0 }),
                     })),
                 }),
             }),
+            params: [{ value: == 2i64 }],
         }));
     }
 
@@ -188,10 +207,11 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
                     filter.expr: Some(Expr::BinaryOp({
                         lhs.as_expr_column_unwrap().column: == status_col.index,
                         op: BinaryOp::Eq,
-                        *rhs: == 1i64,
+                        *rhs: Expr::Arg({ position: 0 }),
                     })),
                 }),
             }),
+            params: [{ value: == 1i64 }],
         }));
     }
 
@@ -209,10 +229,11 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
                     filter.expr: Some(Expr::BinaryOp({
                         lhs.as_expr_column_unwrap().column: == status_col.index,
                         op: BinaryOp::Eq,
-                        *rhs: == 3i64,
+                        *rhs: Expr::Arg({ position: 0 }),
                     })),
                 }),
             }),
+            params: [{ value: == 3i64 }],
         }));
     }
 
