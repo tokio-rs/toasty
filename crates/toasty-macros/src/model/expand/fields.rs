@@ -71,6 +71,9 @@ impl Expand<'_> {
             }
         };
 
+        let validate_create_impl =
+            self.expand_field_struct_validate_create(field_struct_ident, /* list */ false);
+
         quote!(
             #struct_def
 
@@ -102,6 +105,8 @@ impl Expand<'_> {
                     self.path
                 }
             }
+
+            #validate_create_impl
         )
     }
 
@@ -175,6 +180,9 @@ impl Expand<'_> {
             }
         };
 
+        let validate_create_impl =
+            self.expand_field_struct_validate_create(field_list_struct_ident, /* list */ true);
+
         quote!(
             #struct_def
 
@@ -199,7 +207,33 @@ impl Expand<'_> {
                     self.path
                 }
             }
+
+            #validate_create_impl
         )
+    }
+
+    /// Generate a `ValidateCreate` impl for a fields struct of a root model.
+    ///
+    /// The impl points at the owning model's `CREATE_META`. For embedded
+    /// models, which are not `Model`, no impl is emitted.
+    fn expand_field_struct_validate_create(
+        &self,
+        field_struct_ident: &syn::Ident,
+        _is_list: bool,
+    ) -> TokenStream {
+        let toasty = &self.toasty;
+        let model_ident = &self.model.ident;
+
+        if !matches!(self.model.kind, ModelKind::Root(_)) {
+            return TokenStream::new();
+        }
+
+        quote! {
+            impl<__Origin> #toasty::ValidateCreate for #field_struct_ident<__Origin> {
+                const CREATE_META: &'static #toasty::CreateMeta =
+                    &<#model_ident as #toasty::Model>::CREATE_META;
+            }
+        }
     }
 
     pub(super) fn expand_model_field_struct_init(&self) -> TokenStream {

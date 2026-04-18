@@ -70,6 +70,11 @@ pub struct CreateMeta {
 pub struct CreateField {
     pub name: &'static str,
     pub required: bool,
+    // Pre-formatted panic message. `const fn` on stable cannot format
+    // strings at evaluation time (`panic!("{}", ...)` requires
+    // `const_format_args`, which is unstable), so the derive macro
+    // formats the message at expansion time.
+    pub missing_message: &'static str,
 }
 ```
 
@@ -467,3 +472,12 @@ error[E0080]: evaluation panicked: missing required field `title` in create! for
 - **Error messages** include the field name but not a file/line pointer to
   the model definition. The Rust compiler's error output shows the `create!`
   call site, which is the actionable location.
+
+- **`cargo check` does not monomorphize generic functions**, so the
+  scoped- and nested-level assertions (which rely on monomorphization of a
+  `ValidateCreate`-bounded helper) do not surface during `cargo check`.
+  They fire during `cargo build`, `cargo test`, and any invocation that
+  produces actual code. The top-level typed assertion is a concrete const
+  and fires under `cargo check` as well. IDEs that drive diagnostics from
+  `cargo check` will therefore only flag top-level missing fields; the
+  nested cases are caught by the build.

@@ -3,8 +3,81 @@ use crate::model::schema::FieldTy;
 
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
+use std::collections::HashSet;
 
 impl Expand<'_> {
+    /// Build the set of field indices referenced as `key = ...` by any
+    /// `#[belongs_to]` attribute on this model.
+    ///
+    /// These fields are excluded from [`CreateMeta`] because they are set
+    /// implicitly by the relation.
+    fn fk_source_field_indices(&self) -> HashSet<usize> {
+        let mut set = HashSet::new();
+        for field in &self.model.fields {
+            if let FieldTy::BelongsTo(rel) = &field.ty {
+                for fk in &rel.foreign_key {
+                    set.insert(fk.source);
+                }
+            }
+        }
+        set
+    }
+
+    /// Generate the `CREATE_META` const value for this model.
+    ///
+    /// Includes every primitive field that is not `#[auto]`, not
+    /// `#[default(...)]`, not `#[update(...)]`, not `#[serialize]`, and not
+    /// a foreign-key source for a `#[belongs_to]` relation on the same
+    /// model. Relation fields are always excluded.
+    ///
+    /// Each included field's `required` flag is computed at compile time
+    /// from `<T as Field>::NULLABLE`.
+    pub(super) fn expand_create_meta_value(&self) -> TokenStream {
+        let toasty = &self.toasty;
+        let model_name = self.model.ident.to_string();
+        let fk_sources = self.fk_source_field_indices();
+
+        let fields = self
+            .model
+            .fields
+            .iter()
+            .enumerate()
+            .filter_map(|(index, field)| {
+                let FieldTy::Primitive(ty) = &field.ty else {
+                    return None;
+                };
+
+                // Skip fields that Toasty fills in automatically or via FK
+                // resolution.
+                if field.attrs.auto.is_some()
+                    || field.attrs.default_expr.is_some()
+                    || field.attrs.update_expr.is_some()
+                    || field.attrs.serialize.is_some()
+                    || fk_sources.contains(&index)
+                {
+                    return None;
+                }
+
+                let name = field.name.ident.to_string();
+                let missing_message =
+                    format!("missing required field `{name}` in create! for `{model_name}`");
+                Some(quote! {
+                    #toasty::CreateField {
+                        name: #name,
+                        required: !<#ty as #toasty::Field>::NULLABLE,
+                        missing_message: #missing_message,
+                    }
+                })
+            });
+
+        quote! {
+            #toasty::CreateMeta {
+                fields: &[ #( #fields ),* ],
+                model_name: #model_name,
+            }
+        }
+    }
+
     pub(super) fn expand_create_builder(&self) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;

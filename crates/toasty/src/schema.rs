@@ -4,6 +4,9 @@ pub use auto::Auto;
 mod belongs_to;
 pub use belongs_to::BelongsTo;
 
+pub mod create_meta;
+pub use create_meta::{CreateField, CreateMeta, ValidateCreate, assert_create_fields};
+
 mod embed;
 pub use embed::Embed;
 

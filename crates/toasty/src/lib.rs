@@ -134,8 +134,9 @@ pub mod codegen_support {
     pub use crate::{
         Db, Error, Executor, Result, Statement,
         schema::{
-            Auto, BelongsTo, DiscoverItem, Embed, Field, HasMany, HasOne, Load, Model, Register,
-            Relation, Scope, generate_unique_id,
+            Auto, BelongsTo, CreateField, CreateMeta, DiscoverItem, Embed, Field, HasMany, HasOne,
+            Load, Model, Register, Relation, Scope, ValidateCreate, assert_create_fields,
+            generate_unique_id,
         },
         stmt::CreateMany,
         stmt::{self, Assign, IntoExpr, IntoInsert, IntoStatement, List, Path},

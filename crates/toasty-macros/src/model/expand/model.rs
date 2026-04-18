@@ -41,6 +41,7 @@ impl Expand<'_> {
         let into_expr_body_ref = self.expand_model_into_expr_body(true);
         let into_expr_body_val = self.expand_model_into_expr_body(false);
         let reload_trait_method = self.expand_reload_trait_method();
+        let create_meta = self.expand_create_meta_value();
 
         quote! {
             impl #model_ident {
@@ -122,6 +123,8 @@ impl Expand<'_> {
                 type Update<'a> = #update_struct_ident<&'a mut Self>;
                 type UpdateQuery = #update_struct_ident;
                 type Path<__Origin> = #field_struct_ident<__Origin>;
+
+                const CREATE_META: #toasty::CreateMeta = #create_meta;
 
                 fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
                     #field_struct_ident::from_path(path)

@@ -1,0 +1,5 @@
+error[E0080]: evaluation panicked: missing required field `name` in create! for `User`
+  --> tests/ui/create_missing_required_field.rs:12:29
+   |
+12 |     let _ = toasty::create!(User {});
+   |                             ^^^^ evaluation of `main::_` failed here
