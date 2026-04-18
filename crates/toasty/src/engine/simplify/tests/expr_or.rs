@@ -816,6 +816,105 @@ fn error_or_true_becomes_true() {
     assert!(result.unwrap().is_true());
 }
 
+// ---------------------------------------------------------------------------
+// Determinism-aware simplification (issue #236).
+//
+// See the matching block in `expr_and.rs`.  `is_equivalent_to` gates the
+// idempotent, absorption, complement, factoring, and OR-to-IN rewrites on
+// `is_stable`, so non-deterministic sub-expressions survive intact.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn idempotent_not_simplified_for_non_deterministic() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    // `LAST_INSERT_ID() OR LAST_INSERT_ID()` must retain both operands.
+    let mut expr = ExprOr {
+        operands: vec![Expr::last_insert_id(), Expr::last_insert_id()],
+    };
+    let result = simplify.simplify_expr_or(&mut expr);
+
+    assert!(result.is_none());
+    assert_eq!(expr.operands.len(), 2);
+}
+
+#[test]
+fn complement_not_simplified_for_non_deterministic() {
+    use toasty_core::stmt::ExprNot;
+
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    // `f() = 1 OR NOT (f() = 1)` — both draws are independent, so the
+    // complement law must NOT fire.
+    let a = Expr::eq(Expr::last_insert_id(), 1i64);
+    let mut expr = ExprOr {
+        operands: vec![a.clone(), Expr::Not(ExprNot { expr: Box::new(a) })],
+    };
+    let result = simplify.simplify_expr_or(&mut expr);
+
+    assert!(result.is_none());
+    assert_eq!(expr.operands.len(), 2);
+}
+
+#[test]
+fn factoring_not_simplified_for_non_deterministic() {
+    use toasty_core::stmt::ExprAnd;
+
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    // `(f() AND b) OR (f() AND c)` would factor to `f() AND (b OR c)` under
+    // PartialEq, but the original evaluates `f()` twice while the factored
+    // form evaluates it once — unsound for non-deterministic `f()`.
+    let mut expr = ExprOr {
+        operands: vec![
+            Expr::And(ExprAnd {
+                operands: vec![Expr::last_insert_id(), Expr::arg(0)],
+            }),
+            Expr::And(ExprAnd {
+                operands: vec![Expr::last_insert_id(), Expr::arg(1)],
+            }),
+        ],
+    };
+    let result = simplify.simplify_expr_or(&mut expr);
+
+    // No factoring should have taken place — we still have two AND branches,
+    // each with the original two operands.
+    assert!(result.is_none());
+    assert_eq!(expr.operands.len(), 2);
+    for operand in &expr.operands {
+        let Expr::And(and) = operand else {
+            panic!("expected AND branch, got {operand:?}");
+        };
+        assert_eq!(and.operands.len(), 2);
+    }
+}
+
+#[test]
+fn or_to_in_list_not_simplified_for_non_deterministic() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    // `f() = 1 OR f() = 2` must NOT be rewritten to `f() IN (1, 2)`: the
+    // former evaluates `f()` twice (two draws against 1 and 2), the latter
+    // evaluates it once (one draw tested against a set).
+    let mut expr = ExprOr {
+        operands: vec![
+            Expr::eq(Expr::last_insert_id(), 1i64),
+            Expr::eq(Expr::last_insert_id(), 2i64),
+        ],
+    };
+    let result = simplify.simplify_expr_or(&mut expr);
+
+    assert!(result.is_none());
+    assert_eq!(expr.operands.len(), 2);
+    for operand in &expr.operands {
+        assert!(matches!(operand, Expr::BinaryOp(_)));
+    }
+}
+
 // Variant tautology tests
 
 mod variant_tautology {
