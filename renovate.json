@@ -1,10 +1,22 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "fileMatch": ["^rust-toolchain\\.toml$"],
+      "matchStrings": [
+        "channel\\s*=\\s*\"(?<currentValue>\\d+\\.\\d+(\\.\\d+)?)\""
+      ],
+      "depNameTemplate": "rust",
+      "packageNameTemplate": "rust-lang/rust",
+      "datasourceTemplate": "github-releases"
+    }
+  ],
   "packageRules": [
     {
-      "matchManagers": ["rust-toolchain", "github-actions"],
-      "matchPackageNames": ["rust-lang/rust", "dtolnay/rust-toolchain"],
+      "matchManagers": ["custom.regex", "github-actions"],
+      "matchPackageNames": ["rust", "dtolnay/rust-toolchain"],
       "groupName": "rust toolchain",
       "schedule": ["before 9am on Monday"]
     },
