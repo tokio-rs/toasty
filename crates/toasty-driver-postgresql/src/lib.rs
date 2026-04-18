@@ -417,17 +417,8 @@ impl toasty_core::driver::Connection for Connection {
         for table in &schema.db.tables {
             for column in &table.columns {
                 if let toasty_core::schema::db::Type::Enum(type_enum) = &column.storage_ty
-                    && let Some(name) = &type_enum.name
                     && created_enum_types.insert(type_enum.name.clone())
                 {
-                    // Drop any existing enum type first to avoid "already exists" errors
-                    // during test runs or schema resets.
-                    let drop_sql = format!("DROP TYPE IF EXISTS \"{}\" CASCADE;", name);
-                    self.client
-                        .execute(&drop_sql, &[])
-                        .await
-                        .map_err(toasty_core::Error::driver_operation_failed)?;
-
                     let sql = serializer.serialize(&sql::Statement::create_enum_type(type_enum));
 
                     tracing::debug!(enum_type = ?type_enum.name, "creating enum type");
