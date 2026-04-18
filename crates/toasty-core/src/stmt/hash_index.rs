@@ -1,6 +1,7 @@
+use super::value_set::{HashableValue, HashableValueSlice};
 use super::{Entry, Projection, Value};
 
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
 /// A unique hash index over a borrowed slice of [`Value`]s.
 ///
@@ -33,7 +34,7 @@ use std::collections::HashMap;
 /// assert!(found.is_some());
 /// ```
 pub struct HashIndex<'a> {
-    map: HashMap<Vec<Value>, &'a Value>,
+    map: IndexMap<Vec<HashableValue>, &'a Value>,
 }
 
 impl<'a> HashIndex<'a> {
@@ -42,7 +43,7 @@ impl<'a> HashIndex<'a> {
     /// Each projection navigates into a value to extract one key component. Multiple
     /// projections produce a composite key compared lexicographically.
     pub fn new(values: &'a [Value], projections: &[Projection]) -> Self {
-        let mut map = HashMap::with_capacity(values.len());
+        let mut map = IndexMap::with_capacity(values.len());
 
         for value in values {
             let key = extract_key(value, projections);
@@ -58,19 +59,19 @@ impl<'a> HashIndex<'a> {
     /// `key` must be a slice of values with one entry per projection used at build time.
     /// Returns `None` if no value matches.
     pub fn find(&self, key: &[Value]) -> Option<&'a Value> {
-        self.map.get(key).copied()
+        self.map.get(&HashableValueSlice(key)).copied()
     }
 }
 
 /// Extract the composite key from `value` using `projections`.
 ///
 /// Each projection is applied to `value` in sequence, collecting the resulting
-/// field references into an owned `Vec<Value>`.
-fn extract_key(value: &Value, projections: &[Projection]) -> Vec<Value> {
+/// field references into an owned `Vec<HashableValue>`.
+fn extract_key(value: &Value, projections: &[Projection]) -> Vec<HashableValue> {
     projections
         .iter()
         .map(|proj| match value.entry(proj) {
-            Entry::Value(v) => v.clone(),
+            Entry::Value(v) => HashableValue(v.clone()),
             Entry::Expr(_) => panic!("projection yielded an expression, not a value"),
         })
         .collect()
