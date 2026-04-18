@@ -169,17 +169,13 @@ impl toasty_core::driver::Connection for Connection {
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         tracing::trace!(driver = "sqlite", op = %op.name(), "driver exec");
 
-        let (sql, typed_params, ret_tys): (
-            sql::Statement,
-            Vec<toasty_core::driver::operation::TypedValue>,
-            _,
-        ) = match op {
+        let (sql, typed_params, ret_tys) = match op {
             Operation::QuerySql(op) => {
                 assert!(
                     op.last_insert_id_hack.is_none(),
                     "last_insert_id_hack is MySQL-specific and should not be set for SQLite"
                 );
-                (op.stmt.into(), op.params, op.ret)
+                (sql::Statement::from(op.stmt), op.params, op.ret)
             }
             // Operation::Insert(op) => op.stmt.into(),
             Operation::Transaction(mut op) => {

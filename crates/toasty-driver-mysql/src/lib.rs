@@ -191,13 +191,13 @@ impl toasty_core::driver::Connection for Connection {
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         tracing::trace!(driver = "mysql", op = %op.name(), "driver exec");
 
-        let (sql, typed_params, ret, last_insert_id_hack): (
-            sql::Statement,
-            Vec<toasty_core::driver::operation::TypedValue>,
-            _,
-            _,
-        ) = match op {
-            Operation::QuerySql(op) => (op.stmt.into(), op.params, op.ret, op.last_insert_id_hack),
+        let (sql, typed_params, ret, last_insert_id_hack) = match op {
+            Operation::QuerySql(op) => (
+                sql::Statement::from(op.stmt),
+                op.params,
+                op.ret,
+                op.last_insert_id_hack,
+            ),
             Operation::Transaction(op) => {
                 let sql = sql::Serializer::mysql(&schema.db).serialize_transaction(&op);
                 self.conn.query_drop(sql).await.map_err(|e| match e {

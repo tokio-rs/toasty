@@ -25,7 +25,7 @@ use percent_encoding::percent_decode_str;
 use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     Result, Schema,
-    driver::{Capability, Driver, ExecResponse, Operation, operation},
+    driver::{Capability, Driver, ExecResponse, Operation},
     schema::db::{self, Migration, SchemaDiff, Table},
     stmt,
     stmt::ValueRecord,
@@ -323,15 +323,14 @@ impl toasty_core::driver::Connection for Connection {
             return Ok(ExecResponse::count(0));
         }
 
-        let (sql, typed_params, ret_tys): (sql::Statement, Vec<operation::TypedValue>, _) = match op
-        {
-            Operation::Insert(op) => (op.stmt.into(), op.params, None),
+        let (sql, typed_params, ret_tys) = match op {
+            Operation::Insert(op) => (sql::Statement::from(op.stmt), op.params, None),
             Operation::QuerySql(query) => {
                 assert!(
                     query.last_insert_id_hack.is_none(),
                     "last_insert_id_hack is MySQL-specific and should not be set for PostgreSQL"
                 );
-                (query.stmt.into(), query.params, query.ret)
+                (sql::Statement::from(query.stmt), query.params, query.ret)
             }
             op => todo!("op={:#?}", op),
         };
