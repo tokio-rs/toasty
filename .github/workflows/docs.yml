@@ -14,6 +14,11 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
+env:
+  # Pinned so a new Rust release cannot break docs builds on its own.
+  # Bumped automatically by Renovate; see .github/renovate.json5.
+  RUST_STABLE_VERSION: "1.95.0"
+
 jobs:
   build:
     if: github.repository == 'tokio-rs/toasty'
@@ -23,7 +28,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_STABLE_VERSION }}
 
       - name: Install mdBook and mdbook-linkcheck2
         uses: taiki-e/install-action@v2

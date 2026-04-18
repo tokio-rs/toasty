@@ -1,0 +1,33 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: [
+    "config:recommended",
+    "schedule:weekly",
+  ],
+  // The Rust stable toolchain is pinned via `RUST_STABLE_VERSION` in every
+  // workflow under .github/workflows/. This custom manager watches
+  // `rust-lang/rust` releases and opens a PR whenever a newer stable is
+  // released. The PR auto-merges once required CI checks pass.
+  customManagers: [
+    {
+      customType: "regex",
+      managerFilePatterns: ["/^\\.github/workflows/[^/]+\\.ya?ml$/"],
+      matchStrings: [
+        "RUST_STABLE_VERSION:\\s*\"(?<currentValue>\\d+\\.\\d+\\.\\d+)\"",
+      ],
+      depNameTemplate: "rust",
+      packageNameTemplate: "rust-lang/rust",
+      datasourceTemplate: "github-releases",
+      extractVersionTemplate: "^(?<version>\\d+\\.\\d+\\.\\d+)$",
+    },
+  ],
+  packageRules: [
+    {
+      matchManagers: ["custom.regex"],
+      matchDepNames: ["rust"],
+      commitMessageTopic: "Rust",
+      automerge: true,
+      platformAutomerge: true,
+    },
+  ],
+}

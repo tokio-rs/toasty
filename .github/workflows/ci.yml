@@ -10,6 +10,9 @@ env:
     CARGO_TERM_COLOR: always
     RUSTFLAGS: -D warnings
     RUST_BACKTRACE: 1
+    # Pinned so a new Rust release cannot break CI on its own. Bumped
+    # automatically by Renovate; see .github/renovate.json5.
+    RUST_STABLE_VERSION: "1.95.0"
     TOASTY_TEST_POSTGRES_URL: "postgresql://toasty:toasty@localhost/toasty"
     TOASTY_TEST_MYSQL_URL: "mysql://toasty:toasty@localhost/toasty"
     AWS_REGION: "us-east-1"
@@ -23,8 +26,9 @@ jobs:
         runs-on: ubuntu-latest
         steps:
         - uses: actions/checkout@v4
-        - uses: dtolnay/rust-toolchain@stable
+        - uses: dtolnay/rust-toolchain@master
           with:
+            toolchain: ${{ env.RUST_STABLE_VERSION }}
             components: rustfmt
         - uses: Swatinem/rust-cache@v2
           with:
@@ -39,8 +43,9 @@ jobs:
         runs-on: ubuntu-latest
         steps:
         - uses: actions/checkout@v4
-        - uses: dtolnay/rust-toolchain@stable
+        - uses: dtolnay/rust-toolchain@master
           with:
+            toolchain: ${{ env.RUST_STABLE_VERSION }}
             components: clippy
         - uses: Swatinem/rust-cache@v2
           with:
@@ -48,13 +53,35 @@ jobs:
         - name: cargo clippy
           run: cargo clippy --workspace --all-features
 
+    msrv:
+        needs: check
+        name: Check MSRV
+        runs-on: ubuntu-latest
+        steps:
+        - uses: actions/checkout@v4
+        - name: Read MSRV from Cargo.toml
+          id: msrv
+          run: |
+            version=$(awk -F'"' '/^rust-version/ {print $2; exit}' Cargo.toml)
+            echo "version=$version" >> "$GITHUB_OUTPUT"
+        - uses: dtolnay/rust-toolchain@master
+          with:
+            toolchain: ${{ steps.msrv.outputs.version }}
+        - uses: Swatinem/rust-cache@v2
+          with:
+            save-if: ${{ github.ref == 'refs/heads/main' }}
+        - name: cargo check
+          run: cargo check --workspace --all-features
+
     test-sqlite:
       needs: check
       name: Run tests for Sqlite
       runs-on: ubuntu-latest
       steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_STABLE_VERSION }}
       - uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -82,7 +109,9 @@ jobs:
             TOASTY_CONNECTION_URL: mysql://toasty:toasty@localhost:3306/toasty
         steps:
         - uses: actions/checkout@v4
-        - uses: dtolnay/rust-toolchain@stable
+        - uses: dtolnay/rust-toolchain@master
+          with:
+            toolchain: ${{ env.RUST_STABLE_VERSION }}
         - uses: Swatinem/rust-cache@v2
           with:
             save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -110,7 +139,9 @@ jobs:
             TOASTY_TEST_POSTGRES_TLS_URL: postgresql://toasty:toasty@localhost:5433/toasty
         steps:
         - uses: actions/checkout@v4
-        - uses: dtolnay/rust-toolchain@stable
+        - uses: dtolnay/rust-toolchain@master
+          with:
+            toolchain: ${{ env.RUST_STABLE_VERSION }}
         - uses: Swatinem/rust-cache@v2
           with:
             save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -135,7 +166,9 @@ jobs:
         runs-on: ubuntu-latest
         steps:
         - uses: actions/checkout@v4
-        - uses: dtolnay/rust-toolchain@stable
+        - uses: dtolnay/rust-toolchain@master
+          with:
+            toolchain: ${{ env.RUST_STABLE_VERSION }}
         - uses: Swatinem/rust-cache@v2
           with:
             save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -156,7 +189,9 @@ jobs:
               - macos-latest
         steps:
         - uses: actions/checkout@v4
-        - uses: dtolnay/rust-toolchain@stable
+        - uses: dtolnay/rust-toolchain@master
+          with:
+            toolchain: ${{ env.RUST_STABLE_VERSION }}
         - uses: Swatinem/rust-cache@v2
           with:
             save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -171,7 +206,9 @@ jobs:
         runs-on: ubuntu-latest
         steps:
         - uses: actions/checkout@v4
-        - uses: dtolnay/rust-toolchain@stable
+        - uses: dtolnay/rust-toolchain@master
+          with:
+            toolchain: ${{ env.RUST_STABLE_VERSION }}
         - uses: Swatinem/rust-cache@v2
           with:
             save-if: ${{ github.ref == 'refs/heads/main' }}
