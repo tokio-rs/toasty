@@ -13,7 +13,7 @@ note: required by a bound in `toasty::codegen_support::scope_fields`
   --> $WORKSPACE/crates/toasty/src/lib.rs
    |
    |     pub fn scope_fields<S: Scope>(_scope: &S) -> S::Path<S::Item> {
-   |                            ^^^^^ required by this bound in `toasty::codegen_support::scope_fields`
+   |                            ^^^^^ required by this bound in `scope_fields`
 
 error[E0599]: no method named `create` found for type `i64` in the current scope
   --> tests/ui/create_scoped_not_scope.rs:11:32
