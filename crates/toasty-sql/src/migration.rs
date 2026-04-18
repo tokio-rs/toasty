@@ -40,6 +40,9 @@ impl<'a> MigrationStatement<'a> {
                         Cow::Borrowed(schema_diff.next()),
                     ));
                     for index in &table.indices {
+                        if index.primary_key {
+                            continue; // PK indices are created as part of CREATE TABLE
+                        }
                         result.push(Self::new(
                             Statement::create_index(index),
                             Cow::Borrowed(schema_diff.next()),
