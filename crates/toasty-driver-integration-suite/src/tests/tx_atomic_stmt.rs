@@ -65,7 +65,7 @@ pub async fn single_op_skips_transaction(t: &mut Test) -> Result<()> {
 /// explicit transaction wrapping is exercised. With uuid::Uuid IDs the engine
 /// reorders execution (INSERT todo before INSERT user due to the Const
 /// optimization), which produces a different but equally valid log pattern.
-#[driver_test(requires(sql))]
+#[driver_test(requires(and(sql, auto_increment)))]
 pub async fn create_with_has_many_rolls_back_on_failure(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -139,7 +139,7 @@ pub async fn create_with_has_many_rolls_back_on_failure(t: &mut Test) -> Result<
 /// explicit transaction wrapping is exercised. With uuid::Uuid IDs the engine
 /// can combine both inserts into a single atomic SQL statement, which provides
 /// atomicity without an explicit transaction.
-#[driver_test(requires(sql))]
+#[driver_test(requires(and(sql, auto_increment)))]
 pub async fn create_with_has_one_rolls_back_on_failure(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
