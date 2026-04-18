@@ -30,7 +30,7 @@ use std::cmp::Ordering;
 /// let v = Value::from(true);
 /// assert_eq!(v, true);
 /// ```
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub enum Value {
     /// Boolean value
     Bool(bool),
@@ -411,89 +411,6 @@ impl Value {
 impl AsRef<Self> for Value {
     fn as_ref(&self) -> &Self {
         self
-    }
-}
-
-impl PartialEq for Value {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Value::Bool(a), Value::Bool(b)) => a == b,
-            (Value::I8(a), Value::I8(b)) => a == b,
-            (Value::I16(a), Value::I16(b)) => a == b,
-            (Value::I32(a), Value::I32(b)) => a == b,
-            (Value::I64(a), Value::I64(b)) => a == b,
-            (Value::U8(a), Value::U8(b)) => a == b,
-            (Value::U16(a), Value::U16(b)) => a == b,
-            (Value::U32(a), Value::U32(b)) => a == b,
-            (Value::U64(a), Value::U64(b)) => a == b,
-            // Use bit-level equality for floats so NaN == NaN and the impl is consistent with Hash
-            (Value::F32(a), Value::F32(b)) => a.to_bits() == b.to_bits(),
-            (Value::F64(a), Value::F64(b)) => a.to_bits() == b.to_bits(),
-            (Value::SparseRecord(a), Value::SparseRecord(b)) => a == b,
-            (Value::Null, Value::Null) => true,
-            (Value::Record(a), Value::Record(b)) => a == b,
-            (Value::List(a), Value::List(b)) => a == b,
-            (Value::String(a), Value::String(b)) => a == b,
-            (Value::Bytes(a), Value::Bytes(b)) => a == b,
-            (Value::Uuid(a), Value::Uuid(b)) => a == b,
-            #[cfg(feature = "rust_decimal")]
-            (Value::Decimal(a), Value::Decimal(b)) => a == b,
-            #[cfg(feature = "bigdecimal")]
-            (Value::BigDecimal(a), Value::BigDecimal(b)) => a == b,
-            #[cfg(feature = "jiff")]
-            (Value::Timestamp(a), Value::Timestamp(b)) => a == b,
-            #[cfg(feature = "jiff")]
-            (Value::Zoned(a), Value::Zoned(b)) => a == b,
-            #[cfg(feature = "jiff")]
-            (Value::Date(a), Value::Date(b)) => a == b,
-            #[cfg(feature = "jiff")]
-            (Value::Time(a), Value::Time(b)) => a == b,
-            #[cfg(feature = "jiff")]
-            (Value::DateTime(a), Value::DateTime(b)) => a == b,
-            _ => false,
-        }
-    }
-}
-
-impl Eq for Value {}
-
-impl std::hash::Hash for Value {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        std::mem::discriminant(self).hash(state);
-        match self {
-            Value::Bool(v) => v.hash(state),
-            Value::I8(v) => v.hash(state),
-            Value::I16(v) => v.hash(state),
-            Value::I32(v) => v.hash(state),
-            Value::I64(v) => v.hash(state),
-            Value::U8(v) => v.hash(state),
-            Value::U16(v) => v.hash(state),
-            Value::U32(v) => v.hash(state),
-            Value::U64(v) => v.hash(state),
-            Value::F32(v) => v.to_bits().hash(state),
-            Value::F64(v) => v.to_bits().hash(state),
-            Value::SparseRecord(v) => v.hash(state),
-            Value::Null => {}
-            Value::Record(v) => v.hash(state),
-            Value::List(v) => v.hash(state),
-            Value::String(v) => v.hash(state),
-            Value::Bytes(v) => v.hash(state),
-            Value::Uuid(v) => v.hash(state),
-            #[cfg(feature = "rust_decimal")]
-            Value::Decimal(v) => v.hash(state),
-            #[cfg(feature = "bigdecimal")]
-            Value::BigDecimal(v) => v.hash(state),
-            #[cfg(feature = "jiff")]
-            Value::Timestamp(v) => v.hash(state),
-            #[cfg(feature = "jiff")]
-            Value::Zoned(v) => v.hash(state),
-            #[cfg(feature = "jiff")]
-            Value::Date(v) => v.hash(state),
-            #[cfg(feature = "jiff")]
-            Value::Time(v) => v.hash(state),
-            #[cfg(feature = "jiff")]
-            Value::DateTime(v) => v.hash(state),
-        }
     }
 }
 

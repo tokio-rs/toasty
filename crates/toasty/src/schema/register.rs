@@ -130,23 +130,29 @@ pub use inventory;
 #[macro_export]
 macro_rules! models {
     // Register all models from current crate with `models!(crate::*)`
-    (@internal $set:ident crate::* $(,$rest:ty)* $(,)?) => {{
+    (@internal $set:ident crate::* $(,$($rest:tt)*)?) => {{
         ::toasty::codegen_support::DiscoverItem::add_all_from_crate_to(&mut $set, env!("CARGO_PKG_NAME"));
-        $crate::models!(@internal $set $($rest),*);
+        $(
+            $crate::models!(@internal $set $($rest)*);
+        )?
     }};
 
     // Register all models from a third party crate with `models!(third_party::*)`
-    (@internal $set:ident $crate_name:ident::* $(,$rest:ty)* $(,)?) => {{
+    (@internal $set:ident $crate_name:ident::* $(,$($rest:tt)*)?) => {{
         // Make sure the provided crate actually exists.
         { use ::$crate_name; }
         ::toasty::codegen_support::DiscoverItem::add_all_from_crate_to(&mut $set, stringify!($crate_name));
-        $crate::models!(@internal $set $($rest),*);
+        $(
+            $crate::models!(@internal $set $($rest)*);
+        )?
     }};
 
     // Register single model with `models!(ModelName)`
-    (@internal $set:ident $model:ty $(,$rest:ty)* $(,)?) => {{
+    (@internal $set:ident $model:ty $(,$($rest:tt)*)?) => {{
         <$model as ::toasty::schema::Register>::register(&mut $set);
-        $crate::models!(@internal $set $($rest),*);
+        $(
+            $crate::models!(@internal $set $($rest)*);
+        )?
     }};
 
     // Empty list
