@@ -70,7 +70,11 @@ jobs:
         - uses: Swatinem/rust-cache@v2
           with:
             save-if: ${{ github.ref == 'refs/heads/main' }}
+        # `RUSTUP_TOOLCHAIN` overrides `rust-toolchain.toml`, which otherwise
+        # pins this job back to the latest stable and defeats the MSRV check.
         - name: cargo check
+          env:
+            RUSTUP_TOOLCHAIN: ${{ steps.msrv.outputs.version }}
           run: cargo check --workspace --all-features
 
     test-sqlite:

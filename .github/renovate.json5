@@ -4,16 +4,22 @@
     "config:recommended",
     "schedule:weekly",
   ],
-  // The Rust stable toolchain is pinned via `RUST_STABLE_VERSION` in every
-  // workflow under .github/workflows/. This custom manager watches
-  // `rust-lang/rust` releases and opens a PR whenever a newer stable is
-  // released. The PR auto-merges once required CI checks pass.
+  // The Rust stable toolchain is pinned in two places:
+  //   * `RUST_STABLE_VERSION` env var in every `.github/workflows/*.yml`
+  //   * `channel` field in `rust-toolchain.toml` at the repo root
+  // Both are bumped atomically by this custom manager based on
+  // `rust-lang/rust` releases. The PR auto-merges once required CI checks
+  // pass.
   customManagers: [
     {
       customType: "regex",
-      managerFilePatterns: ["/^\\.github/workflows/[^/]+\\.ya?ml$/"],
+      managerFilePatterns: [
+        "/^\\.github/workflows/[^/]+\\.ya?ml$/",
+        "/(^|/)rust-toolchain\\.toml$/",
+      ],
       matchStrings: [
         "RUST_STABLE_VERSION:\\s*\"(?<currentValue>\\d+\\.\\d+\\.\\d+)\"",
+        "channel\\s*=\\s*\"(?<currentValue>\\d+\\.\\d+\\.\\d+)\"",
       ],
       depNameTemplate: "rust",
       packageNameTemplate: "rust-lang/rust",
