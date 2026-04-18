@@ -269,21 +269,26 @@ fn deserialize_ddb_cursor(cursor: &stmt::Value) -> HashMap<String, AttributeValu
     ret
 }
 
-fn ddb_key_schema(partition: &Column, range: Option<&Column>) -> Vec<KeySchemaElement> {
+fn ddb_key_schema(
+    partition_columns: &[&Column],
+    range_columns: &[&Column],
+) -> Vec<KeySchemaElement> {
     let mut ks = vec![];
 
-    ks.push(
-        KeySchemaElement::builder()
-            .attribute_name(&partition.name)
-            .key_type(KeyType::Hash)
-            .build()
-            .unwrap(),
-    );
-
-    if let Some(range) = range {
+    for col in partition_columns {
         ks.push(
             KeySchemaElement::builder()
-                .attribute_name(&range.name)
+                .attribute_name(&col.name)
+                .key_type(KeyType::Hash)
+                .build()
+                .unwrap(),
+        );
+    }
+
+    for col in range_columns {
+        ks.push(
+            KeySchemaElement::builder()
+                .attribute_name(&col.name)
                 .key_type(KeyType::Range)
                 .build()
                 .unwrap(),

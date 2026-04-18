@@ -22,6 +22,7 @@ anyhow = "1.0.102"
 clap.workspace = true
 console.workspace = true
 dialoguer.workspace = true
+jiff.workspace = true
 rand.workspace = true
 serde.workspace = true
 toml.workspace = true
