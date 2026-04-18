@@ -259,6 +259,9 @@ mod value_jiff;
 mod value_record;
 pub use value_record::ValueRecord;
 
+mod value_set;
+pub use value_set::ValueSet;
+
 /// Mutable AST visitor trait and helpers.
 pub mod visit_mut;
 pub use visit_mut::VisitMut;
