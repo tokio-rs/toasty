@@ -1,6 +1,6 @@
 [package]
 name = "toasty-core"
-version = "0.3.0"
+version = "0.4.0"
 description = "Core types, schema representations, and driver interface for Toasty"
 authors.workspace = true
 edition.workspace = true
@@ -17,6 +17,7 @@ documentation = "https://docs.rs/toasty-core"
 assert-struct = { workspace = true, optional = true }
 async-trait.workspace = true
 bit-set.workspace = true
+hashbrown.workspace = true
 indexmap.workspace = true
 jiff = { workspace = true, optional = true }
 rust_decimal = { workspace = true, optional = true }

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0](https://github.com/tokio-rs/toasty/compare/toasty-v0.3.0...toasty-v0.4.0) - 2026-04-11
+
+### Added
+
+- add support for newtype embedded structs ([#634](https://github.com/tokio-rs/toasty/pull/634))
+- auto-discover related models through fields ([#635](https://github.com/tokio-rs/toasty/pull/635))
+- support boxed and smart pointer foreign keys in has_many relations ([#630](https://github.com/tokio-rs/toasty/pull/630))
+
+### Other
+
+- make FieldName::app_name optional to support unnamed fields ([#633](https://github.com/tokio-rs/toasty/pull/633))
+
 ## [0.3.0](https://github.com/tokio-rs/toasty/compare/toasty-v0.2.0...toasty-v0.3.0) - 2026-04-03
 
 ### Added

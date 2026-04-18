@@ -25,6 +25,8 @@ members = [
 
     # Tests
     "tests",
+    "tests/tests/fixtures/post",
+    "tests/tests/fixtures/user",
 
     # Benchmarks
     "benches",
@@ -38,7 +40,7 @@ homepage = "https://github.com/tokio-rs/toasty"
 keywords = ["orm", "database", "sql", "nosql", "async"]
 license = "MIT"
 repository = "https://github.com/tokio-rs/toasty"
-rust-version = "1.94"
+rust-version = "1.95"
 categories = ["database"]
 
 [workspace.lints.rust]
@@ -46,20 +48,20 @@ unsafe_code = "deny"
 
 [workspace.dependencies]
 # Toasty crates
-toasty = { version = "0.3.0", path = "crates/toasty" }
-toasty-cli = { version = "0.3.0", path = "crates/toasty-cli" }
-toasty-core = { version = "0.3.0", path = "crates/toasty-core" }
-toasty-macros = { version = "0.3.0", path = "crates/toasty-macros" }
-toasty-sql = { version = "0.3.0", path = "crates/toasty-sql" }
+toasty = { version = "0.4.0", path = "crates/toasty" }
+toasty-cli = { version = "0.4.0", path = "crates/toasty-cli" }
+toasty-core = { version = "0.4.0", path = "crates/toasty-core" }
+toasty-macros = { version = "0.4.0", path = "crates/toasty-macros" }
+toasty-sql = { version = "0.4.0", path = "crates/toasty-sql" }
 # Driver implementations
-toasty-driver-dynamodb = { version = "0.3.0", path = "crates/toasty-driver-dynamodb" }
-toasty-driver-mysql = { version = "0.3.0", path = "crates/toasty-driver-mysql" }
-toasty-driver-postgresql = { version = "0.3.0", path = "crates/toasty-driver-postgresql" }
-toasty-driver-sqlite = { version = "0.3.0", path = "crates/toasty-driver-sqlite" }
+toasty-driver-dynamodb = { version = "0.4.0", path = "crates/toasty-driver-dynamodb" }
+toasty-driver-mysql = { version = "0.4.0", path = "crates/toasty-driver-mysql" }
+toasty-driver-postgresql = { version = "0.4.0", path = "crates/toasty-driver-postgresql" }
+toasty-driver-sqlite = { version = "0.4.0", path = "crates/toasty-driver-sqlite" }
 
 # Driver integration test suite dependencies
-toasty-driver-integration-suite = { version = "0.3.0", path = "crates/toasty-driver-integration-suite" }
-toasty-driver-integration-suite-macros = { version = "0.3.0", path = "crates/toasty-driver-integration-suite-macros" }
+toasty-driver-integration-suite = { version = "0.4.0", path = "crates/toasty-driver-integration-suite" }
+toasty-driver-integration-suite-macros = { version = "0.4.0", path = "crates/toasty-driver-integration-suite-macros" }
 
 # Other crates
 assert-struct = "0.4.2"
@@ -75,6 +77,7 @@ clap = { version = "4.6.0", features = ["derive"] }
 console = "0.16"
 deadpool = { version = "0.13", features = ["rt_tokio_1"] }
 dialoguer = "0.12"
+hashbrown = "0.16"
 heck = "0.5.0"
 indexmap = "2.13.0"
 index_vec = "0.1.4"

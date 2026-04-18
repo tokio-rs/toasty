@@ -351,6 +351,10 @@ impl<T> Query<List<T>> {
 fn set_first(query: &mut stmt::Query) {
     assert!(!query.single, "query is single");
     query.single = true;
+    query.limit = Some(stmt::Limit::Offset(stmt::LimitOffset {
+        limit: stmt::Expr::from(1i64),
+        offset: None,
+    }));
 }
 
 impl<T: Load> Query<T> {
