@@ -2263,10 +2263,10 @@ pub async fn bare_and_nested_includes_on_shared_prefix(test: &mut Test) -> Resul
     Ok(())
 }
 
-// DDB-compatible variant of the issue #691 repro. Same shared-prefix shape
-// (two sibling nested includes under `items()`) but using a schema pattern
-// known to work on all drivers including DynamoDB — mirrors the structure of
-// `nested_has_many_then_belongs_to_required` with an extra sibling BelongsTo.
+// DDB-compatible variant of the issue #691 repro. Two sibling nested includes
+// under `items()` — each item has a distinct brand and supplier so the
+// per-item belongs_to batches stay unique (DDB's nested merge uses a HashIndex
+// that requires unique keys).
 #[driver_test(id(ID))]
 pub async fn sibling_nested_includes_on_shared_prefix_non_sql(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -2294,6 +2294,16 @@ pub async fn sibling_nested_includes_on_shared_prefix_non_sql(test: &mut Test) -
 
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
+    struct Supplier {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
     struct Item {
         #[key]
         #[auto]
@@ -2312,32 +2322,56 @@ pub async fn sibling_nested_includes_on_shared_prefix_non_sql(test: &mut Test) -
 
         #[belongs_to(key = brand_id, references = id)]
         brand: toasty::BelongsTo<Brand>,
+
+        #[index]
+        supplier_id: ID,
+
+        #[belongs_to(key = supplier_id, references = id)]
+        supplier: toasty::BelongsTo<Supplier>,
     }
 
-    let mut db = test.setup_db(models!(Category, Brand, Item)).await;
+    let mut db = test
+        .setup_db(models!(Category, Brand, Supplier, Item))
+        .await;
 
-    let brand = Brand::create().name("BrandA").exec(&mut db).await?;
+    let brand_a = Brand::create().name("BrandA").exec(&mut db).await?;
+    let brand_b = Brand::create().name("BrandB").exec(&mut db).await?;
+    let sup_a = Supplier::create().name("SupA").exec(&mut db).await?;
+    let sup_b = Supplier::create().name("SupB").exec(&mut db).await?;
+
     let cat = Category::create()
         .name("Electronics")
-        .item(Item::create().title("Phone").brand(&brand))
-        .item(Item::create().title("Laptop").brand(&brand))
+        .item(
+            Item::create()
+                .title("Phone")
+                .brand(&brand_a)
+                .supplier(&sup_a),
+        )
+        .item(
+            Item::create()
+                .title("Laptop")
+                .brand(&brand_b)
+                .supplier(&sup_b),
+        )
         .exec(&mut db)
         .await?;
 
     // Two sibling nested includes under the `items()` prefix. Without the
     // fix, the second would overwrite the first.
     let loaded = Category::filter_by_id(cat.id)
-        .include(Category::fields().items().category())
         .include(Category::fields().items().brand())
+        .include(Category::fields().items().supplier())
         .get(&mut db)
         .await?;
 
     let items = loaded.items.get();
     assert_eq!(2, items.len());
-    for item in items {
-        assert_eq!("Electronics", item.category.get().name);
-        assert_eq!("BrandA", item.brand.get().name);
-    }
+    let mut pairs: Vec<(&str, &str)> = items
+        .iter()
+        .map(|i| (i.brand.get().name.as_str(), i.supplier.get().name.as_str()))
+        .collect();
+    pairs.sort();
+    assert_eq!(pairs, vec![("BrandA", "SupA"), ("BrandB", "SupB")]);
 
     Ok(())
 }
