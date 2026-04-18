@@ -25,6 +25,8 @@ members = [
 
     # Tests
     "tests",
+    "tests/tests/fixtures/post",
+    "tests/tests/fixtures/user",
 
     # Benchmarks
     "benches",
