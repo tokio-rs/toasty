@@ -493,30 +493,35 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         if let stmt::Returning::Model { include } = i {
             // Capture the include clause as we will be using it to generate
             // inclusion statements.
-            let include = std::mem::take(include);
+            let mut include = std::mem::take(include);
 
             let mut returning = self.mapping_unwrap().table_to_model.lower_returning_model();
 
-            // Group paths by their first field so includes sharing a prefix
-            // produce a single merged subquery. Without this, each `.include()`
-            // call would overwrite the previous subquery at the same field
-            // slot (see issue #691).
-            let mut groups: Vec<(usize, Vec<stmt::Projection>)> = vec![];
+            // Sort by first field so paths sharing a prefix are contiguous,
+            // then emit one merged subquery per group — without this, each
+            // `.include()` call would overwrite the previous subquery at the
+            // same field slot (see issue #691).
+            include.sort_by_key(|p| *p.projection.as_slice().first().expect("empty include path"));
+
+            let mut nested: Vec<stmt::Projection> = vec![];
+            let mut current: Option<usize> = None;
+
             for path in include {
-                let (first, rest) = match path.projection.as_slice() {
-                    [] => panic!("Empty include path"),
-                    [first, rest @ ..] => (*first, stmt::Projection::from(rest)),
+                let [first, rest @ ..] = path.projection.as_slice() else {
+                    unreachable!("guaranteed non-empty by sort_by_key above")
                 };
 
-                if let Some((_, rests)) = groups.iter_mut().find(|(f, _)| *f == first) {
-                    rests.push(rest);
-                } else {
-                    groups.push((first, vec![rest]));
+                if current != Some(*first) {
+                    if let Some(field) = current {
+                        self.build_include_subquery(&mut returning, field, &nested);
+                        nested.clear();
+                    }
+                    current = Some(*first);
                 }
+                nested.push(stmt::Projection::from(rest));
             }
-
-            for (field_index, nested) in groups {
-                self.build_include_subquery(&mut returning, field_index, &nested);
+            if let Some(field) = current {
+                self.build_include_subquery(&mut returning, field, &nested);
             }
 
             *i = stmt::Returning::Expr(returning);
