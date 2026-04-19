@@ -30,9 +30,12 @@ impl Simplify<'_> {
 
         // Idempotent law, `a or a` → `a`
         // Note: O(n) lookups are acceptable here since operand lists are typically small.
-        let mut seen = Vec::new();
+        // `is_equivalent_to` (not `PartialEq`) keeps this sound for non-deterministic
+        // operands like `LAST_INSERT_ID()` — two syntactically identical calls may
+        // return different values, so the second occurrence must survive.
+        let mut seen: Vec<stmt::Expr> = Vec::new();
         expr.operands.retain(|operand| {
-            if seen.contains(operand) {
+            if seen.iter().any(|e| e.is_equivalent_to(operand)) {
                 false
             } else {
                 seen.push(operand.clone());
@@ -55,7 +58,7 @@ impl Simplify<'_> {
                 !and_expr
                     .operands
                     .iter()
-                    .any(|op| non_and_operands.contains(op))
+                    .any(|op| non_and_operands.iter().any(|e| e.is_equivalent_to(op)))
             } else {
                 true
             }
@@ -122,7 +125,7 @@ impl Simplify<'_> {
             .filter(|op| {
                 expr.operands[1..].iter().all(|other| {
                     if let stmt::Expr::And(other_and) = other {
-                        other_and.operands.contains(op)
+                        other_and.operands.iter().any(|e| e.is_equivalent_to(op))
                     } else {
                         false
                     }
@@ -138,7 +141,8 @@ impl Simplify<'_> {
         // Remove all common factors from each AND
         for operand in &mut expr.operands {
             if let stmt::Expr::And(and) = operand {
-                and.operands.retain(|op| !common.contains(op));
+                and.operands
+                    .retain(|op| !common.iter().any(|c| c.is_equivalent_to(op)));
                 // If only one operand left, unwrap the AND
                 if and.operands.len() == 1 {
                     *operand = and.operands.pop().unwrap();
@@ -182,7 +186,9 @@ impl Simplify<'_> {
             }
 
             // Check if not(operand) exists and operand is non-nullable
-            if negated.contains(&operand) && operand.is_always_non_nullable() {
+            if negated.iter().any(|n| n.is_equivalent_to(operand))
+                && operand.is_always_non_nullable()
+            {
                 return true;
             }
         }
@@ -220,7 +226,11 @@ impl Simplify<'_> {
                 continue;
             };
 
-            if iv.expr != *anchor_expr || iv.variant.model != model_id {
+            // Every `IsVariant` subject must be equivalent to the anchor:
+            // two syntactically different (or non-deterministic) subjects could
+            // disagree at runtime, so covering all variants of the anchor tells
+            // us nothing about them.
+            if !iv.expr.is_equivalent_to(anchor_expr) || iv.variant.model != model_id {
                 return false;
             }
 
@@ -254,10 +264,16 @@ impl Simplify<'_> {
                 && bin_op.op.is_eq()
                 && let stmt::Expr::Value(value) = bin_op.rhs.as_ref()
             {
-                // Find or create index for this LHS
+                // Find or create index for this LHS. `is_equivalent_to` is
+                // crucial here: if the lhs is non-deterministic (e.g. `RAND()`),
+                // it is never equivalent to another occurrence of itself, so
+                // each instance falls into its own singleton group and no IN
+                // list is produced. Rewriting `RAND() = 1 OR RAND() = 2` into
+                // `RAND() IN (1, 2)` would collapse two independent draws into
+                // one, which is unsound.
                 let lhs_idx = lhs_exprs
                     .iter()
-                    .position(|e| e == bin_op.lhs.as_ref())
+                    .position(|e| e.is_equivalent_to(bin_op.lhs.as_ref()))
                     .unwrap_or_else(|| {
                         lhs_exprs.push(bin_op.lhs.as_ref().clone());
                         lhs_exprs.len() - 1
