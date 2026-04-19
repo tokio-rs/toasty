@@ -28,6 +28,7 @@ What kind of work the issue represents.
 | `C-chore` | CI, release tooling, scripts, lint fixes |
 | `C-tracking` | An umbrella issue that tracks related work |
 | `C-discussion` | Open-ended design discussion or RFC |
+| `C-sketch` | A proof-of-concept PR that demonstrates an idea and is not intended to be merged |
 
 ## `A-` Area
 
