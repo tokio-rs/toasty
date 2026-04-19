@@ -50,7 +50,7 @@ jobs:
           mkdir -p _site/nightly
           cp -r docs/guide/book/html _site/nightly/guide
           cp -r target/doc _site/nightly/api
-          cp docs/api-index.html _site/nightly/api/index.html
+          cp docs/api/index.html _site/nightly/api/index.html
           cat > _site/index.html << 'HEREDOC'
           <!DOCTYPE html>
           <html>
