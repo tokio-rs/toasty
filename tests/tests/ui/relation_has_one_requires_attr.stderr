@@ -12,7 +12,7 @@ error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::schema::
             Vec<u8>
             bigdecimal::BigDecimal
             bool
-            i16
+            f32
           and $N others
 
 error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::schema::Field` is not satisfied
@@ -29,7 +29,7 @@ error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::schema::
             Vec<u8>
             bigdecimal::BigDecimal
             bool
-            i16
+            f32
           and $N others
   = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
 
@@ -47,5 +47,5 @@ error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::schema::
             Vec<u8>
             bigdecimal::BigDecimal
             bool
-            i16
+            f32
           and $N others
