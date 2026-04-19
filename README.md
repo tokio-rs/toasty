@@ -116,6 +116,13 @@ application data model maps to the database schema.
 
 Development priorities are based on feedback and contributions. If you run into
 missing features or rough edges, please open an issue or submit a pull request.
+Planned work lives under [`docs/dev/roadmap/`](docs/dev/roadmap/).
+
+## Contributing
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md). Small fixes can go straight to a PR;
+larger changes follow a lightweight propose → roadmap + design doc → implement
+flow.
 
 ## License
 
