@@ -811,6 +811,7 @@ where
         Expr::Error(expr) => v.visit_expr_error_mut(expr),
         Expr::Exists(expr) => v.visit_expr_exists_mut(expr),
         Expr::Func(expr) => v.visit_expr_func_mut(expr),
+        Expr::Ident(_) => {}
         Expr::InList(expr) => v.visit_expr_in_list_mut(expr),
         Expr::InSubquery(expr) => v.visit_expr_in_subquery_mut(expr),
         Expr::IsNull(expr) => v.visit_expr_is_null_mut(expr),

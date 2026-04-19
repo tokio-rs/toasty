@@ -37,6 +37,15 @@ pub async fn ty_timestamp(test: &mut Test) -> Result<(), BoxError> {
         Value::String(format!("{ts:.9}"))
     };
 
+    // Position: id_u64 uses Expr::Default (no param), so val is at
+    // params[0]. id_uuid adds the uuid at params[0], shifting val to params[1].
+    let sql = test.capability().sql;
+    let val_pos = if driver_test_cfg!(id_u64) { 0 } else { 1 };
+    let val_pat = if sql {
+        ArgOr::Arg(val_pos)
+    } else {
+        ArgOr::Value(expected_val.clone())
+    };
     assert_struct!(op, Operation::QuerySql({
         stmt: Statement::Insert({
             target: InsertTarget::Table({
@@ -44,10 +53,15 @@ pub async fn ty_timestamp(test: &mut Test) -> Result<(), BoxError> {
                 columns: == columns(&db, "items", &["id", "val"]),
             }),
             source.body: ExprSet::Values({
-                rows: [=~ (Any, expected_val)],
+                rows: [=~ (Any, val_pat)],
             }),
         }),
     }));
+    if sql {
+        assert_struct!(op, Operation::QuerySql({
+            params[val_pos].value: == expected_val,
+        }));
+    }
 
     // Verify round-trip with more values
     let read = Item::get_by_id(&mut db, &created.id).await?;
@@ -326,6 +340,13 @@ pub async fn ty_timestamp_as_text(test: &mut Test) -> Result<(), BoxError> {
     // Verify the INSERT encodes the timestamp as a fixed-precision text string.
     // The #[column(type = text)] forces text encoding on all drivers.
     let (op, _) = test.log().pop();
+    let sql = test.capability().sql;
+    let val_pos = if driver_test_cfg!(id_u64) { 0 } else { 1 };
+    let val_pat = if sql {
+        ArgOr::Arg(val_pos)
+    } else {
+        ArgOr::Value(ts_text.as_str())
+    };
     assert_struct!(op, Operation::QuerySql({
         stmt: Statement::Insert({
             target: InsertTarget::Table({
@@ -333,10 +354,15 @@ pub async fn ty_timestamp_as_text(test: &mut Test) -> Result<(), BoxError> {
                 columns: == columns(&db, "items", &["id", "val"]),
             }),
             source.body: ExprSet::Values({
-                rows: [=~ (Any, ts_text)],
+                rows: [=~ (Any, val_pat)],
             }),
         }),
     }));
+    if sql {
+        assert_struct!(op, Operation::QuerySql({
+            params[val_pos].value: == ts_text,
+        }));
+    }
 
     // Verify round-trip
     let read = Item::get_by_id(&mut db, &created.id).await?;

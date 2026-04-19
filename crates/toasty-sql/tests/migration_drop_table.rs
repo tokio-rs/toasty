@@ -6,19 +6,7 @@ use toasty_core::{
     },
     stmt as core_stmt,
 };
-use toasty_sql::{
-    Serializer,
-    migration::MigrationStatement,
-    serializer::{Params, Placeholder},
-};
-
-struct NoParams;
-
-impl Params for NoParams {
-    fn push(&mut self, _: &core_stmt::Value, _: Option<&core_stmt::Type>) -> Placeholder {
-        Placeholder(0)
-    }
-}
+use toasty_sql::{Serializer, migration::MigrationStatement};
 
 fn make_column(table_id: usize, index: usize, name: &str, storage_ty: Type) -> Column {
     Column {
@@ -67,7 +55,7 @@ fn serialize_migration(stmts: &[MigrationStatement<'_>], flavor: &str) -> Vec<St
                 "mysql" => Serializer::mysql(ms.schema()),
                 _ => panic!("unknown flavor: {flavor}"),
             };
-            serializer.serialize(ms.statement(), &mut NoParams)
+            serializer.serialize(ms.statement())
         })
         .collect()
 }

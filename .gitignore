@@ -1,5 +1,4 @@
 .cargo
-.claude/worktrees/
 **/target
 /Cargo.lock
 docs/guide/book/

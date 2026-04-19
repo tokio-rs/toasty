@@ -11,6 +11,7 @@
 //! let driver = PostgreSQL::new("postgresql://localhost/mydb").unwrap();
 //! ```
 
+mod oid_cache;
 mod statement_cache;
 #[cfg(feature = "tls")]
 mod tls;
@@ -20,6 +21,7 @@ mod value;
 pub(crate) use value::Value;
 
 use async_trait::async_trait;
+use percent_encoding::percent_decode_str;
 use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     Result, Schema,
@@ -28,11 +30,11 @@ use toasty_core::{
     stmt,
     stmt::ValueRecord,
 };
-use toasty_sql::{self as sql, TypedValue};
+use toasty_sql::{self as sql};
 use tokio_postgres::{Client, Config, Socket, tls::MakeTlsConnect, types::ToSql};
 use url::Url;
 
-use crate::{statement_cache::StatementCache, r#type::TypeExt};
+use crate::{oid_cache::OidCache, statement_cache::StatementCache};
 
 /// A PostgreSQL [`Driver`] that connects via `tokio-postgres`.
 ///
@@ -80,18 +82,47 @@ impl PostgreSQL {
 
         let mut config = Config::new();
         config.host(host);
-        config.dbname(url.path().trim_start_matches('/'));
+
+        let dbname = percent_decode_str(url.path().trim_start_matches('/'))
+            .decode_utf8()
+            .map_err(|_| {
+                toasty_core::Error::invalid_connection_url("database name is not valid UTF-8")
+            })?;
+        config.dbname(&*dbname);
 
         if let Some(port) = url.port() {
             config.port(port);
         }
 
         if !url.username().is_empty() {
-            config.user(url.username());
+            let user = percent_decode_str(url.username())
+                .decode_utf8()
+                .map_err(|_| {
+                    toasty_core::Error::invalid_connection_url("username is not valid UTF-8")
+                })?;
+            config.user(&*user);
         }
 
         if let Some(password) = url.password() {
-            config.password(password);
+            config.password(percent_decode_str(password).collect::<Vec<u8>>());
+        }
+
+        for (key, value) in url.query_pairs() {
+            if key == "application_name" {
+                config.application_name(&*value);
+            }
+        }
+
+        #[cfg(feature = "tls")]
+        let tls = tls::configure_tls(&url, &mut config)?;
+
+        #[cfg(not(feature = "tls"))]
+        for (key, value) in url.query_pairs() {
+            if key == "sslmode" && value != "disable" {
+                return Err(toasty_core::Error::invalid_connection_url(
+                    "TLS not available: compile with the `tls` feature",
+                ));
+            }
         }
 
         #[cfg(feature = "tls")]
@@ -144,16 +175,7 @@ impl Driver for PostgreSQL {
 
         let sql_strings: Vec<String> = statements
             .iter()
-            .map(|stmt| {
-                let mut params = Vec::<TypedValue>::new();
-                let sql = sql::Serializer::postgresql(stmt.schema())
-                    .serialize(stmt.statement(), &mut params);
-                assert!(
-                    params.is_empty(),
-                    "migration statements should not have parameters"
-                );
-                sql
-            })
+            .map(|stmt| sql::Serializer::postgresql(stmt.schema()).serialize(stmt.statement()))
             .collect();
 
         Migration::new_sql(sql_strings.join("\n"))
@@ -226,6 +248,7 @@ impl Driver for PostgreSQL {
 pub struct Connection {
     client: Client,
     statement_cache: StatementCache,
+    oid_cache: OidCache,
 }
 
 impl Connection {
@@ -234,6 +257,7 @@ impl Connection {
         Self {
             client,
             statement_cache: StatementCache::new(100),
+            oid_cache: OidCache::new(),
         }
     }
 
@@ -263,35 +287,22 @@ impl Connection {
     pub async fn create_table(&mut self, schema: &db::Schema, table: &Table) -> Result<()> {
         let serializer = sql::Serializer::postgresql(schema);
 
-        let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
-        let sql = serializer.serialize(
-            &sql::Statement::create_table(table, &Capability::POSTGRESQL),
-            &mut params,
-        );
-
-        assert!(
-            params.is_empty(),
-            "creating a table shouldn't involve any parameters"
-        );
+        let sql = serializer.serialize(&sql::Statement::create_table(
+            table,
+            &Capability::POSTGRESQL,
+        ));
 
         self.client
             .execute(&sql, &[])
             .await
             .map_err(toasty_core::Error::driver_operation_failed)?;
 
-        // NOTE: `params` is guaranteed to be empty based on the assertion above. If
-        // that changes, `params.clear()` should be called here.
         for index in &table.indices {
             if index.primary_key {
                 continue;
             }
 
-            let sql = serializer.serialize(&sql::Statement::create_index(index), &mut params);
-
-            assert!(
-                params.is_empty(),
-                "creating an index shouldn't involve any parameters"
-            );
+            let sql = serializer.serialize(&sql::Statement::create_index(index));
 
             self.client
                 .execute(&sql, &[])
@@ -305,10 +316,7 @@ impl Connection {
 
 impl From<Client> for Connection {
     fn from(client: Client) -> Self {
-        Self {
-            client,
-            statement_cache: StatementCache::new(100),
-        }
+        Self::new(client)
     }
 }
 
@@ -333,31 +341,36 @@ impl toasty_core::driver::Connection for Connection {
             return Ok(ExecResponse::count(0));
         }
 
-        let (sql, ret_tys): (sql::Statement, _) = match op {
-            Operation::Insert(op) => (op.stmt.into(), None),
+        let (sql, typed_params, ret_tys) = match op {
+            Operation::Insert(op) => (sql::Statement::from(op.stmt), op.params, None),
             Operation::QuerySql(query) => {
                 assert!(
                     query.last_insert_id_hack.is_none(),
                     "last_insert_id_hack is MySQL-specific and should not be set for PostgreSQL"
                 );
-                (query.stmt.into(), query.ret)
+                (sql::Statement::from(query.stmt), query.params, query.ret)
             }
             op => todo!("op={:#?}", op),
         };
 
         let width = sql.returning_len();
 
-        let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
-        let sql_as_str = sql::Serializer::postgresql(&schema.db).serialize(&sql, &mut params);
+        let sql_as_str = sql::Serializer::postgresql(&schema.db).serialize(&sql);
 
-        tracing::debug!(db.system = "postgresql", db.statement = %sql_as_str, params = params.len(), "executing SQL");
+        tracing::debug!(db.system = "postgresql", db.statement = %sql_as_str, params = typed_params.len(), "executing SQL");
 
-        let param_types = params
+        self.oid_cache
+            .preload(&self.client, typed_params.iter().map(|tv| &tv.ty))
+            .await?;
+        let param_types: Vec<_> = typed_params
             .iter()
-            .map(|typed_value| typed_value.infer_ty().to_postgres_type())
-            .collect::<Vec<_>>();
+            .map(|tv| self.oid_cache.get(&tv.ty))
+            .collect();
 
-        let values: Vec<_> = params.into_iter().map(|tv| Value::from(tv.value)).collect();
+        let values: Vec<_> = typed_params
+            .into_iter()
+            .map(|tv| Value::from(tv.value))
+            .collect();
         let params = values
             .iter()
             .map(|param| param as &(dyn ToSql + Sync))
@@ -414,6 +427,27 @@ impl toasty_core::driver::Connection for Connection {
     }
 
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
+        let serializer = sql::Serializer::postgresql(&schema.db);
+
+        // Create PostgreSQL enum types before creating tables.
+        // Collect unique enum types across all columns.
+        let mut created_enum_types = std::collections::HashSet::new();
+        for table in &schema.db.tables {
+            for column in &table.columns {
+                if let toasty_core::schema::db::Type::Enum(type_enum) = &column.storage_ty
+                    && created_enum_types.insert(type_enum.name.clone())
+                {
+                    let sql = serializer.serialize(&sql::Statement::create_enum_type(type_enum));
+
+                    tracing::debug!(enum_type = ?type_enum.name, "creating enum type");
+                    self.client
+                        .execute(&sql, &[])
+                        .await
+                        .map_err(toasty_core::Error::driver_operation_failed)?;
+                }
+            }
+        }
+
         for table in &schema.db.tables {
             tracing::debug!(table = %table.name, "creating table");
             self.create_table(&schema.db, table).await?;

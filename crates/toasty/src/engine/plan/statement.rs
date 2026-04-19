@@ -352,24 +352,22 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         *expr = stmt::Expr::arg_project(position, [*row, column]);
                     }
                 }
-                stmt::Expr::Reference(expr_reference) => {
-                    if is_returning_projection {
-                        let column = self.load_data_expr_reference_position(expr_reference);
-                        let (position, _) = inputs.insert_full(load_data_node_id);
-                        *expr = stmt::Expr::arg_project(position, [column]);
-                    }
+                stmt::Expr::Reference(expr_reference) if is_returning_projection => {
+                    let column = self.load_data_expr_reference_position(expr_reference);
+                    let (position, _) = inputs.insert_full(load_data_node_id);
+                    *expr = stmt::Expr::arg_project(position, [column]);
                 }
-                stmt::Expr::Func(stmt::ExprFunc::Count(stmt::FuncCount { arg: None, .. })) => {
-                    if is_returning_projection {
-                        let index = self
-                            .stmt_info
-                            .load_data_select_items
-                            .get()
-                            .unwrap()
-                            .get_index_of_count_star();
-                        let (position, _) = inputs.insert_full(load_data_node_id);
-                        *expr = stmt::Expr::arg_project(position, [index]);
-                    }
+                stmt::Expr::Func(stmt::ExprFunc::Count(stmt::FuncCount { arg: None, .. }))
+                    if is_returning_projection =>
+                {
+                    let index = self
+                        .stmt_info
+                        .load_data_select_items
+                        .get()
+                        .unwrap()
+                        .get_index_of_count_star();
+                    let (position, _) = inputs.insert_full(load_data_node_id);
+                    *expr = stmt::Expr::arg_project(position, [index]);
                 }
                 _ => {}
             }
