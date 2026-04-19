@@ -3,6 +3,9 @@
 Documentation for contributors working on Toasty itself. For user-facing
 documentation, see the [Toasty Guide](../guide/).
 
+Start with [`CONTRIBUTING.md`](../../CONTRIBUTING.md) — it describes how
+to propose changes and land PRs.
+
 ## Architecture
 
 High-level documentation of how Toasty is put together.
@@ -13,8 +16,8 @@ High-level documentation of how Toasty is put together.
 
 ## Design Documents
 
-Design notes for specific features, written as proposals or post-hoc records
-of how a subsystem works.
+Guide-level design documents for specific features. Use
+[`_template.md`](./design/_template.md) when starting a new one.
 
 - [Design Overview](./design/README.md)
 - [Batch Queries](./design/batch-queries.md)
