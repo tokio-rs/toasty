@@ -3,7 +3,7 @@ use crate::schema::Register;
 use std::{fmt, marker::PhantomData};
 use toasty_core::{
     schema::app::VariantId,
-    stmt::{self, Direction, OrderByExpr},
+    stmt::{self, Direction, LatestBy, OrderByExpr},
 };
 
 /// A typed path from a root model `T` to a field of type `U`.
@@ -489,6 +489,12 @@ impl<T, U> IntoExpr<U> for Path<T, U> {
 impl<T, U> From<Path<T, U>> for stmt::Path {
     fn from(value: Path<T, U>) -> Self {
         value.untyped
+    }
+}
+
+impl<T, U> From<Path<T, U>> for LatestBy {
+    fn from(value: Path<T, U>) -> Self {
+        LatestBy { path: value.into() }
     }
 }
 

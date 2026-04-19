@@ -49,7 +49,7 @@ pub use query::Query;
 mod update;
 pub use update::Update;
 
-pub use toasty_core::stmt::{OrderBy, Projection, Value};
+pub use toasty_core::stmt::{LatestBy, OrderBy, Projection, Value};
 
 use toasty_core::stmt;
 

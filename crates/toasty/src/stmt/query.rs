@@ -173,6 +173,32 @@ impl<T> Query<T> {
         self
     }
 
+    /// Set the sort order for this query to descending (newest first).
+    ///
+    /// This is a convenience method equivalent to calling
+    /// [`order_by`](Self::order_by) with [`Path::desc`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// #     #[auto]
+    /// #     created_at: jiff::Timestamp,
+    /// # }
+    /// use toasty::stmt::{List, Query};
+    ///
+    /// let mut q = Query::<List<User>>::all();
+    /// q.latest_by(User::fields().created_at());
+    /// ```
+    pub fn latest_by(&mut self, latest_by: impl Into<stmt::LatestBy>) -> &mut Self {
+        self.untyped.order_by = Some(latest_by.into().into());
+        self
+    }
+
     /// Limit the number of records returned.
     ///
     /// # Examples
