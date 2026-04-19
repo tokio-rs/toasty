@@ -4,110 +4,113 @@
 # `.github/workflows/labels.yml`. Update this file — not the GitHub UI —
 # when adding or changing labels.
 #
+# Colors mirror rust-lang/rust's palette: one color per prefix family so the
+# UI groups related labels visually.
+#
 # See `docs/dev/src/labels.md` for the labeling scheme and how each label
 # should be used.
 
 # Category (C-) — what kind of work the issue represents.
 - name: C-bug
   description: "A defect: the code behaves incorrectly"
-  color: "d73a4a"
+  color: "f5f1fd"
 - name: C-feature
   description: "A new feature request or missing use case"
-  color: "a2eeef"
+  color: "f5f1fd"
 - name: C-enhancement
   description: "An improvement to an existing feature"
-  color: "c5def5"
+  color: "f5f1fd"
 - name: C-refactor
   description: "An internal code change with no user-visible effect"
-  color: "c2e0c6"
+  color: "f5f1fd"
 - name: C-docs
   description: "User docs, dev docs, rustdoc"
-  color: "0075ca"
+  color: "f5f1fd"
 - name: C-chore
   description: "CI, release tooling, scripts, lint fixes"
-  color: "cfd3d7"
+  color: "f5f1fd"
 - name: C-tracking
   description: "An umbrella issue that tracks related work"
-  color: "5319e7"
+  color: "f5f1fd"
 - name: C-discussion
   description: "Open-ended design discussion or RFC"
-  color: "d876e3"
+  color: "f5f1fd"
 - name: C-sketch
   description: "A proof-of-concept PR that demonstrates an idea and is not intended to be merged"
-  color: "bfd4f2"
+  color: "f5f1fd"
 
 # Area (A-) — which part of the codebase the issue touches.
 - name: A-engine
   description: "toasty/src/engine/ — simplify, lower, plan, exec"
-  color: "fbca04"
+  color: "f7e101"
 - name: A-macros
   description: "toasty-macros and the create! and models! macros"
-  color: "fbca04"
+  color: "f7e101"
 - name: A-schema
   description: "toasty-core/src/schema/ — app, db, mapping"
-  color: "fbca04"
+  color: "f7e101"
 - name: A-sql
   description: "toasty-sql — AST to SQL serialization"
-  color: "fbca04"
+  color: "f7e101"
 - name: A-driver
   description: "Driver trait, capabilities, connection lifecycle, and per-backend behavior"
-  color: "fbca04"
+  color: "f7e101"
 - name: A-migration
   description: "toasty-cli and migration generation and application"
-  color: "fbca04"
+  color: "f7e101"
 - name: A-tests
   description: "toasty-driver-integration-suite and workspace tests"
-  color: "fbca04"
+  color: "f7e101"
 - name: A-docs
   description: "docs/ mdbook content"
-  color: "fbca04"
+  color: "f7e101"
 - name: A-ci
   description: ".github/workflows, release-plz, scripts/"
-  color: "fbca04"
+  color: "f7e101"
 
 # Priority (P-) — how urgent the issue is.
 - name: P-critical
   description: "Data loss, data corruption, correctness, or security"
-  color: "b60205"
+  color: "eb6420"
 - name: P-high
   description: "Blocks a user with no workaround"
-  color: "d93f0b"
+  color: "eb6420"
 - name: P-medium
   description: "The default for actionable issues"
-  color: "fbca04"
+  color: "eb6420"
 - name: P-low
   description: "Nice-to-have"
-  color: "0e8a16"
+  color: "eb6420"
 
 # Impact (I-) — the nature of a bug that needs attention beyond its priority.
 - name: I-unsound
   description: "A soundness hole: undefined behavior or a violated safety invariant"
-  color: "b60205"
+  color: "e11d21"
 - name: I-security
   description: "A security vulnerability — apply alongside P-critical"
-  color: "b60205"
+  color: "e11d21"
 
 # Status (S-) — where the issue or PR sits in the workflow.
 - name: S-needs-design
   description: "A design decision is required before implementation"
-  color: "bfdadc"
+  color: "d3dddd"
 - name: S-needs-repro
   description: "The bug report lacks a reproducer"
-  color: "bfdadc"
+  color: "d3dddd"
 - name: S-needs-info
   description: "Waiting on more information from the reporter"
-  color: "bfdadc"
+  color: "d3dddd"
 - name: S-blocked
   description: "Blocked on another issue, PR, or upstream change"
-  color: "bfdadc"
+  color: "d3dddd"
 - name: S-waiting-on-author
   description: "PR is waiting on author changes"
-  color: "bfdadc"
+  color: "d3dddd"
 - name: S-waiting-on-review
   description: "PR is waiting on maintainer review"
-  color: "bfdadc"
+  color: "d3dddd"
 
-# Community — keep default GitHub names so the UI highlights them.
+# Community — keep default GitHub names and colors so the UI highlights them.
 - name: good first issue
   description: "A beginner-friendly, well-scoped issue"
   color: "7057ff"
