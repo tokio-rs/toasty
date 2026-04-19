@@ -108,7 +108,7 @@ impl Statement {
     ) -> Self {
         AlterColumn {
             id: column.id,
-            column_def: ColumnDef::from_schema(column, &capability.storage_types),
+            column_def: ColumnDef::from_schema(column, &capability.storage_types, capability),
             changes,
         }
         .into()

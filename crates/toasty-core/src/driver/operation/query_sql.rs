@@ -1,4 +1,4 @@
-use super::Operation;
+use super::{Operation, TypedValue};
 
 use crate::stmt;
 
@@ -23,8 +23,14 @@ use crate::stmt;
 /// ```
 #[derive(Debug, Clone)]
 pub struct QuerySql {
-    /// The SQL statement to execute.
+    /// The SQL statement to execute. Scalar values that should be sent as
+    /// bind parameters have been replaced with `Expr::Arg(n)` where `n` is
+    /// the index into [`params`](Self::params).
     pub stmt: stmt::Statement,
+
+    /// Typed bind parameters extracted from the statement. Each entry
+    /// corresponds to an `Expr::Arg(n)` placeholder in the statement.
+    pub params: Vec<TypedValue>,
 
     /// The types of columns in the result set. When `Some`, the driver uses
     /// these types to decode returned rows. When `None`, the statement does

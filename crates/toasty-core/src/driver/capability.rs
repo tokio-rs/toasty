@@ -68,6 +68,25 @@ pub struct Capability {
     /// Whether the database has native support for DateTime types.
     pub native_datetime: bool,
 
+    /// Whether the database supports native enum types.
+    ///
+    /// - PostgreSQL: `true` — `CREATE TYPE ... AS ENUM`
+    /// - MySQL: `true` — inline `ENUM('a', 'b')` column type
+    /// - SQLite: `false` — uses `TEXT` + `CHECK` constraint
+    /// - DynamoDB: `false` — plain string attribute
+    pub native_enum: bool,
+
+    /// Whether enum types are standalone named objects requiring separate DDL.
+    ///
+    /// When `true`, migrations must emit `CREATE TYPE` / `ALTER TYPE` for enum
+    /// types. When `false`, enum definitions are inline in column types.
+    ///
+    /// - PostgreSQL: `true` — `CREATE TYPE <name> AS ENUM (...)`
+    /// - MySQL: `false` — inline `ENUM('a', 'b')` on the column
+    /// - SQLite: `false`
+    /// - DynamoDB: `false`
+    pub named_enum_types: bool,
+
     /// Whether the database has native support for Decimal types.
     pub native_decimal: bool,
 
@@ -260,6 +279,10 @@ impl Capability {
 
         native_varchar: true,
 
+        // SQLite does not have native enum types; uses TEXT + CHECK
+        native_enum: false,
+        named_enum_types: false,
+
         // SQLite does not have native date/time types
         native_timestamp: false,
         native_date: false,
@@ -283,6 +306,10 @@ impl Capability {
         select_for_update: true,
         auto_increment: true,
         bigdecimal_implemented: false,
+
+        // PostgreSQL has CREATE TYPE ... AS ENUM
+        native_enum: true,
+        named_enum_types: true,
 
         // PostgreSQL has native date/time types
         native_timestamp: true,
@@ -308,6 +335,10 @@ impl Capability {
         returning_from_mutation: false,
         auto_increment: true,
         bigdecimal_implemented: true,
+
+        // MySQL has inline ENUM('a', 'b') column types
+        native_enum: true,
+        named_enum_types: false,
 
         // MySQL has native date/time types
         native_timestamp: true,
@@ -336,6 +367,8 @@ impl Capability {
         auto_increment: false,
         bigdecimal_implemented: false,
         native_varchar: false,
+        native_enum: false,
+        named_enum_types: false,
 
         // DynamoDB does not have native date/time types
         native_timestamp: false,

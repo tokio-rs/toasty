@@ -17,7 +17,7 @@ mod ident;
 use ident::Ident;
 
 mod params;
-pub use params::{Params, Placeholder, TypedValue};
+pub use params::Placeholder;
 
 // Fragment serializers
 mod column_def;
@@ -34,15 +34,6 @@ use toasty_core::{
     schema::db::{self, Index, Table},
 };
 
-/// Context information when serializing VALUES in an INSERT statement.
-#[derive(Debug, Clone)]
-pub struct InsertContext {
-    /// The table being inserted into.
-    pub table_id: db::TableId,
-    /// Columns receiving values, in order.
-    pub columns: Vec<db::ColumnId>,
-}
-
 /// Serialize a statement to a SQL string
 #[derive(Debug)]
 pub struct Serializer<'a> {
@@ -54,15 +45,12 @@ pub struct Serializer<'a> {
     flavor: Flavor,
 }
 
-struct Formatter<'a, T> {
+struct Formatter<'a> {
     /// Handle to the serializer
     serializer: &'a Serializer<'a>,
 
     /// Where to write the serialized SQL
     dst: &'a mut String,
-
-    /// Where to store parameters
-    params: &'a mut T,
 
     /// Current query depth. This is used to determine the nesting level when
     /// generating names
@@ -71,37 +59,58 @@ struct Formatter<'a, T> {
     /// True when table names should be aliased.
     alias: bool,
 
-    /// Context when serializing VALUES in an INSERT statement
-    insert_context: Option<InsertContext>,
+    /// True when inside an INSERT statement. Used by MySQL to decide whether
+    /// VALUES rows need the ROW() wrapper (required in subqueries but not in
+    /// INSERT).
+    in_insert: bool,
+
+    /// Collects `Expr::Arg(n)` positions in the order they appear in the SQL.
+    /// Used by MySQL (which uses positional `?` without indices) to reorder
+    /// the params vec to match placeholder occurrence order.
+    arg_positions: Vec<usize>,
 }
 
 /// Expression context bound to a database-level schema.
 pub type ExprContext<'a> = toasty_core::stmt::ExprContext<'a, db::Schema>;
 
 impl<'a> Serializer<'a> {
-    /// Serializes a [`Statement`] to a SQL string, appending a trailing semicolon.
+    /// Serializes a [`Statement`] to a SQL string with all values inlined as
+    /// literals (no bind parameters). Appends a trailing semicolon.
     ///
-    /// Parameter placeholders are written in the dialect's native format
-    /// (`$1` for PostgreSQL, `?1` for SQLite, `?` for MySQL) and the
-    /// corresponding values are pushed into `params`.
-    pub fn serialize(&self, stmt: &Statement, params: &mut impl Params) -> String {
+    /// Use this for DDL statements (`CREATE TABLE`, `CREATE TYPE`, etc.) where
+    /// bind parameters are not supported. DML statements should already have
+    /// their parameters extracted (as `Expr::Arg` placeholders) before reaching
+    /// the serializer.
+    pub fn serialize(&self, stmt: &Statement) -> String {
+        self.serialize_with_arg_order(stmt).0
+    }
+
+    /// Serializes a [`Statement`] and returns both the SQL string and the order
+    /// in which `Expr::Arg(n)` placeholders appear in the SQL.
+    ///
+    /// The arg order is needed by MySQL which uses positional `?` without
+    /// indices — the caller must reorder its params vec to match the occurrence
+    /// order. PostgreSQL and SQLite use indexed placeholders (`$1`, `?1`) so
+    /// they can ignore the arg order.
+    pub fn serialize_with_arg_order(&self, stmt: &Statement) -> (String, Vec<usize>) {
         let mut ret = String::new();
 
         let mut fmt = Formatter {
             serializer: self,
             dst: &mut ret,
-            params,
             depth: 0,
             alias: false,
-            insert_context: None,
+            in_insert: false,
+            arg_positions: Vec::new(),
         };
 
         let cx = ExprContext::new(self.schema);
 
         stmt.to_sql(&cx, &mut fmt);
 
+        let arg_positions = fmt.arg_positions;
         ret.push(';');
-        ret
+        (ret, arg_positions)
     }
 
     /// Serialize a transaction control operation to a SQL string.
@@ -114,10 +123,10 @@ impl<'a> Serializer<'a> {
         let mut f = Formatter {
             serializer: self,
             dst: &mut ret,
-            params: &mut Vec::<TypedValue>::new(),
             depth: 0,
             alias: false,
-            insert_context: None,
+            in_insert: false,
+            arg_positions: Vec::new(),
         };
 
         let cx = ExprContext::new(self.schema);

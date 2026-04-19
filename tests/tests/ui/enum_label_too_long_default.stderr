@@ -1,0 +1,5 @@
+error: variant label "this_variant_name_is_extremely_long_and_will_exceed_sixty_three_bytes_when_converted_to_snake_case" is 98 bytes; maximum is 63
+ --> tests/ui/enum_label_too_long_default.rs:4:5
+  |
+4 |     ThisVariantNameIsExtremelyLongAndWillExceedSixtyThreeBytesWhenConvertedToSnakeCase,
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -26,7 +26,7 @@ mod key_attr;
 pub(crate) use key_attr::KeyAttr;
 
 mod model;
-pub(crate) use model::{Model, ModelKind};
+pub(crate) use model::{EnumStorageStrategy, Model, ModelKind};
 
 mod model_attr;
 pub(crate) use model_attr::ModelAttr;
@@ -41,4 +41,4 @@ mod variant;
 pub(crate) use variant::Variant;
 
 mod column;
-pub(crate) use column::{Column, VariantValue};
+pub(crate) use column::{Column, ColumnType, VariantValue};

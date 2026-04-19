@@ -493,12 +493,35 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         if let stmt::Returning::Model { include } = i {
             // Capture the include clause as we will be using it to generate
             // inclusion statements.
-            let include = std::mem::take(include);
+            let mut include = std::mem::take(include);
 
             let mut returning = self.mapping_unwrap().table_to_model.lower_returning_model();
 
-            for path in &include {
-                self.build_include_subquery(&mut returning, path);
+            // Sort by first field so paths sharing a prefix are contiguous,
+            // then emit one merged subquery per group — without this, each
+            // `.include()` call would overwrite the previous subquery at the
+            // same field slot (see issue #691).
+            include.sort_by_key(|p| *p.projection.as_slice().first().expect("empty include path"));
+
+            let mut nested: Vec<stmt::Projection> = vec![];
+            let mut current: Option<usize> = None;
+
+            for path in include {
+                let [first, rest @ ..] = path.projection.as_slice() else {
+                    unreachable!("guaranteed non-empty by sort_by_key above")
+                };
+
+                if current != Some(*first) {
+                    if let Some(field) = current {
+                        self.build_include_subquery(&mut returning, field, &nested);
+                        nested.clear();
+                    }
+                    current = Some(*first);
+                }
+                nested.push(stmt::Projection::from(rest));
+            }
+            if let Some(field) = current {
+                self.build_include_subquery(&mut returning, field, &nested);
             }
 
             *i = stmt::Returning::Expr(returning);
@@ -816,14 +839,13 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         }
     }
 
-    fn build_include_subquery(&mut self, returning: &mut stmt::Expr, path: &stmt::Path) {
-        let projection = &path.projection[..];
-        let (field_index, rest) = match projection {
-            [] => panic!("Empty include path"),
-            [first, rest @ ..] => (first, rest),
-        };
-
-        let field = &self.model_unwrap().fields[*field_index];
+    fn build_include_subquery(
+        &mut self,
+        returning: &mut stmt::Expr,
+        field_index: usize,
+        nested: &[stmt::Projection],
+    ) {
+        let field = &self.model_unwrap().fields[field_index];
 
         let (mut stmt, target_model_id) = match &field.ty {
             FieldTy::HasMany(rel) => (
@@ -878,15 +900,18 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             _ => todo!(),
         };
 
-        // If there are remaining steps in the path, add them as nested includes
-        // on the subquery. The lowering pipeline will recursively process them
-        // when it encounters the Returning::Model on this subquery.
-        if !rest.is_empty() {
-            let remaining_path = stmt::Path {
-                root: stmt::PathRoot::Model(target_model_id),
-                projection: stmt::Projection::from(rest),
-            };
-            stmt.include(remaining_path);
+        // Attach each non-empty remainder as a nested include on the subquery.
+        // Empty remainders (from a bare `.include(posts())`) need no nested
+        // include — the subquery itself satisfies them. The lowering pipeline
+        // will recursively group and process the nested includes when it
+        // encounters `Returning::Model` on this subquery.
+        for rest in nested {
+            if !rest.is_empty() {
+                stmt.include(stmt::Path {
+                    root: stmt::PathRoot::Model(target_model_id),
+                    projection: rest.clone(),
+                });
+            }
         }
 
         // Simplify the new stmt to handle relations.
@@ -921,7 +946,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             });
         }
 
-        returning.entry_mut(*field_index).insert(sub_expr);
+        returning.entry_mut(field_index).insert(sub_expr);
     }
 
     /// Returns the ArgId for the new reference

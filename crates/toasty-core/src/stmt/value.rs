@@ -1,6 +1,5 @@
 use super::{Entry, EntryPath, Type, TypeUnion, ValueRecord, sparse_record::SparseRecord};
 use std::cmp::Ordering;
-use std::hash::Hash;
 
 /// A dynamically typed value used throughout Toasty's query engine.
 ///
@@ -31,7 +30,7 @@ use std::hash::Hash;
 /// let v = Value::from(true);
 /// assert_eq!(v, true);
 /// ```
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub enum Value {
     /// Boolean value
     Bool(bool),
