@@ -1,58 +1,14 @@
-use super::{Comma, Params, ToSql};
+use super::{Comma, ToSql};
 
 use crate::{serializer::ExprContext, stmt};
 
-/// Wrapper for serializing a value within an INSERT VALUES record with type hints
-struct TypeHintedValue<'a> {
-    field_index: usize,
-    value: &'a stmt::Value,
-}
-
-impl<'a> ToSql for TypeHintedValue<'a> {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
-        // Get type hint from insert context if available
-        let type_hint = f.insert_context.as_ref().and_then(|insert_ctx| {
-            if self.field_index < insert_ctx.columns.len() {
-                let col_id = insert_ctx.columns[self.field_index];
-                let table = &cx.schema().tables[insert_ctx.table_id.0];
-                Some(table.columns[col_id.index].ty.clone())
-            } else {
-                None
-            }
-        });
-
-        if matches!(self.value, stmt::Value::Null) {
-            // Write NULL as a literal — see ToSql for &stmt::Value
-            f.dst.push_str("NULL");
-        } else if matches!(self.value, stmt::Value::Record(_) | stmt::Value::List(_)) {
-            // For nested records/lists, recurse normally (they handle their own fields)
-            self.value.to_sql(cx, f);
-        } else {
-            // For scalar values, use the type hint
-            let placeholder = f.params.push(self.value, type_hint.as_ref());
-            fmt!(cx, f, placeholder);
-        }
-    }
-}
-
 impl ToSql for &stmt::Value {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         use stmt::Value::*;
 
         match self {
             Record(value) => {
-                // Use TypeHintedValue wrapper to provide type hints from INSERT context
-                let fields =
-                    Comma(
-                        value
-                            .fields
-                            .iter()
-                            .enumerate()
-                            .map(|(i, field)| TypeHintedValue {
-                                field_index: i,
-                                value: field,
-                            }),
-                    );
+                let fields = Comma(value.fields.iter());
                 fmt!(cx, f, "(" fields ")");
             }
             List(values) => {
@@ -66,15 +22,30 @@ impl ToSql for &stmt::Value {
                 f.dst.push(')');
             }
             Null => {
-                // Write NULL as a literal rather than a bind parameter.
-                // A bound NULL with no type hint causes PostgreSQL to fail
-                // type inference (e.g. in VALUES-based derived tables).
                 f.dst.push_str("NULL");
             }
-            value => {
-                let placeholder = f.params.push(value, None);
-                fmt!(cx, f, placeholder)
+            // Inline as a SQL literal (used in DDL contexts like CHECK constraints).
+            // DML values are already extracted as Expr::Arg placeholders before
+            // reaching the serializer.
+            String(s) => {
+                f.dst.push('\'');
+                // Escape single quotes by doubling them.
+                for ch in s.chars() {
+                    if ch == '\'' {
+                        f.dst.push('\'');
+                    }
+                    f.dst.push(ch);
+                }
+                f.dst.push('\'');
             }
+            I64(n) => {
+                use std::fmt::Write;
+                write!(f.dst, "{n}").unwrap();
+            }
+            Bool(b) => {
+                f.dst.push_str(if *b { "TRUE" } else { "FALSE" });
+            }
+            _ => todo!("inline SQL literal for value: {self:?}"),
         }
     }
 }

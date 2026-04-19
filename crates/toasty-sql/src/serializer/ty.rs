@@ -1,11 +1,11 @@
 use crate::serializer::ExprContext;
 
-use super::{Flavor, Params, ToSql};
+use super::{Flavor, ToSql};
 
 use toasty_core::schema::db;
 
 impl ToSql for &db::Type {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         match self {
             db::Type::Boolean => fmt!(cx, f, "BOOLEAN"),
             db::Type::Integer(1..=2) => fmt!(cx, f, "SMALLINT"),
@@ -104,6 +104,31 @@ impl ToSql for &db::Type {
                 Flavor::Postgresql => fmt!(cx, f, "TIMESTAMP(" precision ")"),
                 Flavor::Mysql => fmt!(cx, f, "DATETIME(" precision ")"),
                 Flavor::Sqlite => todo!("SQLite does not support DateTime"),
+            },
+            db::Type::Enum(type_enum) => match f.serializer.flavor {
+                // PostgreSQL: reference the named enum type created with CREATE TYPE.
+                Flavor::Postgresql => {
+                    let name = type_enum
+                        .name
+                        .as_deref()
+                        .expect("PostgreSQL enums require a type name");
+                    fmt!(cx, f, name);
+                }
+                // MySQL: inline ENUM('label1', 'label2', ...) column type.
+                Flavor::Mysql => {
+                    use toasty_core::stmt::Value;
+
+                    f.dst.push_str("ENUM(");
+                    for (i, variant) in type_enum.variants.iter().enumerate() {
+                        if i > 0 {
+                            f.dst.push_str(", ");
+                        }
+                        Value::String(variant.name.clone()).to_sql(cx, f);
+                    }
+                    f.dst.push(')');
+                }
+                // SQLite: TEXT column (CHECK constraint added in ColumnDef).
+                Flavor::Sqlite => fmt!(cx, f, "TEXT"),
             },
             db::Type::Custom(custom) => fmt!(cx, f, custom.as_str()),
         }

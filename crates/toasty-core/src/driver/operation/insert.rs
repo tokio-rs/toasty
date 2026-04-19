@@ -1,4 +1,4 @@
-use super::Operation;
+use super::{Operation, TypedValue};
 
 use crate::stmt;
 
@@ -21,8 +21,13 @@ use crate::stmt;
 /// ```
 #[derive(Debug, Clone)]
 pub struct Insert {
-    /// The insert statement to execute.
+    /// The insert statement to execute. Scalar values that should be sent as
+    /// bind parameters have been replaced with `Expr::Arg(n)` where `n` is
+    /// the index into [`params`](Self::params).
     pub stmt: stmt::Statement,
+
+    /// Typed bind parameters extracted from the statement.
+    pub params: Vec<TypedValue>,
 
     /// The types of columns to return from the insert. When `Some`, the driver
     /// should return the inserted row(s) projected to these types (e.g.,

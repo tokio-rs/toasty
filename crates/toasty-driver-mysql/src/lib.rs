@@ -27,7 +27,7 @@ use toasty_core::{
     schema::db::{self, Migration, SchemaDiff, Table},
     stmt::{self, ValueRecord},
 };
-use toasty_sql::{self as sql, TypedValue};
+use toasty_sql::{self as sql};
 use url::Url;
 
 /// A MySQL [`Driver`] that connects via `mysql_async`.
@@ -105,16 +105,7 @@ impl Driver for MySQL {
 
         let sql_strings: Vec<String> = statements
             .iter()
-            .map(|stmt| {
-                let mut params = Vec::<TypedValue>::new();
-                let sql =
-                    sql::Serializer::mysql(stmt.schema()).serialize(stmt.statement(), &mut params);
-                assert!(
-                    params.is_empty(),
-                    "migration statements should not have parameters"
-                );
-                sql
-            })
+            .map(|stmt| sql::Serializer::mysql(stmt.schema()).serialize(stmt.statement()))
             .collect();
 
         Migration::new_sql_with_breakpoints(&sql_strings)
@@ -165,17 +156,7 @@ impl Connection {
     pub async fn create_table(&mut self, schema: &db::Schema, table: &Table) -> Result<()> {
         let serializer = sql::Serializer::mysql(schema);
 
-        let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
-
-        let sql = serializer.serialize(
-            &sql::Statement::create_table(table, &Capability::MYSQL),
-            &mut params,
-        );
-
-        assert!(
-            params.is_empty(),
-            "creating a table shouldn't involve any parameters"
-        );
+        let sql = serializer.serialize(&sql::Statement::create_table(table, &Capability::MYSQL));
 
         self.conn
             .exec_drop(&sql, ())
@@ -187,12 +168,7 @@ impl Connection {
                 continue;
             }
 
-            let sql = serializer.serialize(&sql::Statement::create_index(index), &mut params);
-
-            assert!(
-                params.is_empty(),
-                "creating an index shouldn't involve any parameters"
-            );
+            let sql = serializer.serialize(&sql::Statement::create_index(index));
 
             self.conn
                 .exec_drop(&sql, ())
@@ -215,8 +191,13 @@ impl toasty_core::driver::Connection for Connection {
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         tracing::trace!(driver = "mysql", op = %op.name(), "driver exec");
 
-        let (sql, ret, last_insert_id_hack): (sql::Statement, _, _) = match op {
-            Operation::QuerySql(op) => (op.stmt.into(), op.ret, op.last_insert_id_hack),
+        let (sql, typed_params, ret, last_insert_id_hack) = match op {
+            Operation::QuerySql(op) => (
+                sql::Statement::from(op.stmt),
+                op.params,
+                op.ret,
+                op.last_insert_id_hack,
+            ),
             Operation::Transaction(op) => {
                 let sql = sql::Serializer::mysql(&schema.db).serialize_transaction(&op);
                 self.conn.query_drop(sql).await.map_err(|e| match e {
@@ -234,16 +215,17 @@ impl toasty_core::driver::Connection for Connection {
             op => todo!("op={:#?}", op),
         };
 
-        let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
+        let (sql_as_str, arg_order) =
+            sql::Serializer::mysql(&schema.db).serialize_with_arg_order(&sql);
 
-        let sql_as_str = sql::Serializer::mysql(&schema.db).serialize(&sql, &mut params);
+        tracing::debug!(db.system = "mysql", db.statement = %sql_as_str, params = typed_params.len(), "executing SQL");
 
-        tracing::debug!(db.system = "mysql", db.statement = %sql_as_str, params = params.len(), "executing SQL");
-
-        let params = params
-            .into_iter()
-            .map(|tv| Value::from(tv.value))
-            .collect::<Vec<_>>();
+        // MySQL uses positional `?` without indices, so params must be reordered
+        // to match the order `Expr::Arg(n)` placeholders appear in the SQL.
+        let params: Vec<_> = arg_order
+            .iter()
+            .map(|&pos| Value::from(typed_params[pos].value.clone()))
+            .collect();
         let args = params
             .iter()
             .map(|param| param.to_value())

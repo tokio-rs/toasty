@@ -1,8 +1,31 @@
 use toasty_core::stmt::{self, Value as CoreValue};
 use tokio_postgres::{
     Column, Row,
-    types::{IsNull, ToSql, Type, accepts, private::BytesMut, to_sql_checked},
+    types::{IsNull, Kind, ToSql, Type, private::BytesMut, to_sql_checked},
 };
+
+/// Wrapper for reading string values from PostgreSQL enum columns.
+///
+/// The standard `String::FromSql::accepts()` rejects custom enum types.
+/// This wrapper accepts `Kind::Enum` types and reads the value as UTF-8 text.
+struct EnumString(String);
+
+impl<'a> postgres_types::FromSql<'a> for EnumString {
+    fn from_sql(
+        _ty: &Type,
+        raw: &'a [u8],
+    ) -> std::result::Result<Self, Box<dyn std::error::Error + Sync + Send>> {
+        Ok(EnumString(
+            std::str::from_utf8(raw)
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Sync + Send>)?
+                .to_string(),
+        ))
+    }
+
+    fn accepts(ty: &Type) -> bool {
+        matches!(ty.kind(), Kind::Enum(_))
+    }
+}
 
 #[derive(Debug)]
 pub struct Value(pub(crate) CoreValue);
@@ -155,6 +178,14 @@ impl Value {
             {
                 panic!("NUMERIC requires rust_decimal feature to be enabled")
             }
+        } else if matches!(column.type_().kind(), Kind::Enum(_)) {
+            // Native database enum types (CREATE TYPE ... AS ENUM) are read as strings.
+            // We use EnumString instead of String because String::FromSql::accepts()
+            // rejects custom enum types.
+            match row.get::<usize, Option<EnumString>>(index) {
+                Some(EnumString(v)) => stmt::Value::String(v),
+                None => return Self(stmt::Value::Null),
+            }
         } else {
             todo!(
                 "implement PostgreSQL to toasty conversion for `{:#?}`",
@@ -228,22 +259,25 @@ impl ToSql for Value {
         }
     }
 
-    accepts!(
-        BOOL,
-        INT2,
-        INT4,
-        INT8,
-        FLOAT4,
-        FLOAT8,
-        TEXT,
-        VARCHAR,
-        BYTEA,
-        UUID,
-        NUMERIC,
-        TIMESTAMP,
-        TIMESTAMPTZ,
-        DATE,
-        TIME
-    );
+    fn accepts(ty: &Type) -> bool {
+        matches!(
+            *ty,
+            Type::BOOL
+                | Type::INT2
+                | Type::INT4
+                | Type::INT8
+                | Type::TEXT
+                | Type::FLOAT4
+                | Type::FLOAT8
+                | Type::VARCHAR
+                | Type::BYTEA
+                | Type::UUID
+                | Type::NUMERIC
+                | Type::TIMESTAMP
+                | Type::TIMESTAMPTZ
+                | Type::DATE
+                | Type::TIME
+        ) || matches!(ty.kind(), Kind::Enum(_))
+    }
     to_sql_checked!();
 }

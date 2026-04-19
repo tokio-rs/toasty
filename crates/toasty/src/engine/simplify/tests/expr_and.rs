@@ -944,3 +944,112 @@ fn prune_or_end_to_end_via_visit() {
     assert!(and.operands.contains(&Expr::eq(disc, Expr::from(1i64))));
     assert!(and.operands.contains(&Expr::eq(addr, Expr::from("alice"))));
 }
+
+// ---------------------------------------------------------------------------
+// Determinism-aware simplification (issue #236).
+//
+// `is_equivalent_to` gates every "syntactic identity implies semantic
+// equivalence" rewrite on `Expr::is_stable`.  Non-deterministic expressions
+// (e.g.  `LAST_INSERT_ID()`) are re-evaluated on each occurrence and must not
+// be folded even when two occurrences are textually identical.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn idempotent_not_simplified_for_non_deterministic() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    // `LAST_INSERT_ID() AND LAST_INSERT_ID()` must retain both operands.
+    let mut expr = ExprAnd {
+        operands: vec![Expr::last_insert_id(), Expr::last_insert_id()],
+    };
+    let result = simplify.simplify_expr_and(&mut expr);
+
+    assert!(result.is_none());
+    assert_eq!(expr.operands.len(), 2);
+    assert_eq!(expr.operands[0], Expr::last_insert_id());
+    assert_eq!(expr.operands[1], Expr::last_insert_id());
+}
+
+#[test]
+fn absorption_not_simplified_for_non_deterministic() {
+    use toasty_core::stmt::ExprOr;
+
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    // `x AND (x OR y)` would absorb to `x` under PartialEq, but with a
+    // non-deterministic `x` the two occurrences are independent draws, so
+    // absorption must not fire.
+    let x = Expr::eq(Expr::last_insert_id(), 1i64);
+    let mut expr = ExprAnd {
+        operands: vec![
+            x.clone(),
+            Expr::Or(ExprOr {
+                operands: vec![x, Expr::arg(0)],
+            }),
+        ],
+    };
+    let result = simplify.simplify_expr_and(&mut expr);
+
+    assert!(result.is_none());
+    assert_eq!(expr.operands.len(), 2);
+}
+
+#[test]
+fn complement_not_simplified_for_non_deterministic() {
+    use toasty_core::stmt::ExprNot;
+
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    // `f() = 1 AND NOT (f() = 1)` — both `f()` calls are independent
+    // evaluations, so complement must NOT fire.  (Compare with
+    // `complement_basic`, which uses `arg` — stable.)
+    let a = Expr::eq(Expr::last_insert_id(), 1i64);
+    let mut expr = ExprAnd {
+        operands: vec![a.clone(), Expr::Not(ExprNot { expr: Box::new(a) })],
+    };
+    let result = simplify.simplify_expr_and(&mut expr);
+
+    assert!(result.is_none());
+    assert_eq!(expr.operands.len(), 2);
+}
+
+#[test]
+fn range_to_equality_not_simplified_for_non_deterministic() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    // `f() >= 5 AND f() <= 5` — two independent draws of `f()` bracketed
+    // by the same constant do not imply the draws are equal to 5.
+    let mut expr = ExprAnd {
+        operands: vec![
+            Expr::binary_op(Expr::last_insert_id(), BinaryOp::Ge, 5i64),
+            Expr::binary_op(Expr::last_insert_id(), BinaryOp::Le, 5i64),
+        ],
+    };
+    let result = simplify.simplify_expr_and(&mut expr);
+
+    assert!(result.is_none());
+    assert_eq!(expr.operands.len(), 2);
+}
+
+#[test]
+fn contradicting_eq_not_simplified_for_non_deterministic() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema);
+
+    // `f() == 1 AND f() == 2` — two independent draws can produce 1 and 2
+    // respectively, so this is NOT a contradiction.
+    let mut expr = ExprAnd {
+        operands: vec![
+            Expr::eq(Expr::last_insert_id(), 1i64),
+            Expr::eq(Expr::last_insert_id(), 2i64),
+        ],
+    };
+    let result = simplify.simplify_expr_and(&mut expr);
+
+    assert!(result.is_none());
+    assert_eq!(expr.operands.len(), 2);
+}
