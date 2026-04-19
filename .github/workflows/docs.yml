@@ -40,9 +40,6 @@ jobs:
       - name: Build guide
         run: mdbook build docs/guide
 
-      - name: Build dev docs
-        run: mdbook build docs/dev
-
       - name: Build Rust API docs
         run: cargo doc --workspace --no-deps
         env:
@@ -52,7 +49,6 @@ jobs:
         run: |
           mkdir -p _site/nightly
           cp -r docs/guide/book/html _site/nightly/guide
-          cp -r docs/dev/book/html _site/nightly/dev
           cp -r target/doc _site/nightly/api
           cp docs/api-index.html _site/nightly/api/index.html
           cat > _site/index.html << 'HEREDOC'
