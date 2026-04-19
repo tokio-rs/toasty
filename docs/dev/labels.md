@@ -100,6 +100,6 @@ default names so GitHub's UI highlights them.
   `A-driver`, `P-high`.
 - A request for native PostgreSQL enums: `C-feature`, `A-driver`, `A-schema`.
 - An umbrella issue tracking simplification rules: `C-tracking`, `A-engine`.
-- A typo fix in `docs/dev/src/architecture.md`: `C-docs`, `A-docs`.
+- A typo fix in `docs/dev/architecture/README.md`: `C-docs`, `A-docs`.
 - A release-plz config change: `C-chore`, `A-ci`.
 - A cross-cutting API naming discussion: `C-discussion` — no `A-` needed.
