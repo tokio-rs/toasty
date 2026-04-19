@@ -18,3 +18,4 @@
   - [Order, Limit, Pagination](./roadmap/order_limit_pagination.md)
   - [Query Constraints](./roadmap/query-constraints.md)
   - [Query Engine](./roadmap/query-engine.md)
+- [GitHub Labels](./labels.md)
