@@ -125,18 +125,6 @@ impl PostgreSQL {
             }
         }
 
-        #[cfg(feature = "tls")]
-        let tls = tls::configure_tls(&url, &mut config)?;
-
-        #[cfg(not(feature = "tls"))]
-        for (key, value) in url.query_pairs() {
-            if key == "sslmode" && value != "disable" {
-                return Err(toasty_core::Error::invalid_connection_url(
-                    "TLS not available: compile with the `tls` feature",
-                ));
-            }
-        }
-
         Ok(Self {
             url: url_str,
             config,
