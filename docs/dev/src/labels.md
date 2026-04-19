@@ -3,7 +3,7 @@
 Labels categorize issues and pull requests so maintainers and contributors can
 filter by kind of work, affected area, priority, and workflow state.
 
-The scheme uses prefixes borrowed from `rust-lang/rust`:
+The scheme uses prefixes:
 
 - `C-` category — what kind of issue
 - `A-` area — which part of the codebase
