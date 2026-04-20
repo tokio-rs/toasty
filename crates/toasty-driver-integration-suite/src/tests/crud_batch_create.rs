@@ -213,7 +213,7 @@ pub async fn batch_create_inside_transaction_uses_savepoints(t: &mut Test) -> Re
         title: String,
     }
 
-    let mut db = t.setup_db(models!(Todo)).await;
+    let db = t.setup_db(models!(Todo)).await;
 
     t.log().clear();
     let mut tx = db.transaction().await?;

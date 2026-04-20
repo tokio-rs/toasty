@@ -73,7 +73,7 @@ pub async fn multiple_ops_in_transaction(t: &mut Test) -> Result<()> {
 /// before commit.
 #[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn read_your_writes(t: &mut Test) -> Result<()> {
-    let mut db = setup(t).await;
+    let db = setup(t).await;
 
     let mut tx = db.transaction().await?;
     User::create().name("Alice").exec(&mut tx).await?;
@@ -143,7 +143,7 @@ pub async fn delete_rolled_back(t: &mut Test) -> Result<()> {
 /// Verify the driver receives BEGIN, statements, and COMMIT in the right order.
 #[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn driver_sees_begin_commit(t: &mut Test) -> Result<()> {
-    let mut db = setup(t).await;
+    let db = setup(t).await;
 
     t.log().clear();
 
@@ -171,7 +171,7 @@ pub async fn driver_sees_begin_commit(t: &mut Test) -> Result<()> {
 /// Verify the driver receives BEGIN and ROLLBACK when rolled back.
 #[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn driver_sees_begin_rollback(t: &mut Test) -> Result<()> {
-    let mut db = setup(t).await;
+    let db = setup(t).await;
 
     t.log().clear();
 
@@ -296,7 +296,7 @@ pub async fn nested_drop_rolls_back_savepoint(t: &mut Test) -> Result<()> {
 /// SAVEPOINT around the inner work.
 #[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn nested_driver_sees_savepoint_ops(t: &mut Test) -> Result<()> {
-    let mut db = setup(t).await;
+    let db = setup(t).await;
 
     t.log().clear();
 
@@ -345,7 +345,7 @@ pub async fn nested_driver_sees_savepoint_ops(t: &mut Test) -> Result<()> {
 /// ROLLBACK TO SAVEPOINT.
 #[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn nested_driver_sees_rollback_to_savepoint(t: &mut Test) -> Result<()> {
-    let mut db = setup(t).await;
+    let db = setup(t).await;
 
     t.log().clear();
 
@@ -510,7 +510,7 @@ pub async fn builder_on_connection_commit(t: &mut Test) -> Result<()> {
 /// TransactionBuilder with isolation level sends the correct option to the driver.
 #[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn builder_with_isolation_level(t: &mut Test) -> Result<()> {
-    let mut db = setup(t).await;
+    let db = setup(t).await;
 
     t.log().clear();
 
@@ -536,7 +536,7 @@ pub async fn builder_with_isolation_level(t: &mut Test) -> Result<()> {
 /// TransactionBuilder with read_only sends the correct option to the driver.
 #[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn builder_with_read_only(t: &mut Test) -> Result<()> {
-    let mut db = setup(t).await;
+    let db = setup(t).await;
 
     t.log().clear();
 
@@ -557,7 +557,7 @@ pub async fn builder_with_read_only(t: &mut Test) -> Result<()> {
 /// TransactionBuilder with both isolation and read_only sends both options.
 #[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn builder_with_all_options(t: &mut Test) -> Result<()> {
-    let mut db = setup(t).await;
+    let db = setup(t).await;
 
     t.log().clear();
 
