@@ -95,6 +95,9 @@ Allowed types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`,
 `build`, `ci`, `chore`, `revert`. Scopes are optional. The subject begins
 with a lowercase letter.
 
+See [`docs/dev/COMMITS.md`](docs/dev/COMMITS.md) for the full commit
+message format, scope conventions, and examples.
+
 [cc]: https://www.conventionalcommits.org/
 
 ### Before you push

@@ -42,4 +42,5 @@ Planned work and feature gaps.
 
 ## Project
 
+- [Commit Guidelines](./COMMITS.md)
 - [GitHub Labels](./labels.md)
