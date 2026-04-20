@@ -36,10 +36,12 @@ the entry lands here.
   - Partial updates within a variant
   - DynamoDB encoding
 - Native PostgreSQL enum types
-  - Migrations for enum representation changes (#724)
+  - Migrations for enum representation changes ([#724])
 - Serde-serialized fields (JSON/JSONB for arbitrary Rust types) ([design](design/serialize-fields.md))
 - Embedded collections (arrays, maps, sets)
 - Partial model loading via `#[deferred]` / `Deferred<T>`
+
+[#724]: https://github.com/tokio-rs/toasty/issues/724
 
 ## Query Engine
 
@@ -61,13 +63,15 @@ the entry lands here.
   - Multi-column `.then_by()`
   - Direct `.limit()` for non-paginated queries
   - `.last()` convenience
-  - Pagination with complex ORDER BY expressions (non-column references) (#723)
+  - Pagination with complex ORDER BY expressions (non-column references) ([#723])
 - Post-lowering optimization pass
   - Single-pass predicate analysis (not per-node)
   - Equivalence classes for transitive constraints
   - Structured constraint representation (constants, ranges, exclusions)
   - Targeted normalization without full DNF
 - Pre-compiled query plans — parameterized plans that skip re-planning on repeated calls
+
+[#723]: https://github.com/tokio-rs/toasty/issues/723
 
 ## Relationships
 
