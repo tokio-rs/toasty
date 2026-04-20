@@ -32,9 +32,10 @@ the entry lands here.
   - Junction tables / many-to-many with composite keys
   - DynamoDB: batch delete/update, composite unique indexes
 - Embedded structs and enums ([design](design/enums-and-embedded-structs.md), [impl](design/embedded-enums-data-carrying-impl.md))
-  - Data-carrying enum variants
+  - Tuple variants
+  - Shared columns across variants
   - Partial updates within a variant
-  - DynamoDB encoding
+  - DynamoDB encoding for data-carrying enum variants
 - Native PostgreSQL enum types
   - Migrations for enum representation changes ([#724])
 - Serde-serialized fields (JSON/JSONB for arbitrary Rust types) ([design](design/serialize-fields.md))

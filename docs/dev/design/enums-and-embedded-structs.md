@@ -4,14 +4,8 @@ Addresses [Issue #280](https://github.com/tokio-rs/toasty/issues/280).
 
 ## Summary
 
-Toasty embeds enums and structs in models via `#[derive(Embed)]`. Unit and
-struct-variant enums, newtypes, nested types, column renaming, discriminator
-customization, variant-only filters, variant+field filters via `.matches()`,
-embedded struct partial updates, and automatic transitive registration all
-work today. Three extensions remain: tuple variants, columns shared across
-variants, and enum within-variant partial updates via `stmt::patch`. A
-related cleanup removes the `.with_<field>` closure-style partial-update
-methods for embedded structs, which `stmt::patch` replaces.
+Three extensions to `#[derive(Embed)]` remain: tuple variants, columns shared
+across variants, and enum within-variant partial updates via `stmt::patch`.
 
 ## Motivation
 
@@ -28,11 +22,6 @@ attribute.
 variant requires reading the row, rebuilding the full variant value, and
 writing it back. For a `Phone { country, number }` where only `number`
 changes, that's a read-modify-write with a concurrency window.
-
-**`.with_<field>` cleanup.** Embedded struct partial updates shipped as
-closure methods (`.with_address(|a| a.city("Seattle"))`). `stmt::patch` and
-`stmt::apply` cover the same cases across scalars, embedded structs, and
-enums, so `.with_<field>` duplicates them.
 
 ## User-facing API
 
@@ -115,44 +104,10 @@ Character::all().filter(
 );
 ```
 
-### Partial updates via `stmt::patch`
+### Enum within-variant partial updates via `stmt::patch`
 
-`stmt::patch` takes a typed field path and a value and produces an
-`Assignment` that updates one sub-field. For embedded structs:
-
-```rust
-user.update()
-    .address(stmt::patch(Address::fields().city(), "Seattle"))
-    .exec(&mut db)
-    .await?;
-```
-
-Multiple sub-field updates compose with `stmt::apply`:
-
-```rust
-user.update()
-    .address(stmt::apply([
-        stmt::patch(Address::fields().street(), "456 Oak Ave"),
-        stmt::patch(Address::fields().zip(), "97202"),
-    ]))
-    .exec(&mut db)
-    .await?;
-```
-
-Nested patches pass an inner `stmt::patch` as the value of an outer one:
-
-```rust
-company.update()
-    .headquarters(stmt::patch(
-        Office::fields().address(),
-        stmt::patch(Address::fields().street(), "456 Oak Ave"),
-    ))
-    .exec(&mut db)
-    .await?;
-```
-
-For enums, a variant+field path updates one field of a specific variant and
-leaves the discriminator unchanged:
+A variant+field path updates one field of a specific variant and leaves the
+discriminator unchanged:
 
 ```rust
 #[derive(toasty::Embed)]
@@ -170,34 +125,6 @@ user.update()
     ))
     .exec(&mut db)
     .await?;
-```
-
-**Migration from `.with_<field>`.** Single-field closure calls map
-one-to-one to `stmt::patch`:
-
-```rust
-// Before
-user.update().with_address(|a| a.city("Seattle")).exec(&mut db).await?;
-
-// After
-user.update()
-    .address(stmt::patch(Address::fields().city(), "Seattle"))
-    .exec(&mut db).await?;
-```
-
-Multi-field calls become `stmt::apply`:
-
-```rust
-// Before
-user.update().with_address(|a| a.street("456 Oak Ave").zip("97202")).exec(&mut db).await?;
-
-// After
-user.update()
-    .address(stmt::apply([
-        stmt::patch(Address::fields().street(), "456 Oak Ave"),
-        stmt::patch(Address::fields().zip(), "97202"),
-    ]))
-    .exec(&mut db).await?;
 ```
 
 ## Behavior
@@ -218,10 +145,6 @@ Switching variants requires full replacement via
 `.field(FullVariant { ... })`. A `stmt::patch` never writes the
 discriminator column.
 
-**`.with_<field>` removal.** The update builder stops generating
-`.with_<field>` for embedded types. Existing callers fail to compile and
-switch to `stmt::patch`.
-
 ## Edge cases
 
 - Shared-column types that differ in width (e.g. `i32` in one variant,
@@ -240,11 +163,9 @@ The three extensions reuse existing encoding paths:
   fields.
 - Shared columns reuse an existing column; drivers see the same column
   shape.
-- `stmt::patch` compiles to a `Set` assignment at a longer projection. SQL
-  drivers emit `UPDATE ... SET col = ...`; DynamoDB uses its existing
-  nested-attribute update path. Variant-conditional assignment compiles
-  to a `CASE` expression (SQL) or a conditional `UpdateExpression`
-  (DynamoDB) on top of the existing path.
+- Variant-conditional assignment from `stmt::patch` compiles to a `CASE`
+  expression (SQL) or a conditional `UpdateExpression` (DynamoDB) on top
+  of the existing assignment path.
 
 Drivers receive no new `Operation` variants.
 
