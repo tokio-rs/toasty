@@ -45,8 +45,14 @@ jobs:
                - C-docs         user docs, dev docs, rustdoc
                - C-chore        CI, release tooling, scripts, lint fixes
 
-            3. Choose zero or more area labels based on paths / crate names
-               mentioned in the body:
+            3. Choose zero or more area labels. Apply A-<area> only when
+               the issue is clearly about that area — the body names the
+               crate/path, or describes behavior that obviously lives
+               there. Most issues carry 0 or 1 A- labels; 2 is possible
+               for a genuinely cross-cutting issue. More than 2 is almost
+               never right. When the issue is vague, broad, or doesn't
+               clearly belong to an area, leave A- labels off.
+
                - A-engine     toasty/src/engine/
                - A-macros     toasty-macros, create!, models!
                - A-schema     toasty-core/src/schema/
@@ -111,7 +117,11 @@ jobs:
                - C-docs         docs:
                - C-chore        chore:, ci:, build:
 
-            3. Choose zero or more area labels based on CHANGED FILES:
+            3. Choose area labels. Most PRs carry 0, 1, or 2 A- labels.
+               More than 2 is unusual and requires each area to be a
+               genuine focus of the PR.
+
+               Area paths (necessary but not sufficient):
                - A-engine     crates/toasty/src/engine/**
                - A-macros     crates/toasty-macros/**
                - A-schema     crates/toasty-core/src/schema/**
@@ -122,9 +132,25 @@ jobs:
                - A-docs       docs/**
                - A-ci         .github/**, scripts/**
 
-               If a PR spans many areas, apply A- labels that cover the bulk
-               of changes — skip areas touched only by incidental edits
-               (e.g. a one-line import fix).
+               Apply A-<area> only when the PR meaningfully changes that
+               area: modifies its logic, behavior, or public API, or fixes
+               a bug specific to it. Tests added alongside a feature or
+               fix are covered by the PR's primary area — they do not
+               earn A-tests on their own. Apply A-tests only when the PR
+               is primarily a testing effort.
+
+               Do NOT apply an A- label for:
+               - Mechanical or sweeping changes that touch a crate
+                 without changing its behavior: dependency swaps, import
+                 rewrites, mass renames, formatting passes. These often
+                 warrant C-refactor or C-chore with zero A- labels.
+               - Incidental touches: a handful of lines changed only
+                 because a helper moved, a type was renamed, or an API
+                 shifted elsewhere.
+               - Pure Cargo.toml dependency bumps.
+
+               When in doubt, leave the label off. Fewer labels beats
+               over-labeling.
 
             4. Apply labels, skipping any already present:
                gh pr edit ${{ github.event.pull_request.number }} --add-label <label>
