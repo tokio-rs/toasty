@@ -1,5 +1,5 @@
 use crate::{Setup, isolation::TestIsolation};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use toasty_core::driver::{Capability, Driver};
 use toasty_driver_dynamodb::DynamoDb;
 use tokio::runtime::Runtime;
@@ -76,8 +76,8 @@ impl Setup for SetupDynamoDb {
         // Get the per-test-instance DynamoDB client
         let client = self.get_client().await;
 
-        // Convert filter to DynamoDB key
-        let mut key = HashMap::new();
+        // Convert filter to DynamoDB key (AWS SDK requires std HashMap)
+        let mut key = std::collections::HashMap::new();
         for (col_name, value) in filter {
             let attr_value = self.stmt_value_to_dynamodb_attr(&value)?;
             key.insert(col_name, attr_value);

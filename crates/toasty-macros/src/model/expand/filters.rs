@@ -1,9 +1,9 @@
 use super::Expand;
 use crate::model::schema::{FieldTy, Index, Model};
 
+use hashbrown::HashMap;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use std::collections::HashMap;
 
 /// Combination of fields for which filter a method should be generated.
 #[derive(Debug)]

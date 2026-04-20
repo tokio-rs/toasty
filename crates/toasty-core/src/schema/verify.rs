@@ -7,7 +7,7 @@ use super::{
 };
 use crate::stmt;
 
-use std::collections::{HashMap, HashSet};
+use hashbrown::{HashMap, HashSet};
 
 struct Verify<'a> {
     schema: &'a Schema,

@@ -1,8 +1,6 @@
 use crate::{Setup, exec_log::ExecLog, logging_driver::LoggingDriver};
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
+use hashbrown::HashMap;
+use std::sync::{Arc, Mutex};
 use toasty::{Db, schema::ModelSet};
 use toasty_core::stmt;
 

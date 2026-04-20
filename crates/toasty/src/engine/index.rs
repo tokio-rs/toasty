@@ -7,7 +7,7 @@ mod index_plan;
 pub(crate) use index_plan::IndexPlan;
 
 use crate::{Result, engine::Engine};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use toasty_core::{
     Schema,
     driver::Capability,

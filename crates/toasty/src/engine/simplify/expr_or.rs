@@ -248,7 +248,7 @@ impl Simplify<'_> {
     /// Groups equality comparisons by their LHS and converts groups with 2+
     /// values into IN lists. Non-equality operands are preserved.
     fn try_or_to_in_list(&self, expr: &mut stmt::ExprOr) -> Option<stmt::Expr> {
-        use std::collections::HashMap;
+        use hashbrown::HashMap;
 
         // Group equalities by their LHS expression
         // Key: index into `lhs_exprs`, Value: list of RHS constant values

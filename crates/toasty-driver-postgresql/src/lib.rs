@@ -419,7 +419,7 @@ impl toasty_core::driver::Connection for Connection {
 
         // Create PostgreSQL enum types before creating tables.
         // Collect unique enum types across all columns.
-        let mut created_enum_types = std::collections::HashSet::new();
+        let mut created_enum_types = hashbrown::HashSet::new();
         for table in &schema.db.tables {
             for column in &table.columns {
                 if let toasty_core::schema::db::Type::Enum(type_enum) = &column.storage_ty
