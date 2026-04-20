@@ -8,7 +8,7 @@ name: Claude Triage
 on:
   issues:
     types: [opened]
-  pull_request_target:
+  pull_request:
     types: [opened, ready_for_review]
 
 jobs:
@@ -76,7 +76,7 @@ jobs:
             --allowed-tools "Bash(gh issue view:*),Bash(gh issue edit:*),Bash(gh label list:*)"
 
   triage-pr:
-    if: github.event_name == 'pull_request_target'
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
