@@ -25,7 +25,10 @@ impl ModelAttr {
                 if self.key.is_some() {
                     errs.push(syn::Error::new_spanned(attr, "duplicate #[key] attribute"));
                 } else {
-                    self.key = Some(KeyAttr::from_ast(attr, names)?);
+                    match KeyAttr::from_ast(attr, names) {
+                        Ok(key_attr) => self.key = Some(key_attr),
+                        Err(e) => errs.push(e),
+                    }
                 }
             } else if attr.path().is_ident("index") {
                 match KeyAttr::from_ast(attr, names) {
@@ -60,6 +63,10 @@ impl ModelAttr {
 
                 self.table = Some(lit.clone());
             }
+        }
+
+        if let Some(err) = errs.collect() {
+            return Err(err);
         }
 
         Ok(())
