@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 #[driver_test(id(ID))]
 pub async fn crud_person_self_referential(t: &mut Test) -> Result<()> {

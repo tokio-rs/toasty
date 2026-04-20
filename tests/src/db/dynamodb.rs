@@ -1,5 +1,5 @@
 use crate::{Setup, isolation::TestIsolation};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use toasty_core::driver::{Capability, Driver};
 use toasty_driver_dynamodb::DynamoDb;
 use tokio::runtime::Runtime;

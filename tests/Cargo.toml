@@ -24,6 +24,7 @@ assert-struct.workspace = true
 async-trait.workspace = true
 rust_decimal.workspace = true
 bigdecimal.workspace = true
+hashbrown.workspace = true
 jiff.workspace = true
 toasty = { workspace = true, features = ["rust_decimal", "bigdecimal", "jiff"] }
 toasty-core = { workspace = true, features = ["assert-struct"] }

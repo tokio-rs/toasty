@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::Mutex;
 use tempfile::NamedTempFile;
 use toasty::db::{self, Connect};

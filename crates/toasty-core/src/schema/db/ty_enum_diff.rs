@@ -99,8 +99,8 @@ impl<'a> TypesDiff<'a> {
 ///
 /// If the same type name appears on multiple columns, the first occurrence wins
 /// (they must be identical per the schema verifier).
-fn collect_named_enums(schema: &Schema) -> std::collections::HashMap<&str, &TypeEnum> {
-    let mut result = std::collections::HashMap::new();
+fn collect_named_enums(schema: &Schema) -> hashbrown::HashMap<&str, &TypeEnum> {
+    let mut result = hashbrown::HashMap::new();
     for table in &schema.tables {
         for column in &table.columns {
             if let super::Type::Enum(type_enum) = &column.storage_ty
