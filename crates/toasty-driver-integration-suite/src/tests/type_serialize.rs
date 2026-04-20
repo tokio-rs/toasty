@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
+use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use toasty_core::{
     driver::{Operation, Rows},
     stmt::{Assignment, Expr, ExprSet, Statement, Value},

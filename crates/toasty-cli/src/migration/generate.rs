@@ -4,8 +4,8 @@ use anyhow::Result;
 use clap::Parser;
 use console::style;
 use dialoguer::Select;
+use hashbrown::{HashMap, HashSet};
 use rand::RngExt;
-use std::collections::{HashMap, HashSet};
 use std::fs;
 use toasty::{
     Db,

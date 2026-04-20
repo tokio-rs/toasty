@@ -287,6 +287,23 @@ impl Expr {
         }
     }
 
+    /// Returns `true` if `self` and `other` are syntactically identical **and**
+    /// both sides are stable.
+    ///
+    /// This is the soundness-preserving comparison used by simplification
+    /// rules that rewrite on the assumption that two equal sub-expressions
+    /// produce the same value (idempotent, absorption, complement,
+    /// range-to-equality, OR-to-IN, factoring, variant tautology).
+    ///
+    /// Syntactic identity alone is not enough: `LAST_INSERT_ID() =
+    /// LAST_INSERT_ID()` is two independent evaluations and may yield
+    /// different values, so rewriting `a AND a` to `a` would be unsound when
+    /// `a` is non-deterministic. Gating on [`Self::is_stable`] excludes any
+    /// sub-expression whose value may change across evaluations.
+    pub fn is_equivalent_to(&self, other: &Self) -> bool {
+        self == other && self.is_stable()
+    }
+
     /// Returns `true` if the expression is a constant expression.
     ///
     /// A constant expression is one that does not reference any external data.

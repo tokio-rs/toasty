@@ -10,6 +10,8 @@ impl TypeExt for db::Type {
     fn to_postgres_type(&self) -> Type {
         match self {
             db::Type::Boolean => Type::BOOL,
+            db::Type::Float(4) => Type::FLOAT4,
+            db::Type::Float(8) => Type::FLOAT8,
             db::Type::Integer(1) => Type::INT2,
             db::Type::Integer(2) => Type::INT2,
             db::Type::Integer(4) => Type::INT4,

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::Arc;
 use toasty::db::Connect;
 use toasty_core::driver::{Capability, Driver};

@@ -1,0 +1,119 @@
+# Labels for tokio-rs/toasty.
+#
+# This file is the source of truth for repository labels. It is synced by
+# `.github/workflows/labels.yml`. Update this file — not the GitHub UI —
+# when adding or changing labels.
+#
+# Colors mirror rust-lang/rust's palette: one color per prefix family so the
+# UI groups related labels visually.
+#
+# See `docs/dev/src/labels.md` for the labeling scheme and how each label
+# should be used.
+
+# Category (C-) — what kind of work the issue represents.
+- name: C-bug
+  description: "A defect: the code behaves incorrectly"
+  color: "f5f1fd"
+- name: C-feature
+  description: "A new feature request or missing use case"
+  color: "f5f1fd"
+- name: C-enhancement
+  description: "An improvement to an existing feature"
+  color: "f5f1fd"
+- name: C-refactor
+  description: "An internal code change with no user-visible effect"
+  color: "f5f1fd"
+- name: C-docs
+  description: "User docs, dev docs, rustdoc"
+  color: "f5f1fd"
+- name: C-chore
+  description: "CI, release tooling, scripts, lint fixes"
+  color: "f5f1fd"
+- name: C-tracking
+  description: "An umbrella issue that tracks related work"
+  color: "f5f1fd"
+- name: C-discussion
+  description: "Open-ended design discussion or RFC"
+  color: "f5f1fd"
+- name: C-sketch
+  description: "A proof-of-concept PR that demonstrates an idea and is not intended to be merged"
+  color: "f5f1fd"
+
+# Area (A-) — which part of the codebase the issue touches.
+- name: A-engine
+  description: "toasty/src/engine/ — simplify, lower, plan, exec"
+  color: "f7e101"
+- name: A-macros
+  description: "toasty-macros and the create! and models! macros"
+  color: "f7e101"
+- name: A-schema
+  description: "toasty-core/src/schema/ — app, db, mapping"
+  color: "f7e101"
+- name: A-sql
+  description: "toasty-sql — AST to SQL serialization"
+  color: "f7e101"
+- name: A-driver
+  description: "Driver trait, capabilities, connection lifecycle, and per-backend behavior"
+  color: "f7e101"
+- name: A-migration
+  description: "toasty-cli and migration generation and application"
+  color: "f7e101"
+- name: A-tests
+  description: "toasty-driver-integration-suite and workspace tests"
+  color: "f7e101"
+- name: A-docs
+  description: "docs/ mdbook content"
+  color: "f7e101"
+- name: A-ci
+  description: ".github/workflows, release-plz, scripts/"
+  color: "f7e101"
+
+# Priority (P-) — how urgent the issue is.
+- name: P-critical
+  description: "Data loss, data corruption, correctness, or security"
+  color: "eb6420"
+- name: P-high
+  description: "Blocks a user with no workaround"
+  color: "eb6420"
+- name: P-medium
+  description: "The default for actionable issues"
+  color: "eb6420"
+- name: P-low
+  description: "Nice-to-have"
+  color: "eb6420"
+
+# Impact (I-) — the nature of a bug that needs attention beyond its priority.
+- name: I-unsound
+  description: "A soundness hole: undefined behavior or a violated safety invariant"
+  color: "e11d21"
+- name: I-security
+  description: "A security vulnerability — apply alongside P-critical"
+  color: "e11d21"
+
+# Status (S-) — where the issue or PR sits in the workflow.
+- name: S-needs-design
+  description: "A design decision is required before implementation"
+  color: "d3dddd"
+- name: S-needs-repro
+  description: "The bug report lacks a reproducer"
+  color: "d3dddd"
+- name: S-needs-info
+  description: "Waiting on more information from the reporter"
+  color: "d3dddd"
+- name: S-blocked
+  description: "Blocked on another issue, PR, or upstream change"
+  color: "d3dddd"
+- name: S-waiting-on-author
+  description: "PR is waiting on author changes"
+  color: "d3dddd"
+- name: S-waiting-on-review
+  description: "PR is waiting on maintainer review"
+  color: "d3dddd"
+
+# Community — keep default GitHub names and colors so the UI highlights them.
+- name: good first issue
+  description: "A beginner-friendly, well-scoped issue"
+  color: "7057ff"
+- name: help wanted
+  description: "Maintainers welcome a contributor to pick this up"
+  color: "008672"

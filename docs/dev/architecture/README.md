@@ -11,7 +11,7 @@ User-facing crate with query engine and runtime.
 
 **Key Components**:
 - `engine/`: Multi-phase query compilation and execution pipeline
-  - See [Query Engine Architecture](architecture/query-engine.md) for detailed documentation
+  - See [Query Engine Architecture](./query-engine.md) for detailed documentation
 - `stmt/`: Typed statement builders (wrappers around `toasty_core::stmt` types)
 - `relation/`: Relationship abstractions (HasMany, BelongsTo, HasOne)
 - `model.rs`: Model trait and ID generation
@@ -21,7 +21,7 @@ User-facing crate with query engine and runtime.
 Statement AST → Simplify → Lower → Plan → Execute → Results
 ```
 
-The engine compiles queries into a mini-program of actions executed by an interpreter. For details on HIR, MIR, and the full compilation pipeline, see [Query Engine Architecture](architecture/query-engine.md).
+The engine compiles queries into a mini-program of actions executed by an interpreter. For details on HIR, MIR, and the full compilation pipeline, see [Query Engine Architecture](./query-engine.md).
 
 ### 2. toasty-core
 Shared types used by all other crates: schema representations, statement AST, and driver interface.
@@ -73,5 +73,5 @@ Converts statement AST to SQL strings. Used by SQL-based drivers.
 
 ## Further Reading
 
-- [Query Engine Architecture](architecture/query-engine.md) - Query compilation and execution pipeline
-- [Type System](architecture/type-system.md) - Type system design and conversions
+- [Query Engine Architecture](./query-engine.md) - Query compilation and execution pipeline
+- [Type System](./type-system.md) - Type system design and conversions

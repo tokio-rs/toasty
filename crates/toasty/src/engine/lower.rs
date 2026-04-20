@@ -3,7 +3,9 @@ mod paginate;
 mod relation;
 mod returning;
 
-use std::{cell::Cell, collections::HashSet};
+use std::cell::Cell;
+
+use hashbrown::HashSet;
 
 use index_vec::IndexVec;
 use toasty_core::{
@@ -116,7 +118,7 @@ struct LoweringState<'a> {
     /// All new statements should include these as part of its dependencies
     dependencies: HashSet<hir::StmtId>,
 
-    /// Tracks errors that occured while lowering the statement
+    /// Tracks errors that occurred while lowering the statement
     errors: Vec<crate::Error>,
 }
 

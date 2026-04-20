@@ -1,7 +1,7 @@
 #[macro_export]
 macro_rules! assert_eq_unordered {
     ($actual:expr, $expect:expr) => {
-        let mut vals = std::collections::HashSet::new();
+        let mut vals = ::hashbrown::HashSet::new();
 
         for val in $actual {
             assert!(vals.insert(val));

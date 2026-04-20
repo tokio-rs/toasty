@@ -127,6 +127,9 @@ mod kw {
     syn::custom_keyword!(u32);
     syn::custom_keyword!(u64);
 
+    syn::custom_keyword!(f32);
+    syn::custom_keyword!(f64);
+
     syn::custom_keyword!(text);
     syn::custom_keyword!(varchar);
 
@@ -145,6 +148,7 @@ pub enum ColumnType {
     Boolean,
     Integer(u8),
     UnsignedInteger(u8),
+    Float(u8),
     Text,
     VarChar(u64),
     Numeric(Option<(u32, u32)>),
@@ -209,6 +213,9 @@ impl syn::parse::Parse for ColumnType {
         peek_ident!(u16, UnsignedInteger(2));
         peek_ident!(u32, UnsignedInteger(4));
         peek_ident!(u64, UnsignedInteger(8));
+
+        peek_ident!(f32, Float(4));
+        peek_ident!(f64, Float(8));
 
         peek_ident!(text, Text);
         peek_ident_paren_int!(varchar, VarChar);
@@ -275,6 +282,7 @@ impl ColumnType {
             Self::UnsignedInteger(size) => {
                 quote! { #toasty::core::schema::db::Type::UnsignedInteger(#size) }
             }
+            Self::Float(size) => quote! { #toasty::core::schema::db::Type::Float(#size) },
             Self::Text => quote! { #toasty::core::schema::db::Type::Text },
             Self::VarChar(size) => quote! { #toasty::core::schema::db::Type::VarChar(#size) },
             Self::Numeric(None) => quote! { #toasty::core::schema::db::Type::Numeric(None) },
