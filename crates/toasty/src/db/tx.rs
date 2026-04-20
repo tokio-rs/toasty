@@ -14,7 +14,7 @@ use tokio::sync::oneshot;
 /// Either a `&mut Db` or `&mut Connection`, used by [`TransactionBuilder`] to
 /// defer connection acquisition until [`begin`](TransactionBuilder::begin).
 pub(crate) enum TxSource<'a> {
-    Db(&'a mut super::Db),
+    Db(&'a super::Db),
     Connection(&'a mut super::Connection),
 }
 

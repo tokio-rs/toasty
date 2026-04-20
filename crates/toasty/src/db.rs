@@ -128,13 +128,14 @@ impl Db {
     }
 
     /// Begin a transaction, acquiring a connection from the pool.
-    pub async fn transaction(&mut self) -> Result<Transaction<'_>> {
-        <Self as Executor>::transaction(self).await
+    pub async fn transaction(&self) -> Result<Transaction<'_>> {
+        let conn = self.connection().await?;
+        Transaction::begin(ConnRef::owned(conn)).await
     }
 
     /// Returns a [`TransactionBuilder`] that will acquire a connection from
     /// the pool when [`begin`](TransactionBuilder::begin) is called.
-    pub fn transaction_builder(&mut self) -> TransactionBuilder<'_> {
+    pub fn transaction_builder(&self) -> TransactionBuilder<'_> {
         TransactionBuilder::new(tx::TxSource::Db(self))
     }
 
@@ -156,8 +157,7 @@ impl std::fmt::Debug for Db {
 #[async_trait]
 impl Executor for Db {
     async fn transaction(&mut self) -> Result<Transaction<'_>> {
-        let conn = self.connection().await?;
-        Transaction::begin(ConnRef::owned(conn)).await
+        Self::transaction(self).await
     }
 
     async fn exec_untyped(&mut self, stmt: stmt::Statement) -> Result<ExecResponse> {
