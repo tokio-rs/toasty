@@ -83,7 +83,7 @@ indexmap = "2.13.0"
 index_vec = "0.1.4"
 inventory = "0.3.24"
 jiff = "0.2.23"
-lru = "0.16.3"
+lru = "0.17.0"
 mysql_async = { version = "0.36.2", default-features = false, features = [
     "minimal",
     "native-tls-tls",
