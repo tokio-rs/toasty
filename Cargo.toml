@@ -110,7 +110,7 @@ tokio = { version = "1.50", features = ["full"] }
 tokio-postgres = "0.7.17"
 tokio-rustls = { version = "0.26", default-features = false }
 rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }
-const-oid = { version = "0.9.6", default-features = false, features = ["db"] }
+const-oid = { version = "0.10.0", default-features = false, features = ["db"] }
 sha2 = { version = "0.11", default-features = false }
 x509-cert = { version = "0.2.5", default-features = false, features = ["std"] }
 rustls-platform-verifier = "0.6"
