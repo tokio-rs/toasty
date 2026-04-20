@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use toasty_core::driver::{Capability, Driver};
 
 #[async_trait::async_trait]

@@ -27,6 +27,9 @@ pub use query_sql::QuerySql;
 mod transaction;
 pub use transaction::{IsolationLevel, Transaction};
 
+mod typed_value;
+pub use typed_value::TypedValue;
+
 mod update_by_key;
 pub use update_by_key::UpdateByKey;
 

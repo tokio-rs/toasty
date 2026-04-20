@@ -27,7 +27,7 @@ impl Statement {
             columns: table
                 .columns
                 .iter()
-                .map(|column| ColumnDef::from_schema(column, &capability.storage_types))
+                .map(|column| ColumnDef::from_schema(column, &capability.storage_types, capability))
                 .collect(),
             primary_key: Some(Box::new(stmt::Expr::record(
                 table

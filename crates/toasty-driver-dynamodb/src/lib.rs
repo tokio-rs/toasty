@@ -189,8 +189,8 @@ impl Connection {
                     "last_insert_id_hack is MySQL-specific and should not be set for DynamoDB"
                 );
                 match op.stmt {
-                    stmt::Statement::Insert(op) => self.exec_insert(&schema.db, op).await,
-                    _ => todo!("op={:#?}", op),
+                    stmt::Statement::Insert(insert) => self.exec_insert(&schema.db, insert).await,
+                    _ => todo!("op={:#?}", op.stmt),
                 }
             }
             Operation::Transaction(_) => Err(Error::unsupported_feature(

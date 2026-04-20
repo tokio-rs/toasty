@@ -1,4 +1,4 @@
-use std::collections::{HashMap, hash_map};
+use hashbrown::{HashMap, hash_map};
 
 use by_address::ByAddress;
 use toasty_core::{schema::db::Index, stmt};

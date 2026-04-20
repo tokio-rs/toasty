@@ -809,6 +809,7 @@ where
         Expr::Error(expr) => v.visit_expr_error(expr),
         Expr::Exists(expr) => v.visit_expr_exists(expr),
         Expr::Func(expr) => v.visit_expr_func(expr),
+        Expr::Ident(_) => {}
         Expr::InList(expr) => v.visit_expr_in_list(expr),
         Expr::InSubquery(expr) => v.visit_expr_in_subquery(expr),
         Expr::IsNull(expr) => v.visit_expr_is_null(expr),

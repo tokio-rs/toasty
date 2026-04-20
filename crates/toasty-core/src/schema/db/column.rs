@@ -1,11 +1,8 @@
 use super::{DiffContext, TableId, Type, table};
 use crate::stmt;
 
-use std::{
-    collections::{HashMap, HashSet},
-    fmt,
-    ops::Deref,
-};
+use hashbrown::{HashMap, HashSet};
+use std::{fmt, ops::Deref};
 
 /// A column in a database table.
 ///

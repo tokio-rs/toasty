@@ -4,8 +4,8 @@ use anyhow::Result;
 use clap::Parser;
 use console::style;
 use dialoguer::Select;
+use hashbrown::{HashMap, HashSet};
 use rand::RngExt;
-use std::collections::{HashMap, HashSet};
 use std::fs;
 use toasty::{
     Db,
@@ -274,13 +274,20 @@ impl GenerateCommand {
         }
 
         let snapshot = SnapshotFile::new(schema.clone());
-        let migration_number = history.next_migration_number();
-        let snapshot_name = format!("{:04}_snapshot.toml", migration_number);
+        let migration_prefix = match config.migration.prefix_style {
+            crate::MigrationPrefixStyle::Sequential => {
+                format!("{:04}", history.next_migration_number())
+            }
+            crate::MigrationPrefixStyle::Timestamp => {
+                jiff::Timestamp::now().strftime("%Y%m%d_%H%M%S").to_string()
+            }
+        };
+        let snapshot_name = format!("{:04}_snapshot.toml", &migration_prefix);
         let snapshot_path = config.migration.get_snapshots_dir().join(&snapshot_name);
 
         let migration_name = format!(
             "{:04}_{}.sql",
-            migration_number,
+            &migration_prefix,
             self.name.as_deref().unwrap_or("migration")
         );
         let migration_path = config.migration.get_migrations_dir().join(&migration_name);
@@ -296,7 +303,7 @@ impl GenerateCommand {
         });
 
         let Migration::Sql(sql) = migration;
-        std::fs::write(migration_path, sql)?;
+        std::fs::write(&migration_path, format!("{sql}\n"))?;
         println!(
             "  {} {}",
             style("✓").green().bold(),

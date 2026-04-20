@@ -62,6 +62,15 @@ pub enum Expr {
     /// Aggregate or scalar function call. See [`ExprFunc`].
     Func(ExprFunc),
 
+    /// An **unresolved** reference to a name (e.g. a column name in a DDL
+    /// context).
+    ///
+    /// Unlike [`Expr::Reference`] / [`ExprReference`], which hold **resolved**
+    /// index-based references into the schema, `Ident` carries only the raw
+    /// name string. It is used in contexts where schema resolution is not
+    /// applicable, such as CHECK constraints in CREATE TABLE statements.
+    Ident(String),
+
     /// `expr IN (list)` membership test. See [`ExprInList`].
     InList(ExprInList),
 
@@ -234,6 +243,9 @@ impl Expr {
             // Always stable - constant values
             Self::Value(_) => true,
 
+            // Unresolved identifiers refer to external state (e.g. a column)
+            Self::Ident(_) => false,
+
             // Never stable - generates new values each evaluation
             Self::Default => false,
 
@@ -275,6 +287,23 @@ impl Expr {
         }
     }
 
+    /// Returns `true` if `self` and `other` are syntactically identical **and**
+    /// both sides are stable.
+    ///
+    /// This is the soundness-preserving comparison used by simplification
+    /// rules that rewrite on the assumption that two equal sub-expressions
+    /// produce the same value (idempotent, absorption, complement,
+    /// range-to-equality, OR-to-IN, factoring, variant tautology).
+    ///
+    /// Syntactic identity alone is not enough: `LAST_INSERT_ID() =
+    /// LAST_INSERT_ID()` is two independent evaluations and may yield
+    /// different values, so rewriting `a AND a` to `a` would be unsound when
+    /// `a` is non-deterministic. Gating on [`Self::is_stable`] excludes any
+    /// sub-expression whose value may change across evaluations.
+    pub fn is_equivalent_to(&self, other: &Self) -> bool {
+        self == other && self.is_stable()
+    }
+
     /// Returns `true` if the expression is a constant expression.
     ///
     /// A constant expression is one that does not reference any external data.
@@ -295,6 +324,9 @@ impl Expr {
         match self {
             // Always constant
             Self::Value(_) => true,
+
+            // Unresolved identifiers reference external data
+            Self::Ident(_) => false,
 
             // Arg: local if nesting is within map_depth, otherwise external
             Self::Arg(arg) => arg.nesting < map_depth,
@@ -371,6 +403,9 @@ impl Expr {
         match self {
             // Always evaluable
             Self::Value(_) => true,
+
+            // Unresolved identifiers cannot be evaluated
+            Self::Ident(_) => false,
 
             // Args are OK for evaluation
             Self::Arg(_) => true,
@@ -565,6 +600,7 @@ impl fmt::Debug for Expr {
             Self::Error(e) => e.fmt(f),
             Self::Exists(e) => e.fmt(f),
             Self::Func(e) => e.fmt(f),
+            Self::Ident(e) => write!(f, "Ident({e:?})"),
             Self::InList(e) => e.fmt(f),
             Self::InSubquery(e) => e.fmt(f),
             Self::IsNull(e) => e.fmt(f),

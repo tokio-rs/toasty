@@ -6,19 +6,7 @@ use toasty_core::{
     },
     stmt as core_stmt,
 };
-use toasty_sql::{
-    Serializer,
-    migration::MigrationStatement,
-    serializer::{Params, Placeholder},
-};
-
-struct NoParams;
-
-impl Params for NoParams {
-    fn push(&mut self, _: &core_stmt::Value, _: Option<&core_stmt::Type>) -> Placeholder {
-        Placeholder(0)
-    }
-}
+use toasty_sql::{Serializer, migration::MigrationStatement};
 
 fn make_column(table_id: usize, index: usize, name: &str, storage_ty: Type) -> Column {
     Column {
@@ -68,7 +56,7 @@ fn serialize_migration(stmts: &[MigrationStatement<'_>], flavor: &str) -> Vec<St
                 "mysql" => Serializer::mysql(ms.schema()),
                 _ => panic!("unknown flavor: {flavor}"),
             };
-            serializer.serialize(ms.statement(), &mut NoParams)
+            serializer.serialize(ms.statement())
         })
         .collect()
 }
@@ -334,4 +322,56 @@ fn create_table_varchar_mysql() {
 
     assert_eq!(sql.len(), 1);
     assert!(sql[0].contains("VARCHAR(191)"), "got: {}", sql[0]);
+}
+
+/// When the table's `indices` list contains the primary key index (as
+/// #[derive(Model)] produces), migration should NOT emit a separate
+/// CREATE UNIQUE INDEX for it — the PRIMARY KEY in CREATE TABLE is sufficient.
+#[test]
+fn create_table_no_redundant_pk_index() {
+    let from = Schema::default();
+
+    let pk_index = Index {
+        id: IndexId {
+            table: TableId(0),
+            index: 0,
+        },
+        name: "index_users_by_id".to_string(),
+        on: TableId(0),
+        columns: vec![IndexColumn {
+            column: ColumnId {
+                table: TableId(0),
+                index: 0,
+            },
+            op: IndexOp::Eq,
+            scope: IndexScope::Local,
+        }],
+        unique: true,
+        primary_key: true,
+    };
+
+    let to = Schema {
+        tables: vec![make_table(
+            0,
+            "users",
+            vec![
+                make_column(0, 0, "id", Type::Text),
+                make_column(0, 1, "name", Type::Text),
+            ],
+            vec![pk_index],
+        )],
+    };
+
+    let hints = RenameHints::new();
+    let diff = SchemaDiff::from(&from, &to, &hints);
+    let stmts = MigrationStatement::from_diff(&diff, &Capability::SQLITE);
+    let sql = serialize_migration(&stmts, "sqlite");
+
+    assert_eq!(
+        sql.len(),
+        1,
+        "expected only CREATE TABLE, got extra statements: {sql:?}"
+    );
+    assert!(sql[0].starts_with("CREATE TABLE"), "got: {}", sql[0]);
+    assert!(sql[0].contains("PRIMARY KEY"), "got: {}", sql[0]);
 }

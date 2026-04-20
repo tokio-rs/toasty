@@ -29,9 +29,12 @@ impl Simplify<'_> {
 
         // Idempotent law, `a and a` → `a`
         // Note: O(n) lookups are acceptable here since operand lists are typically small.
-        let mut seen = Vec::new();
+        // `is_equivalent_to` (not `PartialEq`) keeps this sound for non-deterministic
+        // operands like `LAST_INSERT_ID()` — two syntactically identical calls may
+        // return different values, so the second occurrence must survive.
+        let mut seen: Vec<Expr> = Vec::new();
         expr.operands.retain(|operand| {
-            if seen.contains(operand) {
+            if seen.iter().any(|e| e.is_equivalent_to(operand)) {
                 false
             } else {
                 seen.push(operand.clone());
@@ -54,7 +57,7 @@ impl Simplify<'_> {
                 !or_expr
                     .operands
                     .iter()
-                    .any(|op| non_or_operands.contains(op))
+                    .any(|op| non_or_operands.iter().any(|e| e.is_equivalent_to(op)))
             } else {
                 true
             }
@@ -113,7 +116,9 @@ impl Simplify<'_> {
             }
 
             // Check if not(operand) exists and operand is non-nullable
-            if negated.contains(&operand) && operand.is_always_non_nullable() {
+            if negated.iter().any(|n| n.is_equivalent_to(operand))
+                && operand.is_always_non_nullable()
+            {
                 return true;
             }
         }
@@ -152,7 +157,7 @@ impl Simplify<'_> {
                     continue;
                 }
 
-                if op_i.lhs == op_j.lhs && op_i.rhs == op_j.rhs {
+                if op_i.lhs.is_equivalent_to(&op_j.lhs) && op_i.rhs.is_equivalent_to(&op_j.rhs) {
                     let lhs = op_i.lhs.clone();
                     let rhs = op_i.rhs.clone();
 
@@ -164,8 +169,8 @@ impl Simplify<'_> {
                     for k in (i + 1)..expr.operands.len() {
                         if let Expr::BinaryOp(op_k) = &expr.operands[k]
                             && matches!(op_k.op, BinaryOp::Ge | BinaryOp::Le)
-                            && op_k.lhs == lhs
-                            && op_k.rhs == rhs
+                            && op_k.lhs.is_equivalent_to(&lhs)
+                            && op_k.rhs.is_equivalent_to(&rhs)
                         {
                             expr.operands[k] = true.into();
                         }
@@ -243,10 +248,11 @@ fn prune_or_branches(expr: &mut stmt::ExprAnd) -> Option<Expr> {
     }
 
     // Deduplicate after flattening (flatten can reintroduce operands
-    // already present in the outer AND).
-    let mut seen = Vec::new();
+    // already present in the outer AND). `is_equivalent_to` skips dedup
+    // of non-deterministic operands, preserving their independent evaluations.
+    let mut seen: Vec<Expr> = Vec::new();
     expr.operands.retain(|operand| {
-        if seen.contains(operand) {
+        if seen.iter().any(|e| e.is_equivalent_to(operand)) {
             false
         } else {
             seen.push(operand.clone());
@@ -270,7 +276,11 @@ fn is_contradicting_eq_constraints(a: &[Expr], b: &[Expr]) -> bool {
                 continue;
             };
 
-            if o_lhs != b_lhs {
+            // Only consider the two lhs sides "the same value" when they are
+            // syntactically equal AND stable. Otherwise `f() == 1 AND f() == 2`
+            // would be rewritten to `false`, but two evaluations of a
+            // non-deterministic `f()` can produce 1 and 2.
+            if !o_lhs.is_equivalent_to(b_lhs) {
                 continue;
             }
 

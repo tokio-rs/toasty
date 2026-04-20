@@ -319,7 +319,7 @@ let mut doc = toasty::create!(Document { content: "hello" })
 assert_eq!(doc.version, 1);
 
 // Load a second handle — both start at version 1
-let stale = Document::get_by_id(&mut db, &doc.id).await?;
+let mut stale = Document::get_by_id(&mut db, &doc.id).await?;
 
 // Advance doc to version 2
 doc.update().content("world").exec(&mut db).await?;

@@ -1,6 +1,5 @@
 use super::Simplify;
-use std::collections::HashSet;
-use toasty_core::stmt::{self, Expr, Value};
+use toasty_core::stmt::{self, Expr, Value, ValueSet};
 
 impl Simplify<'_> {
     pub(super) fn simplify_expr_in_list(&self, expr: &mut stmt::ExprInList) -> Option<Expr> {
@@ -26,7 +25,7 @@ impl Simplify<'_> {
     /// Remove duplicate values from a `Value::List` in-place, preserving order.
     fn dedup_expr_in_list_values(&self, expr: &mut stmt::ExprInList) {
         if let Expr::Value(Value::List(values)) = &mut *expr.list {
-            let mut seen = HashSet::new();
+            let mut seen = ValueSet::new();
             values.retain(|v| seen.insert(v.clone()));
         }
     }

@@ -232,6 +232,38 @@ pub async fn limit_offset(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
+#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(sql))]
+pub async fn first_narrows_to_single_row(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    toasty::create!(User::[
+        { name: "Alice", age: 30 },
+        { name: "Bob", age: 20 },
+        { name: "Carol", age: 40 },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    // Regression for https://github.com/tokio-rs/toasty/issues/692:
+    // `.first()` on a query with multiple matching rows must return the first
+    // row (after any ordering), not panic.
+    let youngest = User::all()
+        .order_by(User::fields().age().asc())
+        .first()
+        .exec(&mut db)
+        .await?;
+    assert_struct!(youngest, Some(_ { name: "Bob", .. }));
+
+    let oldest = User::all()
+        .order_by(User::fields().age().desc())
+        .first()
+        .exec(&mut db)
+        .await?;
+    assert_struct!(oldest, Some(_ { name: "Carol", .. }));
+
+    Ok(())
+}
+
 #[driver_test(requires(not(sql)))]
 pub async fn paginate_for_dynamodb(test: &mut Test) -> Result<()> {
     #[derive(toasty::Model)]

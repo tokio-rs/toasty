@@ -163,45 +163,24 @@ impl Expand<'_> {
                     });
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
-                    field_ty = quote!(#toasty::core::schema::app::FieldTy::BelongsTo(#toasty::core::schema::app::BelongsTo {
-                        target:  <#ty as #toasty::Relation>::Model::id(),
-                        expr_ty: #toasty::core::stmt::Type::Model(<#ty as #toasty::Relation>::Model::id()),
-                        // The pair is populated at runtime.
-                        pair: None,
-                        foreign_key: #toasty::core::schema::app::ForeignKey {
+                    field_ty = quote!(<#ty as #toasty::Relation>::belongs_to_field_ty(
+                        #toasty::core::schema::app::ForeignKey {
                             fields: vec![ #( #fk_fields ),* ],
                         },
-                    }));
+                    ));
                 }
                 FieldTy::HasMany(rel) => {
                     let ty = &rel.ty;
                     let singular_name = expand_name(toasty, &rel.singular);
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
-                    field_ty = quote!(#toasty::core::schema::app::FieldTy::HasMany(#toasty::core::schema::app::HasMany {
-                        target: <#ty as #toasty::Relation>::Model::id(),
-                        expr_ty: #toasty::core::stmt::Type::List(Box::new(#toasty::core::stmt::Type::Model(<#ty as #toasty::Relation>::Model::id()))),
-                        singular: #singular_name,
-                        // The pair is populated at runtime.
-                        pair: #toasty::core::schema::app::FieldId {
-                            model: #toasty::core::schema::app::ModelId(usize::MAX),
-                            index: usize::MAX,
-                        },
-                    }));
+                    field_ty = quote!(<#ty as #toasty::Relation>::has_many_field_ty(#singular_name));
                 }
                 FieldTy::HasOne(rel) => {
                     let ty = &rel.ty;
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
-                    field_ty = quote!(#toasty::core::schema::app::FieldTy::HasOne(#toasty::core::schema::app::HasOne {
-                        target: <#ty as #toasty::Relation>::Model::id(),
-                        expr_ty: #toasty::core::stmt::Type::Model(<#ty as #toasty::Relation>::Model::id()),
-                        // The pair is populated at runtime.
-                        pair: #toasty::core::schema::app::FieldId {
-                            model: #toasty::core::schema::app::ModelId(usize::MAX),
-                            index: usize::MAX,
-                        },
-                    }));
+                    field_ty = quote!(<#ty as #toasty::Relation>::has_one_field_ty());
                 }
             }
 

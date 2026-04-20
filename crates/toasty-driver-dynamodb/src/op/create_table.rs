@@ -31,7 +31,7 @@ impl Connection {
         }
 
         // Calculate which attributes need to be defined
-        let mut defined_attributes = std::collections::HashSet::new();
+        let mut defined_attributes = hashbrown::HashSet::new();
 
         let pk_cols: Vec<&db::Column> = table.primary_key_columns().collect();
 

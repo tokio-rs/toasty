@@ -1,3 +1,4 @@
+use super::TypeEnum;
 use crate::{Result, driver, stmt};
 
 /// Database-level storage types representing how values are stored in the target database.
@@ -70,6 +71,9 @@ pub enum Type {
     /// An unsigned integer of `n` bytes
     UnsignedInteger(u8),
 
+    /// A floating point number of `n` bytes
+    Float(u8),
+
     /// Unconstrained text type
     Text,
 
@@ -102,6 +106,9 @@ pub enum Type {
     /// A representation of a civil datetime in the Gregorian calendar with fractional seconds precision (0-9 digits).
     DateTime(u8),
 
+    /// A database enum type. See [`TypeEnum`].
+    Enum(TypeEnum),
+
     /// User-specified unrecognized type
     Custom(String),
 }
@@ -126,6 +133,8 @@ impl Type {
                 stmt::Type::U16 => Ok(Type::UnsignedInteger(2)),
                 stmt::Type::U32 => Ok(Type::UnsignedInteger(4)),
                 stmt::Type::U64 => Ok(Type::UnsignedInteger(8)),
+                stmt::Type::F32 => Ok(Type::Float(4)),
+                stmt::Type::F64 => Ok(Type::Float(8)),
                 stmt::Type::String => Ok(db.default_string_type.clone()),
                 stmt::Type::Uuid => Ok(db.default_uuid_type.clone()),
                 stmt::Type::Bytes => Ok(db.default_bytes_type.clone()),
@@ -154,12 +163,46 @@ impl Type {
         }
     }
 
+    /// Infers a `db::Type` from a `stmt::Value` using generic defaults.
+    ///
+    /// This is an initial guess suitable for bind parameter typing. Column
+    /// context will refine it later (e.g., `Text` → `Enum` for enum columns).
+    pub fn from_value(value: &stmt::Value) -> Type {
+        match value {
+            stmt::Value::Bool(_) => Type::Boolean,
+            stmt::Value::I8(_) => Type::Integer(1),
+            stmt::Value::I16(_) => Type::Integer(2),
+            stmt::Value::I32(_) => Type::Integer(4),
+            stmt::Value::I64(_) => Type::Integer(8),
+            stmt::Value::U8(_) => Type::UnsignedInteger(1),
+            stmt::Value::U16(_) => Type::UnsignedInteger(2),
+            stmt::Value::U32(_) => Type::UnsignedInteger(4),
+            stmt::Value::U64(_) => Type::UnsignedInteger(8),
+            stmt::Value::String(_) => Type::Text,
+            stmt::Value::Uuid(_) => Type::Uuid,
+            stmt::Value::Bytes(_) => Type::Blob,
+            #[cfg(feature = "rust_decimal")]
+            stmt::Value::Decimal(_) => Type::Numeric(None),
+            #[cfg(feature = "jiff")]
+            stmt::Value::Timestamp(_) => Type::Timestamp(6),
+            #[cfg(feature = "jiff")]
+            stmt::Value::Date(_) => Type::Date,
+            #[cfg(feature = "jiff")]
+            stmt::Value::Time(_) => Type::Time(6),
+            #[cfg(feature = "jiff")]
+            stmt::Value::DateTime(_) => Type::DateTime(6),
+            _ => Type::Text,
+        }
+    }
+
     /// Determines the [`stmt::Type`] closest to this [`db::Type`] that should be used
     /// as an intermediate conversion step to lessen the work done by each individual driver.
     pub fn bridge_type(&self, ty: &stmt::Type) -> stmt::Type {
         match (self, ty) {
             (Self::Blob | Self::Binary(_), stmt::Type::Uuid) => stmt::Type::Bytes,
             (Self::Text | Self::VarChar(_), _) => stmt::Type::String,
+            // Enum values are always strings at the application level
+            (Self::Enum(_), _) => stmt::Type::String,
             // Let engine handle UTC conversion
             #[cfg(feature = "jiff")]
             (Self::Timestamp(_) | Self::DateTime(_), stmt::Type::Zoned) => stmt::Type::Timestamp,
