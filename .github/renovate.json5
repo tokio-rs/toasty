@@ -3,6 +3,7 @@
   extends: [
     "config:recommended",
     "schedule:weekly",
+    "group:all",
   ],
   // The Rust stable toolchain is pinned in two places:
   //   * `RUST_STABLE_VERSION` env var in every `.github/workflows/*.yml`
