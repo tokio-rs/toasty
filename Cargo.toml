@@ -113,7 +113,7 @@ rustls = { version = "0.23", default-features = false, features = ["std", "ring"
 const-oid = { version = "0.9.6", default-features = false, features = ["db"] }
 sha2 = { version = "0.11", default-features = false }
 x509-cert = { version = "0.2.5", default-features = false, features = ["std"] }
-rustls-platform-verifier = "0.6"
+rustls-platform-verifier = "0.7"
 rustls-pemfile = "2"
 rustls-webpki = { version = "0.103", default-features = false, features = ["alloc", "std"] }
 tokio-stream = { version = "0.1.18", default-features = false }
