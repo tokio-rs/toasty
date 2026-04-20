@@ -168,3 +168,22 @@ impl Executor for Db {
         Db::schema(self)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::Db;
+
+    #[test]
+    fn this_should_compile() {
+        #[allow(unused)]
+        async fn shared_ref(db: &Db) -> crate::Result<()> {
+            let tx = db.transaction().await?;
+            std::mem::drop(tx);
+
+            let tx = db.transaction_builder().begin().await?;
+            std::mem::drop(tx);
+
+            Ok(())
+        }
+    }
+}
