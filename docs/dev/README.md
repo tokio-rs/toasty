@@ -20,15 +20,9 @@ Guide-level design documents for specific features. Use
 [`_template.md`](./design/_template.md) when starting a new one.
 
 - [Design Overview](./design/README.md)
-- [Batch Queries](./design/batch-queries.md)
 - [DynamoDB OR Index Predicate](./design/ddb_or_index_predicate.md)
-- [Embedded Enums Data Carrying Impl](./design/embedded-enums-data-carrying-impl.md)
 - [Enums and Embedded Structs](./design/enums-and-embedded-structs.md)
-- [Mapping Formalization](./design/mapping-formalization.md)
-- [Pagination](./design/pagination.md)
-- [Serialize Fields](./design/serialize-fields.md)
 - [Static Assertions for `create!` Required Fields](./design/static-assertions-create-macro.md)
-- [Database Enum Types](./design/postgresql-enum-type.md)
 
 ## Roadmap
 
