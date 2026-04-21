@@ -185,9 +185,6 @@ pub use order_by::OrderBy;
 mod order_by_expr;
 pub use order_by_expr::OrderByExpr;
 
-mod latest_by;
-pub use latest_by::LatestBy;
-
 mod op_set;
 pub use op_set::SetOp;
 

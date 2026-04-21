@@ -72,9 +72,12 @@ impl Expand<'_> {
                     self
                 }
 
-                #vis fn latest_by(mut self, latest_by: impl Into<#toasty::stmt::LatestBy>) -> #query_struct_ident {
-                  self.stmt.latest_by(latest_by);
-                  self
+                #vis fn latest_by<#include_ty: #toasty::stmt::Recency>(
+                    mut self,
+                    field: impl Into<#toasty::stmt::Path<#model_ident, #include_ty>>
+                ) -> #query_struct_ident {
+                    self.stmt.latest_by(field.into());
+                    self
                 }
 
                 #vis fn limit(mut self, n: usize) -> #query_struct_ident {

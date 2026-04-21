@@ -2,6 +2,7 @@ use super::{Delete, Expr, IntoStatement, List, Statement, Value};
 use crate::{
     Executor, Result,
     schema::{Load, Model},
+    stmt::{Path, Recency},
 };
 use std::{fmt, marker::PhantomData};
 use toasty_core::stmt::{self, Returning};
@@ -194,8 +195,13 @@ impl<T> Query<T> {
     /// let mut q = Query::<List<User>>::all();
     /// q.latest_by(User::fields().created_at());
     /// ```
-    pub fn latest_by(&mut self, latest_by: impl Into<stmt::LatestBy>) -> &mut Self {
-        self.untyped.order_by = Some(latest_by.into().into());
+    pub fn latest_by<M, U: Recency>(&mut self, field: impl Into<Path<M, U>>) -> &mut Self {
+        self.untyped.order_by = Some(stmt::OrderBy {
+            exprs: vec![stmt::OrderByExpr {
+                expr: field.into().untyped.into_stmt(),
+                order: Some(stmt::Direction::Desc),
+            }],
+        });
         self
     }
 
