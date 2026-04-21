@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Question or chat
+    url: https://discord.gg/tokio
+    about: The #toasty channel on the tokio-rs Discord is the fastest path for questions and design chat.
+  - name: Contribution guide
+    url: https://github.com/tokio-rs/toasty/blob/main/CONTRIBUTING.md
+    about: How to propose changes and land PRs.

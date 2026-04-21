@@ -3,11 +3,33 @@ use std::borrow::Cow;
 use toasty_core::{
     driver::Capability,
     schema::db::{
-        ColumnsDiff, ColumnsDiffItem, IndicesDiffItem, Schema, SchemaDiff, Table, TablesDiffItem,
+        Column, ColumnsDiff, ColumnsDiffItem, IndicesDiffItem, Schema, SchemaDiff, Table,
+        TablesDiffItem, Type, TypeEnum, TypesDiffItem,
     },
 };
 
 use crate::stmt::{AlterColumnChanges, AlterTable, AlterTableAction, DropTable, Name, Statement};
+
+/// Returns `true` if the only difference between two columns is the variant
+/// list of a named enum type. These changes are handled by `TypesDiff`
+/// (`ALTER TYPE ... ADD VALUE`) and should not produce column-level DDL.
+fn is_named_enum_variant_only_change(previous: &Column, next: &Column) -> bool {
+    if previous.name != next.name
+        || previous.nullable != next.nullable
+        || previous.primary_key != next.primary_key
+        || previous.auto_increment != next.auto_increment
+    {
+        return false;
+    }
+
+    matches!(
+        (&previous.storage_ty, &next.storage_ty),
+        (
+            Type::Enum(TypeEnum { name: Some(a), .. }),
+            Type::Enum(TypeEnum { name: Some(b), .. }),
+        ) if a == b
+    )
+}
 
 /// A migration step pairing a DDL [`Statement`] with the [`Schema`] it applies against.
 ///
@@ -26,12 +48,39 @@ impl<'a> MigrationStatement<'a> {
 
     /// Generates migration statements from a [`SchemaDiff`].
     ///
-    /// Walks the diff's table, column, and index changes and produces the
-    /// corresponding DDL statements. On databases that lack `ALTER COLUMN`
-    /// support (e.g. SQLite), column type changes trigger a full table
-    /// recreation sequence.
+    /// Walks the diff's type, table, column, and index changes and produces
+    /// the corresponding DDL statements. Type changes (CREATE TYPE, ALTER
+    /// TYPE) are emitted before table changes. On databases that lack
+    /// `ALTER COLUMN` support (e.g. SQLite), column type changes trigger a
+    /// full table recreation sequence.
     pub fn from_diff(schema_diff: &'a SchemaDiff<'a>, capability: &Capability) -> Vec<Self> {
         let mut result = Vec::new();
+
+        // Emit enum type changes before table changes (tables may reference
+        // newly created types).
+        if capability.named_enum_types {
+            let types_diff = schema_diff.types();
+            for item in types_diff.iter() {
+                match item {
+                    TypesDiffItem::CreateType(ty) => {
+                        result.push(Self::new(
+                            Statement::create_enum_type(ty),
+                            Cow::Borrowed(schema_diff.next()),
+                        ));
+                    }
+                    TypesDiffItem::AddVariants { ty, added } => {
+                        let type_name = ty.name.as_deref().expect("named enum type");
+                        for variant in added {
+                            result.push(Self::new(
+                                Statement::alter_type_add_value(type_name, variant),
+                                Cow::Borrowed(schema_diff.next()),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+
         for table in schema_diff.tables().iter() {
             match table {
                 TablesDiffItem::CreateTable(table) => {
@@ -40,6 +89,9 @@ impl<'a> MigrationStatement<'a> {
                         Cow::Borrowed(schema_diff.next()),
                     ));
                     for index in &table.indices {
+                        if index.primary_key {
+                            continue; // PK indices are created as part of CREATE TABLE
+                        }
                         result.push(Self::new(
                             Statement::create_index(index),
                             Cow::Borrowed(schema_diff.next()),
@@ -76,6 +128,8 @@ impl<'a> MigrationStatement<'a> {
                                     previous: prev_col,
                                     next: next_col
                                 } if AlterColumnChanges::from_diff(prev_col, next_col).has_type_change()
+                                    && !(capability.named_enum_types
+                                        && is_named_enum_variant_only_change(prev_col, next_col))
                             )
                         });
 
@@ -242,6 +296,14 @@ impl<'a> MigrationStatement<'a> {
                     previous,
                     next: col_next,
                 } => {
+                    // Skip column-level DDL for named enum variant changes — those
+                    // are handled by TypesDiff (ALTER TYPE ... ADD VALUE).
+                    if capability.named_enum_types
+                        && is_named_enum_variant_only_change(previous, col_next)
+                    {
+                        continue;
+                    }
+
                     let changes = AlterColumnChanges::from_diff(previous, col_next);
                     let changes = if capability.schema_mutations.alter_column_properties_atomic {
                         vec![changes]

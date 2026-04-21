@@ -82,7 +82,7 @@ pub struct Expansion {
     pub id_ident: Option<String>,
 
     /// Matrix dimension values (e.g., {"single": true, "composite": false})
-    pub matrix_values: std::collections::HashMap<String, bool>,
+    pub matrix_values: hashbrown::HashMap<String, bool>,
 
     /// The predicate to evaluate for this expansion
     pub predicate: Option<BoolExpr>,
@@ -485,7 +485,7 @@ impl DriverTest {
             return vec![Expansion {
                 id_variant: None,
                 id_ident: None,
-                matrix_values: std::collections::HashMap::new(),
+                matrix_values: hashbrown::HashMap::new(),
                 predicate: None,
             }];
         }
@@ -545,18 +545,16 @@ impl DriverTest {
     /// - {a: true, b: false, c: false}
     /// - {a: false, b: true, c: false}
     /// - {a: false, b: false, c: true}
-    fn generate_matrix_combinations(
-        matrix: &[String],
-    ) -> Vec<std::collections::HashMap<String, bool>> {
+    fn generate_matrix_combinations(matrix: &[String]) -> Vec<hashbrown::HashMap<String, bool>> {
         if matrix.is_empty() {
-            return vec![std::collections::HashMap::new()];
+            return vec![hashbrown::HashMap::new()];
         }
 
         let mut combinations = Vec::new();
 
         // Generate one combination for each matrix value where only that value is true
         for (i, _key) in matrix.iter().enumerate() {
-            let mut combination = std::collections::HashMap::new();
+            let mut combination = hashbrown::HashMap::new();
             for (j, other_key) in matrix.iter().enumerate() {
                 combination.insert(other_key.clone(), i == j);
             }

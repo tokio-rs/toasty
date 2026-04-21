@@ -1,5 +1,6 @@
-use super::{Load, Relation};
+use super::{Load, Register, Relation};
 
+use toasty_core::schema::app::{self, FieldTy, ForeignKey};
 use toasty_core::stmt::{self, Value};
 
 use std::fmt;
@@ -79,6 +80,16 @@ impl<T: Relation> Relation for BelongsTo<T> {
 
     fn nullable() -> bool {
         T::nullable()
+    }
+
+    fn belongs_to_field_ty(foreign_key: ForeignKey) -> FieldTy {
+        FieldTy::BelongsTo(app::BelongsTo {
+            target: <T::Model as Register>::id(),
+            expr_ty: stmt::Type::Model(<T::Model as Register>::id()),
+            // The pair is populated at runtime.
+            pair: None,
+            foreign_key,
+        })
     }
 }
 

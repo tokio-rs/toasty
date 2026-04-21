@@ -199,8 +199,11 @@ impl Simplify<'_> {
             //
             // By this point, constant projections and record projections have been simplified.
             // What remains are projections with opaque bases (e.g., field references).
+            // `lhs.base.is_stable()` keeps this sound: a projection through a
+            // non-deterministic base would evaluate the base twice and could
+            // yield different values each time.
             (Expr::Project(lhs), Expr::Project(rhs))
-                if lhs == rhs && (op.is_eq() || op.is_ne()) =>
+                if lhs == rhs && lhs.base.is_stable() && (op.is_eq() || op.is_ne()) =>
             {
                 // TODO: Check if the projected value is nullable
                 Some(Expr::from(op.is_eq()))

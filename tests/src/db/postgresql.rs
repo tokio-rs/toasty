@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::Arc;
 use toasty::db::Connect;
 use toasty_core::driver::{Capability, Driver};
@@ -86,11 +86,10 @@ impl Setup for SetupPostgreSQL {
 
         // Build WHERE clause from filter
         let mut where_conditions = Vec::new();
-        let mut param_index = 1;
 
         // Convert stmt::Values to PostgreSQL parameters
         let mut pg_params = Vec::new();
-        for (col_name, value) in filter {
+        for (param_index, (col_name, value)) in (1..).zip(filter) {
             where_conditions.push(format!("{col_name} = ${param_index}"));
 
             // Convert each value individually to avoid trait bound issues
@@ -100,7 +99,6 @@ impl Setup for SetupPostgreSQL {
                 stmt::Value::U64(u) => pg_params.push((u as i64).to_string()),
                 _ => todo!("Unsupported filter value type: {value:?}"),
             }
-            param_index += 1;
         }
 
         let where_clause = if where_conditions.is_empty() {
