@@ -44,7 +44,7 @@ pub enum QueryPkLimit {
 ///     select: vec![col_a, col_b],
 ///     pk_filter: pk_expr,
 ///     filter: None,
-///     pagination: None,
+///     limit: None,
 ///     order: None,
 /// };
 /// let operation: Operation = op.into();
@@ -68,8 +68,8 @@ pub struct QueryPk {
     /// returning results to the caller.
     pub filter: Option<stmt::Expr>,
 
-    /// Pagination bounds for this query. `None` means no limit or cursor.
-    pub pagination: Option<QueryPkLimit>,
+    /// Limit and pagination bounds for this query. `None` means unbounded.
+    pub limit: Option<QueryPkLimit>,
 
     /// Sort key ordering direction for tables with a composite primary key.
     /// `None` uses the driver's default ordering.

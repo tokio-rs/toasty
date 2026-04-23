@@ -37,8 +37,8 @@ pub(crate) struct QueryPk {
     /// The return type.
     pub(crate) ty: stmt::Type,
 
-    /// Pagination bounds for this query. `None` means no limit or cursor.
-    pub(crate) pagination: Option<QueryPkLimit>,
+    /// Limit and pagination bounds for this query. `None` means unbounded.
+    pub(crate) limit: Option<QueryPkLimit>,
 
     /// Sort key ordering direction.
     pub(crate) order: Option<stmt::Direction>,
@@ -85,7 +85,7 @@ impl QueryPk {
             columns,
             pk_filter: self.pk_filter.clone(),
             row_filter: self.row_filter.clone(),
-            pagination: self.pagination.clone(),
+            limit: self.limit.clone(),
             order: self.order,
         }
     }

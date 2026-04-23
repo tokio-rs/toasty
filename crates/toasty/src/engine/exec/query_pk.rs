@@ -32,8 +32,8 @@ pub(crate) struct QueryPk {
     /// Filter to pass to the database
     pub row_filter: Option<stmt::Expr>,
 
-    /// Pagination bounds for this query. `None` means no limit or cursor.
-    pub pagination: Option<QueryPkLimit>,
+    /// Limit and pagination bounds for this query. `None` means unbounded.
+    pub limit: Option<QueryPkLimit>,
 
     /// Sort key ordering direction.
     pub order: Option<stmt::Direction>,
@@ -55,7 +55,7 @@ impl Exec<'_> {
         // Pagination with multiple filters is not supported — a cursor is only
         // meaningful for a single partition key query.
         let has_cursor = matches!(
-            &action.pagination,
+            &action.limit,
             Some(QueryPkLimit::Cursor { after: Some(_), .. })
         );
         assert!(
@@ -78,7 +78,7 @@ impl Exec<'_> {
                         select: action.columns.clone(),
                         pk_filter: f,
                         filter: action.row_filter.clone(),
-                        pagination: action.pagination.clone(),
+                        limit: action.limit.clone(),
                         order: action.order,
                     }
                     .into(),

@@ -1239,7 +1239,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             };
 
             if stmt.is_query() {
-                let pagination = extract_query_pk_pagination(&stmt);
+                let limit = extract_query_pk_limit(&stmt);
                 let order = extract_query_pk_order(&stmt);
 
                 // For queries, stream all matching records with the requested columns.
@@ -1251,7 +1251,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     pk_filter: index_plan.index_filter.take(),
                     row_filter: index_plan.result_filter.take(),
                     ty: ty.clone(),
-                    pagination,
+                    limit,
                     order,
                 })
             } else {
@@ -1280,7 +1280,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     pk_filter: index_plan.index_filter.take(),
                     row_filter: index_plan.result_filter.take(),
                     ty: index_key_ty,
-                    pagination: None,
+                    limit: None,
                     order: None,
                 });
 
@@ -1313,7 +1313,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 Some(inputs[0])
             };
 
-            let pagination = extract_query_pk_pagination(&stmt);
+            let limit = extract_query_pk_limit(&stmt);
             let order = extract_query_pk_order(&stmt);
 
             // Use QueryPk with index to query the secondary index and return full records
@@ -1326,7 +1326,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 pk_filter: index_plan.index_filter.take(),
                 row_filter: index_plan.result_filter.take(),
                 ty: ty.clone(), // Full record type, not just PKs
-                pagination,
+                limit,
                 order,
             });
         }
@@ -1721,9 +1721,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     }
 }
 
-/// Extract pagination bounds from a query statement for use with `QueryPk` on
-/// NoSQL drivers. Returns `None` when the statement has no limit clause.
-fn extract_query_pk_pagination(stmt: &stmt::Statement) -> Option<QueryPkLimit> {
+/// Extract limit/pagination bounds from a query statement for use with
+/// `QueryPk` on NoSQL drivers. Returns `None` when the statement has no limit
+/// clause.
+fn extract_query_pk_limit(stmt: &stmt::Statement) -> Option<QueryPkLimit> {
     let query = stmt.as_query()?;
     match query.limit.as_ref()? {
         stmt::Limit::Cursor(c) => {

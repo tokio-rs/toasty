@@ -54,7 +54,7 @@ impl Connection {
             query = query.scan_index_forward(*direction == stmt::Direction::Asc);
         }
 
-        match op.pagination {
+        match op.limit {
             None => {
                 // No limit — return all results in a single call.
                 let schema = schema.clone();
