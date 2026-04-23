@@ -223,7 +223,7 @@ impl<T> Query<T> {
             Some(stmt::Limit::Offset(limit_offset)) => {
                 Some(stmt::Limit::Offset(stmt::LimitOffset {
                     limit: limit_offset.limit,
-                    offset: Some(stmt::Expr::Value(Value::from(n))),
+                    offset: Some(stmt::Value::from(n as i64).into()),
                 }))
             }
             Some(stmt::Limit::Cursor(_)) => {

@@ -1724,14 +1724,16 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 /// Extract limit/pagination bounds from a query statement for use with
 /// `QueryPk` on NoSQL drivers. Returns `None` when the statement has no limit
 /// clause.
+///
+/// Assumes `page_size`, `limit`, and `offset` fields are `Value::I64` literals.
+/// Builders normalize to `I64`, and `verify::verify_limit_is_integer_literal`
+/// enforces this invariant on the AST — so any other shape reaching here is a
+/// bug upstream.
 fn extract_query_pk_limit(stmt: &stmt::Statement) -> Option<QueryPkLimit> {
     let query = stmt.as_query()?;
     match query.limit.as_ref()? {
         stmt::Limit::Cursor(c) => {
-            let page_size = match &c.page_size {
-                stmt::Expr::Value(stmt::Value::I64(n)) => *n,
-                _ => return None,
-            };
+            let page_size = as_i64_literal(&c.page_size);
             let after = c.after.as_ref().and_then(|e| match e {
                 stmt::Expr::Value(v) => Some(v.clone()),
                 _ => None,
@@ -1739,17 +1741,19 @@ fn extract_query_pk_limit(stmt: &stmt::Statement) -> Option<QueryPkLimit> {
             Some(QueryPkLimit::Cursor { page_size, after })
         }
         stmt::Limit::Offset(lo) => {
-            let limit = match &lo.limit {
-                stmt::Expr::Value(stmt::Value::I64(n)) => *n,
-                _ => return None,
-            };
-            let offset = lo.offset.as_ref().and_then(|e| match e {
-                stmt::Expr::Value(stmt::Value::I64(n)) => Some(*n),
-                stmt::Expr::Value(stmt::Value::U64(n)) => Some(*n as i64),
-                _ => None,
-            });
+            let limit = as_i64_literal(&lo.limit);
+            let offset = lo.offset.as_ref().map(as_i64_literal);
             Some(QueryPkLimit::Offset { limit, offset })
         }
+    }
+}
+
+/// Extracts an `i64` from a `Value::I64` literal expression. Panics on any
+/// other shape — an invariant violation that `verify` should have caught.
+fn as_i64_literal(expr: &stmt::Expr) -> i64 {
+    match expr {
+        stmt::Expr::Value(stmt::Value::I64(n)) => *n,
+        _ => panic!("limit/offset must be an i64 literal; got {expr:#?}"),
     }
 }
 
