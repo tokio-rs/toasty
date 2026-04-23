@@ -190,8 +190,9 @@ impl<T> Query<T> {
     /// q.limit(10);
     /// ```
     pub fn limit(&mut self, n: usize) -> &mut Self {
+        let n = i64::try_from(n).expect("limit exceeds i64::MAX");
         self.untyped.limit = Some(stmt::Limit::Offset(stmt::LimitOffset {
-            limit: stmt::Value::from(n as i64).into(),
+            limit: stmt::Value::from(n).into(),
             offset: None,
         }));
         self
@@ -219,11 +220,12 @@ impl<T> Query<T> {
     /// q.offset(20);
     /// ```
     pub fn offset(&mut self, n: usize) -> &mut Self {
+        let n = i64::try_from(n).expect("offset exceeds i64::MAX");
         self.untyped.limit = match self.untyped.limit.take() {
             Some(stmt::Limit::Offset(limit_offset)) => {
                 Some(stmt::Limit::Offset(stmt::LimitOffset {
                     limit: limit_offset.limit,
-                    offset: Some(stmt::Value::from(n as i64).into()),
+                    offset: Some(stmt::Value::from(n).into()),
                 }))
             }
             Some(stmt::Limit::Cursor(_)) => {
