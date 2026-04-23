@@ -5,11 +5,26 @@ name: Claude Triage
 # no reproducer — are applied automatically. Priority, impact, status, and
 # community labels are left for humans. See docs/dev/labels.md.
 
+# SECURITY: the PR job uses `pull_request_target`, which runs in the base
+# repo's context with full secrets. PR contents (branch, files, scripts,
+# Cargo.toml, build.rs, etc.) are UNTRUSTED — a malicious fork could use
+# them to exfiltrate secrets. This workflow must never execute code from
+# the PR: no `actions/checkout` of the PR ref, no `cargo build`, no `npm
+# install`, no running of fork-supplied scripts. The only safe operations
+# are reading PR metadata via `gh` and applying labels.
+
 on:
   issues:
     types: [opened]
-  pull_request:
+  pull_request_target:
     types: [opened, ready_for_review]
+
+# Collapse overlapping runs on the same issue/PR (e.g. a rapid
+# open → ready_for_review sequence, or PR amend/rebase). Issues
+# and PRs share a number space in GitHub, so one key suffices.
+concurrency:
+  group: claude-triage-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   triage-issue:
@@ -18,15 +33,12 @@ jobs:
     permissions:
       contents: read
       issues: write
-      id-token: write
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-
+      # No checkout: this job only reads/writes issue metadata via `gh`.
       - uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: |
             You are a triage bot for the toasty repository. Apply GitHub labels
             to issue #${{ github.event.issue.number }} based on its content.
@@ -82,20 +94,21 @@ jobs:
             --allowed-tools "Bash(gh issue view:*),Bash(gh issue edit:*),Bash(gh label list:*)"
 
   triage-pr:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
-      id-token: write
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-
+      # No checkout: running under `pull_request_target`, any checkout of
+      # the PR ref would place untrusted fork code in a job that has
+      # access to secrets. This job only reads PR metadata and applies
+      # labels via `gh`, so no working tree is needed.
       - uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          allowed_non_write_users: "*"
           prompt: |
             You are a triage bot for the toasty repository. Apply GitHub labels
             to PR #${{ github.event.pull_request.number }} based on its title
