@@ -119,6 +119,11 @@ the entry lands here.
 
 ## Drivers
 
+- DynamoDB Scan support ([design](design/ddb-scan.md))
+  - `Operation::Scan` for queries with no viable index
+  - Internal pagination loop following `LastEvaluatedKey`
+  - Cursor-based user-facing pagination
+  - Planner error for `order_by` on scan queries
 - Raw SQL escape hatch
   - Arbitrary SQL statements
   - Parameterized queries with type-safe bindings
