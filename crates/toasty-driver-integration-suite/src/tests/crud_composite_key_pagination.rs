@@ -132,6 +132,8 @@ pub async fn limit_offset_composite_key(test: &mut Test) -> Result<()> {
     let events: Vec<_> = Event::filter_by_kind("info").limit(5).exec(&mut db).await?;
     assert_eq!(events.len(), 5);
 
+    test.log().clear();
+
     let events: Vec<_> = Event::filter_by_kind("info")
         .order_by(Event::fields().seq().asc())
         .limit(7)
@@ -141,6 +143,35 @@ pub async fn limit_offset_composite_key(test: &mut Test) -> Result<()> {
     assert_eq!(events.len(), 7);
     assert_eq!(events[0].seq, 5);
     assert_eq!(events[6].seq, 11);
+
+    // A `.limit().offset()` should route through the same driver operation as a
+    // plain `.limit()` — a future refactor accidentally producing a different
+    // operation type for the offset path would be silent without this assert.
+    let (op, _) = test.log().pop();
+    if test.capability().sql {
+        assert_struct!(op, Operation::QuerySql(_));
+    } else {
+        assert_struct!(op, Operation::QueryPk(_));
+    }
+
+    // offset = 0 should behave identically to a plain limit.
+    let events: Vec<_> = Event::filter_by_kind("info")
+        .order_by(Event::fields().seq().asc())
+        .limit(5)
+        .offset(0)
+        .exec(&mut db)
+        .await?;
+    assert_eq!(events.len(), 5);
+    assert_eq!(events[0].seq, 0);
+    assert_eq!(events[4].seq, 4);
+
+    // offset past the end of the result set returns empty, not an error.
+    let events: Vec<_> = Event::filter_by_kind("info")
+        .limit(5)
+        .offset(100)
+        .exec(&mut db)
+        .await?;
+    assert!(events.is_empty());
 
     let events: Vec<_> = Event::filter_by_kind("info")
         .limit(100)
