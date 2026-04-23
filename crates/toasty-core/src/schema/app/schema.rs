@@ -249,7 +249,9 @@ impl Builder {
                 if let FieldTy::HasMany(has_many) = &field.ty {
                     let target = has_many.target;
                     let field_name = field.name.app_unwrap().to_string();
-                    let pair = self.find_has_many_pair(src, target, &field_name)?;
+                    let pair_hint = has_many.pair_hint.clone();
+                    let pair =
+                        self.find_has_many_pair(src, target, &field_name, pair_hint.as_ref())?;
                     self.models[curr].as_root_mut_unwrap().fields[index]
                         .ty
                         .as_has_many_mut_unwrap()
@@ -272,7 +274,13 @@ impl Builder {
                     FieldTy::HasOne(has_one) => {
                         let target = has_one.target;
                         let field_name = field.name.app_unwrap().to_string();
-                        let pair = match self.find_belongs_to_pair(src, target, &field_name)? {
+                        let pair_hint = has_one.pair_hint.clone();
+                        let pair = match self.find_belongs_to_pair(
+                            src,
+                            target,
+                            &field_name,
+                            pair_hint.as_ref(),
+                        )? {
                             Some(pair) => pair,
                             None => {
                                 return Err(crate::Error::invalid_schema(format!(
@@ -368,6 +376,7 @@ impl Builder {
         src: ModelId,
         target: ModelId,
         field_name: &str,
+        pair_hint: Option<&super::Name>,
     ) -> crate::Result<Option<FieldId>> {
         let src_model = &self.models[&src];
 
@@ -394,11 +403,37 @@ impl Builder {
             })
             .collect();
 
+        // If the user provided a `pair = <field>` hint, use it to pick the
+        // matching `BelongsTo` by field name. This disambiguates cases where
+        // the target model has multiple `BelongsTo` relations pointing back
+        // at the source model.
+        if let Some(hint) = pair_hint {
+            let hint = hint.snake_case();
+            return match belongs_to
+                .iter()
+                .find(|field| field.name.app_unwrap() == hint)
+            {
+                Some(field) => Ok(Some(field.id)),
+                None => Err(crate::Error::invalid_schema(format!(
+                    "field `{}::{}` specifies `pair = {}`, but `{}` has no `BelongsTo` field \
+                     named `{}` targeting `{}`",
+                    src_model.name().upper_camel_case(),
+                    field_name,
+                    hint,
+                    target.name().upper_camel_case(),
+                    hint,
+                    src_model.name().upper_camel_case(),
+                ))),
+            };
+        }
+
         match &belongs_to[..] {
             [field] => Ok(Some(field.id)),
             [] => Ok(None),
             _ => Err(crate::Error::invalid_schema(format!(
-                "model `{}` has more than one `BelongsTo` relation targeting `{}`",
+                "model `{}` has more than one `BelongsTo` relation targeting `{}`; \
+                 disambiguate by adding `pair = <field>` on the paired `has_many`/`has_one` \
+                 field",
                 target.name().upper_camel_case(),
                 src_model.name().upper_camel_case(),
             ))),
@@ -410,8 +445,9 @@ impl Builder {
         src: ModelId,
         target: ModelId,
         field_name: &str,
+        pair_hint: Option<&super::Name>,
     ) -> crate::Result<FieldId> {
-        if let Some(field_id) = self.find_belongs_to_pair(src, target, field_name)? {
+        if let Some(field_id) = self.find_belongs_to_pair(src, target, field_name, pair_hint)? {
             return Ok(field_id);
         }
 

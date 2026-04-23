@@ -1,5 +1,6 @@
 use super::{Load, Register, Relation};
 
+use toasty_core::schema::Name;
 use toasty_core::schema::app::{self, FieldId, FieldTy, ModelId};
 use toasty_core::stmt::{self, Value};
 
@@ -82,7 +83,7 @@ impl<T: Relation> Relation for HasOne<T> {
         T::nullable()
     }
 
-    fn has_one_field_ty() -> FieldTy {
+    fn has_one_field_ty(pair_hint: Option<Name>) -> FieldTy {
         FieldTy::HasOne(app::HasOne {
             target: <T::Model as Register>::id(),
             expr_ty: stmt::Type::Model(<T::Model as Register>::id()),
@@ -91,6 +92,7 @@ impl<T: Relation> Relation for HasOne<T> {
                 model: ModelId(usize::MAX),
                 index: usize::MAX,
             },
+            pair_hint,
         })
     }
 }

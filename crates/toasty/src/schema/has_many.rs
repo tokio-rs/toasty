@@ -96,7 +96,7 @@ impl<T: Relation> Relation for HasMany<T> {
         T::nullable()
     }
 
-    fn has_many_field_ty(singular: Name) -> FieldTy {
+    fn has_many_field_ty(singular: Name, pair_hint: Option<Name>) -> FieldTy {
         FieldTy::HasMany(app::HasMany {
             target: <T::Model as Register>::id(),
             expr_ty: stmt::Type::List(Box::new(stmt::Type::Model(<T::Model as Register>::id()))),
@@ -106,6 +106,7 @@ impl<T: Relation> Relation for HasMany<T> {
                 model: ModelId(usize::MAX),
                 index: usize::MAX,
             },
+            pair_hint,
         })
     }
 }

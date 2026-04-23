@@ -33,6 +33,12 @@ pub struct HasMany {
     /// The [`BelongsTo`] field on the target model that pairs with this
     /// relation.
     pub pair: FieldId,
+
+    /// User-supplied name of the paired `BelongsTo` field on the target
+    /// model (from `#[has_many(pair = <field>)]`). When present, it is used
+    /// during schema linking to disambiguate between multiple `BelongsTo`
+    /// relations on the target that reference the source model.
+    pub pair_hint: Option<Name>,
 }
 
 impl HasMany {

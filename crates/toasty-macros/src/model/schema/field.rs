@@ -297,7 +297,11 @@ impl Field {
                         "field has more than one relation attribute",
                     ));
                 } else {
-                    ty = Some(FieldTy::HasOne(HasOne::from_ast(&field.ty, field.span())?));
+                    ty = Some(FieldTy::HasOne(HasOne::from_ast(
+                        attr,
+                        &field.ty,
+                        field.span(),
+                    )?));
                 }
             }
         }

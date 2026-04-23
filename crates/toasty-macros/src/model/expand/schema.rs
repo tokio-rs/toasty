@@ -159,15 +159,17 @@ impl Expand<'_> {
                 FieldTy::HasMany(rel) => {
                     let ty = &rel.ty;
                     let singular_name = expand_name(toasty, &rel.singular);
+                    let pair_hint = expand_pair_hint(toasty, rel.pair.as_ref());
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
-                    field_ty = quote!(<#ty as #toasty::Relation>::has_many_field_ty(#singular_name));
+                    field_ty = quote!(<#ty as #toasty::Relation>::has_many_field_ty(#singular_name, #pair_hint));
                 }
                 FieldTy::HasOne(rel) => {
                     let ty = &rel.ty;
+                    let pair_hint = expand_pair_hint(toasty, rel.pair.as_ref());
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
-                    field_ty = quote!(<#ty as #toasty::Relation>::has_one_field_ty());
+                    field_ty = quote!(<#ty as #toasty::Relation>::has_one_field_ty(#pair_hint));
                 }
             }
 
@@ -371,5 +373,16 @@ pub(super) fn expand_name(toasty: &TokenStream, name: &Name) -> TokenStream {
         #toasty::core::schema::Name {
             parts: vec![#( #parts ),*],
         }
+    }
+}
+
+fn expand_pair_hint(toasty: &TokenStream, pair: Option<&syn::Ident>) -> TokenStream {
+    match pair {
+        Some(ident) => {
+            let name = Name::from_ident(ident);
+            let expanded = expand_name(toasty, &name);
+            quote! { Some(#expanded) }
+        }
+        None => quote! { None },
     }
 }
