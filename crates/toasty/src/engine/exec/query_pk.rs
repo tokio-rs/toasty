@@ -52,15 +52,15 @@ impl Exec<'_> {
         let mut all_rows = Vec::new();
         let mut response_cursor = None;
 
-        // Pagination with multiple filters is not supported — a cursor is only
-        // meaningful for a single partition key query.
-        let has_cursor = matches!(
-            &action.limit,
-            Some(QueryPkLimit::Cursor { after: Some(_), .. })
-        );
+        // A limit or pagination clause is only meaningful against a single
+        // partition key query. With multiple filters, each partition call
+        // would apply the limit/offset independently and produce wrong
+        // totals (e.g. `.limit(10)` across 3 partitions could return 30
+        // rows, each offset skipping within its own partition).
         assert!(
-            !has_cursor || filters.len() <= 1,
-            "cursor-based pagination with multiple partition filters is not supported"
+            action.limit.is_none() || filters.len() <= 1,
+            "limit/pagination with multiple partition filters is not supported; filters={}",
+            filters.len()
         );
 
         // When there are multiple filters, discard the response cursor since it
