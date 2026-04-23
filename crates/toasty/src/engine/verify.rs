@@ -43,6 +43,7 @@ impl stmt::Visit for Verify<'_> {
 
         self.verify_single_query(i);
         self.verify_offset_key_matches_order_by(i);
+        self.verify_limit_is_integer_literal(i);
     }
 
     fn visit_stmt_select(&mut self, i: &stmt::Select) {
@@ -132,6 +133,38 @@ impl Verify<'_> {
             assert_eq!(1, values.rows.len(), "stmt={i:#?}");
         }
     }
+
+    /// Assert that every field inside a `LIMIT` clause is a `Value::I64` literal.
+    ///
+    /// Builders always normalize integer limits to `I64`, and downstream
+    /// consumers (e.g. `extract_query_pk_limit`) rely on this invariant. Any
+    /// other variant here means either a builder regressed or the AST was
+    /// hand-constructed with a non-canonical shape — both bugs we want to catch
+    /// loudly instead of silently degrading to an unbounded scan.
+    fn verify_limit_is_integer_literal(&self, i: &stmt::Query) {
+        let Some(limit) = i.limit.as_ref() else {
+            return;
+        };
+        match limit {
+            stmt::Limit::Cursor(c) => {
+                assert_i64_literal(&c.page_size, "Cursor page_size");
+            }
+            stmt::Limit::Offset(o) => {
+                assert_i64_literal(&o.limit, "Offset limit");
+                if let Some(off) = o.offset.as_ref() {
+                    assert_i64_literal(off, "Offset offset");
+                }
+            }
+        }
+    }
+}
+
+#[track_caller]
+fn assert_i64_literal(expr: &stmt::Expr, what: &str) {
+    assert!(
+        matches!(expr, stmt::Expr::Value(stmt::Value::I64(_))),
+        "{what} must be a Value::I64 literal; got {expr:#?}"
+    );
 }
 
 impl VerifyExpr<'_> {
@@ -226,5 +259,32 @@ impl stmt::Visit for VerifyExpr<'_> {
             capability: self.capability,
         }
         .visit(&*i.query);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::engine::test_util::test_schema;
+    use toasty_core::driver::Capability;
+
+    fn verify_query(query: stmt::Query) {
+        let schema = test_schema();
+        Verify {
+            schema: &schema,
+            capability: &Capability::SQLITE,
+        }
+        .visit(&Statement::Query(query));
+    }
+
+    #[test]
+    #[should_panic(expected = "Offset offset must be a Value::I64 literal")]
+    fn offset_with_non_i64_limit_panics() {
+        let mut query = stmt::Query::unit();
+        query.limit = Some(stmt::Limit::Offset(stmt::LimitOffset {
+            limit: stmt::Value::I64(10).into(),
+            offset: Some(stmt::Value::U64(5).into()),
+        }));
+        verify_query(query);
     }
 }
