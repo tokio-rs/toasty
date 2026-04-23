@@ -385,6 +385,11 @@ fn ddb_expression(
             let inner = ddb_expression(cx, attrs, primary, &expr_not.expr);
             format!("(NOT {inner})")
         }
+        stmt::Expr::BeginsWith(expr_begins_with) => {
+            let expr = ddb_expression(cx, attrs, primary, &expr_begins_with.expr);
+            let prefix = ddb_expression(cx, attrs, primary, &expr_begins_with.prefix);
+            format!("begins_with({expr}, {prefix})")
+        }
         _ => todo!("FILTER = {:#?}", expr),
     }
 }

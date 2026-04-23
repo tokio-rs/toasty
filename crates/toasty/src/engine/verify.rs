@@ -145,6 +145,7 @@ impl VerifyExpr<'_> {
 
         match expr {
             And(_)
+            | BeginsWith(_)
             | BinaryOp(_)
             | InList(_)
             | InSubquery(_)

@@ -48,6 +48,13 @@ impl<'stmt> IndexMatch<'stmt> {
                 }
                 _ => todo!("expr={:#?}", expr),
             },
+            BeginsWith(e) => match &*e.expr {
+                stmt::Expr::Reference(expr_column @ stmt::ExprReference::Column(_)) => {
+                    // begins_with is a range-like condition: valid on sort key, not partition key
+                    self.match_expr_binary_op_column(cx, expr_column, expr, stmt::BinaryOp::Ge)
+                }
+                _ => false,
+            },
             InList(e) => self.match_expr_in_list(cx, &e.expr, expr),
             IsNull(e) => match &*e.expr {
                 stmt::Expr::Reference(expr_column @ stmt::ExprReference::Column(_)) => {
@@ -224,10 +231,11 @@ impl<'stmt> IndexMatch<'stmt> {
         op: stmt::BinaryOp,
     ) -> bool {
         let mut matched = false;
+        let resolved_col = cx.resolve_expr_reference(expr_ref).as_column_unwrap();
 
         for (i, index_column) in self.index.columns.iter().enumerate() {
             // Check that the path matches an index column
-            if cx.resolve_expr_reference(expr_ref).as_column_unwrap().id != index_column.column {
+            if resolved_col.id != index_column.column {
                 continue;
             }
 
@@ -279,7 +287,7 @@ impl<'stmt> IndexMatch<'stmt> {
         use stmt::Expr::*;
 
         match expr {
-            InList(_) | IsNull(_) | Not(_) => {
+            BeginsWith(_) | InList(_) | IsNull(_) | Not(_) => {
                 if self
                     .columns
                     .iter()

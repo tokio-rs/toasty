@@ -1,10 +1,10 @@
 use crate::stmt::{ExprExists, Input};
 
 use super::{
-    Entry, EntryMut, EntryPath, ExprAnd, ExprAny, ExprArg, ExprBinaryOp, ExprCast, ExprError,
-    ExprFunc, ExprInList, ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprList, ExprMap,
-    ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord, ExprStmt, Node, Projection, Substitute,
-    Value, Visit, VisitMut, expr_reference::ExprReference,
+    Entry, EntryMut, EntryPath, ExprAnd, ExprAny, ExprArg, ExprBeginsWith, ExprBinaryOp, ExprCast,
+    ExprError, ExprFunc, ExprInList, ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprList,
+    ExprMap, ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord, ExprStmt, Node, Projection,
+    Substitute, Value, Visit, VisitMut, expr_reference::ExprReference,
 };
 use std::fmt;
 
@@ -42,6 +42,9 @@ pub enum Expr {
 
     /// Positional argument placeholder. See [`ExprArg`].
     Arg(ExprArg),
+
+    /// String prefix match: `begins_with(expr, prefix)`. See [`ExprBeginsWith`].
+    BeginsWith(ExprBeginsWith),
 
     /// Binary comparison or arithmetic operation. See [`ExprBinaryOp`].
     BinaryOp(ExprBinaryOp),
@@ -256,6 +259,7 @@ impl Expr {
             Self::Record(expr_record) => expr_record.iter().all(|expr| expr.is_stable()),
             Self::List(expr_list) => expr_list.items.iter().all(|expr| expr.is_stable()),
             Self::Cast(expr_cast) => expr_cast.expr.is_stable(),
+            Self::BeginsWith(e) => e.expr.is_stable() && e.prefix.is_stable(),
             Self::BinaryOp(expr_binary) => {
                 expr_binary.lhs.is_stable() && expr_binary.rhs.is_stable()
             }
@@ -351,6 +355,9 @@ impl Expr {
                 .iter()
                 .all(|expr| expr.is_const_at_depth(map_depth)),
             Self::Cast(expr_cast) => expr_cast.expr.is_const_at_depth(map_depth),
+            Self::BeginsWith(e) => {
+                e.expr.is_const_at_depth(map_depth) && e.prefix.is_const_at_depth(map_depth)
+            }
             Self::BinaryOp(expr_binary) => {
                 expr_binary.lhs.is_const_at_depth(map_depth)
                     && expr_binary.rhs.is_const_at_depth(map_depth)
@@ -413,12 +420,13 @@ impl Expr {
             // Error expressions are evaluable (they produce an error)
             Self::Error(_) => true,
 
-            // Never evaluable - references external data
+            // Never evaluable - references external data or requires a database driver
             Self::Default
             | Self::Reference(_)
             | Self::Stmt(_)
             | Self::InSubquery(_)
-            | Self::Exists(_) => false,
+            | Self::Exists(_)
+            | Self::BeginsWith(_) => false,
 
             // Evaluable if all children are evaluable
             Self::Record(expr_record) => expr_record.iter().all(|expr| expr.is_eval()),
@@ -594,6 +602,7 @@ impl fmt::Debug for Expr {
             Self::And(e) => e.fmt(f),
             Self::Any(e) => e.fmt(f),
             Self::Arg(e) => e.fmt(f),
+            Self::BeginsWith(e) => e.fmt(f),
             Self::BinaryOp(e) => e.fmt(f),
             Self::Cast(e) => e.fmt(f),
             Self::Default => write!(f, "Default"),
