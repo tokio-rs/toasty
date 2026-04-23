@@ -2,9 +2,9 @@ use crate::stmt::{ExprExists, Input};
 
 use super::{
     Entry, EntryMut, EntryPath, ExprAnd, ExprAny, ExprArg, ExprBeginsWith, ExprBinaryOp, ExprCast,
-    ExprError, ExprFunc, ExprInList, ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprList,
-    ExprMap, ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord, ExprStmt, Node, Projection,
-    Substitute, Value, Visit, VisitMut, expr_reference::ExprReference,
+    ExprError, ExprFunc, ExprInList, ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprLike,
+    ExprList, ExprMap, ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord, ExprStmt, Node,
+    Projection, Substitute, Value, Visit, VisitMut, expr_reference::ExprReference,
 };
 use std::fmt;
 
@@ -90,6 +90,9 @@ pub enum Expr {
     /// Scoped binding expression (transient -- inlined before planning).
     /// See [`ExprLet`].
     Let(ExprLet),
+
+    /// SQL `LIKE` pattern match: `expr LIKE pattern`. See [`ExprLike`].
+    Like(ExprLike),
 
     /// Applies a transformation to each item in a collection. See [`ExprMap`].
     Map(ExprMap),
@@ -260,6 +263,7 @@ impl Expr {
             Self::List(expr_list) => expr_list.items.iter().all(|expr| expr.is_stable()),
             Self::Cast(expr_cast) => expr_cast.expr.is_stable(),
             Self::BeginsWith(e) => e.expr.is_stable() && e.prefix.is_stable(),
+            Self::Like(e) => e.expr.is_stable() && e.pattern.is_stable(),
             Self::BinaryOp(expr_binary) => {
                 expr_binary.lhs.is_stable() && expr_binary.rhs.is_stable()
             }
@@ -358,6 +362,9 @@ impl Expr {
             Self::BeginsWith(e) => {
                 e.expr.is_const_at_depth(map_depth) && e.prefix.is_const_at_depth(map_depth)
             }
+            Self::Like(e) => {
+                e.expr.is_const_at_depth(map_depth) && e.pattern.is_const_at_depth(map_depth)
+            }
             Self::BinaryOp(expr_binary) => {
                 expr_binary.lhs.is_const_at_depth(map_depth)
                     && expr_binary.rhs.is_const_at_depth(map_depth)
@@ -426,7 +433,8 @@ impl Expr {
             | Self::Stmt(_)
             | Self::InSubquery(_)
             | Self::Exists(_)
-            | Self::BeginsWith(_) => false,
+            | Self::BeginsWith(_)
+            | Self::Like(_) => false,
 
             // Evaluable if all children are evaluable
             Self::Record(expr_record) => expr_record.iter().all(|expr| expr.is_eval()),
@@ -615,6 +623,7 @@ impl fmt::Debug for Expr {
             Self::IsNull(e) => e.fmt(f),
             Self::IsVariant(e) => e.fmt(f),
             Self::Let(e) => e.fmt(f),
+            Self::Like(e) => e.fmt(f),
             Self::Map(e) => e.fmt(f),
             Self::Match(e) => e.fmt(f),
             Self::Not(e) => e.fmt(f),

@@ -48,6 +48,9 @@ impl ToSql for &stmt::Expr {
             stmt::Expr::IsNull(expr) => {
                 fmt!(cx, f, expr.expr " IS NULL");
             }
+            stmt::Expr::Like(expr) => {
+                fmt!(cx, f, expr.expr " LIKE " expr.pattern);
+            }
             stmt::Expr::Not(expr) => {
                 fmt!(cx, f, "NOT (" expr.expr ")");
             }

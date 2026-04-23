@@ -287,7 +287,7 @@ impl<'stmt> IndexMatch<'stmt> {
         use stmt::Expr::*;
 
         match expr {
-            BeginsWith(_) | InList(_) | IsNull(_) | Not(_) => {
+            BeginsWith(_) | InList(_) | IsNull(_) | Like(_) | Not(_) => {
                 if self
                     .columns
                     .iter()

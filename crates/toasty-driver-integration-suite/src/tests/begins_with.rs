@@ -27,8 +27,9 @@ async fn setup(test: &mut Test) -> toasty::Db {
     db
 }
 
-/// begins_with on the sort key — routed to KeyConditionExpression.
-#[driver_test(requires(not(sql)))]
+/// begins_with on the sort key. On DynamoDB this uses KeyConditionExpression;
+/// on SQL it lowers to LIKE.
+#[driver_test]
 pub async fn begins_with_sort_key(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -50,8 +51,9 @@ pub async fn begins_with_sort_key(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// begins_with on a non-key attribute — routed to FilterExpression.
-#[driver_test(requires(not(sql)))]
+/// begins_with on a non-key attribute. On DynamoDB this uses FilterExpression;
+/// on SQL it lowers to LIKE.
+#[driver_test]
 pub async fn begins_with_non_key_attr(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -74,7 +76,7 @@ pub async fn begins_with_non_key_attr(test: &mut Test) -> Result<()> {
 }
 
 /// begins_with with a prefix that matches nothing — returns empty result.
-#[driver_test(requires(not(sql)))]
+#[driver_test]
 pub async fn begins_with_no_match(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -110,6 +112,25 @@ pub async fn begins_with_empty_prefix(test: &mut Test) -> Result<()> {
         result.is_err(),
         "expected error when using begins_with with empty prefix on DynamoDB"
     );
+
+    Ok(())
+}
+
+/// begins_with with an empty prefix on SQL — lowers to LIKE '%', matches all rows.
+#[driver_test(requires(sql))]
+pub async fn begins_with_empty_prefix_sql(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let items: Vec<Item> = Item::filter(
+        Item::fields()
+            .partition_id()
+            .eq(1_i64)
+            .and(Item::fields().sort_key().begins_with("".to_string())),
+    )
+    .exec(&mut db)
+    .await?;
+
+    assert_eq!(items.len(), 4, "empty prefix should match all rows on SQL");
 
     Ok(())
 }

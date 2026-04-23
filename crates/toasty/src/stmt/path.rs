@@ -488,6 +488,30 @@ impl<T> Path<T, String> {
             _p: PhantomData,
         }
     }
+
+    /// Test whether this string field matches a SQL `LIKE` pattern.
+    ///
+    /// Only available on `String`-typed fields. The caller is responsible for
+    /// including any `%` or `_` wildcard characters in `pattern`. Not supported
+    /// by the DynamoDB driver — use [`begins_with`](Self::begins_with) instead.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// let filter = User::fields().name().like("Al%".to_string());
+    /// ```
+    pub fn like(self, pattern: impl IntoExpr<String>) -> Expr<bool> {
+        Expr {
+            untyped: stmt::Expr::like(self.untyped.into_stmt(), pattern.into_expr().untyped),
+            _p: PhantomData,
+        }
+    }
 }
 
 impl<T, U> Clone for Path<T, U> {

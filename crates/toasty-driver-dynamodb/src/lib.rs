@@ -390,6 +390,11 @@ fn ddb_expression(
             let prefix = ddb_expression(cx, attrs, primary, &expr_begins_with.prefix);
             format!("begins_with({expr}, {prefix})")
         }
+        stmt::Expr::Like(_) => {
+            panic!(
+                "LIKE is not supported by the DynamoDB driver; use begins_with for prefix matching"
+            )
+        }
         _ => todo!("FILTER = {:#?}", expr),
     }
 }

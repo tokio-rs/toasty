@@ -3,12 +3,12 @@
 use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprAny, ExprArg,
     ExprBeginsWith, ExprBinaryOp, ExprCast, ExprColumn, ExprError, ExprExists, ExprFunc,
-    ExprInList, ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprList, ExprMap, ExprMatch,
-    ExprNot, ExprOr, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, Filter,
-    FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, LimitCursor,
-    LimitOffset, Node, OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select, Source,
-    SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor, TableRef,
-    TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
+    ExprInList, ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprLike, ExprList, ExprMap,
+    ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp,
+    ExprStmt, Filter, FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit,
+    LimitCursor, LimitOffset, Node, OrderBy, OrderByExpr, Path, Projection, Query, Returning,
+    Select, Source, SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor,
+    TableRef, TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
 };
 
 /// Immutable visitor trait for the statement AST.
@@ -200,6 +200,13 @@ pub trait Visit {
     /// The default implementation delegates to [`visit_expr_let`].
     fn visit_expr_let(&mut self, i: &ExprLet) {
         visit_expr_let(self, i);
+    }
+
+    /// Visits an [`ExprLike`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_like`].
+    fn visit_expr_like(&mut self, i: &ExprLike) {
+        visit_expr_like(self, i);
     }
 
     /// Visits an [`ExprMap`] node.
@@ -589,6 +596,10 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_expr_let(&mut **self, i);
     }
 
+    fn visit_expr_like(&mut self, i: &ExprLike) {
+        Visit::visit_expr_like(&mut **self, i);
+    }
+
     fn visit_expr_map(&mut self, i: &ExprMap) {
         Visit::visit_expr_map(&mut **self, i);
     }
@@ -827,6 +838,7 @@ where
         Expr::IsNull(expr) => v.visit_expr_is_null(expr),
         Expr::IsVariant(expr) => v.visit_expr_is_variant(expr),
         Expr::Let(expr) => v.visit_expr_let(expr),
+        Expr::Like(expr) => v.visit_expr_like(expr),
         Expr::Map(expr) => v.visit_expr_map(expr),
         Expr::Match(expr) => v.visit_expr_match(expr),
         Expr::Not(expr) => v.visit_expr_not(expr),
@@ -998,6 +1010,15 @@ where
         v.visit_expr(binding);
     }
     v.visit_expr(&node.body);
+}
+
+/// Default traversal for [`ExprLike`] nodes. Visits the attribute expression and pattern.
+pub fn visit_expr_like<V>(v: &mut V, node: &ExprLike)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_expr(&node.expr);
+    v.visit_expr(&node.pattern);
 }
 
 /// Default traversal for [`ExprMap`] nodes. Visits base and map expressions.

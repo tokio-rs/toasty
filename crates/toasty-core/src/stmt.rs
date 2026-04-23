@@ -105,6 +105,9 @@ pub use expr_is_variant::ExprIsVariant;
 mod expr_let;
 pub use expr_let::ExprLet;
 
+mod expr_like;
+pub use expr_like::ExprLike;
+
 mod expr_list;
 pub use expr_list::ExprList;
 
