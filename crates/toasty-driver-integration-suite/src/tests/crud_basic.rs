@@ -457,11 +457,12 @@ pub async fn unique_index_set_same_value(test: &mut Test) -> Result<()> {
 
     let mut db = test.setup_db(models!(User)).await;
 
-    let mut user = User::create()
-        .email("user@example.com")
-        .name("John Doe")
-        .exec(&mut db)
-        .await?;
+    let mut user = toasty::create!(User {
+        email: "user@example.com",
+        name: "John Doe",
+    })
+    .exec(&mut db)
+    .await?;
 
     // Update both fields, but set email to the same value it already has.
     // This exercises the path where the unique column appears in op.assignments
