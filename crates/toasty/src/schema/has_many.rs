@@ -96,17 +96,16 @@ impl<T: Relation> Relation for HasMany<T> {
         T::nullable()
     }
 
-    fn has_many_field_ty(singular: Name, pair_hint: Option<Name>) -> FieldTy {
+    fn has_many_field_ty(singular: Name, pair: Option<FieldId>) -> FieldTy {
         FieldTy::HasMany(app::HasMany {
             target: <T::Model as Register>::id(),
             expr_ty: stmt::Type::List(Box::new(stmt::Type::Model(<T::Model as Register>::id()))),
             singular,
-            // The pair is populated at runtime.
-            pair: FieldId {
+            // If unresolved, the pair is populated by the schema linker.
+            pair: pair.unwrap_or(FieldId {
                 model: ModelId(usize::MAX),
                 index: usize::MAX,
-            },
-            pair_hint,
+            }),
         })
     }
 }

@@ -541,6 +541,10 @@ impl FieldId {
             index: usize::MAX,
         }
     }
+
+    pub(crate) fn is_placeholder(&self) -> bool {
+        self.index == usize::MAX && self.model == ModelId::placeholder()
+    }
 }
 
 impl From<&Self> for FieldId {

@@ -93,7 +93,6 @@ fn has_many_target_not_registered() {
                     model: MISSING,
                     index: 0,
                 },
-                pair_hint: None,
             }),
         )],
     )];
@@ -119,7 +118,6 @@ fn has_one_target_not_registered() {
                     model: MISSING,
                     index: 0,
                 },
-                pair_hint: None,
             }),
         )],
     )];

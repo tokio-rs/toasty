@@ -159,17 +159,17 @@ impl Expand<'_> {
                 FieldTy::HasMany(rel) => {
                     let ty = &rel.ty;
                     let singular_name = expand_name(toasty, &rel.singular);
-                    let pair_hint = expand_pair_hint(toasty, rel.pair.as_ref());
+                    let pair = expand_pair(toasty, ty, rel.pair.as_ref());
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
-                    field_ty = quote!(<#ty as #toasty::Relation>::has_many_field_ty(#singular_name, #pair_hint));
+                    field_ty = quote!(<#ty as #toasty::Relation>::has_many_field_ty(#singular_name, #pair));
                 }
                 FieldTy::HasOne(rel) => {
                     let ty = &rel.ty;
-                    let pair_hint = expand_pair_hint(toasty, rel.pair.as_ref());
+                    let pair = expand_pair(toasty, ty, rel.pair.as_ref());
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
-                    field_ty = quote!(<#ty as #toasty::Relation>::has_one_field_ty(#pair_hint));
+                    field_ty = quote!(<#ty as #toasty::Relation>::has_one_field_ty(#pair));
                 }
             }
 
@@ -376,12 +376,15 @@ pub(super) fn expand_name(toasty: &TokenStream, name: &Name) -> TokenStream {
     }
 }
 
-fn expand_pair_hint(toasty: &TokenStream, pair: Option<&syn::Ident>) -> TokenStream {
+fn expand_pair(
+    toasty: &TokenStream,
+    target_ty: &syn::Type,
+    pair: Option<&syn::Ident>,
+) -> TokenStream {
     match pair {
         Some(ident) => {
-            let name = Name::from_ident(ident);
-            let expanded = expand_name(toasty, &name);
-            quote! { Some(#expanded) }
+            let name = ident.to_string();
+            quote! { Some(<#target_ty as #toasty::Relation>::field_name_to_id(#name)) }
         }
         None => quote! { None },
     }

@@ -74,20 +74,24 @@ pub trait Relation: Load<Output = Self> {
 
     /// Build the [`FieldTy`] for a `HasMany` relation wrapper, given the
     /// singular name derived from the field identifier and an optional
-    /// pair hint naming the paired `BelongsTo` field on the target model
-    /// (from `#[has_many(pair = <field>)]`).
+    /// paired `BelongsTo` field on the target model resolved from
+    /// `#[has_many(pair = <field>)]`. When `None`, the linker selects the
+    /// pair by searching the target for a unique `BelongsTo` back to the
+    /// source.
     ///
     /// Only [`HasMany`](super::HasMany) overrides this.
-    fn has_many_field_ty(_singular: Name, _pair_hint: Option<Name>) -> FieldTy {
+    fn has_many_field_ty(_singular: Name, _pair: Option<FieldId>) -> FieldTy {
         unimplemented!("not a HasMany relation wrapper")
     }
 
     /// Build the [`FieldTy`] for a `HasOne` relation wrapper, given an
-    /// optional pair hint naming the paired `BelongsTo` field on the
-    /// target model (from `#[has_one(pair = <field>)]`).
+    /// optional paired `BelongsTo` field on the target model resolved
+    /// from `#[has_one(pair = <field>)]`. When `None`, the linker selects
+    /// the pair by searching the target for a unique `BelongsTo` back to
+    /// the source.
     ///
     /// Only [`HasOne`](super::HasOne) overrides this.
-    fn has_one_field_ty(_pair_hint: Option<Name>) -> FieldTy {
+    fn has_one_field_ty(_pair: Option<FieldId>) -> FieldTy {
         unimplemented!("not a HasOne relation wrapper")
     }
 }
