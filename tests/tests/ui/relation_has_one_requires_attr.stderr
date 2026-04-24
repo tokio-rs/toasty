@@ -16,24 +16,6 @@ error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::schema::
           and $N others
 
 error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::schema::Field` is not satisfied
- --> tests/ui/relation_has_one_requires_attr.rs:1:10
-  |
-1 | #[derive(toasty::Model)]
-  |          ^^^^^^^^^^^^^ the trait `toasty::schema::Field` is not implemented for `toasty::HasOne<Option<Profile>>`
-  |
-  = help: the following other types implement trait `toasty::schema::Field`:
-            Arc<T>
-            Box<T>
-            Option<T>
-            Rc<T>
-            Vec<u8>
-            bigdecimal::BigDecimal
-            bool
-            f32
-          and $N others
-  = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
-
-error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::schema::Field` is not satisfied
  --> tests/ui/relation_has_one_requires_attr.rs:7:14
   |
 7 |     profile: toasty::HasOne<Option<Profile>>,

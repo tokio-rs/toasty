@@ -83,8 +83,9 @@ impl<M> Paginate<M> {
             "pagination requires an order_by clause"
         );
 
+        let per_page = i64::try_from(per_page).expect("per_page exceeds i64::MAX");
         query.untyped.limit = Some(stmt::Limit::Cursor(stmt::LimitCursor {
-            page_size: stmt::Value::from(per_page as i64).into(),
+            page_size: stmt::Value::from(per_page).into(),
             after: None,
         }));
 

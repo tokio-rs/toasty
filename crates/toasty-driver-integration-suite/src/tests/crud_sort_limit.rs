@@ -174,12 +174,16 @@ pub async fn limit_offset(t: &mut Test) -> Result<()> {
     assert_eq!(items.len(), 5);
 
     let (op, _) = t.log().pop();
-    assert_struct!(op, Operation::QuerySql({
-        stmt: Statement::Query({
-            body: ExprSet::Select({ .. }),
-            limit: Some(_),
-        }),
-    }));
+    if t.capability().sql {
+        assert_struct!(op, Operation::QuerySql({
+            stmt: Statement::Query({
+                body: ExprSet::Select({ .. }),
+                limit: Some(_),
+            }),
+        }));
+    } else {
+        assert_struct!(op, Operation::QueryPk({ .. }));
+    }
 
     t.log().clear();
 
@@ -195,13 +199,17 @@ pub async fn limit_offset(t: &mut Test) -> Result<()> {
     }
 
     let (op, _) = t.log().pop();
-    assert_struct!(op, Operation::QuerySql({
-        stmt: Statement::Query({
-            body: ExprSet::Select({ .. }),
-            order_by: Some(_),
-            limit: Some(_),
-        }),
-    }));
+    if t.capability().sql {
+        assert_struct!(op, Operation::QuerySql({
+            stmt: Statement::Query({
+                body: ExprSet::Select({ .. }),
+                order_by: Some(_),
+                limit: Some(_),
+            }),
+        }));
+    } else {
+        assert_struct!(op, Operation::QueryPk({ .. }));
+    }
 
     t.log().clear();
 

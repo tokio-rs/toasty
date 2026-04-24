@@ -29,8 +29,8 @@ pub mod operation;
 pub use operation::{IsolationLevel, Operation};
 
 use crate::schema::{
-    db::{AppliedMigration, Migration, SchemaDiff},
     Schema,
+    db::{AppliedMigration, Migration, SchemaDiff},
 };
 
 use async_trait::async_trait;

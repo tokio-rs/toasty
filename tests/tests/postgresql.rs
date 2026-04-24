@@ -249,10 +249,12 @@ async fn pool_recovers_db_crash() {
     tokio::time::sleep(Duration::from_millis(500)).await;
 
     // The connection gets closed when the backend gets terminated
-    assert!(User::filter_by_id(1)
-        .exec(&mut db)
-        .await
-        .is_err_and(|err| err.to_string().eq("connection closed")));
+    assert!(
+        User::filter_by_id(1)
+            .exec(&mut db)
+            .await
+            .is_err_and(|err| err.to_string().eq("connection closed"))
+    );
 
     // After observing a broken connection the pool should discard it and
     // open a fresh one.
