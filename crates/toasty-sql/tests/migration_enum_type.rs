@@ -20,6 +20,7 @@ fn make_column(table_id: usize, index: usize, name: &str, storage_ty: Type) -> C
         nullable: false,
         primary_key: index == 0,
         auto_increment: false,
+        versionable: false,
     }
 }
 

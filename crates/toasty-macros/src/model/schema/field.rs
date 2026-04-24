@@ -64,6 +64,9 @@ pub(crate) struct FieldAttr {
 
     /// Serialization info for the field: `#[serialize(json)]` or `#[serialize(json, nullable)]`
     pub(crate) serialize: Option<SerializeAttr>,
+
+    /// True if the field tracks an OCC version counter
+    pub(crate) versionable: bool,
 }
 
 #[derive(Debug)]
@@ -103,6 +106,7 @@ impl FieldAttr {
             default_expr: None,
             update_expr: None,
             serialize: None,
+            versionable: false,
         };
 
         for attr in attrs {
@@ -174,6 +178,15 @@ impl FieldAttr {
                         Ok(expr) => field_attr.update_expr = Some(expr),
                         Err(e) => errs.push(e),
                     }
+                }
+            } else if attr.path().is_ident("version") {
+                if field_attr.versionable {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "duplicate #[version] attribute",
+                    ));
+                } else {
+                    field_attr.versionable = true;
                 }
             } else if attr.path().is_ident("serialize") {
                 if field_attr.serialize.is_some() {
@@ -360,6 +373,30 @@ impl Field {
                 field,
                 "#[update] and #[auto] cannot be combined on the same field",
             ));
+        }
+
+        if attrs.versionable && attrs.key.is_some() {
+            errs.push(syn::Error::new_spanned(
+                field,
+                "#[version] cannot be combined with #[key]",
+            ));
+        }
+
+        if attrs.versionable && attrs.auto.is_some() {
+            errs.push(syn::Error::new_spanned(
+                field,
+                "#[version] cannot be combined with #[auto]",
+            ));
+        }
+
+        if attrs.versionable {
+            let is_u64 = matches!(&field.ty, syn::Type::Path(p) if p.path.is_ident("u64"));
+            if !is_u64 {
+                errs.push(syn::Error::new_spanned(
+                    &field.ty,
+                    "#[version] can only be applied to a u64 field",
+                ));
+            }
         }
 
         if let Some(err) = errs.collect() {

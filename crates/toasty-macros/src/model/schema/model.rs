@@ -15,6 +15,13 @@ pub(crate) enum ModelKind {
 }
 
 impl ModelKind {
+    pub(crate) fn as_root(&self) -> Option<&ModelRoot> {
+        match self {
+            ModelKind::Root(root) => Some(root),
+            _ => None,
+        }
+    }
+
     pub(crate) fn as_root_unwrap(&self) -> &ModelRoot {
         match self {
             ModelKind::Root(root) => root,
@@ -44,6 +51,9 @@ impl ModelKind {
 pub(crate) struct ModelRoot {
     /// Tracks fields in the primary key
     pub(crate) primary_key: PrimaryKey,
+
+    /// Index of the versionable field, if any
+    pub(crate) version_field: Option<usize>,
 
     /// The field struct identifier (e.g., `UserFields`)
     pub(crate) field_struct_ident: syn::Ident,
@@ -246,8 +256,31 @@ impl Model {
                 primary_key: true,
             });
 
+            // Iterate all extras rather than bailing on the first so every
+            // offending site surfaces in one compile pass.
+            let mut version_iter = fields
+                .iter()
+                .enumerate()
+                .filter(|(_, f)| f.attrs.versionable);
+            let version_field = version_iter.next().map(|(i, _)| i);
+            let mut extra_err: Option<syn::Error> = None;
+            for (_, extra) in version_iter {
+                let err = syn::Error::new_spanned(
+                    &extra.name.ident,
+                    "only one field may be annotated with #[version]",
+                );
+                match &mut extra_err {
+                    Some(acc) => acc.combine(err),
+                    None => extra_err = Some(err),
+                }
+            }
+            if let Some(err) = extra_err {
+                return Err(err);
+            }
+
             ModelKind::Root(ModelRoot {
                 primary_key: PrimaryKey { fields: pk_fields },
+                version_field,
                 field_struct_ident: struct_ident("Fields", ast),
                 field_list_struct_ident: struct_list_ident("ListFields", ast),
                 query_struct_ident: struct_ident("Query", ast),
