@@ -1,8 +1,3 @@
-> **Sketch — work in progress.** This is a first pass at the new roadmap
-> structure. Content is carried over from the old `docs/dev/roadmap/`
-> directory and has not yet been reconciled against open issues and PRs. Do
-> not treat this document as authoritative yet.
-
 # Toasty Roadmap
 
 This roadmap is the source of truth for work the maintainers have accepted as
@@ -40,6 +35,7 @@ the entry lands here.
   - Migrations for enum representation changes ([#724])
 - Serde-serialized fields (JSON/JSONB for arbitrary Rust types) ([design](design/serialize-fields.md))
 - Embedded collections (arrays, maps, sets)
+  - Array membership / containment predicates (`has`, `has_every`, `has_some`)
 - Partial model loading via `#[deferred]` / `Deferred<T>`
 
 [#724]: https://github.com/tokio-rs/toasty/issues/724
@@ -50,16 +46,29 @@ the entry lands here.
   - `contains` / `starts_with` / `ends_with`
   - `LIKE` with escape handling
   - Case-insensitive matching
+  - Regex matching (`regex` / `iregex`)
 - Range and set predicates
   - `NOT IN`
   - `BETWEEN` / range queries
+  - `IS DISTINCT FROM` — NULL-safe inequality
 - Relation filtering — filter by fields on an associated model
 - Field-to-field comparison
 - Arithmetic in predicates (add, subtract, multiply, divide, modulo)
+- Conditional expressions — `CASE WHEN ... THEN ... ELSE ... END`
 - Aggregates
   - `COUNT`, `SUM`, `AVG`, `MIN`, `MAX`
   - `GROUP BY` / `HAVING`
 - Subquery improvements
+  - Subquery comparisons (`ALL` / `ANY` / `SOME`)
+- Full-text search
+  - User-facing builder API
+  - PostgreSQL `tsvector` / `tsquery`
+  - MySQL `FULLTEXT` / `MATCH ... AGAINST`
+  - SQLite FTS5 integration
+- JSON field queries
+  - Core AST + path-traversal user API
+  - Per-backend SQL serialization (PostgreSQL `jsonb`, MySQL JSON, SQLite `json_extract`)
+- Dynamic / conditional query building — optional-filter pattern (SeaORM-style `Condition::add_option`, Diesel `BoxableExpression`)
 - Query ordering & limits
   - Multi-column `.then_by()`
   - Direct `.limit()` for non-paginated queries
@@ -70,7 +79,9 @@ the entry lands here.
   - Equivalence classes for transitive constraints
   - Structured constraint representation (constants, ranges, exclusions)
   - Targeted normalization without full DNF
+  - `ExprLet` inlining — move from `lower_returning` into the post-lowering pass
 - Pre-compiled query plans — parameterized plans that skip re-planning on repeated calls
+- Query result caching — cache results for repeated identical queries
 
 [#723]: https://github.com/tokio-rs/toasty/issues/723
 
