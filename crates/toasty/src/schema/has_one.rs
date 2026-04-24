@@ -82,15 +82,15 @@ impl<T: Relation> Relation for HasOne<T> {
         T::nullable()
     }
 
-    fn has_one_field_ty() -> FieldTy {
+    fn has_one_field_ty(pair: Option<FieldId>) -> FieldTy {
         FieldTy::HasOne(app::HasOne {
             target: <T::Model as Register>::id(),
             expr_ty: stmt::Type::Model(<T::Model as Register>::id()),
-            // The pair is populated at runtime.
-            pair: FieldId {
+            // If unresolved, the pair is populated by the schema linker.
+            pair: pair.unwrap_or(FieldId {
                 model: ModelId(usize::MAX),
                 index: usize::MAX,
-            },
+            }),
         })
     }
 }
