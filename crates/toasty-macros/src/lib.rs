@@ -78,12 +78,12 @@ use proc_macro::TokenStream;
 /// DynamoDB); `local` fields scope within a partition. For SQL databases
 /// both behave as a regular composite primary key.
 ///
-/// Multiple `partition` and `local` entries are allowed:
+/// Multiple `partition` and `local` fields are allowed using bracket syntax:
 ///
 /// ```
 /// # use toasty::Model;
 /// # #[derive(Model)]
-/// #[key(partition = tenant, partition = org, local = id)]
+/// #[key(partition = [tenant, org], local = [id])]
 /// # struct Example { tenant: String, org: String, id: String }
 /// ```
 ///
