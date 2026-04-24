@@ -145,7 +145,7 @@ pub async fn composite_index_prefix_queries(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// Multi-attribute partition key: `#[index(partition = a, partition = b, local = c)]`
+/// Multi-attribute partition key: `#[index(partition = [a, b], local = [c])]`
 /// creates a GSI with 2 HASH + 1 RANGE attributes (DDB-only).
 ///
 /// Verifies prefix queries for all valid access patterns.
@@ -153,7 +153,7 @@ pub async fn composite_index_prefix_queries(t: &mut Test) -> Result<()> {
 pub async fn composite_index_multi_hash(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(id)]
-    #[index(partition = tournament_id, partition = region, local = round)]
+    #[index(partition = [tournament_id, region], local = [round])]
     struct Match {
         id: String,
         tournament_id: String,
@@ -206,7 +206,7 @@ pub async fn composite_index_multi_hash(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// Multi-attribute sort key: `#[index(partition = a, local = b, local = c)]`
+/// Multi-attribute sort key: `#[index(partition = [a], local = [b, c])]`
 /// creates a GSI with 1 HASH + 2 RANGE attributes (DDB-only).
 ///
 /// Verifies all three prefix query methods issue indexed operations.
@@ -214,7 +214,7 @@ pub async fn composite_index_multi_hash(t: &mut Test) -> Result<()> {
 pub async fn composite_index_multi_range(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(id)]
-    #[index(partition = player_id, local = match_date, local = round)]
+    #[index(partition = [player_id], local = [match_date, round])]
     struct PlayerMatch {
         id: String,
         player_id: String,
@@ -473,7 +473,7 @@ pub async fn composite_index_multiple_indexes(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// Maximum attribute boundary: `#[index(partition = f1..f4, local = f5..f8)]` (DDB-only).
+/// Maximum attribute boundary: `#[index(partition = [f1, f2, f3, f4], local = [f5, f6, f7, f8])]` (DDB-only).
 ///
 /// DynamoDB allows up to 4 HASH + 4 RANGE attributes in a GSI KeySchema.
 /// Verifies that `setup_db()` succeeds at the limit and that a query using all
@@ -483,7 +483,7 @@ pub async fn composite_index_multiple_indexes(t: &mut Test) -> Result<()> {
 pub async fn composite_index_max_attributes(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(id)]
-    #[index(partition = f1, partition = f2, partition = f3, partition = f4, local = f5, local = f6, local = f7, local = f8)]
+    #[index(partition = [f1, f2, f3, f4], local = [f5, f6, f7, f8])]
     struct MaxIndex {
         id: String,
         f1: String,

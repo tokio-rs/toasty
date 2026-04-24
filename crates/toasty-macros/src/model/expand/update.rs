@@ -24,28 +24,16 @@ impl Expand<'_> {
         }
     }
 
-    /// Expand all update methods for all fields.
-    /// Generates both the field setter methods and the .with_field() method for each field.
+    /// Expand the field setter methods for an update builder.
     /// For embedded builders: uses self.projection.clone().push(index) and self.assignments
     /// For root builders: uses Projection::from_index(index) and self.assignments
     fn expand_update_field_methods(&self, is_embedded: bool) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
 
-        // For root builders, self.assignments is Assignments (owned),
-        // so &mut self.assignments gives &mut Assignments.
-        // For embedded builders, self.assignments is &'a mut Assignments,
-        // so we need &mut *self.assignments to reborrow.
-        let assignments_for_builder = if is_embedded {
-            quote!(&mut *self.assignments)
-        } else {
-            quote!(&mut self.assignments)
-        };
-
         self.model.fields.iter().enumerate().map(|(field_index, field)| {
             let field_ident = &field.name.ident;
             let set_field_ident = &field.set_ident;
-            let with_field_ident = &field.with_ident;
 
             let index = util::int(field_index);
             let projection = if is_embedded {
@@ -158,16 +146,6 @@ impl Expand<'_> {
                     #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<#ty>) -> &mut Self {
                         let projection = #projection;
                         #field_ident.assign(&mut self.assignments, projection);
-                        self
-                    }
-
-                    #vis fn #with_field_ident(
-                        mut self,
-                        f: impl FnOnce(<#ty as #toasty::Field>::Update<'_>)
-                    ) -> Self {
-                        let projection = #projection;
-                        let builder = <#ty as #toasty::Field>::new_update(#assignments_for_builder, projection);
-                        f(builder);
                         self
                     }
                 }
