@@ -246,13 +246,18 @@ impl Expand<'_> {
 
                 #builder_methods
 
-                #vis async fn exec(mut self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<()> {
+                fn build_stmt(&mut self) -> #toasty::core::stmt::Statement {
                     use #toasty::UpdateTarget as _;
-                    let mut stmt = self.target.to_update_stmt(self.assignments);
-                    if let Some(cond) = self.condition {
+                    let assignments = ::std::mem::take(&mut self.assignments);
+                    let mut stmt = self.target.to_update_stmt(assignments);
+                    if let Some(cond) = self.condition.take() {
                         stmt.as_untyped_mut().condition = #toasty::core::stmt::Condition::new(cond);
                     }
-                    let response = executor.exec_untyped(stmt.into_untyped()).await?;
+                    stmt.into_untyped()
+                }
+
+                #vis async fn exec(mut self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<()> {
+                    let response = executor.exec_untyped(self.build_stmt()).await?;
                     let value = response.values.collect_as_value().await?;
                     self.target.apply_result(value)?;
                     Ok(())
@@ -331,12 +336,7 @@ impl Expand<'_> {
                 type Returning = ();
 
                 fn into_statement(mut self) -> #toasty::Statement<()> {
-                    use #toasty::UpdateTarget as _;
-                    let mut stmt = self.target.to_update_stmt(self.assignments);
-                    if let Some(cond) = self.condition {
-                        stmt.as_untyped_mut().condition = #toasty::core::stmt::Condition::new(cond);
-                    }
-                    #toasty::Statement::from_untyped_stmt(stmt.into_untyped())
+                    #toasty::Statement::from_untyped_stmt(self.build_stmt())
                 }
             }
         }
