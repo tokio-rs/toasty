@@ -34,9 +34,6 @@ pub(crate) struct Field {
     /// Identifier for setter method on update builder
     pub(crate) set_ident: syn::Ident,
 
-    /// Identifier for the `with_field` builder method on update builder
-    pub(crate) with_ident: syn::Ident,
-
     /// If this field belongs to an enum variant, the variant's index within
     /// the enum. `None` for fields on root models and embedded structs.
     pub(crate) variant: Option<usize>,
@@ -257,7 +254,6 @@ impl Field {
         };
 
         let set_ident = syn::Ident::new(&name.with_prefix("set"), span);
-        let with_ident = syn::Ident::new(&name.with_prefix("with"), span);
 
         let mut attrs = FieldAttr::from_attrs(&field.attrs)?;
 
@@ -393,7 +389,6 @@ impl Field {
             name,
             ty,
             set_ident,
-            with_ident,
             variant: None,
         })
     }
