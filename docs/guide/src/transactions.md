@@ -39,6 +39,31 @@ The transaction borrows `&mut Db`, preventing other operations on the same `Db`
 handle while the transaction is open. Pass `&mut tx` to query builders the same
 way you pass `&mut db`.
 
+The exclusive borrow is deliberate. Without it, it would be easy to run a
+statement against `db` while holding `tx` — that statement would execute on a
+separate connection pulled from the pool, bypassing the transaction entirely.
+The `&mut` keeps `db` unusable until the transaction ends, so every statement
+has to go through `&mut tx`.
+
+If you genuinely need a second handle while a transaction is open — for
+example, an independent task doing unrelated work — clone the `Db` before
+starting the transaction:
+
+```rust,ignore
+let mut db2 = db.clone();
+let mut tx = db.transaction().await?;
+
+// `db2` is a separate handle backed by the same pool; use it freely
+// for work that is not part of `tx`.
+```
+
+Clones share the underlying pool, so cloning is cheap and does not open a new
+connection.
+
+The same rule applies to transactions started from a `Connection` and to
+nested transactions created from an existing `Transaction`: each takes
+`&mut self` so statements cannot accidentally bypass the innermost scope.
+
 ## Running queries in a transaction
 
 All the same operations work inside a transaction — creates, queries, updates,
