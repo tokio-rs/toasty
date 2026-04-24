@@ -128,12 +128,24 @@ impl Db {
     }
 
     /// Begin a transaction, acquiring a connection from the pool.
+    ///
+    /// Takes `&mut self` so the `Db` handle is exclusively borrowed while the
+    /// transaction is open. This prevents accidentally running a statement
+    /// against the pool — which would execute on a separate connection and
+    /// bypass the transaction — when you meant to run it against `&mut tx`.
+    ///
+    /// If you need a second handle while the transaction is open, clone the
+    /// `Db` before calling this method. Clones share the same pool.
     pub async fn transaction(&mut self) -> Result<Transaction<'_>> {
         <Self as Executor>::transaction(self).await
     }
 
     /// Returns a [`TransactionBuilder`] that will acquire a connection from
     /// the pool when [`begin`](TransactionBuilder::begin) is called.
+    ///
+    /// Like [`transaction`](Self::transaction), this takes `&mut self` so the
+    /// `Db` handle stays locked for the lifetime of the transaction. Clone
+    /// the `Db` beforehand if you need a separate handle.
     pub fn transaction_builder(&mut self) -> TransactionBuilder<'_> {
         TransactionBuilder::new(tx::TxSource::Db(self))
     }
