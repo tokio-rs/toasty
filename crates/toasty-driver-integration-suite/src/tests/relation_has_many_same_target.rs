@@ -9,30 +9,24 @@ use hashbrown::HashSet;
 pub async fn pair_hint_disambiguates_has_many(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
-    let alice = User::create().name("Alice").exec(&mut db).await?;
-    let bob = User::create().name("Bob").exec(&mut db).await?;
+    let users = toasty::create!(User::[
+        { name: "Alice" },
+        { name: "Bob" },
+    ])
+    .exec(&mut db)
+    .await?;
+    let (alice, bob) = (&users[0], &users[1]);
 
-    // Alice authors two articles, each reviewed by Bob.
-    let a1 = Article::create()
-        .title("one")
-        .author(&alice)
-        .reviewer(&bob)
-        .exec(&mut db)
-        .await?;
-    let a2 = Article::create()
-        .title("two")
-        .author(&alice)
-        .reviewer(&bob)
-        .exec(&mut db)
-        .await?;
-
-    // Bob authors one article, reviewed by Alice.
-    let a3 = Article::create()
-        .title("three")
-        .author(&bob)
-        .reviewer(&alice)
-        .exec(&mut db)
-        .await?;
+    // Alice authors two articles (both reviewed by Bob); Bob authors one
+    // (reviewed by Alice).
+    let articles = toasty::create!(Article::[
+        { title: "one",   author: alice, reviewer: bob },
+        { title: "two",   author: alice, reviewer: bob },
+        { title: "three", author: bob,   reviewer: alice },
+    ])
+    .exec(&mut db)
+    .await?;
+    let (a1, a2, a3) = (&articles[0], &articles[1], &articles[2]);
 
     // Each has_many side picks up only the articles that match its paired
     // belongs_to — not every article referencing the user.
@@ -67,19 +61,23 @@ pub async fn pair_hint_disambiguates_has_many(test: &mut Test) -> Result<()> {
 pub async fn pair_hint_create_via_has_many_accessor(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
-    let alice = User::create().name("Alice").exec(&mut db).await?;
-    let bob = User::create().name("Bob").exec(&mut db).await?;
+    let users = toasty::create!(User::[
+        { name: "Alice" },
+        { name: "Bob" },
+    ])
+    .exec(&mut db)
+    .await?;
+    let (alice, bob) = (&users[0], &users[1]);
 
-    // Create an article scoped to Alice's authored side — the other FK still
-    // needs a concrete reviewer, and the side you create through should be
-    // filled by the accessor.
-    let article = alice
-        .authored_articles()
-        .create()
-        .title("draft")
-        .reviewer(&bob)
-        .exec(&mut db)
-        .await?;
+    // Create an article scoped to Alice's authored side — the scoped create
+    // should fill in the `author` FK, and the other side (`reviewer`) still
+    // needs to be specified.
+    let article = toasty::create!(in alice.authored_articles() {
+        title: "draft",
+        reviewer: bob,
+    })
+    .exec(&mut db)
+    .await?;
 
     assert_eq!(article.author_id, alice.id);
     assert_eq!(article.reviewer_id, bob.id);
