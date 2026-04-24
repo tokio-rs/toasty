@@ -10,7 +10,7 @@ Load this skill before filing any issue in this project.
 ## Writing style
 
 An issue is project documentation. Follow the conventions from the
-[`write-docs`](../write-docs/SKILL.md) skill: be fact-focused, direct,
+[`prose`](../prose/SKILL.md) skill: be fact-focused, direct,
 and concrete. No buzzwords, no fluff, no dramatic terms. State what
 happened or what is being proposed, not how important it is.
 
