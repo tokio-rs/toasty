@@ -40,10 +40,10 @@ assert!(result.is_err());
 The `.delete()` method consumes the instance (takes `self`, not `&self`). After
 deleting, you can no longer use the instance.
 
-If the model has a [`#[version]`](./field-options.md#optimistic-concurrency-with-version)
-field, instance deletes are version-guarded: Toasty conditions the deletion on the
-version the instance was last loaded with. If a concurrent writer has modified the
-record in the meantime, `.exec()` returns an error.
+If the model has a [`#[version]`](./concurrency-control.md) field, instance
+deletes are version-guarded: Toasty conditions the deletion on the version the
+instance was last loaded with. If a concurrent writer has modified the record
+in the meantime, `.exec()` returns an error.
 
 The generated SQL looks like:
 
