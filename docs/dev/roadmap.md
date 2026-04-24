@@ -31,13 +31,29 @@ the entry lands here.
   - Shared columns across variants
   - Partial updates within a variant
   - DynamoDB encoding for data-carrying enum variants
-- Native PostgreSQL enum types
+  - `BelongsTo` fields in embedded structs ([#670])
+- Native PostgreSQL enum types ([#641])
   - Migrations for enum representation changes ([#724])
-- Serde-serialized fields (JSON/JSONB for arbitrary Rust types) ([design](design/serialize-fields.md))
+- Serde-serialized fields (JSON/JSONB for arbitrary Rust types) ([design](design/serialize-fields.md), [#672])
 - Embedded collections (arrays, maps, sets)
   - Array membership / containment predicates (`has`, `has_every`, `has_some`)
+- Foreign key constraints ([#366])
+- Server-side check constraints ([#644])
+- Database-side column defaults ([#642])
+- Composite unique constraints ([#639])
+- Partial / conditional unique constraints ([#640])
+- PostgreSQL dynamic index types — GIN, GiST, BRIN, HASH ([#673])
 - Partial model loading via `#[deferred]` / `Deferred<T>`
 
+[#366]: https://github.com/tokio-rs/toasty/issues/366
+[#639]: https://github.com/tokio-rs/toasty/issues/639
+[#640]: https://github.com/tokio-rs/toasty/issues/640
+[#641]: https://github.com/tokio-rs/toasty/issues/641
+[#642]: https://github.com/tokio-rs/toasty/issues/642
+[#644]: https://github.com/tokio-rs/toasty/issues/644
+[#670]: https://github.com/tokio-rs/toasty/issues/670
+[#672]: https://github.com/tokio-rs/toasty/issues/672
+[#673]: https://github.com/tokio-rs/toasty/issues/673
 [#724]: https://github.com/tokio-rs/toasty/issues/724
 
 ## Query Engine
@@ -55,12 +71,15 @@ the entry lands here.
 - Field-to-field comparison
 - Arithmetic in predicates (add, subtract, multiply, divide, modulo)
 - Conditional expressions — `CASE WHEN ... THEN ... ELSE ... END`
-- Aggregates
+- `DISTINCT` / `DISTINCT ON` ([#425])
+- Aggregates ([#421])
   - `COUNT`, `SUM`, `AVG`, `MIN`, `MAX`
   - `GROUP BY` / `HAVING`
 - Subquery improvements
   - Subquery comparisons (`ALL` / `ANY` / `SOME`)
-- Full-text search
+- Recursive queries / CTEs ([#420])
+- Lateral joins ([#419])
+- Full-text search ([#423])
   - User-facing builder API
   - PostgreSQL `tsvector` / `tsquery`
   - MySQL `FULLTEXT` / `MATCH ... AGAINST`
@@ -74,16 +93,26 @@ the entry lands here.
   - Direct `.limit()` for non-paginated queries
   - `.last()` convenience
   - Pagination with complex ORDER BY expressions (non-column references) ([#723])
+  - Backward pagination as a driver capability ([#732])
+- Streaming query results — `.all()` returns a `Stream` for large result sets ([#324])
 - Post-lowering optimization pass
   - Single-pass predicate analysis (not per-node)
   - Equivalence classes for transitive constraints
   - Structured constraint representation (constants, ranges, exclusions)
   - Targeted normalization without full DNF
   - `ExprLet` inlining — move from `lower_returning` into the post-lowering pass
-- Pre-compiled query plans — parameterized plans that skip re-planning on repeated calls
+- Pre-compiled query plans — parameterized plans that skip re-planning on repeated calls ([#266])
 - Query result caching — cache results for repeated identical queries
 
+[#266]: https://github.com/tokio-rs/toasty/issues/266
+[#324]: https://github.com/tokio-rs/toasty/issues/324
+[#419]: https://github.com/tokio-rs/toasty/issues/419
+[#420]: https://github.com/tokio-rs/toasty/issues/420
+[#421]: https://github.com/tokio-rs/toasty/issues/421
+[#423]: https://github.com/tokio-rs/toasty/issues/423
+[#425]: https://github.com/tokio-rs/toasty/issues/425
 [#723]: https://github.com/tokio-rs/toasty/issues/723
+[#732]: https://github.com/tokio-rs/toasty/issues/732
 
 ## Relationships
 
@@ -93,7 +122,7 @@ the entry lands here.
 
 ## Data Modification
 
-- Upsert
+- Upsert ([#422])
   - SQL: `ON CONFLICT` (PostgreSQL/SQLite), `ON DUPLICATE KEY UPDATE` (MySQL), `MERGE`
   - Insert-or-ignore (`DO NOTHING` / `INSERT IGNORE`)
   - Conflict target by column, constraint name, or partial index
@@ -108,6 +137,10 @@ the entry lands here.
 - Database-side function expressions in create/update
   - `toasty::stmt::now()` → `NOW()` / `CURRENT_TIMESTAMP` / `datetime('now')`
   - Future scalar functions: `COALESCE`, `LOWER`, `UPPER`, `LENGTH`
+- Soft deletion — tombstone semantics with transparent query filtering ([#462])
+
+[#422]: https://github.com/tokio-rs/toasty/issues/422
+[#462]: https://github.com/tokio-rs/toasty/issues/462
 
 ## Transactions
 
@@ -119,22 +152,46 @@ the entry lands here.
   - `BEGIN` / `COMMIT` / `ROLLBACK`
   - Savepoints and nested transactions
   - Isolation-level configuration
+- Row-level locking — `SELECT ... FOR UPDATE` / `SKIP LOCKED` ([#424])
+
+[#424]: https://github.com/tokio-rs/toasty/issues/424
 
 ## Migrations
 
-- Schema migration system
+- Schema migration system ([#190])
   - Migration generation from schema diffs
   - Rollback support
   - Schema versioning
-- `toasty-cli` for schema management
+- `toasty-cli` for schema management ([#190])
+- Schema lock file for tracking applied migrations ([#136])
+
+[#136]: https://github.com/tokio-rs/toasty/issues/136
+[#190]: https://github.com/tokio-rs/toasty/issues/190
 
 ## Drivers
 
-- Raw SQL escape hatch
+- Raw SQL escape hatch ([#93])
   - Arbitrary SQL statements
   - Parameterized queries with type-safe bindings
   - Raw fragments inside typed queries
-- Connection pooling improvements
+- Connection pooling improvements ([#378], [#384])
+- DynamoDB `Scan` — queries without a partition-key predicate ([#741])
+- New driver backends
+  - MongoDB — `toasty-mongodb` ([#48])
+  - DuckDB ([#608])
+  - MSSQL — `toasty-msql` ([#82])
+  - SurrealDB ([#669])
+  - libsql SQLite variant ([#78])
+
+[#48]: https://github.com/tokio-rs/toasty/issues/48
+[#78]: https://github.com/tokio-rs/toasty/issues/78
+[#82]: https://github.com/tokio-rs/toasty/issues/82
+[#93]: https://github.com/tokio-rs/toasty/issues/93
+[#378]: https://github.com/tokio-rs/toasty/issues/378
+[#384]: https://github.com/tokio-rs/toasty/issues/384
+[#608]: https://github.com/tokio-rs/toasty/issues/608
+[#669]: https://github.com/tokio-rs/toasty/issues/669
+[#741]: https://github.com/tokio-rs/toasty/issues/741
 
 ## Macros
 
@@ -157,9 +214,13 @@ the entry lands here.
 
 ## Observability
 
-- Query logging
+- Query logging — `tracing` debug / trace output from the engine ([#254])
+
+[#254]: https://github.com/tokio-rs/toasty/issues/254
 
 ## Safety
 
 - `#[sensitive]` field flagging — automatic redaction in logs, traces, and errors
-- Trusted vs. untrusted expression tagging — skip escaping for engine-produced values; parameterize external input
+- Trusted vs. untrusted expression tagging — skip escaping for engine-produced values; parameterize external input ([#237])
+
+[#237]: https://github.com/tokio-rs/toasty/issues/237
