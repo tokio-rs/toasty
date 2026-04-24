@@ -200,17 +200,30 @@ user.update()
     .await?;
 ```
 
-Or update individual fields within the struct using a closure:
+Or patch individual fields within the struct with `stmt::patch`:
 
 ```rust,ignore
+use toasty::stmt;
+
 user.update()
-    .with_address(|a| { a.city("Portland"); })
+    .address(stmt::patch(Address::fields().city(), "Portland"))
     .exec(&mut db)
     .await?;
 ```
 
-The closure receives the embedded struct's update builder, so you only need to
-set the fields you want to change.
+`stmt::patch` targets a sub-field by its typed path and leaves the other
+fields of the embedded struct unchanged. Combine multiple sub-field updates
+with `stmt::apply`:
+
+```rust,ignore
+user.update()
+    .address(stmt::apply([
+        stmt::patch(Address::fields().street(), "456 Oak Ave"),
+        stmt::patch(Address::fields().city(), "Portland"),
+    ]))
+    .exec(&mut db)
+    .await?;
+```
 
 ### Nested embedding
 

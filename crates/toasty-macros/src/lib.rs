@@ -778,8 +778,8 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 ///
 /// Reference an embedded type as a field on a [`Model`][`derive@Model`]
 /// struct. The parent model's create and update builders gain a setter for
-/// the embedded field. For embedded structs, a `with_<field>` method
-/// supports partial updates of individual sub-fields:
+/// the embedded field. Partial updates of individual sub-fields use
+/// `stmt::patch`:
 ///
 /// ```no_run
 /// # #[derive(toasty::Embed)]
@@ -793,14 +793,16 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// #     address: Address,
 /// # }
 /// # async fn example(mut db: toasty::Db, mut user: User) -> toasty::Result<()> {
+/// use toasty::stmt;
+///
 /// // Full replacement
 /// user.update()
 ///     .address(Address { street: "456 Oak Ave".into(), city: "Seattle".into() })
 ///     .exec(&mut db).await?;
 ///
-/// // Partial update (struct only) — updates city, leaves street unchanged
+/// // Partial update — updates city, leaves street unchanged
 /// user.update()
-///     .with_address(|a| { a.city("Portland"); })
+///     .address(stmt::patch(Address::fields().city(), "Portland"))
 ///     .exec(&mut db).await?;
 /// # Ok(())
 /// # }
@@ -891,8 +893,12 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// ).exec(&mut db).await?;
 ///
 /// // Partial update
+/// use toasty::stmt;
 /// doc.update()
-///     .with_meta(|m| { m.version(2).status("published"); })
+///     .meta(stmt::apply([
+///         stmt::patch(Metadata::fields().version(), 2),
+///         stmt::patch(Metadata::fields().status(), "published"),
+///     ]))
 ///     .exec(&mut db).await?;
 /// # Ok(())
 /// # }
