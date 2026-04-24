@@ -62,7 +62,9 @@ pub async fn create_initializes_version(test: &mut Test) -> Result<()> {
 
     let mut db = test.setup_db(models!(Item)).await;
 
-    let item = Item::create().name("hello").exec(&mut db).await?;
+    let item = toasty::create!(Item { name: "hello" })
+        .exec(&mut db)
+        .await?;
     assert_eq!(item.version, 1);
 
     Ok(())
@@ -75,7 +77,9 @@ pub async fn update_increments_version(test: &mut Test) -> Result<()> {
 
     let mut db = test.setup_db(models!(Item)).await;
 
-    let mut item = Item::create().name("hello").exec(&mut db).await?;
+    let mut item = toasty::create!(Item { name: "hello" })
+        .exec(&mut db)
+        .await?;
     assert_eq!(item.version, 1);
 
     item.update().name("world").exec(&mut db).await?;
@@ -95,7 +99,9 @@ pub async fn stale_update_fails(test: &mut Test) -> Result<()> {
 
     let mut db = test.setup_db(models!(Item)).await;
 
-    let mut item = Item::create().name("hello").exec(&mut db).await?;
+    let mut item = toasty::create!(Item { name: "hello" })
+        .exec(&mut db)
+        .await?;
     assert_eq!(item.version, 1);
 
     // Load a second handle from the DB — same record, version == 1.
@@ -124,13 +130,16 @@ pub async fn duplicate_create_fails(test: &mut Test) -> Result<()> {
 
     let mut db = test.setup_db(models!(Item)).await;
 
-    let item = Item::create().name("original").exec(&mut db).await?;
-
-    let result = Item::create()
-        .id(item.id)
-        .name("duplicate")
+    let item = toasty::create!(Item { name: "original" })
         .exec(&mut db)
-        .await;
+        .await?;
+
+    let result = toasty::create!(Item {
+        id: item.id,
+        name: "duplicate"
+    })
+    .exec(&mut db)
+    .await;
 
     assert!(
         result.is_err(),
@@ -149,22 +158,24 @@ pub async fn batch_insert_checks_version(test: &mut Test) -> Result<()> {
     let mut db = test.setup_db(models!(Item)).await;
 
     // Create two items in a single batch — both should succeed with version == 1.
-    let items = Item::create_many()
-        .item(Item::create().name("first"))
-        .item(Item::create().name("second"))
-        .exec(&mut db)
-        .await?;
+    let items = toasty::create!(Item::[
+        { name: "first" },
+        { name: "second" },
+    ])
+    .exec(&mut db)
+    .await?;
 
     assert_eq!(items.len(), 2);
     assert!(items.iter().all(|i| i.version == 1));
 
     // Attempt to batch-create a new item alongside a duplicate ID — should fail.
     let existing_id = items[0].id;
-    let result = Item::create_many()
-        .item(Item::create().id(existing_id).name("duplicate"))
-        .item(Item::create().name("new"))
-        .exec(&mut db)
-        .await;
+    let result = toasty::create!(Item::[
+        { id: existing_id, name: "duplicate" },
+        { name: "new" },
+    ])
+    .exec(&mut db)
+    .await;
 
     assert!(
         result.is_err(),
@@ -187,16 +198,12 @@ pub async fn query_update_multi_key_works(test: &mut Test) -> Result<()> {
     let mut db = test.setup_db(models!(Item)).await;
 
     // Create two items sharing the same tag
-    let a = Item::create()
-        .tag("batch")
-        .name("alpha")
-        .exec(&mut db)
-        .await?;
-    let b = Item::create()
-        .tag("batch")
-        .name("beta")
-        .exec(&mut db)
-        .await?;
+    let items = toasty::create!(Item::[
+        { tag: "batch", name: "alpha" },
+        { tag: "batch", name: "beta" },
+    ])
+    .exec(&mut db)
+    .await?;
 
     // Update all items with tag == "batch" in one query-based operation.
     Item::filter_by_tag("batch")
@@ -205,8 +212,8 @@ pub async fn query_update_multi_key_works(test: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
 
-    let a2 = Item::filter_by_id(a.id).get(&mut db).await?;
-    let b2 = Item::filter_by_id(b.id).get(&mut db).await?;
+    let a2 = Item::filter_by_id(items[0].id).get(&mut db).await?;
+    let b2 = Item::filter_by_id(items[1].id).get(&mut db).await?;
     assert_eq!(a2.name, "updated");
     assert_eq!(b2.name, "updated");
 
@@ -221,10 +228,11 @@ pub async fn unique_index_update_increments_version(test: &mut Test) -> Result<(
 
     let mut db = test.setup_db(models!(User)).await;
 
-    let mut user = User::create()
-        .email("alice@example.com")
-        .exec(&mut db)
-        .await?;
+    let mut user = toasty::create!(User {
+        email: "alice@example.com"
+    })
+    .exec(&mut db)
+    .await?;
     assert_eq!(user.version, 1);
 
     user.update()
@@ -250,10 +258,11 @@ pub async fn unique_index_stale_update_fails(test: &mut Test) -> Result<()> {
 
     let mut db = test.setup_db(models!(User)).await;
 
-    let mut user = User::create()
-        .email("bob@example.com")
-        .exec(&mut db)
-        .await?;
+    let mut user = toasty::create!(User {
+        email: "bob@example.com"
+    })
+    .exec(&mut db)
+    .await?;
     assert_eq!(user.version, 1);
 
     let mut stale = User::filter_by_email("bob@example.com")
@@ -285,7 +294,9 @@ pub async fn delete_checks_version(test: &mut Test) -> Result<()> {
 
     let mut db = test.setup_db(models!(Item)).await;
 
-    let item = Item::create().name("hello").exec(&mut db).await?;
+    let item = toasty::create!(Item { name: "hello" })
+        .exec(&mut db)
+        .await?;
     assert_eq!(item.version, 1);
     let id = item.id;
 
@@ -305,7 +316,9 @@ pub async fn stale_delete_fails(test: &mut Test) -> Result<()> {
 
     let mut db = test.setup_db(models!(Item)).await;
 
-    let mut item = Item::create().name("hello").exec(&mut db).await?;
+    let mut item = toasty::create!(Item { name: "hello" })
+        .exec(&mut db)
+        .await?;
     assert_eq!(item.version, 1);
 
     // Load a stale copy and then advance item.version to 2.
