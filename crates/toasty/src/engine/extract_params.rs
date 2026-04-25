@@ -34,10 +34,6 @@ type Cx<'a> = stmt::ExprContext<'a, db::Schema>;
 /// Extract bind parameters from a statement, replacing scalar values with
 /// `Expr::Arg(n)` placeholders and inferring precise `db::Type` for each.
 pub(crate) fn extract_params(stmt: &mut stmt::Statement, schema: &Schema) -> Vec<TypedValue> {
-    // Pre-pass: lower BeginsWith → Like (appending % to the prefix value)
-    // before value extraction so the prefix Value is still accessible.
-    lower_begins_with(stmt);
-
     // Phase 1: Mechanical extraction — replace values with Arg(n)
     let mut params = Vec::new();
     extract_values(stmt, &mut params);
@@ -89,25 +85,6 @@ impl Ty {
 // ============================================================================
 // Phase 1: Mechanical value extraction
 // ============================================================================
-
-/// Rewrite `Expr::BeginsWith(expr, prefix)` → `Expr::Like(expr, prefix%)`.
-///
-/// Must run before `extract_values` so the prefix `Value` node is still in
-/// place (not yet replaced by an `Arg` placeholder).
-fn lower_begins_with(stmt: &mut stmt::Statement) {
-    stmt::visit_mut::for_each_expr_mut(stmt, |expr| {
-        if let stmt::Expr::BeginsWith(e) = expr {
-            let pattern = match e.prefix.as_mut() {
-                stmt::Expr::Value(stmt::Value::String(s)) => {
-                    s.push('%');
-                    stmt::Expr::Value(stmt::Value::String(std::mem::take(s)))
-                }
-                other => panic!("unexpected BeginsWith prefix expression: {other:?}"),
-            };
-            *expr = stmt::Expr::like(*e.expr.clone(), pattern);
-        }
-    });
-}
 
 /// Replace all scalar `Value` nodes with `Arg(n)` placeholders.
 /// Initialize each param's `ty` from the value itself.
@@ -418,8 +395,9 @@ fn synthesize(expr: &stmt::Expr, cx: &Cx<'_>, params: &mut [TypedValue]) -> Ty {
             Ty::Inferred(db::Type::Boolean)
         }
 
-        // BeginsWith — both sides are strings (lowered to Like for SQL drivers,
-        // but may still appear on the DynamoDB path)
+        // BeginsWith — both sides are strings. Reaches here only on drivers
+        // that natively support it (e.g., DynamoDB); SQL drivers lower it to
+        // Like during the lowering phase.
         stmt::Expr::BeginsWith(e) => {
             check(&e.expr, &Ty::Inferred(db::Type::Text), params);
             check(&e.prefix, &Ty::Inferred(db::Type::Text), params);
