@@ -13,32 +13,10 @@
 
 use crate::prelude::*;
 
-macro_rules! tagged_item {
-    () => {
-        #[derive(Debug, toasty::Model)]
-        struct Item {
-            #[key]
-            #[auto]
-            id: uuid::Uuid,
-
-            /// Indexed so the planner uses FindPkByIndex to collect keys.
-            #[index]
-            tag: String,
-
-            /// Not indexed; becomes the `result_filter` on UpdateByKey.
-            status: String,
-
-            name: String,
-        }
-    };
-}
-
 /// All items match the filter — every key is updated.
-#[driver_test(requires(not(sql)))]
+#[driver_test(requires(not(sql)), scenario(crate::scenarios::tagged_item))]
 pub async fn batch_update_filter_all_match(t: &mut Test) -> Result<()> {
-    tagged_item!();
-
-    let mut db = t.setup_db(models!(Item)).await;
+    let mut db = setup(t).await;
 
     toasty::create!(Item {
         tag: "batch",
@@ -76,11 +54,9 @@ pub async fn batch_update_filter_all_match(t: &mut Test) -> Result<()> {
 /// No items match the filter — the transact_write_items call is cancelled with
 /// ConditionalCheckFailed for every item.  The driver must return count 0 rather
 /// than panicking.
-#[driver_test(requires(not(sql)))]
+#[driver_test(requires(not(sql)), scenario(crate::scenarios::tagged_item))]
 pub async fn batch_update_filter_no_match(t: &mut Test) -> Result<()> {
-    tagged_item!();
-
-    let mut db = t.setup_db(models!(Item)).await;
+    let mut db = setup(t).await;
 
     toasty::create!(Item {
         tag: "batch",
