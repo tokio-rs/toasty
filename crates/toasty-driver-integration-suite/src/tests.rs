@@ -47,6 +47,7 @@ pub mod infra_reset_db;
 pub mod infra_sync_send;
 pub mod key_unsigned;
 pub mod query_count;
+pub mod raw_identifier_fields;
 pub mod record_not_found;
 pub mod relation_belongs_to_configured;
 pub mod relation_belongs_to_one_way;

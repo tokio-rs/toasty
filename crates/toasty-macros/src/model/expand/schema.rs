@@ -91,7 +91,7 @@ impl Expand<'_> {
 
             let name = {
                 let app_name = if field_named {
-                    let n = field.name.ident.to_string();
+                    let n = field.name.as_str();
                     quote! { Some(#n.to_string()) }
                 } else {
                     quote! { None }

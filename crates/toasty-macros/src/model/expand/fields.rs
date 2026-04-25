@@ -248,7 +248,7 @@ impl Expand<'_> {
             .iter()
             .enumerate()
             .map(move |(offset, field)| {
-                let field_name = field.name.ident.to_string();
+                let field_name = field.name.as_str();
                 let field_offset = util::int(offset);
 
                 quote!( #field_name => #toasty::core::schema::app::FieldId { model: Self::id(), index: #field_offset }, )

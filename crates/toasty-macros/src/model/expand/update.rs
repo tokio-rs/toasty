@@ -349,7 +349,7 @@ impl Expand<'_> {
         self.model.fields.iter().enumerate().map(|(offset, field)| {
             let i = util::int(offset);
             let field_ident = &field.name.ident;
-            let field_name_str = field.name.ident.to_string();
+            let field_name_str = field.name.as_str();
 
             match &field.ty {
                 FieldTy::Primitive(_ty) if field.attrs.serialize.is_some() => {
