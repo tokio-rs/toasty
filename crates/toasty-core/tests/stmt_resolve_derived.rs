@@ -36,6 +36,7 @@ fn db_schema() -> DbSchema {
                 nullable: false,
                 primary_key: true,
                 auto_increment: false,
+                versionable: false,
             }],
             primary_key: DbPrimaryKey {
                 columns: vec![ColumnId {

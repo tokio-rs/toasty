@@ -207,6 +207,12 @@ impl Expand<'_> {
                 #comparison_methods
             }
 
+            impl<__Origin> Into<#toasty::Path<__Origin, #model_ident>> for #field_struct_ident<__Origin> {
+                fn into(self) -> #toasty::Path<__Origin, #model_ident> {
+                    self.path
+                }
+            }
+
             #( #variant_field_structs )*
         }
     }
@@ -288,6 +294,7 @@ impl Expand<'_> {
                         nullable: <#ty as #toasty::Field>::NULLABLE,
                         primary_key: false,
                         auto: None,
+                        versionable: false,
                         constraints: vec![],
                         variant: Some(#toasty::core::schema::app::VariantId {
                             model: id,

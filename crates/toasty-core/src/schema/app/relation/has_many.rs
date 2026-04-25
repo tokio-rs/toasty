@@ -31,7 +31,10 @@ pub struct HasMany {
     pub singular: Name,
 
     /// The [`BelongsTo`] field on the target model that pairs with this
-    /// relation.
+    /// relation. If a `#[has_many(pair = <field>)]` was supplied, the macro
+    /// resolves this at schema-construction time via `field_name_to_id` on
+    /// the target. Otherwise the linker fills it in by searching the target
+    /// model for a unique `BelongsTo` back to the source.
     pub pair: FieldId,
 }
 

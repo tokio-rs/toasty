@@ -22,6 +22,9 @@ pub(crate) struct DeleteByKey {
 
     /// Only delete keys that match the filter
     pub filter: Option<stmt::Expr>,
+
+    /// Condition for optimistic locking (e.g., version check).
+    pub condition: Option<stmt::Expr>,
 }
 
 impl Exec<'_> {
@@ -45,6 +48,7 @@ impl Exec<'_> {
                     table: action.table,
                     keys: vec![key],
                     filter: action.filter.clone(),
+                    condition: action.condition.clone(),
                 };
 
                 let res = self.connection.exec(&self.engine.schema, op.into()).await?;

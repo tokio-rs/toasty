@@ -34,8 +34,12 @@ jobs:
       contents: read
       issues: write
     steps:
-      # No checkout: this job only reads/writes issue metadata via `gh`.
-      - uses: anthropics/claude-code-action@v1
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Run Claude Code for Issue Triage
+        uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -100,11 +104,12 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      # No checkout: running under `pull_request_target`, any checkout of
-      # the PR ref would place untrusted fork code in a job that has
-      # access to secrets. This job only reads PR metadata and applies
-      # labels via `gh`, so no working tree is needed.
-      - uses: anthropics/claude-code-action@v1
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Run Claude Code for PR Triage
+        uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}

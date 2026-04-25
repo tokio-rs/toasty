@@ -34,9 +34,6 @@ pub(crate) struct Field {
     /// Identifier for setter method on update builder
     pub(crate) set_ident: syn::Ident,
 
-    /// Identifier for the `with_field` builder method on update builder
-    pub(crate) with_ident: syn::Ident,
-
     /// If this field belongs to an enum variant, the variant's index within
     /// the enum. `None` for fields on root models and embedded structs.
     pub(crate) variant: Option<usize>,
@@ -67,6 +64,9 @@ pub(crate) struct FieldAttr {
 
     /// Serialization info for the field: `#[serialize(json)]` or `#[serialize(json, nullable)]`
     pub(crate) serialize: Option<SerializeAttr>,
+
+    /// True if the field tracks an OCC version counter
+    pub(crate) versionable: bool,
 }
 
 #[derive(Debug)]
@@ -106,6 +106,7 @@ impl FieldAttr {
             default_expr: None,
             update_expr: None,
             serialize: None,
+            versionable: false,
         };
 
         for attr in attrs {
@@ -177,6 +178,15 @@ impl FieldAttr {
                         Ok(expr) => field_attr.update_expr = Some(expr),
                         Err(e) => errs.push(e),
                     }
+                }
+            } else if attr.path().is_ident("version") {
+                if field_attr.versionable {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "duplicate #[version] attribute",
+                    ));
+                } else {
+                    field_attr.versionable = true;
                 }
             } else if attr.path().is_ident("serialize") {
                 if field_attr.serialize.is_some() {
@@ -257,7 +267,6 @@ impl Field {
         };
 
         let set_ident = syn::Ident::new(&name.with_prefix("set"), span);
-        let with_ident = syn::Ident::new(&name.with_prefix("with"), span);
 
         let mut attrs = FieldAttr::from_attrs(&field.attrs)?;
 
@@ -297,7 +306,11 @@ impl Field {
                         "field has more than one relation attribute",
                     ));
                 } else {
-                    ty = Some(FieldTy::HasOne(HasOne::from_ast(&field.ty, field.span())?));
+                    ty = Some(FieldTy::HasOne(HasOne::from_ast(
+                        attr,
+                        &field.ty,
+                        field.span(),
+                    )?));
                 }
             }
         }
@@ -362,6 +375,30 @@ impl Field {
             ));
         }
 
+        if attrs.versionable && attrs.key.is_some() {
+            errs.push(syn::Error::new_spanned(
+                field,
+                "#[version] cannot be combined with #[key]",
+            ));
+        }
+
+        if attrs.versionable && attrs.auto.is_some() {
+            errs.push(syn::Error::new_spanned(
+                field,
+                "#[version] cannot be combined with #[auto]",
+            ));
+        }
+
+        if attrs.versionable {
+            let is_u64 = matches!(&field.ty, syn::Type::Path(p) if p.path.is_ident("u64"));
+            if !is_u64 {
+                errs.push(syn::Error::new_spanned(
+                    &field.ty,
+                    "#[version] can only be applied to a u64 field",
+                ));
+            }
+        }
+
         if let Some(err) = errs.collect() {
             return Err(err);
         }
@@ -389,7 +426,6 @@ impl Field {
             name,
             ty,
             set_ident,
-            with_ident,
             variant: None,
         })
     }

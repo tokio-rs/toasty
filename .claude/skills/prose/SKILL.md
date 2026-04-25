@@ -1,11 +1,11 @@
 ---
-name: write-docs
-description: Author or edit documentation for the Toasty project, following project writing conventions
+name: prose
+description: Author or edit any prose for the Toasty project — documentation, design docs, READMEs, PR descriptions, issue bodies, commit message bodies, or other human-readable text — following project writing conventions
 ---
 
-# Writing Toasty Documentation
+# Writing Toasty Prose
 
-Load this skill when writing or editing any documentation in the `docs/` directory or other markdown files in this project.
+Load this skill whenever writing or editing prose for this project: documentation in `docs/`, READMEs, design docs, PR descriptions, issue bodies, commit message bodies, or any other human-readable markdown.
 
 ## Writing Style
 
