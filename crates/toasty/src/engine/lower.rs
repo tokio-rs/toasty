@@ -1,3 +1,4 @@
+mod expr_pattern;
 mod insert;
 mod paginate;
 mod relation;
@@ -421,6 +422,9 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 if self.state.hir[target_id].independent {
                     self.curr_stmt_info().deps.insert(target_id);
                 }
+            }
+            stmt::Expr::BeginsWith(_) if self.capability().sql => {
+                self.lower_expr_begins_with(expr);
             }
             stmt::Expr::Exists(_) if !self.capability().sql => {
                 let stmt::Expr::Exists(mut expr_exists) = expr.take() else {
