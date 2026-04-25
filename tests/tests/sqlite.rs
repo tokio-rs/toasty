@@ -31,3 +31,24 @@ toasty_driver_integration_suite::generate_driver_tests!(
     native_datetime: false,
     test_connection_pool: false,
 );
+
+#[derive(Debug, toasty::Model)]
+struct PoolItem {
+    #[key]
+    #[auto]
+    id: i64,
+}
+
+/// In-memory SQLite forces `max_connections = 1`; verify the driver cap
+/// overrides a larger user-requested pool size.
+#[tokio::test]
+async fn in_memory_caps_user_max_pool_size() {
+    let db = toasty::Db::builder()
+        .models(toasty::models!(PoolItem))
+        .max_pool_size(16)
+        .build(toasty_driver_sqlite::Sqlite::in_memory())
+        .await
+        .unwrap();
+
+    assert_eq!(db.pool().status().max_size, 1);
+}
