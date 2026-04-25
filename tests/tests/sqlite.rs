@@ -29,4 +29,5 @@ toasty_driver_integration_suite::generate_driver_tests!(
     native_date: false,
     native_time: false,
     native_datetime: false,
+    test_connection_pool: false,
 );

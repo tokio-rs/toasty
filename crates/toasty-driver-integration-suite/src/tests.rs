@@ -40,6 +40,7 @@ pub mod float_fields;
 pub mod index_composite;
 pub mod infra_connection_per_clone;
 pub mod infra_missing_registrations;
+pub mod infra_pool_config;
 pub mod infra_reset_db;
 pub mod infra_sync_send;
 pub mod key_unsigned;

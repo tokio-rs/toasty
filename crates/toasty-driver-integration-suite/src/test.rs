@@ -54,11 +54,25 @@ impl Test {
 
     /// Try to setup a database with models, returns Result for error handling
     pub async fn try_setup_db(&mut self, models: ModelSet) -> toasty::Result<Db> {
+        self.try_setup_db_with(models, |_| {}).await
+    }
+
+    /// Try to setup a database with models, allowing the caller to customize
+    /// the [`toasty::db::Builder`] before it is built (e.g., to set pool
+    /// configuration).
+    pub async fn try_setup_db_with(
+        &mut self,
+        models: ModelSet,
+        customize: impl FnOnce(&mut toasty::db::Builder),
+    ) -> toasty::Result<Db> {
         let mut builder = toasty::Db::builder();
         builder.models(models);
 
         // Set the table prefix
         builder.table_name_prefix(&self.isolate.table_prefix());
+
+        // Apply caller customizations
+        customize(&mut builder);
 
         // Always wrap with logging
         let logging_driver = LoggingDriver::new(self.setup.driver());
@@ -79,6 +93,16 @@ impl Test {
     /// Setup a database with models, always with logging enabled
     pub async fn setup_db(&mut self, models: ModelSet) -> Db {
         self.try_setup_db(models).await.unwrap()
+    }
+
+    /// Setup a database, applying the given customization to the
+    /// [`toasty::db::Builder`] before building.
+    pub async fn setup_db_with(
+        &mut self,
+        models: ModelSet,
+        customize: impl FnOnce(&mut toasty::db::Builder),
+    ) -> Db {
+        self.try_setup_db_with(models, customize).await.unwrap()
     }
 
     /// Get the driver capability

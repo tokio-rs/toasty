@@ -13,23 +13,6 @@ struct Item {
 }
 
 #[tokio::test]
-async fn max_pool_size_is_applied() {
-    // File-backed SQLite reports no max_connections, so the user-requested
-    // value is used verbatim.
-    let tmp = tempfile::NamedTempFile::new().unwrap();
-    let url = format!("sqlite://{}", tmp.path().display());
-
-    let db = toasty::Db::builder()
-        .models(models!(Item))
-        .max_pool_size(7)
-        .connect(&url)
-        .await
-        .unwrap();
-
-    assert_eq!(db.pool().status().max_size, 7);
-}
-
-#[tokio::test]
 async fn driver_max_connections_caps_user_request() {
     // In-memory SQLite forces max_connections = 1; it must override a
     // larger user-requested value.
