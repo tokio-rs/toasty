@@ -1,9 +1,9 @@
 use super::{
     Connection, Delete, ExprAttrs, Put, Result, ReturnValuesOnConditionCheckFailure, SdkError,
-    TransactWriteItem, Update, UpdateItemError, Value, db, ddb_expression, ddb_key, item_to_record,
-    operation, stmt,
+    TransactWriteItem, TransactWriteItemsError, Update, UpdateItemError, Value, db, ddb_expression,
+    ddb_key, item_to_record, operation, stmt,
 };
-use aws_sdk_dynamodb::types::AttributeValue;
+use aws_sdk_dynamodb::types::{AttributeValue, CancellationReason};
 use std::{collections::HashMap, fmt::Write};
 use toasty_core::{driver::ExecResponse, stmt::ExprContext};
 
@@ -58,6 +58,60 @@ fn filter_failed(
 
     let record = item_to_record(item, table.columns.iter()).unwrap();
     !filter.eval_bool(RecordInput(&record)).unwrap_or(false)
+}
+
+/// Interprets a `ConditionalCheckFailedException` from `update_item`: if the
+/// filter was the failing predicate return an empty response; otherwise surface
+/// a condition error.
+fn on_update_item_condition_failed(
+    item: Option<&HashMap<String, AttributeValue>>,
+    message: Option<&str>,
+    table: &db::Table,
+    filter: Option<&stmt::Expr>,
+    returning: bool,
+) -> Result<ExecResponse> {
+    if filter_failed(item, table, filter) {
+        if returning {
+            Ok(ExecResponse::empty_value_stream())
+        } else {
+            Ok(ExecResponse::count(0))
+        }
+    } else {
+        Err(toasty_core::Error::condition_failed(
+            message
+                .unwrap_or("DynamoDB conditional check failed")
+                .to_string(),
+        ))
+    }
+}
+
+/// Interprets a `TransactionCanceledException` from `transact_write_items`:
+/// if every `ConditionalCheckFailed` reason was caused by the filter return an
+/// empty response; if any was caused by the condition expression surface a
+/// condition error.
+fn on_transaction_cancelled(
+    reasons: &[CancellationReason],
+    message: Option<&str>,
+    table: &db::Table,
+    filter: Option<&stmt::Expr>,
+    returning: bool,
+) -> Result<ExecResponse> {
+    let any_condition_failed = reasons
+        .iter()
+        .filter(|r| r.code() == Some("ConditionalCheckFailed"))
+        .any(|r| !filter_failed(r.item(), table, filter));
+
+    if any_condition_failed {
+        Err(toasty_core::Error::condition_failed(
+            message
+                .unwrap_or("DynamoDB conditional check failed")
+                .to_string(),
+        ))
+    } else if returning {
+        Ok(ExecResponse::empty_value_stream())
+    } else {
+        Ok(ExecResponse::count(0))
+    }
 }
 
 impl Connection {
@@ -169,19 +223,14 @@ impl Connection {
 
                     if let Err(SdkError::ServiceError(e)) = res {
                         if let UpdateItemError::ConditionalCheckFailedException(cce) = e.err() {
-                            if filter_failed(cce.item(), table, op.filter.as_ref()) {
-                                return if op.returning {
-                                    Ok(ExecResponse::empty_value_stream())
-                                } else {
-                                    Ok(ExecResponse::count(0))
-                                };
-                            }
-
-                            return Err(toasty_core::Error::condition_failed(
-                                "DynamoDB conditional check failed",
-                            ));
+                            return on_update_item_condition_failed(
+                                cce.item(),
+                                cce.message.as_deref(),
+                                table,
+                                op.filter.as_ref(),
+                                op.returning,
+                            );
                         }
-
                         return Err(toasty_core::Error::driver_operation_failed(
                             SdkError::ServiceError(e),
                         ));
@@ -226,11 +275,54 @@ impl Connection {
                         .await;
 
                     if let Err(SdkError::ServiceError(e)) = res {
-                        todo!("err={:#?}", e);
+                        if let TransactWriteItemsError::TransactionCanceledException(tce) = e.err()
+                        {
+                            return on_transaction_cancelled(
+                                tce.cancellation_reasons(),
+                                tce.message(),
+                                table,
+                                op.filter.as_ref(),
+                                op.returning,
+                            );
+                        }
+                        return Err(toasty_core::Error::driver_operation_failed(
+                            SdkError::ServiceError(e),
+                        ));
                     }
                 }
             }
             [index] => {
+                // Updating a unique-indexed column requires synchronizing the separate
+                // DynamoDB index table. Because DynamoDB has no native unique-constraint
+                // support, Toasty maintains a dedicated table per unique index and keeps
+                // it in sync manually.
+                //
+                // The sequence is:
+                //   1. Read the current unique column value(s) with get_item.
+                //   2. Compare against the incoming assignment to decide whether the
+                //      unique value actually changed.
+                //   3a. Unchanged → plain update_item; no index surgery needed.
+                //   3b. Changed (or first-time set) → transact_write_items that
+                //       atomically: updates the base table, deletes the old index entry
+                //       (if any), and inserts the new index entry with an
+                //       attribute_not_exists guard to enforce uniqueness.
+                //
+                // Concurrency contract:
+                //   The get_item in step 1 is NOT atomic with the write in step 3. A
+                //   concurrent writer could mutate the unique column between those two
+                //   operations.
+                //
+                //   Changed branch (3b): the base-table Update inside the transaction
+                //   carries `<unique_col> = :old_value` as its condition, so a
+                //   concurrent mutation is detected atomically at commit time and the
+                //   transaction is cancelled.
+                //
+                //   Unchanged branch (3a): the only concurrent-safety guarantee comes
+                //   from op.condition (e.g. a #[version] check). If the model has no
+                //   version field, a narrow ABA race is possible where a concurrent
+                //   writer changes the unique column away and back between the read and
+                //   the update_item, leaving the index in an inconsistent state. Models
+                //   with mutable unique fields should use #[version] to close this gap.
                 assert!(op.keys.len() == 1, "TODO: handle multiple keys");
                 let key = &op.keys[0];
 
@@ -245,11 +337,13 @@ impl Connection {
                 // Records that have had their unique values set initially
                 // (previously were null).
                 let mut set_unique_attrs = HashMap::new();
-                // Records that have had their unique attribute update from a
+                // Records that have had their unique attribute updated from a
                 // previous value.
                 let mut updated_unique_attrs = HashMap::new();
 
-                // First, we need to read the current value for the unique attributes
+                // Read the current unique column value(s) to determine whether index
+                // surgery is needed. Version is not fetched here; it is verified
+                // atomically at write time via op.condition.
                 let res = self
                     .client
                     .get_item()
@@ -267,7 +361,6 @@ impl Connection {
                     )));
                 };
 
-                // Which unique attributes are being updated
                 for index_column in &index.columns {
                     let column = index_column.table_column(schema);
 
@@ -275,15 +368,16 @@ impl Connection {
                         if *projection == column.id.index {
                             if let Some(prev) = curr_unique_values.remove(&column.name) {
                                 let stmt::Assignment::Set(expr) = assignment else {
-                                    todo!(
-                                        "only SET supported in DynamoDB unique check; got {assignment:#?}"
+                                    unreachable!(
+                                        "unique index assignments are always Set; got {assignment:#?}"
                                     );
                                 };
                                 let stmt::Expr::Value(value) = expr else {
-                                    todo!()
+                                    unreachable!(
+                                        "unique index assignment expression is always a Value; got {expr:#?}"
+                                    );
                                 };
 
-                                // TODO: this probably could be made cheaper if needed
                                 if Value::from_ddb(&column.ty, &prev).into_inner() != *value {
                                     updated_unique_attrs.insert(column.id, prev);
                                 }
@@ -319,17 +413,13 @@ impl Connection {
 
                     if let Err(SdkError::ServiceError(e)) = res {
                         if let UpdateItemError::ConditionalCheckFailedException(cce) = e.err() {
-                            if filter_failed(cce.item(), table, op.filter.as_ref()) {
-                                return if op.returning {
-                                    Ok(ExecResponse::empty_value_stream())
-                                } else {
-                                    Ok(ExecResponse::count(0))
-                                };
-                            }
-
-                            return Err(toasty_core::Error::condition_failed(
-                                "DynamoDB conditional check failed",
-                            ));
+                            return on_update_item_condition_failed(
+                                cce.item(),
+                                cce.message.as_deref(),
+                                table,
+                                op.filter.as_ref(),
+                                op.returning,
+                            );
                         }
                         return Err(toasty_core::Error::driver_operation_failed(
                             SdkError::ServiceError(e),
@@ -360,7 +450,6 @@ impl Connection {
                         condition_expression.push_str(&filter_expression);
                     }
 
-                    // Insert the update op
                     transact_items.push(
                         TransactWriteItem::builder()
                             .update(
@@ -379,8 +468,6 @@ impl Connection {
 
                     for (column_id, prev) in &updated_unique_attrs {
                         let name = &schema.column(*column_id).name;
-                        // Delete the index entry for all rows that are updating
-                        // their unique attribute.
                         transact_items.push(
                             TransactWriteItem::builder()
                                 .delete(
@@ -397,7 +484,6 @@ impl Connection {
                     for column_id in updated_unique_attrs.keys().chain(set_unique_attrs.keys()) {
                         let name = &schema.column(*column_id).name;
 
-                        // Create the new entry if there is one.
                         let mut index_insert_items = HashMap::new();
 
                         for index_column in &index.columns {
@@ -409,12 +495,14 @@ impl Connection {
                                 .unwrap();
 
                             let stmt::Assignment::Set(expr) = assignment else {
-                                todo!(
-                                    "only SET supported in DynamoDB index insert; got {assignment:#?}"
+                                unreachable!(
+                                    "unique index assignments are always Set; got {assignment:#?}"
                                 );
                             };
                             let stmt::Expr::Value(value) = expr else {
-                                todo!()
+                                unreachable!(
+                                    "unique index assignment expression is always a Value; got {expr:#?}"
+                                );
                             };
 
                             if !value.is_null() {
@@ -430,7 +518,6 @@ impl Connection {
                             continue;
                         }
 
-                        // Add primary keys
                         for (index, column) in table.primary_key_columns().enumerate() {
                             let key_field = match key {
                                 stmt::Value::Record(record) => &record[index],
@@ -442,10 +529,8 @@ impl Connection {
                             );
                         }
 
-                        // Ensure value is unique
                         let mut expression_names = HashMap::new();
                         let expr_name = format!("#{name}");
-
                         let condition_expression = format!("attribute_not_exists({expr_name})");
                         expression_names.insert(expr_name, name.clone());
 
@@ -471,8 +556,20 @@ impl Connection {
                         .send()
                         .await;
 
-                    if let Err(e) = res {
-                        return Err(toasty_core::Error::driver_operation_failed(e));
+                    if let Err(SdkError::ServiceError(e)) = res {
+                        if let TransactWriteItemsError::TransactionCanceledException(tce) = e.err()
+                        {
+                            return on_transaction_cancelled(
+                                tce.cancellation_reasons(),
+                                tce.message(),
+                                table,
+                                op.filter.as_ref(),
+                                op.returning,
+                            );
+                        }
+                        return Err(toasty_core::Error::driver_operation_failed(
+                            SdkError::ServiceError(e),
+                        ));
                     }
                 }
             }

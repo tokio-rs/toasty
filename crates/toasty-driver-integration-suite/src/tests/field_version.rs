@@ -1,66 +1,9 @@
 use crate::prelude::*;
 
-/// Model used by all version tests in this file.
-macro_rules! version_model {
-    () => {
-        #[derive(Debug, toasty::Model)]
-        struct Item {
-            #[key]
-            #[auto]
-            id: uuid::Uuid,
-
-            name: String,
-
-            #[version]
-            version: u64,
-        }
-    };
-}
-
-/// Model with a secondary index used for multi-key update tests.
-macro_rules! version_model_with_tag {
-    () => {
-        #[derive(Debug, toasty::Model)]
-        struct Item {
-            #[key]
-            #[auto]
-            id: uuid::Uuid,
-
-            #[index]
-            tag: String,
-
-            name: String,
-
-            #[version]
-            version: u64,
-        }
-    };
-}
-
-/// Model with a unique field used for unique-index update tests.
-macro_rules! version_model_with_unique {
-    () => {
-        #[derive(Debug, toasty::Model)]
-        struct User {
-            #[key]
-            #[auto]
-            id: uuid::Uuid,
-
-            #[unique]
-            email: String,
-
-            #[version]
-            version: u64,
-        }
-    };
-}
-
 /// A newly created record starts with version == 1.
-#[driver_test(requires(not(sql)))]
+#[driver_test(requires(not(sql)), scenario(crate::scenarios::versioned_item))]
 pub async fn create_initializes_version(test: &mut Test) -> Result<()> {
-    version_model!();
-
-    let mut db = test.setup_db(models!(Item)).await;
+    let mut db = setup(test).await;
 
     let item = toasty::create!(Item { name: "hello" })
         .exec(&mut db)
@@ -71,11 +14,9 @@ pub async fn create_initializes_version(test: &mut Test) -> Result<()> {
 }
 
 /// Updating a record increments the version.
-#[driver_test(requires(not(sql)))]
+#[driver_test(requires(not(sql)), scenario(crate::scenarios::versioned_item))]
 pub async fn update_increments_version(test: &mut Test) -> Result<()> {
-    version_model!();
-
-    let mut db = test.setup_db(models!(Item)).await;
+    let mut db = setup(test).await;
 
     let mut item = toasty::create!(Item { name: "hello" })
         .exec(&mut db)
@@ -93,11 +34,9 @@ pub async fn update_increments_version(test: &mut Test) -> Result<()> {
 
 /// Two updates from the same stale snapshot — the second should fail with a
 /// condition-check error because the DB version has already moved to 2.
-#[driver_test(requires(not(sql)))]
+#[driver_test(requires(not(sql)), scenario(crate::scenarios::versioned_item))]
 pub async fn stale_update_fails(test: &mut Test) -> Result<()> {
-    version_model!();
-
-    let mut db = test.setup_db(models!(Item)).await;
+    let mut db = setup(test).await;
 
     let mut item = toasty::create!(Item { name: "hello" })
         .exec(&mut db)
@@ -124,11 +63,9 @@ pub async fn stale_update_fails(test: &mut Test) -> Result<()> {
 
 /// Creating the same primary key twice should fail because of the
 /// attribute_not_exists condition on the version column.
-#[driver_test(requires(not(sql)))]
+#[driver_test(requires(not(sql)), scenario(crate::scenarios::versioned_item))]
 pub async fn duplicate_create_fails(test: &mut Test) -> Result<()> {
-    version_model!();
-
-    let mut db = test.setup_db(models!(Item)).await;
+    let mut db = setup(test).await;
 
     let item = toasty::create!(Item { name: "original" })
         .exec(&mut db)
@@ -151,11 +88,9 @@ pub async fn duplicate_create_fails(test: &mut Test) -> Result<()> {
 
 /// Batch-creating multiple versioned items should initialize all versions to 1,
 /// and a duplicate within the batch should fail.
-#[driver_test(requires(not(sql)))]
+#[driver_test(requires(not(sql)), scenario(crate::scenarios::versioned_item))]
 pub async fn batch_insert_checks_version(test: &mut Test) -> Result<()> {
-    version_model!();
-
-    let mut db = test.setup_db(models!(Item)).await;
+    let mut db = setup(test).await;
 
     // Create two items in a single batch — both should succeed with version == 1.
     let items = toasty::create!(Item::[
@@ -191,16 +126,14 @@ pub async fn batch_insert_checks_version(test: &mut Test) -> Result<()> {
 /// Query-based updates don't carry a per-item version condition, so the version
 /// column is not incremented. The test verifies that the multi-key transact
 /// path executes without error and applies all assignments.
-#[driver_test(requires(not(sql)))]
+#[driver_test(requires(not(sql)), scenario(crate::scenarios::tagged_item))]
 pub async fn query_update_multi_key_works(test: &mut Test) -> Result<()> {
-    version_model_with_tag!();
-
-    let mut db = test.setup_db(models!(Item)).await;
+    let mut db = setup(test).await;
 
     // Create two items sharing the same tag
     let items = toasty::create!(Item::[
-        { tag: "batch", name: "alpha" },
-        { tag: "batch", name: "beta" },
+        { tag: "batch", status: "active", name: "alpha" },
+        { tag: "batch", status: "active", name: "beta" },
     ])
     .exec(&mut db)
     .await?;
@@ -222,11 +155,12 @@ pub async fn query_update_multi_key_works(test: &mut Test) -> Result<()> {
 
 /// Updating a record through the unique-index path (path 3) increments the
 /// version when the unique column changes.
-#[driver_test(requires(not(sql)))]
+#[driver_test(
+    requires(not(sql)),
+    scenario(crate::scenarios::versioned_user_unique_email)
+)]
 pub async fn unique_index_update_increments_version(test: &mut Test) -> Result<()> {
-    version_model_with_unique!();
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     let mut user = toasty::create!(User {
         email: "alice@example.com"
@@ -252,11 +186,12 @@ pub async fn unique_index_update_increments_version(test: &mut Test) -> Result<(
 
 /// Stale update on a model with a unique index: the second update from a stale
 /// snapshot should fail.
-#[driver_test(requires(not(sql)))]
+#[driver_test(
+    requires(not(sql)),
+    scenario(crate::scenarios::versioned_user_unique_email)
+)]
 pub async fn unique_index_stale_update_fails(test: &mut Test) -> Result<()> {
-    version_model_with_unique!();
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     let mut user = toasty::create!(User {
         email: "bob@example.com"
@@ -288,11 +223,9 @@ pub async fn unique_index_stale_update_fails(test: &mut Test) -> Result<()> {
 }
 
 /// Deleting a record checks the version — a fresh handle succeeds.
-#[driver_test(requires(not(sql)))]
+#[driver_test(requires(not(sql)), scenario(crate::scenarios::versioned_item))]
 pub async fn delete_checks_version(test: &mut Test) -> Result<()> {
-    version_model!();
-
-    let mut db = test.setup_db(models!(Item)).await;
+    let mut db = setup(test).await;
 
     let item = toasty::create!(Item { name: "hello" })
         .exec(&mut db)
@@ -310,11 +243,9 @@ pub async fn delete_checks_version(test: &mut Test) -> Result<()> {
 }
 
 /// Deleting from a stale snapshot (wrong version) should fail.
-#[driver_test(requires(not(sql)))]
+#[driver_test(requires(not(sql)), scenario(crate::scenarios::versioned_item))]
 pub async fn stale_delete_fails(test: &mut Test) -> Result<()> {
-    version_model!();
-
-    let mut db = test.setup_db(models!(Item)).await;
+    let mut db = setup(test).await;
 
     let mut item = toasty::create!(Item { name: "hello" })
         .exec(&mut db)

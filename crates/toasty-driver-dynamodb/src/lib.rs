@@ -32,6 +32,7 @@ use toasty_core::{
 use aws_sdk_dynamodb::{
     Client,
     error::SdkError,
+    operation::transact_write_items::TransactWriteItemsError,
     operation::update_item::UpdateItemError,
     types::{
         AttributeDefinition, AttributeValue, BillingMode, Delete, GlobalSecondaryIndex,
