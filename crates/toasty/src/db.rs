@@ -9,7 +9,7 @@ pub use builder::Builder;
 pub use connect::Connect;
 pub use connection::Connection;
 pub use executor::Executor;
-pub use pool::{Pool, PoolConfig, PoolStatus, Timeouts};
+pub use pool::{Pool, PoolStatus};
 pub use toasty_core::driver::{Capability, Driver};
 pub use tx::{Transaction, TransactionBuilder};
 
