@@ -3,7 +3,7 @@ use crate::Config;
 use anyhow::Result;
 use clap::Parser;
 use console::style;
-use std::collections::HashSet;
+use hashbrown::HashSet;
 use std::fs;
 use toasty::Db;
 use toasty::schema::db::Migration;

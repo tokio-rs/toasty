@@ -165,6 +165,7 @@ impl Query {
                 from: select.source,
                 filter: select.filter,
                 returning: None,
+                condition: Default::default(),
             },
             _ => todo!("{self:#?}"),
         }

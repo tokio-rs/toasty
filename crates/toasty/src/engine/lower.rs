@@ -1,9 +1,12 @@
+mod expr_pattern;
 mod insert;
 mod paginate;
 mod relation;
 mod returning;
 
-use std::{cell::Cell, collections::HashSet};
+use std::cell::Cell;
+
+use hashbrown::HashSet;
 
 use index_vec::IndexVec;
 use toasty_core::{
@@ -116,7 +119,7 @@ struct LoweringState<'a> {
     /// All new statements should include these as part of its dependencies
     dependencies: HashSet<hir::StmtId>,
 
-    /// Tracks errors that occured while lowering the statement
+    /// Tracks errors that occurred while lowering the statement
     errors: Vec<crate::Error>,
 }
 
@@ -420,6 +423,9 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     self.curr_stmt_info().deps.insert(target_id);
                 }
             }
+            stmt::Expr::BeginsWith(_) if self.capability().sql => {
+                self.lower_expr_begins_with(expr);
+            }
             stmt::Expr::Exists(_) if !self.capability().sql => {
                 let stmt::Expr::Exists(mut expr_exists) = expr.take() else {
                     panic!()
@@ -551,6 +557,10 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         lower.plan_stmt_delete_relations(stmt);
 
         lower.visit_filter_mut(&mut stmt.filter);
+
+        if let Some(expr) = &mut stmt.condition.expr {
+            lower.visit_expr_mut(expr);
+        }
 
         if let Some(returning) = &mut stmt.returning {
             lower.visit_returning_mut(returning);

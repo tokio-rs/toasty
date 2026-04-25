@@ -1,7 +1,7 @@
 //! Test N+1 query behavior with has_many associations
 
 use crate::prelude::*;
-use std::collections::HashSet;
+use hashbrown::HashSet;
 
 #[driver_test(id(ID), scenario(crate::scenarios::has_many_multi_relation))]
 pub async fn hello_world(test: &mut Test) -> Result<()> {

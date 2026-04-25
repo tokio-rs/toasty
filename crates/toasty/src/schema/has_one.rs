@@ -1,6 +1,7 @@
-use super::{Load, Relation};
+use super::{Load, Register, Relation};
 
-use toasty_core::stmt::Value;
+use toasty_core::schema::app::{self, FieldId, FieldTy, ModelId};
+use toasty_core::stmt::{self, Value};
 
 use std::fmt;
 
@@ -19,7 +20,7 @@ pub struct HasOne<T> {
 impl<T: Relation> Load for HasOne<T> {
     type Output = Self;
 
-    fn ty() -> toasty_core::stmt::Type {
+    fn ty() -> stmt::Type {
         T::ty_relation()
     }
 
@@ -79,6 +80,18 @@ impl<T: Relation> Relation for HasOne<T> {
 
     fn nullable() -> bool {
         T::nullable()
+    }
+
+    fn has_one_field_ty(pair: Option<FieldId>) -> FieldTy {
+        FieldTy::HasOne(app::HasOne {
+            target: <T::Model as Register>::id(),
+            expr_ty: stmt::Type::Model(<T::Model as Register>::id()),
+            // If unresolved, the pair is populated by the schema linker.
+            pair: pair.unwrap_or(FieldId {
+                model: ModelId(usize::MAX),
+                index: usize::MAX,
+            }),
+        })
     }
 }
 

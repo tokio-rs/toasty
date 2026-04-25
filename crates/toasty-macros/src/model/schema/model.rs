@@ -1,7 +1,8 @@
 use super::{
-    ErrorSet, Field, Index, IndexField, IndexScope, ModelAttr, Name, PrimaryKey, Variant,
-    VariantValue,
+    Column, ColumnType, ErrorSet, Field, Index, IndexField, IndexScope, ModelAttr, Name,
+    PrimaryKey, Variant, VariantValue,
 };
+use heck::ToSnakeCase;
 
 #[derive(Debug)]
 pub(crate) enum ModelKind {
@@ -14,6 +15,13 @@ pub(crate) enum ModelKind {
 }
 
 impl ModelKind {
+    pub(crate) fn as_root(&self) -> Option<&ModelRoot> {
+        match self {
+            ModelKind::Root(root) => Some(root),
+            _ => None,
+        }
+    }
+
     pub(crate) fn as_root_unwrap(&self) -> &ModelRoot {
         match self {
             ModelKind::Root(root) => root,
@@ -43,6 +51,9 @@ impl ModelKind {
 pub(crate) struct ModelRoot {
     /// Tracks fields in the primary key
     pub(crate) primary_key: PrimaryKey,
+
+    /// Index of the versionable field, if any
+    pub(crate) version_field: Option<usize>,
 
     /// The field struct identifier (e.g., `UserFields`)
     pub(crate) field_struct_ident: syn::Ident,
@@ -76,6 +87,16 @@ pub(crate) struct ModelEmbeddedStruct {
     pub(crate) fields_named: bool,
 }
 
+/// How the enum discriminant column is stored in the database.
+#[derive(Debug)]
+pub(crate) enum EnumStorageStrategy {
+    /// Native database enum type (default for string-label enums).
+    /// The optional string is a custom PostgreSQL type name.
+    NativeEnum(Option<String>),
+    /// Plain text/varchar column, no database-level enum enforcement.
+    PlainString(ColumnType),
+}
+
 #[derive(Debug)]
 pub(crate) struct ModelEmbeddedEnum {
     /// The field struct identifier (e.g., `ContactInfoFields`)
@@ -86,6 +107,10 @@ pub(crate) struct ModelEmbeddedEnum {
 
     /// The enum's variants with their names and discriminant values
     pub(crate) variants: Vec<Variant>,
+
+    /// Storage strategy for string-discriminant enums. `None` means integer
+    /// discriminants (no enum-level storage strategy applies).
+    pub(crate) storage_strategy: Option<EnumStorageStrategy>,
 }
 
 impl ModelEmbeddedEnum {
@@ -231,8 +256,31 @@ impl Model {
                 primary_key: true,
             });
 
+            // Iterate all extras rather than bailing on the first so every
+            // offending site surfaces in one compile pass.
+            let mut version_iter = fields
+                .iter()
+                .enumerate()
+                .filter(|(_, f)| f.attrs.versionable);
+            let version_field = version_iter.next().map(|(i, _)| i);
+            let mut extra_err: Option<syn::Error> = None;
+            for (_, extra) in version_iter {
+                let err = syn::Error::new_spanned(
+                    &extra.name.ident,
+                    "only one field may be annotated with #[version]",
+                );
+                match &mut extra_err {
+                    Some(acc) => acc.combine(err),
+                    None => extra_err = Some(err),
+                }
+            }
+            if let Some(err) = extra_err {
+                return Err(err);
+            }
+
             ModelKind::Root(ModelRoot {
                 primary_key: PrimaryKey { fields: pk_fields },
+                version_field,
                 field_struct_ident: struct_ident("Fields", ast),
                 field_list_struct_ident: struct_list_ident("ListFields", ast),
                 query_struct_ident: struct_ident("Query", ast),
@@ -329,6 +377,23 @@ impl Model {
             ));
         }
 
+        // Parse enum-level #[column(type = ...)] attribute to determine storage strategy.
+        let mut enum_column_type: Option<ColumnType> = None;
+        for attr in &ast.attrs {
+            if attr.path().is_ident("column") {
+                let col = Column::from_ast(attr)?;
+                if let Some(ty) = col.ty {
+                    if enum_column_type.is_some() {
+                        return Err(syn::Error::new_spanned(
+                            attr,
+                            "duplicate #[column(type = ...)] attribute on enum",
+                        ));
+                    }
+                    enum_column_type = Some(ty);
+                }
+            }
+        }
+
         let mut variants = vec![];
         let mut all_fields: Vec<Field> = vec![];
         let mut errs = ErrorSet::new();
@@ -336,7 +401,7 @@ impl Model {
         let model_ident = ast.ident.clone();
 
         // Parse all variants in a single pass, defaulting omitted discriminants
-        // to string labels using the variant identifier.
+        // to string labels using the variant identifier converted to snake_case.
         for (variant_index, variant) in ast.variants.iter().enumerate() {
             let has_fields = !variant.fields.is_empty();
 
@@ -349,11 +414,11 @@ impl Model {
                 }
             };
 
-            // Resolve discriminant: explicit value or default to variant name as string
+            // Resolve discriminant: explicit value or default to variant name in snake_case
             let attr = match explicit_attr {
                 Some(a) => a,
                 None => VariantAttr {
-                    discriminant: VariantValue::String(variant.ident.to_string()),
+                    discriminant: VariantValue::String(variant.ident.to_string().to_snake_case()),
                 },
             };
 
@@ -404,9 +469,62 @@ impl Model {
             }
         }
 
+        // Validate string label lengths (max 63 bytes).
+        for v in &variants {
+            if let VariantValue::String(s) = &v.attrs.discriminant
+                && s.len() > 63
+            {
+                errs.push(syn::Error::new_spanned(
+                    &v.ident,
+                    format!(
+                        "variant label \"{}\" is {} bytes; maximum is 63",
+                        s,
+                        s.len()
+                    ),
+                ));
+            }
+        }
+
         if let Some(err) = errs.collect() {
             return Err(err);
         }
+
+        // Determine storage strategy for string-discriminant enums.
+        let uses_strings = variants
+            .first()
+            .map(|v| v.attrs.discriminant.is_string())
+            .unwrap_or(false);
+
+        let storage_strategy = if uses_strings {
+            match enum_column_type {
+                // Explicit `#[column(type = text)]` or `#[column(type = varchar(N))]`
+                // opts out of native enum storage.
+                Some(ty) if ty.is_string_like() => Some(EnumStorageStrategy::PlainString(ty)),
+                // Explicit `#[column(type = enum)]` or `#[column(type = enum("name"))]`
+                Some(ColumnType::Enum(custom_name)) => {
+                    Some(EnumStorageStrategy::NativeEnum(custom_name))
+                }
+                // No explicit type attribute: default to native enum.
+                None => Some(EnumStorageStrategy::NativeEnum(None)),
+                // Any other type override on an enum is an error.
+                Some(_) => {
+                    return Err(syn::Error::new_spanned(
+                        ast,
+                        "unsupported #[column(type = ...)] for enum; \
+                         use `text`, `varchar(N)`, or `enum` / `enum(\"name\")`",
+                    ));
+                }
+            }
+        } else {
+            // Integer discriminants: enum-level type override is not applicable.
+            if enum_column_type.is_some() {
+                return Err(syn::Error::new_spanned(
+                    ast,
+                    "#[column(type = ...)] is not supported for integer-discriminant enums",
+                ));
+            }
+            None
+        };
 
         let mut indices = vec![];
         collect_field_indices(&all_fields, &mut indices);
@@ -420,6 +538,7 @@ impl Model {
                 field_struct_ident: enum_ident("Fields", ast),
                 field_list_struct_ident: enum_list_ident("ListFields", ast),
                 variants,
+                storage_strategy,
             }),
             indices,
             table: None,

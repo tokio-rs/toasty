@@ -93,7 +93,7 @@ pub async fn batch_create_and_update_rolls_back_on_update_failure(t: &mut Test) 
     // "bob" was rolled back and "alice" was not renamed
     let all: Vec<User> = User::all().exec(&mut db).await?;
     assert_eq!(2, all.len());
-    let emails: std::collections::HashSet<_> = all.iter().map(|u| u.email.as_str()).collect();
+    let emails: hashbrown::HashSet<_> = all.iter().map(|u| u.email.as_str()).collect();
     assert!(emails.contains("alice@example.com"));
     assert!(emails.contains("taken@example.com"));
 

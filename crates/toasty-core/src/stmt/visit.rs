@@ -2,13 +2,13 @@
 
 use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprAny, ExprArg,
-    ExprBinaryOp, ExprCast, ExprColumn, ExprError, ExprExists, ExprFunc, ExprInList,
-    ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprList, ExprMap, ExprMatch, ExprNot,
-    ExprOr, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, Filter,
-    FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, LimitCursor,
-    LimitOffset, Node, OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select, Source,
-    SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor, TableRef,
-    TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
+    ExprBeginsWith, ExprBinaryOp, ExprCast, ExprColumn, ExprError, ExprExists, ExprFunc,
+    ExprInList, ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprLike, ExprList, ExprMap,
+    ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp,
+    ExprStmt, Filter, FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit,
+    LimitCursor, LimitOffset, Node, OrderBy, OrderByExpr, Path, Projection, Query, Returning,
+    Select, Source, SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor,
+    TableRef, TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
 };
 
 /// Immutable visitor trait for the statement AST.
@@ -95,6 +95,13 @@ pub trait Visit {
     /// The default implementation delegates to [`visit_expr_arg`].
     fn visit_expr_arg(&mut self, i: &ExprArg) {
         visit_expr_arg(self, i);
+    }
+
+    /// Visits an [`ExprBeginsWith`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_begins_with`].
+    fn visit_expr_begins_with(&mut self, i: &ExprBeginsWith) {
+        visit_expr_begins_with(self, i);
     }
 
     /// Visits an [`ExprBinaryOp`] node.
@@ -193,6 +200,13 @@ pub trait Visit {
     /// The default implementation delegates to [`visit_expr_let`].
     fn visit_expr_let(&mut self, i: &ExprLet) {
         visit_expr_let(self, i);
+    }
+
+    /// Visits an [`ExprLike`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_like`].
+    fn visit_expr_like(&mut self, i: &ExprLike) {
+        visit_expr_like(self, i);
     }
 
     /// Visits an [`ExprMap`] node.
@@ -526,6 +540,10 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_expr_arg(&mut **self, i);
     }
 
+    fn visit_expr_begins_with(&mut self, i: &ExprBeginsWith) {
+        Visit::visit_expr_begins_with(&mut **self, i);
+    }
+
     fn visit_expr_binary_op(&mut self, i: &ExprBinaryOp) {
         Visit::visit_expr_binary_op(&mut **self, i);
     }
@@ -576,6 +594,10 @@ impl<V: Visit> Visit for &mut V {
 
     fn visit_expr_let(&mut self, i: &ExprLet) {
         Visit::visit_expr_let(&mut **self, i);
+    }
+
+    fn visit_expr_like(&mut self, i: &ExprLike) {
+        Visit::visit_expr_like(&mut **self, i);
     }
 
     fn visit_expr_map(&mut self, i: &ExprMap) {
@@ -803,17 +825,20 @@ where
         Expr::And(expr) => v.visit_expr_and(expr),
         Expr::Any(expr) => v.visit_expr_any(expr),
         Expr::Arg(expr) => v.visit_expr_arg(expr),
+        Expr::BeginsWith(expr) => v.visit_expr_begins_with(expr),
         Expr::BinaryOp(expr) => v.visit_expr_binary_op(expr),
         Expr::Cast(expr) => v.visit_expr_cast(expr),
         Expr::Default => v.visit_expr_default(),
         Expr::Error(expr) => v.visit_expr_error(expr),
         Expr::Exists(expr) => v.visit_expr_exists(expr),
         Expr::Func(expr) => v.visit_expr_func(expr),
+        Expr::Ident(_) => {}
         Expr::InList(expr) => v.visit_expr_in_list(expr),
         Expr::InSubquery(expr) => v.visit_expr_in_subquery(expr),
         Expr::IsNull(expr) => v.visit_expr_is_null(expr),
         Expr::IsVariant(expr) => v.visit_expr_is_variant(expr),
         Expr::Let(expr) => v.visit_expr_let(expr),
+        Expr::Like(expr) => v.visit_expr_like(expr),
         Expr::Map(expr) => v.visit_expr_map(expr),
         Expr::Match(expr) => v.visit_expr_match(expr),
         Expr::Not(expr) => v.visit_expr_not(expr),
@@ -850,6 +875,15 @@ pub fn visit_expr_arg<V>(v: &mut V, node: &ExprArg)
 where
     V: Visit + ?Sized,
 {
+}
+
+/// Default traversal for [`ExprBeginsWith`] nodes. Visits the attribute expression and prefix.
+pub fn visit_expr_begins_with<V>(v: &mut V, node: &ExprBeginsWith)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_expr(&node.expr);
+    v.visit_expr(&node.prefix);
 }
 
 /// Default traversal for [`ExprBinaryOp`] nodes. Visits left and right operands.
@@ -976,6 +1010,15 @@ where
         v.visit_expr(binding);
     }
     v.visit_expr(&node.body);
+}
+
+/// Default traversal for [`ExprLike`] nodes. Visits the attribute expression and pattern.
+pub fn visit_expr_like<V>(v: &mut V, node: &ExprLike)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_expr(&node.expr);
+    v.visit_expr(&node.pattern);
 }
 
 /// Default traversal for [`ExprMap`] nodes. Visits base and map expressions.
@@ -1286,6 +1329,7 @@ where
 {
     v.visit_source(&node.from);
     v.visit_filter(&node.filter);
+    v.visit_condition(&node.condition);
 
     if let Some(returning) = &node.returning {
         v.visit_returning(returning);

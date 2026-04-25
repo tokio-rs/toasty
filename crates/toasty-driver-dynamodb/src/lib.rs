@@ -32,6 +32,7 @@ use toasty_core::{
 use aws_sdk_dynamodb::{
     Client,
     error::SdkError,
+    operation::transact_write_items::TransactWriteItemsError,
     operation::update_item::UpdateItemError,
     types::{
         AttributeDefinition, AttributeValue, BillingMode, Delete, GlobalSecondaryIndex,
@@ -189,8 +190,8 @@ impl Connection {
                     "last_insert_id_hack is MySQL-specific and should not be set for DynamoDB"
                 );
                 match op.stmt {
-                    stmt::Statement::Insert(op) => self.exec_insert(&schema.db, op).await,
-                    _ => todo!("op={:#?}", op),
+                    stmt::Statement::Insert(insert) => self.exec_insert(&schema.db, insert).await,
+                    _ => todo!("op={:#?}", op.stmt),
                 }
             }
             Operation::Transaction(_) => Err(Error::unsupported_feature(
@@ -384,6 +385,16 @@ fn ddb_expression(
         stmt::Expr::Not(expr_not) => {
             let inner = ddb_expression(cx, attrs, primary, &expr_not.expr);
             format!("(NOT {inner})")
+        }
+        stmt::Expr::BeginsWith(expr_begins_with) => {
+            let expr = ddb_expression(cx, attrs, primary, &expr_begins_with.expr);
+            let prefix = ddb_expression(cx, attrs, primary, &expr_begins_with.prefix);
+            format!("begins_with({expr}, {prefix})")
+        }
+        stmt::Expr::Like(_) => {
+            panic!(
+                "LIKE is not supported by the DynamoDB driver; use begins_with for prefix matching"
+            )
         }
         _ => todo!("FILTER = {:#?}", expr),
     }

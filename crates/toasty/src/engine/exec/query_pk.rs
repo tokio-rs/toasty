@@ -3,6 +3,7 @@ use crate::{
     engine::exec::{Action, Exec, Output, VarId},
 };
 use toasty_core::{
+    driver::operation::QueryPkLimit,
     driver::{ExecResponse, Rows, operation},
     schema::db::{ColumnId, IndexId, TableId},
     stmt,
@@ -31,14 +32,11 @@ pub(crate) struct QueryPk {
     /// Filter to pass to the database
     pub row_filter: Option<stmt::Expr>,
 
-    /// Maximum number of items to return.
-    pub limit: Option<i64>,
+    /// Limit and pagination bounds for this query. `None` means unbounded.
+    pub limit: Option<QueryPkLimit>,
 
     /// Sort key ordering direction.
     pub order: Option<stmt::Direction>,
-
-    /// Cursor for resuming a paginated query.
-    pub cursor: Option<stmt::Value>,
 }
 
 impl Exec<'_> {
@@ -54,11 +52,15 @@ impl Exec<'_> {
         let mut all_rows = Vec::new();
         let mut response_cursor = None;
 
-        // Pagination with multiple filters is not supported — a cursor is only
-        // meaningful for a single partition key query.
+        // A limit or pagination clause is only meaningful against a single
+        // partition key query. With multiple filters, each partition call
+        // would apply the limit/offset independently and produce wrong
+        // totals (e.g. `.limit(10)` across 3 partitions could return 30
+        // rows, each offset skipping within its own partition).
         assert!(
-            action.cursor.is_none() || filters.len() <= 1,
-            "cursor-based pagination with multiple partition filters is not supported"
+            action.limit.is_none() || filters.len() <= 1,
+            "limit/pagination with multiple partition filters is not supported; filters={}",
+            filters.len()
         );
 
         // When there are multiple filters, discard the response cursor since it
@@ -76,9 +78,8 @@ impl Exec<'_> {
                         select: action.columns.clone(),
                         pk_filter: f,
                         filter: action.row_filter.clone(),
-                        limit: action.limit,
+                        limit: action.limit.clone(),
                         order: action.order,
-                        cursor: action.cursor.clone(),
                     }
                     .into(),
                 )

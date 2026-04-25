@@ -4,7 +4,7 @@ The `filter_by_*` methods generated for indexed fields cover simple equality
 lookups. For anything else — comparisons, combining conditions with AND/OR,
 checking for null — use `Model::filter()` with field expressions.
 
-| Expression | Description | SQL equivalent |
+| Expression | Description | Database equivalent |
 |---|---|---|
 | [`.eq(value)`](#equality-and-inequality) | Equal | `= value` |
 | [`.ne(value)`](#equality-and-inequality) | Not equal | `!= value` |
@@ -15,6 +15,8 @@ checking for null — use `Model::filter()` with field expressions.
 | [`.in_list([...])`](#membership-with-in_list) | Value in list | `IN (...)` |
 | [`.is_none()`](#null-checks) | Null check (`Option` fields) | `IS NULL` |
 | [`.is_some()`](#null-checks) | Not-null check (`Option` fields) | `IS NOT NULL` |
+| [`.begins_with(prefix)`](#string-pattern-matching) | Prefix match | `begins_with(field, prefix)` / `LIKE 'prefix%'` |
+| [`.like(pattern)`](#string-pattern-matching) | SQL pattern match | `LIKE pattern` |
 | [`.and(expr)`](#combining-with-and) | Both conditions true | `AND` |
 | [`.or(expr)`](#combining-with-or) | Either condition true | `OR` |
 | [`.not()` / `!expr`](#negation-with-not) | Negate condition | `NOT` |
@@ -384,6 +386,60 @@ let users = User::filter(
 # Ok(())
 # }
 ```
+
+## String pattern matching
+
+### `begins_with`
+
+`.begins_with()` tests whether a string field starts with the given prefix. It
+works on all supported databases — SQL drivers translate it to `LIKE 'prefix%'`,
+and DynamoDB uses its native `begins_with` condition expression:
+
+```rust
+# use toasty::Model;
+# #[derive(Debug, toasty::Model)]
+# struct User {
+#     #[key]
+#     #[auto]
+#     id: u64,
+#     name: String,
+# }
+# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
+// Find users whose name starts with "Al"
+let users = User::filter(User::fields().name().begins_with("Al"))
+    .exec(&mut db)
+    .await?;
+# Ok(())
+# }
+```
+
+### `like`
+
+`.like()` tests a string field against a SQL `LIKE` pattern. `%` matches any
+sequence of characters; `_` matches any single character. **This operator is
+only supported on SQL databases (SQLite, PostgreSQL, MySQL).** Calling it
+against DynamoDB will panic at runtime.
+
+```rust
+# use toasty::Model;
+# #[derive(Debug, toasty::Model)]
+# struct User {
+#     #[key]
+#     #[auto]
+#     id: u64,
+#     name: String,
+# }
+# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
+// Find users whose name matches a pattern
+let users = User::filter(User::fields().name().like("Al%"))
+    .exec(&mut db)
+    .await?;
+# Ok(())
+# }
+```
+
+Prefer `.begins_with()` over `.like("prefix%")` when you only need a prefix
+match — it works across all drivers.
 
 ## Filtering on associations
 

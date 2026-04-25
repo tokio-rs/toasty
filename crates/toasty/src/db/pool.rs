@@ -1,6 +1,6 @@
 //! Connection pooling for database connections.
 
-pub use deadpool::managed::Timeouts;
+use deadpool::managed::Timeouts;
 use std::sync::Arc;
 use toasty_core::driver::{Capability, Driver, Rows};
 use toasty_core::stmt::Value;
@@ -19,26 +19,17 @@ fn get_default_pool_max_size() -> usize {
 
 /// Configuration for connection pool behavior.
 #[derive(Debug, Clone)]
-pub struct PoolConfig {
-    /// Maximum number of connections the pool will maintain.
-    pub max_size: usize,
-    /// Timeout settings for acquiring a connection from the pool.
-    pub timeouts: Timeouts,
-}
-
-impl PoolConfig {
-    /// Creates a new pool configuration with default settings.
-    pub fn new() -> Self {
-        Self {
-            max_size: get_default_pool_max_size(),
-            timeouts: Default::default(),
-        }
-    }
+pub(crate) struct PoolConfig {
+    pub(crate) max_size: usize,
+    pub(crate) timeouts: Timeouts,
 }
 
 impl Default for PoolConfig {
     fn default() -> Self {
-        Self::new()
+        Self {
+            max_size: get_default_pool_max_size(),
+            timeouts: Default::default(),
+        }
     }
 }
 
@@ -86,22 +77,37 @@ pub struct Pool {
 }
 
 impl Pool {
-    /// Creates a new connection pool from the given driver and engine.
-    pub(crate) fn new(driver: impl Driver, engine: Engine) -> crate::Result<Self> {
+    /// Creates a new connection pool from the given driver, engine, and
+    /// configuration.
+    pub(crate) fn new(
+        driver: impl Driver,
+        engine: Engine,
+        config: PoolConfig,
+    ) -> crate::Result<Self> {
         let capability = driver.capability();
-        let max_connections = driver.max_connections();
+        let driver_cap = driver.max_connections();
 
-        let mut builder = deadpool::managed::Pool::builder(Manager {
+        let effective_max = match driver_cap {
+            Some(cap) if cap < config.max_size => {
+                tracing::warn!(
+                    requested = config.max_size,
+                    cap,
+                    "driver caps max pool size below the requested value; using driver cap"
+                );
+                cap
+            }
+            _ => config.max_size,
+        };
+
+        let inner = deadpool::managed::Pool::builder(Manager {
             driver: Box::new(driver),
             engine,
         })
-        .runtime(deadpool::Runtime::Tokio1);
-
-        if let Some(max_connections) = max_connections {
-            builder = builder.max_size(max_connections);
-        }
-
-        let inner = builder.build().map_err(|e| {
+        .runtime(deadpool::Runtime::Tokio1)
+        .max_size(effective_max)
+        .timeouts(config.timeouts)
+        .build()
+        .map_err(|e| {
             tracing::error!(error = %e, "failed to build connection pool");
             toasty_core::Error::connection_pool(e)
         })?;

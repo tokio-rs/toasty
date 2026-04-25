@@ -134,6 +134,18 @@ impl Value {
                 }
             }
 
+            CT::MYSQL_TYPE_FLOAT => match ty {
+                stmt::Type::F32 => extract_or_null(row, i, stmt::Value::F32),
+                stmt::Type::F64 => extract_or_null(row, i, |v: f32| stmt::Value::F64(v as f64)),
+                _ => todo!("ty={ty:#?}"),
+            },
+
+            CT::MYSQL_TYPE_DOUBLE => match ty {
+                stmt::Type::F64 => extract_or_null(row, i, stmt::Value::F64),
+                stmt::Type::F32 => extract_or_null(row, i, |v: f64| stmt::Value::F32(v as f32)),
+                _ => todo!("ty={ty:#?}"),
+            },
+
             CT::MYSQL_TYPE_NEWDECIMAL | CT::MYSQL_TYPE_DECIMAL => match ty {
                 #[cfg(feature = "rust_decimal")]
                 stmt::Type::Decimal => extract_or_null(row, i, |s: String| {
@@ -172,6 +184,8 @@ impl ToValue for Value {
             CoreValue::U16(value) => value.to_value(),
             CoreValue::U32(value) => value.to_value(),
             CoreValue::U64(value) => value.to_value(),
+            CoreValue::F32(value) => value.to_value(),
+            CoreValue::F64(value) => value.to_value(),
             CoreValue::Null => mysql_async::Value::NULL,
             CoreValue::String(value) => value.to_value(),
             CoreValue::Bytes(value) => value.to_value(),

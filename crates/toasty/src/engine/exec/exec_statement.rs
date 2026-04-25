@@ -115,8 +115,17 @@ impl Exec<'_> {
             return Ok(());
         }
 
+        // Only extract bind parameters for SQL drivers. Key-value drivers
+        // (e.g., DynamoDB) read values directly from the statement.
+        let params = if self.engine.capability().sql {
+            self.engine.extract_params(&mut stmt)
+        } else {
+            vec![]
+        };
+
         let op = operation::QuerySql {
             stmt,
+            params,
             ret: if action.conditional_update_with_no_returning {
                 Some(vec![stmt::Type::I64, stmt::Type::I64])
             } else if mysql_insert_returning.is_some() {

@@ -127,6 +127,9 @@ mod kw {
     syn::custom_keyword!(u32);
     syn::custom_keyword!(u64);
 
+    syn::custom_keyword!(f32);
+    syn::custom_keyword!(f64);
+
     syn::custom_keyword!(text);
     syn::custom_keyword!(varchar);
 
@@ -145,6 +148,7 @@ pub enum ColumnType {
     Boolean,
     Integer(u8),
     UnsignedInteger(u8),
+    Float(u8),
     Text,
     VarChar(u64),
     Numeric(Option<(u32, u32)>),
@@ -154,7 +158,19 @@ pub enum ColumnType {
     Date,
     Time(u8),
     DateTime(u8),
+    /// Native database enum type. The optional string is a custom PostgreSQL
+    /// type name; when `None`, the name is derived from the Rust enum in
+    /// snake_case.
+    Enum(Option<String>),
     Custom(syn::LitStr),
+}
+
+impl ColumnType {
+    /// Returns `true` for `Text` and `VarChar` — the plain string storage types
+    /// that opt out of native enum representation.
+    pub(crate) fn is_string_like(&self) -> bool {
+        matches!(self, Self::Text | Self::VarChar(_))
+    }
 }
 
 impl syn::parse::Parse for ColumnType {
@@ -198,6 +214,9 @@ impl syn::parse::Parse for ColumnType {
         peek_ident!(u32, UnsignedInteger(4));
         peek_ident!(u64, UnsignedInteger(8));
 
+        peek_ident!(f32, Float(4));
+        peek_ident!(f64, Float(8));
+
         peek_ident!(text, Text);
         peek_ident_paren_int!(varchar, VarChar);
 
@@ -227,6 +246,26 @@ impl syn::parse::Parse for ColumnType {
         peek_ident_paren_int!(time, Time);
         peek_ident_paren_int!(datetime, DateTime);
 
+        // `enum` or `enum("custom_type_name")`
+        if lookahead.peek(syn::Token![enum]) {
+            let _kw: syn::Token![enum] = input.parse()?;
+            if input.peek(syn::token::Paren) {
+                let content;
+                parenthesized!(content in input);
+                let lit: syn::LitStr = content.parse()?;
+                let name = lit.value();
+                if name.is_empty() {
+                    return Err(syn::Error::new_spanned(
+                        lit,
+                        "enum type name must not be empty",
+                    ));
+                }
+                return Ok(Self::Enum(Some(name)));
+            } else {
+                return Ok(Self::Enum(None));
+            }
+        }
+
         Err(lookahead.error())
     }
 }
@@ -243,6 +282,7 @@ impl ColumnType {
             Self::UnsignedInteger(size) => {
                 quote! { #toasty::core::schema::db::Type::UnsignedInteger(#size) }
             }
+            Self::Float(size) => quote! { #toasty::core::schema::db::Type::Float(#size) },
             Self::Text => quote! { #toasty::core::schema::db::Type::Text },
             Self::VarChar(size) => quote! { #toasty::core::schema::db::Type::VarChar(#size) },
             Self::Numeric(None) => quote! { #toasty::core::schema::db::Type::Numeric(None) },
@@ -258,6 +298,14 @@ impl ColumnType {
             Self::Time(precision) => quote! { #toasty::core::schema::db::Type::Time(#precision) },
             Self::DateTime(precision) => {
                 quote! { #toasty::core::schema::db::Type::DateTime(#precision) }
+            }
+            Self::Enum(_) => {
+                // Enum storage type is constructed at the enum level with labels
+                // and name, not via this generic expand path. This arm should not
+                // be reached for enum types.
+                panic!(
+                    "ColumnType::Enum should be expanded via expand_enum_storage_ty, not expand_with"
+                )
             }
             Self::Custom(custom) => quote! { #toasty::core::schema::db::Type::Custom(#custom) },
         }

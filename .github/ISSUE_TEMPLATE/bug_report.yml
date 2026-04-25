@@ -1,0 +1,50 @@
+name: Bug report
+description: Report incorrect or unexpected behavior in Toasty.
+labels: ["C-bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A small, self-contained reproducer is the single most useful thing
+        you can include.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What did you expect to happen, and what happened instead?
+
+  - type: textarea
+    id: reproducer
+    attributes:
+      label: Reproducer
+      description: |
+        A minimal example that demonstrates the issue. A failing test in
+        `crates/toasty-driver-integration-suite/src/tests/` is ideal; a
+        small standalone snippet works too.
+      render: rust
+
+  - type: input
+    id: driver
+    attributes:
+      label: Database driver
+      description: |
+        Which driver(s) reproduce this. Any of:
+        - an in-tree driver: SQLite, PostgreSQL, MySQL, DynamoDB
+        - multiple (list them)
+        - a third-party driver (name it)
+        - other / none, if the bug is not driver-specific
+      placeholder: SQLite, or "all SQL drivers", or "none — in toasty-core"
+
+  - type: input
+    id: version
+    attributes:
+      label: Toasty version
+      description: Crate version or commit SHA.
+      placeholder: "0.x.y or commit abcdef0"
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional context
+      description: Backtrace, generated SQL, related issues, anything else relevant.

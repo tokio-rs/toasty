@@ -1,0 +1,184 @@
+name: Claude Triage
+
+# Auto-apply a constrained subset of GitHub labels to new issues and PRs.
+# Only C- (category) and A- (area) labels — plus S-needs-repro for bugs with
+# no reproducer — are applied automatically. Priority, impact, status, and
+# community labels are left for humans. See docs/dev/labels.md.
+
+# SECURITY: the PR job uses `pull_request_target`, which runs in the base
+# repo's context with full secrets. PR contents (branch, files, scripts,
+# Cargo.toml, build.rs, etc.) are UNTRUSTED — a malicious fork could use
+# them to exfiltrate secrets. This workflow must never execute code from
+# the PR: no `actions/checkout` of the PR ref, no `cargo build`, no `npm
+# install`, no running of fork-supplied scripts. The only safe operations
+# are reading PR metadata via `gh` and applying labels.
+
+on:
+  issues:
+    types: [opened]
+  pull_request_target:
+    types: [opened, ready_for_review]
+
+# Collapse overlapping runs on the same issue/PR (e.g. a rapid
+# open → ready_for_review sequence, or PR amend/rebase). Issues
+# and PRs share a number space in GitHub, so one key suffices.
+concurrency:
+  group: claude-triage-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  triage-issue:
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Run Claude Code for Issue Triage
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          allowed_non_write_users: "*"
+          prompt: |
+            You are a triage bot for the toasty repository. Apply GitHub labels
+            to issue #${{ github.event.issue.number }} based on its content.
+
+            Steps:
+
+            1. Read the issue:
+               gh issue view ${{ github.event.issue.number }} --json title,body,labels
+
+            2. Choose EXACTLY ONE category label from this allowlist. Skip if
+               nothing clearly fits — do not guess.
+               - C-bug          code behaves incorrectly
+               - C-feature      new feature request or missing use case
+               - C-enhancement  improvement to an existing feature
+               - C-refactor     internal change, no user-visible effect
+               - C-docs         user docs, dev docs, rustdoc
+               - C-chore        CI, release tooling, scripts, lint fixes
+
+            3. Choose zero or more area labels. Apply A-<area> only when
+               the issue is clearly about that area — the body names the
+               crate/path, or describes behavior that obviously lives
+               there. Most issues carry 0 or 1 A- labels; 2 is possible
+               for a genuinely cross-cutting issue. More than 2 is almost
+               never right. When the issue is vague, broad, or doesn't
+               clearly belong to an area, leave A- labels off.
+
+               - A-engine     toasty/src/engine/
+               - A-macros     toasty-macros, create!, models!
+               - A-schema     toasty-core/src/schema/
+               - A-sql        toasty-sql
+               - A-driver     Driver trait, SQLite/PostgreSQL/MySQL/DynamoDB
+               - A-migration  toasty-cli, migration generation
+               - A-tests      toasty-driver-integration-suite, workspace tests
+               - A-docs       docs/ mdbook content
+               - A-ci         .github/workflows, release-plz, scripts/
+
+            4. If (and only if) you chose C-bug AND the body has no clear
+               reproducer — steps to reproduce, a code snippet, or a minimal
+               example — also apply S-needs-repro.
+
+            5. Apply labels, skipping any already present:
+               gh issue edit ${{ github.event.issue.number }} --add-label <label>
+
+            NEVER apply (reserved for humans):
+            C-sketch, C-tracking, C-discussion, all P-*, all I-*,
+            S-needs-design, S-blocked, S-needs-info, S-waiting-on-author,
+            S-waiting-on-review, good first issue, help wanted.
+
+            Do nothing else: no comments, no edits to the issue body, no
+            closing. If the issue is ambiguous, apply fewer labels rather
+            than guessing.
+          claude_args: |
+            --allowed-tools "Bash(gh issue view:*),Bash(gh issue edit:*),Bash(gh label list:*)"
+
+  triage-pr:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Run Claude Code for PR Triage
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          allowed_non_write_users: "*"
+          prompt: |
+            You are a triage bot for the toasty repository. Apply GitHub labels
+            to PR #${{ github.event.pull_request.number }} based on its title
+            and changed files.
+
+            Steps:
+
+            1. Read the PR metadata and file list:
+               gh pr view ${{ github.event.pull_request.number }} --json title,body,labels,files
+
+            2. Choose EXACTLY ONE category label. The title is a Conventional
+               Commit (feat:, fix:, docs:, refactor:, chore:, ci:, build:,
+               test:, perf:, style:) — use it as a strong hint, verified
+               against the diff:
+               - C-bug          fix:
+               - C-feature      feat:
+               - C-enhancement  improvement to existing feature (often feat: or perf:)
+               - C-refactor     refactor:
+               - C-docs         docs:
+               - C-chore        chore:, ci:, build:
+
+            3. Choose area labels. Most PRs carry 0, 1, or 2 A- labels.
+               More than 2 is unusual and requires each area to be a
+               genuine focus of the PR.
+
+               Area paths (necessary but not sufficient):
+               - A-engine     crates/toasty/src/engine/**
+               - A-macros     crates/toasty-macros/**
+               - A-schema     crates/toasty-core/src/schema/**
+               - A-sql        crates/toasty-sql/**
+               - A-driver     crates/toasty-driver-*/**
+               - A-migration  crates/toasty-cli/**
+               - A-tests      crates/toasty-driver-integration-suite/**, tests/**
+               - A-docs       docs/**
+               - A-ci         .github/**, scripts/**
+
+               Apply A-<area> only when the PR meaningfully changes that
+               area: modifies its logic, behavior, or public API, or fixes
+               a bug specific to it. Tests added alongside a feature or
+               fix are covered by the PR's primary area — they do not
+               earn A-tests on their own. Apply A-tests only when the PR
+               is primarily a testing effort.
+
+               Do NOT apply an A- label for:
+               - Mechanical or sweeping changes that touch a crate
+                 without changing its behavior: dependency swaps, import
+                 rewrites, mass renames, formatting passes. These often
+                 warrant C-refactor or C-chore with zero A- labels.
+               - Incidental touches: a handful of lines changed only
+                 because a helper moved, a type was renamed, or an API
+                 shifted elsewhere.
+               - Pure Cargo.toml dependency bumps.
+
+               When in doubt, leave the label off. Fewer labels beats
+               over-labeling.
+
+            4. Apply labels, skipping any already present:
+               gh pr edit ${{ github.event.pull_request.number }} --add-label <label>
+
+            NEVER apply (reserved for humans):
+            C-sketch, C-tracking, C-discussion, all P-*, all I-*, all S-*,
+            good first issue, help wanted.
+
+            Do nothing else: no review, no comments, no edits to the PR
+            description, no merges. Do not run tests or build commands.
+          claude_args: |
+            --allowed-tools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr edit:*),Bash(gh label list:*)"

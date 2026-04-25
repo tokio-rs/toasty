@@ -1,6 +1,8 @@
-use super::{Load, Relation, Scope};
+use super::{Load, Register, Relation, Scope};
 
-use toasty_core::stmt::Value;
+use toasty_core::schema::Name;
+use toasty_core::schema::app::{self, FieldId, FieldTy, ModelId};
+use toasty_core::stmt::{self, Value};
 
 use std::fmt;
 
@@ -20,8 +22,8 @@ pub struct HasMany<T> {
 impl<T: Relation> Load for HasMany<T> {
     type Output = Self;
 
-    fn ty() -> toasty_core::stmt::Type {
-        toasty_core::stmt::Type::list(T::ty())
+    fn ty() -> stmt::Type {
+        stmt::Type::list(T::ty())
     }
 
     fn load(input: Value) -> crate::Result<Self> {
@@ -92,6 +94,19 @@ impl<T: Relation> Relation for HasMany<T> {
 
     fn nullable() -> bool {
         T::nullable()
+    }
+
+    fn has_many_field_ty(singular: Name, pair: Option<FieldId>) -> FieldTy {
+        FieldTy::HasMany(app::HasMany {
+            target: <T::Model as Register>::id(),
+            expr_ty: stmt::Type::List(Box::new(stmt::Type::Model(<T::Model as Register>::id()))),
+            singular,
+            // If unresolved, the pair is populated by the schema linker.
+            pair: pair.unwrap_or(FieldId {
+                model: ModelId(usize::MAX),
+                index: usize::MAX,
+            }),
+        })
     }
 }
 

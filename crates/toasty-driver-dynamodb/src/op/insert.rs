@@ -53,16 +53,56 @@ impl Connection {
 
         let count = insert_items.len();
 
+        // Build an attribute_not_exists condition for the version column, if any.
+        let version_condition = table.columns.iter().find(|col| col.versionable).map(|col| {
+            let placeholder = format!("#{}", col.id.index);
+            let condition = format!("attribute_not_exists({placeholder})");
+            let mut names = std::collections::HashMap::new();
+            names.insert(placeholder, col.name.clone());
+            (condition, names)
+        });
+
         match &unique_indices[..] {
             [] => {
                 if insert_items.len() == 1 {
                     tracing::trace!(table_name = %table.name, "inserting single item");
                     let insert_items = insert_items.into_iter().next().unwrap();
 
-                    self.client
+                    let mut req = self
+                        .client
                         .put_item()
                         .table_name(&table.name)
-                        .set_item(Some(insert_items))
+                        .set_item(Some(insert_items));
+
+                    if let Some((cond_expr, expr_names)) = &version_condition {
+                        req = req
+                            .condition_expression(cond_expr.clone())
+                            .set_expression_attribute_names(Some(expr_names.clone()));
+                    }
+
+                    req.send()
+                        .await
+                        .map_err(toasty_core::Error::driver_operation_failed)?;
+                } else if version_condition.is_some() {
+                    tracing::trace!(table_name = %table.name, item_count = insert_items.len(), "transact inserting items with version condition");
+                    let transact_items = insert_items
+                        .into_iter()
+                        .map(|items| {
+                            let mut main_put =
+                                Put::builder().table_name(&table.name).set_item(Some(items));
+                            if let Some((cond_expr, expr_names)) = &version_condition {
+                                main_put = main_put
+                                    .condition_expression(cond_expr.clone())
+                                    .set_expression_attribute_names(Some(expr_names.clone()));
+                            }
+                            TransactWriteItem::builder()
+                                .put(main_put.build().unwrap())
+                                .build()
+                        })
+                        .collect();
+                    self.client
+                        .transact_write_items()
+                        .set_transact_items(Some(transact_items))
                         .send()
                         .await
                         .map_err(toasty_core::Error::driver_operation_failed)?;
@@ -143,15 +183,19 @@ impl Connection {
                         );
                     }
 
+                    let mut main_put = Put::builder()
+                        .table_name(&table.name)
+                        .set_item(Some(insert_items));
+
+                    if let Some((cond_expr, expr_names)) = &version_condition {
+                        main_put = main_put
+                            .condition_expression(cond_expr.clone())
+                            .set_expression_attribute_names(Some(expr_names.clone()));
+                    }
+
                     transact_items.push(
                         TransactWriteItem::builder()
-                            .put(
-                                Put::builder()
-                                    .table_name(&table.name)
-                                    .set_item(Some(insert_items))
-                                    .build()
-                                    .unwrap(),
-                            )
+                            .put(main_put.build().unwrap())
                             .build(),
                     );
                 }

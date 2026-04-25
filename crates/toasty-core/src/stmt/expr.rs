@@ -1,10 +1,10 @@
 use crate::stmt::{ExprExists, Input};
 
 use super::{
-    Entry, EntryMut, EntryPath, ExprAnd, ExprAny, ExprArg, ExprBinaryOp, ExprCast, ExprError,
-    ExprFunc, ExprInList, ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprList, ExprMap,
-    ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord, ExprStmt, Node, Projection, Substitute,
-    Value, Visit, VisitMut, expr_reference::ExprReference,
+    Entry, EntryMut, EntryPath, ExprAnd, ExprAny, ExprArg, ExprBeginsWith, ExprBinaryOp, ExprCast,
+    ExprError, ExprFunc, ExprInList, ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprLike,
+    ExprList, ExprMap, ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord, ExprStmt, Node,
+    Projection, Substitute, Value, Visit, VisitMut, expr_reference::ExprReference,
 };
 use std::fmt;
 
@@ -43,6 +43,9 @@ pub enum Expr {
     /// Positional argument placeholder. See [`ExprArg`].
     Arg(ExprArg),
 
+    /// String prefix match: `begins_with(expr, prefix)`. See [`ExprBeginsWith`].
+    BeginsWith(ExprBeginsWith),
+
     /// Binary comparison or arithmetic operation. See [`ExprBinaryOp`].
     BinaryOp(ExprBinaryOp),
 
@@ -62,6 +65,15 @@ pub enum Expr {
     /// Aggregate or scalar function call. See [`ExprFunc`].
     Func(ExprFunc),
 
+    /// An **unresolved** reference to a name (e.g. a column name in a DDL
+    /// context).
+    ///
+    /// Unlike [`Expr::Reference`] / [`ExprReference`], which hold **resolved**
+    /// index-based references into the schema, `Ident` carries only the raw
+    /// name string. It is used in contexts where schema resolution is not
+    /// applicable, such as CHECK constraints in CREATE TABLE statements.
+    Ident(String),
+
     /// `expr IN (list)` membership test. See [`ExprInList`].
     InList(ExprInList),
 
@@ -78,6 +90,9 @@ pub enum Expr {
     /// Scoped binding expression (transient -- inlined before planning).
     /// See [`ExprLet`].
     Let(ExprLet),
+
+    /// SQL `LIKE` pattern match: `expr LIKE pattern`. See [`ExprLike`].
+    Like(ExprLike),
 
     /// Applies a transformation to each item in a collection. See [`ExprMap`].
     Map(ExprMap),
@@ -234,6 +249,9 @@ impl Expr {
             // Always stable - constant values
             Self::Value(_) => true,
 
+            // Unresolved identifiers refer to external state (e.g. a column)
+            Self::Ident(_) => false,
+
             // Never stable - generates new values each evaluation
             Self::Default => false,
 
@@ -244,6 +262,8 @@ impl Expr {
             Self::Record(expr_record) => expr_record.iter().all(|expr| expr.is_stable()),
             Self::List(expr_list) => expr_list.items.iter().all(|expr| expr.is_stable()),
             Self::Cast(expr_cast) => expr_cast.expr.is_stable(),
+            Self::BeginsWith(e) => e.expr.is_stable() && e.prefix.is_stable(),
+            Self::Like(e) => e.expr.is_stable() && e.pattern.is_stable(),
             Self::BinaryOp(expr_binary) => {
                 expr_binary.lhs.is_stable() && expr_binary.rhs.is_stable()
             }
@@ -275,6 +295,23 @@ impl Expr {
         }
     }
 
+    /// Returns `true` if `self` and `other` are syntactically identical **and**
+    /// both sides are stable.
+    ///
+    /// This is the soundness-preserving comparison used by simplification
+    /// rules that rewrite on the assumption that two equal sub-expressions
+    /// produce the same value (idempotent, absorption, complement,
+    /// range-to-equality, OR-to-IN, factoring, variant tautology).
+    ///
+    /// Syntactic identity alone is not enough: `LAST_INSERT_ID() =
+    /// LAST_INSERT_ID()` is two independent evaluations and may yield
+    /// different values, so rewriting `a AND a` to `a` would be unsound when
+    /// `a` is non-deterministic. Gating on [`Self::is_stable`] excludes any
+    /// sub-expression whose value may change across evaluations.
+    pub fn is_equivalent_to(&self, other: &Self) -> bool {
+        self == other && self.is_stable()
+    }
+
     /// Returns `true` if the expression is a constant expression.
     ///
     /// A constant expression is one that does not reference any external data.
@@ -295,6 +332,9 @@ impl Expr {
         match self {
             // Always constant
             Self::Value(_) => true,
+
+            // Unresolved identifiers reference external data
+            Self::Ident(_) => false,
 
             // Arg: local if nesting is within map_depth, otherwise external
             Self::Arg(arg) => arg.nesting < map_depth,
@@ -319,6 +359,12 @@ impl Expr {
                 .iter()
                 .all(|expr| expr.is_const_at_depth(map_depth)),
             Self::Cast(expr_cast) => expr_cast.expr.is_const_at_depth(map_depth),
+            Self::BeginsWith(e) => {
+                e.expr.is_const_at_depth(map_depth) && e.prefix.is_const_at_depth(map_depth)
+            }
+            Self::Like(e) => {
+                e.expr.is_const_at_depth(map_depth) && e.pattern.is_const_at_depth(map_depth)
+            }
             Self::BinaryOp(expr_binary) => {
                 expr_binary.lhs.is_const_at_depth(map_depth)
                     && expr_binary.rhs.is_const_at_depth(map_depth)
@@ -372,18 +418,23 @@ impl Expr {
             // Always evaluable
             Self::Value(_) => true,
 
+            // Unresolved identifiers cannot be evaluated
+            Self::Ident(_) => false,
+
             // Args are OK for evaluation
             Self::Arg(_) => true,
 
             // Error expressions are evaluable (they produce an error)
             Self::Error(_) => true,
 
-            // Never evaluable - references external data
+            // Never evaluable - references external data or requires a database driver
             Self::Default
             | Self::Reference(_)
             | Self::Stmt(_)
             | Self::InSubquery(_)
-            | Self::Exists(_) => false,
+            | Self::Exists(_)
+            | Self::BeginsWith(_)
+            | Self::Like(_) => false,
 
             // Evaluable if all children are evaluable
             Self::Record(expr_record) => expr_record.iter().all(|expr| expr.is_eval()),
@@ -559,17 +610,20 @@ impl fmt::Debug for Expr {
             Self::And(e) => e.fmt(f),
             Self::Any(e) => e.fmt(f),
             Self::Arg(e) => e.fmt(f),
+            Self::BeginsWith(e) => e.fmt(f),
             Self::BinaryOp(e) => e.fmt(f),
             Self::Cast(e) => e.fmt(f),
             Self::Default => write!(f, "Default"),
             Self::Error(e) => e.fmt(f),
             Self::Exists(e) => e.fmt(f),
             Self::Func(e) => e.fmt(f),
+            Self::Ident(e) => write!(f, "Ident({e:?})"),
             Self::InList(e) => e.fmt(f),
             Self::InSubquery(e) => e.fmt(f),
             Self::IsNull(e) => e.fmt(f),
             Self::IsVariant(e) => e.fmt(f),
             Self::Let(e) => e.fmt(f),
+            Self::Like(e) => e.fmt(f),
             Self::Map(e) => e.fmt(f),
             Self::Match(e) => e.fmt(f),
             Self::Not(e) => e.fmt(f),
