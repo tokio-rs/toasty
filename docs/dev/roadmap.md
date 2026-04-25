@@ -170,12 +170,16 @@ the entry lands here.
 
 ## Drivers
 
+- DynamoDB Scan support ([design](design/ddb-scan.md), [#741])
+  - `Operation::Scan` for queries with no viable index
+  - Internal pagination loop following `LastEvaluatedKey`
+  - Cursor-based user-facing pagination
+  - Planner error for `order_by` on scan queries
 - Raw SQL escape hatch ([#93])
   - Arbitrary SQL statements
   - Parameterized queries with type-safe bindings
   - Raw fragments inside typed queries
 - Connection pooling improvements ([#378], [#384])
-- DynamoDB `Scan` — queries without a partition-key predicate ([#741])
 - New driver backends
   - MongoDB — `toasty-mongodb` ([#48])
   - DuckDB ([#608])
