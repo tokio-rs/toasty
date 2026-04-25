@@ -1,3 +1,4 @@
+mod expr_pattern;
 mod insert;
 mod paginate;
 mod relation;
@@ -422,6 +423,9 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     self.curr_stmt_info().deps.insert(target_id);
                 }
             }
+            stmt::Expr::BeginsWith(_) if self.capability().sql => {
+                self.lower_expr_begins_with(expr);
+            }
             stmt::Expr::Exists(_) if !self.capability().sql => {
                 let stmt::Expr::Exists(mut expr_exists) = expr.take() else {
                     panic!()
@@ -553,6 +557,10 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         lower.plan_stmt_delete_relations(stmt);
 
         lower.visit_filter_mut(&mut stmt.filter);
+
+        if let Some(expr) = &mut stmt.condition.expr {
+            lower.visit_expr_mut(expr);
+        }
 
         if let Some(returning) = &mut stmt.returning {
             lower.visit_returning_mut(returning);

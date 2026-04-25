@@ -303,7 +303,7 @@ key:
 ```rust
 # use toasty::Model;
 #[derive(Debug, toasty::Model)]
-#[index(partition = tournament_id, partition = region, local = round)]
+#[index(partition = [tournament_id, region], local = [round])]
 struct Match {
     #[key]
     #[auto]

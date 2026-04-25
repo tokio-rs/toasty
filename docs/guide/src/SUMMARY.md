@@ -37,5 +37,6 @@
 - [Embedded Types](./embedded-types.md)
 - [Batch Operations](./batch-operations.md)
 - [Transactions](./transactions.md)
+- [Concurrency Control](./concurrency-control.md)
 - [Database Setup](./database-setup.md)
 - [Migrations and Schema Management](./schema-management.md)

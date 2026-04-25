@@ -464,6 +464,56 @@ impl<T, U> Path<T, Option<U>> {
     }
 }
 
+impl<T> Path<T, String> {
+    /// Test whether this string field starts with `prefix`.
+    ///
+    /// Only available on `String`-typed fields. For DynamoDB, this maps to
+    /// `begins_with` in a `KeyConditionExpression` (sort key) or
+    /// `FilterExpression` (non-key attribute).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// let filter = User::fields().name().begins_with("Al".to_string());
+    /// ```
+    pub fn begins_with(self, prefix: impl IntoExpr<String>) -> Expr<bool> {
+        Expr {
+            untyped: stmt::Expr::begins_with(self.untyped.into_stmt(), prefix.into_expr().untyped),
+            _p: PhantomData,
+        }
+    }
+
+    /// Test whether this string field matches a SQL `LIKE` pattern.
+    ///
+    /// Only available on `String`-typed fields. The caller is responsible for
+    /// including any `%` or `_` wildcard characters in `pattern`. Not supported
+    /// by the DynamoDB driver — use [`begins_with`](Self::begins_with) instead.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// let filter = User::fields().name().like("Al%".to_string());
+    /// ```
+    pub fn like(self, pattern: impl IntoExpr<String>) -> Expr<bool> {
+        Expr {
+            untyped: stmt::Expr::like(self.untyped.into_stmt(), pattern.into_expr().untyped),
+            _p: PhantomData,
+        }
+    }
+}
+
 impl<T, U> Clone for Path<T, U> {
     fn clone(&self) -> Self {
         Self {
