@@ -16,11 +16,11 @@ queries fail at runtime with an unsupported-feature error:
 
 ```rust
 // Fetch every user in the table
-let users = User::all().exec(&db).await?;
+let users = User::all().exec(&mut db).await?;
 
 // Filter on a non-key attribute
 let active = User::filter(User::fields().active().eq(true))
-    .exec(&db)
+    .exec(&mut db)
     .await?;
 ```
 
@@ -38,15 +38,14 @@ No new methods are added. Queries that previously failed now succeed.
 ```rust
 # use toasty::Model;
 # #[derive(Debug, toasty::Model)]
-# #[toasty(driver = "dynamodb")]
 # struct User {
 #     #[key]
 #     id: String,
 #     name: String,
 #     active: bool,
 # }
-# async fn __example(db: toasty::Db) -> toasty::Result<()> {
-let users = User::all().exec(&db).await?;
+# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
+let users = User::all().exec(&mut db).await?;
 # Ok(())
 # }
 ```
@@ -59,16 +58,15 @@ DynamoDB `FilterExpression`:
 ```rust
 # use toasty::Model;
 # #[derive(Debug, toasty::Model)]
-# #[toasty(driver = "dynamodb")]
 # struct User {
 #     #[key]
 #     id: String,
 #     name: String,
 #     active: bool,
 # }
-# async fn __example(db: toasty::Db) -> toasty::Result<()> {
+# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
 let active_users = User::filter(User::fields().active().eq(true))
-    .exec(&db)
+    .exec(&mut db)
     .await?;
 # Ok(())
 # }
@@ -85,15 +83,14 @@ have been collected or the table is exhausted:
 ```rust
 # use toasty::Model;
 # #[derive(Debug, toasty::Model)]
-# #[toasty(driver = "dynamodb")]
 # struct User {
 #     #[key]
 #     id: String,
 #     name: String,
 #     active: bool,
 # }
-# async fn __example(db: toasty::Db) -> toasty::Result<()> {
-let sample = User::all().limit(10).exec(&db).await?;
+# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
+let sample = User::all().limit(10).exec(&mut db).await?;
 # Ok(())
 # }
 ```
@@ -105,22 +102,21 @@ let sample = User::all().limit(10).exec(&db).await?;
 ```rust
 # use toasty::Model;
 # #[derive(Debug, toasty::Model)]
-# #[toasty(driver = "dynamodb")]
 # struct User {
 #     #[key]
 #     id: String,
 #     name: String,
 #     active: bool,
 # }
-# async fn __example(db: toasty::Db) -> toasty::Result<()> {
-let page = User::all().paginate(25).exec(&db).await?;
+# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
+let page = User::all().paginate(25).exec(&mut db).await?;
 
 for user in &page.items {
     println!("{}", user.name);
 }
 
 if let Some(cursor) = page.next_cursor {
-    let next_page = User::all().paginate(25).after(cursor).exec(&db).await?;
+    let next_page = User::all().paginate(25).after(cursor).exec(&mut db).await?;
 }
 # Ok(())
 # }
@@ -190,9 +186,9 @@ pub struct Scan {
 ```
 
 `Operation::Scan` is only emitted when the driver capability `sql = false`. SQL
-drivers do not need to handle it, but out-of-tree drivers that set
-`sql = false` must implement `exec_scan` or return
-`Error::unsupported_feature`.
+drivers do not need to handle it. Out-of-tree drivers that set `sql = false`
+must add a match arm for `Operation::Scan` in their `Connection::exec`
+implementation, or return `Error::unsupported_feature`.
 
 ### DynamoDB implementation
 
