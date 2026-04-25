@@ -180,10 +180,22 @@ pub struct Scan {
     pub table: TableId,
     pub select: Vec<ColumnId>,
     pub filter: Option<stmt::Expr>,
-    pub limit: Option<i64>,
-    pub cursor: Option<stmt::Value>,
+    pub limit: Option<ScanLimit>,
+}
+
+pub struct ScanLimit {
+    /// Maximum items to return in this call. Maps to DynamoDB's `Limit`.
+    pub page_size: i64,
+    /// Resume token from a previous Scan response, or `None` for the first
+    /// call. Maps to DynamoDB's `ExclusiveStartKey`.
+    pub after: Option<stmt::Value>,
 }
 ```
+
+The driver issues a single Scan call per `Operation::Scan`. The exec layer
+decides whether to loop on the returned cursor — `.limit(N)` loops internally
+until `N` items are collected; `.paginate(N)` issues one call and returns the
+cursor to the caller.
 
 `Operation::Scan` is only emitted when the driver capability `sql = false`. SQL
 drivers do not need to handle it. Out-of-tree drivers that set `sql = false`
@@ -195,8 +207,8 @@ implementation, or return `Error::unsupported_feature`.
 - Map `filter` to a `FilterExpression` with `ExpressionAttributeNames` /
   `ExpressionAttributeValues` using the existing expression-serialization
   helpers.
-- Map `limit` to the DynamoDB `Limit` parameter.
-- Map `cursor` to `ExclusiveStartKey`.
+- Map `limit.page_size` to the DynamoDB `Limit` parameter.
+- Map `limit.after` to `ExclusiveStartKey`.
 - Return `LastEvaluatedKey` (if present) as `ExecResponse::next_cursor`.
 
 ## Alternatives considered
@@ -213,7 +225,13 @@ than the base table if the GSI is sparse. Base table scan is always correct.
 
 ## Open questions
 
-None blocking acceptance.
+**Unify `ScanLimit` with `QueryPkLimit`?** Deferrable. `QueryPkLimit::Cursor`
+has the same shape as `ScanLimit` (`page_size` + `after`), and a single shared
+type would avoid two near-identical structs. The case against unifying:
+`QueryPkLimit` is an enum that also carries an `Offset` variant which Scan
+cannot express (DynamoDB Scan has no native offset), so reusing it would force
+Scan drivers to reject one variant. Keeping them separate is simpler today;
+revisit if a third operation grows a similar limit shape.
 
 ## Out of scope
 
