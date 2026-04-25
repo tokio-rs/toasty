@@ -173,7 +173,9 @@ themselves.
 
 ### New `Operation::Scan` variant
 
-Driver implementors must handle a new variant in the `Operation` enum:
+A new variant is added to the `Operation` enum. Drivers that opt in via the
+[capability flag](#capability-flag) below must handle it; others can ignore
+it.
 
 ```rust
 pub struct Scan {
@@ -197,10 +199,16 @@ decides whether to loop on the returned cursor — `.limit(N)` loops internally
 until `N` items are collected; `.paginate(N)` issues one call and returns the
 cursor to the caller.
 
-`Operation::Scan` is only emitted when the driver capability `sql = false`. SQL
-drivers do not need to handle it. Out-of-tree drivers that set `sql = false`
-must add a match arm for `Operation::Scan` in their `Connection::exec`
-implementation, or return `Error::unsupported_feature`.
+### Capability flag
+
+A new `scan: bool` field on `Capability` gates this operation. The planner
+only emits `Operation::Scan` when the driver sets `scan = true`. Drivers
+without scan support keep the existing behavior — the planner returns a
+user-facing unsupported-feature error before any operation is dispatched, so
+drivers never see `Operation::Scan` unless they opted in.
+
+DynamoDB sets `scan: true`. SQL drivers and other key-value drivers default
+to `false`; they need no changes to their `Connection::exec` implementation.
 
 ### DynamoDB implementation
 
