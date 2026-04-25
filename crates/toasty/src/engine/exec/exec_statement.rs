@@ -213,8 +213,8 @@ impl Exec<'_> {
             None
         };
 
-        // Extract prev cursor from first row (for backward pagination)
-        res.prev_cursor = if !row_vec.is_empty() {
+        // Extract prev cursor from first row only when the driver supports backward pagination
+        res.prev_cursor = if !row_vec.is_empty() && self.engine.capability().backward_pagination {
             let cursor_row = &row_vec[0];
             Some(extract_cursor.eval(std::slice::from_ref(cursor_row))?)
         } else {
