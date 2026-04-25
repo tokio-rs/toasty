@@ -389,7 +389,7 @@ impl Expand<'_> {
         let field_loads = self.model.fields.iter().enumerate().map(|(index, field)| {
             let field_ident = &field.name.ident;
             let index_tokenized = util::int(index);
-            let field_name_str = field.name.ident.to_string();
+            let field_name_str = field.name.as_str();
 
             let field_name = if fields_named {
                 quote!(#field_ident:)
@@ -469,7 +469,7 @@ impl Expand<'_> {
 
         let reload_arms = self.model.fields.iter().enumerate().map(|(index, field)| {
             let i = util::int(index);
-            let field_name_str = field.name.ident.to_string();
+            let field_name_str = field.name.as_str();
 
             // For newtypes, access via tuple index (target.0); otherwise by name
             let field_access = if fields_named {

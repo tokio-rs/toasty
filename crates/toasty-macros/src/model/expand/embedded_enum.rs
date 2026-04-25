@@ -276,7 +276,7 @@ impl Expand<'_> {
             .iter()
             .map(|field| {
                 let index = util::int(field.id);
-                let app_name = field.name.ident.to_string();
+                let app_name = field.name.as_str();
                 let ty = primitive_ty_unwrap(field);
                 let variant_index = field.variant.expect("enum field must have variant");
                 let variant_idx = util::int(variant_index);
