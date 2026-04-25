@@ -6,6 +6,10 @@ pub(crate) struct Name {
     /// Name parts
     pub(crate) parts: Vec<String>,
 
+    /// Snake-case form of the name (`parts` joined by `_`), without any
+    /// raw-identifier (`r#`) prefix.
+    pub(crate) snake_case: String,
+
     /// field/var identifier
     pub(crate) ident: syn::Ident,
 }
@@ -36,26 +40,30 @@ impl Name {
         };
         let parts: Vec<_> = snake.split("_").map(String::from).collect();
 
-        let joined = parts.join("_");
+        let snake_case = parts.join("_");
         let ident = if raw {
-            syn::Ident::new_raw(&joined, span)
+            syn::Ident::new_raw(&snake_case, span)
         } else {
-            syn::Ident::new(&joined, span)
+            syn::Ident::new(&snake_case, span)
         };
 
-        Self { parts, ident }
+        Self {
+            parts,
+            snake_case,
+            ident,
+        }
     }
 
-    /// The bare snake-case name as a string, without any `r#` prefix.
-    pub(crate) fn as_str(&self) -> String {
-        self.parts.join("_")
+    /// The bare snake-case name, without any `r#` prefix.
+    pub(crate) fn as_str(&self) -> &str {
+        &self.snake_case
     }
 
     pub(crate) fn with_prefix(&self, prefix: &str) -> String {
         // Use the bare name (without any `r#` prefix) so the result is a valid
         // Rust identifier. Another hack: handles the `_0` case described in
         // `from_str` by checking for a leading underscore.
-        let name = self.as_str();
+        let name = &self.snake_case;
 
         if name.starts_with("_") {
             format!("{prefix}{name}")

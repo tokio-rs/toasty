@@ -323,7 +323,7 @@ impl<'a> BuildModelFilters<'a> {
 
         for index in fields {
             name.push_str(prefix);
-            name.push_str(&self.model.fields[*index].name.as_str());
+            name.push_str(self.model.fields[*index].name.as_str());
 
             prefix = "_and_";
         }
