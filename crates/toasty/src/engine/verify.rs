@@ -178,7 +178,6 @@ impl VerifyExpr<'_> {
 
         match expr {
             And(_)
-            | BeginsWith(_)
             | BinaryOp(_)
             | Like(_)
             | InList(_)
@@ -187,6 +186,7 @@ impl VerifyExpr<'_> {
             | IsVariant(_)
             | Not(_)
             | Or(_)
+            | StartsWith(_)
             | Value(stmt::Value::Bool(_)) => {}
             expr => panic!("Not a bool? {expr:#?}"),
         }
