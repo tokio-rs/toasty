@@ -140,8 +140,9 @@ pub async fn starts_with_empty_prefix_sql(test: &mut Test) -> Result<()> {
 #[driver_test]
 pub async fn starts_with_optional_field(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
+    #[key(partition = partition_id, local = id)]
     struct OptItem {
-        #[key]
+        partition_id: i64,
         id: i64,
         nickname: Option<String>,
     }
@@ -149,18 +150,22 @@ pub async fn starts_with_optional_field(test: &mut Test) -> Result<()> {
     let mut db = test.setup_db(models!(OptItem)).await;
 
     toasty::create!(OptItem::[
-        { id: 1_i64, nickname: Some("Ali".to_string())     },
-        { id: 2_i64, nickname: Some("Alicia".to_string())  },
-        { id: 3_i64, nickname: Some("Bob".to_string())     },
-        { id: 4_i64, nickname: None                        },
+        { partition_id: 1_i64, id: 1_i64, nickname: Some("Ali".to_string())     },
+        { partition_id: 1_i64, id: 2_i64, nickname: Some("Alicia".to_string())  },
+        { partition_id: 1_i64, id: 3_i64, nickname: Some("Bob".to_string())     },
+        { partition_id: 1_i64, id: 4_i64, nickname: None                        },
     ])
     .exec(&mut db)
     .await?;
 
-    let mut items: Vec<OptItem> =
-        OptItem::filter(OptItem::fields().nickname().starts_with("Al".to_string()))
-            .exec(&mut db)
-            .await?;
+    let mut items: Vec<OptItem> = OptItem::filter(
+        OptItem::fields()
+            .partition_id()
+            .eq(1_i64)
+            .and(OptItem::fields().nickname().starts_with("Al".to_string())),
+    )
+    .exec(&mut db)
+    .await?;
 
     items.sort_by_key(|i| i.id);
 
