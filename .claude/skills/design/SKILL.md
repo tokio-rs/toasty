@@ -30,6 +30,13 @@ proposal so a maintainer can grasp the important bits quickly. Cut
 restated background, obvious explanations, and throat-clearing.
 Length is not a virtue; clarity is.
 
+## Rust examples
+
+Rust code blocks in design docs are illustrative and are **not** run
+through rustdoc. Do not add `#`-prefixed hidden boilerplate (imports,
+`fn main`, etc.) just to make the snippet compile. Show only the lines
+that matter to the reader.
+
 ## Framing
 
 A design doc is **guide-level**, not implementation-level. Write it for
