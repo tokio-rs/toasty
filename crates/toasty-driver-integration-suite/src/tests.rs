@@ -54,6 +54,7 @@ pub mod record_not_found;
 pub mod relation_belongs_to_configured;
 pub mod relation_belongs_to_one_way;
 pub mod relation_belongs_to_self_referential;
+pub mod relation_filter_association;
 pub mod relation_has_many_batch_create;
 pub mod relation_has_many_boxed_fk;
 pub mod relation_has_many_crud;
