@@ -23,6 +23,13 @@ Follow the conventions from the [`prose`](../prose/SKILL.md) skill: be
 fact-focused, direct, and concrete. No buzzwords, no fluff, no dramatic
 terms.
 
+## Be succinct
+
+Readers already know Toasty and Rust. Lead with the problem and the
+proposal so a maintainer can grasp the important bits quickly. Cut
+restated background, obvious explanations, and throat-clearing.
+Length is not a virtue; clarity is.
+
 ## Framing
 
 A design doc is **guide-level**, not implementation-level. Write it for
