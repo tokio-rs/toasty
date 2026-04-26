@@ -4,6 +4,15 @@ pr_draft = true
 pr_labels = ["release"]
 release_always = true
 
+[changelog]
+# Pipe each rendered release section through Claude to filter for
+# user-relevant changes only (drops internal refactors, CI, dev docs,
+# tests). The script falls back to passthrough on any failure, so a
+# missing claude binary or auth issue won't break a release.
+postprocessors = [
+  { pattern = '(?s).*', replace_command = 'scripts/rewrite-changelog.sh' },
+]
+
 [[package]]
 name = "toasty"
 version_group = "toasty"

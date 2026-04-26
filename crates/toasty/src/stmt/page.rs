@@ -9,7 +9,12 @@ use toasty_core::stmt;
 ///
 /// Obtained by calling [`Paginate::exec`]. The
 /// page contains up to `per_page` items and optional cursors for fetching the
-/// next or previous page.
+/// next or previous page. `per_page` is an upper bound, not a guarantee:
+/// Toasty applies the page size at the database query and may filter the
+/// returned rows further, so a page can have fewer items than `per_page` even
+/// when more results exist. Use [`has_next`](Page::has_next) (or check
+/// `next_cursor`) to detect the end of the result set rather than relying on
+/// page size.
 ///
 /// `Page<M>` dereferences to `[M]`, so it can be used anywhere a slice is
 /// expected.

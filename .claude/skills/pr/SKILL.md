@@ -38,6 +38,14 @@ Keep the section headings and the checklist; replace the HTML comment
 placeholders with real content. Delete checklist items that do not
 apply rather than leaving them unchecked with no explanation.
 
+## Be succinct
+
+Reviewers already know Toasty and Rust. Keep the body high-signal:
+state the problem, the change, and anything a reviewer needs to know
+to evaluate it. Skip restated context, obvious explanations, and
+throat-clearing. A reviewer should grasp the important bits in
+seconds.
+
 ## Labels
 
 Do not apply labels when creating the PR. Maintainers triage and label
