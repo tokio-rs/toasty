@@ -17,6 +17,10 @@
 #     entries that matter to library consumers (features and fixes that
 #     affect behavior or public API). Internal refactors, CI, chores, dev
 #     docs, and test changes are dropped.
+#   * Strips the inline URL from each `[#NNN](url)` PR reference and
+#     appends a sorted `[#NNN]: <url>` definitions block at the end of
+#     the section, so URLs render once at the bottom (Tokio-style)
+#     instead of cluttering every bullet.
 #   * Caches successful rewrites by SHA-256 of stdin so repeated invocations
 #     with the same input (release-plz calls the postprocessor several
 #     times per release) only pay for one Claude call.
@@ -105,15 +109,16 @@ if [ -z "$OUTPUT" ] \
   exit 0
 fi
 
-# Strip any leaked <system-reminder>...</system-reminder> blocks and trim any
-# leading or trailing blank lines from Claude output. release-plz/git-cliff
-# expect each rendered section to be wrapped with one leading and one trailing
-# blank line so that consecutive sections in the assembled CHANGELOG.md are
-# separated, so we re-add those wrappers ourselves below.
-OUTPUT="$(printf '%s\n' "$OUTPUT" | awk '
+# Strip any leaked <system-reminder>...</system-reminder> blocks and trim
+# leading/trailing blank lines from Claude's output. release-plz / git-cliff
+# expect each rendered section to be wrapped with one leading and one
+# trailing blank line so consecutive sections in the assembled
+# CHANGELOG.md are separated; we re-add those wrappers at the bottom.
+BODY="$(printf '%s\n' "$OUTPUT" | awk '
   /<system-reminder>/ { skip=1; next }
   /<\/system-reminder>/ { skip=0; next }
-  !skip { lines[++n] = $0 }
+  skip { next }
+  { lines[++n] = $0 }
   END {
     s = 1; while (s <= n && lines[s] == "") s++
     e = n; while (e >= s && lines[e] == "") e--
@@ -121,6 +126,24 @@ OUTPUT="$(printf '%s\n' "$OUTPUT" | awk '
   }
 ')"
 
-FINAL=$'\n'"$OUTPUT"$'\n'
+# Collect a sorted, deduped list of `[#NNN]: <url>` definitions from every
+# inline PR reference Claude kept. Then strip the URL out of each inline
+# `[#NNN](<url>)` so only `[#NNN]` remains, leaving the URL to render once
+# at the bottom of the section. The substitution leaves the section
+# heading link `## [version](compare-url)` alone because its bracket
+# content does not start with `#`.
+REF_DEFS="$(printf '%s\n' "$BODY" \
+  | grep -oE '\[#[0-9]+\]\([^)]+\)' \
+  | sed -E 's/^(\[#[0-9]+\])\(([^)]+)\)$/\1: \2/' \
+  | sort -u -t '#' -k 2 -n)"
+
+BODY_REF="$(printf '%s' "$BODY" \
+  | sed -E 's/(\[#[0-9]+\])\([^)]+\)/\1/g')"
+
+if [ -n "$REF_DEFS" ]; then
+  FINAL=$'\n'"$BODY_REF"$'\n\n'"$REF_DEFS"$'\n'
+else
+  FINAL=$'\n'"$BODY_REF"$'\n'
+fi
 printf '%s' "$FINAL" >"$CACHE_FILE"
 printf '%s' "$FINAL"
