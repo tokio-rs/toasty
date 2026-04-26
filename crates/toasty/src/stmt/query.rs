@@ -175,6 +175,12 @@ impl<T> Query<T> {
 
     /// Limit the number of records returned.
     ///
+    /// `n` is an upper bound, not a guarantee. The limit is applied to the
+    /// database query, but Toasty may apply additional filtering to the rows
+    /// the database returns. When that happens, the final result can have
+    /// fewer than `n` records even if more than `n` rows match the filter
+    /// expression.
+    ///
     /// # Examples
     ///
     /// ```
@@ -300,6 +306,10 @@ impl<T> Query<List<T>> {
     /// The resulting `Query<Option<T>>` returns `Some(record)` if at least one
     /// row matches, or `None` if no rows match.
     ///
+    /// This applies `LIMIT 1` to the database query. Toasty may then filter
+    /// the returned row, so `None` does not always mean that no rows in the
+    /// table match the filter expression.
+    ///
     /// # Examples
     ///
     /// ```
@@ -326,6 +336,10 @@ impl<T> Query<List<T>> {
     ///
     /// The resulting `Query<T>` returns the record directly. If no rows match,
     /// execution returns an error.
+    ///
+    /// This applies `LIMIT 1` to the database query. If Toasty filters the
+    /// returned row out, execution returns the same error as when the database
+    /// returns no rows.
     ///
     /// # Examples
     ///
