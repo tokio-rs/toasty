@@ -1053,6 +1053,81 @@ pub async fn nested_has_many_then_belongs_to_required(test: &mut Test) -> Result
     Ok(())
 }
 
+// ===== HasMany -> BelongsTo<T> where multiple items share the same target =====
+// Sibling rows with the same foreign key must not break the nested preload.
+// Regression for #701: the DDB nested merge used to panic with
+// "HashIndex: duplicate key detected" when two Items pointed at one Brand.
+#[driver_test(id(ID))]
+pub async fn nested_has_many_then_shared_belongs_to(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Category {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        #[has_many]
+        items: toasty::HasMany<Item>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Brand {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+
+        title: String,
+
+        #[index]
+        category_id: ID,
+
+        #[belongs_to(key = category_id, references = id)]
+        category: toasty::BelongsTo<Category>,
+
+        #[index]
+        brand_id: ID,
+
+        #[belongs_to(key = brand_id, references = id)]
+        brand: toasty::BelongsTo<Brand>,
+    }
+
+    let mut db = test.setup_db(models!(Category, Brand, Item)).await;
+
+    let brand = Brand::create().name("BrandA").exec(&mut db).await?;
+    let cat = Category::create()
+        .name("Electronics")
+        .item(Item::create().title("Phone").brand(&brand))
+        .item(Item::create().title("Laptop").brand(&brand))
+        .exec(&mut db)
+        .await?;
+
+    let cat = Category::filter_by_id(cat.id)
+        .include(Category::fields().items().brand())
+        .get(&mut db)
+        .await?;
+
+    let items = cat.items.get();
+    assert_eq!(2, items.len());
+    for item in items {
+        assert_eq!("BrandA", item.brand.get().name);
+    }
+
+    Ok(())
+}
+
 // ===== HasMany -> BelongsTo<Option<T>> =====
 // Team has_many Tasks, each Task optionally belongs_to an Assignee
 #[driver_test(id(ID))]
