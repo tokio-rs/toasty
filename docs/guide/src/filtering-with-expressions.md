@@ -15,7 +15,7 @@ checking for null — use `Model::filter()` with field expressions.
 | [`.in_list([...])`](#membership-with-in_list) | Value in list | `IN (...)` |
 | [`.is_none()`](#null-checks) | Null check (`Option` fields) | `IS NULL` |
 | [`.is_some()`](#null-checks) | Not-null check (`Option` fields) | `IS NOT NULL` |
-| [`.begins_with(prefix)`](#string-pattern-matching) | Prefix match | `begins_with(field, prefix)` / `LIKE 'prefix%'` |
+| [`.starts_with(prefix)`](#string-pattern-matching) | Prefix match | `starts_with(field, prefix)` / `LIKE 'prefix%'` |
 | [`.like(pattern)`](#string-pattern-matching) | SQL pattern match | `LIKE pattern` |
 | [`.and(expr)`](#combining-with-and) | Both conditions true | `AND` |
 | [`.or(expr)`](#combining-with-or) | Either condition true | `OR` |
@@ -389,9 +389,9 @@ let users = User::filter(
 
 ## String pattern matching
 
-### `begins_with`
+### `starts_with`
 
-`.begins_with()` tests whether a string field starts with the given prefix. It
+`.starts_with()` tests whether a string field starts with the given prefix. It
 works on all supported databases — SQL drivers translate it to `LIKE 'prefix%'`,
 and DynamoDB uses its native `begins_with` condition expression:
 
@@ -406,7 +406,7 @@ and DynamoDB uses its native `begins_with` condition expression:
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
 // Find users whose name starts with "Al"
-let users = User::filter(User::fields().name().begins_with("Al"))
+let users = User::filter(User::fields().name().starts_with("Al"))
     .exec(&mut db)
     .await?;
 # Ok(())
@@ -438,7 +438,7 @@ let users = User::filter(User::fields().name().like("Al%"))
 # }
 ```
 
-Prefer `.begins_with()` over `.like("prefix%")` when you only need a prefix
+Prefer `.starts_with()` over `.like("prefix%")` when you only need a prefix
 match — it works across all drivers.
 
 ## Filtering on associations

@@ -2,9 +2,9 @@
 
 use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprAny, ExprArg,
-    ExprBeginsWith, ExprBinaryOp, ExprCast, ExprColumn, ExprError, ExprExists, ExprFunc,
-    ExprInList, ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprLike, ExprList, ExprMap,
-    ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp,
+    ExprBinaryOp, ExprCast, ExprColumn, ExprError, ExprExists, ExprFunc, ExprInList,
+    ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprLike, ExprList, ExprMap, ExprMatch,
+    ExprNot, ExprOr, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStartsWith,
     ExprStmt, Filter, FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit,
     LimitCursor, LimitOffset, Node, OrderBy, OrderByExpr, Path, Projection, Query, Returning,
     Select, Source, SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor,
@@ -97,11 +97,11 @@ pub trait Visit {
         visit_expr_arg(self, i);
     }
 
-    /// Visits an [`ExprBeginsWith`] node.
+    /// Visits an [`ExprStartsWith`] node.
     ///
-    /// The default implementation delegates to [`visit_expr_begins_with`].
-    fn visit_expr_begins_with(&mut self, i: &ExprBeginsWith) {
-        visit_expr_begins_with(self, i);
+    /// The default implementation delegates to [`visit_expr_starts_with`].
+    fn visit_expr_starts_with(&mut self, i: &ExprStartsWith) {
+        visit_expr_starts_with(self, i);
     }
 
     /// Visits an [`ExprBinaryOp`] node.
@@ -540,8 +540,8 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_expr_arg(&mut **self, i);
     }
 
-    fn visit_expr_begins_with(&mut self, i: &ExprBeginsWith) {
-        Visit::visit_expr_begins_with(&mut **self, i);
+    fn visit_expr_starts_with(&mut self, i: &ExprStartsWith) {
+        Visit::visit_expr_starts_with(&mut **self, i);
     }
 
     fn visit_expr_binary_op(&mut self, i: &ExprBinaryOp) {
@@ -825,7 +825,7 @@ where
         Expr::And(expr) => v.visit_expr_and(expr),
         Expr::Any(expr) => v.visit_expr_any(expr),
         Expr::Arg(expr) => v.visit_expr_arg(expr),
-        Expr::BeginsWith(expr) => v.visit_expr_begins_with(expr),
+        Expr::StartsWith(expr) => v.visit_expr_starts_with(expr),
         Expr::BinaryOp(expr) => v.visit_expr_binary_op(expr),
         Expr::Cast(expr) => v.visit_expr_cast(expr),
         Expr::Default => v.visit_expr_default(),
@@ -878,7 +878,7 @@ where
 }
 
 /// Default traversal for [`ExprBeginsWith`] nodes. Visits the attribute expression and prefix.
-pub fn visit_expr_begins_with<V>(v: &mut V, node: &ExprBeginsWith)
+pub fn visit_expr_starts_with<V>(v: &mut V, node: &ExprStartsWith)
 where
     V: Visit + ?Sized,
 {
