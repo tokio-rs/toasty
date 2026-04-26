@@ -113,7 +113,16 @@ the SQL text. `LATERAL` lets the inner subquery reference `s_t` and
 `s_k` columns. The outer `SELECT` is a custom shape — neither a model
 nor a single scalar.
 
-### The same query in `query!`
+There are two plausible surfaces for expressing this in `query!`. They
+share the same engine-level building blocks (see
+[Building blocks](#building-blocks)) but differ in how the user thinks
+about the query: as a relational `SELECT` or as a graph shape.
+
+### Option A: SQL-flavored `query!`
+
+A direct port of the SQL above. `FROM` builds a relation from
+table-valued inputs; `LEFT JOIN LATERAL` attaches the per-row lookup;
+`SELECT` projects the output row.
 
 ```rust
 let chart = query!(
@@ -139,15 +148,117 @@ let chart = query!(
 .await?;
 ```
 
-`chart` is a `Vec<_>` of an anonymous (or generated) row type with
-fields `recorded_at`, `sku`, `matched_at`, `on_hand`, `reserved`,
-`net_flow`. See [Return shape](#return-shape) for what that type
-actually is.
+`chart` is a `Vec<_>` of a flat row type with fields `recorded_at`,
+`sku`, `matched_at`, `on_hand`, `reserved`, `net_flow`. Unmatched
+sample points produce `NULL` columns from the lateral side; `COALESCE`
+turns them into zeros.
+
+### Option B: graph-flavored `query!`
+
+The same query expressed as a graph shape rather than a relation. The
+top of the query is a `for` comprehension over the input arrays; the
+trailing `{...}` is the result shape — one entry per iteration. Field
+values can be plain identifiers, computed expressions, or **nested
+queries**. A nested query takes its own filter / order / limit and a
+shape that projects its own fields.
+
+```rust
+let chart = query!(
+    for sample_at IN #sample_times
+    for target_sku IN #skus
+    {
+        sample_at,
+        target_sku,
+        snapshot: InventoryLevel
+            FILTER  .warehouse_id == #warehouse_id
+                AND .sku          == target_sku
+                AND .recorded_at  <= sample_at
+            ORDER BY .recorded_at DESC
+            LIMIT 1
+        {
+            recorded_at,
+            on_hand,
+            reserved,
+            net_flow: .received_total - .shipped_total,
+        },
+    }
+)
+.exec(&mut db)
+.await?;
+```
+
+`chart` is a `Vec` of:
+
+```rust
+struct Sample {
+    sample_at: DateTime<Utc>,
+    target_sku: String,
+    snapshot: Option<Snapshot>,   // Option<_> because the inner query has LIMIT 1
+}
+
+struct Snapshot {
+    recorded_at: DateTime<Utc>,
+    on_hand: i64,
+    reserved: i64,
+    net_flow: i64,                // computed field
+}
+```
+
+Three properties drop out of the graph form for free:
+
+- **No `JOIN` keyword and no aliases.** The relation between
+  `sample_at` and the inner snapshot is the lexical position of the
+  nested query inside the outer shape. Outer values are referenced by
+  the iteration-variable name (`sample_at`, `target_sku`), not via
+  qualified column paths.
+- **Optional cardinality is structural, not nullable columns.**
+  `LIMIT 1` on the nested query makes the field `Option<Snapshot>`;
+  drop the `LIMIT` and it becomes `Vec<Snapshot>`. The "no match"
+  case is `None`, so there is nothing to `COALESCE` — defaults move
+  out of the query into ordinary Rust (`opt.map_or(0, |s| s.on_hand)`)
+  if you want them.
+- **Computed fields live where they are used.** `net_flow:
+  .received_total - .shipped_total` is declared on the snapshot
+  shape, next to the columns it derives from, instead of in a top-level
+  projection list.
+
+This form is a generalization of the existing `INCLUDE` syntax
+(`query!(User { todos { tags } })`). The new pieces are
+(a) `for ... in #vec` to iterate over a Rust collection, (b) a nested
+*query* (not just a relation traversal) as a shape field, and
+(c) computed fields with arithmetic and function calls.
+
+### Comparison
+
+| | Option A: SQL | Option B: graph |
+|---|---|---|
+| Mental model | rows joined into wider rows | objects with nested objects |
+| Relating outer to inner | aliases + qualified paths (`s.sku`, `b.on_hand`) | lexical nesting + iteration vars |
+| Missing-match handling | nullable columns + `COALESCE` | `Option<T>` |
+| Result type | flat row | nested struct |
+| Aggregation across sources (#421) | natural fit | needs extra constructs |
+| Familiarity | SQL users | EdgeQL / GraphQL users |
+| Reuses existing `query!` syntax | adds `SELECT` / `FROM` / joins | extends `INCLUDE` shapes |
+
+Option B is the better fit for the as-of pattern specifically — the
+nested-Option result is exactly the data the chart code wants, with no
+post-processing. Option A is the better fit for cross-source
+aggregation (sum / group-by), which Option B cannot express without
+borrowing relational constructs back. Toasty plausibly wants both
+eventually; the open question is which one to lead with.
 
 ## Building blocks
 
-The query needs three new pieces. They are independent of each other
-and useful on their own.
+The query needs three new engine-level pieces. Both Options A and B
+ride on the same building blocks; the surfaces only differ in how the
+user reaches them. The mapping between surface syntax and engine
+concept:
+
+| Engine concept | Option A spelling | Option B spelling |
+|---|---|---|
+| Iterate Rust collection as rows | `INPUTS(...)` / `UNNEST(#v)` in `FROM` | `for x in #v` |
+| Per-outer-row sub-query | `LEFT JOIN LATERAL ( ... )` | nested query as a shape field |
+| Custom output shape | `SELECT expr AS name, ...` | trailing `{ name: expr, ... }` shape |
 
 ### 1. Table-valued inputs from Rust collections
 
@@ -315,10 +426,16 @@ explicit `UNNEST(...)` matches SQL convention and is easy to teach.
 
 ## Open questions
 
+- **Surface choice**. Lead with Option A (SQL-flavored), Option B
+  (graph-flavored), or commit to both? See
+  [Comparison](#comparison). Option B has a better fit for the
+  as-of pattern; Option A has a better fit for the aggregation work
+  that follows. **Blocks acceptance** — almost everything else
+  downstream depends on this.
 - **Return shape**. Generated struct (named from the binding), tuple of
   named columns, or a user-supplied struct that the macro projects
-  into? **Blocks acceptance** — the spelling of `SELECT` depends on
-  this choice.
+  into? **Blocks acceptance** — the spelling of `SELECT` (Option A) or
+  the shape literal (Option B) depends on this choice.
 - **`INPUTS` Cartesian default vs. zip**. `INPUTS(...)` cross-joins by
   default. Some callers want zipped pairs (i-th time with i-th sku).
   Add `ZIP(...)` later or require explicit `UNNEST` + join? Deferrable.
