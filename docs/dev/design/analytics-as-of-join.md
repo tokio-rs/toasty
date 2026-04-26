@@ -116,14 +116,6 @@ nor a single scalar.
 ### The same query in `query!`
 
 ```rust
-# use chrono::{DateTime, Utc};
-# use toasty::query;
-# async fn __example(
-#     mut db: toasty::Db,
-#     warehouse_id: &str,
-#     skus: &[String],
-#     sample_times: &[DateTime<Utc>],
-# ) -> toasty::Result<()> {
 let chart = query!(
     SELECT
         s.recorded_at,
@@ -145,8 +137,6 @@ let chart = query!(
 )
 .exec(&mut db)
 .await?;
-# Ok(())
-# }
 ```
 
 `chart` is a `Vec<_>` of an anonymous (or generated) row type with
@@ -171,16 +161,11 @@ The single-column form `UNNEST(#vec) AS name(col)` is the primitive;
 Single-column is enough for "for each id in this set, find ...":
 
 ```rust
-# use toasty::query;
-# async fn __example(mut db: toasty::Db, ids: &[i64]) -> toasty::Result<()> {
 query!(
     SELECT .id, .name
     FROM   User
     FILTER .id IN UNNEST(#ids)
 )
-# .exec(&mut db).await?;
-# Ok(())
-# }
 ```
 
 The driver lowering is what makes this worth building (see
