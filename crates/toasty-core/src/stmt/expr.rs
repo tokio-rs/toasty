@@ -1,9 +1,9 @@
 use crate::stmt::{ExprExists, Input};
 
 use super::{
-    Entry, EntryMut, EntryPath, ExprAnd, ExprAny, ExprArg, ExprBeginsWith, ExprBinaryOp, ExprCast,
-    ExprError, ExprFunc, ExprInList, ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprLike,
-    ExprList, ExprMap, ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord, ExprStmt, Node,
+    Entry, EntryMut, EntryPath, ExprAnd, ExprAny, ExprArg, ExprBinaryOp, ExprCast, ExprError,
+    ExprFunc, ExprInList, ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprLike, ExprList,
+    ExprMap, ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord, ExprStartsWith, ExprStmt, Node,
     Projection, Substitute, Value, Visit, VisitMut, expr_reference::ExprReference,
 };
 use std::fmt;
@@ -42,9 +42,6 @@ pub enum Expr {
 
     /// Positional argument placeholder. See [`ExprArg`].
     Arg(ExprArg),
-
-    /// String prefix match: `begins_with(expr, prefix)`. See [`ExprBeginsWith`].
-    BeginsWith(ExprBeginsWith),
 
     /// Binary comparison or arithmetic operation. See [`ExprBinaryOp`].
     BinaryOp(ExprBinaryOp),
@@ -119,6 +116,9 @@ pub enum Expr {
 
     /// Ordered, homogeneous collection of expressions. See [`ExprList`].
     List(ExprList),
+
+    /// String prefix match: `starts_with(expr, prefix)`. See [`ExprStartsWith`].
+    StartsWith(ExprStartsWith),
 
     /// Embedded sub-statement (e.g., a subquery). See [`ExprStmt`].
     Stmt(ExprStmt),
@@ -262,7 +262,7 @@ impl Expr {
             Self::Record(expr_record) => expr_record.iter().all(|expr| expr.is_stable()),
             Self::List(expr_list) => expr_list.items.iter().all(|expr| expr.is_stable()),
             Self::Cast(expr_cast) => expr_cast.expr.is_stable(),
-            Self::BeginsWith(e) => e.expr.is_stable() && e.prefix.is_stable(),
+            Self::StartsWith(e) => e.expr.is_stable() && e.prefix.is_stable(),
             Self::Like(e) => e.expr.is_stable() && e.pattern.is_stable(),
             Self::BinaryOp(expr_binary) => {
                 expr_binary.lhs.is_stable() && expr_binary.rhs.is_stable()
@@ -359,7 +359,7 @@ impl Expr {
                 .iter()
                 .all(|expr| expr.is_const_at_depth(map_depth)),
             Self::Cast(expr_cast) => expr_cast.expr.is_const_at_depth(map_depth),
-            Self::BeginsWith(e) => {
+            Self::StartsWith(e) => {
                 e.expr.is_const_at_depth(map_depth) && e.prefix.is_const_at_depth(map_depth)
             }
             Self::Like(e) => {
@@ -433,7 +433,7 @@ impl Expr {
             | Self::Stmt(_)
             | Self::InSubquery(_)
             | Self::Exists(_)
-            | Self::BeginsWith(_)
+            | Self::StartsWith(_)
             | Self::Like(_) => false,
 
             // Evaluable if all children are evaluable
@@ -610,7 +610,6 @@ impl fmt::Debug for Expr {
             Self::And(e) => e.fmt(f),
             Self::Any(e) => e.fmt(f),
             Self::Arg(e) => e.fmt(f),
-            Self::BeginsWith(e) => e.fmt(f),
             Self::BinaryOp(e) => e.fmt(f),
             Self::Cast(e) => e.fmt(f),
             Self::Default => write!(f, "Default"),
@@ -632,6 +631,7 @@ impl fmt::Debug for Expr {
             Self::Record(e) => e.fmt(f),
             Self::Reference(e) => e.fmt(f),
             Self::List(e) => e.fmt(f),
+            Self::StartsWith(e) => e.fmt(f),
             Self::Stmt(e) => e.fmt(f),
             Self::Value(e) => e.fmt(f),
         }

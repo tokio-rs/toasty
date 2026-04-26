@@ -386,14 +386,14 @@ fn ddb_expression(
             let inner = ddb_expression(cx, attrs, primary, &expr_not.expr);
             format!("(NOT {inner})")
         }
-        stmt::Expr::BeginsWith(expr_begins_with) => {
-            let expr = ddb_expression(cx, attrs, primary, &expr_begins_with.expr);
-            let prefix = ddb_expression(cx, attrs, primary, &expr_begins_with.prefix);
+        stmt::Expr::StartsWith(expr_starts_with) => {
+            let expr = ddb_expression(cx, attrs, primary, &expr_starts_with.expr);
+            let prefix = ddb_expression(cx, attrs, primary, &expr_starts_with.prefix);
             format!("begins_with({expr}, {prefix})")
         }
         stmt::Expr::Like(_) => {
             panic!(
-                "LIKE is not supported by the DynamoDB driver; use begins_with for prefix matching"
+                "LIKE is not supported by the DynamoDB driver; use starts_with for prefix matching"
             )
         }
         _ => todo!("FILTER = {:#?}", expr),

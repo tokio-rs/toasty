@@ -72,9 +72,6 @@ pub use expr_any::ExprAny;
 mod expr_arg;
 pub use expr_arg::ExprArg;
 
-mod expr_begins_with;
-pub use expr_begins_with::ExprBeginsWith;
-
 mod expr_binary_op;
 pub use expr_binary_op::ExprBinaryOp;
 
@@ -137,6 +134,9 @@ pub use expr_set::ExprSet;
 
 mod expr_set_op;
 pub use expr_set_op::ExprSetOp;
+
+mod expr_starts_with;
+pub use expr_starts_with::ExprStartsWith;
 
 mod expr_stmt;
 pub use expr_stmt::ExprStmt;

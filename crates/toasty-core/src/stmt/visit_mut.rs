@@ -2,9 +2,9 @@
 
 use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprAny, ExprArg,
-    ExprBeginsWith, ExprBinaryOp, ExprCast, ExprColumn, ExprError, ExprExists, ExprFunc,
-    ExprInList, ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprLike, ExprList, ExprMap,
-    ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp,
+    ExprBinaryOp, ExprCast, ExprColumn, ExprError, ExprExists, ExprFunc, ExprInList,
+    ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprLike, ExprList, ExprMap, ExprMatch,
+    ExprNot, ExprOr, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStartsWith,
     ExprStmt, Filter, FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit,
     LimitCursor, LimitOffset, Node, OrderBy, OrderByExpr, Path, Projection, Query, Returning,
     Select, Source, SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor,
@@ -97,13 +97,6 @@ pub trait VisitMut {
     /// The default implementation delegates to [`visit_expr_arg_mut`].
     fn visit_expr_arg_mut(&mut self, i: &mut ExprArg) {
         visit_expr_arg_mut(self, i);
-    }
-
-    /// Visits an [`ExprBeginsWith`] node mutably.
-    ///
-    /// The default implementation delegates to [`visit_expr_begins_with_mut`].
-    fn visit_expr_begins_with_mut(&mut self, i: &mut ExprBeginsWith) {
-        visit_expr_begins_with_mut(self, i);
     }
 
     /// Visits an [`ExprBinaryOp`] node mutably.
@@ -272,6 +265,13 @@ pub trait VisitMut {
     /// The default implementation delegates to [`visit_expr_set_op_mut`].
     fn visit_expr_set_op_mut(&mut self, i: &mut ExprSetOp) {
         visit_expr_set_op_mut(self, i);
+    }
+
+    /// Visits an [`ExprStartsWith`] node mutably.
+    ///
+    /// The default implementation delegates to [`visit_expr_starts_with_mut`].
+    fn visit_expr_starts_with_mut(&mut self, i: &mut ExprStartsWith) {
+        visit_expr_starts_with_mut(self, i);
     }
 
     /// Visits an [`ExprStmt`] node mutably.
@@ -542,10 +542,6 @@ impl<V: VisitMut> VisitMut for &mut V {
         VisitMut::visit_expr_arg_mut(&mut **self, i);
     }
 
-    fn visit_expr_begins_with_mut(&mut self, i: &mut ExprBeginsWith) {
-        VisitMut::visit_expr_begins_with_mut(&mut **self, i);
-    }
-
     fn visit_expr_binary_op_mut(&mut self, i: &mut ExprBinaryOp) {
         VisitMut::visit_expr_binary_op_mut(&mut **self, i);
     }
@@ -636,6 +632,10 @@ impl<V: VisitMut> VisitMut for &mut V {
 
     fn visit_expr_set_op_mut(&mut self, i: &mut ExprSetOp) {
         VisitMut::visit_expr_set_op_mut(&mut **self, i);
+    }
+
+    fn visit_expr_starts_with_mut(&mut self, i: &mut ExprStartsWith) {
+        VisitMut::visit_expr_starts_with_mut(&mut **self, i);
     }
 
     fn visit_expr_stmt_mut(&mut self, i: &mut ExprStmt) {
@@ -827,7 +827,6 @@ where
         Expr::And(expr) => v.visit_expr_and_mut(expr),
         Expr::Any(expr) => v.visit_expr_any_mut(expr),
         Expr::Arg(expr) => v.visit_expr_arg_mut(expr),
-        Expr::BeginsWith(expr) => v.visit_expr_begins_with_mut(expr),
         Expr::BinaryOp(expr) => v.visit_expr_binary_op_mut(expr),
         Expr::Cast(expr) => v.visit_expr_cast_mut(expr),
         Expr::Default => v.visit_expr_default_mut(),
@@ -849,6 +848,7 @@ where
         Expr::Record(expr) => v.visit_expr_record_mut(expr),
         Expr::Reference(expr) => v.visit_expr_reference_mut(expr),
         Expr::List(expr) => v.visit_expr_list_mut(expr),
+        Expr::StartsWith(expr) => v.visit_expr_starts_with_mut(expr),
         Expr::Stmt(expr) => v.visit_expr_stmt_mut(expr),
         Expr::Value(expr) => v.visit_value_mut(expr),
     }
@@ -877,15 +877,6 @@ pub fn visit_expr_arg_mut<V>(v: &mut V, node: &mut ExprArg)
 where
     V: VisitMut + ?Sized,
 {
-}
-
-/// Default mutable traversal for [`ExprBeginsWith`] nodes. Visits the attribute expression and prefix.
-pub fn visit_expr_begins_with_mut<V>(v: &mut V, node: &mut ExprBeginsWith)
-where
-    V: VisitMut + ?Sized,
-{
-    v.visit_expr_mut(&mut node.expr);
-    v.visit_expr_mut(&mut node.prefix);
 }
 
 /// Default mutable traversal for [`ExprBinaryOp`] nodes. Visits the lhs and rhs expressions.
@@ -1116,6 +1107,15 @@ where
     for operand in &mut node.operands {
         v.visit_expr_set_mut(operand);
     }
+}
+
+/// Default mutable traversal for [`ExprStartsWith`] nodes. Visits the attribute expression and prefix.
+pub fn visit_expr_starts_with_mut<V>(v: &mut V, node: &mut ExprStartsWith)
+where
+    V: VisitMut + ?Sized,
+{
+    v.visit_expr_mut(&mut node.expr);
+    v.visit_expr_mut(&mut node.prefix);
 }
 
 /// Default mutable traversal for [`ExprStmt`] nodes. Visits the inner statement.

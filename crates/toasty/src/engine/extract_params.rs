@@ -395,10 +395,10 @@ fn synthesize(expr: &stmt::Expr, cx: &Cx<'_>, params: &mut [TypedValue]) -> Ty {
             Ty::Inferred(db::Type::Boolean)
         }
 
-        // BeginsWith — both sides are strings. Reaches here only on drivers
+        // StartsWith — both sides are strings. Reaches here only on drivers
         // that natively support it (e.g., DynamoDB); SQL drivers lower it to
         // Like during the lowering phase.
-        stmt::Expr::BeginsWith(e) => {
+        stmt::Expr::StartsWith(e) => {
             check(&e.expr, &Ty::Inferred(db::Type::Text), params);
             check(&e.prefix, &Ty::Inferred(db::Type::Text), params);
             Ty::Inferred(db::Type::Boolean)

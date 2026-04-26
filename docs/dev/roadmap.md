@@ -59,8 +59,7 @@ the entry lands here.
 ## Query Engine
 
 - String predicates
-  - `contains` / `starts_with` / `ends_with`
-  - `LIKE` with escape handling
+  - `contains` / `ends_with`
   - Case-insensitive matching
   - Regex matching (`regex` / `iregex`)
 - Range and set predicates

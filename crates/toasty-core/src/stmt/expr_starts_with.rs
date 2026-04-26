@@ -1,6 +1,6 @@
 use super::Expr;
 
-/// A string prefix-match expression: `begins_with(expr, prefix)`.
+/// A string prefix-match expression: `starts_with(expr, prefix)`.
 ///
 /// Returns `true` if `expr` starts with `prefix`. The attribute reference
 /// is always `expr` (lhs) and the prefix value is always `prefix` (rhs).
@@ -8,10 +8,10 @@ use super::Expr;
 /// # Examples
 ///
 /// ```text
-/// begins_with(name, "Al")   // true if name starts with "Al"
+/// starts_with(name, "Al")   // true if name starts with "Al"
 /// ```
 #[derive(Debug, Clone, PartialEq)]
-pub struct ExprBeginsWith {
+pub struct ExprStartsWith {
     /// The attribute to test.
     pub expr: Box<Expr>,
 
@@ -20,9 +20,9 @@ pub struct ExprBeginsWith {
 }
 
 impl Expr {
-    /// Creates a `begins_with(expr, prefix)` expression.
-    pub fn begins_with(expr: impl Into<Self>, prefix: impl Into<Self>) -> Self {
-        ExprBeginsWith {
+    /// Creates a `starts_with(expr, prefix)` expression.
+    pub fn starts_with(expr: impl Into<Self>, prefix: impl Into<Self>) -> Self {
+        ExprStartsWith {
             expr: Box::new(expr.into()),
             prefix: Box::new(prefix.into()),
         }
@@ -30,8 +30,8 @@ impl Expr {
     }
 }
 
-impl From<ExprBeginsWith> for Expr {
-    fn from(value: ExprBeginsWith) -> Self {
-        Self::BeginsWith(value)
+impl From<ExprStartsWith> for Expr {
+    fn from(value: ExprStartsWith) -> Self {
+        Self::StartsWith(value)
     }
 }

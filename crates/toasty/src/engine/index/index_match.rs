@@ -48,9 +48,9 @@ impl<'stmt> IndexMatch<'stmt> {
                 }
                 _ => todo!("expr={:#?}", expr),
             },
-            BeginsWith(e) => match &*e.expr {
+            StartsWith(e) => match &*e.expr {
                 stmt::Expr::Reference(expr_column @ stmt::ExprReference::Column(_)) => {
-                    // begins_with is a range-like condition: valid on sort key, not partition key
+                    // starts_with is a range-like condition: valid on sort key, not partition key
                     self.match_expr_binary_op_column(cx, expr_column, expr, stmt::BinaryOp::Ge)
                 }
                 _ => false,
@@ -287,7 +287,7 @@ impl<'stmt> IndexMatch<'stmt> {
         use stmt::Expr::*;
 
         match expr {
-            BeginsWith(_) | InList(_) | IsNull(_) | Like(_) | Not(_) => {
+            StartsWith(_) | InList(_) | IsNull(_) | Like(_) | Not(_) => {
                 if self
                     .columns
                     .iter()

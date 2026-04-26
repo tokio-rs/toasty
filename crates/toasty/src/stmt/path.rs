@@ -480,11 +480,11 @@ impl<T> Path<T, String> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// let filter = User::fields().name().begins_with("Al".to_string());
+    /// let filter = User::fields().name().starts_with("Al".to_string());
     /// ```
-    pub fn begins_with(self, prefix: impl IntoExpr<String>) -> Expr<bool> {
+    pub fn starts_with(self, prefix: impl IntoExpr<String>) -> Expr<bool> {
         Expr {
-            untyped: stmt::Expr::begins_with(self.untyped.into_stmt(), prefix.into_expr().untyped),
+            untyped: stmt::Expr::starts_with(self.untyped.into_stmt(), prefix.into_expr().untyped),
             _p: PhantomData,
         }
     }
@@ -493,7 +493,7 @@ impl<T> Path<T, String> {
     ///
     /// Only available on `String`-typed fields. The caller is responsible for
     /// including any `%` or `_` wildcard characters in `pattern`. Not supported
-    /// by the DynamoDB driver — use [`begins_with`](Self::begins_with) instead.
+    /// by the DynamoDB driver — use [`starts_with`](Self::starts_with) instead.
     ///
     /// # Examples
     ///
