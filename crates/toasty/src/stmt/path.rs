@@ -1,5 +1,5 @@
 use super::{Expr, IntoExpr, IntoStatement, List};
-use crate::schema::Register;
+use crate::schema::{Field, Register};
 use std::{fmt, marker::PhantomData};
 use toasty_core::{
     schema::app::VariantId,
@@ -464,12 +464,16 @@ impl<T, U> Path<T, Option<U>> {
     }
 }
 
-impl<T> Path<T, String> {
+impl<T, U> Path<T, U>
+where
+    U: Field<Inner = String>,
+{
     /// Test whether this string field starts with `prefix`.
     ///
-    /// Only available on `String`-typed fields. For DynamoDB, this maps to
-    /// `begins_with` in a `KeyConditionExpression` (sort key) or
-    /// `FilterExpression` (non-key attribute).
+    /// Available on any string-valued field, including `String`,
+    /// `Option<String>`, and other wrappers whose `Field::Inner` is `String`.
+    /// For DynamoDB, this maps to `begins_with` in a `KeyConditionExpression`
+    /// (sort key) or `FilterExpression` (non-key attribute).
     ///
     /// # Examples
     ///
@@ -479,8 +483,10 @@ impl<T> Path<T, String> {
     /// #     #[key]
     /// #     id: i64,
     /// #     name: String,
+    /// #     nickname: Option<String>,
     /// # }
     /// let filter = User::fields().name().starts_with("Al".to_string());
+    /// let filter = User::fields().nickname().starts_with("Al".to_string());
     /// ```
     pub fn starts_with(self, prefix: impl IntoExpr<String>) -> Expr<bool> {
         Expr {
@@ -491,9 +497,11 @@ impl<T> Path<T, String> {
 
     /// Test whether this string field matches a SQL `LIKE` pattern.
     ///
-    /// Only available on `String`-typed fields. The caller is responsible for
-    /// including any `%` or `_` wildcard characters in `pattern`. Not supported
-    /// by the DynamoDB driver — use [`starts_with`](Self::starts_with) instead.
+    /// Available on any string-valued field, including `String`,
+    /// `Option<String>`, and other wrappers whose `Field::Inner` is `String`.
+    /// The caller is responsible for including any `%` or `_` wildcard
+    /// characters in `pattern`. Not supported by the DynamoDB driver — use
+    /// [`starts_with`](Self::starts_with) instead.
     ///
     /// # Examples
     ///
@@ -503,8 +511,10 @@ impl<T> Path<T, String> {
     /// #     #[key]
     /// #     id: i64,
     /// #     name: String,
+    /// #     nickname: Option<String>,
     /// # }
     /// let filter = User::fields().name().like("Al%".to_string());
+    /// let filter = User::fields().nickname().like("Al%".to_string());
     /// ```
     pub fn like(self, pattern: impl IntoExpr<String>) -> Expr<bool> {
         Expr {

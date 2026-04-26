@@ -55,3 +55,39 @@ pub async fn like_no_match(test: &mut Test) -> Result<()> {
 
     Ok(())
 }
+
+/// LIKE on an `Option<String>` field — matches non-null values; rows with NULL
+/// values are excluded since `NULL LIKE pattern` is unknown.
+#[driver_test(requires(sql))]
+pub async fn like_optional_field(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct OptItem {
+        #[key]
+        id: i64,
+        nickname: Option<String>,
+    }
+
+    let mut db = test.setup_db(models!(OptItem)).await;
+
+    toasty::create!(OptItem::[
+        { id: 1_i64, nickname: Some("Alice".to_string())   },
+        { id: 2_i64, nickname: Some("Alicia".to_string())  },
+        { id: 3_i64, nickname: Some("Bob".to_string())     },
+        { id: 4_i64, nickname: None                        },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let mut items: Vec<OptItem> =
+        OptItem::filter(OptItem::fields().nickname().like("Al%".to_string()))
+            .exec(&mut db)
+            .await?;
+
+    items.sort_by_key(|i| i.id);
+
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0].nickname.as_deref(), Some("Alice"));
+    assert_eq!(items[1].nickname.as_deref(), Some("Alicia"));
+
+    Ok(())
+}
