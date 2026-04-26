@@ -47,6 +47,7 @@ pub mod infra_pool_config;
 pub mod infra_reset_db;
 pub mod infra_sync_send;
 pub mod key_unsigned;
+pub mod lift_belongs_to_complex_filter;
 pub mod query_count;
 pub mod raw_identifier_fields;
 pub mod record_not_found;

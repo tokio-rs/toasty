@@ -200,7 +200,14 @@ impl Visit for LiftBelongsTo<'_> {
                     self.fail = true;
                 }
             }
-            _ => {}
+            // Constraints we can't lift to a direct FK comparison (e.g. a
+            // projection through an embedded field). Bail to the IN-subquery
+            // form so the filter is preserved verbatim — without this, the
+            // empty `operands` list silently produced an empty AND (= true)
+            // and the subquery returned every row.
+            _ => {
+                self.fail = true;
+            }
         }
     }
 }
