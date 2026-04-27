@@ -7,13 +7,14 @@ Subsumes the [JSON field queries roadmap entry](../roadmap.md#query-engine).
 Toasty picks the best per-backend storage representation for embedded
 types and collection fields by default — column-expanded embeds on SQL
 backends, `text[]` for `Vec<scalar>` on PostgreSQL, BSON sub-documents
-and arrays on MongoDB, JSON wherever no native option exists. `#[json]`
-is an explicit override that forces JSON storage: a single document for
-embeds, a JSON array or object for collections. The query API is the
-same regardless of storage; collection paths expose `std`-aligned
-methods (`contains`, `is_superset`, `intersects`). Updates target nested
-paths via `stmt::patch`, with array push/remove and numeric increment
-for atomic in-place changes when the backend supports it.
+and arrays on MongoDB, Map / List / typed-Set attributes on DynamoDB,
+JSON wherever no native option exists. `#[json]` is an explicit
+override that forces JSON storage where the backend has a meaningful
+distinction. The query API is the same regardless of storage;
+collection paths expose `std`-aligned methods (`contains`,
+`is_superset`, `intersects`). Updates target nested paths via
+`stmt::patch`, with array push/remove and numeric increment for atomic
+in-place changes when the backend supports it.
 
 ## Motivation
 
@@ -31,14 +32,19 @@ document. Both come up constantly:
 The existing `#[serialize(json)]` attribute stores any serde type as
 opaque JSON text. It works, but Toasty cannot query into it, index
 sub-paths, or patch a single field — every change is a read-modify-
-write of the full value. PostgreSQL's native arrays, `jsonb`, and
-MongoDB's BSON all expose rich operators that should be reachable from
-Toasty's typed query API.
+write of the full value. PostgreSQL's native arrays and `jsonb`,
+MongoDB's BSON, and DynamoDB's Map / List / typed-Set attributes all
+expose rich operators that should be reachable from Toasty's typed
+query API.
 
 This design gives one user-facing query API spanning native and JSON
-storage and across SQL and document backends. MongoDB support is
-aspirational — Toasty has no MongoDB driver yet — but the API is
-designed so adding one does not require new user-facing concepts.
+storage and across SQL, document, and key-value backends. MongoDB
+support is aspirational — Toasty has no MongoDB driver yet — but the
+API is designed so adding one does not require new user-facing
+concepts. DynamoDB has stronger native document support than the SQL
+backends in some places (atomic patch and atomic increment at any
+depth) and weaker in others (no sub-document containment, no element
+predicate, indexing only on top-level attributes).
 
 ## User-facing API
 
@@ -47,14 +53,23 @@ designed so adding one does not require new user-facing concepts.
 Toasty chooses storage per (backend, field type) by default. The query
 API is identical across choices.
 
-| Field type | PostgreSQL | MySQL | SQLite | MongoDB |
-|---|---|---|---|---|
-| `#[derive(Embed)]` struct/enum | column-expanded | column-expanded | column-expanded | sub-document |
-| `Vec<scalar>` | `T[]` (e.g. `text[]`) | `JSON` | JSON1 | BSON array |
-| `Vec<struct>` | `jsonb` | `JSON` | JSON1 | BSON array |
-| `HashMap<String, T>` | `jsonb` | `JSON` | JSON1 | BSON sub-document |
+| Field type | PostgreSQL | MySQL | SQLite | MongoDB | DynamoDB |
+|---|---|---|---|---|---|
+| `#[derive(Embed)]` struct/enum | column-expanded | column-expanded | column-expanded | sub-document | Map `M` |
+| `Vec<scalar>` | `T[]` (e.g. `text[]`) | `JSON` | JSON1 | BSON array | List `L` |
+| `Vec<struct>` | `jsonb` | `JSON` | JSON1 | BSON array | List `L` |
+| `HashSet<scalar>` | `T[]` | `JSON` | JSON1 | BSON array | typed Set `SS`/`NS`/`BS` |
+| `HashMap<String, T>` | `jsonb` | `JSON` | JSON1 | BSON sub-document | Map `M` |
 
-`#[json]` overrides the default — see [Forcing JSON storage](#forcing-json-storage).
+`#[json]` overrides the default to JSON storage on backends where there
+is a meaningful distinction. On document-default backends (MongoDB,
+DynamoDB) the override is a no-op — the default already uses the
+backend's native document representation. See
+[Forcing JSON storage](#forcing-json-storage).
+
+DynamoDB typed Sets (`SS`, `NS`, `BS`) only support string, numeric, and
+binary element types respectively. `HashSet<bool>`, `HashSet<struct>`,
+and other element types fall back to List `L` storage on DynamoDB.
 
 ### Embedded types
 
@@ -360,14 +375,20 @@ that does not apply to the field's storage with a clear error.
 (backend, field type) at schema build time. The choice is observable
 through the column type but not through the query API:
 
-- Embed types column-expand on SQL backends and become sub-documents
-  on MongoDB.
+- Embed types column-expand on SQL backends, become sub-documents on
+  MongoDB, and become Map (`M`) attributes on DynamoDB.
 - `Vec<scalar>` uses the backend's native array type if one exists
-  (`text[]`, `int[]`, etc. on PostgreSQL; BSON array on MongoDB) and
-  JSON otherwise.
+  (`text[]`, `int[]`, etc. on PostgreSQL; BSON array on MongoDB; List
+  `L` on DynamoDB) and JSON otherwise.
+- `HashSet<scalar>` uses a typed Set on DynamoDB (`SS` / `NS` / `BS`
+  per element type) and otherwise the same representation as
+  `Vec<scalar>`.
 - `Vec<struct>` and all map types use JSON unless a backend has a
-  better fit (BSON arrays of sub-documents on MongoDB).
-- `#[json]` overrides the default to JSON for any of the above.
+  better fit (BSON arrays / sub-documents on MongoDB; List / Map on
+  DynamoDB).
+- `#[json]` overrides the default to JSON for any of the above. On
+  document-default backends (MongoDB, DynamoDB) the override is a
+  no-op since the default already stores the field as a document.
 - `#[json(text)]` further selects PG text `json` over `jsonb`; ignored
   on other backends.
 
@@ -419,22 +440,22 @@ The query engine emits different operators depending on storage. The
 table shows both forms where they differ; backends without a column
 imply the JSON form is used regardless.
 
-| Operation | PG native (`T[]`) | PG JSON (`jsonb`) | MongoDB | SQLite (JSON1) | MySQL |
-|---|---|---|---|---|---|
-| Path equality | n/a | `col->'a'->>'b' = …` | `{"a.b": …}` | `json_extract` | `JSON_EXTRACT` |
-| Containment | n/a | `@>` | structural match | `json_each` + filter | `JSON_CONTAINS` |
-| `contains_key` | n/a | `?` | `$exists` | `json_extract IS NOT NULL` | `JSON_CONTAINS_PATH` |
-| `contains` (array) | `= ANY(col)` | `@>` | `{arr: v}` | `json_each` | `JSON_CONTAINS` |
-| `is_superset` | `@>` | `@>` | `$all` | `json_each` | `JSON_CONTAINS` |
-| `intersects` | `&&` | `?\|` | `$in` (per-element) | `json_each` | `JSON_OVERLAPS` |
-| `len` | `cardinality` | `jsonb_array_length` | `$size` | `json_array_length` | `JSON_LENGTH` |
-| `any` predicate | `EXISTS unnest` | `EXISTS jsonb_array_elements` | `$elemMatch` | `EXISTS json_each` | `JSON_TABLE` |
-| Patch one path | column update | `jsonb_set` | `$set` | `json_set` | `JSON_SET` |
-| Increment | column update | `jsonb_set` with cast | `$inc` | `json_set` arith | `JSON_SET` arith |
-| `push` | `array_append` | `\|\|` | `$push` | `json_insert` | `JSON_ARRAY_APPEND` |
-| `remove_eq` | `array_remove` | `jsonb_set` minus filter | `$pull` | rewrite | rewrite |
-| `remove_at` | array slicing | `jsonb_path` minus | `$unset` + `$pull` | rewrite | `JSON_REMOVE` |
-| `unset` (key) | n/a | `-` | `$unset` | `json_remove` | `JSON_REMOVE` |
+| Operation | PG native (`T[]`) | PG JSON (`jsonb`) | MongoDB | SQLite (JSON1) | MySQL | DynamoDB |
+|---|---|---|---|---|---|---|
+| Path equality | n/a | `col->'a'->>'b' = …` | `{"a.b": …}` | `json_extract` | `JSON_EXTRACT` | `path = :v` |
+| Containment | n/a | `@>` | structural match | `json_each` + filter | `JSON_CONTAINS` | AND of path equalities |
+| `contains_key` | n/a | `?` | `$exists` | `json_extract IS NOT NULL` | `JSON_CONTAINS_PATH` | `attribute_exists(path)` |
+| `contains` (array) | `= ANY(col)` | `@>` | `{arr: v}` | `json_each` | `JSON_CONTAINS` | `contains(path, :v)` |
+| `is_superset` | `@>` | `@>` | `$all` | `json_each` | `JSON_CONTAINS` | AND of `contains()` |
+| `intersects` | `&&` | `?\|` | `$in` (per-element) | `json_each` | `JSON_OVERLAPS` | OR of `contains()` |
+| `len` | `cardinality` | `jsonb_array_length` | `$size` | `json_array_length` | `JSON_LENGTH` | `size(path)` |
+| `any` predicate | `EXISTS unnest` | `EXISTS jsonb_array_elements` | `$elemMatch` | `EXISTS json_each` | `JSON_TABLE` | client-side filter |
+| Patch one path | column update | `jsonb_set` | `$set` | `json_set` | `JSON_SET` | `SET path = :v` |
+| Increment | column update | `jsonb_set` with cast | `$inc` | `json_set` arith | `JSON_SET` arith | `ADD path :n` |
+| `push` | `array_append` | `\|\|` | `$push` | `json_insert` | `JSON_ARRAY_APPEND` | `SET path = list_append(path, :v)` |
+| `remove_eq` | `array_remove` | `jsonb_set` minus filter | `$pull` | rewrite | rewrite | `DELETE path :s` (typed Set) / RMW |
+| `remove_at` | array slicing | `jsonb_path` minus | `$unset` + `$pull` | rewrite | `JSON_REMOVE` | `REMOVE path[i]` |
+| `unset` (key) | n/a | `-` | `$unset` | `json_remove` | `JSON_REMOVE` | `REMOVE path.key` |
 
 ### Future MongoDB gaps
 
@@ -462,6 +483,38 @@ need to work through:
   separator; map keys containing literal dots need escaping or
   rejection. Decided per the open question below.
 
+### DynamoDB constraints
+
+DynamoDB has stronger native document support than the SQL backends in
+several places (atomic patch, atomic increment, atomic push, atomic
+remove-at), but a few gaps stand out:
+
+- **No sub-document containment.** DynamoDB has no `@>`-equivalent.
+  `.contains(partial)` lowers to an AND of explicit path equalities,
+  which works but does not match the semantics of "any matching shape
+  anywhere in the document." Documented and consistent; users who
+  need deep structural match fall back to load-and-filter.
+- **No element predicate.** `.any(|i| ...)` and `.all(|i| ...)` over a
+  list cannot be evaluated server-side — DynamoDB's filter expression
+  language has no per-element predicate. Toasty falls back to
+  client-side filtering after the read.
+- **`remove_eq` on Lists.** Atomic removal of every element equal to
+  a value works for typed Sets via `DELETE path :s`. For Lists (the
+  default for `Vec<T>`), Toasty falls back to read-modify-write.
+  `HashSet<scalar>` users get the atomic path automatically through
+  the typed Set storage default.
+- **Indexing nested paths.** GSI / LSI keys must be top-level scalar
+  attributes. Indexing a nested value requires either denormalizing
+  the value to a top-level attribute or maintaining a separate index
+  table. Out of scope for v1; a `#[index(extract(...))]` form could
+  cover the denormalization case later.
+- **Item size cap.** 400 KB per item, smaller than PG TOAST and
+  MongoDB's 16 MB. Tighter constraint on what fits in one document.
+- **Filter expressions don't reduce IO.** DynamoDB filters apply
+  after `Query` / `Scan` reads; capacity is consumed for everything
+  matched by the key conditions. JSON-path predicates that lower to
+  filter expressions still cost the full scan.
+
 ## Edge cases
 
 - **Mixed-type values at a path.** Filtering
@@ -476,9 +529,15 @@ need to work through:
   `Option<T>` allows SQL `NULL`. Native-array fields default to `'{}'`
   (an empty array literal in PG).
 - **Document size limits.** PostgreSQL TOAST caps individual values
-  near 1 GB; MongoDB caps documents at 16 MB. Toasty does not enforce
-  a smaller limit. Inserts exceeding the backend limit surface a
-  driver error.
+  near 1 GB; MongoDB caps documents at 16 MB; DynamoDB caps items at
+  400 KB. Toasty does not enforce a smaller limit. Inserts exceeding
+  the backend limit surface a driver error.
+- **DynamoDB typed-Set element types.** Typed Sets only support
+  string, numeric, and binary element types. A model field of
+  `HashSet<bool>` or `HashSet<MyEnum>` falls back to List `L` storage
+  on DynamoDB and loses the atomic `ADD` / `DELETE` path. The
+  fallback is silent; users who care about atomicity should pick a
+  scalar element type.
 - **Floating-point edge values.** NaN and infinity are rejected at
   encode time. Negative zero round-trips as zero on PostgreSQL `jsonb`
   (it stores `numeric`).
@@ -525,6 +584,19 @@ just lose the per-operator optimizations.
 directly to its query and update document forms; SQL serialization
 does not apply. The `Capability::JsonInPlaceAtomic` flag exposes
 whether disjoint-path patches are independent.
+
+**DynamoDB driver.** The existing driver gains:
+
+- A schema-build pass that picks `M`, `L`, or typed-Set storage per
+  field type as described in the storage selection table.
+- Compilation from `stmt::Expr` nodes to DynamoDB condition
+  expressions, including AND-of-`contains` for `is_superset` and
+  OR-of-`contains` for `intersects`.
+- Compilation from `stmt::Assign` nodes to update expressions
+  (`SET path = …`, `ADD path :n`, `REMOVE path[i]`, etc.).
+- Capability flags advertise native support for all writes except
+  `JsonContainment`, `JsonAnyPredicate`, and `JsonRemoveEqOnList`,
+  which fall back to load-and-filter or read-modify-write.
 
 **Out-of-tree drivers.** Existing drivers compile unchanged. New
 operations are gated behind capability flags; absent flags fall back
@@ -597,14 +669,56 @@ Rust users.
 - **Renaming JSON keys.** `#[json(rename = "...")]` on an embed field
   is the natural form. Deferrable.
 
+## Capability matrix
+
+A high-level view of what each backend supports natively, what Toasty
+emulates by composing native primitives, and what falls back to client-
+side handling. The user-facing API is the same in every column; the
+matrix captures only the cost and atomicity differences.
+
+| Capability | PostgreSQL | MySQL | SQLite | MongoDB | DynamoDB |
+|---|---|---|---|---|---|
+| Path equality | native | native | native | native | native |
+| Sub-document containment | native (`@>`) | native (`JSON_CONTAINS`) | compound | native | compound |
+| Key existence | native | native | native | native | native |
+| Array `contains` | native | native | native | native | native |
+| Array `is_superset` | native | native | compound | native | compound |
+| Array `intersects` | native | native | compound | native | compound |
+| `len`, `is_empty` | native | native | native | native | native |
+| `any` / `all` element predicate | native | native | native | native | client-side |
+| Whole-value replace | native | native | native | native | native |
+| `stmt::patch` (nested) | native | native | native (rewrite) | native (atomic) | native (atomic) |
+| `stmt::increment` (nested) | native | native | native (rewrite) | native (atomic) | native (atomic) |
+| `stmt::push` / `push_all` | native | native | native (rewrite) | native (atomic) | native (atomic) |
+| `stmt::remove_eq` | native (`text[]`) / RMW (`jsonb`) | RMW | RMW | native (atomic) | native on typed Set / RMW on List |
+| `stmt::remove_at` | native | native | native (rewrite) | native (atomic) | native (atomic) |
+| `stmt::unset` | native | native | native (rewrite) | native (atomic) | native (atomic) |
+| GIN / wildcard index | ✓ | — | — | ✓ | — |
+| Path expression index | ✓ (B-tree) | partial | — | ✓ | denormalize to top-level attr |
+| Disjoint-path concurrent writes | last-write-wins | last-write-wins | last-write-wins | independent | independent |
+
+Legend:
+
+- **native** — direct server-side operator, one round trip.
+- **compound** — Toasty composes from native primitives, server-side,
+  one round trip but more expressions evaluated.
+- **RMW** — read-modify-write. Toasty does this transparently but it
+  takes two round trips and is not atomic across concurrent writers
+  unless the user wraps it in a transaction or condition.
+- **client-side** — Toasty fetches and filters in process. Same number
+  of round trips as a normal read but with more data over the wire.
+- **rewrite** — operation rewrites the whole JSON column in one
+  statement; transactional but not concurrency-safe across writers.
+
 ## Out of scope
 
 - **Raw JSON path expressions.** A `path_match("$.a[*] ? (@.b > 1)")`
   escape hatch for queries the typed accessors cannot express. Defer
   until the typed surface proves insufficient.
-- **DynamoDB JSON support.** DynamoDB has its own document model
-  (Map / List attributes) with different operators and indexing
-  rules. A separate design will cover how these fields encode there.
+- **DynamoDB nested-path indexing.** Indexing a value buried in a
+  Map requires denormalizing it to a top-level attribute. A
+  `#[index(extract(path))]` form could automate this; out of scope
+  for v1.
 - **Schema migrations for nested document shape changes.** Migrating
   a field from string to object across all rows is a bulk read-
   modify-write; no special migration primitives in this design.
