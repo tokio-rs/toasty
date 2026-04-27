@@ -154,7 +154,7 @@ impl Expand<'_> {
             TokenStream::new()
         };
 
-        // any() is only available on root models (requires Model trait bound)
+        // any() / all() are only available on root models (requires Model trait bound)
         let any_method = if is_root {
             quote! {
                 /// Filter the parent model by a condition on the associated
@@ -162,6 +162,14 @@ impl Expand<'_> {
                 /// satisfies `filter`.
                 #vis fn any(self, filter: #toasty::stmt::Expr<bool>) -> #toasty::stmt::Expr<bool> {
                     self.path.any(filter)
+                }
+
+                /// Filter the parent model by a condition on the associated
+                /// (child) model. Returns `true` when **all** associated records
+                /// satisfy `filter` (vacuously true when there are no
+                /// associated records).
+                #vis fn all(self, filter: #toasty::stmt::Expr<bool>) -> #toasty::stmt::Expr<bool> {
+                    self.path.all(filter)
                 }
             }
         } else {
