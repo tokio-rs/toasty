@@ -423,7 +423,9 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     self.curr_stmt_info().deps.insert(target_id);
                 }
             }
-            stmt::Expr::StartsWith(_) if self.capability().sql => {
+            stmt::Expr::StartsWith(_)
+                if self.capability().sql && !self.capability().native_starts_with =>
+            {
                 self.lower_expr_starts_with(expr);
             }
             stmt::Expr::Exists(_) if !self.capability().sql => {
