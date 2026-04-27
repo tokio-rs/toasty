@@ -77,6 +77,7 @@ DROP:
   - Dependency bumps unless they raise MSRV or change a public re-export.
   - Typo fixes in code comments.
   - Renames that are not visible in the public API.
+  - Fixes for bugs introduced by another entry in this same release. The feature ships in its fixed form, so the fix is not a user-visible change relative to the previous release. Example: if "Added: starts_with operator" appears in the same section as "Fixed: escape LIKE wildcards in starts_with", drop the fix — consumers only ever see the working version. Be conservative: only drop when the fix is clearly tied to a feature/change in the same release (shared subject, shared PR thread, the fix would be nonsensical without the feature). When in doubt, keep the fix.
 
 FORMAT:
   - Preserve the version heading line (## [...]...) exactly as given.
