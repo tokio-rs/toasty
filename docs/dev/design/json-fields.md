@@ -7,10 +7,10 @@ Subsumes the [JSON field queries roadmap entry](../roadmap.md#query-engine).
 `#[json]` on a field stores an embedded type as a single JSON document
 instead of expanding it into per-field columns. The same path-based query
 API used for column-expanded embeds works on JSON fields, plus operators
-specific to documents (containment, key existence, array membership).
-Updates target nested paths via `stmt::patch`, with array push/pull and
-numeric increment for atomic in-place changes. Storage defaults to `jsonb`
-on PostgreSQL; `#[json(text)]` opts into text JSON.
+specific to documents (containment, key existence, set predicates over
+arrays). Updates target nested paths via `stmt::patch`, with array
+push/remove and numeric increment for atomic in-place changes. Storage
+defaults to `jsonb` on PostgreSQL; `#[json(text)]` opts into text JSON.
 
 ## Motivation
 
@@ -39,12 +39,11 @@ concepts.
 ## User-facing API
 
 Capabilities are presented in roughly the order they appear in real
-applications. Tier 1 is the v1 surface; later tiers compose on top.
+applications. Tier 1 is the v1 surface; Tier 2 composes on top.
 
 ### Declaring a JSON field
 
-Annotate a field whose type is `#[derive(Embed)]` (or a JSON-compatible
-collection) with `#[json]`:
+Annotate a field whose type is `#[derive(Embed)]` with `#[json]`:
 
 ```rust
 #[derive(toasty::Embed)]
@@ -67,6 +66,24 @@ struct User {
 
     #[json]
     preferences: UserPreferences,
+}
+```
+
+`UserPreferences` is one `jsonb` column on PostgreSQL, one BSON sub-document
+on MongoDB. Without `#[json]`, the same `UserPreferences` would expand to
+`preferences_theme`, `preferences_notifications_email`, and so on — the
+existing embed behavior.
+
+### Collections at the root: `Vec<T>` and `Map<K, V>`
+
+`Vec<T>`, `HashMap<String, T>`, and `BTreeMap<String, T>` on a model also
+require `#[json]`:
+
+```rust
+#[derive(toasty::Model)]
+struct User {
+    #[key] #[auto]
+    id: u64,
 
     #[json]
     tags: Vec<String>,
@@ -76,16 +93,36 @@ struct User {
 }
 ```
 
-`UserPreferences` is one `jsonb` column on PostgreSQL, one BSON sub-document
-on MongoDB. Without `#[json]`, the same `UserPreferences` would expand to
-`preferences_theme`, `preferences_notifications_email`, and so on — the
-existing embed behavior.
+Without `#[json]`, the macro rejects these field types — there is no
+implicit collection storage today. A future `#[column(type = array)]`
+will add native PostgreSQL `text[]` arrays as a separate option.
 
-The accepted field types are:
+The path API for collection fields mirrors `std`. `User::FIELDS.tags()`
+is a typed path of element type `String` exposing:
+
+- `.contains(value)` — the array contains this element. (`Vec::contains`.)
+- `.is_superset(set)` — the array contains every element of `set`.
+  (`HashSet::is_superset`.)
+- `.intersects(set)` — the array shares at least one element with `set`.
+  (Negation of `HashSet::is_disjoint`; no positive `std` form exists.)
+- `.len()` — the array length as a typed numeric expression.
+- `.is_empty()` — equivalent to `.len().eq(0)`.
+
+`User::FIELDS.metadata()` is a typed path of key type `String` and value
+type `String`:
+
+- `.contains_key(key)` — the map has this key. (`HashMap::contains_key`.)
+- `.keys()` — a set view exposing the same set methods as `Vec` paths
+  (`.contains`, `.is_superset`, `.intersects`).
+- `.values()` — an iterable view supporting `.any(|v| …)` and
+  `.all(|v| …)` (Tier 2 below).
+- `.len()`, `.is_empty()` — as above.
+
+Accepted field types for `#[json]`:
 
 - Any `#[derive(Embed)]` struct or enum.
 - `Vec<T>`, `HashSet<T>`, `BTreeSet<T>` of a JSON-compatible `T`.
-- `HashMap<String, T>`, `BTreeMap<String, T>` for objects with string keys.
+- `HashMap<String, T>`, `BTreeMap<String, T>`.
 - `Option<T>` of any of the above.
 - Bare scalars (`i64`, `String`, `bool`, etc.) — useful when the column
   must accept multiple JSON types.
@@ -145,24 +182,21 @@ embed where every field is `Option`, mirroring the existing update-builder
 pattern. `Default::default()` leaves a field unspecified; `Some(x)`
 includes it in the predicate.
 
-### Tier 1: key existence
+### Tier 1: collection predicates
+
+The collection methods introduced above also work on `Vec` and `Map` paths
+inside embeds:
 
 ```rust
-User::all().filter(User::FIELDS.metadata().has_key("source"));
-User::all().filter(User::FIELDS.metadata().has_any_key(["source", "origin"]));
-User::all().filter(User::FIELDS.metadata().has_all_keys(["source", "version"]));
-```
-
-These work on `HashMap`/`BTreeMap` fields and on raw `Embed` types.
-
-### Tier 1: array membership and length
-
-```rust
-User::all().filter(User::FIELDS.tags().has("admin"));
-User::all().filter(User::FIELDS.tags().has_any(["admin", "moderator"]));
-User::all().filter(User::FIELDS.tags().has_all(["admin", "verified"]));
+User::all().filter(User::FIELDS.tags().contains("admin"));
+User::all().filter(User::FIELDS.tags().is_superset(["admin", "verified"]));
+User::all().filter(User::FIELDS.tags().intersects(["admin", "moderator"]));
 User::all().filter(User::FIELDS.tags().len().gt(3));
-User::all().filter(User::FIELDS.tags().is_empty());
+
+User::all().filter(User::FIELDS.metadata().contains_key("source"));
+User::all().filter(
+    User::FIELDS.metadata().keys().is_superset(["source", "version"])
+);
 ```
 
 ### Tier 1: full-value replacement
@@ -218,17 +252,17 @@ Atomic on backends that support it (PostgreSQL `jsonb_set` with a computed
 expression, MongoDB `$inc`); falls back to read-modify-write on
 backends without an atomic increment.
 
-### Tier 1: array push and pull
+### Tier 1: array push and remove
 
 ```rust
 user.update().tags(stmt::push("admin")).exec(&mut db).await?;
 
 user.update().tags(stmt::push_all(["admin", "verified"])).exec(&mut db).await?;
 
-user.update().tags(stmt::pull_eq("guest")).exec(&mut db).await?;
+user.update().tags(stmt::remove_eq("guest")).exec(&mut db).await?;
 ```
 
-`push` appends; `pull_eq` removes every element equal to the value.
+`push` appends; `remove_eq` removes every element equal to the value.
 
 ### Tier 2: array element predicates
 
@@ -246,13 +280,17 @@ Order::all().filter(Order::FIELDS.line_items().all(|i|
 `EXISTS` over `jsonb_array_elements`; Mongo `$elemMatch`). `all` is
 supported on Mongo natively and via `NOT any(NOT pred)` on PG.
 
-### Tier 2: keys and values iteration
+### Tier 2: predicates over keys and values
 
-For `HashMap` fields:
+For richer predicates over the entries of a map:
 
 ```rust
-User::all().filter(User::FIELDS.metadata().keys().has("internal"));
-User::all().filter(User::FIELDS.metadata().values().any(|v| v.eq("ok")));
+User::all().filter(
+    User::FIELDS.metadata().keys().any(|k| k.starts_with("internal_"))
+);
+User::all().filter(
+    User::FIELDS.metadata().values().any(|v| v.eq("ok"))
+);
 ```
 
 ### Tier 2: removing a key or array element
@@ -264,26 +302,14 @@ user.update()
     .await?;
 
 user.update()
-    .tags(stmt::pull_at(2))           // remove array index 2
+    .tags(stmt::remove_at(2))           // remove array index 2
     .exec(&mut db)
     .await?;
 ```
 
-### Tier 3: raw JSON path expressions
-
-For predicates not expressible through the typed accessors — recursive
-descent, arithmetic in filters, complex disjunctions — an escape hatch
-takes a path expression string interpreted by the backend:
-
-```rust
-User::all().filter(
-    User::FIELDS.preferences().path_match("$.flags[*] ? (@.priority > 5)")
-);
-```
-
-PostgreSQL passes the string to `jsonb_path_match`; MongoDB compiles it
-to an equivalent aggregation match where it can. Use this only when the
-typed accessors fall short.
+`stmt::remove_at` matches `Vec::remove`. Out-of-bounds is a no-op rather
+than an error, since per-row failure semantics on a bulk update are
+rarely useful.
 
 ### Indexes
 
@@ -314,6 +340,13 @@ where the backend supports it (Mongo Int32/Int64; PG `jsonb` numeric).
 Floating-point NaN and infinity are rejected at encode time — JSON has
 no representation for them.
 
+**Column-rename attributes on JSON-stored embeds.** A `#[column("name")]`
+annotation on a field of an embed type used as `#[json]` is an error at
+schema build time. The annotation renames a SQL column suffix in the
+column-expanded case; under `#[json]` there is no column to rename, and
+JSON keys come from the Rust field name. Renaming JSON keys is a future
+feature (likely `#[json(rename = "...")]`).
+
 **Null vs missing key.** `Option<T>` writes nothing for `None` and a JSON
 value for `Some`. Reading distinguishes:
 
@@ -330,8 +363,8 @@ field whose current type is incompatible (e.g. patching `notifications.email`
 when `notifications` is currently a JSON array) returns a runtime error
 on the affected row.
 
-**Array push/pull.** `stmt::push` appends to the array, creating it if
-absent. `stmt::pull_eq` removes every matching element. `stmt::pull_at`
+**Array writes.** `stmt::push` appends to the array, creating it if
+absent. `stmt::remove_eq` removes every matching element. `stmt::remove_at`
 removes a single index; out-of-bounds is a no-op.
 
 **Concurrent updates.** PostgreSQL `jsonb_set` rewrites the entire
@@ -346,15 +379,18 @@ should not rely on it on PostgreSQL.
 |---|---|---|---|---|
 | Path equality | `col->'a'->>'b' = ...` | `{"a.b": ...}` | `json_extract` | `JSON_EXTRACT` |
 | Containment | `@>` | structural match | `json_each` + filter | `JSON_CONTAINS` |
-| Key exists | `?` | `$exists` | `json_extract IS NOT NULL` | `JSON_CONTAINS_PATH` |
-| Array has | `?` (treats as key on array) / `@>` | `{arr: v}` | `json_each` | `JSON_CONTAINS` |
-| Array length | `jsonb_array_length` | `$size` | `json_array_length` | `JSON_LENGTH` |
+| `contains_key` | `?` | `$exists` | `json_extract IS NOT NULL` | `JSON_CONTAINS_PATH` |
+| `contains` (array) | `@>` | `{arr: v}` | `json_each` | `JSON_CONTAINS` |
+| `is_superset` | `@>` | `$all` | `json_each` | `JSON_CONTAINS` |
+| `intersects` | `?\|` | `$in` (per-element) | `json_each` | `JSON_OVERLAPS` |
+| `len` | `jsonb_array_length` | `$size` | `json_array_length` | `JSON_LENGTH` |
 | `any` predicate | `EXISTS` over `jsonb_array_elements` | `$elemMatch` | `EXISTS` over `json_each` | `JSON_TABLE` |
 | Patch one path | `jsonb_set` | `$set` | rewrite via `json_set` | `JSON_SET` |
 | Increment | `jsonb_set` with cast | `$inc` | `json_set` arith | `JSON_SET` arith |
-| Push | `\|\|` array concat | `$push` | `json_insert` | `JSON_ARRAY_APPEND` |
-| Pull eq | `jsonb_set` minus filter | `$pull` | rewrite | rewrite |
-| Path match | `jsonb_path_match` | aggregation match | unsupported | `JSON_SEARCH` (limited) |
+| `push` | `\|\|` array concat | `$push` | `json_insert` | `JSON_ARRAY_APPEND` |
+| `remove_eq` | `jsonb_set` minus filter | `$pull` | rewrite | rewrite |
+| `remove_at` | `jsonb_path` minus | `$unset` + `$pull` | rewrite | `JSON_REMOVE` |
+| `unset` (key) | `-` | `$unset` | `json_remove` | `JSON_REMOVE` |
 
 ### Future MongoDB gaps
 
@@ -379,6 +415,9 @@ work through:
 - **Sharding by JSON-path key.** Mongo shard keys can be JSON paths.
   Toasty's key model is single-field; this is out of scope for v1 and
   may need a broader composite-key story.
+- **Map keys containing `.`.** Mongo path notation uses `.` as a
+  separator; map keys containing literal dots need escaping or
+  rejection. Decided per the open question below.
 
 ## Edge cases
 
@@ -417,12 +456,12 @@ text JSON (`json` on PG; ignored elsewhere).
 serializer renders to dialect-specific operators:
 
 - `stmt::Expr::JsonPath { value, path }` — path traversal for reads.
-- `stmt::Expr::JsonContains { lhs, rhs }`, `JsonHasKey`, `JsonHasAnyKey`,
-  `JsonHasAllKeys`.
-- `stmt::Expr::JsonArrayLength`, `JsonArrayAny { var, body }`.
-- `stmt::Expr::JsonPathMatch { value, expr }` — escape hatch.
+- `stmt::Expr::JsonContains { lhs, rhs }`, `JsonContainsKey`,
+  `JsonIsSuperset`, `JsonIntersects`.
+- `stmt::Expr::JsonArrayLength`, `JsonArrayAny { var, body }`,
+  `JsonArrayAll { var, body }`.
 - Update RHS forms: `stmt::Assign::JsonSet`, `JsonInc`, `JsonPush`,
-  `JsonPull`, `JsonUnset`.
+  `JsonRemoveEq`, `JsonRemoveAt`, `JsonUnset`.
 
 Each is gated behind a capability flag (`Capability::JsonContains`, etc.).
 The planner reads capabilities to decide whether to push the operator
@@ -451,6 +490,13 @@ capabilities differ enough that two attributes are clearer than one
 overloaded one. `#[serialize(json)]` remains for cases where the user
 wants a serde-only escape hatch with no querying.
 
+**Implicit JSON storage for `Vec<T>` and `Map<K, V>`.** Skip the `#[json]`
+on collection fields since they have no column-expanded representation
+anyway. Rejected: explicit storage choice means the user can later opt
+into a different representation (PG-native `text[]`, sidecar table) by
+swapping the attribute, with no silent storage change. Errors point at
+the missing attribute with a clear message.
+
 **Always store embeds as JSON; no flag.** Removes the choice. Rejected:
 column-expanded embeds give per-field indexes, smaller rows, and existing
 SQL-tuning techniques that JSON storage forecloses. The choice is
@@ -465,11 +511,9 @@ modifier on the rare path.
 two parallel modeling APIs is more surface than the value warrants when
 embed already covers nested data.
 
-**Compile path queries to a generic AST and dispatch per-driver later.**
-The current proposal does exactly this — JSON path predicates lower to
-typed AST nodes that drivers either render to native operators or fall
-back to scalar evaluation. Listing the alternative for completeness;
-it is the chosen design.
+**Naming after Mongo (`has`, `has_all`, `has_any`).** Rejected for Rust
+idiom: `Vec::contains`, `HashSet::is_superset`, and the `intersects`
+form (negation of `is_disjoint`) read more naturally to Rust users.
 
 ## Open questions
 
@@ -478,21 +522,30 @@ it is the chosen design.
   forgiving; false catches typos. Blocking acceptance.
 - **Discriminator key name for enums.** `__type`? `$type`? Configurable
   per enum? Blocking implementation.
-- **Map key restrictions.** Should `HashMap<String, T>` allow keys
-  containing `.` (which interferes with Mongo path notation)? Blocking
-  implementation for the Mongo driver; deferrable for v1 PG-only.
+- **Map keys containing `.`.** Mongo path notation uses `.` as a key
+  separator; allowing arbitrary string keys requires escaping on encode
+  or rejection. Blocking implementation for the Mongo driver;
+  deferrable for v1 PG-only.
 - **`HashMap` ordering.** PG `jsonb` sorts keys; SQLite preserves input
   order; Mongo preserves input order. Document the lack of ordering
   guarantee or normalize on encode? Deferrable.
 - **Index DDL syntax.** The `json_gin` / `json_path` forms above are a
   starting point; they may want subkey selection, opclass selection on
   PG, and partial-index conditions. Deferrable.
+- **Renaming JSON keys.** `#[json(rename = "...")]` on an embed field
+  is the natural form. Decide before or alongside implementation.
+  Deferrable.
 
 ## Out of scope
 
+- **Raw JSON path expressions.** A `path_match("$.a[*] ? (@.b > 1)")`
+  escape hatch for queries the typed accessors cannot express. Defer
+  until the typed surface proves insufficient.
 - **DynamoDB JSON support.** DynamoDB has its own document model
   (Map / List attributes) with different operators and indexing rules.
   A separate design will cover how `#[json]` fields encode there.
+- **Native PostgreSQL arrays.** `#[column(type = array)]` on a `Vec<T>`
+  to opt into `text[]` instead of `jsonb`. A separate, smaller design.
 - **Schema migrations for nested document shape changes.** Migrating a
   field from string to object across all rows is a bulk read-modify-
   write; no special migration primitives in this design.
