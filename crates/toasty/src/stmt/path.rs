@@ -418,6 +418,51 @@ impl<T, U> Path<T, List<U>> {
             _p: PhantomData,
         }
     }
+
+    /// Build a `NOT IN subquery` expression that tests whether **all** associated
+    /// records satisfy `filter`.
+    ///
+    /// The path must point to a `HasMany` (or similar collection) field on the
+    /// parent model. Returns `true` when every associated record matches
+    /// `filter`, including the vacuous case where the parent has no associated
+    /// records (matching Rust's `[].iter().all()` semantics).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct Todo {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     complete: bool,
+    /// # }
+    /// use toasty::stmt::{Path, List};
+    ///
+    /// // Find users whose todos are all complete
+    /// let todos_path = Path::<User, List<Todo>>::from_field_index(2);
+    /// let filter = todos_path.all(Todo::fields().complete().eq(true));
+    /// ```
+    pub fn all(self, filter: Expr<bool>) -> Expr<bool>
+    where
+        U: crate::schema::Model,
+    {
+        // parent NOT IN (SELECT child_fk FROM child WHERE NOT filter)
+        let child_query = super::Query::<List<U>>::filter(filter.not());
+
+        Expr {
+            untyped: stmt::Expr::not(stmt::Expr::in_subquery(
+                self.untyped.into_stmt(),
+                child_query.untyped,
+            )),
+            _p: PhantomData,
+        }
+    }
 }
 
 impl<T, U> Path<T, Option<U>> {
