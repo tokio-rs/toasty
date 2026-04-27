@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-mysql-v0.4.0...toasty-driver-mysql-v0.5.0) - 2026-04-27
+
+### Added
+
+- Support for float types ([#687])
+- Native database enum types for embedded enums ([#665])
+
+[#665]: https://github.com/tokio-rs/toasty/pull/665
+[#687]: https://github.com/tokio-rs/toasty/pull/687
+
 ## [0.3.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-mysql-v0.2.0...toasty-driver-mysql-v0.3.0) - 2026-04-03
 
 ### Other
