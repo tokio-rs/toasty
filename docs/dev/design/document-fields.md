@@ -296,22 +296,45 @@ User::all().filter(
 ### Tier 1: sub-document containment
 
 Containment asks "does the document contain this shape, anywhere it
-matches?" Pass a partial value of the embed's type:
+matches?" Build a partial value of the embed's type with the
+`partial!` macro:
 
 ```rust
 User::all().filter(
-    User::FIELDS.preferences().contains(UserPreferencesPartial {
-        theme: Some("dark".into()),
-        ..Default::default()
-    })
+    User::FIELDS.preferences().contains(toasty::partial!({
+        theme: "dark",
+    }))
 );
 ```
 
-The signature is `.contains(impl Into<Expr<{Type}Partial>>) -> Expr<bool>`.
-Toasty generates a `{Type}Partial` companion for every `#[document]`
-embed where every field is `Option`, mirroring the existing update-
-builder pattern. `Default::default()` leaves a field unspecified;
-`Some(x)` includes it in the predicate.
+The signature is `.contains(impl Into<Expr<Partial<T>>>) -> Expr<bool>`,
+where `T` is the embed type. `Partial<T>` is a generic type carrying
+a list of named field assignments; the `partial!` macro produces one
+from struct-literal syntax. Field names not in `{ ... }` are absent
+from the predicate, so `partial!({ theme: "dark" })` matches any row
+whose `preferences.theme` is `"dark"`, regardless of other fields.
+
+Nested partial values work the same way:
+
+```rust
+User::all().filter(
+    User::FIELDS.preferences().contains(toasty::partial!({
+        notifications: { email: true },
+    }))
+);
+```
+
+The `{ … }` body inside a field position produces a nested
+`Partial<NotificationSettings>` that participates in the deep match.
+
+Compile-time field-name validation follows the same pattern as
+[the static assertions for `create!`](static-assertions-create-macro.md):
+the macro emits a const-evaluation block bounded on a hidden trait
+that resolves the target type at monomorphization time, and the
+const panics if a field name is unknown. The compile-time check is a
+DX nicety, not a correctness requirement — the runtime path validates
+keys against the schema as well, so a v1 implementation can ship the
+runtime check first and add the compile-time one later.
 
 Containment is a document-storage feature; the query engine rejects
 `.contains(...)` on a column-expanded embed with a clear error
@@ -776,6 +799,18 @@ the user wants a serde-only escape hatch with no querying.
 Rejected: column-expanded embeds give per-field indexes, smaller
 rows, and existing SQL-tuning techniques that document storage
 forecloses. The choice is load-bearing.
+
+**Generated `{Type}Partial` companion struct for containment.** The
+first draft of the containment API generated a companion struct
+(e.g. `UserPreferencesPartial`) per `#[document]` embed, with every
+field wrapped in `Option`. Rejected: long type names cluttered call
+sites, the `..Default::default()` boilerplate appeared at every
+call, and codegen grew with every embed. The single generic
+`Partial<T>` plus a `partial!` macro is shorter at the call site,
+generates less code, and keeps one type for every embed. The
+compile-time validation that prevents typos in field names rides on
+the same monomorphization trick used by the `create!` static
+assertions.
 
 **`#[column(type = json)]` instead of `#[document]`.** Reuse the
 existing `#[column(type = ...)]` mechanism. Rejected: `#[column]`
