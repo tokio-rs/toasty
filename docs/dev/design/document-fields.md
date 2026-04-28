@@ -178,6 +178,29 @@ API still works (`User::FIELDS.profile().layout().sidebar_width()`
 filters the same way); the difference is column count, indexability
 of individual leaves, and storage layout.
 
+#### Recursive embed types
+
+An embed that contains itself, directly or through another embed,
+cannot be column-expanded — the schema would be infinite.
+`#[document]` somewhere along the cycle terminates the recursion by
+collapsing the recursive sub-tree into one document slot:
+
+```rust
+#[derive(toasty::Embed)]
+struct Comment {
+    text: String,
+
+    #[document]
+    replies: Vec<Comment>,
+}
+```
+
+On SQL backends and DynamoDB this attribute is required — schema
+build errors without it, naming the recursive field and suggesting
+`#[document]`. On MongoDB the recursion is natural (sub-documents
+nest as deep as the data requires) and `#[document]` is a no-op, so
+the same source compiles on every backend.
+
 ### Collections at the model
 
 `Vec<T>`, `HashMap<String, T>`, and `BTreeMap<String, T>` work with no
