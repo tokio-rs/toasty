@@ -308,11 +308,12 @@ User::all().filter(
 ```
 
 The signature is `.contains(impl Into<Expr<Partial<T>>>) -> Expr<bool>`,
-where `T` is the embed type. `Partial<T>` is a generic type carrying
-a list of named field assignments; the `partial!` macro produces one
-from struct-literal syntax. Field names not in `{ ... }` are absent
-from the predicate, so `partial!({ theme: "dark" })` matches any row
-whose `preferences.theme` is `"dark"`, regardless of other fields.
+where `T` is the embed type. `Partial<T>` is a thin wrapper carrying
+the type parameter for type-checking; the `partial!` macro produces
+one from struct-literal syntax. Field names not in `{ ... }` are
+absent from the predicate, so `partial!({ theme: "dark" })` matches
+any row whose `preferences.theme` is `"dark"`, regardless of other
+fields.
 
 Nested partial values work the same way:
 
@@ -324,8 +325,9 @@ User::all().filter(
 );
 ```
 
-The `{ … }` body inside a field position produces a nested
-`Partial<NotificationSettings>` that participates in the deep match.
+Internally, the literal lowers to a nested `stmt::Record` carrying
+only the named field-value pairs; the exact representation of
+`Partial<T>` is TBD (see open questions).
 
 Compile-time field-name validation follows the same pattern as
 [the static assertions for `create!`](static-assertions-create-macro.md):
@@ -867,6 +869,17 @@ Rust users.
   `[T; N]`, `HashSet<T>`, `BTreeSet<T>`) and whether `Set<T>` should
   carry uniqueness as a runtime invariant or a name-only convention.
   Blocking implementation.
+- **`Partial<T>` representation and `partial!` mechanics.** The
+  natural shape is something like `struct Partial<T> { expr:
+  stmt::Expr, _p: PhantomData<T> }`, with `partial!` lowering
+  struct-literal syntax to an `stmt::Record` of named values
+  (recursively, for nested partials). Open: can `partial!` reuse the
+  existing create-builder type machinery to validate field names and
+  types, or does it need its own validation path? The two are
+  similar (both name-and-value bags) but differ in semantics —
+  `create!` requires a complete value, `partial!` accepts an
+  incomplete one. Reuse would cut codegen; a separate path keeps the
+  semantics clean. Blocking implementation.
 
 ## Capability matrix
 
