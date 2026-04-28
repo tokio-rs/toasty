@@ -661,12 +661,22 @@ through the column type but not through the query API:
 **Encoding.** Toasty serializes to the document encoding (JSON on SQL
 and SQLite, BSON on MongoDB, DynamoDB attribute trees on DynamoDB)
 using the same field-by-field representation it would use for
-column-expanded embeds, packed into one document. Enum discriminators
-encode as a `__type` key by default; configurable per the open
-question below. Numeric types preserve Rust width where the backend
-supports it (Mongo Int32/Int64; PG `jsonb` numeric). Floating-point
-NaN and infinity are rejected at encode time — JSON has no
-representation for them.
+column-expanded embeds, packed into one document. Numeric types
+preserve Rust width where the backend supports it (Mongo
+Int32/Int64; PG `jsonb` numeric). Floating-point NaN and infinity
+are rejected at encode time — JSON has no representation for them.
+
+**Enum discriminators.** Toasty uses **internal tagging** — the
+discriminator is a sibling key in the variant's object, defaulting
+to `__type` (matching serde's `#[serde(tag = "__type")]` mode).
+Internal tagging is preferred over serde's default external
+tagging because external tagging adds a nesting level per variant,
+and DynamoDB caps Map/List nesting at 32 levels — a hard budget
+that deeply nested embeds with enums at multiple levels can exhaust.
+Users who also `#[derive(Serialize, Deserialize)]` on the same
+enum need to add `#[serde(tag = "__type")]` to round-trip with
+Toasty's encoding. The discriminator key name is configurable per
+the open question below.
 
 **Column-rename attributes on document-stored embeds.** A
 `#[column("name")]` annotation on a field of an embed type used as
