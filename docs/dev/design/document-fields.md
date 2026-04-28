@@ -714,13 +714,20 @@ index; out-of-bounds is a no-op. `stmt::pop` removes the last Vec
 element; on an empty Vec it is a no-op. `stmt::clear` empties the
 collection.
 
-**Concurrent updates.** PostgreSQL `jsonb_set` rewrites the entire
-document; concurrent patches to disjoint paths within one `jsonb`
-column are not independent — last write wins. PostgreSQL native
-arrays have similar whole-column semantics. MongoDB `$set` and
-DynamoDB `SET path = …` on disjoint paths are independent. Code
-that depends on per-path atomicity should not rely on it on SQL
-backends.
+**Concurrent updates.** A single Toasty operation against one row
+is atomic on every backend — the row write lock (SQL) or document
+write lock (Mongo, DDB) serializes concurrent operations, and on
+SQL backends `READ COMMITTED` makes the second writer's UPDATE
+re-read the column at execution time. Two writers patching
+disjoint paths on the same row both land.
+
+The exception is the read-modify-write (RMW) fallback marked in
+the [Capability matrix](#capability-matrix). RMW splits the
+operation into a SELECT and an UPDATE, so a concurrent writer can
+interleave between them and the second commit overwrites a value
+computed from a stale read. RMW operations need an explicit
+transaction with row locking (e.g. `SELECT … FOR UPDATE` on PG)
+when concurrent correctness matters.
 
 ## Backend mapping
 
@@ -1073,7 +1080,9 @@ Legend:
   number of round trips as a normal read but with more data over the
   wire.
 - **rewrite** — operation rewrites the whole document column in one
-  statement; transactional but not concurrency-safe across writers.
+  statement rather than mutating a path in place. Atomic per row
+  (same as `native`); the cost scales with the document size, not
+  the modified path.
 
 ## Composition with `#[deferred]`
 
