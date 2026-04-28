@@ -100,6 +100,57 @@ struct User {
 }
 ```
 
+#### Collections inside an embed
+
+Storage selection applies recursively. Column-expansion continues
+through nested embeds; collection fields stop the expansion at the
+collection itself, which becomes one column with the same backend-
+chosen storage it would have at the model root:
+
+```rust
+#[derive(toasty::Embed)]
+struct UserPreferences {
+    theme: String,                          // -> preferences_theme: TEXT
+    tags: Vec<String>,                      // -> preferences_tags: text[] (PG) / jsonb (else)
+    feature_flags: HashMap<String, bool>,   // -> preferences_feature_flags: jsonb
+}
+```
+
+The path API works through the boundary unchanged:
+
+```rust
+User::all().filter(
+    User::FIELDS.preferences().tags().contains("beta")
+);
+```
+
+The collection's column inherits its native operators on PostgreSQL —
+`text[]` for `Vec<scalar>` is GIN-indexable, supports `= ANY(col)` and
+`@>`, and so on — so the only difference between a root-level and an
+embed-nested collection is the column name.
+
+#### Override: document storage for a single nested field
+
+`#[document]` on a field inside an embed forces that one field to
+document storage while the rest of the embed stays column-expanded.
+Useful when most fields should live in their own columns (for
+indexing, sort, or schema clarity) but one sub-tree is irregular:
+
+```rust
+#[derive(toasty::Embed)]
+struct Profile {
+    name: String,                            // column
+    age: u32,                                // column
+
+    #[document]
+    extras: HashMap<String, MetadataValue>,  // single jsonb column
+}
+```
+
+`#[document]` on a child embed forces that sub-tree into one document
+column even when the parent embed is column-expanded. The two
+representations compose freely.
+
 ### Collections at the model
 
 `Vec<T>`, `HashMap<String, T>`, and `BTreeMap<String, T>` work with no
@@ -390,10 +441,17 @@ through the column type but not through the query API:
   `Vec<scalar>`.
 - `Vec<struct>` and all map types use document storage (JSON on SQL
   backends, BSON / Map / sub-document on document backends).
-- `#[document]` overrides the default to document storage for any of
-  the above. On document-default backends (MongoDB, DynamoDB) the
-  override is a no-op since the default already stores the field as
-  a document.
+- **Recursion through embeds.** Selection applies to every field on
+  the way down. A nested embed continues to expand; a nested
+  collection stops the expansion and becomes one column with the
+  same storage it would receive at the root. The column name is the
+  underscore-joined path (`preferences_tags`).
+- `#[document]` overrides the default to document storage for any
+  field — at the root or anywhere inside a column-expanded embed.
+  Marking one nested field forces that field alone; marking the
+  parent embed forces the whole sub-tree. On document-default
+  backends (MongoDB, DynamoDB) the override is a no-op since the
+  default already stores the field as a document.
 - `#[document(text)]` further selects PG text `json` over `jsonb`;
   ignored on other backends.
 
