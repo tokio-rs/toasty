@@ -690,14 +690,14 @@ from the Rust field name. Renaming document keys is a future feature
 (likely `#[document(rename = "...")]`).
 
 **Null vs missing key.** `Option<T>` writes nothing for `None` and a
-document value for `Some`. Reading distinguishes:
+document value for `Some`. On read, both an absent key and an
+explicit JSON `null` deserialize to `None` — Toasty's writer never
+produces explicit nulls, so the distinction only arises with
+externally-written data.
 
-- Absent key → `None`.
-- Explicit JSON `null` → `None`, with `#[document(strict_nulls)]`
-  opting into an error instead.
-
-`is_none()` matches both. `is_absent()` and `is_null()` match only one
-each.
+Users who need to distinguish the two cases use the path-level
+predicates: `is_none()` matches both, `is_absent()` matches only
+absent keys, `is_null()` matches only explicit nulls.
 
 **Patch semantics.** A `stmt::patch(path, value)` writes `value` at
 `path`, creating intermediate objects as needed. A patch that walks
