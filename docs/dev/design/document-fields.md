@@ -146,22 +146,36 @@ embed-nested collection is the column name.
 `#[document]` on a field inside an embed forces that one field to
 document storage while the rest of the embed stays column-expanded.
 Useful when most fields should live in their own columns (for
-indexing, sort, or schema clarity) but one sub-tree is irregular:
+indexing, sort, or schema clarity) but one nested embed is large or
+irregular enough that exploding it into per-leaf columns is
+unhelpful:
 
 ```rust
 #[derive(toasty::Embed)]
 struct Profile {
-    name: String,                            // column
-    age: u32,                                // column
+    name: String,                            // column: profile_name
+    age: u32,                                // column: profile_age
 
     #[document]
-    extras: HashMap<String, MetadataValue>,  // single jsonb column
+    layout: LayoutPreferences,               // single jsonb column: profile_layout
+}
+
+#[derive(toasty::Embed)]
+struct LayoutPreferences {
+    sidebar_width: u32,
+    panel_order: Vec<String>,
+    pinned_widgets: Vec<WidgetConfig>,
+    // ...many more fields the user doesn't query individually
 }
 ```
 
-`#[document]` on a child embed forces that sub-tree into one document
-column even when the parent embed is column-expanded. The two
-representations compose freely.
+Without the override, `LayoutPreferences` would expand to
+`profile_layout_sidebar_width`, `profile_layout_panel_order`,
+`profile_layout_pinned_widgets`, and so on. With `#[document]` the
+whole sub-tree becomes one `jsonb` column on PostgreSQL. The path
+API still works (`User::FIELDS.profile().layout().sidebar_width()`
+filters the same way); the difference is column count, indexability
+of individual leaves, and storage layout.
 
 ### Collections at the model
 
