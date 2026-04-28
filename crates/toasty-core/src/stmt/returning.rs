@@ -28,8 +28,8 @@ pub enum Returning {
     /// Return the result of evaluating an expression against the source rows.
     Project(Expr),
 
-    /// Return a fixed value, independent of the statement source.
-    Value(Expr),
+    /// Return a fixed expression, independent of the statement source.
+    Expr(Expr),
 }
 
 impl Returning {
@@ -127,9 +127,9 @@ impl Returning {
         *self = Returning::Project(expr.into());
     }
 
-    /// Returns `true` if this is the `Value` variant.
-    pub fn is_value(&self) -> bool {
-        matches!(self, Self::Value(..))
+    /// Returns `true` if this is the `Expr` variant.
+    pub fn is_expr(&self) -> bool {
+        matches!(self, Self::Expr(..))
     }
 
     /// Takes this returning clause, replacing it with `Returning::Project(null)`,

@@ -543,7 +543,7 @@ impl LowerStatement<'_, '_> {
                 let returning = stmt_info.stmt.as_ref().unwrap().returning().expect("bug");
 
                 let expr = match returning {
-                    stmt::Returning::Value(expr) if expr.is_const() => expr.clone(),
+                    stmt::Returning::Expr(expr) if expr.is_const() => expr.clone(),
                     _ => {
                         // Make sure the source statement returns a single record
                         debug_assert!(match &**stmt_info.stmt.as_ref().unwrap() {
@@ -844,10 +844,10 @@ impl RelationSource for InsertRelationSource<'_> {
     fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr) {
         let record = match self.returning {
             Some(stmt::Returning::Project(stmt::Expr::Record(record))) => record,
-            Some(stmt::Returning::Value(stmt::Expr::List(rows))) => {
+            Some(stmt::Returning::Expr(stmt::Expr::List(rows))) => {
                 rows.items[self.index].as_record_mut_unwrap()
             }
-            Some(stmt::Returning::Value(stmt::Expr::Record(record))) => record,
+            Some(stmt::Returning::Expr(stmt::Expr::Record(record))) => record,
             _ => todo!("InsertRelationSource={self:#?}"),
         };
 

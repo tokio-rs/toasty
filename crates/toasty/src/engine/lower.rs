@@ -539,7 +539,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         // that sub-statements (e.g., child INSERTs for HasOne relations) capture
         // the correct parent row index via scope_statement.
         if matches!(&self.cx, LoweringContext::Insert(..))
-            && let stmt::Returning::Value(stmt::Expr::List(list)) = i
+            && let stmt::Returning::Expr(stmt::Expr::List(list)) = i
         {
             for (index, item) in list.items.iter_mut().enumerate() {
                 self.lower_returning_for_row(index).visit_expr_mut(item);
@@ -596,7 +596,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             lower.constantize_insert_returning(returning, &stmt.source);
 
             if stmt.source.single
-                && let stmt::Returning::Value(expr) = &returning
+                && let stmt::Returning::Expr(expr) = &returning
             {
                 // Not strictly true, but there is nothing that needs to
                 // return a list at this point for a "single" query. If this

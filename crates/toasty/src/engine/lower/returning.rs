@@ -43,7 +43,7 @@ impl LowerStatement<'_, '_> {
     ///
     /// Can be constantized to:
     /// ```text
-    /// stmt::Returning::Value(vec![
+    /// stmt::Returning::Expr(vec![
     ///     Record { id: '123', name: 'Alice' },
     ///     Record { id: '456', name: 'Bob' },
     /// ])
@@ -68,7 +68,7 @@ impl LowerStatement<'_, '_> {
     ///    - This produces a `stmt::Value` for each row
     ///
     /// 3. **Replace** `stmt::Returning::Project(projection)` with
-    ///    `stmt::Returning::Value(values)`
+    ///    `stmt::Returning::Expr(values)`
     ///    - Single-row inserts return a single value
     ///    - Multi-row inserts return a list of values
     ///
@@ -96,7 +96,7 @@ impl LowerStatement<'_, '_> {
                     *returning = xformed_returning;
                 }
             }
-            stmt::Returning::Value(expr) => self.constantize_insert_returning_expr(expr, source),
+            stmt::Returning::Expr(expr) => self.constantize_insert_returning_expr(expr, source),
             _ => {}
         }
     }
@@ -215,7 +215,7 @@ impl LowerStatement<'_, '_> {
             }
 
             // Replace the expression-based RETURNING with a constant value
-            Some(stmt::Returning::Value(if source.single {
+            Some(stmt::Returning::Expr(if source.single {
                 // Single row insert: return just the one value
                 constantized
                     .into_iter()

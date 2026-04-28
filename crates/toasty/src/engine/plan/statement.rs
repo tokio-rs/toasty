@@ -196,7 +196,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             && let stmt::Statement::Query(query) = &mut stmt
             && let stmt::ExprSet::Values(values) = &mut query.body
         {
-            returning = Some(stmt::Returning::Value(if query.single {
+            returning = Some(stmt::Returning::Expr(if query.single {
                 assert_eq!(1, values.rows.len());
                 values.rows.drain(..).next().unwrap()
             } else {
@@ -278,7 +278,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         let is_returning_projection = matches!(returning, Some(stmt::Returning::Project(..)));
         debug_assert!(
-            is_returning_projection || matches!(returning, None | Some(stmt::Returning::Value(..)))
+            is_returning_projection || matches!(returning, None | Some(stmt::Returning::Expr(..)))
         );
 
         visit_mut::for_each_expr_mut(returning, |expr| {
@@ -1613,7 +1613,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         // Then handle returning clause
         if let Some(clause) = returning.clause {
             match clause {
-                stmt::Returning::Value(expr) => {
+                stmt::Returning::Expr(expr) => {
                     // Value variant contains a constant expression that can be evaluated
                     if let Ok(value) = expr.eval_const() {
                         let ty = value.infer_ty();

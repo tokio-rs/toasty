@@ -290,7 +290,7 @@ impl NestedMergePlanner<'_> {
                         let child_returning = child_stmt.returning_unwrap();
 
                         match child_returning {
-                            stmt::Returning::Value(returning_expr) if returning_expr.is_const() => {
+                            stmt::Returning::Expr(returning_expr) if returning_expr.is_const() => {
                                 match child_stmt {
                                     stmt::Statement::Query(query) if query.single => {
                                         let stmt::Expr::Value(v) = returning_expr else {

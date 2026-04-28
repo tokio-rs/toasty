@@ -202,7 +202,7 @@ impl LowerStatement<'_, '_> {
             converted.push(converted_row);
         }
 
-        *returning = Some(stmt::Returning::Value(if single {
+        *returning = Some(stmt::Returning::Expr(if single {
             assert!(converted.len() == 1);
             converted.into_iter().next().unwrap()
         } else {
