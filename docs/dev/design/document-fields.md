@@ -522,21 +522,73 @@ are rarely useful.
 
 ### Indexes
 
-Index syntax follows the field's storage representation. The same
-`#[index(...)]` attribute used for column indexes covers document and
-array fields:
+The existing `#[index]` attribute extends to cover collection and
+document fields. The user-facing rule is unchanged: `#[index]` on a
+field means "filtering on this field is fast." Toasty picks the
+index kind per backend based on the field's type and storage. The
+attribute is **storage-independent**: a `#[index]` on a scalar leaf
+of an embed means the same thing whether the parent embed is
+column-expanded or stored as a document — only the lowering changes.
 
 ```rust
-#[index(gin(tags))]                                   // PG GIN on text[] or jsonb
-#[index(document_path(preferences => theme))]         // expression index on a single path
+#[derive(toasty::Embed)]
+struct Preferences {
+    #[index]
+    theme: String,
+    locale: Option<String>,
+}
+
+#[derive(toasty::Model)]
+struct User {
+    #[key] #[auto]
+    id: u64,
+
+    #[index]
+    tags: Vec<String>,
+
+    preferences: Preferences,
+}
 ```
 
-`gin(...)` produces a GIN index appropriate for the column's storage:
-`array_ops` on `text[]`, `jsonb_ops` on `jsonb`, no-op on backends
-without GIN. `document_path(...)` produces an expression index on a
-single path within the document (PG B-tree, MongoDB path index).
-Toasty rejects an index form that does not apply to the field's
-storage with a clear error.
+The per-backend lowering depends on where `#[index]` sits and how
+the parent is stored:
+
+| Where `#[index]` sits | Per-backend lowering |
+|---|---|
+| Scalar at the model root | B-tree (PG/MySQL/SQLite); B-tree on the path (Mongo); top-level GSI/LSI key (DDB) |
+| Scalar inside a column-expanded embed | B-tree on the flattened column (existing behavior) |
+| Scalar inside a `#[document]` embed | B-tree expression index on the extracted path (PG/MySQL/SQLite); single-field path index (Mongo); schema-build error on DDB unless denormalized |
+| `Vec<T>` or `HashSet<T>` field | GIN with `array_ops` on `text[]` / `jsonb_ops` on `jsonb` (PG); multi-valued (MySQL 8.0+); multikey (Mongo); schema-build error (SQLite, DDB) |
+| `HashMap<String, T>` field | GIN with `jsonb_ops` (PG); wildcard (Mongo); schema-build error (MySQL, SQLite, DDB) |
+| Whole `#[document]` embed | GIN with `jsonb_ops` for containment (PG); wildcard (Mongo); schema-build error elsewhere |
+
+Three notes follow from the table:
+
+- **Method generation.** `#[index]` on a root field today generates
+  `filter_by_<field>` on the model. `#[index]` on a leaf inside an
+  embed type does not generate a method on the parent model — the
+  embed macro cannot see the parent's identifier. The index DDL
+  emits regardless; the user filters via the path API
+  (`User::FIELDS.preferences().theme().eq(...)`), which the engine
+  routes through the index.
+- **Schema-build errors.** When a backend has no viable index type
+  for a field shape (SQLite + collection, DDB + nested path),
+  Toasty rejects the schema with a message naming the field, the
+  backend, and the constraint. Silent degradation is worse than an
+  error here because the user wrote `#[index]` expecting the index
+  to exist.
+- **Backend-specific tuning** (GIN opclass selection, partial-index
+  conditions, custom collation, wildcard projection) is out of
+  scope for this design. A future modifier syntax — something like
+  `#[index(opclass = "jsonb_path_ops")]` or
+  `#[index(partial = "...")]` — covers the long tail without
+  affecting the v1 surface.
+
+Compound and unique forms — `#[index(fields(a, b))]`, `#[unique]` —
+keep their existing semantics. `#[unique]` on a `Vec<T>` is a
+schema-build error (use `HashSet<T>` if uniqueness is the intent;
+the HashSet-on-PG enforcement question is tracked in
+[Open questions](#open-questions)).
 
 ## Behavior
 
@@ -905,9 +957,11 @@ Rust users.
 - **`HashMap` ordering.** PG `jsonb` sorts keys; SQLite preserves
   input order; Mongo preserves input order. Document the lack of
   ordering guarantee or normalize on encode? Deferrable.
-- **Index DDL syntax.** The `gin(...)` and `document_path(...)` forms
-  above are a starting point; they may want subkey selection,
-  opclass selection on PG, and partial-index conditions. Deferrable.
+- **Backend-specific index modifiers.** The unified `#[index]` rule
+  covers the abstract intent. Tuning levers — PG opclass selection
+  (`jsonb_ops` vs `jsonb_path_ops`), partial-index conditions,
+  Mongo wildcard-projection paths, and DynamoDB GSI projection
+  attributes — need a modifier syntax. Deferrable.
 - **Renaming document keys.** `#[document(rename = "...")]` on an
   embed field is the natural form. Deferrable.
 - **`Set<T>` marker type.** This design assumes a `Set<T>` marker
