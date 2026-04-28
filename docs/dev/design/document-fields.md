@@ -666,17 +666,20 @@ preserve Rust width where the backend supports it (Mongo
 Int32/Int64; PG `jsonb` numeric). Floating-point NaN and infinity
 are rejected at encode time — JSON has no representation for them.
 
-**Enum discriminators.** Toasty uses **internal tagging** — the
-discriminator is a sibling key in the variant's object, defaulting
-to `__type` (matching serde's `#[serde(tag = "__type")]` mode).
-Internal tagging is preferred over serde's default external
-tagging because external tagging adds a nesting level per variant,
-and DynamoDB caps Map/List nesting at 32 levels — a hard budget
-that deeply nested embeds with enums at multiple levels can exhaust.
-Users who also `#[derive(Serialize, Deserialize)]` on the same
-enum need to add `#[serde(tag = "__type")]` to round-trip with
-Toasty's encoding. The discriminator key name is configurable per
-the open question below.
+**Enum discriminators.** Toasty uses **internal tagging** with the
+key `type` — the canonical serde convention
+(`#[serde(tag = "type")]` is the example in serde's own docs).
+Internal tagging is preferred over serde's default external tagging
+because external adds a nesting level per variant, and DynamoDB
+caps Map/List nesting at 32 levels — a hard budget that deeply
+nested embeds with enums at multiple levels can exhaust. Users who
+also `#[derive(Serialize, Deserialize)]` on the same enum need to
+add `#[serde(tag = "type")]` to round-trip with Toasty's encoding.
+
+A field on a variant whose name resolves to `type` (via Rust's
+`r#type` raw identifier or a `#[column("type")]` rename inside the
+embed) collides with the discriminator and is rejected at schema
+build time.
 
 **Column-rename attributes on document-stored embeds.** A
 `#[column("name")]` annotation on a field of an embed type used as
@@ -982,8 +985,6 @@ Rust users.
 - **Default `create_if_missing` for `stmt::patch`.** PostgreSQL's
   `jsonb_set` takes a flag; Mongo's `$set` always creates. True is
   more forgiving; false catches typos. Blocking acceptance.
-- **Discriminator key name for enums.** `__type`? `$type`? Configurable
-  per enum? Blocking implementation.
 - **`Vec<struct>` storage on PostgreSQL.** PG composite types and
   arrays-of-composites work but the operators are weak and the
   encoding is awkward. The default in the table above is `jsonb`;
