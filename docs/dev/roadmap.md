@@ -35,8 +35,7 @@ the entry lands here.
 - Native PostgreSQL enum types ([#641])
   - Migrations for enum representation changes ([#724])
 - Serde-serialized fields (JSON/JSONB for arbitrary Rust types) ([design](design/serialize-fields.md), [#672])
-- Embedded collections (arrays, maps, sets)
-  - Array membership / containment predicates (`has`, `has_every`, `has_some`)
+- Document and collection fields — `Vec`, `HashSet`, `HashMap`, with backend-chosen storage and a `#[document]` override ([design](design/document-fields.md))
 - Foreign key constraints ([#366])
 - Server-side check constraints ([#644])
 - Database-side column defaults ([#642])
@@ -83,9 +82,7 @@ the entry lands here.
   - PostgreSQL `tsvector` / `tsquery`
   - MySQL `FULLTEXT` / `MATCH ... AGAINST`
   - SQLite FTS5 integration
-- JSON field queries
-  - Core AST + path-traversal user API
-  - Per-backend SQL serialization (PostgreSQL `jsonb`, MySQL JSON, SQLite `json_extract`)
+- Document field queries — path predicates, sub-document containment, collection operators ([design](design/document-fields.md))
 - Dynamic / conditional query building — optional-filter pattern (SeaORM-style `Condition::add_option`, Diesel `BoxableExpression`)
 - Query ordering & limits
   - Multi-column `.then_by()`
