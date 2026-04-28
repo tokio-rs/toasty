@@ -13,9 +13,10 @@ option exists. `#[document]` is an explicit override that forces
 document storage where the backend has a meaningful distinction. The
 query API is the same regardless of storage; collection paths expose
 `std`-aligned methods (`contains`, `is_superset`, `intersects`).
-Updates target nested paths via `stmt::patch`, with array push/remove
-and numeric increment for atomic in-place changes when the backend
-supports it.
+Updates target nested paths via `stmt::patch`, with `std`-aligned
+collection mutations (`push` / `pop` / `extend` / `remove_at` for
+ordered, `insert` / `remove` for sets, `clear` for both) and numeric
+increment for atomic in-place changes when the backend supports it.
 
 ## Motivation
 
@@ -413,26 +414,53 @@ computed expression for document fields, native column update for
 column-expanded fields, MongoDB `$inc`, DynamoDB `ADD`); falls back
 to read-modify-write otherwise.
 
-### Tier 1: array push and remove
+### Tier 1: collection mutations
+
+`Vec<T>` / `List<T>` paths and `HashSet<T>` / `Set<T>` paths expose
+the in-place mutations that match their `std` counterparts. Each
+function is typed to its collection so `stmt::push` on a `HashSet`
+path is a compile error (use `stmt::insert`) and `stmt::insert` on a
+`Vec` path is a compile error (use `stmt::push`).
+
+**`Vec<T>` / `List<T>`** (matches `std::Vec`):
+
+- `stmt::push(impl Into<Expr<T>>)` — append one element. (`Vec::push`.)
+- `stmt::extend(impl Into<List<T>>)` — append many, in order.
+  (`Vec::extend`.)
+- `stmt::pop()` — remove the last element. (`Vec::pop`.)
+- `stmt::remove_at(impl Into<Expr<usize>>)` — remove the element at
+  the given index. (`Vec::remove`; the `_at` suffix avoids ambiguity
+  with `Set::remove(value)`.)
+- `stmt::clear()` — remove all elements. (`Vec::clear`.)
+
+**`HashSet<T>` / `Set<T>`** (matches `std::HashSet`):
+
+- `stmt::insert(impl Into<Expr<T>>)` — add one element.
+  (`HashSet::insert`.)
+- `stmt::extend(impl Into<Set<T>>)` — add many. (`HashSet::extend`.)
+- `stmt::remove(impl Into<Expr<T>>)` — remove the matching element.
+  (`HashSet::remove`.)
+- `stmt::clear()` — remove all elements. (`HashSet::clear`.)
 
 ```rust
+// Vec<String>
 user.update().tags(stmt::push("admin")).exec(&mut db).await?;
-user.update().tags(stmt::push_all(["admin", "verified"])).exec(&mut db).await?;
-user.update().tags(stmt::remove_eq("guest")).exec(&mut db).await?;
+user.update().tags(stmt::extend(["admin", "verified"])).exec(&mut db).await?;
+user.update().tags(stmt::remove_at(0)).exec(&mut db).await?;
+
+// HashSet<String>
+user.update().permissions(stmt::insert("admin")).exec(&mut db).await?;
+user.update().permissions(stmt::remove("guest")).exec(&mut db).await?;
 ```
 
-The signatures:
+The lowering uses the backend's native operation when available
+(`array_append`, `array_remove`, `||`, `JSON_ARRAY_APPEND`, BSON
+`$push`, DDB `list_append`, typed-Set `ADD` / `DELETE`) and falls
+back to read-modify-write where it is not.
 
-- `stmt::push(impl Into<Expr<T>>)` — append one element.
-- `stmt::push_all(impl Into<List<T>>)` — append multiple, in order.
-- `stmt::remove_eq(impl Into<Expr<T>>)` — remove every element equal
-  to the value.
-- `stmt::remove_at(impl Into<Expr<usize>>)` — remove the element at
-  this index (Tier 2 below).
-
-The lowering uses native array operations (`array_append`,
-`array_remove`) on PostgreSQL native arrays and document operations
-on document-stored arrays.
+Value-based removal from a `Vec<T>` (the `Vec::retain(|x| x != val)`
+spelling) is not in v1. It belongs with the broader closure-based
+predicates in Tier 2 below.
 
 ### Tier 2: array element predicates
 
@@ -566,9 +594,13 @@ through a field whose current type is incompatible (e.g. patching
 `notifications.email` when `notifications` is currently a JSON array)
 returns a runtime error on the affected row.
 
-**Array writes.** `stmt::push` appends, creating the array if absent.
-`stmt::remove_eq` removes every matching element. `stmt::remove_at`
-removes a single index; out-of-bounds is a no-op.
+**Collection writes.** `stmt::push` (Vec) and `stmt::insert` (Set)
+append / add an element, creating the collection if absent.
+`stmt::extend` adds many. `stmt::remove_at` removes a Vec element by
+index; out-of-bounds is a no-op. `stmt::remove` removes a Set
+element by value; absent is a no-op. `stmt::pop` removes the last
+Vec element; on an empty Vec it is a no-op. `stmt::clear` empties
+the collection.
 
 **Concurrent updates.** PostgreSQL `jsonb_set` rewrites the entire
 document; concurrent patches to disjoint paths within one `jsonb`
@@ -596,9 +628,12 @@ imply the document form is used regardless.
 | `any` predicate | `EXISTS unnest` | `EXISTS jsonb_array_elements` | `$elemMatch` | `EXISTS json_each` | `JSON_TABLE` | client-side filter |
 | Patch one path | column update | `jsonb_set` | `$set` | `json_set` | `JSON_SET` | `SET path = :v` |
 | Increment | column update | `jsonb_set` with cast | `$inc` | `json_set` arith | `JSON_SET` arith | `ADD path :n` |
-| `push` | `array_append` | `\|\|` | `$push` | `json_insert` | `JSON_ARRAY_APPEND` | `SET path = list_append(path, :v)` |
-| `remove_eq` | `array_remove` | `jsonb_set` minus filter | `$pull` | rewrite | rewrite | `DELETE path :s` (typed Set) / RMW |
-| `remove_at` | array slicing | `jsonb_path` minus | `$unset` + `$pull` | rewrite | `JSON_REMOVE` | `REMOVE path[i]` |
+| `push` / `insert` | `array_append` / `\|\|` | `\|\|` | `$push` / `$addToSet` | `json_insert` | `JSON_ARRAY_APPEND` | `list_append` (List) / `ADD` (typed Set) |
+| `extend` | `\|\|` | `\|\|` | `$push` w/ `$each` / `$addToSet` w/ `$each` | rewrite | `JSON_ARRAY_APPEND` (per-elem) | `list_append` (List) / `ADD` (typed Set) |
+| `pop` | array slicing | `jsonb_set` w/ length-1 | `$pop` | rewrite | rewrite | `REMOVE path[size-1]` |
+| `remove` (Set) | `array_remove` | `jsonb_set` minus filter | `$pull` | rewrite | rewrite | `DELETE path :s` (typed Set) |
+| `remove_at` (Vec) | array slicing | `jsonb_path` minus | `$unset` + `$pull` | rewrite | `JSON_REMOVE` | `REMOVE path[i]` |
+| `clear` | `'{}'::T[]` | `'[]'::jsonb` | `$set: []` | `'[]'` | `'[]'` | `SET path = :empty` |
 | `unset` (key) | n/a | `-` | `$unset` | `json_remove` | `JSON_REMOVE` | `REMOVE path.key` |
 
 ### Future MongoDB gaps
@@ -642,11 +677,13 @@ remove-at), but a few gaps stand out:
   a list cannot be evaluated server-side — DynamoDB's filter
   expression language has no per-element predicate. Toasty falls
   back to client-side filtering after the read.
-- **`remove_eq` on Lists.** Atomic removal of every element equal to
-  a value works for typed Sets via `DELETE path :s`. For Lists (the
-  default for `Vec<T>`), Toasty falls back to read-modify-write.
-  `HashSet<scalar>` users get the atomic path automatically through
-  the typed Set storage default.
+- **Set `remove` on Lists.** Atomic value-based removal works for
+  typed Sets via `DELETE path :s`. For Lists (the default for
+  `Vec<T>`), there is no value-based remove anyway; the Vec API
+  exposes `remove_at(idx)` instead. `HashSet<scalar>` users get the
+  atomic `remove(value)` path automatically through the typed Set
+  storage default; `HashSet` element types that fall back to List
+  storage (bool, struct, enum) lose it.
 - **Indexing nested paths.** GSI / LSI keys must be top-level scalar
   attributes. Flat-expanded embed leaves are top-level attributes
   and can be GSI / LSI keys directly. Document-stored fields
@@ -717,8 +754,9 @@ lower differently against `Array` vs `Document` column types:
   `ArrayLength`, `ArrayAny { var, body }`, `ArrayAll { var, body }`.
 - `stmt::Expr::DocumentPath { value, path }`, `DocumentContains`,
   `DocumentContainsKey`.
-- Update RHS forms: `stmt::Assign::ArrayAppend`, `ArrayRemoveEq`,
-  `ArrayRemoveAt`; `DocumentSet`, `DocumentInc`, `DocumentUnset`.
+- Update RHS forms: `stmt::Assign::ArrayAppend`, `ArrayPop`,
+  `ArrayRemoveByValue`, `ArrayRemoveAt`, `ArrayClear`;
+  `DocumentSet`, `DocumentInc`, `DocumentUnset`.
 
 Each is gated behind a capability flag. The planner reads
 capabilities to decide whether to push the operator to the driver or
@@ -843,13 +881,13 @@ Rust users.
   confirm or revisit. Deferrable.
 - **Set semantics for `HashSet<scalar>` on PostgreSQL.** PG `text[]`
   has no uniqueness guarantee, and atomic in-place operations
-  (`stmt::push` and friends) modify the array server-side without
-  loading the row, so they can introduce duplicates that violate
-  `HashSet`'s invariant. Options include a CHECK constraint emitted
-  per HashSet field, a DOMAIN type, or compiling each set-modifying
-  operation to its set-aware equivalent (conditional append, or an
-  `array_agg(DISTINCT …)` rewrite). Affects every write path that
-  touches a HashSet field. Blocking implementation.
+  (`stmt::insert`, `stmt::extend`) modify the array server-side
+  without loading the row, so they can introduce duplicates that
+  violate `HashSet`'s invariant. Options include a CHECK constraint
+  emitted per HashSet field, a DOMAIN type, or compiling each
+  set-modifying operation to its set-aware equivalent (conditional
+  append, or an `array_agg(DISTINCT …)` rewrite). Affects every
+  write path that touches a HashSet field. Blocking implementation.
 - **Map keys containing `.`.** Mongo path notation uses `.` as a key
   separator; allowing arbitrary string keys requires escaping on
   encode or rejection. Blocking implementation for the Mongo driver;
@@ -901,9 +939,11 @@ the matrix captures only the cost and atomicity differences.
 | Whole-value replace | native | native | native | native | native |
 | `stmt::patch` (nested) | native | native | native (rewrite) | native (atomic) | native (atomic) |
 | `stmt::increment` (nested) | native | native | native (rewrite) | native (atomic) | native (atomic) |
-| `stmt::push` / `push_all` | native | native | native (rewrite) | native (atomic) | native (atomic) |
-| `stmt::remove_eq` | native (`text[]`) / RMW (`jsonb`) | RMW | RMW | native (atomic) | native on typed Set / RMW on List |
-| `stmt::remove_at` | native | native | native (rewrite) | native (atomic) | native (atomic) |
+| `stmt::push` / `insert` / `extend` | native | native | native (rewrite) | native (atomic) | native (atomic) |
+| `stmt::pop` | native | native | native (rewrite) | native (atomic) | native (atomic) |
+| `stmt::remove` (Set, by value) | native (`text[]`) / RMW (`jsonb`) | RMW | RMW | native (atomic) | native on typed Set / RMW on List |
+| `stmt::remove_at` (Vec, by index) | native | native | native (rewrite) | native (atomic) | native (atomic) |
+| `stmt::clear` | native | native | native | native | native |
 | `stmt::unset` | native | native | native (rewrite) | native (atomic) | native (atomic) |
 | GIN / wildcard index | ✓ | — | — | ✓ | — |
 | Path expression index | ✓ (B-tree) | partial | — | ✓ | denormalize to top-level attr |
