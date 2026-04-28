@@ -196,22 +196,34 @@ struct User {
 `User::FIELDS.tags()` is a typed path of element type `String` exposing
 methods that mirror `std`:
 
-- `.contains(value)` — the array contains this element. (`Vec::contains`.)
-- `.is_superset(set)` — the array contains every element of `set`.
+- `.contains(impl Into<Expr<T>>) -> Expr<bool>` — the array contains
+  this element. (`Vec::contains`.)
+- `.is_superset(impl Into<Set<T>>) -> Expr<bool>` — the array
+  contains every element of the right-hand set.
   (`HashSet::is_superset`.)
-- `.intersects(set)` — the array shares at least one element with `set`.
-  (Negation of `HashSet::is_disjoint`; no positive `std` form exists.)
-- `.len()` — the array length as a typed numeric expression.
-- `.is_empty()` — equivalent to `.len().eq(0)`.
+- `.intersects(impl Into<Set<T>>) -> Expr<bool>` — the array shares
+  at least one element with the right-hand set. (Negation of
+  `HashSet::is_disjoint`; no positive `std` form exists.)
+- `.len() -> Expr<usize>` — the array length as a typed numeric
+  expression.
+- `.is_empty() -> Expr<bool>` — equivalent to `.len().eq(0)`.
 
 `User::FIELDS.metadata()` is a typed path of key type `String` and
 value type `String`:
 
-- `.contains_key(key)` — the map has this key. (`HashMap::contains_key`.)
-- `.keys()` — a set view exposing the same set methods as `Vec` paths.
+- `.contains_key(impl Into<Expr<K>>) -> Expr<bool>` — the map has
+  this key. (`HashMap::contains_key`.)
+- `.keys()` — a set view exposing the same set methods as `Vec`
+  paths (`.contains`, `.is_superset`, `.intersects`).
 - `.values()` — an iterable view supporting `.any(|v| …)` and
   `.all(|v| …)` (Tier 2 below).
 - `.len()`, `.is_empty()`.
+
+`Set<T>` is a marker for set-shaped expressions, analogous to the
+existing `List<T>` marker for ordered collections. Common Rust types
+implement the relevant `Into` impl so values pass through directly:
+`Vec<T>`, `&[T]`, `[T; N]`, `HashSet<T>`, and `BTreeSet<T>` all
+satisfy `Into<Set<T>>` and `Into<List<T>>` where applicable.
 
 ### Forcing document storage
 
@@ -295,6 +307,7 @@ User::all().filter(
 );
 ```
 
+The signature is `.contains(impl Into<Expr<{Type}Partial>>) -> Expr<bool>`.
 Toasty generates a `{Type}Partial` companion for every `#[document]`
 embed where every field is `Option`, mirroring the existing update-
 builder pattern. `Default::default()` leaves a field unspecified;
@@ -338,8 +351,9 @@ Whole-value writes work on every backend with no special operator support.
 
 ### Tier 1: nested patch via `stmt::patch`
 
-`stmt::patch` updates one field inside a document and leaves the rest
-unchanged. It applies to document-stored embeds:
+`stmt::patch(path: Path<T>, value: impl Into<Expr<T>>)` updates one
+field inside a document and leaves the rest unchanged. It applies to
+document-stored embeds:
 
 ```rust
 user.update()
@@ -355,6 +369,9 @@ On column-expanded embeds, the same `stmt::patch` call is already
 supported and translates to a column-level update.
 
 ### Tier 1: numeric increment
+
+`stmt::increment(path: Path<T>, by: impl Into<Expr<T>>)` where `T` is
+a numeric type:
 
 ```rust
 user.update()
@@ -379,7 +396,15 @@ user.update().tags(stmt::push_all(["admin", "verified"])).exec(&mut db).await?;
 user.update().tags(stmt::remove_eq("guest")).exec(&mut db).await?;
 ```
 
-`push` appends; `remove_eq` removes every element equal to the value.
+The signatures:
+
+- `stmt::push(impl Into<Expr<T>>)` — append one element.
+- `stmt::push_all(impl Into<List<T>>)` — append multiple, in order.
+- `stmt::remove_eq(impl Into<Expr<T>>)` — remove every element equal
+  to the value.
+- `stmt::remove_at(impl Into<Expr<usize>>)` — remove the element at
+  this index (Tier 2 below).
+
 The lowering uses native array operations (`array_append`,
 `array_remove`) on PostgreSQL native arrays and document operations
 on document-stored arrays.
@@ -800,6 +825,13 @@ Rust users.
   opclass selection on PG, and partial-index conditions. Deferrable.
 - **Renaming document keys.** `#[document(rename = "...")]` on an
   embed field is the natural form. Deferrable.
+- **`Set<T>` marker type.** This design assumes a `Set<T>` marker
+  alongside the existing `List<T>` to type the right-hand side of
+  set predicates (`.is_superset`, `.intersects`). Confirm the trait
+  layout (`Into<Set<T>>` blanket impls for `Vec<T>`, `&[T]`,
+  `[T; N]`, `HashSet<T>`, `BTreeSet<T>`) and whether `Set<T>` should
+  carry uniqueness as a runtime invariant or a name-only convention.
+  Blocking implementation.
 
 ## Capability matrix
 
