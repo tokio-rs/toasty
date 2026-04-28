@@ -865,24 +865,45 @@ remove-at), but a few gaps stand out:
   as appropriate; `binary: false` selects PG text `json` and is
   ignored elsewhere.
 
-**New operations.** SQL drivers gain new statement nodes that the SQL
-serializer renders to dialect-specific operators. The same nodes
-lower differently against `Array` vs `Document` column types:
+**New operations.** SQL drivers gain new statement nodes for
+collection predicates, collection mutations, and document-specific
+path operations. Operations that exist in both array-storage and
+document-storage forms share one variant carrying a storage-kind
+hint:
 
-- `stmt::Expr::ArrayContains`, `ArrayIsSuperset`, `ArrayIntersects`,
-  `ArrayLength`, `ArrayAny { var, body }`, `ArrayAll { var, body }`.
-- `stmt::Expr::DocumentPath { value, path }`, `DocumentContains`,
-  `DocumentContainsKey`.
-- Update RHS forms: `stmt::Assign::ArrayPush`, `ArrayPop`,
-  `ArrayRemoveByValue`, `ArrayRemoveAt`, `ArrayClear`;
-  `DocumentSet`, `DocumentInc`, `DocumentUnset`.
+```rust
+struct ExprContains {
+    lhs: Box<Expr>,
+    rhs: Box<Expr>,
+    kind: CollectionKind,   // NativeArray or Document
+}
 
-Each is gated behind a capability flag. The planner reads
-capabilities to decide whether to push the operator to the driver or
-fall back to an in-memory implementation. Drivers that implement none
-of the new capabilities still work — every document or array
-predicate compiles to load-and-filter, every update compiles to
-read-modify-write — they just lose the per-operator optimizations.
+enum CollectionKind {
+    NativeArray,
+    Document,
+}
+```
+
+The eval interpreter ignores `kind` — by the time data reaches
+eval it is decoded Rust values, so `Contains` is one operation
+regardless of how it was stored. The SQL serializer dispatches on
+`kind` to emit the right operator (`'x' = ANY(col)` /
+`col @> ARRAY[...]` for native arrays; `col @> '...'::jsonb` for
+document storage). Lowering sets `kind` from the column's storage.
+
+The same hint covers every collection operation that splits along
+storage lines: `IsSuperset`, `Intersects`, `Length`, `Any`, `All`,
+push, pop, remove-by-value, remove-at, clear. Document-specific
+operations — path traversal into a sub-tree, sub-document
+containment via `partial!`, key-existence — stay as their own
+variants since they have no array equivalent.
+
+Each operation is gated behind a capability flag. The planner reads
+capabilities to decide whether to push the operator to the driver
+or fall back to an in-memory implementation. Drivers that implement
+none of the new capabilities still work — every predicate compiles
+to load-and-filter, every update compiles to read-modify-write —
+they just lose the per-operator optimizations.
 
 **MongoDB driver (future).** The driver compiles statement nodes
 directly to its query and update document forms; SQL serialization
