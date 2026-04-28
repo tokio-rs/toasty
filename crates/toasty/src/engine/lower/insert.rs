@@ -161,7 +161,7 @@ impl LowerStatement<'_, '_> {
         single: bool,
     ) {
         // If there is no returning statement, there is nothing to convert
-        let Some(stmt::Returning::Expr(projection)) = returning else {
+        let Some(stmt::Returning::Project(projection)) = returning else {
             return;
         };
 

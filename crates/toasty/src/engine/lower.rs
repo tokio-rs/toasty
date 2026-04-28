@@ -283,12 +283,12 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     let maybe_res = self.lower_expr_binary_op(
                         stmt::BinaryOp::Eq,
                         &mut e.expr,
-                        e.query.returning_mut_unwrap().as_expr_mut_unwrap(),
+                        e.query.returning_mut_unwrap().as_project_mut_unwrap(),
                     );
 
                     assert!(maybe_res.is_none(), "TODO");
 
-                    let returning = e.query.returning_mut_unwrap().as_expr_mut_unwrap();
+                    let returning = e.query.returning_mut_unwrap().as_project_mut_unwrap();
 
                     if !returning.is_record() {
                         *returning = stmt::Expr::record([returning.take()]);
@@ -313,7 +313,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     let maybe_res = self.lower_expr_binary_op(
                         stmt::BinaryOp::Eq,
                         &mut e.expr,
-                        e.query.returning_mut_unwrap().as_expr_mut_unwrap(),
+                        e.query.returning_mut_unwrap().as_project_mut_unwrap(),
                     );
 
                     assert!(maybe_res.is_none(), "TODO");
@@ -532,7 +532,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 self.build_include_subquery(&mut returning, field, &nested);
             }
 
-            *i = stmt::Returning::Expr(returning);
+            *i = stmt::Returning::Project(returning);
         }
 
         // For multi-row INSERT returning, visit each row with its row index so
@@ -663,7 +663,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 }
 
                 // Step 2 — build the returning expression.
-                *returning = stmt::Returning::Expr(build_update_returning(
+                *returning = stmt::Returning::Project(build_update_returning(
                     model.id,
                     None,
                     &mapping.fields,

@@ -276,7 +276,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     ) -> IndexSet<mir::NodeId> {
         let mut inputs = IndexSet::new();
 
-        let is_returning_projection = matches!(returning, Some(stmt::Returning::Expr(..)));
+        let is_returning_projection = matches!(returning, Some(stmt::Returning::Project(..)));
         debug_assert!(
             is_returning_projection || matches!(returning, None | Some(stmt::Returning::Value(..)))
         );
@@ -581,7 +581,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         assert!(tables.len() <= 1, "TODO: handle more complicated cases");
 
         let sub_query = stmt::Select {
-            returning: stmt::Returning::Expr(stmt::Expr::record([1])),
+            returning: stmt::Returning::Project(stmt::Expr::record([1])),
             source: stmt::Source::Table(stmt::SourceTable {
                 tables,
                 from: vec![stmt::TableWithJoins {
@@ -767,7 +767,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         // Set returning clause with all columns (including added ORDER BY columns)
         if !self.load_data.select_items.is_empty() {
-            stmt.set_returning(stmt::Returning::Expr(stmt::Expr::record(
+            stmt.set_returning(stmt::Returning::Project(stmt::Expr::record(
                 self.load_data
                     .select_items
                     .iter()
@@ -807,7 +807,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         } else {
             debug_assert!(
                 stmt.returning()
-                    .and_then(|returning| returning.as_expr())
+                    .and_then(|returning| returning.as_project())
                     .map(|expr| expr.is_record())
                     .unwrap_or(true),
                 "stmt={stmt:#?}"
@@ -995,7 +995,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         ctes.push(stmt::Cte {
             query: stmt::Query::builder(target)
                 .filter(filter.clone())
-                .returning(stmt::Returning::Expr(stmt::Expr::record_from_vec(vec![
+                .returning(stmt::Returning::Project(stmt::Expr::record_from_vec(vec![
                     stmt::Expr::count_star(),
                     stmt::FuncCount {
                         arg: None,
@@ -1007,7 +1007,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         });
 
         let returning_len = match &stmt.returning {
-            Some(stmt::Returning::Expr(expr)) => {
+            Some(stmt::Returning::Project(expr)) => {
                 let stmt::Expr::Record(expr_record) = expr else {
                     panic!("returning must be a record");
                 };
@@ -1033,7 +1033,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         }
                         .into(),
                         filter: true.into(),
-                        returning: stmt::Returning::Expr(stmt::Expr::record_from_vec(vec![
+                        returning: stmt::Returning::Project(stmt::Expr::record_from_vec(vec![
                             stmt::Expr::eq(
                                 stmt::ExprColumn {
                                     nesting: 0,
@@ -1054,7 +1054,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     stmt.returning
                         // TODO: hax
                         .unwrap_or_else(|| {
-                            stmt::Returning::Expr(stmt::Expr::record_from_vec(vec![
+                            stmt::Returning::Project(stmt::Expr::record_from_vec(vec![
                                 stmt::Expr::from("hello"),
                             ]))
                         }),
@@ -1104,7 +1104,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 },
             ),
             filter: stmt::Filter::new(true),
-            returning: stmt::Returning::Expr(stmt::Expr::record_from_vec(columns)),
+            returning: stmt::Returning::Project(stmt::Expr::record_from_vec(columns)),
         })
         .with(ctes)
         .build()
@@ -1144,7 +1144,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         let read = stmt::Query::builder(target)
             .filter(filter.clone())
-            .returning(stmt::Returning::Expr(stmt::Expr::record_from_vec(vec![
+            .returning(stmt::Returning::Project(stmt::Expr::record_from_vec(vec![
                 stmt::Expr::count_star(),
                 stmt::FuncCount {
                     arg: None,
@@ -1637,7 +1637,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         node_id
                     }
                 }
-                stmt::Returning::Expr(projection) => {
+                stmt::Returning::Project(projection) => {
                     if let Some(position) = returning.inputs.get_index_of(&data_load_node_id) {
                         self.insert_mir_with_deps(mir::Eval {
                             inputs: returning.inputs,

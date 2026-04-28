@@ -301,7 +301,7 @@ impl LowerStatement<'_, '_> {
                 let stmt::ExprSet::Select(select) = &mut query.body else {
                     todo!()
                 };
-                select.returning = stmt::Returning::Expr(stmt::Expr::record([1]));
+                select.returning = stmt::Returning::Project(stmt::Expr::record([1]));
                 query
             }));
         }
@@ -529,7 +529,7 @@ impl LowerStatement<'_, '_> {
 
                 // Previous value of returning does nothing in this
                 // context
-                insert.returning = Some(stmt::Returning::Expr(stmt::Expr::record(
+                insert.returning = Some(stmt::Returning::Project(stmt::Expr::record(
                     belongs_to
                         .foreign_key
                         .fields
@@ -792,7 +792,7 @@ impl RelationSource for UpdateRelationSource<'_> {
     fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr) {
         debug_assert!(self.returning_changed, "TODO");
 
-        let Some(stmt::Returning::Expr(stmt::Expr::Cast(expr_cast))) = self.returning else {
+        let Some(stmt::Returning::Project(stmt::Expr::Cast(expr_cast))) = self.returning else {
             todo!("UpdateRelationSource={self:#?}")
         };
 
@@ -843,7 +843,7 @@ impl RelationSource for InsertRelationSource<'_> {
 
     fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr) {
         let record = match self.returning {
-            Some(stmt::Returning::Expr(stmt::Expr::Record(record))) => record,
+            Some(stmt::Returning::Project(stmt::Expr::Record(record))) => record,
             Some(stmt::Returning::Value(stmt::Expr::List(rows))) => {
                 rows.items[self.index].as_record_mut_unwrap()
             }

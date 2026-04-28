@@ -186,7 +186,7 @@ impl NestedMergePlanner<'_> {
 
         // Map the returning clause to projection expression
         let projection = match returning {
-            stmt::Returning::Expr(expr) => {
+            stmt::Returning::Project(expr) => {
                 let (s, _) = self
                     .inputs
                     .insert_full(stmt_state.load_data_statement.get().unwrap());
