@@ -6,15 +6,16 @@ Subsumes the [JSON field queries roadmap entry](../roadmap.md#query-engine).
 
 Toasty picks the best per-backend storage representation for embedded
 types and collection fields by default — column-expanded embeds on SQL
-backends, `text[]` for `Vec<scalar>` on PostgreSQL, BSON sub-documents
-and arrays on MongoDB, Map / List / typed-Set attributes on DynamoDB,
-JSON wherever no native option exists. `#[document]` is an explicit
-override that forces document storage where the backend has a meaningful
-distinction. The query API is the same regardless of storage; collection
-paths expose `std`-aligned methods (`contains`, `is_superset`,
-`intersects`). Updates target nested paths via `stmt::patch`, with
-array push/remove and numeric increment for atomic in-place changes
-when the backend supports it.
+backends, flat-expanded top-level attributes on DynamoDB, BSON
+sub-documents on MongoDB, `text[]` for `Vec<scalar>` on PostgreSQL,
+typed Sets for `HashSet<scalar>` on DynamoDB, JSON wherever no native
+option exists. `#[document]` is an explicit override that forces
+document storage where the backend has a meaningful distinction. The
+query API is the same regardless of storage; collection paths expose
+`std`-aligned methods (`contains`, `is_superset`, `intersects`).
+Updates target nested paths via `stmt::patch`, with array push/remove
+and numeric increment for atomic in-place changes when the backend
+supports it.
 
 ## Motivation
 
@@ -56,16 +57,27 @@ API is identical across choices.
 
 | Field type | PostgreSQL | MySQL | SQLite | MongoDB | DynamoDB |
 |---|---|---|---|---|---|
-| `#[derive(Embed)]` struct/enum | column-expanded | column-expanded | column-expanded | sub-document | Map `M` |
+| `#[derive(Embed)]` struct/enum | column-expanded | column-expanded | column-expanded | sub-document | flat-expanded |
 | `Vec<scalar>` | `T[]` (e.g. `text[]`) | `JSON` | JSON1 | BSON array | List `L` |
 | `Vec<struct>` | `jsonb` | `JSON` | JSON1 | BSON array | List `L` |
 | `HashSet<scalar>` | `T[]` | `JSON` | JSON1 | BSON array | typed Set `SS`/`NS`/`BS` |
 | `HashMap<String, T>` | `jsonb` | `JSON` | JSON1 | BSON sub-document | Map `M` |
 
+DynamoDB defaults embeds to flat-expansion — one top-level attribute
+per leaf field, named `preferences_theme` and so on, the same shape
+as SQL columns. The reason: DynamoDB items are structurally closer to
+SQL rows than to MongoDB documents (flat dictionaries, arbitrary
+attribute names, GSI / LSI keys must be top-level scalars).
+Flat-expansion makes any embed leaf indexable as a GSI / LSI key
+directly. MongoDB defaults to sub-documents because its idiom,
+tooling, and index model favor nesting; DynamoDB shares neither of
+those traits.
+
 `#[document]` overrides the default to document storage on backends
-where there is a meaningful distinction. On document-default backends
-(MongoDB, DynamoDB) the override is a no-op — the default already
-uses the backend's native document representation. See
+where there is a meaningful distinction. MongoDB stores everything
+as BSON, so the override is a no-op there. On DynamoDB it forces a
+Map (`M`) attribute over flat-expansion, or a Map / List over a typed
+Set, making `#[document]` meaningful again. See
 [Forcing document storage](#forcing-document-storage).
 
 DynamoDB typed Sets (`SS`, `NS`, `BS`) only support string, numeric, and
@@ -431,8 +443,8 @@ storage with a clear error.
 (backend, field type) at schema build time. The choice is observable
 through the column type but not through the query API:
 
-- Embed types column-expand on SQL backends, become sub-documents on
-  MongoDB, and become Map (`M`) attributes on DynamoDB.
+- Embed types column-expand on SQL backends, flat-expand to top-level
+  attributes on DynamoDB, and become sub-documents on MongoDB.
 - `Vec<scalar>` uses the backend's native array type if one exists
   (`text[]`, `int[]`, etc. on PostgreSQL; BSON array on MongoDB; List
   `L` on DynamoDB) and JSON otherwise.
@@ -443,15 +455,16 @@ through the column type but not through the query API:
   backends, BSON / Map / sub-document on document backends).
 - **Recursion through embeds.** Selection applies to every field on
   the way down. A nested embed continues to expand; a nested
-  collection stops the expansion and becomes one column with the
-  same storage it would receive at the root. The column name is the
-  underscore-joined path (`preferences_tags`).
+  collection stops the expansion and becomes one slot with the same
+  storage it would receive at the root. The slot name is the
+  underscore-joined path (`preferences_tags`) on SQL and DynamoDB,
+  the dotted path (`preferences.tags`) on MongoDB.
 - `#[document]` overrides the default to document storage for any
-  field — at the root or anywhere inside a column-expanded embed.
-  Marking one nested field forces that field alone; marking the
-  parent embed forces the whole sub-tree. On document-default
-  backends (MongoDB, DynamoDB) the override is a no-op since the
-  default already stores the field as a document.
+  field — at the root or anywhere inside an expanded embed. Marking
+  one nested field forces that field alone; marking the parent embed
+  forces the whole sub-tree. On MongoDB the override is a no-op
+  since BSON is the only encoding; on DynamoDB it forces a Map (`M`)
+  over flat-expansion, or a Map / List over a typed Set.
 - `#[document(text)]` further selects PG text `json` over `jsonb`;
   ignored on other backends.
 
@@ -571,10 +584,12 @@ remove-at), but a few gaps stand out:
   `HashSet<scalar>` users get the atomic path automatically through
   the typed Set storage default.
 - **Indexing nested paths.** GSI / LSI keys must be top-level scalar
-  attributes. Indexing a nested value requires either denormalizing
-  the value to a top-level attribute or maintaining a separate index
-  table. Out of scope for v1; a `#[index(extract(...))]` form could
-  cover the denormalization case later.
+  attributes. Flat-expanded embed leaves are top-level attributes
+  and can be GSI / LSI keys directly. Document-stored fields
+  (`#[document]`-marked, Vec, Map, typed Set) are not indexable
+  except by denormalizing the value to a separate top-level
+  attribute. Out of scope for v1; a `#[index(extract(...))]` form
+  could automate the denormalization case later.
 - **Item size cap.** 400 KB per item, smaller than PG TOAST and
   MongoDB's 16 MB. Tighter constraint on what fits in one document.
 - **Filter expressions don't reduce IO.** DynamoDB filters apply
@@ -655,8 +670,10 @@ whether disjoint-path patches are independent.
 
 **DynamoDB driver.** The existing driver gains:
 
-- A schema-build pass that picks `M`, `L`, or typed-Set storage per
-  field type as described in the storage selection table.
+- A schema-build pass that picks flat-expansion, `M`, `L`, or
+  typed-Set storage per field type as described in the storage
+  selection table. Embeds default to flat-expansion (top-level
+  attributes); `#[document]` opts into Map.
 - Compilation from `stmt::Expr` nodes to DynamoDB condition
   expressions, including AND-of-`contains` for `is_superset` and
   OR-of-`contains` for `intersects`.
@@ -682,6 +699,18 @@ storage (PostgreSQL native arrays, DynamoDB Map / List / typed Sets):
 `#[document]` is encoding-neutral and accurately describes the user
 intent ("store as one document") on every backend, including those
 where the encoding is not JSON.
+
+**DynamoDB embeds default to Map (`M`).** An earlier draft defaulted
+DynamoDB embeds to Map storage, mirroring MongoDB sub-documents
+under the assumption that "document backends" should treat embeds
+as documents. Rejected: DynamoDB items are structurally closer to
+SQL rows than to MongoDB documents — flat dictionaries with
+arbitrary attribute names, where GSI / LSI keys must be top-level
+scalars. The same reasoning that justifies column-expansion on SQL
+(indexability, simpler filter expressions, no idiom mismatch)
+applies to DynamoDB. Mongo really is different because its tooling,
+BSON encoding, and index model favor sub-documents; DynamoDB shares
+none of those traits.
 
 **Always force document storage; no native arrays in v1.** Skip the
 backend-dependent default and require `#[document]` for any
