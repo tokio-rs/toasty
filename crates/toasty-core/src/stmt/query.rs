@@ -1,6 +1,6 @@
 use super::{
-    Delete, ExprSet, Limit, Node, OrderBy, Path, Returning, Select, Source, Statement, Update,
-    UpdateTarget, Values, Visit, VisitMut, With,
+    Delete, Expr, ExprSet, Limit, Node, OrderBy, Path, Returning, Select, Source, Statement,
+    Update, UpdateTarget, Values, Visit, VisitMut, With,
 };
 use crate::stmt::{self, Filter};
 
@@ -300,6 +300,18 @@ impl QueryBuilder {
         }
 
         self
+    }
+
+    /// Sets the returning clause to `Returning::Project` containing the given
+    /// expression.
+    pub fn returning_project(self, expr: impl Into<Expr>) -> Self {
+        self.returning(Returning::Project(expr.into()))
+    }
+
+    /// Sets the returning clause to `Returning::Expr` containing the given
+    /// expression.
+    pub fn returning_expr(self, expr: impl Into<Expr>) -> Self {
+        self.returning(Returning::Expr(expr.into()))
     }
 
     /// Consumes this builder and returns the constructed [`Query`].

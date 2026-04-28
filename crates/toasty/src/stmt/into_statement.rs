@@ -73,7 +73,7 @@ impl_into_statement_for_tuple!(Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q8; 8; 0, 1, 2, 3, 4,
 /// which represents unit.
 fn ensure_batch_returning(stmt: &mut stmt::Statement) {
     if !stmt.is_query() && stmt.returning().is_none() {
-        stmt.set_returning(stmt::Returning::Expr(stmt::Expr::record::<stmt::Expr>([])));
+        stmt.set_returning_expr(stmt::Expr::record::<stmt::Expr>([]));
     }
 }
 

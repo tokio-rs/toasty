@@ -177,6 +177,18 @@ impl Statement {
         }
     }
 
+    /// Set the `Returning` clause to `Returning::Project` containing the given
+    /// expression.
+    pub fn set_returning_project(&mut self, expr: impl Into<Expr>) {
+        self.set_returning(Returning::Project(expr.into()));
+    }
+
+    /// Set the `Returning` clause to `Returning::Expr` containing the given
+    /// expression.
+    pub fn set_returning_expr(&mut self, expr: impl Into<Expr>) {
+        self.set_returning(Returning::Expr(expr.into()));
+    }
+
     /// Returns a reference to this statement's `RETURNING` clause.
     ///
     /// # Panics
