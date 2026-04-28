@@ -4,9 +4,22 @@ name: Claude Docs Sync
 # a design doc also deletes the corresponding entries. Posts a review only
 # when the deletion is missing, and resolves the review once it is fixed.
 
+# SECURITY: this workflow uses `pull_request_target`, which runs in the
+# base repo's context with full secrets. PR contents (branch, files,
+# scripts, Cargo.toml, build.rs, etc.) are UNTRUSTED — a malicious fork
+# could use them to exfiltrate secrets. This workflow must never execute
+# code from the PR: no `actions/checkout` of the PR ref, no `cargo build`,
+# no `npm install`, no running of fork-supplied scripts. The only safe
+# operations are reading PR metadata via `gh` and posting/resolving
+# reviews.
+
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: claude-docs-sync-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   docs-sync:
@@ -14,15 +27,17 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-      id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v6
         with:
           fetch-depth: 1
-
-      - uses: anthropics/claude-code-action@v1
+      - name: Run Claude Code for Docs Sync
+        uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          allowed_non_write_users: "*"
           prompt: |
             You are a docs-sync checker for the toasty repository. Your ONLY
             job is to enforce this rule on PR #${{ github.event.pull_request.number }}:
@@ -41,7 +56,7 @@ jobs:
                  gh pr view ${{ github.event.pull_request.number }} --json title,body,files,reviews,comments
                  gh pr diff ${{ github.event.pull_request.number }}
 
-            2. Read the current docs on the PR's branch:
+            2. Read the current docs on the base branch (this checkout):
                  - docs/dev/roadmap.md
                  - every file under docs/dev/design/ that looks relevant
                    to the PR (match by topic, not by filename guessing)
@@ -57,7 +72,7 @@ jobs:
                a. The PR does not implement a roadmap or design-doc entry.
                   → Do nothing. Exit silently.
 
-               b. The PR implements such an entry AND the same PR already
+               b. The PR implements such an entry AND the diff already
                   deletes the matching entry from docs/dev/roadmap.md
                   and/or removes (or clearly marks as implemented) the
                   design doc.
@@ -66,8 +81,8 @@ jobs:
                     open, resolve that thread using
                     mcp__github__resolve_review_thread. Then exit.
 
-               c. The PR implements such an entry but does NOT delete the
-                  matching docs entries.
+               c. The PR implements such an entry but the diff does NOT
+                  delete the matching docs entries.
                   → Continue to step 4.
 
             4. Check the reviews returned in step 1 for an existing open
