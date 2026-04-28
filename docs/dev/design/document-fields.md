@@ -959,23 +959,19 @@ Rejected: column-expanded embeds give per-field indexes, smaller
 rows, and existing SQL-tuning techniques that document storage
 forecloses. The choice is load-bearing.
 
-**Generated `{Type}Partial` companion struct for containment.** The
-first draft of the containment API generated a companion struct
-(e.g. `UserPreferencesPartial`) per `#[document]` embed, with every
-field wrapped in `Option`. Rejected: long type names cluttered call
-sites, the `..Default::default()` boilerplate appeared at every
-call, and codegen grew with every embed. The single generic
-`Partial<T>` plus a `partial!` macro is shorter at the call site,
-generates less code, and keeps one type for every embed. The
-compile-time validation that prevents typos in field names rides on
-the same monomorphization trick used by the `create!` static
-assertions.
-
 **`#[column(type = json)]` instead of `#[document]`.** Reuse the
 existing `#[column(type = ...)]` mechanism. Rejected: `#[column]`
-takes a column-type name, and "json" leaks the encoding. A future
-`#[column(type = jsonb)]` for explicit PG-specific storage stays
-available.
+sets a column's database type — a per-column knob with no
+structural consequences. `#[document]` does much more than that.
+It collapses an entire embed sub-tree into one storage slot,
+terminates recursion in self-referential embeds, switches a
+collection field from native to document encoding, and on
+DynamoDB switches an embed from flat-expansion to a Map. None of
+those are column-type choices; they are decisions about how the
+field's tree of values maps onto the backend's storage primitives.
+A future `#[column(type = jsonb)]` for explicit PG-specific column
+typing stays available alongside `#[document]` for the narrower
+case of choosing between `jsonb` and `json`.
 
 **Document-collection API distinct from Embed.** A separate, Mongo-
 flavored "collection of documents" surface alongside the relational
