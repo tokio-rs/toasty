@@ -606,12 +606,19 @@ through the column type but not through the query API:
   `Vec<scalar>`.
 - `Vec<struct>` and all map types use document storage (JSON on SQL
   backends, BSON / Map / sub-document on document backends).
-- **Recursion through embeds.** Selection applies to every field on
-  the way down. A nested embed continues to expand; a nested
-  collection stops the expansion and becomes one slot with the same
-  storage it would receive at the root. The slot name is the
-  underscore-joined path (`preferences_tags`) on SQL and DynamoDB,
-  the dotted path (`preferences.tags`) on MongoDB.
+- **Recursion through embeds.** Storage selection walks the field
+  tree from the top. An expanded embed recurses through its own
+  fields. The recursion stops at scalars (each becomes one column
+  or attribute) and at collections (each becomes one column or
+  attribute, with storage chosen by the same rules as if the
+  collection were at the root).
+
+  Example: a `tags: Vec<String>` field inside an expanded
+  `Preferences` embed becomes one slot using the rule for
+  `Vec<scalar>` at the root — `text[]` on PG, JSON elsewhere. Its
+  name reflects the path: `preferences_tags` on SQL backends and
+  DynamoDB, `preferences.tags` on MongoDB (where the embed is a
+  sub-document).
 - `#[document]` overrides the default to document storage for any
   field — at the root or anywhere inside an expanded embed. Marking
   one nested field forces that field alone; marking the parent embed
