@@ -843,6 +843,51 @@ Legend:
 - **rewrite** — operation rewrites the whole document column in one
   statement; transactional but not concurrency-safe across writers.
 
+## Composition with `#[deferred]`
+
+`#[deferred]` (planned, see [Partial model loading](../roadmap.md#schema--types)
+on the roadmap) marks a field as not loaded by default; callers opt
+in to retrieve it. The semantic is "load everything except deferred
+fields." It composes cleanly with the storage choices in this
+design, but the lowering depends on where the deferred field lives.
+
+**Column-expanded fields.** The driver omits the deferred column
+from the `SELECT` list. The existing column-projection path covers
+this; nothing new is needed for document storage.
+
+**Document-stored fields with deferred siblings.** When a deferred
+field lives inside a document-stored embed — or when the document
+column itself contains a deferred sub-path — the driver emits a
+path-exclusion expression on the document column:
+
+| Backend | Exclusion form |
+|---|---|
+| PostgreSQL `jsonb` | `col - 'deferred_key'` (top level) or `col #- '{a,deferred_key}'` (nested) |
+| MySQL JSON | `JSON_REMOVE(col, '$.deferred_key')` |
+| SQLite JSON1 | `json_remove(col, '$.deferred_key')` |
+| MongoDB | exclusion projection: `find({}, { "path.to.deferred": 0 })` |
+| DynamoDB | no native exclusion; driver emits `ProjectionExpression` listing every non-deferred path |
+
+DynamoDB is the only backend that requires the driver to enumerate
+the inclusion set rather than the exclusion set. Toasty knows the
+schema, so this is a code-generation concern, not user-facing.
+
+**Cost notes.** Deferred loading saves bandwidth in every case but
+the per-backend cost reductions differ:
+
+- PostgreSQL `jsonb` exclusion does not skip TOAST decompression;
+  the row read cost is unchanged. The wire saving still matters
+  when the deferred field is the reason the document is large.
+- MongoDB exclusion projection saves wire bytes; the server still
+  loads the full BSON document into memory.
+- DynamoDB read capacity is charged per the full item size
+  regardless of `ProjectionExpression`. Deferred loading saves
+  parsing and bandwidth, not RCU.
+
+The full design for deferred loading lives with the partial-loading
+work; this document only commits to the storage representations
+being deferred-loadable.
+
 ## Out of scope
 
 - **Raw document path expressions.** A `path_match("$.a[*] ? (@.b > 1)")`
