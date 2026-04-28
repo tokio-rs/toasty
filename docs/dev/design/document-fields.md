@@ -765,6 +765,15 @@ Rust users.
   arrays-of-composites work but the operators are weak and the
   encoding is awkward. The default in the table above is `jsonb`;
   confirm or revisit. Deferrable.
+- **Set semantics for `HashSet<scalar>` on PostgreSQL.** PG `text[]`
+  has no uniqueness guarantee, and atomic in-place operations
+  (`stmt::push` and friends) modify the array server-side without
+  loading the row, so they can introduce duplicates that violate
+  `HashSet`'s invariant. Options include a CHECK constraint emitted
+  per HashSet field, a DOMAIN type, or compiling each set-modifying
+  operation to its set-aware equivalent (conditional append, or an
+  `array_agg(DISTINCT …)` rewrite). Affects every write path that
+  touches a HashSet field. Blocking implementation.
 - **Map keys containing `.`.** Mongo path notation uses `.` as a key
   separator; allowing arbitrary string keys requires escaping on
   encode or rejection. Blocking implementation for the Mongo driver;
