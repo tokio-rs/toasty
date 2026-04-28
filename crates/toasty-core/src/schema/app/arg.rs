@@ -19,6 +19,7 @@ use crate::stmt;
 /// assert_eq!(arg.name, "user_id");
 /// ```
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Arg {
     /// The argument's name, used to identify it in queries.
     pub name: String,

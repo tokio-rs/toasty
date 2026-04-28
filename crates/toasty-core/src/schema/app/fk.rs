@@ -21,6 +21,7 @@ use super::{Field, FieldId, Schema};
 /// assert_eq!(fk.fields.len(), 1);
 /// ```
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ForeignKey {
     /// The field pairs that make up this foreign key.
     pub fields: Vec<ForeignKeyField>,
@@ -42,6 +43,7 @@ pub struct ForeignKey {
 /// };
 /// ```
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ForeignKeyField {
     /// The field on the source model that stores the foreign key value.
     pub source: FieldId,

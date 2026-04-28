@@ -14,6 +14,7 @@ use crate::{schema::db, stmt};
 /// let fmt = SerializeFormat::Json;
 /// ```
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SerializeFormat {
     /// Serialize the value as JSON using `serde_json`.
     Json,
@@ -38,6 +39,7 @@ pub enum SerializeFormat {
 /// };
 /// ```
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FieldPrimitive {
     /// The application-level primitive type of this field.
     pub ty: stmt::Type,

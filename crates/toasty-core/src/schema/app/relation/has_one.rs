@@ -18,6 +18,7 @@ use crate::{
 /// let inverse = has_one.pair(&schema); // the BelongsTo on Profile
 /// ```
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HasOne {
     /// The [`ModelId`] of the associated (target) model.
     pub target: ModelId,

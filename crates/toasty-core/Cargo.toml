@@ -34,7 +34,15 @@ assert-struct = ["dep:assert-struct"]
 rust_decimal = ["dep:rust_decimal"]
 bigdecimal = ["dep:bigdecimal"]
 jiff = ["dep:jiff"]
-serde = ["dep:serde", "bit-set/serde"]
+serde = [
+	"dep:serde",
+	"bit-set/serde",
+	"indexmap/serde",
+	"uuid/serde",
+	"jiff?/serde",
+	"rust_decimal?/serde",
+	"bigdecimal?/serde",
+]
 
 [dev-dependencies]
 jiff.workspace = true

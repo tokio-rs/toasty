@@ -16,6 +16,7 @@
 /// assert!(inc.is_increment());
 /// ```
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum AutoStrategy {
     /// Generate a UUID of the specified version.
     Uuid(UuidVersion),
@@ -34,6 +35,7 @@ pub enum AutoStrategy {
 /// let v7 = UuidVersion::V7;
 /// ```
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum UuidVersion {
     /// Random UUID (version 4).
     V4,

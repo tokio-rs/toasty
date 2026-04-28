@@ -27,6 +27,7 @@ use std::fmt;
 /// }
 /// ```
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Field {
     /// Uniquely identifies this field within its containing model.
     pub id: FieldId,
@@ -104,6 +105,7 @@ pub struct FieldId {
 /// assert_eq!(default_name.storage_name(), Some("email"));
 /// ```
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FieldName {
     /// The application-level (Rust) name of the field. `None` for unnamed
     /// (tuple) fields.
@@ -188,6 +190,7 @@ impl fmt::Display for FieldName {
 /// assert!(!ty.is_relation());
 /// ```
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum FieldTy {
     /// A primitive (scalar) field backed by a single column.
     Primitive(FieldPrimitive),

@@ -26,6 +26,7 @@ use std::fmt;
 /// }
 /// ```
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Model {
     /// A root model that maps to its own database table and can be queried
     /// directly.
@@ -53,6 +54,7 @@ pub enum Model {
 /// assert_eq!(set.iter().len(), 0);
 /// ```
 #[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ModelSet {
     models: IndexMap<ModelId, Model>,
 }
@@ -143,6 +145,7 @@ impl ExactSizeIterator for ModelSetIntoIter {}
 /// let pk_fields: Vec<_> = root.primary_key_fields().collect();
 /// ```
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ModelRoot {
     /// Uniquely identifies this model within the schema.
     pub id: ModelId,
@@ -244,6 +247,7 @@ impl ModelRoot {
 /// }
 /// ```
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct EmbeddedStruct {
     /// Uniquely identifies this model within the schema.
     pub id: ModelId,
@@ -287,6 +291,7 @@ impl EmbeddedStruct {
 /// }
 /// ```
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct EmbeddedEnum {
     /// Uniquely identifies this model within the schema.
     pub id: ModelId,
@@ -317,6 +322,7 @@ pub struct EmbeddedEnum {
 /// Each variant has a name and a discriminant value (integer or string) that is
 /// stored in the database to identify which variant is active.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnumVariant {
     /// The Rust variant name.
     pub name: Name,
@@ -486,6 +492,7 @@ impl Model {
 /// assert_eq!(variant_id.index, 0);
 /// ```
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct VariantId {
     /// The enum model this variant belongs to.
     pub model: ModelId,

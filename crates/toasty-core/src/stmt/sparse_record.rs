@@ -20,6 +20,7 @@ use super::{PathFieldSet, Type, Value, ValueRecord};
 /// assert!(matches!(v, Value::SparseRecord(_)));
 /// ```
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SparseRecord {
     /// Bit set of field indices that are populated in this record.
     pub fields: PathFieldSet,

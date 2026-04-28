@@ -18,6 +18,7 @@ use crate::{
 /// let post_model = belongs_to.target(&schema);
 /// ```
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BelongsTo {
     /// The [`ModelId`] of the referenced (target) model.
     pub target: ModelId,

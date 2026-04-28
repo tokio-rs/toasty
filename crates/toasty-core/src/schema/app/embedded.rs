@@ -19,6 +19,7 @@ use crate::{
 /// let target_model = embedded.target(&schema);
 /// ```
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Embedded {
     /// The [`ModelId`] of the embedded model being referenced.
     pub target: ModelId,

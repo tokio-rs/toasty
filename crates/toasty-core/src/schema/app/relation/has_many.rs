@@ -18,6 +18,7 @@ use crate::{
 /// let inverse = has_many.pair(&schema); // the BelongsTo on Post
 /// ```
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HasMany {
     /// The [`ModelId`] of the associated (target) model.
     pub target: ModelId,

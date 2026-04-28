@@ -17,6 +17,7 @@ use crate::{Result, stmt};
 /// assert_eq!(c.max, Some(255));
 /// ```
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ConstraintLength {
     /// The minimum length of the field. `None` means no lower bound.
     pub min: Option<u64>,

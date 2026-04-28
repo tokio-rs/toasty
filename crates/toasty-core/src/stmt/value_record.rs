@@ -19,6 +19,7 @@ use std::ops;
 /// assert_eq!(record[1], "alice");
 /// ```
 #[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ValueRecord {
     /// The field values in this record, ordered by field index.
     pub fields: Vec<Value>,

@@ -46,6 +46,7 @@ pub enum Resolved<'a> {
 /// assert_eq!(schema.models().count(), 0);
 /// ```
 #[derive(Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Schema {
     /// All models in the schema, keyed by [`ModelId`].
     pub models: IndexMap<ModelId, Model>,

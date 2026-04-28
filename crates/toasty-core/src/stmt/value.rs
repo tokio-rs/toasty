@@ -31,6 +31,7 @@ use std::cmp::Ordering;
 /// assert_eq!(v, true);
 /// ```
 #[derive(Debug, Default, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Value {
     /// Boolean value
     Bool(bool),

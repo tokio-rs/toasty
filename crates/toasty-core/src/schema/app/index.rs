@@ -30,6 +30,7 @@ use crate::schema::db::{IndexOp, IndexScope};
 /// assert!(index.primary_key);
 /// ```
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Index {
     /// Uniquely identifies this index within the schema.
     pub id: IndexId,
@@ -58,6 +59,7 @@ pub struct Index {
 /// assert_eq!(id.model, ModelId(0));
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct IndexId {
     /// The model this index belongs to.
     pub model: ModelId,
@@ -83,6 +85,7 @@ pub struct IndexId {
 /// };
 /// ```
 #[derive(Debug, Copy, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct IndexField {
     /// The field being indexed.
     pub field: FieldId,

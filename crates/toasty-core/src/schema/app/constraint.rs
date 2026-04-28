@@ -18,6 +18,7 @@ use crate::{Result, stmt};
 /// // The constraint can be checked against field values at runtime.
 /// ```
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Constraint {
     /// A length constraint on a string field.
     Length(ConstraintLength),
