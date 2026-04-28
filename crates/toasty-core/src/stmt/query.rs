@@ -291,9 +291,7 @@ impl QueryBuilder {
     }
 
     /// Sets the returning clause on the query's `SELECT` body.
-    pub fn returning(mut self, returning: impl Into<Returning>) -> Self {
-        let returning = returning.into();
-
+    pub fn returning(mut self, returning: Returning) -> Self {
         match &mut self.query.body {
             ExprSet::Select(select) => {
                 select.returning = returning;

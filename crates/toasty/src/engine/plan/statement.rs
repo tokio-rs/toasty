@@ -767,15 +767,12 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         // Set returning clause with all columns (including added ORDER BY columns)
         if !self.load_data.select_items.is_empty() {
-            stmt.set_returning(
-                stmt::Expr::record(
-                    self.load_data
-                        .select_items
-                        .iter()
-                        .map(|item| item.to_expr()),
-                )
-                .into(),
-            );
+            stmt.set_returning(stmt::Returning::Expr(stmt::Expr::record(
+                self.load_data
+                    .select_items
+                    .iter()
+                    .map(|item| item.to_expr()),
+            )));
         }
 
         let input_args: Vec<_> = self
@@ -998,14 +995,14 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         ctes.push(stmt::Cte {
             query: stmt::Query::builder(target)
                 .filter(filter.clone())
-                .returning(vec![
+                .returning(stmt::Returning::Expr(stmt::Expr::record_from_vec(vec![
                     stmt::Expr::count_star(),
                     stmt::FuncCount {
                         arg: None,
                         filter: Some(Box::new(condition)),
                     }
                     .into(),
-                ])
+                ])))
                 .build(),
         });
 
@@ -1147,14 +1144,14 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         let read = stmt::Query::builder(target)
             .filter(filter.clone())
-            .returning(vec![
+            .returning(stmt::Returning::Expr(stmt::Expr::record_from_vec(vec![
                 stmt::Expr::count_star(),
                 stmt::FuncCount {
                     arg: None,
                     filter: Some(Box::new(condition)),
                 }
                 .into(),
-            ])
+            ])))
             .locks(if self.planner.engine.capability().select_for_update {
                 vec![stmt::Lock::Update]
             } else {

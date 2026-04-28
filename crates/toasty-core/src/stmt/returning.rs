@@ -1,5 +1,5 @@
 use super::{Expr, Path};
-use crate::stmt::{self, ExprSet, Node, Query, Statement, Value};
+use crate::stmt::{self, ExprSet, Node, Query, Statement};
 
 /// Specifies what data a statement returns.
 ///
@@ -265,27 +265,6 @@ impl Query {
             stmt::ExprSet::Select(select) => &mut select.returning,
             body => panic!("expected query to have RETURNING clause; actual={body:#?}"),
         }
-    }
-}
-
-impl<T> From<T> for Returning
-where
-    Value: From<T>,
-{
-    fn from(value: T) -> Self {
-        Returning::Expr(Value::from(value).into())
-    }
-}
-
-impl From<Expr> for Returning {
-    fn from(value: Expr) -> Self {
-        Self::Expr(value)
-    }
-}
-
-impl From<Vec<Expr>> for Returning {
-    fn from(value: Vec<Expr>) -> Self {
-        stmt::Returning::Expr(stmt::Expr::record_from_vec(value))
     }
 }
 

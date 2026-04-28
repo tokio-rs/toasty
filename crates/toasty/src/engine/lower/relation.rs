@@ -301,7 +301,7 @@ impl LowerStatement<'_, '_> {
                 let stmt::ExprSet::Select(select) = &mut query.body else {
                     todo!()
                 };
-                select.returning = stmt::Expr::record([1]).into();
+                select.returning = stmt::Returning::Expr(stmt::Expr::record([1]));
                 query
             }));
         }
@@ -529,16 +529,13 @@ impl LowerStatement<'_, '_> {
 
                 // Previous value of returning does nothing in this
                 // context
-                insert.returning = Some(
-                    stmt::Expr::record(
-                        belongs_to
-                            .foreign_key
-                            .fields
-                            .iter()
-                            .map(|fk_field| stmt::Expr::ref_self_field(fk_field.target)),
-                    )
-                    .into(),
-                );
+                insert.returning = Some(stmt::Returning::Expr(stmt::Expr::record(
+                    belongs_to
+                        .foreign_key
+                        .fields
+                        .iter()
+                        .map(|fk_field| stmt::Expr::ref_self_field(fk_field.target)),
+                )));
 
                 let target_id = self.new_dependency(insert);
                 let stmt_info = &self.state.hir[target_id];
