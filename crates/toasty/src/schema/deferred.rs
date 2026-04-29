@@ -103,15 +103,21 @@ impl<T: Load<Output = T>> Load for Deferred<T> {
     }
 
     fn load(value: toasty_core::stmt::Value) -> crate::Result<Self> {
-        // A deferred field is loaded as Null when the column was excluded from
-        // the default projection — the unloaded state. (Phase 1: only the
-        // unloaded path is reachable through the model load. `.include()` is
-        // not yet supported.)
+        // The lowering wraps loaded deferred slots in a 1-element record and
+        // emits a bare Null for unloaded slots, so the two states are
+        // distinguishable even when the inner column value is NULL (i.e. the
+        // `Deferred<Option<T>>` case).
         match value {
             toasty_core::stmt::Value::Null => Ok(Self { value: None }),
-            value => Ok(Self {
-                value: Some(T::load(value)?),
-            }),
+            toasty_core::stmt::Value::Record(record) if record.fields.len() == 1 => {
+                let mut iter = record.fields.into_iter();
+                Ok(Self {
+                    value: Some(T::load(iter.next().unwrap())?),
+                })
+            }
+            value => Err(toasty_core::Error::from_args(format_args!(
+                "deferred field decoder expected Null or single-field Record, got {value:?}"
+            ))),
         }
     }
 

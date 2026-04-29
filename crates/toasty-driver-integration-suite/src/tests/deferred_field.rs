@@ -118,6 +118,153 @@ pub async fn deferred_optional_exec_loads_value(t: &mut Test) -> Result<()> {
 }
 
 #[driver_test(id(ID))]
+pub async fn deferred_include_loads_value(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Document {
+        #[key]
+        #[auto]
+        id: ID,
+
+        title: String,
+
+        #[deferred]
+        body: toasty::Deferred<String>,
+    }
+
+    let mut db = t.setup_db(models!(Document)).await;
+
+    let created = toasty::create!(Document {
+        title: "Hello".to_string(),
+        body: "the long body".to_string(),
+    })
+    .exec(&mut db)
+    .await?;
+
+    // `.include()` of a deferred primitive eagerly loads it as part of the
+    // model query — no separate fetch is needed.
+    let read = Document::filter_by_id(created.id)
+        .include(Document::fields().body())
+        .get(&mut db)
+        .await?;
+
+    assert!(!read.body.is_unloaded());
+    assert_eq!("the long body", read.body.get());
+
+    Ok(())
+}
+
+#[driver_test(id(ID))]
+pub async fn deferred_optional_include_loads_some(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Document {
+        #[key]
+        #[auto]
+        id: ID,
+
+        title: String,
+
+        #[deferred]
+        summary: toasty::Deferred<Option<String>>,
+    }
+
+    let mut db = t.setup_db(models!(Document)).await;
+
+    let created = toasty::create!(Document {
+        title: "With summary".to_string(),
+        summary: "a brief summary".to_string(),
+    })
+    .exec(&mut db)
+    .await?;
+
+    let read = Document::filter_by_id(created.id)
+        .include(Document::fields().summary())
+        .get(&mut db)
+        .await?;
+
+    assert!(!read.summary.is_unloaded());
+    assert_eq!(&Some("a brief summary".to_string()), read.summary.get());
+
+    Ok(())
+}
+
+#[driver_test(id(ID))]
+pub async fn deferred_optional_include_loads_none(t: &mut Test) -> Result<()> {
+    // A nullable deferred field must distinguish "loaded as NULL" from
+    // "unloaded". An eager `.include()` puts the field into the loaded state
+    // even when the column value is NULL.
+    #[derive(Debug, toasty::Model)]
+    struct Document {
+        #[key]
+        #[auto]
+        id: ID,
+
+        title: String,
+
+        #[deferred]
+        summary: toasty::Deferred<Option<String>>,
+    }
+
+    let mut db = t.setup_db(models!(Document)).await;
+
+    let created = toasty::create!(Document {
+        title: "No summary".to_string(),
+    })
+    .exec(&mut db)
+    .await?;
+
+    let read = Document::filter_by_id(created.id)
+        .include(Document::fields().summary())
+        .get(&mut db)
+        .await?;
+
+    assert!(!read.summary.is_unloaded());
+    assert_eq!(&None, read.summary.get());
+
+    Ok(())
+}
+
+#[driver_test(id(ID))]
+pub async fn deferred_optional_create_returns_none_loaded(t: &mut Test) -> Result<()> {
+    // INSERT...RETURNING bypasses the deferred mask, so the value the caller
+    // just supplied (including `None`) must come back loaded — the in-memory
+    // record should not be ambiguous with the unloaded state.
+    #[derive(Debug, toasty::Model)]
+    struct Document {
+        #[key]
+        #[auto]
+        id: ID,
+
+        title: String,
+
+        #[deferred]
+        summary: toasty::Deferred<Option<String>>,
+    }
+
+    let mut db = t.setup_db(models!(Document)).await;
+
+    let with_some = toasty::create!(Document {
+        title: "With summary".to_string(),
+        summary: "hello".to_string(),
+    })
+    .exec(&mut db)
+    .await?;
+
+    assert!(!with_some.summary.is_unloaded());
+    assert_eq!(&Some("hello".to_string()), with_some.summary.get());
+
+    let with_none = toasty::create!(Document {
+        title: "No summary".to_string(),
+    })
+    .exec(&mut db)
+    .await?;
+
+    assert!(!with_none.summary.is_unloaded());
+    assert_eq!(&None, with_none.summary.get());
+
+    Ok(())
+}
+
+#[driver_test(id(ID))]
 pub async fn deferred_filter_does_not_load_field(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Document {

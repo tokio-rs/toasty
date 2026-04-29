@@ -538,21 +538,32 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 self.build_include_subquery(&mut returning, field, &nested);
             }
 
-            // Mask out deferred fields not covered by an include path. The
-            // column is preserved in `table_to_model` (so filter and order_by
-            // expressions still resolve to a real column reference), but the
-            // SELECT projection emits Null for the slot.
+            // Encode each deferred slot so the row decoder can distinguish
+            // "loaded" from "unloaded" — critical when the inner type is
+            // `Option<T>`, where a NULL column value is otherwise
+            // indistinguishable from the unloaded state.
             //
-            // INSERT...RETURNING bypasses the mask: the caller just supplied
-            // the value and expects to read it back as loaded.
-            if !self.cx.is_insert() {
-                let model = self.model_unwrap();
-                for (index, field) in model.fields.iter().enumerate() {
-                    if field.deferred && !included_top_fields.contains(index) {
-                        returning
-                            .entry_mut(index)
-                            .insert(stmt::Expr::from(stmt::Value::Null));
-                    }
+            // - Loaded slots wrap the column reference in a 1-element record
+            //   `Record([col])`, so an actual NULL value comes back as
+            //   `Record([Null])` and decodes to `Some(None)`.
+            // - Unloaded slots emit a bare `Null`, which decodes to the
+            //   unloaded state.
+            //
+            // INSERT...RETURNING always projects deferred fields (the caller
+            // just supplied the value and expects to read it back).
+            let model = self.model_unwrap();
+            let is_insert = self.cx.is_insert();
+            for (index, field) in model.fields.iter().enumerate() {
+                if !field.deferred {
+                    continue;
+                }
+                let loaded = is_insert || included_top_fields.contains(index);
+                let mut entry = returning.entry_mut(index);
+                if loaded {
+                    let inner = entry.take();
+                    entry.insert(stmt::Expr::record([inner]));
+                } else {
+                    entry.insert(stmt::Expr::from(stmt::Value::Null));
                 }
             }
 
