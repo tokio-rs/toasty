@@ -18,8 +18,20 @@ name = "toasty"
 path = "src/bin/toasty.rs"
 
 [dependencies]
-toasty = { workspace = true, features = ["sqlite", "postgresql", "mysql"] }
-toasty-core = { workspace = true, features = ["serde"] }
+toasty = { workspace = true, features = [
+    "sqlite",
+    "postgresql",
+    "mysql",
+    "jiff",
+    "rust_decimal",
+    "bigdecimal",
+] }
+toasty-core = { workspace = true, features = [
+    "serde",
+    "jiff",
+    "rust_decimal",
+    "bigdecimal",
+] }
 toasty-sql.workspace = true
 
 anyhow = "1.0.102"
