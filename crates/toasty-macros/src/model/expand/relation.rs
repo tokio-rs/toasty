@@ -1,5 +1,5 @@
 use super::{Expand, util};
-use crate::model::schema::{BelongsTo, Field, FieldTy, HasMany, HasOne, extract_deferred_inner};
+use crate::model::schema::{BelongsTo, Field, FieldTy, HasMany, HasOne};
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -205,8 +205,7 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let field_ident = &field.name.ident;
         let field_index = util::int(field.id);
-        let inner = extract_deferred_inner(ty)
-            .expect("deferred field must wrap inner type in `Deferred<T>`");
+        let inner = quote!(<#ty as #toasty::Defer>::Inner);
 
         let pk_filter = self.primary_key_filter();
         let filter_method_ident = &pk_filter.filter_method_ident;

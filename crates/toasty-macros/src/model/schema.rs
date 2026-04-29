@@ -8,7 +8,7 @@ mod error;
 pub(crate) use error::ErrorSet;
 
 mod field;
-pub(crate) use field::{Field, FieldTy, SerializeAttr, SerializeFormat, extract_deferred_inner};
+pub(crate) use field::{Field, FieldTy, SerializeAttr, SerializeFormat};
 
 mod fk;
 pub(crate) use fk::ForeignKeyField;

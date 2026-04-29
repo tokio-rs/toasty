@@ -433,13 +433,6 @@ impl Field {
                     "#[deferred] cannot be combined with #[key]",
                 ));
             }
-
-            if extract_deferred_inner(&field.ty).is_none() {
-                errs.push(syn::Error::new_spanned(
-                    &field.ty,
-                    "#[deferred] requires the field to be wrapped in `Deferred<T>`",
-                ));
-            }
         }
 
         if let Some(err) = errs.collect() {
@@ -472,34 +465,6 @@ impl Field {
             variant: None,
         })
     }
-}
-
-/// Extract `T` from a syntactic `Deferred<T>` (or `toasty::Deferred<T>` /
-/// `::toasty::Deferred<T>`). Returns `None` if `ty` is not a `Deferred<...>`.
-pub(crate) fn extract_deferred_inner(ty: &syn::Type) -> Option<syn::Type> {
-    let syn::Type::Path(type_path) = ty else {
-        return None;
-    };
-
-    let last = type_path.path.segments.last()?;
-
-    if last.ident != "Deferred" {
-        return None;
-    }
-
-    let syn::PathArguments::AngleBracketed(args) = &last.arguments else {
-        return None;
-    };
-
-    if args.args.len() != 1 {
-        return None;
-    }
-
-    let syn::GenericArgument::Type(inner) = args.args.first()? else {
-        return None;
-    };
-
-    Some(inner.clone())
 }
 
 pub(crate) fn rewrite_self(ty: &mut syn::Type, model: &syn::Ident) {

@@ -18,6 +18,26 @@ pub struct Deferred<T> {
     value: Option<T>,
 }
 
+/// Marker trait identifying a deferred-load field wrapper, exposing the wrapped
+/// value type via [`Inner`](Defer::Inner).
+///
+/// Generated code references `<F as Defer>::Inner` to recover the user-facing
+/// value type for fields annotated with `#[deferred]`. The trait is implemented
+/// only for [`Deferred<T>`], so applying `#[deferred]` to a field whose type is
+/// not `Deferred<T>` (after type aliases are resolved) fails to compile.
+#[diagnostic::on_unimplemented(
+    message = "`#[deferred]` requires the field to be wrapped in `Deferred<T>`",
+    label = "expected `Deferred<T>`, found `{Self}`"
+)]
+pub trait Defer {
+    /// The wrapped value type.
+    type Inner;
+}
+
+impl<T> Defer for Deferred<T> {
+    type Inner = T;
+}
+
 impl<T> Deferred<T> {
     /// Returns `true` if the field has not been loaded.
     pub fn is_unloaded(&self) -> bool {

@@ -5,7 +5,7 @@ mod belongs_to;
 pub use belongs_to::BelongsTo;
 
 mod deferred;
-pub use deferred::{Deferred, DeferredLoad};
+pub use deferred::{Defer, Deferred, DeferredLoad};
 
 mod embed;
 pub use embed::Embed;

@@ -161,6 +161,40 @@ pub async fn deferred_filter_does_not_load_field(t: &mut Test) -> Result<()> {
 }
 
 #[driver_test(id(ID))]
+pub async fn deferred_works_through_type_alias(t: &mut Test) -> Result<()> {
+    type Lazy<T> = toasty::Deferred<T>;
+
+    #[derive(Debug, toasty::Model)]
+    struct Document {
+        #[key]
+        #[auto]
+        id: ID,
+
+        title: String,
+
+        #[deferred]
+        body: Lazy<String>,
+    }
+
+    let mut db = t.setup_db(models!(Document)).await;
+
+    let created = toasty::create!(Document {
+        title: "Hello".to_string(),
+        body: "the long body".to_string(),
+    })
+    .exec(&mut db)
+    .await?;
+
+    let read = Document::filter_by_id(created.id).get(&mut db).await?;
+    assert!(read.body.is_unloaded());
+
+    let body: String = read.body().exec(&mut db).await?;
+    assert_eq!("the long body", body);
+
+    Ok(())
+}
+
+#[driver_test(id(ID))]
 pub async fn deferred_update_without_prior_load(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Document {
