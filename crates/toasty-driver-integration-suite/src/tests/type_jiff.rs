@@ -527,15 +527,13 @@ pub async fn latest_by_timestamp(test: &mut Test) -> Result<(), BoxError> {
 
     let mut db = test.setup_db(models!(Item)).await;
 
-    let timestamps = vec![
-        Timestamp::from_second(1609459200)?, // 2021-01-01
-        Timestamp::from_second(946684800)?,  // 2000-01-01
-        Timestamp::from_second(1735689600)?, // 2025-01-01
-    ];
-
-    for val in &timestamps {
-        Item::create().val(*val).exec(&mut db).await?;
-    }
+    toasty::create!(Item::[
+        { val: Timestamp::from_second(1609459200)? }, // 2021-01-01
+        { val: Timestamp::from_second(946684800)? },  // 2000-01-01
+        { val: Timestamp::from_second(1735689600)? }, // 2025-01-01
+    ])
+    .exec(&mut db)
+    .await?;
 
     let latest: Vec<_> = Item::all()
         .latest_by(Item::fields().val())

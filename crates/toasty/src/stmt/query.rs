@@ -2,7 +2,7 @@ use super::{Delete, Expr, IntoStatement, List, Statement, Value};
 use crate::{
     Executor, Result,
     schema::{Load, Model},
-    stmt::{Path, Recency},
+    stmt::Path,
 };
 use std::{fmt, marker::PhantomData};
 use toasty_core::stmt::{self, Returning};
@@ -171,37 +171,6 @@ impl<T> Query<T> {
     /// ```
     pub fn order_by(&mut self, order_by: impl Into<stmt::OrderBy>) -> &mut Self {
         self.untyped.order_by = Some(order_by.into());
-        self
-    }
-
-    /// Set the sort order for this query to descending (newest first).
-    ///
-    /// This is a convenience method equivalent to calling
-    /// [`order_by`](Self::order_by) with [`Path::desc`].
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[derive(Debug, toasty::Model)]
-    /// # struct User {
-    /// #     #[key]
-    /// #     id: i64,
-    /// #     name: String,
-    /// #     #[auto]
-    /// #     created_at: jiff::Timestamp,
-    /// # }
-    /// use toasty::stmt::{List, Query};
-    ///
-    /// let mut q = Query::<List<User>>::all();
-    /// q.latest_by(User::fields().created_at());
-    /// ```
-    pub fn latest_by<M, U: Recency>(&mut self, field: impl Into<Path<M, U>>) -> &mut Self {
-        self.untyped.order_by = Some(stmt::OrderBy {
-            exprs: vec![stmt::OrderByExpr {
-                expr: field.into().untyped.into_stmt(),
-                order: Some(stmt::Direction::Desc),
-            }],
-        });
         self
     }
 
@@ -508,6 +477,30 @@ impl<M: Model> Query<List<M>> {
         let mut query = stmt::Query::new_select(M::id(), filter);
         query.single = false;
         Self::from_untyped(query)
+    }
+
+    /// Sort this query so the most recently inserted records on `field`
+    /// appear first.
+    ///
+    /// Convenience for [`order_by`](Self::order_by) with [`Path::desc`].
+    /// `field` must be a path rooted at this query's model `M`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::{List, Query};
+    ///
+    /// let mut q = Query::<List<User>>::all();
+    /// q.latest_by(User::fields().id());
+    /// ```
+    pub fn latest_by<U>(&mut self, field: Path<M, U>) -> &mut Self {
+        self.order_by(field.desc())
     }
 }
 
