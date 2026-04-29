@@ -513,7 +513,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
             // Track which top-level fields are explicitly included so that
             // deferred fields are not masked when the caller asked for them.
-            let mut included_top_fields = HashSet::new();
+            let mut included_top_fields = stmt::PathFieldSet::new();
 
             let mut nested: Vec<stmt::Projection> = vec![];
             let mut current: Option<usize> = None;
@@ -548,7 +548,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             if !self.cx.is_insert() {
                 let model = self.model_unwrap();
                 for (index, field) in model.fields.iter().enumerate() {
-                    if field.deferred && !included_top_fields.contains(&index) {
+                    if field.deferred && !included_top_fields.contains(index) {
                         returning
                             .entry_mut(index)
                             .insert(stmt::Expr::from(stmt::Value::Null));
