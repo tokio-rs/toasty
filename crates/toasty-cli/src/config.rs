@@ -51,15 +51,18 @@ impl Config {
         Ok(config)
     }
 
-    /// Load configuration from `<project_root>/Toasty.toml`, falling back to
-    /// [`Config::default`] if the file does not exist. Used by the standalone
+    /// Load configuration from `<project_root>/Toasty.toml`, creating it with
+    /// default contents if the file does not exist. Used by the standalone
     /// CLI; library callers can wire this up themselves via [`Config::load`].
     pub fn load_or_default(project_root: &Path) -> Result<Self> {
         let path = project_root.join("Toasty.toml");
         if path.exists() {
             Self::load_from(&path)
         } else {
-            Ok(Self::default())
+            let config = Self::default();
+            let toml = toml::to_string_pretty(&config)?;
+            fs::write(&path, toml)?;
+            Ok(config)
         }
     }
 
