@@ -13,8 +13,12 @@ categories.workspace = true
 readme.workspace = true
 documentation = "https://docs.rs/toasty-cli"
 
+[[bin]]
+name = "toasty"
+path = "src/bin/toasty.rs"
+
 [dependencies]
-toasty.workspace = true
+toasty = { workspace = true, features = ["sqlite", "postgresql", "mysql"] }
 toasty-core = { workspace = true, features = ["serde"] }
 toasty-sql.workspace = true
 
@@ -28,6 +32,7 @@ jiff.workspace = true
 rand.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 toml.workspace = true
 toml_edit = { workspace = true, features = ["serde"] }
 url.workspace = true
