@@ -2,7 +2,7 @@
 //! during query time. All associations are accessed via queries on demand.
 
 use crate::prelude::*;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 #[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn crud_user_todos(test: &mut Test) -> Result<()> {

@@ -1,9 +1,12 @@
+mod expr_pattern;
 mod insert;
 mod paginate;
 mod relation;
 mod returning;
 
-use std::{cell::Cell, collections::HashSet};
+use std::cell::Cell;
+
+use hashbrown::HashSet;
 
 use index_vec::IndexVec;
 use toasty_core::{
@@ -280,12 +283,12 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     let maybe_res = self.lower_expr_binary_op(
                         stmt::BinaryOp::Eq,
                         &mut e.expr,
-                        e.query.returning_mut_unwrap().as_expr_mut_unwrap(),
+                        e.query.returning_mut_unwrap().as_project_mut_unwrap(),
                     );
 
                     assert!(maybe_res.is_none(), "TODO");
 
-                    let returning = e.query.returning_mut_unwrap().as_expr_mut_unwrap();
+                    let returning = e.query.returning_mut_unwrap().as_project_mut_unwrap();
 
                     if !returning.is_record() {
                         *returning = stmt::Expr::record([returning.take()]);
@@ -310,7 +313,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     let maybe_res = self.lower_expr_binary_op(
                         stmt::BinaryOp::Eq,
                         &mut e.expr,
-                        e.query.returning_mut_unwrap().as_expr_mut_unwrap(),
+                        e.query.returning_mut_unwrap().as_project_mut_unwrap(),
                     );
 
                     assert!(maybe_res.is_none(), "TODO");
@@ -420,6 +423,11 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     self.curr_stmt_info().deps.insert(target_id);
                 }
             }
+            stmt::Expr::StartsWith(_)
+                if self.capability().sql && !self.capability().native_starts_with =>
+            {
+                self.lower_expr_starts_with(expr);
+            }
             stmt::Expr::Exists(_) if !self.capability().sql => {
                 let stmt::Expr::Exists(mut expr_exists) = expr.take() else {
                     panic!()
@@ -524,14 +532,14 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 self.build_include_subquery(&mut returning, field, &nested);
             }
 
-            *i = stmt::Returning::Expr(returning);
+            *i = stmt::Returning::Project(returning);
         }
 
         // For multi-row INSERT returning, visit each row with its row index so
         // that sub-statements (e.g., child INSERTs for HasOne relations) capture
         // the correct parent row index via scope_statement.
         if matches!(&self.cx, LoweringContext::Insert(..))
-            && let stmt::Returning::Value(stmt::Expr::List(list)) = i
+            && let stmt::Returning::Expr(stmt::Expr::List(list)) = i
         {
             for (index, item) in list.items.iter_mut().enumerate() {
                 self.lower_returning_for_row(index).visit_expr_mut(item);
@@ -551,6 +559,10 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         lower.plan_stmt_delete_relations(stmt);
 
         lower.visit_filter_mut(&mut stmt.filter);
+
+        if let Some(expr) = &mut stmt.condition.expr {
+            lower.visit_expr_mut(expr);
+        }
 
         if let Some(returning) = &mut stmt.returning {
             lower.visit_returning_mut(returning);
@@ -584,7 +596,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             lower.constantize_insert_returning(returning, &stmt.source);
 
             if stmt.source.single
-                && let stmt::Returning::Value(expr) = &returning
+                && let stmt::Returning::Expr(expr) = &returning
             {
                 // Not strictly true, but there is nothing that needs to
                 // return a list at this point for a "single" query. If this
@@ -651,7 +663,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 }
 
                 // Step 2 — build the returning expression.
-                *returning = stmt::Returning::Expr(build_update_returning(
+                *returning = stmt::Returning::Project(build_update_returning(
                     model.id,
                     None,
                     &mapping.fields,

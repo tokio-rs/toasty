@@ -52,6 +52,10 @@ impl AlterColumnChanges {
     }
 
     /// Splits up this set of changes into a [`Vec`] of individual changes.
+    ///
+    /// The rename change is emitted last so that any preceding statements
+    /// (type, nullability, auto-increment) still find the column under its
+    /// pre-rename name.
     pub fn split(self) -> Vec<Self> {
         let Self {
             new_name,
@@ -66,12 +70,6 @@ impl AlterColumnChanges {
             new_auto_increment: None,
         };
         let mut result = vec![];
-        if new_name.is_some() {
-            result.push(Self {
-                new_name,
-                ..default.clone()
-            });
-        }
         if new_ty.is_some() {
             result.push(Self {
                 new_ty,
@@ -87,6 +85,12 @@ impl AlterColumnChanges {
         if new_auto_increment.is_some() {
             result.push(Self {
                 new_auto_increment,
+                ..default.clone()
+            });
+        }
+        if new_name.is_some() {
+            result.push(Self {
+                new_name,
                 ..default.clone()
             });
         }

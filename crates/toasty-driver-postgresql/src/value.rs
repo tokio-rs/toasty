@@ -155,6 +155,20 @@ impl Value {
             {
                 panic!("TIME requires jiff feature to be enabled")
             }
+        } else if column.type_() == &Type::FLOAT4 {
+            let v = get_or_return_null!(f32);
+            match expected_ty {
+                stmt::Type::F32 => stmt::Value::F32(v),
+                stmt::Type::F64 => stmt::Value::F64(v as f64),
+                _ => panic!("unexpected type for FLOAT4: {expected_ty:#?}"),
+            }
+        } else if column.type_() == &Type::FLOAT8 {
+            let v = get_or_return_null!(f64);
+            match expected_ty {
+                stmt::Type::F32 => stmt::Value::F32(v as f32),
+                stmt::Type::F64 => stmt::Value::F64(v),
+                _ => panic!("unexpected type for FLOAT8: {expected_ty:#?}"),
+            }
         } else if column.type_() == &Type::NUMERIC {
             #[cfg(feature = "rust_decimal")]
             {
@@ -223,6 +237,10 @@ impl ToSql for Value {
                 }
                 (*value as i64).to_sql(ty, out)
             }
+            (stmt::Value::F32(value), &Type::FLOAT4) => value.to_sql(ty, out),
+            (stmt::Value::F32(value), &Type::FLOAT8) => (*value as f64).to_sql(ty, out),
+            (stmt::Value::F64(value), &Type::FLOAT4) => (*value as f32).to_sql(ty, out),
+            (stmt::Value::F64(value), &Type::FLOAT8) => value.to_sql(ty, out),
             (stmt::Value::Null, _) => Ok(IsNull::Yes),
             (stmt::Value::String(value), _) => value.to_sql(ty, out),
             (stmt::Value::Bytes(value), &Type::BYTEA) => value.to_sql(ty, out),
@@ -249,6 +267,8 @@ impl ToSql for Value {
                 | Type::INT4
                 | Type::INT8
                 | Type::TEXT
+                | Type::FLOAT4
+                | Type::FLOAT8
                 | Type::VARCHAR
                 | Type::BYTEA
                 | Type::UUID

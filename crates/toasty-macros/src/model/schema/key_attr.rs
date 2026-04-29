@@ -20,22 +20,46 @@ impl KeyAttr {
                     ));
                 }
 
-                has_named = true;
-                let value = meta.value()?;
-                let ident: syn::Ident = value.parse()?;
+                let is_partition = meta.path.is_ident("partition");
+                let target = if is_partition {
+                    &mut partition
+                } else {
+                    &mut local
+                };
 
-                if !names.contains(&ident) {
+                if !target.is_empty() {
                     return Err(syn::Error::new_spanned(
-                        &ident,
-                        format!("unknown field `{ident}`"),
+                        &meta.path,
+                        if is_partition {
+                            "`partition` specified more than once; use `partition = [a, b]` for multiple fields"
+                        } else {
+                            "`local` specified more than once; use `local = [a, b]` for multiple fields"
+                        },
                     ));
                 }
 
-                if meta.path.is_ident("partition") {
-                    partition.push(ident);
+                has_named = true;
+                let value = meta.value()?;
+
+                let idents: Vec<syn::Ident> = if value.peek(syn::token::Bracket) {
+                    let content;
+                    syn::bracketed!(content in value);
+                    let punctuated = syn::punctuated::Punctuated::<syn::Ident, syn::Token![,]>::parse_terminated(&content)?;
+                    punctuated.into_iter().collect()
                 } else {
-                    local.push(ident);
+                    vec![value.parse::<syn::Ident>()?]
+                };
+
+                for ident in &idents {
+                    if !names.contains(ident) {
+                        return Err(syn::Error::new_spanned(
+                            ident,
+                            format!("unknown field `{ident}`"),
+                        ));
+                    }
                 }
+
+                *target = idents;
             } else {
                 if has_named {
                     return Err(syn::Error::new_spanned(
@@ -70,14 +94,14 @@ impl KeyAttr {
             if partition.is_empty() {
                 return Err(syn::Error::new_spanned(
                     attr,
-                    "expected at least one `partition` attribute",
+                    "expected at least one `partition` field",
                 ));
             }
 
             if local.is_empty() {
                 return Err(syn::Error::new_spanned(
                     attr,
-                    "expected at least one `local` attribute",
+                    "expected at least one `local` field",
                 ));
             }
         }

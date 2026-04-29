@@ -1,6 +1,6 @@
 [package]
 name = "toasty-driver-integration-suite-macros"
-version = "0.4.0"
+version = "0.5.0"
 description = "Proc macros for the Toasty driver integration test suite"
 authors.workspace = true
 edition.workspace = true
@@ -17,6 +17,7 @@ documentation = "https://docs.rs/toasty-driver-integration-suite-macros"
 proc-macro = true
 
 [dependencies]
+hashbrown.workspace = true
 proc-macro2.workspace = true
 quote.workspace = true
 syn = { workspace = true, features = ["visit", "visit-mut"] }

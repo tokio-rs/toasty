@@ -13,6 +13,11 @@ use toasty_core::{Schema, driver::ExecResponse};
 #[async_trait]
 pub trait Executor: Send + Sync {
     /// Starts a (potentially nested) transaction.
+    ///
+    /// Takes `&mut self` so the executor is exclusively borrowed while the
+    /// transaction is open. This prevents statements from accidentally
+    /// executing on the parent handle rather than through `&mut tx`, which
+    /// would bypass the transaction.
     async fn transaction(&mut self) -> Result<Transaction<'_>>;
 
     /// Execute an untyped statement, returning the full execution response.

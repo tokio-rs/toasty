@@ -44,7 +44,7 @@ fn scan_test_directory(dir: &Path) -> TestStructure {
         requires: Vec::new(),
     };
 
-    let mut all_requires = std::collections::HashSet::new();
+    let mut all_requires = hashbrown::HashSet::new();
 
     // Read all .rs files in the directory
     for entry in fs::read_dir(dir).expect("Failed to read tests directory") {
@@ -80,7 +80,7 @@ fn scan_test_directory(dir: &Path) -> TestStructure {
     }
 
     // Extract all capability identifiers from the BoolExpr requirements
-    let mut capability_names = std::collections::HashSet::new();
+    let mut capability_names = hashbrown::HashSet::new();
     for req_expr in &all_requires {
         extract_capability_names(req_expr, &mut capability_names);
     }
@@ -100,7 +100,7 @@ fn scan_test_directory(dir: &Path) -> TestStructure {
 }
 
 /// Extract all capability names from a BoolExpr (ignoring matrix identifiers)
-fn extract_capability_names(expr: &BoolExpr, result: &mut std::collections::HashSet<String>) {
+fn extract_capability_names(expr: &BoolExpr, result: &mut hashbrown::HashSet<String>) {
     match expr {
         BoolExpr::Ident(name) => {
             // Skip common matrix identifiers
@@ -256,7 +256,7 @@ fn generate_capability_runtime_test(structure: &TestStructure) -> TokenStream2 {
                 let capability = t.capability();
 
                 // Parse capability flags from macro arguments
-                let mut expected_capabilities = ::std::collections::HashMap::new();
+                let mut expected_capabilities = ::hashbrown::HashMap::new();
 
                 // Default all capabilities to true
                 #(
@@ -284,7 +284,7 @@ fn generate_capability_runtime_test(structure: &TestStructure) -> TokenStream2 {
         }
 
         #[allow(dead_code)]
-        fn __parse_capability_flags(map: &mut ::std::collections::HashMap<String, bool>, input: &str) {
+        fn __parse_capability_flags(map: &mut ::hashbrown::HashMap<String, bool>, input: &str) {
             // Parse "cap1: false, cap2: true" format
             for part in input.split(',') {
                 let part = part.trim();

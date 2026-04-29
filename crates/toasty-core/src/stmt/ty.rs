@@ -99,6 +99,12 @@ pub enum Type {
     /// Unsigned 64-bit integer
     U64,
 
+    /// 32-bit floating point number
+    F32,
+
+    /// 64-bit floating point number
+    F64,
+
     /// 128-bit universally unique identifier (UUID)
     Uuid,
 
@@ -374,6 +380,20 @@ impl Type {
             (value, Self::U16) => Value::U16(u16::try_from(value)?),
             (value, Self::U32) => Value::U32(u32::try_from(value)?),
             (value, Self::U64) => Value::U64(u64::try_from(value)?),
+            // Float casts
+            (Value::F32(v), Self::F32) => Value::F32(v),
+            (Value::F64(v), Self::F32) => {
+                let converted = v as f32;
+                if converted.is_infinite() && !v.is_infinite() {
+                    return Err(crate::Error::type_conversion(
+                        Value::F64(v),
+                        "f32 (overflow)",
+                    ));
+                }
+                Value::F32(converted)
+            }
+            (Value::F32(v), Self::F64) => Value::F64(v as f64),
+            (Value::F64(v), Self::F64) => Value::F64(v),
             (value, _) => todo!("value={value:#?}; ty={self:#?}"),
         })
     }
@@ -416,6 +436,8 @@ impl Type {
             (Type::U16, Type::U16) => true,
             (Type::U32, Type::U32) => true,
             (Type::U64, Type::U64) => true,
+            (Type::F32, Type::F32) => true,
+            (Type::F64, Type::F64) => true,
             (Type::Uuid, Type::Uuid) => true,
             (Type::Bytes, Type::Bytes) => true,
             (Type::Unit, Type::Unit) => true,

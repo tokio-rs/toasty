@@ -1,4 +1,4 @@
-use toasty_core::{schema::db::TableId, stmt, stmt::ExprContext};
+use toasty_core::{schema::db::TableId, stmt, stmt::ExprContext, stmt::ValueSet};
 
 use crate::engine::simplify;
 
@@ -40,6 +40,10 @@ impl Exec<'_> {
 
     /// `ANY(MAP(Value::List([v1, v2, ...]), pred))` — substitutes each value
     /// into the predicate template.
+    ///
+    /// Duplicate values are collapsed: each kv-layer fan-out becomes one
+    /// driver call per partition key, and a downstream `HashIndex` build
+    /// over the merged rows requires unique keys.
     fn split_filter_any_map(map_expr: stmt::Expr, cx: ExprContext<'_>) -> Vec<stmt::Expr> {
         let stmt::Expr::Map(map) = map_expr else {
             unreachable!()
@@ -48,9 +52,11 @@ impl Exec<'_> {
             unreachable!()
         };
 
+        let mut seen = ValueSet::with_capacity(items.len());
         items
             .into_iter()
             .filter(|item| !item.is_null())
+            .filter(|item| seen.insert(item.clone()))
             .filter_map(|item| {
                 let mut pred = *map.map.clone();
                 // Unpack Record fields so arg(i) binds to field i.
@@ -66,6 +72,8 @@ impl Exec<'_> {
 
     /// `InList(expr, Value::List([v1, v2, ...]))` — produces `expr == vi` for
     /// each value.
+    ///
+    /// Duplicate values are collapsed; see `split_filter_any_map`.
     fn split_filter_in_list(
         expr: stmt::Expr,
         list: stmt::Expr,
@@ -75,9 +83,11 @@ impl Exec<'_> {
             unreachable!()
         };
 
+        let mut seen = ValueSet::with_capacity(values.len());
         values
             .into_iter()
             .filter(|v| !v.is_null())
+            .filter(|v| seen.insert(v.clone()))
             .filter_map(|v| {
                 let mut pred = stmt::Expr::binary_op(expr.clone(), stmt::BinaryOp::Eq, v);
                 simplify::simplify_expr(cx, &mut pred);

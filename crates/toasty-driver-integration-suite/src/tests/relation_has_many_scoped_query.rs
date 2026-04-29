@@ -1,7 +1,7 @@
 //! Test scoped queries on has_many associations
 
 use crate::prelude::*;
-use std::collections::HashSet;
+use hashbrown::HashSet;
 
 #[driver_test(id(ID), matrix(single, composite), requires(or(single, not(id_u64))))]
 pub async fn scoped_query_eq(test: &mut Test) -> Result<()> {

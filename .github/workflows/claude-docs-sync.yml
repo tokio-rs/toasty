@@ -1,0 +1,103 @@
+name: Claude Docs Sync
+
+# Check that any PR implementing functionality described in the roadmap or
+# a design doc also deletes the corresponding entries. Posts a review only
+# when the deletion is missing, and resolves the review once it is fixed.
+
+# SECURITY: this workflow uses `pull_request_target`, which runs in the
+# base repo's context with full secrets. PR contents (branch, files,
+# scripts, Cargo.toml, build.rs, etc.) are UNTRUSTED — a malicious fork
+# could use them to exfiltrate secrets. This workflow must never execute
+# code from the PR: no `actions/checkout` of the PR ref, no `cargo build`,
+# no `npm install`, no running of fork-supplied scripts. The only safe
+# operations are reading PR metadata via `gh` and posting/resolving
+# reviews.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: claude-docs-sync-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  docs-sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Run Claude Code for Docs Sync
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          allowed_non_write_users: "*"
+          prompt: |
+            You are a docs-sync checker for the toasty repository. Your ONLY
+            job is to enforce this rule on PR #${{ github.event.pull_request.number }}:
+
+              If a PR implements functionality that is listed in
+              docs/dev/roadmap.md or described in a design document under
+              docs/dev/design/, the PR MUST also delete the entries for
+              that functionality from those docs.
+
+            Do nothing else. No style feedback, no code review, no general
+            suggestions.
+
+            Steps:
+
+            1. Read the PR and its diff:
+                 gh pr view ${{ github.event.pull_request.number }} --json title,body,files,reviews,comments
+                 gh pr diff ${{ github.event.pull_request.number }}
+
+            2. Read the current docs on the base branch (this checkout):
+                 - docs/dev/roadmap.md
+                 - every file under docs/dev/design/ that looks relevant
+                   to the PR (match by topic, not by filename guessing)
+
+            3. Decide whether the PR's code changes implement work that is
+               currently an entry in docs/dev/roadmap.md or is described
+               in a design doc under docs/dev/design/. Be conservative:
+               only flag an entry when the PR clearly ships that specific
+               item, not when it merely touches related code.
+
+               Cases:
+
+               a. The PR does not implement a roadmap or design-doc entry.
+                  → Do nothing. Exit silently.
+
+               b. The PR implements such an entry AND the diff already
+                  deletes the matching entry from docs/dev/roadmap.md
+                  and/or removes (or clearly marks as implemented) the
+                  design doc.
+                  → The rule is satisfied. If a previous Claude review on
+                    this PR flagged this issue and its thread is still
+                    open, resolve that thread using
+                    mcp__github__resolve_review_thread. Then exit.
+
+               c. The PR implements such an entry but the diff does NOT
+                  delete the matching docs entries.
+                  → Continue to step 4.
+
+            4. Check the reviews returned in step 1 for an existing open
+               review from this bot about docs sync.
+
+               - If one exists and is still unresolved, do nothing — do
+                 not post a duplicate review.
+               - Otherwise, post ONE PR review using
+                 mcp__github__pull_request_review_write with event
+                 REQUEST_CHANGES. The review body must:
+                   * Name each roadmap or design-doc entry that needs to
+                     be removed, with the file path.
+                   * Briefly explain the rule (one sentence).
+                   * Not comment on anything else.
+
+            Keep the review terse. Prefer fewer words over more.
+          claude_args: |
+            --allowed-tools "Bash(gh pr view:*),Bash(gh pr diff:*),mcp__github__pull_request_read,mcp__github__pull_request_review_write,mcp__github__resolve_review_thread"

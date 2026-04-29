@@ -1,6 +1,6 @@
 [package]
 name = "toasty-driver-postgresql"
-version = "0.4.0"
+version = "0.5.0"
 description = "PostgreSQL driver for Toasty"
 authors.workspace = true
 edition.workspace = true
@@ -33,6 +33,7 @@ jiff = ["dep:jiff", "toasty-core/jiff", "postgres-types/with-jiff-0_2"]
 async-trait.workspace = true
 toasty-core.workspace = true
 toasty-sql.workspace = true
+hashbrown.workspace = true
 rust_decimal = { workspace = true, optional = true, features = ["db-postgres"] }
 bigdecimal = { workspace = true, optional = true }
 jiff = { workspace = true, optional = true }

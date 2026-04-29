@@ -1,11 +1,8 @@
 use super::{Column, ColumnId, DiffContext, Schema, TableId};
 use crate::stmt;
 
-use std::{
-    collections::{HashMap, HashSet},
-    fmt,
-    ops::Deref,
-};
+use hashbrown::{HashMap, HashSet};
+use std::{fmt, ops::Deref};
 
 /// A database index over one or more columns of a table.
 ///
@@ -336,6 +333,7 @@ mod tests {
             nullable: false,
             primary_key: false,
             auto_increment: false,
+            versionable: false,
         }
     }
 

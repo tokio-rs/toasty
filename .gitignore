@@ -2,5 +2,4 @@
 **/target
 /Cargo.lock
 docs/guide/book/
-docs/dev/book/
 tests/tls/certs/

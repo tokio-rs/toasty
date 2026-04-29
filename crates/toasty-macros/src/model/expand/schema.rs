@@ -17,8 +17,20 @@ impl Expand<'_> {
         let table_name = self.expand_table_name();
 
         let model = match &self.model.kind {
-            ModelKind::Root(_) => {
+            ModelKind::Root(root) => {
                 let primary_key = self.expand_primary_key();
+                let version_field = match root.version_field {
+                    Some(idx) => {
+                        let idx_tok = util::int(idx);
+                        quote! {
+                            Some(#toasty::core::schema::app::FieldId {
+                                model: id,
+                                index: #idx_tok,
+                            })
+                        }
+                    }
+                    None => quote! { None },
+                };
                 quote! {
                     #toasty::core::schema::app::Model::Root(
                         #toasty::core::schema::app::ModelRoot {
@@ -28,6 +40,7 @@ impl Expand<'_> {
                             primary_key: #primary_key,
                             table_name: #table_name,
                             indices: #indices,
+                            version_field: #version_field,
                         }
                     )
                 }
@@ -78,7 +91,7 @@ impl Expand<'_> {
 
             let name = {
                 let app_name = if field_named {
-                    let n = field.name.ident.to_string();
+                    let n = field.name.as_str();
                     quote! { Some(#n.to_string()) }
                 } else {
                     quote! { None }
@@ -159,15 +172,17 @@ impl Expand<'_> {
                 FieldTy::HasMany(rel) => {
                     let ty = &rel.ty;
                     let singular_name = expand_name(toasty, &rel.singular);
+                    let pair = expand_pair(toasty, ty, rel.pair.as_ref());
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
-                    field_ty = quote!(<#ty as #toasty::Relation>::has_many_field_ty(#singular_name));
+                    field_ty = quote!(<#ty as #toasty::Relation>::has_many_field_ty(#singular_name, #pair));
                 }
                 FieldTy::HasOne(rel) => {
                     let ty = &rel.ty;
+                    let pair = expand_pair(toasty, ty, rel.pair.as_ref());
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
-                    field_ty = quote!(<#ty as #toasty::Relation>::has_one_field_ty());
+                    field_ty = quote!(<#ty as #toasty::Relation>::has_one_field_ty(#pair));
                 }
             }
 
@@ -192,6 +207,8 @@ impl Expand<'_> {
                 }
             };
 
+            let versionable = field.attrs.versionable;
+
             quote! {
                 #toasty::core::schema::app::Field {
                     id: #toasty::core::schema::app::FieldId {
@@ -203,6 +220,7 @@ impl Expand<'_> {
                     nullable: #nullable,
                     primary_key: #primary_key,
                     auto: #auto,
+                    versionable: #versionable,
                     constraints: vec![],
                     variant: None,
                 }
@@ -371,5 +389,19 @@ pub(super) fn expand_name(toasty: &TokenStream, name: &Name) -> TokenStream {
         #toasty::core::schema::Name {
             parts: vec![#( #parts ),*],
         }
+    }
+}
+
+fn expand_pair(
+    toasty: &TokenStream,
+    target_ty: &syn::Type,
+    pair: Option<&syn::Ident>,
+) -> TokenStream {
+    match pair {
+        Some(ident) => {
+            let name = ident.to_string();
+            quote! { Some(<#target_ty as #toasty::Relation>::field_name_to_id(#name)) }
+        }
+        None => quote! { None },
     }
 }

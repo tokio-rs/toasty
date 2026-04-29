@@ -7,7 +7,7 @@ use super::{
 };
 use crate::stmt;
 
-use std::collections::{HashMap, HashSet};
+use hashbrown::{HashMap, HashSet};
 
 struct Verify<'a> {
     schema: &'a Schema,
@@ -40,6 +40,25 @@ impl Verify<'_> {
         self.verify_table_indices_and_nullable();
         self.verify_auto_increment_columns()?;
         self.verify_enum_type_names_are_unique()?;
+        self.verify_at_most_one_version_field()?;
+
+        Ok(())
+    }
+
+    fn verify_at_most_one_version_field(&self) -> Result<()> {
+        for model in self.schema.app.models() {
+            let super::app::Model::Root(root) = model else {
+                continue;
+            };
+
+            let count = root.fields.iter().filter(|f| f.versionable).count();
+            if count > 1 {
+                return Err(crate::Error::invalid_schema(format!(
+                    "model `{}` has {count} versionable fields; only one field may be marked versionable",
+                    root.name
+                )));
+            }
+        }
 
         Ok(())
     }

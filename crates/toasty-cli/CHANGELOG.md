@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0](https://github.com/tokio-rs/toasty/compare/toasty-cli-v0.4.0...toasty-cli-v0.5.0) - 2026-04-27
+
+### Added
+
+- Generate migrations with timestamp prefixes ([#684])
+- Add newlines at the end of generated migration files ([#683])
+
+[#683]: https://github.com/tokio-rs/toasty/pull/683
+[#684]: https://github.com/tokio-rs/toasty/pull/684
+
 ## [0.3.0](https://github.com/tokio-rs/toasty/compare/toasty-cli-v0.2.0...toasty-cli-v0.3.0) - 2026-04-03
 
 ### Other

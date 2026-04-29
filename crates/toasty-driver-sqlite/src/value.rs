@@ -37,6 +37,11 @@ impl Value {
                 stmt::Type::U64 => stmt::Value::U64(value as u64),
                 _ => todo!("ty={ty:#?}"),
             },
+            Some(SqlValue::Real(value)) => match ty {
+                stmt::Type::F32 => stmt::Value::F32(value as f32),
+                stmt::Type::F64 => stmt::Value::F64(value),
+                _ => todo!("ty={ty:#?}"),
+            },
             Some(SqlValue::Text(value)) => match ty {
                 stmt::Type::Uuid => stmt::Value::Uuid(value.parse().expect("text is a valid uuid")),
                 _ => stmt::Value::String(value),
@@ -46,7 +51,6 @@ impl Value {
                 _ => todo!("value={value:#?}"),
             },
             None => stmt::Value::Null,
-            _ => todo!("value={value:#?}"),
         };
 
         Value(core_value)
@@ -68,6 +72,8 @@ impl ToSql for Value {
             Value::U16(v) => Ok(ToSqlOutput::Owned(SqlValue::Integer(*v as i64))),
             Value::U32(v) => Ok(ToSqlOutput::Owned(SqlValue::Integer(*v as i64))),
             Value::U64(v) => Ok(ToSqlOutput::Owned(SqlValue::Integer(*v as i64))),
+            Value::F32(v) => Ok(ToSqlOutput::Owned(SqlValue::Real(*v as f64))),
+            Value::F64(v) => Ok(ToSqlOutput::Owned(SqlValue::Real(*v))),
             Value::String(v) => Ok(ToSqlOutput::Borrowed(ValueRef::Text(v.as_bytes()))),
             Value::Bytes(v) => Ok(ToSqlOutput::Borrowed(ValueRef::Blob(&v[..]))),
             Value::Null => Ok(ToSqlOutput::Owned(SqlValue::Null)),

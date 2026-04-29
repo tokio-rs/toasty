@@ -102,6 +102,16 @@ impl LowerStatement<'_, '_> {
             }
         }
 
+        // Initialize version fields to 1 if not already set by the user.
+        for field in &model.fields {
+            if field.is_versionable() {
+                let mut field_expr = expr.entry_mut(field.id.index);
+                if field_expr.is_default() || field_expr.is_value_null() {
+                    field_expr.insert(stmt::Value::U64(1).into());
+                }
+            }
+        }
+
         // We have to handle auto fields first because they are often the
         // identifier which may be referenced to handle associations.
         for field in &model.fields {
@@ -151,7 +161,7 @@ impl LowerStatement<'_, '_> {
         single: bool,
     ) {
         // If there is no returning statement, there is nothing to convert
-        let Some(stmt::Returning::Expr(projection)) = returning else {
+        let Some(stmt::Returning::Project(projection)) = returning else {
             return;
         };
 
@@ -192,7 +202,7 @@ impl LowerStatement<'_, '_> {
             converted.push(converted_row);
         }
 
-        *returning = Some(stmt::Returning::Value(if single {
+        *returning = Some(stmt::Returning::Expr(if single {
             assert!(converted.len() == 1);
             converted.into_iter().next().unwrap()
         } else {

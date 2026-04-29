@@ -43,7 +43,7 @@ impl LowerStatement<'_, '_> {
     ///
     /// Can be constantized to:
     /// ```text
-    /// stmt::Returning::Value(vec![
+    /// stmt::Returning::Expr(vec![
     ///     Record { id: '123', name: 'Alice' },
     ///     Record { id: '456', name: 'Bob' },
     /// ])
@@ -67,8 +67,8 @@ impl LowerStatement<'_, '_> {
     ///    - For each INSERT row, evaluate the RETURNING projection
     ///    - This produces a `stmt::Value` for each row
     ///
-    /// 3. **Replace** `stmt::Returning::Expr(projection)` with
-    ///    `stmt::Returning::Value(values)`
+    /// 3. **Replace** `stmt::Returning::Project(projection)` with
+    ///    `stmt::Returning::Expr(values)`
     ///    - Single-row inserts return a single value
     ///    - Multi-row inserts return a list of values
     ///
@@ -89,14 +89,14 @@ impl LowerStatement<'_, '_> {
         source: &stmt::Query,
     ) {
         match returning {
-            stmt::Returning::Expr(project) => {
+            stmt::Returning::Project(project) => {
                 if let Some(xformed_returning) =
                     self.constantize_insert_returning_projection(project, source)
                 {
                     *returning = xformed_returning;
                 }
             }
-            stmt::Returning::Value(expr) => self.constantize_insert_returning_expr(expr, source),
+            stmt::Returning::Expr(expr) => self.constantize_insert_returning_expr(expr, source),
             _ => {}
         }
     }
@@ -215,7 +215,7 @@ impl LowerStatement<'_, '_> {
             }
 
             // Replace the expression-based RETURNING with a constant value
-            Some(stmt::Returning::Value(if source.single {
+            Some(stmt::Returning::Expr(if source.single {
                 // Single row insert: return just the one value
                 constantized
                     .into_iter()
@@ -306,7 +306,7 @@ impl LowerStatement<'_, '_> {
             source: ConstantizeSource::UpdateAssignments { assignments },
         };
 
-        let stmt::Returning::Expr(project) = returning else {
+        let stmt::Returning::Project(project) = returning else {
             // Already a constant value (e.g., empty record for batch
             // unit-returning); nothing to constantize.
             return;
@@ -315,7 +315,7 @@ impl LowerStatement<'_, '_> {
         project.substitute(input);
 
         if let Ok(row) = project.eval_const() {
-            *returning = stmt::Returning::Expr(row.into());
+            *returning = stmt::Returning::Project(row.into());
         }
     }
 }

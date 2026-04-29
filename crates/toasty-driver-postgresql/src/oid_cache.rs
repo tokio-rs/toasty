@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use hashbrown::{HashMap, HashSet};
 
 use toasty_core::{Result, schema::db};
 use tokio_postgres::{

@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-v0.4.0...toasty-driver-integration-suite-v0.5.0) - 2026-04-27
+
+### Added
+
+- String prefix filtering with `starts_with` and `like` operators ([#745])
+- Connection pool configuration to Db builder ([#759])
+- Optimistic concurrency control for DynamoDB with `#[version]` attribute ([#694])
+- Array syntax for partition/local macro attributes ([#738])
+- `pair` attribute to disambiguate `has_many`/`has_one` relationships ([#746])
+- `Limit::Offset` support in DynamoDB driver ([#674])
+- Float type support ([#687])
+- Native database enum type support for embedded enums ([#665])
+- Multi-column composite index support ([#664])
+
+### Fixed
+
+- Preserve non-reference constraints when lifting BelongsTo subqueries ([#777])
+- Deduplicated GetByKey input keys and strengthened HashIndex invariants ([#750])
+- Support for raw identifier fields in model schema ([#761])
+- Nested includes no longer overwritten when sharing a prefix ([#699])
+- [**breaking**] `.first()` returns first row instead of panicking on multiple matches ([#693])
+
+[#664]: https://github.com/tokio-rs/toasty/pull/664
+[#665]: https://github.com/tokio-rs/toasty/pull/665
+[#674]: https://github.com/tokio-rs/toasty/pull/674
+[#687]: https://github.com/tokio-rs/toasty/pull/687
+[#693]: https://github.com/tokio-rs/toasty/pull/693
+[#694]: https://github.com/tokio-rs/toasty/pull/694
+[#699]: https://github.com/tokio-rs/toasty/pull/699
+[#738]: https://github.com/tokio-rs/toasty/pull/738
+[#745]: https://github.com/tokio-rs/toasty/pull/745
+[#746]: https://github.com/tokio-rs/toasty/pull/746
+[#750]: https://github.com/tokio-rs/toasty/pull/750
+[#759]: https://github.com/tokio-rs/toasty/pull/759
+[#761]: https://github.com/tokio-rs/toasty/pull/761
+[#777]: https://github.com/tokio-rs/toasty/pull/777
+
 ## [0.4.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-v0.3.0...toasty-driver-integration-suite-v0.4.0) - 2026-04-11
 
 ### Added

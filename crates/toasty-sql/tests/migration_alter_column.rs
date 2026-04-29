@@ -20,6 +20,7 @@ fn make_column(table_id: usize, index: usize, name: &str, storage_ty: Type) -> C
         nullable: false,
         primary_key: index == 0,
         auto_increment: false,
+        versionable: false,
     }
 }
 
@@ -297,6 +298,111 @@ fn alter_column_multiple_changes_postgresql() {
         vec![
             "ALTER TABLE \"users\" ALTER COLUMN \"value\" TYPE TEXT;",
             "ALTER TABLE \"users\" ALTER COLUMN \"value\" SET NOT NULL;",
+        ]
+    );
+}
+
+#[test]
+fn alter_column_rename_and_change_type_postgresql() {
+    // Column renamed is_admin → user_type AND type changed Boolean → Text
+    // The type change must reference the column by its OLD name; the rename
+    // therefore has to come last. (See issue #755.)
+    let from = Schema {
+        tables: vec![make_table(
+            0,
+            "users",
+            vec![
+                make_column(0, 0, "id", Type::Integer(8)),
+                make_column(0, 1, "is_admin", Type::Boolean),
+            ],
+        )],
+    };
+
+    let mut renamed = make_column(0, 1, "user_type", Type::Text);
+    renamed.primary_key = false;
+
+    let to = Schema {
+        tables: vec![make_table(
+            0,
+            "users",
+            vec![make_column(0, 0, "id", Type::Integer(8)), renamed],
+        )],
+    };
+
+    let mut hints = RenameHints::new();
+    hints.add_column_hint(
+        ColumnId {
+            table: TableId(0),
+            index: 1,
+        },
+        ColumnId {
+            table: TableId(0),
+            index: 1,
+        },
+    );
+
+    let diff = SchemaDiff::from(&from, &to, &hints);
+    let stmts = MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
+    let sql = serialize_migration(&stmts, "postgresql");
+
+    assert_eq!(
+        sql,
+        vec![
+            "ALTER TABLE \"users\" ALTER COLUMN \"is_admin\" TYPE TEXT;",
+            "ALTER TABLE \"users\" RENAME COLUMN \"is_admin\" TO \"user_type\";",
+        ]
+    );
+}
+
+#[test]
+fn alter_column_rename_and_drop_not_null_postgresql() {
+    // Column renamed name → full_name AND nullability changed NOT NULL → NULL.
+    // Both changes must reference the OLD column name, so the rename comes
+    // last.
+    let from = Schema {
+        tables: vec![make_table(
+            0,
+            "users",
+            vec![
+                make_column(0, 0, "id", Type::Integer(8)),
+                make_column(0, 1, "name", Type::Text),
+            ],
+        )],
+    };
+
+    let mut renamed = make_column(0, 1, "full_name", Type::Text);
+    renamed.primary_key = false;
+    renamed.nullable = true;
+
+    let to = Schema {
+        tables: vec![make_table(
+            0,
+            "users",
+            vec![make_column(0, 0, "id", Type::Integer(8)), renamed],
+        )],
+    };
+
+    let mut hints = RenameHints::new();
+    hints.add_column_hint(
+        ColumnId {
+            table: TableId(0),
+            index: 1,
+        },
+        ColumnId {
+            table: TableId(0),
+            index: 1,
+        },
+    );
+
+    let diff = SchemaDiff::from(&from, &to, &hints);
+    let stmts = MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
+    let sql = serialize_migration(&stmts, "postgresql");
+
+    assert_eq!(
+        sql,
+        vec![
+            "ALTER TABLE \"users\" ALTER COLUMN \"name\" DROP NOT NULL;",
+            "ALTER TABLE \"users\" RENAME COLUMN \"name\" TO \"full_name\";",
         ]
     );
 }

@@ -395,6 +395,22 @@ fn synthesize(expr: &stmt::Expr, cx: &Cx<'_>, params: &mut [TypedValue]) -> Ty {
             Ty::Inferred(db::Type::Boolean)
         }
 
+        // StartsWith — both sides are strings. Reaches here only on drivers
+        // that natively support it (e.g., DynamoDB); SQL drivers lower it to
+        // Like during the lowering phase.
+        stmt::Expr::StartsWith(e) => {
+            check(&e.expr, &Ty::Inferred(db::Type::Text), params);
+            check(&e.prefix, &Ty::Inferred(db::Type::Text), params);
+            Ty::Inferred(db::Type::Boolean)
+        }
+
+        // Like — both sides are strings
+        stmt::Expr::Like(e) => {
+            check(&e.expr, &Ty::Inferred(db::Type::Text), params);
+            check(&e.pattern, &Ty::Inferred(db::Type::Text), params);
+            Ty::Inferred(db::Type::Boolean)
+        }
+
         // Values that weren't extracted (Null, Default)
         stmt::Expr::Value(stmt::Value::Null) => Ty::Unknown,
         stmt::Expr::Default => Ty::Unknown,
