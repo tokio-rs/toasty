@@ -264,8 +264,11 @@ pub async fn deferred_optional_create_returns_none_loaded(t: &mut Test) -> Resul
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), requires(sql))]
 pub async fn deferred_filter_does_not_load_field(t: &mut Test) -> Result<()> {
+    // SQL-only: a bare predicate on the deferred field requires a full table
+    // scan. The DDB equivalent is `deferred_pk_filter_does_not_load_field`,
+    // which grounds the query on the primary key.
     #[derive(Debug, toasty::Model)]
     struct Document {
         #[key]
@@ -303,6 +306,59 @@ pub async fn deferred_filter_does_not_load_field(t: &mut Test) -> Result<()> {
     assert_eq!(1, docs.len());
     assert_eq!("First", docs[0].title);
     assert!(docs[0].body.is_unloaded());
+
+    Ok(())
+}
+
+#[driver_test(id(ID))]
+pub async fn deferred_pk_filter_does_not_load_field(t: &mut Test) -> Result<()> {
+    // Same coverage as `deferred_filter_does_not_load_field`, expressed as a
+    // PK-grounded query so it runs on DDB. The deferred field appears in the
+    // filter but is still left unloaded in the result.
+    #[derive(Debug, toasty::Model)]
+    struct Document {
+        #[key]
+        #[auto]
+        id: ID,
+
+        title: String,
+
+        #[deferred]
+        body: toasty::Deferred<String>,
+    }
+
+    let mut db = t.setup_db(models!(Document)).await;
+
+    let alpha = toasty::create!(Document {
+        title: "First".to_string(),
+        body: "alpha body".to_string(),
+    })
+    .exec(&mut db)
+    .await?;
+
+    toasty::create!(Document {
+        title: "Second".to_string(),
+        body: "beta body".to_string(),
+    })
+    .exec(&mut db)
+    .await?;
+
+    // Match on the PK, with the deferred field as an additional filter.
+    let matched = Document::filter_by_id(alpha.id)
+        .filter(Document::fields().body().eq("alpha body".to_string()))
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(1, matched.len());
+    assert_eq!("First", matched[0].title);
+    assert!(matched[0].body.is_unloaded());
+
+    // The deferred predicate filters the row out when it does not match.
+    let missed = Document::filter_by_id(alpha.id)
+        .filter(Document::fields().body().eq("beta body".to_string()))
+        .exec(&mut db)
+        .await?;
+    assert!(missed.is_empty());
 
     Ok(())
 }
