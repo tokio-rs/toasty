@@ -71,9 +71,11 @@ impl ToastyCli {
     pub fn standalone() -> Result<Self> {
         let project_root = std::env::current_dir()
             .context("resolving current working directory for standalone CLI")?;
+        let config = Config::load_or_default(&project_root)
+            .context("loading Toasty.toml from project root")?;
         Ok(Self {
             db: None,
-            config: Config::default(),
+            config,
             project_root: Some(project_root),
         })
     }

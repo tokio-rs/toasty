@@ -41,10 +41,26 @@ impl Config {
 
     /// Load configuration from Toasty.toml in the project root
     pub fn load() -> Result<Self> {
-        let path = Path::new("Toasty.toml");
+        Self::load_from(Path::new("Toasty.toml"))
+    }
+
+    /// Load configuration from a specific path.
+    pub fn load_from(path: &Path) -> Result<Self> {
         let contents = fs::read_to_string(path)?;
         let config: Config = toml::from_str(&contents)?;
         Ok(config)
+    }
+
+    /// Load configuration from `<project_root>/Toasty.toml`, falling back to
+    /// [`Config::default`] if the file does not exist. Used by the standalone
+    /// CLI; library callers can wire this up themselves via [`Config::load`].
+    pub fn load_or_default(project_root: &Path) -> Result<Self> {
+        let path = project_root.join("Toasty.toml");
+        if path.exists() {
+            Self::load_from(&path)
+        } else {
+            Ok(Self::default())
+        }
     }
 
     /// Set the migration configuration
