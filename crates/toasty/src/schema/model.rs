@@ -1,3 +1,4 @@
+use super::create_meta::CreateMeta;
 use super::{Load, Register};
 use crate::stmt::{IntoExpr, IntoInsert, Path};
 
@@ -21,6 +22,10 @@ pub trait Model: Register + Load<Output = Self> + Sized {
 
     /// A typed path from `Origin` into this model.
     type Path<Origin>;
+
+    /// Metadata about the model's fields for compile-time validation of
+    /// `create!` invocations.
+    const CREATE_META: CreateMeta;
 
     /// Construct a model path from a [`Path`] targeting this model.
     fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin>;
