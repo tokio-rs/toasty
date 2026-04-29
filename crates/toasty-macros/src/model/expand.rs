@@ -225,6 +225,10 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     } else {
         quote! { #toasty::core::stmt::Type::I64 }
     };
+
+    // Generate the storage_ty token for the discriminant FieldPrimitive.
+    let storage_ty_tokens = e.expand_enum_storage_ty();
+
     let field_struct_ident = &embedded_enum.field_struct_ident;
     let field_list_struct_ident = &embedded_enum.field_list_struct_ident;
     let enum_field_struct = e.expand_enum_field_struct();
@@ -249,7 +253,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
                         name: #name,
                         discriminant: #toasty::core::schema::app::FieldPrimitive {
                             ty: #disc_ty,
-                            storage_ty: ::std::option::Option::None,
+                            storage_ty: #storage_ty_tokens,
                             serialize: ::std::option::Option::None,
                         },
                         variants: vec![ #( #variant_tokens ),* ],

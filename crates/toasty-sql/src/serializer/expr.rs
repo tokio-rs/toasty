@@ -1,64 +1,30 @@
 use toasty_core::stmt::ResolvedRef;
 
-use super::{ColumnAlias, Comma, Delimited, Params, ToSql};
+use super::{ColumnAlias, Comma, Delimited, Ident, ToSql};
 
 use crate::{
-    serializer::{ExprContext, Flavor, Ident},
+    serializer::{ExprContext, Flavor},
     stmt,
 };
 
-/// Wrapper for serializing a field within an INSERT VALUES record with type hints
-struct TypeHintedField<'a> {
-    field_index: usize,
-    expr: &'a stmt::Expr,
-}
-
-impl<'a> ToSql for TypeHintedField<'a> {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
-        // Get type hint from insert context if available
-        let type_hint = f.insert_context.as_ref().and_then(|insert_ctx| {
-            if self.field_index < insert_ctx.columns.len()
-                && !matches!(self.expr, stmt::Expr::Default)
-            {
-                let col_id = insert_ctx.columns[self.field_index];
-                let table = &cx.schema().tables[insert_ctx.table_id.0];
-                Some(table.columns[col_id.index].ty.clone())
-            } else {
-                None
-            }
-        });
-
-        // If this is a Value expr with a type hint, serialize with the hint
-        if let (stmt::Expr::Value(value), Some(type_hint)) = (self.expr, type_hint) {
-            let placeholder = f.params.push(value, Some(&type_hint));
-            fmt!(cx, f, placeholder);
-        } else {
-            // Other expr types (including Default) serialize normally
-            self.expr.to_sql(cx, f);
-        }
-    }
-}
-
 impl ToSql for &stmt::Expr {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
-        use stmt::Expr::*;
-
+    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         match self {
-            And(expr) => {
+            stmt::Expr::And(expr) => {
                 fmt!(cx, f, Delimited(&expr.operands, " AND "));
             }
-            BinaryOp(expr) => {
+            stmt::Expr::BinaryOp(expr) => {
                 assert!(!expr.lhs.is_value_null());
                 assert!(!expr.rhs.is_value_null());
 
                 fmt!(cx, f, expr.lhs " " expr.op " " expr.rhs);
             }
-            Exists(expr) => {
+            stmt::Expr::Exists(expr) => {
                 f.depth += 1;
                 fmt!(cx, f, "EXISTS (" expr.subquery ")");
                 f.depth -= 1;
             }
-            Func(stmt::ExprFunc::Count(func)) => match (&func.arg, &func.filter) {
+            stmt::Expr::Func(stmt::ExprFunc::Count(func)) => match (&func.arg, &func.filter) {
                 (None, None) => fmt!(cx, f, "COUNT(*)"),
                 // Mysql does not support filters, so translate it to an expression
                 (None, Some(expr)) if f.serializer.is_mysql() => {
@@ -67,39 +33,54 @@ impl ToSql for &stmt::Expr {
                 (None, Some(expr)) => fmt!(cx, f, "COUNT(*) FILTER (WHERE " expr ")"),
                 _ => todo!("func={func:#?}"),
             },
-            Func(stmt::ExprFunc::LastInsertId(_)) => {
+            stmt::Expr::Func(stmt::ExprFunc::LastInsertId(_)) => {
                 fmt!(cx, f, "LAST_INSERT_ID()")
             }
-            InList(expr) => {
+            stmt::Expr::Ident(name) => {
+                fmt!(cx, f, Ident(name));
+            }
+            stmt::Expr::InList(expr) => {
                 fmt!(cx, f, expr.expr " IN " expr.list);
             }
-            InSubquery(expr) => {
+            stmt::Expr::InSubquery(expr) => {
                 fmt!(cx, f, expr.expr " IN (" expr.query ")");
             }
-            IsNull(expr) => {
+            stmt::Expr::IsNull(expr) => {
                 fmt!(cx, f, expr.expr " IS NULL");
             }
-            Not(expr) => {
+            stmt::Expr::Like(expr) => {
+                fmt!(cx, f, expr.expr " LIKE " expr.pattern);
+                if let Some(escape) = expr.escape {
+                    let escape = &stmt::Value::String(escape.to_string());
+                    fmt!(cx, f, " ESCAPE " escape);
+                }
+            }
+            stmt::Expr::StartsWith(expr) => {
+                // The lowering pass leaves `StartsWith` in place when
+                // `Capability::native_prefix_match_op` is true. PostgreSQL
+                // is the only such SQL flavor today (`^@` operator).
+                match f.serializer.flavor {
+                    Flavor::Postgresql => {
+                        fmt!(cx, f, expr.expr " ^@ " expr.prefix);
+                    }
+                    Flavor::Sqlite | Flavor::Mysql => {
+                        unreachable!(
+                            "StartsWith should have been lowered to LIKE for non-PostgreSQL flavors"
+                        );
+                    }
+                }
+            }
+            stmt::Expr::Not(expr) => {
                 fmt!(cx, f, "NOT (" expr.expr ")");
             }
-            Or(expr) => {
+            stmt::Expr::Or(expr) => {
                 fmt!(cx, f, Delimited(&expr.operands, " OR "));
             }
-            Record(expr) => {
-                // Use TypeHintedField wrapper to provide type hints from INSERT context
-                let fields =
-                    Comma(
-                        expr.fields
-                            .iter()
-                            .enumerate()
-                            .map(|(i, field)| TypeHintedField {
-                                field_index: i,
-                                expr: field,
-                            }),
-                    );
+            stmt::Expr::Record(expr) => {
+                let fields = Comma(expr.fields.iter());
                 fmt!(cx, f, "(" fields ")");
             }
-            Reference(expr_reference @ stmt::ExprReference::Column(expr_column)) => {
+            stmt::Expr::Reference(expr_reference @ stmt::ExprReference::Column(expr_column)) => {
                 if f.alias {
                     let depth = f.depth - expr_column.nesting;
 
@@ -123,12 +104,24 @@ impl ToSql for &stmt::Expr {
                     fmt!(cx, f, Ident(&column.name))
                 }
             }
-            Stmt(expr) => {
+            stmt::Expr::Stmt(expr) => {
                 let stmt = &*expr.stmt;
                 fmt!(cx, f, "(" stmt ")");
             }
-            Value(expr) => expr.to_sql(cx, f),
-            Default => match f.serializer.flavor {
+            stmt::Expr::List(expr) => {
+                let items = Comma(expr.items.iter());
+                fmt!(cx, f, "(" items ")");
+            }
+            stmt::Expr::Value(expr) => expr.to_sql(cx, f),
+            stmt::Expr::Arg(arg) => {
+                // Pre-extracted bind parameter placeholder — render as a
+                // positional parameter. The arg position is 0-based; the
+                // placeholder is 1-based.
+                f.arg_positions.push(arg.position);
+                let placeholder = super::Placeholder(arg.position + 1);
+                fmt!(cx, f, placeholder);
+            }
+            stmt::Expr::Default => match f.serializer.flavor {
                 Flavor::Postgresql | Flavor::Mysql => fmt!(cx, f, "DEFAULT"),
                 // SQLite does not support the DEFAULT keyword but NULL acts similarly.
                 Flavor::Sqlite => fmt!(cx, f, "NULL"),
@@ -139,7 +132,7 @@ impl ToSql for &stmt::Expr {
 }
 
 impl ToSql for &stmt::BinaryOp {
-    fn to_sql<P: Params>(self, _cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql(self, _cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         f.dst.push_str(match self {
             stmt::BinaryOp::Eq => "=",
             stmt::BinaryOp::Gt => ">",

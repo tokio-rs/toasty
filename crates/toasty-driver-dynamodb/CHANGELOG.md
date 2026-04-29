@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-dynamodb-v0.4.0...toasty-driver-dynamodb-v0.5.0) - 2026-04-27
+
+### Added
+
+- Add starts_with and LIKE string prefix filter operators ([#745])
+- Add #[version] optimistic concurrency control for DynamoDB ([#694])
+- Add Limit::Offset support to DynamoDB driver ([#674])
+- Add support for floats ([#687])
+- Add native database enum type support for embedded enums ([#665])
+- Add multi-column composite index support ([#664])
+
+[#664]: https://github.com/tokio-rs/toasty/pull/664
+[#665]: https://github.com/tokio-rs/toasty/pull/665
+[#674]: https://github.com/tokio-rs/toasty/pull/674
+[#687]: https://github.com/tokio-rs/toasty/pull/687
+[#694]: https://github.com/tokio-rs/toasty/pull/694
+[#745]: https://github.com/tokio-rs/toasty/pull/745
+
+## [0.4.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-dynamodb-v0.3.0...toasty-driver-dynamodb-v0.4.0) - 2026-04-11
+
+### Added
+
+- use on-demand billing for DynamoDB table and GSI creation ([#618](https://github.com/tokio-rs/toasty/pull/618))
+- support unsigned integer primary keys in DynamoDB ([#617](https://github.com/tokio-rs/toasty/pull/617))
+
 ## [0.3.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-dynamodb-v0.2.0...toasty-driver-dynamodb-v0.3.0) - 2026-04-03
 
 ### Other

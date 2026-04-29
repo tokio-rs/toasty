@@ -5,6 +5,11 @@ on:
     branches:
       - main
 
+env:
+  # Pinned so a new Rust release cannot break release-plz on its own.
+  # Bumped automatically by Renovate; see .github/renovate.json5.
+  RUST_STABLE_VERSION: "1.95.0"
+
 jobs:
   release-plz-release:
     name: Release-plz release
@@ -23,7 +28,9 @@ jobs:
           token: ${{ secrets.RELEASE_PLZ_TOKEN }}
       - &install-rust
         name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_STABLE_VERSION }}
       - name: Run release-plz
         uses: release-plz/action@v0.5
         with:
@@ -44,9 +51,17 @@ jobs:
     steps:
       - *checkout
       - *install-rust
+      # The changelog postprocessor in release-plz.toml shells out to
+      # `claude` to filter each rendered release section down to changes
+      # that matter to library consumers. The script falls back to
+      # passthrough on any error, so an outage or missing token will
+      # surface the unfiltered changelog rather than block the release.
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
       - name: Run release-plz
         uses: release-plz/action@v0.5
         with:
           command: release-pr
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

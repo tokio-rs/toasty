@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0](https://github.com/tokio-rs/toasty/compare/toasty-v0.4.0...toasty-v0.5.0) - 2026-04-27
+
+### Added
+
+- String prefix filter operators (`starts_with` and `LIKE`) ([#745])
+- Connection pool configuration ([#759])
+- Optimistic concurrency control for DynamoDB via `#[version]` attribute ([#694])
+- Pair attributes to disambiguate has_many/has_one relationships ([#746])
+- Limit::Offset pagination for DynamoDB ([#674])
+- Float field type support ([#687])
+- Native database enums for embedded enums ([#665])
+- Multiple external crate glob imports in models! macro ([#685])
+
+### Fixed
+
+- Preserve non-reference constraints when lifting BelongsTo IN-subquery ([#777])
+- Deduplicate GetByKey input keys and strengthen HashIndex invariant ([#750])
+- Gate simplification rules on expression stability ([#703])
+- Nested includes sharing a prefix being overwritten ([#699])
+- [**breaking**] `.first()` returns the first row instead of panicking on multiple matches ([#693])
+
+[#665]: https://github.com/tokio-rs/toasty/pull/665
+[#674]: https://github.com/tokio-rs/toasty/pull/674
+[#685]: https://github.com/tokio-rs/toasty/pull/685
+[#687]: https://github.com/tokio-rs/toasty/pull/687
+[#693]: https://github.com/tokio-rs/toasty/pull/693
+[#694]: https://github.com/tokio-rs/toasty/pull/694
+[#699]: https://github.com/tokio-rs/toasty/pull/699
+[#703]: https://github.com/tokio-rs/toasty/pull/703
+[#745]: https://github.com/tokio-rs/toasty/pull/745
+[#746]: https://github.com/tokio-rs/toasty/pull/746
+[#750]: https://github.com/tokio-rs/toasty/pull/750
+[#759]: https://github.com/tokio-rs/toasty/pull/759
+[#777]: https://github.com/tokio-rs/toasty/pull/777
+
+## [0.4.0](https://github.com/tokio-rs/toasty/compare/toasty-v0.3.0...toasty-v0.4.0) - 2026-04-11
+
+### Added
+
+- add support for newtype embedded structs ([#634](https://github.com/tokio-rs/toasty/pull/634))
+- auto-discover related models through fields ([#635](https://github.com/tokio-rs/toasty/pull/635))
+- support boxed and smart pointer foreign keys in has_many relations ([#630](https://github.com/tokio-rs/toasty/pull/630))
+
+### Other
+
+- make FieldName::app_name optional to support unnamed fields ([#633](https://github.com/tokio-rs/toasty/pull/633))
+
 ## [0.3.0](https://github.com/tokio-rs/toasty/compare/toasty-v0.2.0...toasty-v0.3.0) - 2026-04-03
 
 ### Added

@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.4.0...toasty-core-v0.5.0) - 2026-04-27
+
+### Added
+
+- add starts_with and LIKE string prefix filter operators ([#745])
+- add #[version] optimistic concurrency control for DynamoDB ([#694])
+- support disambiguating has_many/has_one with pair attribute ([#746])
+- add Limit::Offset support to DynamoDB driver ([#674])
+- add support for floats ([#687])
+- add native database enum type support for embedded enums ([#665])
+- export `SchemaMutations` for external drivers ([#686])
+
+### Fixed
+
+- fix GetByKey to handle duplicate input keys correctly ([#750])
+- fix query results when simplification rules encounter unstable expressions ([#703])
+
+[#665]: https://github.com/tokio-rs/toasty/pull/665
+[#674]: https://github.com/tokio-rs/toasty/pull/674
+[#686]: https://github.com/tokio-rs/toasty/pull/686
+[#687]: https://github.com/tokio-rs/toasty/pull/687
+[#694]: https://github.com/tokio-rs/toasty/pull/694
+[#703]: https://github.com/tokio-rs/toasty/pull/703
+[#745]: https://github.com/tokio-rs/toasty/pull/745
+[#746]: https://github.com/tokio-rs/toasty/pull/746
+[#750]: https://github.com/tokio-rs/toasty/pull/750
+
+## [0.4.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.3.0...toasty-core-v0.4.0) - 2026-04-11
+
+### Added
+
+- add support for newtype embedded structs ([#634](https://github.com/tokio-rs/toasty/pull/634))
+- auto-discover related models through fields ([#635](https://github.com/tokio-rs/toasty/pull/635))
+
+### Other
+
+- make Error non_exaustive ([#636](https://github.com/tokio-rs/toasty/pull/636))
+- make FieldName::app_name optional to support unnamed fields ([#633](https://github.com/tokio-rs/toasty/pull/633))
+
 ## [0.3.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.2.0...toasty-core-v0.3.0) - 2026-04-03
 
 ### Added

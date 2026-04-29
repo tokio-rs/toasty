@@ -1,8 +1,31 @@
-use postgres::{
-    Column, Row,
-    types::{IsNull, ToSql, Type, accepts, private::BytesMut, to_sql_checked},
-};
 use toasty_core::stmt::{self, Value as CoreValue};
+use tokio_postgres::{
+    Column, Row,
+    types::{IsNull, Kind, ToSql, Type, private::BytesMut, to_sql_checked},
+};
+
+/// Wrapper for reading string values from PostgreSQL enum columns.
+///
+/// The standard `String::FromSql::accepts()` rejects custom enum types.
+/// This wrapper accepts `Kind::Enum` types and reads the value as UTF-8 text.
+struct EnumString(String);
+
+impl<'a> postgres_types::FromSql<'a> for EnumString {
+    fn from_sql(
+        _ty: &Type,
+        raw: &'a [u8],
+    ) -> std::result::Result<Self, Box<dyn std::error::Error + Sync + Send>> {
+        Ok(EnumString(
+            std::str::from_utf8(raw)
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Sync + Send>)?
+                .to_string(),
+        ))
+    }
+
+    fn accepts(ty: &Type) -> bool {
+        matches!(ty.kind(), Kind::Enum(_))
+    }
+}
 
 #[derive(Debug)]
 pub struct Value(pub(crate) CoreValue);
@@ -132,6 +155,20 @@ impl Value {
             {
                 panic!("TIME requires jiff feature to be enabled")
             }
+        } else if column.type_() == &Type::FLOAT4 {
+            let v = get_or_return_null!(f32);
+            match expected_ty {
+                stmt::Type::F32 => stmt::Value::F32(v),
+                stmt::Type::F64 => stmt::Value::F64(v as f64),
+                _ => panic!("unexpected type for FLOAT4: {expected_ty:#?}"),
+            }
+        } else if column.type_() == &Type::FLOAT8 {
+            let v = get_or_return_null!(f64);
+            match expected_ty {
+                stmt::Type::F32 => stmt::Value::F32(v as f32),
+                stmt::Type::F64 => stmt::Value::F64(v),
+                _ => panic!("unexpected type for FLOAT8: {expected_ty:#?}"),
+            }
         } else if column.type_() == &Type::NUMERIC {
             #[cfg(feature = "rust_decimal")]
             {
@@ -140,6 +177,14 @@ impl Value {
             #[cfg(not(feature = "rust_decimal"))]
             {
                 panic!("NUMERIC requires rust_decimal feature to be enabled")
+            }
+        } else if matches!(column.type_().kind(), Kind::Enum(_)) {
+            // Native database enum types (CREATE TYPE ... AS ENUM) are read as strings.
+            // We use EnumString instead of String because String::FromSql::accepts()
+            // rejects custom enum types.
+            match row.get::<usize, Option<EnumString>>(index) {
+                Some(EnumString(v)) => stmt::Value::String(v),
+                None => return Self(stmt::Value::Null),
             }
         } else {
             todo!(
@@ -192,6 +237,10 @@ impl ToSql for Value {
                 }
                 (*value as i64).to_sql(ty, out)
             }
+            (stmt::Value::F32(value), &Type::FLOAT4) => value.to_sql(ty, out),
+            (stmt::Value::F32(value), &Type::FLOAT8) => (*value as f64).to_sql(ty, out),
+            (stmt::Value::F64(value), &Type::FLOAT4) => (*value as f32).to_sql(ty, out),
+            (stmt::Value::F64(value), &Type::FLOAT8) => value.to_sql(ty, out),
             (stmt::Value::Null, _) => Ok(IsNull::Yes),
             (stmt::Value::String(value), _) => value.to_sql(ty, out),
             (stmt::Value::Bytes(value), &Type::BYTEA) => value.to_sql(ty, out),
@@ -210,20 +259,25 @@ impl ToSql for Value {
         }
     }
 
-    accepts!(
-        BOOL,
-        INT2,
-        INT4,
-        INT8,
-        TEXT,
-        VARCHAR,
-        BYTEA,
-        UUID,
-        NUMERIC,
-        TIMESTAMP,
-        TIMESTAMPTZ,
-        DATE,
-        TIME
-    );
+    fn accepts(ty: &Type) -> bool {
+        matches!(
+            *ty,
+            Type::BOOL
+                | Type::INT2
+                | Type::INT4
+                | Type::INT8
+                | Type::TEXT
+                | Type::FLOAT4
+                | Type::FLOAT8
+                | Type::VARCHAR
+                | Type::BYTEA
+                | Type::UUID
+                | Type::NUMERIC
+                | Type::TIMESTAMP
+                | Type::TIMESTAMPTZ
+                | Type::DATE
+                | Type::TIME
+        ) || matches!(ty.kind(), Kind::Enum(_))
+    }
     to_sql_checked!();
 }

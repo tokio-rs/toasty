@@ -1,6 +1,6 @@
 [package]
 name = "toasty-driver-integration-suite"
-version = "0.3.0"
+version = "0.5.0"
 description = "Integration test suite for Toasty database drivers"
 authors.workspace = true
 edition.workspace = true
@@ -17,6 +17,7 @@ documentation = "https://docs.rs/toasty-driver-integration-suite"
 assert-struct.workspace = true
 async-trait.workspace = true
 bigdecimal.workspace = true
+hashbrown = { workspace = true, features = ["serde"] }
 jiff.workspace = true
 rust_decimal.workspace = true
 serde = { version = "1.0", features = ["derive"] }

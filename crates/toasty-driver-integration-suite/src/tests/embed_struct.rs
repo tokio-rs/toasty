@@ -582,9 +582,9 @@ pub async fn update_with_embedded_field_filter(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// Tests partial updates of embedded struct fields using with_field() builders.
-/// This validates that we can update individual fields within an embedded struct
-/// without replacing the entire struct.
+/// Tests partial updates of embedded struct fields via `stmt::patch` /
+/// `stmt::apply`. This validates that individual fields within an embedded
+/// struct can be updated without replacing the entire struct.
 #[driver_test(id(ID))]
 pub async fn partial_update_embedded_fields(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
@@ -625,9 +625,7 @@ pub async fn partial_update_embedded_fields(t: &mut Test) -> Result<()> {
 
     // Partial update: only change city, leave street and zip unchanged
     user.update()
-        .with_address(|a| {
-            a.city("Seattle");
-        })
+        .address(toasty::stmt::patch(Address::fields().city(), "Seattle"))
         .exec(&mut db)
         .await?;
 
@@ -648,9 +646,10 @@ pub async fn partial_update_embedded_fields(t: &mut Test) -> Result<()> {
 
     // Multiple field update in one call
     user.update()
-        .with_address(|a| {
-            a.city("Portland").zip("97201");
-        })
+        .address(toasty::stmt::apply([
+            toasty::stmt::patch(Address::fields().city(), "Portland"),
+            toasty::stmt::patch(Address::fields().zip(), "97201"),
+        ]))
         .exec(&mut db)
         .await?;
 
@@ -669,14 +668,13 @@ pub async fn partial_update_embedded_fields(t: &mut Test) -> Result<()> {
         zip: "97201",
     });
 
-    // Multiple calls to with_address should accumulate
+    // Multiple calls to the address setter should accumulate
     user.update()
-        .with_address(|a| {
-            a.street("456 Oak Ave");
-        })
-        .with_address(|a| {
-            a.zip("97202");
-        })
+        .address(toasty::stmt::patch(
+            Address::fields().street(),
+            "456 Oak Ave",
+        ))
+        .address(toasty::stmt::patch(Address::fields().zip(), "97202"))
         .exec(&mut db)
         .await?;
 
@@ -1116,9 +1114,10 @@ pub async fn crud_nested_embedded(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// Tests partial updates of deeply nested embedded fields using chained closures.
-/// Validates that `with_outer(|o| o.with_inner(|i| i.field(v)))` updates only
-/// the targeted leaf field, leaving all other fields unchanged in the database.
+/// Tests partial updates of deeply nested embedded fields via nested
+/// `stmt::patch` calls. Validates that patching a leaf field inside an
+/// outer embedded struct updates only that leaf, leaving all other fields
+/// unchanged in the database.
 #[driver_test(id(ID))]
 pub async fn partial_update_nested_embedded(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
@@ -1160,11 +1159,10 @@ pub async fn partial_update_nested_embedded(t: &mut Test) -> Result<()> {
     // street and headquarters.name must remain unchanged.
     company
         .update()
-        .with_headquarters(|h| {
-            h.with_address(|a| {
-                a.city("Seattle");
-            });
-        })
+        .headquarters(toasty::stmt::patch(
+            Office::fields().address().city(),
+            "Seattle",
+        ))
         .exec(&mut db)
         .await?;
 
@@ -1181,9 +1179,10 @@ pub async fn partial_update_nested_embedded(t: &mut Test) -> Result<()> {
     // address fields must remain unchanged.
     company
         .update()
-        .with_headquarters(|h| {
-            h.name("West Coast HQ");
-        })
+        .headquarters(toasty::stmt::patch(
+            Office::fields().name(),
+            "West Coast HQ",
+        ))
         .exec(&mut db)
         .await?;
 
@@ -1197,14 +1196,13 @@ pub async fn partial_update_nested_embedded(t: &mut Test) -> Result<()> {
     });
 
     // Combined update: change headquarters.name and headquarters.address.city
-    // in a single with_headquarters call. street must remain unchanged.
+    // in a single call via stmt::apply. street must remain unchanged.
     company
         .update()
-        .with_headquarters(|h| {
-            h.name("East Coast HQ").with_address(|a| {
-                a.city("Boston");
-            });
-        })
+        .headquarters(toasty::stmt::apply([
+            toasty::stmt::patch(Office::fields().name(), "East Coast HQ"),
+            toasty::stmt::patch(Office::fields().address().city(), "Boston"),
+        ]))
         .exec(&mut db)
         .await?;
 
@@ -1220,8 +1218,9 @@ pub async fn partial_update_nested_embedded(t: &mut Test) -> Result<()> {
 }
 
 /// Tests partial updates of embedded fields using the query/filter-based path.
-/// `User::filter_by_id(id).update().with_address(...)` follows a different code path
-/// than the instance-based `user.update().with_address(...)`, so both need coverage.
+/// `User::filter_by_id(id).update().address(stmt::patch(...))` follows a different
+/// code path than the instance-based `user.update().address(stmt::patch(...))`,
+/// so both need coverage.
 #[driver_test(id(ID))]
 pub async fn query_based_partial_update_embedded(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
@@ -1256,9 +1255,7 @@ pub async fn query_based_partial_update_embedded(t: &mut Test) -> Result<()> {
     // street and zip must remain unchanged.
     User::filter_by_id(user.id)
         .update()
-        .with_address(|a| {
-            a.city("Seattle");
-        })
+        .address(toasty::stmt::patch(Address::fields().city(), "Seattle"))
         .exec(&mut db)
         .await?;
 
@@ -1272,9 +1269,10 @@ pub async fn query_based_partial_update_embedded(t: &mut Test) -> Result<()> {
     // Multiple fields: update city and zip together, leave street unchanged.
     User::filter_by_id(user.id)
         .update()
-        .with_address(|a| {
-            a.city("Portland").zip("97201");
-        })
+        .address(toasty::stmt::apply([
+            toasty::stmt::patch(Address::fields().city(), "Portland"),
+            toasty::stmt::patch(Address::fields().zip(), "97201"),
+        ]))
         .exec(&mut db)
         .await?;
 
@@ -1379,9 +1377,10 @@ pub async fn unit_enum_in_embedded_struct(t: &mut Test) -> Result<()> {
     assert_eq!(found.meta.priority, Priority::High);
 
     task.update()
-        .with_meta(|m| {
-            m.priority(Priority::Normal);
-        })
+        .meta(toasty::stmt::patch(
+            Meta::fields().priority().into(),
+            Priority::Normal,
+        ))
         .exec(&mut db)
         .await?;
 

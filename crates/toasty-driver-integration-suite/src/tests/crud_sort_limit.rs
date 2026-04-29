@@ -174,12 +174,16 @@ pub async fn limit_offset(t: &mut Test) -> Result<()> {
     assert_eq!(items.len(), 5);
 
     let (op, _) = t.log().pop();
-    assert_struct!(op, Operation::QuerySql({
-        stmt: Statement::Query({
-            body: ExprSet::Select({ .. }),
-            limit: Some(_),
-        }),
-    }));
+    if t.capability().sql {
+        assert_struct!(op, Operation::QuerySql({
+            stmt: Statement::Query({
+                body: ExprSet::Select({ .. }),
+                limit: Some(_),
+            }),
+        }));
+    } else {
+        assert_struct!(op, Operation::QueryPk({ .. }));
+    }
 
     t.log().clear();
 
@@ -195,13 +199,17 @@ pub async fn limit_offset(t: &mut Test) -> Result<()> {
     }
 
     let (op, _) = t.log().pop();
-    assert_struct!(op, Operation::QuerySql({
-        stmt: Statement::Query({
-            body: ExprSet::Select({ .. }),
-            order_by: Some(_),
-            limit: Some(_),
-        }),
-    }));
+    if t.capability().sql {
+        assert_struct!(op, Operation::QuerySql({
+            stmt: Statement::Query({
+                body: ExprSet::Select({ .. }),
+                order_by: Some(_),
+                limit: Some(_),
+            }),
+        }));
+    } else {
+        assert_struct!(op, Operation::QueryPk({ .. }));
+    }
 
     t.log().clear();
 
@@ -220,6 +228,38 @@ pub async fn limit_offset(t: &mut Test) -> Result<()> {
     // Limit larger than the result set returns all results
     let items: Vec<_> = Item::all().limit(100).exec(&mut db).await?;
     assert_eq!(items.len(), 20);
+
+    Ok(())
+}
+
+#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(sql))]
+pub async fn first_narrows_to_single_row(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    toasty::create!(User::[
+        { name: "Alice", age: 30 },
+        { name: "Bob", age: 20 },
+        { name: "Carol", age: 40 },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    // Regression for https://github.com/tokio-rs/toasty/issues/692:
+    // `.first()` on a query with multiple matching rows must return the first
+    // row (after any ordering), not panic.
+    let youngest = User::all()
+        .order_by(User::fields().age().asc())
+        .first()
+        .exec(&mut db)
+        .await?;
+    assert_struct!(youngest, Some(_ { name: "Bob", .. }));
+
+    let oldest = User::all()
+        .order_by(User::fields().age().desc())
+        .first()
+        .exec(&mut db)
+        .await?;
+    assert_struct!(oldest, Some(_ { name: "Carol", .. }));
 
     Ok(())
 }

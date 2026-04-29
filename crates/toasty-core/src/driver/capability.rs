@@ -68,6 +68,25 @@ pub struct Capability {
     /// Whether the database has native support for DateTime types.
     pub native_datetime: bool,
 
+    /// Whether the database supports native enum types.
+    ///
+    /// - PostgreSQL: `true` — `CREATE TYPE ... AS ENUM`
+    /// - MySQL: `true` — inline `ENUM('a', 'b')` column type
+    /// - SQLite: `false` — uses `TEXT` + `CHECK` constraint
+    /// - DynamoDB: `false` — plain string attribute
+    pub native_enum: bool,
+
+    /// Whether enum types are standalone named objects requiring separate DDL.
+    ///
+    /// When `true`, migrations must emit `CREATE TYPE` / `ALTER TYPE` for enum
+    /// types. When `false`, enum definitions are inline in column types.
+    ///
+    /// - PostgreSQL: `true` — `CREATE TYPE <name> AS ENUM (...)`
+    /// - MySQL: `false` — inline `ENUM('a', 'b')` on the column
+    /// - SQLite: `false`
+    /// - DynamoDB: `false`
+    pub named_enum_types: bool,
+
     /// Whether the database has native support for Decimal types.
     pub native_decimal: bool,
 
@@ -86,6 +105,18 @@ pub struct Capability {
     /// Whether OR is supported in index key conditions (e.g. DynamoDB KeyConditionExpression).
     /// DynamoDB: false. All other backends: true (SQL backends never use index key conditions).
     pub index_or_predicate: bool,
+
+    /// Whether the database has a native prefix-match operator that does not
+    /// require LIKE-style escaping. When `true`, `starts_with` is left in the
+    /// AST and the driver renders it natively (DynamoDB's `begins_with()`,
+    /// PostgreSQL's `^@`). When `false`, the lowering rewrites it to a
+    /// `LIKE` expression — which requires `native_like` to be `true`.
+    pub native_starts_with: bool,
+
+    /// Whether the database has a native `LIKE` expression. When `false`,
+    /// `Expr::Like` cannot be sent to the driver; `starts_with` lowering
+    /// will not produce one.
+    pub native_like: bool,
 
     /// Whether to test connection pool behavior.
     /// TODO: We only need this for the `connection_per_clone.rs` test, come up with a better way.
@@ -260,6 +291,10 @@ impl Capability {
 
         native_varchar: true,
 
+        // SQLite does not have native enum types; uses TEXT + CHECK
+        native_enum: false,
+        named_enum_types: false,
+
         // SQLite does not have native date/time types
         native_timestamp: false,
         native_date: false,
@@ -272,6 +307,9 @@ impl Capability {
 
         index_or_predicate: true,
 
+        native_starts_with: false,
+        native_like: true,
+
         test_connection_pool: false,
     };
 
@@ -283,6 +321,13 @@ impl Capability {
         select_for_update: true,
         auto_increment: true,
         bigdecimal_implemented: false,
+
+        // PostgreSQL has the `^@` prefix-match operator.
+        native_starts_with: true,
+
+        // PostgreSQL has CREATE TYPE ... AS ENUM
+        native_enum: true,
+        named_enum_types: true,
 
         // PostgreSQL has native date/time types
         native_timestamp: true,
@@ -308,6 +353,10 @@ impl Capability {
         returning_from_mutation: false,
         auto_increment: true,
         bigdecimal_implemented: true,
+
+        // MySQL has inline ENUM('a', 'b') column types
+        native_enum: true,
+        named_enum_types: false,
 
         // MySQL has native date/time types
         native_timestamp: true,
@@ -336,6 +385,8 @@ impl Capability {
         auto_increment: false,
         bigdecimal_implemented: false,
         native_varchar: false,
+        native_enum: false,
+        named_enum_types: false,
 
         // DynamoDB does not have native date/time types
         native_timestamp: false,
@@ -348,6 +399,10 @@ impl Capability {
         decimal_arbitrary_precision: false,
 
         index_or_predicate: false,
+
+        // DynamoDB has `begins_with()` but no LIKE.
+        native_starts_with: true,
+        native_like: false,
 
         test_connection_pool: false,
     };

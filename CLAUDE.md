@@ -22,7 +22,12 @@ cargo test -p tests <test_name>
 # Run tests with specific database drivers (requires running external services)
 cargo test -p tests --features mysql
 cargo test -p tests --features postgresql
-cargo test -p tests --features dynamodb
+
+# DynamoDB only (requires local DynamoDB running)
+cargo test --features dynamodb --no-default-features -- --test-threads=1
+
+# DynamoDB + SQLite
+cargo test --features dynamodb -- --test-threads=1
 
 # Lint
 cargo clippy
@@ -34,21 +39,6 @@ cargo fmt
 ## Workflow
 
 Always run `cargo fmt` after finishing work on a change.
-
-## Commit and PR Conventions
-
-This repository follows the [Conventional Commits](https://www.conventionalcommits.org/) specification.
-All commit messages and PR titles must use the format:
-
-```
-type: description
-```
-
-For example: `feat: add new pattern`, `fix: resolve parsing bug`.
-
-Allowed types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
-
-Scopes are optional. Subjects must begin with a lowercase letter.
 
 ## Architecture
 
@@ -109,6 +99,6 @@ To add a new integration test, add a file to `crates/toasty-driver-integration-s
 
 ### Further Reading
 
-- `docs/dev/src/architecture.md` — architectural overview
-- `docs/dev/src/architecture/query-engine.md` — detailed query engine documentation
-- `docs/dev/src/architecture/type-system.md` — type system design
+- `docs/dev/architecture/README.md` — architectural overview
+- `docs/dev/architecture/query-engine.md` — detailed query engine documentation
+- `docs/dev/architecture/type-system.md` — type system design

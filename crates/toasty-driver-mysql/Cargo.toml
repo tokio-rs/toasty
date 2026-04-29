@@ -1,6 +1,6 @@
 [package]
 name = "toasty-driver-mysql"
-version = "0.3.0"
+version = "0.5.0"
 description = "MySQL driver for Toasty"
 authors.workspace = true
 edition.workspace = true

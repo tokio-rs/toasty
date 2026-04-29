@@ -25,6 +25,8 @@ members = [
 
     # Tests
     "tests",
+    "tests/tests/fixtures/post",
+    "tests/tests/fixtures/user",
 
     # Benchmarks
     "benches",
@@ -38,7 +40,7 @@ homepage = "https://github.com/tokio-rs/toasty"
 keywords = ["orm", "database", "sql", "nosql", "async"]
 license = "MIT"
 repository = "https://github.com/tokio-rs/toasty"
-rust-version = "1.94"
+rust-version = "1.95"
 categories = ["database"]
 
 [workspace.lints.rust]
@@ -46,20 +48,20 @@ unsafe_code = "deny"
 
 [workspace.dependencies]
 # Toasty crates
-toasty = { version = "0.3.0", path = "crates/toasty" }
-toasty-cli = { version = "0.3.0", path = "crates/toasty-cli" }
-toasty-core = { version = "0.3.0", path = "crates/toasty-core" }
-toasty-macros = { version = "0.3.0", path = "crates/toasty-macros" }
-toasty-sql = { version = "0.3.0", path = "crates/toasty-sql" }
+toasty = { version = "0.5.0", path = "crates/toasty" }
+toasty-cli = { version = "0.5.0", path = "crates/toasty-cli" }
+toasty-core = { version = "0.5.0", path = "crates/toasty-core" }
+toasty-macros = { version = "0.5.0", path = "crates/toasty-macros" }
+toasty-sql = { version = "0.5.0", path = "crates/toasty-sql" }
 # Driver implementations
-toasty-driver-dynamodb = { version = "0.3.0", path = "crates/toasty-driver-dynamodb" }
-toasty-driver-mysql = { version = "0.3.0", path = "crates/toasty-driver-mysql" }
-toasty-driver-postgresql = { version = "0.3.0", path = "crates/toasty-driver-postgresql" }
-toasty-driver-sqlite = { version = "0.3.0", path = "crates/toasty-driver-sqlite" }
+toasty-driver-dynamodb = { version = "0.5.0", path = "crates/toasty-driver-dynamodb" }
+toasty-driver-mysql = { version = "0.5.0", path = "crates/toasty-driver-mysql" }
+toasty-driver-postgresql = { version = "0.5.0", path = "crates/toasty-driver-postgresql" }
+toasty-driver-sqlite = { version = "0.5.0", path = "crates/toasty-driver-sqlite" }
 
 # Driver integration test suite dependencies
-toasty-driver-integration-suite = { version = "0.3.0", path = "crates/toasty-driver-integration-suite" }
-toasty-driver-integration-suite-macros = { version = "0.3.0", path = "crates/toasty-driver-integration-suite-macros" }
+toasty-driver-integration-suite = { version = "0.5.0", path = "crates/toasty-driver-integration-suite" }
+toasty-driver-integration-suite-macros = { version = "0.5.0", path = "crates/toasty-driver-integration-suite-macros" }
 
 # Other crates
 assert-struct = "0.4.2"
@@ -75,6 +77,7 @@ clap = { version = "4.6.0", features = ["derive"] }
 console = "0.16"
 deadpool = { version = "0.13", features = ["rt_tokio_1"] }
 dialoguer = "0.12"
+hashbrown = "0.16"
 heck = "0.5.0"
 indexmap = "2.13.0"
 index_vec = "0.1.4"
@@ -87,7 +90,7 @@ mysql_async = { version = "0.36.2", default-features = false, features = [
 ] }
 pulldown-cmark = { version = "0.13", default-features = false }
 pluralizer = "0.5.0"
-postgres = "0.19.13"
+percent-encoding = "2.3.2"
 postgres-types = { version = "0.2.13", features = ["with-uuid-1", "array-impls"] }
 pretty_assertions = "1.4.1"
 proc-macro2 = "1.0.106"
@@ -105,6 +108,14 @@ tempfile = "3.27"
 proptest = "1"
 tokio = { version = "1.50", features = ["full"] }
 tokio-postgres = "0.7.17"
+tokio-rustls = { version = "0.26", default-features = false }
+rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }
+const-oid = { version = "0.9.6", default-features = false, features = ["db"] }
+sha2 = { version = "0.11", default-features = false }
+x509-cert = { version = "0.2.5", default-features = false, features = ["std"] }
+rustls-platform-verifier = "0.6"
+rustls-pemfile = "2"
+rustls-webpki = { version = "0.103", default-features = false, features = ["alloc", "std"] }
 tokio-stream = { version = "0.1.18", default-features = false }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

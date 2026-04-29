@@ -1,6 +1,5 @@
 use super::{Entry, EntryPath, Type, TypeUnion, ValueRecord, sparse_record::SparseRecord};
 use std::cmp::Ordering;
-use std::hash::Hash;
 
 /// A dynamically typed value used throughout Toasty's query engine.
 ///
@@ -31,7 +30,7 @@ use std::hash::Hash;
 /// let v = Value::from(true);
 /// assert_eq!(v, true);
 /// ```
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub enum Value {
     /// Boolean value
     Bool(bool),
@@ -59,6 +58,12 @@ pub enum Value {
 
     /// Unsigned 64-bit integer
     U64(u64),
+
+    /// 32-bit floating point number
+    F32(f32),
+
+    /// 64-bit floating point number
+    F64(f64),
 
     /// A typed record
     SparseRecord(SparseRecord),
@@ -265,6 +270,8 @@ impl Value {
             Self::U16(_) => ty.is_u16(),
             Self::U32(_) => ty.is_u32(),
             Self::U64(_) => ty.is_u64(),
+            Self::F32(_) => ty.is_f32(),
+            Self::F64(_) => ty.is_f64(),
             Self::List(value) => match ty {
                 Type::List(ty) => {
                     if value.is_empty() {
@@ -340,6 +347,8 @@ impl Value {
             Value::U16(_) => Type::U16,
             Value::U32(_) => Type::U32,
             Value::U64(_) => Type::U64,
+            Value::F32(_) => Type::F32,
+            Value::F64(_) => Type::F64,
             Value::Bytes(_) => Type::Bytes,
             Value::Uuid(_) => Type::Uuid,
             #[cfg(feature = "rust_decimal")]
@@ -432,6 +441,10 @@ impl PartialOrd for Value {
             (Value::U16(a), Value::U16(b)) => a.partial_cmp(b),
             (Value::U32(a), Value::U32(b)) => a.partial_cmp(b),
             (Value::U64(a), Value::U64(b)) => a.partial_cmp(b),
+
+            // Floating point.
+            (Value::F32(a), Value::F32(b)) => a.partial_cmp(b),
+            (Value::F64(a), Value::F64(b)) => a.partial_cmp(b),
 
             // Strings: lexicographic ordering.
             (Value::String(a), Value::String(b)) => a.partial_cmp(b),

@@ -1,0 +1,190 @@
+name: Claude Docs Sync
+
+# Enforces two doc-sync rules on every PR:
+#   1. If a PR ships an item listed in docs/dev/roadmap.md or described in
+#      docs/dev/design/, that entry must be deleted in the same PR.
+#   2. If a PR changes user-facing behavior covered by the user guide
+#      (docs/guide/src/), the corresponding guide page must be updated.
+#      For new user-facing functionality, the guide should be updated when
+#      the addition is significant enough to fit the guide's scope.
+#
+# Posts one review when a rule is violated, and resolves the review once
+# the issue is fixed.
+
+# SECURITY: this workflow uses `pull_request_target`, which runs in the
+# base repo's context with full secrets. PR contents (branch, files,
+# scripts, Cargo.toml, build.rs, etc.) are UNTRUSTED — a malicious fork
+# could use them to exfiltrate secrets. This workflow must never execute
+# code from the PR: no `actions/checkout` of the PR ref, no `cargo build`,
+# no `npm install`, no running of fork-supplied scripts. The only safe
+# operations are reading PR metadata via `gh`, reading docs from the
+# base-branch checkout, and posting/resolving reviews.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: claude-docs-sync-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  docs-sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Run Claude Code for Docs Sync
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          allowed_non_write_users: "*"
+          prompt: |
+            You are a docs-sync checker for the toasty repository. Your
+            ONLY job is to enforce the following two rules on
+            PR #${{ github.event.pull_request.number }}. Do nothing else —
+            no style feedback, no code review, no general suggestions.
+
+            ## Rule A — Roadmap and design-doc entries
+
+            If a PR implements functionality that is listed in
+            docs/dev/roadmap.md or described in a design document under
+            docs/dev/design/, the PR MUST also delete the matching entries
+            from those docs (or clearly mark a design doc as implemented).
+
+            ## Rule B — User guide updates
+
+            The Toasty user guide lives at docs/guide/src/ (table of
+            contents in SUMMARY.md). It documents the user-facing API
+            surface only — the things a Toasty *user* needs to know when
+            writing application code against the library.
+
+            What the guide covers (in scope):
+              - Schema definition: `#[derive(Model)]`, `#[derive(Embed)]`,
+                supported field types, attributes (`#[key]`, `#[auto]`,
+                `#[unique]`, `#[index]`, `#[column(...)]`, `#[version]`)
+              - Database setup: `Db::builder()`, `toasty::models!`,
+                connection URLs, supported drivers, Cargo feature flags
+                (`sqlite`, `postgresql`, `mysql`, `dynamodb`, `jiff`,
+                `rust_decimal`, `bigdecimal`)
+              - CRUD: `toasty::create!`, generated query / update / delete
+                builders, generated methods (`get_by_*`, `filter_by_*`,
+                `all`, `find`, etc.)
+              - Relationships: `BelongsTo`, `HasMany`, `HasOne`,
+                preloading / `INCLUDE`
+              - Filtering, expressions, sorting, limits, pagination
+              - Embedded types (newtypes, structs, enums)
+              - Batch operations, interactive transactions, optimistic
+                concurrency control
+              - Schema management (`push_schema`, migrations)
+
+            What the guide does NOT cover (out of scope — ignore these):
+              - Internal architecture: query engine phases, HIR, MIR,
+                planner, simplifier, lower
+              - Driver interface internals, statement AST representations
+              - Internal schema layers (app / db / mapping)
+              - Proc-macro implementation details
+              - Test framework and integration suite internals
+              - Build, CI, release, and tooling plumbing
+              - Refactors, renames, and bug fixes that do not change
+                documented behavior
+
+            Two cases under Rule B:
+
+              (i) The PR changes the behavior of an existing, currently
+                  documented feature (semantics, syntax, output, error
+                  cases, supported types, default values, etc.).
+                  → The guide page covering that feature MUST be updated
+                    in the same PR. If the diff doesn't update it, flag.
+
+              (ii) The PR adds new user-facing functionality.
+                   → Use judgment. Flag only when the addition is
+                     substantial enough to deserve guide coverage —
+                     something that would naturally be a new section,
+                     a new row in an existing table, or a paragraph in
+                     an existing page. Examples that warrant flagging:
+                     a new derive attribute, a new public API on `Db`,
+                     a new query operator or filter method, a new
+                     supported field type, a new feature flag, a new
+                     top-level concept.
+                     Skip small additions that don't fit the guide's
+                     shape: niche options, new error variants, internal
+                     helpers, or anything where a guide entry would feel
+                     forced. When genuinely unsure, do NOT flag — false
+                     positives are worse than false negatives here.
+
+            ## Steps
+
+            1. Read the PR and its diff:
+                 gh pr view ${{ github.event.pull_request.number }} --json title,body,files,reviews,comments
+                 gh pr diff ${{ github.event.pull_request.number }}
+
+            2. Read the current docs on the base branch (this checkout):
+                 - docs/dev/roadmap.md
+                 - any file under docs/dev/design/ that looks relevant
+                   to the PR (match by topic, not filename guessing)
+                 - docs/guide/src/SUMMARY.md (to see the guide's scope
+                   and table of contents)
+                 - any docs/guide/src/*.md page that covers a feature
+                   the PR appears to touch
+
+            3. Evaluate Rule A.
+
+               Be conservative: only flag a roadmap or design-doc entry
+               when the PR clearly ships that specific item, not when it
+               merely touches related code.
+
+               - Not implementing a tracked entry → Rule A satisfied.
+               - Implementing an entry and the diff already removes /
+                 marks-implemented the matching docs → Rule A satisfied.
+               - Implementing an entry but the diff does NOT remove the
+                 matching docs → Rule A violated.
+
+            4. Evaluate Rule B.
+
+               First, decide if the PR contains user-facing changes at
+               all (per the in-scope / out-of-scope lists above). If
+               not, Rule B is satisfied.
+
+               Otherwise, for each user-facing change:
+                 - Case (i): does the change modify a behavior the guide
+                   currently documents? If the diff updates the relevant
+                   guide page(s), satisfied. If not, violated.
+                 - Case (ii): is the new functionality substantial enough
+                   to warrant guide coverage? If yes and the diff does
+                   not update the guide, violated. If no (or unsure),
+                   satisfied.
+
+            5. Decide what to do:
+
+               - Both rules satisfied. If a previous Claude review on
+                 this PR flagged a docs-sync issue and its thread is
+                 still open, resolve that thread using
+                 mcp__github__resolve_review_thread. Then exit.
+               - One or both rules violated. Check existing reviews from
+                 step 1 for an open, unresolved Claude review that
+                 already covers the same violation(s).
+                   - If one exists and still applies, do nothing (no
+                     duplicates).
+                   - Otherwise, post ONE PR review using
+                     mcp__github__pull_request_review_write with event
+                     REQUEST_CHANGES. The review body must:
+                       * State which rule(s) are violated.
+                       * For Rule A: name each roadmap or design-doc
+                         entry that needs to be removed, with file path.
+                       * For Rule B: name each guide page that needs to
+                         be updated, with file path. For new
+                         functionality, give one short sentence on
+                         where in the guide it would belong.
+                       * Briefly explain the rule(s) — one sentence each.
+                       * Not comment on anything else.
+
+            Keep the review terse. Prefer fewer words over more.
+          claude_args: |
+            --allowed-tools "Bash(gh pr view:*),Bash(gh pr diff:*),mcp__github__pull_request_read,mcp__github__pull_request_review_write,mcp__github__resolve_review_thread"

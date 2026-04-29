@@ -462,3 +462,6 @@ Without `nullable`:
 | `#[auto]` on `updated_at` | Shorthand for `#[update(jiff::Timestamp::now())]` | Create and update |
 | `#[serialize(json)]` | Store as JSON text | Create and update |
 | `#[serialize(json, nullable)]` | Store as JSON text with SQL NULL support | Create and update |
+
+See [Concurrency Control](./concurrency-control.md) for the `#[version]`
+attribute.

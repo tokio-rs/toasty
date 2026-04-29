@@ -3,12 +3,12 @@
 use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprAny, ExprArg,
     ExprBinaryOp, ExprCast, ExprColumn, ExprError, ExprExists, ExprFunc, ExprInList,
-    ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprList, ExprMap, ExprMatch, ExprNot,
-    ExprOr, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, Filter,
-    FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, LimitCursor,
-    LimitOffset, Node, OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select, Source,
-    SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor, TableRef,
-    TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
+    ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprLike, ExprList, ExprMap, ExprMatch,
+    ExprNot, ExprOr, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStartsWith,
+    ExprStmt, Filter, FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit,
+    LimitCursor, LimitOffset, Node, OrderBy, OrderByExpr, Path, Projection, Query, Returning,
+    Select, Source, SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor,
+    TableRef, TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
 };
 
 /// Mutable visitor trait for the statement AST.
@@ -197,6 +197,13 @@ pub trait VisitMut {
         visit_expr_let_mut(self, i);
     }
 
+    /// Visits an [`ExprLike`] node mutably.
+    ///
+    /// The default implementation delegates to [`visit_expr_like_mut`].
+    fn visit_expr_like_mut(&mut self, i: &mut ExprLike) {
+        visit_expr_like_mut(self, i);
+    }
+
     /// Visits an [`ExprMap`] node mutably.
     ///
     /// The default implementation delegates to [`visit_expr_map_mut`].
@@ -258,6 +265,13 @@ pub trait VisitMut {
     /// The default implementation delegates to [`visit_expr_set_op_mut`].
     fn visit_expr_set_op_mut(&mut self, i: &mut ExprSetOp) {
         visit_expr_set_op_mut(self, i);
+    }
+
+    /// Visits an [`ExprStartsWith`] node mutably.
+    ///
+    /// The default implementation delegates to [`visit_expr_starts_with_mut`].
+    fn visit_expr_starts_with_mut(&mut self, i: &mut ExprStartsWith) {
+        visit_expr_starts_with_mut(self, i);
     }
 
     /// Visits an [`ExprStmt`] node mutably.
@@ -580,6 +594,10 @@ impl<V: VisitMut> VisitMut for &mut V {
         VisitMut::visit_expr_let_mut(&mut **self, i);
     }
 
+    fn visit_expr_like_mut(&mut self, i: &mut ExprLike) {
+        VisitMut::visit_expr_like_mut(&mut **self, i);
+    }
+
     fn visit_expr_map_mut(&mut self, i: &mut ExprMap) {
         VisitMut::visit_expr_map_mut(&mut **self, i);
     }
@@ -614,6 +632,10 @@ impl<V: VisitMut> VisitMut for &mut V {
 
     fn visit_expr_set_op_mut(&mut self, i: &mut ExprSetOp) {
         VisitMut::visit_expr_set_op_mut(&mut **self, i);
+    }
+
+    fn visit_expr_starts_with_mut(&mut self, i: &mut ExprStartsWith) {
+        VisitMut::visit_expr_starts_with_mut(&mut **self, i);
     }
 
     fn visit_expr_stmt_mut(&mut self, i: &mut ExprStmt) {
@@ -811,11 +833,13 @@ where
         Expr::Error(expr) => v.visit_expr_error_mut(expr),
         Expr::Exists(expr) => v.visit_expr_exists_mut(expr),
         Expr::Func(expr) => v.visit_expr_func_mut(expr),
+        Expr::Ident(_) => {}
         Expr::InList(expr) => v.visit_expr_in_list_mut(expr),
         Expr::InSubquery(expr) => v.visit_expr_in_subquery_mut(expr),
         Expr::IsNull(expr) => v.visit_expr_is_null_mut(expr),
         Expr::IsVariant(expr) => v.visit_expr_is_variant_mut(expr),
         Expr::Let(expr) => v.visit_expr_let_mut(expr),
+        Expr::Like(expr) => v.visit_expr_like_mut(expr),
         Expr::Map(expr) => v.visit_expr_map_mut(expr),
         Expr::Match(expr) => v.visit_expr_match_mut(expr),
         Expr::Not(expr) => v.visit_expr_not_mut(expr),
@@ -824,6 +848,7 @@ where
         Expr::Record(expr) => v.visit_expr_record_mut(expr),
         Expr::Reference(expr) => v.visit_expr_reference_mut(expr),
         Expr::List(expr) => v.visit_expr_list_mut(expr),
+        Expr::StartsWith(expr) => v.visit_expr_starts_with_mut(expr),
         Expr::Stmt(expr) => v.visit_expr_stmt_mut(expr),
         Expr::Value(expr) => v.visit_value_mut(expr),
     }
@@ -980,6 +1005,15 @@ where
     v.visit_expr_mut(&mut node.body);
 }
 
+/// Default mutable traversal for [`ExprLike`] nodes. Visits the attribute expression and pattern.
+pub fn visit_expr_like_mut<V>(v: &mut V, node: &mut ExprLike)
+where
+    V: VisitMut + ?Sized,
+{
+    v.visit_expr_mut(&mut node.expr);
+    v.visit_expr_mut(&mut node.pattern);
+}
+
 /// Default mutable traversal for [`ExprMap`] nodes. Visits the base expression and the map expression.
 pub fn visit_expr_map_mut<V>(v: &mut V, node: &mut ExprMap)
 where
@@ -1073,6 +1107,15 @@ where
     for operand in &mut node.operands {
         v.visit_expr_set_mut(operand);
     }
+}
+
+/// Default mutable traversal for [`ExprStartsWith`] nodes. Visits the attribute expression and prefix.
+pub fn visit_expr_starts_with_mut<V>(v: &mut V, node: &mut ExprStartsWith)
+where
+    V: VisitMut + ?Sized,
+{
+    v.visit_expr_mut(&mut node.expr);
+    v.visit_expr_mut(&mut node.prefix);
 }
 
 /// Default mutable traversal for [`ExprStmt`] nodes. Visits the inner statement.
@@ -1211,8 +1254,8 @@ where
             }
         }
         Returning::Changed => {}
+        Returning::Project(expr) => v.visit_expr_mut(expr),
         Returning::Expr(expr) => v.visit_expr_mut(expr),
-        Returning::Value(expr) => v.visit_expr_mut(expr),
     }
 }
 
@@ -1288,6 +1331,7 @@ where
 {
     v.visit_source_mut(&mut node.from);
     v.visit_filter_mut(&mut node.filter);
+    v.visit_condition_mut(&mut node.condition);
 
     if let Some(returning) = &mut node.returning {
         v.visit_returning_mut(returning);

@@ -1,5 +1,5 @@
 use super::{Expand, schema, util};
-use crate::model::schema::{FieldTy, VariantValue};
+use crate::model::schema::{EnumStorageStrategy, FieldTy, VariantValue};
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -207,6 +207,12 @@ impl Expand<'_> {
                 #comparison_methods
             }
 
+            impl<__Origin> Into<#toasty::Path<__Origin, #model_ident>> for #field_struct_ident<__Origin> {
+                fn into(self) -> #toasty::Path<__Origin, #model_ident> {
+                    self.path
+                }
+            }
+
             #( #variant_field_structs )*
         }
     }
@@ -270,7 +276,7 @@ impl Expand<'_> {
             .iter()
             .map(|field| {
                 let index = util::int(field.id);
-                let app_name = field.name.ident.to_string();
+                let app_name = field.name.as_str();
                 let ty = primitive_ty_unwrap(field);
                 let variant_index = field.variant.expect("enum field must have variant");
                 let variant_idx = util::int(variant_index);
@@ -288,6 +294,7 @@ impl Expand<'_> {
                         nullable: <#ty as #toasty::Field>::NULLABLE,
                         primary_key: false,
                         auto: None,
+                        versionable: false,
                         constraints: vec![],
                         variant: Some(#toasty::core::schema::app::VariantId {
                             model: id,
@@ -498,6 +505,62 @@ impl Expand<'_> {
             quote! { #toasty::core::stmt::Type::String }
         } else {
             quote! { #toasty::core::stmt::Type::I64 }
+        }
+    }
+
+    /// Generates the `storage_ty` token for the discriminant `FieldPrimitive`.
+    ///
+    /// - Native enum: `Some(db::Type::Enum(TypeEnum { ... }))`
+    /// - Plain string (`#[column(type = text)]`): `Some(db::Type::Text)`
+    /// - Integer discriminants: `None`
+    pub(super) fn expand_enum_storage_ty(&self) -> TokenStream {
+        let toasty = &self.toasty;
+        let embedded_enum = self.model.kind.as_embedded_enum_unwrap();
+
+        match &embedded_enum.storage_strategy {
+            Some(EnumStorageStrategy::NativeEnum(custom_name)) => {
+                // Determine the type name: custom name or default snake_case of enum ident.
+                let type_name = match custom_name {
+                    Some(name) => name.clone(),
+                    None => {
+                        use heck::ToSnakeCase;
+                        self.model.ident.to_string().to_snake_case()
+                    }
+                };
+
+                // Collect variant names in declaration order.
+                let variant_names: Vec<&str> = embedded_enum
+                    .variants
+                    .iter()
+                    .map(|v| match &v.attrs.discriminant {
+                        VariantValue::String(s) => s.as_str(),
+                        _ => unreachable!("native enum requires string discriminants"),
+                    })
+                    .collect();
+
+                quote! {
+                    ::std::option::Option::Some(
+                        #toasty::core::schema::db::Type::Enum(
+                            #toasty::core::schema::db::TypeEnum {
+                                name: ::std::option::Option::Some(#type_name.to_string()),
+                                variants: vec![
+                                    #( #toasty::core::schema::db::EnumVariant {
+                                        name: #variant_names.to_string(),
+                                    } ),*
+                                ],
+                            }
+                        )
+                    )
+                }
+            }
+            Some(EnumStorageStrategy::PlainString(col_ty)) => {
+                let ty_tokens = col_ty.expand_with(toasty);
+                quote! { ::std::option::Option::Some(#ty_tokens) }
+            }
+            None => {
+                // Integer discriminants: no storage type hint.
+                quote! { ::std::option::Option::None }
+            }
         }
     }
 }

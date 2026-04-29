@@ -32,6 +32,8 @@ impl Value {
             (Type::U16, AV::N(val)) => stmt::Value::from(val.parse::<u16>().unwrap()),
             (Type::U32, AV::N(val)) => stmt::Value::from(val.parse::<u32>().unwrap()),
             (Type::U64, AV::N(val)) => stmt::Value::from(val.parse::<u64>().unwrap()),
+            (Type::F32, AV::N(val)) => stmt::Value::from(val.parse::<f32>().unwrap()),
+            (Type::F64, AV::N(val)) => stmt::Value::from(val.parse::<f64>().unwrap()),
             (Type::Bytes, AV::B(val)) => stmt::Value::Bytes(val.clone().into_inner()),
             (Type::Uuid, AV::S(val)) => stmt::Value::from(val.parse::<uuid::Uuid>().unwrap()),
             _ => todo!("ty={:#?}; value={:#?}", ty, val),
@@ -55,6 +57,8 @@ impl Value {
             stmt::Value::U16(val) => AV::N(val.to_string()),
             stmt::Value::U32(val) => AV::N(val.to_string()),
             stmt::Value::U64(val) => AV::N(val.to_string()),
+            stmt::Value::F32(val) => AV::N(val.to_string()),
+            stmt::Value::F64(val) => AV::N(val.to_string()),
             stmt::Value::Bytes(val) => AV::B(val.clone().into()),
             stmt::Value::Uuid(val) => AV::S(val.to_string()),
             stmt::Value::List(vals) => {

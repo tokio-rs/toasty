@@ -1,9 +1,9 @@
 use super::Expand;
 use crate::model::schema::{FieldTy, Index, Model};
 
+use hashbrown::HashMap;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use std::collections::HashMap;
 
 /// Combination of fields for which filter a method should be generated.
 #[derive(Debug)]
@@ -323,7 +323,7 @@ impl<'a> BuildModelFilters<'a> {
 
         for index in fields {
             name.push_str(prefix);
-            name.push_str(&self.model.fields[*index].name.ident.to_string());
+            name.push_str(self.model.fields[*index].name.as_str());
 
             prefix = "_and_";
         }

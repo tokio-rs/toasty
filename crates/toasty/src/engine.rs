@@ -1,6 +1,10 @@
 pub(crate) mod eval;
 pub(crate) mod exec;
 
+mod extract_params;
+#[cfg(test)]
+pub(crate) mod test_util;
+
 mod hir;
 use hir::HirStatement;
 

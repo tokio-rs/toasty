@@ -1,6 +1,7 @@
+use super::value_set::{HashableValue, HashableValueSlice};
 use super::{Entry, Projection, Value};
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 /// A unique hash index over a borrowed slice of [`Value`]s.
 ///
@@ -11,8 +12,9 @@ use std::collections::HashMap;
 ///
 /// # Uniqueness
 ///
-/// The index assumes each extracted key is unique across the source slice. A
-/// `debug_assert!` fires on duplicate keys at build time.
+/// The index requires each extracted key to be unique across the source slice.
+/// An `assert!` fires on duplicate keys at build time so release builds surface
+/// the invariant violation rather than silently stomping existing entries.
 ///
 /// # Cloning
 ///
@@ -33,7 +35,7 @@ use std::collections::HashMap;
 /// assert!(found.is_some());
 /// ```
 pub struct HashIndex<'a> {
-    map: HashMap<Vec<Value>, &'a Value>,
+    map: HashMap<Vec<HashableValue>, &'a Value>,
 }
 
 impl<'a> HashIndex<'a> {
@@ -47,7 +49,7 @@ impl<'a> HashIndex<'a> {
         for value in values {
             let key = extract_key(value, projections);
             let prev = map.insert(key, value);
-            debug_assert!(prev.is_none(), "HashIndex: duplicate key detected");
+            assert!(prev.is_none(), "HashIndex: duplicate key detected");
         }
 
         Self { map }
@@ -58,19 +60,19 @@ impl<'a> HashIndex<'a> {
     /// `key` must be a slice of values with one entry per projection used at build time.
     /// Returns `None` if no value matches.
     pub fn find(&self, key: &[Value]) -> Option<&'a Value> {
-        self.map.get(key).copied()
+        self.map.get(&HashableValueSlice(key)).copied()
     }
 }
 
 /// Extract the composite key from `value` using `projections`.
 ///
 /// Each projection is applied to `value` in sequence, collecting the resulting
-/// field references into an owned `Vec<Value>`.
-fn extract_key(value: &Value, projections: &[Projection]) -> Vec<Value> {
+/// field references into an owned `Vec<HashableValue>`.
+fn extract_key(value: &Value, projections: &[Projection]) -> Vec<HashableValue> {
     projections
         .iter()
         .map(|proj| match value.entry(proj) {
-            Entry::Value(v) => v.clone(),
+            Entry::Value(v) => HashableValue(v.clone()),
             Entry::Expr(_) => panic!("projection yielded an expression, not a value"),
         })
         .collect()

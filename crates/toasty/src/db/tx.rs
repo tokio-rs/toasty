@@ -154,6 +154,11 @@ impl<'a> Transaction<'a> {
     }
 
     /// Create a nested transaction (savepoint).
+    ///
+    /// Takes `&mut self` so the outer transaction is exclusively borrowed
+    /// while the nested one is open. This prevents statements from running
+    /// against the outer transaction — bypassing the savepoint — when they
+    /// should have gone through the nested handle.
     pub async fn transaction(&mut self) -> Result<Transaction<'_>> {
         <Self as Executor>::transaction(self).await
     }

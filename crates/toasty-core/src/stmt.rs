@@ -102,6 +102,9 @@ pub use expr_is_variant::ExprIsVariant;
 mod expr_let;
 pub use expr_let::ExprLet;
 
+mod expr_like;
+pub use expr_like::ExprLike;
+
 mod expr_list;
 pub use expr_list::ExprList;
 
@@ -131,6 +134,9 @@ pub use expr_set::ExprSet;
 
 mod expr_set_op;
 pub use expr_set_op::ExprSetOp;
+
+mod expr_starts_with;
+pub use expr_starts_with::ExprStartsWith;
 
 mod expr_stmt;
 pub use expr_stmt::ExprStmt;
@@ -258,6 +264,9 @@ mod value_jiff;
 
 mod value_record;
 pub use value_record::ValueRecord;
+
+mod value_set;
+pub use value_set::ValueSet;
 
 /// Mutable AST visitor trait and helpers.
 pub mod visit_mut;

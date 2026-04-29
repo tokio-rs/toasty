@@ -214,6 +214,133 @@ let user = User::get_by_country(&mut db, "US").await?;
 # }
 ```
 
+## Multi-column indexes
+
+Struct-level `#[index]` lets you define a composite index spanning multiple
+fields. This is useful when you frequently query by a combination of fields
+rather than a single one.
+
+### Simple mode
+
+List the fields in order — the first field is the leading key, and the remaining
+fields extend it:
+
+```rust
+# use toasty::Model;
+#[derive(Debug, toasty::Model)]
+#[index(game_title, top_score)]
+struct GameScore {
+    #[key]
+    #[auto]
+    id: u64,
+    user_id: String,
+    game_title: String,
+    top_score: i64,
+}
+```
+
+On SQL databases this creates a composite index with columns in the order
+specified:
+
+```sql
+CREATE INDEX idx_game_scores_game_title_top_score
+    ON game_scores (game_title, top_score);
+```
+
+On DynamoDB, the first field becomes the HASH key and the remaining fields
+become RANGE keys of a Global Secondary Index (GSI).
+
+Toasty generates a method for each valid prefix of the index fields:
+
+| Method | Description |
+|---|---|
+| `GameScore::filter_by_game_title(game_title)` | All scores for a game |
+| `GameScore::filter_by_game_title_and_top_score(game_title, top_score)` | Scores for a game with a specific score |
+
+You can use these the same way as single-column index methods:
+
+```rust
+# use toasty::Model;
+# #[derive(Debug, toasty::Model)]
+# #[index(game_title, top_score)]
+# struct GameScore {
+#     #[key]
+#     #[auto]
+#     id: u64,
+#     user_id: String,
+#     game_title: String,
+#     top_score: i64,
+# }
+# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
+// All scores for "chess"
+let scores: Vec<GameScore> = GameScore::filter_by_game_title("chess")
+    .exec(&mut db)
+    .await?;
+
+// Scores for "chess" with a top score of exactly 1400
+let scores: Vec<GameScore> = GameScore::filter_by_game_title_and_top_score("chess", 1400)
+    .exec(&mut db)
+    .await?;
+# Ok(())
+# }
+```
+
+For a three-column index, Toasty generates three prefix methods. Given
+`#[index(country, city, zip_code)]`:
+
+| Method | Columns matched |
+|---|---|
+| `filter_by_country(country)` | `country` |
+| `filter_by_country_and_city(country, city)` | `country`, `city` |
+| `filter_by_country_and_city_and_zip_code(country, city, zip_code)` | `country`, `city`, `zip_code` |
+
+### Named mode
+
+Use `partition = ...` and `local = ...` to explicitly assign fields to key
+roles. This is required when you need multiple fields in the DynamoDB partition
+key:
+
+```rust
+# use toasty::Model;
+#[derive(Debug, toasty::Model)]
+#[index(partition = [tournament_id, region], local = [round])]
+struct Match {
+    #[key]
+    #[auto]
+    id: u64,
+    tournament_id: String,
+    region: String,
+    round: String,
+    player1_id: String,
+    player2_id: String,
+}
+```
+
+On DynamoDB, `partition` fields map to `KeyType::Hash` entries and `local`
+fields map to `KeyType::Range` entries in the GSI KeySchema. This allows the
+DynamoDB index to carry a composite identifier — here, a tournament is uniquely
+identified by both `tournament_id` and `region`.
+
+The generated methods require all partition fields:
+
+| Method | Description |
+|---|---|
+| `Match::filter_by_tournament_id_and_region(tournament_id, region)` | All rounds for a tournament+region |
+| `Match::filter_by_tournament_id_and_region_and_round(tournament_id, region, round)` | A specific round |
+
+On SQL databases, the `partition`/`local` distinction is ignored — all fields
+are placed in the composite index in the order they appear, producing
+`CREATE INDEX ... ON matches (tournament_id, region, round)`.
+
+### SQL vs DynamoDB behavior
+
+| Behavior | SQL | DynamoDB |
+|---|---|---|
+| Index structure | `CREATE INDEX` with all columns in order | GSI with HASH and RANGE key entries |
+| Partition / local distinction | Ignored — all columns form a flat composite index | `partition` = `KeyType::Hash`, `local` = `KeyType::Range` |
+| Query matching | Database uses leftmost-prefix matching | All `partition` fields required; `local` fields optional left-to-right |
+| Column limits | No artificial limits | Up to 4 partition and 4 local attributes per index |
+
 ## Indexing newtype fields
 
 Newtype embedded structs (single unnamed field, e.g., `struct Email(String)`)

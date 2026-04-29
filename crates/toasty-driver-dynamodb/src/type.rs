@@ -18,7 +18,9 @@ impl TypeExt for stmt::Type {
             | stmt::Type::U8
             | stmt::Type::U16
             | stmt::Type::U32
-            | stmt::Type::U64 => ScalarAttributeType::N,
+            | stmt::Type::U64
+            | stmt::Type::F32
+            | stmt::Type::F64 => ScalarAttributeType::N,
             stmt::Type::Bytes => ScalarAttributeType::B,
             _ => panic!("key attribute must be a string, number, or binary"),
         }

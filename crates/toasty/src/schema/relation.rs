@@ -1,7 +1,8 @@
 use super::{Load, Model};
 use crate::stmt::{IntoExpr, IntoInsert, List, Path};
 
-use toasty_core::schema::app::FieldId;
+use toasty_core::schema::Name;
+use toasty_core::schema::app::{FieldId, FieldTy, ForeignKey};
 
 /// Describes how a model participates in associations.
 ///
@@ -59,5 +60,38 @@ pub trait Relation: Load<Output = Self> {
     /// `Option`). The default is `false`.
     fn nullable() -> bool {
         false
+    }
+
+    /// Build the [`FieldTy`] for a `BelongsTo` relation wrapper, given the
+    /// foreign key resolved from the field's `#[belongs_to(...)]` attribute.
+    ///
+    /// Only [`BelongsTo`](super::BelongsTo) overrides this; the default
+    /// panics so that misuse (e.g. applying `#[belongs_to]` to a field whose
+    /// type is not a `BelongsTo<T>`) fails loudly.
+    fn belongs_to_field_ty(_foreign_key: ForeignKey) -> FieldTy {
+        unimplemented!("not a BelongsTo relation wrapper")
+    }
+
+    /// Build the [`FieldTy`] for a `HasMany` relation wrapper, given the
+    /// singular name derived from the field identifier and an optional
+    /// paired `BelongsTo` field on the target model resolved from
+    /// `#[has_many(pair = <field>)]`. When `None`, the linker selects the
+    /// pair by searching the target for a unique `BelongsTo` back to the
+    /// source.
+    ///
+    /// Only [`HasMany`](super::HasMany) overrides this.
+    fn has_many_field_ty(_singular: Name, _pair: Option<FieldId>) -> FieldTy {
+        unimplemented!("not a HasMany relation wrapper")
+    }
+
+    /// Build the [`FieldTy`] for a `HasOne` relation wrapper, given an
+    /// optional paired `BelongsTo` field on the target model resolved
+    /// from `#[has_one(pair = <field>)]`. When `None`, the linker selects
+    /// the pair by searching the target for a unique `BelongsTo` back to
+    /// the source.
+    ///
+    /// Only [`HasOne`](super::HasOne) overrides this.
+    fn has_one_field_ty(_pair: Option<FieldId>) -> FieldTy {
+        unimplemented!("not a HasOne relation wrapper")
     }
 }

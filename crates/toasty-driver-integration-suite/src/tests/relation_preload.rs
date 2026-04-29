@@ -1053,6 +1053,81 @@ pub async fn nested_has_many_then_belongs_to_required(test: &mut Test) -> Result
     Ok(())
 }
 
+// ===== HasMany -> BelongsTo<T> where multiple items share the same target =====
+// Sibling rows with the same foreign key must not break the nested preload.
+// Regression for #701: the DDB nested merge used to panic with
+// "HashIndex: duplicate key detected" when two Items pointed at one Brand.
+#[driver_test(id(ID))]
+pub async fn nested_has_many_then_shared_belongs_to(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Category {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        #[has_many]
+        items: toasty::HasMany<Item>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Brand {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+
+        title: String,
+
+        #[index]
+        category_id: ID,
+
+        #[belongs_to(key = category_id, references = id)]
+        category: toasty::BelongsTo<Category>,
+
+        #[index]
+        brand_id: ID,
+
+        #[belongs_to(key = brand_id, references = id)]
+        brand: toasty::BelongsTo<Brand>,
+    }
+
+    let mut db = test.setup_db(models!(Category, Brand, Item)).await;
+
+    let brand = Brand::create().name("BrandA").exec(&mut db).await?;
+    let cat = Category::create()
+        .name("Electronics")
+        .item(Item::create().title("Phone").brand(&brand))
+        .item(Item::create().title("Laptop").brand(&brand))
+        .exec(&mut db)
+        .await?;
+
+    let cat = Category::filter_by_id(cat.id)
+        .include(Category::fields().items().brand())
+        .get(&mut db)
+        .await?;
+
+    let items = cat.items.get();
+    assert_eq!(2, items.len());
+    for item in items {
+        assert_eq!("BrandA", item.brand.get().name);
+    }
+
+    Ok(())
+}
+
 // ===== HasMany -> BelongsTo<Option<T>> =====
 // Team has_many Tasks, each Task optionally belongs_to an Assignee
 #[driver_test(id(ID))]
@@ -2190,4 +2265,197 @@ pub async fn nested_has_many_then_has_many_with_empty_leaves(test: &mut Test) {
         total_steps += steps.len();
     }
     assert_eq!(1, total_steps);
+}
+
+// ===== Issue #691: multiple nested includes sharing a prefix =====
+// When several `.include()` calls share a common prefix (e.g. `todos()`), each
+// sibling nested include must be preserved — previously the second overwrote
+// the first at the shared field slot.
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::has_many_multi_relation)
+)]
+pub async fn sibling_nested_includes_on_shared_prefix(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let category = toasty::create!(Category { name: "Food" })
+        .exec(&mut db)
+        .await?;
+    let user = toasty::create!(User {
+        name: "Alice",
+        todos: [
+            { title: "T1", category: &category },
+            { title: "T2", category: &category },
+        ],
+    })
+    .exec(&mut db)
+    .await?;
+
+    // Two sibling nested includes under the `todos()` prefix. Both must be
+    // preloaded — neither should be silently clobbered by the other.
+    let loaded = User::filter_by_id(user.id)
+        .include(User::fields().todos().user())
+        .include(User::fields().todos().category())
+        .get(&mut db)
+        .await?;
+
+    let todos = loaded.todos.get();
+    assert_eq!(2, todos.len());
+    for todo in todos {
+        assert_eq!("Alice", todo.user.get().name);
+        assert_eq!("Food", todo.category.get().name);
+    }
+
+    Ok(())
+}
+
+// Mirrors the exact pattern from issue #691: a bare top-level include plus
+// two sibling nested includes sharing that same top-level prefix. All three
+// paths must be honored.
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::has_many_multi_relation)
+)]
+pub async fn bare_and_nested_includes_on_shared_prefix(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let category = toasty::create!(Category { name: "Food" })
+        .exec(&mut db)
+        .await?;
+    let user = toasty::create!(User {
+        name: "Alice",
+        todos: [{ title: "T1", category: &category }],
+    })
+    .exec(&mut db)
+    .await?;
+
+    let loaded = User::filter_by_id(user.id)
+        .include(User::fields().todos()) // bare
+        .include(User::fields().todos().user()) // sibling 1
+        .include(User::fields().todos().category()) // sibling 2
+        .get(&mut db)
+        .await?;
+
+    let todos = loaded.todos.get();
+    assert_eq!(1, todos.len());
+    assert_eq!("Alice", todos[0].user.get().name);
+    assert_eq!("Food", todos[0].category.get().name);
+
+    Ok(())
+}
+
+// DDB-compatible variant of the issue #691 repro. Two sibling nested includes
+// under `items()` — each item has a distinct brand and supplier so the
+// per-item belongs_to batches stay unique (DDB's nested merge uses a HashIndex
+// that requires unique keys).
+#[driver_test(id(ID))]
+pub async fn sibling_nested_includes_on_shared_prefix_non_sql(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Category {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        #[has_many]
+        items: toasty::HasMany<Item>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Brand {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Supplier {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+
+        title: String,
+
+        #[index]
+        category_id: ID,
+
+        #[belongs_to(key = category_id, references = id)]
+        category: toasty::BelongsTo<Category>,
+
+        #[index]
+        brand_id: ID,
+
+        #[belongs_to(key = brand_id, references = id)]
+        brand: toasty::BelongsTo<Brand>,
+
+        #[index]
+        supplier_id: ID,
+
+        #[belongs_to(key = supplier_id, references = id)]
+        supplier: toasty::BelongsTo<Supplier>,
+    }
+
+    let mut db = test
+        .setup_db(models!(Category, Brand, Supplier, Item))
+        .await;
+
+    let brand_a = toasty::create!(Brand { name: "BrandA" })
+        .exec(&mut db)
+        .await?;
+    let brand_b = toasty::create!(Brand { name: "BrandB" })
+        .exec(&mut db)
+        .await?;
+    let sup_a = toasty::create!(Supplier { name: "SupA" })
+        .exec(&mut db)
+        .await?;
+    let sup_b = toasty::create!(Supplier { name: "SupB" })
+        .exec(&mut db)
+        .await?;
+
+    let cat = toasty::create!(Category {
+        name: "Electronics",
+        items: [
+            { title: "Phone", brand: &brand_a, supplier: &sup_a },
+            { title: "Laptop", brand: &brand_b, supplier: &sup_b },
+        ],
+    })
+    .exec(&mut db)
+    .await?;
+
+    // Two sibling nested includes under the `items()` prefix. Without the
+    // fix, the second would overwrite the first.
+    let loaded = Category::filter_by_id(cat.id)
+        .include(Category::fields().items().brand())
+        .include(Category::fields().items().supplier())
+        .get(&mut db)
+        .await?;
+
+    let items = loaded.items.get();
+    assert_eq!(2, items.len());
+    let mut pairs: Vec<(&str, &str)> = items
+        .iter()
+        .map(|i| (i.brand.get().name.as_str(), i.supplier.get().name.as_str()))
+        .collect();
+    pairs.sort();
+    assert_eq!(pairs, vec![("BrandA", "SupA"), ("BrandB", "SupB")]);
+
+    Ok(())
 }

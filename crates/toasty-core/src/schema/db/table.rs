@@ -4,11 +4,8 @@ use crate::{
     stmt,
 };
 
-use std::{
-    collections::{HashMap, HashSet},
-    fmt,
-    ops::Deref,
-};
+use hashbrown::{HashMap, HashSet};
+use std::{fmt, ops::Deref};
 
 /// A database table with its columns, primary key, and indices.
 ///
@@ -245,6 +242,7 @@ mod tests {
                 nullable: false,
                 primary_key: false,
                 auto_increment: false,
+                versionable: false,
             });
         }
 

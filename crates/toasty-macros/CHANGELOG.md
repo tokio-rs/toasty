@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0](https://github.com/tokio-rs/toasty/compare/toasty-macros-v0.4.0...toasty-macros-v0.5.0) - 2026-04-27
+
+### Added
+
+- Add optimistic concurrency control with #[version] attribute for DynamoDB ([#694])
+- Support array syntax for partition/local key declarations ([#738])
+- Add pair attribute to disambiguate has_many/has_one relations ([#746])
+- Add support for float types ([#687])
+- Add native database enum support ([#665])
+- Add multi-column composite index support ([#664])
+
+### Fixed
+
+- Support Rust raw identifiers in model schemas ([#761])
+
+[#664]: https://github.com/tokio-rs/toasty/pull/664
+[#665]: https://github.com/tokio-rs/toasty/pull/665
+[#687]: https://github.com/tokio-rs/toasty/pull/687
+[#694]: https://github.com/tokio-rs/toasty/pull/694
+[#738]: https://github.com/tokio-rs/toasty/pull/738
+[#746]: https://github.com/tokio-rs/toasty/pull/746
+[#761]: https://github.com/tokio-rs/toasty/pull/761
+
+## [0.4.0](https://github.com/tokio-rs/toasty/compare/toasty-macros-v0.3.0...toasty-macros-v0.4.0) - 2026-04-11
+
+### Added
+
+- add field shorthand syntax support to create! macro ([#650](https://github.com/tokio-rs/toasty/pull/650))
+- add support for newtype embedded structs ([#634](https://github.com/tokio-rs/toasty/pull/634))
+- auto-discover related models through fields ([#635](https://github.com/tokio-rs/toasty/pull/635))
+
+### Other
+
+- fix UUID v7 auto-generation strategy code generation ([#646](https://github.com/tokio-rs/toasty/pull/646))
+- make FieldName::app_name optional to support unnamed fields ([#633](https://github.com/tokio-rs/toasty/pull/633))
+
 ## [0.3.0](https://github.com/tokio-rs/toasty/compare/toasty-macros-v0.2.0...toasty-macros-v0.3.0) - 2026-04-03
 
 ### Added

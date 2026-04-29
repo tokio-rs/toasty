@@ -1,9 +1,9 @@
 use std::borrow::Cow;
 
 use lru::LruCache;
-use postgres::{Error, Statement};
 use postgres_types::Type;
 use tokio_postgres::Client;
+use tokio_postgres::{Error, Statement};
 
 #[derive(Debug, Clone)]
 pub struct StatementCache {

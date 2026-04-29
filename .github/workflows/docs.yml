@@ -14,6 +14,11 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
+env:
+  # Pinned so a new Rust release cannot break docs builds on its own.
+  # Bumped automatically by Renovate; see .github/renovate.json5.
+  RUST_STABLE_VERSION: "1.95.0"
+
 jobs:
   build:
     if: github.repository == 'tokio-rs/toasty'
@@ -23,18 +28,17 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_STABLE_VERSION }}
 
       - name: Install mdBook and mdbook-linkcheck2
         uses: taiki-e/install-action@v2
         with:
-          tool: mdbook,mdbook-linkcheck2
+          tool: mdbook@0.5.2,mdbook-linkcheck2
 
       - name: Build guide
         run: mdbook build docs/guide
-
-      - name: Build dev docs
-        run: mdbook build docs/dev
 
       - name: Build Rust API docs
         run: cargo doc --workspace --no-deps
@@ -45,9 +49,8 @@ jobs:
         run: |
           mkdir -p _site/nightly
           cp -r docs/guide/book/html _site/nightly/guide
-          cp -r docs/dev/book/html _site/nightly/dev
           cp -r target/doc _site/nightly/api
-          cp docs/api-index.html _site/nightly/api/index.html
+          cp docs/api/index.html _site/nightly/api/index.html
           cat > _site/index.html << 'HEREDOC'
           <!DOCTYPE html>
           <html>

@@ -82,7 +82,7 @@ impl Exec<'_> {
 
         debug_assert!(
             stmt.returning()
-                .and_then(|returning| returning.as_expr())
+                .and_then(|returning| returning.as_project())
                 .map(|expr| expr.is_record())
                 .unwrap_or(true),
             "stmt={stmt:#?}"
@@ -115,8 +115,17 @@ impl Exec<'_> {
             return Ok(());
         }
 
+        // Only extract bind parameters for SQL drivers. Key-value drivers
+        // (e.g., DynamoDB) read values directly from the statement.
+        let params = if self.engine.capability().sql {
+            self.engine.extract_params(&mut stmt)
+        } else {
+            vec![]
+        };
+
         let op = operation::QuerySql {
             stmt,
+            params,
             ret: if action.conditional_update_with_no_returning {
                 Some(vec![stmt::Type::I64, stmt::Type::I64])
             } else if mysql_insert_returning.is_some() {
@@ -273,7 +282,7 @@ impl Exec<'_> {
 
         // Extract the expression from the RETURNING clause and replace ExprReference with ExprArg
         let mut returning_expr = match returning {
-            stmt::Returning::Expr(expr) => expr,
+            stmt::Returning::Project(expr) => expr,
             _ => panic!(
                 "MySQL INSERT with RETURNING must have an Expr, got: {:#?}",
                 returning
