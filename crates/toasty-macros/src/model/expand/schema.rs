@@ -208,6 +208,7 @@ impl Expand<'_> {
             };
 
             let versionable = field.attrs.versionable;
+            let deferred = field.attrs.deferred;
 
             quote! {
                 #toasty::core::schema::app::Field {
@@ -221,6 +222,7 @@ impl Expand<'_> {
                     primary_key: #primary_key,
                     auto: #auto,
                     versionable: #versionable,
+                    deferred: #deferred,
                     constraints: vec![],
                     variant: None,
                 }

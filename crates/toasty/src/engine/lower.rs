@@ -511,6 +511,10 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             // same field slot (see issue #691).
             include.sort_by_key(|p| *p.projection.as_slice().first().expect("empty include path"));
 
+            // Track which top-level fields are explicitly included so that
+            // deferred fields are not masked when the caller asked for them.
+            let mut included_top_fields = HashSet::new();
+
             let mut nested: Vec<stmt::Projection> = vec![];
             let mut current: Option<usize> = None;
 
@@ -518,6 +522,8 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 let [first, rest @ ..] = path.projection.as_slice() else {
                     unreachable!("guaranteed non-empty by sort_by_key above")
                 };
+
+                included_top_fields.insert(*first);
 
                 if current != Some(*first) {
                     if let Some(field) = current {
@@ -530,6 +536,19 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             }
             if let Some(field) = current {
                 self.build_include_subquery(&mut returning, field, &nested);
+            }
+
+            // Mask out deferred fields not covered by an include path. The
+            // column is preserved in `table_to_model` (so filter and order_by
+            // expressions still resolve to a real column reference), but the
+            // SELECT projection emits Null for the slot.
+            let model = self.model_unwrap();
+            for (index, field) in model.fields.iter().enumerate() {
+                if field.deferred && !included_top_fields.contains(&index) {
+                    returning
+                        .entry_mut(index)
+                        .insert(stmt::Expr::from(stmt::Value::Null));
+                }
             }
 
             *i = stmt::Returning::Project(returning);
@@ -858,6 +877,20 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         nested: &[stmt::Projection],
     ) {
         let field = &self.model_unwrap().fields[field_index];
+
+        // Primitive deferred field: the column reference is already in the
+        // returning record (built from `table_to_model`), so an include is
+        // a no-op here. The masking step in `visit_returning_mut` will skip
+        // this field's slot since it appears in the include set.
+        if field.deferred && field.ty.is_primitive() {
+            for path in nested {
+                assert!(
+                    path.is_empty(),
+                    "include sub-paths on deferred primitive fields are not supported"
+                );
+            }
+            return;
+        }
 
         let (mut stmt, target_model_id) = match &field.ty {
             FieldTy::HasMany(rel) => (

@@ -1,6 +1,6 @@
 use super::{Expand, util};
 use crate::model::schema::FieldTy::{BelongsTo, HasMany, HasOne, Primitive};
-use crate::model::schema::ModelKind;
+use crate::model::schema::{ModelKind, extract_deferred_inner};
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
 
@@ -36,6 +36,11 @@ impl Expand<'_> {
                     Primitive(_) if field.attrs.serialize.is_some() => {
                         // Serialized fields are stored as opaque JSON; no field accessor
                         TokenStream::new()
+                    }
+                    Primitive(ty) if field.attrs.deferred => {
+                        let inner = extract_deferred_inner(ty)
+                            .expect("deferred field must wrap inner type in `Deferred<T>`");
+                        self.expand_primitive_field_method(field_ident, &inner, &field_offset)
                     }
                     Primitive(ty) => {
                         self.expand_primitive_field_method(field_ident, ty, &field_offset)
@@ -124,6 +129,11 @@ impl Expand<'_> {
 
                 match &field.ty {
                     Primitive(_) if field.attrs.serialize.is_some() => TokenStream::new(),
+                    Primitive(ty) if field.attrs.deferred => {
+                        let inner = extract_deferred_inner(ty)
+                            .expect("deferred field must wrap inner type in `Deferred<T>`");
+                        self.expand_list_primitive_field_method(field_ident, &inner, &field_offset)
+                    }
                     Primitive(ty) => {
                         self.expand_list_primitive_field_method(field_ident, ty, &field_offset)
                     }

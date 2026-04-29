@@ -295,6 +295,7 @@ impl Expand<'_> {
                         primary_key: false,
                         auto: None,
                         versionable: false,
+                        deferred: false,
                         constraints: vec![],
                         variant: Some(#toasty::core::schema::app::VariantId {
                             model: id,

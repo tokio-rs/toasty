@@ -7,12 +7,12 @@ error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::schema::
   = help: the following other types implement trait `toasty::schema::Field`:
             Arc<T>
             Box<T>
+            Deferred<T>
             Option<T>
             Rc<T>
             Vec<u8>
             bigdecimal::BigDecimal
             bool
-            f32
           and $N others
 
 error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::schema::Field` is not satisfied
@@ -24,10 +24,10 @@ error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::schema::
   = help: the following other types implement trait `toasty::schema::Field`:
             Arc<T>
             Box<T>
+            Deferred<T>
             Option<T>
             Rc<T>
             Vec<u8>
             bigdecimal::BigDecimal
             bool
-            f32
           and $N others

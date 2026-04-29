@@ -67,6 +67,9 @@ pub(crate) struct FieldAttr {
 
     /// True if the field tracks an OCC version counter
     pub(crate) versionable: bool,
+
+    /// True if the field is annotated with `#[deferred]`
+    pub(crate) deferred: bool,
 }
 
 #[derive(Debug)]
@@ -107,6 +110,7 @@ impl FieldAttr {
             update_expr: None,
             serialize: None,
             versionable: false,
+            deferred: false,
         };
 
         for attr in attrs {
@@ -187,6 +191,15 @@ impl FieldAttr {
                     ));
                 } else {
                     field_attr.versionable = true;
+                }
+            } else if attr.path().is_ident("deferred") {
+                if field_attr.deferred {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "duplicate #[deferred] attribute",
+                    ));
+                } else {
+                    field_attr.deferred = true;
                 }
             } else if attr.path().is_ident("serialize") {
                 if field_attr.serialize.is_some() {
@@ -399,6 +412,36 @@ impl Field {
             }
         }
 
+        if attrs.deferred {
+            if ty.is_some() {
+                errs.push(syn::Error::new_spanned(
+                    field,
+                    "#[deferred] cannot be combined with relation attributes",
+                ));
+            }
+
+            if attrs.versionable {
+                errs.push(syn::Error::new_spanned(
+                    field,
+                    "#[deferred] cannot be combined with #[version]",
+                ));
+            }
+
+            if attrs.key.is_some() {
+                errs.push(syn::Error::new_spanned(
+                    field,
+                    "#[deferred] cannot be combined with #[key]",
+                ));
+            }
+
+            if extract_deferred_inner(&field.ty).is_none() {
+                errs.push(syn::Error::new_spanned(
+                    &field.ty,
+                    "#[deferred] requires the field to be wrapped in `Deferred<T>`",
+                ));
+            }
+        }
+
         if let Some(err) = errs.collect() {
             return Err(err);
         }
@@ -429,6 +472,34 @@ impl Field {
             variant: None,
         })
     }
+}
+
+/// Extract `T` from a syntactic `Deferred<T>` (or `toasty::Deferred<T>` /
+/// `::toasty::Deferred<T>`). Returns `None` if `ty` is not a `Deferred<...>`.
+pub(crate) fn extract_deferred_inner(ty: &syn::Type) -> Option<syn::Type> {
+    let syn::Type::Path(type_path) = ty else {
+        return None;
+    };
+
+    let last = type_path.path.segments.last()?;
+
+    if last.ident != "Deferred" {
+        return None;
+    }
+
+    let syn::PathArguments::AngleBracketed(args) = &last.arguments else {
+        return None;
+    };
+
+    if args.args.len() != 1 {
+        return None;
+    }
+
+    let syn::GenericArgument::Type(inner) = args.args.first()? else {
+        return None;
+    };
+
+    Some(inner.clone())
 }
 
 pub(crate) fn rewrite_self(ty: &mut syn::Type, model: &syn::Ident) {

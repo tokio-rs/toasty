@@ -1,5 +1,5 @@
 use super::{Expand, util};
-use crate::model::schema::FieldTy;
+use crate::model::schema::{FieldTy, extract_deferred_inner};
 
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
@@ -208,6 +208,16 @@ impl Expand<'_> {
                                     self.stmt.set(#index_tokenized, <String as #toasty::IntoExpr<String>>::into_expr(json));
                                     self
                                 }
+                            }
+                        }
+                    }
+                    FieldTy::Primitive(ty) if field.attrs.deferred => {
+                        let inner = extract_deferred_inner(ty)
+                            .expect("deferred field must wrap inner type in `Deferred<T>`");
+                        quote! {
+                            #vis fn #name(mut self, #name: impl #toasty::IntoExpr<#inner>) -> Self {
+                                self.stmt.set(#index_tokenized, #name.into_expr());
+                                self
                             }
                         }
                     }

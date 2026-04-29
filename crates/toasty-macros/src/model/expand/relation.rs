@@ -1,5 +1,5 @@
 use super::{Expand, util};
-use crate::model::schema::{BelongsTo, Field, FieldTy, HasMany, HasOne};
+use crate::model::schema::{BelongsTo, Field, FieldTy, HasMany, HasOne, extract_deferred_inner};
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -191,9 +191,61 @@ impl Expand<'_> {
                     Some(self.expand_model_relation_has_many_method(rel, field))
                 }
                 FieldTy::HasOne(rel) => Some(self.expand_model_relation_has_one_method(rel, field)),
+                FieldTy::Primitive(ty) if field.attrs.deferred => {
+                    Some(self.expand_model_deferred_load_method(ty, field))
+                }
                 FieldTy::Primitive(_) => None,
             })
             .collect()
+    }
+
+    fn expand_model_deferred_load_method(&self, ty: &syn::Type, field: &Field) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let model_ident = &self.model.ident;
+        let field_ident = &field.name.ident;
+        let field_index = util::int(field.id);
+        let inner = extract_deferred_inner(ty)
+            .expect("deferred field must wrap inner type in `Deferred<T>`");
+
+        let pk_filter = self.primary_key_filter();
+        let filter_method_ident = &pk_filter.filter_method_ident;
+        let arg_idents: Vec<_> = self.expand_filter_arg_idents(pk_filter).collect();
+
+        quote! {
+            #vis fn #field_ident(&self) -> #toasty::DeferredLoad<#inner> {
+                // Suppress unused field warning: a never-loaded #[deferred]
+                // field still compiles cleanly even if no other code reads it.
+                if false {
+                    let _ = &self.#field_ident;
+                }
+
+                use #toasty::IntoStatement;
+
+                // Build a PK-filtered single-row query, then rewrite its
+                // RETURNING clause to project only the deferred column. This
+                // yields `SELECT <deferred_col> FROM <table> WHERE pk = ?`.
+                let __stmt = #model_ident::#filter_method_ident( #( & self.#arg_idents ),* )
+                    .one()
+                    .into_statement()
+                    .into_untyped();
+                let mut __query = match __stmt {
+                    #toasty::core::stmt::Statement::Query(q) => q,
+                    _ => unreachable!("filter_by_<pk>().one() always builds a Query"),
+                };
+                *__query.returning_mut_unwrap() = #toasty::core::stmt::Returning::Project(
+                    #toasty::core::stmt::Expr::record([
+                        #toasty::core::stmt::Expr::Reference(
+                            #toasty::core::stmt::ExprReference::Field {
+                                nesting: 0,
+                                index: #field_index,
+                            }
+                        )
+                    ])
+                );
+                #toasty::DeferredLoad::new(__query.into())
+            }
+        }
     }
 
     fn expand_model_relation_belongs_to_method(

@@ -84,6 +84,7 @@ fn model_root(id: usize, field_types: &[(Type, &str)]) -> ModelRoot {
             primary_key: i == 0,
             auto: None,
             versionable: false,
+            deferred: false,
             constraints: vec![],
             variant: None,
         })
