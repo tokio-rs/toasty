@@ -48,6 +48,11 @@ pub struct Builder {
     /// implementatin is removed.
     models: app::ModelSet,
 
+    /// Pre-built app schema. When set, takes precedence over `models`. Used by
+    /// tooling (e.g., the standalone CLI) that obtains a schema from somewhere
+    /// other than compile-time `#[derive(Model)]` registration.
+    app_schema: Option<app::Schema>,
+
     /// Schema builder
     core: schema::Builder,
 
@@ -114,13 +119,32 @@ impl Builder {
         self
     }
 
+    /// Use a pre-built [`app::Schema`] instead of constructing one from
+    /// registered models.
+    ///
+    /// When set, [`build_app_schema`](Self::build_app_schema) returns a clone
+    /// of this schema and any models passed via [`models`](Self::models) are
+    /// ignored. Intended for tooling — such as the standalone CLI's dumper —
+    /// that obtains a schema from outside the current process.
+    pub fn app_schema(&mut self, schema: app::Schema) -> &mut Self {
+        self.app_schema = Some(schema);
+        self
+    }
+
     /// Build and return the app-level schema from the registered models
     /// without opening a database connection.
+    ///
+    /// If [`app_schema`](Self::app_schema) was called, returns a clone of that
+    /// pre-built schema instead of constructing one from `models`.
     ///
     /// This is useful for tooling that needs the schema without a running
     /// database (e.g., migration generators).
     pub fn build_app_schema(&self) -> Result<app::Schema> {
-        app::Schema::from_macro(self.models.clone())
+        if let Some(schema) = &self.app_schema {
+            Ok(schema.clone())
+        } else {
+            app::Schema::from_macro(self.models.clone())
+        }
     }
 
     /// Open a database connection using a URL string.

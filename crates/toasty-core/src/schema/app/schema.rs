@@ -45,7 +45,7 @@ pub enum Resolved<'a> {
 /// let schema = Schema::default();
 /// assert_eq!(schema.models().count(), 0);
 /// ```
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Schema {
     /// All models in the schema, keyed by [`ModelId`].

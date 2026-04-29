@@ -19,6 +19,7 @@ toasty-core = { workspace = true, features = ["serde"] }
 toasty-sql.workspace = true
 
 anyhow = "1.0.102"
+cargo_metadata.workspace = true
 clap.workspace = true
 console.workspace = true
 dialoguer.workspace = true
@@ -26,6 +27,7 @@ hashbrown.workspace = true
 jiff.workspace = true
 rand.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 toml.workspace = true
 toml_edit = { workspace = true, features = ["serde"] }
 url.workspace = true

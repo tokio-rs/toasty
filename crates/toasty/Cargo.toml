@@ -37,7 +37,7 @@ jiff = [
 	"toasty-driver-postgresql?/jiff",
 	"toasty-driver-mysql?/jiff",
 ]
-serde = ["dep:serde_core", "dep:serde_json"]
+serde = ["dep:serde_core", "dep:serde_json", "toasty-core/serde"]
 
 [dependencies]
 async-trait.workspace = true

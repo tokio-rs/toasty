@@ -32,11 +32,13 @@
 //! ```
 
 mod config;
+mod dumper;
 mod migration;
 mod theme;
 mod utility;
 
 pub use config::*;
+pub use dumper::extract_schema;
 pub use migration::*;
 
 use anyhow::Result;

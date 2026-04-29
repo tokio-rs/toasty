@@ -128,6 +128,26 @@ pub use toasty_macros::{Embed, Model, create, query};
 
 pub use toasty_core::{Error, Result, schema::app::ModelSet};
 
+/// Internal entry point for the `toasty-cli` dumper crate.
+///
+/// Iterates every model registered through `inventory`, builds an
+/// [`app::Schema`](schema::app::Schema), and writes it to stdout as JSON.
+/// Panics on any error, since the dumper has no useful recovery path.
+///
+/// Not part of the public API. Gated on the `serde` feature.
+#[cfg(feature = "serde")]
+#[doc(hidden)]
+pub fn __dump_schema() {
+    let mut set = schema::ModelSet::new();
+    for item in schema::inventory::iter::<schema::DiscoverItem>() {
+        item.add_to(&mut set);
+    }
+    let schema =
+        schema::from_macro(set).expect("failed to build app::Schema from registered models");
+    serde_json::to_writer(std::io::stdout(), &schema)
+        .expect("failed to serialize app::Schema as JSON");
+}
+
 #[doc(hidden)]
 pub mod codegen_support {
     pub use crate::schema::inventory;
