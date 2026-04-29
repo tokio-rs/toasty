@@ -212,14 +212,14 @@ impl Expand<'_> {
         let arg_idents: Vec<_> = self.expand_filter_arg_idents(pk_filter).collect();
 
         quote! {
-            #vis fn #field_ident(&self) -> #toasty::DeferredLoad<#inner> {
+            #vis fn #field_ident(&self) -> #toasty::Statement<#inner> {
                 // Suppress unused field warning: a never-loaded #[deferred]
                 // field still compiles cleanly even if no other code reads it.
                 if false {
                     let _ = &self.#field_ident;
                 }
 
-                #toasty::DeferredLoad::from_pk_query(
+                #toasty::build_deferred_load(
                     #model_ident::#filter_method_ident( #( & self.#arg_idents ),* ).one(),
                     #field_index,
                 )

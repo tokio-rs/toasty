@@ -1,10 +1,9 @@
 use super::{Field, Load};
+use crate::Statement;
 use crate::stmt::{self, Expr, IntoStatement};
-use crate::{Executor, Result};
 use toasty_core::schema::app::ModelSet;
 
 use std::fmt;
-use std::marker::PhantomData;
 
 /// A field whose value is not loaded by default.
 ///
@@ -70,74 +69,24 @@ impl<T> Deferred<T> {
     }
 }
 
-/// Builder returned by the per-field accessor on a model with a `#[deferred]`
-/// primitive. Calling [`exec`](DeferredLoad::exec) issues a single-row read
-/// against the database keyed on the model's primary key and returns the
-/// deferred field's value.
+/// Build a `Statement<T>` from a PK-filtered single-row query and the
+/// model-field index of the deferred field. Rewrites the statement's
+/// `RETURNING` clause to project just that column.
 ///
-/// `DeferredLoad` is constructed by generated code via [`new`](DeferredLoad::new)
-/// and rewrites the statement's `RETURNING` clause to project just the deferred
-/// column. The model record itself is never decoded, which keeps the loaded
-/// state of nullable fields (`Deferred<Option<T>>`) unambiguous regardless of
-/// whether the column value is `NULL`.
-pub struct DeferredLoad<T> {
-    stmt: toasty_core::stmt::Statement,
-    _p: PhantomData<T>,
-}
-
-impl<T: Load<Output = T>> DeferredLoad<T> {
-    /// Construct a new builder. Used by generated code.
-    #[doc(hidden)]
-    pub fn new(stmt: toasty_core::stmt::Statement) -> Self {
-        Self {
-            stmt,
-            _p: PhantomData,
-        }
-    }
-
-    /// Build a `DeferredLoad` from a PK-filtered single-row query and the
-    /// model-field index of the deferred field. Rewrites the statement's
-    /// `RETURNING` clause to project just that column. Used by generated code.
-    #[doc(hidden)]
-    pub fn from_pk_query<S: IntoStatement>(stmt: S, field_index: usize) -> Self {
-        let mut untyped = stmt.into_statement().into_untyped();
-        *untyped.returning_mut_unwrap() =
-            toasty_core::stmt::Returning::Project(toasty_core::stmt::Expr::record([
-                toasty_core::stmt::Expr::Reference(toasty_core::stmt::ExprReference::Field {
-                    nesting: 0,
-                    index: field_index,
-                }),
-            ]));
-        Self::new(untyped)
-    }
-
-    /// Execute the load and return the deferred field's value.
-    pub async fn exec(self, executor: &mut dyn Executor) -> Result<T> {
-        let response = executor.exec_untyped(self.stmt).await?;
-        let value = response.values.collect_as_value().await?;
-        T::load(unwrap_single_column(value))
-    }
-}
-
-/// Unwrap the value returned by a `SELECT col FROM tbl WHERE pk = ?` into the
-/// scalar at the single column. Handles `Value::List([Value::Record([col])])`
-/// (driver-shaped result), `Value::Record([col])` (single-row), and a bare
-/// scalar.
-fn unwrap_single_column(value: toasty_core::stmt::Value) -> toasty_core::stmt::Value {
-    use toasty_core::stmt::Value;
-    match value {
-        Value::List(items) => {
-            let mut iter = items.into_iter();
-            match iter.next() {
-                Some(first) => unwrap_single_column(first),
-                None => Value::Null,
-            }
-        }
-        Value::Record(record) if record.fields.len() == 1 => {
-            record.fields.into_iter().next().unwrap()
-        }
-        v => v,
-    }
+/// Used by generated code for the per-field accessor on `#[deferred]`
+/// primitives. The model record itself is never decoded, which keeps the
+/// loaded state of nullable fields (`Deferred<Option<T>>`) unambiguous
+/// regardless of whether the column value is `NULL`.
+#[doc(hidden)]
+pub fn build_deferred_load<T, S: IntoStatement>(stmt: S, field_index: usize) -> Statement<T> {
+    let mut untyped = stmt.into_statement().into_untyped();
+    *untyped.returning_mut_unwrap() = toasty_core::stmt::Returning::Project(
+        toasty_core::stmt::Expr::Reference(toasty_core::stmt::ExprReference::Field {
+            nesting: 0,
+            index: field_index,
+        }),
+    );
+    Statement::from_untyped_stmt(untyped)
 }
 
 impl<T> Default for Deferred<T> {
