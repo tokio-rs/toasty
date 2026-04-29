@@ -1,5 +1,5 @@
 use super::{Field, Load};
-use crate::stmt::{self, Expr};
+use crate::stmt::{self, Expr, IntoStatement};
 use crate::{Executor, Result};
 use toasty_core::schema::app::ModelSet;
 
@@ -93,6 +93,22 @@ impl<T: Load<Output = T>> DeferredLoad<T> {
             stmt,
             _p: PhantomData,
         }
+    }
+
+    /// Build a `DeferredLoad` from a PK-filtered single-row query and the
+    /// model-field index of the deferred field. Rewrites the statement's
+    /// `RETURNING` clause to project just that column. Used by generated code.
+    #[doc(hidden)]
+    pub fn from_pk_query<S: IntoStatement>(stmt: S, field_index: usize) -> Self {
+        let mut untyped = stmt.into_statement().into_untyped();
+        *untyped.returning_mut_unwrap() =
+            toasty_core::stmt::Returning::Project(toasty_core::stmt::Expr::record([
+                toasty_core::stmt::Expr::Reference(toasty_core::stmt::ExprReference::Field {
+                    nesting: 0,
+                    index: field_index,
+                }),
+            ]));
+        Self::new(untyped)
     }
 
     /// Execute the load and return the deferred field's value.

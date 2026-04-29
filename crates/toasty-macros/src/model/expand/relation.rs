@@ -219,30 +219,10 @@ impl Expand<'_> {
                     let _ = &self.#field_ident;
                 }
 
-                use #toasty::IntoStatement;
-
-                // Build a PK-filtered single-row query, then rewrite its
-                // RETURNING clause to project only the deferred column. This
-                // yields `SELECT <deferred_col> FROM <table> WHERE pk = ?`.
-                let __stmt = #model_ident::#filter_method_ident( #( & self.#arg_idents ),* )
-                    .one()
-                    .into_statement()
-                    .into_untyped();
-                let mut __query = match __stmt {
-                    #toasty::core::stmt::Statement::Query(q) => q,
-                    _ => unreachable!("filter_by_<pk>().one() always builds a Query"),
-                };
-                *__query.returning_mut_unwrap() = #toasty::core::stmt::Returning::Project(
-                    #toasty::core::stmt::Expr::record([
-                        #toasty::core::stmt::Expr::Reference(
-                            #toasty::core::stmt::ExprReference::Field {
-                                nesting: 0,
-                                index: #field_index,
-                            }
-                        )
-                    ])
-                );
-                #toasty::DeferredLoad::new(__query.into())
+                #toasty::DeferredLoad::from_pk_query(
+                    #model_ident::#filter_method_ident( #( & self.#arg_idents ),* ).one(),
+                    #field_index,
+                )
             }
         }
     }
