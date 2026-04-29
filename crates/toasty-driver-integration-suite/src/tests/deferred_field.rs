@@ -23,9 +23,9 @@ pub async fn default_load_leaves_deferred_unloaded(t: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await?;
 
-    // Newly created records: deferred field is unloaded.
+    // Newly created records expose the value just written as loaded.
     assert_eq!("Hello", created.title);
-    assert!(created.body.is_unloaded());
+    assert_eq!("the long body", created.body.get());
 
     // Querying the model leaves the deferred field unloaded.
     let read = Document::filter_by_id(created.id).get(&mut db).await?;

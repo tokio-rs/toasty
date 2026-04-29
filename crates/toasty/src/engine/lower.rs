@@ -542,12 +542,17 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             // column is preserved in `table_to_model` (so filter and order_by
             // expressions still resolve to a real column reference), but the
             // SELECT projection emits Null for the slot.
-            let model = self.model_unwrap();
-            for (index, field) in model.fields.iter().enumerate() {
-                if field.deferred && !included_top_fields.contains(&index) {
-                    returning
-                        .entry_mut(index)
-                        .insert(stmt::Expr::from(stmt::Value::Null));
+            //
+            // INSERT...RETURNING bypasses the mask: the caller just supplied
+            // the value and expects to read it back as loaded.
+            if !self.cx.is_insert() {
+                let model = self.model_unwrap();
+                for (index, field) in model.fields.iter().enumerate() {
+                    if field.deferred && !included_top_fields.contains(&index) {
+                        returning
+                            .entry_mut(index)
+                            .insert(stmt::Expr::from(stmt::Value::Null));
+                    }
                 }
             }
 
