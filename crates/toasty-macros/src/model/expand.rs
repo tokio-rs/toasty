@@ -347,20 +347,6 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
 // === Shared token-generation helpers ===
 
 impl Expand<'_> {
-    /// Splices a call to the runtime `into_untyped_expr` helper, which performs
-    /// the typed-`IntoExpr` → untyped-`core::stmt::Expr` conversion. The
-    /// explicit `T` type parameter disambiguates which `IntoExpr` impl to use.
-    fn expand_into_untyped_expr(
-        &self,
-        ty: impl quote::ToTokens,
-        value: impl quote::ToTokens,
-    ) -> TokenStream {
-        let toasty = &self.toasty;
-        quote! {
-            #toasty::into_untyped_expr::<#ty, _>(#value)
-        }
-    }
-
     /// Generates a field accessor method for a `BelongsTo` or `HasOne`
     /// relation using `Relation::OneField`.
     fn expand_one_relation_field_method(

@@ -479,7 +479,7 @@ impl Expand<'_> {
                     let field_exprs = fields.iter().map(|field| {
                         let field_ident = &field.name.ident;
                         let ty = primitive_ty_unwrap(field);
-                        self.expand_into_untyped_expr(ty, field_ident)
+                        quote!(#toasty::into_untyped_expr::<#ty, _>(#field_ident))
                     });
 
                     quote! {
