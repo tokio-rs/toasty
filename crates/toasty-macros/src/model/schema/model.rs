@@ -363,8 +363,12 @@ impl Model {
         }
     }
 
-    pub(crate) fn has_associations(&self) -> bool {
-        self.fields.iter().any(|f| f.ty.is_relation())
+    /// True if any field can be the target of `.include()` — relations or
+    /// `#[deferred]` primitives.
+    pub(crate) fn has_includable_fields(&self) -> bool {
+        self.fields
+            .iter()
+            .any(|f| f.ty.is_relation() || f.attrs.deferred)
     }
 
     pub(crate) fn from_enum_ast(ast: &syn::ItemEnum) -> syn::Result<Self> {
