@@ -121,9 +121,15 @@ impl<T: Load<Output = T>> Load for Deferred<T> {
         }
     }
 
-    fn reload(_target: &mut Self, _value: toasty_core::stmt::Value) -> crate::Result<()> {
-        // An update does not change a deferred field's loaded state. The
-        // in-memory copy (loaded or unloaded) is left as-is.
+    fn reload(target: &mut Self, value: toasty_core::stmt::Value) -> crate::Result<()> {
+        // The caller already supplied the value as part of the update, so the
+        // field becomes loaded regardless of its prior state — no follow-up
+        // fetch is needed to read what was just written.
+        //
+        // Updates send the assigned value back unwrapped, unlike the SELECT
+        // lowering which wraps loaded slots in a 1-element record to
+        // distinguish them from unloaded slots.
+        target.value = Some(T::load(value)?);
         Ok(())
     }
 }

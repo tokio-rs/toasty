@@ -290,7 +290,9 @@ pub async fn deferred_works_through_type_alias(t: &mut Test) -> Result<()> {
 }
 
 #[driver_test(id(ID), scenario(crate::scenarios::deferred_document))]
-pub async fn deferred_update_without_prior_load(t: &mut Test) -> Result<()> {
+pub async fn deferred_update_loads_from_unloaded(t: &mut Test) -> Result<()> {
+    // The caller supplied the value as part of the update, so the in-memory
+    // field becomes loaded — no follow-up fetch is needed.
     let mut db = setup(t).await;
 
     let created = toasty::create!(Document {
@@ -303,18 +305,43 @@ pub async fn deferred_update_without_prior_load(t: &mut Test) -> Result<()> {
     let mut doc = Document::filter_by_id(created.id).get(&mut db).await?;
     assert!(doc.body.is_unloaded());
 
-    // Update the deferred field without ever loading it.
     doc.update()
         .body("new body".to_string())
         .exec(&mut db)
         .await?;
 
-    // Loaded-ness is unchanged after an update.
-    assert!(doc.body.is_unloaded());
+    assert!(!doc.body.is_unloaded());
+    assert_eq!("new body", doc.body.get());
 
-    // The new value is persisted in the database.
-    let body: String = doc.body().exec(&mut db).await?;
-    assert_eq!("new body", body);
+    Ok(())
+}
+
+#[driver_test(id(ID), scenario(crate::scenarios::deferred_document))]
+pub async fn deferred_update_refreshes_loaded_value(t: &mut Test) -> Result<()> {
+    // An already-loaded deferred field is refreshed by the update, matching
+    // non-deferred field behavior.
+    let mut db = setup(t).await;
+
+    let created = toasty::create!(Document {
+        title: "Hello".to_string(),
+        body: "old body".to_string(),
+    })
+    .exec(&mut db)
+    .await?;
+
+    let mut doc = Document::filter_by_id(created.id)
+        .include(Document::fields().body())
+        .get(&mut db)
+        .await?;
+    assert_eq!("old body", doc.body.get());
+
+    doc.update()
+        .body("new body".to_string())
+        .exec(&mut db)
+        .await?;
+
+    assert!(!doc.body.is_unloaded());
+    assert_eq!("new body", doc.body.get());
 
     Ok(())
 }

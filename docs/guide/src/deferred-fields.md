@@ -201,7 +201,10 @@ assert!(docs[0].body.is_unloaded());
 
 ## Updating
 
-Updating a deferred field does not require it to be loaded:
+Updating a deferred field does not require it to be loaded. The
+caller already supplies the value, so the field is loaded with the new
+value after the update — no follow-up `.exec()` or `.include()` is
+needed to read what was just written:
 
 ```rust
 # use toasty::Model;
@@ -224,15 +227,11 @@ assert!(doc.body.is_unloaded());
 
 doc.update().body("new body".to_string()).exec(&mut db).await?;
 
-// The update does not change the loaded state of the in-memory record.
-assert!(doc.body.is_unloaded());
+// The field is loaded with the value just assigned.
+assert_eq!("new body", doc.body.get());
 # Ok(())
 # }
 ```
-
-A loaded value is unchanged by the update. The caller is responsible
-for refreshing the in-memory record to read the new value without a
-follow-up `.exec()` or `.include()`.
 
 ## Optional deferred fields
 
