@@ -499,63 +499,22 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
     fn visit_returning_mut(&mut self, i: &mut stmt::Returning) {
         if let stmt::Returning::Model { include } = i {
-            // Capture the include clause as we will be using it to generate
-            // inclusion statements.
-            let mut include = std::mem::take(include);
+            let include = std::mem::take(include);
 
-            let mut returning = self.mapping_unwrap().table_to_model.lower_returning_model();
-
-            // Sort by first field so paths sharing a prefix are contiguous,
-            // then emit one merged subquery per group — without this, each
-            // `.include()` call would overwrite the previous subquery at the
-            // same field slot (see issue #691).
-            include.sort_by_key(|p| *p.projection.as_slice().first().expect("empty include path"));
-
-            let mut nested: Vec<stmt::Projection> = vec![];
-            let mut current: Option<usize> = None;
-
-            for path in &include {
-                let [first, rest @ ..] = path.projection.as_slice() else {
-                    unreachable!("guaranteed non-empty by sort_by_key above")
-                };
-
-                if current != Some(*first) {
-                    if let Some(field) = current {
-                        self.build_include_subquery(&mut returning, field, &nested);
-                        nested.clear();
-                    }
-                    current = Some(*first);
-                }
-                nested.push(stmt::Projection::from(rest));
-            }
-            if let Some(field) = current {
-                self.build_include_subquery(&mut returning, field, &nested);
-            }
-
-            // Encode each deferred slot so the row decoder can distinguish
-            // "loaded" from "unloaded" — critical when the inner type is
-            // `Option<T>`, where a NULL column value is otherwise
-            // indistinguishable from the unloaded state.
-            //
-            // - Loaded slots wrap the column reference in a 1-element record
-            //   `Record([col])`, so an actual NULL value comes back as
-            //   `Record([Null])` and decodes to `Some(None)`.
-            // - Unloaded slots emit a bare `Null`, which decodes to the
-            //   unloaded state.
-            //
-            // INSERT...RETURNING always projects deferred fields (the caller
-            // just supplied the value and expects to read it back).
-            //
-            // The walk recurses into embedded fields so `#[deferred]` sub-fields
-            // inside an `#[derive(Embed)]` struct are masked the same way as
-            // top-level deferred fields.
-            let model = self.model_unwrap();
-            let is_insert = self.cx.is_insert();
+            // Start from the schema's pre-computed default returning — every
+            // `#[deferred]` slot, top-level or nested, is already `Null`.
+            // `process_includes` then splices loaded forms in at the slots
+            // named by include paths (and at every deferred slot when this
+            // is an `INSERT ... RETURNING`).
+            let mut returning = self.mapping_unwrap().default_returning.clone();
             let include_projections: Vec<stmt::Projection> =
                 include.iter().map(|p| p.projection.clone()).collect();
-            self.apply_deferred_mask(
+            let is_insert = self.cx.is_insert();
+            let model_id = self.model_unwrap().id;
+
+            self.process_top_level_includes(
                 &mut returning,
-                &model.fields,
+                model_id,
                 &include_projections,
                 is_insert,
             );
@@ -879,118 +838,175 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         }
     }
 
-    /// Walks `returning` (a Record matching the shape of `fields`) and applies
-    /// the `Deferred<T>` sentinel encoding to every deferred field — top-level
-    /// or nested inside an embedded struct.
-    ///
-    /// - Loaded slot: wrap the slot's expression in `Record([..])` so the row
-    ///   decoder distinguishes "loaded as `None`" from "unloaded" for
-    ///   `Deferred<Option<T>>`.
-    /// - Unloaded slot: replace with `Null` so the decoder reports unloaded.
-    ///
-    /// `include_paths` are the projection paths the caller passed to
-    /// `.include()`, expressed relative to the current `fields` slice. A
-    /// matching path entry — either the field itself (`[i]`) or a sub-path
-    /// (`[i, ..]`) — marks the field as loaded. `is_insert` short-circuits
-    /// every deferred slot to loaded for `INSERT ... RETURNING`, where the
-    /// caller just supplied the value.
-    ///
-    /// The recursion only descends into `EmbeddedStruct` targets. Embedded
-    /// enums with `#[deferred]` variant fields are not yet supported.
-    fn apply_deferred_mask(
-        &self,
+    /// Top-level entry: dispatches every model field on `mapping.default_returning`.
+    /// Reads the root model's app fields and field mappings via
+    /// `self.schema()` (long-lived `'b` borrow) so the recursive helper can
+    /// freely re-borrow `&mut self` for relation include subqueries.
+    fn process_top_level_includes(
+        &mut self,
         returning: &mut stmt::Expr,
-        fields: &[app::Field],
+        model_id: app::ModelId,
+        include_paths: &[stmt::Projection],
+        is_insert: bool,
+    ) {
+        let app_fields: &[app::Field] = self
+            .schema()
+            .app
+            .model(model_id)
+            .as_root_unwrap()
+            .fields
+            .as_slice();
+        let mapping_fields: &[mapping::Field] =
+            self.schema().mapping_for(model_id).fields.as_slice();
+        self.process_includes(
+            returning,
+            app_fields,
+            mapping_fields,
+            include_paths,
+            is_insert,
+        );
+    }
+
+    /// Walks `returning` (a `Record(..)` matching the shape of `app_fields`)
+    /// and splices loaded forms in at slots named by the include paths or, when
+    /// `is_insert`, at every deferred slot.
+    ///
+    /// Each field at index `i` dispatches by kind:
+    ///
+    /// - **Relation** — falls through to `build_include_subquery`, which
+    ///   builds the subquery for the slot. (Relations are not allowed inside
+    ///   embedded types today, so this branch only fires at the top level.)
+    /// - **Deferred primitive** — when activated, replaces the slot's `Null`
+    ///   with `Record([column_expr])` so the row decoder sees the loaded
+    ///   sentinel.
+    /// - **Deferred embed** — when activated, replaces the slot's `Null` with
+    ///   `Record([embed.default_returning.clone()])` and recurses into the
+    ///   wrapped inner record so further `.include()` paths within the embed
+    ///   apply.
+    /// - **Eager embed (struct)** — recurses into the slot (already the
+    ///   embed's default expression) so any `#[deferred]` sub-fields the
+    ///   caller named get spliced in. Eager enums carry no deferred-aware
+    ///   recursion — `#[deferred]` on variant fields is rejected at the
+    ///   macro layer today.
+    /// - **Eager primitive** — no-op; the default expression already holds
+    ///   the column reference.
+    fn process_includes(
+        &mut self,
+        returning: &mut stmt::Expr,
+        app_fields: &[app::Field],
+        mapping_fields: &[mapping::Field],
         include_paths: &[stmt::Projection],
         is_insert: bool,
     ) {
         let stmt::Expr::Record(record) = returning else {
-            // Non-record returning shapes (e.g., `Match` arms for embedded
-            // enums) carry no deferred sub-fields today.
+            // Non-record shapes (e.g., a `Match` for an embedded enum) hold
+            // no deferred sub-fields today; nothing to splice.
             return;
         };
 
-        for (i, field) in fields.iter().enumerate() {
-            // A bare `[i]` path matches "include this field"; a longer
-            // `[i, ..]` path matches "include this sub-path within the field"
-            // and also implies the parent field itself is loaded.
+        for (i, field) in app_fields.iter().enumerate() {
+            // Partition include paths matching this slot. `bare` covers
+            // `[i]` ("include this field"); `sub_paths` covers `[i, …]`
+            // ("include sub-path within"). Either kind activates the slot.
             let mut bare = false;
             let mut sub_paths: Vec<stmt::Projection> = Vec::new();
             for path in include_paths {
-                let slice = path.as_slice();
-                match slice.split_first() {
-                    Some((first, rest)) if *first == i => {
-                        if rest.is_empty() {
-                            bare = true;
-                        } else {
-                            sub_paths.push(stmt::Projection::from(rest));
-                        }
+                if let Some((first, rest)) = path.as_slice().split_first()
+                    && *first == i
+                {
+                    if rest.is_empty() {
+                        bare = true;
+                    } else {
+                        sub_paths.push(stmt::Projection::from(rest));
                     }
-                    _ => {}
                 }
             }
 
-            if field.deferred {
-                let loaded = is_insert || bare || !sub_paths.is_empty();
-                let target = &mut record[i];
-                if loaded {
-                    let inner = target.take();
-                    *target = stmt::Expr::record([inner]);
-
-                    // For a deferred embed, descend into the wrapped inner
-                    // record so any `#[deferred]` sub-fields inside the embed
-                    // get the same masking treatment.
-                    if let app::FieldTy::Embedded(embedded) = &field.ty
-                        && let app::Model::EmbeddedStruct(s) =
-                            self.schema().app.model(embedded.target)
-                        && let stmt::Expr::Record(outer) = &mut record[i]
-                    {
-                        self.apply_deferred_mask(&mut outer[0], &s.fields, &sub_paths, is_insert);
-                    }
-                } else {
-                    *target = stmt::Expr::from(stmt::Value::Null);
+            // Relations go through the existing subquery splice; deferred
+            // and embed slots are handled inline.
+            if field.ty.is_relation() {
+                if bare || !sub_paths.is_empty() {
+                    self.build_include_subquery(record, i, &sub_paths);
                 }
                 continue;
             }
 
-            if let app::FieldTy::Embedded(embedded) = &field.ty {
-                let target_model = self.schema().app.model(embedded.target);
-                if let app::Model::EmbeddedStruct(s) = target_model {
-                    let target = &mut record[i];
-                    self.apply_deferred_mask(target, &s.fields, &sub_paths, is_insert);
+            if field.deferred {
+                let loaded = is_insert || bare || !sub_paths.is_empty();
+                if !loaded {
+                    // Default state already has `Null` at this slot.
+                    continue;
                 }
-                // Embedded enums: skipped intentionally — `#[deferred]` on
-                // variant fields is not yet supported and the macro does not
-                // propagate the flag in `expand_enum_schema_fields`.
+
+                let target = &mut record[i];
+                let loaded_inner = match &field.ty {
+                    app::FieldTy::Primitive(_) => mapping_fields[i]
+                        .as_primitive()
+                        .expect("deferred primitive must map to FieldPrimitive")
+                        .column_expr
+                        .clone(),
+                    app::FieldTy::Embedded(_) => match &mapping_fields[i] {
+                        mapping::Field::Struct(s) => s.default_returning.clone(),
+                        mapping::Field::Enum(e) => e.default_returning.clone(),
+                        _ => unreachable!("deferred embed must map to FieldStruct/FieldEnum"),
+                    },
+                    _ => unreachable!("relation already handled above"),
+                };
+                *target = stmt::Expr::record([loaded_inner]);
+
+                // Recurse into the wrapped inner so nested deferred sub-fields
+                // named by `sub_paths` get spliced too. Only struct embeds
+                // carry recursive deferred sub-fields today.
+                if let app::FieldTy::Embedded(embedded) = &field.ty
+                    && let app::Model::EmbeddedStruct(em) = self.schema().app.model(embedded.target)
+                    && let mapping::Field::Struct(fs) = &mapping_fields[i]
+                    && let stmt::Expr::Record(outer) = &mut record[i]
+                {
+                    let nested_app: &[app::Field] = em.fields.as_slice();
+                    let nested_mapping: &[mapping::Field] = fs.fields.as_slice();
+                    self.process_includes(
+                        &mut outer[0],
+                        nested_app,
+                        nested_mapping,
+                        &sub_paths,
+                        is_insert,
+                    );
+                }
+                continue;
+            }
+
+            // Eager embed: recurse into the slot for any sub-path includes
+            // (or to apply the `is_insert` short-circuit to nested deferred
+            // sub-fields).
+            if let app::FieldTy::Embedded(embedded) = &field.ty
+                && (is_insert || !sub_paths.is_empty())
+                && let app::Model::EmbeddedStruct(em) = self.schema().app.model(embedded.target)
+                && let mapping::Field::Struct(fs) = &mapping_fields[i]
+            {
+                let nested_app: &[app::Field] = em.fields.as_slice();
+                let nested_mapping: &[mapping::Field] = fs.fields.as_slice();
+                self.process_includes(
+                    &mut record[i],
+                    nested_app,
+                    nested_mapping,
+                    &sub_paths,
+                    is_insert,
+                );
             }
         }
     }
 
+    /// Builds the relation subquery to splice into `returning[field_index]`
+    /// for a `.include()` of a `BelongsTo`/`HasMany`/`HasOne`. Called only by
+    /// `process_includes` for relation slots; deferred and embedded slots
+    /// never reach here.
     fn build_include_subquery(
         &mut self,
-        returning: &mut stmt::Expr,
+        returning: &mut stmt::ExprRecord,
         field_index: usize,
         nested: &[stmt::Projection],
     ) {
         let field = &self.model_unwrap().fields[field_index];
-
-        // Deferred or embedded field: the column references are already in
-        // the returning record (built from `table_to_model`); the deferred-mask
-        // walk in `apply_deferred_mask` consumes the include paths to decide
-        // which slots to mask. Sub-paths on a deferred primitive are still
-        // rejected since a primitive has no sub-projection.
-        if field.deferred && field.ty.is_primitive() {
-            for path in nested {
-                assert!(
-                    path.is_empty(),
-                    "include sub-paths on deferred primitive fields are not supported"
-                );
-            }
-            return;
-        }
-        if field.ty.is_embedded() {
-            return;
-        }
 
         let (mut stmt, target_model_id) = match &field.ty {
             FieldTy::HasMany(rel) => (
@@ -1091,7 +1107,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             });
         }
 
-        returning.entry_mut(field_index).insert(sub_expr);
+        returning[field_index] = sub_expr;
     }
 
     /// Returns the ArgId for the new reference

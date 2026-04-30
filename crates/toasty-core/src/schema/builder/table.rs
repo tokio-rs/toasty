@@ -376,20 +376,118 @@ impl BuildTableFromModels<'_> {
 
 impl BuildMapping<'_> {
     fn build_mapping(mut self, model: &ModelRoot) -> Result<()> {
-        let fields = MapField::new(&mut self).map_fields(&model.fields)?;
+        let mut fields = MapField::new(&mut self).map_fields(&model.fields)?;
 
         assert!(!self.model_to_table.is_empty());
         assert_eq!(self.model_to_table.len(), self.lowering_columns.len());
 
         self.build_table_to_model(model, &fields)?;
 
+        // Compute the default `RETURNING` expression for the model and for
+        // each nested embedded type. Mutates `fields` to populate the
+        // per-embed `default_returning` along the way.
+        let default_returning = self.build_default_returning_root(model, &mut fields)?;
+
         self.mapping.fields = fields;
         self.mapping.columns = self.lowering_columns;
         self.mapping.model_to_table = stmt::ExprRecord::from_vec(self.model_to_table);
         self.mapping.table_to_model =
             TableToModel::new(stmt::ExprRecord::from_vec(self.table_to_model));
+        self.mapping.default_returning = default_returning;
 
         Ok(())
+    }
+
+    /// Builds the model's default `RETURNING` expression — the same shape as
+    /// `table_to_model` but with every `#[deferred]` slot, at this level or
+    /// inside a nested embedded type, pre-masked to `Null`. Also writes each
+    /// embed's own default expression into the corresponding mapping node so
+    /// lowering can splice it in when an `.include()` activates a deferred
+    /// embed slot.
+    fn build_default_returning_root(
+        &self,
+        model: &ModelRoot,
+        fields: &mut [mapping::Field],
+    ) -> Result<stmt::Expr> {
+        let exprs: Vec<stmt::Expr> = model
+            .fields
+            .iter()
+            .zip(fields.iter_mut())
+            .map(|(field, mapping)| self.build_default_returning_field(field, mapping))
+            .collect::<Result<_>>()?;
+        Ok(stmt::Expr::record(exprs))
+    }
+
+    /// Builds the default returning expression for a single field slot and,
+    /// if the field is an embedded type, populates the embed's own
+    /// `default_returning` cache.
+    fn build_default_returning_field(
+        &self,
+        field: &app::Field,
+        mapping: &mut mapping::Field,
+    ) -> Result<stmt::Expr> {
+        // Deferred slots are `Null` in the default expression. Still recurse
+        // through deferred embeds so the nested `default_returning` is
+        // populated — `process_includes` reads it during a `.include()`
+        // splice.
+        if field.deferred {
+            if matches!(&field.ty, app::FieldTy::Embedded(_)) {
+                self.populate_embed_default_returning(field, mapping)?;
+            }
+            return Ok(stmt::Expr::null());
+        }
+
+        match &field.ty {
+            app::FieldTy::Primitive(primitive) => {
+                let column_id = mapping.as_primitive().unwrap().column;
+                Ok(self.map_table_column_to_model(column_id, primitive))
+            }
+            app::FieldTy::Embedded(_) => self.populate_embed_default_returning(field, mapping),
+            app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
+                Ok(stmt::Value::Null.into())
+            }
+        }
+    }
+
+    /// Resolves the embedded target, recurses to compute its default
+    /// expression, stores it on the mapping node, and returns a clone for
+    /// the caller to splice in at the parent's slot.
+    fn populate_embed_default_returning(
+        &self,
+        field: &app::Field,
+        mapping: &mut mapping::Field,
+    ) -> Result<stmt::Expr> {
+        let app::FieldTy::Embedded(embedded) = &field.ty else {
+            unreachable!("populate_embed_default_returning called on non-embed");
+        };
+        let target = lookup_embedded_model(self.app, embedded.target, field)?;
+
+        match (target, mapping) {
+            (app::Model::EmbeddedStruct(embed_model), mapping::Field::Struct(s)) => {
+                let expr = {
+                    let exprs: Vec<stmt::Expr> = embed_model
+                        .fields
+                        .iter()
+                        .zip(s.fields.iter_mut())
+                        .map(|(f, m)| self.build_default_returning_field(f, m))
+                        .collect::<Result<_>>()?;
+                    stmt::Expr::record(exprs)
+                };
+                s.default_returning = expr.clone();
+                Ok(expr)
+            }
+            (app::Model::EmbeddedEnum(embed_model), mapping::Field::Enum(e)) => {
+                // Variant fields cannot be `#[deferred]` today (macro
+                // rejects), so the enum's default returning matches the
+                // raw `table_to_model` shape exactly. If variant-deferred
+                // is ever lifted, this is where the per-arm masking would
+                // recurse.
+                let expr = self.build_table_to_model_field_enum(embed_model, e)?;
+                e.default_returning = expr.clone();
+                Ok(expr)
+            }
+            _ => unreachable!("invalid schema: embedded field maps to root model"),
+        }
     }
 
     fn next_bit(&mut self) -> usize {
@@ -648,12 +746,14 @@ impl<'a, 'b> MapField<'a, 'b> {
         let lowering_index = self.build.push_lowering(column_id, &primitive.ty, expr);
         let bit = self.build.next_bit();
         let sub_projection = self.sub_projection(field_index);
+        let column_expr = self.build.map_table_column_to_model(column_id, primitive);
 
         mapping::Field::Primitive(mapping::FieldPrimitive {
             column: column_id,
             lowering: lowering_index,
             field_mask: stmt::PathFieldSet::from_iter([bit]),
             sub_projection,
+            column_expr,
         })
     }
 
@@ -714,16 +814,22 @@ impl<'a, 'b> MapField<'a, 'b> {
 
         let field_mask = stmt::PathFieldSet::from_iter([bit]);
 
+        let disc_column_expr = self
+            .build
+            .map_table_column_to_model(column_id, &embedded_enum.discriminant);
+
         Ok(mapping::Field::Enum(mapping::FieldEnum {
             discriminant: mapping::FieldPrimitive {
                 column: column_id,
                 lowering: lowering_index,
                 field_mask: field_mask.clone(),
                 sub_projection: stmt::Projection::identity(),
+                column_expr: disc_column_expr,
             },
             variants,
             field_mask,
             sub_projection,
+            default_returning: stmt::Expr::null(),
         }))
     }
 
@@ -752,6 +858,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             columns,
             field_mask,
             sub_projection,
+            default_returning: stmt::Expr::null(),
         }))
     }
 

@@ -1,6 +1,6 @@
 use crate::{
     schema::{app::ModelId, db::ColumnId},
-    stmt::{PathFieldSet, Projection},
+    stmt::{self, PathFieldSet, Projection},
 };
 use indexmap::IndexMap;
 
@@ -179,6 +179,15 @@ pub struct FieldPrimitive {
     /// existing lowering and constantization pipeline resolves it to the
     /// correct column value without needing to carry assignment expressions.
     pub sub_projection: Projection,
+
+    /// Pre-computed table→model expression for this primitive — a column
+    /// reference, possibly wrapped in a cast when the storage type differs
+    /// from the primitive's expression type.
+    ///
+    /// Cached so that lowering can splice the loaded form `Record([..])` for
+    /// a `#[deferred]` primitive without re-deriving the column expression
+    /// from the column id and schema.
+    pub column_expr: stmt::Expr,
 }
 
 /// Maps an embedded struct field to its flattened column representation.
@@ -220,6 +229,14 @@ pub struct FieldStruct {
     /// The projection from the root model field down to this embedded field
     /// within the type hierarchy. Identity for root-level embedded fields.
     pub sub_projection: Projection,
+
+    /// Pre-computed default record expression for this embedded struct.
+    ///
+    /// `Record([..])` shape matching the struct's fields, with deferred
+    /// sub-fields (direct or further nested) pre-masked to `Null`. Spliced
+    /// in by `process_includes` when a parent `.include()` activates a
+    /// `Deferred<EmbedStruct>` slot.
+    pub default_returning: stmt::Expr,
 }
 
 /// Maps an embedded enum field to its discriminant column and per-variant data columns.
@@ -250,6 +267,16 @@ pub struct FieldEnum {
 
     /// Sub-projection from the root model field to this enum field.
     pub sub_projection: Projection,
+
+    /// Pre-computed default expression for this embedded enum.
+    ///
+    /// For unit-only enums this is the discriminant column reference. For
+    /// data-carrying enums it is the full `Match { disc, arms[], else }`
+    /// expression with per-arm records (currently identical to the raw
+    /// `table_to_model` shape — `#[deferred]` on a variant field is
+    /// rejected at the macro layer; if it is ever lifted, the per-arm
+    /// records would mask their deferred slots here).
+    pub default_returning: stmt::Expr,
 }
 
 /// Mapping for a single variant of an embedded enum.
