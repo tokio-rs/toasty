@@ -187,4 +187,4 @@ jobs:
 
             Keep the review terse. Prefer fewer words over more.
           claude_args: |
-            --allowed-tools "Bash(gh pr view:*),Bash(gh pr diff:*),mcp__github__pull_request_read,mcp__github__pull_request_review_write,mcp__github__resolve_review_thread"
+            --allowed-tools "Bash(gh pr view:*),Bash(gh pr diff:*),Read(docs/**),Glob(docs/**),mcp__github__pull_request_read,mcp__github__pull_request_review_write,mcp__github__resolve_review_thread"
