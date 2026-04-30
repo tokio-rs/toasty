@@ -78,10 +78,6 @@ impl<M> Paginate<M> {
             query.untyped.limit.is_none(),
             "pagination requires no limit clause"
         );
-        assert!(
-            query.untyped.order_by.is_some(),
-            "pagination requires an order_by clause"
-        );
 
         let per_page = i64::try_from(per_page).expect("per_page exceeds i64::MAX");
         query.untyped.limit = Some(stmt::Limit::Cursor(stmt::LimitCursor {
@@ -254,10 +250,6 @@ impl<M> From<Query<List<M>>> for Paginate<M> {
         assert!(
             value.untyped.limit.is_some(),
             "pagination requires a limit clause"
-        );
-        assert!(
-            value.untyped.order_by.is_some(),
-            "pagination requires an order_by clause"
         );
 
         Paginate {

@@ -4,6 +4,7 @@ mod find_pk_by_index;
 mod get_by_key;
 mod insert;
 mod query_pk;
+mod scan;
 mod update_by_key;
 
 use super::{
