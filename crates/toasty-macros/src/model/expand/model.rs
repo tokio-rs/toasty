@@ -345,7 +345,7 @@ impl Expand<'_> {
                 _ => panic!("only primitive fields are supported in embedded types"),
             };
 
-            let raw = if fields_named {
+            let value = if fields_named {
                 let field_ident = &field.name.ident;
                 if by_ref {
                     quote!((&self.#field_ident))
@@ -364,7 +364,7 @@ impl Expand<'_> {
             // `Deferred<T>: IntoExpr<Deferred<T>>` forwards to the inner T's
             // expression encoding, so deferred sub-fields go through the same
             // path as plain primitives.
-            quote!(#toasty::into_untyped_expr::<#ty, _>(#raw))
+            quote!(#toasty::into_untyped_expr::<#ty, _>(#value))
         });
 
         quote! {
