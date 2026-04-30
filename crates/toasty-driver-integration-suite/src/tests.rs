@@ -34,6 +34,7 @@ pub mod embed_enum_unit;
 pub mod embed_newtype;
 pub mod embed_struct;
 pub mod embed_struct_index;
+pub mod embedded_vec_implicit_json;
 pub mod field_auto;
 pub mod field_column_name;
 pub mod field_column_type;

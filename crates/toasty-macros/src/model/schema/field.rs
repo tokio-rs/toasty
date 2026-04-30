@@ -283,6 +283,29 @@ impl Field {
 
         let mut attrs = FieldAttr::from_attrs(&field.attrs)?;
 
+        // Auto-imply `#[serialize(json)]` on `Vec<T>` and `Option<Vec<T>>`
+        // fields when no serialize attribute was written (and `T` is not
+        // `u8`, which is reserved for the byte-string `Field` impl). This
+        // is the v0 surface for embedded collections: storage falls back
+        // to opaque JSON text on every backend, with no typed-path
+        // accessor. Native per-backend storage and queryable paths are
+        // tracked as follow-up work.
+        if attrs.serialize.is_none() {
+            if is_non_byte_vec(&field.ty) {
+                attrs.serialize = Some(SerializeAttr {
+                    format: SerializeFormat::Json,
+                    nullable: false,
+                });
+            } else if let Some(inner) = unwrap_option(&field.ty)
+                && is_non_byte_vec(inner)
+            {
+                attrs.serialize = Some(SerializeAttr {
+                    format: SerializeFormat::Json,
+                    nullable: true,
+                });
+            }
+        }
+
         let mut errs = ErrorSet::new();
         let mut ty = None;
 
@@ -465,6 +488,60 @@ impl Field {
             variant: None,
         })
     }
+}
+
+/// Returns the inner type when `ty` syntactically matches `Option<T>`.
+fn unwrap_option(ty: &syn::Type) -> Option<&syn::Type> {
+    let syn::Type::Path(path) = ty else {
+        return None;
+    };
+    let last = path.path.segments.last()?;
+    if last.ident != "Option" {
+        return None;
+    }
+    let syn::PathArguments::AngleBracketed(args) = &last.arguments else {
+        return None;
+    };
+    if args.args.len() != 1 {
+        return None;
+    }
+    let syn::GenericArgument::Type(inner) = args.args.first()? else {
+        return None;
+    };
+    Some(inner)
+}
+
+/// Returns `true` when `ty` syntactically matches `Vec<T>` for some `T`
+/// other than the literal `u8`. `Vec<u8>` is excluded because it has a
+/// dedicated `Field` impl mapping it to byte-string storage.
+fn is_non_byte_vec(ty: &syn::Type) -> bool {
+    let syn::Type::Path(path) = ty else {
+        return false;
+    };
+    let Some(last) = path.path.segments.last() else {
+        return false;
+    };
+    if last.ident != "Vec" {
+        return false;
+    }
+    let syn::PathArguments::AngleBracketed(args) = &last.arguments else {
+        return false;
+    };
+    if args.args.len() != 1 {
+        return false;
+    }
+    let Some(syn::GenericArgument::Type(inner)) = args.args.first() else {
+        return false;
+    };
+    !is_u8(inner)
+}
+
+/// Returns `true` when `ty` is the literal `u8` path.
+fn is_u8(ty: &syn::Type) -> bool {
+    let syn::Type::Path(path) = ty else {
+        return false;
+    };
+    path.path.is_ident("u8")
 }
 
 pub(crate) fn rewrite_self(ty: &mut syn::Type, model: &syn::Ident) {
