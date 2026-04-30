@@ -1,20 +1,8 @@
 use crate::prelude::*;
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::deferred_document))]
 pub async fn default_load_leaves_deferred_unloaded(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Document {
-        #[key]
-        #[auto]
-        id: ID,
-
-        title: String,
-
-        #[deferred]
-        body: toasty::Deferred<String>,
-    }
-
-    let mut db = t.setup_db(models!(Document)).await;
+    let mut db = setup(t).await;
 
     let created = toasty::create!(Document {
         title: "Hello".to_string(),
@@ -35,21 +23,9 @@ pub async fn default_load_leaves_deferred_unloaded(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::deferred_document))]
 pub async fn deferred_exec_loads_value(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Document {
-        #[key]
-        #[auto]
-        id: ID,
-
-        title: String,
-
-        #[deferred]
-        body: toasty::Deferred<String>,
-    }
-
-    let mut db = t.setup_db(models!(Document)).await;
+    let mut db = setup(t).await;
 
     let created = toasty::create!(Document {
         title: "Hello".to_string(),
@@ -71,21 +47,9 @@ pub async fn deferred_exec_loads_value(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::deferred_optional_document))]
 pub async fn deferred_optional_exec_loads_value(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Document {
-        #[key]
-        #[auto]
-        id: ID,
-
-        title: String,
-
-        #[deferred]
-        summary: toasty::Deferred<Option<String>>,
-    }
-
-    let mut db = t.setup_db(models!(Document)).await;
+    let mut db = setup(t).await;
 
     // Create with summary set.
     let with_summary = toasty::create!(Document {
@@ -117,21 +81,9 @@ pub async fn deferred_optional_exec_loads_value(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::deferred_document))]
 pub async fn deferred_include_loads_value(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Document {
-        #[key]
-        #[auto]
-        id: ID,
-
-        title: String,
-
-        #[deferred]
-        body: toasty::Deferred<String>,
-    }
-
-    let mut db = t.setup_db(models!(Document)).await;
+    let mut db = setup(t).await;
 
     let created = toasty::create!(Document {
         title: "Hello".to_string(),
@@ -153,21 +105,9 @@ pub async fn deferred_include_loads_value(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::deferred_optional_document))]
 pub async fn deferred_optional_include_loads_some(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Document {
-        #[key]
-        #[auto]
-        id: ID,
-
-        title: String,
-
-        #[deferred]
-        summary: toasty::Deferred<Option<String>>,
-    }
-
-    let mut db = t.setup_db(models!(Document)).await;
+    let mut db = setup(t).await;
 
     let created = toasty::create!(Document {
         title: "With summary".to_string(),
@@ -187,24 +127,12 @@ pub async fn deferred_optional_include_loads_some(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::deferred_optional_document))]
 pub async fn deferred_optional_include_loads_none(t: &mut Test) -> Result<()> {
     // A nullable deferred field must distinguish "loaded as NULL" from
     // "unloaded". An eager `.include()` puts the field into the loaded state
     // even when the column value is NULL.
-    #[derive(Debug, toasty::Model)]
-    struct Document {
-        #[key]
-        #[auto]
-        id: ID,
-
-        title: String,
-
-        #[deferred]
-        summary: toasty::Deferred<Option<String>>,
-    }
-
-    let mut db = t.setup_db(models!(Document)).await;
+    let mut db = setup(t).await;
 
     let created = toasty::create!(Document {
         title: "No summary".to_string(),
@@ -223,24 +151,12 @@ pub async fn deferred_optional_include_loads_none(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::deferred_optional_document))]
 pub async fn deferred_optional_create_returns_none_loaded(t: &mut Test) -> Result<()> {
     // INSERT...RETURNING bypasses the deferred mask, so the value the caller
     // just supplied (including `None`) must come back loaded — the in-memory
     // record should not be ambiguous with the unloaded state.
-    #[derive(Debug, toasty::Model)]
-    struct Document {
-        #[key]
-        #[auto]
-        id: ID,
-
-        title: String,
-
-        #[deferred]
-        summary: toasty::Deferred<Option<String>>,
-    }
-
-    let mut db = t.setup_db(models!(Document)).await;
+    let mut db = setup(t).await;
 
     let with_some = toasty::create!(Document {
         title: "With summary".to_string(),
@@ -264,24 +180,12 @@ pub async fn deferred_optional_create_returns_none_loaded(t: &mut Test) -> Resul
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::deferred_document))]
 pub async fn deferred_filter_does_not_load_field(t: &mut Test) -> Result<()> {
     // SQL-only: a bare predicate on the deferred field requires a full table
     // scan. The DDB equivalent is `deferred_pk_filter_does_not_load_field`,
     // which grounds the query on the primary key.
-    #[derive(Debug, toasty::Model)]
-    struct Document {
-        #[key]
-        #[auto]
-        id: ID,
-
-        title: String,
-
-        #[deferred]
-        body: toasty::Deferred<String>,
-    }
-
-    let mut db = t.setup_db(models!(Document)).await;
+    let mut db = setup(t).await;
 
     toasty::create!(Document {
         title: "First".to_string(),
@@ -310,24 +214,12 @@ pub async fn deferred_filter_does_not_load_field(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::deferred_document))]
 pub async fn deferred_pk_filter_does_not_load_field(t: &mut Test) -> Result<()> {
     // Same coverage as `deferred_filter_does_not_load_field`, expressed as a
     // PK-grounded query so it runs on DDB. The deferred field appears in the
     // filter but is still left unloaded in the result.
-    #[derive(Debug, toasty::Model)]
-    struct Document {
-        #[key]
-        #[auto]
-        id: ID,
-
-        title: String,
-
-        #[deferred]
-        body: toasty::Deferred<String>,
-    }
-
-    let mut db = t.setup_db(models!(Document)).await;
+    let mut db = setup(t).await;
 
     let alpha = toasty::create!(Document {
         title: "First".to_string(),
@@ -397,21 +289,9 @@ pub async fn deferred_works_through_type_alias(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::deferred_document))]
 pub async fn deferred_update_without_prior_load(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Document {
-        #[key]
-        #[auto]
-        id: ID,
-
-        title: String,
-
-        #[deferred]
-        body: toasty::Deferred<String>,
-    }
-
-    let mut db = t.setup_db(models!(Document)).await;
+    let mut db = setup(t).await;
 
     let created = toasty::create!(Document {
         title: "Hello".to_string(),
