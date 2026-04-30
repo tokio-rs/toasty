@@ -511,19 +511,13 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             // same field slot (see issue #691).
             include.sort_by_key(|p| *p.projection.as_slice().first().expect("empty include path"));
 
-            // Track which top-level fields are explicitly included so that
-            // deferred fields are not masked when the caller asked for them.
-            let mut included_top_fields = stmt::PathFieldSet::new();
-
             let mut nested: Vec<stmt::Projection> = vec![];
             let mut current: Option<usize> = None;
 
-            for path in include {
+            for path in &include {
                 let [first, rest @ ..] = path.projection.as_slice() else {
                     unreachable!("guaranteed non-empty by sort_by_key above")
                 };
-
-                included_top_fields.insert(*first);
 
                 if current != Some(*first) {
                     if let Some(field) = current {
@@ -551,21 +545,20 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             //
             // INSERT...RETURNING always projects deferred fields (the caller
             // just supplied the value and expects to read it back).
+            //
+            // The walk recurses into embedded fields so `#[deferred]` sub-fields
+            // inside an `#[derive(Embed)]` struct are masked the same way as
+            // top-level deferred fields.
             let model = self.model_unwrap();
             let is_insert = self.cx.is_insert();
-            for (index, field) in model.fields.iter().enumerate() {
-                if !field.deferred {
-                    continue;
-                }
-                let loaded = is_insert || included_top_fields.contains(index);
-                let mut entry = returning.entry_mut(index);
-                if loaded {
-                    let inner = entry.take();
-                    entry.insert(stmt::Expr::record([inner]));
-                } else {
-                    entry.insert(stmt::Expr::from(stmt::Value::Null));
-                }
-            }
+            let include_projections: Vec<stmt::Projection> =
+                include.iter().map(|p| p.projection.clone()).collect();
+            self.apply_deferred_mask(
+                &mut returning,
+                &model.fields,
+                &include_projections,
+                is_insert,
+            );
 
             *i = stmt::Returning::Project(returning);
         }
@@ -886,6 +879,93 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         }
     }
 
+    /// Walks `returning` (a Record matching the shape of `fields`) and applies
+    /// the `Deferred<T>` sentinel encoding to every deferred field — top-level
+    /// or nested inside an embedded struct.
+    ///
+    /// - Loaded slot: wrap the slot's expression in `Record([..])` so the row
+    ///   decoder distinguishes "loaded as `None`" from "unloaded" for
+    ///   `Deferred<Option<T>>`.
+    /// - Unloaded slot: replace with `Null` so the decoder reports unloaded.
+    ///
+    /// `include_paths` are the projection paths the caller passed to
+    /// `.include()`, expressed relative to the current `fields` slice. A
+    /// matching path entry — either the field itself (`[i]`) or a sub-path
+    /// (`[i, ..]`) — marks the field as loaded. `is_insert` short-circuits
+    /// every deferred slot to loaded for `INSERT ... RETURNING`, where the
+    /// caller just supplied the value.
+    ///
+    /// The recursion only descends into `EmbeddedStruct` targets. Embedded
+    /// enums with `#[deferred]` variant fields are not yet supported.
+    fn apply_deferred_mask(
+        &self,
+        returning: &mut stmt::Expr,
+        fields: &[app::Field],
+        include_paths: &[stmt::Projection],
+        is_insert: bool,
+    ) {
+        let stmt::Expr::Record(record) = returning else {
+            // Non-record returning shapes (e.g., `Match` arms for embedded
+            // enums) carry no deferred sub-fields today.
+            return;
+        };
+
+        for (i, field) in fields.iter().enumerate() {
+            // A bare `[i]` path matches "include this field"; a longer
+            // `[i, ..]` path matches "include this sub-path within the field"
+            // and also implies the parent field itself is loaded.
+            let mut bare = false;
+            let mut sub_paths: Vec<stmt::Projection> = Vec::new();
+            for path in include_paths {
+                let slice = path.as_slice();
+                match slice.split_first() {
+                    Some((first, rest)) if *first == i => {
+                        if rest.is_empty() {
+                            bare = true;
+                        } else {
+                            sub_paths.push(stmt::Projection::from(rest));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            if field.deferred {
+                let loaded = is_insert || bare || !sub_paths.is_empty();
+                let target = &mut record[i];
+                if loaded {
+                    let inner = target.take();
+                    *target = stmt::Expr::record([inner]);
+
+                    // For a deferred embed, descend into the wrapped inner
+                    // record so any `#[deferred]` sub-fields inside the embed
+                    // get the same masking treatment.
+                    if let app::FieldTy::Embedded(embedded) = &field.ty
+                        && let app::Model::EmbeddedStruct(s) =
+                            self.schema().app.model(embedded.target)
+                        && let stmt::Expr::Record(outer) = &mut record[i]
+                    {
+                        self.apply_deferred_mask(&mut outer[0], &s.fields, &sub_paths, is_insert);
+                    }
+                } else {
+                    *target = stmt::Expr::from(stmt::Value::Null);
+                }
+                continue;
+            }
+
+            if let app::FieldTy::Embedded(embedded) = &field.ty {
+                let target_model = self.schema().app.model(embedded.target);
+                if let app::Model::EmbeddedStruct(s) = target_model {
+                    let target = &mut record[i];
+                    self.apply_deferred_mask(target, &s.fields, &sub_paths, is_insert);
+                }
+                // Embedded enums: skipped intentionally — `#[deferred]` on
+                // variant fields is not yet supported and the macro does not
+                // propagate the flag in `expand_enum_schema_fields`.
+            }
+        }
+    }
+
     fn build_include_subquery(
         &mut self,
         returning: &mut stmt::Expr,
@@ -894,10 +974,11 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     ) {
         let field = &self.model_unwrap().fields[field_index];
 
-        // Primitive deferred field: the column reference is already in the
-        // returning record (built from `table_to_model`), so an include is
-        // a no-op here. The masking step in `visit_returning_mut` will skip
-        // this field's slot since it appears in the include set.
+        // Deferred or embedded field: the column references are already in
+        // the returning record (built from `table_to_model`); the deferred-mask
+        // walk in `apply_deferred_mask` consumes the include paths to decide
+        // which slots to mask. Sub-paths on a deferred primitive are still
+        // rejected since a primitive has no sub-projection.
         if field.deferred && field.ty.is_primitive() {
             for path in nested {
                 assert!(
@@ -905,6 +986,9 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                     "include sub-paths on deferred primitive fields are not supported"
                 );
             }
+            return;
+        }
+        if field.ty.is_embedded() {
             return;
         }
 

@@ -39,8 +39,68 @@ projection and to generate the per-field load method. The wrapper type
 provides the unloaded-state runtime API.
 
 `#[deferred]` is supported on primitive fields and on embedded types
-(`#[derive(Embed)]`). It does not compose with `#[belongs_to]`,
-`#[has_many]`, or `#[has_one]` — relations are already lazy.
+(`#[derive(Embed)]` structs and enums). It does not compose with
+`#[belongs_to]`, `#[has_many]`, or `#[has_one]` — relations are already
+lazy.
+
+A deferred embed value omits all of the embed's columns from the default
+projection. Loading is the same as for a primitive: call the per-field
+accessor, or chain `.include()` to preload alongside the parent query.
+
+```rust
+# use toasty::Model;
+#[derive(Debug, toasty::Embed)]
+struct Metadata {
+    author: String,
+    notes: String,
+}
+
+#[derive(Debug, toasty::Model)]
+struct Document {
+    #[key]
+    #[auto]
+    id: u64,
+
+    title: String,
+
+    #[deferred]
+    metadata: toasty::Deferred<Metadata>,
+}
+```
+
+`#[deferred]` is also valid on a primitive field *inside* an embedded
+struct. The annotation defers just that column wherever the embed is
+used; the embed's other (eager) fields still load with the parent query.
+
+```rust
+# use toasty::Model;
+#[derive(Debug, toasty::Embed)]
+struct Metadata {
+    author: String,
+
+    #[deferred]
+    notes: toasty::Deferred<String>,
+}
+```
+
+To load such a sub-field on a parent query, name it in `.include()`:
+
+```rust,ignore
+let doc = Document::filter_by_id(id)
+    .include(Document::fields().metadata().notes())
+    .get(&mut db)
+    .await?;
+```
+
+When the user constructs an embed value directly (struct-literal
+syntax), a deferred sub-field accepts the inner value via `.into()`:
+
+```rust,ignore
+Metadata {
+    author: "Alice".to_string(),
+    notes: "the note".to_string().into(),
+}
+```
 
 ## Loaded state on create vs query
 

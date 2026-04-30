@@ -95,6 +95,17 @@ impl<T> Default for Deferred<T> {
     }
 }
 
+impl<T> From<T> for Deferred<T> {
+    /// Constructs a loaded `Deferred<T>` from a value.
+    ///
+    /// Used in struct literals for `#[derive(Embed)]` types that contain
+    /// `#[deferred]` sub-fields, where the user supplies the inner value
+    /// directly: `Metadata { author, notes: "...".into() }`.
+    fn from(value: T) -> Self {
+        Self { value: Some(value) }
+    }
+}
+
 impl<T: Load<Output = T>> Load for Deferred<T> {
     type Output = Self;
 

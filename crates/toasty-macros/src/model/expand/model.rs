@@ -345,7 +345,7 @@ impl Expand<'_> {
                 _ => panic!("only primitive fields are supported in embedded types"),
             };
 
-            let value = if fields_named {
+            let raw = if fields_named {
                 let field_ident = &field.name.ident;
                 if by_ref {
                     quote!((&self.#field_ident))
@@ -361,7 +361,22 @@ impl Expand<'_> {
                 }
             };
 
-            self.expand_into_untyped_expr(ty, value)
+            // For `#[deferred]` sub-fields the runtime type is `Deferred<T>` but
+            // the wire shape is `T` — unwrap and emit the inner expression so
+            // it lands in the right column slot. Panics here surface as the
+            // standard "deferred field not loaded" runtime error if the user
+            // constructs an embed with an unloaded sentinel.
+            if field.attrs.deferred {
+                let inner_ty: syn::Type = syn::parse_quote!(<#ty as #toasty::Defer>::Inner);
+                let value = if by_ref {
+                    quote!(#raw.get())
+                } else {
+                    quote!(#raw.into_inner())
+                };
+                self.expand_into_untyped_expr(&inner_ty, value)
+            } else {
+                self.expand_into_untyped_expr(ty, raw)
+            }
         });
 
         quote! {
