@@ -187,8 +187,8 @@ impl<T> Query<T> {
     /// // Include the field at index 1 (name)
     /// let q = Query::<List<User>>::all().include(User::path_field::<String>(1));
     /// ```
-    pub fn include(mut self, path: impl Into<stmt::Path>) -> Self {
-        self.untyped.include(path.into());
+    pub fn include(mut self, include: impl Into<stmt::Include>) -> Self {
+        self.untyped.include(include.into());
         self
     }
 

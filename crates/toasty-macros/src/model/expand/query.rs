@@ -459,10 +459,10 @@ impl Expand<'_> {
         Some(quote! {
             #vis fn include<#include_ty>(
                 self,
-                path: impl #toasty::Into<#toasty::Path<#model_ident, #include_ty>>,
+                include: impl #toasty::Into<#toasty::stmt::Include<#model_ident, #include_ty>>,
             ) -> Self {
                 Self {
-                    stmt: self.stmt.include(path.into()),
+                    stmt: self.stmt.include(include.into()),
                 }
             }
         })

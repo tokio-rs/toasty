@@ -91,6 +91,7 @@ pub mod relation_has_many_scoped_query;
 pub mod relation_has_many_via;
 pub mod relation_has_one_crud;
 pub mod relation_preload;
+pub mod relation_preload_filter;
 pub mod relation_via_mutation_runtime_error;
 pub mod scan_no_index;
 pub mod select_projection;

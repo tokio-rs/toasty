@@ -13,6 +13,9 @@ pub use delete::Delete;
 mod expr;
 pub use expr::Expr;
 
+mod include;
+pub use include::Include;
+
 mod insert;
 pub use insert::Insert;
 
