@@ -1,6 +1,6 @@
 use super::{Field, Load};
 use crate::Statement;
-use crate::stmt::{self, Expr, IntoStatement};
+use crate::stmt::{self, Expr, IntoExpr, IntoStatement};
 use toasty_core::schema::app::ModelSet;
 
 use std::fmt;
@@ -103,6 +103,22 @@ impl<T> From<T> for Deferred<T> {
     /// directly: `Metadata { author, notes: "...".into() }`.
     fn from(value: T) -> Self {
         Self { value: Some(value) }
+    }
+}
+
+/// Forwards the inner value's expression encoding under the `Deferred<T>` type
+/// tag, so generated code can splice a `Deferred<T>` field into the same
+/// expression sites that accept a `T`.
+///
+/// Panics with the standard "deferred field not loaded" error if the value is
+/// in the unloaded state — matching `.get()` / `.into_inner()`.
+impl<T: IntoExpr<T>> IntoExpr<Self> for Deferred<T> {
+    fn into_expr(self) -> Expr<Self> {
+        self.into_inner().into_expr().cast()
+    }
+
+    fn by_ref(&self) -> Expr<Self> {
+        self.get().by_ref().cast()
     }
 }
 

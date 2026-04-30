@@ -361,22 +361,10 @@ impl Expand<'_> {
                 }
             };
 
-            // For `#[deferred]` sub-fields the runtime type is `Deferred<T>` but
-            // the wire shape is `T` — unwrap and emit the inner expression so
-            // it lands in the right column slot. Panics here surface as the
-            // standard "deferred field not loaded" runtime error if the user
-            // constructs an embed with an unloaded sentinel.
-            if field.attrs.deferred {
-                let inner_ty: syn::Type = syn::parse_quote!(<#ty as #toasty::Defer>::Inner);
-                let value = if by_ref {
-                    quote!(#raw.get())
-                } else {
-                    quote!(#raw.into_inner())
-                };
-                self.expand_into_untyped_expr(&inner_ty, value)
-            } else {
-                self.expand_into_untyped_expr(ty, raw)
-            }
+            // `Deferred<T>: IntoExpr<Deferred<T>>` forwards to the inner T's
+            // expression encoding, so deferred sub-fields go through the same
+            // path as plain primitives.
+            self.expand_into_untyped_expr(ty, raw)
         });
 
         quote! {

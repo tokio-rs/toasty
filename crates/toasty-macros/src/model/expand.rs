@@ -347,17 +347,9 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
 // === Shared token-generation helpers ===
 
 impl Expand<'_> {
-    /// Generates a block that converts a Rust value into an untyped `core::stmt::Expr`
-    /// via the typed `IntoExpr` trait.
-    ///
-    /// Produced token pattern:
-    /// ```ignore
-    /// {
-    ///     let expr: Expr<T> = IntoExpr::into_expr(value);
-    ///     let untyped: core::stmt::Expr = expr.into();
-    ///     untyped
-    /// }
-    /// ```
+    /// Splices a call to the runtime `into_untyped_expr` helper, which performs
+    /// the typed-`IntoExpr` → untyped-`core::stmt::Expr` conversion. The
+    /// explicit `T` type parameter disambiguates which `IntoExpr` impl to use.
     fn expand_into_untyped_expr(
         &self,
         ty: impl quote::ToTokens,
@@ -365,12 +357,7 @@ impl Expand<'_> {
     ) -> TokenStream {
         let toasty = &self.toasty;
         quote! {
-            {
-                let expr: #toasty::stmt::Expr<#ty> =
-                    #toasty::stmt::IntoExpr::into_expr(#value);
-                let untyped: #toasty::core::stmt::Expr = expr.into();
-                untyped
-            }
+            #toasty::into_untyped_expr::<#ty, _>(#value)
         }
     }
 
