@@ -477,17 +477,81 @@ impl BuildMapping<'_> {
                 Ok(expr)
             }
             (app::Model::EmbeddedEnum(embed_model), mapping::Field::Enum(e)) => {
-                // Variant fields cannot be `#[deferred]` today (macro
-                // rejects), so the enum's default returning matches the
-                // raw `table_to_model` shape exactly. If variant-deferred
-                // is ever lifted, this is where the per-arm masking would
-                // recurse.
-                let expr = self.build_table_to_model_field_enum(embed_model, e)?;
+                let expr = self.build_default_returning_enum(embed_model, e)?;
                 e.default_returning = expr.clone();
                 Ok(expr)
             }
             _ => unreachable!("invalid schema: embedded field maps to root model"),
         }
+    }
+
+    /// Builds the enum's default `Match` expression, recursing into each
+    /// variant's fields so a deferred sub-field nested inside a variant's
+    /// embed-struct is pre-masked. The shape mirrors
+    /// [`Self::build_table_to_model_field_enum`] but routes each variant
+    /// field through [`Self::build_default_returning_field`] instead of
+    /// the raw column emitter.
+    ///
+    /// `#[deferred]` directly on a variant field is rejected by the macro,
+    /// so the only deferred slots reachable through this recursion live
+    /// inside an embed struct used as a variant field.
+    fn build_default_returning_enum(
+        &self,
+        model: &app::EmbeddedEnum,
+        mapping: &mut mapping::FieldEnum,
+    ) -> Result<stmt::Expr> {
+        let disc_col_ref = stmt::Expr::column(stmt::ExprColumn {
+            nesting: 0,
+            table: 0,
+            column: mapping.discriminant.column.index,
+        });
+
+        if !model.has_data_variants() {
+            return Ok(disc_col_ref);
+        }
+
+        let mut arms = Vec::new();
+        for (variant_index, (variant, variant_mapping)) in model
+            .variants
+            .iter()
+            .zip(mapping.variants.iter_mut())
+            .enumerate()
+        {
+            let variant_fields: Vec<&app::Field> = model.variant_fields(variant_index).collect();
+            let arm_expr = if variant_fields.is_empty() {
+                disc_col_ref.clone()
+            } else {
+                let mut record_elems = vec![disc_col_ref.clone()];
+                for (local_idx, field) in variant_fields.iter().enumerate() {
+                    let mapping_field = &mut variant_mapping.fields[local_idx];
+                    record_elems.push(self.build_default_returning_field(field, mapping_field)?);
+                }
+                stmt::Expr::record(record_elems)
+            };
+            arms.push(stmt::MatchArm {
+                pattern: variant.discriminant.clone(),
+                expr: arm_expr,
+            });
+        }
+
+        let max_fields = model
+            .variants
+            .iter()
+            .enumerate()
+            .map(|(i, _)| model.variant_fields(i).count())
+            .max()
+            .unwrap_or(0);
+        let else_expr = if max_fields == 0 {
+            stmt::Expr::error("unexpected enum discriminant")
+        } else {
+            let mut elems = vec![disc_col_ref.clone()];
+            for _ in 0..max_fields {
+                elems.push(stmt::Expr::error("unexpected enum discriminant"));
+            }
+            stmt::Expr::record(elems)
+        };
+
+        Ok(stmt::Expr::match_expr(disc_col_ref, arms, else_expr))
     }
 
     fn next_bit(&mut self) -> usize {

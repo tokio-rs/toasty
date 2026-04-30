@@ -70,6 +70,79 @@ pub async fn deferred_embed_struct(t: &mut Test) -> Result<()> {
 // errors out with "type Model(...) is not supported by this database".
 // Tracking that gap is orthogonal to deferred fields.
 
+// ---------- #[deferred] inside an embed struct that's nested in an enum variant ----------
+//
+// `#[deferred]` on a variant field directly is rejected at the macro layer,
+// but a struct embedded as a variant field is allowed to carry its own
+// deferred sub-fields. The lowering has to descend through the enum's
+// `Match` expression to mask / wrap those sub-fields.
+
+#[driver_test(id(ID))]
+pub async fn deferred_inside_embed_in_enum_variant(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Embed)]
+    struct Metadata {
+        author: String,
+
+        #[deferred]
+        notes: toasty::Deferred<String>,
+    }
+
+    #[derive(Debug, toasty::Embed)]
+    enum ContactInfo {
+        Email { address: String, metadata: Metadata },
+        Phone { number: String },
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Person {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        contact: ContactInfo,
+    }
+
+    let mut db = t.setup_db(models!(Person, ContactInfo, Metadata)).await;
+
+    // INSERT...RETURNING must echo back the deferred sub-field nested two
+    // levels deep (through the enum variant and through the embed struct).
+    let created = toasty::create!(Person {
+        name: "Alice".to_string(),
+        contact: ContactInfo::Email {
+            address: "alice@example.com".to_string(),
+            metadata: Metadata {
+                author: "Alice".to_string(),
+                notes: "Important".to_string().into(),
+            },
+        },
+    })
+    .exec(&mut db)
+    .await?;
+
+    let ContactInfo::Email {
+        address, metadata, ..
+    } = &created.contact
+    else {
+        panic!("expected Email variant");
+    };
+    assert_eq!("alice@example.com", address);
+    assert_eq!("Alice", metadata.author);
+    assert_eq!("Important", metadata.notes.get());
+
+    // Default load: contact loaded, but the deferred sub-field nested inside
+    // the variant's Metadata embed is unloaded.
+    let read = Person::filter_by_id(created.id).get(&mut db).await?;
+    let ContactInfo::Email { metadata, .. } = &read.contact else {
+        panic!("expected Email variant");
+    };
+    assert_eq!("Alice", metadata.author);
+    assert!(metadata.notes.is_unloaded());
+
+    Ok(())
+}
+
 // ---------- Deferred<UnitEnum> ----------
 
 #[driver_test(id(ID))]

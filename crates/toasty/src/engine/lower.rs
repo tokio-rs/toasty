@@ -867,29 +867,17 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         );
     }
 
-    /// Walks `returning` (a `Record(..)` matching the shape of `app_fields`)
-    /// and splices loaded forms in at slots named by the include paths or, when
-    /// `is_insert`, at every deferred slot.
+    /// Walks the schema mapping tree (`app_fields`/`mapping_fields`) in
+    /// lockstep with the `returning` record and splices loaded forms at slots
+    /// named by `include_paths` — or, when `is_insert`, at every deferred
+    /// slot at every depth.
     ///
-    /// Each field at index `i` dispatches by kind:
-    ///
-    /// - **Relation** — falls through to `build_include_subquery`, which
-    ///   builds the subquery for the slot. (Relations are not allowed inside
-    ///   embedded types today, so this branch only fires at the top level.)
-    /// - **Deferred primitive** — when activated, replaces the slot's `Null`
-    ///   with `Record([column_expr])` so the row decoder sees the loaded
-    ///   sentinel.
-    /// - **Deferred embed** — when activated, replaces the slot's `Null` with
-    ///   `Record([embed.default_returning.clone()])` and recurses into the
-    ///   wrapped inner record so further `.include()` paths within the embed
-    ///   apply.
-    /// - **Eager embed (struct)** — recurses into the slot (already the
-    ///   embed's default expression) so any `#[deferred]` sub-fields the
-    ///   caller named get spliced in. Eager enums carry no deferred-aware
-    ///   recursion — `#[deferred]` on variant fields is rejected at the
-    ///   macro layer today.
-    /// - **Eager primitive** — no-op; the default expression already holds
-    ///   the column reference.
+    /// The recursion is mapping-driven: each `mapping::Field` variant decides
+    /// how to descend into the corresponding slot expression. Driving off the
+    /// mapping (rather than pattern-matching the slot expression) is what
+    /// lets us reach a `#[deferred]` sub-field of an embed struct nested
+    /// inside an enum variant — those slots live inside a `Match`
+    /// expression, not a `Record`.
     fn process_includes(
         &mut self,
         returning: &mut stmt::Expr,
@@ -899,12 +887,10 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         is_insert: bool,
     ) {
         let stmt::Expr::Record(record) = returning else {
-            // Non-record shapes (e.g., a `Match` for an embedded enum) hold
-            // no deferred sub-fields today; nothing to splice.
             return;
         };
 
-        for (i, field) in app_fields.iter().enumerate() {
+        for (i, (field, mapping)) in app_fields.iter().zip(mapping_fields).enumerate() {
             // Partition include paths matching this slot. `bare` covers
             // `[i]` ("include this field"); `sub_paths` covers `[i, …]`
             // ("include sub-path within"). Either kind activates the slot.
@@ -922,8 +908,10 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 }
             }
 
-            // Relations go through the existing subquery splice; deferred
-            // and embed slots are handled inline.
+            // Relations are spliced as a subquery into the parent record.
+            // They never live inside an embedded type today, so we handle
+            // them here where `record` is in scope rather than threading the
+            // parent through every recursive helper.
             if field.ty.is_relation() {
                 if bare || !sub_paths.is_empty() {
                     self.build_include_subquery(record, i, &sub_paths);
@@ -931,69 +919,149 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 continue;
             }
 
-            if field.deferred {
-                let loaded = is_insert || bare || !sub_paths.is_empty();
-                if !loaded {
-                    // Default state already has `Null` at this slot.
-                    continue;
-                }
+            self.process_field_slot(&mut record[i], field, mapping, bare, &sub_paths, is_insert);
+        }
+    }
 
-                let target = &mut record[i];
-                let loaded_inner = match &field.ty {
-                    app::FieldTy::Primitive(_) => mapping_fields[i]
-                        .as_primitive()
-                        .expect("deferred primitive must map to FieldPrimitive")
-                        .column_expr
-                        .clone(),
-                    app::FieldTy::Embedded(_) => match &mapping_fields[i] {
-                        mapping::Field::Struct(s) => s.default_returning.clone(),
-                        mapping::Field::Enum(e) => e.default_returning.clone(),
-                        _ => unreachable!("deferred embed must map to FieldStruct/FieldEnum"),
-                    },
-                    _ => unreachable!("relation already handled above"),
-                };
-                *target = stmt::Expr::record([loaded_inner]);
-
-                // Recurse into the wrapped inner so nested deferred sub-fields
-                // named by `sub_paths` get spliced too. Only struct embeds
-                // carry recursive deferred sub-fields today.
-                if let app::FieldTy::Embedded(embedded) = &field.ty
-                    && let app::Model::EmbeddedStruct(em) = self.schema().app.model(embedded.target)
-                    && let mapping::Field::Struct(fs) = &mapping_fields[i]
-                    && let stmt::Expr::Record(outer) = &mut record[i]
-                {
-                    let nested_app: &[app::Field] = em.fields.as_slice();
-                    let nested_mapping: &[mapping::Field] = fs.fields.as_slice();
-                    self.process_includes(
-                        &mut outer[0],
-                        nested_app,
-                        nested_mapping,
-                        &sub_paths,
-                        is_insert,
-                    );
-                }
-                continue;
+    /// Dispatches one non-relation field slot by `mapping::Field` kind.
+    ///
+    /// - **Deferred field** — when activated (by include match or `is_insert`),
+    ///   wraps the slot in `Record([loaded])` (column ref for primitives, the
+    ///   embed's `default_returning` for embed targets) and recurses into
+    ///   the wrapped inner so nested deferred sub-fields apply.
+    /// - **Eager embed (struct)** — recurses into the slot's record.
+    /// - **Eager embed (enum)** — recurses into each `Match` arm so
+    ///   `#[deferred]` sub-fields living inside an embed-struct variant
+    ///   field still get spliced.
+    /// - **Eager primitive** — no-op.
+    fn process_field_slot(
+        &mut self,
+        slot: &mut stmt::Expr,
+        field: &app::Field,
+        mapping: &mapping::Field,
+        bare: bool,
+        sub_paths: &[stmt::Projection],
+        is_insert: bool,
+    ) {
+        if field.deferred {
+            let loaded = is_insert || bare || !sub_paths.is_empty();
+            if !loaded {
+                return;
             }
 
-            // Eager embed: recurse into the slot for any sub-path includes
-            // (or to apply the `is_insert` short-circuit to nested deferred
-            // sub-fields).
-            if let app::FieldTy::Embedded(embedded) = &field.ty
-                && (is_insert || !sub_paths.is_empty())
-                && let app::Model::EmbeddedStruct(em) = self.schema().app.model(embedded.target)
-                && let mapping::Field::Struct(fs) = &mapping_fields[i]
-            {
-                let nested_app: &[app::Field] = em.fields.as_slice();
-                let nested_mapping: &[mapping::Field] = fs.fields.as_slice();
+            let loaded_inner = match (&field.ty, mapping) {
+                (app::FieldTy::Primitive(_), mapping::Field::Primitive(p)) => p.column_expr.clone(),
+                (app::FieldTy::Embedded(_), mapping::Field::Struct(s)) => {
+                    s.default_returning.clone()
+                }
+                (app::FieldTy::Embedded(_), mapping::Field::Enum(e)) => e.default_returning.clone(),
+                _ => unreachable!("deferred field has unexpected mapping shape"),
+            };
+            *slot = stmt::Expr::record([loaded_inner]);
+
+            // Descend into the wrapped inner so nested deferred sub-fields
+            // get spliced if the caller named them or if `is_insert`.
+            if let app::FieldTy::Embedded(embedded) = &field.ty {
+                let stmt::Expr::Record(outer) = slot else {
+                    unreachable!("just-wrapped slot");
+                };
+                self.recurse_embed(
+                    &mut outer[0],
+                    embedded.target,
+                    mapping,
+                    sub_paths,
+                    is_insert,
+                );
+            }
+            return;
+        }
+
+        // Eager field — only embeds need recursion; eager primitives sit on
+        // the column reference already in `default_returning`.
+        if let app::FieldTy::Embedded(embedded) = &field.ty
+            && (is_insert || !sub_paths.is_empty())
+        {
+            self.recurse_embed(slot, embedded.target, mapping, sub_paths, is_insert);
+        }
+    }
+
+    /// Descends into an embed slot. For struct embeds the slot is a `Record`;
+    /// for enum embeds it is a `Match` (or a bare column ref for unit-only
+    /// enums — nothing to descend into).
+    fn recurse_embed(
+        &mut self,
+        slot: &mut stmt::Expr,
+        target: app::ModelId,
+        mapping: &mapping::Field,
+        sub_paths: &[stmt::Projection],
+        is_insert: bool,
+    ) {
+        match (self.schema().app.model(target), mapping) {
+            (app::Model::EmbeddedStruct(em), mapping::Field::Struct(fs)) => {
                 self.process_includes(
-                    &mut record[i],
-                    nested_app,
-                    nested_mapping,
-                    &sub_paths,
+                    slot,
+                    em.fields.as_slice(),
+                    fs.fields.as_slice(),
+                    sub_paths,
+                    is_insert,
+                );
+            }
+            (app::Model::EmbeddedEnum(em), mapping::Field::Enum(fe)) => {
+                self.process_enum_arms(slot, em, fe, is_insert);
+            }
+            _ => {}
+        }
+    }
+
+    /// Walks each arm of an embedded enum's `Match` expression and dispatches
+    /// the variant fields the same way as a struct's record fields.
+    ///
+    /// Each data-arm record has the discriminant at position 0 and variant
+    /// fields at positions 1.., so iterating variant fields offsets the arm
+    /// record index by one.
+    ///
+    /// Include paths into specific variants don't exist today (the path
+    /// macro has no syntax for it), so this only services the `is_insert`
+    /// short-circuit. The shape is what lets a deferred sub-field nested
+    /// inside a variant's embed-struct round-trip through `INSERT…RETURNING`.
+    fn process_enum_arms(
+        &mut self,
+        slot: &mut stmt::Expr,
+        app_enum: &app::EmbeddedEnum,
+        mapping: &mapping::FieldEnum,
+        is_insert: bool,
+    ) {
+        let stmt::Expr::Match(match_expr) = slot else {
+            return;
+        };
+
+        for (variant_idx, arm) in match_expr.arms.iter_mut().enumerate() {
+            let variant_fields: Vec<&app::Field> = app_enum.variant_fields(variant_idx).collect();
+            if variant_fields.is_empty() {
+                continue;
+            }
+            let stmt::Expr::Record(arm_record) = &mut arm.expr else {
+                continue;
+            };
+            let variant_mapping = &mapping.variants[variant_idx];
+
+            for (j, (var_field, var_mapping)) in variant_fields
+                .iter()
+                .zip(&variant_mapping.fields)
+                .enumerate()
+            {
+                self.process_field_slot(
+                    &mut arm_record[j + 1],
+                    var_field,
+                    var_mapping,
+                    false,
+                    &[],
                     is_insert,
                 );
             }
         }
+        // The else arm holds `Expr::Error` placeholders for unreachable
+        // variants; nothing to splice there.
     }
 
     /// Builds the relation subquery to splice into `returning[field_index]`
