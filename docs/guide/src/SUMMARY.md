@@ -35,6 +35,7 @@
 # Advanced Features
 
 - [Embedded Types](./embedded-types.md)
+- [Deferred Fields](./deferred-fields.md)
 - [Batch Operations](./batch-operations.md)
 - [Transactions](./transactions.md)
 - [Concurrency Control](./concurrency-control.md)
