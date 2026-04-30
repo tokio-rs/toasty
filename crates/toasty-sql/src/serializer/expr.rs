@@ -49,7 +49,13 @@ impl ToSql for &stmt::Expr {
                 fmt!(cx, f, expr.expr " IS NULL");
             }
             stmt::Expr::Like(expr) => {
-                fmt!(cx, f, expr.expr " LIKE " expr.pattern);
+                let op =
+                    if expr.case_insensitive && matches!(f.serializer.flavor, Flavor::Postgresql) {
+                        " ILIKE "
+                    } else {
+                        " LIKE "
+                    };
+                fmt!(cx, f, expr.expr op expr.pattern);
                 if let Some(escape) = expr.escape {
                     let escape = &stmt::Value::String(escape.to_string());
                     fmt!(cx, f, " ESCAPE " escape);

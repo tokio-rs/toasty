@@ -43,6 +43,7 @@ impl LowerStatement<'_, '_> {
             expr: Box::new(*e.expr),
             pattern: Box::new(stmt::Expr::Value(stmt::Value::String(pattern))),
             escape,
+            case_insensitive: false,
         }
         .into();
     }
