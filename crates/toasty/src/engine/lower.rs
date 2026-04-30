@@ -499,16 +499,16 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
     fn visit_returning_mut(&mut self, i: &mut stmt::Returning) {
         if let stmt::Returning::Model { include } = i {
-            let include = std::mem::take(include);
-
             // Start from the schema's pre-computed default returning — every
             // `#[deferred]` slot, top-level or nested, is already `Null`.
             // `process_includes` then splices loaded forms in at the slots
             // named by include paths (and at every deferred slot when this
             // is an `INSERT ... RETURNING`).
             let mut returning = self.mapping_unwrap().default_returning.clone();
-            let include_projections: Vec<stmt::Projection> =
-                include.iter().map(|p| p.projection.clone()).collect();
+            let include_projections: Vec<stmt::Projection> = std::mem::take(include)
+                .into_iter()
+                .map(|p| p.projection)
+                .collect();
             let is_insert = self.cx.is_insert();
             let model_id = self.model_unwrap().id;
 
