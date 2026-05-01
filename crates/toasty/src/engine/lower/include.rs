@@ -38,26 +38,18 @@ use crate::engine::{lower::LowerStatement, simplify::Simplify};
 
 impl LowerStatement<'_, '_> {
     /// Top-level entry from `visit_returning_mut` for a `Returning::Model`.
-    /// Looks up the root model's app fields and field mappings via the
-    /// schema (`'b` lifetime), then runs the recursion.
+    /// Reads the current scope's model and mapping, then runs the recursion.
     pub(super) fn process_top_level_includes(
         &mut self,
         returning: &mut stmt::Expr,
-        model_id: app::ModelId,
         include_paths: &[stmt::Projection],
         is_insert: bool,
     ) {
         let stmt::Expr::Record(record) = returning else {
             return;
         };
-        let app_fields = self
-            .schema()
-            .app
-            .model(model_id)
-            .as_root_unwrap()
-            .fields
-            .as_slice();
-        let mapping_fields = self.schema().mapping_for(model_id).fields.as_slice();
+        let app_fields = self.model_unwrap().fields.as_slice();
+        let mapping_fields = self.mapping_unwrap().fields.as_slice();
         self.walk_record_fields(record, app_fields, mapping_fields, include_paths, is_insert);
     }
 
