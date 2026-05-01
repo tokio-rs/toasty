@@ -25,11 +25,8 @@ use async_trait::async_trait;
 use toasty_core::{
     Error, Result, Schema,
     driver::{Capability, Driver, ExecResponse, operation::Operation},
-    schema::{
-        db::{self, Column, ColumnId, Migration, Table},
-        diff,
-    },
-    stmt::{self, ExprContext},
+    schema::db::{self, Column, ColumnId, IndexScope, Migration, Table},
+    stmt::{self, Expr, ExprContext, Visit},
 };
 
 use aws_sdk_dynamodb::{
@@ -44,6 +41,7 @@ use aws_sdk_dynamodb::{
     },
 };
 use std::{borrow::Cow, collections::HashMap, sync::Arc};
+use toasty_core::schema::diff;
 
 /// A DynamoDB [`Driver`] backed by the AWS SDK.
 ///
@@ -211,17 +209,56 @@ impl Connection {
 
 fn ddb_key(table: &Table, key: &stmt::Value) -> HashMap<String, AttributeValue> {
     let mut ret = HashMap::new();
+    let pk_index = &table.indices[table.primary_key.index.index];
+    let mut sk_values: Vec<(&str, stmt::Value)> = Vec::new();
 
-    for (index, column) in table.primary_key_columns().enumerate() {
+    for (index, index_column) in pk_index.columns.iter().enumerate() {
+        let column = table.column(index_column.column);
         let value = match key {
-            stmt::Value::Record(record) => &record[index],
-            value => value,
+            stmt::Value::Record(record) => record[index].clone(),
+            value => value.clone(),
         };
 
-        ret.insert(column.name.clone(), Value::from(value.clone()).to_ddb());
+        match index_column.scope {
+            IndexScope::Local => {
+                sk_values.push((&column.name, value));
+            }
+            IndexScope::Partition => {
+                ret.insert(column.name.clone(), Value::from(value).to_ddb());
+            }
+        }
+    }
+
+    if sk_values.len() > 1 {
+        // Stop at the first Null — root-model rows (e.g. User) leave child-only
+        // sort-key components absent, so the composite key is a prefix only.
+        let parts: Vec<String> = sk_values
+            .iter()
+            .take_while(|(_, v)| !v.is_null())
+            .map(|(_, v)| value_to_sk_part(v))
+            .collect();
+        assert!(
+            !parts.is_empty(),
+            "at least one sort-key component must be non-null"
+        );
+        let mut sk = parts.join("#");
+        sk.push('#');
+        ret.insert("__sk".to_string(), AttributeValue::S(sk));
+    } else if let Some((name, val)) = sk_values.into_iter().next() {
+        ret.insert(name.to_string(), Value::from(val).to_ddb());
     }
 
     ret
+}
+
+fn value_to_sk_part(val: &stmt::Value) -> String {
+    match val {
+        stmt::Value::String(s) => s.clone(),
+        stmt::Value::Uuid(u) => u.to_string(),
+        stmt::Value::I64(n) => n.to_string(),
+        stmt::Value::U64(n) => n.to_string(),
+        _ => panic!("unsupported sort-key value type: {val:?}"),
+    }
 }
 
 /// Convert a DynamoDB AttributeValue to stmt::Value (type-inferred).
@@ -277,26 +314,23 @@ fn deserialize_ddb_cursor(cursor: &stmt::Value) -> HashMap<String, AttributeValu
     ret
 }
 
-fn ddb_key_schema(
-    partition_columns: &[&Column],
-    range_columns: &[&Column],
-) -> Vec<KeySchemaElement> {
+fn ddb_key_schema(partition: &[&str], range: &[&str]) -> Vec<KeySchemaElement> {
     let mut ks = vec![];
 
-    for col in partition_columns {
+    for name in partition {
         ks.push(
             KeySchemaElement::builder()
-                .attribute_name(&col.name)
+                .attribute_name(*name)
                 .key_type(KeyType::Hash)
                 .build()
                 .unwrap(),
         );
     }
 
-    for col in range_columns {
+    for name in range {
         ks.push(
             KeySchemaElement::builder()
-                .attribute_name(&col.name)
+                .attribute_name(*name)
                 .key_type(KeyType::Range)
                 .build()
                 .unwrap(),
@@ -306,21 +340,180 @@ fn ddb_key_schema(
     ks
 }
 
-fn item_to_record<'a, 'stmt>(
+fn sort_key_columns(table: &Table) -> Vec<ColumnId> {
+    table.indices[table.primary_key.index.index]
+        .columns
+        .iter()
+        .filter(|c| matches!(c.scope, IndexScope::Local))
+        .map(|c| table.column(c.column).id)
+        .collect()
+}
+
+fn item_to_record<'a>(
     item: &HashMap<String, AttributeValue>,
     columns: impl Iterator<Item = &'a Column>,
+    sk_cols: &[ColumnId],
 ) -> Result<stmt::ValueRecord> {
+    // Parse __sk back into individual column values when the table uses a
+    // composite sort key.
+    let mut sk_vals: HashMap<ColumnId, stmt::Value> = HashMap::new();
+    if sk_cols.len() > 1 {
+        if let Some(AttributeValue::S(sk)) = item.get("__sk") {
+            let mut parts: Vec<&str> = sk.split('#').collect();
+            // We write a trailing delimiter so pop the empty tail.
+            if parts.last() == Some(&"") {
+                parts.pop();
+            }
+            for (i, part) in parts.iter().enumerate() {
+                if let Some(&col_id) = sk_cols.get(i) {
+                    sk_vals.insert(col_id, stmt::Value::String((*part).to_string()));
+                }
+            }
+        }
+    }
+
     Ok(stmt::ValueRecord::from_vec(
         columns
             .map(|column| {
                 if let Some(value) = item.get(&column.name) {
                     Value::from_ddb(&column.ty, value).into_inner()
+                } else if let Some(value) = sk_vals.get(&column.id) {
+                    // Re-parse the raw string into the column's proper type.
+                    let attr = AttributeValue::S(match value {
+                        stmt::Value::String(s) => s.clone(),
+                        _ => unreachable!(),
+                    });
+                    Value::from_ddb(&column.ty, &attr).into_inner()
                 } else {
                     stmt::Value::Null
                 }
             })
             .collect(),
     ))
+}
+
+/// Builds the DynamoDB key condition expression for a primary-key query.
+///
+/// For simple tables (single sort key or no sort key) this delegates to
+/// `ddb_expression` unchanged.  For item-collection tables where the sort key
+/// is synthesized as `__sk = "val1#val2#…"` this decomposes the filter into a
+/// hash-key equality condition plus a `begins_with(__sk, prefix)` expression.
+struct BuildKeyExpression<'a> {
+    table: &'a Table,
+    attrs: &'a mut ExprAttrs,
+    /// Column IDs of the Local-scoped PK columns (sort-key components).
+    sk_cols: &'a [ColumnId],
+    /// Accumulated equality conditions keyed by column ID.
+    sk_components: HashMap<ColumnId, stmt::Expr>,
+    /// The partition-key equality sub-expression.
+    pk_component: Option<stmt::Expr>,
+}
+
+impl<'a> BuildKeyExpression<'a> {
+    fn build(mut self, cx: &ExprContext<'_, db::Schema>, expr: &stmt::Expr) -> String {
+        if self.sk_cols.len() <= 1 {
+            // No composite sort key — pass through unchanged.
+            return ddb_expression(cx, self.attrs, true, expr);
+        }
+
+        // Collect sub-expressions per column.
+        self.visit_expr(expr);
+
+        let pk_expr = self
+            .pk_component
+            .as_ref()
+            .expect("key expression must include a hash-key condition");
+        let mut key_expr = ddb_expression(cx, self.attrs, true, pk_expr);
+
+        // Build the sort-key prefix from the collected components.
+        let mut missing = false;
+        let mut sk_prefix = String::new();
+        for &sk_col_id in self.sk_cols {
+            let Some(sk_sub) = self.sk_components.get(&sk_col_id) else {
+                missing = true;
+                continue;
+            };
+
+            assert!(!missing, "gap in sort-key component conditions");
+
+            match sk_sub {
+                stmt::Expr::IsNull(_) => {
+                    // Null-check means this column is absent for this model type; skip.
+                }
+                stmt::Expr::BinaryOp(op) if matches!(op.op, stmt::BinaryOp::Eq) => {
+                    let stmt::Expr::Value(val) = op.rhs.as_ref() else {
+                        todo!("sk_sub rhs = {:#?}", op.rhs);
+                    };
+                    sk_prefix.push_str(&value_to_sk_part(val));
+                    sk_prefix.push('#');
+                }
+                _ => todo!("sk_sub={sk_sub:#?}"),
+            }
+        }
+
+        let sk_prefix_attr = self.attrs.literal(sk_prefix);
+        self.attrs
+            .attr_names
+            .insert("#__sk".to_string(), "__sk".to_string());
+        key_expr.push_str(&format!(" AND begins_with(#__sk, {sk_prefix_attr})"));
+        key_expr
+    }
+}
+
+impl Visit for BuildKeyExpression<'_> {
+    fn visit_expr(&mut self, i: &Expr) {
+        match i {
+            Expr::And(and) => self.visit_expr_and(and),
+            Expr::BinaryOp(binop) => self.visit_expr_binary_op(binop),
+            Expr::IsNull(isnull) => self.visit_expr_is_null(isnull),
+            _ => todo!("BuildKeyExpression::visit_expr: {i:#?}"),
+        }
+    }
+
+    fn visit_expr_binary_op(&mut self, i: &stmt::ExprBinaryOp) {
+        assert!(
+            matches!(i.op, stmt::BinaryOp::Eq),
+            "key condition must be equality; got {i:#?}"
+        );
+        let Expr::Reference(refer) = i.lhs.as_ref() else {
+            todo!("key lhs is not a reference: {i:#?}");
+        };
+
+        // To avoid needing a &ExprContext here we pattern-match on the column
+        // index directly — the reference's column index into the table.
+        let col_idx = match refer {
+            stmt::ExprReference::Column(ec) => ec.column,
+            _ => todo!("key reference is not a column: {refer:#?}"),
+        };
+
+        let col_id = ColumnId {
+            table: self.table.id,
+            index: col_idx,
+        };
+
+        if self.sk_cols.contains(&col_id) {
+            self.sk_components.insert(col_id, Expr::BinaryOp(i.clone()));
+        } else {
+            self.pk_component = Some(Expr::BinaryOp(i.clone()));
+        }
+    }
+
+    fn visit_expr_is_null(&mut self, i: &stmt::ExprIsNull) {
+        let Expr::Reference(refer) = i.expr.as_ref() else {
+            return;
+        };
+        let col_idx = match refer {
+            stmt::ExprReference::Column(ec) => ec.column,
+            _ => return,
+        };
+        let col_id = ColumnId {
+            table: self.table.id,
+            index: col_idx,
+        };
+        if self.sk_cols.contains(&col_id) {
+            self.sk_components.insert(col_id, Expr::IsNull(i.clone()));
+        }
+    }
 }
 
 fn ddb_expression(
@@ -494,6 +687,10 @@ impl ExprAttrs {
             }
             Entry::Occupied(e) => e.into_mut(),
         }
+    }
+
+    fn literal(&mut self, s: impl Into<String>) -> String {
+        self.ddb_value(AttributeValue::S(s.into()))
     }
 
     fn value(&mut self, val: &stmt::Value) -> String {

@@ -145,6 +145,10 @@ pub(crate) struct Model {
 
     /// Optional table to map the model to
     pub(crate) table: Option<syn::LitStr>,
+
+    /// Parent model type for item collection (single-table design).
+    /// Comes from `#[item_collection(ParentType)]` on the struct.
+    pub(crate) item_collection: Option<syn::Type>,
 }
 
 impl Model {
@@ -350,6 +354,7 @@ impl Model {
             kind,
             indices,
             table: model_attr.table,
+            item_collection: model_attr.item_collection,
         })
     }
 
@@ -540,6 +545,7 @@ impl Model {
             }),
             indices,
             table: None,
+            item_collection: None,
         })
     }
 }

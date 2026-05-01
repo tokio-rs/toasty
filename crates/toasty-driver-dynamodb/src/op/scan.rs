@@ -8,6 +8,7 @@ use toasty_core::{
     schema::db::ColumnId,
     stmt::ExprContext,
 };
+use crate::sort_key_columns;
 
 impl Connection {
     pub(crate) async fn exec_scan(
@@ -49,7 +50,7 @@ impl Connection {
                 })
             })
         };
-
+        let sk_cols = sort_key_columns(table);
         match op.limit {
             None => {
                 let mut stream = scan.into_paginator().items().send();
@@ -61,7 +62,7 @@ impl Connection {
                     .transpose()
                     .map_err(toasty_core::Error::driver_operation_failed)?
                 {
-                    rows.push(item_to_record(&item, cols()).map(stmt::Value::from)?);
+                    rows.push(item_to_record(&item, cols(), &sk_cols).map(stmt::Value::from)?);
                 }
 
                 Ok(ExecResponse {
@@ -88,7 +89,7 @@ impl Connection {
 
                 let mut rows: Vec<stmt::Value> = Vec::new();
                 for item in res.items.into_iter().flatten() {
-                    rows.push(item_to_record(&item, cols()).map(stmt::Value::from)?);
+                    rows.push(item_to_record(&item, cols(), &sk_cols).map(stmt::Value::from)?);
                 }
 
                 Ok(ExecResponse {
@@ -127,7 +128,7 @@ impl Connection {
                         .map_err(toasty_core::Error::driver_operation_failed)?
                     {
                         Some(item) => {
-                            rows.push(item_to_record(&item, cols()).map(stmt::Value::from)?);
+                            rows.push(item_to_record(&item, cols(), &sk_cols).map(stmt::Value::from)?);
                         }
                         None => break,
                     }

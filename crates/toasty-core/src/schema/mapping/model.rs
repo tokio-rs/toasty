@@ -1,4 +1,4 @@
-use super::Field;
+use super::{Field, ItemCollection};
 use crate::{
     schema::{
         app::ModelId,
@@ -74,6 +74,11 @@ pub struct Model {
     /// forms in for fields named by `.include()` (or for every deferred
     /// field when an `INSERT ... RETURNING` is being lowered).
     pub default_returning: stmt::Expr,
+
+    /// Item-collection metadata for this model.
+    ///
+    /// Empty/default for models that are not part of an item-collection group.
+    pub item_collection: ItemCollection,
 }
 
 /// Expression template for converting table rows into model records.

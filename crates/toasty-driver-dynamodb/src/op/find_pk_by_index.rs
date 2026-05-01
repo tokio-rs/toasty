@@ -1,3 +1,5 @@
+use crate::sort_key_columns;
+
 use super::{
     Connection, ExprAttrs, Result, Schema, ddb_expression, item_to_record, operation, stmt,
 };
@@ -50,12 +52,13 @@ impl Connection {
                 .map_err(toasty_core::Error::driver_operation_failed)?
         };
 
+        let sk_cols = sort_key_columns(table);
         let schema = schema.clone();
 
         Ok(ExecResponse::value_stream(stmt::ValueStream::from_iter(
             res.items.into_iter().flatten().map(move |item| {
                 let table = schema.db.table(op.table);
-                item_to_record(&item, table.primary_key_columns())
+                item_to_record(&item, table.primary_key_columns(), &sk_cols)
             }),
         )))
     }

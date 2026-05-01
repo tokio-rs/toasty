@@ -1,3 +1,5 @@
+use crate::sort_key_columns;
+
 use super::{
     Connection, Delete, ExprAttrs, Put, Result, ReturnValuesOnConditionCheckFailure, SdkError,
     TransactWriteItem, TransactWriteItemsError, Update, UpdateItemError, Value, db, ddb_expression,
@@ -5,7 +7,7 @@ use super::{
 };
 use aws_sdk_dynamodb::types::{AttributeValue, CancellationReason, ReturnValue};
 use std::{collections::HashMap, fmt::Write};
-use toasty_core::{driver::ExecResponse, stmt::ExprContext};
+use toasty_core::{driver::ExecResponse, schema::db::ColumnId, stmt::ExprContext};
 
 /// An [`stmt::Input`] that resolves column references into a record produced
 /// by `item_to_record`. After lowering, filter/condition expressions reference
@@ -46,6 +48,7 @@ impl stmt::Input for RecordInput<'_> {
 fn filter_failed(
     old_item: Option<&HashMap<String, AttributeValue>>,
     table: &db::Table,
+    sk_cols: &[ColumnId],
     filter: Option<&stmt::Expr>,
 ) -> bool {
     let Some(filter) = filter else {
@@ -56,7 +59,7 @@ fn filter_failed(
         return true;
     };
 
-    let record = item_to_record(item, table.columns.iter()).unwrap();
+    let record = item_to_record(item, table.columns.iter(), sk_cols).unwrap();
     !filter.eval_bool(RecordInput(&record)).unwrap_or(false)
 }
 
@@ -67,10 +70,11 @@ fn on_update_item_condition_failed(
     item: Option<&HashMap<String, AttributeValue>>,
     message: Option<&str>,
     table: &db::Table,
+    sk_cols: &[ColumnId],
     filter: Option<&stmt::Expr>,
     returning: bool,
 ) -> Result<ExecResponse> {
-    if filter_failed(item, table, filter) {
+    if filter_failed(item, table, sk_cols, filter) {
         if returning {
             Ok(ExecResponse::empty_value_stream())
         } else {
@@ -93,13 +97,14 @@ fn on_transaction_cancelled(
     reasons: &[CancellationReason],
     message: Option<&str>,
     table: &db::Table,
+    sk_cols: &[ColumnId],
     filter: Option<&stmt::Expr>,
     returning: bool,
 ) -> Result<ExecResponse> {
     let any_condition_failed = reasons
         .iter()
         .filter(|r| r.code() == Some("ConditionalCheckFailed"))
-        .any(|r| !filter_failed(r.item(), table, filter));
+        .any(|r| !filter_failed(r.item(), table, sk_cols, filter));
 
     if any_condition_failed {
         Err(toasty_core::Error::condition_failed(
@@ -121,6 +126,7 @@ impl Connection {
         op: operation::UpdateByKey,
     ) -> Result<ExecResponse> {
         let table = schema.table(op.table);
+        let sk_cols = sort_key_columns(table);
         let cx = ExprContext::new_with_target(schema, table);
 
         let mut expr_attrs = ExprAttrs::default();
@@ -397,6 +403,7 @@ impl Connection {
                                 tce.cancellation_reasons(),
                                 tce.message(),
                                 table,
+                                &sk_cols,
                                 op.filter.as_ref(),
                                 op.returning.is_some(),
                             );
@@ -574,6 +581,7 @@ impl Connection {
                                 cce.item(),
                                 cce.message.as_deref(),
                                 table,
+                                &sk_cols,
                                 op.filter.as_ref(),
                                 op.returning.is_some(),
                             );
@@ -704,6 +712,7 @@ impl Connection {
                                 tce.cancellation_reasons(),
                                 tce.message(),
                                 table,
+                                &sk_cols,
                                 op.filter.as_ref(),
                                 op.returning.is_some(),
                             );
@@ -788,7 +797,7 @@ mod tests {
     #[test]
     fn no_filter_returns_false() {
         let table = make_table();
-        assert!(!filter_failed(None, &table, None));
+        assert!(!filter_failed(None, &table, &[], None));
     }
 
     // Filter present but item is missing (record was deleted between read and check):
@@ -797,7 +806,7 @@ mod tests {
     fn missing_item_with_filter_returns_true() {
         let table = make_table();
         let filter = status_eq_active();
-        assert!(filter_failed(None, &table, Some(&filter)));
+        assert!(filter_failed(None, &table, &[], Some(&filter)));
     }
 
     // Item present and filter matches: the filter was NOT the failing part, so the
@@ -807,7 +816,7 @@ mod tests {
         let table = make_table();
         let filter = status_eq_active();
         let item = item_with_status("active");
-        assert!(!filter_failed(Some(&item), &table, Some(&filter)));
+        assert!(!filter_failed(Some(&item), &table, &[], Some(&filter)));
     }
 
     // Item present but filter does not match: the filter failed → count 0.
@@ -816,6 +825,6 @@ mod tests {
         let table = make_table();
         let filter = status_eq_active();
         let item = item_with_status("inactive");
-        assert!(filter_failed(Some(&item), &table, Some(&filter)));
+        assert!(filter_failed(Some(&item), &table, &[], Some(&filter)));
     }
 }

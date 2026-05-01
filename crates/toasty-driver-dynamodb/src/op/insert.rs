@@ -1,6 +1,9 @@
+use crate::{sort_key_columns, value_to_sk_part};
+
 use super::{
     Connection, Put, PutRequest, Result, TransactWriteItem, Value, WriteRequest, db, stmt,
 };
+use aws_sdk_dynamodb::types::AttributeValue;
 use std::collections::HashMap;
 use toasty_core::driver::ExecResponse;
 
@@ -35,19 +38,53 @@ impl Connection {
         let mut insert_items = vec![];
 
         let source = insert.source.body.into_values();
+        let sk_cols = sort_key_columns(table);
+        let concat_sk = sk_cols.len() > 1;
 
         for row in source.rows {
             let mut items = HashMap::new();
+            // Collect sort-key component values when using composite __sk encoding.
+            let mut sk_vals: Vec<Option<stmt::Value>> = if concat_sk {
+                vec![None; sk_cols.len()]
+            } else {
+                vec![]
+            };
 
             for (i, column_id) in insert_table.columns.iter().enumerate() {
                 let column = schema.column(*column_id);
                 let entry = row.entry(i).unwrap();
                 let value = entry.as_value_unwrap();
 
+                if concat_sk {
+                    if let Some(sk_pos) = sk_cols.iter().position(|&c| c == *column_id) {
+                        sk_vals[sk_pos] = Some(value.clone());
+                        continue;
+                    }
+                }
+
                 if !value.is_null() {
                     items.insert(column.name.clone(), Value::from(value.clone()).to_ddb());
                 }
             }
+
+            if concat_sk {
+                // Only use the components that are present for this model.
+                // The root model only provides __model; child models provide
+                // __model + their own local PK fields.
+                let sk_parts: Vec<String> = sk_vals
+                    .iter()
+                    .take_while(|v| v.is_some())
+                    .map(|v| value_to_sk_part(v.as_ref().unwrap()))
+                    .collect();
+                assert!(
+                    !sk_parts.is_empty(),
+                    "at least one sort-key component must be present for insert"
+                );
+                let mut sk = sk_parts.join("#");
+                sk.push('#');
+                items.insert("__sk".to_string(), AttributeValue::S(sk));
+            }
+
             insert_items.push(items);
         }
 
@@ -162,10 +199,25 @@ impl Connection {
                     }
 
                     if !nullable {
-                        // Add primary key values
-                        for column in table.primary_key_columns() {
-                            let name = &column.name;
-                            index_insert_items.insert(name.clone(), insert_items[name].clone());
+                        // Add primary key values (including __sk for composite sort keys).
+                        if concat_sk {
+                            // Copy the partition-key column(s) individually and __sk as a unit.
+                            let pk_index = &table.indices[table.primary_key.index.index];
+                            for ic in &pk_index.columns {
+                                if ic.scope.is_partition() {
+                                    let col = schema.column(ic.column);
+                                    index_insert_items
+                                        .insert(col.name.clone(), insert_items[&col.name].clone());
+                                }
+                            }
+                            if let Some(sk_val) = insert_items.get("__sk") {
+                                index_insert_items.insert("__sk".to_string(), sk_val.clone());
+                            }
+                        } else {
+                            for column in table.primary_key_columns() {
+                                let name = &column.name;
+                                index_insert_items.insert(name.clone(), insert_items[name].clone());
+                            }
                         }
 
                         transact_items.push(

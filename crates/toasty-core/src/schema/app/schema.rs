@@ -227,6 +227,7 @@ impl Builder {
         self.link_relations()?;
         self.resolve_via_targets()?;
         self.verify_no_eager_load_cycles()?;
+        self.validate_item_collections()?;
 
         Ok(())
     }
@@ -327,6 +328,57 @@ impl Builder {
         }
 
         Ok(current)
+    }
+
+    fn validate_item_collections(&self) -> Result<()> {
+        for model in self.models.values() {
+            let root = match model {
+                Model::Root(r) => r,
+                _ => continue,
+            };
+
+            let Some(_parent_id) = root.item_collection else {
+                continue;
+            };
+
+            // The primary key index is always the first index in `indices`.
+            let pk_index = &root.indices[root.primary_key.index.index];
+
+            // Must have at least one Local-scoped field (compound key).
+            if pk_index.local_fields().is_empty() {
+                return Err(crate::Error::invalid_schema(format!(
+                    "model `{}` has `#[item_collection]` but no local (sort-key) component in its \
+                     primary key; add `#[key(partition = <fk_field>, local = <own_field>)]`",
+                    root.name.upper_camel_case(),
+                )));
+            }
+
+            // Collect the FieldIds of all FK source fields from BelongsTo relations.
+            let fk_sources: std::collections::HashSet<FieldId> = root
+                .fields
+                .iter()
+                .filter_map(|f| f.ty.as_belongs_to())
+                .flat_map(|bt| bt.foreign_key.fields.iter().map(|fkf| fkf.source))
+                .collect();
+
+            // Every partition-scoped PK field must be a FK source.
+            for partition_field in pk_index.partition_fields() {
+                if !fk_sources.contains(&partition_field.field) {
+                    let field_name = root.fields[partition_field.field.index]
+                        .name
+                        .app_unwrap()
+                        .to_string();
+                    return Err(crate::Error::invalid_schema(format!(
+                        "model `{}` has `#[item_collection]` but the partition key field `{}` is \
+                         not sourced from a `BelongsTo` relation; the partition key must reuse the \
+                         parent model's primary key via a foreign key field",
+                        root.name.upper_camel_case(),
+                        field_name,
+                    )));
+                }
+            }
+        }
+        Ok(())
     }
 
     fn verify_no_eager_load_cycles(&self) -> crate::Result<()> {

@@ -56,6 +56,7 @@ pub mod infra_missing_registrations;
 pub mod infra_pool_config;
 pub mod infra_reset_db;
 pub mod infra_sync_send;
+pub mod item_collection;
 pub mod key_unsigned;
 pub mod lift_belongs_to_complex_filter;
 pub mod query_count;

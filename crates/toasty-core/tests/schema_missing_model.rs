@@ -41,6 +41,7 @@ fn make_root_model(id: ModelId, name: &str, extra_fields: Vec<Field>) -> Model {
             },
         },
         table_name: None,
+        item_collection: None,
         indices: vec![],
         version_field: None,
     })

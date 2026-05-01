@@ -1,3 +1,5 @@
+use crate::sort_key_columns;
+
 use super::{
     Connection, Delete, ExprAttrs, Result, ReturnValuesOnConditionCheckFailure, SdkError,
     TransactWriteItem, db, ddb_expression, ddb_key, item_to_record, operation,
@@ -14,6 +16,7 @@ impl Connection {
         use aws_sdk_dynamodb::operation::delete_item::DeleteItemError;
 
         let table = schema.table(op.table);
+        let sk_cols = sort_key_columns(table);
         let cx = ExprContext::new_with_target(schema, table);
 
         let mut expr_attrs = ExprAttrs::default();
@@ -82,7 +85,8 @@ impl Connection {
                             // Both filter and condition set — check if filter matched
                             if let Some(old_item) = cce.item() {
                                 let record =
-                                    item_to_record(old_item, table.columns.iter()).unwrap();
+                                    item_to_record(old_item, table.columns.iter(), &sk_cols)
+                                        .unwrap();
                                 use toasty_core::stmt;
                                 struct RecordInput<'a>(&'a stmt::ValueRecord);
                                 impl stmt::Input for RecordInput<'_> {

@@ -10,6 +10,10 @@ pub(crate) struct ModelAttr {
 
     /// Optional database table name to map the model to
     pub(crate) table: Option<syn::LitStr>,
+
+    /// Parent model type for item collection (single-table design).
+    /// Set when `#[item_collection(ParentType)]` is present on the model.
+    pub(crate) item_collection: Option<syn::Type>,
 }
 
 impl ModelAttr {
@@ -73,6 +77,18 @@ impl ModelAttr {
                 };
 
                 self.table = Some(lit.clone());
+            } else if attr.path().is_ident("item_collection") {
+                if self.item_collection.is_some() {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "duplicate #[item_collection] attribute",
+                    ));
+                } else {
+                    match attr.parse_args::<syn::Type>() {
+                        Ok(ty) => self.item_collection = Some(ty),
+                        Err(e) => errs.push(e),
+                    }
+                }
             }
         }
 
