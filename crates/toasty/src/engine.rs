@@ -5,6 +5,7 @@ mod extract_params;
 #[cfg(test)]
 pub(crate) mod test_util;
 
+mod fold;
 mod hir;
 use hir::HirStatement;
 

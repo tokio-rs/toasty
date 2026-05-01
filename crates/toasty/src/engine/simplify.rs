@@ -9,11 +9,8 @@ mod expr_is_null;
 mod expr_let;
 mod expr_list;
 mod expr_map;
-mod expr_match;
-mod expr_not;
 mod expr_or;
 mod expr_project;
-mod expr_record;
 mod stmt_query;
 
 // Simplifications
@@ -27,7 +24,7 @@ use toasty_core::{
     stmt::{self, Expr, IntoExprTarget, Node, VisitMut},
 };
 
-use crate::engine::Engine;
+use crate::engine::{Engine, fold};
 
 /// Statement and expression simplifier.
 ///
@@ -56,10 +53,14 @@ pub(crate) fn simplify_expr(cx: stmt::ExprContext<'_>, expr: &mut stmt::Expr) {
 
 impl VisitMut for Simplify<'_> {
     fn visit_expr_mut(&mut self, i: &mut stmt::Expr) {
-        // First, simplify the expression.
+        // Recurse into children first.
         stmt::visit_mut::visit_expr_mut(self, i);
 
-        // If an in-subquery expression, then try lifting it.
+        // Fold this node bottom-up so heavyweight rules see canonical input.
+        // Children are already canonical (post-order recursion), so this is
+        // effectively local.
+        fold::fold_stmt(i);
+
         let maybe_expr = match i {
             Expr::Any(expr) => self.simplify_expr_any(expr),
             Expr::And(expr) => self.simplify_expr_and(expr),
@@ -73,16 +74,17 @@ impl VisitMut for Simplify<'_> {
             Expr::Let(expr) => self.simplify_expr_let(expr),
             Expr::List(expr) => self.simplify_expr_list(expr),
             Expr::Map(_) => self.simplify_expr_map(i),
-            Expr::Match(expr) => self.simplify_expr_match(expr),
-            Expr::Not(expr) => self.simplify_expr_not(expr),
             Expr::Or(expr) => self.simplify_expr_or(expr),
-            Expr::Record(expr) => self.simplify_expr_record(expr),
             Expr::IsNull(expr) => self.simplify_expr_is_null(expr),
             Expr::Project(expr) => self.simplify_expr_project(expr),
             _ => None,
         };
 
-        if let Some(expr) = maybe_expr {
+        if let Some(mut expr) = maybe_expr {
+            // Heavyweight rules may emit new fold-eligible structure
+            // (e.g., match elimination produces ANDs containing constants
+            // that need short-circuiting).
+            fold::fold_stmt(&mut expr);
             *i = expr;
         }
     }

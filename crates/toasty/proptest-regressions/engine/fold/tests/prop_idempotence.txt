@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc f8c9e99c9ce4a9ad6638043e3e0bec128ff94eff680061d5a5abf81f31e93f52 # shrinks to expr = ExprNot { expr: ExprOr { operands: [Bool(false), ExprInList { expr: I64(0), list: List([I64(0)]) }] } }
