@@ -1,5 +1,3 @@
-use std::cmp::PartialOrd;
-
 use super::Simplify;
 use toasty_core::schema::app::{FieldId, FieldTy};
 use toasty_core::stmt::{self, Expr, ResolvedRef, VisitMut};
@@ -46,7 +44,11 @@ impl Simplify<'_> {
         }
     }
 
-    /// Recursively walk a binary expression in parallel
+    /// Heavyweight binary-op rewrites. Cheap canonicalization (constant
+    /// folding, null propagation, boolean-constant simplification,
+    /// literal-on-right swap) runs in `fold::expr_binary_op` before this
+    /// is reached, so heavyweight rules see operands in canonical form
+    /// (no `(Value, Value)`, no `(Value, _)` ahead of `(_, Value)`).
     pub(super) fn simplify_expr_binary_op(
         &mut self,
         op: stmt::BinaryOp,
@@ -75,52 +77,6 @@ impl Simplify<'_> {
                     }
                 }
                 None
-            }
-            // Constant folding and null propagation,
-            //
-            //   - `5 = 5` → `true`
-            //   - `1 < 5` → `true`
-            //   - `"a" >= "b"` → `false`
-            //   - `null <op> x` → `null`
-            //   - `x <op> null` → `null`
-            (Expr::Value(lhs_val), Expr::Value(rhs_val)) => {
-                if lhs_val.is_null() || rhs_val.is_null() {
-                    return Some(Expr::null());
-                }
-
-                match op {
-                    stmt::BinaryOp::Eq => Some((*lhs_val == *rhs_val).into()),
-                    stmt::BinaryOp::Ne => Some((*lhs_val != *rhs_val).into()),
-                    stmt::BinaryOp::Lt => {
-                        PartialOrd::partial_cmp(&*lhs_val, &*rhs_val).map(|o| o.is_lt().into())
-                    }
-                    stmt::BinaryOp::Le => {
-                        PartialOrd::partial_cmp(&*lhs_val, &*rhs_val).map(|o| o.is_le().into())
-                    }
-                    stmt::BinaryOp::Gt => {
-                        PartialOrd::partial_cmp(&*lhs_val, &*rhs_val).map(|o| o.is_gt().into())
-                    }
-                    stmt::BinaryOp::Ge => {
-                        PartialOrd::partial_cmp(&*lhs_val, &*rhs_val).map(|o| o.is_ge().into())
-                    }
-                }
-            }
-            // Boolean constant comparisons:
-            //
-            //  - `x = true` → `x`
-            //  - `x = false` → `not(x)`
-            //  - `x != true` → `not(x)`
-            //  - `x != false` → `x`
-            (expr, Expr::Value(stmt::Value::Bool(b)))
-            | (Expr::Value(stmt::Value::Bool(b)), expr)
-                if op.is_eq() || op.is_ne() =>
-            {
-                let is_eq_true = (op.is_eq() && *b) || (op.is_ne() && !*b);
-                if is_eq_true {
-                    Some(expr.take())
-                } else {
-                    Some(Expr::not(expr.take()))
-                }
             }
             // Tuple decomposition,
             //
@@ -178,19 +134,6 @@ impl Simplify<'_> {
                 let other = lhs.take();
                 let match_expr = rhs.take();
                 Some(self.eliminate_match_in_binary_op(op, match_expr, other, false))
-            }
-            // Null propagation: `expr <op> null` → `null` (and symmetric)
-            //
-            // Any comparison with NULL yields NULL (SQL three-valued logic).
-            // This catches cases like `column = null` after input substitution
-            // provides a null FK value.
-            (_, Expr::Value(stmt::Value::Null)) | (Expr::Value(stmt::Value::Null), _) => {
-                return Some(Expr::null());
-            }
-            // Canonicalization, `literal <op> col` → `col <op_commuted> literal`
-            (Expr::Value(_), rhs) if !rhs.is_value() => {
-                std::mem::swap(lhs, rhs);
-                Some(Expr::binary_op(lhs.take(), op.commute(), rhs.take()))
             }
             // Self-comparison with projections, e.g.,
             //
