@@ -16,16 +16,16 @@
 //!
 //! ```text
 //! process_top_level_includes
-//!     └─► walk_record_fields ──┬──► relation slot: build_include_subquery
-//!         ▲                    └──► non-relation: process_field
-//!         │                              ├── deferred: splice + descend_into_embed
-//!         │                              └── eager embed: descend_into_embed
-//!         │                                        ├── struct → walk_record_fields
-//!         └──────────────────────────────────────  └── enum   → walk_enum_arms
+//!     └─► process_fields ──┬──► relation slot: build_include_subquery
+//!         ▲                └──► non-relation: process_field
+//!         │                          ├── deferred: splice + process_embed
+//!         │                          └── eager embed: process_embed
+//!         │                                    ├── struct → process_fields
+//!         └──────────────────────────────────  └── enum   → process_enum_arms
 //! ```
 //!
 //! Relations don't currently live inside embedded types, so
-//! `build_include_subquery` only fires from `walk_record_fields` at the
+//! `build_include_subquery` only fires from `process_fields` at the
 //! top-level model. When relations-in-embeds eventually lands, the same
 //! function will fire from any depth without further restructuring.
 
@@ -35,6 +35,18 @@ use toasty_core::{
 };
 
 use crate::engine::{lower::LowerStatement, simplify::Simplify};
+
+/// The include paths that target a single field slot, partitioned by
+/// whether they name the slot itself or a sub-path within it.
+///
+/// Either kind activates the slot. Sub-paths only matter when the slot is
+/// an embed — they drive the recursion into nested fields.
+struct FieldIncludes {
+    /// At least one include path equals `[i]` — the field is named directly.
+    include_self: bool,
+    /// Tails of every `[i, …]` include path, with the leading index stripped.
+    sub_paths: Vec<stmt::Projection>,
+}
 
 impl LowerStatement<'_, '_> {
     /// Top-level entry from `visit_returning_mut` for a `Returning::Model`.
@@ -50,18 +62,18 @@ impl LowerStatement<'_, '_> {
         };
         let app_fields = &self.model_unwrap().fields;
         let mapping_fields = &self.mapping_unwrap().fields;
-        self.walk_record_fields(record, app_fields, mapping_fields, include_paths, is_insert);
+        self.process_fields(record, app_fields, mapping_fields, include_paths, is_insert);
     }
 
-    /// Walk the fields of a struct-shaped record (top-level model or embedded
-    /// struct). For each field, partition matching include paths via
+    /// Process the fields of a struct-shaped record (top-level model or
+    /// embedded struct). For each field, partition matching include paths via
     /// [`FieldIncludes`] and dispatch:
     ///
     /// - Relation → splice a subquery via [`build_include_subquery`]
     ///   (relations live only at the top level today; a future "relations in
     ///   embeds" feature will fire this from any depth).
     /// - Anything else → [`process_field`].
-    fn walk_record_fields(
+    fn process_fields(
         &mut self,
         record: &mut stmt::ExprRecord,
         app_fields: &[app::Field],
@@ -111,7 +123,7 @@ impl LowerStatement<'_, '_> {
                 let stmt::Expr::Record(outer) = slot else {
                     unreachable!("just-wrapped slot");
                 };
-                self.descend_into_embed(
+                self.process_embed(
                     &mut outer[0],
                     embedded.target,
                     mapping,
@@ -125,7 +137,7 @@ impl LowerStatement<'_, '_> {
         if let app::FieldTy::Embedded(embedded) = &field.ty
             && (is_insert || !matches.sub_paths.is_empty())
         {
-            self.descend_into_embed(
+            self.process_embed(
                 slot,
                 embedded.target,
                 mapping,
@@ -135,10 +147,10 @@ impl LowerStatement<'_, '_> {
         }
     }
 
-    /// Descend into an embed's slot. Struct embeds expose a `Record`; enum
-    /// embeds expose a `Match` (or a bare column ref for unit-only enums,
-    /// which has nothing nested to splice).
-    fn descend_into_embed(
+    /// Process an embed's slot. Struct embeds expose a `Record`; enum embeds
+    /// expose a `Match` (or a bare column ref for unit-only enums, which has
+    /// nothing nested to splice).
+    fn process_embed(
         &mut self,
         slot: &mut stmt::Expr,
         target: app::ModelId,
@@ -151,7 +163,7 @@ impl LowerStatement<'_, '_> {
                 let stmt::Expr::Record(record) = slot else {
                     return;
                 };
-                self.walk_record_fields(
+                self.process_fields(
                     record,
                     em.fields.as_slice(),
                     fs.fields.as_slice(),
@@ -160,13 +172,13 @@ impl LowerStatement<'_, '_> {
                 );
             }
             (app::Model::EmbeddedEnum(em), mapping::Field::Enum(fe)) => {
-                self.walk_enum_arms(slot, em, fe, is_insert);
+                self.process_enum_arms(slot, em, fe, is_insert);
             }
             _ => {}
         }
     }
 
-    /// Walk the arms of an embedded enum's `Match`, processing variant
+    /// Process the arms of an embedded enum's `Match`, handling variant
     /// fields the same way as a struct's record fields.
     ///
     /// Each data-arm record has the discriminant at position 0 and variant
@@ -174,7 +186,7 @@ impl LowerStatement<'_, '_> {
     /// exist today (the path macro has no syntax for it), so this only
     /// services the `is_insert` short-circuit and the deferred-mask walk
     /// for sub-fields nested in struct embeds inside variants.
-    fn walk_enum_arms(
+    fn process_enum_arms(
         &mut self,
         slot: &mut stmt::Expr,
         app_enum: &app::EmbeddedEnum,
@@ -220,7 +232,7 @@ impl LowerStatement<'_, '_> {
 
     /// Build the relation subquery to splice into `record[field_index]` for
     /// `.include()` of a `BelongsTo`/`HasMany`/`HasOne`. Reached from
-    /// [`walk_record_fields`] for relation slots only.
+    /// [`process_fields`] for relation slots only.
     fn build_include_subquery(
         &mut self,
         record: &mut stmt::ExprRecord,
@@ -331,18 +343,6 @@ impl LowerStatement<'_, '_> {
 
         record[field_index] = sub_expr;
     }
-}
-
-/// The include paths that target a single field slot, partitioned by
-/// whether they name the slot itself or a sub-path within it.
-///
-/// Either kind activates the slot. Sub-paths only matter when the slot is
-/// an embed — they drive the recursion into nested fields.
-struct FieldIncludes {
-    /// At least one include path equals `[i]` — the field is named directly.
-    include_self: bool,
-    /// Tails of every `[i, …]` include path, with the leading index stripped.
-    sub_paths: Vec<stmt::Projection>,
 }
 
 impl FieldIncludes {
