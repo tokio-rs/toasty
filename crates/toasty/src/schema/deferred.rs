@@ -130,8 +130,8 @@ impl<T: Load<Output = T>> Load for Deferred<T> {
     }
 
     fn load(value: toasty_core::stmt::Value) -> crate::Result<Self> {
-        // The lowering wraps loaded deferred slots in a 1-element record and
-        // emits a bare Null for unloaded slots, so the two states are
+        // The lowering wraps a loaded deferred field in a 1-element record
+        // and emits a bare Null when unloaded, so the two states are
         // distinguishable even when the inner column value is NULL (i.e. the
         // `Deferred<Option<T>>` case).
         match value {
@@ -154,8 +154,8 @@ impl<T: Load<Output = T>> Load for Deferred<T> {
         // fetch is needed to read what was just written.
         //
         // Updates send the assigned value back unwrapped, unlike the SELECT
-        // lowering which wraps loaded slots in a 1-element record to
-        // distinguish them from unloaded slots.
+        // lowering which wraps a loaded deferred field in a 1-element record
+        // to distinguish it from the unloaded case.
         target.value = Some(T::load(value)?);
         Ok(())
     }

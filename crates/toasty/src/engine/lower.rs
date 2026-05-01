@@ -501,9 +501,9 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     fn visit_returning_mut(&mut self, i: &mut stmt::Returning) {
         if let stmt::Returning::Model { include } = i {
             // Start from the schema's pre-computed default returning — every
-            // `#[deferred]` slot, top-level or nested, is already `Null`.
-            // `process_top_level_includes` then splices loaded forms in at
-            // the slots named by include paths (and at every deferred slot
+            // `#[deferred]` field, top-level or nested, is already `Null`.
+            // `process_top_level_includes` then splices loaded forms in for
+            // the fields named by include paths (and for every deferred field
             // when this is an `INSERT ... RETURNING`).
             let mut returning = self.mapping_unwrap().default_returning.clone();
             let include_projections: Vec<stmt::Projection> = std::mem::take(include)

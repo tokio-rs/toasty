@@ -1,22 +1,22 @@
 //! Lowering for `Returning::Model` includes and deferred-field masking.
 //!
 //! `mapping::Model::default_returning` is computed at schema-build time with
-//! every `#[deferred]` slot — top-level or nested inside an embedded type —
+//! every `#[deferred]` field — top-level or nested inside an embedded type —
 //! pre-masked to `Null`. Lowering starts from a clone of the default
-//! expression and splices loaded forms in at slots named by `.include()`
-//! paths or, for an `INSERT … RETURNING`, at every deferred slot.
+//! expression and splices loaded forms in for fields named by `.include()`
+//! paths or, for an `INSERT … RETURNING`, for every deferred field.
 //!
 //! The recursion is mapping-driven: each `mapping::Field` variant decides how
-//! to descend into its corresponding slot expression. Driving off the mapping
-//! tree (rather than the slot expression's shape) is what lets us reach a
+//! to descend into its corresponding expression. Driving off the mapping
+//! tree (rather than the expression's shape) is what lets us reach a
 //! `#[deferred]` sub-field of an embed struct nested inside an enum variant —
-//! those slots live inside a `Match` expression, not a `Record`.
+//! the masked `Null` lives inside a `Match` expression, not a `Record`.
 //!
 //! The flow:
 //!
 //! ```text
 //! process_top_level_includes
-//!     └─► process_fields ──┬──► relation slot: build_include_subquery
+//!     └─► process_fields ──┬──► relation field: build_include_subquery
 //!         ▲                └──► non-relation: process_field
 //!         │                          ├── deferred: splice + process_embed
 //!         │                          └── eager embed: process_embed
@@ -36,11 +36,11 @@ use toasty_core::{
 
 use crate::engine::{lower::LowerStatement, simplify::Simplify};
 
-/// The include paths that target a single field slot, partitioned by
-/// whether they name the slot itself or a sub-path within it.
+/// The include paths that target a single field, partitioned by whether
+/// they name the field itself or a sub-path within it.
 ///
-/// Either kind activates the slot. Sub-paths only matter when the slot is
-/// an embed — they drive the recursion into nested fields.
+/// Either kind activates the field. Sub-paths only matter when the field
+/// is an embed — they drive the recursion into nested fields.
 struct FieldIncludes {
     /// At least one include path equals `[i]` — the field is named directly.
     include_self: bool,
@@ -97,13 +97,15 @@ impl LowerStatement<'_, '_> {
 
     /// Process one non-relation field by `mapping::Field` kind.
     ///
-    /// - **Deferred field** — when activated, wraps the slot in
-    ///   `Record([loaded])`. `loaded` is the column reference for primitives
-    ///   or the embed's pre-computed `default_returning` for embed targets.
-    ///   Then descends into the wrapped inner so nested deferred sub-fields
-    ///   apply.
-    /// - **Eager embed** — descends into the slot. (Eager primitives are a
-    ///   no-op; the column reference already sits in `default_returning`.)
+    /// - **Deferred field** — when activated, replaces the masked `Null`
+    ///   with `Record([loaded])`. `loaded` is the column reference for
+    ///   primitives or the embed's pre-computed `default_returning` for
+    ///   embed targets. For an embed, `default_returning` has its own
+    ///   deferred sub-fields pre-masked, so recurse to splice loaded forms
+    ///   in for those too.
+    /// - **Eager embed** — recurses into the embed's expression. (Eager
+    ///   primitives are a no-op; the column reference already sits in
+    ///   `default_returning`.)
     fn process_field(
         &mut self,
         slot: &mut stmt::Expr,
@@ -118,10 +120,12 @@ impl LowerStatement<'_, '_> {
             }
             *slot = stmt::Expr::record([loaded_form(field, mapping)]);
 
-            // Descend into the wrap so nested deferred sub-fields fire too.
+            // For an embed, the loaded form is the embed's `default_returning`, which
+            // has its own deferred sub-fields pre-masked. Recurse so those get loaded
+            // forms spliced in too.
             if let app::FieldTy::Embedded(embedded) = &field.ty {
                 let stmt::Expr::Record(outer) = slot else {
-                    unreachable!("just-wrapped slot");
+                    unreachable!("just-wrapped record");
                 };
                 self.process_embed(
                     &mut outer[0],
@@ -147,9 +151,9 @@ impl LowerStatement<'_, '_> {
         }
     }
 
-    /// Process an embed's slot. Struct embeds expose a `Record`; enum embeds
-    /// expose a `Match` (or a bare column ref for unit-only enums, which has
-    /// nothing nested to splice).
+    /// Process an embed's expression. Struct embeds expose a `Record`; enum
+    /// embeds expose a `Match` (or a bare column ref for unit-only enums,
+    /// which has nothing nested to splice).
     fn process_embed(
         &mut self,
         slot: &mut stmt::Expr,
@@ -209,7 +213,7 @@ impl LowerStatement<'_, '_> {
 
             // No path syntax routes through enum variants today, so each
             // variant field gets an empty `FieldIncludes`. `is_insert` is the
-            // only thing that activates a slot here.
+            // only thing that activates a field here.
             let no_match = FieldIncludes {
                 include_self: false,
                 sub_paths: Vec::new(),
@@ -232,7 +236,7 @@ impl LowerStatement<'_, '_> {
 
     /// Build the relation subquery to splice into `record[field_index]` for
     /// `.include()` of a `BelongsTo`/`HasMany`/`HasOne`. Reached from
-    /// [`process_fields`] for relation slots only.
+    /// [`process_fields`] for relation fields only.
     fn build_include_subquery(
         &mut self,
         record: &mut stmt::ExprRecord,
@@ -346,7 +350,7 @@ impl LowerStatement<'_, '_> {
 }
 
 impl FieldIncludes {
-    /// True when at least one include path activates this slot.
+    /// True when at least one include path activates this field.
     fn self_included(&self) -> bool {
         self.include_self || !self.sub_paths.is_empty()
     }
@@ -374,7 +378,7 @@ fn partition_paths(paths: &[stmt::Projection], i: usize) -> FieldIncludes {
     }
 }
 
-/// Build the loaded-form inner expression for a deferred slot.
+/// Build the loaded-form inner expression for a deferred field.
 ///
 /// - Primitive — the cached column reference (with any storage-type cast).
 /// - Embed (struct or enum) — the embed's pre-computed `default_returning`.

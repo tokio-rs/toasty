@@ -235,7 +235,7 @@ pub struct FieldStruct {
     /// `Record([..])` shape matching the struct's fields, with deferred
     /// sub-fields (direct or further nested) pre-masked to `Null`. Spliced
     /// in by `process_includes` when a parent `.include()` activates a
-    /// `Deferred<EmbedStruct>` slot.
+    /// `Deferred<EmbedStruct>` field.
     pub default_returning: stmt::Expr,
 }
 
@@ -275,7 +275,7 @@ pub struct FieldEnum {
     /// expression with per-arm records (currently identical to the raw
     /// `table_to_model` shape — `#[deferred]` on a variant field is
     /// rejected at the macro layer; if it is ever lifted, the per-arm
-    /// records would mask their deferred slots here).
+    /// records would mask their deferred fields here).
     pub default_returning: stmt::Expr,
 }
 

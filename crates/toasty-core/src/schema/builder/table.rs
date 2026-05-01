@@ -399,11 +399,11 @@ impl BuildMapping<'_> {
     }
 
     /// Builds the model's default `RETURNING` expression — the same shape as
-    /// `table_to_model` but with every `#[deferred]` slot, at this level or
+    /// `table_to_model` but with every `#[deferred]` field, at this level or
     /// inside a nested embedded type, pre-masked to `Null`. Also writes each
     /// embed's own default expression into the corresponding mapping node so
     /// lowering can splice it in when an `.include()` activates a deferred
-    /// embed slot.
+    /// embed.
     fn build_default_returning_root(
         &self,
         model: &ModelRoot,
@@ -418,17 +418,17 @@ impl BuildMapping<'_> {
         Ok(stmt::Expr::record(exprs))
     }
 
-    /// Builds the default returning expression for a single field slot and,
-    /// if the field is an embedded type, populates the embed's own
+    /// Builds the default returning expression for a single field and, if
+    /// the field is an embedded type, populates the embed's own
     /// `default_returning` cache.
     fn build_default_returning_field(
         &self,
         field: &app::Field,
         mapping: &mut mapping::Field,
     ) -> Result<stmt::Expr> {
-        // Deferred slots are `Null` in the default expression. Still recurse
-        // through deferred embeds so the nested `default_returning` is
-        // populated — `process_includes` reads it during a `.include()`
+        // Deferred fields are `Null` in the default expression. Still
+        // recurse through deferred embeds so the nested `default_returning`
+        // is populated — `process_includes` reads it during a `.include()`
         // splice.
         if field.deferred {
             if matches!(&field.ty, app::FieldTy::Embedded(_)) {
@@ -451,7 +451,7 @@ impl BuildMapping<'_> {
 
     /// Resolves the embedded target, recurses to compute its default
     /// expression, stores it on the mapping node, and returns a clone for
-    /// the caller to splice in at the parent's slot.
+    /// the caller to splice in for the parent field.
     fn populate_embed_default_returning(
         &self,
         field: &app::Field,
@@ -493,7 +493,7 @@ impl BuildMapping<'_> {
     /// the raw column emitter.
     ///
     /// `#[deferred]` directly on a variant field is rejected by the macro,
-    /// so the only deferred slots reachable through this recursion live
+    /// so the only deferred fields reachable through this recursion live
     /// inside an embed struct used as a variant field.
     fn build_default_returning_enum(
         &self,
@@ -618,7 +618,7 @@ impl BuildMapping<'_> {
             });
         }
         // The else branch uses the same Record shape as data arms but with
-        // Expr::Error for each field slot. This makes projections work
+        // Expr::Error for each field position. This makes projections work
         // uniformly: projecting [0] extracts disc_col (pruning the errors),
         // while projecting [1] yields Expr::Error (unreachable at runtime).
         let max_fields = model
