@@ -12,6 +12,14 @@
 //! `#[deferred]` sub-field of an embed struct nested inside an enum variant —
 //! the masked `Null` lives inside a `Match` expression, not a `Record`.
 //!
+//! Include paths arrive as [`stmt::Path`] values. The first thing we do is
+//! flatten any `PathRoot::Variant` chain into a plain projection of the form
+//! `[…parent_steps, variant_idx, …local_var_field_steps]`. This LOCAL form
+//! mirrors the IR's `Match` arm record (where each arm is `[disc, field_0,
+//! field_1, …]`), so descent through enum variants is just two index steps:
+//! one selecting the arm by variant index, the next addressing a local
+//! variant field.
+//!
 //! The flow:
 //!
 //! ```text
@@ -50,19 +58,22 @@ struct FieldIncludes {
 
 impl LowerStatement<'_, '_> {
     /// Top-level entry from `visit_returning_mut` for a `Returning::Model`.
-    /// Reads the current scope's model and mapping, then runs the recursion.
+    /// Flattens each include `Path` to its projection (folding any
+    /// `PathRoot::Variant` chain into discriminant-index steps), then runs
+    /// the recursion against the model's fields.
     pub(super) fn process_top_level_includes(
         &mut self,
         returning: &mut stmt::Expr,
-        include_paths: &[stmt::Projection],
+        include_paths: &[stmt::Path],
         is_insert: bool,
     ) {
         let stmt::Expr::Record(record) = returning else {
             return;
         };
+        let projections: Vec<stmt::Projection> = include_paths.iter().map(flatten_path).collect();
         let app_fields = &self.model_unwrap().fields;
         let mapping_fields = &self.mapping_unwrap().fields;
-        self.process_fields(record, app_fields, mapping_fields, include_paths, is_insert);
+        self.process_fields(record, app_fields, mapping_fields, &projections, is_insert);
     }
 
     /// Process the fields of a struct-shaped record (top-level model or
@@ -182,7 +193,7 @@ impl LowerStatement<'_, '_> {
                 );
             }
             (app::Model::EmbeddedEnum(em), mapping::Field::Enum(fe)) => {
-                self.process_enum_arms(returning, em, fe, is_insert);
+                self.process_enum_arms(returning, em, fe, sub_paths, is_insert);
             }
             _ => {}
         }
@@ -192,15 +203,18 @@ impl LowerStatement<'_, '_> {
     /// fields the same way as a struct's record fields.
     ///
     /// Each data-arm record has the discriminant at position 0 and variant
-    /// fields at positions `1..`. Include paths through enum variants don't
-    /// exist today (the path macro has no syntax for it), so this only
-    /// services the `is_insert` short-circuit and the deferred-mask walk
-    /// for sub-fields nested in struct embeds inside variants.
+    /// fields at positions `1..`. `sub_paths` are the path remainders that
+    /// have already had the parent field index stripped off — within them,
+    /// the leading step is a variant index and the next is a local variant
+    /// field index. We partition by variant index per arm and then by local
+    /// field index per variant field. `is_insert` independently activates
+    /// every field for `INSERT … RETURNING`.
     fn process_enum_arms(
         &mut self,
         returning: &mut stmt::Expr,
         app_enum: &app::EmbeddedEnum,
         mapping: &mapping::FieldEnum,
+        sub_paths: &[stmt::Projection],
         is_insert: bool,
     ) {
         let stmt::Expr::Match(match_expr) = returning else {
@@ -217,23 +231,27 @@ impl LowerStatement<'_, '_> {
             };
             let variant_mapping = &mapping.variants[variant_idx];
 
-            // No path syntax routes through enum variants today, so each
-            // variant field gets an empty `FieldIncludes`. `is_insert` is the
-            // only thing that activates a field here.
-            let no_match = FieldIncludes {
-                include_self: false,
-                sub_paths: Vec::new(),
-            };
+            // Tails of every path that targets THIS arm — i.e., paths whose
+            // leading step equals `variant_idx`. The leading step is stripped.
+            let arm_sub_paths: Vec<stmt::Projection> = sub_paths
+                .iter()
+                .filter_map(|p| {
+                    let (first, rest) = p.as_slice().split_first()?;
+                    (*first == variant_idx).then(|| stmt::Projection::from(rest))
+                })
+                .collect();
+
             for (j, (var_field, var_mapping)) in variant_fields
                 .iter()
                 .zip(&variant_mapping.fields)
                 .enumerate()
             {
+                let field_includes = partition_paths(&arm_sub_paths, j);
                 self.process_field(
                     &mut arm_record[j + 1],
                     var_field,
                     var_mapping,
-                    &no_match,
+                    &field_includes,
                     is_insert,
                 );
             }
@@ -381,6 +399,32 @@ fn partition_paths(paths: &[stmt::Projection], i: usize) -> FieldIncludes {
     FieldIncludes {
         include_self,
         sub_paths,
+    }
+}
+
+/// Flatten an include [`stmt::Path`] into a single projection, folding any
+/// `PathRoot::Variant` chain into a discriminant-index step.
+///
+/// The result uses LOCAL field indices for variant fields (matching the IR's
+/// `Match` arm record convention), not the GLOBAL `EmbeddedEnum::fields`
+/// indices used by `Schema::resolve`. Include lowering walks the IR shape,
+/// not the schema, so LOCAL is what `process_enum_arms` needs.
+fn flatten_path(path: &stmt::Path) -> stmt::Projection {
+    let mut acc = stmt::Projection::identity();
+    push_root_steps(&path.root, &mut acc);
+    for step in path.projection.as_slice() {
+        acc.push(*step);
+    }
+    acc
+}
+
+fn push_root_steps(root: &stmt::PathRoot, acc: &mut stmt::Projection) {
+    if let stmt::PathRoot::Variant { parent, variant_id } = root {
+        push_root_steps(&parent.root, acc);
+        for step in parent.projection.as_slice() {
+            acc.push(*step);
+        }
+        acc.push(variant_id.index);
     }
 }
 

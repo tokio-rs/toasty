@@ -143,6 +143,109 @@ pub async fn deferred_inside_embed_in_enum_variant(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
+// `.include()` reaching a deferred sub-field that lives inside a struct embed
+// nested inside an enum variant. The path is variant-rooted: lowering must
+// flatten the `PathRoot::Variant` into a `[contact_idx, variant_idx, …]`
+// projection and `process_enum_arms` must descend into the matching arm.
+//
+// The user-facing path syntax is built from the typed primitives
+// (`into_variant` + `chain`) because the macro doesn't yet expose
+// path-yielding accessors on the variant handle. Once it does, this test
+// can use the natural API instead.
+
+#[driver_test(id(ID))]
+pub async fn include_deferred_inside_embed_in_enum_variant(t: &mut Test) -> Result<()> {
+    use toasty::stmt::Path;
+    use toasty_core::schema::app::VariantId;
+
+    #[derive(Debug, toasty::Embed)]
+    struct Metadata {
+        author: String,
+
+        #[deferred]
+        notes: toasty::Deferred<String>,
+    }
+
+    #[derive(Debug, toasty::Embed)]
+    enum ContactInfo {
+        Email { address: String, metadata: Metadata },
+        Phone { number: String },
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Person {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        contact: ContactInfo,
+    }
+
+    let mut db = t.setup_db(models!(Person, ContactInfo, Metadata)).await;
+
+    let alice = toasty::create!(Person {
+        name: "Alice".to_string(),
+        contact: ContactInfo::Email {
+            address: "alice@example.com".to_string(),
+            metadata: Metadata {
+                author: "Alice".to_string(),
+                notes: "Important".to_string().into(),
+            },
+        },
+    })
+    .exec(&mut db)
+    .await?;
+
+    // Bob's contact is a different variant, used to verify that an include
+    // routed through Email doesn't activate anything for him.
+    let bob = toasty::create!(Person {
+        name: "Bob".to_string(),
+        contact: ContactInfo::Phone {
+            number: "555-0100".to_string(),
+        },
+    })
+    .exec(&mut db)
+    .await?;
+
+    // Build a path through Email → metadata (local idx 1) → notes (idx 1).
+    let email_id = VariantId {
+        model: ContactInfo::id(),
+        index: 0,
+    };
+    let contact: Path<Person, ContactInfo> = Person::fields().contact().into();
+    let notes_path = contact
+        .into_variant(email_id)
+        .chain(Path::<ContactInfo, Metadata>::from_field_index(1))
+        .chain(Path::<Metadata, toasty::Deferred<String>>::from_field_index(1));
+
+    // Alice's variant matches the path — `notes` arrives loaded.
+    let alice_read = Person::filter_by_id(alice.id)
+        .include(notes_path.clone())
+        .get(&mut db)
+        .await?;
+    let ContactInfo::Email { metadata, .. } = &alice_read.contact else {
+        panic!("expected Email variant");
+    };
+    assert_eq!("Alice", metadata.author);
+    assert!(!metadata.notes.is_unloaded());
+    assert_eq!("Important", metadata.notes.get());
+
+    // Bob's variant doesn't match the include path's arm — the include is a
+    // no-op for him: the row still loads cleanly with the Phone variant.
+    let bob_read = Person::filter_by_id(bob.id)
+        .include(notes_path)
+        .get(&mut db)
+        .await?;
+    let ContactInfo::Phone { number } = &bob_read.contact else {
+        panic!("expected Phone variant");
+    };
+    assert_eq!("555-0100", number);
+
+    Ok(())
+}
+
 // ---------- Deferred<UnitEnum> ----------
 
 #[driver_test(id(ID))]

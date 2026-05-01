@@ -506,13 +506,10 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             // the fields named by include paths (and for every deferred field
             // when this is an `INSERT ... RETURNING`).
             let mut returning = self.mapping_unwrap().default_returning.clone();
-            let include_projections: Vec<stmt::Projection> = std::mem::take(include)
-                .into_iter()
-                .map(|p| p.projection)
-                .collect();
+            let include_paths = std::mem::take(include);
             let is_insert = self.cx.is_insert();
 
-            self.process_top_level_includes(&mut returning, &include_projections, is_insert);
+            self.process_top_level_includes(&mut returning, &include_paths, is_insert);
 
             *i = stmt::Returning::Project(returning);
         }
