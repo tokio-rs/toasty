@@ -157,3 +157,64 @@ pub async fn filter_variant_field_with_partition_key(t: &mut Test) -> Result<()>
 
     Ok(())
 }
+
+/// Filtering directly via a variant-rooted path comparison (no `matches`
+/// closure). The implicit gate on filter methods means
+/// `email().address().eq("x")` is equivalent to
+/// `email().matches(|e| e.address().eq("x"))` — the variant predicate is
+/// added automatically, so Phone-variant rows are excluded.
+#[driver_test(requires(sql))]
+pub async fn filter_variant_field_implicit_gate(t: &mut Test) -> Result<()> {
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    enum ContactInfo {
+        #[column(variant = 1)]
+        Email { address: String },
+        #[column(variant = 2)]
+        Phone { number: String },
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct User {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        name: String,
+        contact: ContactInfo,
+    }
+
+    let mut db = t.setup_db(models!(User, ContactInfo)).await;
+
+    User::create()
+        .name("Alice")
+        .contact(ContactInfo::Email {
+            address: "alice@example.com".to_string(),
+        })
+        .exec(&mut db)
+        .await?;
+
+    // Bob shares the same string but in the Phone column — the gate must
+    // reject him because his variant is Phone, not Email.
+    User::create()
+        .name("Bob")
+        .contact(ContactInfo::Phone {
+            number: "alice@example.com".to_string(),
+        })
+        .exec(&mut db)
+        .await?;
+
+    let results = User::filter(
+        User::fields()
+            .contact()
+            .email()
+            .address()
+            .eq("alice@example.com"),
+    )
+    .exec(&mut db)
+    .await?;
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].name, "Alice");
+
+    Ok(())
+}

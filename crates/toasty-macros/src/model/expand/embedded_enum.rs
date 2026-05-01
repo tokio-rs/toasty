@@ -122,7 +122,17 @@ impl Expand<'_> {
             })
             .collect();
 
-        // Generate per-variant handle + field structs for data-carrying variants.
+        // Generate one struct per data-carrying variant. The same struct is
+        // both the entry point returned by `email()` (used for `.matches(...)`
+        // filters and direct `.eq()`/include path access) and the namespace
+        // for variant-field accessors. The struct stores the parent path
+        // (the path to the embed enum field) and exposes:
+        //
+        // - `parent_path()` — model-rooted path to the enum field. Used by
+        //   `matches()` to build the `is_variant` gate and by every filter
+        //   method on a variant-rooted Path to inject the implicit gate.
+        // - `path()` — variant-rooted path. Field accessors chain off this
+        //   so that the produced Path knows its variant context.
         let variant_field_structs: Vec<_> = embedded_enum
             .variants
             .iter()
@@ -130,9 +140,7 @@ impl Expand<'_> {
             .filter(|(_, v)| v.variant_handle_ident.is_some())
             .map(|(variant_index, variant)| {
                 let variant_handle_ident = variant.variant_handle_ident.as_ref().unwrap();
-                let variant_field_struct_ident = variant.field_struct_ident.as_ref().unwrap();
                 let variant_idx = util::int(variant_index);
-                let is_variant_check = self.expand_is_variant_expr(&variant_idx);
 
                 let field_methods: Vec<_> = self
                     .variant_fields(variant_index)
@@ -152,34 +160,35 @@ impl Expand<'_> {
                     }
 
                     impl<__Origin> #variant_handle_ident<__Origin> {
-                        fn path(&self) -> #toasty::Path<__Origin, #model_ident> {
+                        fn parent_path(&self) -> #toasty::Path<__Origin, #model_ident> {
                             self.path.clone()
                         }
 
-                        #vis fn matches(
-                            &self,
-                            f: impl FnOnce(#variant_field_struct_ident<__Origin>) -> #toasty::stmt::Expr<bool>,
-                        ) -> #toasty::stmt::Expr<bool> {
-                            let is_var: #toasty::stmt::Expr<bool> = #is_variant_check;
+                        fn path(&self) -> #toasty::Path<__Origin, #model_ident> {
                             let variant_id = #toasty::core::schema::app::VariantId {
                                 model: <#model_ident as #toasty::Register>::id(),
                                 index: #variant_idx,
                             };
-                            let fields = #variant_field_struct_ident {
-                                path: self.path().into_variant(variant_id),
-                            };
-                            let body = f(fields);
-                            is_var.and(body)
+                            self.parent_path().into_variant(variant_id)
                         }
-                    }
 
-                    #vis struct #variant_field_struct_ident<__Origin> {
-                        path: #toasty::Path<__Origin, #model_ident>,
-                    }
-
-                    impl<__Origin> #variant_field_struct_ident<__Origin> {
-                        fn path(&self) -> #toasty::Path<__Origin, #model_ident> {
-                            self.path.clone()
+                        #vis fn matches(
+                            self,
+                            f: impl FnOnce(Self) -> #toasty::stmt::Expr<bool>,
+                        ) -> #toasty::stmt::Expr<bool> {
+                            let parent_stmt: #toasty::core::stmt::Expr = {
+                                let p: #toasty::core::stmt::Path = self.parent_path().into();
+                                p.into_stmt()
+                            };
+                            let variant_id = #toasty::core::schema::app::VariantId {
+                                model: <#model_ident as #toasty::Register>::id(),
+                                index: #variant_idx,
+                            };
+                            let is_var = #toasty::stmt::Expr::from_untyped(
+                                #toasty::core::stmt::Expr::is_variant(parent_stmt, variant_id)
+                            );
+                            let body = f(self);
+                            is_var.and(body)
                         }
 
                         #( #field_methods )*
