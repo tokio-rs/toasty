@@ -32,6 +32,7 @@ use toasty_core::{
 use aws_sdk_dynamodb::{
     Client,
     error::SdkError,
+    operation::transact_write_items::TransactWriteItemsError,
     operation::update_item::UpdateItemError,
     types::{
         AttributeDefinition, AttributeValue, BillingMode, Delete, GlobalSecondaryIndex,
@@ -384,6 +385,16 @@ fn ddb_expression(
         stmt::Expr::Not(expr_not) => {
             let inner = ddb_expression(cx, attrs, primary, &expr_not.expr);
             format!("(NOT {inner})")
+        }
+        stmt::Expr::StartsWith(expr_starts_with) => {
+            let expr = ddb_expression(cx, attrs, primary, &expr_starts_with.expr);
+            let prefix = ddb_expression(cx, attrs, primary, &expr_starts_with.prefix);
+            format!("begins_with({expr}, {prefix})")
+        }
+        stmt::Expr::Like(_) => {
+            panic!(
+                "LIKE is not supported by the DynamoDB driver; use starts_with for prefix matching"
+            )
         }
         _ => todo!("FILTER = {:#?}", expr),
     }

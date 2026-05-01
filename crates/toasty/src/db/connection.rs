@@ -68,12 +68,20 @@ impl Connection {
     }
 
     /// Begin a transaction on this connection.
+    ///
+    /// Takes `&mut self` so the `Connection` is exclusively borrowed while
+    /// the transaction is open. This prevents statements from running on the
+    /// connection directly — bypassing the transaction — when they should
+    /// have gone through `&mut tx`.
     pub async fn transaction(&mut self) -> crate::Result<super::Transaction<'_>> {
         <Self as super::Executor>::transaction(self).await
     }
 
     /// Returns a [`TransactionBuilder`](super::TransactionBuilder) that will
     /// use this connection.
+    ///
+    /// Like [`transaction`](Self::transaction), this takes `&mut self` so the
+    /// `Connection` stays locked for the lifetime of the transaction.
     pub fn transaction_builder(&mut self) -> super::TransactionBuilder<'_> {
         super::TransactionBuilder::new(super::tx::TxSource::Connection(self))
     }

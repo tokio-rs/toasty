@@ -102,6 +102,9 @@ pub use expr_is_variant::ExprIsVariant;
 mod expr_let;
 pub use expr_let::ExprLet;
 
+mod expr_like;
+pub use expr_like::ExprLike;
+
 mod expr_list;
 pub use expr_list::ExprList;
 
@@ -131,6 +134,9 @@ pub use expr_set::ExprSet;
 
 mod expr_set_op;
 pub use expr_set_op::ExprSetOp;
+
+mod expr_starts_with;
+pub use expr_starts_with::ExprStartsWith;
 
 mod expr_stmt;
 pub use expr_stmt::ExprStmt;

@@ -5,7 +5,7 @@ use crate::{
 use toasty_core::{
     driver::{ExecResponse, Rows, operation},
     schema::db::{ColumnId, TableId},
-    stmt::ValueStream,
+    stmt::{ValueSet, ValueStream},
 };
 
 /// Get a model by key
@@ -26,6 +26,7 @@ pub(crate) struct GetByKey {
 
 impl Exec<'_> {
     pub(super) async fn action_get_by_key(&mut self, action: &GetByKey) -> Result<()> {
+        let mut seen = ValueSet::new();
         let keys: Vec<_> = self
             .vars
             .load(action.input)
@@ -36,6 +37,7 @@ impl Exec<'_> {
             .into_list_unwrap()
             .into_iter()
             .filter(|k| !k.is_null())
+            .filter(|k| seen.insert(k.clone()))
             .collect();
 
         let res = if keys.is_empty() {

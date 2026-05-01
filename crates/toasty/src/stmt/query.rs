@@ -2,6 +2,7 @@ use super::{Delete, Expr, IntoStatement, List, Statement, Value};
 use crate::{
     Executor, Result,
     schema::{Load, Model},
+    stmt::Path,
 };
 use std::{fmt, marker::PhantomData};
 use toasty_core::stmt::{self, Returning};
@@ -175,6 +176,12 @@ impl<T> Query<T> {
 
     /// Limit the number of records returned.
     ///
+    /// `n` is an upper bound, not a guarantee. The limit is applied to the
+    /// database query, but Toasty may apply additional filtering to the rows
+    /// the database returns. When that happens, the final result can have
+    /// fewer than `n` records even if more than `n` rows match the filter
+    /// expression.
+    ///
     /// # Examples
     ///
     /// ```
@@ -190,8 +197,9 @@ impl<T> Query<T> {
     /// q.limit(10);
     /// ```
     pub fn limit(&mut self, n: usize) -> &mut Self {
+        let n = i64::try_from(n).expect("limit exceeds i64::MAX");
         self.untyped.limit = Some(stmt::Limit::Offset(stmt::LimitOffset {
-            limit: stmt::Value::from(n as i64).into(),
+            limit: stmt::Value::from(n).into(),
             offset: None,
         }));
         self
@@ -219,11 +227,12 @@ impl<T> Query<T> {
     /// q.offset(20);
     /// ```
     pub fn offset(&mut self, n: usize) -> &mut Self {
+        let n = i64::try_from(n).expect("offset exceeds i64::MAX");
         self.untyped.limit = match self.untyped.limit.take() {
             Some(stmt::Limit::Offset(limit_offset)) => {
                 Some(stmt::Limit::Offset(stmt::LimitOffset {
                     limit: limit_offset.limit,
-                    offset: Some(stmt::Expr::Value(Value::from(n))),
+                    offset: Some(stmt::Value::from(n).into()),
                 }))
             }
             Some(stmt::Limit::Cursor(_)) => {
@@ -298,6 +307,10 @@ impl<T> Query<List<T>> {
     /// The resulting `Query<Option<T>>` returns `Some(record)` if at least one
     /// row matches, or `None` if no rows match.
     ///
+    /// This applies `LIMIT 1` to the database query. Toasty may then filter
+    /// the returned row, so `None` does not always mean that no rows in the
+    /// table match the filter expression.
+    ///
     /// # Examples
     ///
     /// ```
@@ -324,6 +337,10 @@ impl<T> Query<List<T>> {
     ///
     /// The resulting `Query<T>` returns the record directly. If no rows match,
     /// execution returns an error.
+    ///
+    /// This applies `LIMIT 1` to the database query. If Toasty filters the
+    /// returned row out, execution returns the same error as when the database
+    /// returns no rows.
     ///
     /// # Examples
     ///
@@ -434,7 +451,7 @@ impl<M: Model> Query<List<M>> {
     /// ```
     pub fn count(mut self) -> Query<u64> {
         // Set the returning clause to COUNT(*)
-        *self.untyped.returning_mut_unwrap() = Returning::Expr(stmt::Expr::count_star());
+        *self.untyped.returning_mut_unwrap() = Returning::Project(stmt::Expr::count_star());
         self.untyped.single = true;
 
         Query::from_untyped(self.untyped)
@@ -460,6 +477,30 @@ impl<M: Model> Query<List<M>> {
         let mut query = stmt::Query::new_select(M::id(), filter);
         query.single = false;
         Self::from_untyped(query)
+    }
+
+    /// Sort this query so the most recently inserted records on `field`
+    /// appear first.
+    ///
+    /// Convenience for [`order_by`](Self::order_by) with [`Path::desc`].
+    /// `field` must be a path rooted at this query's model `M`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::{List, Query};
+    ///
+    /// let mut q = Query::<List<User>>::all();
+    /// q.latest_by(User::fields().id());
+    /// ```
+    pub fn latest_by<U>(&mut self, field: Path<M, U>) -> &mut Self {
+        self.order_by(field.desc())
     }
 }
 

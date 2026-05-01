@@ -10,9 +10,17 @@ Load this skill before filing any issue in this project.
 ## Writing style
 
 An issue is project documentation. Follow the conventions from the
-[`write-docs`](../write-docs/SKILL.md) skill: be fact-focused, direct,
+[`prose`](../prose/SKILL.md) skill: be fact-focused, direct,
 and concrete. No buzzwords, no fluff, no dramatic terms. State what
 happened or what is being proposed, not how important it is.
+
+## Be succinct
+
+Maintainers reading the issue already know Toasty and Rust. Keep the
+prose high-signal: lead with the bug or proposal, then the reproducer
+or API sketch, then the alternatives. Skip restated background and
+throat-clearing. A maintainer should grasp the problem in seconds, not
+paragraphs.
 
 ## Pick the right template
 

@@ -84,6 +84,13 @@ let items = Item::all().limit(5).exec(&mut db).await?;
 If the query matches fewer records than the limit, all matching records are
 returned.
 
+`.limit(n)` is an upper bound, not a guarantee. Toasty applies the limit to
+the database query, but it may filter the returned rows further before
+producing the final result set. When that happens, a query can return fewer
+than `n` records even if more than `n` rows match the filter expression. Use
+[cursor-based pagination](#cursor-based-pagination) to walk every matching
+record.
+
 Combine `.order_by()` with `.limit()` to get the top or bottom N records:
 
 ```rust
@@ -178,6 +185,13 @@ println!("items: {}", page.len());
 
 A `Page` dereferences to a slice, so you can index into it, iterate over it, and
 call slice methods like `.len()` and `.iter()` directly.
+
+`per_page` is an upper bound on the page size, not a guarantee. Toasty
+applies it to the database query, but it may filter the returned rows further
+before producing the page. A page can therefore contain fewer than `per_page`
+items even when more results exist. Check `.has_next()` (or follow
+`.next()` until it returns `None`) to detect the end of the result set rather
+than relying on the size of any individual page.
 
 ### Navigating pages
 

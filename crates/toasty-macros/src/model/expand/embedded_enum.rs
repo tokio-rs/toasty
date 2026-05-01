@@ -207,6 +207,12 @@ impl Expand<'_> {
                 #comparison_methods
             }
 
+            impl<__Origin> Into<#toasty::Path<__Origin, #model_ident>> for #field_struct_ident<__Origin> {
+                fn into(self) -> #toasty::Path<__Origin, #model_ident> {
+                    self.path
+                }
+            }
+
             #( #variant_field_structs )*
         }
     }
@@ -270,7 +276,7 @@ impl Expand<'_> {
             .iter()
             .map(|field| {
                 let index = util::int(field.id);
-                let app_name = field.name.ident.to_string();
+                let app_name = field.name.as_str();
                 let ty = primitive_ty_unwrap(field);
                 let variant_index = field.variant.expect("enum field must have variant");
                 let variant_idx = util::int(variant_index);
@@ -288,6 +294,8 @@ impl Expand<'_> {
                         nullable: <#ty as #toasty::Field>::NULLABLE,
                         primary_key: false,
                         auto: None,
+                        versionable: false,
+                        deferred: false,
                         constraints: vec![],
                         variant: Some(#toasty::core::schema::app::VariantId {
                             model: id,

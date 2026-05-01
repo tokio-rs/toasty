@@ -242,6 +242,7 @@ mod tests {
                 nullable: false,
                 primary_key: false,
                 auto_increment: false,
+                versionable: false,
             });
         }
 

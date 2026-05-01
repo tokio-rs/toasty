@@ -211,6 +211,15 @@ impl Expand<'_> {
                             }
                         }
                     }
+                    FieldTy::Primitive(ty) if field.attrs.deferred => {
+                        let inner = quote!(<#ty as #toasty::Defer>::Inner);
+                        quote! {
+                            #vis fn #name(mut self, #name: impl #toasty::IntoExpr<#inner>) -> Self {
+                                self.stmt.set(#index_tokenized, #name.into_expr());
+                                self
+                            }
+                        }
+                    }
                     FieldTy::Primitive(ty) => {
                         quote! {
                             #vis fn #name(mut self, #name: impl #toasty::IntoExpr<#ty>) -> Self {

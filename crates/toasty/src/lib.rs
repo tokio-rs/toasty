@@ -116,7 +116,7 @@ mod engine;
 
 /// Model, relation, and schema inspection types.
 pub mod schema;
-pub use schema::{BelongsTo, HasMany, HasOne};
+pub use schema::{BelongsTo, Deferred, HasMany, HasOne};
 
 // `Page` lives in `stmt`.
 
@@ -134,8 +134,8 @@ pub mod codegen_support {
     pub use crate::{
         Db, Error, Executor, Result, Statement,
         schema::{
-            Auto, BelongsTo, DiscoverItem, Embed, Field, HasMany, HasOne, Load, Model, Register,
-            Relation, Scope, generate_unique_id,
+            Auto, BelongsTo, Defer, Deferred, DiscoverItem, Embed, Field, HasMany, HasOne, Load,
+            Model, Register, Relation, Scope, build_deferred_load, generate_unique_id,
         },
         stmt::CreateMany,
         stmt::{self, Assign, IntoExpr, IntoInsert, IntoStatement, List, Path},

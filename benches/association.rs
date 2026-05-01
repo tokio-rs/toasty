@@ -1,6 +1,6 @@
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
-use tests::{LoggingDriver, Setup, models};
+use tests::{LoggingDriver, Setup};
 
 type SetupFactory = Box<dyn Fn() -> Box<dyn Setup>>;
 
@@ -82,7 +82,8 @@ async fn setup_database_and_data(
     posts: usize,
     comments: usize,
 ) -> toasty::Db {
-    let mut builder = models!(User, Post, Comment);
+    let mut builder = toasty::Db::builder();
+    builder.models(toasty::models!(User, Post, Comment));
     setup.configure_builder(&mut builder);
 
     let logging_driver = LoggingDriver::new(setup.driver().await);

@@ -34,6 +34,7 @@ fn db_schema(col_types: &[(Type, &str)]) -> Schema {
             nullable: false,
             primary_key: i == 0,
             auto_increment: false,
+            versionable: false,
         })
         .collect();
 
@@ -82,6 +83,8 @@ fn model_root(id: usize, field_types: &[(Type, &str)]) -> ModelRoot {
             nullable: false,
             primary_key: i == 0,
             auto: None,
+            versionable: false,
+            deferred: false,
             constraints: vec![],
             variant: None,
         })
@@ -100,6 +103,7 @@ fn model_root(id: usize, field_types: &[(Type, &str)]) -> ModelRoot {
         },
         table_name: None,
         indices: vec![],
+        version_field: None,
     }
 }
 

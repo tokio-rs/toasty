@@ -1,3 +1,4 @@
+mod expr_pattern;
 mod insert;
 mod paginate;
 mod relation;
@@ -282,12 +283,12 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     let maybe_res = self.lower_expr_binary_op(
                         stmt::BinaryOp::Eq,
                         &mut e.expr,
-                        e.query.returning_mut_unwrap().as_expr_mut_unwrap(),
+                        e.query.returning_mut_unwrap().as_project_mut_unwrap(),
                     );
 
                     assert!(maybe_res.is_none(), "TODO");
 
-                    let returning = e.query.returning_mut_unwrap().as_expr_mut_unwrap();
+                    let returning = e.query.returning_mut_unwrap().as_project_mut_unwrap();
 
                     if !returning.is_record() {
                         *returning = stmt::Expr::record([returning.take()]);
@@ -312,7 +313,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     let maybe_res = self.lower_expr_binary_op(
                         stmt::BinaryOp::Eq,
                         &mut e.expr,
-                        e.query.returning_mut_unwrap().as_expr_mut_unwrap(),
+                        e.query.returning_mut_unwrap().as_project_mut_unwrap(),
                     );
 
                     assert!(maybe_res.is_none(), "TODO");
@@ -422,6 +423,11 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     self.curr_stmt_info().deps.insert(target_id);
                 }
             }
+            stmt::Expr::StartsWith(_)
+                if self.capability().sql && !self.capability().native_starts_with =>
+            {
+                self.lower_expr_starts_with(expr);
+            }
             stmt::Expr::Exists(_) if !self.capability().sql => {
                 let stmt::Expr::Exists(mut expr_exists) = expr.take() else {
                     panic!()
@@ -505,6 +511,10 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             // same field slot (see issue #691).
             include.sort_by_key(|p| *p.projection.as_slice().first().expect("empty include path"));
 
+            // Track which top-level fields are explicitly included so that
+            // deferred fields are not masked when the caller asked for them.
+            let mut included_top_fields = stmt::PathFieldSet::new();
+
             let mut nested: Vec<stmt::Projection> = vec![];
             let mut current: Option<usize> = None;
 
@@ -512,6 +522,8 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 let [first, rest @ ..] = path.projection.as_slice() else {
                     unreachable!("guaranteed non-empty by sort_by_key above")
                 };
+
+                included_top_fields.insert(*first);
 
                 if current != Some(*first) {
                     if let Some(field) = current {
@@ -526,14 +538,43 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 self.build_include_subquery(&mut returning, field, &nested);
             }
 
-            *i = stmt::Returning::Expr(returning);
+            // Encode each deferred slot so the row decoder can distinguish
+            // "loaded" from "unloaded" — critical when the inner type is
+            // `Option<T>`, where a NULL column value is otherwise
+            // indistinguishable from the unloaded state.
+            //
+            // - Loaded slots wrap the column reference in a 1-element record
+            //   `Record([col])`, so an actual NULL value comes back as
+            //   `Record([Null])` and decodes to `Some(None)`.
+            // - Unloaded slots emit a bare `Null`, which decodes to the
+            //   unloaded state.
+            //
+            // INSERT...RETURNING always projects deferred fields (the caller
+            // just supplied the value and expects to read it back).
+            let model = self.model_unwrap();
+            let is_insert = self.cx.is_insert();
+            for (index, field) in model.fields.iter().enumerate() {
+                if !field.deferred {
+                    continue;
+                }
+                let loaded = is_insert || included_top_fields.contains(index);
+                let mut entry = returning.entry_mut(index);
+                if loaded {
+                    let inner = entry.take();
+                    entry.insert(stmt::Expr::record([inner]));
+                } else {
+                    entry.insert(stmt::Expr::from(stmt::Value::Null));
+                }
+            }
+
+            *i = stmt::Returning::Project(returning);
         }
 
         // For multi-row INSERT returning, visit each row with its row index so
         // that sub-statements (e.g., child INSERTs for HasOne relations) capture
         // the correct parent row index via scope_statement.
         if matches!(&self.cx, LoweringContext::Insert(..))
-            && let stmt::Returning::Value(stmt::Expr::List(list)) = i
+            && let stmt::Returning::Expr(stmt::Expr::List(list)) = i
         {
             for (index, item) in list.items.iter_mut().enumerate() {
                 self.lower_returning_for_row(index).visit_expr_mut(item);
@@ -553,6 +594,10 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         lower.plan_stmt_delete_relations(stmt);
 
         lower.visit_filter_mut(&mut stmt.filter);
+
+        if let Some(expr) = &mut stmt.condition.expr {
+            lower.visit_expr_mut(expr);
+        }
 
         if let Some(returning) = &mut stmt.returning {
             lower.visit_returning_mut(returning);
@@ -586,7 +631,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             lower.constantize_insert_returning(returning, &stmt.source);
 
             if stmt.source.single
-                && let stmt::Returning::Value(expr) = &returning
+                && let stmt::Returning::Expr(expr) = &returning
             {
                 // Not strictly true, but there is nothing that needs to
                 // return a list at this point for a "single" query. If this
@@ -653,7 +698,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 }
 
                 // Step 2 — build the returning expression.
-                *returning = stmt::Returning::Expr(build_update_returning(
+                *returning = stmt::Returning::Project(build_update_returning(
                     model.id,
                     None,
                     &mapping.fields,
@@ -848,6 +893,20 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         nested: &[stmt::Projection],
     ) {
         let field = &self.model_unwrap().fields[field_index];
+
+        // Primitive deferred field: the column reference is already in the
+        // returning record (built from `table_to_model`), so an include is
+        // a no-op here. The masking step in `visit_returning_mut` will skip
+        // this field's slot since it appears in the include set.
+        if field.deferred && field.ty.is_primitive() {
+            for path in nested {
+                assert!(
+                    path.is_empty(),
+                    "include sub-paths on deferred primitive fields are not supported"
+                );
+            }
+            return;
+        }
 
         let (mut stmt, target_model_id) = match &field.ty {
             FieldTy::HasMany(rel) => (

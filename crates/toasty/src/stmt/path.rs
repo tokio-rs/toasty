@@ -1,5 +1,5 @@
 use super::{Expr, IntoExpr, IntoStatement, List};
-use crate::schema::Register;
+use crate::schema::{Field, Register};
 use std::{fmt, marker::PhantomData};
 use toasty_core::{
     schema::app::VariantId,
@@ -418,6 +418,51 @@ impl<T, U> Path<T, List<U>> {
             _p: PhantomData,
         }
     }
+
+    /// Build a `NOT IN subquery` expression that tests whether **all** associated
+    /// records satisfy `filter`.
+    ///
+    /// The path must point to a `HasMany` (or similar collection) field on the
+    /// parent model. Returns `true` when every associated record matches
+    /// `filter`, including the vacuous case where the parent has no associated
+    /// records (matching Rust's `[].iter().all()` semantics).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct Todo {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     complete: bool,
+    /// # }
+    /// use toasty::stmt::{Path, List};
+    ///
+    /// // Find users whose todos are all complete
+    /// let todos_path = Path::<User, List<Todo>>::from_field_index(2);
+    /// let filter = todos_path.all(Todo::fields().complete().eq(true));
+    /// ```
+    pub fn all(self, filter: Expr<bool>) -> Expr<bool>
+    where
+        U: crate::schema::Model,
+    {
+        // parent NOT IN (SELECT child_fk FROM child WHERE NOT filter)
+        let child_query = super::Query::<List<U>>::filter(filter.not());
+
+        Expr {
+            untyped: stmt::Expr::not(stmt::Expr::in_subquery(
+                self.untyped.into_stmt(),
+                child_query.untyped,
+            )),
+            _p: PhantomData,
+        }
+    }
 }
 
 impl<T, U> Path<T, Option<U>> {
@@ -459,6 +504,94 @@ impl<T, U> Path<T, Option<U>> {
     pub fn is_some(self) -> Expr<bool> {
         Expr {
             untyped: stmt::Expr::is_not_null(self.untyped.into_stmt()),
+            _p: PhantomData,
+        }
+    }
+}
+
+impl<T, U> Path<T, U>
+where
+    U: Field<Inner = String>,
+{
+    /// Test whether this string field starts with `prefix`.
+    ///
+    /// Available on any string-valued field, including `String`,
+    /// `Option<String>`, and other wrappers whose `Field::Inner` is `String`.
+    /// For DynamoDB, this maps to `begins_with` in a `KeyConditionExpression`
+    /// (sort key) or `FilterExpression` (non-key attribute).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// #     nickname: Option<String>,
+    /// # }
+    /// let filter = User::fields().name().starts_with("Al".to_string());
+    /// let filter = User::fields().nickname().starts_with("Al".to_string());
+    /// ```
+    pub fn starts_with(self, prefix: impl IntoExpr<String>) -> Expr<bool> {
+        Expr {
+            untyped: stmt::Expr::starts_with(self.untyped.into_stmt(), prefix.into_expr().untyped),
+            _p: PhantomData,
+        }
+    }
+
+    /// Test whether this string field matches a SQL `LIKE` pattern.
+    ///
+    /// Available on any string-valued field, including `String`,
+    /// `Option<String>`, and other wrappers whose `Field::Inner` is `String`.
+    /// The caller is responsible for including any `%` or `_` wildcard
+    /// characters in `pattern`. Not supported by the DynamoDB driver — use
+    /// [`starts_with`](Self::starts_with) instead.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// #     nickname: Option<String>,
+    /// # }
+    /// let filter = User::fields().name().like("Al%".to_string());
+    /// let filter = User::fields().nickname().like("Al%".to_string());
+    /// ```
+    pub fn like(self, pattern: impl IntoExpr<String>) -> Expr<bool> {
+        Expr {
+            untyped: stmt::Expr::like(self.untyped.into_stmt(), pattern.into_expr().untyped),
+            _p: PhantomData,
+        }
+    }
+
+    /// Case-insensitive variant of [`like`](Self::like).
+    ///
+    /// On PostgreSQL this serializes to `ILIKE`. On SQLite and MySQL it
+    /// serializes to plain `LIKE`, since both engines are already
+    /// case-insensitive for ASCII by default — note that Unicode case-folding
+    /// behavior depends on locale (PostgreSQL) or column collation (MySQL),
+    /// and SQLite's `LIKE` is ASCII-only without the ICU extension. Not
+    /// supported by the DynamoDB driver.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// // Matches "Alice", "ALICIA", and "alfred".
+    /// let filter = User::fields().name().ilike("al%".to_string());
+    /// ```
+    pub fn ilike(self, pattern: impl IntoExpr<String>) -> Expr<bool> {
+        Expr {
+            untyped: stmt::Expr::ilike(self.untyped.into_stmt(), pattern.into_expr().untyped),
             _p: PhantomData,
         }
     }

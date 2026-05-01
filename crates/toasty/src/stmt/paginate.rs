@@ -83,8 +83,9 @@ impl<M> Paginate<M> {
             "pagination requires an order_by clause"
         );
 
+        let per_page = i64::try_from(per_page).expect("per_page exceeds i64::MAX");
         query.untyped.limit = Some(stmt::Limit::Cursor(stmt::LimitCursor {
-            page_size: stmt::Value::from(per_page as i64).into(),
+            page_size: stmt::Value::from(per_page).into(),
             after: None,
         }));
 
@@ -170,7 +171,11 @@ impl<M: Load> Paginate<M> {
     /// Execute the paginated query and return a [`Page`](super::Page).
     ///
     /// The returned page contains up to `per_page` items along with optional
-    /// cursors for the next and previous pages.
+    /// cursors for the next and previous pages. `per_page` is an upper bound,
+    /// not a guarantee. The page size is applied to the database query, but
+    /// Toasty may filter the returned rows further, so a page can have fewer
+    /// than `per_page` items even when more results exist. Continue paging
+    /// until `next_cursor` is `None` to consume the full result set.
     ///
     /// # Examples
     ///

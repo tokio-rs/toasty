@@ -12,8 +12,9 @@ use hashbrown::HashMap;
 ///
 /// # Uniqueness
 ///
-/// The index assumes each extracted key is unique across the source slice. A
-/// `debug_assert!` fires on duplicate keys at build time.
+/// The index requires each extracted key to be unique across the source slice.
+/// An `assert!` fires on duplicate keys at build time so release builds surface
+/// the invariant violation rather than silently stomping existing entries.
 ///
 /// # Cloning
 ///
@@ -48,7 +49,7 @@ impl<'a> HashIndex<'a> {
         for value in values {
             let key = extract_key(value, projections);
             let prev = map.insert(key, value);
-            debug_assert!(prev.is_none(), "HashIndex: duplicate key detected");
+            assert!(prev.is_none(), "HashIndex: duplicate key detected");
         }
 
         Self { map }

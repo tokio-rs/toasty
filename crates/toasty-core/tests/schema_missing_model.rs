@@ -19,6 +19,8 @@ fn make_id_field(model_id: ModelId) -> Field {
         nullable: false,
         primary_key: true,
         auto: None,
+        versionable: false,
+        deferred: false,
         constraints: vec![],
         variant: None,
     }
@@ -40,6 +42,7 @@ fn make_root_model(id: ModelId, name: &str, extra_fields: Vec<Field>) -> Model {
         },
         table_name: None,
         indices: vec![],
+        version_field: None,
     })
 }
 
@@ -54,6 +57,8 @@ fn make_relation_field(model_id: ModelId, index: usize, name: &str, ty: FieldTy)
         nullable: false,
         primary_key: false,
         auto: None,
+        versionable: false,
+        deferred: false,
         constraints: vec![],
         variant: None,
     }

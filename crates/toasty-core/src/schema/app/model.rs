@@ -162,6 +162,9 @@ pub struct ModelRoot {
 
     /// Secondary indices defined on this model.
     pub indices: Vec<Index>,
+
+    /// The versionable field, if any. Points directly into `fields` to avoid scanning.
+    pub version_field: Option<FieldId>,
 }
 
 impl ModelRoot {
@@ -200,6 +203,11 @@ impl ModelRoot {
             .fields
             .iter()
             .map(|pk_field| &self.fields[pk_field.index])
+    }
+
+    /// Returns the versionable field, if one is defined on this model.
+    pub fn version_field(&self) -> Option<&Field> {
+        self.version_field.map(|id| &self.fields[id.index])
     }
 
     /// Looks up a field by its application-level name.

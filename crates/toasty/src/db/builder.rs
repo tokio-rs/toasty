@@ -1,6 +1,6 @@
 use crate::{
     Db, Result,
-    db::{Connect, Pool, Shared},
+    db::{Connect, Pool, Shared, pool::PoolConfig},
     engine::Engine,
 };
 
@@ -12,7 +12,7 @@ use toasty_core::{
     },
 };
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 /// Configures the schema and driver for a [`Db`] instance.
 ///
@@ -50,6 +50,9 @@ pub struct Builder {
 
     /// Schema builder
     core: schema::Builder,
+
+    /// Connection pool configuration
+    pool: PoolConfig,
 }
 
 impl Builder {
@@ -80,6 +83,34 @@ impl Builder {
     /// Set the table name prefix for all tables
     pub fn table_name_prefix(&mut self, prefix: &str) -> &mut Self {
         self.core.table_name_prefix(prefix);
+        self
+    }
+
+    /// Set the maximum number of connections the pool will maintain.
+    ///
+    /// Defaults to `num_cpus * 2`.
+    ///
+    /// Drivers may cap this below the requested value. For example, an
+    /// in-memory SQLite database forces a single connection. When that
+    /// happens a warning is emitted and the driver cap is used.
+    pub fn max_pool_size(&mut self, max_size: usize) -> &mut Self {
+        self.pool.max_size = max_size;
+        self
+    }
+
+    /// Set the maximum time to wait for a free connection from the pool
+    /// before returning an error. Passing `None` disables the timeout,
+    /// which is the default.
+    pub fn pool_wait_timeout(&mut self, timeout: Option<Duration>) -> &mut Self {
+        self.pool.timeouts.wait = timeout;
+        self
+    }
+
+    /// Set the maximum time allowed for establishing a new database
+    /// connection. Passing `None` disables the timeout, which is the
+    /// default.
+    pub fn pool_create_timeout(&mut self, timeout: Option<Duration>) -> &mut Self {
+        self.pool.timeouts.create = timeout;
         self
     }
 
@@ -164,7 +195,7 @@ impl Builder {
         tracing::info!(tables = schema.db.tables.len(), "schema built successfully");
 
         let engine = Engine::new(Arc::new(schema), capability);
-        let pool = Pool::new(driver, engine.clone())?;
+        let pool = Pool::new(driver, engine.clone(), self.pool.clone())?;
 
         let shared = Arc::new(Shared { engine, pool });
 

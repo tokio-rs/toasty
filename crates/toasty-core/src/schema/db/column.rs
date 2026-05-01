@@ -56,6 +56,10 @@ pub struct Column {
     /// of type `Serial` is used.
     #[cfg_attr(feature = "serde", serde(default, skip_serializing_if = "is_false"))]
     pub auto_increment: bool,
+
+    /// True if the column tracks an OCC version counter.
+    #[cfg_attr(feature = "serde", serde(default, skip_serializing_if = "is_false"))]
+    pub versionable: bool,
 }
 
 #[cfg(feature = "serde")]
@@ -140,6 +144,7 @@ impl<'a> ColumnsDiff<'a> {
                 || previous.nullable != next.nullable
                 || previous.primary_key != next.primary_key
                 || previous.auto_increment != next.auto_increment
+                || previous.versionable != next.versionable
         }
 
         let mut items = vec![];
@@ -227,6 +232,7 @@ mod tests {
             nullable,
             primary_key: false,
             auto_increment: false,
+            versionable: false,
         }
     }
 
@@ -415,6 +421,7 @@ mod tests {
                 nullable: false,
                 primary_key: false,
                 auto_increment: false,
+                versionable: false,
             }
         }
 
@@ -424,6 +431,7 @@ mod tests {
             assert!(!toml.contains("nullable"), "toml: {toml}");
             assert!(!toml.contains("primary_key"), "toml: {toml}");
             assert!(!toml.contains("auto_increment"), "toml: {toml}");
+            assert!(!toml.contains("versionable"), "toml: {toml}");
         }
 
         #[test]
@@ -463,6 +471,7 @@ mod tests {
             assert!(!col.nullable);
             assert!(!col.primary_key);
             assert!(!col.auto_increment);
+            assert!(!col.versionable);
         }
 
         #[test]

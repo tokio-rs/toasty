@@ -37,6 +37,11 @@ impl Expand<'_> {
                         // Serialized fields are stored as opaque JSON; no field accessor
                         TokenStream::new()
                     }
+                    Primitive(ty) if field.attrs.deferred => {
+                        let inner: syn::Type =
+                            syn::parse_quote!(<#ty as #toasty::Defer>::Inner);
+                        self.expand_primitive_field_method(field_ident, &inner, &field_offset)
+                    }
                     Primitive(ty) => {
                         self.expand_primitive_field_method(field_ident, ty, &field_offset)
                     }
@@ -124,6 +129,10 @@ impl Expand<'_> {
 
                 match &field.ty {
                     Primitive(_) if field.attrs.serialize.is_some() => TokenStream::new(),
+                    Primitive(ty) if field.attrs.deferred => {
+                        let inner: syn::Type = syn::parse_quote!(<#ty as #toasty::Defer>::Inner);
+                        self.expand_list_primitive_field_method(field_ident, &inner, &field_offset)
+                    }
                     Primitive(ty) => {
                         self.expand_list_primitive_field_method(field_ident, ty, &field_offset)
                     }
@@ -154,7 +163,7 @@ impl Expand<'_> {
             TokenStream::new()
         };
 
-        // any() is only available on root models (requires Model trait bound)
+        // any() / all() are only available on root models (requires Model trait bound)
         let any_method = if is_root {
             quote! {
                 /// Filter the parent model by a condition on the associated
@@ -162,6 +171,14 @@ impl Expand<'_> {
                 /// satisfies `filter`.
                 #vis fn any(self, filter: #toasty::stmt::Expr<bool>) -> #toasty::stmt::Expr<bool> {
                     self.path.any(filter)
+                }
+
+                /// Filter the parent model by a condition on the associated
+                /// (child) model. Returns `true` when **all** associated records
+                /// satisfy `filter` (vacuously true when there are no
+                /// associated records).
+                #vis fn all(self, filter: #toasty::stmt::Expr<bool>) -> #toasty::stmt::Expr<bool> {
+                    self.path.all(filter)
                 }
             }
         } else {
@@ -248,7 +265,7 @@ impl Expand<'_> {
             .iter()
             .enumerate()
             .map(move |(offset, field)| {
-                let field_name = field.name.ident.to_string();
+                let field_name = field.name.as_str();
                 let field_offset = util::int(offset);
 
                 quote!( #field_name => #toasty::core::schema::app::FieldId { model: Self::id(), index: #field_offset }, )

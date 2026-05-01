@@ -72,6 +72,14 @@ impl Expand<'_> {
                     self
                 }
 
+                #vis fn latest_by<#include_ty>(
+                    mut self,
+                    field: #toasty::stmt::Path<#model_ident, #include_ty>
+                ) -> #query_struct_ident {
+                    self.stmt.latest_by(field);
+                    self
+                }
+
                 #vis fn limit(mut self, n: usize) -> #query_struct_ident {
                     self.stmt.limit(n);
                     self
@@ -188,7 +196,7 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let query_struct_ident = &self.model.kind.as_root_unwrap().query_struct_ident;
 
-        if self.model.has_associations() {
+        if self.model.has_includable_fields() {
             Some(quote! {
                     #vis fn include<#include_ty>(mut self, path: impl #toasty::Into<#toasty::Path<#model_ident, #include_ty>>) -> #query_struct_ident {
                         self.stmt.include(path.into());
