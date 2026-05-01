@@ -536,3 +536,65 @@ pub async fn deferred_field_inside_embed(t: &mut Test) -> Result<()> {
 
     Ok(())
 }
+
+// Updating an eager embed by whole-value when that embed contains a
+// `#[deferred]` sub-field. The struct literal supplies the deferred sub-field
+// via `From<T>` (`.into()`), the encoder unwraps it through
+// `Deferred<T>: IntoExpr<T>`, and the column is written.
+
+#[driver_test(id(ID))]
+pub async fn update_embed_by_value_with_deferred_sub_field(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Embed)]
+    struct Metadata {
+        author: String,
+
+        #[deferred]
+        notes: toasty::Deferred<String>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Document {
+        #[key]
+        #[auto]
+        id: ID,
+
+        title: String,
+
+        metadata: Metadata,
+    }
+
+    let mut db = t.setup_db(models!(Document, Metadata)).await;
+
+    let mut doc = toasty::create!(Document {
+        title: "Hello".to_string(),
+        metadata: Metadata {
+            author: "Alice".to_string(),
+            notes: "old".to_string().into(),
+        },
+    })
+    .exec(&mut db)
+    .await?;
+
+    doc.update()
+        .metadata(Metadata {
+            author: "Bob".to_string(),
+            notes: "new".to_string().into(),
+        })
+        .exec(&mut db)
+        .await?;
+
+    // Both columns are written and the in-memory record reflects the update.
+    assert_eq!("Bob", doc.metadata.author);
+    assert_eq!("new", doc.metadata.notes.get());
+
+    // Re-read with the deferred sub-field included to confirm both columns
+    // were persisted.
+    let reread = Document::filter_by_id(doc.id)
+        .include(Document::fields().metadata().notes())
+        .get(&mut db)
+        .await?;
+    assert_eq!("Bob", reread.metadata.author);
+    assert_eq!("new", reread.metadata.notes.get());
+
+    Ok(())
+}

@@ -470,12 +470,20 @@ impl Expand<'_> {
 
     /// Generate the body of the `reload` method for an embedded model's `Primitive` impl.
     ///
-    /// Handles `SparseRecord` values (partial updates) by reloading only the specified
-    /// sub-fields, and falls back to full `load` for complete record values.
+    /// Handles two value shapes:
+    /// - `SparseRecord` — partial update, reload only the named sub-fields.
+    /// - `Record` — whole-embed update, reload every sub-field positionally.
+    ///
+    /// The positional path matters for embeds with `#[deferred]` sub-fields:
+    /// the assigned record carries the inner T directly (because `IntoExpr<T>`
+    /// for `Deferred<T>` unwraps), so each sub-field must go through `reload`
+    /// — which knows to re-wrap a bare value as loaded — rather than through
+    /// `Load::load`, which expects the SELECT-format `Record([loaded])` for
+    /// deferred columns and would reject a bare value.
     pub(super) fn expand_embedded_reload_body(&self, fields_named: bool) -> TokenStream {
         let toasty = &self.toasty;
 
-        let reload_arms = self.model.fields.iter().enumerate().map(|(index, field)| {
+        let reload_arms: Vec<_> = self.model.fields.iter().enumerate().map(|(index, field)| {
             let i = util::int(index);
             let field_name_str = field.name.as_str();
 
@@ -521,12 +529,21 @@ impl Expand<'_> {
                     quote!(#i => #field_access.unload(),)
                 }
             }
-        });
+        }).collect();
 
         quote! {
             match value {
                 #toasty::core::stmt::Value::SparseRecord(sparse) => {
                     for (field, value) in sparse.into_iter() {
+                        match field {
+                            #( #reload_arms )*
+                            _ => todo!("handle unknown field in embedded reload"),
+                        }
+                    }
+                    Ok(())
+                }
+                #toasty::core::stmt::Value::Record(record) => {
+                    for (field, value) in record.fields.into_iter().enumerate() {
                         match field {
                             #( #reload_arms )*
                             _ => todo!("handle unknown field in embedded reload"),
