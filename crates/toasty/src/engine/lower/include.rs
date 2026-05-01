@@ -17,7 +17,7 @@
 //! ```text
 //! process_top_level_includes
 //!     └─► walk_record_fields ──┬──► relation slot: build_include_subquery
-//!         ▲                    └──► non-relation: dispatch_slot
+//!         ▲                    └──► non-relation: process_field
 //!         │                              ├── deferred: splice + descend_into_embed
 //!         │                              └── eager embed: descend_into_embed
 //!         │                                        ├── struct → walk_record_fields
@@ -48,19 +48,19 @@ impl LowerStatement<'_, '_> {
         let stmt::Expr::Record(record) = returning else {
             return;
         };
-        let app_fields = self.model_unwrap().fields.as_slice();
-        let mapping_fields = self.mapping_unwrap().fields.as_slice();
+        let app_fields = &self.model_unwrap().fields;
+        let mapping_fields = &self.mapping_unwrap().fields;
         self.walk_record_fields(record, app_fields, mapping_fields, include_paths, is_insert);
     }
 
     /// Walk the fields of a struct-shaped record (top-level model or embedded
-    /// struct). For each field, partition matching include paths into a
-    /// `bare` flag (`[i]`) and `sub_paths` (`[i, …]`) and dispatch:
+    /// struct). For each field, partition matching include paths via
+    /// [`FieldIncludes`] and dispatch:
     ///
     /// - Relation → splice a subquery via [`build_include_subquery`]
     ///   (relations live only at the top level today; a future "relations in
     ///   embeds" feature will fire this from any depth).
-    /// - Anything else → [`dispatch_slot`].
+    /// - Anything else → [`process_field`].
     fn walk_record_fields(
         &mut self,
         record: &mut stmt::ExprRecord,
@@ -70,20 +70,20 @@ impl LowerStatement<'_, '_> {
         is_insert: bool,
     ) {
         for (i, (field, mapping)) in app_fields.iter().zip(mapping_fields).enumerate() {
-            let (bare, sub_paths) = partition_paths(include_paths, i);
+            let field_includes = partition_paths(include_paths, i);
 
             if field.ty.is_relation() {
-                if bare || !sub_paths.is_empty() {
-                    self.build_include_subquery(record, i, &sub_paths);
+                if field_includes.self_included() {
+                    self.build_include_subquery(record, i, &field_includes.sub_paths);
                 }
                 continue;
             }
 
-            self.dispatch_slot(&mut record[i], field, mapping, bare, &sub_paths, is_insert);
+            self.process_field(&mut record[i], field, mapping, &field_includes, is_insert);
         }
     }
 
-    /// Dispatch one non-relation slot by `mapping::Field` kind.
+    /// Process one non-relation field by `mapping::Field` kind.
     ///
     /// - **Deferred field** — when activated, wraps the slot in
     ///   `Record([loaded])`. `loaded` is the column reference for primitives
@@ -92,18 +92,16 @@ impl LowerStatement<'_, '_> {
     ///   apply.
     /// - **Eager embed** — descends into the slot. (Eager primitives are a
     ///   no-op; the column reference already sits in `default_returning`.)
-    fn dispatch_slot(
+    fn process_field(
         &mut self,
         slot: &mut stmt::Expr,
         field: &app::Field,
         mapping: &mapping::Field,
-        bare: bool,
-        sub_paths: &[stmt::Projection],
+        matches: &FieldIncludes,
         is_insert: bool,
     ) {
         if field.deferred {
-            let loaded = is_insert || bare || !sub_paths.is_empty();
-            if !loaded {
+            if !is_insert && !matches.self_included() {
                 return;
             }
             *slot = stmt::Expr::record([loaded_form(field, mapping)]);
@@ -117,7 +115,7 @@ impl LowerStatement<'_, '_> {
                     &mut outer[0],
                     embedded.target,
                     mapping,
-                    sub_paths,
+                    &matches.sub_paths,
                     is_insert,
                 );
             }
@@ -125,9 +123,15 @@ impl LowerStatement<'_, '_> {
         }
 
         if let app::FieldTy::Embedded(embedded) = &field.ty
-            && (is_insert || !sub_paths.is_empty())
+            && (is_insert || !matches.sub_paths.is_empty())
         {
-            self.descend_into_embed(slot, embedded.target, mapping, sub_paths, is_insert);
+            self.descend_into_embed(
+                slot,
+                embedded.target,
+                mapping,
+                &matches.sub_paths,
+                is_insert,
+            );
         }
     }
 
@@ -162,7 +166,7 @@ impl LowerStatement<'_, '_> {
         }
     }
 
-    /// Walk the arms of an embedded enum's `Match`, dispatching variant
+    /// Walk the arms of an embedded enum's `Match`, processing variant
     /// fields the same way as a struct's record fields.
     ///
     /// Each data-arm record has the discriminant at position 0 and variant
@@ -191,17 +195,23 @@ impl LowerStatement<'_, '_> {
             };
             let variant_mapping = &mapping.variants[variant_idx];
 
+            // No path syntax routes through enum variants today, so each
+            // variant field gets an empty `FieldIncludes`. `is_insert` is the
+            // only thing that activates a slot here.
+            let no_match = FieldIncludes {
+                include_self: false,
+                sub_paths: Vec::new(),
+            };
             for (j, (var_field, var_mapping)) in variant_fields
                 .iter()
                 .zip(&variant_mapping.fields)
                 .enumerate()
             {
-                self.dispatch_slot(
+                self.process_field(
                     &mut arm_record[j + 1],
                     var_field,
                     var_mapping,
-                    false,
-                    &[],
+                    &no_match,
                     is_insert,
                 );
             }
@@ -323,24 +333,45 @@ impl LowerStatement<'_, '_> {
     }
 }
 
-/// Partition `paths` against `i`: `bare` is `true` if `[i]` is in the set;
-/// `sub_paths` collects the tail of every `[i, …]` path. Both kinds activate
-/// the slot at `i`.
-fn partition_paths(paths: &[stmt::Projection], i: usize) -> (bool, Vec<stmt::Projection>) {
-    let mut bare = false;
+/// The include paths that target a single field slot, partitioned by
+/// whether they name the slot itself or a sub-path within it.
+///
+/// Either kind activates the slot. Sub-paths only matter when the slot is
+/// an embed — they drive the recursion into nested fields.
+struct FieldIncludes {
+    /// At least one include path equals `[i]` — the field is named directly.
+    include_self: bool,
+    /// Tails of every `[i, …]` include path, with the leading index stripped.
+    sub_paths: Vec<stmt::Projection>,
+}
+
+impl FieldIncludes {
+    /// True when at least one include path activates this slot.
+    fn self_included(&self) -> bool {
+        self.include_self || !self.sub_paths.is_empty()
+    }
+}
+
+/// Find the include paths that target field index `i` and split them by
+/// whether they name the field itself or a sub-path within it.
+fn partition_paths(paths: &[stmt::Projection], i: usize) -> FieldIncludes {
+    let mut include_self = false;
     let mut sub_paths = Vec::new();
     for path in paths {
         if let Some((first, rest)) = path.as_slice().split_first()
             && *first == i
         {
             if rest.is_empty() {
-                bare = true;
+                include_self = true;
             } else {
                 sub_paths.push(stmt::Projection::from(rest));
             }
         }
     }
-    (bare, sub_paths)
+    FieldIncludes {
+        include_self,
+        sub_paths,
+    }
 }
 
 /// Build the loaded-form inner expression for a deferred slot.
