@@ -75,7 +75,7 @@ impl LowerStatement<'_, '_> {
     /// - Anything else → [`process_field`].
     fn process_fields(
         &mut self,
-        record: &mut stmt::ExprRecord,
+        returning: &mut stmt::ExprRecord,
         app_fields: &[app::Field],
         mapping_fields: &[mapping::Field],
         include_paths: &[stmt::Projection],
@@ -86,12 +86,18 @@ impl LowerStatement<'_, '_> {
 
             if field.ty.is_relation() {
                 if field_includes.self_included() {
-                    self.build_include_subquery(record, i, &field_includes.sub_paths);
+                    self.build_include_subquery(returning, i, &field_includes.sub_paths);
                 }
                 continue;
             }
 
-            self.process_field(&mut record[i], field, mapping, &field_includes, is_insert);
+            self.process_field(
+                &mut returning[i],
+                field,
+                mapping,
+                &field_includes,
+                is_insert,
+            );
         }
     }
 
@@ -108,7 +114,7 @@ impl LowerStatement<'_, '_> {
     ///   `default_returning`.)
     fn process_field(
         &mut self,
-        slot: &mut stmt::Expr,
+        returning: &mut stmt::Expr,
         field: &app::Field,
         mapping: &mapping::Field,
         matches: &FieldIncludes,
@@ -118,13 +124,13 @@ impl LowerStatement<'_, '_> {
             if !is_insert && !matches.self_included() {
                 return;
             }
-            *slot = stmt::Expr::record([loaded_form(field, mapping)]);
+            *returning = stmt::Expr::record([loaded_form(field, mapping)]);
 
             // For an embed, the loaded form is the embed's `default_returning`, which
             // has its own deferred sub-fields pre-masked. Recurse so those get loaded
             // forms spliced in too.
             if let app::FieldTy::Embedded(embedded) = &field.ty {
-                let stmt::Expr::Record(outer) = slot else {
+                let stmt::Expr::Record(outer) = returning else {
                     unreachable!("just-wrapped record");
                 };
                 self.process_embed(
@@ -142,7 +148,7 @@ impl LowerStatement<'_, '_> {
             && (is_insert || !matches.sub_paths.is_empty())
         {
             self.process_embed(
-                slot,
+                returning,
                 embedded.target,
                 mapping,
                 &matches.sub_paths,
@@ -156,7 +162,7 @@ impl LowerStatement<'_, '_> {
     /// which has nothing nested to splice).
     fn process_embed(
         &mut self,
-        slot: &mut stmt::Expr,
+        returning: &mut stmt::Expr,
         target: app::ModelId,
         mapping: &mapping::Field,
         sub_paths: &[stmt::Projection],
@@ -164,7 +170,7 @@ impl LowerStatement<'_, '_> {
     ) {
         match (self.schema().app.model(target), mapping) {
             (app::Model::EmbeddedStruct(em), mapping::Field::Struct(fs)) => {
-                let stmt::Expr::Record(record) = slot else {
+                let stmt::Expr::Record(record) = returning else {
                     return;
                 };
                 self.process_fields(
@@ -176,7 +182,7 @@ impl LowerStatement<'_, '_> {
                 );
             }
             (app::Model::EmbeddedEnum(em), mapping::Field::Enum(fe)) => {
-                self.process_enum_arms(slot, em, fe, is_insert);
+                self.process_enum_arms(returning, em, fe, is_insert);
             }
             _ => {}
         }
@@ -192,12 +198,12 @@ impl LowerStatement<'_, '_> {
     /// for sub-fields nested in struct embeds inside variants.
     fn process_enum_arms(
         &mut self,
-        slot: &mut stmt::Expr,
+        returning: &mut stmt::Expr,
         app_enum: &app::EmbeddedEnum,
         mapping: &mapping::FieldEnum,
         is_insert: bool,
     ) {
-        let stmt::Expr::Match(match_expr) = slot else {
+        let stmt::Expr::Match(match_expr) = returning else {
             return;
         };
 
@@ -234,12 +240,12 @@ impl LowerStatement<'_, '_> {
         }
     }
 
-    /// Build the relation subquery to splice into `record[field_index]` for
-    /// `.include()` of a `BelongsTo`/`HasMany`/`HasOne`. Reached from
+    /// Build the relation subquery to splice into `returning[field_index]`
+    /// for `.include()` of a `BelongsTo`/`HasMany`/`HasOne`. Reached from
     /// [`process_fields`] for relation fields only.
     fn build_include_subquery(
         &mut self,
-        record: &mut stmt::ExprRecord,
+        returning: &mut stmt::ExprRecord,
         field_index: usize,
         nested: &[stmt::Projection],
     ) {
@@ -345,7 +351,7 @@ impl LowerStatement<'_, '_> {
             });
         }
 
-        record[field_index] = sub_expr;
+        returning[field_index] = sub_expr;
     }
 }
 
