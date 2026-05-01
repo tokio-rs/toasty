@@ -106,19 +106,30 @@ impl<T> From<T> for Deferred<T> {
     }
 }
 
-/// Forwards the inner value's expression encoding under the `Deferred<T>` type
-/// tag, so generated code can splice a `Deferred<T>` field into the same
-/// expression sites that accept a `T`.
+/// Forwards the inner value's expression encoding so a `Deferred<T>` field
+/// can be spliced into any site that accepts a `T`.
 ///
-/// Panics with the standard "deferred field not loaded" error if the value is
-/// in the unloaded state — matching `.get()` / `.into_inner()`.
-impl<T: IntoExpr<T>> IntoExpr<Self> for Deferred<T> {
-    fn into_expr(self) -> Expr<Self> {
-        self.into_inner().into_expr().cast()
+/// `Deferred<T>` is a load-state wrapper, not a value type, so the produced
+/// expression is `Expr<T>` (the value), never `Expr<Deferred<T>>`. Panics
+/// with the standard "deferred field not loaded" error if the value is in
+/// the unloaded state — matching `.get()` / `.into_inner()`.
+impl<T: IntoExpr<T>> IntoExpr<T> for Deferred<T> {
+    fn into_expr(self) -> Expr<T> {
+        self.into_inner().into_expr()
     }
 
-    fn by_ref(&self) -> Expr<Self> {
-        self.get().by_ref().cast()
+    fn by_ref(&self) -> Expr<T> {
+        self.get().by_ref()
+    }
+}
+
+impl<T: IntoExpr<T>> IntoExpr<T> for &Deferred<T> {
+    fn into_expr(self) -> Expr<T> {
+        self.get().by_ref()
+    }
+
+    fn by_ref(&self) -> Expr<T> {
+        self.get().by_ref()
     }
 }
 

@@ -361,10 +361,15 @@ impl Expand<'_> {
                 }
             };
 
-            // `Deferred<T>: IntoExpr<Deferred<T>>` forwards to the inner T's
-            // expression encoding, so deferred sub-fields go through the same
-            // path as plain primitives.
-            quote!(#toasty::into_untyped_expr::<#ty, _>(#value))
+            // For `#[deferred]` fields, encode at the inner type. `Deferred<T>`
+            // is a load-state wrapper, not a value type, so the splice site
+            // must talk in `T` — there is no meaningful `Expr<Deferred<T>>`.
+            let target_ty = if field.attrs.deferred {
+                quote!(<#ty as #toasty::Defer>::Inner)
+            } else {
+                quote!(#ty)
+            };
+            quote!(#toasty::into_untyped_expr::<#target_ty, _>(#value))
         });
 
         quote! {
