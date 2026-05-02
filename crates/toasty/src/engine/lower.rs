@@ -21,7 +21,7 @@ use toasty_core::{
     stmt::{self, IntoExprTarget, VisitMut, visit_mut},
 };
 
-use crate::engine::{Engine, HirStatement, hir, simplify::Simplify};
+use crate::engine::{Engine, HirStatement, fold, hir, simplify::Simplify};
 
 impl Engine {
     pub(super) fn lower_stmt(&self, stmt: stmt::Statement) -> Result<HirStatement> {
@@ -416,7 +416,10 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     visit_mut::visit_expr_stmt_mut(child, &mut expr_stmt);
                 });
 
-                self.state.engine.simplify_stmt(&mut *expr_stmt.stmt);
+                // Cheap canonicalization is enough here: the parent statement's
+                // post-lowering simplify will recursively visit this embedded
+                // sub-statement and apply the heavyweight rules.
+                fold::fold_stmt(&mut *expr_stmt.stmt);
 
                 *expr = self.new_sub_statement(source_id, target_id, expr_stmt.stmt);
 
@@ -442,7 +445,10 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 });
 
                 let mut stmt = stmt::Statement::Query(*expr_exists.subquery);
-                self.state.engine.simplify_stmt(&mut stmt);
+                // Cheap canonicalization is enough here: the parent statement's
+                // post-lowering simplify will recursively visit this embedded
+                // sub-statement and apply the heavyweight rules.
+                fold::fold_stmt(&mut stmt);
 
                 let arg = self.new_sub_statement(source_id, target_id, Box::new(stmt));
 

@@ -1,42 +1,6 @@
-use super::{test_schema, test_schema_with};
+use super::test_schema_with;
 use crate::engine::simplify::Simplify;
-use toasty_core::stmt::{
-    Expr, ExprArg, ExprCast, ExprIsNull, ExprReference, Type, Value, VisitMut as _,
-};
-
-#[test]
-fn cast_is_stripped_from_is_null() {
-    let schema = test_schema();
-    let simplify = Simplify::new(&schema);
-
-    // `is_null(cast(arg(0), String))` → `is_null(arg(0))`
-    // Nullity is type-independent, so the cast is stripped.
-    let mut expr = ExprIsNull {
-        expr: Box::new(Expr::Cast(ExprCast {
-            expr: Box::new(Expr::arg(0)),
-            ty: Type::String,
-        })),
-    };
-    let result = simplify.simplify_expr_is_null(&mut expr);
-
-    assert!(result.is_none());
-    assert!(matches!(*expr.expr, Expr::Arg(ExprArg { position: 0, .. })));
-}
-
-#[test]
-fn non_cast_expr_not_simplified() {
-    let schema = test_schema();
-    let simplify = Simplify::new(&schema);
-
-    // `is_null(arg(0))`, non-cast, not simplified
-    let mut expr = ExprIsNull {
-        expr: Box::new(Expr::arg(0)),
-    };
-    let result = simplify.simplify_expr_is_null(&mut expr);
-
-    assert!(result.is_none());
-    assert!(matches!(*expr.expr, Expr::Arg(ExprArg { position: 0, .. })));
-}
+use toasty_core::stmt::{Expr, ExprIsNull, ExprReference, Value};
 
 #[test]
 fn is_null_non_nullable_field() {
@@ -67,56 +31,4 @@ fn is_null_non_nullable_field() {
     let result = simplify.simplify_expr_is_null(&mut field);
 
     assert!(matches!(result, Some(Expr::Value(Value::Bool(false)))));
-}
-
-#[test]
-fn null_is_null_becomes_true() {
-    let schema = test_schema();
-    let simplify = Simplify::new(&schema);
-
-    // `null is null` → `true`
-    let mut expr = ExprIsNull {
-        expr: Box::new(Expr::null()),
-    };
-    let result = simplify.simplify_expr_is_null(&mut expr);
-
-    assert!(matches!(result, Some(Expr::Value(Value::Bool(true)))));
-}
-
-#[test]
-fn non_null_const_is_null_becomes_false() {
-    let schema = test_schema();
-    let simplify = Simplify::new(&schema);
-
-    // `5 is null` → `false`
-    let mut expr = ExprIsNull {
-        expr: Box::new(Expr::from(5i64)),
-    };
-    let result = simplify.simplify_expr_is_null(&mut expr);
-
-    assert!(matches!(result, Some(Expr::Value(Value::Bool(false)))));
-}
-
-#[test]
-fn null_is_not_null_becomes_false() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // `not(is_null(null))` → `not(true)` → `false`
-    let mut expr = Expr::is_not_null(Expr::null());
-    simplify.visit_expr_mut(&mut expr);
-
-    assert!(matches!(expr, Expr::Value(Value::Bool(false))));
-}
-
-#[test]
-fn non_null_const_is_not_null_becomes_true() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // `not(is_null(5))` → `not(false)` → `true`
-    let mut expr = Expr::is_not_null(Expr::from(5i64));
-    simplify.visit_expr_mut(&mut expr);
-
-    assert!(matches!(expr, Expr::Value(Value::Bool(true))));
 }

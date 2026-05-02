@@ -40,6 +40,7 @@ pub mod field_column_name;
 pub mod field_column_type;
 pub mod field_default_and_update;
 pub mod field_version;
+pub mod filter_ilike;
 pub mod filter_like;
 pub mod float_fields;
 pub mod index_composite;

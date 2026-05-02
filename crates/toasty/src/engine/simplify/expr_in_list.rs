@@ -1,33 +1,15 @@
 use super::Simplify;
-use toasty_core::stmt::{self, Expr, Value, ValueSet};
+use toasty_core::stmt::{self, Expr};
 
 impl Simplify<'_> {
+    /// Heavyweight `IN`-list rewrites. Cheap canonicalization (empty list,
+    /// null propagation, literal dedup, single-item collapse) runs in
+    /// `fold::expr_in_list` before this is reached.
     pub(super) fn simplify_expr_in_list(&self, expr: &mut stmt::ExprInList) -> Option<Expr> {
-        // `x in ()` → `false`
-        if expr.list.is_list_empty() {
-            return Some(Expr::Value(Value::Bool(false)));
-        }
-
-        // Null propagation, `null in (x, y, z)` → `null`
-        if expr.expr.is_value_null() {
-            return Some(Expr::null());
-        }
-
+        // Currently only the model → primary-key-field rewrite is heavyweight.
+        // It is in-place and does not produce a top-level expression replacement.
         self.rewrite_expr_in_list_when_model(expr);
-
-        // Deduplicate literal value lists: `x in (1, 1, 2)` → `x in (1, 2)`
-        self.dedup_expr_in_list_values(expr);
-
-        // Rewrite single-item lists into equalities
-        self.rewrite_expr_in_list_with_single_item(expr)
-    }
-
-    /// Remove duplicate values from a `Value::List` in-place, preserving order.
-    fn dedup_expr_in_list_values(&self, expr: &mut stmt::ExprInList) {
-        if let Expr::Value(Value::List(values)) = &mut *expr.list {
-            let mut seen = ValueSet::new();
-            values.retain(|v| seen.insert(v.clone()));
-        }
+        None
     }
 
     fn rewrite_expr_in_list_when_model(&self, expr: &mut stmt::ExprInList) {
@@ -68,33 +50,5 @@ impl Simplify<'_> {
         }
 
         *expr.expr = stmt::Expr::ref_field(nesting, pk.id());
-    }
-
-    fn rewrite_expr_in_list_with_single_item(&self, expr: &mut stmt::ExprInList) -> Option<Expr> {
-        let rhs = match &mut *expr.list {
-            Expr::Value(value) => {
-                let values = match value {
-                    Value::List(value) => &value[..],
-                    _ => todo!("{value:#?}"),
-                };
-
-                if values.len() != 1 {
-                    return None;
-                }
-
-                Expr::Value(values[0].clone())
-            }
-            Expr::List(expr_list) => {
-                if expr_list.items.len() != 1 {
-                    return None;
-                }
-
-                expr_list.items[0].take()
-            }
-            Expr::Record(_) => todo!("should not happen"),
-            _ => return None,
-        };
-
-        Some(Expr::eq(expr.expr.take(), rhs))
     }
 }

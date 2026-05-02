@@ -4,30 +4,10 @@ use std::mem;
 use toasty_core::stmt;
 
 impl Simplify<'_> {
+    /// Heavyweight OR rewrites. Cheap canonicalization (flatten, true
+    /// short-circuit, drop false, null propagation) runs in `fold::expr_or`
+    /// before this is reached.
     pub(super) fn simplify_expr_or(&mut self, expr: &mut stmt::ExprOr) -> Option<stmt::Expr> {
-        // Flatten any nested ors
-        for i in 0..expr.operands.len() {
-            if let stmt::Expr::Or(or) = &mut expr.operands[i] {
-                let mut nested = mem::take(&mut or.operands);
-                expr.operands[i] = false.into();
-                expr.operands.append(&mut nested);
-            }
-        }
-
-        // `or(..., true, ...) → true`
-        if expr.operands.iter().any(|e| e.is_true()) {
-            return Some(true.into());
-        }
-
-        // `or(..., false, ...) → or(..., ...)`
-        expr.operands.retain(|expr| !expr.is_false());
-
-        // Null propagation, `null or null` → `null`
-        // After removing false values, if all operands are null, return null.
-        if !expr.operands.is_empty() && expr.operands.iter().all(|e| e.is_value_null()) {
-            return Some(stmt::Expr::null());
-        }
-
         // Idempotent law, `a or a` → `a`
         // Note: O(n) lookups are acceptable here since operand lists are typically small.
         // `is_equivalent_to` (not `PartialEq`) keeps this sound for non-deterministic

@@ -566,6 +566,34 @@ where
         let pattern = pattern.into_expr().untyped;
         self.build_filter(move |path| stmt::Expr::like(path, pattern))
     }
+
+    /// Case-insensitive variant of [`like`](Self::like).
+    ///
+    /// On PostgreSQL this serializes to `ILIKE`. On SQLite and MySQL it
+    /// serializes to plain `LIKE`, since both engines are already
+    /// case-insensitive for ASCII by default — note that Unicode case-folding
+    /// behavior depends on locale (PostgreSQL) or column collation (MySQL),
+    /// and SQLite's `LIKE` is ASCII-only without the ICU extension. Not
+    /// supported by the DynamoDB driver.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// // Matches "Alice", "ALICIA", and "alfred".
+    /// let filter = User::fields().name().ilike("al%".to_string());
+    /// ```
+    pub fn ilike(self, pattern: impl IntoExpr<String>) -> Expr<bool> {
+        Expr {
+            untyped: stmt::Expr::ilike(self.untyped.into_stmt(), pattern.into_expr().untyped),
+            _p: PhantomData,
+        }
+    }
 }
 
 impl<T, U> Clone for Path<T, U> {
