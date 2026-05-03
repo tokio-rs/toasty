@@ -1,4 +1,5 @@
 mod expr_pattern;
+mod include;
 mod insert;
 mod paginate;
 mod relation;
@@ -13,7 +14,7 @@ use toasty_core::{
     Result, Schema,
     driver::Capability,
     schema::{
-        app::{self, FieldTy, ModelRoot},
+        app::{self, ModelRoot},
         db::ColumnId,
         mapping,
     },
@@ -505,73 +506,16 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
     fn visit_returning_mut(&mut self, i: &mut stmt::Returning) {
         if let stmt::Returning::Model { include } = i {
-            // Capture the include clause as we will be using it to generate
-            // inclusion statements.
-            let mut include = std::mem::take(include);
-
-            let mut returning = self.mapping_unwrap().table_to_model.lower_returning_model();
-
-            // Sort by first field so paths sharing a prefix are contiguous,
-            // then emit one merged subquery per group — without this, each
-            // `.include()` call would overwrite the previous subquery at the
-            // same field slot (see issue #691).
-            include.sort_by_key(|p| *p.projection.as_slice().first().expect("empty include path"));
-
-            // Track which top-level fields are explicitly included so that
-            // deferred fields are not masked when the caller asked for them.
-            let mut included_top_fields = stmt::PathFieldSet::new();
-
-            let mut nested: Vec<stmt::Projection> = vec![];
-            let mut current: Option<usize> = None;
-
-            for path in include {
-                let [first, rest @ ..] = path.projection.as_slice() else {
-                    unreachable!("guaranteed non-empty by sort_by_key above")
-                };
-
-                included_top_fields.insert(*first);
-
-                if current != Some(*first) {
-                    if let Some(field) = current {
-                        self.build_include_subquery(&mut returning, field, &nested);
-                        nested.clear();
-                    }
-                    current = Some(*first);
-                }
-                nested.push(stmt::Projection::from(rest));
-            }
-            if let Some(field) = current {
-                self.build_include_subquery(&mut returning, field, &nested);
-            }
-
-            // Encode each deferred slot so the row decoder can distinguish
-            // "loaded" from "unloaded" — critical when the inner type is
-            // `Option<T>`, where a NULL column value is otherwise
-            // indistinguishable from the unloaded state.
-            //
-            // - Loaded slots wrap the column reference in a 1-element record
-            //   `Record([col])`, so an actual NULL value comes back as
-            //   `Record([Null])` and decodes to `Some(None)`.
-            // - Unloaded slots emit a bare `Null`, which decodes to the
-            //   unloaded state.
-            //
-            // INSERT...RETURNING always projects deferred fields (the caller
-            // just supplied the value and expects to read it back).
-            let model = self.model_unwrap();
+            // Start from the schema's pre-computed default returning — every
+            // `#[deferred]` field, top-level or nested, is already `Null`.
+            // `process_top_level_includes` then splices loaded forms in for
+            // the fields named by include paths (and for every deferred field
+            // when this is an `INSERT ... RETURNING`).
+            let mut returning = self.mapping_unwrap().default_returning.clone();
+            let include_paths = std::mem::take(include);
             let is_insert = self.cx.is_insert();
-            for (index, field) in model.fields.iter().enumerate() {
-                if !field.deferred {
-                    continue;
-                }
-                let loaded = is_insert || included_top_fields.contains(index);
-                let mut entry = returning.entry_mut(index);
-                if loaded {
-                    let inner = entry.take();
-                    entry.insert(stmt::Expr::record([inner]));
-                } else {
-                    entry.insert(stmt::Expr::from(stmt::Value::Null));
-                }
-            }
+
+            self.process_top_level_includes(&mut returning, &include_paths, is_insert);
 
             *i = stmt::Returning::Project(returning);
         }
@@ -890,130 +834,6 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             }
             _ => todo!("cx={:#?}", self.cx),
         }
-    }
-
-    fn build_include_subquery(
-        &mut self,
-        returning: &mut stmt::Expr,
-        field_index: usize,
-        nested: &[stmt::Projection],
-    ) {
-        let field = &self.model_unwrap().fields[field_index];
-
-        // Primitive deferred field: the column reference is already in the
-        // returning record (built from `table_to_model`), so an include is
-        // a no-op here. The masking step in `visit_returning_mut` will skip
-        // this field's slot since it appears in the include set.
-        if field.deferred && field.ty.is_primitive() {
-            for path in nested {
-                assert!(
-                    path.is_empty(),
-                    "include sub-paths on deferred primitive fields are not supported"
-                );
-            }
-            return;
-        }
-
-        let (mut stmt, target_model_id) = match &field.ty {
-            FieldTy::HasMany(rel) => (
-                stmt::Query::new_select(
-                    rel.target,
-                    stmt::Expr::eq(
-                        stmt::Expr::ref_parent_model(),
-                        stmt::Expr::ref_self_field(rel.pair),
-                    ),
-                ),
-                rel.target,
-            ),
-            // To handle single relations, we need a new query modifier that
-            // returns a single record and not a list. This matters for the type
-            // system.
-            FieldTy::BelongsTo(rel) => {
-                let source_fk;
-                let target_pk;
-
-                if let [fk_field] = &rel.foreign_key.fields[..] {
-                    source_fk = stmt::Expr::ref_parent_field(fk_field.source);
-                    target_pk = stmt::Expr::ref_self_field(fk_field.target);
-                } else {
-                    let mut source_fk_fields = vec![];
-                    let mut target_pk_fields = vec![];
-
-                    for fk_field in &rel.foreign_key.fields {
-                        source_fk_fields.push(stmt::Expr::ref_parent_field(fk_field.source));
-                        target_pk_fields.push(stmt::Expr::ref_parent_field(fk_field.source));
-                    }
-
-                    source_fk = stmt::Expr::record_from_vec(source_fk_fields);
-                    target_pk = stmt::Expr::record_from_vec(target_pk_fields);
-                }
-
-                let mut query =
-                    stmt::Query::new_select(rel.target, stmt::Expr::eq(source_fk, target_pk));
-                query.single = true;
-                (query, rel.target)
-            }
-            FieldTy::HasOne(rel) => {
-                let mut query = stmt::Query::new_select(
-                    rel.target,
-                    stmt::Expr::eq(
-                        stmt::Expr::ref_parent_model(),
-                        stmt::Expr::ref_self_field(rel.pair),
-                    ),
-                );
-                query.single = true;
-                (query, rel.target)
-            }
-            _ => todo!(),
-        };
-
-        // Attach each non-empty remainder as a nested include on the subquery.
-        // Empty remainders (from a bare `.include(posts())`) need no nested
-        // include — the subquery itself satisfies them. The lowering pipeline
-        // will recursively group and process the nested includes when it
-        // encounters `Returning::Model` on this subquery.
-        for rest in nested {
-            if !rest.is_empty() {
-                stmt.include(stmt::Path {
-                    root: stmt::PathRoot::Model(target_model_id),
-                    projection: rest.clone(),
-                });
-            }
-        }
-
-        // Simplify the new stmt to handle relations.
-        Simplify::with_context(self.expr_cx).visit_stmt_query_mut(&mut stmt);
-
-        let mut sub_expr = stmt::Expr::stmt(stmt);
-
-        // For nullable single relations (HasOne<Option<T>>, BelongsTo<Option<T>>),
-        // wrap the sub-expression with a Let + Match to encode the result using
-        // variant-encoded values that distinguish loaded-None from unloaded.
-        //
-        //   Let {
-        //     binding: Stmt(query),
-        //     body: Match {
-        //       subject: Arg(0),
-        //       arms: [Null → I64(0)],
-        //       else_: Arg(0)
-        //     }
-        //   }
-        if field.nullable() && !field.ty.is_has_many() {
-            sub_expr = stmt::Expr::Let(stmt::ExprLet {
-                bindings: vec![sub_expr],
-                body: Box::new(stmt::Expr::match_expr(
-                    stmt::Expr::arg(0),
-                    vec![stmt::MatchArm {
-                        pattern: stmt::Value::Null,
-                        expr: stmt::Expr::from(0i64),
-                    }],
-                    // Non-null: pass through as-is (raw model record)
-                    stmt::Expr::arg(0),
-                )),
-            });
-        }
-
-        returning.entry_mut(field_index).insert(sub_expr);
     }
 
     /// Returns the ArgId for the new reference

@@ -1,6 +1,6 @@
 use super::{Field, Load};
 use crate::Statement;
-use crate::stmt::{self, Expr, IntoStatement};
+use crate::stmt::{self, Expr, IntoExpr, IntoStatement};
 use toasty_core::schema::app::ModelSet;
 
 use std::fmt;
@@ -95,6 +95,44 @@ impl<T> Default for Deferred<T> {
     }
 }
 
+impl<T> From<T> for Deferred<T> {
+    /// Constructs a loaded `Deferred<T>` from a value.
+    ///
+    /// Used in struct literals for `#[derive(Embed)]` types that contain
+    /// `#[deferred]` sub-fields, where the user supplies the inner value
+    /// directly: `Metadata { author, notes: "...".into() }`.
+    fn from(value: T) -> Self {
+        Self { value: Some(value) }
+    }
+}
+
+/// Forwards the inner value's expression encoding so a `Deferred<T>` field
+/// can be spliced into any site that accepts a `T`.
+///
+/// `Deferred<T>` is a load-state wrapper, not a value type, so the produced
+/// expression is `Expr<T>` (the value), never `Expr<Deferred<T>>`. Panics
+/// with the standard "deferred field not loaded" error if the value is in
+/// the unloaded state — matching `.get()` / `.into_inner()`.
+impl<T: IntoExpr<T>> IntoExpr<T> for Deferred<T> {
+    fn into_expr(self) -> Expr<T> {
+        self.into_inner().into_expr()
+    }
+
+    fn by_ref(&self) -> Expr<T> {
+        self.get().by_ref()
+    }
+}
+
+impl<T: IntoExpr<T>> IntoExpr<T> for &Deferred<T> {
+    fn into_expr(self) -> Expr<T> {
+        self.get().by_ref()
+    }
+
+    fn by_ref(&self) -> Expr<T> {
+        self.get().by_ref()
+    }
+}
+
 impl<T: Load<Output = T>> Load for Deferred<T> {
     type Output = Self;
 
@@ -103,8 +141,8 @@ impl<T: Load<Output = T>> Load for Deferred<T> {
     }
 
     fn load(value: toasty_core::stmt::Value) -> crate::Result<Self> {
-        // The lowering wraps loaded deferred slots in a 1-element record and
-        // emits a bare Null for unloaded slots, so the two states are
+        // The lowering wraps a loaded deferred field in a 1-element record
+        // and emits a bare Null when unloaded, so the two states are
         // distinguishable even when the inner column value is NULL (i.e. the
         // `Deferred<Option<T>>` case).
         match value {
@@ -127,8 +165,8 @@ impl<T: Load<Output = T>> Load for Deferred<T> {
         // fetch is needed to read what was just written.
         //
         // Updates send the assigned value back unwrapped, unlike the SELECT
-        // lowering which wraps loaded slots in a 1-element record to
-        // distinguish them from unloaded slots.
+        // lowering which wraps a loaded deferred field in a 1-element record
+        // to distinguish it from the unloaded case.
         target.value = Some(T::load(value)?);
         Ok(())
     }

@@ -157,4 +157,16 @@ pub mod codegen_support {
     pub fn scope_fields<S: Scope>(_scope: &S) -> S::Path<S::Item> {
         S::new_path_root()
     }
+
+    /// Convert a value into an untyped [`core::stmt::Expr`] via the typed
+    /// [`IntoExpr<T>`] trait.
+    ///
+    /// Generated code (`#[derive(Model)]`, `#[derive(Embed)]`) splices this in
+    /// instead of inlining the `let expr: Expr<T> = value.into_expr(); expr.into()`
+    /// pattern at every field site. The explicit `T` type parameter
+    /// disambiguates which `IntoExpr` impl to use.
+    pub fn into_untyped_expr<T, V: IntoExpr<T>>(value: V) -> core::stmt::Expr {
+        let expr: stmt::Expr<T> = value.into_expr();
+        expr.into()
+    }
 }
