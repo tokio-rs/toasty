@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0](https://github.com/tokio-rs/toasty/compare/toasty-cli-v0.5.0...toasty-cli-v0.6.0) - 2026-05-03
+
+### Fixed
+
+- CLI automatically creates a default configuration file if none exists ([#795])
+
+[#795]: https://github.com/tokio-rs/toasty/pull/795
+
 ## [0.5.0](https://github.com/tokio-rs/toasty/compare/toasty-cli-v0.4.0...toasty-cli-v0.5.0) - 2026-04-27
 
 ### Added

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.5.0...toasty-sql-v0.6.0) - 2026-05-03
+
+### Added
+
+- Add ilike() filter method ([#801])
+
+[#801]: https://github.com/tokio-rs/toasty/pull/801
+
 ## [0.5.0](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.4.0...toasty-sql-v0.5.0) - 2026-04-27
 
 ### Added

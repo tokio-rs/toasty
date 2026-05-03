@@ -1,6 +1,6 @@
 [package]
 name = "toasty-driver-postgresql"
-version = "0.5.0"
+version = "0.6.0"
 description = "PostgreSQL driver for Toasty"
 authors.workspace = true
 edition.workspace = true
