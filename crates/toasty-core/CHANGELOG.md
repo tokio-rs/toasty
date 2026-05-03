@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.5.0...toasty-core-v0.6.0) - 2026-05-03
+
+### Added
+
+- Support #[deferred] on embedded types ([#799])
+- Backward pagination support in drivers ([#757])
+- Case-insensitive ilike() filtering ([#801])
+- Lazy-loaded relations with #[deferred] field attribute and Deferred<T> wrapper ([#793])
+
+### Changed
+
+- [**breaking**] Renamed Returning enum variants: Expr→Project, Value→Expr ([#790])
+
+[#757]: https://github.com/tokio-rs/toasty/pull/757
+[#790]: https://github.com/tokio-rs/toasty/pull/790
+[#793]: https://github.com/tokio-rs/toasty/pull/793
+[#799]: https://github.com/tokio-rs/toasty/pull/799
+[#801]: https://github.com/tokio-rs/toasty/pull/801
+
 ## [0.5.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.4.0...toasty-core-v0.5.0) - 2026-04-27
 
 ### Added

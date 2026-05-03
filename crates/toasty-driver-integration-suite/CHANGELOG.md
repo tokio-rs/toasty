@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-v0.5.0...toasty-driver-integration-suite-v0.6.0) - 2026-05-03
+
+### Added
+
+- Deferred field loading with #[deferred] attribute and Deferred<T> wrapper ([#793])
+- Extend #[deferred] support to embedded types ([#799])
+- Backward pagination support in drivers ([#757])
+- Case-insensitive filtering with ilike() method ([#801])
+- Latest-by queries ([#707])
+- Filtering by fields on associated models ([#781])
+- All filter for associations ([#784])
+
+[#707]: https://github.com/tokio-rs/toasty/pull/707
+[#757]: https://github.com/tokio-rs/toasty/pull/757
+[#781]: https://github.com/tokio-rs/toasty/pull/781
+[#784]: https://github.com/tokio-rs/toasty/pull/784
+[#793]: https://github.com/tokio-rs/toasty/pull/793
+[#799]: https://github.com/tokio-rs/toasty/pull/799
+[#801]: https://github.com/tokio-rs/toasty/pull/801
+
 ## [0.5.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-v0.4.0...toasty-driver-integration-suite-v0.5.0) - 2026-04-27
 
 ### Added
