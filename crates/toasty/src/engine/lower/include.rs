@@ -39,10 +39,10 @@
 
 use toasty_core::{
     schema::{app, mapping},
-    stmt::{self, VisitMut},
+    stmt,
 };
 
-use crate::engine::{lower::LowerStatement, simplify::Simplify};
+use crate::engine::lower::LowerStatement;
 
 /// The include paths that target a single field, partitioned by whether
 /// they name the field itself or a sub-path within it.
@@ -336,10 +336,10 @@ impl LowerStatement<'_, '_> {
             }
         }
 
-        // Simplify the new stmt to handle relations.
-        Simplify::with_context(self.expr_cx).visit_stmt_query_mut(&mut stmt);
-
-        let mut sub_expr = stmt::Expr::stmt(stmt);
+        // Run the canonical pipeline (pre-lower simplify, lowering walk,
+        // post-lower simplify) on the synthesized subquery, stitching it onto
+        // the parent as an `Expr::Arg`.
+        let mut sub_expr = self.lower_sub_stmt(stmt::Statement::Query(stmt));
 
         // For nullable single relations (HasOne<Option<T>>, BelongsTo<Option<T>>),
         // wrap the sub-expression with a Let + Match to encode the result

@@ -940,6 +940,48 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         stmt::Expr::arg(arg)
     }
 
+    /// Run the canonical pipeline (pre-lower simplify, lowering walk, post-lower
+    /// simplify) on a synthesized sub-statement and stitch it onto the parent
+    /// as an `Expr::Arg`.
+    ///
+    /// Used at sites where lowering itself synthesizes a new statement to embed
+    /// in the parent's `Returning` (include subqueries, child inserts for
+    /// relation planning).  Equivalent to a recursive `lower_stmt` call that
+    /// passes through the `Expr::Stmt` arm in `visit_expr_mut`, but expressed
+    /// directly so the synthesized statement does not have to round-trip
+    /// through an `Expr::Stmt` placeholder.
+    fn lower_sub_stmt(&mut self, stmt: stmt::Statement) -> stmt::Expr {
+        let source_id = self.scope_stmt_id();
+        let mut stmt = Box::new(stmt);
+
+        let target_id = self.scope_statement(|child| {
+            // Pre-lower simplify: app-level rewrites (model→PK, lift_in_subquery,
+            // association rewrites) that the lowering visitor expects to have
+            // already fired.
+            Simplify::with_context(child.expr_cx).visit_mut(&mut *stmt);
+            // Lowering walk.
+            child.visit_stmt_mut(&mut stmt);
+            // Post-lower simplify: heavyweight rules on the lowered tree.
+            child.state.engine.simplify_stmt(&mut *stmt);
+        });
+
+        // Sub-statements built via this helper always live in the parent's
+        // Returning clause (include subqueries, child inserts for relation
+        // planning).  Force the new `Arg::Sub`'s `returning` flag accordingly:
+        // `plan_nested_merge` keys off `returning: true` to discover include
+        // subqueries, and the line-399 `Expr::Stmt` arm gets the same flag
+        // because it fires during the parent's Returning walk.
+        let saved_cx = std::mem::replace(&mut self.cx, LoweringContext::Returning(None));
+        let arg = self.new_sub_statement(source_id, target_id, stmt);
+        self.cx = saved_cx;
+
+        if self.state.hir[target_id].independent {
+            self.curr_stmt_info().deps.insert(target_id);
+        }
+
+        arg
+    }
+
     fn schema(&self) -> &'b Schema {
         &self.state.engine.schema
     }
