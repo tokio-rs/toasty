@@ -365,6 +365,41 @@ impl<T> Query<List<T>> {
     }
 }
 
+impl<T> Query<Option<T>> {
+    /// Widen an optional single-row query back into a list query.
+    ///
+    /// This is the inverse of [`first`](Query::first). The `Option` wrapper is
+    /// stripped: `Query<Option<T>>` becomes `Query<List<T>>`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this query is not a single-row query.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::{List, Query};
+    ///
+    /// let q: Query<Option<User>> = Query::<List<User>>::all().first();
+    /// let _list_q: Query<List<User>> = q.into_rows();
+    /// ```
+    pub fn into_rows(mut self) -> Query<List<T>> {
+        assert!(self.untyped.single, "not a single query");
+        self.untyped.single = false;
+
+        Query {
+            untyped: self.untyped,
+            _p: PhantomData,
+        }
+    }
+}
+
 fn set_first(query: &mut stmt::Query) {
     assert!(!query.single, "query is single");
     query.single = true;
