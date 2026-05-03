@@ -138,9 +138,11 @@ the entry lands here.
 
 ## Macros
 
-- `toasty::query!()` — succinct query syntax ([design](design/query-macro.md))
+- `toasty::query!()` — succinct query syntax ([design](design/query-macro.md), [#808])
 - `toasty::create!()` — concise record creation ([design](design/static-assertions-create-macro.md))
 - `toasty::update!()` — concise updates
+
+[#808]: https://github.com/tokio-rs/toasty/issues/808
 
 ## Runtime
 
