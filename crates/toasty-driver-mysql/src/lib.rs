@@ -188,6 +188,10 @@ impl From<Conn> for Connection {
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
+    fn is_valid(&self) -> bool {
+        true
+    }
+
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         tracing::trace!(driver = "mysql", op = %op.name(), "driver exec");
 

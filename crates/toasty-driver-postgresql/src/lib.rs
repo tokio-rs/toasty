@@ -310,6 +310,10 @@ impl From<Client> for Connection {
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
+    fn is_valid(&self) -> bool {
+        !self.client.is_closed()
+    }
+
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         tracing::trace!(driver = "postgresql", op = %op.name(), "driver exec");
 
