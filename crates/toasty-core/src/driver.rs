@@ -20,7 +20,7 @@
 //! ```
 
 mod capability;
-pub use capability::{Capability, SchemaMutations, StorageTypes};
+pub use capability::{Capability, ScalarList, SchemaMutations, StorageTypes};
 
 mod response;
 pub use response::{ExecResponse, Rows};

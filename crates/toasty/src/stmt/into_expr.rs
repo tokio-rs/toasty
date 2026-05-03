@@ -322,6 +322,42 @@ where
 }
 impl_assign_via_expr!({T, U: IntoExpr<T>} Vec<U> => List<T>);
 
+/// Whole-value conversion for collection fields. The element bound
+/// ([`Scalar`](crate::schema::Scalar)) keeps this from overlapping with the
+/// `Vec<u8>` bytes-blob impl above — `u8` is not `Scalar`.
+///
+/// The result is a single `Value::List` bound parameter (one placeholder
+/// in the SQL), not an `Expr::List` of element expressions (which would
+/// render as a tuple).
+impl<T: IntoExpr<T> + crate::schema::Scalar> IntoExpr<Self> for Vec<T> {
+    fn into_expr(self) -> Expr<Self> {
+        let items = collect_scalar_values(self.into_iter().map(|item| item.into_expr()));
+        Expr::from_value(Value::List(items))
+    }
+
+    fn by_ref(&self) -> Expr<Self> {
+        let items = collect_scalar_values(self.iter().map(|item| item.by_ref()));
+        Expr::from_value(Value::List(items))
+    }
+}
+impl_assign_via_expr!({T: IntoExpr<T> + crate::schema::Scalar} Vec<T> => Vec<T>);
+
+/// Walk a sequence of `Expr<T>` produced by `IntoExpr<T>` for a scalar `T`
+/// and pull the wrapped `Value` out of each. Every scalar `IntoExpr` impl
+/// returns `Expr::from_value(...)`, so the only legal shape here is
+/// `stmt::Expr::Value(_)`.
+fn collect_scalar_values<T, I: IntoIterator<Item = Expr<T>>>(iter: I) -> Vec<Value> {
+    iter.into_iter()
+        .map(|expr| match expr.untyped {
+            stmt::Expr::Value(v) => v,
+            other => panic!(
+                "Vec<T: Scalar> element produced a non-value Expr ({other:#?}) — \
+                 IntoExpr for scalars must always emit Expr::Value"
+            ),
+        })
+        .collect()
+}
+
 macro_rules! forward_impl {
     ( $( $ty:ty ,) *) => {
         $(

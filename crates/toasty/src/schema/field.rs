@@ -1,4 +1,4 @@
-use super::Load;
+use super::{Load, Scalar};
 use crate::stmt::{self, Expr, List};
 use toasty_core::schema::app::ModelSet;
 
@@ -284,3 +284,41 @@ impl_field_primitive!(rust_decimal::Decimal);
 
 #[cfg(feature = "bigdecimal")]
 impl_field_primitive!(bigdecimal::BigDecimal);
+
+/// Collection field. `Vec<T>` for any [`Scalar`] `T` is a queryable
+/// collection field. `Vec<u8>` keeps its bytes-blob meaning via the explicit
+/// impl above (`u8` is not [`Scalar`]).
+impl<T: Field<Output = T> + Scalar + crate::stmt::IntoExpr<T>> Field for Vec<T> {
+    type Path<Origin> = stmt::Path<Origin, Self>;
+    type ListPath<Origin> = stmt::Path<Origin, List<Self>>;
+    type Update<'a> = ();
+    type Inner = Self;
+
+    fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+
+    fn new_list_path<Origin>(path: stmt::Path<Origin, List<Self>>) -> Self::ListPath<Origin> {
+        path
+    }
+
+    fn new_update<'a>(
+        _assignments: &'a mut toasty_core::stmt::Assignments,
+        _projection: toasty_core::stmt::Projection,
+    ) -> Self::Update<'a> {
+    }
+
+    fn field_ty(
+        storage_ty: Option<toasty_core::schema::db::Type>,
+    ) -> toasty_core::schema::app::FieldTy {
+        toasty_core::schema::app::FieldTy::Primitive(toasty_core::schema::app::FieldPrimitive {
+            ty: toasty_core::stmt::Type::list(<T as Load>::ty()),
+            storage_ty,
+            serialize: None,
+        })
+    }
+
+    fn key_constraint<Origin>(&self, target: stmt::Path<Origin, Self::Inner>) -> Expr<bool> {
+        target.eq(self)
+    }
+}

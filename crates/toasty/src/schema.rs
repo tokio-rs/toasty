@@ -39,6 +39,9 @@ mod num;
 mod relation;
 pub use relation::Relation;
 
+mod scalar;
+pub use scalar::Scalar;
+
 mod scope;
 pub use scope::Scope;
 

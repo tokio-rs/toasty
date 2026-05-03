@@ -127,6 +127,22 @@ pub struct Capability {
     pub backward_pagination: bool,
 }
 
+/// How a backend stores `Vec<T>` (and other ordered collection) fields whose
+/// element type is a scalar.
+///
+/// PostgreSQL has native arrays (`text[]`, `int[]`, …) with rich indexable
+/// operators. MySQL and SQLite have no native array type and store collections
+/// as JSON. The schema builder reads [`StorageTypes::scalar_list`] to choose
+/// between [`db::Type::Array`] and [`db::Type::Json`] when no explicit storage
+/// hint is present.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScalarList {
+    /// Native array column type (e.g. PostgreSQL `text[]`).
+    Array,
+    /// Document encoding — [`db::Type::Json`].
+    Json,
+}
+
 /// Maps application-level types to the concrete database column types used for
 /// storage.
 ///
@@ -187,6 +203,10 @@ pub struct StorageTypes {
     /// Maximum value for unsigned integers. When `Some`, unsigned integers
     /// are limited to this value. When `None`, full u64 range is supported.
     pub max_unsigned_integer: Option<u64>,
+
+    /// How `Vec<T>` of a scalar element type is stored. PostgreSQL uses
+    /// native arrays; MySQL/SQLite use JSON.
+    pub scalar_list: ScalarList,
 }
 
 /// The database's capabilities to mutate the schema (tables, columns, indices).
@@ -451,6 +471,8 @@ impl StorageTypes {
         // SQLite INTEGER is a signed 64-bit integer, so unsigned integers
         // are limited to i64::MAX to prevent overflow
         max_unsigned_integer: Some(i64::MAX as u64),
+
+        scalar_list: ScalarList::Json,
     };
 
     /// PostgreSQL storage types.
@@ -483,6 +505,8 @@ impl StorageTypes {
         // to i64::MAX. While NUMERIC could theoretically support larger values,
         // we prefer explicit limits over implicit type switching.
         max_unsigned_integer: Some(i64::MAX as u64),
+
+        scalar_list: ScalarList::Array,
     };
 
     /// MySQL storage types.
@@ -519,6 +543,8 @@ impl StorageTypes {
 
         // MySQL supports full u64 range via BIGINT UNSIGNED
         max_unsigned_integer: None,
+
+        scalar_list: ScalarList::Json,
     };
 
     /// DynamoDB storage types.
@@ -545,6 +571,11 @@ impl StorageTypes {
 
         // DynamoDB supports full u64 range (numbers stored as strings)
         max_unsigned_integer: None,
+
+        // DynamoDB has its own list/typed-set encoding; the SQL scalar-list
+        // distinction is irrelevant. Default to Json so any accidental SQL
+        // code path on this storage type maps consistently with MySQL/SQLite.
+        scalar_list: ScalarList::Json,
     };
 }
 

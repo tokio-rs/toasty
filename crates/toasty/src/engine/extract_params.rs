@@ -89,6 +89,13 @@ impl Ty {
 /// Replace all scalar `Value` nodes with `Arg(n)` placeholders.
 /// Initialize each param's `ty` from the value itself.
 fn extract_values(stmt: &mut stmt::Statement, params: &mut Vec<TypedValue>) {
+    // Pre-pass: `IN <list>` predicates expect their rhs to render as a tuple
+    // of placeholders (`x IN (?1, ?2, ?3)`), so a `Value::List` rhs must be
+    // unrolled before extraction. Without this, `is_extractable_scalar` would
+    // bundle the whole list as a single parameter — correct for collection
+    // columns but wrong here.
+    unroll_in_list_value_lists(stmt);
+
     stmt::visit_mut::for_each_expr_mut(stmt, |expr| {
         match expr {
             // Scalar value → extract
@@ -126,6 +133,16 @@ fn value_to_extracted_expr(value: stmt::Value, params: &mut Vec<TypedValue>) -> 
                 .collect();
             stmt::Expr::Record(stmt::ExprRecord::from_vec(fields))
         }
+        // A list of all-scalars is extracted as a single bind parameter so
+        // that collection columns receive the whole list as one value
+        // (rather than rendering as a tuple of placeholders).
+        stmt::Value::List(values) if values.iter().all(is_extractable_scalar) => {
+            let value = stmt::Value::List(values);
+            let ty = db::Type::from_value(&value);
+            let position = params.len();
+            params.push(TypedValue { value, ty });
+            stmt::Expr::arg(position)
+        }
         stmt::Value::List(values) => {
             let items = values
                 .into_iter()
@@ -142,11 +159,38 @@ fn value_to_extracted_expr(value: stmt::Value, params: &mut Vec<TypedValue>) -> 
     }
 }
 
+/// Walk the statement and rewrite any `Expr::InList { list }` whose `list` is
+/// a `Expr::Value(Value::List(items))` into `Expr::InList { list: Expr::List(items as Expr::Value) }`.
+/// Subsequent extraction then decomposes each item as its own scalar parameter,
+/// producing `IN (?1, ?2, …)` rather than a single bundled parameter.
+fn unroll_in_list_value_lists(stmt: &mut stmt::Statement) {
+    stmt::visit_mut::for_each_expr_mut(stmt, |expr| {
+        if let stmt::Expr::InList(in_list) = expr
+            && let stmt::Expr::Value(stmt::Value::List(_)) = in_list.list.as_ref()
+        {
+            let list_expr =
+                std::mem::replace(in_list.list.as_mut(), stmt::Expr::Value(stmt::Value::Null));
+            let stmt::Expr::Value(stmt::Value::List(items)) = list_expr else {
+                unreachable!()
+            };
+            *in_list.list = stmt::Expr::List(stmt::ExprList {
+                items: items.into_iter().map(stmt::Expr::Value).collect(),
+            });
+        }
+    });
+}
+
 fn is_extractable_scalar(value: &stmt::Value) -> bool {
-    !matches!(
-        value,
-        stmt::Value::Null | stmt::Value::Record(_) | stmt::Value::List(_)
-    )
+    match value {
+        stmt::Value::Null | stmt::Value::Record(_) => false,
+        // A list of scalars is itself a single bind parameter — collection
+        // columns (e.g. PostgreSQL `text[]` or a JSON-encoded list) take the
+        // whole list as one driver-level value rather than expanding to a
+        // tuple of placeholders. Lists containing records still decompose
+        // (batch INSERT VALUES, etc.).
+        stmt::Value::List(items) => items.iter().all(is_extractable_scalar),
+        _ => true,
+    }
 }
 
 // ============================================================================

@@ -130,6 +130,20 @@ impl ToSql for &db::Type {
                 // SQLite: TEXT column (CHECK constraint added in ColumnDef).
                 Flavor::Sqlite => fmt!(cx, f, "TEXT"),
             },
+            db::Type::Array(elem) => match f.serializer.flavor {
+                Flavor::Postgresql => {
+                    elem.as_ref().to_sql(cx, f);
+                    f.dst.push_str("[]");
+                }
+                Flavor::Mysql | Flavor::Sqlite => {
+                    todo!("Array column type is only supported on PostgreSQL")
+                }
+            },
+            db::Type::Json => match f.serializer.flavor {
+                Flavor::Postgresql => fmt!(cx, f, "JSONB"),
+                Flavor::Mysql => fmt!(cx, f, "JSON"),
+                Flavor::Sqlite => fmt!(cx, f, "TEXT"),
+            },
             db::Type::Custom(custom) => fmt!(cx, f, custom.as_str()),
         }
     }

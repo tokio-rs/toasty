@@ -109,6 +109,17 @@ pub enum Type {
     /// A database enum type. See [`TypeEnum`].
     Enum(TypeEnum),
 
+    /// A native array of `elem` values. PostgreSQL `<elem>[]`. Other SQL
+    /// drivers reject this type — the schema builder picks [`Type::Json`]
+    /// instead via [`StorageTypes::scalar_list`](crate::driver::StorageTypes::scalar_list).
+    Array(Box<Type>),
+
+    /// A document-encoded value. JSON on SQL backends (rendered as `JSONB` on
+    /// PostgreSQL, `JSON` on MySQL, `TEXT` on SQLite using JSON1 functions).
+    /// Used as the storage for collection and document fields when no native
+    /// option exists.
+    Json,
+
     /// User-specified unrecognized type
     Custom(String),
 }
@@ -155,6 +166,13 @@ impl Type {
                 stmt::Type::Time => Ok(db.default_time_type.clone()),
                 #[cfg(feature = "jiff")]
                 stmt::Type::DateTime => Ok(db.default_datetime_type.clone()),
+                stmt::Type::List(elem) => match db.scalar_list {
+                    crate::driver::ScalarList::Array => {
+                        let elem_ty = Type::from_app(elem, None, db)?;
+                        Ok(Type::Array(Box::new(elem_ty)))
+                    }
+                    crate::driver::ScalarList::Json => Ok(Type::Json),
+                },
                 _ => Err(crate::Error::unsupported_feature(format!(
                     "type {:?} is not supported by this database",
                     ty
@@ -191,6 +209,7 @@ impl Type {
             stmt::Value::Time(_) => Type::Time(6),
             #[cfg(feature = "jiff")]
             stmt::Value::DateTime(_) => Type::DateTime(6),
+            stmt::Value::List(_) => Type::Json,
             _ => Type::Text,
         }
     }
