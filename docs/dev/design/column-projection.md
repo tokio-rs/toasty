@@ -108,9 +108,10 @@ let pairs: Vec<(u64, String)> = User::all()
 # }
 ```
 
-Tuple impls cover sizes 1 through 12, matching the standard library's
-tuple trait conventions.  For larger projections or named-field
-results, see "Open questions" below.
+Tuple impls cover sizes 1 through 10, matching the existing
+`impl_into_expr_for_tuple!` ceiling in `toasty/src/stmt/into_expr.rs`.
+For larger projections or named-field results, see "Open questions"
+below.
 
 ### Composing with other clauses
 
@@ -171,45 +172,112 @@ let metas: Vec<Metadata> = Document::all()
 # }
 ```
 
+### Selecting relation fields
+
+A relation field is a valid projection target.  Selecting one
+projects to the relation's value shape: a `BelongsTo<T>` or `HasOne<T>`
+field yields one element per parent row (`T`, or `Option<T>` for a
+nullable association); a `HasMany<T>` field yields a `Vec<T>` per
+parent row.  The engine reuses the include-subquery machinery already
+used by `.include(...)`; the difference is the surrounding shape.
+`.include(...)` returns a model record with the relation attached;
+`.select(...)` returns the relation value directly.
+
+```rust
+# use toasty::Model;
+# #[derive(Debug, toasty::Model)]
+# struct Author { #[key] #[auto] id: u64, name: String }
+# #[derive(Debug, toasty::Model)]
+# struct Post {
+#     #[key] #[auto] id: u64,
+#     title: String,
+#     #[belongs_to(key = author_id, references = id)]
+#     author: toasty::BelongsTo<Author>,
+#     author_id: u64,
+# }
+# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
+let authors: Vec<Author> = Post::all()
+    .select(Post::fields().author())
+    .exec(&mut db)
+    .await?;
+# Ok(())
+# }
+```
+
+Field paths through a relation are also supported.  Following a
+`HasMany` adds a `Vec` layer; following a `BelongsTo` or `HasOne`
+adds none (or `Option` if the association is nullable):
+
+```rust
+# use toasty::Model;
+# #[derive(Debug, toasty::Model)]
+# struct Author { #[key] #[auto] id: u64, name: String }
+# #[derive(Debug, toasty::Model)]
+# struct Post {
+#     #[key] #[auto] id: u64,
+#     title: String,
+#     #[belongs_to(key = author_id, references = id)]
+#     author: toasty::BelongsTo<Author>,
+#     author_id: u64,
+# }
+# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
+let author_names: Vec<String> = Post::all()
+    .select(Post::fields().author().name())
+    .exec(&mut db)
+    .await?;
+# Ok(())
+# }
+```
+
+Relations compose with tuple projections: `.select((Post::fields().
+title(), Post::fields().author().name()))` yields `Vec<(String,
+String)>`.  A `HasMany` traversal inside a tuple position contributes
+its `Vec` layer at that position only; the outer projection stays a
+flat tuple per parent row.
+
 ### What `.select(...)` does not accept
-
-`.select(...)` rejects relation fields at compile time.  Relation
-loading already has a dedicated surface (`.include(...)`); allowing
-relations on `.select(...)` would force the result type to bridge two
-shapes (a tuple for projections, a model+children record for relations)
-and would duplicate the include machinery.  The compile error points
-the user at `.include(...)`.
-
-`.select(())` (empty tuple) is also a compile error.  At least one
-field is required; an "empty projection" reduces to `.count()` for
-collections or a no-op for single-row queries.
 
 `.update(...)` and `.delete(...)` reject `.select(...)`.  Mutations
 return either nothing or, in a future iteration, a `RETURNING`
 projection covered by a separate design.
 
+`.select(())` (empty tuple) is permitted and yields `Vec<()>`: one
+unit value per matching row.  This degenerates to row counting, and
+`.count()` is the more natural call site, but the empty tuple is not
+specially rejected.
+
 ## Behavior
 
 **Default projection.**  A query without `.select(...)` loads every
 non-deferred field, exactly as today.  `.select(P)` replaces the
-default column list with `P`'s columns.
+default model projection with the expression `P` reduces to.
 
-**Result type.**  The mapping is mechanical:
+**Result type.**  The mapping is mechanical: where the projection
+expression `P` implements `IntoExpr<T>`, the call returns `Select<M,
+T>` and `.exec()` yields `Vec<T>`.  Concrete shapes:
 
-| Builder call                                         | Result of `.exec()`        |
-|------------------------------------------------------|----------------------------|
-| (none)                                               | `Vec<Model>`               |
-| `.select(F)`                                         | `Vec<F::Type>`             |
-| `.select((F1, F2, ..., Fn))`                         | `Vec<(F1::Type, ..., Fn::Type)>` |
+| Builder call                            | Projection `IntoExpr<T>` | Result of `.exec()`     |
+|-----------------------------------------|--------------------------|-------------------------|
+| (none)                                   | (n/a)                    | `Vec<Model>`            |
+| `.select(field)`                         | `T = FieldType`          | `Vec<FieldType>`        |
+| `.select((f1, ..., fn))`                 | `T = (T1, ..., Tn)`      | `Vec<(T1, ..., Tn)>`    |
+| `.select(belongs_to_field)`              | `T = Related`            | `Vec<Related>`          |
+| `.select(has_many_field)`                | `T = Vec<Related>`       | `Vec<Vec<Related>>`     |
+| `.select(belongs_to_field.sub())`        | `T = SubFieldType`       | `Vec<SubFieldType>`     |
+| `.select(has_many_field.sub())`          | `T = Vec<SubFieldType>`  | `Vec<Vec<SubFieldType>>` |
+
+Field paths reduce by composition: a `HasMany` step lifts the eventual
+element type into a `Vec`; a `BelongsTo` / `HasOne` step does not (or
+adds `Option` if nullable).
 
 `.first()` lifts the outer container to `Option<_>` and `.get()` lifts
 to a single value, identical to today's mapping for `Select<M>`.
 `.count()` ignores the projection entirely; it returns the row count.
 
-**Type inference.**  The result element type follows from the
-projection's `Project::Output` associated type, so the user can let
-inference do the work or annotate at the binding site as the examples
-above do.
+**Type inference.**  The result element type follows from the `T`
+parameter of the `IntoExpr<T>` impl chosen at the call site.  The
+user can let inference do the work or annotate at the binding site as
+the examples above do.
 
 **Deferred fields.**  Selecting a `#[deferred]` field eagerly loads
 it.  The result element type is `T`, not `Deferred<T>`; the unloaded
@@ -228,6 +296,16 @@ a single-row `.get()` on a missing record returns the existing
   element of the embed type.  Selecting one field of an embed via the
   field-path chain (`Model::fields().embed().sub_field()`) is also
   permitted and yields the sub-field's type.
+- *Relations.*  Relation fields and field paths through relations are
+  valid projections; cardinality follows the rules described in
+  "Selecting relation fields" above.  `.select(...)` and `.include(...)`
+  are mutually exclusive on a single query.  The builder enforces this
+  at the type level: `.include(...)` is exposed on the pre-projection
+  `Select<M>` (which carries `Returning::Model`), and `.select(...)` is
+  only callable on a `Select<M>` with no includes attached.  Once
+  `.select(...)` returns `Select<M, T>`, neither method is exposed
+  again.  A user who wants both a model-with-relations record and a
+  separate projection should issue two queries.
 - *`#[version]`.*  The version column is a normal field for
   projection purposes; selecting it returns the version number.  The
   returned tuple does not drive an instance update; only loaded model
@@ -249,17 +327,18 @@ costs nothing extra to support.
 `Model::fields()` only exposes what the model declares.
 
 **Selecting through a relation traversal (`.todos().title()`).**
-Rejected at compile time with the same message as a direct relation
-selection: relations are loaded via `.include(...)`, not `.select(...)`.
+Supported.  See "Selecting relation fields" above for the cardinality
+rules: each `HasMany` step adds a `Vec` layer, each `BelongsTo` /
+`HasOne` step adds none (or `Option` for a nullable association).
 
 **Selection on a streamed query** (when streaming lands, [#324]).
 Streams yield the projected element type per item.  The projection is
 established before the stream is opened; no new behavior to design
 here.
 
-**Boundary: tuple of size 13 or more.**  Compile error from a missing
-trait impl.  The diagnostic message points the user at the size-12
-ceiling and the future work item.
+**Boundary: tuple of size 11 or more.**  Compile error from a missing
+`IntoExpr` impl.  The diagnostic message points the user at the
+size-10 ceiling and the future work item.
 
 **Concurrent modification.**  No new concurrency surface.  The query
 returns whatever rows match at execution time; projection is purely a
@@ -271,54 +350,87 @@ The feature is a column-list change on existing operations.  Most of
 the work lives in the macro and the engine's lowering phase; drivers
 see operations they already handle, with a different column list.
 
-### Macro
+### Macro and trait surface
 
 `#[derive(Model)]` generates a single new method on the query builder:
 
-- `Select<M>::select<P>(self, projection: P) -> Select<M, P::Output>`
-  where `P: Project<M>`.
-
-The `Project` trait is doc-hidden codegen support:
-
 ```rust
-#[doc(hidden)]
-pub trait Project<M: Model> {
-    type Output: stmt::Decode;
-    fn columns(&self) -> Vec<stmt::ExprReference>;
+impl<M: Model> Select<M> {
+    pub fn select<E, T>(self, projection: E) -> Select<M, T>
+    where
+        E: stmt::IntoExpr<T>,
+        T: stmt::Decode,
+    {
+        // sets Returning::Project(projection.into_expr().untyped)
+        // on the underlying statement
+        ...
+    }
 }
 ```
 
-Implementations are generated for:
+There is no new `Project` trait.  `stmt::IntoExpr<T>` already exists
+in `toasty/src/stmt/into_expr.rs` and already covers everything the
+projection surface needs:
 
-1. Every field handle on the model (one impl per field, with
-   `Output = FieldType`).
-2. Tuple impls for sizes 1 through 12 (composition over the
-   per-field impls).
+- Field handles for primitive, embedded, and deferred fields impl
+  `IntoExpr<FieldType>` (or get the impl through their `stmt::Expr<T>`
+  return value, which has a blanket `IntoExpr<T> for Expr<T>`).
+- Tuples of arities 1-10 already impl `IntoExpr<(T0, ..., Tn)>`
+  whenever each component does (`impl_into_expr_for_tuple!` macro
+  invocation in `into_expr.rs`).  An impl for `()` is added so the
+  empty-tuple projection compiles.
+- `Option<T>` already lifts; nullable field handles flow through
+  unchanged.
 
-Compile-time rejection of relation handles is enforced by *not*
-generating a `Project` impl for them.  The diagnostic uses
-`#[diagnostic::on_unimplemented]` to point users at `.include(...)`.
+What the macro must add for projection to work end-to-end:
 
-The decode path on the result side reuses the `stmt::Decode` machinery
-that already underlies model record decoding; tuples and primitives
-are existing `Decode` shapes.
+1. `IntoExpr<T>` impls for relation field handles, where `T` is the
+   relation's value shape (`Author` for a `BelongsTo<Author>`,
+   `Vec<Comment>` for a `HasMany<Comment>`, `Option<T>` for nullable
+   associations).  These reduce to the same subquery expression
+   `.include(...)` already constructs, wrapped in a typed `Expr<T>`.
+2. `IntoExpr<T>` impls for relation-traversal field paths
+   (`Post::fields().author().name()`), where `T` follows the
+   cardinality rules above.
+3. `stmt::Decode` impls for any new shape that does not already have
+   one.  Primitives, tuples, `Option<T>`, and `Vec<T>` are existing
+   `Decode` shapes; relation values decode through the same path
+   `.include(...)` already uses for nested model records.
+
+The 10-arity ceiling matches the existing `impl_into_expr_for_tuple!`
+expansion and `IntoExpr`'s own conventions.  Raising it is a one-line
+change to the macro invocation if a use case justifies the compile-time
+cost.
+
+Why a new trait was considered and rejected: an earlier draft proposed
+a `Project<M>` trait with `type Output: Decode; fn columns(&self) ->
+Vec<stmt::ExprReference>`.  Reusing `IntoExpr<T>` is strictly better:
+it is the same trait already used everywhere else expressions enter
+the API (filters, setters, comparisons), the tuple impls are already
+in place, and there is no duplicated typing surface for users or
+docs to cross-reference.  The only concrete cost is that
+`stmt::IntoExpr` must be in scope at the call site, which it already
+is for any user touching `.filter(...)` or `.eq(...)`.
 
 ### Engine
 
-Lowering already walks the field list and emits a column projection
-in `Returning::Project`.  The change is to consult one extra input
-from the user-facing query:
+`Returning::Project(Expr)` and `Returning::Model { include }` already
+exist (see `crates/toasty-core/src/stmt/returning.rs`).  Today, a
+default `Select<M>` carries `Returning::Model { include: vec![] }` and
+lowering expands that into the model's field list.  `.include(...)`
+appends to the include vec; `.select(p)` replaces the entire
+`Returning` with `Returning::Project(p.into_expr().untyped)`, using
+the existing `Statement::set_returning_project` helper.
 
-- **`select_override: Option<Vec<ExprReference>>`**, when present,
-  replaces the default model projection wholesale.
+Lowering already handles `Returning::Project` (see PR #790's
+`Returning` rename and PR #793's deferred-field path).  Decode already
+follows whatever the typed expression resolves to.  Combining
+`.select(...)` with `.include(...)` becomes a compile-time error in
+the builder layer, since `Select<M>` and `Select<M, T>` (post-select)
+are different types and `.include(...)` is only defined on the former.
 
-When `select_override` is present, the lowering bypasses the
-model-shape decode at exec time: the result is decoded as the
-projected types, not as a model record.  When absent, lowering
-proceeds exactly as today.
-
-No change to the planner.  No change to the operation graph.  No new
-MIR variant.
+No new builder field.  No `select_override`.  No change to the
+planner.  No change to the operation graph.  No new MIR variant.
 
 ### SQL drivers
 
@@ -405,23 +517,26 @@ different result shape.
 
 ## Open questions
 
-- **Tuple arity ceiling.**  The proposal sets the ceiling at 12.
-  Diesel goes higher (16 or 32 depending on feature flag).  Higher
-  ceilings cost compile time on every consumer.  The 12-impl ceiling
-  is consistent with the standard library's own conventions.
-  *Deferrable; can be raised by adding more impls in a follow-on PR.*
+- **Tuple arity ceiling.**  The proposal inherits the existing
+  10-tuple ceiling from `impl_into_expr_for_tuple!`.  Diesel goes
+  higher (16 or 32 depending on feature flag).  Higher ceilings cost
+  compile time on every consumer.  *Deferrable; raised by extending
+  the macro invocation in `into_expr.rs` and is independent of this
+  design.*
 
 - **`#[derive(Project)]` for named-field results.**  Once tuples
   ship, a derived projection struct gives ergonomic named access for
-  repeated projections.  *Deferrable; not part of this design.*
+  repeated projections.  Implementation-wise this is just an
+  `IntoExpr<MyStruct> for MyStruct` impl emitted by a derive macro,
+  composing the field-handle expressions into a record.  *Deferrable;
+  not part of this design.*
 
-- **Aggregates inside `.select(...)`.**  `.select(count(F), avg(G))`
+- **Aggregates inside `.select(...)`.**  `.select((count(F), avg(G)))`
   would let projection cover aggregate queries (#421).  Out of scope
-  here, but the `Project` trait should leave room in its
-  `columns()` return for aggregate expressions so the future
-  expansion does not require a breaking change.
-  *Blocking acceptance: confirm the trait shape leaves the door open
-  for aggregate-expression columns.*
+  here.  Compatibility with this design is automatic: aggregate
+  expressions already produce typed `Expr<T>` values, which already
+  satisfy `IntoExpr<T>` via the blanket `IntoExpr<T> for Expr<T>`
+  impl.  No trait-shape change needed when aggregates land.
 
 - **`.exclude(...)` shorthand via macro.**  If users push back on
   `.select((a, b, c, d, e))` for "everything except f" projections, a
@@ -434,11 +549,14 @@ different result shape.
   projected shape back from a mutation.  *Deferrable; covered by a
   separate write-projection design.*
 
-- **Field-path projections.**  `.select(Document::fields().metadata().author())`
-  selects an embed sub-field.  The proposal supports this, but the
-  trait shape that allows arbitrary field paths versus only top-level
-  fields needs one more pass.  *Blocking implementation: confirm the
-  field-path-chain typing.*
+- **Relation field-handle return type.**  Relation field handles
+  currently return relation-specific builder types
+  (`BelongsToBuilder`, `HasManyBuilder`, etc.).  Adding `IntoExpr<T>`
+  impls for them is straightforward but the `T` choice for `HasMany`
+  warrants a closer look during implementation: `Vec<T>` is the
+  natural shape, but `List<T>` (toasty's wire-typed list) may compose
+  better with the existing decode machinery.  *Blocking
+  implementation: pick one and confirm `Decode` lines up.*
 
 [#324]: https://github.com/tokio-rs/toasty/issues/324
 [#421]: https://github.com/tokio-rs/toasty/issues/421
