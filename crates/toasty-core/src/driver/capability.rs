@@ -106,9 +106,25 @@ pub struct Capability {
     /// DynamoDB: false. All other backends: true (SQL backends never use index key conditions).
     pub index_or_predicate: bool,
 
+    /// Whether the database has a native prefix-match operator that does not
+    /// require LIKE-style escaping. When `true`, `starts_with` is left in the
+    /// AST and the driver renders it natively (DynamoDB's `begins_with()`,
+    /// PostgreSQL's `^@`). When `false`, the lowering rewrites it to a
+    /// `LIKE` expression — which requires `native_like` to be `true`.
+    pub native_starts_with: bool,
+
+    /// Whether the database has a native `LIKE` expression. When `false`,
+    /// `Expr::Like` cannot be sent to the driver; `starts_with` lowering
+    /// will not produce one.
+    pub native_like: bool,
+
     /// Whether to test connection pool behavior.
     /// TODO: We only need this for the `connection_per_clone.rs` test, come up with a better way.
     pub test_connection_pool: bool,
+
+    /// Whether the driver supports backward (previous-page) pagination.
+    /// SQL: true. DynamoDB: false.
+    pub backward_pagination: bool,
 }
 
 /// Maps application-level types to the concrete database column types used for
@@ -295,7 +311,12 @@ impl Capability {
 
         index_or_predicate: true,
 
+        native_starts_with: false,
+        native_like: true,
+
         test_connection_pool: false,
+
+        backward_pagination: true,
     };
 
     /// PostgreSQL capabilities
@@ -306,6 +327,9 @@ impl Capability {
         select_for_update: true,
         auto_increment: true,
         bigdecimal_implemented: false,
+
+        // PostgreSQL has the `^@` prefix-match operator.
+        native_starts_with: true,
 
         // PostgreSQL has CREATE TYPE ... AS ENUM
         native_enum: true,
@@ -382,7 +406,13 @@ impl Capability {
 
         index_or_predicate: false,
 
+        // DynamoDB has `begins_with()` but no LIKE.
+        native_starts_with: true,
+        native_like: false,
+
         test_connection_pool: false,
+
+        backward_pagination: false,
     };
 }
 

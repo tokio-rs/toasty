@@ -19,12 +19,11 @@ pub(crate) struct Variant {
     pub(crate) is_method_ident: syn::Ident,
 
     /// Variant handle struct identifier (e.g., `ContactInfoEmailVariant`).
-    /// Only set for data-carrying variants.
+    /// Only set for data-carrying variants. Returned by the
+    /// `{variant_method}()` accessor on the parent `{Enum}Fields` struct;
+    /// carries both the `matches(closure)` filter API and the variant-field
+    /// path accessors.
     pub(crate) variant_handle_ident: Option<syn::Ident>,
-
-    /// Ident for the per-variant field struct (e.g., `ContactInfoEmailFields`).
-    /// Only set for data-carrying variants.
-    pub(crate) field_struct_ident: Option<syn::Ident>,
 }
 
 #[derive(Debug)]
@@ -71,19 +70,13 @@ impl Variant {
         let is_method_ident =
             syn::Ident::new(&format!("is_{}", name.as_str()), variant.ident.span());
 
-        let (variant_handle_ident, field_struct_ident) = if !has_fields {
-            (None, None)
+        let variant_handle_ident = if has_fields {
+            Some(syn::Ident::new(
+                &format!("{}{}Variant", enum_ident, variant.ident),
+                variant.ident.span(),
+            ))
         } else {
-            (
-                Some(syn::Ident::new(
-                    &format!("{}{}Variant", enum_ident, variant.ident),
-                    variant.ident.span(),
-                )),
-                Some(syn::Ident::new(
-                    &format!("{}{}Fields", enum_ident, variant.ident),
-                    variant.ident.span(),
-                )),
-            )
+            None
         };
 
         Ok(Variant {
@@ -93,7 +86,6 @@ impl Variant {
             fields_named,
             is_method_ident,
             variant_handle_ident,
-            field_struct_ident,
         })
     }
 }

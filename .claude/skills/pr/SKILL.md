@@ -38,6 +38,25 @@ Keep the section headings and the checklist; replace the HTML comment
 placeholders with real content. Delete checklist items that do not
 apply rather than leaving them unchecked with no explanation.
 
+## Markdown-doc PRs: link the rendered version
+
+When a PR's primary change is adding or substantially modifying a single
+markdown file (e.g., a design doc or a major docs rewrite), put a link
+to the rendered version on the branch as the first line under
+`## Summary`:
+
+```
+## Summary
+
+[Rendered](https://github.com/tokio-rs/toasty/blob/<branch-name>/<path-to-file>.md)
+
+<rest of summary>
+```
+
+Use the PR's head branch name in the URL so the link renders the
+version under review, not what's on `main`. PR
+[#787](https://github.com/tokio-rs/toasty/pull/787) is an example.
+
 ## Be succinct
 
 Reviewers already know Toasty and Rust. Keep the body high-signal:

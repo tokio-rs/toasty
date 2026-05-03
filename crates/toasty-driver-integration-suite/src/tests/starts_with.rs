@@ -135,6 +135,120 @@ pub async fn starts_with_empty_prefix_sql(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// starts_with prefix containing SQL LIKE wildcards (`%`, `_`) and the
+/// chosen escape char (`!`). On SQL drivers the prefix is escaped before
+/// being lowered to LIKE so these characters match literally.
+#[driver_test]
+pub async fn starts_with_special_chars(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = partition_id, local = sort_key)]
+    struct StringItem {
+        partition_id: i64,
+        sort_key: String,
+    }
+
+    let mut db = test.setup_db(models!(StringItem)).await;
+
+    toasty::create!(StringItem::[
+        { partition_id: 1_i64, sort_key: "100%-discount" },
+        { partition_id: 1_i64, sort_key: "100xdiscount"  },
+        { partition_id: 1_i64, sort_key: "1009"          },
+        { partition_id: 1_i64, sort_key: "a_b-literal"   },
+        { partition_id: 1_i64, sort_key: "axb-wildcard"  },
+        { partition_id: 1_i64, sort_key: "!bang-literal" },
+        { partition_id: 1_i64, sort_key: "x!bang"        },
+    ])
+    .exec(&mut db)
+    .await
+    .unwrap();
+
+    // `%` must match literally, not as a wildcard.
+    let mut items: Vec<StringItem> = StringItem::filter(
+        StringItem::fields().partition_id().eq(1_i64).and(
+            StringItem::fields()
+                .sort_key()
+                .starts_with("100%".to_string()),
+        ),
+    )
+    .exec(&mut db)
+    .await?;
+    items.sort_by(|a, b| a.sort_key.cmp(&b.sort_key));
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].sort_key, "100%-discount");
+
+    // `_` must match literally, not as a single-char wildcard.
+    let mut items: Vec<StringItem> = StringItem::filter(
+        StringItem::fields().partition_id().eq(1_i64).and(
+            StringItem::fields()
+                .sort_key()
+                .starts_with("a_b".to_string()),
+        ),
+    )
+    .exec(&mut db)
+    .await?;
+    items.sort_by(|a, b| a.sort_key.cmp(&b.sort_key));
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].sort_key, "a_b-literal");
+
+    // `!` (the escape char chosen by the SQL lowering) must also match
+    // literally when present in the user-supplied prefix.
+    let mut items: Vec<StringItem> = StringItem::filter(
+        StringItem::fields().partition_id().eq(1_i64).and(
+            StringItem::fields()
+                .sort_key()
+                .starts_with("!bang".to_string()),
+        ),
+    )
+    .exec(&mut db)
+    .await?;
+    items.sort_by(|a, b| a.sort_key.cmp(&b.sort_key));
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].sort_key, "!bang-literal");
+
+    Ok(())
+}
+
+/// starts_with on an `Option<String>` field — matches non-null values with
+/// the given prefix; rows with NULL values are excluded.
+#[driver_test]
+pub async fn starts_with_optional_field(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = partition_id, local = id)]
+    struct OptItem {
+        partition_id: i64,
+        id: i64,
+        nickname: Option<String>,
+    }
+
+    let mut db = test.setup_db(models!(OptItem)).await;
+
+    toasty::create!(OptItem::[
+        { partition_id: 1_i64, id: 1_i64, nickname: Some("Ali".to_string())     },
+        { partition_id: 1_i64, id: 2_i64, nickname: Some("Alicia".to_string())  },
+        { partition_id: 1_i64, id: 3_i64, nickname: Some("Bob".to_string())     },
+        { partition_id: 1_i64, id: 4_i64, nickname: None                        },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let mut items: Vec<OptItem> = OptItem::filter(
+        OptItem::fields()
+            .partition_id()
+            .eq(1_i64)
+            .and(OptItem::fields().nickname().starts_with("Al".to_string())),
+    )
+    .exec(&mut db)
+    .await?;
+
+    items.sort_by_key(|i| i.id);
+
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0].nickname.as_deref(), Some("Ali"));
+    assert_eq!(items[1].nickname.as_deref(), Some("Alicia"));
+
+    Ok(())
+}
+
 /// starts_with on the partition key — DynamoDB returns a runtime error since
 /// starts_with is not valid in a KeyConditionExpression on the partition key.
 #[driver_test(requires(not(sql)))]

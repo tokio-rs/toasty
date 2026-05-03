@@ -4,6 +4,9 @@ pub use auto::Auto;
 mod belongs_to;
 pub use belongs_to::BelongsTo;
 
+mod deferred;
+pub use deferred::{Defer, Deferred, build_deferred_load};
+
 mod embed;
 pub use embed::Embed;
 

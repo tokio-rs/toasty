@@ -119,7 +119,7 @@ impl Simplify<'_> {
             let mut subquery = query.clone();
 
             subquery.body.as_select_mut_unwrap().returning =
-                stmt::Returning::Expr(stmt::Expr::ref_self_field(fk_fields.target));
+                stmt::Returning::Project(stmt::Expr::ref_self_field(fk_fields.target));
 
             Some(stmt::Expr::in_subquery(
                 stmt::Expr::ref_self_field(fk_fields.source),
@@ -166,7 +166,8 @@ impl Simplify<'_> {
 
         match &mut subquery.body {
             stmt::ExprSet::Select(select) => {
-                select.returning = stmt::Returning::Expr(stmt::Expr::ref_self_field(child_field));
+                select.returning =
+                    stmt::Returning::Project(stmt::Expr::ref_self_field(child_field));
             }
             _ => todo!(),
         }

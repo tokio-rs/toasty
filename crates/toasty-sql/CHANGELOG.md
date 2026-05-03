@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.4.0...toasty-sql-v0.5.0) - 2026-04-27
+
+### Added
+
+- String prefix filtering with begins_with and LIKE operators ([#745])
+- Optimistic concurrency control for DynamoDB with #[version] attribute ([#694])
+- Float type support ([#687])
+- Native database enum type support for embedded enums ([#665])
+
+### Fixed
+
+- Column rename emits last when combined with other schema changes ([#769])
+- Removed unnecessary unique index on primary key ([#682])
+
+[#665]: https://github.com/tokio-rs/toasty/pull/665
+[#682]: https://github.com/tokio-rs/toasty/pull/682
+[#687]: https://github.com/tokio-rs/toasty/pull/687
+[#694]: https://github.com/tokio-rs/toasty/pull/694
+[#745]: https://github.com/tokio-rs/toasty/pull/745
+[#769]: https://github.com/tokio-rs/toasty/pull/769
+
 ## [0.3.0](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.2.0...toasty-sql-v0.3.0) - 2026-04-03
 
 ### Other

@@ -416,12 +416,12 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                 if single { ty } else { Type::list(ty) }
             }
             Returning::Changed => todo!(),
-            Returning::Expr(expr) => {
+            Returning::Project(expr) => {
                 let ty = self.infer_expr_ty2(&arg_ty_stack, expr, false);
 
                 if single { ty } else { Type::list(ty) }
             }
-            Returning::Value(expr) => self.infer_expr_ty2(&arg_ty_stack, expr, true),
+            Returning::Expr(expr) => self.infer_expr_ty2(&arg_ty_stack, expr, true),
         }
     }
 

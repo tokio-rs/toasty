@@ -1252,8 +1252,8 @@ where
             }
         }
         Returning::Changed => {}
+        Returning::Project(expr) => v.visit_expr(expr),
         Returning::Expr(expr) => v.visit_expr(expr),
-        Returning::Value(expr) => v.visit_expr(expr),
     }
 }
 

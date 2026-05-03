@@ -49,7 +49,32 @@ impl ToSql for &stmt::Expr {
                 fmt!(cx, f, expr.expr " IS NULL");
             }
             stmt::Expr::Like(expr) => {
-                fmt!(cx, f, expr.expr " LIKE " expr.pattern);
+                let op =
+                    if expr.case_insensitive && matches!(f.serializer.flavor, Flavor::Postgresql) {
+                        " ILIKE "
+                    } else {
+                        " LIKE "
+                    };
+                fmt!(cx, f, expr.expr op expr.pattern);
+                if let Some(escape) = expr.escape {
+                    let escape = &stmt::Value::String(escape.to_string());
+                    fmt!(cx, f, " ESCAPE " escape);
+                }
+            }
+            stmt::Expr::StartsWith(expr) => {
+                // The lowering pass leaves `StartsWith` in place when
+                // `Capability::native_prefix_match_op` is true. PostgreSQL
+                // is the only such SQL flavor today (`^@` operator).
+                match f.serializer.flavor {
+                    Flavor::Postgresql => {
+                        fmt!(cx, f, expr.expr " ^@ " expr.prefix);
+                    }
+                    Flavor::Sqlite | Flavor::Mysql => {
+                        unreachable!(
+                            "StartsWith should have been lowered to LIKE for non-PostgreSQL flavors"
+                        );
+                    }
+                }
             }
             stmt::Expr::Not(expr) => {
                 fmt!(cx, f, "NOT (" expr.expr ")");

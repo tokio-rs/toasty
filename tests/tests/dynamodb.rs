@@ -75,5 +75,6 @@ toasty_driver_integration_suite::generate_driver_tests!(DynamoDbSetup::new(),
     native_date: false,
     native_time: false,
     native_datetime: false,
+    backward_pagination: false,
     test_connection_pool: false,
 );

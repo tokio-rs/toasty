@@ -21,19 +21,10 @@ the entry lands here.
 ## Schema & Types
 
 - Composite keys — full support across drivers ([design](design/composite-keys.md))
-  - Composite foreign key optimization in query simplification
-  - Composite PK in expression rewriting and `IN`-list operations
-  - `HasMany` / `BelongsTo` with composite foreign keys
-  - Junction tables / many-to-many with composite keys
-  - DynamoDB: batch delete/update, composite unique indexes
 - Embedded structs and enums ([design](design/enums-and-embedded-structs.md), [impl](design/embedded-enums-data-carrying-impl.md))
-  - Tuple variants
-  - Shared columns across variants
-  - Partial updates within a variant
-  - DynamoDB encoding for data-carrying enum variants
-  - `BelongsTo` fields in embedded structs ([#670])
+- `BelongsTo` fields in embedded structs ([#670])
 - Native PostgreSQL enum types ([#641])
-  - Migrations for enum representation changes ([#724])
+- Migrations for enum representation changes ([#724])
 - Serde-serialized fields (JSON/JSONB for arbitrary Rust types) ([design](design/serialize-fields.md), [#672])
 - Document and collection fields — `Vec`, `HashSet`, `HashMap`, with backend-chosen storage and a `#[document]` override ([design](design/document-fields.md))
 - Foreign key constraints ([#366])
@@ -42,7 +33,7 @@ the entry lands here.
 - Composite unique constraints ([#639])
 - Partial / conditional unique constraints ([#640])
 - PostgreSQL dynamic index types — GIN, GiST, BRIN, HASH ([#673])
-- Partial model loading via `#[deferred]` / `Deferred<T>`
+- Partial model loading via `#[deferred]` / `Deferred<T>` ([design](design/deferred-fields.md))
 
 [#366]: https://github.com/tokio-rs/toasty/issues/366
 [#639]: https://github.com/tokio-rs/toasty/issues/639
@@ -57,46 +48,25 @@ the entry lands here.
 
 ## Query Engine
 
-- String predicates
-  - `contains` / `ends_with`
-  - Case-insensitive matching
-  - Regex matching (`regex` / `iregex`)
-- Range and set predicates
-  - `NOT IN`
-  - `BETWEEN` / range queries
-  - `IS DISTINCT FROM` — NULL-safe inequality
+- String predicates — `contains`, `ends_with`, case-insensitive matching, regex ([#774])
+- Range and set predicates — `NOT IN`, `BETWEEN`, `IS DISTINCT FROM`
 - Relation filtering — filter by fields on an associated model
 - Field-to-field comparison
 - Arithmetic in predicates (add, subtract, multiply, divide, modulo)
 - Conditional expressions — `CASE WHEN ... THEN ... ELSE ... END`
 - `DISTINCT` / `DISTINCT ON` ([#425])
-- Aggregates ([#421])
-  - `COUNT`, `SUM`, `AVG`, `MIN`, `MAX`
-  - `GROUP BY` / `HAVING`
-- Subquery improvements
-  - Subquery comparisons (`ALL` / `ANY` / `SOME`)
+- Aggregates — `COUNT`, `SUM`, `AVG`, `MIN`, `MAX`, `GROUP BY`, `HAVING` ([#421])
+- Subquery comparisons (`ALL` / `ANY` / `SOME`)
 - Recursive queries / CTEs ([#420])
 - Lateral joins ([#419])
 - Full-text search ([#423])
-  - User-facing builder API
-  - PostgreSQL `tsvector` / `tsquery`
-  - MySQL `FULLTEXT` / `MATCH ... AGAINST`
-  - SQLite FTS5 integration
 - Document field queries — path predicates, sub-document containment, collection operators ([design](design/document-fields.md))
 - Dynamic / conditional query building — optional-filter pattern (SeaORM-style `Condition::add_option`, Diesel `BoxableExpression`)
-- Query ordering & limits
-  - Multi-column `.then_by()`
-  - Direct `.limit()` for non-paginated queries
-  - `.last()` convenience
-  - Pagination with complex ORDER BY expressions (non-column references) ([#723])
-  - Backward pagination as a driver capability ([#732])
+- Query ordering & limits — multi-column `.then_by()`, direct `.limit()`, `.last()`
+- Pagination with complex ORDER BY expressions ([#723])
+- Backward pagination as a driver capability ([#732])
 - Streaming query results — `.all()` returns a `Stream` for large result sets ([#324])
 - Post-lowering optimization pass
-  - Single-pass predicate analysis (not per-node)
-  - Equivalence classes for transitive constraints
-  - Structured constraint representation (constants, ranges, exclusions)
-  - Targeted normalization without full DNF
-  - `ExprLet` inlining — move from `lower_returning` into the post-lowering pass
 - Pre-compiled query plans — parameterized plans that skip re-planning on repeated calls ([#266])
 - Query result caching — cache results for repeated identical queries
 
@@ -109,6 +79,7 @@ the entry lands here.
 [#425]: https://github.com/tokio-rs/toasty/issues/425
 [#723]: https://github.com/tokio-rs/toasty/issues/723
 [#732]: https://github.com/tokio-rs/toasty/issues/732
+[#774]: https://github.com/tokio-rs/toasty/issues/774
 
 ## Relationships
 
@@ -119,20 +90,9 @@ the entry lands here.
 ## Data Modification
 
 - Upsert ([#422])
-  - SQL: `ON CONFLICT` (PostgreSQL/SQLite), `ON DUPLICATE KEY UPDATE` (MySQL), `MERGE`
-  - Insert-or-ignore (`DO NOTHING` / `INSERT IGNORE`)
-  - Conflict target by column, constraint name, or partial index
-  - Column update control (all / subset / raw expression)
-  - `EXCLUDED` pseudo-table access in update expressions
-  - Bulk multi-row upsert
-  - DynamoDB: `PutItem` vs. conditional `UpdateItem`
-- Mutation result metadata
-  - Affected row counts for update and delete
-  - Distinguish "no rows matched" from "matched but unchanged"
+- Mutation result metadata — affected row counts and "matched but unchanged" detection
 - Bulk insert / update
-- Database-side function expressions in create/update
-  - `toasty::stmt::now()` → `NOW()` / `CURRENT_TIMESTAMP` / `datetime('now')`
-  - Future scalar functions: `COALESCE`, `LOWER`, `UPPER`, `LENGTH`
+- Database-side function expressions in create/update — `now()`, `COALESCE`, `LOWER`, `UPPER`, `LENGTH`
 - Soft deletion — tombstone semantics with transparent query filtering ([#462])
 
 [#422]: https://github.com/tokio-rs/toasty/issues/422
@@ -140,14 +100,8 @@ the entry lands here.
 
 ## Transactions
 
-- Cross-database atomic batch API
-  - Works across SQL and NoSQL
-  - Type-safe operation batching
-  - All-or-nothing semantics
-- Manual SQL transactions
-  - `BEGIN` / `COMMIT` / `ROLLBACK`
-  - Savepoints and nested transactions
-  - Isolation-level configuration
+- Cross-database atomic batch API — type-safe, all-or-nothing across SQL and NoSQL
+- Manual SQL transactions — `BEGIN` / `COMMIT` / `ROLLBACK`, savepoints, isolation levels
 - Row-level locking — `SELECT ... FOR UPDATE` / `SKIP LOCKED` ([#424])
 
 [#424]: https://github.com/tokio-rs/toasty/issues/424
@@ -155,9 +109,6 @@ the entry lands here.
 ## Migrations
 
 - Schema migration system ([#190])
-  - Migration generation from schema diffs
-  - Rollback support
-  - Schema versioning
 - `toasty-cli` for schema management ([#190])
 - Schema lock file for tracking applied migrations ([#136])
 
@@ -167,15 +118,8 @@ the entry lands here.
 ## Drivers
 
 - DynamoDB Scan support ([design](design/ddb-scan.md), [#741])
-  - `Operation::Scan` for queries with no viable index
-  - Internal pagination loop following `LastEvaluatedKey`
-  - Cursor-based user-facing pagination
-  - Planner error for `order_by` on scan queries
 - Raw SQL escape hatch ([#93])
-  - Arbitrary SQL statements
-  - Parameterized queries with type-safe bindings
-  - Raw fragments inside typed queries
-- Connection pooling improvements ([#378], [#384])
+- Connection pooling improvements ([#384])
 - New driver backends
   - MongoDB — `toasty-mongodb` ([#48])
   - DuckDB ([#608])
@@ -187,7 +131,6 @@ the entry lands here.
 [#78]: https://github.com/tokio-rs/toasty/issues/78
 [#82]: https://github.com/tokio-rs/toasty/issues/82
 [#93]: https://github.com/tokio-rs/toasty/issues/93
-[#378]: https://github.com/tokio-rs/toasty/issues/378
 [#384]: https://github.com/tokio-rs/toasty/issues/384
 [#608]: https://github.com/tokio-rs/toasty/issues/608
 [#669]: https://github.com/tokio-rs/toasty/issues/669
@@ -195,22 +138,17 @@ the entry lands here.
 
 ## Macros
 
-- `toasty::query!()` — succinct query syntax ([design](design/query-macro.md))
+- `toasty::query!()` — succinct query syntax ([design](design/query-macro.md), [#808])
 - `toasty::create!()` — concise record creation ([design](design/static-assertions-create-macro.md))
 - `toasty::update!()` — concise updates
 
+[#808]: https://github.com/tokio-rs/toasty/issues/808
+
 ## Runtime
 
-- Concurrent task execution
-  - In-flight task manager (replaces the ad-hoc background task)
-  - Run independent plan nodes concurrently
-- Cancellation and cleanup
-  - Detect dropped completion futures
-  - Roll back incomplete transactions on cancel
-  - Release resources without orphaned state
-- Internal instrumentation
-  - Per-phase timing (planning, simplify, exec, serialization)
-  - Planner CPU time to surface expensive plans
+- Concurrent task execution — run independent plan nodes concurrently
+- Cancellation and cleanup — drop detection, transaction rollback on cancel
+- Internal instrumentation — per-phase timing, planner CPU time
 
 ## Observability
 

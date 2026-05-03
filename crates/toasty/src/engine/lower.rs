@@ -1,4 +1,5 @@
 mod expr_pattern;
+mod include;
 mod insert;
 mod paginate;
 mod relation;
@@ -13,14 +14,14 @@ use toasty_core::{
     Result, Schema,
     driver::Capability,
     schema::{
-        app::{self, FieldTy, ModelRoot},
+        app::{self, ModelRoot},
         db::ColumnId,
         mapping,
     },
     stmt::{self, IntoExprTarget, VisitMut, visit_mut},
 };
 
-use crate::engine::{Engine, HirStatement, hir, simplify::Simplify};
+use crate::engine::{Engine, HirStatement, fold, hir, simplify::Simplify};
 
 impl Engine {
     pub(super) fn lower_stmt(&self, stmt: stmt::Statement) -> Result<HirStatement> {
@@ -283,12 +284,12 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     let maybe_res = self.lower_expr_binary_op(
                         stmt::BinaryOp::Eq,
                         &mut e.expr,
-                        e.query.returning_mut_unwrap().as_expr_mut_unwrap(),
+                        e.query.returning_mut_unwrap().as_project_mut_unwrap(),
                     );
 
                     assert!(maybe_res.is_none(), "TODO");
 
-                    let returning = e.query.returning_mut_unwrap().as_expr_mut_unwrap();
+                    let returning = e.query.returning_mut_unwrap().as_project_mut_unwrap();
 
                     if !returning.is_record() {
                         *returning = stmt::Expr::record([returning.take()]);
@@ -313,7 +314,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     let maybe_res = self.lower_expr_binary_op(
                         stmt::BinaryOp::Eq,
                         &mut e.expr,
-                        e.query.returning_mut_unwrap().as_expr_mut_unwrap(),
+                        e.query.returning_mut_unwrap().as_project_mut_unwrap(),
                     );
 
                     assert!(maybe_res.is_none(), "TODO");
@@ -415,7 +416,10 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     visit_mut::visit_expr_stmt_mut(child, &mut expr_stmt);
                 });
 
-                self.state.engine.simplify_stmt(&mut *expr_stmt.stmt);
+                // Cheap canonicalization is enough here: the parent statement's
+                // post-lowering simplify will recursively visit this embedded
+                // sub-statement and apply the heavyweight rules.
+                fold::fold_stmt(&mut *expr_stmt.stmt);
 
                 *expr = self.new_sub_statement(source_id, target_id, expr_stmt.stmt);
 
@@ -423,7 +427,9 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     self.curr_stmt_info().deps.insert(target_id);
                 }
             }
-            stmt::Expr::StartsWith(_) if self.capability().sql => {
+            stmt::Expr::StartsWith(_)
+                if self.capability().sql && !self.capability().native_starts_with =>
+            {
                 self.lower_expr_starts_with(expr);
             }
             stmt::Expr::Exists(_) if !self.capability().sql => {
@@ -439,7 +445,10 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 });
 
                 let mut stmt = stmt::Statement::Query(*expr_exists.subquery);
-                self.state.engine.simplify_stmt(&mut stmt);
+                // Cheap canonicalization is enough here: the parent statement's
+                // post-lowering simplify will recursively visit this embedded
+                // sub-statement and apply the heavyweight rules.
+                fold::fold_stmt(&mut stmt);
 
                 let arg = self.new_sub_statement(source_id, target_id, Box::new(stmt));
 
@@ -497,47 +506,25 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
     fn visit_returning_mut(&mut self, i: &mut stmt::Returning) {
         if let stmt::Returning::Model { include } = i {
-            // Capture the include clause as we will be using it to generate
-            // inclusion statements.
-            let mut include = std::mem::take(include);
+            // Start from the schema's pre-computed default returning — every
+            // `#[deferred]` field, top-level or nested, is already `Null`.
+            // `process_top_level_includes` then splices loaded forms in for
+            // the fields named by include paths (and for every deferred field
+            // when this is an `INSERT ... RETURNING`).
+            let mut returning = self.mapping_unwrap().default_returning.clone();
+            let include_paths = std::mem::take(include);
+            let is_insert = self.cx.is_insert();
 
-            let mut returning = self.mapping_unwrap().table_to_model.lower_returning_model();
+            self.process_top_level_includes(&mut returning, &include_paths, is_insert);
 
-            // Sort by first field so paths sharing a prefix are contiguous,
-            // then emit one merged subquery per group — without this, each
-            // `.include()` call would overwrite the previous subquery at the
-            // same field slot (see issue #691).
-            include.sort_by_key(|p| *p.projection.as_slice().first().expect("empty include path"));
-
-            let mut nested: Vec<stmt::Projection> = vec![];
-            let mut current: Option<usize> = None;
-
-            for path in include {
-                let [first, rest @ ..] = path.projection.as_slice() else {
-                    unreachable!("guaranteed non-empty by sort_by_key above")
-                };
-
-                if current != Some(*first) {
-                    if let Some(field) = current {
-                        self.build_include_subquery(&mut returning, field, &nested);
-                        nested.clear();
-                    }
-                    current = Some(*first);
-                }
-                nested.push(stmt::Projection::from(rest));
-            }
-            if let Some(field) = current {
-                self.build_include_subquery(&mut returning, field, &nested);
-            }
-
-            *i = stmt::Returning::Expr(returning);
+            *i = stmt::Returning::Project(returning);
         }
 
         // For multi-row INSERT returning, visit each row with its row index so
         // that sub-statements (e.g., child INSERTs for HasOne relations) capture
         // the correct parent row index via scope_statement.
         if matches!(&self.cx, LoweringContext::Insert(..))
-            && let stmt::Returning::Value(stmt::Expr::List(list)) = i
+            && let stmt::Returning::Expr(stmt::Expr::List(list)) = i
         {
             for (index, item) in list.items.iter_mut().enumerate() {
                 self.lower_returning_for_row(index).visit_expr_mut(item);
@@ -594,7 +581,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             lower.constantize_insert_returning(returning, &stmt.source);
 
             if stmt.source.single
-                && let stmt::Returning::Value(expr) = &returning
+                && let stmt::Returning::Expr(expr) = &returning
             {
                 // Not strictly true, but there is nothing that needs to
                 // return a list at this point for a "single" query. If this
@@ -661,7 +648,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 }
 
                 // Step 2 — build the returning expression.
-                *returning = stmt::Returning::Expr(build_update_returning(
+                *returning = stmt::Returning::Project(build_update_returning(
                     model.id,
                     None,
                     &mapping.fields,
@@ -847,116 +834,6 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             }
             _ => todo!("cx={:#?}", self.cx),
         }
-    }
-
-    fn build_include_subquery(
-        &mut self,
-        returning: &mut stmt::Expr,
-        field_index: usize,
-        nested: &[stmt::Projection],
-    ) {
-        let field = &self.model_unwrap().fields[field_index];
-
-        let (mut stmt, target_model_id) = match &field.ty {
-            FieldTy::HasMany(rel) => (
-                stmt::Query::new_select(
-                    rel.target,
-                    stmt::Expr::eq(
-                        stmt::Expr::ref_parent_model(),
-                        stmt::Expr::ref_self_field(rel.pair),
-                    ),
-                ),
-                rel.target,
-            ),
-            // To handle single relations, we need a new query modifier that
-            // returns a single record and not a list. This matters for the type
-            // system.
-            FieldTy::BelongsTo(rel) => {
-                let source_fk;
-                let target_pk;
-
-                if let [fk_field] = &rel.foreign_key.fields[..] {
-                    source_fk = stmt::Expr::ref_parent_field(fk_field.source);
-                    target_pk = stmt::Expr::ref_self_field(fk_field.target);
-                } else {
-                    let mut source_fk_fields = vec![];
-                    let mut target_pk_fields = vec![];
-
-                    for fk_field in &rel.foreign_key.fields {
-                        source_fk_fields.push(stmt::Expr::ref_parent_field(fk_field.source));
-                        target_pk_fields.push(stmt::Expr::ref_parent_field(fk_field.source));
-                    }
-
-                    source_fk = stmt::Expr::record_from_vec(source_fk_fields);
-                    target_pk = stmt::Expr::record_from_vec(target_pk_fields);
-                }
-
-                let mut query =
-                    stmt::Query::new_select(rel.target, stmt::Expr::eq(source_fk, target_pk));
-                query.single = true;
-                (query, rel.target)
-            }
-            FieldTy::HasOne(rel) => {
-                let mut query = stmt::Query::new_select(
-                    rel.target,
-                    stmt::Expr::eq(
-                        stmt::Expr::ref_parent_model(),
-                        stmt::Expr::ref_self_field(rel.pair),
-                    ),
-                );
-                query.single = true;
-                (query, rel.target)
-            }
-            _ => todo!(),
-        };
-
-        // Attach each non-empty remainder as a nested include on the subquery.
-        // Empty remainders (from a bare `.include(posts())`) need no nested
-        // include — the subquery itself satisfies them. The lowering pipeline
-        // will recursively group and process the nested includes when it
-        // encounters `Returning::Model` on this subquery.
-        for rest in nested {
-            if !rest.is_empty() {
-                stmt.include(stmt::Path {
-                    root: stmt::PathRoot::Model(target_model_id),
-                    projection: rest.clone(),
-                });
-            }
-        }
-
-        // Simplify the new stmt to handle relations.
-        Simplify::with_context(self.expr_cx).visit_stmt_query_mut(&mut stmt);
-
-        let mut sub_expr = stmt::Expr::stmt(stmt);
-
-        // For nullable single relations (HasOne<Option<T>>, BelongsTo<Option<T>>),
-        // wrap the sub-expression with a Let + Match to encode the result using
-        // variant-encoded values that distinguish loaded-None from unloaded.
-        //
-        //   Let {
-        //     binding: Stmt(query),
-        //     body: Match {
-        //       subject: Arg(0),
-        //       arms: [Null → I64(0)],
-        //       else_: Arg(0)
-        //     }
-        //   }
-        if field.nullable() && !field.ty.is_has_many() {
-            sub_expr = stmt::Expr::Let(stmt::ExprLet {
-                bindings: vec![sub_expr],
-                body: Box::new(stmt::Expr::match_expr(
-                    stmt::Expr::arg(0),
-                    vec![stmt::MatchArm {
-                        pattern: stmt::Value::Null,
-                        expr: stmt::Expr::from(0i64),
-                    }],
-                    // Non-null: pass through as-is (raw model record)
-                    stmt::Expr::arg(0),
-                )),
-            });
-        }
-
-        returning.entry_mut(field_index).insert(sub_expr);
     }
 
     /// Returns the ArgId for the new reference
