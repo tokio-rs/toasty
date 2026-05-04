@@ -215,13 +215,7 @@ fn expand_nested_check_for_entry(
 
     match &entry.value {
         FieldValue::Single(sub_fields) => {
-            let field_names = field_name_strs(sub_fields);
-            let deeper = expand_nested_checks(sub_fields, &nested_path);
-            Some(expand_nested_validation_block(
-                &nested_path,
-                &field_names,
-                deeper,
-            ))
+            Some(expand_nested_check_for_sub_fields(sub_fields, &nested_path))
         }
         FieldValue::List(items) => {
             // Validate each FieldSet in the list. All items in a list target
@@ -231,13 +225,7 @@ fn expand_nested_check_for_entry(
                 .iter()
                 .filter_map(|item| match item {
                     FieldValue::Single(sub_fields) => {
-                        let field_names = field_name_strs(sub_fields);
-                        let deeper = expand_nested_checks(sub_fields, &nested_path);
-                        Some(expand_nested_validation_block(
-                            &nested_path,
-                            &field_names,
-                            deeper,
-                        ))
+                        Some(expand_nested_check_for_sub_fields(sub_fields, &nested_path))
                     }
                     _ => None,
                 })
@@ -251,6 +239,17 @@ fn expand_nested_check_for_entry(
         }
         FieldValue::Expr(_) => None,
     }
+}
+
+/// Emit a validation block for a `FieldSet` of sub-fields at `nested_path`,
+/// recursively including checks for any deeper nested fields.
+fn expand_nested_check_for_sub_fields(
+    sub_fields: &FieldSet,
+    nested_path: &TokenStream,
+) -> TokenStream {
+    let field_names = field_name_strs(sub_fields);
+    let deeper = expand_nested_checks(sub_fields, nested_path);
+    expand_nested_validation_block(nested_path, &field_names, deeper)
 }
 
 /// Generate a monomorphization-based validation block for a nested level.
