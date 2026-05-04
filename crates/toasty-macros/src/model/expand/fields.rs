@@ -20,11 +20,13 @@ impl Expand<'_> {
         let field_list_struct_ident = self.field_list_struct_ident();
 
         quote! {
+            #[diagnostic::do_not_recommend]
             impl<__Origin> #toasty::ValidateCreate for #field_struct_ident<__Origin> {
                 const CREATE_META: &'static #toasty::CreateMeta =
                     &<#model_ident as #toasty::Model>::CREATE_META;
             }
 
+            #[diagnostic::do_not_recommend]
             impl<__Origin> #toasty::ValidateCreate for #field_list_struct_ident<__Origin> {
                 const CREATE_META: &'static #toasty::CreateMeta =
                     &<#model_ident as #toasty::Model>::CREATE_META;
