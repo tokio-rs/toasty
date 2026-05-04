@@ -393,11 +393,11 @@ impl Capability {
 
         test_connection_pool: true,
 
-        // PostgreSQL natively supports `x = ANY($1)` and
-        // `x IN (SELECT unnest($1))`, but the SQL serializer does not yet
-        // emit either form. Until that lands, IN-list rhs decomposes to
-        // per-element placeholders, same as the other backends.
-        // Inherits `in_array: false` and `array_binding: true` from `Self::SQLITE`.
+        // PostgreSQL accepts a single bound array as the rhs of IN
+        // (the SQL serializer emits `x = ANY($1)`). The parameter
+        // extractor keeps the rhs as one `Value::List` parameter.
+        in_array: true,
+
         ..Self::SQLITE
     };
 

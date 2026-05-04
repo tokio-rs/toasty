@@ -43,9 +43,18 @@ pub(crate) fn extract_params(
     let mut extractor = Extractor {
         params: &mut params,
         capability,
-        in_list_rhs_depth: 0,
+        decompose_depth: 0,
     };
     extractor.visit_stmt_mut(stmt);
+
+    // Phase 1.5: For backends with `in_array` support, phase 1 bundled
+    // every IN-list rhs whose elements were scalars. Some lhs column
+    // types (notably native enums) have no driver-level array path; for
+    // those we decompose the bundled Arg back into per-element Args.
+    if capability.in_array {
+        let cx = stmt::ExprContext::new(&schema.db);
+        decompose_unsupported_in_lists(stmt, &cx, &mut params);
+    }
 
     // Phase 2+3: Bidirectional type inference — refine param types
     refine_param_types(stmt, &schema.db, &mut params);
@@ -108,12 +117,19 @@ impl Ty {
 ///   Without it, the rhs of an `IN` predicate must decompose to
 ///   `(?1, ?2, …)` even when the driver could bind an array elsewhere.
 ///
-/// `in_list_rhs_depth` counts enclosing `IN`-list rhs positions so the
-/// same `Value::List` node can take either path depending on where it sits.
+/// For an `IN`-list rhs, the visitor additionally checks whether the lhs
+/// column's storage type is one the driver can bind as an array. If not
+/// (e.g. a native `Enum`), the rhs decomposes regardless — `array_binding`
+/// alone isn't enough when the array element type has no driver-level
+/// array path.
+///
+/// `decompose_depth` counts enclosing positions where bundling is *forbidden*
+/// by capability alone — namely an `IN`-list rhs on a backend without
+/// `in_array`. Zero means bundling is fine.
 struct Extractor<'a> {
     params: &'a mut Vec<TypedValue>,
     capability: &'a Capability,
-    in_list_rhs_depth: u32,
+    decompose_depth: u32,
 }
 
 impl Extractor<'_> {
@@ -121,15 +137,7 @@ impl Extractor<'_> {
     /// kept whole (one bind parameter) rather than decomposed into per-
     /// element parameters.
     fn can_bundle_scalar_list(&self) -> bool {
-        if !self.capability.array_binding {
-            return false;
-        }
-        if self.in_list_rhs_depth > 0 && !self.capability.in_array {
-            // Inside an `IN` rhs and the dialect has no `IN <array>` form:
-            // SQL would render as `WHERE x IN ?n`, which is invalid.
-            return false;
-        }
-        true
+        self.capability.array_binding && self.decompose_depth == 0
     }
 
     /// Push `value` as a fresh parameter and return the matching `Arg`.
@@ -186,13 +194,19 @@ impl Extractor<'_> {
 impl VisitMut for Extractor<'_> {
     /// IN-list rhs gets a context flag pushed around just the `list` child.
     /// The lhs is visited normally — only the rhs participates in the
-    /// "must decompose" decision.
+    /// bundle / decompose decision.
     fn visit_expr_in_list_mut(&mut self, node: &mut stmt::ExprInList) {
         self.visit_expr_mut(&mut node.expr);
 
-        self.in_list_rhs_depth += 1;
+        // Without `in_array`, IN-list rhs cannot be a bound array.
+        let must_decompose = !self.capability.in_array;
+        if must_decompose {
+            self.decompose_depth += 1;
+        }
         self.visit_expr_mut(&mut node.list);
-        self.in_list_rhs_depth -= 1;
+        if must_decompose {
+            self.decompose_depth -= 1;
+        }
     }
 
     /// Post-order traversal. Children are processed first (scalar values
@@ -242,6 +256,167 @@ fn is_scalar_leaf(value: &stmt::Value) -> bool {
         value,
         stmt::Value::Null | stmt::Value::Record(_) | stmt::Value::List(_)
     )
+}
+
+// ============================================================================
+// Phase 1.5: Decompose bundled IN-list rhs whose lhs has no array path
+// ============================================================================
+
+/// Returns true if a `db::Type` is one the driver array-binding path
+/// supports across SQL backends. Excludes types whose array form needs
+/// special driver handling — most importantly native enum types, where
+/// PostgreSQL would need an OID-aware enum-array binder.
+fn is_array_bindable_element(ty: &db::Type) -> bool {
+    matches!(
+        ty,
+        db::Type::Boolean
+            | db::Type::Integer(_)
+            | db::Type::UnsignedInteger(_)
+            | db::Type::Float(_)
+            | db::Type::Text
+            | db::Type::VarChar(_)
+            | db::Type::Uuid
+            | db::Type::Numeric(_)
+    )
+}
+
+/// Walk the statement with proper scoping and undo the IN-list bundling
+/// where the lhs's column type isn't one the driver can ship as an array.
+/// The bundled rhs is `Expr::Arg(n)` whose param is `Value::List([...])`;
+/// we replace the Arg with `Expr::List([Arg(m1), Arg(m2), …])` and the
+/// single param with one per element. The original (now unreferenced)
+/// param is replaced with `Value::Null` to avoid renumbering.
+fn decompose_unsupported_in_lists(
+    stmt: &mut stmt::Statement,
+    cx: &Cx<'_>,
+    params: &mut Vec<TypedValue>,
+) {
+    // The cx scoping borrows the statement immutably; the filter rewrite
+    // needs it mutably. Take each filter out first (so the immutable
+    // borrow that scoping needs is uncontested), do the rewrite, put it
+    // back.
+    match stmt {
+        stmt::Statement::Insert(insert) => {
+            // Take the filter out (releases the mut borrow on insert),
+            // scope, rewrite, put back.
+            let mut filter = match &mut insert.source.body {
+                stmt::ExprSet::Select(select) => std::mem::take(&mut select.filter),
+                _ => return,
+            };
+            {
+                let cx_insert = cx.scope(&*insert);
+                if let stmt::ExprSet::Select(select) = &insert.source.body {
+                    let cx_select = cx_insert.scope(&**select);
+                    decompose_in_filter(&mut filter, &cx_select, params);
+                }
+            }
+            if let stmt::ExprSet::Select(select) = &mut insert.source.body {
+                select.filter = filter;
+            }
+        }
+        stmt::Statement::Update(update) => {
+            let mut filter = std::mem::take(&mut update.filter);
+            {
+                let scoped = cx.scope(&*update);
+                decompose_in_filter(&mut filter, &scoped, params);
+            }
+            update.filter = filter;
+        }
+        stmt::Statement::Delete(delete) => {
+            let mut filter = std::mem::take(&mut delete.filter);
+            {
+                let scoped = cx.scope(&*delete);
+                decompose_in_filter(&mut filter, &scoped, params);
+            }
+            delete.filter = filter;
+        }
+        stmt::Statement::Query(query) => {
+            let mut filter = match &mut query.body {
+                stmt::ExprSet::Select(select) => std::mem::take(&mut select.filter),
+                _ => return,
+            };
+            {
+                let cx_query = cx.scope(&*query);
+                if let stmt::ExprSet::Select(select) = &query.body {
+                    let cx_select = cx_query.scope(&**select);
+                    decompose_in_filter(&mut filter, &cx_select, params);
+                }
+            }
+            if let stmt::ExprSet::Select(select) = &mut query.body {
+                select.filter = filter;
+            }
+        }
+    }
+}
+
+fn decompose_in_filter(filter: &mut stmt::Filter, cx: &Cx<'_>, params: &mut Vec<TypedValue>) {
+    if let Some(expr) = &mut filter.expr {
+        decompose_in_expr(expr, cx, params);
+    }
+}
+
+fn decompose_in_expr(expr: &mut stmt::Expr, cx: &Cx<'_>, params: &mut Vec<TypedValue>) {
+    match expr {
+        stmt::Expr::And(and) => {
+            for op in &mut and.operands {
+                decompose_in_expr(op, cx, params);
+            }
+        }
+        stmt::Expr::Or(or) => {
+            for op in &mut or.operands {
+                decompose_in_expr(op, cx, params);
+            }
+        }
+        stmt::Expr::Not(not) => decompose_in_expr(&mut not.expr, cx, params),
+        stmt::Expr::InList(in_list) => {
+            // Only act on the bundled-Arg shape — a decomposed `Expr::List`
+            // rhs already has individual placeholders.
+            let stmt::Expr::Arg(arg) = &*in_list.list else {
+                return;
+            };
+            let arg_pos = arg.position;
+
+            // Resolve lhs column type. Bail if lhs isn't a column ref or
+            // resolves to something else (e.g. a foreign-key field that
+            // lowering didn't simplify to a column).
+            let stmt::Expr::Reference(reference @ stmt::ExprReference::Column(_)) = &*in_list.expr
+            else {
+                return;
+            };
+            let stmt::ResolvedRef::Column(col) = cx.resolve_expr_reference(reference) else {
+                return;
+            };
+
+            if is_array_bindable_element(&col.storage_ty) {
+                return;
+            }
+
+            // Pull the bundled list out of params, leave a Null sentinel
+            // behind to keep param positions stable for any other
+            // references (there shouldn't be any, but it's cheap insurance).
+            let stmt::Value::List(items) =
+                std::mem::replace(&mut params[arg_pos].value, stmt::Value::Null)
+            else {
+                // Not a bundled list — nothing to decompose.
+                return;
+            };
+            params[arg_pos].ty = db::Type::from_value(&stmt::Value::Null);
+
+            // Append one param per element, build the matching List of Args.
+            let new_items: Vec<stmt::Expr> = items
+                .into_iter()
+                .map(|value| {
+                    let ty = db::Type::from_value(&value);
+                    let position = params.len();
+                    params.push(TypedValue { value, ty });
+                    stmt::Expr::arg(position)
+                })
+                .collect();
+
+            *in_list.list = stmt::Expr::List(stmt::ExprList { items: new_items });
+        }
+        _ => {}
+    }
 }
 
 // ============================================================================
@@ -561,6 +736,14 @@ fn check_list(list_expr: &stmt::Expr, elem_ty: &Ty, params: &mut [TypedValue]) {
         stmt::Expr::List(list) => {
             for item in &list.items {
                 check(item, elem_ty, params);
+            }
+        }
+        // Bundled IN-list rhs: a single `Arg` whose param holds the whole
+        // array. The param needs the array type (e.g., `db::Type::Array(Text)`),
+        // not the scalar element type, so the driver binds it as an array.
+        stmt::Expr::Arg(arg) if elem_ty.is_column() => {
+            if let Some(elem_db_ty) = elem_ty.db_type() {
+                params[arg.position].ty = db::Type::Array(Box::new(elem_db_ty.clone()));
             }
         }
         _ => {

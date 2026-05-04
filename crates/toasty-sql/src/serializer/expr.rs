@@ -40,7 +40,18 @@ impl ToSql for &stmt::Expr {
                 fmt!(cx, f, Ident(name));
             }
             stmt::Expr::InList(expr) => {
-                fmt!(cx, f, expr.expr " IN " expr.list);
+                // When the rhs was bundled into a single bound array
+                // parameter (`Capability::in_array`), `IN <arg>` is invalid
+                // SQL. PostgreSQL accepts the bound-array form via
+                // `x = ANY($1)`; other dialects bundle only when they have
+                // an equivalent — extend this match when they land.
+                if matches!(&*expr.list, stmt::Expr::Arg(_))
+                    && matches!(f.serializer.flavor, Flavor::Postgresql)
+                {
+                    fmt!(cx, f, expr.expr " = ANY(" expr.list ")");
+                } else {
+                    fmt!(cx, f, expr.expr " IN " expr.list);
+                }
             }
             stmt::Expr::InSubquery(expr) => {
                 fmt!(cx, f, expr.expr " IN (" expr.query ")");
