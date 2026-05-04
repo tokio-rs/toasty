@@ -125,6 +125,27 @@ pub struct Capability {
     /// Whether the driver supports backward (previous-page) pagination.
     /// SQL: true. DynamoDB: false.
     pub backward_pagination: bool,
+
+    /// Whether the driver accepts a `Value::List` as a single bind
+    /// parameter representing a scalar array.
+    ///
+    /// PostgreSQL binds a native array. SQLite and (eventually) MySQL
+    /// bind JSON-encoded text. When `false`, scalar lists in
+    /// non-decomposable positions (e.g. a `Vec<scalar>` column value) have
+    /// nowhere to go — the schema layer is responsible for rejecting
+    /// `Vec<scalar>` fields on such backends.
+    pub array_binding: bool,
+    /// Whether `x IN <bound_array>` is a valid SQL form (e.g. PostgreSQL
+    /// `x = ANY($1)` / `x IN (SELECT unnest($1))`).
+    ///
+    /// When `true`, the parameter extractor keeps an `IN`-list rhs as a
+    /// single bound array; the SQL serializer is expected to emit the
+    /// matching predicate form. When `false`, the rhs decomposes to
+    /// per-element parameters (`x IN (?1, ?2, ?3)`).
+    ///
+    /// Implies [`Capability::array_binding`]: there is no point lowering
+    /// to `IN <array>` if the driver cannot bind an array.
+    pub in_array: bool,
 }
 
 /// How a backend stores `Vec<T>` (and other ordered collection) fields whose
@@ -337,6 +358,11 @@ impl Capability {
         test_connection_pool: false,
 
         backward_pagination: true,
+
+        // SQLite binds a `Value::List` parameter as JSON text.
+        array_binding: true,
+        // No native `IN <array>` form: IN-list rhs decomposes to ?1, ?2, …
+        in_array: false,
     };
 
     /// PostgreSQL capabilities
@@ -367,6 +393,10 @@ impl Capability {
 
         test_connection_pool: true,
 
+        // PostgreSQL accepts a single bound array as the rhs of IN
+        // (`x = ANY($1)` / `x IN (SELECT unnest($1))`).
+        in_array: true,
+
         ..Self::SQLITE
     };
 
@@ -395,6 +425,10 @@ impl Capability {
         decimal_arbitrary_precision: false,
 
         test_connection_pool: true,
+
+        // MySQL driver does not yet implement JSON-list binding; schema
+        // build should reject `Vec<scalar>` until the driver lands.
+        array_binding: false,
 
         ..Self::SQLITE
     };
@@ -433,6 +467,9 @@ impl Capability {
         test_connection_pool: false,
 
         backward_pagination: false,
+
+        array_binding: false,
+        in_array: false,
     };
 }
 

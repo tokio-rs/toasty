@@ -19,9 +19,9 @@
 //! merging.
 
 use toasty_core::{
-    driver::operation::TypedValue,
+    driver::{Capability, operation::TypedValue},
     schema::{Schema, db},
-    stmt,
+    stmt::{self, visit_mut::VisitMut},
 };
 
 /// Expression context bound to the database schema.
@@ -33,10 +33,19 @@ type Cx<'a> = stmt::ExprContext<'a, db::Schema>;
 
 /// Extract bind parameters from a statement, replacing scalar values with
 /// `Expr::Arg(n)` placeholders and inferring precise `db::Type` for each.
-pub(crate) fn extract_params(stmt: &mut stmt::Statement, schema: &Schema) -> Vec<TypedValue> {
+pub(crate) fn extract_params(
+    stmt: &mut stmt::Statement,
+    schema: &Schema,
+    capability: &Capability,
+) -> Vec<TypedValue> {
     // Phase 1: Mechanical extraction — replace values with Arg(n)
     let mut params = Vec::new();
-    extract_values(stmt, &mut params);
+    let mut extractor = Extractor {
+        params: &mut params,
+        capability,
+        in_list_rhs_depth: 0,
+    };
+    extractor.visit_stmt_mut(stmt);
 
     // Phase 2+3: Bidirectional type inference — refine param types
     refine_param_types(stmt, &schema.db, &mut params);
@@ -86,111 +95,153 @@ impl Ty {
 // Phase 1: Mechanical value extraction
 // ============================================================================
 
-/// Replace all scalar `Value` nodes with `Arg(n)` placeholders.
-/// Initialize each param's `ty` from the value itself.
-fn extract_values(stmt: &mut stmt::Statement, params: &mut Vec<TypedValue>) {
-    // Pre-pass: `IN <list>` predicates expect their rhs to render as a tuple
-    // of placeholders (`x IN (?1, ?2, ?3)`), so a `Value::List` rhs must be
-    // unrolled before extraction. Without this, `is_extractable_scalar` would
-    // bundle the whole list as a single parameter — correct for collection
-    // columns but wrong here.
-    unroll_in_list_value_lists(stmt);
+/// Stateful AST visitor that replaces `Value` nodes with `Arg(n)`
+/// placeholders.
+///
+/// Whether a `Value::List` of scalars rides as one parameter or decomposes
+/// into per-element parameters depends on two backend capabilities and on
+/// **position**, tracked through the visit:
+///
+/// - [`Capability::array_binding`] — driver can bind a `Value::List` at
+///   all. Without it, no list ever bundles.
+/// - [`Capability::in_array`] — `IN <bound_array>` is a valid SQL form.
+///   Without it, the rhs of an `IN` predicate must decompose to
+///   `(?1, ?2, …)` even when the driver could bind an array elsewhere.
+///
+/// `in_list_rhs_depth` counts enclosing `IN`-list rhs positions so the
+/// same `Value::List` node can take either path depending on where it sits.
+struct Extractor<'a> {
+    params: &'a mut Vec<TypedValue>,
+    capability: &'a Capability,
+    in_list_rhs_depth: u32,
+}
 
-    stmt::visit_mut::for_each_expr_mut(stmt, |expr| {
+impl Extractor<'_> {
+    /// Whether a `Value::List` of scalars at the current position should be
+    /// kept whole (one bind parameter) rather than decomposed into per-
+    /// element parameters.
+    fn can_bundle_scalar_list(&self) -> bool {
+        if !self.capability.array_binding {
+            return false;
+        }
+        if self.in_list_rhs_depth > 0 && !self.capability.in_array {
+            // Inside an `IN` rhs and the dialect has no `IN <array>` form:
+            // SQL would render as `WHERE x IN ?n`, which is invalid.
+            return false;
+        }
+        true
+    }
+
+    /// Push `value` as a fresh parameter and return the matching `Arg`.
+    fn push_param(&mut self, value: stmt::Value) -> stmt::Expr {
+        let ty = db::Type::from_value(&value);
+        let position = self.params.len();
+        self.params.push(TypedValue { value, ty });
+        stmt::Expr::arg(position)
+    }
+
+    /// Recursively destructure a non-extractable composite value. Used for
+    /// rows in batch INSERT (`Value::Record` of fields) and for IN-list-rhs
+    /// lists that the backend cannot accept whole.
+    ///
+    /// Field positions inside a destructured `Record` revisit the same
+    /// "scalar-list = one parameter" decision: a `Vec<scalar>` field of an
+    /// INSERT row should bundle even though its enclosing record had to
+    /// destructure.
+    fn destructure(&mut self, value: stmt::Value) -> stmt::Expr {
+        match value {
+            stmt::Value::Null => stmt::Expr::Value(stmt::Value::Null),
+            stmt::Value::Record(record) => {
+                let fields = record
+                    .fields
+                    .into_iter()
+                    .map(|f| self.destructure_field(f))
+                    .collect();
+                stmt::Expr::Record(stmt::ExprRecord::from_vec(fields))
+            }
+            stmt::Value::List(values) => {
+                let items = values.into_iter().map(|v| self.destructure(v)).collect();
+                stmt::Expr::List(stmt::ExprList { items })
+            }
+            scalar => self.push_param(scalar),
+        }
+    }
+
+    /// Like [`destructure`], but a `Value::List` of scalars is kept whole
+    /// (one bind parameter) when the current context allows it. Used for
+    /// the immediate fields of a record so a `Vec<scalar>` column value
+    /// rides as one parameter even though its enclosing row record must
+    /// be destructured.
+    fn destructure_field(&mut self, value: stmt::Value) -> stmt::Expr {
+        if let stmt::Value::List(items) = &value
+            && items.iter().all(is_scalar_leaf)
+            && self.can_bundle_scalar_list()
+        {
+            return self.push_param(value);
+        }
+        self.destructure(value)
+    }
+}
+
+impl VisitMut for Extractor<'_> {
+    /// IN-list rhs gets a context flag pushed around just the `list` child.
+    /// The lhs is visited normally — only the rhs participates in the
+    /// "must decompose" decision.
+    fn visit_expr_in_list_mut(&mut self, node: &mut stmt::ExprInList) {
+        self.visit_expr_mut(&mut node.expr);
+
+        self.in_list_rhs_depth += 1;
+        self.visit_expr_mut(&mut node.list);
+        self.in_list_rhs_depth -= 1;
+    }
+
+    /// Post-order traversal. Children are processed first (scalar values
+    /// inside them get extracted as their own parameters), then the
+    /// current node decides whether it itself is a parameter, a structural
+    /// expression, or untouched.
+    fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
+        stmt::visit_mut::visit_expr_mut(self, expr);
+
         match expr {
-            // Scalar value → extract
-            stmt::Expr::Value(value) if is_extractable_scalar(value) => {
-                let ty = db::Type::from_value(value);
-                let position = params.len();
+            // Plain scalar → one parameter.
+            stmt::Expr::Value(value) if is_scalar_leaf(value) => {
                 let value = std::mem::replace(value, stmt::Value::Null);
-                params.push(TypedValue { value, ty });
-                *expr = stmt::Expr::arg(position);
+                *expr = self.push_param(value);
             }
 
-            // Value::Record or Value::List → take ownership, convert to
-            // Expr::Record/Expr::List with extracted fields
+            // Composite values (records, lists) need a context-aware decision.
             stmt::Expr::Value(value @ (stmt::Value::Record(_) | stmt::Value::List(_))) => {
                 let owned = std::mem::replace(value, stmt::Value::Null);
-                *expr = value_to_extracted_expr(owned, params);
+
+                // A list of all-scalars in a position that supports an array
+                // bind ships as one parameter. Anywhere else we destructure:
+                //   - records always destructure (their fields are independent);
+                //   - lists of records destructure (batch INSERT VALUES);
+                //   - lists of scalars in an IN-list rhs without `in_list_array`
+                //     destructure to per-element placeholders.
+                if let stmt::Value::List(items) = &owned
+                    && items.iter().all(is_scalar_leaf)
+                    && self.can_bundle_scalar_list()
+                {
+                    *expr = self.push_param(owned);
+                } else {
+                    *expr = self.destructure(owned);
+                }
             }
 
-            // Null, Default, and everything else: leave as-is
             _ => {}
         }
-    });
-}
-
-/// Recursively convert a `Value` into an `Expr`, extracting scalar values.
-/// Takes ownership to avoid cloning.
-fn value_to_extracted_expr(value: stmt::Value, params: &mut Vec<TypedValue>) -> stmt::Expr {
-    match value {
-        stmt::Value::Null => stmt::Expr::Value(stmt::Value::Null),
-        stmt::Value::Record(record) => {
-            let fields = record
-                .fields
-                .into_iter()
-                .map(|f| value_to_extracted_expr(f, params))
-                .collect();
-            stmt::Expr::Record(stmt::ExprRecord::from_vec(fields))
-        }
-        // A list of all-scalars is extracted as a single bind parameter so
-        // that collection columns receive the whole list as one value
-        // (rather than rendering as a tuple of placeholders).
-        stmt::Value::List(values) if values.iter().all(is_extractable_scalar) => {
-            let value = stmt::Value::List(values);
-            let ty = db::Type::from_value(&value);
-            let position = params.len();
-            params.push(TypedValue { value, ty });
-            stmt::Expr::arg(position)
-        }
-        stmt::Value::List(values) => {
-            let items = values
-                .into_iter()
-                .map(|v| value_to_extracted_expr(v, params))
-                .collect();
-            stmt::Expr::List(stmt::ExprList { items })
-        }
-        scalar => {
-            let ty = db::Type::from_value(&scalar);
-            let position = params.len();
-            params.push(TypedValue { value: scalar, ty });
-            stmt::Expr::arg(position)
-        }
     }
 }
 
-/// Walk the statement and rewrite any `Expr::InList { list }` whose `list` is
-/// a `Expr::Value(Value::List(items))` into `Expr::InList { list: Expr::List(items as Expr::Value) }`.
-/// Subsequent extraction then decomposes each item as its own scalar parameter,
-/// producing `IN (?1, ?2, …)` rather than a single bundled parameter.
-fn unroll_in_list_value_lists(stmt: &mut stmt::Statement) {
-    stmt::visit_mut::for_each_expr_mut(stmt, |expr| {
-        if let stmt::Expr::InList(in_list) = expr
-            && let stmt::Expr::Value(stmt::Value::List(_)) = in_list.list.as_ref()
-        {
-            let list_expr =
-                std::mem::replace(in_list.list.as_mut(), stmt::Expr::Value(stmt::Value::Null));
-            let stmt::Expr::Value(stmt::Value::List(items)) = list_expr else {
-                unreachable!()
-            };
-            *in_list.list = stmt::Expr::List(stmt::ExprList {
-                items: items.into_iter().map(stmt::Expr::Value).collect(),
-            });
-        }
-    });
-}
-
-fn is_extractable_scalar(value: &stmt::Value) -> bool {
-    match value {
-        stmt::Value::Null | stmt::Value::Record(_) => false,
-        // A list of scalars is itself a single bind parameter — collection
-        // columns (e.g. PostgreSQL `text[]` or a JSON-encoded list) take the
-        // whole list as one driver-level value rather than expanding to a
-        // tuple of placeholders. Lists containing records still decompose
-        // (batch INSERT VALUES, etc.).
-        stmt::Value::List(items) => items.iter().all(is_extractable_scalar),
-        _ => true,
-    }
+/// A `Value` is a "scalar leaf" if it represents a single typed value that
+/// the driver binds as one parameter — i.e. anything that isn't `Null`,
+/// `Record`, or `List`.
+fn is_scalar_leaf(value: &stmt::Value) -> bool {
+    !matches!(
+        value,
+        stmt::Value::Null | stmt::Value::Record(_) | stmt::Value::List(_)
+    )
 }
 
 // ============================================================================
