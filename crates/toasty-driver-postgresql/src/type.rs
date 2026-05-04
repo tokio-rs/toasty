@@ -31,6 +31,19 @@ impl TypeExt for db::Type {
             // Enum types are handled separately via the cached OID map;
             // fall back to TEXT if we reach here (shouldn't happen in practice).
             db::Type::Enum(_) => Type::TEXT,
+            db::Type::Array(elem) => match elem.to_postgres_type() {
+                Type::BOOL => Type::BOOL_ARRAY,
+                Type::INT2 => Type::INT2_ARRAY,
+                Type::INT4 => Type::INT4_ARRAY,
+                Type::INT8 => Type::INT8_ARRAY,
+                Type::FLOAT4 => Type::FLOAT4_ARRAY,
+                Type::FLOAT8 => Type::FLOAT8_ARRAY,
+                Type::TEXT | Type::VARCHAR => Type::TEXT_ARRAY,
+                Type::UUID => Type::UUID_ARRAY,
+                Type::NUMERIC => Type::NUMERIC_ARRAY,
+                other => todo!("to_postgres_type: array of {other:#?} unsupported"),
+            },
+            db::Type::Json => Type::JSONB,
             _ => todo!("to_postgres_type; db_ty={:#?}", self),
         }
     }

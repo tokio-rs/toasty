@@ -393,10 +393,11 @@ impl Capability {
 
         test_connection_pool: true,
 
-        // PostgreSQL accepts a single bound array as the rhs of IN
-        // (`x = ANY($1)` / `x IN (SELECT unnest($1))`).
-        in_array: true,
-
+        // PostgreSQL natively supports `x = ANY($1)` and
+        // `x IN (SELECT unnest($1))`, but the SQL serializer does not yet
+        // emit either form. Until that lands, IN-list rhs decomposes to
+        // per-element placeholders, same as the other backends.
+        // Inherits `in_array: false` and `array_binding: true` from `Self::SQLITE`.
         ..Self::SQLITE
     };
 
@@ -426,10 +427,9 @@ impl Capability {
 
         test_connection_pool: true,
 
-        // MySQL driver does not yet implement JSON-list binding; schema
-        // build should reject `Vec<scalar>` until the driver lands.
-        array_binding: false,
-
+        // MySQL binds a `Value::List` parameter as a JSON-encoded string,
+        // matching the SQLite path. Inherits `array_binding: true` from
+        // `Self::SQLITE`.
         ..Self::SQLITE
     };
 

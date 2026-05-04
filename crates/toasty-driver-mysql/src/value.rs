@@ -146,6 +146,19 @@ impl Value {
                 _ => todo!("ty={ty:#?}"),
             },
 
+            CT::MYSQL_TYPE_JSON => match ty {
+                stmt::Type::List(elem) => {
+                    match row.take_opt::<String, _>(i).expect("value missing") {
+                        Ok(json) => decode_json_list(&json, elem),
+                        Err(e) => {
+                            assert!(matches!(e.0, mysql_async::Value::NULL));
+                            stmt::Value::Null
+                        }
+                    }
+                }
+                _ => todo!("unexpected type for JSON: {ty:#?}"),
+            },
+
             CT::MYSQL_TYPE_NEWDECIMAL | CT::MYSQL_TYPE_DECIMAL => match ty {
                 #[cfg(feature = "rust_decimal")]
                 stmt::Type::Decimal => extract_or_null(row, i, |s: String| {
@@ -241,7 +254,95 @@ impl ToValue for Value {
                     (value.subsec_nanosecond() / 1000) as u32, // Convert nanoseconds to microseconds
                 )
             }
+            CoreValue::List(items) => {
+                // MySQL `JSON` columns accept a JSON-encoded text payload.
+                // Whole-list reads round-trip through `decode_json_list` on
+                // the read path.
+                let json = serde_json::Value::Array(items.iter().map(value_to_json).collect());
+                json.to_string().to_value()
+            }
             value => todo!("{:#?}", value),
         }
+    }
+}
+
+/// Decode a MySQL `JSON` payload (always a JSON array for a `Vec<scalar>`
+/// column) into `Value::List` whose elements have type `elem`.
+fn decode_json_list(text: &str, elem: &stmt::Type) -> stmt::Value {
+    let json: serde_json::Value = serde_json::from_str(text).expect("invalid JSON in list column");
+    let serde_json::Value::Array(items) = json else {
+        panic!("expected JSON array; got {json:#?}");
+    };
+    stmt::Value::List(
+        items
+            .into_iter()
+            .map(|item| json_to_value(item, elem))
+            .collect(),
+    )
+}
+
+fn json_to_value(json: serde_json::Value, ty: &stmt::Type) -> stmt::Value {
+    match (json, ty) {
+        (serde_json::Value::Null, _) => stmt::Value::Null,
+        (serde_json::Value::String(s), stmt::Type::String) => stmt::Value::String(s),
+        (serde_json::Value::String(s), stmt::Type::Uuid) => {
+            stmt::Value::Uuid(s.parse().expect("invalid uuid in JSON list element"))
+        }
+        (serde_json::Value::Bool(b), stmt::Type::Bool) => stmt::Value::Bool(b),
+        (serde_json::Value::Number(n), stmt::Type::I8) => {
+            stmt::Value::I8(n.as_i64().expect("integer expected") as i8)
+        }
+        (serde_json::Value::Number(n), stmt::Type::I16) => {
+            stmt::Value::I16(n.as_i64().expect("integer expected") as i16)
+        }
+        (serde_json::Value::Number(n), stmt::Type::I32) => {
+            stmt::Value::I32(n.as_i64().expect("integer expected") as i32)
+        }
+        (serde_json::Value::Number(n), stmt::Type::I64) => {
+            stmt::Value::I64(n.as_i64().expect("integer expected"))
+        }
+        (serde_json::Value::Number(n), stmt::Type::U8) => {
+            stmt::Value::U8(n.as_u64().expect("unsigned integer expected") as u8)
+        }
+        (serde_json::Value::Number(n), stmt::Type::U16) => {
+            stmt::Value::U16(n.as_u64().expect("unsigned integer expected") as u16)
+        }
+        (serde_json::Value::Number(n), stmt::Type::U32) => {
+            stmt::Value::U32(n.as_u64().expect("unsigned integer expected") as u32)
+        }
+        (serde_json::Value::Number(n), stmt::Type::U64) => {
+            stmt::Value::U64(n.as_u64().expect("unsigned integer expected"))
+        }
+        (serde_json::Value::Number(n), stmt::Type::F32) => {
+            stmt::Value::F32(n.as_f64().expect("float expected") as f32)
+        }
+        (serde_json::Value::Number(n), stmt::Type::F64) => {
+            stmt::Value::F64(n.as_f64().expect("float expected"))
+        }
+        (json, ty) => todo!("json={json:#?}; ty={ty:#?}"),
+    }
+}
+
+fn value_to_json(value: &stmt::Value) -> serde_json::Value {
+    match value {
+        stmt::Value::Null => serde_json::Value::Null,
+        stmt::Value::Bool(v) => serde_json::Value::Bool(*v),
+        stmt::Value::I8(v) => serde_json::Value::Number((*v as i64).into()),
+        stmt::Value::I16(v) => serde_json::Value::Number((*v as i64).into()),
+        stmt::Value::I32(v) => serde_json::Value::Number((*v as i64).into()),
+        stmt::Value::I64(v) => serde_json::Value::Number((*v).into()),
+        stmt::Value::U8(v) => serde_json::Value::Number((*v as u64).into()),
+        stmt::Value::U16(v) => serde_json::Value::Number((*v as u64).into()),
+        stmt::Value::U32(v) => serde_json::Value::Number((*v as u64).into()),
+        stmt::Value::U64(v) => serde_json::Value::Number((*v).into()),
+        stmt::Value::F32(v) => serde_json::Number::from_f64(*v as f64)
+            .map(serde_json::Value::Number)
+            .unwrap_or(serde_json::Value::Null),
+        stmt::Value::F64(v) => serde_json::Number::from_f64(*v)
+            .map(serde_json::Value::Number)
+            .unwrap_or(serde_json::Value::Null),
+        stmt::Value::String(v) => serde_json::Value::String(v.clone()),
+        stmt::Value::Uuid(v) => serde_json::Value::String(v.to_string()),
+        _ => todo!("value_to_json: {value:#?}"),
     }
 }
