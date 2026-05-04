@@ -5,6 +5,37 @@ use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
 
 impl Expand<'_> {
+    /// Generate `ValidateCreate` impls for the field struct and field list struct.
+    ///
+    /// Only generated for root models since `ValidateCreate` references
+    /// `<Model>::CREATE_META` which is only available on root models.
+    pub(super) fn expand_validate_create_impls(&self) -> TokenStream {
+        let ModelKind::Root(_) = &self.model.kind else {
+            return TokenStream::new();
+        };
+
+        let toasty = &self.toasty;
+        let model_ident = &self.model.ident;
+        let field_struct_ident = self.field_struct_ident();
+        let field_list_struct_ident = self.field_list_struct_ident();
+
+        quote! {
+            #[diagnostic::do_not_recommend]
+            impl<__Origin> #toasty::ValidateCreate for #field_struct_ident<__Origin> {
+                const CREATE_META: &'static #toasty::CreateMeta =
+                    &<#model_ident as #toasty::Model>::CREATE_META;
+            }
+
+            #[diagnostic::do_not_recommend]
+            impl<__Origin> #toasty::ValidateCreate for #field_list_struct_ident<__Origin> {
+                const CREATE_META: &'static #toasty::CreateMeta =
+                    &<#model_ident as #toasty::Model>::CREATE_META;
+            }
+        }
+    }
+}
+
+impl Expand<'_> {
     pub(super) fn expand_field_struct(&self) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;

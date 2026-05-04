@@ -176,6 +176,24 @@ impl Expand<'_> {
                     #field_struct_ident::from_path(#toasty::Path::root())
                 }
             }
+
+            #[diagnostic::do_not_recommend]
+            impl #toasty::ValidateCreate for Many {
+                const CREATE_META: &'static #toasty::CreateMeta =
+                    &<#model_ident as #toasty::Model>::CREATE_META;
+            }
+
+            #[diagnostic::do_not_recommend]
+            impl #toasty::ValidateCreate for One {
+                const CREATE_META: &'static #toasty::CreateMeta =
+                    &<#model_ident as #toasty::Model>::CREATE_META;
+            }
+
+            #[diagnostic::do_not_recommend]
+            impl #toasty::ValidateCreate for OptionOne {
+                const CREATE_META: &'static #toasty::CreateMeta =
+                    &<#model_ident as #toasty::Model>::CREATE_META;
+            }
         }
     }
 

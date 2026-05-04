@@ -1,3 +1,16 @@
+error[E0277]: the trait bound `i64: toasty::schema::ValidateCreate` is not satisfied
+  --> tests/ui/create_scoped_not_scope.rs:11:13
+   |
+11 |     let _ = toasty::create!(in 42_i64 { name: "Carl" });
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `toasty::schema::ValidateCreate` is not implemented for `i64`
+   |
+note: required by a bound in `__force_check`
+  --> tests/ui/create_scoped_not_scope.rs:11:13
+   |
+11 |     let _ = toasty::create!(in 42_i64 { name: "Carl" });
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `__force_check`
+   = note: this error originates in the macro `toasty::create` (in Nightly builds, run with -Z macro-backtrace for more info)
+
 error[E0277]: the trait bound `i64: toasty::schema::Scope` is not satisfied
   --> tests/ui/create_scoped_not_scope.rs:11:32
    |

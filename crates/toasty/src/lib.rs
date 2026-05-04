@@ -133,9 +133,11 @@ pub mod codegen_support {
     pub use crate::schema::inventory;
     pub use crate::{
         Db, Error, Executor, Result, Statement,
+        schema::create_meta::{assert_create_fields, const_contains},
         schema::{
-            Auto, BelongsTo, Defer, Deferred, DiscoverItem, Embed, Field, HasMany, HasOne, Load,
-            Model, Register, Relation, Scope, build_deferred_load, generate_unique_id,
+            Auto, BelongsTo, CreateField, CreateMeta, Defer, Deferred, DiscoverItem, Embed, Field,
+            HasMany, HasOne, Load, Model, Register, Relation, Scope, ValidateCreate,
+            build_deferred_load, generate_unique_id,
         },
         stmt::CreateMany,
         stmt::{self, Assign, IntoExpr, IntoInsert, IntoStatement, List, Path},
