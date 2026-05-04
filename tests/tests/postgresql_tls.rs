@@ -1,5 +1,10 @@
 #![cfg(feature = "postgresql")]
 
+// Each test below is marked `#[ignore]` unless `cfg(toasty_postgres_tls)` is
+// set, which `tests/build.rs` emits when `TOASTY_TEST_POSTGRES_TLS_URL` is
+// defined at build time. CI sets the env var; local users opt in by exporting
+// it (rebuilds the crate).
+
 use toasty_driver_postgresql::PostgreSQL;
 
 fn tls_url() -> String {
@@ -22,6 +27,10 @@ async fn smoke_query(driver: &PostgreSQL) {
     drop(conn);
 }
 
+#[cfg_attr(
+    not(toasty_postgres_tls),
+    ignore = "set TOASTY_TEST_POSTGRES_TLS_URL to run"
+)]
 #[tokio::test]
 async fn tls_require() {
     let url = format!("{}?sslmode=require", tls_url());
@@ -29,6 +38,10 @@ async fn tls_require() {
     smoke_query(&driver).await;
 }
 
+#[cfg_attr(
+    not(toasty_postgres_tls),
+    ignore = "set TOASTY_TEST_POSTGRES_TLS_URL to run"
+)]
 #[tokio::test]
 async fn tls_prefer() {
     let url = format!("{}?sslmode=prefer", tls_url());
@@ -36,6 +49,10 @@ async fn tls_prefer() {
     smoke_query(&driver).await;
 }
 
+#[cfg_attr(
+    not(toasty_postgres_tls),
+    ignore = "set TOASTY_TEST_POSTGRES_TLS_URL to run"
+)]
 #[tokio::test]
 async fn tls_channel_binding() {
     let url = format!("{}?sslmode=require&channel_binding=require", tls_url());
@@ -43,6 +60,10 @@ async fn tls_channel_binding() {
     smoke_query(&driver).await;
 }
 
+#[cfg_attr(
+    not(toasty_postgres_tls),
+    ignore = "set TOASTY_TEST_POSTGRES_TLS_URL to run"
+)]
 #[tokio::test]
 async fn tls_disable_against_tls_server() {
     let url = format!("{}?sslmode=disable", tls_url());
@@ -55,6 +76,10 @@ async fn tls_disable_against_tls_server() {
     );
 }
 
+#[cfg_attr(
+    not(toasty_postgres_tls),
+    ignore = "set TOASTY_TEST_POSTGRES_TLS_URL to run"
+)]
 #[tokio::test]
 async fn sslrootcert_require() {
     let url = format!(
@@ -66,6 +91,10 @@ async fn sslrootcert_require() {
     smoke_query(&driver).await;
 }
 
+#[cfg_attr(
+    not(toasty_postgres_tls),
+    ignore = "set TOASTY_TEST_POSTGRES_TLS_URL to run"
+)]
 #[tokio::test]
 async fn sslrootcert_wrong_ca() {
     use toasty_core::driver::Driver;
@@ -81,6 +110,10 @@ async fn sslrootcert_wrong_ca() {
     );
 }
 
+#[cfg_attr(
+    not(toasty_postgres_tls),
+    ignore = "set TOASTY_TEST_POSTGRES_TLS_URL to run"
+)]
 #[tokio::test]
 async fn verify_ca() {
     let url = format!(
@@ -92,6 +125,10 @@ async fn verify_ca() {
     smoke_query(&driver).await;
 }
 
+#[cfg_attr(
+    not(toasty_postgres_tls),
+    ignore = "set TOASTY_TEST_POSTGRES_TLS_URL to run"
+)]
 #[tokio::test]
 async fn verify_full() {
     let url = format!(
@@ -103,6 +140,10 @@ async fn verify_full() {
     smoke_query(&driver).await;
 }
 
+#[cfg_attr(
+    not(toasty_postgres_tls),
+    ignore = "set TOASTY_TEST_POSTGRES_TLS_URL to run"
+)]
 #[tokio::test]
 async fn verify_full_hostname_mismatch() {
     use toasty_core::driver::Driver;
@@ -121,6 +162,10 @@ async fn verify_full_hostname_mismatch() {
     );
 }
 
+#[cfg_attr(
+    not(toasty_postgres_tls),
+    ignore = "set TOASTY_TEST_POSTGRES_TLS_URL to run"
+)]
 #[tokio::test]
 async fn verify_ca_hostname_mismatch() {
     // test.localtest.me resolves to 127.0.0.1 but is not in the certificate
@@ -134,6 +179,10 @@ async fn verify_ca_hostname_mismatch() {
     smoke_query(&driver).await;
 }
 
+#[cfg_attr(
+    not(toasty_postgres_tls),
+    ignore = "set TOASTY_TEST_POSTGRES_TLS_URL to run"
+)]
 #[tokio::test]
 async fn verify_ca_wrong_ca() {
     use toasty_core::driver::Driver;
@@ -148,6 +197,10 @@ async fn verify_ca_wrong_ca() {
     );
 }
 
+#[cfg_attr(
+    not(toasty_postgres_tls),
+    ignore = "set TOASTY_TEST_POSTGRES_TLS_URL to run"
+)]
 #[test]
 fn verify_ca_requires_sslrootcert() {
     let url = format!("{}?sslmode=verify-ca", tls_url());
@@ -158,6 +211,10 @@ fn verify_ca_requires_sslrootcert() {
     );
 }
 
+#[cfg_attr(
+    not(toasty_postgres_tls),
+    ignore = "set TOASTY_TEST_POSTGRES_TLS_URL to run"
+)]
 #[test]
 fn verify_full_requires_sslrootcert() {
     let url = format!("{}?sslmode=verify-full", tls_url());
@@ -168,6 +225,10 @@ fn verify_full_requires_sslrootcert() {
     );
 }
 
+#[cfg_attr(
+    not(toasty_postgres_tls),
+    ignore = "set TOASTY_TEST_POSTGRES_TLS_URL to run"
+)]
 #[tokio::test]
 async fn require_without_sslrootcert() {
     let url = format!("{}?sslmode=require", tls_url());
@@ -175,6 +236,10 @@ async fn require_without_sslrootcert() {
     smoke_query(&driver).await;
 }
 
+#[cfg_attr(
+    not(toasty_postgres_tls),
+    ignore = "set TOASTY_TEST_POSTGRES_TLS_URL to run"
+)]
 #[tokio::test]
 async fn client_cert_auth() {
     let dir = certs_dir();
@@ -189,6 +254,10 @@ async fn client_cert_auth() {
     smoke_query(&driver).await;
 }
 
+#[cfg_attr(
+    not(toasty_postgres_tls),
+    ignore = "set TOASTY_TEST_POSTGRES_TLS_URL to run"
+)]
 #[test]
 fn missing_sslkey() {
     let dir = certs_dir();
@@ -200,6 +269,10 @@ fn missing_sslkey() {
     );
 }
 
+#[cfg_attr(
+    not(toasty_postgres_tls),
+    ignore = "set TOASTY_TEST_POSTGRES_TLS_URL to run"
+)]
 #[test]
 fn missing_sslcert() {
     let dir = certs_dir();
