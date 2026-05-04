@@ -394,8 +394,10 @@ impl LowerStatement<'_, '_> {
             stmt.source.single = false;
         }
 
-        self.state.engine.simplify_stmt(&mut stmt);
-        source.set_returning_field(_field.id, stmt.into());
+        // Run the canonical pipeline on the synthesized child insert and
+        // stitch it onto the parent as an `Expr::Arg`.
+        let arg = self.lower_sub_stmt(stmt::Statement::Insert(stmt));
+        source.set_returning_field(_field.id, arg);
     }
 
     fn plan_mut_belongs_to(
