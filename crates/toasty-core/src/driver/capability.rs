@@ -121,6 +121,10 @@ pub struct Capability {
     /// Whether to test connection pool behavior.
     /// TODO: We only need this for the `connection_per_clone.rs` test, come up with a better way.
     pub test_connection_pool: bool,
+
+    /// Whether the driver supports backward (previous-page) pagination.
+    /// SQL: true. DynamoDB: false.
+    pub backward_pagination: bool,
 }
 
 /// Maps application-level types to the concrete database column types used for
@@ -311,6 +315,8 @@ impl Capability {
         native_like: true,
 
         test_connection_pool: false,
+
+        backward_pagination: true,
     };
 
     /// PostgreSQL capabilities
@@ -405,6 +411,8 @@ impl Capability {
         native_like: false,
 
         test_connection_pool: false,
+
+        backward_pagination: false,
     };
 }
 

@@ -18,6 +18,10 @@ let users = User::filter(User::fields().name().eq("Carl")).exec(&mut db).await?;
 The macro eliminates the repetition of the model name in field paths, provides
 infix operators instead of method chains, and reads closer to a query language.
 
+Tracked in [#808] — discussion of the feature happens there.
+
+[#808]: https://github.com/tokio-rs/toasty/issues/808
+
 ## Syntax
 
 ```

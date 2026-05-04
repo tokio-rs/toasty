@@ -116,7 +116,7 @@ mod engine;
 
 /// Model, relation, and schema inspection types.
 pub mod schema;
-pub use schema::{BelongsTo, HasMany, HasOne};
+pub use schema::{BelongsTo, Deferred, HasMany, HasOne};
 
 // `Page` lives in `stmt`.
 
@@ -135,8 +135,9 @@ pub mod codegen_support {
         Db, Error, Executor, Result, Statement,
         schema::create_meta::{assert_create_fields, const_contains},
         schema::{
-            Auto, BelongsTo, CreateField, CreateMeta, DiscoverItem, Embed, Field, HasMany, HasOne,
-            Load, Model, Register, Relation, Scope, ValidateCreate, generate_unique_id,
+            Auto, BelongsTo, CreateField, CreateMeta, Defer, Deferred, DiscoverItem, Embed, Field,
+            HasMany, HasOne, Load, Model, Register, Relation, Scope, ValidateCreate,
+            build_deferred_load, generate_unique_id,
         },
         stmt::CreateMany,
         stmt::{self, Assign, IntoExpr, IntoInsert, IntoStatement, List, Path},
@@ -157,5 +158,17 @@ pub mod codegen_support {
     /// lets Rust infer `S` from the scope argument.
     pub fn scope_fields<S: Scope>(_scope: &S) -> S::Path<S::Item> {
         S::new_path_root()
+    }
+
+    /// Convert a value into an untyped [`core::stmt::Expr`] via the typed
+    /// [`IntoExpr<T>`] trait.
+    ///
+    /// Generated code (`#[derive(Model)]`, `#[derive(Embed)]`) splices this in
+    /// instead of inlining the `let expr: Expr<T> = value.into_expr(); expr.into()`
+    /// pattern at every field site. The explicit `T` type parameter
+    /// disambiguates which `IntoExpr` impl to use.
+    pub fn into_untyped_expr<T, V: IntoExpr<T>>(value: V) -> core::stmt::Expr {
+        let expr: stmt::Expr<T> = value.into_expr();
+        expr.into()
     }
 }

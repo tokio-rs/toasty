@@ -1,3 +1,5 @@
+pub mod deferred_document;
+pub mod deferred_optional_document;
 pub mod has_many_belongs_to;
 pub mod has_many_multi_relation;
 pub mod has_many_same_target;

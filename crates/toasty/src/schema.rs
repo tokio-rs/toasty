@@ -8,6 +8,9 @@ pub use belongs_to::BelongsTo;
 pub mod create_meta;
 pub use create_meta::{CreateField, CreateMeta, ValidateCreate};
 
+mod deferred;
+pub use deferred::{Defer, Deferred, build_deferred_load};
+
 mod embed;
 pub use embed::Embed;
 

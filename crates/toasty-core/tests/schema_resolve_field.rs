@@ -23,6 +23,7 @@ fn id_field(model: ModelId) -> Field {
         primary_key: true,
         auto: None,
         versionable: false,
+        deferred: false,
         constraints: vec![],
         variant: None,
     }
@@ -44,6 +45,7 @@ fn prim_field(model: ModelId, index: usize, name: &str) -> Field {
         primary_key: false,
         auto: None,
         versionable: false,
+        deferred: false,
         constraints: vec![],
         variant: None,
     }
@@ -65,6 +67,7 @@ fn variant_field(model: ModelId, index: usize, name: &str, variant_index: usize)
         primary_key: false,
         auto: None,
         versionable: false,
+        deferred: false,
         constraints: vec![],
         variant: Some(VariantId {
             model,
@@ -88,6 +91,7 @@ fn embedded_field(model: ModelId, index: usize, name: &str, target: ModelId) -> 
         primary_key: false,
         auto: None,
         versionable: false,
+        deferred: false,
         constraints: vec![],
         variant: None,
     }
