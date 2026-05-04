@@ -1,4 +1,5 @@
-use anyhow::{Result, bail};
+use super::{err, err_ctx};
+use crate::Result;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::path::Path;
@@ -8,39 +9,36 @@ use toml_edit::{DocumentMut, Item};
 
 const SNAPSHOT_FILE_VERSION: u32 = 1;
 
-/// A TOML-serializable snapshot of the database schema at a point in time.
+/// Serializable snapshot of the database schema at the moment a migration was
+/// generated.
 ///
-/// Each time a migration is generated, a corresponding snapshot is written
-/// alongside it. The next `generate` run loads the most recent snapshot to
-/// compute a diff against the current schema.
+/// Each call to [`generate`](super::generate) writes a snapshot alongside the
+/// SQL migration. The next call loads the most recent snapshot to compute the
+/// diff against the current schema, producing the next migration.
 ///
-/// The file carries a version number. [`SnapshotFile::load`] and the
-/// [`FromStr`] implementation reject files whose version does not match the
-/// current format.
+/// The file carries a version number; loading rejects files written with an
+/// incompatible version.
 ///
 /// # Examples
 ///
 /// ```
-/// use toasty_cli::SnapshotFile;
-/// use toasty_core::schema::db::Schema;
+/// use toasty::migrate::SnapshotFile;
+/// use toasty::schema::db::Schema;
 ///
 /// let snapshot = SnapshotFile::new(Schema::default());
-///
-/// // Serialize to TOML via the serde impl
-/// let toml_str = toml::to_string_pretty(&snapshot).unwrap();
-/// let restored: SnapshotFile = toml::from_str(&toml_str).unwrap();
+/// assert!(snapshot.schema.tables.is_empty());
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SnapshotFile {
-    /// Snapshot file format version
+    /// Snapshot file format version.
     version: u32,
 
-    /// The database schema
+    /// Captured database schema.
     pub schema: Schema,
 }
 
 impl SnapshotFile {
-    /// Create a new snapshot file with the given schema
+    /// Creates a new snapshot wrapping the given schema.
     pub fn new(schema: Schema) -> Self {
         Self {
             version: SNAPSHOT_FILE_VERSION,
@@ -48,32 +46,35 @@ impl SnapshotFile {
         }
     }
 
-    /// Load a snapshot file from a TOML file
+    /// Loads a snapshot file from `path`.
     pub fn load(path: impl AsRef<Path>) -> Result<Self> {
-        let contents = std::fs::read_to_string(path.as_ref())?;
+        let path = path.as_ref();
+        let contents = std::fs::read_to_string(path)
+            .map_err(|e| err_ctx(format!("reading {}", path.display()), e))?;
         contents.parse()
     }
 
-    /// Save the snapshot file to a TOML file
+    /// Saves the snapshot to `path`, overwriting any existing file.
     pub fn save(&self, path: impl AsRef<Path>) -> Result<()> {
-        std::fs::write(path.as_ref(), self.to_string())?;
+        let path = path.as_ref();
+        std::fs::write(path, self.to_string())
+            .map_err(|e| err_ctx(format!("writing {}", path.display()), e))?;
         Ok(())
     }
 }
 
 impl FromStr for SnapshotFile {
-    type Err = anyhow::Error;
+    type Err = toasty_core::Error;
 
     fn from_str(s: &str) -> Result<Self> {
-        let file: SnapshotFile = toml::from_str(s)?;
+        let file: SnapshotFile =
+            toml::from_str(s).map_err(|e| err_ctx("parsing schema snapshot", e))?;
 
-        // Validate version
         if file.version != SNAPSHOT_FILE_VERSION {
-            bail!(
-                "Unsupported snapshot file version: {}. Expected version {}",
-                file.version,
-                SNAPSHOT_FILE_VERSION
-            );
+            return Err(err(format!(
+                "unsupported snapshot file version: {}. Expected version {}",
+                file.version, SNAPSHOT_FILE_VERSION
+            )));
         }
 
         Ok(file)
@@ -88,8 +89,12 @@ impl fmt::Display for SnapshotFile {
 }
 
 impl SnapshotFile {
+    /// Renders the snapshot as a `toml_edit::DocumentMut`, flattening
+    /// nested arrays of tables into the multi-line TOML form so the file is
+    /// easier to read and review.
     fn to_toml_document(&self) -> Result<DocumentMut> {
-        let mut doc = toml_edit::ser::to_document(self)?;
+        let mut doc = toml_edit::ser::to_document(self)
+            .map_err(|e| err_ctx("serializing schema snapshot", e))?;
         for (_key, item) in doc.as_table_mut().iter_mut() {
             if item.is_inline_table() {
                 let mut placeholder = Item::None;

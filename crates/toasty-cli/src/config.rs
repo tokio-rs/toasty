@@ -1,35 +1,36 @@
-use crate::migration::MigrationConfig;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
+use toasty::migrate::Config as MigrationConfig;
 
 /// Configuration for Toasty CLI operations.
 ///
 /// Holds all settings that control how the CLI behaves. Currently this is
-/// limited to [`MigrationConfig`]. A `Config` can be built programmatically
-/// with the builder methods or loaded from a `Toasty.toml` file via
-/// [`Config::load`].
+/// limited to a [`toasty::migrate::Config`]. A `Config` can be built
+/// programmatically with the builder methods or loaded from a `Toasty.toml`
+/// file via [`Config::load`].
 ///
 /// # Examples
 ///
 /// ```
-/// use toasty_cli::{Config, MigrationConfig, MigrationPrefixStyle};
+/// use toasty::migrate::{Config as MigrationConfig, PrefixStyle};
+/// use toasty_cli::Config;
 ///
 /// let config = Config::new()
 ///     .migration(
 ///         MigrationConfig::new()
 ///             .path("db")
-///             .prefix_style(MigrationPrefixStyle::Timestamp),
+///             .prefix_style(PrefixStyle::Timestamp),
 ///     );
 /// assert_eq!(
-///     config.migration.get_migrations_dir(),
+///     config.migration.migrations_dir(),
 ///     std::path::PathBuf::from("db/migrations"),
 /// );
 /// ```
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Config {
-    /// Migration-related configuration
+    /// Migration-related configuration.
     pub migration: MigrationConfig,
 }
 

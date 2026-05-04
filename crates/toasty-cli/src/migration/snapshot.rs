@@ -1,9 +1,9 @@
-use super::SnapshotFile;
 use crate::Config;
 use anyhow::Result;
 use clap::Parser;
 use console::style;
 use toasty::Db;
+use toasty::migrate::SnapshotFile;
 
 /// Prints the current schema as a TOML snapshot to stdout.
 ///

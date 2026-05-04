@@ -1,4 +1,4 @@
-use super::apply_migrations;
+use super::run_apply;
 use crate::Config;
 use crate::theme::dialoguer_theme;
 use anyhow::Result;
@@ -67,7 +67,7 @@ impl ResetCommand {
         println!();
 
         if !self.skip_migrations {
-            apply_migrations(db, config).await?;
+            run_apply(db, &config.migration).await?;
         }
 
         Ok(())

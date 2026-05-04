@@ -6,20 +6,20 @@
 //! apply, drop, reset, snapshot). It uses [clap] for argument parsing and
 //! [dialoguer] for interactive prompts.
 //!
-//! The crate also exposes the underlying configuration and file types so that
-//! custom tooling can read and manipulate migration history and snapshots
-//! directly.
+//! The library bits — types like
+//! [`HistoryFile`](toasty::migrate::HistoryFile),
+//! [`SnapshotFile`](toasty::migrate::SnapshotFile), and the
+//! [`apply`](toasty::migrate::apply) / [`generate`](toasty::migrate::generate)
+//! functions — live in the [`toasty::migrate`] module. This crate is the
+//! interactive front-end on top of them.
 //!
 //! # Main types
 //!
 //! - [`ToastyCli`] — parses CLI arguments and dispatches to the appropriate
 //!   migration subcommand.
-//! - [`Config`] / [`MigrationConfig`] — configure migration paths, prefix
-//!   styles, and checksum behavior. Loaded from a `Toasty.toml` file or built
+//! - [`Config`] — configures the CLI. Wraps a
+//!   [`toasty::migrate::Config`]. Loaded from a `Toasty.toml` file or built
 //!   programmatically.
-//! - [`HistoryFile`] / [`HistoryFileMigration`] — read and write the TOML
-//!   history that tracks which migrations exist.
-//! - [`SnapshotFile`] — read and write schema snapshot TOML files.
 //!
 //! # Examples
 //!
@@ -53,7 +53,8 @@ use toasty::Db;
 /// # Examples
 ///
 /// ```ignore
-/// use toasty_cli::{ToastyCli, Config, MigrationConfig};
+/// use toasty::migrate::{Config as MigrationConfig, PrefixStyle};
+/// use toasty_cli::{Config, ToastyCli};
 ///
 /// let config = Config::new()
 ///     .migration(MigrationConfig::new().path("db"));

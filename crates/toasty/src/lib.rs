@@ -114,6 +114,12 @@ pub use db::{Connection, Db, Executor, Transaction, TransactionBuilder};
 
 mod engine;
 
+/// Programmatic access to the migration tooling that powers `toasty-cli`.
+///
+/// Available when the `migrate` feature is enabled (on by default).
+#[cfg(feature = "migrate")]
+pub mod migrate;
+
 /// Model, relation, and schema inspection types.
 pub mod schema;
 pub use schema::{BelongsTo, Deferred, HasMany, HasOne};

@@ -1,17 +1,14 @@
-use super::{HistoryFile, HistoryFileMigration, SnapshotFile};
 use crate::{Config, theme::dialoguer_theme};
 use anyhow::Result;
 use clap::Parser;
 use console::style;
 use dialoguer::Select;
 use hashbrown::{HashMap, HashSet};
-use rand::RngExt;
-use std::fs;
 use toasty::{
     Db,
     schema::db::{
-        ColumnId, ColumnsDiffItem, IndexId, IndicesDiffItem, Migration, RenameHints, Schema,
-        SchemaDiff, TableId, TablesDiffItem,
+        ColumnId, ColumnsDiffItem, IndexId, IndicesDiffItem, RenameHints, Schema, SchemaDiff,
+        TableId, TablesDiffItem,
     },
 };
 
@@ -238,31 +235,15 @@ impl GenerateCommand {
         );
         println!();
 
-        let history_path = config.migration.get_history_file_path();
+        let previous_schema = toasty::migrate::previous_schema(&config.migration)?;
+        let current_schema = Schema::clone(&db.schema().db);
 
-        fs::create_dir_all(config.migration.get_migrations_dir())?;
-        fs::create_dir_all(config.migration.get_snapshots_dir())?;
-        fs::create_dir_all(history_path.parent().unwrap())?;
+        let rename_hints = collect_rename_hints(&previous_schema, &current_schema)?;
 
-        let mut history = HistoryFile::load_or_default(&history_path)?;
+        let generated =
+            toasty::migrate::generate(db, &config.migration, self.name.as_deref(), &rename_hints)?;
 
-        let previous_snapshot = history
-            .migrations()
-            .last()
-            .map(|f| {
-                SnapshotFile::load(config.migration.get_snapshots_dir().join(&f.snapshot_name))
-            })
-            .transpose()?;
-        let previous_schema = previous_snapshot
-            .map(|snapshot| snapshot.schema)
-            .unwrap_or_else(Schema::default);
-
-        let schema = toasty::schema::db::Schema::clone(&db.schema().db);
-
-        let rename_hints = collect_rename_hints(&previous_schema, &schema)?;
-        let diff = SchemaDiff::from(&previous_schema, &schema, &rename_hints);
-
-        if diff.is_empty() {
+        let Some(generated) = generated else {
             println!(
                 "  {}",
                 style("The current schema matches the previous snapshot. No migration needed.")
@@ -271,53 +252,22 @@ impl GenerateCommand {
             );
             println!();
             return Ok(());
-        }
-
-        let snapshot = SnapshotFile::new(schema.clone());
-        let migration_prefix = match config.migration.prefix_style {
-            crate::MigrationPrefixStyle::Sequential => {
-                format!("{:04}", history.next_migration_number())
-            }
-            crate::MigrationPrefixStyle::Timestamp => {
-                jiff::Timestamp::now().strftime("%Y%m%d_%H%M%S").to_string()
-            }
         };
-        let snapshot_name = format!("{:04}_snapshot.toml", &migration_prefix);
-        let snapshot_path = config.migration.get_snapshots_dir().join(&snapshot_name);
 
-        let migration_name = format!(
-            "{:04}_{}.sql",
-            &migration_prefix,
-            self.name.as_deref().unwrap_or("migration")
-        );
-        let migration_path = config.migration.get_migrations_dir().join(&migration_name);
-
-        let migration = db.driver().generate_migration(&diff);
-
-        history.add_migration(HistoryFileMigration {
-            // Some databases only supported signed 64-bit integers.
-            id: rand::rng().random_range(0..i64::MAX) as u64,
-            name: migration_name.clone(),
-            snapshot_name: snapshot_name.clone(),
-            checksum: None,
-        });
-
-        let Migration::Sql(sql) = migration;
-        std::fs::write(&migration_path, format!("{sql}\n"))?;
         println!(
             "  {} {}",
             style("✓").green().bold(),
-            style(format!("Created migration file: {}", migration_name)).dim()
+            style(format!(
+                "Created migration file: {}",
+                generated.migration_name
+            ))
+            .dim()
         );
-
-        snapshot.save(&snapshot_path)?;
         println!(
             "  {} {}",
             style("✓").green().bold(),
-            style(format!("Created snapshot: {}", snapshot_name)).dim()
+            style(format!("Created snapshot: {}", generated.snapshot_name)).dim()
         );
-
-        history.save(&history_path)?;
         println!(
             "  {} {}",
             style("✓").green().bold(),
@@ -329,7 +279,7 @@ impl GenerateCommand {
             "  {}",
             style(format!(
                 "Migration '{}' generated successfully",
-                migration_name
+                generated.migration_name
             ))
             .green()
             .bold()

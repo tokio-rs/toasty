@@ -14,20 +14,15 @@ readme.workspace = true
 documentation = "https://docs.rs/toasty-cli"
 
 [dependencies]
-toasty.workspace = true
-toasty-core = { workspace = true, features = ["serde"] }
-toasty-sql.workspace = true
+toasty = { workspace = true, features = ["migrate"] }
 
 anyhow = "1.0.102"
 clap.workspace = true
 console.workspace = true
 dialoguer.workspace = true
 hashbrown.workspace = true
-jiff.workspace = true
-rand.workspace = true
 serde.workspace = true
 toml.workspace = true
-toml_edit = { workspace = true, features = ["serde"] }
 url.workspace = true
 
 [dev-dependencies]
