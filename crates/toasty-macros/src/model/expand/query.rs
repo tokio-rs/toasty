@@ -53,6 +53,17 @@ impl Expand<'_> {
                     self.stmt.count()
                 }
 
+                #vis fn select<__E, __T>(
+                    self,
+                    projection: __E,
+                ) -> #toasty::stmt::Query<#toasty::List<__T>>
+                where
+                    __E: #toasty::IntoExpr<__T>,
+                    __T: #toasty::Load,
+                {
+                    self.stmt.select(projection)
+                }
+
                 #vis fn delete(self) -> #toasty::stmt::Delete<()> {
                     self.stmt.delete()
                 }
