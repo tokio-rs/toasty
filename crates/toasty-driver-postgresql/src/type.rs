@@ -31,14 +31,14 @@ impl TypeExt for db::Type {
             // Enum types are handled separately via the cached OID map;
             // fall back to TEXT if we reach here (shouldn't happen in practice).
             db::Type::Enum(_) => Type::TEXT,
+            db::Type::List(elem) => array_type_of(&elem.to_postgres_type()),
             _ => todo!("to_postgres_type; db_ty={:#?}", self),
         }
     }
 }
 
-/// Returns the PostgreSQL array type whose element type is `elem`. Used when
-/// binding a `Value::List` as a single array-valued parameter (`= ANY($1)`).
-pub fn array_type_of(elem: &Type) -> Type {
+/// Returns the PostgreSQL array type whose element type is `elem`.
+fn array_type_of(elem: &Type) -> Type {
     match *elem {
         Type::BOOL => Type::BOOL_ARRAY,
         Type::INT2 => Type::INT2_ARRAY,

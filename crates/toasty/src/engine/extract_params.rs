@@ -77,8 +77,30 @@ impl Ty {
     }
 
     /// Returns true if this type comes from the schema (authoritative).
+    #[cfg(test)]
     fn is_column(&self) -> bool {
         matches!(self, Ty::Column(_))
+    }
+
+    /// Convert to the corresponding `db::Type`, lifting `Ty::List(elem)`
+    /// into `db::Type::List(Box::new(elem))`. Returns `None` for `Unknown`,
+    /// `Record`, or any nested shape the bind layer can't represent.
+    fn to_db_type(&self) -> Option<db::Type> {
+        match self {
+            Ty::Column(ty) | Ty::Inferred(ty) => Some(ty.clone()),
+            Ty::List(elem) => elem.to_db_type().map(|t| db::Type::List(Box::new(t))),
+            _ => None,
+        }
+    }
+
+    /// Returns `true` if this type — or, recursively, the element type of a
+    /// list — has column provenance.
+    fn has_column(&self) -> bool {
+        match self {
+            Ty::Column(_) => true,
+            Ty::List(elem) => elem.has_column(),
+            _ => false,
+        }
     }
 }
 
@@ -145,11 +167,12 @@ fn extract_values(stmt: &mut stmt::Statement, params: &mut Vec<TypedValue>) {
 }
 
 /// If `rhs` is a list literal of values, take it out, push one
-/// `TypedValue { value: Value::List(items), ty: <elem placeholder> }` onto
-/// `params`, and return an `Expr::Arg(n)` to put back in its place.
+/// `TypedValue { value: Value::List(items), ty: db::Type::List(<elem>) }`
+/// onto `params`, and return an `Expr::Arg(n)` to put back in its place.
 ///
 /// The element type stored on the param is the value-inferred type of the
-/// first item; the synthesize/check pass refines it to the column type.
+/// first non-null item; the synthesize/check pass refines it to the column
+/// type when one is known.
 fn extract_array_operand(rhs: &mut stmt::Expr, params: &mut Vec<TypedValue>) -> Option<stmt::Expr> {
     let items: Vec<stmt::Value> = match rhs {
         stmt::Expr::Value(stmt::Value::List(_)) => {
@@ -175,17 +198,11 @@ fn extract_array_operand(rhs: &mut stmt::Expr, params: &mut Vec<TypedValue>) -> 
         _ => return None,
     };
 
-    let elem_ty = items
-        .iter()
-        .find(|v| !v.is_null())
-        .map(db::Type::from_value)
-        .unwrap_or(db::Type::Boolean);
+    let value = stmt::Value::List(items);
+    let ty = db::Type::from_value(&value);
 
     let position = params.len();
-    params.push(TypedValue {
-        value: stmt::Value::List(items),
-        ty: elem_ty,
-    });
+    params.push(TypedValue { value, ty });
     Some(stmt::Expr::arg(position))
 }
 
@@ -430,18 +447,17 @@ fn synthesize(expr: &stmt::Expr, cx: &Cx<'_>, params: &mut [TypedValue]) -> Ty {
             Ty::Inferred(db::Type::Boolean)
         }
 
-        // AnyOp / AllOp — synthesize lhs, then push the lhs scalar type down
-        // into the rhs as the array element type. When the rhs is an Arg
-        // bound to a Value::List, this refines the param's `ty` to the
-        // column type so the driver picks the right array element type.
+        // AnyOp / AllOp — synthesize lhs, then push `List(lhs_ty)` down so
+        // the rhs Arg's param type lifts to `db::Type::List(<elem>)` with
+        // the column-known element type.
         stmt::Expr::AnyOp(e) => {
             let lhs_ty = synthesize(&e.lhs, cx, params);
-            check(&e.rhs, &lhs_ty, params);
+            check(&e.rhs, &Ty::List(Box::new(lhs_ty)), params);
             Ty::Inferred(db::Type::Boolean)
         }
         stmt::Expr::AllOp(e) => {
             let lhs_ty = synthesize(&e.lhs, cx, params);
-            check(&e.rhs, &lhs_ty, params);
+            check(&e.rhs, &Ty::List(Box::new(lhs_ty)), params);
             Ty::Inferred(db::Type::Boolean)
         }
 
@@ -519,10 +535,13 @@ fn synthesize(expr: &stmt::Expr, cx: &Cx<'_>, params: &mut [TypedValue]) -> Ty {
 /// update `params[n].ty` if the expected type has column provenance.
 fn check(expr: &stmt::Expr, expected: &Ty, params: &mut [TypedValue]) {
     match (expr, expected) {
-        // Arg — update the param's type if expected has column provenance
-        (stmt::Expr::Arg(arg), ty) if ty.is_column() => {
-            if let Some(db_ty) = ty.db_type() {
-                params[arg.position].ty = db_ty.clone();
+        // Arg — update the param's type if expected has column provenance.
+        // `to_db_type` lifts `Ty::List(Column(elem))` into
+        // `db::Type::List(Box::new(elem))` so list-bound params get the
+        // correct array type rather than just the element type.
+        (stmt::Expr::Arg(arg), ty) if ty.has_column() => {
+            if let Some(db_ty) = ty.to_db_type() {
+                params[arg.position].ty = db_ty;
             }
         }
 

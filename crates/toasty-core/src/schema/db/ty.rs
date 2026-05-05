@@ -109,6 +109,11 @@ pub enum Type {
     /// A database enum type. See [`TypeEnum`].
     Enum(TypeEnum),
 
+    /// An array of `T`, e.g. PostgreSQL `INT8[]` or `TEXT[]`. Used both for
+    /// array column storage (where supported) and to type list-shaped bind
+    /// parameters that the engine sends as a single PG array operand.
+    List(Box<Type>),
+
     /// User-specified unrecognized type
     Custom(String),
 }
@@ -155,6 +160,7 @@ impl Type {
                 stmt::Type::Time => Ok(db.default_time_type.clone()),
                 #[cfg(feature = "jiff")]
                 stmt::Type::DateTime => Ok(db.default_datetime_type.clone()),
+                stmt::Type::List(elem) => Ok(Type::List(Box::new(Self::from_app(elem, None, db)?))),
                 _ => Err(crate::Error::unsupported_feature(format!(
                     "type {:?} is not supported by this database",
                     ty
@@ -191,6 +197,18 @@ impl Type {
             stmt::Value::Time(_) => Type::Time(6),
             #[cfg(feature = "jiff")]
             stmt::Value::DateTime(_) => Type::DateTime(6),
+            // List: pick the element type from the first non-null entry.
+            // Empty / all-null lists default to Boolean (refined by
+            // synthesize/check downstream when the element type is known
+            // from a column).
+            stmt::Value::List(items) => {
+                let elem = items
+                    .iter()
+                    .find(|v| !v.is_null())
+                    .map(Self::from_value)
+                    .unwrap_or(Type::Boolean);
+                Type::List(Box::new(elem))
+            }
             _ => Type::Text,
         }
     }

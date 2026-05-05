@@ -130,6 +130,15 @@ impl ToSql for &db::Type {
                 // SQLite: TEXT column (CHECK constraint added in ColumnDef).
                 Flavor::Sqlite => fmt!(cx, f, "TEXT"),
             },
+            db::Type::List(elem) => match f.serializer.flavor {
+                Flavor::Postgresql => fmt!(cx, f, elem.as_ref() "[]"),
+                Flavor::Mysql | Flavor::Sqlite => {
+                    todo!(
+                        "array column DDL is not yet supported on {:?}",
+                        f.serializer.flavor
+                    )
+                }
+            },
             db::Type::Custom(custom) => fmt!(cx, f, custom.as_str()),
         }
     }

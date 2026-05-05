@@ -255,12 +255,13 @@ impl ToSql for Value {
             (stmt::Value::Time(value), _) => value.to_sql(ty, out),
             #[cfg(feature = "jiff")]
             (stmt::Value::DateTime(value), _) => value.to_sql(ty, out),
-            // List → bind as a PostgreSQL array. Used by the `= ANY($1)`
-            // form the engine emits in place of `IN (...)`. The element
-            // PG type drives the per-item conversion.
-            (stmt::Value::List(items), _) if matches!(ty.kind(), Kind::Array(_)) => {
+            // List → bind as a PostgreSQL array. The prepared statement
+            // already declared the param as an array type (see
+            // `db::Type::List` → `to_postgres_type`); the element PG type
+            // drives the per-item conversion.
+            (stmt::Value::List(items), _) => {
                 let Kind::Array(elem) = ty.kind() else {
-                    unreachable!()
+                    return Err(format!("Value::List bound to non-array PG type {ty:?}").into());
                 };
                 list_to_sql(items, elem, ty, out)
             }
