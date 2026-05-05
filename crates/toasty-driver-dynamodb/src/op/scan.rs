@@ -27,7 +27,6 @@ impl Connection {
 
         tracing::trace!(table_name = %table.name, "scanning table");
 
-        // Build the base scan with filter and expression attributes.
         let scan = self
             .client
             .scan()
@@ -36,9 +35,19 @@ impl Connection {
             .set_expression_attribute_names(Some(expr_attrs.attr_names))
             .set_expression_attribute_values(Some(expr_attrs.attr_values));
 
+        let table_id = op.table;
+        let col_indices = op.columns;
+        let cols = || {
+            col_indices.iter().map(|&idx| {
+                schema.db.column(ColumnId {
+                    table: table_id,
+                    index: idx,
+                })
+            })
+        };
+
         match op.limit {
             None => {
-                // No limit — stream all items across 1 MB DynamoDB pages.
                 let mut stream = scan.into_paginator().items().send();
 
                 let mut rows: Vec<stmt::Value> = Vec::new();
@@ -48,17 +57,7 @@ impl Connection {
                     .transpose()
                     .map_err(toasty_core::Error::driver_operation_failed)?
                 {
-                    let value = item_to_record(
-                        &item,
-                        op.columns.iter().map(|&col_idx| {
-                            schema.db.column(ColumnId {
-                                table: op.table,
-                                index: col_idx,
-                            })
-                        }),
-                    )
-                    .map(stmt::Value::from)?;
-                    rows.push(value);
+                    rows.push(item_to_record(&item, cols()).map(stmt::Value::from)?);
                 }
 
                 Ok(ExecResponse {
@@ -69,7 +68,6 @@ impl Connection {
             }
 
             Some(Pagination::Cursor { page_size, after }) => {
-                // Cursor-based pagination: single call returning one page.
                 let scan = scan.limit(page_size as i32);
                 let scan = if let Some(cursor_value) = after {
                     scan.set_exclusive_start_key(Some(deserialize_ddb_cursor(&cursor_value)))
@@ -77,7 +75,6 @@ impl Connection {
                     scan
                 };
 
-                let schema = schema.clone();
                 let res = scan
                     .send()
                     .await
@@ -85,36 +82,25 @@ impl Connection {
 
                 let cursor = res.last_evaluated_key.as_ref().map(serialize_ddb_cursor);
 
-                let rows = stmt::ValueStream::from_iter(res.items.into_iter().flatten().map(
-                    move |item| {
-                        item_to_record(
-                            &item,
-                            op.columns.iter().map(|&col_idx| {
-                                schema.db.column(ColumnId {
-                                    table: op.table,
-                                    index: col_idx,
-                                })
-                            }),
-                        )
-                        .map(stmt::Value::from)
-                    },
-                ));
+                let mut rows: Vec<stmt::Value> = Vec::new();
+                for item in res.items.into_iter().flatten() {
+                    rows.push(item_to_record(&item, cols()).map(stmt::Value::from)?);
+                }
 
                 Ok(ExecResponse {
-                    values: toasty_core::driver::Rows::Stream(rows),
+                    values: toasty_core::driver::Rows::Stream(stmt::ValueStream::from_vec(rows)),
                     next_cursor: cursor,
                     prev_cursor: None,
                 })
             }
 
             Some(Pagination::Offset { limit, offset }) => {
-                // Offset-based: stream items, discard the first `offset`, then
-                // collect exactly `limit`.
                 let skip = offset.unwrap_or(0) as usize;
                 let need = limit as usize + skip;
+                // DynamoDB Limit applies before filter expressions, so we fetch
+                // skip+limit items and discard the first `skip` client-side.
                 let mut stream = scan.into_paginator().page_size(need as i32).items().send();
 
-                // Discard offset items without storing them.
                 let mut skipped = 0;
                 while skipped < skip {
                     match stream
@@ -128,7 +114,6 @@ impl Connection {
                     }
                 }
 
-                // Collect up to `limit` items.
                 let mut rows: Vec<stmt::Value> = Vec::with_capacity(limit as usize);
                 while rows.len() < limit as usize {
                     match stream
@@ -138,17 +123,7 @@ impl Connection {
                         .map_err(toasty_core::Error::driver_operation_failed)?
                     {
                         Some(item) => {
-                            let value = item_to_record(
-                                &item,
-                                op.columns.iter().map(|&col_idx| {
-                                    schema.db.column(ColumnId {
-                                        table: op.table,
-                                        index: col_idx,
-                                    })
-                                }),
-                            )
-                            .map(stmt::Value::from)?;
-                            rows.push(value);
+                            rows.push(item_to_record(&item, cols()).map(stmt::Value::from)?);
                         }
                         None => break,
                     }
