@@ -56,30 +56,29 @@ impl Connection {
 
         match op.limit {
             None => {
-                // No limit — return all results in a single call.
-                let schema = schema.clone();
-                let res = query
-                    .send()
+                // No limit — stream all items across 1 MB DynamoDB pages.
+                let mut stream = query.into_paginator().items().send();
+
+                let mut rows: Vec<stmt::Value> = Vec::new();
+                while let Some(item) = stream
+                    .next()
                     .await
-                    .map_err(toasty_core::Error::driver_operation_failed)?;
-
-                let cursor = res.last_evaluated_key.as_ref().map(serialize_ddb_cursor);
-
-                let rows = stmt::ValueStream::from_iter(res.items.into_iter().flatten().map(
-                    move |item| {
-                        item_to_record(
-                            &item,
-                            op.select
-                                .iter()
-                                .map(|column_id| schema.db.column(*column_id)),
-                        )
-                        .map(stmt::Value::from)
-                    },
-                ));
+                    .transpose()
+                    .map_err(toasty_core::Error::driver_operation_failed)?
+                {
+                    let value = item_to_record(
+                        &item,
+                        op.select
+                            .iter()
+                            .map(|column_id| schema.db.column(*column_id)),
+                    )
+                    .map(stmt::Value::from)?;
+                    rows.push(value);
+                }
 
                 Ok(ExecResponse {
-                    values: toasty_core::driver::Rows::Stream(rows),
-                    next_cursor: cursor,
+                    values: toasty_core::driver::Rows::Stream(stmt::ValueStream::from_vec(rows)),
+                    next_cursor: None,
                     prev_cursor: None,
                 })
             }

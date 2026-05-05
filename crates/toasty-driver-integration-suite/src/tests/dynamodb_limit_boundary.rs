@@ -89,6 +89,41 @@ pub async fn limit_offset_spans_page_boundary(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// No-limit query across a 1 MB boundary returns **all** rows.
+///
+/// With ~10 KB items and 200 rows (~2 MB total), a single DynamoDB `Query`
+/// call is capped at 1 MB and returns only ~100 rows. The driver must follow
+/// `LastEvaluatedKey` and keep querying until all results are returned.
+#[driver_test(requires(not(sql)))]
+pub async fn no_limit_spans_page_boundary(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = kind, local = seq)]
+    struct Item {
+        kind: String,
+        seq: i64,
+        payload: String,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+
+    let payload = "x".repeat(10_000);
+    for i in 0..200_i64 {
+        toasty::create!(Item {
+            kind: "boundary",
+            seq: i,
+            payload: payload.clone(),
+        })
+        .exec(&mut db)
+        .await?;
+    }
+
+    let items: Vec<_> = Item::filter_by_kind("boundary").exec(&mut db).await?;
+
+    assert_eq!(items.len(), 200);
+
+    Ok(())
+}
+
 // ── GSI tests (non-unique index on a UUID-keyed model) ────────────────────────
 
 #[driver_test(requires(not(sql)))]
