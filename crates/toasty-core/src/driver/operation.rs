@@ -19,8 +19,11 @@ pub use get_by_key::GetByKey;
 mod insert;
 pub use insert::Insert;
 
+mod pagination;
+pub use pagination::Pagination;
+
 mod query_pk;
-pub use query_pk::{QueryPk, QueryPkLimit};
+pub use query_pk::QueryPk;
 
 mod query_sql;
 pub use query_sql::QuerySql;

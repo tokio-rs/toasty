@@ -1,4 +1,4 @@
-use super::{Operation, QueryPkLimit};
+use super::{Operation, Pagination};
 use crate::{schema::db::TableId, stmt};
 
 /// A full-table scan operation.
@@ -19,10 +19,9 @@ pub struct Scan {
 
     /// Limit and pagination bounds. `None` means return all rows.
     ///
-    /// Uses the same [`QueryPkLimit`] variants as `QueryPk`:
     /// - `Cursor` for keyset/cursor-based pagination (`.paginate()`)
     /// - `Offset` for hard-limit with optional skip (`.limit()` / `.offset()`)
-    pub limit: Option<QueryPkLimit>,
+    pub limit: Option<Pagination>,
 }
 
 impl From<Scan> for Operation {

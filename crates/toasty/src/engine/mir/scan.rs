@@ -1,6 +1,6 @@
 use indexmap::IndexSet;
 use toasty_core::{
-    driver::operation::QueryPkLimit,
+    driver::operation::Pagination,
     schema::db::{ColumnId, TableId},
     stmt,
 };
@@ -27,7 +27,7 @@ pub(crate) struct Scan {
     pub(crate) row_filter: Option<stmt::Expr>,
 
     /// Limit and pagination bounds. `None` means return all rows.
-    pub(crate) limit: Option<QueryPkLimit>,
+    pub(crate) limit: Option<Pagination>,
 
     /// The return type.
     pub(crate) ty: stmt::Type,

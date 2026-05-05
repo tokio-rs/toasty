@@ -92,7 +92,7 @@ use std::mem;
 use indexmap::{IndexMap, IndexSet};
 use toasty_core::stmt::{self, Condition, visit_mut};
 
-use toasty_core::driver::operation::QueryPkLimit;
+use toasty_core::driver::operation::Pagination;
 
 use crate::{
     Result,
@@ -1271,7 +1271,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             if f.is_true() { None } else { Some(f.clone()) }
         };
 
-        let limit = extract_query_pk_limit(&stmt);
+        let limit = extract_pagination(&stmt);
 
         Ok(self.insert_mir_with_deps(mir::Scan {
             input,
@@ -1307,7 +1307,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             };
 
             if stmt.is_query() {
-                let limit = extract_query_pk_limit(&stmt);
+                let limit = extract_pagination(&stmt);
                 let order = extract_query_pk_order(&stmt);
 
                 // For queries, stream all matching records with the requested columns.
@@ -1381,7 +1381,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 Some(inputs[0])
             };
 
-            let limit = extract_query_pk_limit(&stmt);
+            let limit = extract_pagination(&stmt);
             let order = extract_query_pk_order(&stmt);
 
             // Use QueryPk with index to query the secondary index and return full records
@@ -1798,7 +1798,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 /// Builders normalize to `I64`, and `verify::verify_limit_is_integer_literal`
 /// enforces this invariant on the AST — so any other shape reaching here is a
 /// bug upstream.
-fn extract_query_pk_limit(stmt: &stmt::Statement) -> Option<QueryPkLimit> {
+fn extract_pagination(stmt: &stmt::Statement) -> Option<Pagination> {
     let query = stmt.as_query()?;
     match query.limit.as_ref()? {
         stmt::Limit::Cursor(c) => {
@@ -1807,12 +1807,12 @@ fn extract_query_pk_limit(stmt: &stmt::Statement) -> Option<QueryPkLimit> {
                 stmt::Expr::Value(v) => Some(v.clone()),
                 _ => None,
             });
-            Some(QueryPkLimit::Cursor { page_size, after })
+            Some(Pagination::Cursor { page_size, after })
         }
         stmt::Limit::Offset(lo) => {
             let limit = as_i64_literal(&lo.limit);
             let offset = lo.offset.as_ref().map(as_i64_literal);
-            Some(QueryPkLimit::Offset { limit, offset })
+            Some(Pagination::Offset { limit, offset })
         }
     }
 }

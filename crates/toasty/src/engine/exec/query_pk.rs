@@ -3,7 +3,7 @@ use crate::{
     engine::exec::{Action, Exec, Output, VarId},
 };
 use toasty_core::{
-    driver::operation::QueryPkLimit,
+    driver::operation::Pagination,
     driver::{ExecResponse, Rows, operation},
     schema::db::{ColumnId, IndexId, TableId},
     stmt,
@@ -33,7 +33,7 @@ pub(crate) struct QueryPk {
     pub row_filter: Option<stmt::Expr>,
 
     /// Limit and pagination bounds for this query. `None` means unbounded.
-    pub limit: Option<QueryPkLimit>,
+    pub limit: Option<Pagination>,
 
     /// Sort key ordering direction.
     pub order: Option<stmt::Direction>,

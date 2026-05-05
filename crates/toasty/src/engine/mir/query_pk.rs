@@ -1,6 +1,6 @@
 use indexmap::IndexSet;
 use toasty_core::{
-    driver::operation::QueryPkLimit,
+    driver::operation::Pagination,
     schema::db::{ColumnId, IndexId, TableId},
     stmt,
 };
@@ -38,7 +38,7 @@ pub(crate) struct QueryPk {
     pub(crate) ty: stmt::Type,
 
     /// Limit and pagination bounds for this query. `None` means unbounded.
-    pub(crate) limit: Option<QueryPkLimit>,
+    pub(crate) limit: Option<Pagination>,
 
     /// Sort key ordering direction.
     pub(crate) order: Option<stmt::Direction>,

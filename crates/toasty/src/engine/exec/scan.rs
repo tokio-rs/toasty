@@ -3,7 +3,7 @@ use crate::{
     engine::exec::{Action, Exec, Output, VarId},
 };
 use toasty_core::{
-    driver::operation::QueryPkLimit,
+    driver::operation::Pagination,
     driver::{ExecResponse, Rows, operation},
     schema::db::{ColumnId, TableId},
     stmt,
@@ -27,7 +27,7 @@ pub(crate) struct Scan {
     pub row_filter: Option<stmt::Expr>,
 
     /// Limit and pagination bounds. `None` means return all rows.
-    pub limit: Option<QueryPkLimit>,
+    pub limit: Option<Pagination>,
 }
 
 impl Exec<'_> {

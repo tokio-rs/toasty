@@ -3,7 +3,7 @@ use super::{
     operation, serialize_ddb_cursor, stmt,
 };
 use std::sync::Arc;
-use toasty_core::driver::operation::QueryPkLimit;
+use toasty_core::driver::operation::Pagination;
 use toasty_core::{driver::ExecResponse, stmt::ExprContext};
 
 impl Connection {
@@ -84,7 +84,7 @@ impl Connection {
                 })
             }
 
-            Some(QueryPkLimit::Cursor { page_size, after }) => {
+            Some(Pagination::Cursor { page_size, after }) => {
                 // Cursor-based pagination: single call, return one page.
                 query = query.limit(page_size as i32);
                 if let Some(cursor_value) = after {
@@ -119,7 +119,7 @@ impl Connection {
                 })
             }
 
-            Some(QueryPkLimit::Offset { limit, offset }) => {
+            Some(Pagination::Offset { limit, offset }) => {
                 // Offset-based pagination: stream items, discard the first
                 // `offset` in-place, then collect exactly `limit` items.
                 let skip = offset.unwrap_or(0) as usize;

@@ -4,7 +4,7 @@ use super::{
 };
 use std::sync::Arc;
 use toasty_core::{
-    driver::{ExecResponse, operation::QueryPkLimit},
+    driver::{ExecResponse, operation::Pagination},
     schema::db::ColumnId,
     stmt::ExprContext,
 };
@@ -68,7 +68,7 @@ impl Connection {
                 })
             }
 
-            Some(QueryPkLimit::Cursor { page_size, after }) => {
+            Some(Pagination::Cursor { page_size, after }) => {
                 // Cursor-based pagination: single call returning one page.
                 let scan = scan.limit(page_size as i32);
                 let scan = if let Some(cursor_value) = after {
@@ -107,7 +107,7 @@ impl Connection {
                 })
             }
 
-            Some(QueryPkLimit::Offset { limit, offset }) => {
+            Some(Pagination::Offset { limit, offset }) => {
                 // Offset-based: stream items, discard the first `offset`, then
                 // collect exactly `limit`.
                 let skip = offset.unwrap_or(0) as usize;
