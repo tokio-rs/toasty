@@ -1,10 +1,10 @@
 use crate as toasty;
-use crate::engine::simplify::Simplify;
+use crate::engine::lower::association::RewriteVia;
 use crate::schema::Register;
 use toasty_core::{
     driver::Capability,
     schema::{Builder, app, app::FieldId, app::ModelId},
-    stmt::{self, Association, Expr, ExprInSubquery, Path, Query, SourceModel, Value},
+    stmt::{self, Association, Expr, ExprContext, ExprInSubquery, Path, Query, SourceModel, Value},
 };
 
 #[allow(dead_code)]
@@ -89,7 +89,8 @@ impl UserPostSchema {
 fn has_many_via_becomes_in_subquery() {
     // `select(Post, via(User.posts)) → select(Post, in_subquery(author, user_query))`
     let s = UserPostSchema::new();
-    let mut simplify = Simplify::new(&s.schema);
+    let cx = ExprContext::new(&s.schema);
+    let mut rewrite = RewriteVia::new(cx);
 
     let user_filter = Expr::eq(
         Expr::ref_self_field(s.user_id),
@@ -109,7 +110,7 @@ fn has_many_via_becomes_in_subquery() {
         model.via = Some(association);
     }
 
-    simplify.simplify_via_association_for_query(&mut query);
+    rewrite.rewrite_via_for_query(&mut query);
 
     let stmt::ExprSet::Select(select) = &query.body else {
         panic!("expected Select");

@@ -1,4 +1,3 @@
-mod association;
 mod expr_and;
 mod expr_any;
 mod expr_binary_op;
@@ -139,11 +138,6 @@ impl VisitMut for Simplify<'_> {
         // Visit and simplify source first before pushing a new scope
         self.visit_source_mut(&mut stmt.from);
 
-        // Convert "via" associations into WHERE filters. For example,
-        // user.todos().delete(...) becomes "DELETE FROM Todo" with via association,
-        // which gets simplified to "DELETE FROM Todo WHERE user_id IN (SELECT id FROM User WHERE ...)"
-        self.simplify_via_association_for_delete(stmt);
-
         let mut s = self.scope(&stmt.from);
 
         s.visit_filter_mut(&mut stmt.filter);
@@ -157,11 +151,6 @@ impl VisitMut for Simplify<'_> {
         // Visit target first before pushing a new scope.
         self.visit_insert_target_mut(&mut stmt.target);
 
-        // Convert "via" associations in insert scopes into WHERE filters. For example,
-        // user.todos().insert(...) creates a scope query that gets simplified to ensure
-        // inserted todos are automatically linked to the specific user.
-        self.simplify_via_association_for_insert(stmt);
-
         // Create a new scope for the insert target
         let mut s = self.scope(&stmt.target);
 
@@ -174,8 +163,6 @@ impl VisitMut for Simplify<'_> {
     }
 
     fn visit_stmt_query_mut(&mut self, stmt: &mut stmt::Query) {
-        self.simplify_via_association_for_query(stmt);
-
         stmt::visit_mut::visit_stmt_query_mut(self, stmt);
 
         self.simplify_stmt_query_when_empty(stmt);
