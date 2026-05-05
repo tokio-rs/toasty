@@ -34,7 +34,7 @@ use toasty_sql::{self as sql};
 use tokio_postgres::{Client, Config, Socket, tls::MakeTlsConnect, types::ToSql};
 use url::Url;
 
-use crate::{oid_cache::OidCache, statement_cache::StatementCache};
+use crate::{oid_cache::OidCache, statement_cache::StatementCache, r#type::array_type_of};
 
 /// A PostgreSQL [`Driver`] that connects via `tokio-postgres`.
 ///
@@ -352,7 +352,18 @@ impl toasty_core::driver::Connection for Connection {
             .await?;
         let param_types: Vec<_> = typed_params
             .iter()
-            .map(|tv| self.oid_cache.get(&tv.ty))
+            .map(|tv| {
+                let elem = self.oid_cache.get(&tv.ty);
+                // A `Value::List` is bound as a single PG array param (e.g.
+                // `INT8[]`). Engine-side, the lower phase rewrote
+                // `IN (...)` to `= ANY($n)`; the bind layer wraps the
+                // element type to match.
+                if matches!(tv.value, stmt::Value::List(_)) {
+                    array_type_of(&elem)
+                } else {
+                    elem
+                }
+            })
             .collect();
 
         let values: Vec<_> = typed_params

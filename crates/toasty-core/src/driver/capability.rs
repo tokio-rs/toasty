@@ -125,6 +125,17 @@ pub struct Capability {
     /// Whether the driver supports backward (previous-page) pagination.
     /// SQL: true. DynamoDB: false.
     pub backward_pagination: bool,
+
+    /// The driver's bind layer accepts a single parameter whose value is
+    /// `Value::List(items)` and type is `Type::List(elem)`, sending it as
+    /// one protocol-level parameter (not N separate scalars).
+    /// Property of the driver bind impl, not the SQL dialect.
+    pub bind_list_param: bool,
+
+    /// The SQL dialect parses `expr <op> ANY(<array>)` and `expr <op> ALL(<array>)`
+    /// as predicates against an array-valued operand.
+    /// Property of the dialect, not the bind layer.
+    pub predicate_match_any: bool,
 }
 
 /// Maps application-level types to the concrete database column types used for
@@ -317,6 +328,11 @@ impl Capability {
         test_connection_pool: false,
 
         backward_pagination: true,
+
+        // SQLite: list params are not bound as a single protocol parameter; the
+        // engine still emits expanded `IN (?, ?, ?)` lists.
+        bind_list_param: false,
+        predicate_match_any: false,
     };
 
     /// PostgreSQL capabilities
@@ -346,6 +362,11 @@ impl Capability {
         decimal_arbitrary_precision: true,
 
         test_connection_pool: true,
+
+        // PostgreSQL accepts a single array-valued bind param and supports
+        // `expr <op> ANY(array)` / `<op> ALL(array)` predicates.
+        bind_list_param: true,
+        predicate_match_any: true,
 
         ..Self::SQLITE
     };
@@ -413,6 +434,11 @@ impl Capability {
         test_connection_pool: false,
 
         backward_pagination: false,
+
+        // DynamoDB: not SQL-based; the array-bind/`ANY`-predicate features do
+        // not apply.
+        bind_list_param: false,
+        predicate_match_any: false,
     };
 }
 

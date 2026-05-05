@@ -35,3 +35,26 @@ impl TypeExt for db::Type {
         }
     }
 }
+
+/// Returns the PostgreSQL array type whose element type is `elem`. Used when
+/// binding a `Value::List` as a single array-valued parameter (`= ANY($1)`).
+pub fn array_type_of(elem: &Type) -> Type {
+    match *elem {
+        Type::BOOL => Type::BOOL_ARRAY,
+        Type::INT2 => Type::INT2_ARRAY,
+        Type::INT4 => Type::INT4_ARRAY,
+        Type::INT8 => Type::INT8_ARRAY,
+        Type::FLOAT4 => Type::FLOAT4_ARRAY,
+        Type::FLOAT8 => Type::FLOAT8_ARRAY,
+        Type::TEXT => Type::TEXT_ARRAY,
+        Type::VARCHAR => Type::VARCHAR_ARRAY,
+        Type::BYTEA => Type::BYTEA_ARRAY,
+        Type::UUID => Type::UUID_ARRAY,
+        Type::NUMERIC => Type::NUMERIC_ARRAY,
+        Type::TIMESTAMP => Type::TIMESTAMP_ARRAY,
+        Type::TIMESTAMPTZ => Type::TIMESTAMPTZ_ARRAY,
+        Type::DATE => Type::DATE_ARRAY,
+        Type::TIME => Type::TIME_ARRAY,
+        _ => todo!("no PostgreSQL array type for element type {elem:?}"),
+    }
+}

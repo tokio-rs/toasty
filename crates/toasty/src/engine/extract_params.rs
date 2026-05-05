@@ -21,7 +21,7 @@
 use toasty_core::{
     driver::operation::TypedValue,
     schema::{Schema, db},
-    stmt,
+    stmt::{self, VisitMut},
 };
 
 /// Expression context bound to the database schema.
@@ -89,28 +89,104 @@ impl Ty {
 /// Replace all scalar `Value` nodes with `Arg(n)` placeholders.
 /// Initialize each param's `ty` from the value itself.
 fn extract_values(stmt: &mut stmt::Statement, params: &mut Vec<TypedValue>) {
-    stmt::visit_mut::for_each_expr_mut(stmt, |expr| {
-        match expr {
-            // Scalar value → extract
-            stmt::Expr::Value(value) if is_extractable_scalar(value) => {
-                let ty = db::Type::from_value(value);
-                let position = params.len();
-                let value = std::mem::replace(value, stmt::Value::Null);
-                params.push(TypedValue { value, ty });
-                *expr = stmt::Expr::arg(position);
+    struct Extract<'a> {
+        params: &'a mut Vec<TypedValue>,
+    }
+
+    impl stmt::VisitMut for Extract<'_> {
+        fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
+            // Intercept ANY/ALL: bind their array operand as one Value::List
+            // param rather than visiting the rhs and extracting each element
+            // separately. The element type is refined to the column type by
+            // the synthesize/check pass.
+            match expr {
+                stmt::Expr::AnyOp(e) => {
+                    self.visit_expr_mut(&mut e.lhs);
+                    if let Some(arg) = extract_array_operand(&mut e.rhs, self.params) {
+                        *e.rhs = arg;
+                    } else {
+                        self.visit_expr_mut(&mut e.rhs);
+                    }
+                    return;
+                }
+                stmt::Expr::AllOp(e) => {
+                    self.visit_expr_mut(&mut e.lhs);
+                    if let Some(arg) = extract_array_operand(&mut e.rhs, self.params) {
+                        *e.rhs = arg;
+                    } else {
+                        self.visit_expr_mut(&mut e.rhs);
+                    }
+                    return;
+                }
+                _ => {}
             }
 
-            // Value::Record or Value::List → take ownership, convert to
-            // Expr::Record/Expr::List with extracted fields
-            stmt::Expr::Value(value @ (stmt::Value::Record(_) | stmt::Value::List(_))) => {
-                let owned = std::mem::replace(value, stmt::Value::Null);
-                *expr = value_to_extracted_expr(owned, params);
-            }
+            // Default post-order: recurse first, then maybe extract this node.
+            stmt::visit_mut::visit_expr_mut(self, expr);
 
-            // Null, Default, and everything else: leave as-is
-            _ => {}
+            match expr {
+                stmt::Expr::Value(value) if is_extractable_scalar(value) => {
+                    let ty = db::Type::from_value(value);
+                    let position = self.params.len();
+                    let value = std::mem::replace(value, stmt::Value::Null);
+                    self.params.push(TypedValue { value, ty });
+                    *expr = stmt::Expr::arg(position);
+                }
+                stmt::Expr::Value(value @ (stmt::Value::Record(_) | stmt::Value::List(_))) => {
+                    let owned = std::mem::replace(value, stmt::Value::Null);
+                    *expr = value_to_extracted_expr(owned, self.params);
+                }
+                _ => {}
+            }
         }
+    }
+
+    Extract { params }.visit_mut(stmt);
+}
+
+/// If `rhs` is a list literal of values, take it out, push one
+/// `TypedValue { value: Value::List(items), ty: <elem placeholder> }` onto
+/// `params`, and return an `Expr::Arg(n)` to put back in its place.
+///
+/// The element type stored on the param is the value-inferred type of the
+/// first item; the synthesize/check pass refines it to the column type.
+fn extract_array_operand(rhs: &mut stmt::Expr, params: &mut Vec<TypedValue>) -> Option<stmt::Expr> {
+    let items: Vec<stmt::Value> = match rhs {
+        stmt::Expr::Value(stmt::Value::List(_)) => {
+            let stmt::Expr::Value(stmt::Value::List(items)) =
+                std::mem::replace(rhs, stmt::Expr::null())
+            else {
+                unreachable!()
+            };
+            items
+        }
+        stmt::Expr::List(list) if list.items.iter().all(|i| matches!(i, stmt::Expr::Value(_))) => {
+            let stmt::Expr::List(list) = std::mem::replace(rhs, stmt::Expr::null()) else {
+                unreachable!()
+            };
+            list.items
+                .into_iter()
+                .map(|e| match e {
+                    stmt::Expr::Value(v) => v,
+                    _ => unreachable!(),
+                })
+                .collect()
+        }
+        _ => return None,
+    };
+
+    let elem_ty = items
+        .iter()
+        .find(|v| !v.is_null())
+        .map(db::Type::from_value)
+        .unwrap_or(db::Type::Boolean);
+
+    let position = params.len();
+    params.push(TypedValue {
+        value: stmt::Value::List(items),
+        ty: elem_ty,
     });
+    Some(stmt::Expr::arg(position))
 }
 
 /// Recursively convert a `Value` into an `Expr`, extracting scalar values.
@@ -351,6 +427,21 @@ fn synthesize(expr: &stmt::Expr, cx: &Cx<'_>, params: &mut [TypedValue]) -> Ty {
             let expr_ty = synthesize(&in_list.expr, cx, params);
             synthesize(&in_list.list, cx, params);
             check_list(&in_list.list, &expr_ty, params);
+            Ty::Inferred(db::Type::Boolean)
+        }
+
+        // AnyOp / AllOp — synthesize lhs, then push the lhs scalar type down
+        // into the rhs as the array element type. When the rhs is an Arg
+        // bound to a Value::List, this refines the param's `ty` to the
+        // column type so the driver picks the right array element type.
+        stmt::Expr::AnyOp(e) => {
+            let lhs_ty = synthesize(&e.lhs, cx, params);
+            check(&e.rhs, &lhs_ty, params);
+            Ty::Inferred(db::Type::Boolean)
+        }
+        stmt::Expr::AllOp(e) => {
+            let lhs_ty = synthesize(&e.lhs, cx, params);
+            check(&e.rhs, &lhs_ty, params);
             Ty::Inferred(db::Type::Boolean)
         }
 
