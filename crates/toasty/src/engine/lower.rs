@@ -1341,14 +1341,23 @@ fn build_update_returning(
     )
 }
 
-/// True when the `IN` list is a constant collection of values that can be
-/// bound as a single array parameter — either an `Expr::Value(Value::List)`
-/// or an `Expr::List` of `Value`s. Other shapes (e.g. lists containing
-/// references) are left as expanded `IN` lists.
+/// True when an `IN` list is a candidate for the `= ANY($1)` rewrite:
+///
+/// - The lhs is scalar (not a `Record`). Composite-key `IN` would need a PG
+///   row-array bind which the current driver doesn't support.
+/// - The list is a constant collection of scalar values. Lists containing
+///   references, sub-statements, or record values stay as expanded `IN`.
 fn in_list_is_value_list(e: &stmt::ExprInList) -> bool {
+    if matches!(*e.expr, stmt::Expr::Record(_)) {
+        return false;
+    }
+    let scalar = |v: &stmt::Value| !matches!(v, stmt::Value::Record(_) | stmt::Value::List(_));
     match &*e.list {
-        stmt::Expr::Value(stmt::Value::List(_)) => true,
-        stmt::Expr::List(list) => list.items.iter().all(|i| matches!(i, stmt::Expr::Value(_))),
+        stmt::Expr::Value(stmt::Value::List(items)) => items.iter().all(scalar),
+        stmt::Expr::List(list) => list
+            .items
+            .iter()
+            .all(|i| matches!(i, stmt::Expr::Value(v) if scalar(v))),
         _ => false,
     }
 }

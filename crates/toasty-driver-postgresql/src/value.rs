@@ -27,6 +27,35 @@ impl<'a> postgres_types::FromSql<'a> for EnumString {
     }
 }
 
+/// Wrapper for writing string values to PostgreSQL enum columns.
+///
+/// `String::ToSql::accepts()` rejects custom enum types, so when binding a
+/// `Vec<Option<String>>` to an enum array we have to route through this
+/// adapter. The wire format for enum values is the variant label as plain
+/// UTF-8 — identical to TEXT — so the impl just writes the bytes.
+#[derive(Debug)]
+struct EnumStr(String);
+
+impl ToSql for EnumStr {
+    fn to_sql(
+        &self,
+        _ty: &Type,
+        out: &mut BytesMut,
+    ) -> std::result::Result<IsNull, Box<dyn std::error::Error + Sync + Send>>
+    where
+        Self: Sized,
+    {
+        out.extend_from_slice(self.0.as_bytes());
+        Ok(IsNull::No)
+    }
+
+    fn accepts(ty: &Type) -> bool {
+        matches!(ty.kind(), Kind::Enum(_))
+    }
+
+    to_sql_checked!();
+}
+
 #[derive(Debug)]
 pub struct Value(pub(crate) CoreValue);
 
@@ -317,6 +346,18 @@ fn list_to_sql(
                 other => f(other).map(Some),
             })
             .collect()
+    }
+
+    // Enum element: PG enums are wire-encoded as plain UTF-8 text. The
+    // standard `String` ToSql impl rejects `Kind::Enum`, so wrap each
+    // value in an adapter that accepts enum types and writes the bytes
+    // unchanged.
+    if matches!(elem.kind(), Kind::Enum(_)) {
+        let v = collect(items, |x| match x {
+            CoreValue::String(s) => Ok(EnumStr(s.clone())),
+            _ => Err(format!("expected String in {elem:?}[] array, got {x:?}").into()),
+        })?;
+        return v.to_sql(array_ty, out);
     }
 
     match *elem {
