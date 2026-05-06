@@ -31,6 +31,13 @@ pub(super) struct PackageDep {
     /// dependency or workspace member). When `None`, the registry version
     /// is used.
     pub path: Option<PathBuf>,
+    /// Features the user's package enables on this dep. The dumper crate
+    /// mirrors these so it builds with the same `toasty` configuration the
+    /// user's crate was compiled against — otherwise feature-gated `Model`
+    /// fields (e.g., jiff types) would not match.
+    pub features: Vec<String>,
+    /// Whether the user's dep entry uses default features.
+    pub default_features: bool,
 }
 
 pub(super) fn load(project_root: &Path) -> Result<ProjectMetadata> {
@@ -70,7 +77,7 @@ pub(super) fn load(project_root: &Path) -> Result<ProjectMetadata> {
         })
     });
 
-    let toasty = find_dep(&metadata, "toasty")?;
+    let toasty = find_dep(&metadata, root_pkg, "toasty")?;
 
     Ok(ProjectMetadata {
         workspace_root: metadata.workspace_root.into_std_path_buf(),
@@ -84,7 +91,11 @@ pub(super) fn load(project_root: &Path) -> Result<ProjectMetadata> {
     })
 }
 
-fn find_dep(metadata: &cargo_metadata::Metadata, name: &str) -> Result<PackageDep> {
+fn find_dep(
+    metadata: &cargo_metadata::Metadata,
+    root_pkg: &cargo_metadata::Package,
+    name: &str,
+) -> Result<PackageDep> {
     let pkg = metadata
         .packages
         .iter()
@@ -104,8 +115,24 @@ fn find_dep(metadata: &cargo_metadata::Metadata, name: &str) -> Result<PackageDe
         None
     };
 
+    // Pick up the feature set the user enabled on this dep in their
+    // Cargo.toml. Skip dev/build-only entries.
+    let dep_entry = root_pkg
+        .dependencies
+        .iter()
+        .find(|d| {
+            d.name == name && matches!(d.kind, cargo_metadata::DependencyKind::Normal)
+        });
+
+    let (features, default_features) = match dep_entry {
+        Some(d) => (d.features.clone(), d.uses_default_features),
+        None => (Vec::new(), true),
+    };
+
     Ok(PackageDep {
         version: pkg.version.to_string(),
         path,
+        features,
+        default_features,
     })
 }

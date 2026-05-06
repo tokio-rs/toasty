@@ -56,25 +56,42 @@ path = "src/dumper.rs"
 
 [dependencies]
 {user_pkg_name} = {{ path = "{user_pkg_path}" }}
-toasty = {{ {toasty}, features = ["serde"] }}
+toasty = {{ {toasty} }}
 
 [workspace]
 "#,
         edition = meta.package.edition,
         user_pkg_name = meta.package.name,
-        toasty = render_dep_inner(&meta.toasty),
+        toasty = render_toasty_dep(&meta.toasty),
     )
 }
 
-fn render_dep_inner(dep: &PackageDep) -> String {
-    match &dep.path {
-        Some(path) => format!(
-            r#"version = "{}", path = "{}""#,
-            dep.version,
-            path.display()
-        ),
-        None => format!(r#"version = "{}""#, dep.version),
+fn render_toasty_dep(dep: &PackageDep) -> String {
+    let mut parts = vec![format!(r#"version = "{}""#, dep.version)];
+
+    if let Some(path) = &dep.path {
+        parts.push(format!(r#"path = "{}""#, path.display()));
     }
+
+    if !dep.default_features {
+        parts.push("default-features = false".to_string());
+    }
+
+    // Mirror the user's feature selection on `toasty`, plus `serde` (the
+    // dumper needs `app::Schema` to be `Serialize`). Dedup so we don't
+    // emit `serde` twice when the user already enabled it.
+    let mut features: Vec<String> = dep.features.clone();
+    if !features.iter().any(|f| f == "serde") {
+        features.push("serde".to_string());
+    }
+    let feat_list = features
+        .iter()
+        .map(|f| format!(r#""{f}""#))
+        .collect::<Vec<_>>()
+        .join(", ");
+    parts.push(format!("features = [{feat_list}]"));
+
+    parts.join(", ")
 }
 
 fn render_dumper_src(meta: &ProjectMetadata) -> String {
