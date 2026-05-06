@@ -230,7 +230,12 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<Ren
 }
 
 impl GenerateCommand {
-    pub(crate) fn run(self, db: &Db, config: &Config) -> Result<()> {
+    pub(crate) fn run(
+        self,
+        db: &Db,
+        config: &Config,
+        project_root: Option<&std::path::Path>,
+    ) -> Result<()> {
         println!();
         println!(
             "  {}",
@@ -323,6 +328,13 @@ impl GenerateCommand {
             style("✓").green().bold(),
             style("Updated migration history").dim()
         );
+
+        // Materialize Toasty.toml on the first migration so the user has a
+        // concrete config to edit. Only runs in standalone mode (where we
+        // know the project root) and is a no-op if the file already exists.
+        if let Some(project_root) = project_root {
+            config.save_if_missing(project_root)?;
+        }
 
         println!();
         println!(

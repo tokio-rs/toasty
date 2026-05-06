@@ -51,19 +51,30 @@ impl Config {
         Ok(config)
     }
 
-    /// Load configuration from `<project_root>/Toasty.toml`, creating it with
-    /// default contents if the file does not exist. Used by the standalone
-    /// CLI; library callers can wire this up themselves via [`Config::load`].
+    /// Load configuration from `<project_root>/Toasty.toml`, falling back to
+    /// the default config (without touching disk) if the file is missing.
+    /// The file is written lazily by [`Config::save_if_missing`] when the
+    /// first migration is generated, so just running the CLI doesn't drop
+    /// a Toasty.toml into the user's project.
     pub fn load_or_default(project_root: &Path) -> Result<Self> {
         let path = project_root.join("Toasty.toml");
         if path.exists() {
             Self::load_from(&path)
         } else {
-            let config = Self::default();
-            let toml = toml::to_string_pretty(&config)?;
-            fs::write(&path, toml)?;
-            Ok(config)
+            Ok(Self::default())
         }
+    }
+
+    /// Write `<project_root>/Toasty.toml` with this config's contents, but
+    /// only if the file does not already exist.
+    pub fn save_if_missing(&self, project_root: &Path) -> Result<()> {
+        let path = project_root.join("Toasty.toml");
+        if path.exists() {
+            return Ok(());
+        }
+        let toml = toml::to_string_pretty(self)?;
+        fs::write(&path, toml)?;
+        Ok(())
     }
 
     /// Set the migration configuration
@@ -79,18 +90,28 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
-    fn load_or_default_creates_toasty_toml_when_missing() {
+    fn load_or_default_does_not_create_toasty_toml() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("Toasty.toml");
         assert!(!path.exists());
 
-        Config::load_or_default(dir.path()).unwrap();
+        let config = Config::load_or_default(dir.path()).unwrap();
 
-        assert!(path.exists(), "Toasty.toml should be created on first load");
-        let contents = fs::read_to_string(&path).unwrap();
-        let reparsed: Config = toml::from_str(&contents).unwrap();
-        let default = Config::default();
+        assert!(!path.exists(), "Toasty.toml must not be created on load");
+        assert_eq!(config, Config::default());
+    }
 
-        assert_eq!(reparsed, default);
+    #[test]
+    fn save_if_missing_writes_when_absent_and_is_idempotent() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("Toasty.toml");
+
+        Config::default().save_if_missing(dir.path()).unwrap();
+        assert!(path.exists());
+
+        // Modify the file; a subsequent save must not overwrite it.
+        fs::write(&path, "# user edits\n").unwrap();
+        Config::default().save_if_missing(dir.path()).unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), "# user edits\n");
     }
 }

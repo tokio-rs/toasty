@@ -141,7 +141,10 @@ impl ToastyCli {
         };
 
         match cli.command {
-            Command::Migration(cmd) => cmd.run(db, &self.config).await,
+            Command::Migration(cmd) => {
+                cmd.run(db, &self.config, self.project_root.as_deref())
+                    .await
+            }
         }
     }
 }

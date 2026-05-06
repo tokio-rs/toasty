@@ -19,6 +19,7 @@ pub use snapshot_file::*;
 use crate::Config;
 use anyhow::Result;
 use clap::Parser;
+use std::path::Path;
 use toasty::Db;
 
 /// Top-level `migration` subcommand.
@@ -50,16 +51,21 @@ enum MigrationSubcommand {
 }
 
 impl MigrationCommand {
-    pub(crate) async fn run(self, db: &Db, config: &Config) -> Result<()> {
-        self.subcommand.run(db, config).await
+    pub(crate) async fn run(
+        self,
+        db: &Db,
+        config: &Config,
+        project_root: Option<&Path>,
+    ) -> Result<()> {
+        self.subcommand.run(db, config, project_root).await
     }
 }
 
 impl MigrationSubcommand {
-    async fn run(self, db: &Db, config: &Config) -> Result<()> {
+    async fn run(self, db: &Db, config: &Config, project_root: Option<&Path>) -> Result<()> {
         match self {
             Self::Apply(cmd) => cmd.run(db, config).await,
-            Self::Generate(cmd) => cmd.run(db, config),
+            Self::Generate(cmd) => cmd.run(db, config, project_root),
             Self::Snapshot(cmd) => cmd.run(db, config),
             Self::Drop(cmd) => cmd.run(db, config),
             Self::Reset(cmd) => cmd.run(db, config).await,
