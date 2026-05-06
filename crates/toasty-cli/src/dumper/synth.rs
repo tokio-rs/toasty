@@ -8,8 +8,8 @@ use std::path::{Path, PathBuf};
 
 pub(super) struct Synth {
     pub manifest_path: PathBuf,
-    /// The cargo target directory to use when building the dumper. Mirrors
-    /// the user's resolved target dir so the dep cache is shared.
+    /// User's resolved target dir — shared with the dumper's build so the
+    /// dep cache is reused.
     pub target_directory: PathBuf,
 }
 
@@ -79,9 +79,11 @@ fn render_toasty_dep(dep: &PackageDep) -> String {
         parts.push("default-features = false".to_string());
     }
 
-    // Mirror the user's feature selection on `toasty`, plus `serde` (the
-    // dumper needs `app::Schema` to be `Serialize`). Dedup so we don't
-    // emit `serde` twice when the user already enabled it.
+    // Mirror the user's feature selection on `toasty`, plus `serde` (needed
+    // for `app::Schema: Serialize`). Mirroring rather than enabling all
+    // features keeps feature-gated user models compiling against a matching
+    // `toasty` config, and lets cargo reuse the cached `toasty` rlib from
+    // the user's workspace instead of building a separately-unified copy.
     let mut features: Vec<String> = dep.features.clone();
     if !features.iter().any(|f| f == "serde") {
         features.push("serde".to_string());

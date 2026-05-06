@@ -5,9 +5,8 @@ use std::path::{Path, PathBuf};
 
 /// Metadata captured from the user's project for synthesizing the dumper.
 pub(super) struct ProjectMetadata {
-    /// The resolved cargo target directory. Honors `CARGO_TARGET_DIR`,
-    /// `[build] target-dir` in cargo config, and workspace-level overrides
-    /// — we cannot assume `<workspace_root>/target`.
+    /// Resolved target dir — honors `CARGO_TARGET_DIR` and config overrides,
+    /// so it isn't necessarily `<workspace>/target`.
     pub target_directory: PathBuf,
 
     /// The user's root package — the one whose schema we are extracting.
@@ -33,12 +32,9 @@ pub(super) struct PackageDep {
     /// dependency or workspace member). When `None`, the registry version
     /// is used.
     pub path: Option<PathBuf>,
-    /// Features the user's package enables on this dep. The dumper crate
-    /// mirrors these so it builds with the same `toasty` configuration the
-    /// user's crate was compiled against — otherwise feature-gated `Model`
-    /// fields (e.g., jiff types) would not match.
+    /// Features the user enables on this dep. The dumper mirrors them so
+    /// feature-gated `Model` types (e.g. jiff fields) compile.
     pub features: Vec<String>,
-    /// Whether the user's dep entry uses default features.
     pub default_features: bool,
 }
 
