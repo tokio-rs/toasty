@@ -7,8 +7,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 pub(super) struct Synth {
-    pub root: PathBuf,
     pub manifest_path: PathBuf,
+    pub workspace_root: PathBuf,
 }
 
 pub(super) fn write(meta: &ProjectMetadata) -> Result<Synth> {
@@ -24,8 +24,8 @@ pub(super) fn write(meta: &ProjectMetadata) -> Result<Synth> {
     write_if_changed(&dumper_rs, &render_dumper_src(meta))?;
 
     Ok(Synth {
-        root,
         manifest_path,
+        workspace_root: meta.workspace_root.clone(),
     })
 }
 

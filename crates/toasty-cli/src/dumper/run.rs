@@ -9,7 +9,11 @@ use toasty_core::schema::app;
 /// Build the dumper crate, run it, and deserialize its stdout as
 /// [`app::Schema`].
 pub(super) fn build_and_run(synth: &Synth) -> Result<app::Schema> {
-    let target_dir = synth.root.join("target");
+    // Share the user's workspace target dir so cargo's dep cache (toasty,
+    // serde, the user's crate, transitive deps) is reused across runs and
+    // with the user's own builds. Without this, the dumper's first build
+    // recompiles everything from scratch.
+    let target_dir = synth.workspace_root.join("target");
 
     let output = Command::new("cargo")
         .arg("build")
