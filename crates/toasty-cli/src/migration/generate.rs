@@ -1,5 +1,5 @@
 use super::{HistoryFile, HistoryFileMigration, SnapshotFile};
-use crate::{Config, theme::dialoguer_theme};
+use crate::{Config, Flavor, theme::dialoguer_theme};
 use anyhow::Result;
 use clap::Parser;
 use console::style;
@@ -7,13 +7,12 @@ use dialoguer::Select;
 use hashbrown::{HashMap, HashSet};
 use rand::RngExt;
 use std::fs;
-use toasty::{
-    Db,
-    schema::db::{
-        ColumnId, ColumnsDiffItem, IndexId, IndicesDiffItem, Migration, RenameHints, Schema,
-        SchemaDiff, TableId, TablesDiffItem,
-    },
+use std::path::Path;
+use toasty::schema::db::{
+    ColumnId, ColumnsDiffItem, IndexId, IndicesDiffItem, Migration, RenameHints, Schema,
+    SchemaDiff, TableId, TablesDiffItem,
 };
+use toasty_core::schema::app;
 
 /// Generates a new SQL migration from the current schema diff.
 ///
@@ -32,6 +31,11 @@ pub struct GenerateCommand {
     /// Name for the migration
     #[arg(short, long)]
     name: Option<String>,
+
+    /// SQL dialect to emit. Required in standalone mode; ignored in library
+    /// mode (the dialect is inherited from the provided `Db`).
+    #[arg(long, value_enum)]
+    flavor: Option<Flavor>,
 }
 
 /// Collects rename hints by interactively asking the user about potential renames
@@ -230,11 +234,17 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<Ren
 }
 
 impl GenerateCommand {
+    /// Returns the user-supplied `--flavor` flag, if any.
+    pub(crate) fn flavor(&self) -> Option<Flavor> {
+        self.flavor
+    }
+
     pub(crate) fn run(
         self,
-        db: &Db,
+        app_schema: app::Schema,
+        flavor: toasty_sql::Flavor,
         config: &Config,
-        project_root: Option<&std::path::Path>,
+        project_root: &Path,
     ) -> Result<()> {
         println!();
         println!(
@@ -262,7 +272,12 @@ impl GenerateCommand {
             .map(|snapshot| snapshot.schema)
             .unwrap_or_else(Schema::default);
 
-        let schema = toasty::schema::db::Schema::clone(&db.schema().db);
+        // Build the current db-level schema from the app schema using the
+        // flavor's capability. Mirrors what `Db::builder().build(...)` does
+        // internally, without needing a connected `Db`.
+        let full_schema =
+            toasty_core::schema::Builder::new().build(app_schema, flavor.capability())?;
+        let schema = full_schema.db;
 
         let rename_hints = collect_rename_hints(&previous_schema, &schema)?;
         let diff = SchemaDiff::from(&previous_schema, &schema, &rename_hints);
@@ -297,7 +312,7 @@ impl GenerateCommand {
         );
         let migration_path = config.migration.get_migrations_dir().join(&migration_name);
 
-        let migration = db.driver().generate_migration(&diff);
+        let migration = flavor.generate_migration(&diff);
 
         history.add_migration(HistoryFileMigration {
             // Some databases only supported signed 64-bit integers.
@@ -330,11 +345,8 @@ impl GenerateCommand {
         );
 
         // Materialize Toasty.toml on the first migration so the user has a
-        // concrete config to edit. Only runs in standalone mode (where we
-        // know the project root) and is a no-op if the file already exists.
-        if let Some(project_root) = project_root {
-            config.save_if_missing(project_root)?;
-        }
+        // concrete config to edit. No-op if the file already exists.
+        config.save_if_missing(project_root)?;
 
         println!();
         println!(

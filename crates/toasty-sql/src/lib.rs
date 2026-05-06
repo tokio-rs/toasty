@@ -12,7 +12,7 @@ pub use migration::*;
 
 /// SQL serialization and parameter handling.
 pub mod serializer;
-pub use serializer::Serializer;
+pub use serializer::{Flavor, Serializer};
 
 /// SQL statement types for both DML and DDL operations.
 pub mod stmt;

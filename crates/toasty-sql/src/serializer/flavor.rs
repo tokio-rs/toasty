@@ -1,21 +1,56 @@
 use super::Serializer;
 
-use toasty_core::schema::db;
+use toasty_core::driver::Capability;
+use toasty_core::schema::db::{self, Migration, SchemaDiff};
 
-#[derive(Debug)]
-pub(super) enum Flavor {
+/// SQL dialect for migration generation and serialization.
+#[derive(Copy, Clone, Debug)]
+pub enum Flavor {
+    /// PostgreSQL
     Postgresql,
+    /// SQLite
     Sqlite,
+    /// MySQL
     Mysql,
 }
 
+impl Flavor {
+    /// The driver capability associated with this flavor.
+    pub fn capability(&self) -> &'static Capability {
+        match self {
+            Flavor::Sqlite => &Capability::SQLITE,
+            Flavor::Postgresql => &Capability::POSTGRESQL,
+            Flavor::Mysql => &Capability::MYSQL,
+        }
+    }
+
+    /// Generate a migration by serializing each statement of the schema diff
+    /// with this flavor's dialect-specific SQL.
+    pub fn generate_migration(&self, diff: &SchemaDiff<'_>) -> Migration {
+        let statements = crate::MigrationStatement::from_diff(diff, self.capability());
+        let sql_strings: Vec<String> = statements
+            .iter()
+            .map(|stmt| Serializer::for_flavor(*self, stmt.schema()).serialize(stmt.statement()))
+            .collect();
+
+        // Sqlite and MySQL use breakpoints between statements; PostgreSQL
+        // emits a single joined SQL blob. Mirrors the per-driver impls.
+        match self {
+            Flavor::Sqlite | Flavor::Mysql => Migration::new_sql_with_breakpoints(&sql_strings),
+            Flavor::Postgresql => Migration::new_sql(sql_strings.join("\n")),
+        }
+    }
+}
+
 impl<'a> Serializer<'a> {
+    /// Creates a serializer for the given dialect.
+    pub fn for_flavor(flavor: Flavor, schema: &'a db::Schema) -> Self {
+        Serializer { schema, flavor }
+    }
+
     /// Creates a serializer that emits SQLite SQL.
     pub fn sqlite(schema: &'a db::Schema) -> Self {
-        Serializer {
-            schema,
-            flavor: Flavor::Sqlite,
-        }
+        Self::for_flavor(Flavor::Sqlite, schema)
     }
 
     /// Returns `true` if this serializer targets SQLite.
@@ -25,18 +60,12 @@ impl<'a> Serializer<'a> {
 
     /// Creates a serializer that emits PostgreSQL SQL.
     pub fn postgresql(schema: &'a db::Schema) -> Self {
-        Serializer {
-            schema,
-            flavor: Flavor::Postgresql,
-        }
+        Self::for_flavor(Flavor::Postgresql, schema)
     }
 
     /// Creates a serializer that emits MySQL SQL.
     pub fn mysql(schema: &'a db::Schema) -> Self {
-        Serializer {
-            schema,
-            flavor: Flavor::Mysql,
-        }
+        Self::for_flavor(Flavor::Mysql, schema)
     }
 
     pub(super) fn is_mysql(&self) -> bool {

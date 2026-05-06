@@ -11,7 +11,7 @@ mod delim;
 use delim::{Comma, Delimited, Period};
 
 mod flavor;
-use flavor::Flavor;
+pub use flavor::Flavor;
 
 mod ident;
 use ident::Ident;

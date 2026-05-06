@@ -26,9 +26,5 @@ uuid.workspace = true
 name = "todo-app"
 path = "src/bin/app.rs"
 
-[[bin]]
-name = "todo-cli"
-path = "src/bin/cli.rs"
-
 [lints]
 workspace = true
