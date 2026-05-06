@@ -363,10 +363,6 @@ impl Model {
         }
     }
 
-    pub(crate) fn has_associations(&self) -> bool {
-        self.fields.iter().any(|f| f.ty.is_relation())
-    }
-
     pub(crate) fn from_enum_ast(ast: &syn::ItemEnum) -> syn::Result<Self> {
         use super::variant::VariantAttr;
 
@@ -431,6 +427,12 @@ impl Model {
             for (index, ast_field) in ast_fields.iter().enumerate() {
                 let mut field =
                     Field::from_ast(ast_field, &model_ident, global_field_index, index, &names)?;
+                if field.attrs.deferred {
+                    errs.push(syn::Error::new_spanned(
+                        ast_field,
+                        "#[deferred] is not yet supported on embedded enum variant fields",
+                    ));
+                }
                 field.variant = Some(variant_index);
                 all_fields.push(field);
                 global_field_index += 1;

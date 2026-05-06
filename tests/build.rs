@@ -59,6 +59,19 @@ fn main() {
 
     generate_readme_tests(base, &out_dir);
     generate_guide_tests(base, &out_dir);
+    detect_postgres_tls();
+}
+
+/// Set `cfg(toasty_postgres_tls)` when `TOASTY_TEST_POSTGRES_TLS_URL` is set at
+/// build time. The TLS test suite uses this cfg to apply `#[ignore]` when it is
+/// absent, so the tests are skipped unless the env var is provided (which CI
+/// already does, and local users can set to opt in).
+fn detect_postgres_tls() {
+    println!("cargo::rerun-if-env-changed=TOASTY_TEST_POSTGRES_TLS_URL");
+    println!("cargo::rustc-check-cfg=cfg(toasty_postgres_tls)");
+    if env::var_os("TOASTY_TEST_POSTGRES_TLS_URL").is_some_and(|v| !v.is_empty()) {
+        println!("cargo::rustc-cfg=toasty_postgres_tls");
+    }
 }
 
 fn generate_readme_tests(base: &Path, out_dir: &str) {

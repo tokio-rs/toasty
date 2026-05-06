@@ -127,7 +127,7 @@ This lowering phase handles:
 Lowering transforms model-level statements to table-level statements through a visitor pattern that rewrites each part of the statement AST:
 
 1. **Table Resolution**: `InsertTarget::Model`, `UpdateTarget::Model`, etc. become their corresponding table references
-2. **Returning Clause Transformation**: `Returning::Model` is replaced with `Returning::Expr` containing the expanded column expressions
+2. **Returning Clause Transformation**: `Returning::Model` is replaced with `Returning::Project` containing the expanded column expressions
 3. **Field Reference Resolution**: Model field references are converted to table column references
 4. **Include Expansion**: Association includes become subqueries in the returning clause
 

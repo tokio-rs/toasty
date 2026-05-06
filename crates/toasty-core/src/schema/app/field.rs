@@ -50,6 +50,10 @@ pub struct Field {
     /// If `true`, this field tracks an OCC version counter.
     pub versionable: bool,
 
+    /// If `true`, this field is excluded from default queries and must be
+    /// loaded on demand via the per-field `.exec()` method.
+    pub deferred: bool,
+
     /// Validation constraints applied to this field's values.
     pub constraints: Vec<Constraint>,
 

@@ -24,6 +24,7 @@ fn make_field(model_id: ModelId, index: usize, name: &str, versionable: bool) ->
         primary_key: index == 0,
         auto: None,
         versionable,
+        deferred: false,
         constraints: vec![],
         variant: None,
     }

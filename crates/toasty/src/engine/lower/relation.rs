@@ -301,7 +301,7 @@ impl LowerStatement<'_, '_> {
                 let stmt::ExprSet::Select(select) = &mut query.body else {
                     todo!()
                 };
-                select.returning = stmt::Expr::record([1]).into();
+                select.returning = stmt::Returning::Project(stmt::Expr::record([1]));
                 query
             }));
         }
@@ -394,8 +394,10 @@ impl LowerStatement<'_, '_> {
             stmt.source.single = false;
         }
 
-        self.state.engine.simplify_stmt(&mut stmt);
-        source.set_returning_field(_field.id, stmt.into());
+        // Run the canonical pipeline on the synthesized child insert and
+        // stitch it onto the parent as an `Expr::Arg`.
+        let arg = self.lower_sub_stmt(stmt::Statement::Insert(stmt));
+        source.set_returning_field(_field.id, arg);
     }
 
     fn plan_mut_belongs_to(
@@ -529,16 +531,13 @@ impl LowerStatement<'_, '_> {
 
                 // Previous value of returning does nothing in this
                 // context
-                insert.returning = Some(
-                    stmt::Expr::record(
-                        belongs_to
-                            .foreign_key
-                            .fields
-                            .iter()
-                            .map(|fk_field| stmt::Expr::ref_self_field(fk_field.target)),
-                    )
-                    .into(),
-                );
+                insert.returning = Some(stmt::Returning::Project(stmt::Expr::record(
+                    belongs_to
+                        .foreign_key
+                        .fields
+                        .iter()
+                        .map(|fk_field| stmt::Expr::ref_self_field(fk_field.target)),
+                )));
 
                 let target_id = self.new_dependency(insert);
                 let stmt_info = &self.state.hir[target_id];
@@ -546,7 +545,7 @@ impl LowerStatement<'_, '_> {
                 let returning = stmt_info.stmt.as_ref().unwrap().returning().expect("bug");
 
                 let expr = match returning {
-                    stmt::Returning::Value(expr) if expr.is_const() => expr.clone(),
+                    stmt::Returning::Expr(expr) if expr.is_const() => expr.clone(),
                     _ => {
                         // Make sure the source statement returns a single record
                         debug_assert!(match &**stmt_info.stmt.as_ref().unwrap() {
@@ -795,7 +794,7 @@ impl RelationSource for UpdateRelationSource<'_> {
     fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr) {
         debug_assert!(self.returning_changed, "TODO");
 
-        let Some(stmt::Returning::Expr(stmt::Expr::Cast(expr_cast))) = self.returning else {
+        let Some(stmt::Returning::Project(stmt::Expr::Cast(expr_cast))) = self.returning else {
             todo!("UpdateRelationSource={self:#?}")
         };
 
@@ -846,11 +845,11 @@ impl RelationSource for InsertRelationSource<'_> {
 
     fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr) {
         let record = match self.returning {
-            Some(stmt::Returning::Expr(stmt::Expr::Record(record))) => record,
-            Some(stmt::Returning::Value(stmt::Expr::List(rows))) => {
+            Some(stmt::Returning::Project(stmt::Expr::Record(record))) => record,
+            Some(stmt::Returning::Expr(stmt::Expr::List(rows))) => {
                 rows.items[self.index].as_record_mut_unwrap()
             }
-            Some(stmt::Returning::Value(stmt::Expr::Record(record))) => record,
+            Some(stmt::Returning::Expr(stmt::Expr::Record(record))) => record,
             _ => todo!("InsertRelationSource={self:#?}"),
         };
 

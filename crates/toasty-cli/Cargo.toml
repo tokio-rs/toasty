@@ -49,5 +49,8 @@ toml.workspace = true
 toml_edit = { workspace = true, features = ["serde"] }
 url.workspace = true
 
+[dev-dependencies]
+tempfile.workspace = true
+
 [lints]
 workspace = true

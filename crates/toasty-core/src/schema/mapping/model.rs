@@ -65,6 +65,15 @@ pub struct Model {
     /// a model field value. Relation fields are initialized to `Null` and
     /// replaced with subqueries when `include()` is used.
     pub table_to_model: TableToModel,
+
+    /// Pre-computed default `RETURNING` expression for this model.
+    ///
+    /// Same shape as `table_to_model`'s record, but with every `#[deferred]`
+    /// field — at this level or nested inside an embedded type — pre-masked
+    /// to `Null`. Lowering starts from this expression and splices loaded
+    /// forms in for fields named by `.include()` (or for every deferred
+    /// field when an `INSERT ... RETURNING` is being lowered).
+    pub default_returning: stmt::Expr,
 }
 
 /// Expression template for converting table rows into model records.

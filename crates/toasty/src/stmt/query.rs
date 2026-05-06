@@ -2,6 +2,7 @@ use super::{Delete, Expr, IntoStatement, List, Statement, Value};
 use crate::{
     Executor, Result,
     schema::{Load, Model},
+    stmt::Path,
 };
 use std::{fmt, marker::PhantomData};
 use toasty_core::stmt::{self, Returning};
@@ -450,7 +451,7 @@ impl<M: Model> Query<List<M>> {
     /// ```
     pub fn count(mut self) -> Query<u64> {
         // Set the returning clause to COUNT(*)
-        *self.untyped.returning_mut_unwrap() = Returning::Expr(stmt::Expr::count_star());
+        *self.untyped.returning_mut_unwrap() = Returning::Project(stmt::Expr::count_star());
         self.untyped.single = true;
 
         Query::from_untyped(self.untyped)
@@ -476,6 +477,30 @@ impl<M: Model> Query<List<M>> {
         let mut query = stmt::Query::new_select(M::id(), filter);
         query.single = false;
         Self::from_untyped(query)
+    }
+
+    /// Sort this query so the most recently inserted records on `field`
+    /// appear first.
+    ///
+    /// Convenience for [`order_by`](Self::order_by) with [`Path::desc`].
+    /// `field` must be a path rooted at this query's model `M`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::{List, Query};
+    ///
+    /// let mut q = Query::<List<User>>::all();
+    /// q.latest_by(User::fields().id());
+    /// ```
+    pub fn latest_by<U>(&mut self, field: Path<M, U>) -> &mut Self {
+        self.order_by(field.desc())
     }
 }
 

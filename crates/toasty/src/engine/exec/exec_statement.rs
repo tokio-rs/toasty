@@ -82,7 +82,7 @@ impl Exec<'_> {
 
         debug_assert!(
             stmt.returning()
-                .and_then(|returning| returning.as_expr())
+                .and_then(|returning| returning.as_project())
                 .map(|expr| expr.is_record())
                 .unwrap_or(true),
             "stmt={stmt:#?}"
@@ -213,8 +213,8 @@ impl Exec<'_> {
             None
         };
 
-        // Extract prev cursor from first row (for backward pagination)
-        res.prev_cursor = if !row_vec.is_empty() {
+        // Extract prev cursor from first row only when the driver supports backward pagination
+        res.prev_cursor = if !row_vec.is_empty() && self.engine.capability().backward_pagination {
             let cursor_row = &row_vec[0];
             Some(extract_cursor.eval(std::slice::from_ref(cursor_row))?)
         } else {
@@ -282,7 +282,7 @@ impl Exec<'_> {
 
         // Extract the expression from the RETURNING clause and replace ExprReference with ExprArg
         let mut returning_expr = match returning {
-            stmt::Returning::Expr(expr) => expr,
+            stmt::Returning::Project(expr) => expr,
             _ => panic!(
                 "MySQL INSERT with RETURNING must have an Expr, got: {:#?}",
                 returning

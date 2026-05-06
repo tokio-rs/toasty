@@ -67,6 +67,9 @@ pub(crate) struct FieldAttr {
 
     /// True if the field tracks an OCC version counter
     pub(crate) versionable: bool,
+
+    /// True if the field is annotated with `#[deferred]`
+    pub(crate) deferred: bool,
 }
 
 #[derive(Debug)]
@@ -75,15 +78,6 @@ pub(crate) enum FieldTy {
     BelongsTo(BelongsTo),
     HasMany(HasMany),
     HasOne(HasOne),
-}
-
-impl FieldTy {
-    pub(crate) fn is_relation(&self) -> bool {
-        matches!(
-            self,
-            Self::BelongsTo(..) | Self::HasMany(..) | Self::HasOne(..)
-        )
-    }
 }
 
 impl FieldAttr {
@@ -107,6 +101,7 @@ impl FieldAttr {
             update_expr: None,
             serialize: None,
             versionable: false,
+            deferred: false,
         };
 
         for attr in attrs {
@@ -187,6 +182,15 @@ impl FieldAttr {
                     ));
                 } else {
                     field_attr.versionable = true;
+                }
+            } else if attr.path().is_ident("deferred") {
+                if field_attr.deferred {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "duplicate #[deferred] attribute",
+                    ));
+                } else {
+                    field_attr.deferred = true;
                 }
             } else if attr.path().is_ident("serialize") {
                 if field_attr.serialize.is_some() {
@@ -395,6 +399,29 @@ impl Field {
                 errs.push(syn::Error::new_spanned(
                     &field.ty,
                     "#[version] can only be applied to a u64 field",
+                ));
+            }
+        }
+
+        if attrs.deferred {
+            if ty.is_some() {
+                errs.push(syn::Error::new_spanned(
+                    field,
+                    "#[deferred] cannot be combined with relation attributes",
+                ));
+            }
+
+            if attrs.versionable {
+                errs.push(syn::Error::new_spanned(
+                    field,
+                    "#[deferred] cannot be combined with #[version]",
+                ));
+            }
+
+            if attrs.key.is_some() {
+                errs.push(syn::Error::new_spanned(
+                    field,
+                    "#[deferred] cannot be combined with #[key]",
                 ));
             }
         }

@@ -1,0 +1,6 @@
+error: #[deferred] is not yet supported on embedded enum variant fields
+ --> tests/ui/deferred_in_enum_variant.rs:8:9
+  |
+8 | /         #[deferred]
+9 | |         address: toasty::Deferred<String>,
+  | |_________________________________________^

@@ -454,7 +454,7 @@ impl ToSql for &stmt::OrderByExpr {
 impl ToSql for &stmt::Returning {
     fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         match self {
-            stmt::Returning::Expr(stmt::Expr::Record(expr_record)) => {
+            stmt::Returning::Project(stmt::Expr::Record(expr_record)) => {
                 let fields = expr_record
                     .fields
                     .iter()
@@ -468,7 +468,7 @@ impl ToSql for &stmt::Returning {
 
                 fmt!(cx, f, Comma(fields));
             }
-            stmt::Returning::Expr(stmt::Expr::Value(stmt::Value::Record(value_record))) => {
+            stmt::Returning::Project(stmt::Expr::Value(stmt::Value::Record(value_record))) => {
                 fmt!(cx, f, Comma(&value_record.fields));
             }
             _ => todo!("returning={self:#?}"),
