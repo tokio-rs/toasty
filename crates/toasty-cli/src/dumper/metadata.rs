@@ -120,9 +120,7 @@ fn find_dep(
     let dep_entry = root_pkg
         .dependencies
         .iter()
-        .find(|d| {
-            d.name == name && matches!(d.kind, cargo_metadata::DependencyKind::Normal)
-        });
+        .find(|d| d.name == name && matches!(d.kind, cargo_metadata::DependencyKind::Normal));
 
     let (features, default_features) = match dep_entry {
         Some(d) => (d.features.clone(), d.uses_default_features),
