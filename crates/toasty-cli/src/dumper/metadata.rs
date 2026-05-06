@@ -5,8 +5,10 @@ use std::path::{Path, PathBuf};
 
 /// Metadata captured from the user's project for synthesizing the dumper.
 pub(super) struct ProjectMetadata {
-    /// The cargo workspace root (used to locate `target/`).
-    pub workspace_root: PathBuf,
+    /// The resolved cargo target directory. Honors `CARGO_TARGET_DIR`,
+    /// `[build] target-dir` in cargo config, and workspace-level overrides
+    /// — we cannot assume `<workspace_root>/target`.
+    pub target_directory: PathBuf,
 
     /// The user's root package — the one whose schema we are extracting.
     pub package: PackageInfo,
@@ -80,7 +82,7 @@ pub(super) fn load(project_root: &Path) -> Result<ProjectMetadata> {
     let toasty = find_dep(&metadata, root_pkg, "toasty")?;
 
     Ok(ProjectMetadata {
-        workspace_root: metadata.workspace_root.into_std_path_buf(),
+        target_directory: metadata.target_directory.into_std_path_buf(),
         package: PackageInfo {
             name: root_pkg.name.to_string(),
             edition: root_pkg.edition.to_string(),

@@ -1,5 +1,5 @@
 //! Render the synthetic dumper crate (`Cargo.toml` + `src/dumper.rs`) into
-//! `<workspace_root>/target/toasty-dump/`.
+//! `<target_directory>/toasty-dump/`.
 
 use super::metadata::{PackageDep, ProjectMetadata};
 use anyhow::{Context, Result};
@@ -8,11 +8,13 @@ use std::path::{Path, PathBuf};
 
 pub(super) struct Synth {
     pub manifest_path: PathBuf,
-    pub workspace_root: PathBuf,
+    /// The cargo target directory to use when building the dumper. Mirrors
+    /// the user's resolved target dir so the dep cache is shared.
+    pub target_directory: PathBuf,
 }
 
 pub(super) fn write(meta: &ProjectMetadata) -> Result<Synth> {
-    let root = meta.workspace_root.join("target").join("toasty-dump");
+    let root = meta.target_directory.join("toasty-dump");
     let src = root.join("src");
     fs::create_dir_all(&src)
         .with_context(|| format!("creating dumper source dir {}", src.display()))?;
@@ -25,7 +27,7 @@ pub(super) fn write(meta: &ProjectMetadata) -> Result<Synth> {
 
     Ok(Synth {
         manifest_path,
-        workspace_root: meta.workspace_root.clone(),
+        target_directory: meta.target_directory.clone(),
     })
 }
 
