@@ -1,3 +1,4 @@
+use postgres_protocol::types::{ArrayDimension, array_to_sql};
 use toasty_core::stmt::{self, Value as CoreValue};
 use tokio_postgres::{
     Column, Row,
@@ -25,35 +26,6 @@ impl<'a> postgres_types::FromSql<'a> for EnumString {
     fn accepts(ty: &Type) -> bool {
         matches!(ty.kind(), Kind::Enum(_))
     }
-}
-
-/// Wrapper for writing string values to PostgreSQL enum columns.
-///
-/// `String::ToSql::accepts()` rejects custom enum types, so when binding a
-/// `Vec<Option<String>>` to an enum array we have to route through this
-/// adapter. The wire format for enum values is the variant label as plain
-/// UTF-8 — identical to TEXT — so the impl just writes the bytes.
-#[derive(Debug)]
-struct EnumStr(String);
-
-impl ToSql for EnumStr {
-    fn to_sql(
-        &self,
-        _ty: &Type,
-        out: &mut BytesMut,
-    ) -> std::result::Result<IsNull, Box<dyn std::error::Error + Sync + Send>>
-    where
-        Self: Sized,
-    {
-        out.extend_from_slice(self.0.as_bytes());
-        Ok(IsNull::No)
-    }
-
-    fn accepts(ty: &Type) -> bool {
-        matches!(ty.kind(), Kind::Enum(_))
-    }
-
-    to_sql_checked!();
 }
 
 #[derive(Debug)]
@@ -235,67 +207,7 @@ impl ToSql for Value {
     where
         Self: Sized,
     {
-        match (&self.0, ty) {
-            (stmt::Value::Bool(value), _) => value.to_sql(ty, out),
-            (stmt::Value::I8(value), &Type::INT2) => (*value as i16).to_sql(ty, out),
-            (stmt::Value::I8(value), &Type::INT4) => (*value as i32).to_sql(ty, out),
-            (stmt::Value::I8(value), &Type::INT8) => (*value as i64).to_sql(ty, out),
-            (stmt::Value::I16(value), &Type::INT2) => value.to_sql(ty, out),
-            (stmt::Value::I16(value), &Type::INT4) => (*value as i32).to_sql(ty, out),
-            (stmt::Value::I16(value), &Type::INT8) => (*value as i64).to_sql(ty, out),
-            (stmt::Value::I32(value), &Type::INT4) => value.to_sql(ty, out),
-            (stmt::Value::I32(value), &Type::INT8) => (*value as i64).to_sql(ty, out),
-            (stmt::Value::I64(value), &Type::INT4) => (*value as i32).to_sql(ty, out),
-            (stmt::Value::I64(value), &Type::INT8) => value.to_sql(ty, out),
-            (stmt::Value::U8(value), &Type::INT2) => (*value as i16).to_sql(ty, out),
-            (stmt::Value::U8(value), &Type::INT4) => (*value as i32).to_sql(ty, out),
-            (stmt::Value::U8(value), &Type::INT8) => (*value as i64).to_sql(ty, out),
-            (stmt::Value::U16(value), &Type::INT4) => (*value as i32).to_sql(ty, out),
-            (stmt::Value::U16(value), &Type::INT8) => (*value as i64).to_sql(ty, out),
-            (stmt::Value::U32(value), &Type::INT8) => (*value as i64).to_sql(ty, out),
-            (stmt::Value::U64(value), &Type::INT8) => {
-                if *value > i64::MAX as u64 {
-                    return Err(Box::new(std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        format!(
-                            "u64 value {} exceeds i64::MAX ({}), cannot store in PostgreSQL BIGINT",
-                            value,
-                            i64::MAX
-                        ),
-                    )));
-                }
-                (*value as i64).to_sql(ty, out)
-            }
-            (stmt::Value::F32(value), &Type::FLOAT4) => value.to_sql(ty, out),
-            (stmt::Value::F32(value), &Type::FLOAT8) => (*value as f64).to_sql(ty, out),
-            (stmt::Value::F64(value), &Type::FLOAT4) => (*value as f32).to_sql(ty, out),
-            (stmt::Value::F64(value), &Type::FLOAT8) => value.to_sql(ty, out),
-            (stmt::Value::Null, _) => Ok(IsNull::Yes),
-            (stmt::Value::String(value), _) => value.to_sql(ty, out),
-            (stmt::Value::Bytes(value), &Type::BYTEA) => value.to_sql(ty, out),
-            (stmt::Value::Uuid(value), &Type::UUID) => value.to_sql(ty, out),
-            #[cfg(feature = "rust_decimal")]
-            (stmt::Value::Decimal(value), _) => value.to_sql(ty, out),
-            #[cfg(feature = "jiff")]
-            (stmt::Value::Timestamp(value), _) => value.to_sql(ty, out),
-            #[cfg(feature = "jiff")]
-            (stmt::Value::Date(value), _) => value.to_sql(ty, out),
-            #[cfg(feature = "jiff")]
-            (stmt::Value::Time(value), _) => value.to_sql(ty, out),
-            #[cfg(feature = "jiff")]
-            (stmt::Value::DateTime(value), _) => value.to_sql(ty, out),
-            // List → bind as a PostgreSQL array. The prepared statement
-            // already declared the param as an array type (see
-            // `db::Type::List` → `to_postgres_type`); the element PG type
-            // drives the per-item conversion.
-            (stmt::Value::List(items), _) => {
-                let Kind::Array(elem) = ty.kind() else {
-                    return Err(format!("Value::List bound to non-array PG type {ty:?}").into());
-                };
-                list_to_sql(items, elem, ty, out)
-            }
-            (value, _) => todo!("unsupported Value for PostgreSQL type: {value:#?}, type: {ty:#?}"),
-        }
+        value_to_sql(&self.0, ty, out)
     }
 
     fn accepts(ty: &Type) -> bool {
@@ -321,184 +233,95 @@ impl ToSql for Value {
     to_sql_checked!();
 }
 
-/// Convert a `Value::List` of scalars into the PG array wire format. NULLs in
-/// the list become SQL NULLs in the array; PostgreSQL arrays carry NULLs
-/// natively.
-fn list_to_sql(
-    items: &[CoreValue],
-    elem: &Type,
-    array_ty: &Type,
+/// Free-fn form of `Value::to_sql` so the array-element closure can call it
+/// with a `&CoreValue` borrowed from the input slice — no per-element clone
+/// or wrapper construction.
+fn value_to_sql(
+    value: &CoreValue,
+    ty: &Type,
     out: &mut BytesMut,
 ) -> std::result::Result<IsNull, Box<dyn std::error::Error + Sync + Send>> {
-    /// Build a `Vec<Option<T>>` from `items`, mapping each entry through `f`.
-    /// Used to share the array-binding boilerplate across element types.
-    fn collect<T, F>(
-        items: &[CoreValue],
-        mut f: F,
-    ) -> std::result::Result<Vec<Option<T>>, Box<dyn std::error::Error + Sync + Send>>
-    where
-        F: FnMut(&CoreValue) -> std::result::Result<T, Box<dyn std::error::Error + Sync + Send>>,
-    {
-        items
-            .iter()
-            .map(|v| match v {
-                CoreValue::Null => Ok(None),
-                other => f(other).map(Some),
-            })
-            .collect()
-    }
-
-    // Enum element: PG enums are wire-encoded as plain UTF-8 text. The
-    // standard `String` ToSql impl rejects `Kind::Enum`, so wrap each
-    // value in an adapter that accepts enum types and writes the bytes
-    // unchanged.
-    if matches!(elem.kind(), Kind::Enum(_)) {
-        let v = collect(items, |x| match x {
-            CoreValue::String(s) => Ok(EnumStr(s.clone())),
-            _ => Err(format!("expected String in {elem:?}[] array, got {x:?}").into()),
-        })?;
-        return v.to_sql(array_ty, out);
-    }
-
-    match *elem {
-        Type::BOOL => {
-            let v = collect(items, |x| match x {
-                CoreValue::Bool(b) => Ok(*b),
-                _ => Err(format!("expected Bool in BOOL[] array, got {x:?}").into()),
-            })?;
-            v.to_sql(array_ty, out)
+    match (value, ty) {
+        (stmt::Value::Bool(value), _) => value.to_sql(ty, out),
+        (stmt::Value::I8(value), &Type::INT2) => (*value as i16).to_sql(ty, out),
+        (stmt::Value::I8(value), &Type::INT4) => (*value as i32).to_sql(ty, out),
+        (stmt::Value::I8(value), &Type::INT8) => (*value as i64).to_sql(ty, out),
+        (stmt::Value::I16(value), &Type::INT2) => value.to_sql(ty, out),
+        (stmt::Value::I16(value), &Type::INT4) => (*value as i32).to_sql(ty, out),
+        (stmt::Value::I16(value), &Type::INT8) => (*value as i64).to_sql(ty, out),
+        (stmt::Value::I32(value), &Type::INT4) => value.to_sql(ty, out),
+        (stmt::Value::I32(value), &Type::INT8) => (*value as i64).to_sql(ty, out),
+        (stmt::Value::I64(value), &Type::INT4) => (*value as i32).to_sql(ty, out),
+        (stmt::Value::I64(value), &Type::INT8) => value.to_sql(ty, out),
+        (stmt::Value::U8(value), &Type::INT2) => (*value as i16).to_sql(ty, out),
+        (stmt::Value::U8(value), &Type::INT4) => (*value as i32).to_sql(ty, out),
+        (stmt::Value::U8(value), &Type::INT8) => (*value as i64).to_sql(ty, out),
+        (stmt::Value::U16(value), &Type::INT4) => (*value as i32).to_sql(ty, out),
+        (stmt::Value::U16(value), &Type::INT8) => (*value as i64).to_sql(ty, out),
+        (stmt::Value::U32(value), &Type::INT8) => (*value as i64).to_sql(ty, out),
+        (stmt::Value::U64(value), &Type::INT8) => {
+            if *value > i64::MAX as u64 {
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!(
+                        "u64 value {} exceeds i64::MAX ({}), cannot store in PostgreSQL BIGINT",
+                        value,
+                        i64::MAX
+                    ),
+                )));
+            }
+            (*value as i64).to_sql(ty, out)
         }
-        Type::INT2 => {
-            let v = collect(
-                items,
-                |x| -> std::result::Result<i16, Box<dyn std::error::Error + Sync + Send>> {
-                    match x {
-                        CoreValue::I8(n) => Ok(*n as i16),
-                        CoreValue::I16(n) => Ok(*n),
-                        CoreValue::U8(n) => Ok(*n as i16),
-                        CoreValue::U16(n) => i16::try_from(*n)
-                            .map_err(|_| format!("u16 {n} out of i16 range").into()),
-                        _ => Err(format!("expected small int in INT2[] array, got {x:?}").into()),
-                    }
-                },
-            )?;
-            v.to_sql(array_ty, out)
+        (stmt::Value::F32(value), &Type::FLOAT4) => value.to_sql(ty, out),
+        (stmt::Value::F32(value), &Type::FLOAT8) => (*value as f64).to_sql(ty, out),
+        (stmt::Value::F64(value), &Type::FLOAT4) => (*value as f32).to_sql(ty, out),
+        (stmt::Value::F64(value), &Type::FLOAT8) => value.to_sql(ty, out),
+        (stmt::Value::Null, _) => Ok(IsNull::Yes),
+        // PG enums are wire-encoded as plain UTF-8 text. `String::ToSql::accepts`
+        // rejects `Kind::Enum`, so write the bytes directly.
+        (stmt::Value::String(value), _) if matches!(ty.kind(), Kind::Enum(_)) => {
+            out.extend_from_slice(value.as_bytes());
+            Ok(IsNull::No)
         }
-        Type::INT4 => {
-            let v = collect(
-                items,
-                |x| -> std::result::Result<i32, Box<dyn std::error::Error + Sync + Send>> {
-                    match x {
-                        CoreValue::I8(n) => Ok(*n as i32),
-                        CoreValue::I16(n) => Ok(*n as i32),
-                        CoreValue::I32(n) => Ok(*n),
-                        CoreValue::U8(n) => Ok(*n as i32),
-                        CoreValue::U16(n) => Ok(*n as i32),
-                        CoreValue::U32(n) => i32::try_from(*n)
-                            .map_err(|_| format!("u32 {n} out of i32 range").into()),
-                        _ => Err(format!("expected int in INT4[] array, got {x:?}").into()),
-                    }
-                },
-            )?;
-            v.to_sql(array_ty, out)
-        }
-        Type::INT8 => {
-            let v = collect(
-                items,
-                |x| -> std::result::Result<i64, Box<dyn std::error::Error + Sync + Send>> {
-                    match x {
-                        CoreValue::I8(n) => Ok(*n as i64),
-                        CoreValue::I16(n) => Ok(*n as i64),
-                        CoreValue::I32(n) => Ok(*n as i64),
-                        CoreValue::I64(n) => Ok(*n),
-                        CoreValue::U8(n) => Ok(*n as i64),
-                        CoreValue::U16(n) => Ok(*n as i64),
-                        CoreValue::U32(n) => Ok(*n as i64),
-                        CoreValue::U64(n) => i64::try_from(*n)
-                            .map_err(|_| format!("u64 {n} out of i64 range").into()),
-                        _ => Err(format!("expected int in INT8[] array, got {x:?}").into()),
-                    }
-                },
-            )?;
-            v.to_sql(array_ty, out)
-        }
-        Type::FLOAT4 => {
-            let v = collect(items, |x| match x {
-                CoreValue::F32(n) => Ok(*n),
-                CoreValue::F64(n) => Ok(*n as f32),
-                _ => Err(format!("expected float in FLOAT4[] array, got {x:?}").into()),
-            })?;
-            v.to_sql(array_ty, out)
-        }
-        Type::FLOAT8 => {
-            let v = collect(items, |x| match x {
-                CoreValue::F32(n) => Ok(*n as f64),
-                CoreValue::F64(n) => Ok(*n),
-                _ => Err(format!("expected float in FLOAT8[] array, got {x:?}").into()),
-            })?;
-            v.to_sql(array_ty, out)
-        }
-        Type::TEXT | Type::VARCHAR => {
-            let v = collect(items, |x| match x {
-                CoreValue::String(s) => Ok(s.clone()),
-                _ => Err(format!("expected String in TEXT[] array, got {x:?}").into()),
-            })?;
-            v.to_sql(array_ty, out)
-        }
-        Type::BYTEA => {
-            let v = collect(items, |x| match x {
-                CoreValue::Bytes(b) => Ok(b.clone()),
-                _ => Err(format!("expected Bytes in BYTEA[] array, got {x:?}").into()),
-            })?;
-            v.to_sql(array_ty, out)
-        }
-        Type::UUID => {
-            let v = collect(items, |x| match x {
-                CoreValue::Uuid(u) => Ok(*u),
-                _ => Err(format!("expected Uuid in UUID[] array, got {x:?}").into()),
-            })?;
-            v.to_sql(array_ty, out)
-        }
+        (stmt::Value::String(value), _) => value.to_sql(ty, out),
+        (stmt::Value::Bytes(value), &Type::BYTEA) => value.to_sql(ty, out),
+        (stmt::Value::Uuid(value), &Type::UUID) => value.to_sql(ty, out),
         #[cfg(feature = "rust_decimal")]
-        Type::NUMERIC => {
-            let v = collect(items, |x| match x {
-                CoreValue::Decimal(d) => Ok(*d),
-                _ => Err(format!("expected Decimal in NUMERIC[] array, got {x:?}").into()),
-            })?;
-            v.to_sql(array_ty, out)
-        }
+        (stmt::Value::Decimal(value), _) => value.to_sql(ty, out),
         #[cfg(feature = "jiff")]
-        Type::TIMESTAMPTZ => {
-            let v = collect(items, |x| match x {
-                CoreValue::Timestamp(t) => Ok(*t),
-                _ => Err(format!("expected Timestamp in TIMESTAMPTZ[] array, got {x:?}").into()),
-            })?;
-            v.to_sql(array_ty, out)
-        }
+        (stmt::Value::Timestamp(value), _) => value.to_sql(ty, out),
         #[cfg(feature = "jiff")]
-        Type::DATE => {
-            let v = collect(items, |x| match x {
-                CoreValue::Date(d) => Ok(*d),
-                _ => Err(format!("expected Date in DATE[] array, got {x:?}").into()),
-            })?;
-            v.to_sql(array_ty, out)
-        }
+        (stmt::Value::Date(value), _) => value.to_sql(ty, out),
         #[cfg(feature = "jiff")]
-        Type::TIME => {
-            let v = collect(items, |x| match x {
-                CoreValue::Time(t) => Ok(*t),
-                _ => Err(format!("expected Time in TIME[] array, got {x:?}").into()),
-            })?;
-            v.to_sql(array_ty, out)
-        }
+        (stmt::Value::Time(value), _) => value.to_sql(ty, out),
         #[cfg(feature = "jiff")]
-        Type::TIMESTAMP => {
-            let v = collect(items, |x| match x {
-                CoreValue::DateTime(d) => Ok(*d),
-                _ => Err(format!("expected DateTime in TIMESTAMP[] array, got {x:?}").into()),
-            })?;
-            v.to_sql(array_ty, out)
+        (stmt::Value::DateTime(value), _) => value.to_sql(ty, out),
+        // List → bind as a PostgreSQL array via the streaming `array_to_sql`
+        // primitive: the closure runs per element and writes directly into
+        // `out`, so there's no intermediate `Vec<Option<T>>`. The element PG
+        // type (carried by the prepared statement, see `db::Type::List` →
+        // `to_postgres_type`) drives per-item conversion via this same fn.
+        (stmt::Value::List(items), _) => {
+            let Kind::Array(elem) = ty.kind() else {
+                return Err(format!("Value::List bound to non-array PG type {ty:?}").into());
+            };
+            let len = i32::try_from(items.len())
+                .map_err(|_| format!("array length {} exceeds i32::MAX", items.len()))?;
+            array_to_sql(
+                [ArrayDimension {
+                    len,
+                    lower_bound: 1,
+                }],
+                elem.oid(),
+                items.iter(),
+                |v, buf| match value_to_sql(v, elem, buf)? {
+                    IsNull::No => Ok(postgres_protocol::IsNull::No),
+                    IsNull::Yes => Ok(postgres_protocol::IsNull::Yes),
+                },
+                out,
+            )?;
+            Ok(IsNull::No)
         }
-        _ => Err(format!("unsupported PG array element type: {elem:?}").into()),
+        (value, _) => todo!("unsupported Value for PostgreSQL type: {value:#?}, type: {ty:#?}"),
     }
 }
