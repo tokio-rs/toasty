@@ -1,4 +1,5 @@
 mod association;
+mod expr_eq_operand;
 mod expr_pattern;
 mod include;
 mod insert;
@@ -61,6 +62,11 @@ impl LoweringState<'_> {
         // must be converted to a WHERE filter before the lowering walk
         // converts `Source::Model` into `Source::Table`.
         association::RewriteVia::new(expr_cx).rewrite(&mut stmt);
+
+        // Rewrite `Reference::Model` and BelongsTo references in eq/ne
+        // operands to their primary-key / foreign-key field references
+        // before the lowering walk removes the relation handles.
+        expr_eq_operand::RewriteEqOperand::new(expr_cx).rewrite(&mut stmt);
 
         Simplify::with_context(expr_cx).visit_mut(&mut stmt);
 
@@ -968,9 +974,13 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             // explicit WHERE filter so the lowering walk only sees rewritten
             // sources.
             association::RewriteVia::new(child.expr_cx).rewrite(&mut stmt);
-            // Pre-lower simplify: remaining app-level rewrites (model→PK,
-            // lift_in_subquery) that the lowering visitor expects to have
-            // already fired.
+            // Eq-operand rewrite: model and BelongsTo references inside
+            // eq/ne binary ops become PK/FK column references.
+            expr_eq_operand::RewriteEqOperand::new(child.expr_cx).rewrite(&mut stmt);
+            // Pre-lower simplify: remaining app-level rewrites
+            // (`lift_in_subquery`, `rewrite_expr_in_list_when_model`,
+            // `try_variant_tautology_or`) that the lowering visitor expects
+            // to have already fired.
             Simplify::with_context(child.expr_cx).visit_mut(&mut *stmt);
             // Lowering walk.
             child.visit_stmt_mut(&mut stmt);
