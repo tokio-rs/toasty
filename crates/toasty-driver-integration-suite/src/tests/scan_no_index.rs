@@ -193,12 +193,10 @@ pub async fn scan_limit_with_filter_returns_correct_count(t: &mut Test) -> Resul
     // frequently return fewer than 5 rows when the examined items are mostly
     // "other".
     for _i in 0..10_i64 {
-        Item::create()
-            .category("match".to_string())
+        toasty::create!(Item { category: "match" })
             .exec(&mut db)
             .await?;
-        Item::create()
-            .category("other".to_string())
+        toasty::create!(Item { category: "other" })
             .exec(&mut db)
             .await?;
     }
@@ -237,7 +235,7 @@ pub async fn scan_paginate_multi_page(t: &mut Test) -> Result<()> {
     let mut db = t.setup_db(models!(Item)).await;
 
     for score in 1_i64..=15 {
-        Item::create().score(score).exec(&mut db).await?;
+        toasty::create!(Item { score }).exec(&mut db).await?;
     }
 
     // Paginate with page_size=5 — should yield 3 pages of 5 rows each.
