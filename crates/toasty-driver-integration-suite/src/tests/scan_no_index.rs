@@ -13,9 +13,13 @@ pub async fn scan_filter_by_non_indexed_field(t: &mut Test) -> Result<()> {
 
     let mut db = t.setup_db(models!(Item)).await;
 
-    for name in ["Alice", "Bob", "Charlie"] {
-        Item::create().name(name).exec(&mut db).await?;
-    }
+    toasty::create!(Item::[
+        { name: "Alice" },
+        { name: "Bob" },
+        { name: "Charlie" },
+    ])
+    .exec(&mut db)
+    .await?;
 
     let results: Vec<Item> = Item::filter(Item::fields().name().eq("Alice"))
         .exec(&mut db)
@@ -40,9 +44,13 @@ pub async fn scan_no_filter(t: &mut Test) -> Result<()> {
 
     let mut db = t.setup_db(models!(Item)).await;
 
-    for name in ["Alice", "Bob", "Charlie"] {
-        Item::create().name(name).exec(&mut db).await?;
-    }
+    toasty::create!(Item::[
+        { name: "Alice" },
+        { name: "Bob" },
+        { name: "Charlie" },
+    ])
+    .exec(&mut db)
+    .await?;
 
     let mut results: Vec<Item> = Item::all().exec(&mut db).await?;
     results.sort_by(|a, b| a.name.cmp(&b.name));
@@ -69,9 +77,13 @@ pub async fn scan_multi_predicate_and(t: &mut Test) -> Result<()> {
 
     let mut db = t.setup_db(models!(Item)).await;
 
-    Item::create().name("Alice").score(10).exec(&mut db).await?;
-    Item::create().name("Alice").score(20).exec(&mut db).await?;
-    Item::create().name("Bob").score(10).exec(&mut db).await?;
+    toasty::create!(Item::[
+        { name: "Alice", score: 10_i64 },
+        { name: "Alice", score: 20_i64 },
+        { name: "Bob", score: 10_i64 },
+    ])
+    .exec(&mut db)
+    .await?;
 
     let results: Vec<Item> = Item::filter(
         Item::fields()
@@ -102,9 +114,13 @@ pub async fn scan_or_filter(t: &mut Test) -> Result<()> {
 
     let mut db = t.setup_db(models!(Item)).await;
 
-    for name in ["Alice", "Bob", "Charlie"] {
-        Item::create().name(name).exec(&mut db).await?;
-    }
+    toasty::create!(Item::[
+        { name: "Alice" },
+        { name: "Bob" },
+        { name: "Charlie" },
+    ])
+    .exec(&mut db)
+    .await?;
 
     let mut results: Vec<Item> = Item::filter(
         Item::fields()
@@ -136,9 +152,15 @@ pub async fn scan_with_limit(t: &mut Test) -> Result<()> {
 
     let mut db = t.setup_db(models!(Item)).await;
 
-    for name in ["Alice", "Bob", "Charlie", "Dave", "Eve"] {
-        Item::create().name(name).exec(&mut db).await?;
-    }
+    toasty::create!(Item::[
+        { name: "Alice" },
+        { name: "Bob" },
+        { name: "Charlie" },
+        { name: "Dave" },
+        { name: "Eve" },
+    ])
+    .exec(&mut db)
+    .await?;
 
     let results: Vec<Item> = Item::all().limit(3).exec(&mut db).await?;
 
@@ -258,9 +280,15 @@ pub async fn scan_order_by_is_error(t: &mut Test) -> Result<()> {
 
     let mut db = t.setup_db(models!(Item)).await;
 
-    for score in [10_i64, 30, 20, 50, 40] {
-        Item::create().score(score).exec(&mut db).await?;
-    }
+    toasty::create!(Item::[
+        { score: 10_i64 },
+        { score: 30_i64 },
+        { score: 20_i64 },
+        { score: 50_i64 },
+        { score: 40_i64 },
+    ])
+    .exec(&mut db)
+    .await?;
 
     let result: toasty::Result<Vec<Item>> = Item::all()
         .order_by(Item::fields().score().desc())
@@ -289,9 +317,15 @@ pub async fn scan_order_by_sql(t: &mut Test) -> Result<()> {
 
     let mut db = t.setup_db(models!(Item)).await;
 
-    for score in [10_i64, 30, 20, 50, 40] {
-        Item::create().score(score).exec(&mut db).await?;
-    }
+    toasty::create!(Item::[
+        { score: 10_i64 },
+        { score: 30_i64 },
+        { score: 20_i64 },
+        { score: 50_i64 },
+        { score: 40_i64 },
+    ])
+    .exec(&mut db)
+    .await?;
 
     let results: Vec<Item> = Item::all()
         .order_by(Item::fields().score().desc())
