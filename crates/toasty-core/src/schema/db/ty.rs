@@ -169,50 +169,6 @@ impl Type {
         }
     }
 
-    /// Infers a `db::Type` from a `stmt::Value` using generic defaults.
-    ///
-    /// This is an initial guess suitable for bind parameter typing. Column
-    /// context will refine it later (e.g., `Text` → `Enum` for enum columns).
-    pub fn from_value(value: &stmt::Value) -> Type {
-        match value {
-            stmt::Value::Bool(_) => Type::Boolean,
-            stmt::Value::I8(_) => Type::Integer(1),
-            stmt::Value::I16(_) => Type::Integer(2),
-            stmt::Value::I32(_) => Type::Integer(4),
-            stmt::Value::I64(_) => Type::Integer(8),
-            stmt::Value::U8(_) => Type::UnsignedInteger(1),
-            stmt::Value::U16(_) => Type::UnsignedInteger(2),
-            stmt::Value::U32(_) => Type::UnsignedInteger(4),
-            stmt::Value::U64(_) => Type::UnsignedInteger(8),
-            stmt::Value::String(_) => Type::Text,
-            stmt::Value::Uuid(_) => Type::Uuid,
-            stmt::Value::Bytes(_) => Type::Blob,
-            #[cfg(feature = "rust_decimal")]
-            stmt::Value::Decimal(_) => Type::Numeric(None),
-            #[cfg(feature = "jiff")]
-            stmt::Value::Timestamp(_) => Type::Timestamp(6),
-            #[cfg(feature = "jiff")]
-            stmt::Value::Date(_) => Type::Date,
-            #[cfg(feature = "jiff")]
-            stmt::Value::Time(_) => Type::Time(6),
-            #[cfg(feature = "jiff")]
-            stmt::Value::DateTime(_) => Type::DateTime(6),
-            // List: pick the element type from the first non-null entry.
-            // Empty / all-null lists default to Boolean (refined by
-            // synthesize/check downstream when the element type is known
-            // from a column).
-            stmt::Value::List(items) => {
-                let elem = items
-                    .iter()
-                    .find(|v| !v.is_null())
-                    .map(Self::from_value)
-                    .unwrap_or(Type::Boolean);
-                Type::List(Box::new(elem))
-            }
-            _ => Type::Text,
-        }
-    }
-
     /// Determines the [`stmt::Type`] closest to this [`db::Type`] that should be used
     /// as an intermediate conversion step to lessen the work done by each individual driver.
     pub fn bridge_type(&self, ty: &stmt::Type) -> stmt::Type {

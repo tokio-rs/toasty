@@ -35,13 +35,92 @@ type Cx<'a> = stmt::ExprContext<'a, db::Schema>;
 /// `Expr::Arg(n)` placeholders and inferring precise `db::Type` for each.
 pub(crate) fn extract_params(stmt: &mut stmt::Statement, schema: &Schema) -> Vec<TypedValue> {
     // Phase 1: Mechanical extraction — replace values with Arg(n)
-    let mut params = Vec::new();
+    let mut params: Vec<Param> = Vec::new();
     extract_values(stmt, &mut params);
 
     // Phase 2+3: Bidirectional type inference — refine param types
     refine_param_types(stmt, &schema.db, &mut params);
 
+    // Materialize the final TypedValues. `finalize_ty` panics if any param
+    // is still unresolved — synthesize/check is expected to type every param.
     params
+        .into_iter()
+        .map(|p| {
+            let Param { value, ty } = p;
+            TypedValue {
+                ty: finalize_ty(&value, ty),
+                value,
+            }
+        })
+        .collect()
+}
+
+/// A bind parameter being inferred. Once inference completes, the `Ty` is
+/// converted to a concrete `db::Type` for the `TypedValue`.
+struct Param {
+    value: stmt::Value,
+    ty: Ty,
+}
+
+/// Resolve a `Ty` to a concrete `db::Type`. Panics on `Unknown` / `Record` —
+/// every param should be fully inferred by the synthesize/check pass; if a
+/// statement reaches here with an unresolved param, that's a bug worth
+/// surfacing so we can evaluate the specific case.
+fn finalize_ty(value: &stmt::Value, ty: Ty) -> db::Type {
+    match ty {
+        Ty::Column(t) | Ty::Inferred(t) => t,
+        Ty::List(elem) => db::Type::List(Box::new(finalize_ty(value, *elem))),
+        Ty::Unknown => panic!("extract_params left {value:?} with unresolved type"),
+        Ty::Record(_) => panic!(
+            "extract_params left {value:?} typed as a record; only scalars and lists are extracted as params"
+        ),
+    }
+}
+
+/// Initial type guess for a value, used as the starting point for inference.
+///
+/// Returns the most precise `Ty` derivable from the value alone:
+/// - Scalars become `Ty::Inferred(<db::Type>)`.
+/// - Lists become `Ty::List(<elem>)`, recursing into the first non-null item.
+///   Empty / all-null lists yield `Ty::List(Ty::Unknown)`; the element type is
+///   refined by synthesize/check when a column context is available.
+/// - Anything we can't classify (`Null`, `Record`, `F32`/`F64`, `Zoned`,
+///   `BigDecimal`, `SparseRecord`) becomes `Ty::Unknown`.
+fn infer_ty(value: &stmt::Value) -> Ty {
+    use stmt::Value;
+    match value {
+        Value::Bool(_) => Ty::Inferred(db::Type::Boolean),
+        Value::I8(_) => Ty::Inferred(db::Type::Integer(1)),
+        Value::I16(_) => Ty::Inferred(db::Type::Integer(2)),
+        Value::I32(_) => Ty::Inferred(db::Type::Integer(4)),
+        Value::I64(_) => Ty::Inferred(db::Type::Integer(8)),
+        Value::U8(_) => Ty::Inferred(db::Type::UnsignedInteger(1)),
+        Value::U16(_) => Ty::Inferred(db::Type::UnsignedInteger(2)),
+        Value::U32(_) => Ty::Inferred(db::Type::UnsignedInteger(4)),
+        Value::U64(_) => Ty::Inferred(db::Type::UnsignedInteger(8)),
+        Value::String(_) => Ty::Inferred(db::Type::Text),
+        Value::Uuid(_) => Ty::Inferred(db::Type::Uuid),
+        Value::Bytes(_) => Ty::Inferred(db::Type::Blob),
+        #[cfg(feature = "rust_decimal")]
+        Value::Decimal(_) => Ty::Inferred(db::Type::Numeric(None)),
+        #[cfg(feature = "jiff")]
+        Value::Timestamp(_) => Ty::Inferred(db::Type::Timestamp(6)),
+        #[cfg(feature = "jiff")]
+        Value::Date(_) => Ty::Inferred(db::Type::Date),
+        #[cfg(feature = "jiff")]
+        Value::Time(_) => Ty::Inferred(db::Type::Time(6)),
+        #[cfg(feature = "jiff")]
+        Value::DateTime(_) => Ty::Inferred(db::Type::DateTime(6)),
+        Value::List(items) => {
+            let elem = items
+                .iter()
+                .find(|v| !v.is_null())
+                .map(infer_ty)
+                .unwrap_or(Ty::Unknown);
+            Ty::List(Box::new(elem))
+        }
+        _ => Ty::Unknown,
+    }
 }
 
 // ============================================================================
@@ -81,27 +160,6 @@ impl Ty {
     fn is_column(&self) -> bool {
         matches!(self, Ty::Column(_))
     }
-
-    /// Convert to the corresponding `db::Type`, lifting `Ty::List(elem)`
-    /// into `db::Type::List(Box::new(elem))`. Returns `None` for `Unknown`,
-    /// `Record`, or any nested shape the bind layer can't represent.
-    fn to_db_type(&self) -> Option<db::Type> {
-        match self {
-            Ty::Column(ty) | Ty::Inferred(ty) => Some(ty.clone()),
-            Ty::List(elem) => elem.to_db_type().map(|t| db::Type::List(Box::new(t))),
-            _ => None,
-        }
-    }
-
-    /// Returns `true` if this type — or, recursively, the element type of a
-    /// list — has column provenance.
-    fn has_column(&self) -> bool {
-        match self {
-            Ty::Column(_) => true,
-            Ty::List(elem) => elem.has_column(),
-            _ => false,
-        }
-    }
 }
 
 // ============================================================================
@@ -110,9 +168,9 @@ impl Ty {
 
 /// Replace all scalar `Value` nodes with `Arg(n)` placeholders.
 /// Initialize each param's `ty` from the value itself.
-fn extract_values(stmt: &mut stmt::Statement, params: &mut Vec<TypedValue>) {
+fn extract_values(stmt: &mut stmt::Statement, params: &mut Vec<Param>) {
     struct Extract<'a> {
-        params: &'a mut Vec<TypedValue>,
+        params: &'a mut Vec<Param>,
     }
 
     impl stmt::VisitMut for Extract<'_> {
@@ -148,10 +206,10 @@ fn extract_values(stmt: &mut stmt::Statement, params: &mut Vec<TypedValue>) {
 
             match expr {
                 stmt::Expr::Value(value) if is_extractable_scalar(value) => {
-                    let ty = db::Type::from_value(value);
+                    let ty = infer_ty(value);
                     let position = self.params.len();
                     let value = std::mem::replace(value, stmt::Value::Null);
-                    self.params.push(TypedValue { value, ty });
+                    self.params.push(Param { value, ty });
                     *expr = stmt::Expr::arg(position);
                 }
                 stmt::Expr::Value(value @ (stmt::Value::Record(_) | stmt::Value::List(_))) => {
@@ -167,13 +225,13 @@ fn extract_values(stmt: &mut stmt::Statement, params: &mut Vec<TypedValue>) {
 }
 
 /// If `rhs` is a list literal of values, take it out, push one
-/// `TypedValue { value: Value::List(items), ty: db::Type::List(<elem>) }`
-/// onto `params`, and return an `Expr::Arg(n)` to put back in its place.
+/// `Param { value: Value::List(items), ty: Ty::List(<elem>) }` onto `params`,
+/// and return an `Expr::Arg(n)` to put back in its place.
 ///
-/// The element type stored on the param is the value-inferred type of the
-/// first non-null item; the synthesize/check pass refines it to the column
-/// type when one is known.
-fn extract_array_operand(rhs: &mut stmt::Expr, params: &mut Vec<TypedValue>) -> Option<stmt::Expr> {
+/// The element type starts as the value-inferred type of the first non-null
+/// item — or `Ty::Unknown` for empty / all-null lists. The synthesize/check
+/// pass refines it to the column type when one is known.
+fn extract_array_operand(rhs: &mut stmt::Expr, params: &mut Vec<Param>) -> Option<stmt::Expr> {
     let items: Vec<stmt::Value> = match rhs {
         stmt::Expr::Value(stmt::Value::List(_)) => {
             let stmt::Expr::Value(stmt::Value::List(items)) =
@@ -199,16 +257,16 @@ fn extract_array_operand(rhs: &mut stmt::Expr, params: &mut Vec<TypedValue>) -> 
     };
 
     let value = stmt::Value::List(items);
-    let ty = db::Type::from_value(&value);
+    let ty = infer_ty(&value);
 
     let position = params.len();
-    params.push(TypedValue { value, ty });
+    params.push(Param { value, ty });
     Some(stmt::Expr::arg(position))
 }
 
 /// Recursively convert a `Value` into an `Expr`, extracting scalar values.
 /// Takes ownership to avoid cloning.
-fn value_to_extracted_expr(value: stmt::Value, params: &mut Vec<TypedValue>) -> stmt::Expr {
+fn value_to_extracted_expr(value: stmt::Value, params: &mut Vec<Param>) -> stmt::Expr {
     match value {
         stmt::Value::Null => stmt::Expr::Value(stmt::Value::Null),
         stmt::Value::Record(record) => {
@@ -227,9 +285,9 @@ fn value_to_extracted_expr(value: stmt::Value, params: &mut Vec<TypedValue>) -> 
             stmt::Expr::List(stmt::ExprList { items })
         }
         scalar => {
-            let ty = db::Type::from_value(&scalar);
+            let ty = infer_ty(&scalar);
             let position = params.len();
-            params.push(TypedValue { value: scalar, ty });
+            params.push(Param { value: scalar, ty });
             stmt::Expr::arg(position)
         }
     }
@@ -247,17 +305,12 @@ fn is_extractable_scalar(value: &stmt::Value) -> bool {
 // ============================================================================
 
 /// Refine param types by walking the statement with synthesize + check.
-fn refine_param_types(stmt: &stmt::Statement, db_schema: &db::Schema, params: &mut [TypedValue]) {
+fn refine_param_types(stmt: &stmt::Statement, db_schema: &db::Schema, params: &mut [Param]) {
     let cx = stmt::ExprContext::new(db_schema);
     refine_stmt(stmt, &cx, db_schema, params);
 }
 
-fn refine_stmt(
-    stmt: &stmt::Statement,
-    cx: &Cx<'_>,
-    db_schema: &db::Schema,
-    params: &mut [TypedValue],
-) {
+fn refine_stmt(stmt: &stmt::Statement, cx: &Cx<'_>, db_schema: &db::Schema, params: &mut [Param]) {
     match stmt {
         stmt::Statement::Insert(insert) => {
             let cx = cx.scope(insert);
@@ -281,7 +334,7 @@ fn refine_insert(
     insert: &stmt::Insert,
     _cx: &Cx<'_>,
     db_schema: &db::Schema,
-    params: &mut [TypedValue],
+    params: &mut [Param],
 ) {
     // Build expected type from column list (authoritative)
     let expected = match &insert.target {
@@ -305,12 +358,7 @@ fn refine_insert(
     }
 }
 
-fn refine_update(
-    update: &stmt::Update,
-    cx: &Cx<'_>,
-    db_schema: &db::Schema,
-    params: &mut [TypedValue],
-) {
+fn refine_update(update: &stmt::Update, cx: &Cx<'_>, db_schema: &db::Schema, params: &mut [Param]) {
     // Refine assignment types from target columns
     if let stmt::UpdateTarget::Table(table_id) = &update.target {
         let db_table = &db_schema.tables[table_id.0];
@@ -336,7 +384,7 @@ fn refine_update(
     refine_filter(&update.filter, cx, params);
 }
 
-fn refine_query(query: &stmt::Query, cx: &Cx<'_>, params: &mut [TypedValue]) {
+fn refine_query(query: &stmt::Query, cx: &Cx<'_>, params: &mut [Param]) {
     let cx = cx.scope(query);
 
     match &query.body {
@@ -360,7 +408,7 @@ fn refine_query(query: &stmt::Query, cx: &Cx<'_>, params: &mut [TypedValue]) {
     }
 }
 
-fn refine_filter(filter: &stmt::Filter, cx: &Cx<'_>, params: &mut [TypedValue]) {
+fn refine_filter(filter: &stmt::Filter, cx: &Cx<'_>, params: &mut [Param]) {
     if let Some(expr) = &filter.expr {
         synthesize(expr, cx, params);
     }
@@ -374,13 +422,12 @@ fn refine_filter(filter: &stmt::Filter, cx: &Cx<'_>, params: &mut [TypedValue]) 
 ///
 /// For comparison operators, this also triggers `check()` to push refined
 /// types down into both sides (bidirectional inference).
-fn synthesize(expr: &stmt::Expr, cx: &Cx<'_>, params: &mut [TypedValue]) -> Ty {
+fn synthesize(expr: &stmt::Expr, cx: &Cx<'_>, params: &mut [Param]) -> Ty {
     match expr {
-        // Arg — type comes from the extracted param (inferred from value)
-        stmt::Expr::Arg(arg) => {
-            let tv = &params[arg.position];
-            Ty::Inferred(tv.ty.clone())
-        }
+        // Arg — type comes from the extracted param (whatever the current
+        // inference state is — `Inferred(...)` from the value, possibly
+        // already upgraded to `Column(...)` by a prior `check`).
+        stmt::Expr::Arg(arg) => params[arg.position].ty.clone(),
 
         // Column reference — authoritative from schema
         stmt::Expr::Reference(expr_ref @ stmt::ExprReference::Column(_)) => {
@@ -532,17 +579,16 @@ fn synthesize(expr: &stmt::Expr, cx: &Cx<'_>, params: &mut [TypedValue]) -> Ty {
 // ============================================================================
 
 /// Push an expected type down into an expression. When it reaches `Arg(n)`,
-/// update `params[n].ty` if the expected type has column provenance.
-fn check(expr: &stmt::Expr, expected: &Ty, params: &mut [TypedValue]) {
+/// merge the expected type into `params[n].ty` so column provenance and
+/// concrete element types propagate down (e.g. `List(Unknown) → List(Column(_))`).
+fn check(expr: &stmt::Expr, expected: &Ty, params: &mut [Param]) {
     match (expr, expected) {
-        // Arg — update the param's type if expected has column provenance.
-        // `to_db_type` lifts `Ty::List(Column(elem))` into
-        // `db::Type::List(Box::new(elem))` so list-bound params get the
-        // correct array type rather than just the element type.
-        (stmt::Expr::Arg(arg), ty) if ty.has_column() => {
-            if let Some(db_ty) = ty.to_db_type() {
-                params[arg.position].ty = db_ty;
-            }
+        // Arg — merge expected into the param's current type. `merge` handles
+        // provenance (column wins over inferred) and unknowns (any type wins
+        // over Unknown), including recursively for list element types.
+        (stmt::Expr::Arg(arg), ty) => {
+            let current = params[arg.position].ty.clone();
+            params[arg.position].ty = merge(&current, ty);
         }
 
         // Record — check each field against its expected type
@@ -571,7 +617,7 @@ fn check(expr: &stmt::Expr, expected: &Ty, params: &mut [TypedValue]) {
 }
 
 /// Check all items in a list expression against an expected element type.
-fn check_list(list_expr: &stmt::Expr, elem_ty: &Ty, params: &mut [TypedValue]) {
+fn check_list(list_expr: &stmt::Expr, elem_ty: &Ty, params: &mut [Param]) {
     match list_expr {
         stmt::Expr::List(list) => {
             for item in &list.items {
