@@ -1,6 +1,5 @@
 pub use crate::engine::test_util::*;
 
-mod association;
 mod expr_and;
 mod expr_any;
 mod expr_binary_op;

@@ -1,9 +1,13 @@
+mod association;
 mod expr_pattern;
 mod include;
 mod insert;
 mod paginate;
 mod relation;
 mod returning;
+
+#[cfg(test)]
+mod tests;
 
 use std::cell::Cell;
 
@@ -53,6 +57,11 @@ impl LoweringState<'_> {
         row_index: Option<usize>,
         mut stmt: stmt::Statement,
     ) -> hir::StmtId {
+        // App-level rewrites that lowering depends on. `Source::Model { via }`
+        // must be converted to a WHERE filter before the lowering walk
+        // converts `Source::Model` into `Source::Table`.
+        association::RewriteVia::new(expr_cx).rewrite(&mut stmt);
+
         Simplify::with_context(expr_cx).visit_mut(&mut stmt);
 
         let stmt_id = self.hir.new_statement_info(self.dependencies.clone());
@@ -989,8 +998,12 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         let mut stmt = Box::new(stmt);
 
         let target_id = self.scope_statement(|child| {
-            // Pre-lower simplify: app-level rewrites (model→PK, lift_in_subquery,
-            // association rewrites) that the lowering visitor expects to have
+            // Via-association rewrite: `Source::Model { via }` becomes an
+            // explicit WHERE filter so the lowering walk only sees rewritten
+            // sources.
+            association::RewriteVia::new(child.expr_cx).rewrite(&mut stmt);
+            // Pre-lower simplify: remaining app-level rewrites (model→PK,
+            // lift_in_subquery) that the lowering visitor expects to have
             // already fired.
             Simplify::with_context(child.expr_cx).visit_mut(&mut *stmt);
             // Lowering walk.
