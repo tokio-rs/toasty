@@ -12,7 +12,7 @@ use toasty::schema::db::{
     ColumnId, ColumnsDiffItem, IndexId, IndicesDiffItem, Migration, RenameHints, Schema,
     SchemaDiff, TableId, TablesDiffItem,
 };
-use toasty_core::schema::app;
+use toasty_core::schema;
 
 /// Generates a new SQL migration from the current schema diff.
 ///
@@ -235,7 +235,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<Ren
 impl GenerateCommand {
     pub(crate) fn run(
         self,
-        app_schema: app::Schema,
+        app_schema: schema::app::Schema,
         config: &Config,
         project_root: &Path,
     ) -> Result<()> {
@@ -266,11 +266,7 @@ impl GenerateCommand {
             .map(|snapshot| snapshot.schema)
             .unwrap_or_else(Schema::default);
 
-        // Build the current db-level schema from the app schema using the
-        // flavor's capability. Mirrors what `Db::builder().build(...)` does
-        // internally, without needing a connected `Db`.
-        let full_schema =
-            toasty_core::schema::Builder::new().build(app_schema, flavor.capability())?;
+        let full_schema = schema::Builder::new().build(app_schema, flavor.capability())?;
         let schema = full_schema.db;
 
         let rename_hints = collect_rename_hints(&previous_schema, &schema)?;
@@ -317,8 +313,7 @@ impl GenerateCommand {
         });
 
         // Materialize Toasty.toml on the first migration so the user has a
-        // concrete config to edit. No-op if the file already exists. Done
-        // before any "✓" output so a failed write doesn't print success first.
+        // concrete config to edit. No-op if the file already exists.
         config.save_if_missing(project_root)?;
 
         let Migration::Sql(sql) = migration;

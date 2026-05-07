@@ -52,8 +52,7 @@ impl Config {
     }
 
     /// Load configuration from `<project_root>/Toasty.toml`, falling back to
-    /// defaults if the file does not exist. The file is written lazily by
-    /// [`Config::save_if_missing`] on first migration generation.
+    /// defaults if the file does not exist.
     pub fn load_or_default(project_root: &Path) -> Result<Self> {
         let path = project_root.join("Toasty.toml");
         if path.exists() {

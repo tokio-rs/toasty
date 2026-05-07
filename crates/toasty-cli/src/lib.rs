@@ -24,8 +24,7 @@ use toasty::Db;
 /// CLI runner rooted at a project directory.
 pub struct ToastyCli {
     config: Config,
-    /// Project root (cwd at construction). Used by the dumper and for lazy
-    /// `Toasty.toml` writes.
+    /// Project root (cwd at construction).
     project_root: PathBuf,
 }
 

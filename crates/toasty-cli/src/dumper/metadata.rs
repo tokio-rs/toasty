@@ -1,17 +1,13 @@
-//! Resolve information about the user's package via `cargo metadata`.
-
 use anyhow::{Context, Result, anyhow};
+use cargo_metadata::TargetKind;
 use std::path::{Path, PathBuf};
 
 /// Metadata captured from the user's project for synthesizing the dumper.
 pub(super) struct ProjectMetadata {
-    /// Resolved target dir — honors `CARGO_TARGET_DIR` and config overrides,
-    /// so it isn't necessarily `<workspace>/target`.
+    /// Resolved target dir.
     pub target_directory: PathBuf,
-
-    /// The user's root package — the one whose schema we are extracting.
+    /// The user's root package, the one whose schema we are extracting.
     pub package: PackageInfo,
-
     /// Resolved info for the `toasty` dependency.
     pub toasty: PackageDep,
 }
@@ -25,7 +21,7 @@ pub(super) struct PackageInfo {
     pub has_lib: bool,
 }
 
-/// A resolved version (and possibly local path) for a workspace dep.
+/// A resolved version for a workspace dep.
 pub(super) struct PackageDep {
     pub version: String,
     /// Set when the dependency resolves to a local path (e.g., a path
@@ -67,12 +63,9 @@ pub(super) fn load(project_root: &Path) -> Result<ProjectMetadata> {
         .to_path_buf();
 
     let has_lib = root_pkg.targets.iter().any(|t| {
-        t.kind.iter().any(|k| {
-            matches!(
-                k,
-                cargo_metadata::TargetKind::Lib | cargo_metadata::TargetKind::RLib
-            )
-        })
+        t.kind
+            .iter()
+            .any(|k| matches!(k, TargetKind::Lib | TargetKind::RLib))
     });
 
     let toasty_pkg = metadata
