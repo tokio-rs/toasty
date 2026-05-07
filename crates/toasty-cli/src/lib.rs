@@ -1,8 +1,9 @@
 #![warn(missing_docs)]
-//! Standalone CLI for Toasty. Powers the bundled `toasty` binary: extracts
-//! the user's schema via the dumper crate and dispatches migration
-//! subcommands. `generate` runs offline (`--flavor`); `apply`/`reset` connect
-//! via `--url`.
+//! Standalone CLI for Toasty. Powers the bundled `toasty` binary and
+//! dispatches migration subcommands. Only `generate` invokes the dumper to
+//! extract the user's `app::Schema`; `apply`/`reset` open the database via
+//! `--url` (no schema needed — they run raw SQL); `snapshot`/`drop` are
+//! purely file ops.
 
 mod config;
 mod dumper;
@@ -16,10 +17,10 @@ pub use dumper::extract_schema;
 pub use flavor::Flavor;
 pub use migration::*;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use clap::Parser;
 use std::path::PathBuf;
-use toasty::Db;
+use toasty::db::Connect;
 
 /// CLI runner rooted at a project directory.
 pub struct ToastyCli {
@@ -55,27 +56,17 @@ impl ToastyCli {
     async fn run(&self, cli: Cli) -> Result<()> {
         let Command::Migration(cmd) = cli.command;
 
-        let app_schema = extract_schema(&self.project_root)?;
-
-        // Built lazily so `generate` doesn't require `--url`.
-        let connect = || async {
-            let url = cli
-                .url
-                .as_deref()
-                .ok_or_else(|| anyhow!("--url <DATABASE_URL> is required for this subcommand"))?;
-            Db::builder()
-                .app_schema(app_schema.clone())
-                .connect(url)
-                .await
-                .with_context(|| format!("connecting to database at {url}"))
-        };
-
+        // Only `generate` needs the user's models. Everything else operates on
+        // saved snapshot/history files or raw SQL, so no dumper invocation.
         match cmd.subcommand {
-            MigrationSubcommand::Generate(c) => c.run(app_schema, &self.config, &self.project_root),
-            MigrationSubcommand::Apply(c) => c.run(&connect().await?, &self.config).await,
-            MigrationSubcommand::Snapshot(c) => c.run(&connect().await?, &self.config),
-            MigrationSubcommand::Drop(c) => c.run(&connect().await?, &self.config),
-            MigrationSubcommand::Reset(c) => c.run(&connect().await?, &self.config).await,
+            MigrationSubcommand::Generate(c) => {
+                let app_schema = extract_schema(&self.project_root)?;
+                c.run(app_schema, &self.config, &self.project_root)
+            }
+            MigrationSubcommand::Apply(c) => c.run(&self.config).await,
+            MigrationSubcommand::Snapshot(c) => c.run(&self.config),
+            MigrationSubcommand::Drop(c) => c.run(&self.config),
+            MigrationSubcommand::Reset(c) => c.run(&self.config).await,
         }
     }
 }
@@ -85,10 +76,6 @@ impl ToastyCli {
 #[command(about = "Toasty CLI - Database migration and management tool")]
 #[command(version)]
 struct Cli {
-    /// Database URL used by subcommands that connect (e.g. `migration apply`).
-    #[arg(long, global = true)]
-    url: Option<String>,
-
     #[command(subcommand)]
     command: Command,
 }
@@ -97,4 +84,23 @@ struct Cli {
 enum Command {
     /// Database migration commands
     Migration(migration::MigrationCommand),
+}
+
+/// Shared `--url` argument for subcommands that open a database connection.
+#[derive(Parser, Debug)]
+pub(crate) struct ConnectArgs {
+    /// Database URL (e.g. `sqlite://...`, `postgres://...`).
+    #[arg(long)]
+    url: String,
+}
+
+impl ConnectArgs {
+    /// Open a raw [`Connect`] driver. No schema is needed — the migration
+    /// subcommands that connect (apply/reset) talk to the driver directly via
+    /// `Driver::connect` and never read `Db::schema`.
+    pub(crate) async fn driver(&self) -> Result<Connect> {
+        Connect::new(&self.url)
+            .await
+            .with_context(|| format!("connecting to database at {}", self.url))
+    }
 }

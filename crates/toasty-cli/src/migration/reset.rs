@@ -1,11 +1,11 @@
 use super::apply_migrations;
-use crate::Config;
 use crate::theme::dialoguer_theme;
+use crate::{Config, ConnectArgs};
 use anyhow::Result;
 use clap::Parser;
 use console::style;
 use dialoguer::Confirm;
-use toasty::Db;
+use toasty::db::Driver;
 
 /// Drops all tables in the database, then optionally re-applies migrations.
 ///
@@ -17,10 +17,14 @@ pub struct ResetCommand {
     /// Skip applying migrations after reset
     #[arg(long)]
     skip_migrations: bool,
+
+    #[command(flatten)]
+    connect: ConnectArgs,
 }
 
 impl ResetCommand {
-    pub(crate) async fn run(self, db: &Db, config: &Config) -> Result<()> {
+    pub(crate) async fn run(self, config: &Config) -> Result<()> {
+        let driver = self.connect.driver().await?;
         println!();
         println!("  {}", style("Reset Database").cyan().bold().underlined());
         println!();
@@ -28,7 +32,7 @@ impl ResetCommand {
             "  {}",
             style(format!(
                 "Connected to {}",
-                crate::utility::redact_url_password(&db.driver().url())
+                crate::utility::redact_url_password(&driver.url())
             ))
             .dim()
         );
@@ -57,7 +61,7 @@ impl ResetCommand {
         println!();
         println!("  {} Resetting database...", style("→").cyan());
 
-        db.reset_db().await?;
+        driver.reset_db().await?;
 
         println!(
             "  {} {}",
@@ -67,7 +71,7 @@ impl ResetCommand {
         println!();
 
         if !self.skip_migrations {
-            apply_migrations(db, config).await?;
+            apply_migrations(&driver, config).await?;
         }
 
         Ok(())

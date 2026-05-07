@@ -1,30 +1,49 @@
-use super::SnapshotFile;
+use super::{HistoryFile, SnapshotFile};
 use crate::Config;
 use anyhow::Result;
 use clap::Parser;
 use console::style;
-use toasty::Db;
 
-/// Prints the current schema as a TOML snapshot to stdout.
+/// Prints the most recently generated schema snapshot to stdout.
 ///
-/// Reads the schema registered on the [`Db`] and formats it as a
-/// [`SnapshotFile`]. Table headers, key-value pairs, and whitespace are
-/// syntax-highlighted for terminal display.
+/// Reads the latest entry from the migration history and pretty-prints the
+/// corresponding `*_snapshot.toml` file. Does not connect to a database or
+/// invoke the dumper.
 #[derive(Parser, Debug)]
-pub struct SnapshotCommand {
-    // Future options can be added here
-}
+pub struct SnapshotCommand {}
 
 impl SnapshotCommand {
-    pub(crate) fn run(self, db: &Db, _config: &Config) -> Result<()> {
+    pub(crate) fn run(self, config: &Config) -> Result<()> {
+        let history_path = config.migration.get_history_file_path();
+        let history = HistoryFile::load_or_default(&history_path)?;
+
+        let Some(latest) = history.migrations().last() else {
+            println!();
+            println!(
+                "  {}",
+                style("No migrations have been generated yet.")
+                    .magenta()
+                    .dim()
+            );
+            println!();
+            return Ok(());
+        };
+
+        let snapshot_path = config
+            .migration
+            .get_snapshots_dir()
+            .join(&latest.snapshot_name);
+        let snapshot_file = SnapshotFile::load(&snapshot_path)?;
+
         println!();
         println!(
             "  {}",
-            style("Current Schema Snapshot").cyan().bold().underlined()
+            style(format!("Schema Snapshot: {}", latest.snapshot_name))
+                .cyan()
+                .bold()
+                .underlined()
         );
         println!();
-
-        let snapshot_file = SnapshotFile::new(toasty::schema::db::Schema::clone(&db.schema().db));
 
         // Print the snapshot with nice formatting
         let snapshot_str = snapshot_file.to_string();

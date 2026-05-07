@@ -1,11 +1,11 @@
 use super::HistoryFile;
-use crate::Config;
+use crate::{Config, ConnectArgs};
 use anyhow::Result;
 use clap::Parser;
 use console::style;
 use hashbrown::HashSet;
 use std::fs;
-use toasty::Db;
+use toasty::db::Driver;
 use toasty::schema::db::Migration;
 
 /// Applies pending migrations to the database.
@@ -17,10 +17,14 @@ use toasty::schema::db::Migration;
 /// If no pending migrations are found, the command prints a message and exits
 /// without modifying the database.
 #[derive(Parser, Debug)]
-pub struct ApplyCommand {}
+pub struct ApplyCommand {
+    #[command(flatten)]
+    connect: ConnectArgs,
+}
 
 impl ApplyCommand {
-    pub(crate) async fn run(self, db: &Db, config: &Config) -> Result<()> {
+    pub(crate) async fn run(self, config: &Config) -> Result<()> {
+        let driver = self.connect.driver().await?;
         println!();
         println!("  {}", style("Apply Migrations").cyan().bold().underlined());
         println!();
@@ -28,17 +32,17 @@ impl ApplyCommand {
             "  {}",
             style(format!(
                 "Connected to {}",
-                crate::utility::redact_url_password(&db.driver().url())
+                crate::utility::redact_url_password(&driver.url())
             ))
             .dim()
         );
         println!();
 
-        apply_migrations(db, config).await
+        apply_migrations(&driver, config).await
     }
 }
 
-pub(crate) async fn apply_migrations(db: &Db, config: &Config) -> Result<()> {
+pub(crate) async fn apply_migrations(driver: &dyn Driver, config: &Config) -> Result<()> {
     let history_path = config.migration.get_history_file_path();
 
     // Load migration history
@@ -56,7 +60,7 @@ pub(crate) async fn apply_migrations(db: &Db, config: &Config) -> Result<()> {
     }
 
     // Get a connection to check which migrations have been applied
-    let mut conn = db.driver().connect().await?;
+    let mut conn = driver.connect().await?;
 
     // Get list of already applied migrations
     let applied_migrations = conn.applied_migrations().await?;

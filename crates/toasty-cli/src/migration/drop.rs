@@ -5,7 +5,6 @@ use clap::Parser;
 use console::style;
 use dialoguer::Select;
 use std::fs;
-use toasty::Db;
 
 /// Removes a migration from the history and deletes its files on disk.
 ///
@@ -25,7 +24,7 @@ pub struct DropCommand {
 }
 
 impl DropCommand {
-    pub(crate) fn run(self, _db: &Db, config: &Config) -> Result<()> {
+    pub(crate) fn run(self, config: &Config) -> Result<()> {
         let history_path = config.migration.get_history_file_path();
         let mut history = HistoryFile::load_or_default(&history_path)?;
 
