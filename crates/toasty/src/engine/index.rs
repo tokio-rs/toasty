@@ -16,7 +16,10 @@ use toasty_core::{
 };
 
 impl Engine {
-    pub(crate) fn plan_index_path<'a>(&'a self, stmt: &stmt::Statement) -> Result<IndexPlan<'a>> {
+    pub(crate) fn plan_index_path<'a>(
+        &'a self,
+        stmt: &stmt::Statement,
+    ) -> Result<Option<IndexPlan<'a>>> {
         plan_index_path(&self.schema, self.capability(), stmt)
     }
 }
@@ -25,7 +28,7 @@ pub(crate) fn plan_index_path<'a>(
     schema: &'a Schema,
     capability: &'a Capability,
     stmt: &stmt::Statement,
-) -> Result<IndexPlan<'a>> {
+) -> Result<Option<IndexPlan<'a>>> {
     let cx = stmt::ExprContext::new(schema);
     let cx = cx.scope(stmt);
     // Get a handle to the expression target so it can be passed into the planner
@@ -49,9 +52,13 @@ pub(crate) fn plan_index_path<'a>(
         filter: &remaining_filter,
         index_matches: vec![],
         index_paths: vec![],
+        capability,
     };
 
-    let index_path = index_planner.plan_index_path()?;
+    let Some(index_path) = index_planner.plan_index_path()? else {
+        // No index found and the driver supports scan — caller handles it.
+        return Ok(None);
+    };
 
     let mut partition_cx = PartitionCtx {
         capability,
@@ -78,7 +85,7 @@ pub(crate) fn plan_index_path<'a>(
     let index = schema.db.index(index_match.index.id);
     let has_pk_keys = index.primary_key && key_values.is_some();
 
-    Ok(IndexPlan {
+    Ok(Some(IndexPlan {
         // Reload the index to make lifetimes happy.
         index,
         index_filter,
@@ -95,7 +102,7 @@ pub(crate) fn plan_index_path<'a>(
         pre_filter,
         key_values,
         has_pk_keys,
-    })
+    }))
 }
 
 struct IndexPlanner<'stmt> {
@@ -111,6 +118,9 @@ struct IndexPlanner<'stmt> {
 
     /// Possible ways to execute the query using one or more index
     index_paths: Vec<IndexPath>,
+
+    /// Driver capability flags (used to decide scan vs error when no index found).
+    capability: &'stmt Capability,
 }
 
 #[derive(Debug, Clone)]
@@ -125,7 +135,7 @@ struct PartitionCtx<'a> {
 }
 
 impl IndexPlanner<'_> {
-    fn plan_index_path(&mut self) -> Result<IndexPath> {
+    fn plan_index_path(&mut self) -> Result<Option<IndexPath>> {
         // A preprocessing step that matches filter clauses to various index columns.
         self.build_index_matches();
 
@@ -133,6 +143,10 @@ impl IndexPlanner<'_> {
         self.build_single_index_paths();
 
         if self.index_paths.is_empty() {
+            if self.capability.scan {
+                // No index found but driver supports scan — signal caller to use a Scan node.
+                return Ok(None);
+            }
             return Err(toasty_core::Error::unsupported_feature(
                 "This database requires queries to use an index. The current filter cannot be \
                  satisfied by any available index. Consider adding an index that matches your \
@@ -140,12 +154,13 @@ impl IndexPlanner<'_> {
             ));
         }
 
-        Ok(self
-            .index_paths
-            .iter()
-            .min_by_key(|index_path| index_path.cost)
-            .unwrap()
-            .clone())
+        Ok(Some(
+            self.index_paths
+                .iter()
+                .min_by_key(|index_path| index_path.cost)
+                .unwrap()
+                .clone(),
+        ))
     }
 
     fn build_index_matches(&mut self) {

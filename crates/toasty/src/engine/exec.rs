@@ -44,6 +44,9 @@ pub(crate) use query_pk::QueryPk;
 mod rmw;
 pub(crate) use rmw::ReadModifyWrite;
 
+mod scan;
+pub(crate) use scan::Scan;
+
 mod set_var;
 pub(crate) use set_var::SetVar;
 
@@ -165,6 +168,7 @@ impl Exec<'_> {
             Action::NestedMerge(action) => self.action_nested_merge(action).await,
             Action::QueryPk(action) => self.action_query_pk(action).await,
             Action::ReadModifyWrite(action) => self.action_read_modify_write(action).await,
+            Action::Scan(action) => self.action_scan(action).await,
             Action::Project(action) => self.action_project(action).await,
             Action::SetVar(action) => self.action_set_var(action),
             Action::UpdateByKey(action) => self.action_update_by_key(action).await,

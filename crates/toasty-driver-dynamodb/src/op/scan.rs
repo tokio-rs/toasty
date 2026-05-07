@@ -5,63 +5,50 @@ use super::{
 use std::sync::Arc;
 use toasty_core::{
     driver::{ExecResponse, operation::Pagination},
+    schema::db::ColumnId,
     stmt::ExprContext,
 };
 
 impl Connection {
-    pub(crate) async fn exec_query_pk(
+    pub(crate) async fn exec_scan(
         &mut self,
         schema: &Arc<Schema>,
-        op: operation::QueryPk,
+        op: operation::Scan,
     ) -> Result<ExecResponse> {
         let table = schema.db.table(op.table);
         let cx = ExprContext::new_with_target(&schema.db, table);
 
         let mut expr_attrs = ExprAttrs::default();
 
-        // When querying an index, use index filter logic (not primary key logic)
-        let is_primary_key = op.index.is_none();
-        let key_expression = ddb_expression(&cx, &mut expr_attrs, is_primary_key, &op.pk_filter);
-
         let filter_expression = op
             .filter
             .as_ref()
             .map(|expr| ddb_expression(&cx, &mut expr_attrs, false, expr));
 
-        // Build base query
-        let mut query = self
+        tracing::trace!(table_name = %table.name, "scanning table");
+
+        let scan = self
             .client
-            .query()
+            .scan()
             .table_name(&table.name)
-            .key_condition_expression(key_expression)
             .set_filter_expression(filter_expression)
             .set_expression_attribute_names(Some(expr_attrs.attr_names))
             .set_expression_attribute_values(Some(expr_attrs.attr_values));
 
-        if let Some(index_id) = op.index {
-            let index = schema.db.index(index_id);
-            if index.unique {
-                return Err(toasty_core::Error::from_args(format_args!(
-                    "Unique index {} doesn't have fields.",
-                    index.name
-                )));
-            }
-            tracing::trace!(table_name = %table.name, index_name = %index.name, "querying secondary index");
-            query = query.index_name(&index.name);
-        } else {
-            tracing::trace!(table_name = %table.name, "querying primary key");
-        }
-
-        if let Some(ref direction) = op.order {
-            query = query.scan_index_forward(*direction == stmt::Direction::Asc);
-        }
-
-        let select = op.select;
-        let cols = || select.iter().map(|&id| schema.db.column(id));
+        let table_id = op.table;
+        let col_indices = op.columns;
+        let cols = || {
+            col_indices.iter().map(|&idx| {
+                schema.db.column(ColumnId {
+                    table: table_id,
+                    index: idx,
+                })
+            })
+        };
 
         match op.limit {
             None => {
-                let mut stream = query.into_paginator().items().send();
+                let mut stream = scan.into_paginator().items().send();
 
                 let mut rows: Vec<stmt::Value> = Vec::new();
                 while let Some(item) = stream
@@ -81,13 +68,14 @@ impl Connection {
             }
 
             Some(Pagination::Cursor { page_size, after }) => {
-                query = query.limit(page_size as i32);
-                if let Some(cursor_value) = after {
-                    query =
-                        query.set_exclusive_start_key(Some(deserialize_ddb_cursor(&cursor_value)));
-                }
+                let scan = scan.limit(page_size as i32);
+                let scan = if let Some(cursor_value) = after {
+                    scan.set_exclusive_start_key(Some(deserialize_ddb_cursor(&cursor_value)))
+                } else {
+                    scan
+                };
 
-                let res = query
+                let res = scan
                     .send()
                     .await
                     .map_err(toasty_core::Error::driver_operation_failed)?;
@@ -111,7 +99,7 @@ impl Connection {
                 let need = limit as usize + skip;
                 // DynamoDB Limit applies before filter expressions, so we fetch
                 // skip+limit items and discard the first `skip` client-side.
-                let mut stream = query.into_paginator().page_size(need as i32).items().send();
+                let mut stream = scan.into_paginator().page_size(need as i32).items().send();
 
                 let mut skipped = 0;
                 while skipped < skip {

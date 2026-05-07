@@ -3,8 +3,9 @@
 //! An [`Operation`] is the unit of work sent to [`Connection::exec`](super::Connection::exec).
 //! The query engine compiles user queries into one or more `Operation` values.
 //! SQL drivers handle [`QuerySql`] and [`Insert`]; key-value drivers handle
-//! [`GetByKey`], [`QueryPk`], [`DeleteByKey`], [`FindPkByIndex`], and
-//! [`UpdateByKey`]. Both driver types handle [`Transaction`] operations.
+//! [`GetByKey`], [`QueryPk`], [`DeleteByKey`], [`FindPkByIndex`], [`UpdateByKey`],
+//! and (when [`Capability::scan`](super::Capability::scan) is `true`) [`Scan`].
+//! Both driver types handle [`Transaction`] operations.
 
 mod delete_by_key;
 pub use delete_by_key::DeleteByKey;
@@ -18,11 +19,17 @@ pub use get_by_key::GetByKey;
 mod insert;
 pub use insert::Insert;
 
+mod pagination;
+pub use pagination::Pagination;
+
 mod query_pk;
-pub use query_pk::{QueryPk, QueryPkLimit};
+pub use query_pk::QueryPk;
 
 mod query_sql;
 pub use query_sql::QuerySql;
+
+mod scan;
+pub use scan::Scan;
 
 mod transaction;
 pub use transaction::{IsolationLevel, Transaction};
@@ -78,6 +85,11 @@ pub enum Operation {
 
     /// Update one or more records identified by primary key.
     UpdateByKey(UpdateByKey),
+
+    /// Full-table scan with optional filter and pagination.
+    ///
+    /// Only sent to drivers with [`Capability::scan`](super::Capability::scan) set to `true`.
+    Scan(Scan),
 }
 
 impl Operation {
@@ -92,6 +104,7 @@ impl Operation {
             Operation::QuerySql(_) => "query_sql",
             Operation::Transaction(_) => "transaction",
             Operation::UpdateByKey(_) => "update_by_key",
+            Operation::Scan(_) => "scan",
         }
     }
 }
