@@ -95,30 +95,24 @@ impl OidCache {
     /// Look up the PostgreSQL wire type for a `db::Type`. Recurses into
     /// `List(elem)` so list-of-enum and list-of-scalar both resolve to the
     /// correct array OID. Panics if an enum type was not preloaded.
-    pub fn get(&self, ty: &db::Type) -> Type {
+    pub fn get(&self, ty: &db::Type) -> &Type {
         match ty {
             db::Type::Enum(type_enum) if type_enum.name.is_some() => {
                 let name = type_enum.name.as_ref().unwrap();
-                self.enum_types
-                    .get(name)
-                    .unwrap_or_else(|| {
-                        panic!("enum type '{name}' not preloaded — call preload() before get()")
-                    })
-                    .clone()
+                self.enum_types.get(name).unwrap_or_else(|| {
+                    panic!("enum type '{name}' not preloaded — call preload() before get()")
+                })
             }
             db::Type::List(elem) => match elem.as_ref() {
                 db::Type::Enum(type_enum) if type_enum.name.is_some() => {
                     let name = type_enum.name.as_ref().unwrap();
-                    self.enum_array_types
-                        .get(name)
-                        .unwrap_or_else(|| {
-                            panic!(
-                                "enum array type '_{name}' not preloaded — call preload() before get()"
-                            )
-                        })
-                        .clone()
+                    self.enum_array_types.get(name).unwrap_or_else(|| {
+                        panic!(
+                            "enum array type '_{name}' not preloaded — call preload() before get()"
+                        )
+                    })
                 }
-                _ => array_type_of(&self.get(elem)),
+                _ => array_type_of(self.get(elem)),
             },
             _ => to_postgres_type(ty),
         }
@@ -242,7 +236,7 @@ mod tests {
 
         assert_eq!(list.name(), format!("_{name}"));
         match list.kind() {
-            Kind::Array(elem) => assert_eq!(elem, &scalar),
+            Kind::Array(elem) => assert_eq!(elem, scalar),
             other => panic!("expected Kind::Array, got {other:?}"),
         }
 
@@ -279,11 +273,11 @@ mod tests {
         let cache = OidCache::new();
         assert_eq!(
             cache.get(&db::Type::List(Box::new(db::Type::Integer(8)))),
-            Type::INT8_ARRAY
+            &Type::INT8_ARRAY
         );
         assert_eq!(
             cache.get(&db::Type::List(Box::new(db::Type::Text))),
-            Type::TEXT_ARRAY
+            &Type::TEXT_ARRAY
         );
     }
 
@@ -298,10 +292,10 @@ mod tests {
 
         let mut cache = OidCache::new();
         cache.preload(&client, [&db_enum(&name)]).await.unwrap();
-        let first = cache.get(&db_enum(&name));
+        let first = cache.get(&db_enum(&name)).clone();
         cache.preload(&client, [&db_enum(&name)]).await.unwrap();
         let second = cache.get(&db_enum(&name));
-        assert_eq!(first, second);
+        assert_eq!(&first, second);
 
         drop_enum(&client, &name).await;
     }
