@@ -64,7 +64,6 @@ impl ToastyCli {
                 c.run(app_schema, &self.config, &self.project_root)
             }
             MigrationSubcommand::Apply(c) => c.run(&self.config).await,
-            MigrationSubcommand::Snapshot(c) => c.run(&self.config),
             MigrationSubcommand::Drop(c) => c.run(&self.config),
             MigrationSubcommand::Reset(c) => c.run(&self.config).await,
         }
