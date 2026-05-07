@@ -6,7 +6,7 @@ use tokio_postgres::{
     types::{Kind, Type},
 };
 
-use crate::r#type::{TypeExt, array_type_of};
+use crate::r#type::{array_type_of, to_postgres_type};
 
 /// Lazily caches PostgreSQL OIDs for native enum types — both the base enum
 /// (e.g. `status`) and its array form (`_status`). Array OIDs are needed
@@ -120,7 +120,7 @@ impl OidCache {
                 }
                 _ => array_type_of(&self.get(elem)),
             },
-            _ => ty.to_postgres_type(),
+            _ => to_postgres_type(ty),
         }
     }
 }
