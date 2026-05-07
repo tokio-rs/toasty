@@ -6,7 +6,6 @@ edition.workspace = true
 license.workspace = true
 readme.workspace = true
 publish = false
-default-run = "todo-app"
 
 [features]
 default = [ "sqlite" ]
@@ -17,7 +16,6 @@ sqlite = [ "toasty/sqlite" ]
 
 [dependencies]
 toasty.workspace = true
-toasty-cli.workspace = true
 tokio.workspace = true
 anyhow = "1.0.102"
 uuid.workspace = true

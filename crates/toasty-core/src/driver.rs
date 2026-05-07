@@ -30,7 +30,7 @@ pub use operation::{IsolationLevel, Operation};
 
 use crate::schema::{
     Schema,
-    db::{AppliedMigration, Migration, SchemaDiff},
+    db::{AppliedMigration, Migration},
 };
 
 use async_trait::async_trait;
@@ -76,9 +76,6 @@ pub trait Driver: Debug + Send + Sync + 'static {
     fn max_connections(&self) -> Option<usize> {
         None
     }
-
-    /// Generates a migration from a [`SchemaDiff`].
-    fn generate_migration(&self, schema_diff: &SchemaDiff<'_>) -> Migration;
 
     /// Drops the entire database and recreates an empty one without applying migrations.
     ///

@@ -26,7 +26,7 @@ use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     Result, Schema,
     driver::{Capability, Driver, ExecResponse, Operation},
-    schema::db::{self, Migration, SchemaDiff, Table},
+    schema::db::{self, Table},
     stmt,
     stmt::ValueRecord,
 };
@@ -156,17 +156,6 @@ impl Driver for PostgreSQL {
         Ok(Box::new(
             self.connect_with_config(self.config.clone()).await?,
         ))
-    }
-
-    fn generate_migration(&self, schema_diff: &SchemaDiff<'_>) -> Migration {
-        let statements = sql::MigrationStatement::from_diff(schema_diff, &Capability::POSTGRESQL);
-
-        let sql_strings: Vec<String> = statements
-            .iter()
-            .map(|stmt| sql::Serializer::postgresql(stmt.schema()).serialize(stmt.statement()))
-            .collect();
-
-        Migration::new_sql(sql_strings.join("\n"))
     }
 
     async fn reset_db(&self) -> toasty_core::Result<()> {

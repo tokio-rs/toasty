@@ -49,7 +49,7 @@ pub(super) fn load(project_root: &Path) -> Result<ProjectMetadata> {
         .as_ref()
         .and_then(|r| r.root.as_ref())
         .ok_or_else(|| {
-            anyhow!("cargo metadata did not report a root package — virtual workspaces are not supported yet")
+            anyhow!("cargo metadata did not report a root package — virtual workspaces are not supported")
         })?
         .clone();
 
@@ -75,37 +75,23 @@ pub(super) fn load(project_root: &Path) -> Result<ProjectMetadata> {
         })
     });
 
-    let toasty = find_dep(&metadata, root_pkg, "toasty")?;
-
-    Ok(ProjectMetadata {
-        target_directory: metadata.target_directory.into_std_path_buf(),
-        package: PackageInfo {
-            name: root_pkg.name.to_string(),
-            edition: root_pkg.edition.to_string(),
-            manifest_dir,
-            has_lib,
-        },
-        toasty,
-    })
-}
-
-fn find_dep(
-    metadata: &cargo_metadata::Metadata,
-    root_pkg: &cargo_metadata::Package,
-    name: &str,
-) -> Result<PackageDep> {
-    let pkg = metadata
+    let toasty_pkg = metadata
         .packages
         .iter()
-        .find(|p| p.name.as_str() == name)
-        .ok_or_else(|| anyhow!("`{name}` is not in the resolved dependency graph — is it listed in your Cargo.toml?"))?;
+        .find(|p| p.name.as_str() == "toasty")
+        .ok_or_else(|| {
+            anyhow!(
+                "`toasty` is not in the resolved dependency graph — is it listed in your Cargo.toml?"
+            )
+        })?;
 
     // A path/workspace dep has `source == None`; registry deps have a source.
-    let path = if pkg.source.is_none() {
+    let toasty_path = if toasty_pkg.source.is_none() {
         Some(
-            pkg.manifest_path
+            toasty_pkg
+                .manifest_path
                 .parent()
-                .ok_or_else(|| anyhow!("`{name}` manifest path has no parent"))?
+                .ok_or_else(|| anyhow!("`toasty` manifest path has no parent"))?
                 .as_std_path()
                 .to_path_buf(),
         )
@@ -118,17 +104,26 @@ fn find_dep(
     let dep_entry = root_pkg
         .dependencies
         .iter()
-        .find(|d| d.name == name && matches!(d.kind, cargo_metadata::DependencyKind::Normal));
+        .find(|d| d.name == "toasty" && matches!(d.kind, cargo_metadata::DependencyKind::Normal));
 
     let (features, default_features) = match dep_entry {
         Some(d) => (d.features.clone(), d.uses_default_features),
         None => (Vec::new(), true),
     };
 
-    Ok(PackageDep {
-        version: pkg.version.to_string(),
-        path,
-        features,
-        default_features,
+    Ok(ProjectMetadata {
+        target_directory: metadata.target_directory.into_std_path_buf(),
+        package: PackageInfo {
+            name: root_pkg.name.to_string(),
+            edition: root_pkg.edition.to_string(),
+            manifest_dir,
+            has_lib,
+        },
+        toasty: PackageDep {
+            version: toasty_pkg.version.to_string(),
+            path: toasty_path,
+            features,
+            default_features,
+        },
     })
 }

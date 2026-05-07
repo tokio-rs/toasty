@@ -16,9 +16,9 @@ use toasty_core::schema::app;
 
 /// Generates a new SQL migration from the current schema diff.
 ///
-/// Compares the current database schema (as registered on the [`Db`]) against
-/// the most recent snapshot. If there are differences, generates a SQL
-/// migration file, writes a new snapshot, and updates the history file.
+/// Compares the user's current schema (extracted via the dumper) against the
+/// most recent snapshot. If there are differences, emits a SQL migration in
+/// the chosen `--flavor`, writes a new snapshot, and updates the history file.
 ///
 /// When the diff contains dropped-and-added tables, columns, or indices, the
 /// command interactively asks whether these are renames rather than
@@ -32,10 +32,9 @@ pub struct GenerateCommand {
     #[arg(short, long)]
     name: Option<String>,
 
-    /// SQL dialect to emit. Required in standalone mode; ignored in library
-    /// mode (the dialect is inherited from the provided `Db`).
+    /// SQL dialect to emit.
     #[arg(long, value_enum)]
-    flavor: Option<Flavor>,
+    flavor: Flavor,
 }
 
 /// Collects rename hints by interactively asking the user about potential renames
@@ -234,18 +233,13 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<Ren
 }
 
 impl GenerateCommand {
-    /// Returns the user-supplied `--flavor` flag, if any.
-    pub(crate) fn flavor(&self) -> Option<Flavor> {
-        self.flavor
-    }
-
     pub(crate) fn run(
         self,
         app_schema: app::Schema,
-        flavor: toasty_sql::Flavor,
         config: &Config,
         project_root: &Path,
     ) -> Result<()> {
+        let flavor: toasty_sql::Flavor = self.flavor.into();
         println!();
         println!(
             "  {}",
@@ -322,6 +316,11 @@ impl GenerateCommand {
             checksum: None,
         });
 
+        // Materialize Toasty.toml on the first migration so the user has a
+        // concrete config to edit. No-op if the file already exists. Done
+        // before any "✓" output so a failed write doesn't print success first.
+        config.save_if_missing(project_root)?;
+
         let Migration::Sql(sql) = migration;
         std::fs::write(&migration_path, format!("{sql}\n"))?;
         println!(
@@ -343,10 +342,6 @@ impl GenerateCommand {
             style("✓").green().bold(),
             style("Updated migration history").dim()
         );
-
-        // Materialize Toasty.toml on the first migration so the user has a
-        // concrete config to edit. No-op if the file already exists.
-        config.save_if_missing(project_root)?;
 
         println!();
         println!(

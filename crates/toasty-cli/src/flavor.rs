@@ -1,12 +1,9 @@
-//! CLI-facing SQL dialect flag, parsed by clap. Converts into the canonical
-//! [`toasty_sql::Flavor`] used by the rest of the migration pipeline.
+//! Clap-parsed mirror of [`toasty_sql::Flavor`], so `toasty-sql` doesn't need
+//! a `clap` dependency. Converted via [`From`] before reaching `toasty-sql`.
 
 use clap::ValueEnum;
 
-/// SQL dialect for `migration generate`.
-///
-/// Thin wrapper around [`toasty_sql::Flavor`] that adds the clap-derived
-/// parsing for `--flavor` without forcing a clap dependency on `toasty-sql`.
+/// SQL dialect for `--flavor`.
 #[derive(Copy, Clone, Debug, ValueEnum)]
 pub enum Flavor {
     /// SQLite

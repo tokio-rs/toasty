@@ -1,18 +1,8 @@
 #![warn(missing_docs)]
-//! Standalone CLI for Toasty.
-//!
-//! `toasty-cli` powers the bundled `toasty` binary. It collects the user's
-//! schema by synthesizing and running an ephemeral "dumper" crate against the
-//! package in the current working directory, then dispatches migration
-//! subcommands:
-//!
-//! - `migration generate` runs offline; pick the dialect with
-//!   `--flavor <sqlite|postgresql|mysql>`.
-//! - `migration apply` / `reset` open a connection via `--url`.
-//!
-//! The crate also re-exports the underlying configuration and file types so
-//! external tooling can read and manipulate migration history and snapshots
-//! directly.
+//! Standalone CLI for Toasty. Powers the bundled `toasty` binary: extracts
+//! the user's schema via the dumper crate and dispatches migration
+//! subcommands. `generate` runs offline (`--flavor`); `apply`/`reset` connect
+//! via `--url`.
 
 mod config;
 mod dumper;
@@ -31,20 +21,17 @@ use clap::Parser;
 use std::path::PathBuf;
 use toasty::Db;
 
-/// CLI runner for the standalone `toasty` binary.
-///
-/// Resolves the user's schema from the current working directory and
-/// dispatches migration subcommands.
+/// CLI runner rooted at a project directory.
 pub struct ToastyCli {
     config: Config,
-    /// Project root: the cwd at construction time. Used to locate the user's
-    /// package for the dumper and to write `Toasty.toml` lazily.
+    /// Project root (cwd at construction). Used by the dumper and for lazy
+    /// `Toasty.toml` writes.
     project_root: PathBuf,
 }
 
 impl ToastyCli {
-    /// Build a CLI runner rooted at the current working directory. Loads
-    /// `Toasty.toml` if present, otherwise uses the default config.
+    /// Build a runner from the current working directory. Loads `Toasty.toml`
+    /// if present, otherwise uses defaults.
     pub fn new() -> Result<Self> {
         let project_root = std::env::current_dir()
             .context("resolving current working directory for the toasty CLI")?;
@@ -56,53 +43,40 @@ impl ToastyCli {
         })
     }
 
-    /// Get a reference to the configuration.
+    /// Get the loaded configuration.
     pub fn config(&self) -> &Config {
         &self.config
     }
 
-    /// Parse and execute CLI commands from `std::env::args`.
+    /// Parse `std::env::args` and run.
     pub async fn parse_and_run(&self) -> Result<()> {
         self.run(Cli::parse()).await
-    }
-
-    /// Parse and execute CLI commands from an iterator of arguments.
-    pub async fn parse_from<I, T>(&self, args: I) -> Result<()>
-    where
-        I: IntoIterator<Item = T>,
-        T: Into<std::ffi::OsString> + Clone,
-    {
-        self.run(Cli::parse_from(args)).await
     }
 
     async fn run(&self, cli: Cli) -> Result<()> {
         let Command::Migration(cmd) = cli.command;
 
+        let app_schema = extract_schema(&self.project_root)?;
+
+        // Built lazily so `generate` doesn't require `--url`.
+        let connect = || async {
+            let url = cli
+                .url
+                .as_deref()
+                .ok_or_else(|| anyhow!("--url <DATABASE_URL> is required for this subcommand"))?;
+            Db::builder()
+                .app_schema(app_schema.clone())
+                .connect(url)
+                .await
+                .with_context(|| format!("connecting to database at {url}"))
+        };
+
         match cmd.subcommand {
-            MigrationSubcommand::Generate(gen_cmd) => {
-                let flavor: toasty_sql::Flavor = gen_cmd
-                    .flavor()
-                    .ok_or_else(|| {
-                        anyhow!(
-                            "--flavor <sqlite|postgresql|mysql> is required for migration generate"
-                        )
-                    })?
-                    .into();
-                let app_schema = extract_schema(&self.project_root)?;
-                gen_cmd.run(app_schema, flavor, &self.config, &self.project_root)
-            }
-            other => {
-                let url = cli.url.as_deref().ok_or_else(|| {
-                    anyhow!("--url <DATABASE_URL> is required for this subcommand")
-                })?;
-                let app = extract_schema(&self.project_root)?;
-                let db = Db::builder()
-                    .app_schema(app)
-                    .connect(url)
-                    .await
-                    .with_context(|| format!("connecting to database at {url}"))?;
-                other.run_with_db(&db, &self.config).await
-            }
+            MigrationSubcommand::Generate(c) => c.run(app_schema, &self.config, &self.project_root),
+            MigrationSubcommand::Apply(c) => c.run(&connect().await?, &self.config).await,
+            MigrationSubcommand::Snapshot(c) => c.run(&connect().await?, &self.config),
+            MigrationSubcommand::Drop(c) => c.run(&connect().await?, &self.config),
+            MigrationSubcommand::Reset(c) => c.run(&connect().await?, &self.config).await,
         }
     }
 }

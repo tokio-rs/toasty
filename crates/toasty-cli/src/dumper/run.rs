@@ -20,7 +20,7 @@ pub(super) fn build_and_run(synth: &Synth) -> Result<app::Schema> {
         .arg("--bin")
         .arg("toasty-dumper")
         .arg("--message-format=json-render-diagnostics")
-        .env("CARGO_TARGET_DIR", &target_dir)
+        .env("CARGO_TARGET_DIR", target_dir)
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .output()

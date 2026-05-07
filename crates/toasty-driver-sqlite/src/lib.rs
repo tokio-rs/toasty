@@ -33,7 +33,7 @@ use toasty_core::{
         Capability, Driver, ExecResponse,
         operation::{IsolationLevel, Operation, Transaction},
     },
-    schema::db::{self, Migration, SchemaDiff, Table},
+    schema::db::{self, Table},
     stmt,
 };
 use toasty_sql::{self as sql};
@@ -110,17 +110,6 @@ impl Driver for Sqlite {
 
     fn max_connections(&self) -> Option<usize> {
         matches!(self, Self::InMemory).then_some(1)
-    }
-
-    fn generate_migration(&self, schema_diff: &SchemaDiff<'_>) -> Migration {
-        let statements = sql::MigrationStatement::from_diff(schema_diff, &Capability::SQLITE);
-
-        let sql_strings: Vec<String> = statements
-            .iter()
-            .map(|stmt| sql::Serializer::sqlite(stmt.schema()).serialize(stmt.statement()))
-            .collect();
-
-        Migration::new_sql_with_breakpoints(&sql_strings)
     }
 
     async fn reset_db(&self) -> toasty_core::Result<()> {

@@ -6,7 +6,7 @@ use std::{
 use toasty_core::{
     Result, Schema,
     driver::{Capability, Connection, Driver, ExecResponse, Operation, Rows},
-    schema::db::{AppliedMigration, Migration, SchemaDiff},
+    schema::db::{AppliedMigration, Migration},
 };
 
 #[derive(Debug)]
@@ -47,10 +47,6 @@ impl Driver for LoggingDriver {
             inner: self.inner.connect().await?,
             ops_log: self.ops_log_handle(),
         }))
-    }
-
-    fn generate_migration(&self, schema_diff: &SchemaDiff<'_>) -> Migration {
-        self.inner.generate_migration(schema_diff)
     }
 
     async fn reset_db(&self) -> Result<()> {

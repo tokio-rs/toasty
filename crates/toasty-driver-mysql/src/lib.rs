@@ -24,7 +24,7 @@ use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     Result, Schema,
     driver::{Capability, Driver, ExecResponse, Operation},
-    schema::db::{self, Migration, SchemaDiff, Table},
+    schema::db::{self, Table},
     stmt::{self, ValueRecord},
 };
 use toasty_sql::{self as sql};
@@ -98,17 +98,6 @@ impl Driver for MySQL {
             .await
             .map_err(toasty_core::Error::driver_operation_failed)?;
         Ok(Box::new(Connection::new(conn)))
-    }
-
-    fn generate_migration(&self, schema_diff: &SchemaDiff<'_>) -> Migration {
-        let statements = sql::MigrationStatement::from_diff(schema_diff, &Capability::MYSQL);
-
-        let sql_strings: Vec<String> = statements
-            .iter()
-            .map(|stmt| sql::Serializer::mysql(stmt.schema()).serialize(stmt.statement()))
-            .collect();
-
-        Migration::new_sql_with_breakpoints(&sql_strings)
     }
 
     async fn reset_db(&self) -> toasty_core::Result<()> {

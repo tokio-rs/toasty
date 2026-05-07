@@ -25,7 +25,7 @@ use async_trait::async_trait;
 use toasty_core::{
     Error, Result, Schema,
     driver::{Capability, Driver, ExecResponse, operation::Operation},
-    schema::db::{self, Column, ColumnId, Migration, SchemaDiff, Table},
+    schema::db::{self, Column, ColumnId, Table},
     stmt::{self, ExprContext},
 };
 
@@ -89,12 +89,6 @@ impl Driver for DynamoDb {
     async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::driver::Connection>> {
         // Clone the shared client - cheap operation (Client uses Arc internally)
         Ok(Box::new(Connection::new(self.client.clone())))
-    }
-
-    fn generate_migration(&self, _schema_diff: &SchemaDiff<'_>) -> Migration {
-        unimplemented!(
-            "DynamoDB migrations are not yet supported. DynamoDB schema changes require manual table updates through the AWS console or SDK."
-        )
     }
 
     async fn reset_db(&self) -> toasty_core::Result<()> {

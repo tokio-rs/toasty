@@ -16,10 +16,7 @@ pub use reset::*;
 pub use snapshot::*;
 pub use snapshot_file::*;
 
-use crate::Config;
-use anyhow::Result;
 use clap::Parser;
-use toasty::Db;
 
 /// Top-level `migration` subcommand.
 ///
@@ -47,21 +44,4 @@ pub(crate) enum MigrationSubcommand {
 
     /// Reset the database (drop all tables) and optionally re-apply migrations
     Reset(ResetCommand),
-}
-
-impl MigrationSubcommand {
-    /// Run a non-generate subcommand against a connected `Db`. Generate is
-    /// dispatched directly by [`ToastyCli::run`](crate::ToastyCli) via
-    /// [`GenerateCommand::run`], without a connection.
-    pub(crate) async fn run_with_db(self, db: &Db, config: &Config) -> Result<()> {
-        match self {
-            Self::Apply(cmd) => cmd.run(db, config).await,
-            Self::Generate(_) => {
-                unreachable!("Generate is dispatched offline, not via run_with_db")
-            }
-            Self::Snapshot(cmd) => cmd.run(db, config),
-            Self::Drop(cmd) => cmd.run(db, config),
-            Self::Reset(cmd) => cmd.run(db, config).await,
-        }
-    }
 }

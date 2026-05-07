@@ -131,21 +131,28 @@ pub use toasty_core::{Error, Result, schema::app::ModelSet};
 /// Internal entry point for the `toasty-cli` dumper crate.
 ///
 /// Iterates every model registered through `inventory`, builds an
-/// [`app::Schema`](schema::app::Schema), and writes it to stdout as JSON.
-/// Panics on any error, since the dumper has no useful recovery path.
+/// [`app::Schema`](schema::app::Schema), and writes it to stdout as JSON. On
+/// failure prints to stderr and exits with status 1 so the parent CLI sees a
+/// clean message instead of a backtrace.
 ///
 /// Not part of the public API. Gated on the `serde` feature.
 #[cfg(feature = "serde")]
 #[doc(hidden)]
 pub fn __dump_schema() {
+    fn fail(msg: impl std::fmt::Display) -> ! {
+        eprintln!("toasty dumper: {msg}");
+        std::process::exit(1);
+    }
+
     let mut set = schema::ModelSet::new();
     for item in schema::inventory::iter::<schema::DiscoverItem>() {
         item.add_to(&mut set);
     }
     let schema =
-        schema::from_macro(set).expect("failed to build app::Schema from registered models");
-    serde_json::to_writer(std::io::stdout(), &schema)
-        .expect("failed to serialize app::Schema as JSON");
+        schema::from_macro(set).unwrap_or_else(|e| fail(format_args!("building app::Schema: {e}")));
+    if let Err(e) = serde_json::to_writer(std::io::stdout(), &schema) {
+        fail(format_args!("serializing app::Schema: {e}"));
+    }
 }
 
 #[doc(hidden)]

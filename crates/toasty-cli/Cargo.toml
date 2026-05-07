@@ -44,13 +44,10 @@ jiff.workspace = true
 rand.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tokio = { workspace = true, features = ["rt", "macros"] }
 toml.workspace = true
 toml_edit = { workspace = true, features = ["serde"] }
 url.workspace = true
-
-[dev-dependencies]
-tempfile.workspace = true
 
 [lints]
 workspace = true

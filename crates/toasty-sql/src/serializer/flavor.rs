@@ -6,10 +6,10 @@ use toasty_core::schema::db::{self, Migration, SchemaDiff};
 /// SQL dialect for migration generation and serialization.
 #[derive(Copy, Clone, Debug)]
 pub enum Flavor {
-    /// PostgreSQL
-    Postgresql,
     /// SQLite
     Sqlite,
+    /// PostgreSQL
+    Postgresql,
     /// MySQL
     Mysql,
 }
@@ -24,8 +24,7 @@ impl Flavor {
         }
     }
 
-    /// Generate a migration by serializing each statement of the schema diff
-    /// with this flavor's dialect-specific SQL.
+    /// Serialize a schema diff into a dialect-specific migration.
     pub fn generate_migration(&self, diff: &SchemaDiff<'_>) -> Migration {
         let statements = crate::MigrationStatement::from_diff(diff, self.capability());
         let sql_strings: Vec<String> = statements
@@ -33,8 +32,7 @@ impl Flavor {
             .map(|stmt| Serializer::for_flavor(*self, stmt.schema()).serialize(stmt.statement()))
             .collect();
 
-        // Sqlite and MySQL use breakpoints between statements; PostgreSQL
-        // emits a single joined SQL blob. Mirrors the per-driver impls.
+        // Postgres emits a single joined blob; Sqlite/MySQL use breakpoints.
         match self {
             Flavor::Sqlite | Flavor::Mysql => Migration::new_sql_with_breakpoints(&sql_strings),
             Flavor::Postgresql => Migration::new_sql(sql_strings.join("\n")),
