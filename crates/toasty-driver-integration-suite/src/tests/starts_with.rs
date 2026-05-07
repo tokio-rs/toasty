@@ -249,8 +249,9 @@ pub async fn starts_with_optional_field(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// starts_with on the partition key — DynamoDB returns a runtime error since
-/// starts_with is not valid in a KeyConditionExpression on the partition key.
+/// starts_with on the partition key — on scan-capable drivers (DynamoDB) this
+/// falls back to a table scan with a begins_with filter and succeeds; on
+/// non-scan NoSQL drivers it returns an error.
 #[driver_test(requires(not(sql)))]
 pub async fn starts_with_partition_key_error(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -276,10 +277,16 @@ pub async fn starts_with_partition_key_error(test: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await;
 
-    assert!(
-        result.is_err(),
-        "expected error when using starts_with on partition key"
-    );
+    if test.capability().scan {
+        let items = result?;
+        assert_eq!(1, items.len());
+        assert_eq!("hello", items[0].partition_id);
+    } else {
+        assert!(
+            result.is_err(),
+            "expected error when using starts_with on partition key"
+        );
+    }
 
     Ok(())
 }

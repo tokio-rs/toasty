@@ -98,6 +98,13 @@ impl Verify<'_> {
             return;
         };
 
+        // SQL requires ORDER BY for cursor-based pagination.
+        // NoSQL drivers (DynamoDB) use a driver-level cursor (ExclusiveStartKey)
+        // and do not require ORDER BY.
+        if !self.capability.sql {
+            return;
+        }
+
         let Some(order_by) = i.order_by.as_ref() else {
             todo!("specified offset but no order; stmt={i:#?}");
         };

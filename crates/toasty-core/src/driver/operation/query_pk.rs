@@ -1,30 +1,8 @@
-use super::Operation;
+use super::{Operation, Pagination};
 use crate::{
     schema::db::{ColumnId, IndexId, TableId},
     stmt,
 };
-
-/// Describes how results from a [`QueryPk`] operation should be bounded.
-#[derive(Debug, Clone)]
-pub enum QueryPkLimit {
-    /// Cursor-based (keyset) pagination. Returns `page_size` items resuming
-    /// after `after`. `after = None` means the first page.
-    Cursor {
-        /// Maximum number of items to return per page.
-        page_size: i64,
-        /// Serialized key of the last item from the previous page, or `None`
-        /// for the first page.
-        after: Option<stmt::Value>,
-    },
-    /// Hard-limit with optional client-side skip. Returns up to `limit` items
-    /// after discarding the first `offset`.
-    Offset {
-        /// Maximum number of items to return.
-        limit: i64,
-        /// Number of leading items to skip before returning results.
-        offset: Option<i64>,
-    },
-}
 
 /// Queries a table by primary key (or secondary index) with optional filtering,
 /// ordering, and pagination.
@@ -69,7 +47,7 @@ pub struct QueryPk {
     pub filter: Option<stmt::Expr>,
 
     /// Limit and pagination bounds for this query. `None` means unbounded.
-    pub limit: Option<QueryPkLimit>,
+    pub limit: Option<Pagination>,
 
     /// Sort key ordering direction for tables with a composite primary key.
     /// `None` uses the driver's default ordering.

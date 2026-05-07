@@ -1,6 +1,6 @@
 use crate::engine::exec::{
     DeleteByKey, Eval, ExecStatement, Filter, FindPkByIndex, GetByKey, Guard, NestedMerge, Project,
-    QueryPk, ReadModifyWrite, SetVar, UpdateByKey,
+    QueryPk, ReadModifyWrite, Scan, SetVar, UpdateByKey,
 };
 
 use std::fmt;
@@ -40,6 +40,9 @@ pub(crate) enum Action {
     /// Query records by primary key
     QueryPk(QueryPk),
 
+    /// Perform a full-table scan
+    Scan(Scan),
+
     /// Perform an atomic operation in multiple steps
     ReadModifyWrite(Box<ReadModifyWrite>),
 
@@ -65,6 +68,7 @@ impl Action {
             Action::Project(_) => "project",
             Action::QueryPk(_) => "query_pk",
             Action::ReadModifyWrite(_) => "read_modify_write",
+            Action::Scan(_) => "scan",
             Action::SetVar(_) => "set_var",
             Action::UpdateByKey(_) => "update_by_key",
         }
@@ -82,6 +86,7 @@ impl Action {
             | Action::GetByKey(_)
             | Action::QueryPk(_)
             | Action::ReadModifyWrite(_)
+            | Action::Scan(_)
             | Action::UpdateByKey(_) => true,
 
             Action::Eval(_)
@@ -107,6 +112,7 @@ impl fmt::Debug for Action {
             Self::NestedMerge(a) => a.fmt(f),
             Self::QueryPk(a) => a.fmt(f),
             Self::ReadModifyWrite(a) => a.fmt(f),
+            Self::Scan(a) => a.fmt(f),
             Self::Project(a) => a.fmt(f),
             Self::SetVar(a) => a.fmt(f),
             Self::UpdateByKey(a) => a.fmt(f),

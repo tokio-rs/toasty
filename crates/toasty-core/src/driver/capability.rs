@@ -118,6 +118,22 @@ pub struct Capability {
     /// will not produce one.
     pub native_like: bool,
 
+    /// Whether the driver supports full-table scan without a key constraint.
+    ///
+    /// When `true`, the query planner may emit [`Operation::Scan`] for queries
+    /// that cannot be satisfied by any index. SQL drivers set this to `false`
+    /// because they always use `QuerySql`; DynamoDB sets it to `true`.
+    pub scan: bool,
+
+    /// Whether scan operations support ordering results.
+    ///
+    /// SQL drivers do not use `Operation::Scan`, so this is `true` for them
+    /// (ordering is handled inside `QuerySql`). DynamoDB's `Scan` API returns
+    /// items in an arbitrary order with no server-side sort, so this is `false`
+    /// for DynamoDB. When `false`, the planner rejects queries that combine a
+    /// scan path with `ORDER BY`.
+    pub scan_supports_sort: bool,
+
     /// Whether to test connection pool behavior.
     /// TODO: We only need this for the `connection_per_clone.rs` test, come up with a better way.
     pub test_connection_pool: bool,
@@ -314,6 +330,9 @@ impl Capability {
         native_starts_with: false,
         native_like: true,
 
+        scan: false,
+        scan_supports_sort: true,
+
         test_connection_pool: false,
 
         backward_pagination: true,
@@ -409,6 +428,9 @@ impl Capability {
         // DynamoDB has `begins_with()` but no LIKE.
         native_starts_with: true,
         native_like: false,
+
+        scan: true,
+        scan_supports_sort: false,
 
         test_connection_pool: false,
 

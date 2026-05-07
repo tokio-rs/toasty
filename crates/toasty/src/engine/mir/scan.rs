@@ -1,56 +1,45 @@
 use indexmap::IndexSet;
 use toasty_core::{
     driver::operation::Pagination,
-    schema::db::{ColumnId, IndexId, TableId},
+    schema::db::{ColumnId, TableId},
     stmt,
 };
 
-use crate::engine::{
-    exec,
-    mir::{self, LogicalPlan},
-};
+use crate::engine::{exec, mir};
 
-/// Queries records using a primary key filter.
+/// Performs a full-table scan with optional filter, limit, and pagination.
 ///
-/// Used with NoSQL drivers to query a table's primary key index with optional
-/// additional row filtering.
+/// `Scan` is emitted by the planner when no index covers the query filter on a
+/// DynamoDB-backed model. The driver applies `row_filter` to each scanned row
+/// before returning results.
 #[derive(Debug)]
-pub(crate) struct QueryPk {
-    /// Optional node providing input arguments for the filter.
+pub(crate) struct Scan {
+    /// Optional node providing input arguments for the filter expression.
     pub(crate) input: Option<mir::NodeId>,
 
-    /// The table to query.
+    /// The table to scan.
     pub(crate) table: TableId,
-
-    /// Optional index to query. None = primary key, Some(id) = secondary index
-    pub(crate) index: Option<IndexId>,
 
     /// The columns to include in the returned records.
     pub(crate) columns: IndexSet<stmt::ExprReference>,
 
-    /// Filter expression for the primary key index.
-    pub(crate) pk_filter: stmt::Expr,
-
-    /// Additional filter applied to matching rows.
+    /// Filter expression applied to each scanned row.
     pub(crate) row_filter: Option<stmt::Expr>,
+
+    /// Limit and pagination bounds. `None` means return all rows.
+    pub(crate) limit: Option<Pagination>,
 
     /// The return type.
     pub(crate) ty: stmt::Type,
-
-    /// Limit and pagination bounds for this query. `None` means unbounded.
-    pub(crate) limit: Option<Pagination>,
-
-    /// Sort key ordering direction.
-    pub(crate) order: Option<stmt::Direction>,
 }
 
-impl QueryPk {
+impl Scan {
     pub(crate) fn to_exec(
         &self,
-        logical_plan: &LogicalPlan,
+        logical_plan: &mir::LogicalPlan,
         node: &mir::Node,
         var_table: &mut exec::VarDecls,
-    ) -> exec::QueryPk {
+    ) -> exec::Scan {
         let input = self
             .input
             .map(|node_id| logical_plan[node_id].var.get().unwrap());
@@ -74,25 +63,22 @@ impl QueryPk {
             })
             .collect();
 
-        exec::QueryPk {
+        exec::Scan {
             input,
             output: exec::Output {
                 var: output,
                 num_uses: node.num_uses.get(),
             },
             table: self.table,
-            index: self.index,
             columns,
-            pk_filter: self.pk_filter.clone(),
             row_filter: self.row_filter.clone(),
             limit: self.limit.clone(),
-            order: self.order,
         }
     }
 }
 
-impl From<QueryPk> for mir::Node {
-    fn from(value: QueryPk) -> Self {
-        mir::Operation::QueryPk(value).into()
+impl From<Scan> for mir::Node {
+    fn from(value: Scan) -> Self {
+        mir::Operation::Scan(value).into()
     }
 }
