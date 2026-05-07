@@ -289,7 +289,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 // PostgreSQL-style: `x IN (a, b, c)` → `x = ANY($1)` with the
                 // list bound as a single array param.
                 if let stmt::Expr::InList(e) = expr
-                    && self.match_any_gate()
+                    && self.supports_any_rewrite()
                     && in_list_is_value_list(e)
                 {
                     let stmt::Expr::InList(e) = expr.take() else {
@@ -307,7 +307,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 // `Not(InList)` alone and let the SQL serializer render
                 // `NOT IN`. Otherwise, rewrite `NOT (x = ANY(arr))` into the
                 // canonical `x <> ALL(arr)` form.
-                if self.match_any_gate()
+                if self.supports_any_rewrite()
                     && let stmt::Expr::AnyOp(any) = e.expr.as_mut()
                     && any.op == stmt::BinaryOp::Eq
                 {
@@ -1040,7 +1040,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     /// Both flags must be true to rewrite `IN (...)` into `= ANY(<array>)`:
     /// the dialect must accept the predicate, and the bind layer must accept
     /// a single array-valued parameter.
-    fn match_any_gate(&self) -> bool {
+    fn supports_any_rewrite(&self) -> bool {
         let cap = self.capability();
         cap.bind_list_param && cap.predicate_match_any
     }
