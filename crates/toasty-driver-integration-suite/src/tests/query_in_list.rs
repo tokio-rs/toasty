@@ -81,7 +81,7 @@ pub async fn not_in_list_string(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::in_list_item))]
+#[driver_test(id(ID), scenario(crate::scenarios::in_list_item))]
 pub async fn in_list_empty(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -96,9 +96,9 @@ pub async fn in_list_empty(t: &mut Test) -> Result<()> {
 
     // Empty list — `IN ()` is unsatisfiable; the simplifier folds the
     // predicate to `false` and the engine short-circuits before issuing
-    // any SQL. No driver op should be logged. If this regresses and an
-    // empty list reached extract_params, `finalize_ty` would panic on
-    // `List(Unknown)` (no column refinement runs on a folded branch).
+    // any driver op. If this regresses and an empty list reached
+    // extract_params, `finalize_ty` would panic on `List(Unknown)` (no
+    // column refinement runs on a folded branch).
     let empty: Vec<String> = vec![];
     let items = Item::filter(Item::fields().name().in_list(empty))
         .exec(&mut db)
