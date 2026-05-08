@@ -53,10 +53,6 @@ trybuild.workspace = true
 env_logger = "0.11.10"
 url.workspace = true
 
-# `tests/cdylib_ctor_smoke.rs` builds a fixture as a cdylib and dlopens it.
-libloading = "0.8"
-serde_json.workspace = true
-
 # Fixtures
 tests-fixture-post = { path = "tests/fixtures/post" }
 tests-fixture-user = { path = "tests/fixtures/user" }

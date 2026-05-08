@@ -25,7 +25,6 @@ members = [
 
     # Tests
     "tests",
-    "tests/tests/fixtures/cdylib-ctor",
     "tests/tests/fixtures/post",
     "tests/tests/fixtures/user",
 
@@ -49,7 +48,6 @@ default-members = [
     "examples/todo-with-cli",
     "examples/user-has-one-profile",
     "tests",
-    "tests/tests/fixtures/cdylib-ctor",
     "tests/tests/fixtures/post",
     "tests/tests/fixtures/user",
     "benches",

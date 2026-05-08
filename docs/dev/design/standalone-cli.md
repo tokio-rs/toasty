@@ -121,10 +121,10 @@ set, it returns immediately.
 The ctor is gated on `cfg(debug_assertions)` so release builds carry no
 schema-dump machinery at all.
 
-That ctors fire reliably from a `cargo rustc --crate-type cdylib` build
-on Linux, macOS, and Windows is verified by
-`tests/tests/cdylib_ctor_smoke.rs`, which CI runs against
-`ubuntu-latest`, `macos-latest`, and `windows-latest`.
+Constructor preservation through `cargo rustc --crate-type cdylib` was
+verified on Linux, macOS, and Windows during design review; the
+implementation pulls in tests that exercise the same path on every CI
+run.
 
 ### Running the bin path
 
