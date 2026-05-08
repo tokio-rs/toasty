@@ -71,6 +71,7 @@ pub mod relation_has_one_crud;
 pub mod relation_preload;
 pub mod scan_no_index;
 pub mod select_projection;
+pub mod select_projection_embed;
 pub mod starts_with;
 pub mod tx_atomic_stmt;
 pub mod tx_interactive;
