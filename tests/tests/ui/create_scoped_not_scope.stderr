@@ -23,7 +23,7 @@ help: the trait `toasty::schema::Scope` is implemented for `toasty::HasMany<T>`
    | impl<T: Relation> Scope for HasMany<T> {
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 note: required by a bound in `toasty::codegen_support::scope_fields`
-  --> $WORKSPACE/crates/toasty/src/codegen_support/mod.rs
+  --> $WORKSPACE/crates/toasty/src/codegen_support.rs
    |
    | pub fn scope_fields<S: Scope>(_scope: &S) -> S::Path<S::Item> {
    |                        ^^^^^ required by this bound in `scope_fields`
