@@ -121,6 +121,11 @@ set, it returns immediately.
 The ctor is gated on `cfg(debug_assertions)` so release builds carry no
 schema-dump machinery at all.
 
+That ctors fire reliably from a `cargo rustc --crate-type cdylib` build
+on Linux, macOS, and Windows is verified by
+`tests/tests/cdylib_ctor_smoke.rs`, which CI runs against
+`ubuntu-latest`, `macos-latest`, and `windows-latest`.
+
 ### Running the bin path
 
 For a bin target, the CLI invokes the artifact directly:
@@ -245,11 +250,6 @@ transactionally; rejected for the same reason in [#762].
 
 ## Open questions
 
-- **Smoke test on all three platforms** that constructors fire reliably
-  from `cargo rustc --crate-type cdylib` for a lib-only crate that
-  transitively links `toasty`. Blocking acceptance: if a platform does
-  not preserve the ctor, the cdylib path needs a different mechanism on
-  that platform.
 - **`cfg(debug_assertions)` vs. always-on ctor.** A `getenv` per startup
   is cheap; gating on `debug_assertions` is cleaner. Keeping the gate
   means a release-only consumer cannot extract a schema from their built
