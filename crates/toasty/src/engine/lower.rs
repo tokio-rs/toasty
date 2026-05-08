@@ -59,7 +59,9 @@ impl LoweringState<'_> {
     ) -> hir::StmtId {
         // App-level rewrites that lowering depends on. `Source::Model { via }`
         // must be converted to a WHERE filter before the lowering walk
-        // converts `Source::Model` into `Source::Table`.
+        // converts `Source::Model` into `Source::Table`.  The eq/ne operand
+        // rewrite (model→PK, BelongsTo→FK) fires inside the lowering walk
+        // itself via `LowerStatement::visit_expr_binary_op_mut`.
         association::RewriteVia::new(expr_cx).rewrite(&mut stmt);
 
         Simplify::with_context(expr_cx).visit_mut(&mut stmt);
@@ -268,6 +270,21 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
     fn visit_expr_set_op_mut(&mut self, i: &mut stmt::ExprSetOp) {
         todo!("stmt={i:#?}");
+    }
+
+    fn visit_expr_binary_op_mut(&mut self, i: &mut stmt::ExprBinaryOp) {
+        // App-level operand rewrite for `eq` / `ne` (`Reference::Model` →
+        // primary-key field, `BelongsTo` → foreign-key field).  Must fire
+        // before the operands are walked, since walking lowers the field
+        // references into column references and the rewrite has nothing to
+        // match on.  Nested binary ops are handled by the recursive walk
+        // through `visit_expr_mut`.
+        if i.op.is_eq() || i.op.is_ne() {
+            self.rewrite_eq_operand(&mut i.lhs);
+            self.rewrite_eq_operand(&mut i.rhs);
+        }
+
+        stmt::visit_mut::visit_expr_binary_op_mut(self, i);
     }
 
     fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
@@ -753,6 +770,58 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 }
 
 impl<'a, 'b> LowerStatement<'a, 'b> {
+    /// App-level operand rewrite for `eq` and `ne` binary ops.
+    ///
+    /// `Reference::Model { nesting }` becomes a reference to the model's
+    /// primary-key field; a `BelongsTo` field reference becomes a reference
+    /// to the relation's foreign-key field.  Both rewrites only match on
+    /// app-level shapes; after the surrounding lowering walk converts the
+    /// references to columns, this method has nothing to rewrite.
+    ///
+    /// Must fire before the operand's children are visited, since lowering
+    /// otherwise replaces the field reference with a column reference and
+    /// the rewrite has no app-level shape to match on.
+    fn rewrite_eq_operand(&self, operand: &mut stmt::Expr) {
+        if let stmt::Expr::Reference(expr_reference) = operand {
+            match &*expr_reference {
+                stmt::ExprReference::Model { nesting } => {
+                    let model = self
+                        .expr_cx
+                        .resolve_expr_reference(expr_reference)
+                        .as_model_unwrap();
+
+                    let [pk_field] = &model.primary_key.fields[..] else {
+                        todo!("handle composite keys");
+                    };
+
+                    *operand = stmt::Expr::ref_field(*nesting, pk_field);
+                }
+                stmt::ExprReference::Field { .. } => {
+                    let field = self
+                        .expr_cx
+                        .resolve_expr_reference(expr_reference)
+                        .as_field_unwrap();
+
+                    match &field.ty {
+                        app::FieldTy::Primitive(_) | app::FieldTy::Embedded(_) => {}
+                        app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => todo!(),
+                        app::FieldTy::BelongsTo(rel) => {
+                            let [fk_field] = &rel.foreign_key.fields[..] else {
+                                todo!("handle composite keys");
+                            };
+
+                            let stmt::ExprReference::Field { index, .. } = expr_reference else {
+                                panic!()
+                            };
+                            *index = fk_field.source.index;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
     fn lower_expr_binary_op(
         &mut self,
         op: stmt::BinaryOp,
@@ -1000,11 +1069,14 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         let target_id = self.scope_statement(|child| {
             // Via-association rewrite: `Source::Model { via }` becomes an
             // explicit WHERE filter so the lowering walk only sees rewritten
-            // sources.
+            // sources.  The eq/ne operand rewrite (model→PK, BelongsTo→FK)
+            // fires inside the lowering walk via
+            // `LowerStatement::visit_expr_binary_op_mut`.
             association::RewriteVia::new(child.expr_cx).rewrite(&mut stmt);
-            // Pre-lower simplify: remaining app-level rewrites (model→PK,
-            // lift_in_subquery) that the lowering visitor expects to have
-            // already fired.
+            // Pre-lower simplify: remaining app-level rewrites
+            // (`lift_in_subquery`, `rewrite_expr_in_list_when_model`,
+            // `try_variant_tautology_or`) that the lowering visitor expects
+            // to have already fired.
             Simplify::with_context(child.expr_cx).visit_mut(&mut *stmt);
             // Lowering walk.
             child.visit_stmt_mut(&mut stmt);

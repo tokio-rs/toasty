@@ -3,63 +3,22 @@ use toasty_core::schema::app::{FieldId, FieldTy};
 use toasty_core::stmt::{self, Expr, ResolvedRef, VisitMut};
 
 impl Simplify<'_> {
-    pub(super) fn simplify_expr_eq_operand(&mut self, operand: &mut stmt::Expr) {
-        if let stmt::Expr::Reference(expr_reference) = operand {
-            match &*expr_reference {
-                stmt::ExprReference::Model { nesting } => {
-                    let model = self
-                        .cx
-                        .resolve_expr_reference(expr_reference)
-                        .as_model_unwrap();
-
-                    let [pk_field] = &model.primary_key.fields[..] else {
-                        todo!("handle composite keys");
-                    };
-
-                    *operand = stmt::Expr::ref_field(*nesting, pk_field);
-                }
-                stmt::ExprReference::Field { .. } => {
-                    let field = self
-                        .cx
-                        .resolve_expr_reference(expr_reference)
-                        .as_field_unwrap();
-
-                    match &field.ty {
-                        FieldTy::Primitive(_) | FieldTy::Embedded(_) => {}
-                        FieldTy::HasMany(_) | FieldTy::HasOne(_) => todo!(),
-                        FieldTy::BelongsTo(rel) => {
-                            let [fk_field] = &rel.foreign_key.fields[..] else {
-                                todo!("handle composite keys");
-                            };
-
-                            let stmt::ExprReference::Field { index, .. } = expr_reference else {
-                                panic!()
-                            };
-                            *index = fk_field.source.index;
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-
     /// Heavyweight binary-op rewrites. Cheap canonicalization (constant
     /// folding, null propagation, boolean-constant simplification,
     /// literal-on-right swap) runs in `fold::expr_binary_op` before this
     /// is reached, so heavyweight rules see operands in canonical form
     /// (no `(Value, Value)`, no `(Value, _)` ahead of `(_, Value)`).
+    ///
+    /// App-level rewrites on eq/ne operands (`Reference::Model` →
+    /// primary-key field, `BelongsTo` → foreign-key field) fire in the
+    /// pre-lowering `lower::expr_eq_operand::RewriteEqOperand` pass, not
+    /// here.
     pub(super) fn simplify_expr_binary_op(
         &mut self,
         op: stmt::BinaryOp,
         lhs: &mut stmt::Expr,
         rhs: &mut stmt::Expr,
     ) -> Option<stmt::Expr> {
-        if op.is_eq() || op.is_ne() {
-            self.simplify_expr_eq_operand(lhs);
-            self.simplify_expr_eq_operand(rhs);
-        }
-
         let result = match (&mut *lhs, &mut *rhs) {
             // Self-comparison, e.g.,
             //
