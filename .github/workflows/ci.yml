@@ -89,8 +89,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
+      # Default-members covers everything except the driver crates (see
+      # workspace `default-members`); the second invocation runs the SQLite
+      # driver's own crate-local tests.
       - name: cargo test
-        run: cargo test --workspace --no-default-features --features sqlite
+        run: cargo test --no-default-features --features sqlite
+      - name: cargo test -p toasty-driver-sqlite
+        run: cargo test -p toasty-driver-sqlite
       - name: doc-tests
         run: cargo test -p tests --doc
 
@@ -120,7 +125,9 @@ jobs:
           with:
             save-if: ${{ github.ref == 'refs/heads/main' }}
         - name: cargo test
-          run: cargo test --workspace --no-default-features --features mysql
+          run: cargo test --no-default-features --features mysql
+        - name: cargo test -p toasty-driver-mysql
+          run: cargo test -p toasty-driver-mysql
         - name: cargo run --bin example-hello-toasty
           run: cargo run --bin example-hello-toasty --features mysql
 
@@ -160,7 +167,9 @@ jobs:
               sleep 1
             done
         - name: cargo test
-          run: cargo test --workspace --no-default-features --features postgresql
+          run: cargo test --no-default-features --features postgresql
+        - name: cargo test -p toasty-driver-postgresql
+          run: cargo test -p toasty-driver-postgresql
         - name: cargo run --bin example-hello-toasty
           run: cargo run --bin example-hello-toasty --features postgresql
 
@@ -179,7 +188,9 @@ jobs:
         - name: Start dynamodb-local
           run: sudo docker run --name dynamodb -d -p 8000:8000 amazon/dynamodb-local:latest -jar DynamoDBLocal.jar -port 8000
         - name: cargo test
-          run: cargo test --workspace --no-default-features --features dynamodb -- --test-threads 1
+          run: cargo test --no-default-features --features dynamodb -- --test-threads 1
+        - name: cargo test -p toasty-driver-dynamodb
+          run: cargo test -p toasty-driver-dynamodb -- --test-threads 1
 
     test-all-os:
         needs: check

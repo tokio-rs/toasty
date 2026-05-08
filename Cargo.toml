@@ -31,6 +31,27 @@ members = [
     # Benchmarks
     "benches",
 ]
+# Driver crates are excluded so `cargo test` (no `-p`/`--workspace`) and CI's
+# per-driver jobs don't pull in *every* driver's crate-local unit tests. Each
+# driver-specific CI job runs `cargo test -p toasty-driver-<driver>` separately
+# to cover its own tests. `cargo test --workspace` still selects every member.
+default-members = [
+    "crates/toasty",
+    "crates/toasty-cli",
+    "crates/toasty-core",
+    "crates/toasty-macros",
+    "crates/toasty-sql",
+    "crates/toasty-driver-integration-suite",
+    "crates/toasty-driver-integration-suite-macros",
+    "examples/composite-key",
+    "examples/hello-toasty",
+    "examples/todo-with-cli",
+    "examples/user-has-one-profile",
+    "tests",
+    "tests/tests/fixtures/post",
+    "tests/tests/fixtures/user",
+    "benches",
+]
 
 [workspace.package]
 readme = "README.md"
