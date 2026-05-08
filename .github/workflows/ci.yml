@@ -13,12 +13,15 @@ env:
     # Pinned so a new Rust release cannot break CI on its own. Bumped
     # automatically by Renovate; see .github/renovate.json5.
     RUST_STABLE_VERSION: "1.95.0"
-    TOASTY_TEST_POSTGRES_URL: "postgresql://toasty:toasty@localhost/toasty"
-    TOASTY_TEST_MYSQL_URL: "mysql://toasty:toasty@localhost/toasty"
     AWS_REGION: "us-east-1"
     AWS_ENDPOINT_URL_DYNAMODB: http://localhost:8000
     AWS_ACCESS_KEY_ID: test
     AWS_SECRET_ACCESS_KEY: test
+    # NOTE: `TOASTY_TEST_POSTGRES_URL` / `TOASTY_TEST_MYSQL_URL` are set per-job
+    # below — only on workers that actually run the matching service. Setting
+    # them globally caused the `test-all-os` worker to inherit a non-functional
+    # URL, so live-PG tests panicked with "connection refused" instead of
+    # short-circuiting on a missing env var.
 
 jobs:
     check:
@@ -116,6 +119,7 @@ jobs:
             options: --health-cmd "mysqladmin ping -h localhost" --health-interval 10s --health-timeout 5s --health-retries 5
         env:
             TOASTY_CONNECTION_URL: mysql://toasty:toasty@localhost:3306/toasty
+            TOASTY_TEST_MYSQL_URL: mysql://toasty:toasty@localhost/toasty
         steps:
         - uses: actions/checkout@v4
         - uses: dtolnay/rust-toolchain@master
@@ -147,6 +151,7 @@ jobs:
             options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
         env:
             TOASTY_CONNECTION_URL: postgresql://toasty:toasty@localhost/toasty
+            TOASTY_TEST_POSTGRES_URL: postgresql://toasty:toasty@localhost/toasty
             TOASTY_TEST_POSTGRES_TLS_URL: postgresql://toasty:toasty@localhost:5433/toasty
         steps:
         - uses: actions/checkout@v4
