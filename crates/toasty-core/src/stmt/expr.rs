@@ -1,10 +1,11 @@
 use crate::stmt::{ExprExists, Input};
 
 use super::{
-    Entry, EntryMut, EntryPath, ExprAnd, ExprAny, ExprArg, ExprBinaryOp, ExprCast, ExprError,
-    ExprFunc, ExprInList, ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprLike, ExprList,
-    ExprMap, ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord, ExprStartsWith, ExprStmt, Node,
-    Projection, Substitute, Value, Visit, VisitMut, expr_reference::ExprReference,
+    Entry, EntryMut, EntryPath, ExprAllOp, ExprAnd, ExprAny, ExprAnyOp, ExprArg, ExprBinaryOp,
+    ExprCast, ExprError, ExprFunc, ExprInList, ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet,
+    ExprLike, ExprList, ExprMap, ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord,
+    ExprStartsWith, ExprStmt, Node, Projection, Substitute, Value, Visit, VisitMut,
+    expr_reference::ExprReference,
 };
 use std::fmt;
 
@@ -34,11 +35,17 @@ use std::fmt;
 /// ```
 #[derive(Clone, PartialEq)]
 pub enum Expr {
+    /// `lhs <op> ALL(rhs)` predicate against an array-valued operand. See [`ExprAllOp`].
+    AllOp(ExprAllOp),
+
     /// Logical AND of multiple expressions. See [`ExprAnd`].
     And(ExprAnd),
 
     /// Returns `true` if any item in a collection is truthy. See [`ExprAny`].
     Any(ExprAny),
+
+    /// `lhs <op> ANY(rhs)` predicate against an array-valued operand. See [`ExprAnyOp`].
+    AnyOp(ExprAnyOp),
 
     /// Positional argument placeholder. See [`ExprArg`].
     Arg(ExprArg),
@@ -202,6 +209,8 @@ impl Expr {
             Self::And(_) | Self::Or(_) | Self::Not(_) => true,
             // ANY returns true if any item matches, always boolean.
             Self::Any(_) => true,
+            // ANY/ALL array predicates always evaluate to true or false.
+            Self::AnyOp(_) | Self::AllOp(_) => true,
             // Comparisons always evaluate to true or false.
             Self::BinaryOp(_) => true,
             // IS NULL checks always evaluate to true or false.
@@ -269,6 +278,8 @@ impl Expr {
             }
             Self::And(expr_and) => expr_and.iter().all(|expr| expr.is_stable()),
             Self::Any(expr_any) => expr_any.expr.is_stable(),
+            Self::AnyOp(e) => e.lhs.is_stable() && e.rhs.is_stable(),
+            Self::AllOp(e) => e.lhs.is_stable() && e.rhs.is_stable(),
             Self::Or(expr_or) => expr_or.iter().all(|expr| expr.is_stable()),
             Self::IsNull(expr_is_null) => expr_is_null.expr.is_stable(),
             Self::IsVariant(expr_is_variant) => expr_is_variant.expr.is_stable(),
@@ -373,6 +384,12 @@ impl Expr {
                 .iter()
                 .all(|expr| expr.is_const_at_depth(map_depth)),
             Self::Any(expr_any) => expr_any.expr.is_const_at_depth(map_depth),
+            Self::AnyOp(e) => {
+                e.lhs.is_const_at_depth(map_depth) && e.rhs.is_const_at_depth(map_depth)
+            }
+            Self::AllOp(e) => {
+                e.lhs.is_const_at_depth(map_depth) && e.rhs.is_const_at_depth(map_depth)
+            }
             Self::Not(expr_not) => expr_not.expr.is_const_at_depth(map_depth),
             Self::Or(expr_or) => expr_or.iter().all(|expr| expr.is_const_at_depth(map_depth)),
             Self::IsNull(expr_is_null) => expr_is_null.expr.is_const_at_depth(map_depth),
@@ -443,6 +460,8 @@ impl Expr {
             Self::BinaryOp(expr_binary) => expr_binary.lhs.is_eval() && expr_binary.rhs.is_eval(),
             Self::And(expr_and) => expr_and.iter().all(|expr| expr.is_eval()),
             Self::Any(expr_any) => expr_any.expr.is_eval(),
+            Self::AnyOp(e) => e.lhs.is_eval() && e.rhs.is_eval(),
+            Self::AllOp(e) => e.lhs.is_eval() && e.rhs.is_eval(),
             Self::Or(expr_or) => expr_or.iter().all(|expr| expr.is_eval()),
             Self::Not(expr_not) => expr_not.expr.is_eval(),
             Self::IsNull(expr_is_null) => expr_is_null.expr.is_eval(),
@@ -607,8 +626,10 @@ where
 impl fmt::Debug for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::AllOp(e) => e.fmt(f),
             Self::And(e) => e.fmt(f),
             Self::Any(e) => e.fmt(f),
+            Self::AnyOp(e) => e.fmt(f),
             Self::Arg(e) => e.fmt(f),
             Self::BinaryOp(e) => e.fmt(f),
             Self::Cast(e) => e.fmt(f),

@@ -63,11 +63,17 @@ mod eval;
 mod expr;
 pub use expr::Expr;
 
+mod expr_all_op;
+pub use expr_all_op::ExprAllOp;
+
 mod expr_and;
 pub use expr_and::ExprAnd;
 
 mod expr_any;
 pub use expr_any::ExprAny;
+
+mod expr_any_op;
+pub use expr_any_op::ExprAnyOp;
 
 mod expr_arg;
 pub use expr_arg::ExprArg;

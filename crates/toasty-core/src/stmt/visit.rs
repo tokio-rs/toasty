@@ -1,14 +1,15 @@
 #![allow(unused_variables)]
 
 use super::{
-    Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprAny, ExprArg,
-    ExprBinaryOp, ExprCast, ExprColumn, ExprError, ExprExists, ExprFunc, ExprInList,
-    ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprLike, ExprList, ExprMap, ExprMatch,
-    ExprNot, ExprOr, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStartsWith,
-    ExprStmt, Filter, FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit,
-    LimitCursor, LimitOffset, Node, OrderBy, OrderByExpr, Path, Projection, Query, Returning,
-    Select, Source, SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor,
-    TableRef, TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
+    Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAllOp, ExprAnd,
+    ExprAny, ExprAnyOp, ExprArg, ExprBinaryOp, ExprCast, ExprColumn, ExprError, ExprExists,
+    ExprFunc, ExprInList, ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprLike, ExprList,
+    ExprMap, ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord, ExprReference, ExprSet,
+    ExprSetOp, ExprStartsWith, ExprStmt, Filter, FuncCount, FuncLastInsertId, Insert, InsertTarget,
+    Join, JoinOp, Limit, LimitCursor, LimitOffset, Node, OrderBy, OrderByExpr, Path, Projection,
+    Query, Returning, Select, Source, SourceModel, SourceTable, SourceTableId, Statement,
+    TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update, UpdateTarget, Value,
+    ValueRecord, Values, With,
 };
 
 /// Immutable visitor trait for the statement AST.
@@ -95,6 +96,20 @@ pub trait Visit {
     /// The default implementation delegates to [`visit_expr_arg`].
     fn visit_expr_arg(&mut self, i: &ExprArg) {
         visit_expr_arg(self, i);
+    }
+
+    /// Visits an [`ExprAnyOp`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_any_op`].
+    fn visit_expr_any_op(&mut self, i: &ExprAnyOp) {
+        visit_expr_any_op(self, i);
+    }
+
+    /// Visits an [`ExprAllOp`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_all_op`].
+    fn visit_expr_all_op(&mut self, i: &ExprAllOp) {
+        visit_expr_all_op(self, i);
     }
 
     /// Visits an [`ExprBinaryOp`] node.
@@ -540,6 +555,14 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_expr_arg(&mut **self, i);
     }
 
+    fn visit_expr_any_op(&mut self, i: &ExprAnyOp) {
+        Visit::visit_expr_any_op(&mut **self, i);
+    }
+
+    fn visit_expr_all_op(&mut self, i: &ExprAllOp) {
+        Visit::visit_expr_all_op(&mut **self, i);
+    }
+
     fn visit_expr_binary_op(&mut self, i: &ExprBinaryOp) {
         Visit::visit_expr_binary_op(&mut **self, i);
     }
@@ -822,8 +845,10 @@ where
     V: Visit + ?Sized,
 {
     match node {
+        Expr::AllOp(expr) => v.visit_expr_all_op(expr),
         Expr::And(expr) => v.visit_expr_and(expr),
         Expr::Any(expr) => v.visit_expr_any(expr),
+        Expr::AnyOp(expr) => v.visit_expr_any_op(expr),
         Expr::Arg(expr) => v.visit_expr_arg(expr),
         Expr::BinaryOp(expr) => v.visit_expr_binary_op(expr),
         Expr::Cast(expr) => v.visit_expr_cast(expr),
@@ -879,6 +904,24 @@ where
 
 /// Default traversal for [`ExprBinaryOp`] nodes. Visits left and right operands.
 pub fn visit_expr_binary_op<V>(v: &mut V, node: &ExprBinaryOp)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_expr(&node.lhs);
+    v.visit_expr(&node.rhs);
+}
+
+/// Default traversal for [`ExprAnyOp`] nodes. Visits left and right operands.
+pub fn visit_expr_any_op<V>(v: &mut V, node: &ExprAnyOp)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_expr(&node.lhs);
+    v.visit_expr(&node.rhs);
+}
+
+/// Default traversal for [`ExprAllOp`] nodes. Visits left and right operands.
+pub fn visit_expr_all_op<V>(v: &mut V, node: &ExprAllOp)
 where
     V: Visit + ?Sized,
 {

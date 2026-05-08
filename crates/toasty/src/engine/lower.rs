@@ -285,6 +285,40 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 if let Some(lowered) = self.lower_expr_in_list(&mut e.expr, &mut e.list) {
                     *expr = lowered;
                 }
+
+                // PostgreSQL-style: `x IN (a, b, c)` → `x = ANY($1)` with the
+                // list bound as a single array param.
+                if let stmt::Expr::InList(e) = expr
+                    && self.supports_any_rewrite()
+                    && in_list_is_value_list(e)
+                {
+                    let stmt::Expr::InList(e) = expr.take() else {
+                        unreachable!()
+                    };
+                    *expr = stmt::Expr::any_op(*e.expr, stmt::BinaryOp::Eq, *e.list);
+                }
+            }
+            stmt::Expr::Not(e) if matches!(*e.expr, stmt::Expr::InList(_)) => {
+                // Recurse into inner first so the InList itself is lowered.
+                self.visit_expr_not_mut(e);
+
+                // If the inner is still an InList (not yet rewritten because
+                // the gate is off or the list shape doesn't qualify), leave
+                // `Not(InList)` alone and let the SQL serializer render
+                // `NOT IN`. Otherwise, rewrite `NOT (x = ANY(arr))` into the
+                // canonical `x <> ALL(arr)` form.
+                if self.supports_any_rewrite()
+                    && let stmt::Expr::AnyOp(any) = e.expr.as_mut()
+                    && any.op == stmt::BinaryOp::Eq
+                {
+                    let stmt::Expr::Not(not) = expr.take() else {
+                        unreachable!()
+                    };
+                    let stmt::Expr::AnyOp(any) = *not.expr else {
+                        unreachable!()
+                    };
+                    *expr = stmt::Expr::all_op(*any.lhs, stmt::BinaryOp::Ne, *any.rhs);
+                }
             }
             stmt::Expr::InSubquery(e) => {
                 if self.capability().sql {
@@ -1003,6 +1037,14 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         self.state.engine.capability()
     }
 
+    /// Both flags must be true to rewrite `IN (...)` into `= ANY(<array>)`:
+    /// the dialect must accept the predicate, and the bind layer must accept
+    /// a single array-valued parameter.
+    fn supports_any_rewrite(&self) -> bool {
+        let cap = self.capability();
+        cap.bind_list_param && cap.predicate_match_any
+    }
+
     fn field(&self, id: impl Into<app::FieldId>) -> &'b app::Field {
         self.schema().app.field(id.into())
     }
@@ -1310,4 +1352,25 @@ fn build_update_returning(
         stmt::ExprRecord::from_vec(exprs),
         stmt::Type::SparseRecord(field_set),
     )
+}
+
+/// True when an `IN` list is a candidate for the `= ANY($1)` rewrite:
+///
+/// - The lhs is scalar (not a `Record`). Composite-key `IN` would need a PG
+///   row-array bind which the current driver doesn't support.
+/// - The list is a constant collection of scalar values. Lists containing
+///   references, sub-statements, or record values stay as expanded `IN`.
+fn in_list_is_value_list(e: &stmt::ExprInList) -> bool {
+    if matches!(*e.expr, stmt::Expr::Record(_)) {
+        return false;
+    }
+    let scalar = |v: &stmt::Value| !matches!(v, stmt::Value::Record(_) | stmt::Value::List(_));
+    match &*e.list {
+        stmt::Expr::Value(stmt::Value::List(items)) => items.iter().all(scalar),
+        stmt::Expr::List(list) => list
+            .items
+            .iter()
+            .all(|i| matches!(i, stmt::Expr::Value(v) if scalar(v))),
+        _ => false,
+    }
 }

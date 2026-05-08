@@ -25,7 +25,7 @@ async fn setup(test: &mut Test) -> toasty::Db {
 
 /// `.select(field)` on a `Query<List<Item>>` returns a `Query<List<String>>`
 /// whose `.exec()` produces a `Vec<String>` of the projected column.
-#[driver_test(requires(sql))]
+#[driver_test]
 pub async fn select_single_field(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -50,7 +50,7 @@ pub async fn select_single_field(test: &mut Test) -> Result<()> {
 
 /// `.select((f1, f2))` returns a `Query<List<(T1, T2)>>` whose `.exec()`
 /// produces a `Vec` of tuples.
-#[driver_test(requires(sql))]
+#[driver_test]
 pub async fn select_tuple(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -75,7 +75,7 @@ pub async fn select_tuple(test: &mut Test) -> Result<()> {
 
 /// `.select(...)` composes with `.filter(...)`: the projection sees only rows
 /// matching the filter expression.
-#[driver_test(requires(sql))]
+#[driver_test]
 pub async fn select_with_filter(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -92,7 +92,7 @@ pub async fn select_with_filter(test: &mut Test) -> Result<()> {
 }
 
 /// `.select(...).first()` lifts the outer container to `Option<T>`.
-#[driver_test(requires(sql))]
+#[driver_test]
 pub async fn select_first(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -108,7 +108,7 @@ pub async fn select_first(test: &mut Test) -> Result<()> {
 }
 
 /// `.select(...).first()` returns `None` when no rows match.
-#[driver_test(requires(sql))]
+#[driver_test]
 pub async fn select_first_no_match(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 

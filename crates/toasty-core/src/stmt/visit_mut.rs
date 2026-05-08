@@ -1,14 +1,15 @@
 #![allow(unused_variables)]
 
 use super::{
-    Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprAny, ExprArg,
-    ExprBinaryOp, ExprCast, ExprColumn, ExprError, ExprExists, ExprFunc, ExprInList,
-    ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprLike, ExprList, ExprMap, ExprMatch,
-    ExprNot, ExprOr, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStartsWith,
-    ExprStmt, Filter, FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit,
-    LimitCursor, LimitOffset, Node, OrderBy, OrderByExpr, Path, Projection, Query, Returning,
-    Select, Source, SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor,
-    TableRef, TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
+    Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAllOp, ExprAnd,
+    ExprAny, ExprAnyOp, ExprArg, ExprBinaryOp, ExprCast, ExprColumn, ExprError, ExprExists,
+    ExprFunc, ExprInList, ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprLike, ExprList,
+    ExprMap, ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord, ExprReference, ExprSet,
+    ExprSetOp, ExprStartsWith, ExprStmt, Filter, FuncCount, FuncLastInsertId, Insert, InsertTarget,
+    Join, JoinOp, Limit, LimitCursor, LimitOffset, Node, OrderBy, OrderByExpr, Path, Projection,
+    Query, Returning, Select, Source, SourceModel, SourceTable, SourceTableId, Statement,
+    TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update, UpdateTarget, Value,
+    ValueRecord, Values, With,
 };
 
 /// Mutable visitor trait for the statement AST.
@@ -97,6 +98,20 @@ pub trait VisitMut {
     /// The default implementation delegates to [`visit_expr_arg_mut`].
     fn visit_expr_arg_mut(&mut self, i: &mut ExprArg) {
         visit_expr_arg_mut(self, i);
+    }
+
+    /// Visits an [`ExprAnyOp`] node mutably.
+    ///
+    /// The default implementation delegates to [`visit_expr_any_op_mut`].
+    fn visit_expr_any_op_mut(&mut self, i: &mut ExprAnyOp) {
+        visit_expr_any_op_mut(self, i);
+    }
+
+    /// Visits an [`ExprAllOp`] node mutably.
+    ///
+    /// The default implementation delegates to [`visit_expr_all_op_mut`].
+    fn visit_expr_all_op_mut(&mut self, i: &mut ExprAllOp) {
+        visit_expr_all_op_mut(self, i);
     }
 
     /// Visits an [`ExprBinaryOp`] node mutably.
@@ -542,6 +557,14 @@ impl<V: VisitMut> VisitMut for &mut V {
         VisitMut::visit_expr_arg_mut(&mut **self, i);
     }
 
+    fn visit_expr_any_op_mut(&mut self, i: &mut ExprAnyOp) {
+        VisitMut::visit_expr_any_op_mut(&mut **self, i);
+    }
+
+    fn visit_expr_all_op_mut(&mut self, i: &mut ExprAllOp) {
+        VisitMut::visit_expr_all_op_mut(&mut **self, i);
+    }
+
     fn visit_expr_binary_op_mut(&mut self, i: &mut ExprBinaryOp) {
         VisitMut::visit_expr_binary_op_mut(&mut **self, i);
     }
@@ -824,8 +847,10 @@ where
     V: VisitMut + ?Sized,
 {
     match node {
+        Expr::AllOp(expr) => v.visit_expr_all_op_mut(expr),
         Expr::And(expr) => v.visit_expr_and_mut(expr),
         Expr::Any(expr) => v.visit_expr_any_mut(expr),
+        Expr::AnyOp(expr) => v.visit_expr_any_op_mut(expr),
         Expr::Arg(expr) => v.visit_expr_arg_mut(expr),
         Expr::BinaryOp(expr) => v.visit_expr_binary_op_mut(expr),
         Expr::Cast(expr) => v.visit_expr_cast_mut(expr),
@@ -881,6 +906,24 @@ where
 
 /// Default mutable traversal for [`ExprBinaryOp`] nodes. Visits the lhs and rhs expressions.
 pub fn visit_expr_binary_op_mut<V>(v: &mut V, node: &mut ExprBinaryOp)
+where
+    V: VisitMut + ?Sized,
+{
+    v.visit_expr_mut(&mut node.lhs);
+    v.visit_expr_mut(&mut node.rhs);
+}
+
+/// Default mutable traversal for [`ExprAnyOp`] nodes. Visits the lhs and rhs expressions.
+pub fn visit_expr_any_op_mut<V>(v: &mut V, node: &mut ExprAnyOp)
+where
+    V: VisitMut + ?Sized,
+{
+    v.visit_expr_mut(&mut node.lhs);
+    v.visit_expr_mut(&mut node.rhs);
+}
+
+/// Default mutable traversal for [`ExprAllOp`] nodes. Visits the lhs and rhs expressions.
+pub fn visit_expr_all_op_mut<V>(v: &mut V, node: &mut ExprAllOp)
 where
     V: VisitMut + ?Sized,
 {

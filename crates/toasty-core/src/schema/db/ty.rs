@@ -109,6 +109,11 @@ pub enum Type {
     /// A database enum type. See [`TypeEnum`].
     Enum(TypeEnum),
 
+    /// An array of `T`, e.g. PostgreSQL `INT8[]` or `TEXT[]`. Used both for
+    /// array column storage (where supported) and to type list-shaped bind
+    /// parameters that the engine sends as a single PG array operand.
+    List(Box<Type>),
+
     /// User-specified unrecognized type
     Custom(String),
 }
@@ -155,43 +160,12 @@ impl Type {
                 stmt::Type::Time => Ok(db.default_time_type.clone()),
                 #[cfg(feature = "jiff")]
                 stmt::Type::DateTime => Ok(db.default_datetime_type.clone()),
+                stmt::Type::List(elem) => Ok(Type::List(Box::new(Self::from_app(elem, None, db)?))),
                 _ => Err(crate::Error::unsupported_feature(format!(
                     "type {:?} is not supported by this database",
                     ty
                 ))),
             },
-        }
-    }
-
-    /// Infers a `db::Type` from a `stmt::Value` using generic defaults.
-    ///
-    /// This is an initial guess suitable for bind parameter typing. Column
-    /// context will refine it later (e.g., `Text` → `Enum` for enum columns).
-    pub fn from_value(value: &stmt::Value) -> Type {
-        match value {
-            stmt::Value::Bool(_) => Type::Boolean,
-            stmt::Value::I8(_) => Type::Integer(1),
-            stmt::Value::I16(_) => Type::Integer(2),
-            stmt::Value::I32(_) => Type::Integer(4),
-            stmt::Value::I64(_) => Type::Integer(8),
-            stmt::Value::U8(_) => Type::UnsignedInteger(1),
-            stmt::Value::U16(_) => Type::UnsignedInteger(2),
-            stmt::Value::U32(_) => Type::UnsignedInteger(4),
-            stmt::Value::U64(_) => Type::UnsignedInteger(8),
-            stmt::Value::String(_) => Type::Text,
-            stmt::Value::Uuid(_) => Type::Uuid,
-            stmt::Value::Bytes(_) => Type::Blob,
-            #[cfg(feature = "rust_decimal")]
-            stmt::Value::Decimal(_) => Type::Numeric(None),
-            #[cfg(feature = "jiff")]
-            stmt::Value::Timestamp(_) => Type::Timestamp(6),
-            #[cfg(feature = "jiff")]
-            stmt::Value::Date(_) => Type::Date,
-            #[cfg(feature = "jiff")]
-            stmt::Value::Time(_) => Type::Time(6),
-            #[cfg(feature = "jiff")]
-            stmt::Value::DateTime(_) => Type::DateTime(6),
-            _ => Type::Text,
         }
     }
 
