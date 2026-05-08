@@ -352,7 +352,7 @@ impl toasty_core::driver::Connection for Connection {
             .await?;
         let param_types: Vec<_> = typed_params
             .iter()
-            .map(|tv| self.oid_cache.get(&tv.ty))
+            .map(|tv| self.oid_cache.get(&tv.ty).clone())
             .collect();
 
         let values: Vec<_> = typed_params

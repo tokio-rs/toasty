@@ -37,6 +37,7 @@ impl Expand<'_> {
         let update_builder = self.expand_update_builder();
         let relation_structs = self.expand_relation_structs();
         let validate_create_impls = self.expand_validate_create_impls();
+        let storage_compat_checks = self.expand_storage_compat_checks();
 
         wrap_in_const(quote! {
             #model_impls
@@ -47,6 +48,7 @@ impl Expand<'_> {
             #update_builder
             #relation_structs
             #validate_create_impls
+            #storage_compat_checks
         })
     }
 }
@@ -86,6 +88,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let embedded_field_list_struct = expand.expand_field_list_struct();
     let embedded_model_impls = expand.expand_embedded_model_impls();
     let embedded_update_builder = expand.expand_embedded_update_builder();
+    let storage_compat_checks = expand.expand_storage_compat_checks();
     let field_list_struct_ident = &embedded.field_list_struct_ident;
 
     wrap_in_const(quote! {
@@ -95,6 +98,8 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
         #embedded_update_builder
 
         #embedded_model_impls
+
+        #storage_compat_checks
 
         impl #toasty::Register for #model_ident {
             fn id() -> #toasty::core::schema::app::ModelId {
@@ -234,10 +239,13 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     let enum_field_struct = e.expand_enum_field_struct();
     let enum_field_list_struct = e.expand_field_list_struct();
     let field_register_calls = e.expand_field_register_calls();
+    let storage_compat_checks = e.expand_storage_compat_checks();
 
     wrap_in_const(quote! {
         #enum_field_struct
         #enum_field_list_struct
+
+        #storage_compat_checks
 
         impl #toasty::Register for #model_ident {
             fn id() -> #toasty::core::schema::app::ModelId {

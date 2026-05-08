@@ -42,6 +42,12 @@ impl ToSql for &stmt::Expr {
             stmt::Expr::InList(expr) => {
                 fmt!(cx, f, expr.expr " IN " expr.list);
             }
+            stmt::Expr::AnyOp(expr) => {
+                fmt!(cx, f, expr.lhs " " expr.op " ANY(" expr.rhs ")");
+            }
+            stmt::Expr::AllOp(expr) => {
+                fmt!(cx, f, expr.lhs " " expr.op " ALL(" expr.rhs ")");
+            }
             stmt::Expr::InSubquery(expr) => {
                 fmt!(cx, f, expr.expr " IN (" expr.query ")");
             }

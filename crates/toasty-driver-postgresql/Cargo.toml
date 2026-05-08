@@ -40,6 +40,7 @@ jiff = { workspace = true, optional = true }
 lru.workspace = true
 tracing.workspace = true
 percent-encoding.workspace = true
+postgres-protocol.workspace = true
 postgres-types.workspace = true
 tokio.workspace = true
 tokio-postgres.workspace = true

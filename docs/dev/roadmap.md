@@ -141,8 +141,10 @@ the entry lands here.
 - `toasty::query!()` — succinct query syntax ([design](design/query-macro.md), [#808])
 - `toasty::create!()` — concise record creation ([design](design/static-assertions-create-macro.md))
 - `toasty::update!()` — concise updates
+- Derive macro for populating a struct from a query result ([#828])
 
 [#808]: https://github.com/tokio-rs/toasty/issues/808
+[#828]: https://github.com/tokio-rs/toasty/issues/828
 
 ## Runtime
 

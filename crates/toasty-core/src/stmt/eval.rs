@@ -346,6 +346,26 @@ impl Expr {
 
                 Ok(items.iter().any(|item| item == &needle).into())
             }
+            Expr::AnyOp(e) => {
+                let lhs = e.lhs.eval_ref(scope, input)?;
+                let rhs = e.rhs.eval_ref(scope, input)?;
+                let Value::List(items) = rhs else {
+                    return Err(crate::Error::expression_evaluation_failed(
+                        "ANY right-hand side must evaluate to a list",
+                    ));
+                };
+                Ok(any_all_compare(&lhs, &items, e.op, /*all=*/ false)?.into())
+            }
+            Expr::AllOp(e) => {
+                let lhs = e.lhs.eval_ref(scope, input)?;
+                let rhs = e.rhs.eval_ref(scope, input)?;
+                let Value::List(items) = rhs else {
+                    return Err(crate::Error::expression_evaluation_failed(
+                        "ALL right-hand side must evaluate to a list",
+                    ));
+                };
+                Ok(any_all_compare(&lhs, &items, e.op, /*all=*/ true)?.into())
+            }
             Expr::Match(expr_match) => {
                 let subject = expr_match.subject.eval_ref(scope, input)?;
                 for arm in &expr_match.arms {
@@ -443,4 +463,26 @@ fn cmp_ordered(lhs: &Value, rhs: &Value) -> Result<Ordering> {
     lhs.partial_cmp(rhs).ok_or_else(|| {
         crate::Error::expression_evaluation_failed("ordered comparison between incompatible types")
     })
+}
+
+fn any_all_compare(lhs: &Value, items: &[Value], op: BinaryOp, all: bool) -> Result<bool> {
+    for item in items {
+        let matches = match op {
+            BinaryOp::Eq => lhs == item,
+            BinaryOp::Ne => lhs != item,
+            BinaryOp::Ge => cmp_ordered(lhs, item)? != Ordering::Less,
+            BinaryOp::Gt => cmp_ordered(lhs, item)? == Ordering::Greater,
+            BinaryOp::Le => cmp_ordered(lhs, item)? != Ordering::Greater,
+            BinaryOp::Lt => cmp_ordered(lhs, item)? == Ordering::Less,
+        };
+        if all {
+            if !matches {
+                return Ok(false);
+            }
+        } else if matches {
+            return Ok(true);
+        }
+    }
+    // ANY over empty list → false; ALL over empty list → true.
+    Ok(all)
 }

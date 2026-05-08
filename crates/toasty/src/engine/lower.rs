@@ -59,7 +59,9 @@ impl LoweringState<'_> {
     ) -> hir::StmtId {
         // App-level rewrites that lowering depends on. `Source::Model { via }`
         // must be converted to a WHERE filter before the lowering walk
-        // converts `Source::Model` into `Source::Table`.
+        // converts `Source::Model` into `Source::Table`.  The eq/ne operand
+        // rewrite (model→PK, BelongsTo→FK) fires inside the lowering walk
+        // itself via `LowerStatement::visit_expr_binary_op_mut`.
         association::RewriteVia::new(expr_cx).rewrite(&mut stmt);
 
         Simplify::with_context(expr_cx).visit_mut(&mut stmt);
@@ -270,6 +272,21 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         todo!("stmt={i:#?}");
     }
 
+    fn visit_expr_binary_op_mut(&mut self, i: &mut stmt::ExprBinaryOp) {
+        // App-level operand rewrite for `eq` / `ne` (`Reference::Model` →
+        // primary-key field, `BelongsTo` → foreign-key field).  Must fire
+        // before the operands are walked, since walking lowers the field
+        // references into column references and the rewrite has nothing to
+        // match on.  Nested binary ops are handled by the recursive walk
+        // through `visit_expr_mut`.
+        if i.op.is_eq() || i.op.is_ne() {
+            self.rewrite_eq_operand(&mut i.lhs);
+            self.rewrite_eq_operand(&mut i.rhs);
+        }
+
+        stmt::visit_mut::visit_expr_binary_op_mut(self, i);
+    }
+
     fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
         match expr {
             stmt::Expr::BinaryOp(e) => {
@@ -284,6 +301,40 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
                 if let Some(lowered) = self.lower_expr_in_list(&mut e.expr, &mut e.list) {
                     *expr = lowered;
+                }
+
+                // PostgreSQL-style: `x IN (a, b, c)` → `x = ANY($1)` with the
+                // list bound as a single array param.
+                if let stmt::Expr::InList(e) = expr
+                    && self.supports_any_rewrite()
+                    && in_list_is_value_list(e)
+                {
+                    let stmt::Expr::InList(e) = expr.take() else {
+                        unreachable!()
+                    };
+                    *expr = stmt::Expr::any_op(*e.expr, stmt::BinaryOp::Eq, *e.list);
+                }
+            }
+            stmt::Expr::Not(e) if matches!(*e.expr, stmt::Expr::InList(_)) => {
+                // Recurse into inner first so the InList itself is lowered.
+                self.visit_expr_not_mut(e);
+
+                // If the inner is still an InList (not yet rewritten because
+                // the gate is off or the list shape doesn't qualify), leave
+                // `Not(InList)` alone and let the SQL serializer render
+                // `NOT IN`. Otherwise, rewrite `NOT (x = ANY(arr))` into the
+                // canonical `x <> ALL(arr)` form.
+                if self.supports_any_rewrite()
+                    && let stmt::Expr::AnyOp(any) = e.expr.as_mut()
+                    && any.op == stmt::BinaryOp::Eq
+                {
+                    let stmt::Expr::Not(not) = expr.take() else {
+                        unreachable!()
+                    };
+                    let stmt::Expr::AnyOp(any) = *not.expr else {
+                        unreachable!()
+                    };
+                    *expr = stmt::Expr::all_op(*any.lhs, stmt::BinaryOp::Ne, *any.rhs);
                 }
             }
             stmt::Expr::InSubquery(e) => {
@@ -730,6 +781,58 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 }
 
 impl<'a, 'b> LowerStatement<'a, 'b> {
+    /// App-level operand rewrite for `eq` and `ne` binary ops.
+    ///
+    /// `Reference::Model { nesting }` becomes a reference to the model's
+    /// primary-key field; a `BelongsTo` field reference becomes a reference
+    /// to the relation's foreign-key field.  Both rewrites only match on
+    /// app-level shapes; after the surrounding lowering walk converts the
+    /// references to columns, this method has nothing to rewrite.
+    ///
+    /// Must fire before the operand's children are visited, since lowering
+    /// otherwise replaces the field reference with a column reference and
+    /// the rewrite has no app-level shape to match on.
+    fn rewrite_eq_operand(&self, operand: &mut stmt::Expr) {
+        if let stmt::Expr::Reference(expr_reference) = operand {
+            match &*expr_reference {
+                stmt::ExprReference::Model { nesting } => {
+                    let model = self
+                        .expr_cx
+                        .resolve_expr_reference(expr_reference)
+                        .as_model_unwrap();
+
+                    let [pk_field] = &model.primary_key.fields[..] else {
+                        todo!("handle composite keys");
+                    };
+
+                    *operand = stmt::Expr::ref_field(*nesting, pk_field);
+                }
+                stmt::ExprReference::Field { .. } => {
+                    let field = self
+                        .expr_cx
+                        .resolve_expr_reference(expr_reference)
+                        .as_field_unwrap();
+
+                    match &field.ty {
+                        app::FieldTy::Primitive(_) | app::FieldTy::Embedded(_) => {}
+                        app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => todo!(),
+                        app::FieldTy::BelongsTo(rel) => {
+                            let [fk_field] = &rel.foreign_key.fields[..] else {
+                                todo!("handle composite keys");
+                            };
+
+                            let stmt::ExprReference::Field { index, .. } = expr_reference else {
+                                panic!()
+                            };
+                            *index = fk_field.source.index;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
     fn lower_expr_binary_op(
         &mut self,
         op: stmt::BinaryOp,
@@ -977,11 +1080,14 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         let target_id = self.scope_statement(|child| {
             // Via-association rewrite: `Source::Model { via }` becomes an
             // explicit WHERE filter so the lowering walk only sees rewritten
-            // sources.
+            // sources.  The eq/ne operand rewrite (model→PK, BelongsTo→FK)
+            // fires inside the lowering walk via
+            // `LowerStatement::visit_expr_binary_op_mut`.
             association::RewriteVia::new(child.expr_cx).rewrite(&mut stmt);
-            // Pre-lower simplify: remaining app-level rewrites (model→PK,
-            // lift_in_subquery) that the lowering visitor expects to have
-            // already fired.
+            // Pre-lower simplify: remaining app-level rewrites
+            // (`lift_in_subquery`, `rewrite_expr_in_list_when_model`,
+            // `try_variant_tautology_or`) that the lowering visitor expects
+            // to have already fired.
             Simplify::with_context(child.expr_cx).visit_mut(&mut *stmt);
             // Lowering walk.
             child.visit_stmt_mut(&mut stmt);
@@ -1012,6 +1118,14 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 
     fn capability(&self) -> &Capability {
         self.state.engine.capability()
+    }
+
+    /// Both flags must be true to rewrite `IN (...)` into `= ANY(<array>)`:
+    /// the dialect must accept the predicate, and the bind layer must accept
+    /// a single array-valued parameter.
+    fn supports_any_rewrite(&self) -> bool {
+        let cap = self.capability();
+        cap.bind_list_param && cap.predicate_match_any
     }
 
     fn field(&self, id: impl Into<app::FieldId>) -> &'b app::Field {
@@ -1321,4 +1435,25 @@ fn build_update_returning(
         stmt::ExprRecord::from_vec(exprs),
         stmt::Type::SparseRecord(field_set),
     )
+}
+
+/// True when an `IN` list is a candidate for the `= ANY($1)` rewrite:
+///
+/// - The lhs is scalar (not a `Record`). Composite-key `IN` would need a PG
+///   row-array bind which the current driver doesn't support.
+/// - The list is a constant collection of scalar values. Lists containing
+///   references, sub-statements, or record values stay as expanded `IN`.
+fn in_list_is_value_list(e: &stmt::ExprInList) -> bool {
+    if matches!(*e.expr, stmt::Expr::Record(_)) {
+        return false;
+    }
+    let scalar = |v: &stmt::Value| !matches!(v, stmt::Value::Record(_) | stmt::Value::List(_));
+    match &*e.list {
+        stmt::Expr::Value(stmt::Value::List(items)) => items.iter().all(scalar),
+        stmt::Expr::List(list) => list
+            .items
+            .iter()
+            .all(|i| matches!(i, stmt::Expr::Value(v) if scalar(v))),
+        _ => false,
+    }
 }

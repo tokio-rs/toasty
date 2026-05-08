@@ -1,3 +1,4 @@
+use postgres_protocol::types::{ArrayDimension, array_to_sql};
 use toasty_core::stmt::{self, Value as CoreValue};
 use tokio_postgres::{
     Column, Row,
@@ -206,57 +207,7 @@ impl ToSql for Value {
     where
         Self: Sized,
     {
-        match (&self.0, ty) {
-            (stmt::Value::Bool(value), _) => value.to_sql(ty, out),
-            (stmt::Value::I8(value), &Type::INT2) => (*value as i16).to_sql(ty, out),
-            (stmt::Value::I8(value), &Type::INT4) => (*value as i32).to_sql(ty, out),
-            (stmt::Value::I8(value), &Type::INT8) => (*value as i64).to_sql(ty, out),
-            (stmt::Value::I16(value), &Type::INT2) => value.to_sql(ty, out),
-            (stmt::Value::I16(value), &Type::INT4) => (*value as i32).to_sql(ty, out),
-            (stmt::Value::I16(value), &Type::INT8) => (*value as i64).to_sql(ty, out),
-            (stmt::Value::I32(value), &Type::INT4) => value.to_sql(ty, out),
-            (stmt::Value::I32(value), &Type::INT8) => (*value as i64).to_sql(ty, out),
-            (stmt::Value::I64(value), &Type::INT4) => (*value as i32).to_sql(ty, out),
-            (stmt::Value::I64(value), &Type::INT8) => value.to_sql(ty, out),
-            (stmt::Value::U8(value), &Type::INT2) => (*value as i16).to_sql(ty, out),
-            (stmt::Value::U8(value), &Type::INT4) => (*value as i32).to_sql(ty, out),
-            (stmt::Value::U8(value), &Type::INT8) => (*value as i64).to_sql(ty, out),
-            (stmt::Value::U16(value), &Type::INT4) => (*value as i32).to_sql(ty, out),
-            (stmt::Value::U16(value), &Type::INT8) => (*value as i64).to_sql(ty, out),
-            (stmt::Value::U32(value), &Type::INT8) => (*value as i64).to_sql(ty, out),
-            (stmt::Value::U64(value), &Type::INT8) => {
-                if *value > i64::MAX as u64 {
-                    return Err(Box::new(std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        format!(
-                            "u64 value {} exceeds i64::MAX ({}), cannot store in PostgreSQL BIGINT",
-                            value,
-                            i64::MAX
-                        ),
-                    )));
-                }
-                (*value as i64).to_sql(ty, out)
-            }
-            (stmt::Value::F32(value), &Type::FLOAT4) => value.to_sql(ty, out),
-            (stmt::Value::F32(value), &Type::FLOAT8) => (*value as f64).to_sql(ty, out),
-            (stmt::Value::F64(value), &Type::FLOAT4) => (*value as f32).to_sql(ty, out),
-            (stmt::Value::F64(value), &Type::FLOAT8) => value.to_sql(ty, out),
-            (stmt::Value::Null, _) => Ok(IsNull::Yes),
-            (stmt::Value::String(value), _) => value.to_sql(ty, out),
-            (stmt::Value::Bytes(value), &Type::BYTEA) => value.to_sql(ty, out),
-            (stmt::Value::Uuid(value), &Type::UUID) => value.to_sql(ty, out),
-            #[cfg(feature = "rust_decimal")]
-            (stmt::Value::Decimal(value), _) => value.to_sql(ty, out),
-            #[cfg(feature = "jiff")]
-            (stmt::Value::Timestamp(value), _) => value.to_sql(ty, out),
-            #[cfg(feature = "jiff")]
-            (stmt::Value::Date(value), _) => value.to_sql(ty, out),
-            #[cfg(feature = "jiff")]
-            (stmt::Value::Time(value), _) => value.to_sql(ty, out),
-            #[cfg(feature = "jiff")]
-            (stmt::Value::DateTime(value), _) => value.to_sql(ty, out),
-            (value, _) => todo!("unsupported Value for PostgreSQL type: {value:#?}, type: {ty:#?}"),
-        }
+        value_to_sql(&self.0, ty, out)
     }
 
     fn accepts(ty: &Type) -> bool {
@@ -277,7 +228,100 @@ impl ToSql for Value {
                 | Type::TIMESTAMPTZ
                 | Type::DATE
                 | Type::TIME
-        ) || matches!(ty.kind(), Kind::Enum(_))
+        ) || matches!(ty.kind(), Kind::Enum(_) | Kind::Array(_))
     }
     to_sql_checked!();
+}
+
+/// Free-fn form of `Value::to_sql` so the array-element closure can call it
+/// with a `&CoreValue` borrowed from the input slice — no per-element clone
+/// or wrapper construction.
+fn value_to_sql(
+    value: &CoreValue,
+    ty: &Type,
+    out: &mut BytesMut,
+) -> std::result::Result<IsNull, Box<dyn std::error::Error + Sync + Send>> {
+    match (value, ty) {
+        (stmt::Value::Bool(value), _) => value.to_sql(ty, out),
+        (stmt::Value::I8(value), &Type::INT2) => (*value as i16).to_sql(ty, out),
+        (stmt::Value::I8(value), &Type::INT4) => (*value as i32).to_sql(ty, out),
+        (stmt::Value::I8(value), &Type::INT8) => (*value as i64).to_sql(ty, out),
+        (stmt::Value::I16(value), &Type::INT2) => value.to_sql(ty, out),
+        (stmt::Value::I16(value), &Type::INT4) => (*value as i32).to_sql(ty, out),
+        (stmt::Value::I16(value), &Type::INT8) => (*value as i64).to_sql(ty, out),
+        (stmt::Value::I32(value), &Type::INT4) => value.to_sql(ty, out),
+        (stmt::Value::I32(value), &Type::INT8) => (*value as i64).to_sql(ty, out),
+        (stmt::Value::I64(value), &Type::INT4) => (*value as i32).to_sql(ty, out),
+        (stmt::Value::I64(value), &Type::INT8) => value.to_sql(ty, out),
+        (stmt::Value::U8(value), &Type::INT2) => (*value as i16).to_sql(ty, out),
+        (stmt::Value::U8(value), &Type::INT4) => (*value as i32).to_sql(ty, out),
+        (stmt::Value::U8(value), &Type::INT8) => (*value as i64).to_sql(ty, out),
+        (stmt::Value::U16(value), &Type::INT4) => (*value as i32).to_sql(ty, out),
+        (stmt::Value::U16(value), &Type::INT8) => (*value as i64).to_sql(ty, out),
+        (stmt::Value::U32(value), &Type::INT8) => (*value as i64).to_sql(ty, out),
+        (stmt::Value::U64(value), &Type::INT8) => {
+            if *value > i64::MAX as u64 {
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!(
+                        "u64 value {} exceeds i64::MAX ({}), cannot store in PostgreSQL BIGINT",
+                        value,
+                        i64::MAX
+                    ),
+                )));
+            }
+            (*value as i64).to_sql(ty, out)
+        }
+        (stmt::Value::F32(value), &Type::FLOAT4) => value.to_sql(ty, out),
+        (stmt::Value::F32(value), &Type::FLOAT8) => (*value as f64).to_sql(ty, out),
+        (stmt::Value::F64(value), &Type::FLOAT4) => (*value as f32).to_sql(ty, out),
+        (stmt::Value::F64(value), &Type::FLOAT8) => value.to_sql(ty, out),
+        (stmt::Value::Null, _) => Ok(IsNull::Yes),
+        // PG enums are wire-encoded as plain UTF-8 text. `String::ToSql::accepts`
+        // rejects `Kind::Enum`, so write the bytes directly.
+        (stmt::Value::String(value), _) if matches!(ty.kind(), Kind::Enum(_)) => {
+            out.extend_from_slice(value.as_bytes());
+            Ok(IsNull::No)
+        }
+        (stmt::Value::String(value), _) => value.to_sql(ty, out),
+        (stmt::Value::Bytes(value), &Type::BYTEA) => value.to_sql(ty, out),
+        (stmt::Value::Uuid(value), &Type::UUID) => value.to_sql(ty, out),
+        #[cfg(feature = "rust_decimal")]
+        (stmt::Value::Decimal(value), _) => value.to_sql(ty, out),
+        #[cfg(feature = "jiff")]
+        (stmt::Value::Timestamp(value), _) => value.to_sql(ty, out),
+        #[cfg(feature = "jiff")]
+        (stmt::Value::Date(value), _) => value.to_sql(ty, out),
+        #[cfg(feature = "jiff")]
+        (stmt::Value::Time(value), _) => value.to_sql(ty, out),
+        #[cfg(feature = "jiff")]
+        (stmt::Value::DateTime(value), _) => value.to_sql(ty, out),
+        // List → bind as a PostgreSQL array via the streaming `array_to_sql`
+        // primitive: the closure runs per element and writes directly into
+        // `out`, so there's no intermediate `Vec<Option<T>>`. The element PG
+        // type (carried by the prepared statement, see `db::Type::List` →
+        // `to_postgres_type`) drives per-item conversion via this same fn.
+        (stmt::Value::List(items), _) => {
+            let Kind::Array(elem) = ty.kind() else {
+                return Err(format!("Value::List bound to non-array PG type {ty:?}").into());
+            };
+            let len = i32::try_from(items.len())
+                .map_err(|_| format!("array length {} exceeds i32::MAX", items.len()))?;
+            array_to_sql(
+                [ArrayDimension {
+                    len,
+                    lower_bound: 1,
+                }],
+                elem.oid(),
+                items.iter(),
+                |v, buf| match value_to_sql(v, elem, buf)? {
+                    IsNull::No => Ok(postgres_protocol::IsNull::No),
+                    IsNull::Yes => Ok(postgres_protocol::IsNull::Yes),
+                },
+                out,
+            )?;
+            Ok(IsNull::No)
+        }
+        (value, _) => todo!("unsupported Value for PostgreSQL type: {value:#?}, type: {ty:#?}"),
+    }
 }

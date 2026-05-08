@@ -31,6 +31,27 @@ members = [
     # Benchmarks
     "benches",
 ]
+# Driver crates are excluded so `cargo test` (no `-p`/`--workspace`) and CI's
+# per-driver jobs don't pull in *every* driver's crate-local unit tests. Each
+# driver-specific CI job runs `cargo test -p toasty-driver-<driver>` separately
+# to cover its own tests. `cargo test --workspace` still selects every member.
+default-members = [
+    "crates/toasty",
+    "crates/toasty-cli",
+    "crates/toasty-core",
+    "crates/toasty-macros",
+    "crates/toasty-sql",
+    "crates/toasty-driver-integration-suite",
+    "crates/toasty-driver-integration-suite-macros",
+    "examples/composite-key",
+    "examples/hello-toasty",
+    "examples/todo-with-cli",
+    "examples/user-has-one-profile",
+    "tests",
+    "tests/tests/fixtures/post",
+    "tests/tests/fixtures/user",
+    "benches",
+]
 
 [workspace.package]
 readme = "README.md"
@@ -91,6 +112,7 @@ mysql_async = { version = "0.36.2", default-features = false, features = [
 pulldown-cmark = { version = "0.13", default-features = false }
 pluralizer = "0.5.0"
 percent-encoding = "2.3.2"
+postgres-protocol = "0.6.11"
 postgres-types = { version = "0.2.13", features = ["with-uuid-1", "array-impls"] }
 pretty_assertions = "1.4.1"
 proc-macro2 = "1.0.106"
