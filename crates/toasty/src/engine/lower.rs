@@ -371,6 +371,17 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             }
             stmt::Expr::Reference(expr_reference) => {
                 match expr_reference {
+                    // A reference to a relation field inside a Returning
+                    // clause becomes a subquery that loads the related
+                    // model(s).  This is the `.select(rel_field)` path; it
+                    // mirrors the include-subquery machinery that
+                    // `.include(...)` uses for `Returning::Model`.
+                    stmt::ExprReference::Field { nesting: 0, index }
+                        if matches!(self.cx, LoweringContext::Returning(_))
+                            && self.model_unwrap().fields[*index].ty.is_relation() =>
+                    {
+                        *expr = self.build_relation_subquery(*index, &[]);
+                    }
                     stmt::ExprReference::Field { nesting, index } => {
                         *expr = self.lower_expr_field(*nesting, *index);
                         self.visit_expr_mut(expr);

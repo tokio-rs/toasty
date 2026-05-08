@@ -267,6 +267,20 @@ impl LowerStatement<'_, '_> {
         field_index: usize,
         nested: &[stmt::Projection],
     ) {
+        returning[field_index] = self.build_relation_subquery(field_index, nested);
+    }
+
+    /// Build a subquery that loads the related model(s) for a
+    /// `BelongsTo`/`HasOne`/`HasMany` field, run the canonical lowering
+    /// pipeline on it, and return it stitched onto the parent statement
+    /// as an `Expr::Arg`.  Used both by `.include(...)` (which splices
+    /// the result into a record slot) and by `.select(rel_field)` (which
+    /// uses the result as the entire projection expression).
+    pub(super) fn build_relation_subquery(
+        &mut self,
+        field_index: usize,
+        nested: &[stmt::Projection],
+    ) -> stmt::Expr {
         let field = &self.model_unwrap().fields[field_index];
 
         let (mut stmt, target_model_id) = match &field.ty {
@@ -369,7 +383,7 @@ impl LowerStatement<'_, '_> {
             });
         }
 
-        returning[field_index] = sub_expr;
+        sub_expr
     }
 }
 
