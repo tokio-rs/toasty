@@ -5,7 +5,7 @@
 
 use crate::prelude::*;
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(scan))]
 pub async fn select_belongs_to_basic(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -51,7 +51,7 @@ pub async fn select_belongs_to_basic(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(scan))]
 pub async fn select_belongs_to_with_filter(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -98,7 +98,7 @@ pub async fn select_belongs_to_with_filter(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(scan))]
 pub async fn select_belongs_to_first(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
