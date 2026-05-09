@@ -10,12 +10,12 @@ struct ApplyInsertScope<'a> {
 
 /// How to encode an auto-generated value for a given field. Embedded newtypes
 /// store their value as a single-element record; primitives store it directly.
-struct AutoTarget {
-    ty: stmt::Type,
+struct AutoTarget<'a> {
+    ty: &'a stmt::Type,
     wrap_record: bool,
 }
 
-impl AutoTarget {
+impl AutoTarget<'_> {
     fn wrap(&self, value: stmt::Value) -> stmt::Value {
         if self.wrap_record {
             stmt::Value::record_from_vec(vec![value])
@@ -141,7 +141,7 @@ impl LowerStatement<'_, '_> {
                     // For an embedded newtype, the auto value is generated as
                     // the inner primitive and wrapped in a single-element
                     // record so it round-trips through the embed `Load` impl.
-                    let target = self.auto_target(&field.ty);
+                    let target = self.auto_target(field.id);
                     match auto {
                         app::AutoStrategy::Uuid(version) => {
                             let id = match version {
@@ -175,40 +175,6 @@ impl LowerStatement<'_, '_> {
             if !field_expr.is_value_null() {
                 set_fields.insert(field.id.index);
             }
-        }
-    }
-
-    /// Returns the primitive type the auto value should be encoded as, plus
-    /// how to shape the resulting value to match the field's storage layout.
-    fn auto_target(&self, field_ty: &app::FieldTy) -> AutoTarget {
-        match field_ty {
-            app::FieldTy::Primitive(primitive) => AutoTarget {
-                ty: primitive.ty.clone(),
-                wrap_record: false,
-            },
-            app::FieldTy::Embedded(embedded) => {
-                let target = self.schema().app.model(embedded.target);
-                let app::Model::EmbeddedStruct(es) = target else {
-                    panic!(
-                        "#[auto] on embedded enum is not supported (target {:?})",
-                        embedded.target
-                    );
-                };
-                let [inner] = es.fields.as_slice() else {
-                    panic!(
-                        "#[auto] on embedded type with {} fields; expected exactly one",
-                        es.fields.len()
-                    );
-                };
-                let app::FieldTy::Primitive(inner) = &inner.ty else {
-                    panic!("#[auto] on embedded type whose inner field is not primitive");
-                };
-                AutoTarget {
-                    ty: inner.ty.clone(),
-                    wrap_record: true,
-                }
-            }
-            _ => panic!("#[auto] not allowed on non-primitive fields"),
         }
     }
 
@@ -294,6 +260,45 @@ impl LowerStatement<'_, '_> {
                     self.state.errors.push(err);
                 }
             }
+        }
+    }
+}
+
+impl<'b> LowerStatement<'_, 'b> {
+    /// Returns the primitive type the auto value should be encoded as, plus
+    /// how to shape the resulting value to match the field's storage layout.
+    /// The returned reference borrows from the schema, not from `self`, so
+    /// the caller is free to keep mutating other state.
+    fn auto_target(&self, field_id: app::FieldId) -> AutoTarget<'b> {
+        let field = self.schema().app.field(field_id);
+        match &field.ty {
+            app::FieldTy::Primitive(primitive) => AutoTarget {
+                ty: &primitive.ty,
+                wrap_record: false,
+            },
+            app::FieldTy::Embedded(embedded) => {
+                let target = self.schema().app.model(embedded.target);
+                let app::Model::EmbeddedStruct(es) = target else {
+                    panic!(
+                        "#[auto] on embedded enum is not supported (target {:?})",
+                        embedded.target
+                    );
+                };
+                let [inner] = es.fields.as_slice() else {
+                    panic!(
+                        "#[auto] on embedded type with {} fields; expected exactly one",
+                        es.fields.len()
+                    );
+                };
+                let app::FieldTy::Primitive(inner) = &inner.ty else {
+                    panic!("#[auto] on embedded type whose inner field is not primitive");
+                };
+                AutoTarget {
+                    ty: &inner.ty,
+                    wrap_record: true,
+                }
+            }
+            _ => panic!("#[auto] not allowed on non-primitive fields"),
         }
     }
 }
