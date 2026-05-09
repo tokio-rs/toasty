@@ -357,6 +357,42 @@ pub async fn newtype_as_primary_key(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// Tests `get_by_id` on a `Uuid`-inner newtype primary key. The id field
+/// lowers to a `Record([cast(col, Uuid)])` because the embedded mapping
+/// wraps the column in a record and the column's storage type (e.g.
+/// `Blob` on SQLite) does not match the field's `Uuid` type. The
+/// per-element decomposition of `Record == Record` must run during
+/// lowering so the cast-handling rule fires; otherwise the cast survives
+/// into the SQL serializer.
+#[driver_test(requires(sql))]
+pub async fn newtype_uuid_get_by_id(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Embed)]
+    struct UserId(uuid::Uuid);
+
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        id: UserId,
+        name: String,
+    }
+
+    let mut db = t.setup_db(models!(User, UserId)).await;
+
+    let id = uuid::Uuid::new_v4();
+    toasty::create!(User {
+        id: UserId(id),
+        name: "Alice",
+    })
+    .exec(&mut db)
+    .await?;
+
+    let found = User::get_by_id(&mut db, &UserId(id)).await?;
+    assert_eq!(found.name, "Alice");
+    assert_eq!(found.id.0, id);
+
+    Ok(())
+}
+
 /// Tests newtype nested inside an embedded struct: create, read-back, and
 /// filter by the nested newtype field.
 #[driver_test(id(ID), requires(sql))]
