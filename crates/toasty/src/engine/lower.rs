@@ -898,6 +898,38 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         lhs: &mut stmt::Expr,
         rhs: &mut stmt::Expr,
     ) -> Option<stmt::Expr> {
+        // Record vs Record decomposition for eq/ne. Embedded fields lower
+        // to record expressions, so a comparison like
+        // `Record([cast(col, T)]) == Record([val])` only exposes the cast
+        // (and the cast-stripping rule below) once the record is split
+        // per-element. Recurse into each pair so cast handling fires.
+        //
+        // The rhs side may have folded to `Value::Record(..)` when every
+        // field was a literal value, so handle both shapes uniformly via
+        // `record_fields`.
+        if (op.is_eq() || op.is_ne())
+            && let (Some(lhs_len), Some(rhs_len)) = (record_len(lhs), record_len(rhs))
+            && lhs_len == rhs_len
+        {
+            let lhs_fields = take_record_fields(lhs);
+            let rhs_fields = take_record_fields(rhs);
+
+            let comparisons: Vec<_> = lhs_fields
+                .into_iter()
+                .zip(rhs_fields)
+                .map(|(mut l, mut r)| {
+                    self.lower_expr_binary_op(op, &mut l, &mut r)
+                        .unwrap_or_else(|| stmt::Expr::binary_op(l, op, r))
+                })
+                .collect();
+
+            return Some(if op.is_eq() {
+                stmt::Expr::and_from_vec(comparisons)
+            } else {
+                stmt::Expr::or_from_vec(comparisons)
+            });
+        }
+
         match (&mut *lhs, &mut *rhs) {
             (stmt::Expr::Value(value), other) | (other, stmt::Expr::Value(value))
                 if value.is_null() =>
@@ -1494,6 +1526,32 @@ fn build_update_returning(
         stmt::ExprRecord::from_vec(exprs),
         stmt::Type::SparseRecord(field_set),
     )
+}
+
+/// Length of a record-shaped expression, regardless of whether it is an
+/// `Expr::Record` or has folded into `Expr::Value(Value::Record(..))`.
+fn record_len(expr: &stmt::Expr) -> Option<usize> {
+    match expr {
+        stmt::Expr::Record(rec) => Some(rec.len()),
+        stmt::Expr::Value(stmt::Value::Record(values)) => Some(values.len()),
+        _ => None,
+    }
+}
+
+/// Drains the fields of a record-shaped expression into a `Vec<Expr>`,
+/// promoting `Value` items to `Expr::Value` along the way. The caller
+/// must have checked `record_len` first.
+fn take_record_fields(expr: &mut stmt::Expr) -> Vec<stmt::Expr> {
+    match expr {
+        stmt::Expr::Record(rec) => std::mem::take(&mut rec.fields),
+        stmt::Expr::Value(stmt::Value::Record(_)) => {
+            let stmt::Expr::Value(stmt::Value::Record(values)) = expr.take() else {
+                unreachable!()
+            };
+            values.into_iter().map(stmt::Expr::Value).collect()
+        }
+        _ => unreachable!("record_len gated this branch"),
+    }
 }
 
 /// True when an `IN` list is a candidate for the `= ANY($1)` rewrite:
