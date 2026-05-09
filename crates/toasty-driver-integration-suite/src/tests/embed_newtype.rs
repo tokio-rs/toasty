@@ -316,13 +316,9 @@ pub async fn newtype_auto_uuid_key(t: &mut Test) -> Result<()> {
     assert_eq!(user.name, "Alice");
     assert_ne!(user.id.0, uuid::Uuid::nil());
 
-    // Round-trip via filter on a non-key field — exercises the read-back path
-    // for the auto-generated newtype id column.
-    let users = User::filter(User::fields().name().eq("Alice"))
-        .exec(&mut db)
-        .await?;
-    assert_eq!(users.len(), 1);
-    assert_eq!(users[0].id.0, user.id.0);
+    let found = User::get_by_id(&mut db, &user.id).await?;
+    assert_eq!(found.name, "Alice");
+    assert_eq!(found.id.0, user.id.0);
 
     Ok(())
 }
