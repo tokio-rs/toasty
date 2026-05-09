@@ -379,6 +379,45 @@ impl Expand<'_> {
         quote! { #( #checks )* }
     }
 
+    /// Emit one obligation per field with an explicit `#[auto(...)]` strategy
+    /// that the field's Rust type implements
+    /// `codegen_support::auto::AutoCompatible<Tag>` for the matching tag.
+    ///
+    /// The bare `#[auto]` form already gets a `T: Auto` obligation from the
+    /// `STRATEGY` const lookup in `expand_model_fields`, so it does not need
+    /// a separate check here.
+    pub(super) fn expand_auto_compat_checks(&self) -> TokenStream {
+        let toasty = &self.toasty;
+
+        let checks = self.model.fields.iter().filter_map(|field| {
+            let auto = field.attrs.auto.as_ref()?;
+
+            let FieldTy::Primitive(ty) = &field.ty else {
+                return None;
+            };
+
+            let tag = match auto {
+                AutoStrategy::Unspecified => return None,
+                AutoStrategy::Uuid(_) => quote! { #toasty::auto::tag::Uuid },
+                AutoStrategy::Increment => quote! { #toasty::auto::tag::Increment },
+            };
+
+            // Pin the diagnostic at the field type's span so the error lands
+            // on the user's declaration, not the derive call site.
+            Some(quote_spanned! { ty.span()=>
+                const _: () = {
+                    fn _check<__T>()
+                    where
+                        __T: #toasty::auto::AutoCompatible<#tag>,
+                    {}
+                    let _ = _check::<#ty>;
+                };
+            })
+        });
+
+        quote! { #( #checks )* }
+    }
+
     /// Generate calls to register all models reachable from this model's fields.
     ///
     /// For primitive fields, no call is emitted (the default `Field::register`
