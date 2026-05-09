@@ -326,7 +326,7 @@ pub async fn newtype_auto_uuid_key(t: &mut Test) -> Result<()> {
 /// Tests an integer newtype: the blanket `Auto` impl resolves to
 /// `Increment` via `<u64 as Auto>`, the outer field's auto flag flattens
 /// down to the embed's single column, and the database fills in the value.
-#[driver_test(requires(sql))]
+#[driver_test(requires(auto_increment))]
 pub async fn newtype_auto_increment_key(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     struct OrderId(u64);
@@ -359,7 +359,7 @@ pub async fn newtype_auto_increment_key(t: &mut Test) -> Result<()> {
 /// chain — both layers proxy to the leaf primitive, and the outer
 /// `#[auto]` flattens through both single-field embeds to reach the
 /// storage column.
-#[driver_test(requires(sql))]
+#[driver_test(requires(auto_increment))]
 pub async fn newtype_auto_nested_proxy(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     struct Inner(u64);
