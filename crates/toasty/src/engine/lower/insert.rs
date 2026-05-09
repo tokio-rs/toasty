@@ -164,9 +164,8 @@ impl LowerStatement<'_, '_> {
                             // right shape so it can extract `Default` per
                             // column.
                             if target.wrap_record {
-                                field_expr.insert(
-                                    stmt::Expr::record_from_vec(vec![stmt::Expr::Default]).into(),
-                                );
+                                field_expr
+                                    .insert(stmt::Expr::record_from_vec(vec![stmt::Expr::Default]));
                             }
                         }
                     }
