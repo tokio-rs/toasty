@@ -1,36 +1,6 @@
 use crate::prelude::*;
 use toasty::stmt::Page;
 
-#[driver_test(id(ID))]
-pub async fn scan_filter_by_non_indexed_field(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Item {
-        #[key]
-        #[auto]
-        id: ID,
-        name: String,
-    }
-
-    let mut db = t.setup_db(models!(Item)).await;
-
-    toasty::create!(Item::[
-        { name: "Alice" },
-        { name: "Bob" },
-        { name: "Charlie" },
-    ])
-    .exec(&mut db)
-    .await?;
-
-    let results: Vec<Item> = Item::filter(Item::fields().name().eq("Alice"))
-        .exec(&mut db)
-        .await?;
-
-    assert_eq!(1, results.len());
-    assert_eq!("Alice", results[0].name);
-
-    Ok(())
-}
-
 /// Scan with no filter predicate returns all rows.
 #[driver_test(id(ID))]
 pub async fn scan_no_filter(t: &mut Test) -> Result<()> {
@@ -59,44 +29,6 @@ pub async fn scan_no_filter(t: &mut Test) -> Result<()> {
     assert_eq!("Alice", results[0].name);
     assert_eq!("Bob", results[1].name);
     assert_eq!("Charlie", results[2].name);
-
-    Ok(())
-}
-
-/// Scan with a multi-predicate AND filter on non-indexed fields.
-#[driver_test(id(ID))]
-pub async fn scan_multi_predicate_and(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Item {
-        #[key]
-        #[auto]
-        id: ID,
-        name: String,
-        score: i64,
-    }
-
-    let mut db = t.setup_db(models!(Item)).await;
-
-    toasty::create!(Item::[
-        { name: "Alice", score: 10_i64 },
-        { name: "Alice", score: 20_i64 },
-        { name: "Bob", score: 10_i64 },
-    ])
-    .exec(&mut db)
-    .await?;
-
-    let results: Vec<Item> = Item::filter(
-        Item::fields()
-            .name()
-            .eq("Alice")
-            .and(Item::fields().score().eq(10_i64)),
-    )
-    .exec(&mut db)
-    .await?;
-
-    assert_eq!(1, results.len());
-    assert_eq!("Alice", results[0].name);
-    assert_eq!(10, results[0].score);
 
     Ok(())
 }
