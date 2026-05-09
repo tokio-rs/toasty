@@ -3,7 +3,6 @@ mod expr_any;
 mod expr_binary_op;
 mod expr_cast;
 mod expr_exists;
-mod expr_in_list;
 mod expr_is_null;
 mod expr_let;
 mod expr_list;
@@ -16,10 +15,7 @@ mod stmt_query;
 // TODO: unify names
 mod lift_in_subquery;
 use toasty_core::{
-    schema::{
-        app::{Field, FieldId},
-        *,
-    },
+    schema::*,
     stmt::{self, Expr, IntoExprTarget, Node, VisitMut},
 };
 
@@ -68,7 +64,6 @@ impl VisitMut for Simplify<'_> {
             }
             Expr::Cast(expr) => self.simplify_expr_cast(expr),
             Expr::Exists(expr) => self.simplify_expr_exists(expr),
-            Expr::InList(expr) => self.simplify_expr_in_list(expr),
             Expr::InSubquery(expr) => self.lift_in_subquery(&expr.expr, &expr.query),
             Expr::Let(expr) => self.simplify_expr_let(expr),
             Expr::List(expr) => self.simplify_expr_list(expr),
@@ -230,10 +225,6 @@ impl<'a> Simplify<'a> {
 
     fn schema(&self) -> &'a Schema {
         self.cx.schema()
-    }
-
-    fn field(&self, field_id: impl Into<FieldId>) -> &Field {
-        self.cx.schema().app.field(field_id.into())
     }
 
     /// Return a new `Simplify` instance that operates on a nested scope
