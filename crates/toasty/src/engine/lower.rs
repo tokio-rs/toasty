@@ -287,6 +287,16 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         stmt::visit_mut::visit_expr_binary_op_mut(self, i);
     }
 
+    fn visit_expr_in_list_mut(&mut self, i: &mut stmt::ExprInList) {
+        // App-level operand rewrite: `Reference::Model { nesting } IN list`
+        // becomes `<pk_field> IN list`.  Must fire before the LHS is walked,
+        // since walking lowers the model reference into something the rewrite
+        // can no longer match on.
+        self.rewrite_in_list_model_operand(i);
+
+        stmt::visit_mut::visit_expr_in_list_mut(self, i);
+    }
+
     fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
         match expr {
             stmt::Expr::BinaryOp(e) => {
@@ -820,6 +830,55 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 _ => {}
             }
         }
+    }
+
+    /// App-level rewrite for the LHS of an `IN`-list expression:
+    /// `Reference::Model { nesting } IN list` becomes `<pk_field> IN list`.
+    ///
+    /// Must fire before the LHS is walked, since walking lowers the model
+    /// reference into a column reference and the rewrite has nothing to
+    /// match on.
+    fn rewrite_in_list_model_operand(&self, expr: &mut stmt::ExprInList) {
+        let (nesting, pk_field_id) = {
+            let stmt::Expr::Reference(expr_ref @ stmt::ExprReference::Model { nesting }) =
+                &*expr.expr
+            else {
+                return;
+            };
+            let nesting = *nesting;
+            let model = self
+                .expr_cx
+                .resolve_expr_reference(expr_ref)
+                .as_model_unwrap();
+            let [pk_field_id] = &model.primary_key.fields[..] else {
+                todo!()
+            };
+            (nesting, *pk_field_id)
+        };
+
+        let pk = self.expr_cx.schema().app.field(pk_field_id);
+
+        // Sanity-check the RHS shape against the PK type.
+        match &mut *expr.list {
+            stmt::Expr::List(expr_list) => {
+                for item in &mut expr_list.items {
+                    match item {
+                        stmt::Expr::Value(value) => {
+                            assert!(value.is_a(&pk.ty.as_primitive_unwrap().ty));
+                        }
+                        _ => todo!("{item:#?}"),
+                    }
+                }
+            }
+            stmt::Expr::Value(stmt::Value::List(values)) => {
+                for value in values {
+                    assert!(value.is_a(&pk.ty.as_primitive_unwrap().ty));
+                }
+            }
+            _ => todo!("expr={expr:#?}"),
+        }
+
+        *expr.expr = stmt::Expr::ref_field(nesting, pk.id());
     }
 
     fn lower_expr_binary_op(
