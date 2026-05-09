@@ -898,38 +898,6 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         lhs: &mut stmt::Expr,
         rhs: &mut stmt::Expr,
     ) -> Option<stmt::Expr> {
-        // Record vs Record decomposition for eq/ne. Embedded fields lower
-        // to record expressions, so a comparison like
-        // `Record([cast(col, T)]) == Record([val])` only exposes the cast
-        // (and the cast-stripping rule below) once the record is split
-        // per-element. Recurse into each pair so cast handling fires.
-        //
-        // The rhs side may have folded to `Value::Record(..)` when every
-        // field was a literal value, so handle both shapes uniformly via
-        // `record_fields`.
-        if (op.is_eq() || op.is_ne())
-            && let (Some(lhs_len), Some(rhs_len)) = (record_len(lhs), record_len(rhs))
-            && lhs_len == rhs_len
-        {
-            let lhs_fields = take_record_fields(lhs);
-            let rhs_fields = take_record_fields(rhs);
-
-            let comparisons: Vec<_> = lhs_fields
-                .into_iter()
-                .zip(rhs_fields)
-                .map(|(mut l, mut r)| {
-                    self.lower_expr_binary_op(op, &mut l, &mut r)
-                        .unwrap_or_else(|| stmt::Expr::binary_op(l, op, r))
-                })
-                .collect();
-
-            return Some(if op.is_eq() {
-                stmt::Expr::and_from_vec(comparisons)
-            } else {
-                stmt::Expr::or_from_vec(comparisons)
-            });
-        }
-
         match (&mut *lhs, &mut *rhs) {
             (stmt::Expr::Value(value), other) | (other, stmt::Expr::Value(value))
                 if value.is_null() =>
@@ -942,6 +910,35 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                     _ => todo!(),
                 })
             }
+            // Record-vs-record decomposition for eq/ne. Embedded fields lower
+            // to record expressions, so a comparison like
+            // `Record([cast(col, T)]) == Record([val])` only exposes the
+            // cast (and the cast-stripping rule below) once the record is
+            // split per-element. Recurse into each pair so cast handling
+            // fires.
+            //
+            // Mirrors the two record shapes handled in `simplify_expr_binary_op`:
+            // both sides `Expr::Record`, or one side folded to
+            // `Expr::Value(Value::Record)`.
+            (stmt::Expr::Record(lhs_rec), stmt::Expr::Record(rhs_rec))
+                if (op.is_eq() || op.is_ne()) && lhs_rec.len() == rhs_rec.len() =>
+            {
+                Some(self.combine_record_op(
+                    op,
+                    std::mem::take(&mut lhs_rec.fields),
+                    std::mem::take(&mut rhs_rec.fields),
+                ))
+            }
+            (stmt::Expr::Record(rec), stmt::Expr::Value(stmt::Value::Record(val_rec)))
+            | (stmt::Expr::Value(stmt::Value::Record(val_rec)), stmt::Expr::Record(rec))
+                if (op.is_eq() || op.is_ne()) && rec.len() == val_rec.len() =>
+            {
+                let val_exprs = std::mem::take(&mut val_rec.fields)
+                    .into_iter()
+                    .map(stmt::Expr::Value)
+                    .collect();
+                Some(self.combine_record_op(op, std::mem::take(&mut rec.fields), val_exprs))
+            }
             (stmt::Expr::Cast(expr_cast), _) | (_, stmt::Expr::Cast(expr_cast)) => {
                 let target_ty = self.capability().native_type_for(&expr_cast.ty);
                 self.cast_expr(lhs, &target_ty);
@@ -949,6 +946,32 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 None
             }
             _ => None,
+        }
+    }
+
+    /// Combines per-element comparisons of two record-shaped operands into a
+    /// single boolean expression: AND for `eq`, OR for `ne`. Each pair is
+    /// recursed through `lower_expr_binary_op` so any inner cast handling
+    /// fires as if the comparison had been written elementwise.
+    fn combine_record_op(
+        &mut self,
+        op: stmt::BinaryOp,
+        lhs_fields: Vec<stmt::Expr>,
+        rhs_fields: Vec<stmt::Expr>,
+    ) -> stmt::Expr {
+        let comparisons: Vec<_> = lhs_fields
+            .into_iter()
+            .zip(rhs_fields)
+            .map(|(mut l, mut r)| {
+                self.lower_expr_binary_op(op, &mut l, &mut r)
+                    .unwrap_or_else(|| stmt::Expr::binary_op(l, op, r))
+            })
+            .collect();
+
+        if op.is_eq() {
+            stmt::Expr::and_from_vec(comparisons)
+        } else {
+            stmt::Expr::or_from_vec(comparisons)
         }
     }
 
@@ -1526,32 +1549,6 @@ fn build_update_returning(
         stmt::ExprRecord::from_vec(exprs),
         stmt::Type::SparseRecord(field_set),
     )
-}
-
-/// Length of a record-shaped expression, regardless of whether it is an
-/// `Expr::Record` or has folded into `Expr::Value(Value::Record(..))`.
-fn record_len(expr: &stmt::Expr) -> Option<usize> {
-    match expr {
-        stmt::Expr::Record(rec) => Some(rec.len()),
-        stmt::Expr::Value(stmt::Value::Record(values)) => Some(values.len()),
-        _ => None,
-    }
-}
-
-/// Drains the fields of a record-shaped expression into a `Vec<Expr>`,
-/// promoting `Value` items to `Expr::Value` along the way. The caller
-/// must have checked `record_len` first.
-fn take_record_fields(expr: &mut stmt::Expr) -> Vec<stmt::Expr> {
-    match expr {
-        stmt::Expr::Record(rec) => std::mem::take(&mut rec.fields),
-        stmt::Expr::Value(stmt::Value::Record(_)) => {
-            let stmt::Expr::Value(stmt::Value::Record(values)) = expr.take() else {
-                unreachable!()
-            };
-            values.into_iter().map(stmt::Expr::Value).collect()
-        }
-        _ => unreachable!("record_len gated this branch"),
-    }
 }
 
 /// True when an `IN` list is a candidate for the `= ANY($1)` rewrite:
