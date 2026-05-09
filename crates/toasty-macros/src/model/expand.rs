@@ -11,7 +11,7 @@ mod util;
 
 use filters::Filter;
 
-use super::schema::Model;
+use super::schema::{FieldTy, Model, ModelKind};
 
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
@@ -89,9 +89,12 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let embedded_model_impls = expand.expand_embedded_model_impls();
     let embedded_update_builder = expand.expand_embedded_update_builder();
     let storage_compat_checks = expand.expand_storage_compat_checks();
+    let newtype_marker = expand.expand_embedded_newtype_marker();
     let field_list_struct_ident = &embedded.field_list_struct_ident;
 
     wrap_in_const(quote! {
+        #newtype_marker
+
         #embedded_field_struct
         #embedded_field_list_struct
 
@@ -357,6 +360,38 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
 // === Shared token-generation helpers ===
 
 impl Expand<'_> {
+    /// For tuple-newtype `#[derive(Embed)]` types (one unnamed field), emit
+    /// the `NewtypeOf` marker carrying the inner field's type. The blanket
+    /// `impl<T: NewtypeOf, T::Inner: Auto> Auto for T` in `codegen_support`
+    /// then promotes the newtype to `Auto` whenever the inner type is auto,
+    /// without errors when the inner type is not auto.
+    fn expand_embedded_newtype_marker(&self) -> TokenStream {
+        let ModelKind::EmbeddedStruct(embedded) = &self.model.kind else {
+            return quote! {};
+        };
+        // Only canonical newtypes (single unnamed field) qualify. Named
+        // single-field structs are explicit wrappers and stay opaque.
+        if embedded.fields_named || self.model.fields.len() != 1 {
+            return quote! {};
+        }
+
+        let inner = &self.model.fields[0];
+        let FieldTy::Primitive(inner_ty) = &inner.ty else {
+            // Relations are not allowed inside an `Embed` body today; nothing
+            // to mark if that ever changes.
+            return quote! {};
+        };
+
+        let toasty = &self.toasty;
+        let model_ident = &self.model.ident;
+
+        quote! {
+            impl #toasty::newtype::NewtypeOf for #model_ident {
+                type Inner = #inner_ty;
+            }
+        }
+    }
+
     /// Generates a field accessor method for a `BelongsTo` or `HasOne`
     /// relation using `Relation::OneField`.
     fn expand_one_relation_field_method(

@@ -291,6 +291,102 @@ pub async fn newtype_numeric(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// Tests that a tuple-newtype embed automatically gets an `Auto` impl when
+/// its inner type is auto-able — no annotation, no manual impl. Driven by
+/// the `NewtypeOf` marker the derive emits and the blanket `Auto` impl in
+/// `codegen_support`.
+#[driver_test]
+pub async fn newtype_auto_uuid_key(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Embed)]
+    struct UserId(uuid::Uuid);
+
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: UserId,
+        name: String,
+    }
+
+    let mut db = t.setup_db(models!(User, UserId)).await;
+
+    let user = toasty::create!(User { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+    assert_eq!(user.name, "Alice");
+    assert_ne!(user.id.0, uuid::Uuid::nil());
+
+    let found = User::get_by_id(&mut db, &user.id).await?;
+    assert_eq!(found.name, "Alice");
+    assert_eq!(found.id.0, user.id.0);
+
+    Ok(())
+}
+
+/// Tests an integer newtype: the blanket `Auto` impl resolves to
+/// `Increment` via `<u64 as Auto>`, the outer field's auto flag flattens
+/// down to the embed's single column, and the database fills in the value.
+#[driver_test(requires(auto_increment))]
+pub async fn newtype_auto_increment_key(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Embed)]
+    struct OrderId(u64);
+
+    #[derive(Debug, toasty::Model)]
+    struct Order {
+        #[key]
+        #[auto]
+        id: OrderId,
+        item: String,
+    }
+
+    let mut db = t.setup_db(models!(Order, OrderId)).await;
+
+    let o1 = toasty::create!(Order { item: "Widget" })
+        .exec(&mut db)
+        .await?;
+    let o2 = toasty::create!(Order { item: "Gadget" })
+        .exec(&mut db)
+        .await?;
+    assert_ne!(o1.id.0, o2.id.0);
+
+    let found = Order::get_by_id(&mut db, &o1.id).await?;
+    assert_eq!(found.item, "Widget");
+
+    Ok(())
+}
+
+/// Tests that the blanket `Auto` impl flows through a multi-level newtype
+/// chain — both layers proxy to the leaf primitive, and the outer
+/// `#[auto]` flattens through both single-field embeds to reach the
+/// storage column.
+#[driver_test(requires(auto_increment))]
+pub async fn newtype_auto_nested_proxy(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Embed)]
+    struct Inner(u64);
+
+    #[derive(Debug, toasty::Embed)]
+    struct Outer(Inner);
+
+    #[derive(Debug, toasty::Model)]
+    struct Order {
+        #[key]
+        #[auto]
+        id: Outer,
+        item: String,
+    }
+
+    let mut db = t.setup_db(models!(Order, Outer, Inner)).await;
+
+    let o1 = toasty::create!(Order { item: "A" }).exec(&mut db).await?;
+    let o2 = toasty::create!(Order { item: "B" }).exec(&mut db).await?;
+    assert_ne!(o1.id.0.0, o2.id.0.0);
+
+    let found = Order::get_by_id(&mut db, &o1.id).await?;
+    assert_eq!(found.item, "A");
+
+    Ok(())
+}
+
 /// Tests using a newtype as the primary key field.
 #[driver_test(requires(sql))]
 pub async fn newtype_as_primary_key(t: &mut Test) -> Result<()> {

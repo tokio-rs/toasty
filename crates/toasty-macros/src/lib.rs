@@ -715,6 +715,29 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// - For data-carrying variants, per-variant handle types with a
 ///   `matches(closure)` method for pattern matching and field access.
 ///
+/// # Newtype `Auto` proxying
+///
+/// A tuple-newtype embedded struct (one unnamed field) automatically
+/// implements `Auto` whenever its inner type does — no annotation
+/// required. Toasty emits a `NewtypeOf` marker carrying the inner type
+/// and a blanket `Auto` impl resolves through it:
+///
+/// ```
+/// #[derive(toasty::Embed)]
+/// struct UserId(uuid::Uuid);
+///
+/// #[derive(toasty::Model)]
+/// struct User {
+///     #[key]
+///     #[auto]
+///     id: UserId,
+///     name: String,
+/// }
+/// ```
+///
+/// Newtypes wrapping non-`Auto` types stay non-`Auto`; nesting works
+/// transparently (`Outer(Inner(u64))` proxies through both layers).
+///
 /// # Field-level attributes
 ///
 /// ## `#[column(...)]` — customize the database column
