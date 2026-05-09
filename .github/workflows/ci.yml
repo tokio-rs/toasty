@@ -141,7 +141,7 @@ jobs:
         runs-on: ubuntu-latest
         services:
           postgresql:
-            image: postgres:17
+            image: postgres:18
             env:
               POSTGRES_USER: toasty
               POSTGRES_PASSWORD: toasty
