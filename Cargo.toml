@@ -98,13 +98,13 @@ clap = { version = "4.6.0", features = ["derive"] }
 console = "0.16"
 deadpool = { version = "0.13", features = ["rt_tokio_1"] }
 dialoguer = "0.12"
-hashbrown = "0.16"
+hashbrown = "0.17"
 heck = "0.5.0"
 indexmap = "2.13.0"
 index_vec = "0.1.4"
 inventory = "0.3.24"
 jiff = "0.2.23"
-lru = "0.16.3"
+lru = "0.18.0"
 mysql_async = { version = "0.36.2", default-features = false, features = [
     "minimal",
     "native-tls-tls",
@@ -135,7 +135,7 @@ rustls = { version = "0.23", default-features = false, features = ["std", "ring"
 const-oid = { version = "0.9.6", default-features = false, features = ["db"] }
 sha2 = { version = "0.11", default-features = false }
 x509-cert = { version = "0.2.5", default-features = false, features = ["std"] }
-rustls-platform-verifier = "0.6"
+rustls-platform-verifier = "0.7"
 rustls-pemfile = "2"
 rustls-webpki = { version = "0.103", default-features = false, features = ["alloc", "std"] }
 tokio-stream = { version = "0.1.18", default-features = false }

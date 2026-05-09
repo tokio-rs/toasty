@@ -4,6 +4,8 @@
 
 #![doc(hidden)]
 
+pub mod auto;
+pub mod newtype;
 pub mod storage;
 
 pub use crate::schema::inventory;

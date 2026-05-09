@@ -1,0 +1,22 @@
+error[E0277]: Toasty cannot automatically set values for type `UserId`
+  --> tests/ui/embed_newtype_inner_not_auto.rs:12:9
+   |
+12 |     id: UserId,
+   |         ^^^^^^ Toasty cannot automatically set values for this field
+   |
+help: the trait `Auto` is not implemented for `UserId`
+  --> tests/ui/embed_newtype_inner_not_auto.rs:6:1
+   |
+ 6 | struct UserId(String);
+   | ^^^^^^^^^^^^^
+   = note: Is the field annotated with #[auto]? An embedded newtype is auto-able only when its inner type implements `Auto`.
+   = help: the following other types implement trait `Auto`:
+             i16
+             i32
+             i64
+             i8
+             isize
+             u16
+             u32
+             u64
+           and $N others

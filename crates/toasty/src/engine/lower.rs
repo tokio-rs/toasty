@@ -287,6 +287,16 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         stmt::visit_mut::visit_expr_binary_op_mut(self, i);
     }
 
+    fn visit_expr_in_list_mut(&mut self, i: &mut stmt::ExprInList) {
+        // App-level operand rewrite: `Reference::Model { nesting } IN list`
+        // becomes `<pk_field> IN list`.  Must fire before the LHS is walked,
+        // since walking lowers the model reference into something the rewrite
+        // can no longer match on.
+        self.rewrite_in_list_model_operand(i);
+
+        stmt::visit_mut::visit_expr_in_list_mut(self, i);
+    }
+
     fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
         match expr {
             stmt::Expr::BinaryOp(e) => {
@@ -833,6 +843,55 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         }
     }
 
+    /// App-level rewrite for the LHS of an `IN`-list expression:
+    /// `Reference::Model { nesting } IN list` becomes `<pk_field> IN list`.
+    ///
+    /// Must fire before the LHS is walked, since walking lowers the model
+    /// reference into a column reference and the rewrite has nothing to
+    /// match on.
+    fn rewrite_in_list_model_operand(&self, expr: &mut stmt::ExprInList) {
+        let (nesting, pk_field_id) = {
+            let stmt::Expr::Reference(expr_ref @ stmt::ExprReference::Model { nesting }) =
+                &*expr.expr
+            else {
+                return;
+            };
+            let nesting = *nesting;
+            let model = self
+                .expr_cx
+                .resolve_expr_reference(expr_ref)
+                .as_model_unwrap();
+            let [pk_field_id] = &model.primary_key.fields[..] else {
+                todo!()
+            };
+            (nesting, *pk_field_id)
+        };
+
+        let pk = self.expr_cx.schema().app.field(pk_field_id);
+
+        // Sanity-check the RHS shape against the PK type.
+        match &mut *expr.list {
+            stmt::Expr::List(expr_list) => {
+                for item in &mut expr_list.items {
+                    match item {
+                        stmt::Expr::Value(value) => {
+                            assert!(value.is_a(&pk.ty.as_primitive_unwrap().ty));
+                        }
+                        _ => todo!("{item:#?}"),
+                    }
+                }
+            }
+            stmt::Expr::Value(stmt::Value::List(values)) => {
+                for value in values {
+                    assert!(value.is_a(&pk.ty.as_primitive_unwrap().ty));
+                }
+            }
+            _ => todo!("expr={expr:#?}"),
+        }
+
+        *expr.expr = stmt::Expr::ref_field(nesting, pk.id());
+    }
+
     fn lower_expr_binary_op(
         &mut self,
         op: stmt::BinaryOp,
@@ -851,6 +910,35 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                     _ => todo!(),
                 })
             }
+            // Record-vs-record decomposition for eq/ne. Embedded fields lower
+            // to record expressions, so a comparison like
+            // `Record([cast(col, T)]) == Record([val])` only exposes the
+            // cast (and the cast-stripping rule below) once the record is
+            // split per-element. Recurse into each pair so cast handling
+            // fires.
+            //
+            // Mirrors the two record shapes handled in `simplify_expr_binary_op`:
+            // both sides `Expr::Record`, or one side folded to
+            // `Expr::Value(Value::Record)`.
+            (stmt::Expr::Record(lhs_rec), stmt::Expr::Record(rhs_rec))
+                if (op.is_eq() || op.is_ne()) && lhs_rec.len() == rhs_rec.len() =>
+            {
+                Some(self.combine_record_op(
+                    op,
+                    std::mem::take(&mut lhs_rec.fields),
+                    std::mem::take(&mut rhs_rec.fields),
+                ))
+            }
+            (stmt::Expr::Record(rec), stmt::Expr::Value(stmt::Value::Record(val_rec)))
+            | (stmt::Expr::Value(stmt::Value::Record(val_rec)), stmt::Expr::Record(rec))
+                if (op.is_eq() || op.is_ne()) && rec.len() == val_rec.len() =>
+            {
+                let val_exprs = std::mem::take(&mut val_rec.fields)
+                    .into_iter()
+                    .map(stmt::Expr::Value)
+                    .collect();
+                Some(self.combine_record_op(op, std::mem::take(&mut rec.fields), val_exprs))
+            }
             (stmt::Expr::Cast(expr_cast), _) | (_, stmt::Expr::Cast(expr_cast)) => {
                 let target_ty = self.capability().native_type_for(&expr_cast.ty);
                 self.cast_expr(lhs, &target_ty);
@@ -858,6 +946,32 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 None
             }
             _ => None,
+        }
+    }
+
+    /// Combines per-element comparisons of two record-shaped operands into a
+    /// single boolean expression: AND for `eq`, OR for `ne`. Each pair is
+    /// recursed through `lower_expr_binary_op` so any inner cast handling
+    /// fires as if the comparison had been written elementwise.
+    fn combine_record_op(
+        &mut self,
+        op: stmt::BinaryOp,
+        lhs_fields: Vec<stmt::Expr>,
+        rhs_fields: Vec<stmt::Expr>,
+    ) -> stmt::Expr {
+        let comparisons: Vec<_> = lhs_fields
+            .into_iter()
+            .zip(rhs_fields)
+            .map(|(mut l, mut r)| {
+                self.lower_expr_binary_op(op, &mut l, &mut r)
+                    .unwrap_or_else(|| stmt::Expr::binary_op(l, op, r))
+            })
+            .collect();
+
+        if op.is_eq() {
+            stmt::Expr::and_from_vec(comparisons)
+        } else {
+            stmt::Expr::or_from_vec(comparisons)
         }
     }
 

@@ -254,6 +254,7 @@ impl Model {
                 fields: pk_index_fields,
                 unique: true,
                 primary_key: true,
+                name: model_attr.key.as_ref().and_then(|k| k.name.clone()),
             });
 
             // Iterate all extras rather than bailing on the first so every
@@ -334,6 +335,7 @@ impl Model {
                 fields: index_fields,
                 unique: false,
                 primary_key: false,
+                name: index_attr.name.clone(),
             });
         }
 
@@ -575,6 +577,7 @@ fn collect_field_indices(fields: &[Field], indices: &mut Vec<Index>) {
                 }],
                 unique: field.attrs.unique,
                 primary_key: false,
+                name: None,
             });
         }
     }

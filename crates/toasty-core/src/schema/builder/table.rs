@@ -94,6 +94,13 @@ struct MapField<'a, 'b> {
     /// Used by variant-specific `MapField` instances to automatically wrap
     /// field expressions in the discriminant match guard.
     field_expr_base: stmt::Expr,
+
+    /// True when an outer single-field embed flagged its column as
+    /// auto-increment. Single-field newtype embeds flatten to one column, so
+    /// the outer field's `#[auto]` (Increment) must apply to that flattened
+    /// column. ORed into the column's flag at creation time so an outer or
+    /// inner declaration both take effect.
+    inherited_auto_increment: bool,
 }
 
 impl BuildSchema<'_> {
@@ -227,7 +234,7 @@ impl BuildTableFromModels<'_> {
                     table: self.table.id,
                     index: out.len(),
                 },
-                name: String::new(),
+                name: app_index.name.clone().unwrap_or_default(),
                 on: self.table.id,
                 columns: vec![],
                 unique: app_index.unique,
@@ -247,35 +254,7 @@ impl BuildTableFromModels<'_> {
                 // index matters and there is no syntax to specify it. That will
                 // likely require an explicit field-order annotation on the
                 // index.
-                let column = match mapping {
-                    mapping::Field::Primitive(p) => p.column,
-                    mapping::Field::Struct(s) => {
-                        // Look up the app-level embedded struct to verify this
-                        // is a true newtype: exactly one unnamed field.
-                        let embedded_struct = self.app.model(s.id).as_embedded_struct_unwrap();
-
-                        assert!(
-                            embedded_struct.fields.len() == 1
-                                && embedded_struct.fields[0].name.app.is_none(),
-                            "only newtype embedded structs (single unnamed \
-                             field) can be indexed; multi-field or named-field \
-                             embedded structs require explicit index field \
-                             ordering"
-                        );
-
-                        s.fields[0]
-                            .as_primitive()
-                            .expect(
-                                "newtype embedded struct should contain a \
-                                 primitive for indexing",
-                            )
-                            .column
-                    }
-                    _ => panic!(
-                        "only primitive and newtype embedded structs can be \
-                         indexed"
-                    ),
-                };
+                let column = self.resolve_indexed_column(mapping);
 
                 index.columns.push(db::IndexColumn {
                     column,
@@ -356,8 +335,44 @@ impl BuildTableFromModels<'_> {
         Ok(())
     }
 
+    /// Walks newtype embed layers down to the underlying primitive column.
+    ///
+    /// Indexed fields may be either a primitive directly or a chain of
+    /// single-unnamed-field embeds wrapping a primitive. Multi-field or
+    /// named-field embeds are not supported as index targets — the index
+    /// would have to choose a column ordering and there is no syntax for
+    /// that yet.
+    fn resolve_indexed_column(&self, mut mapping: &mapping::Field) -> ColumnId {
+        loop {
+            match mapping {
+                mapping::Field::Primitive(p) => return p.column,
+                mapping::Field::Struct(s) => {
+                    let embedded_struct = self.app.model(s.id).as_embedded_struct_unwrap();
+                    assert!(
+                        embedded_struct.fields.len() == 1
+                            && embedded_struct.fields[0].name.app.is_none(),
+                        "only newtype embedded structs (single unnamed \
+                         field) can be indexed; multi-field or named-field \
+                         embedded structs require explicit index field \
+                         ordering"
+                    );
+                    mapping = &s.fields[0];
+                }
+                _ => panic!(
+                    "only primitive and newtype embedded structs can be \
+                     indexed"
+                ),
+            }
+        }
+    }
+
     fn update_index_names(&mut self) {
         for index in &mut self.table.indices {
+            // Preserve user-provided names from `#[index(name = "...", ...)]`.
+            if !index.name.is_empty() {
+                continue;
+            }
+
             index.name = format!("index_{}_by", self.table.name);
 
             for (i, index_column) in index.columns.iter().enumerate() {
@@ -759,6 +774,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             in_enum_variant: false,
             field_base: None,
             field_expr_base: stmt::Expr::arg(0),
+            inherited_auto_increment: false,
         }
     }
 
@@ -906,9 +922,20 @@ impl<'a, 'b> MapField<'a, 'b> {
     ) -> Result<mapping::Field> {
         let sub_projection = self.sub_projection(field_index);
 
-        let nested_fields = self
-            .for_struct(field, field_index)
-            .map_fields(&embedded_struct.fields)?;
+        // For a single-field newtype the outer field's `#[auto]` flattens
+        // down to the one inner column. Multi-field embeds have no clear
+        // target column, so the inherited flag stops at the boundary —
+        // `Foo(Bar(u64))` with `#[auto]` on the outer flows through both
+        // newtypes, but `Foo { a, b: Bar(u64) }` would not propagate it
+        // from any outer past the `Foo` layer.
+        let single_field = embedded_struct.fields.len() == 1;
+        let mut child = self.for_struct(field, field_index);
+        if single_field {
+            child.inherited_auto_increment |= field.is_auto_increment();
+        } else {
+            child.inherited_auto_increment = false;
+        }
+        let nested_fields = child.map_fields(&embedded_struct.fields)?;
 
         let columns: indexmap::IndexMap<ColumnId, usize> =
             nested_fields.iter().flat_map(|f| f.columns()).collect();
@@ -992,7 +1019,8 @@ impl<'a, 'b> MapField<'a, 'b> {
             storage_ty,
             nullable: field.nullable || self.in_enum_variant,
             primary_key: false,
-            auto_increment: field.is_auto_increment() && self.build.db.auto_increment,
+            auto_increment: (field.is_auto_increment() || self.inherited_auto_increment)
+                && self.build.db.auto_increment,
             versionable: field.is_versionable(),
         });
 
@@ -1062,15 +1090,18 @@ impl<'a, 'b> MapField<'a, 'b> {
     /// `in_enum_variant`, `field_base`, and `field_expr_base` unchanged. Used
     /// when entering struct/variant fields so that sub-field columns are named
     /// `{..prefix..}_{name}_{sub_field}`.
-    fn with_prefix(&mut self, name: &str) -> MapField<'_, 'b> {
+    fn with_prefix(&mut self, name: Option<&str>) -> MapField<'_, 'b> {
         let mut prefix = self.prefix.clone();
-        prefix.push(name.to_owned());
+        if let Some(name) = name {
+            prefix.push(name.to_owned());
+        }
         MapField {
             build: self.build,
             prefix,
             in_enum_variant: self.in_enum_variant,
             field_base: self.field_base.clone(),
             field_expr_base: self.field_expr_base.clone(),
+            inherited_auto_increment: self.inherited_auto_increment,
         }
     }
 
@@ -1098,7 +1129,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             }],
             stmt::Expr::null(),
         );
-        let mut child = self.with_prefix(field.name.storage_name_unwrap());
+        let mut child = self.with_prefix(Some(field.name.storage_name_unwrap()));
         child.in_enum_variant = true;
         child.field_base = Some(field_base);
         child.field_expr_base.substitute(&[field_expr_base]);
@@ -1113,7 +1144,9 @@ impl<'a, 'b> MapField<'a, 'b> {
     /// `field_index`.
     fn for_struct(&mut self, field: &app::Field, field_index: usize) -> MapField<'_, 'b> {
         let field_base = self.extend_field_base(field, field_index);
-        let mut child = self.with_prefix(field.name.storage_name_unwrap());
+        // Unnamed (newtype) inner fields keep the parent's prefix so the
+        // flattened column name comes from the outermost named field.
+        let mut child = self.with_prefix(field.name.storage_name());
         child.field_base = Some(field_base);
         child
     }
