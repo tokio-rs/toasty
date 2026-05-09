@@ -1,4 +1,4 @@
-use super::{AutoStrategy, ErrorSet, KeyAttr};
+use super::{ErrorSet, KeyAttr};
 
 #[derive(Debug, Default)]
 pub(crate) struct ModelAttr {
@@ -11,10 +11,11 @@ pub(crate) struct ModelAttr {
     /// Optional database table name to map the model to
     pub(crate) table: Option<syn::LitStr>,
 
-    /// Struct-level `#[auto]` (embedded newtype only). Stored alongside the
+    /// Struct-level `#[auto]` (embedded newtype only). Stored as the
     /// originating attribute so downstream code can span errors back to the
-    /// user's source.
-    pub(crate) auto: Option<(AutoStrategy, syn::Attribute)>,
+    /// user's source. Only the bare `#[auto]` form is accepted; the inner
+    /// field's `Auto` impl supplies the strategy.
+    pub(crate) auto: Option<syn::Attribute>,
 }
 
 impl ModelAttr {
@@ -43,11 +44,17 @@ impl ModelAttr {
             } else if attr.path().is_ident("auto") {
                 if self.auto.is_some() {
                     errs.push(syn::Error::new_spanned(attr, "duplicate #[auto] attribute"));
+                } else if !matches!(attr.meta, syn::Meta::Path(_)) {
+                    // Struct-level `#[auto]` always proxies the strategy from
+                    // the inner field's `Auto` impl. Specifying a strategy
+                    // here would shadow that and is rejected.
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "struct-level #[auto] does not take arguments; \
+                         the strategy is taken from the inner field's `Auto` impl",
+                    ));
                 } else {
-                    match AutoStrategy::from_ast(attr) {
-                        Ok(strategy) => self.auto = Some((strategy, attr.clone())),
-                        Err(e) => errs.push(e),
-                    }
+                    self.auto = Some(attr.clone());
                 }
             } else if attr.path().is_ident("table") {
                 if self.table.is_some() {

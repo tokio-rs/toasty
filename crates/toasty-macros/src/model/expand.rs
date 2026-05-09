@@ -11,7 +11,7 @@ mod util;
 
 use filters::Filter;
 
-use super::schema::{AutoStrategy, FieldTy, Model, ModelKind, UuidVersion};
+use super::schema::{FieldTy, Model, ModelKind};
 
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
@@ -371,9 +371,9 @@ impl Expand<'_> {
         let ModelKind::EmbeddedStruct(embedded) = &self.model.kind else {
             return quote! {};
         };
-        let Some(strategy) = &embedded.auto else {
+        if !embedded.auto {
             return quote! {};
-        };
+        }
 
         // `from_ast` already verified there is exactly one field.
         let inner = &self.model.fields[0];
@@ -390,34 +390,16 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let span = inner_ty.span();
 
-        let strategy_expr = match strategy {
-            AutoStrategy::Unspecified => quote_spanned! { span=>
-                <#inner_ty as #toasty::Auto>::STRATEGY
-            },
-            AutoStrategy::Uuid(UuidVersion::V4) => quote! {
-                #toasty::core::schema::app::AutoStrategy::Uuid(
-                    #toasty::core::schema::app::UuidVersion::V4,
-                )
-            },
-            AutoStrategy::Uuid(UuidVersion::V7) => quote! {
-                #toasty::core::schema::app::AutoStrategy::Uuid(
-                    #toasty::core::schema::app::UuidVersion::V7,
-                )
-            },
-            AutoStrategy::Increment => quote! {
-                #toasty::core::schema::app::AutoStrategy::Increment
-            },
-        };
-
-        // Even when the strategy is explicit, require the inner type to
-        // implement `Auto` so the runtime's value-generation path can rely on
-        // a primitive shape it knows how to produce.
+        // The strategy always proxies to the inner type's `Auto` impl. If
+        // the inner type does not implement `Auto`, the diagnostic surfaces
+        // here, spanned at the inner field type.
         quote_spanned! { span=>
             impl #toasty::Auto for #model_ident
             where
                 #inner_ty: #toasty::Auto,
             {
-                const STRATEGY: #toasty::core::schema::app::AutoStrategy = #strategy_expr;
+                const STRATEGY: #toasty::core::schema::app::AutoStrategy =
+                    <#inner_ty as #toasty::Auto>::STRATEGY;
             }
         }
     }

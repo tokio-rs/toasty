@@ -1,6 +1,6 @@
 use super::{
-    AutoStrategy, Column, ColumnType, ErrorSet, Field, Index, IndexField, IndexScope, ModelAttr,
-    Name, PrimaryKey, Variant, VariantValue,
+    Column, ColumnType, ErrorSet, Field, Index, IndexField, IndexScope, ModelAttr, Name,
+    PrimaryKey, Variant, VariantValue,
 };
 use heck::ToSnakeCase;
 
@@ -86,10 +86,10 @@ pub(crate) struct ModelEmbeddedStruct {
     /// for tuple-like (`Foo(T)`). Unused when `fields` is empty.
     pub(crate) fields_named: bool,
 
-    /// Struct-level `#[auto]`: when present, the embedded type is a newtype
+    /// True when the struct has `#[auto]`: the embedded type is a newtype
     /// whose `Auto` impl is generated to proxy the strategy from its single
     /// inner field's type.
-    pub(crate) auto: Option<AutoStrategy>,
+    pub(crate) auto: bool,
 }
 
 /// How the enum discriminant column is stored in the database.
@@ -246,16 +246,16 @@ impl Model {
             // newtype, since the generated `Auto` impl proxies to that field's
             // type via trait resolution.
             let auto = match model_attr.auto.take() {
-                Some((strategy, attr)) => {
+                Some(attr) => {
                     if fields.len() != 1 {
                         return Err(syn::Error::new_spanned(
                             attr,
                             "struct-level #[auto] requires exactly one field",
                         ));
                     }
-                    Some(strategy)
+                    true
                 }
-                None => None,
+                None => false,
             };
 
             ModelKind::EmbeddedStruct(ModelEmbeddedStruct {
@@ -267,7 +267,7 @@ impl Model {
             })
         } else {
             // Struct-level `#[auto]` is only meaningful on embedded newtypes.
-            if let Some((_, attr)) = &model_attr.auto {
+            if let Some(attr) = &model_attr.auto {
                 return Err(syn::Error::new_spanned(
                     attr,
                     "struct-level #[auto] is only supported on `#[derive(Embed)]` newtypes; \
