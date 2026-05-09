@@ -8,6 +8,23 @@ struct ApplyInsertScope<'a> {
     expr: &'a mut stmt::Expr,
 }
 
+/// How to encode an auto-generated value for a given field. Embedded newtypes
+/// store their value as a single-element record; primitives store it directly.
+struct AutoTarget {
+    ty: stmt::Type,
+    wrap_record: bool,
+}
+
+impl AutoTarget {
+    fn wrap(&self, value: stmt::Value) -> stmt::Value {
+        if self.wrap_record {
+            stmt::Value::record_from_vec(vec![value])
+        } else {
+            value
+        }
+    }
+}
+
 impl LowerStatement<'_, '_> {
     // First, apply the insertion scope to the insertion values
     pub(super) fn apply_insert_scope(
@@ -121,28 +138,36 @@ impl LowerStatement<'_, '_> {
                 // If the field is defined to be auto-populated, then populate
                 // it here.
                 if let Some(auto) = &field.auto {
-                    let ty = match &field.ty {
-                        app::FieldTy::Primitive(primitive) => &primitive.ty,
-                        _ => panic!("#[auto] not allowed on non-primitive fields"),
-                    };
+                    // For an embedded newtype, the auto value is generated as
+                    // the inner primitive and wrapped in a single-element
+                    // record so it round-trips through the embed `Load` impl.
+                    let target = self.auto_target(&field.ty);
                     match auto {
                         app::AutoStrategy::Uuid(version) => {
                             let id = match version {
                                 app::UuidVersion::V4 => uuid::Uuid::new_v4(),
                                 app::UuidVersion::V7 => uuid::Uuid::now_v7(),
                             };
-                            match ty {
-                                stmt::Type::String => {
-                                    field_expr.insert(stmt::Value::String(id.to_string()).into())
-                                }
-                                stmt::Type::Uuid => field_expr.insert(stmt::Value::Uuid(id).into()),
-                                _ => panic!(
-                                    "auto-generated UUID cannot be inserted into column of type {ty:?}"
+                            let primitive = match &target.ty {
+                                stmt::Type::String => stmt::Value::String(id.to_string()),
+                                stmt::Type::Uuid => stmt::Value::Uuid(id),
+                                other => panic!(
+                                    "auto-generated UUID cannot be inserted into column of type {other:?}"
                                 ),
                             };
+                            field_expr.insert(target.wrap(primitive).into());
                         }
                         app::AutoStrategy::Increment => {
-                            // Leave value as `Expr::Default` and let the database handle it.
+                            // Leave value as `Expr::Default` for primitives so
+                            // the database fills it in. For embedded newtypes
+                            // the column-projection step needs a Record of the
+                            // right shape so it can extract `Default` per
+                            // column.
+                            if target.wrap_record {
+                                field_expr.insert(
+                                    stmt::Expr::record_from_vec(vec![stmt::Expr::Default]).into(),
+                                );
+                            }
                         }
                     }
                 }
@@ -151,6 +176,40 @@ impl LowerStatement<'_, '_> {
             if !field_expr.is_value_null() {
                 set_fields.insert(field.id.index);
             }
+        }
+    }
+
+    /// Returns the primitive type the auto value should be encoded as, plus
+    /// how to shape the resulting value to match the field's storage layout.
+    fn auto_target(&self, field_ty: &app::FieldTy) -> AutoTarget {
+        match field_ty {
+            app::FieldTy::Primitive(primitive) => AutoTarget {
+                ty: primitive.ty.clone(),
+                wrap_record: false,
+            },
+            app::FieldTy::Embedded(embedded) => {
+                let target = self.schema().app.model(embedded.target);
+                let app::Model::EmbeddedStruct(es) = target else {
+                    panic!(
+                        "#[auto] on embedded enum is not supported (target {:?})",
+                        embedded.target
+                    );
+                };
+                let [inner] = es.fields.as_slice() else {
+                    panic!(
+                        "#[auto] on embedded type with {} fields; expected exactly one",
+                        es.fields.len()
+                    );
+                };
+                let app::FieldTy::Primitive(inner) = &inner.ty else {
+                    panic!("#[auto] on embedded type whose inner field is not primitive");
+                };
+                AutoTarget {
+                    ty: inner.ty.clone(),
+                    wrap_record: true,
+                }
+            }
+            _ => panic!("#[auto] not allowed on non-primitive fields"),
         }
     }
 

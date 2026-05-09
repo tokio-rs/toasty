@@ -715,6 +715,31 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// - For data-carrying variants, per-variant handle types with a
 ///   `matches(closure)` method for pattern matching and field access.
 ///
+/// # Struct-level attributes
+///
+/// ## `#[auto]` — newtype with proxied auto-generation
+///
+/// Allowed only on a single-field embedded struct. The generated `Auto`
+/// impl proxies the strategy from the inner field's type, so the newtype
+/// can stand in anywhere a primitive `#[auto]` field would:
+///
+/// ```
+/// #[derive(toasty::Embed)]
+/// #[auto]
+/// struct UserId(uuid::Uuid);
+///
+/// #[derive(toasty::Model)]
+/// struct User {
+///     #[key]
+///     #[auto]
+///     id: UserId,
+///     name: String,
+/// }
+/// ```
+///
+/// The inner type must implement `Auto`. Multi-field embedded structs
+/// cannot use struct-level `#[auto]`.
+///
 /// # Field-level attributes
 ///
 /// ## `#[column(...)]` — customize the database column
@@ -838,8 +863,10 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 ///   with a unique discriminant value.
 /// - Enum variants may be unit variants or have named fields. Tuple
 ///   variants are not supported.
-/// - Embedded types cannot have primary keys, relations, `#[auto]`,
-///   `#[default]`, `#[update]`, or `#[serialize]` attributes.
+/// - Embedded types cannot have primary keys, relations, `#[default]`,
+///   `#[update]`, or `#[serialize]` attributes. Field-level `#[auto]` is
+///   not allowed; struct-level `#[auto]` is allowed only on a
+///   single-field newtype (see "Struct-level attributes").
 ///
 /// # Full example
 ///
@@ -906,7 +933,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 ///
 /// [`Embed`]: toasty::Embed
 /// [`Register`]: toasty::Register
-#[proc_macro_derive(Embed, attributes(column, deferred, index, unique))]
+#[proc_macro_derive(Embed, attributes(auto, column, deferred, index, unique))]
 pub fn derive_embed(input: TokenStream) -> TokenStream {
     match model::generate_embed(input.into()) {
         Ok(output) => output.into(),

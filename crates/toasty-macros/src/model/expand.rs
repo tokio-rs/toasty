@@ -11,7 +11,7 @@ mod util;
 
 use filters::Filter;
 
-use super::schema::Model;
+use super::schema::{AutoStrategy, FieldTy, Model, ModelKind, UuidVersion};
 
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
@@ -89,9 +89,12 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let embedded_model_impls = expand.expand_embedded_model_impls();
     let embedded_update_builder = expand.expand_embedded_update_builder();
     let storage_compat_checks = expand.expand_storage_compat_checks();
+    let auto_impl = expand.expand_embedded_auto_impl();
     let field_list_struct_ident = &embedded.field_list_struct_ident;
 
     wrap_in_const(quote! {
+        #auto_impl
+
         #embedded_field_struct
         #embedded_field_list_struct
 
@@ -357,6 +360,68 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
 // === Shared token-generation helpers ===
 
 impl Expand<'_> {
+    /// For `#[derive(Embed)]` newtypes carrying a struct-level `#[auto]`,
+    /// emit an `Auto` impl that proxies the strategy from the inner field's
+    /// type. The macro never inspects the inner type — trait resolution does
+    /// the work, so unsupported inner types surface as a normal "not
+    /// implemented" diagnostic on `Auto`, spanned at the inner field.
+    fn expand_embedded_auto_impl(&self) -> TokenStream {
+        use syn::spanned::Spanned;
+
+        let ModelKind::EmbeddedStruct(embedded) = &self.model.kind else {
+            return quote! {};
+        };
+        let Some(strategy) = &embedded.auto else {
+            return quote! {};
+        };
+
+        // `from_ast` already verified there is exactly one field.
+        let inner = &self.model.fields[0];
+        let FieldTy::Primitive(inner_ty) = &inner.ty else {
+            // Relations cannot appear inside an `Embed` body today; if that
+            // ever changes, surface a structural error rather than silently
+            // emitting a bad impl.
+            return quote_spanned! { inner.name.ident.span()=>
+                compile_error!("struct-level #[auto] requires a single primitive field");
+            };
+        };
+
+        let toasty = &self.toasty;
+        let model_ident = &self.model.ident;
+        let span = inner_ty.span();
+
+        let strategy_expr = match strategy {
+            AutoStrategy::Unspecified => quote_spanned! { span=>
+                <#inner_ty as #toasty::Auto>::STRATEGY
+            },
+            AutoStrategy::Uuid(UuidVersion::V4) => quote! {
+                #toasty::core::schema::app::AutoStrategy::Uuid(
+                    #toasty::core::schema::app::UuidVersion::V4,
+                )
+            },
+            AutoStrategy::Uuid(UuidVersion::V7) => quote! {
+                #toasty::core::schema::app::AutoStrategy::Uuid(
+                    #toasty::core::schema::app::UuidVersion::V7,
+                )
+            },
+            AutoStrategy::Increment => quote! {
+                #toasty::core::schema::app::AutoStrategy::Increment
+            },
+        };
+
+        // Even when the strategy is explicit, require the inner type to
+        // implement `Auto` so the runtime's value-generation path can rely on
+        // a primitive shape it knows how to produce.
+        quote_spanned! { span=>
+            impl #toasty::Auto for #model_ident
+            where
+                #inner_ty: #toasty::Auto,
+            {
+                const STRATEGY: #toasty::core::schema::app::AutoStrategy = #strategy_expr;
+            }
+        }
+    }
+
     /// Generates a field accessor method for a `BelongsTo` or `HasOne`
     /// relation using `Relation::OneField`.
     fn expand_one_relation_field_method(

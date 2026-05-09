@@ -1,6 +1,6 @@
 use super::{
-    Column, ColumnType, ErrorSet, Field, Index, IndexField, IndexScope, ModelAttr, Name,
-    PrimaryKey, Variant, VariantValue,
+    AutoStrategy, Column, ColumnType, ErrorSet, Field, Index, IndexField, IndexScope, ModelAttr,
+    Name, PrimaryKey, Variant, VariantValue,
 };
 use heck::ToSnakeCase;
 
@@ -85,6 +85,11 @@ pub(crate) struct ModelEmbeddedStruct {
     /// True when variant fields are named (struct-like `Foo { a: T }`), false
     /// for tuple-like (`Foo(T)`). Unused when `fields` is empty.
     pub(crate) fields_named: bool,
+
+    /// Struct-level `#[auto]`: when present, the embedded type is a newtype
+    /// whose `Auto` impl is generated to proxy the strategy from its single
+    /// inner field's type.
+    pub(crate) auto: Option<AutoStrategy>,
 }
 
 /// How the enum discriminant column is stored in the database.
@@ -237,13 +242,38 @@ impl Model {
 
         // Build ModelKind based on whether this is embedded or root
         let kind = if is_embedded {
+            // Validate struct-level `#[auto]`: only meaningful on a single-field
+            // newtype, since the generated `Auto` impl proxies to that field's
+            // type via trait resolution.
+            let auto = match model_attr.auto.take() {
+                Some((strategy, attr)) => {
+                    if fields.len() != 1 {
+                        return Err(syn::Error::new_spanned(
+                            attr,
+                            "struct-level #[auto] requires exactly one field",
+                        ));
+                    }
+                    Some(strategy)
+                }
+                None => None,
+            };
+
             ModelKind::EmbeddedStruct(ModelEmbeddedStruct {
                 field_struct_ident: struct_ident("Fields", ast),
                 field_list_struct_ident: struct_list_ident("ListFields", ast),
                 update_struct_ident: struct_ident("Update", ast),
                 fields_named: matches!(ast.fields, syn::Fields::Named(_)),
+                auto,
             })
         } else {
+            // Struct-level `#[auto]` is only meaningful on embedded newtypes.
+            if let Some((_, attr)) = &model_attr.auto {
+                return Err(syn::Error::new_spanned(
+                    attr,
+                    "struct-level #[auto] is only supported on `#[derive(Embed)]` newtypes; \
+                     place #[auto] on a model field instead",
+                ));
+            }
             let pk_fields = pk_index_fields
                 .iter()
                 .map(|index_field| index_field.field)

@@ -291,6 +291,42 @@ pub async fn newtype_numeric(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// Tests `#[auto]` on a newtype embed: the struct-level `#[auto]` proxies
+/// the strategy to the inner type's `Auto` impl. The user does not write any
+/// `Auto` impl by hand.
+#[driver_test]
+pub async fn newtype_auto_uuid_key(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Embed)]
+    #[auto]
+    struct UserId(uuid::Uuid);
+
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: UserId,
+        name: String,
+    }
+
+    let mut db = t.setup_db(models!(User, UserId)).await;
+
+    let user = toasty::create!(User { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+    assert_eq!(user.name, "Alice");
+    assert_ne!(user.id.0, uuid::Uuid::nil());
+
+    // Round-trip via filter on a non-key field — exercises the read-back path
+    // for the auto-generated newtype id column.
+    let users = User::filter(User::fields().name().eq("Alice"))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(users.len(), 1);
+    assert_eq!(users[0].id.0, user.id.0);
+
+    Ok(())
+}
+
 /// Tests using a newtype as the primary key field.
 #[driver_test(requires(sql))]
 pub async fn newtype_as_primary_key(t: &mut Test) -> Result<()> {
