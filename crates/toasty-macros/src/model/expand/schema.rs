@@ -283,6 +283,10 @@ impl Expand<'_> {
                 let index_tokenized = util::int(index);
                 let unique = &model_index.unique;
                 let primary_key = &model_index.primary_key;
+                let name = match &model_index.name {
+                    Some(value) => quote!(Some(#value.to_string())),
+                    None => quote!(None),
+                };
 
                 let fields = model_index.fields.iter().map(|index_field| {
                     let field_tokenized = util::int(index_field.field);
@@ -311,6 +315,7 @@ impl Expand<'_> {
                             model: id,
                             index: #index_tokenized,
                         },
+                        name: #name,
                         fields: vec![ #( #fields ),* ],
                         unique: #unique,
                         primary_key: #primary_key,
