@@ -101,9 +101,6 @@ struct MapField<'a, 'b> {
     /// column. ORed into the column's flag at creation time so an outer or
     /// inner declaration both take effect.
     inherited_auto_increment: bool,
-
-    /// Same idea as `inherited_auto_increment` for `#[version]`.
-    inherited_versionable: bool,
 }
 
 impl BuildSchema<'_> {
@@ -773,7 +770,6 @@ impl<'a, 'b> MapField<'a, 'b> {
             field_base: None,
             field_expr_base: stmt::Expr::arg(0),
             inherited_auto_increment: false,
-            inherited_versionable: false,
         }
     }
 
@@ -921,20 +917,18 @@ impl<'a, 'b> MapField<'a, 'b> {
     ) -> Result<mapping::Field> {
         let sub_projection = self.sub_projection(field_index);
 
-        // For a single-field newtype the outer field's column-level flags
-        // (`#[auto]`, `#[version]`) flatten down to the one inner column.
-        // Multi-field embeds have no clear target column, so any inherited
-        // propagation stops at the boundary — `Foo(Bar(u64))` with `#[auto]`
-        // on the outer flows through both newtypes, but `Foo { a, b: Bar(u64) }`
-        // would not propagate `#[auto]` from any outer past the `Foo` layer.
+        // For a single-field newtype the outer field's `#[auto]` flattens
+        // down to the one inner column. Multi-field embeds have no clear
+        // target column, so the inherited flag stops at the boundary —
+        // `Foo(Bar(u64))` with `#[auto]` on the outer flows through both
+        // newtypes, but `Foo { a, b: Bar(u64) }` would not propagate it
+        // from any outer past the `Foo` layer.
         let single_field = embedded_struct.fields.len() == 1;
         let mut child = self.for_struct(field, field_index);
         if single_field {
             child.inherited_auto_increment |= field.is_auto_increment();
-            child.inherited_versionable |= field.is_versionable();
         } else {
             child.inherited_auto_increment = false;
-            child.inherited_versionable = false;
         }
         let nested_fields = child.map_fields(&embedded_struct.fields)?;
 
@@ -1022,7 +1016,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             primary_key: false,
             auto_increment: (field.is_auto_increment() || self.inherited_auto_increment)
                 && self.build.db.auto_increment,
-            versionable: field.is_versionable() || self.inherited_versionable,
+            versionable: field.is_versionable(),
         });
 
         id
@@ -1103,7 +1097,6 @@ impl<'a, 'b> MapField<'a, 'b> {
             field_base: self.field_base.clone(),
             field_expr_base: self.field_expr_base.clone(),
             inherited_auto_increment: self.inherited_auto_increment,
-            inherited_versionable: self.inherited_versionable,
         }
     }
 
