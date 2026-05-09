@@ -108,7 +108,7 @@ pub async fn create_macro_batch(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::two_models))]
 pub async fn create_macro_tuple(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -123,7 +123,7 @@ pub async fn create_macro_tuple(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::two_models))]
 pub async fn create_macro_tuple_mixed(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 

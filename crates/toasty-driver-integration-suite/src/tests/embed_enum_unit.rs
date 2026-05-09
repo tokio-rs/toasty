@@ -7,7 +7,7 @@ use crate::{helpers::column, prelude::*};
 
 use toasty_core::{
     driver::Operation,
-    stmt::{Assignment, BinaryOp, Expr, ExprSet, Statement},
+    stmt::{Assignment, BinaryOp, Expr, ExprSet, Statement, Value},
 };
 
 /// Tests basic CRUD operations with an embedded enum field.
@@ -127,11 +127,12 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
 }
 
 /// Tests filtering records by embedded enum variant.
-/// SQL-only: DynamoDB requires a partition key in queries.
 /// Validates that enum fields can be used in WHERE clauses (comparing discriminants),
-/// and verifies the driver-level representation: the WHERE clause compares the status
-/// column to an I64 discriminant, not a string or other type.
-#[driver_test(requires(sql))]
+/// and verifies the driver-level representation: the predicate compares the status
+/// column to an I64 discriminant, not a string or other type. On SQL the predicate
+/// is emitted as `column = $0` with an I64 param; on DynamoDB it lowers to a
+/// `Scan` whose filter inlines the I64 value directly.
+#[driver_test(requires(scan))]
 pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum Status {
@@ -179,18 +180,28 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
     assert_eq!(active.len(), 2);
     {
         let (op, _) = t.log().pop();
-        assert_struct!(op, Operation::QuerySql({
-            stmt: Statement::Query({
-                body: ExprSet::Select({
-                    filter.expr: Some(Expr::BinaryOp({
-                        lhs.as_expr_column_unwrap().column: == status_col.index,
-                        op: BinaryOp::Eq,
-                        *rhs: Expr::Arg({ position: 0 }),
-                    })),
+        if t.capability().sql {
+            assert_struct!(op, Operation::QuerySql({
+                stmt: Statement::Query({
+                    body: ExprSet::Select({
+                        filter.expr: Some(Expr::BinaryOp({
+                            lhs.as_expr_column_unwrap().column: == status_col.index,
+                            op: BinaryOp::Eq,
+                            *rhs: Expr::Arg({ position: 0 }),
+                        })),
+                    }),
                 }),
-            }),
-            params: [{ value: == 2i64 }],
-        }));
+                params: [{ value: == 2i64 }],
+            }));
+        } else {
+            assert_struct!(op, Operation::Scan({
+                filter: Some(Expr::BinaryOp({
+                    lhs.as_expr_column_unwrap().column: == status_col.index,
+                    op: BinaryOp::Eq,
+                    *rhs: Expr::Value(== Value::I64(2)),
+                })),
+            }));
+        }
     }
 
     // Filter: only Pending tasks (discriminant = 1)
@@ -201,18 +212,28 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
     assert_eq!(pending[0].name, "Task A");
     {
         let (op, _) = t.log().pop();
-        assert_struct!(op, Operation::QuerySql({
-            stmt: Statement::Query({
-                body: ExprSet::Select({
-                    filter.expr: Some(Expr::BinaryOp({
-                        lhs.as_expr_column_unwrap().column: == status_col.index,
-                        op: BinaryOp::Eq,
-                        *rhs: Expr::Arg({ position: 0 }),
-                    })),
+        if t.capability().sql {
+            assert_struct!(op, Operation::QuerySql({
+                stmt: Statement::Query({
+                    body: ExprSet::Select({
+                        filter.expr: Some(Expr::BinaryOp({
+                            lhs.as_expr_column_unwrap().column: == status_col.index,
+                            op: BinaryOp::Eq,
+                            *rhs: Expr::Arg({ position: 0 }),
+                        })),
+                    }),
                 }),
-            }),
-            params: [{ value: == 1i64 }],
-        }));
+                params: [{ value: == 1i64 }],
+            }));
+        } else {
+            assert_struct!(op, Operation::Scan({
+                filter: Some(Expr::BinaryOp({
+                    lhs.as_expr_column_unwrap().column: == status_col.index,
+                    op: BinaryOp::Eq,
+                    *rhs: Expr::Value(== Value::I64(1)),
+                })),
+            }));
+        }
     }
 
     // Filter: only Done tasks (discriminant = 3)
@@ -223,18 +244,28 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
     assert_eq!(done[0].name, "Task D");
     {
         let (op, _) = t.log().pop();
-        assert_struct!(op, Operation::QuerySql({
-            stmt: Statement::Query({
-                body: ExprSet::Select({
-                    filter.expr: Some(Expr::BinaryOp({
-                        lhs.as_expr_column_unwrap().column: == status_col.index,
-                        op: BinaryOp::Eq,
-                        *rhs: Expr::Arg({ position: 0 }),
-                    })),
+        if t.capability().sql {
+            assert_struct!(op, Operation::QuerySql({
+                stmt: Statement::Query({
+                    body: ExprSet::Select({
+                        filter.expr: Some(Expr::BinaryOp({
+                            lhs.as_expr_column_unwrap().column: == status_col.index,
+                            op: BinaryOp::Eq,
+                            *rhs: Expr::Arg({ position: 0 }),
+                        })),
+                    }),
                 }),
-            }),
-            params: [{ value: == 3i64 }],
-        }));
+                params: [{ value: == 3i64 }],
+            }));
+        } else {
+            assert_struct!(op, Operation::Scan({
+                filter: Some(Expr::BinaryOp({
+                    lhs.as_expr_column_unwrap().column: == status_col.index,
+                    op: BinaryOp::Eq,
+                    *rhs: Expr::Value(== Value::I64(3)),
+                })),
+            }));
+        }
     }
 
     Ok(())
