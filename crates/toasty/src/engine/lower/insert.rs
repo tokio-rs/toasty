@@ -8,20 +8,26 @@ struct ApplyInsertScope<'a> {
     expr: &'a mut stmt::Expr,
 }
 
-/// How to encode an auto-generated value for a given field. Embedded newtypes
-/// store their value as a single-element record; primitives store it directly.
+/// How to encode an auto-generated value for a given field. Each newtype
+/// embed layer adds one record wrapping around the leaf primitive value.
 struct AutoTarget<'a> {
     ty: &'a stmt::Type,
-    wrap_record: bool,
+    wrap_depth: usize,
 }
 
 impl AutoTarget<'_> {
-    fn wrap(&self, value: stmt::Value) -> stmt::Value {
-        if self.wrap_record {
-            stmt::Value::record_from_vec(vec![value])
-        } else {
-            value
+    fn wrap(&self, mut value: stmt::Value) -> stmt::Value {
+        for _ in 0..self.wrap_depth {
+            value = stmt::Value::record_from_vec(vec![value]);
         }
+        value
+    }
+
+    fn wrap_expr(&self, mut expr: stmt::Expr) -> stmt::Expr {
+        for _ in 0..self.wrap_depth {
+            expr = stmt::Expr::record_from_vec(vec![expr]);
+        }
+        expr
     }
 }
 
@@ -161,11 +167,10 @@ impl LowerStatement<'_, '_> {
                             // Leave value as `Expr::Default` for primitives so
                             // the database fills it in. For embedded newtypes
                             // the column-projection step needs a Record of the
-                            // right shape so it can extract `Default` per
-                            // column.
-                            if target.wrap_record {
-                                field_expr
-                                    .insert(stmt::Expr::record_from_vec(vec![stmt::Expr::Default]));
+                            // right shape (one wrapping per nested embed) so
+                            // it can extract `Default` per column.
+                            if target.wrap_depth > 0 {
+                                field_expr.insert(target.wrap_expr(stmt::Expr::Default));
                             }
                         }
                     }
@@ -266,39 +271,39 @@ impl LowerStatement<'_, '_> {
 
 impl<'b> LowerStatement<'_, 'b> {
     /// Returns the primitive type the auto value should be encoded as, plus
-    /// how to shape the resulting value to match the field's storage layout.
-    /// The returned reference borrows from the schema, not from `self`, so
-    /// the caller is free to keep mutating other state.
+    /// how many record wrappings to apply for the embed chain. Walks down
+    /// through nested newtype embeds (`Outer(Inner(u64))`) until it reaches
+    /// the leaf primitive.
     fn auto_target(&self, field_id: app::FieldId) -> AutoTarget<'b> {
-        let field = self.schema().app.field(field_id);
-        match &field.ty {
-            app::FieldTy::Primitive(primitive) => AutoTarget {
-                ty: &primitive.ty,
-                wrap_record: false,
-            },
-            app::FieldTy::Embedded(embedded) => {
-                let target = self.schema().app.model(embedded.target);
-                let app::Model::EmbeddedStruct(es) = target else {
-                    panic!(
-                        "#[auto] on embedded enum is not supported (target {:?})",
-                        embedded.target
-                    );
-                };
-                let [inner] = es.fields.as_slice() else {
-                    panic!(
-                        "#[auto] on embedded type with {} fields; expected exactly one",
-                        es.fields.len()
-                    );
-                };
-                let app::FieldTy::Primitive(inner) = &inner.ty else {
-                    panic!("#[auto] on embedded type whose inner field is not primitive");
-                };
-                AutoTarget {
-                    ty: &inner.ty,
-                    wrap_record: true,
+        let mut ty = &self.schema().app.field(field_id).ty;
+        let mut wrap_depth = 0;
+        loop {
+            match ty {
+                app::FieldTy::Primitive(primitive) => {
+                    return AutoTarget {
+                        ty: &primitive.ty,
+                        wrap_depth,
+                    };
                 }
+                app::FieldTy::Embedded(embedded) => {
+                    let target = self.schema().app.model(embedded.target);
+                    let app::Model::EmbeddedStruct(es) = target else {
+                        panic!(
+                            "#[auto] on embedded enum is not supported (target {:?})",
+                            embedded.target
+                        );
+                    };
+                    let [inner] = es.fields.as_slice() else {
+                        panic!(
+                            "#[auto] on embedded type with {} fields; expected exactly one",
+                            es.fields.len()
+                        );
+                    };
+                    ty = &inner.ty;
+                    wrap_depth += 1;
+                }
+                _ => panic!("#[auto] not allowed on non-primitive fields"),
             }
-            _ => panic!("#[auto] not allowed on non-primitive fields"),
         }
     }
 }
