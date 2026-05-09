@@ -323,6 +323,39 @@ pub async fn newtype_auto_uuid_key(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// Tests `#[auto]` on an integer newtype: the strategy resolves to
+/// `Increment` via the proxy, the outer field's auto flag flattens down
+/// to the embed's single column, and the database fills in the value.
+#[driver_test(requires(sql))]
+pub async fn newtype_auto_increment_key(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Embed)]
+    #[auto]
+    struct OrderId(u64);
+
+    #[derive(Debug, toasty::Model)]
+    struct Order {
+        #[key]
+        #[auto]
+        id: OrderId,
+        item: String,
+    }
+
+    let mut db = t.setup_db(models!(Order, OrderId)).await;
+
+    let o1 = toasty::create!(Order { item: "Widget" })
+        .exec(&mut db)
+        .await?;
+    let o2 = toasty::create!(Order { item: "Gadget" })
+        .exec(&mut db)
+        .await?;
+    assert_ne!(o1.id.0, o2.id.0);
+
+    let found = Order::get_by_id(&mut db, &o1.id).await?;
+    assert_eq!(found.item, "Widget");
+
+    Ok(())
+}
+
 /// Tests using a newtype as the primary key field.
 #[driver_test(requires(sql))]
 pub async fn newtype_as_primary_key(t: &mut Test) -> Result<()> {

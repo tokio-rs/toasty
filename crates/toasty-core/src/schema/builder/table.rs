@@ -94,6 +94,16 @@ struct MapField<'a, 'b> {
     /// Used by variant-specific `MapField` instances to automatically wrap
     /// field expressions in the discriminant match guard.
     field_expr_base: stmt::Expr,
+
+    /// True when an outer single-field embed flagged its column as
+    /// auto-increment. Single-field newtype embeds flatten to one column, so
+    /// the outer field's `#[auto]` (Increment) must apply to that flattened
+    /// column. ORed into the column's flag at creation time so an outer or
+    /// inner declaration both take effect.
+    inherited_auto_increment: bool,
+
+    /// Same idea as `inherited_auto_increment` for `#[version]`.
+    inherited_versionable: bool,
 }
 
 impl BuildSchema<'_> {
@@ -759,6 +769,8 @@ impl<'a, 'b> MapField<'a, 'b> {
             in_enum_variant: false,
             field_base: None,
             field_expr_base: stmt::Expr::arg(0),
+            inherited_auto_increment: false,
+            inherited_versionable: false,
         }
     }
 
@@ -906,9 +918,15 @@ impl<'a, 'b> MapField<'a, 'b> {
     ) -> Result<mapping::Field> {
         let sub_projection = self.sub_projection(field_index);
 
-        let nested_fields = self
-            .for_struct(field, field_index)
-            .map_fields(&embedded_struct.fields)?;
+        // For a single-field newtype the outer field's column-level flags
+        // (`#[auto]`, `#[version]`) flatten down to the one inner column.
+        // Multi-field embeds have no clear target column, so the inheritance
+        // does not apply.
+        let single_field = embedded_struct.fields.len() == 1;
+        let mut child = self.for_struct(field, field_index);
+        child.inherited_auto_increment |= single_field && field.is_auto_increment();
+        child.inherited_versionable |= single_field && field.is_versionable();
+        let nested_fields = child.map_fields(&embedded_struct.fields)?;
 
         let columns: indexmap::IndexMap<ColumnId, usize> =
             nested_fields.iter().flat_map(|f| f.columns()).collect();
@@ -992,8 +1010,9 @@ impl<'a, 'b> MapField<'a, 'b> {
             storage_ty,
             nullable: field.nullable || self.in_enum_variant,
             primary_key: false,
-            auto_increment: field.is_auto_increment() && self.build.db.auto_increment,
-            versionable: field.is_versionable(),
+            auto_increment: (field.is_auto_increment() || self.inherited_auto_increment)
+                && self.build.db.auto_increment,
+            versionable: field.is_versionable() || self.inherited_versionable,
         });
 
         id
@@ -1071,6 +1090,8 @@ impl<'a, 'b> MapField<'a, 'b> {
             in_enum_variant: self.in_enum_variant,
             field_base: self.field_base.clone(),
             field_expr_base: self.field_expr_base.clone(),
+            inherited_auto_increment: self.inherited_auto_increment,
+            inherited_versionable: self.inherited_versionable,
         }
     }
 
