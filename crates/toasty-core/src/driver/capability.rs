@@ -118,11 +118,15 @@ pub struct Capability {
     /// will not produce one.
     pub native_like: bool,
 
-    /// Whether the driver supports full-table scan without a key constraint.
+    /// Whether the driver can answer queries that don't match any primary key
+    /// or index — i.e. supports unindexed full-table reads.
     ///
-    /// When `true`, the query planner may emit [`Operation::Scan`] for queries
-    /// that cannot be satisfied by any index. SQL drivers set this to `false`
-    /// because they always use `QuerySql`; DynamoDB sets it to `true`.
+    /// SQL drivers set this to `true`: unindexed queries go through
+    /// [`QuerySql`](super::operation::QuerySql), so the SQL engine handles
+    /// them transparently. DynamoDB also sets this to `true`; the planner
+    /// emits [`Operation::Scan`](super::Operation::Scan) for the unindexed
+    /// case. A hypothetical pure key-value store with no full-scan capability
+    /// would set this to `false`.
     pub scan: bool,
 
     /// Whether scan operations support ordering results.
@@ -341,7 +345,8 @@ impl Capability {
         native_starts_with: false,
         native_like: true,
 
-        scan: false,
+        // SQL drivers handle unindexed queries via QuerySql (see field doc).
+        scan: true,
         scan_supports_sort: true,
 
         test_connection_pool: false,
