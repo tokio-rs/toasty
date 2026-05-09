@@ -3,7 +3,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::Json,
-    routing::{get, post, put},
+    routing::{delete, get, post, put},
 };
 use std::net::SocketAddr;
 
@@ -39,6 +39,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/todo/list", get(list_todos))
         .route("/todo/create", post(create_todo))
         .route("/todo/{id}/update", put(update_todo))
+        .route("/todo/{id}/delete", delete(delete_todo))
         .with_state(db);
 
     // run it with hyper
@@ -88,6 +89,16 @@ async fn update_todo(
         id: todo.id,
         title: updated_todo.title,
     }))
+}
+
+async fn delete_todo(
+    State(mut db): State<toasty::Db>,
+    Path(id): Path<uuid::Uuid>,
+) -> Result<(), (StatusCode, String)> {
+    let todo = Todo::get_by_id(&mut db, id).await.map_err(internal_error)?;
+    todo.delete().exec(&mut db).await.map_err(internal_error)?;
+
+    Ok(())
 }
 
 /// Utility function for mapping any error into a `500 Internal Server Error`
