@@ -19,8 +19,7 @@ toasty = { workspace = true, features = ["serde"] }
 tokio.workspace = true
 uuid = { workspace = true, features = ["serde"] }
 anyhow = "1.0.102"
-axum = { version = "0.8.9", features = ["macros"] }
-axum-macros = "0.5.1"
+axum = "0.8.9"
 serde.workspace = true
 serde_json.workspace = true
 

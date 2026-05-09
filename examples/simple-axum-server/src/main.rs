@@ -50,7 +50,6 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[axum::debug_handler]
 async fn create_todo(
     State(mut db): State<toasty::Db>,
     Json(new_todo): Json<NewTodo>,
@@ -65,7 +64,6 @@ async fn create_todo(
     Ok(Json(res))
 }
 
-#[axum::debug_handler]
 async fn list_todos(
     State(mut db): State<toasty::Db>,
 ) -> Result<Json<Vec<Todo>>, (StatusCode, String)> {
