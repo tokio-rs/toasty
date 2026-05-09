@@ -4,7 +4,9 @@ use toasty_core::schema::app::AutoStrategy;
 #[diagnostic::on_unimplemented(
     message = "Toasty cannot automatically set values for type `{Self}`",
     label = "Toasty cannot automatically set values for this field",
-    note = "Is the field annotated with #[auto]?"
+    note = "Add #[auto] to the field. For an embedded newtype, also add \
+            #[auto] to the struct so the strategy is proxied from its inner \
+            type."
 )]
 /// A field type that supports automatic value generation.
 ///
