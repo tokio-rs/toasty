@@ -2,6 +2,7 @@
 pub(crate) struct KeyAttr {
     pub(crate) partition: Vec<syn::Ident>,
     pub(crate) local: Vec<syn::Ident>,
+    pub(crate) name: Option<String>,
 }
 
 impl KeyAttr {
@@ -9,9 +10,35 @@ impl KeyAttr {
         let mut partition = vec![];
         let mut local = vec![];
         let mut simple_fields = vec![];
+        let mut name: Option<String> = None;
         let mut has_named = false;
 
         attr.parse_nested_meta(|meta| {
+            // `name = "..."` — explicit override for the generated index name.
+            // Disambiguates from a model field literally called `name` by
+            // requiring the `=` token; bare `name` still parses as a field ref.
+            if meta.path.is_ident("name") && meta.input.peek(syn::Token![=]) {
+                if name.is_some() {
+                    return Err(syn::Error::new_spanned(
+                        &meta.path,
+                        "`name` specified more than once",
+                    ));
+                }
+
+                let value: syn::LitStr = meta.value()?.parse()?;
+                let value_str = value.value();
+
+                if value_str.is_empty() {
+                    return Err(syn::Error::new_spanned(
+                        &value,
+                        "`name` must be a non-empty string",
+                    ));
+                }
+
+                name = Some(value_str);
+                return Ok(());
+            }
+
             if meta.path.is_ident("partition") || meta.path.is_ident("local") {
                 if !simple_fields.is_empty() {
                     return Err(syn::Error::new_spanned(
@@ -106,6 +133,10 @@ impl KeyAttr {
             }
         }
 
-        Ok(Self { partition, local })
+        Ok(Self {
+            partition,
+            local,
+            name,
+        })
     }
 }

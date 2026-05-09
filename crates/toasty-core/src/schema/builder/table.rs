@@ -227,7 +227,7 @@ impl BuildTableFromModels<'_> {
                     table: self.table.id,
                     index: out.len(),
                 },
-                name: String::new(),
+                name: app_index.name.clone().unwrap_or_default(),
                 on: self.table.id,
                 columns: vec![],
                 unique: app_index.unique,
@@ -358,6 +358,11 @@ impl BuildTableFromModels<'_> {
 
     fn update_index_names(&mut self) {
         for index in &mut self.table.indices {
+            // Preserve user-provided names from `#[index(name = "...", ...)]`.
+            if !index.name.is_empty() {
+                continue;
+            }
+
             index.name = format!("index_{}_by", self.table.name);
 
             for (i, index_column) in index.columns.iter().enumerate() {
