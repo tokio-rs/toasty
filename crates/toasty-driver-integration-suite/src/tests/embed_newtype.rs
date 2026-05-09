@@ -291,13 +291,13 @@ pub async fn newtype_numeric(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// Tests `#[auto]` on a newtype embed: the struct-level `#[auto]` proxies
-/// the strategy to the inner type's `Auto` impl. The user does not write any
-/// `Auto` impl by hand.
+/// Tests that a tuple-newtype embed automatically gets an `Auto` impl when
+/// its inner type is auto-able — no annotation, no manual impl. Driven by
+/// the `NewtypeOf` marker the derive emits and the blanket `Auto` impl in
+/// `codegen_support`.
 #[driver_test]
 pub async fn newtype_auto_uuid_key(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
-    #[auto]
     struct UserId(uuid::Uuid);
 
     #[derive(Debug, toasty::Model)]
@@ -323,13 +323,12 @@ pub async fn newtype_auto_uuid_key(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// Tests `#[auto]` on an integer newtype: the strategy resolves to
-/// `Increment` via the proxy, the outer field's auto flag flattens down
-/// to the embed's single column, and the database fills in the value.
+/// Tests an integer newtype: the blanket `Auto` impl resolves to
+/// `Increment` via `<u64 as Auto>`, the outer field's auto flag flattens
+/// down to the embed's single column, and the database fills in the value.
 #[driver_test(requires(sql))]
 pub async fn newtype_auto_increment_key(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
-    #[auto]
     struct OrderId(u64);
 
     #[derive(Debug, toasty::Model)]
@@ -356,17 +355,16 @@ pub async fn newtype_auto_increment_key(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// Tests that struct-level `#[auto]` flows through a multi-level newtype
-/// chain — the column-level flag flattens through both single-field embeds
-/// to reach the storage column.
+/// Tests that the blanket `Auto` impl flows through a multi-level newtype
+/// chain — both layers proxy to the leaf primitive, and the outer
+/// `#[auto]` flattens through both single-field embeds to reach the
+/// storage column.
 #[driver_test(requires(sql))]
 pub async fn newtype_auto_nested_proxy(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
-    #[auto]
     struct Inner(u64);
 
     #[derive(Debug, toasty::Embed)]
-    #[auto]
     struct Outer(Inner);
 
     #[derive(Debug, toasty::Model)]

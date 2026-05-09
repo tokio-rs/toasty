@@ -89,11 +89,11 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let embedded_model_impls = expand.expand_embedded_model_impls();
     let embedded_update_builder = expand.expand_embedded_update_builder();
     let storage_compat_checks = expand.expand_storage_compat_checks();
-    let auto_impl = expand.expand_embedded_auto_impl();
+    let newtype_marker = expand.expand_embedded_newtype_marker();
     let field_list_struct_ident = &embedded.field_list_struct_ident;
 
     wrap_in_const(quote! {
-        #auto_impl
+        #newtype_marker
 
         #embedded_field_struct
         #embedded_field_list_struct
@@ -360,46 +360,34 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
 // === Shared token-generation helpers ===
 
 impl Expand<'_> {
-    /// For `#[derive(Embed)]` newtypes carrying a struct-level `#[auto]`,
-    /// emit an `Auto` impl that proxies the strategy from the inner field's
-    /// type. The macro never inspects the inner type — trait resolution does
-    /// the work, so unsupported inner types surface as a normal "not
-    /// implemented" diagnostic on `Auto`, spanned at the inner field.
-    fn expand_embedded_auto_impl(&self) -> TokenStream {
-        use syn::spanned::Spanned;
-
+    /// For tuple-newtype `#[derive(Embed)]` types (one unnamed field), emit
+    /// the `NewtypeOf` marker carrying the inner field's type. The blanket
+    /// `impl<T: NewtypeOf, T::Inner: Auto> Auto for T` in `codegen_support`
+    /// then promotes the newtype to `Auto` whenever the inner type is auto,
+    /// without errors when the inner type is not auto.
+    fn expand_embedded_newtype_marker(&self) -> TokenStream {
         let ModelKind::EmbeddedStruct(embedded) = &self.model.kind else {
             return quote! {};
         };
-        if !embedded.auto {
+        // Only canonical newtypes (single unnamed field) qualify. Named
+        // single-field structs are explicit wrappers and stay opaque.
+        if embedded.fields_named || self.model.fields.len() != 1 {
             return quote! {};
         }
 
-        // `from_ast` already verified there is exactly one field.
         let inner = &self.model.fields[0];
         let FieldTy::Primitive(inner_ty) = &inner.ty else {
-            // Relations cannot appear inside an `Embed` body today; if that
-            // ever changes, surface a structural error rather than silently
-            // emitting a bad impl.
-            return quote_spanned! { inner.name.ident.span()=>
-                compile_error!("struct-level #[auto] requires a single primitive field");
-            };
+            // Relations are not allowed inside an `Embed` body today; nothing
+            // to mark if that ever changes.
+            return quote! {};
         };
 
         let toasty = &self.toasty;
         let model_ident = &self.model.ident;
-        let span = inner_ty.span();
 
-        // The strategy always proxies to the inner type's `Auto` impl. If
-        // the inner type does not implement `Auto`, the diagnostic surfaces
-        // here, spanned at the inner field type.
-        quote_spanned! { span=>
-            impl #toasty::Auto for #model_ident
-            where
-                #inner_ty: #toasty::Auto,
-            {
-                const STRATEGY: #toasty::core::schema::app::AutoStrategy =
-                    <#inner_ty as #toasty::Auto>::STRATEGY;
+        quote! {
+            impl #toasty::newtype::NewtypeOf for #model_ident {
+                type Inner = #inner_ty;
             }
         }
     }
