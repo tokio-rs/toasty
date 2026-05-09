@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-v0.5.0...toasty-driver-integration-suite-v0.6.0) - 2026-05-09
+
+### Added
+
+- Support custom index names in macro definitions ([#842])
+- Auto now works with tuple-newtype Embed types ([#836])
+- Per-call column projection with .select() ([#820])
+- Column projection through BelongsTo relations via .select() ([#827])
+- Case-insensitive filtering with ilike() method ([#801])
+- Filter associated models by their fields ([#781])
+- all filter for associations ([#784])
+- #[deferred] attribute for deferred field loading ([#793])
+- Deferred field loading support in embedded types ([#799])
+- latest_by query for finding latest records ([#707])
+- Backward pagination support in drivers ([#757])
+- IN-list parameters now bound as single arrays on PostgreSQL ([#818])
+- Full-table scan support for DynamoDB ([#821])
+
+### Fixed
+
+- Record equality comparisons now apply cast rules correctly ([#838])
+
+[#707]: https://github.com/tokio-rs/toasty/pull/707
+[#757]: https://github.com/tokio-rs/toasty/pull/757
+[#781]: https://github.com/tokio-rs/toasty/pull/781
+[#784]: https://github.com/tokio-rs/toasty/pull/784
+[#793]: https://github.com/tokio-rs/toasty/pull/793
+[#799]: https://github.com/tokio-rs/toasty/pull/799
+[#801]: https://github.com/tokio-rs/toasty/pull/801
+[#818]: https://github.com/tokio-rs/toasty/pull/818
+[#820]: https://github.com/tokio-rs/toasty/pull/820
+[#821]: https://github.com/tokio-rs/toasty/pull/821
+[#827]: https://github.com/tokio-rs/toasty/pull/827
+[#836]: https://github.com/tokio-rs/toasty/pull/836
+[#838]: https://github.com/tokio-rs/toasty/pull/838
+[#842]: https://github.com/tokio-rs/toasty/pull/842
+
 ## [0.5.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-v0.4.0...toasty-driver-integration-suite-v0.5.0) - 2026-04-27
 
 ### Added

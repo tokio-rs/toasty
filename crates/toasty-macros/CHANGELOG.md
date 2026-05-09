@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0](https://github.com/tokio-rs/toasty/compare/toasty-macros-v0.5.0...toasty-macros-v0.6.0) - 2026-05-09
+
+### Added
+
+- *(macros)* Support custom index names via the `name` parameter ([#842])
+- Support `Auto` with tuple-newtype `Embed` types ([#836])
+- Support `.select()` projections through `BelongsTo` relations ([#827])
+- *(macros)* Compile-time validation of column storage types ([#832])
+- Per-call `.select()` column projections ([#820])
+- Compile-time validation for `create!` macro field sets ([#648])
+- `#[deferred]` field attribute and `Deferred<T>` wrapper type, with support for embedded types ([#793], [#799])
+- `latest_by` query ([#707])
+- `all` filter for associations ([#784])
+
+[#648]: https://github.com/tokio-rs/toasty/pull/648
+[#707]: https://github.com/tokio-rs/toasty/pull/707
+[#784]: https://github.com/tokio-rs/toasty/pull/784
+[#793]: https://github.com/tokio-rs/toasty/pull/793
+[#799]: https://github.com/tokio-rs/toasty/pull/799
+[#820]: https://github.com/tokio-rs/toasty/pull/820
+[#827]: https://github.com/tokio-rs/toasty/pull/827
+[#832]: https://github.com/tokio-rs/toasty/pull/832
+[#836]: https://github.com/tokio-rs/toasty/pull/836
+[#842]: https://github.com/tokio-rs/toasty/pull/842
+
 ## [0.5.0](https://github.com/tokio-rs/toasty/compare/toasty-macros-v0.4.0...toasty-macros-v0.5.0) - 2026-04-27
 
 ### Added

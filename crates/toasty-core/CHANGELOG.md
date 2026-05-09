@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.5.0...toasty-core-v0.6.0) - 2026-05-09
+
+### Added
+
+- Custom index names via the `name` attribute ([#842])
+- Auto proxy support through tuple-newtype Embed types ([#836])
+- .select() projection through BelongsTo relations ([#827])
+- PostgreSQL IN-list binding as a single array parameter ([#818])
+- Full-table scan support for DynamoDB ([#821])
+- #[deferred] support for embedded types ([#799])
+- Backward pagination support ([#757])
+- ilike() filter method for case-insensitive queries ([#801])
+- #[deferred] field attribute and Deferred<T> wrapper ([#793])
+
+[#757]: https://github.com/tokio-rs/toasty/pull/757
+[#793]: https://github.com/tokio-rs/toasty/pull/793
+[#799]: https://github.com/tokio-rs/toasty/pull/799
+[#801]: https://github.com/tokio-rs/toasty/pull/801
+[#818]: https://github.com/tokio-rs/toasty/pull/818
+[#821]: https://github.com/tokio-rs/toasty/pull/821
+[#827]: https://github.com/tokio-rs/toasty/pull/827
+[#836]: https://github.com/tokio-rs/toasty/pull/836
+[#842]: https://github.com/tokio-rs/toasty/pull/842
+
 ## [0.5.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.4.0...toasty-core-v0.5.0) - 2026-04-27
 
 ### Added

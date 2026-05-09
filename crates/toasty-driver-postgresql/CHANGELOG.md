@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-postgresql-v0.5.0...toasty-driver-postgresql-v0.6.0) - 2026-05-09
+
+### Added
+
+- Improved IN-list query performance on PostgreSQL ([#818])
+
+[#818]: https://github.com/tokio-rs/toasty/pull/818
+
 ## [0.5.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-postgresql-v0.4.0...toasty-driver-postgresql-v0.5.0) - 2026-04-27
 
 ### Added

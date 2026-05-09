@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.5.0...toasty-sql-v0.6.0) - 2026-05-09
+
+### Added
+
+- PostgreSQL now binds IN-list clauses as a single array parameter for better performance ([#818])
+- Add `ilike()` filter method for case-insensitive text matching ([#801])
+
+[#801]: https://github.com/tokio-rs/toasty/pull/801
+[#818]: https://github.com/tokio-rs/toasty/pull/818
+
 ## [0.5.0](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.4.0...toasty-sql-v0.5.0) - 2026-04-27
 
 ### Added
