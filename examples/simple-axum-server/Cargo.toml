@@ -1,0 +1,28 @@
+[package]
+name = "example-simple-axum-server"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+publish = false
+
+[features]
+default = ["sqlite"]
+dynamodb = ["toasty/dynamodb"]
+mysql = ["toasty/mysql"]
+postgresql = ["toasty/postgresql"]
+sqlite = ["toasty/sqlite"]
+
+[dependencies]
+toasty = { workspace = true, features = ["serde"] }
+tokio.workspace = true
+uuid = { workspace = true, features = ["serde"] }
+anyhow = "1.0.102"
+axum = { version = "0.8.9", features = ["macros"] }
+axum-macros = "0.5.1"
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

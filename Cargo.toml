@@ -22,6 +22,7 @@ members = [
     "examples/hello-toasty",
     "examples/todo-with-cli",
     "examples/user-has-one-profile",
+    "examples/simple-axum-server",
 
     # Tests
     "tests",
