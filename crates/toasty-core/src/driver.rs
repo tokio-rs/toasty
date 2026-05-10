@@ -111,6 +111,24 @@ pub trait Connection: Debug + Send + 'static {
     /// backend-specific calls and returns an [`ExecResponse`].
     async fn exec(&mut self, schema: &Arc<Schema>, plan: Operation) -> crate::Result<ExecResponse>;
 
+    /// Returns `false` if this connection is known to be unusable.
+    ///
+    /// The pool consults this on every recycle. A `false` result causes
+    /// the connection to be evicted; the pool then falls back to another
+    /// idle connection or opens a fresh one.
+    ///
+    /// Implementations must be cheap and synchronous — no blocking, no
+    /// I/O. The check runs on the hot path of every connection checkout.
+    /// Drivers that cannot answer without a round-trip should leave this
+    /// at the default and rely on the pool's per-acquire ping instead.
+    ///
+    /// The default returns `true`. Drivers without a usable passive
+    /// signal stay on this default and are detected only when an
+    /// operation surfaces [`crate::Error::connection_lost`].
+    fn is_valid(&self) -> bool {
+        true
+    }
+
     /// Creates tables and indices defined in the schema on the database.
     /// TODO: This will probably use database introspection in the future.
     async fn push_schema(&mut self, _schema: &Schema) -> crate::Result<()>;

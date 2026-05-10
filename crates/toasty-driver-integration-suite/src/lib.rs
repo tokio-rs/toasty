@@ -13,7 +13,7 @@ mod isolate;
 use isolate::Isolate;
 
 mod logging_driver;
-pub use logging_driver::{DriverOp, LoggingDriver};
+pub use logging_driver::{DriverOp, Fault, LoggingDriver};
 
 mod setup;
 pub use setup::Setup;

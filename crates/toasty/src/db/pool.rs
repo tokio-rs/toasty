@@ -1,7 +1,10 @@
 //! Connection pooling for database connections.
 
 use deadpool::managed::Timeouts;
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 use toasty_core::driver::{Capability, Driver, Rows};
 use toasty_core::stmt::Value;
 use tokio::{
@@ -40,6 +43,13 @@ impl Default for PoolConfig {
 pub(crate) struct ConnectionHandle {
     pub(crate) in_tx: mpsc::UnboundedSender<ConnectionOperation>,
     join_handle: JoinHandle<()>,
+    /// Mirrors the underlying connection's validity. The task flips this
+    /// to `false` after any operation that leaves the connection in a
+    /// known-bad state, *before* sending the response back to the
+    /// consumer. That ordering matters: it guarantees the next
+    /// `Manager::recycle` call observes the dead state without racing
+    /// the connection task's own exit.
+    valid: Arc<AtomicBool>,
 }
 
 impl std::fmt::Debug for ConnectionHandle {
@@ -47,6 +57,7 @@ impl std::fmt::Debug for ConnectionHandle {
         f.debug_struct("ConnectionHandle")
             .field("channel_closed", &self.in_tx.is_closed())
             .field("task_finished", &self.join_handle.is_finished())
+            .field("valid", &self.valid.load(Ordering::Acquire))
             .finish()
     }
 }
@@ -179,52 +190,84 @@ impl deadpool::managed::Manager for Manager {
         let engine = self.engine.clone();
 
         let (in_tx, mut in_rx) = mpsc::unbounded_channel::<ConnectionOperation>();
+        let valid = Arc::new(AtomicBool::new(true));
 
-        let join_handle = tokio::spawn(async move {
-            while let Some(op) = in_rx.recv().await {
-                match op {
-                    ConnectionOperation::ExecStatement {
-                        stmt,
-                        in_transaction,
-                        tx,
-                    } => {
-                        let single = stmt.is_single();
-                        let result = async {
-                            let mut response =
-                                engine.exec(&mut *connection, *stmt, in_transaction).await?;
-                            response.values.buffer().await?;
-
-                            if single {
-                                let Rows::Value(Value::List(mut items)) = response.values else {
-                                    unreachable!()
-                                };
-                                assert!(
-                                    items.len() <= 1,
-                                    "expected at most 1 row for single statement, got {}",
-                                    items.len()
-                                );
-                                response.values = Rows::Value(items.pop().unwrap_or(Value::Null));
+        let join_handle = tokio::spawn({
+            let valid = valid.clone();
+            async move {
+                while let Some(op) = in_rx.recv().await {
+                    // Run the operation, then flip `valid` *before*
+                    // sending the response so a fast consumer cannot
+                    // re-acquire this slot via `Manager::recycle`
+                    // before the dead state is visible.
+                    macro_rules! finish {
+                        ($tx:ident, $result:expr) => {{
+                            let result = $result;
+                            if !connection.is_valid() {
+                                valid.store(false, Ordering::Release);
                             }
+                            let _ = $tx.send(result);
+                        }};
+                    }
 
-                            Ok(response)
+                    match op {
+                        ConnectionOperation::ExecStatement {
+                            stmt,
+                            in_transaction,
+                            tx,
+                        } => {
+                            let single = stmt.is_single();
+                            finish!(
+                                tx,
+                                async {
+                                    let mut response = engine
+                                        .exec(&mut *connection, *stmt, in_transaction)
+                                        .await?;
+                                    response.values.buffer().await?;
+
+                                    if single {
+                                        let Rows::Value(Value::List(mut items)) = response.values
+                                        else {
+                                            unreachable!()
+                                        };
+                                        assert!(
+                                            items.len() <= 1,
+                                            "expected at most 1 row for single statement, got {}",
+                                            items.len()
+                                        );
+                                        response.values =
+                                            Rows::Value(items.pop().unwrap_or(Value::Null));
+                                    }
+
+                                    Ok(response)
+                                }
+                                .await
+                            );
                         }
-                        .await;
+                        ConnectionOperation::ExecOperation { operation, tx } => {
+                            finish!(tx, connection.exec(&engine.schema, *operation).await);
+                        }
+                        ConnectionOperation::PushSchema { tx } => {
+                            finish!(tx, connection.push_schema(&engine.schema).await);
+                        }
+                    }
 
-                        let _ = tx.send(result);
-                    }
-                    ConnectionOperation::ExecOperation { operation, tx } => {
-                        let result = connection.exec(&engine.schema, *operation).await;
-                        let _ = tx.send(result);
-                    }
-                    ConnectionOperation::PushSchema { tx } => {
-                        let result = connection.push_schema(&engine.schema).await;
-                        let _ = tx.send(result);
+                    // The driver tracks whether the underlying socket is
+                    // still usable. If `valid` flipped above, exit the
+                    // receive loop so the slot is fully reclaimed.
+                    if !valid.load(Ordering::Acquire) {
+                        tracing::debug!("connection reported invalid; exiting connection task");
+                        break;
                     }
                 }
             }
         });
 
-        Ok(ConnectionHandle { in_tx, join_handle })
+        Ok(ConnectionHandle {
+            in_tx,
+            join_handle,
+            valid,
+        })
     }
 
     async fn recycle(
@@ -236,6 +279,12 @@ impl deadpool::managed::Manager for Manager {
             tracing::debug!("discarding dead pooled connection");
             return Err(deadpool::managed::RecycleError::message(
                 "background task is no longer running",
+            ));
+        }
+        if !obj.valid.load(Ordering::Acquire) {
+            tracing::debug!("discarding pooled connection reported as invalid");
+            return Err(deadpool::managed::RecycleError::message(
+                "connection is no longer valid",
             ));
         }
         tracing::trace!("recycling pooled connection");
