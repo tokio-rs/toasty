@@ -9,11 +9,12 @@ loss two ways: through a typed `Error::connection_lost` returned by
 recycle inspects before a connection is handed out.
 
 By default the pool runs a low-cost background sweep: every minute it
-pings one idle connection. If that connection responds, the next sweep
-picks a different one. If the ping fails, the sweep escalates and pings
-every idle connection in the pool, dropping each that fails. One bad
-result triggers a full purge; one good result costs roughly one
-round-trip per minute.
+pings the longest-idle connection. A successful ping returns it as
+most-recently-used, so the next interval picks a different connection.
+A failing ping — or any user query returning `Error::connection_lost`
+— escalates: the pool pings every idle connection and drops the ones
+that fail. One bad result triggers a full purge; one good result costs
+roughly one round-trip per minute.
 
 The sweep is configurable. Disable it for fully passive behavior, or
 combine it with per-acquire pre-ping for paranoid deployments. An
@@ -102,14 +103,20 @@ match User::filter_by_id(1).exec(&mut db).await {
 
 ### The background health-check sweep
 
-Once per `pool_health_check_interval`, the pool grabs one idle
+Once per `pool_health_check_interval`, the pool grabs the longest-idle
 connection, sends it a lightweight ping (`SELECT 1` for SQL drivers,
 `COM_PING` for MySQL, no-op for SQLite and DynamoDB), and returns it.
-A successful ping ends the iteration; the next interval picks a
-different connection. A failing ping triggers an eager sweep — the
-pool drains the rest of the idle connections, pings each, and drops
-the ones that fail. After one bad ping, the entire pool is purged of
-dead connections within seconds.
+The successful ping touches the connection, so it is no longer the
+longest-idle and the next interval naturally picks a different one. A
+failing ping triggers an eager sweep — the pool drains the rest of the
+idle connections, pings each, and drops the ones that fail. After one
+bad ping, the entire pool is purged of dead connections within seconds.
+
+The eager sweep also fires when any user query returns
+`Error::connection_lost`. A real connection-lost error usually means
+more than one connection is affected (database restart, network event),
+so the pool does not wait for the next sweep interval to discover the
+rest.
 
 In the healthy case this costs one round-trip per minute regardless of
 pool size. In the failure case it costs one round-trip per idle
@@ -218,9 +225,9 @@ slot or creates a new connection.
 **Background sweep (default on).** A single tokio task spawned by the
 pool sleeps for `pool_health_check_interval`, then runs one iteration:
 
-1. Grab one idle connection from the pool. If no idle connection is
-   available (every connection is in use, the pool is empty, or the
-   pool size is zero), skip the iteration.
+1. Grab the longest-idle connection from the pool. If no idle
+   connection is available (every connection is in use, the pool is
+   empty, or the pool size is zero), skip the iteration.
 2. Send a `Ping` operation to that connection's task and await the
    result, bounded by `pool_recycle_timeout`.
 3. On success, return the connection to the pool. End the iteration.
@@ -235,13 +242,25 @@ idle. Healthy connections held during the escalation are returned to
 the pool when the loop finishes. This drains all dead connections in
 one pass without forcing a real query to discover them.
 
-The next iteration starts fresh from step 1. Selecting the next idle
-connection is determined by deadpool's slot order — typically the
-oldest idle, which is the most likely to have rotted. Over time, every
-connection sees a ping every few minutes worth of intervals, depending
-on pool size and traffic.
+The next iteration starts fresh from step 1. Because a successful ping
+returns the connection as most-recently-used, the longest-idle selector
+naturally picks a different connection each interval — no extra state
+needed to rotate. Over an idle pool of size `N`, every connection is
+pinged once every `N × pool_health_check_interval`.
 
 The sweep task is canceled when the `Pool` is dropped.
+
+**Eager sweep on observed connection loss.** When `Connection::exec`
+returns `Error::connection_lost`, passive detection (above) evicts that
+connection. The pool also signals the sweep task to escalate
+immediately — pinging every other idle connection and dropping those
+that fail — rather than waiting for the next periodic tick. Eager
+escalation cuts the recovery window after a database restart from
+`pool_health_check_interval` to one round-trip per idle connection,
+starting as soon as the first failure surfaces. Eager escalation runs
+only when the background sweep is enabled; with
+`pool_health_check_interval(None)` the pool relies on per-query
+discovery only.
 
 **Per-acquire validation (opt-in).** With `pool_pre_ping(true)`,
 `Manager::recycle` sends the same `Ping` operation and awaits the
