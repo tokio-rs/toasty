@@ -35,5 +35,15 @@
       automerge: true,
       platformAutomerge: true,
     },
+    {
+      matchUpdateTypes: ["minor", "patch", "pin", "digest"],
+      automerge: true,
+      platformAutomerge: true,
+    },
+    {
+      matchDepTypes: ["devDependencies"],
+      automerge: true,
+      platformAutomerge: true,
+    },
   ],
 }
