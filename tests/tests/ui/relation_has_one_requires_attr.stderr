@@ -10,9 +10,9 @@ error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::schema::
             Deferred<T>
             Option<T>
             Rc<T>
+            Vec<T>
             Vec<u8>
             bigdecimal::BigDecimal
-            bool
           and $N others
 
 error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::schema::Field` is not satisfied
@@ -27,7 +27,7 @@ error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::schema::
             Deferred<T>
             Option<T>
             Rc<T>
+            Vec<T>
             Vec<u8>
             bigdecimal::BigDecimal
-            bool
           and $N others

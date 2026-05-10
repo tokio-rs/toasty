@@ -19,7 +19,7 @@
 //! merging.
 
 use toasty_core::{
-    driver::operation::TypedValue,
+    driver::{Capability, operation::TypedValue},
     schema::{Schema, db},
     stmt::{self, VisitMut},
 };
@@ -33,10 +33,14 @@ type Cx<'a> = stmt::ExprContext<'a, db::Schema>;
 
 /// Extract bind parameters from a statement, replacing scalar values with
 /// `Expr::Arg(n)` placeholders and inferring precise `db::Type` for each.
-pub(crate) fn extract_params(stmt: &mut stmt::Statement, schema: &Schema) -> Vec<TypedValue> {
+pub(crate) fn extract_params(
+    stmt: &mut stmt::Statement,
+    schema: &Schema,
+    capability: &Capability,
+) -> Vec<TypedValue> {
     // Phase 1: Mechanical extraction — replace values with Arg(n)
     let mut params: Vec<Param> = Vec::new();
-    extract_values(stmt, &mut params);
+    extract_values(stmt, &mut params, capability);
 
     // Phase 2+3: Bidirectional type inference — refine param types
     refine_param_types(stmt, &schema.db, &mut params);
@@ -168,9 +172,10 @@ impl Ty {
 
 /// Replace all scalar `Value` nodes with `Arg(n)` placeholders.
 /// Initialize each param's `ty` from the value itself.
-fn extract_values(stmt: &mut stmt::Statement, params: &mut Vec<Param>) {
+fn extract_values(stmt: &mut stmt::Statement, params: &mut Vec<Param>, capability: &Capability) {
     struct Extract<'a> {
         params: &'a mut Vec<Param>,
+        bind_list_param: bool,
     }
 
     impl stmt::VisitMut for Extract<'_> {
@@ -201,6 +206,32 @@ fn extract_values(stmt: &mut stmt::Statement, params: &mut Vec<Param>) {
                 _ => {}
             }
 
+            // On backends that bind arrays as a single protocol parameter
+            // (PostgreSQL, see `Capability::bind_list_param`), a literal
+            // list of scalar values is the value of a `Vec<scalar>` model
+            // field — extract as one `Value::List` arg so it round-trips
+            // through the driver as a `text[]` / `int8[]` bind. Without
+            // this, recursion would expand the list to one arg per item
+            // and render it as a SQL record literal.
+            //
+            // The literal can show up in two forms depending on whether
+            // canonicalization (`fold::expr_list`) already collapsed the
+            // `Expr::List` of `Expr::Value(...)` items into a single
+            // `Expr::Value(Value::List(...))`. Cover both.
+            if self.bind_list_param {
+                let is_scalar_list = match expr {
+                    stmt::Expr::List(list) => list.items.iter().all(is_extractable_scalar_expr),
+                    stmt::Expr::Value(stmt::Value::List(items)) => {
+                        items.iter().all(is_extractable_scalar)
+                    }
+                    _ => false,
+                };
+                if is_scalar_list && let Some(arg) = extract_array_operand(expr, self.params) {
+                    *expr = arg;
+                    return;
+                }
+            }
+
             // Default post-order: recurse first, then maybe extract this node.
             stmt::visit_mut::visit_expr_mut(self, expr);
 
@@ -214,14 +245,23 @@ fn extract_values(stmt: &mut stmt::Statement, params: &mut Vec<Param>) {
                 }
                 stmt::Expr::Value(value @ (stmt::Value::Record(_) | stmt::Value::List(_))) => {
                     let owned = std::mem::replace(value, stmt::Value::Null);
-                    *expr = value_to_extracted_expr(owned, self.params);
+                    *expr = value_to_extracted_expr(owned, self.params, self.bind_list_param);
                 }
                 _ => {}
             }
         }
     }
 
-    Extract { params }.visit_mut(stmt);
+    Extract {
+        params,
+        bind_list_param: capability.bind_list_param,
+    }
+    .visit_mut(stmt);
+}
+
+/// Whether `expr` is an `Expr::Value` carrying an extractable scalar.
+fn is_extractable_scalar_expr(expr: &stmt::Expr) -> bool {
+    matches!(expr, stmt::Expr::Value(v) if is_extractable_scalar(v))
 }
 
 /// If `rhs` is a list literal of values, take it out, push one
@@ -266,21 +306,40 @@ fn extract_array_operand(rhs: &mut stmt::Expr, params: &mut Vec<Param>) -> Optio
 
 /// Recursively convert a `Value` into an `Expr`, extracting scalar values.
 /// Takes ownership to avoid cloning.
-fn value_to_extracted_expr(value: stmt::Value, params: &mut Vec<Param>) -> stmt::Expr {
+///
+/// On backends that bind arrays as a single protocol parameter (`bind_list_param`),
+/// a `Value::List` of all extractable scalars is captured as a single param of
+/// `Value::List` shape so it round-trips through the driver as one array bind.
+/// Other lists fall through to per-element expansion to preserve the existing
+/// record/tuple semantics on backends without native array binds.
+fn value_to_extracted_expr(
+    value: stmt::Value,
+    params: &mut Vec<Param>,
+    bind_list_param: bool,
+) -> stmt::Expr {
     match value {
         stmt::Value::Null => stmt::Expr::Value(stmt::Value::Null),
         stmt::Value::Record(record) => {
             let fields = record
                 .fields
                 .into_iter()
-                .map(|f| value_to_extracted_expr(f, params))
+                .map(|f| value_to_extracted_expr(f, params, bind_list_param))
                 .collect();
             stmt::Expr::Record(stmt::ExprRecord::from_vec(fields))
+        }
+        stmt::Value::List(values)
+            if bind_list_param && values.iter().all(is_extractable_scalar) =>
+        {
+            let value = stmt::Value::List(values);
+            let ty = infer_ty(&value);
+            let position = params.len();
+            params.push(Param { value, ty });
+            stmt::Expr::arg(position)
         }
         stmt::Value::List(values) => {
             let items = values
                 .into_iter()
-                .map(|v| value_to_extracted_expr(v, params))
+                .map(|v| value_to_extracted_expr(v, params, bind_list_param))
                 .collect();
             stmt::Expr::List(stmt::ExprList { items })
         }
@@ -330,6 +389,17 @@ fn refine_stmt(stmt: &stmt::Statement, cx: &Cx<'_>, db_schema: &db::Schema, para
     }
 }
 
+/// Lift a column's `db::Type` into the inferred-type form. List columns
+/// expand to `Ty::List(Ty::Column(elem))` so they unify with values whose
+/// inferred shape is also `Ty::List(_)`; everything else stays as a flat
+/// `Ty::Column(_)`.
+fn ty_from_column(storage_ty: db::Type) -> Ty {
+    match storage_ty {
+        db::Type::List(elem) => Ty::List(Box::new(ty_from_column(*elem))),
+        scalar => Ty::Column(scalar),
+    }
+}
+
 fn refine_insert(
     insert: &stmt::Insert,
     _cx: &Cx<'_>,
@@ -343,7 +413,7 @@ fn refine_insert(
             let field_types: Vec<Ty> = table
                 .columns
                 .iter()
-                .map(|col_id| Ty::Column(db_table.columns[col_id.index].storage_ty.clone()))
+                .map(|col_id| ty_from_column(db_table.columns[col_id.index].storage_ty.clone()))
                 .collect();
             Ty::Record(field_types)
         }
@@ -373,7 +443,7 @@ fn refine_update(update: &stmt::Update, cx: &Cx<'_>, db_schema: &db::Schema, par
                 );
                 let col_idx = steps[0];
                 if let Some(col) = db_table.columns.get(col_idx) {
-                    let expected = Ty::Column(col.storage_ty.clone());
+                    let expected = ty_from_column(col.storage_ty.clone());
                     check(expr, &expected, params);
                 }
             }

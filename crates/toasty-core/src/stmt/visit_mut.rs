@@ -978,6 +978,13 @@ where
     match node {
         ExprFunc::Count(func) => v.visit_expr_func_count_mut(func),
         ExprFunc::LastInsertId(func) => v.visit_expr_func_last_insert_id_mut(func),
+        ExprFunc::IsSuperset { lhs, rhs } | ExprFunc::Intersects { lhs, rhs } => {
+            v.visit_expr_mut(lhs);
+            v.visit_expr_mut(rhs);
+        }
+        ExprFunc::Length { expr } => {
+            v.visit_expr_mut(expr);
+        }
     }
 }
 

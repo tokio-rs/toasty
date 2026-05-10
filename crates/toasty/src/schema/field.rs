@@ -159,6 +159,75 @@ impl Field for Vec<u8> {
     }
 }
 
+/// `Vec<T>` of a non-byte element type is a collection model field. The element
+/// type must itself be a [`Field`] so the schema layer can describe each
+/// member, and `IsCollectionElement` keeps `Vec<u8>` (which is bytes, not a
+/// collection) on the byte-array specialization above.
+impl<T> Field for Vec<T>
+where
+    T: Field<Output = T> + IsCollectionElement + crate::stmt::IntoExpr<T>,
+{
+    type Path<Origin> = stmt::Path<Origin, Vec<T>>;
+    type ListPath<Origin> = stmt::Path<Origin, List<Self>>;
+    type Update<'a> = ();
+    type Inner = Self;
+
+    fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+
+    fn new_list_path<Origin>(path: stmt::Path<Origin, List<Self>>) -> Self::ListPath<Origin> {
+        path
+    }
+
+    fn new_update<'a>(
+        _assignments: &'a mut toasty_core::stmt::Assignments,
+        _projection: toasty_core::stmt::Projection,
+    ) -> Self::Update<'a> {
+    }
+
+    fn key_constraint<Origin>(&self, target: stmt::Path<Origin, Self::Inner>) -> Expr<bool> {
+        target.eq(self)
+    }
+}
+
+/// Marks types that are valid as the element type of a model-level
+/// `Vec<T>` collection field. The blanket impl below covers every primitive
+/// `Field` (string, integers, uuid, …) but is opted out of by the
+/// [`Vec<u8>` byte-array `Field`](impl Field for Vec<u8>) so that bytes keep
+/// their existing scalar storage and don't get re-routed through the
+/// collection-field path.
+pub trait IsCollectionElement {}
+
+macro_rules! impl_is_collection_element {
+    ( $( $t:ty ),* $(,)? ) => {
+        $( impl IsCollectionElement for $t {} )*
+    };
+}
+
+impl_is_collection_element!(
+    String,
+    bool,
+    i8,
+    i16,
+    i32,
+    i64,
+    u16,
+    u32,
+    u64,
+    isize,
+    usize,
+    f32,
+    f64,
+    uuid::Uuid
+);
+
+#[cfg(feature = "rust_decimal")]
+impl IsCollectionElement for rust_decimal::Decimal {}
+
+#[cfg(feature = "bigdecimal")]
+impl IsCollectionElement for bigdecimal::BigDecimal {}
+
 impl<T: Field> Field for Option<T> {
     type Path<Origin> = stmt::Path<Origin, Self>;
     type ListPath<Origin> = stmt::Path<Origin, List<Self>>;

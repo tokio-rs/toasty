@@ -187,6 +187,21 @@ impl Value {
                 Some(EnumString(v)) => stmt::Value::String(v),
                 None => return Self(stmt::Value::Null),
             }
+        } else if let Kind::Array(_) = column.type_().kind() {
+            // Native array column (e.g. `text[]`, `int8[]`) — read as
+            // `Vec<Option<T>>` and rebuild as `Value::List` so it composes
+            // with the rest of Toasty's value space. The element type is
+            // taken from `expected_ty.as_list_unwrap()` so the per-element
+            // conversion mirrors a column of that scalar type.
+            let elem_ty = match expected_ty {
+                stmt::Type::List(elem) => elem.as_ref(),
+                other => panic!("array column expected stmt::Type::List, got {other:?}"),
+            };
+            let items = read_array_items(index, row, column, elem_ty);
+            match items {
+                Some(items) => stmt::Value::List(items),
+                None => return Self(stmt::Value::Null),
+            }
         } else {
             todo!(
                 "implement PostgreSQL to toasty conversion for `{:#?}`",
@@ -195,6 +210,99 @@ impl Value {
         };
 
         Value(core_value)
+    }
+}
+
+/// Decode a PostgreSQL array column into a list of Toasty values. Returns
+/// `None` for SQL NULL. Each element is converted per `elem_ty` — the
+/// element-type cases mirror the scalar branches of [`Value::from_sql`].
+fn read_array_items(
+    index: usize,
+    row: &Row,
+    column: &Column,
+    elem_ty: &stmt::Type,
+) -> Option<Vec<stmt::Value>> {
+    let elem_pg_ty = match column.type_().kind() {
+        Kind::Array(elem) => elem,
+        _ => panic!(
+            "read_array_items called on non-array column: {:?}",
+            column.type_()
+        ),
+    };
+
+    macro_rules! read_vec {
+        ($t:ty, $map:expr) => {{
+            let raw: Option<Vec<Option<$t>>> = row.get(index);
+            raw.map(|items| {
+                items
+                    .into_iter()
+                    .map(|opt| match opt {
+                        Some(v) => $map(v),
+                        None => stmt::Value::Null,
+                    })
+                    .collect::<Vec<_>>()
+            })
+        }};
+    }
+
+    if elem_pg_ty == &Type::TEXT || elem_pg_ty == &Type::VARCHAR {
+        read_vec!(String, |v| match elem_ty {
+            stmt::Type::String => stmt::Value::String(v),
+            stmt::Type::Uuid => stmt::Value::Uuid(
+                v.parse()
+                    .unwrap_or_else(|_| panic!("uuid could not be parsed from text")),
+            ),
+            _ => stmt::Value::String(v),
+        })
+    } else if elem_pg_ty == &Type::BOOL {
+        read_vec!(bool, stmt::Value::Bool)
+    } else if elem_pg_ty == &Type::INT2 {
+        read_vec!(i16, |v| match elem_ty {
+            stmt::Type::I8 => stmt::Value::I8(v as i8),
+            stmt::Type::I16 => stmt::Value::I16(v),
+            stmt::Type::U8 => stmt::Value::U8(
+                u8::try_from(v).unwrap_or_else(|_| panic!("u8 value out of range: {v}")),
+            ),
+            stmt::Type::U16 => stmt::Value::U16(v as u16),
+            _ => stmt::Value::I16(v),
+        })
+    } else if elem_pg_ty == &Type::INT4 {
+        read_vec!(i32, |v| match elem_ty {
+            stmt::Type::I32 => stmt::Value::I32(v),
+            stmt::Type::U16 => stmt::Value::U16(
+                u16::try_from(v).unwrap_or_else(|_| panic!("u16 value out of range: {v}")),
+            ),
+            stmt::Type::U32 => stmt::Value::U32(v as u32),
+            _ => stmt::Value::I32(v),
+        })
+    } else if elem_pg_ty == &Type::INT8 {
+        read_vec!(i64, |v| match elem_ty {
+            stmt::Type::I64 => stmt::Value::I64(v),
+            stmt::Type::U32 => stmt::Value::U32(
+                u32::try_from(v).unwrap_or_else(|_| panic!("u32 value out of range: {v}")),
+            ),
+            stmt::Type::U64 => stmt::Value::U64(
+                u64::try_from(v).unwrap_or_else(|_| panic!("u64 value out of range: {v}")),
+            ),
+            _ => stmt::Value::I64(v),
+        })
+    } else if elem_pg_ty == &Type::FLOAT4 {
+        read_vec!(f32, |v| match elem_ty {
+            stmt::Type::F64 => stmt::Value::F64(v as f64),
+            _ => stmt::Value::F32(v),
+        })
+    } else if elem_pg_ty == &Type::FLOAT8 {
+        read_vec!(f64, |v| match elem_ty {
+            stmt::Type::F32 => stmt::Value::F32(v as f32),
+            _ => stmt::Value::F64(v),
+        })
+    } else if elem_pg_ty == &Type::UUID {
+        read_vec!(uuid::Uuid, stmt::Value::Uuid)
+    } else {
+        todo!(
+            "implement PostgreSQL array decoding for element type `{:#?}`",
+            elem_pg_ty
+        )
     }
 }
 
