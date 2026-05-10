@@ -13,8 +13,8 @@ pings the longest-idle connection. A successful ping returns it as
 most-recently-used, so the next interval picks a different connection.
 A failing ping — or any user query returning `Error::connection_lost`
 — escalates: the pool pings every idle connection and drops the ones
-that fail. One bad result triggers a full purge; one good result costs
-roughly one round-trip per minute.
+that fail. One bad result drains every dead connection in a single
+sweep; one good result costs roughly one round-trip per minute.
 
 The sweep is configurable. Disable it for fully passive behavior, or
 combine it with per-acquire pre-ping for paranoid deployments. An
