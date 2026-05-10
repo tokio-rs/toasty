@@ -40,7 +40,7 @@ pub async fn multi_op_create_wraps_in_transaction(t: &mut Test) -> Result<()> {
 
 /// A single-op create (no associations) must NOT be wrapped in a transaction —
 /// the engine skips the overhead for plans with only one DB operation.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::two_models))]
 pub async fn single_op_skips_transaction(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 

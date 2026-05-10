@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_all(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -15,7 +15,7 @@ pub async fn query_macro_all(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_filter_eq(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -33,7 +33,7 @@ pub async fn query_macro_filter_eq(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_filter_ne(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -50,7 +50,7 @@ pub async fn query_macro_filter_ne(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(scan))]
 pub async fn query_macro_filter_numeric_comparisons(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -81,7 +81,7 @@ pub async fn query_macro_filter_numeric_comparisons(test: &mut Test) -> Result<(
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(scan))]
 pub async fn query_macro_filter_and(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -102,7 +102,7 @@ pub async fn query_macro_filter_and(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_filter_or(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -119,7 +119,7 @@ pub async fn query_macro_filter_or(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_filter_not(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -136,6 +136,10 @@ pub async fn query_macro_filter_not(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+// Gated on `requires(sql)` until [#857] is fixed — `OR` of comparison ops
+// nested inside an `AND` panics in eval on the DynamoDB scan path.
+//
+// [#857]: https://github.com/tokio-rs/toasty/issues/857
 #[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(sql))]
 pub async fn query_macro_filter_parens(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
@@ -159,7 +163,7 @@ pub async fn query_macro_filter_parens(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_filter_external_ref(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -177,7 +181,7 @@ pub async fn query_macro_filter_external_ref(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_filter_external_expr(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -198,7 +202,7 @@ pub async fn query_macro_filter_external_expr(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_case_insensitive_keywords(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -221,7 +225,7 @@ pub async fn query_macro_case_insensitive_keywords(test: &mut Test) -> Result<()
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(scan))]
 pub async fn query_macro_complex_boolean(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -245,6 +249,10 @@ pub async fn query_macro_complex_boolean(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+// Gated on `requires(sql)` until [#856] is fixed — DynamoDB rejects the bool
+// attribute value type when binding `bool` literals in filter predicates.
+//
+// [#856]: https://github.com/tokio-rs/toasty/issues/856
 #[driver_test(id(ID), requires(sql))]
 pub async fn query_macro_filter_bool_literal(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -653,7 +661,7 @@ pub async fn query_macro_partition_key_with_or(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_filter_in_list(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -671,7 +679,7 @@ pub async fn query_macro_filter_in_list(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_filter_in_list_external_ref(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -690,7 +698,7 @@ pub async fn query_macro_filter_in_list_external_ref(test: &mut Test) -> Result<
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_filter_in_list_with_and(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 

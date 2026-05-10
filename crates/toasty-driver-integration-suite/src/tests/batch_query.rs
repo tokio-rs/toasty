@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::two_models))]
 pub async fn batch_two_models(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -21,7 +21,7 @@ pub async fn batch_two_models(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::two_models))]
 pub async fn batch_one_empty(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -40,7 +40,7 @@ pub async fn batch_one_empty(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::two_models))]
 pub async fn batch_same_model(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -59,7 +59,7 @@ pub async fn batch_same_model(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::two_models))]
 pub async fn batch_three_queries(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -82,7 +82,7 @@ pub async fn batch_three_queries(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::two_models))]
 pub async fn batch_both_empty(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -99,7 +99,7 @@ pub async fn batch_both_empty(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::two_models))]
 pub async fn batch_select_and_create(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 

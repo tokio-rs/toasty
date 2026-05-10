@@ -424,7 +424,7 @@ pub async fn newtype_as_primary_key(t: &mut Test) -> Result<()> {
 /// per-element decomposition of `Record == Record` must run during
 /// lowering so the cast-handling rule fires; otherwise the cast survives
 /// into the SQL serializer.
-#[driver_test(requires(sql))]
+#[driver_test(requires(scan))]
 pub async fn newtype_uuid_get_by_id(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     struct UserId(uuid::Uuid);

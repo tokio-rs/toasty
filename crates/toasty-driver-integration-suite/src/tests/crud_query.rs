@@ -711,7 +711,7 @@ pub async fn query_or_with_comparisons(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(scan))]
 pub async fn query_arbitrary_constraint(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Event {

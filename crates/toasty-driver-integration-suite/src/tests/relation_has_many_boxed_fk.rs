@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 use std::{rc::Rc, sync::Arc};
 
-#[driver_test(requires(sql))]
+#[driver_test(requires(scan))]
 pub async fn boxed_u64_fk_crud(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -76,7 +76,7 @@ pub async fn boxed_u64_fk_crud(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(requires(sql))]
+#[driver_test(requires(scan))]
 pub async fn boxed_u64_fk_batch_create(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -119,7 +119,7 @@ pub async fn boxed_u64_fk_batch_create(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(requires(sql))]
+#[driver_test(requires(scan))]
 pub async fn boxed_u64_fk_delete_and_update(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -174,7 +174,7 @@ pub async fn boxed_u64_fk_delete_and_update(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(requires(sql))]
+#[driver_test(requires(scan))]
 pub async fn arc_u64_fk_crud(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -250,7 +250,7 @@ pub async fn arc_u64_fk_crud(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(requires(sql))]
+#[driver_test(requires(scan))]
 pub async fn rc_u64_fk_crud(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {

@@ -324,7 +324,7 @@ pub async fn mixed_string_labels_data_enum(t: &mut Test) -> Result<()> {
 }
 
 /// Tests filtering by variant with string discriminants.
-#[driver_test(requires(sql))]
+#[driver_test(requires(scan))]
 pub async fn filter_by_string_variant(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum Status {

@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
 /// Filters unit enum field using `ne()`.
-#[driver_test(requires(sql))]
+#[driver_test(requires(scan))]
 pub async fn filter_unit_enum_ne(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum Status {
@@ -50,7 +50,7 @@ pub async fn filter_unit_enum_ne(t: &mut Test) -> Result<()> {
 }
 
 /// Filters unit enum field using `in_list()`.
-#[driver_test(requires(sql))]
+#[driver_test(requires(scan))]
 pub async fn filter_unit_enum_in_list(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum Status {
@@ -103,7 +103,7 @@ pub async fn filter_unit_enum_in_list(t: &mut Test) -> Result<()> {
 }
 
 /// Filters data-carrying enum field using `ne()`.
-#[driver_test(requires(sql))]
+#[driver_test(requires(scan))]
 pub async fn filter_data_enum_ne(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum ContactInfo {

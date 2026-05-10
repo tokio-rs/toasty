@@ -91,6 +91,11 @@ pub async fn native_enum_crud_lifecycle(t: &mut Test) -> Result<()> {
 }
 
 /// Filter operations on native database enums: eq, ne, in_list.
+///
+/// Gated on `requires(sql)` until [#855] is fixed — scan over a native enum
+/// panics in the engine with `not yet implemented: ty=Unit`.
+///
+/// [#855]: https://github.com/tokio-rs/toasty/issues/855
 #[driver_test(requires(sql))]
 pub async fn native_enum_filter_operations(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]

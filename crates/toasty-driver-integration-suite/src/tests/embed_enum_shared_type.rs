@@ -81,7 +81,7 @@ pub async fn shared_enum_crud(t: &mut Test) -> Result<()> {
 }
 
 /// Filter by enum value on two models that share the same enum type.
-#[driver_test(requires(sql))]
+#[driver_test(requires(scan))]
 pub async fn shared_enum_filter(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum Priority {

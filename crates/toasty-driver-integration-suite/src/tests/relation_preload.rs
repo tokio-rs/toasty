@@ -433,7 +433,11 @@ pub async fn combined_has_many_and_has_one_preload(test: &mut Test) -> Result<()
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(
+    id(ID),
+    requires(scan),
+    scenario(crate::scenarios::has_many_belongs_to)
+)]
 pub async fn preload_on_empty_table(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
