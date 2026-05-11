@@ -213,6 +213,29 @@ pub async fn multiple_todos(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// Todos can be included on the parent.
+#[driver_test(requires(native_starts_with))]
+pub async fn include_todos(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let user = User::create().exec(&mut db).await?;
+
+    for i in 0..5 {
+        user.todos()
+            .create()
+            .title(format!("todo {i}"))
+            .exec(&mut db)
+            .await?;
+    }
+
+    let mut users = User::filter_by_id(user.id).include(User::fields().todos()).exec(&mut db).await?;
+    assert_eq!(1, users.len());
+    let user = users.pop().unwrap();
+    assert_eq!(5, user.todos.get().len());
+
+    Ok(())
+}
+
 /// Scoped filter_by_id returns the right todo when the user matches and
 /// nothing when the user does not match.
 #[driver_test(requires(native_starts_with))]
