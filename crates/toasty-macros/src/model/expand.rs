@@ -149,7 +149,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
         }
 
         impl #toasty::Field for #model_ident {
-            type PathTarget = Self;
+            type ExprTarget = Self;
             type Path<__Origin> = #field_struct_ident<__Origin>;
             type ListPath<__Origin> = #field_list_struct_ident<__Origin>;
             type Update<'a> = #update_struct_ident<'a>;
@@ -298,7 +298,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
         #load_impl
 
         impl #toasty::Field for #model_ident {
-            type PathTarget = Self;
+            type ExprTarget = Self;
             type Path<__Origin> = #field_struct_ident<__Origin>;
             type ListPath<__Origin> = #field_list_struct_ident<__Origin>;
             type Update<'a> = ();
@@ -433,7 +433,7 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let span = field_ident.span();
 
-        // Construct the chained path with the field's `PathTarget` as the
+        // Construct the chained path with the field's `ExprTarget` as the
         // tag, so `new_path` receives exactly the type it expects — no
         // PhantomData retag at the boundary. For `Vec<scalar>` this is
         // `List<T>`; for everything else it is the field's Rust type.
@@ -441,7 +441,7 @@ impl Expand<'_> {
             #vis fn #field_ident(&self) -> <#ty as #toasty::Field>::Path<__Origin> {
                 <#ty as #toasty::Field>::new_path(
                     self.path().chain(
-                        #toasty::Path::<#model_ident, <#ty as #toasty::Field>::PathTarget>::from_field_index(#field_offset)
+                        #toasty::Path::<#model_ident, <#ty as #toasty::Field>::ExprTarget>::from_field_index(#field_offset)
                     )
                 )
             }

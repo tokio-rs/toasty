@@ -152,20 +152,16 @@ impl Expand<'_> {
                 }
             }
             FieldTy::Primitive(ty) => {
-                // Mirror the create-builder setter: `Vec<scalar>` fields
-                // bind through `Assign<List<T>>` so they line up with the
-                // rest of the expression API. `Vec<u8>` stays a scalar.
-                let target = match util::vec_scalar_inner(ty) {
-                    Some(inner) => quote!(#toasty::List<#inner>),
-                    None => quote!(#ty),
-                };
+                // Bind through `Field::ExprTarget` so each field's setter
+                // accepts whatever its expression-level type permits —
+                // `Self` for scalars, `List<T>` for `Vec<T: Scalar>`.
                 quote! {
-                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<#target>) -> Self {
+                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::Field>::ExprTarget>) -> Self {
                         self.#set_field_ident(#field_ident);
                         self
                     }
 
-                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<#target>) -> &mut Self {
+                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::Field>::ExprTarget>) -> &mut Self {
                         let projection = #projection;
                         #field_ident.assign(&mut self.assignments, projection);
                         self
@@ -227,14 +223,10 @@ impl Expand<'_> {
                     return None;
                 };
                 let index_tokenized = util::int(index);
-                let target = match util::vec_scalar_inner(ty) {
-                    Some(inner) => quote!(#toasty::List<#inner>),
-                    None => quote!(#ty),
-                };
                 Some(quote! {
                     self.assignments.set(
                         #toasty::stmt::Projection::from_index(#index_tokenized),
-                        <#ty as #toasty::IntoExpr<#target>>::into_expr(#expr),
+                        <#ty as #toasty::IntoExpr<<#ty as #toasty::Field>::ExprTarget>>::into_expr(#expr),
                     );
                 })
             })

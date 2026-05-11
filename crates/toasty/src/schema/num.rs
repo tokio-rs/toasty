@@ -28,7 +28,7 @@ macro_rules! impl_field_numeric {
             }
 
             impl Field for $ty {
-                type PathTarget = Self;
+                type ExprTarget = Self;
                 type Path<Origin> = Path<Origin, Self>;
                 type ListPath<Origin> = Path<Origin, List<Self>>;
                 type Update<'a> = ();
