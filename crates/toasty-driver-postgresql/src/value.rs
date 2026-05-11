@@ -1,8 +1,9 @@
-use postgres_protocol::types::{ArrayDimension, array_to_sql};
+use fallible_iterator::FallibleIterator;
+use postgres_protocol::types::{ArrayDimension, array_from_sql, array_to_sql};
 use toasty_core::stmt::{self, Value as CoreValue};
 use tokio_postgres::{
     Column, Row,
-    types::{IsNull, Kind, ToSql, Type, private::BytesMut, to_sql_checked},
+    types::{FromSql, IsNull, Kind, ToSql, Type, private::BytesMut, to_sql_checked},
 };
 
 /// Wrapper for reading string values from PostgreSQL enum columns.
@@ -25,6 +26,25 @@ impl<'a> postgres_types::FromSql<'a> for EnumString {
 
     fn accepts(ty: &Type) -> bool {
         matches!(ty.kind(), Kind::Enum(_))
+    }
+}
+
+/// Captures the raw wire bytes of a column without interpreting them.
+/// Used by the array decode path to hand the column body to
+/// [`array_from_sql`] directly, bypassing tokio-postgres's
+/// `Vec<Option<T>>` element decoder.
+struct RawBytes<'a>(&'a [u8]);
+
+impl<'a> postgres_types::FromSql<'a> for RawBytes<'a> {
+    fn from_sql(
+        _ty: &Type,
+        raw: &'a [u8],
+    ) -> std::result::Result<Self, Box<dyn std::error::Error + Sync + Send>> {
+        Ok(RawBytes(raw))
+    }
+
+    fn accepts(_ty: &Type) -> bool {
+        true
     }
 }
 
@@ -143,11 +163,11 @@ impl Value {
                 None => return Self(stmt::Value::Null),
             }
         } else if let Kind::Array(_) = column.type_().kind() {
-            // Native array column (e.g. `text[]`, `int8[]`) — read as
-            // `Vec<Option<T>>` and rebuild as `Value::List` so it composes
-            // with the rest of Toasty's value space. The element type is
-            // taken from `expected_ty.as_list_unwrap()` so the per-element
-            // conversion mirrors a column of that scalar type.
+            // Native array column (e.g. `text[]`, `int8[]`) — decoded
+            // directly into `Vec<stmt::Value>` via `array_from_sql`. The
+            // element type is taken from `expected_ty.as_list_unwrap()` so
+            // the per-element conversion mirrors a column of that scalar
+            // type.
             let elem_ty = match expected_ty {
                 stmt::Type::List(elem) => elem.as_ref(),
                 other => panic!("array column expected stmt::Type::List, got {other:?}"),
@@ -243,9 +263,10 @@ fn float8_to_value(v: f64, expected_ty: &stmt::Type) -> stmt::Value {
 }
 
 /// Decode a PostgreSQL array column into a list of Toasty values. Returns
-/// `None` for SQL NULL. Each element is converted via the per-primitive
-/// helpers above, the same ones used by [`Value::from_sql`] for scalar
-/// columns.
+/// `None` for SQL NULL. The column body is parsed with [`array_from_sql`]
+/// and each element is decoded straight into a `stmt::Value` via the
+/// per-primitive helpers above — the same ones used by [`Value::from_sql`]
+/// for scalar columns. No intermediate `Vec<Option<T>>` is allocated.
 fn read_array_items(
     index: usize,
     row: &Row,
@@ -260,37 +281,76 @@ fn read_array_items(
         ),
     };
 
-    macro_rules! read_vec {
-        ($t:ty, $map:expr) => {{
-            let raw: Option<Vec<Option<$t>>> = row.get(index);
-            raw.map(|items| {
-                items
-                    .into_iter()
-                    .map(|opt| match opt {
-                        Some(v) => $map(v),
-                        None => stmt::Value::Null,
-                    })
-                    .collect::<Vec<_>>()
-            })
-        }};
+    let RawBytes(raw) = row.get::<usize, Option<RawBytes<'_>>>(index)?;
+    let array = array_from_sql(raw).expect("invalid PostgreSQL array wire format");
+
+    let ndims = array
+        .dimensions()
+        .count()
+        .expect("invalid PostgreSQL array dimensions header");
+    if ndims > 1 {
+        panic!(
+            "multi-dimensional PostgreSQL arrays are not supported \
+             (got {ndims} dimensions). See https://github.com/tokio-rs/toasty/issues/870"
+        );
     }
 
+    let mut values = array.values();
+    let (cap, _) = values.size_hint();
+    let mut out = Vec::with_capacity(cap);
+    while let Some(elem) = values
+        .next()
+        .expect("invalid PostgreSQL array element framing")
+    {
+        out.push(match elem {
+            None => stmt::Value::Null,
+            Some(bytes) => decode_array_element(elem_pg_ty, bytes, elem_ty),
+        });
+    }
+    Some(out)
+}
+
+/// Decode a single PostgreSQL array element from its raw wire bytes and
+/// project it into the Toasty value space using `elem_ty`. Reuses the
+/// scalar-column `_to_value` helpers so a `text[]` element and a `text`
+/// column decode through identical logic.
+fn decode_array_element(elem_pg_ty: &Type, bytes: &[u8], elem_ty: &stmt::Type) -> stmt::Value {
     if elem_pg_ty == &Type::TEXT || elem_pg_ty == &Type::VARCHAR {
-        read_vec!(String, |v| text_to_value(v, elem_ty))
+        text_to_value(
+            String::from_sql(elem_pg_ty, bytes).expect("decode TEXT array element"),
+            elem_ty,
+        )
     } else if elem_pg_ty == &Type::BOOL {
-        read_vec!(bool, stmt::Value::Bool)
+        stmt::Value::Bool(bool::from_sql(elem_pg_ty, bytes).expect("decode BOOL array element"))
     } else if elem_pg_ty == &Type::INT2 {
-        read_vec!(i16, |v| int2_to_value(v, elem_ty))
+        int2_to_value(
+            i16::from_sql(elem_pg_ty, bytes).expect("decode INT2 array element"),
+            elem_ty,
+        )
     } else if elem_pg_ty == &Type::INT4 {
-        read_vec!(i32, |v| int4_to_value(v, elem_ty))
+        int4_to_value(
+            i32::from_sql(elem_pg_ty, bytes).expect("decode INT4 array element"),
+            elem_ty,
+        )
     } else if elem_pg_ty == &Type::INT8 {
-        read_vec!(i64, |v| int8_to_value(v, elem_ty))
+        int8_to_value(
+            i64::from_sql(elem_pg_ty, bytes).expect("decode INT8 array element"),
+            elem_ty,
+        )
     } else if elem_pg_ty == &Type::FLOAT4 {
-        read_vec!(f32, |v| float4_to_value(v, elem_ty))
+        float4_to_value(
+            f32::from_sql(elem_pg_ty, bytes).expect("decode FLOAT4 array element"),
+            elem_ty,
+        )
     } else if elem_pg_ty == &Type::FLOAT8 {
-        read_vec!(f64, |v| float8_to_value(v, elem_ty))
+        float8_to_value(
+            f64::from_sql(elem_pg_ty, bytes).expect("decode FLOAT8 array element"),
+            elem_ty,
+        )
     } else if elem_pg_ty == &Type::UUID {
-        read_vec!(uuid::Uuid, stmt::Value::Uuid)
+        stmt::Value::Uuid(
+            uuid::Uuid::from_sql(elem_pg_ty, bytes).expect("decode UUID array element"),
+        )
     } else {
         todo!(
             "implement PostgreSQL array decoding for element type `{:#?}`",
