@@ -14,20 +14,19 @@ pulldown-cmark = { workspace = true }
 [features]
 default = ["sqlite"]
 sql = ["sqlite", "mysql", "postgresql"]
-sqlite = ["toasty/sqlite", "dep:toasty-driver-sqlite", "dep:rusqlite"]
-mysql = ["toasty/mysql", "dep:toasty-driver-mysql", "dep:mysql_async"]
-dynamodb = ["toasty/dynamodb", "dep:toasty-driver-dynamodb", "dep:aws-config", "dep:aws-sdk-dynamodb"]
-postgresql = ["toasty/postgresql", "dep:toasty-driver-postgresql", "dep:tokio-postgres"]
+sqlite = ["toasty/sqlite", "dep:toasty-driver-sqlite"]
+mysql = ["toasty/mysql", "dep:toasty-driver-mysql"]
+dynamodb = ["toasty/dynamodb", "dep:toasty-driver-dynamodb"]
+postgresql = ["toasty/postgresql", "dep:toasty-driver-postgresql"]
 
 [dependencies]
-assert-struct.workspace = true
 async-trait.workspace = true
 rust_decimal.workspace = true
 bigdecimal.workspace = true
 hashbrown.workspace = true
 jiff.workspace = true
 toasty = { workspace = true, features = ["rust_decimal", "bigdecimal", "jiff"] }
-toasty-core = { workspace = true, features = ["assert-struct"] }
+toasty-core.workspace = true
 toasty-macros.workspace = true
 tokio.workspace = true
 
@@ -40,17 +39,8 @@ toasty-driver-mysql = { workspace = true, optional = true }
 toasty-driver-postgresql = { workspace = true, optional = true }
 toasty-driver-dynamodb = { workspace = true, optional = true }
 
-# Database clients for cleanup
-tokio-postgres = { workspace = true, optional = true }
-mysql_async = { workspace = true, optional = true }
-aws-config = { workspace = true, optional = true }
-aws-sdk-dynamodb = { workspace = true, optional = true }
-rusqlite = { workspace = true, optional = true }
-
 # Utilities
-tempfile.workspace = true
 trybuild.workspace = true
-env_logger = "0.11.10"
 url.workspace = true
 
 # Fixtures

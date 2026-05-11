@@ -27,9 +27,6 @@ members = [
     "tests",
     "tests/tests/fixtures/post",
     "tests/tests/fixtures/user",
-
-    # Benchmarks
-    "benches",
 ]
 # Driver crates are excluded so `cargo test` (no `-p`/`--workspace`) and CI's
 # per-driver jobs don't pull in *every* driver's crate-local unit tests. Each
@@ -50,7 +47,6 @@ default-members = [
     "tests",
     "tests/tests/fixtures/post",
     "tests/tests/fixtures/user",
-    "benches",
 ]
 
 [workspace.package]
