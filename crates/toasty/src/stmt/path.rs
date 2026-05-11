@@ -103,19 +103,6 @@ impl<T, U> Path<T, U> {
         }
     }
 
-    /// Re-tag this path's target type from `U` to `V` without changing the
-    /// underlying untyped representation. Analogous to [`Expr::cast`].
-    ///
-    /// Useful when a wrapper-typed field (e.g. `Vec<T>`) is exposed through
-    /// the API as a collection path (e.g. `Path<Origin, List<T>>`): the
-    /// runtime path is identical, only the type tag differs.
-    pub fn cast<V>(self) -> Path<T, V> {
-        Path {
-            untyped: self.untyped,
-            _p: PhantomData,
-        }
-    }
-
     /// Converts this path into a variant-rooted path for use in `.matches()`
     /// closures on embedded enum fields.
     ///
