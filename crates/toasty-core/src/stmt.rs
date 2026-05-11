@@ -99,11 +99,20 @@ pub use expr_in_list::ExprInList;
 mod expr_in_subquery;
 pub use expr_in_subquery::ExprInSubquery;
 
+mod expr_intersects;
+pub use expr_intersects::ExprIntersects;
+
 mod expr_is_null;
 pub use expr_is_null::ExprIsNull;
 
+mod expr_is_superset;
+pub use expr_is_superset::ExprIsSuperset;
+
 mod expr_is_variant;
 pub use expr_is_variant::ExprIsVariant;
+
+mod expr_length;
+pub use expr_length::ExprLength;
 
 mod expr_let;
 pub use expr_let::ExprLet;

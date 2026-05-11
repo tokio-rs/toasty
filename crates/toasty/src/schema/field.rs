@@ -159,21 +159,33 @@ impl Field for Vec<u8> {
     }
 }
 
-/// `Vec<T>` of a non-byte element type is a collection model field. The element
-/// type must itself be a [`Field`] so the schema layer can describe each
-/// member, and `IsCollectionElement` keeps `Vec<u8>` (which is bytes, not a
-/// collection) on the byte-array specialization above.
+/// `Vec<T>` of a non-byte element type is a collection model field. The
+/// bounds on `T` correspond to what the trait machinery does with elements:
+///
+/// - `Field<Output = T>` — the schema layer describes each element via
+///   [`Load::ty()`](super::Load::ty); `Output = T` rules out wrappers like
+///   `Box<U>` (whose `Output` is `Box<U>`) at the element position because the
+///   load-side `Vec<T>: Load` impl is gated on `T: Load<Output = T>`.
+/// - [`Scalar`] — opts the element type into the collection path. Keeps
+///   `Vec<u8>` (bytes, not a collection) on the byte-array specialization
+///   above and prevents nested collections like `Vec<Vec<U>>` until we
+///   support them.
 impl<T> Field for Vec<T>
 where
-    T: Field<Output = T> + IsCollectionElement + crate::stmt::IntoExpr<T>,
+    T: Field<Output = T> + Scalar,
 {
-    type Path<Origin> = stmt::Path<Origin, Vec<T>>;
+    // Use the `List<T>` marker as the path target so container predicates
+    // (`contains`, `is_superset`, `len`, …) sit on a `Path<_, List<T>>`
+    // shared with the rest of the expression API.
+    type Path<Origin> = stmt::Path<Origin, List<T>>;
     type ListPath<Origin> = stmt::Path<Origin, List<Self>>;
     type Update<'a> = ();
     type Inner = Self;
 
     fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
-        path
+        // The runtime path is untyped, so this is a free re-tagging from
+        // `Path<_, Vec<T>>` to `Path<_, List<T>>`.
+        path.cast()
     }
 
     fn new_list_path<Origin>(path: stmt::Path<Origin, List<Self>>) -> Self::ListPath<Origin> {
@@ -186,26 +198,29 @@ where
     ) -> Self::Update<'a> {
     }
 
-    fn key_constraint<Origin>(&self, target: stmt::Path<Origin, Self::Inner>) -> Expr<bool> {
-        target.eq(self)
+    fn key_constraint<Origin>(&self, _target: stmt::Path<Origin, Self::Inner>) -> Expr<bool> {
+        // A foreign key cannot reference a `Vec<scalar>` field — collections
+        // aren't valid key types. The trait method exists for every `Field`
+        // impl, so we satisfy it with an explicit panic rather than wiring
+        // up an `IntoExpr<Vec<T>>` bound that has no real use.
+        unreachable!("Vec<T> fields cannot be used as foreign-key targets");
     }
 }
 
-/// Marks types that are valid as the element type of a model-level
-/// `Vec<T>` collection field. The blanket impl below covers every primitive
-/// `Field` (string, integers, uuid, …) but is opted out of by the
-/// [`Vec<u8>` byte-array `Field`](impl Field for Vec<u8>) so that bytes keep
-/// their existing scalar storage and don't get re-routed through the
-/// collection-field path.
-pub trait IsCollectionElement {}
+/// Marks scalar (non-composite) types that are valid as the element type of a
+/// model-level `Vec<T>` collection field. The trait is implemented for every
+/// primitive `Field` (string, integers, uuid, …); `Vec<u8>` is intentionally
+/// not a [`Scalar`] so that bytes keep their existing scalar storage and don't
+/// get re-routed through the collection-field path.
+pub trait Scalar {}
 
-macro_rules! impl_is_collection_element {
+macro_rules! impl_scalar {
     ( $( $t:ty ),* $(,)? ) => {
-        $( impl IsCollectionElement for $t {} )*
+        $( impl Scalar for $t {} )*
     };
 }
 
-impl_is_collection_element!(
+impl_scalar!(
     String,
     bool,
     i8,
@@ -223,10 +238,10 @@ impl_is_collection_element!(
 );
 
 #[cfg(feature = "rust_decimal")]
-impl IsCollectionElement for rust_decimal::Decimal {}
+impl Scalar for rust_decimal::Decimal {}
 
 #[cfg(feature = "bigdecimal")]
-impl IsCollectionElement for bigdecimal::BigDecimal {}
+impl Scalar for bigdecimal::BigDecimal {}
 
 impl<T: Field> Field for Option<T> {
     type Path<Origin> = stmt::Path<Origin, Self>;

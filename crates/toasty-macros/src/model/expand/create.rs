@@ -117,8 +117,15 @@ impl Expand<'_> {
                     return None;
                 };
                 let index_tokenized = util::int(index);
+                // Mirror the setter logic: `Vec<scalar>` defaults bind
+                // through `IntoExpr<List<T>>` so they line up with the
+                // rest of the expression API.
+                let target = match util::vec_scalar_inner(ty) {
+                    Some(inner) => quote!(#toasty::List<#inner>),
+                    None => quote!(#ty),
+                };
                 Some(quote! {
-                    s.stmt.set(#index_tokenized, <#ty as #toasty::IntoExpr<#ty>>::into_expr(#expr));
+                    s.stmt.set(#index_tokenized, <#ty as #toasty::IntoExpr<#target>>::into_expr(#expr));
                 })
             })
             .collect()
@@ -221,8 +228,17 @@ impl Expand<'_> {
                         }
                     }
                     FieldTy::Primitive(ty) => {
+                        // For `Vec<scalar>` model fields, drive the setter
+                        // bound through the `List<T>` marker so it lines up
+                        // with the rest of the expression API.
+                        // `Vec<u8>` stays a scalar (bytes) — handled by
+                        // `vec_scalar_inner` returning `None`.
+                        let target = match util::vec_scalar_inner(ty) {
+                            Some(inner) => quote!(#toasty::List<#inner>),
+                            None => quote!(#ty),
+                        };
                         quote! {
-                            #vis fn #name(mut self, #name: impl #toasty::IntoExpr<#ty>) -> Self {
+                            #vis fn #name(mut self, #name: impl #toasty::IntoExpr<#target>) -> Self {
                                 self.stmt.set(#index_tokenized, #name.into_expr());
                                 self
                             }

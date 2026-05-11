@@ -15,7 +15,7 @@ mod embed;
 pub use embed::Embed;
 
 mod field;
-pub use field::{Field, IsCollectionElement};
+pub use field::{Field, Scalar};
 
 #[cfg(feature = "jiff")]
 mod jiff;

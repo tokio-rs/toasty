@@ -1,8 +1,8 @@
 //! Tests for `Vec<scalar>` model fields stored as native arrays on
-//! PostgreSQL. Backends without a native array column type
-//! (`!capability().native_array`) reject the model at schema build time;
-//! tests early-return on those drivers and the assertion is exercised in a
-//! dedicated negative-path test.
+//! PostgreSQL. Backends without a native array column type are gated out at
+//! the `#[driver_test]` level via `requires(native_array)`; the negative
+//! schema-build path is covered by a dedicated `requires(not(native_array))`
+//! test.
 
 use crate::prelude::*;
 
@@ -10,12 +10,8 @@ use crate::prelude::*;
 /// — covers both the PG bind path (driver receives `Value::List` as one
 /// `text[]` parameter) and the read path (`text[]` decoded back to
 /// `Value::List`).
-#[driver_test(id(ID))]
+#[driver_test(id(ID), requires(native_array))]
 pub async fn vec_string_create_get(t: &mut Test) -> Result<(), BoxError> {
-    if !t.capability().native_array {
-        return Ok(());
-    }
-
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Item {
@@ -38,12 +34,8 @@ pub async fn vec_string_create_get(t: &mut Test) -> Result<(), BoxError> {
 
 /// Whole-value replacement via the update builder. Verifies the PG bind
 /// path on UPDATE (assignment expression rather than INSERT row).
-#[driver_test(id(ID))]
+#[driver_test(id(ID), requires(native_array))]
 pub async fn vec_string_update_replace(t: &mut Test) -> Result<(), BoxError> {
-    if !t.capability().native_array {
-        return Ok(());
-    }
-
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Item {
@@ -72,12 +64,8 @@ pub async fn vec_string_update_replace(t: &mut Test) -> Result<(), BoxError> {
 /// `path.contains(value)` filter. Lowers to `value = ANY(col)` on
 /// PostgreSQL — a GIN-indexable predicate when the column has the
 /// appropriate index.
-#[driver_test(id(ID))]
+#[driver_test(id(ID), requires(native_array))]
 pub async fn vec_string_contains_filter(t: &mut Test) -> Result<(), BoxError> {
-    if !t.capability().native_array {
-        return Ok(());
-    }
-
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Item {
@@ -117,12 +105,8 @@ pub async fn vec_string_contains_filter(t: &mut Test) -> Result<(), BoxError> {
 
 /// `path.is_superset([...])` (PG `@>`). Matches rows whose array contains
 /// every element of the right-hand set.
-#[driver_test(id(ID))]
+#[driver_test(id(ID), requires(native_array))]
 pub async fn vec_string_is_superset_filter(t: &mut Test) -> Result<(), BoxError> {
-    if !t.capability().native_array {
-        return Ok(());
-    }
-
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Item {
@@ -161,12 +145,8 @@ pub async fn vec_string_is_superset_filter(t: &mut Test) -> Result<(), BoxError>
 
 /// `path.intersects([...])` (PG `&&`). Matches rows whose array shares at
 /// least one element with the right-hand set.
-#[driver_test(id(ID))]
+#[driver_test(id(ID), requires(native_array))]
 pub async fn vec_string_intersects_filter(t: &mut Test) -> Result<(), BoxError> {
-    if !t.capability().native_array {
-        return Ok(());
-    }
-
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Item {
@@ -205,14 +185,9 @@ pub async fn vec_string_intersects_filter(t: &mut Test) -> Result<(), BoxError> 
 
 /// On backends without `native_array` (everything except PostgreSQL today),
 /// a model containing a `Vec<scalar>` field is rejected at schema build with
-/// a clear error message. The PG path early-returns since it accepts the
-/// model.
-#[driver_test(id(ID))]
+/// a clear error message.
+#[driver_test(id(ID), requires(not(native_array)))]
 pub async fn vec_string_unsupported_backend(t: &mut Test) -> Result<(), BoxError> {
-    if t.capability().native_array {
-        return Ok(());
-    }
-
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Item {
@@ -238,12 +213,8 @@ pub async fn vec_string_unsupported_backend(t: &mut Test) -> Result<(), BoxError
 }
 
 /// `path.len()` and `path.is_empty()` predicates. PG `cardinality(col)`.
-#[driver_test(id(ID))]
+#[driver_test(id(ID), requires(native_array))]
 pub async fn vec_string_len_filter(t: &mut Test) -> Result<(), BoxError> {
-    if !t.capability().native_array {
-        return Ok(());
-    }
-
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Item {

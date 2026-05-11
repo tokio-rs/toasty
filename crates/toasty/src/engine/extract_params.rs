@@ -213,23 +213,12 @@ fn extract_values(stmt: &mut stmt::Statement, params: &mut Vec<Param>, capabilit
             // through the driver as a `text[]` / `int8[]` bind. Without
             // this, recursion would expand the list to one arg per item
             // and render it as a SQL record literal.
-            //
-            // The literal can show up in two forms depending on whether
-            // canonicalization (`fold::expr_list`) already collapsed the
-            // `Expr::List` of `Expr::Value(...)` items into a single
-            // `Expr::Value(Value::List(...))`. Cover both.
-            if self.bind_list_param {
-                let is_scalar_list = match expr {
-                    stmt::Expr::List(list) => list.items.iter().all(is_extractable_scalar_expr),
-                    stmt::Expr::Value(stmt::Value::List(items)) => {
-                        items.iter().all(is_extractable_scalar)
-                    }
-                    _ => false,
-                };
-                if is_scalar_list && let Some(arg) = extract_array_operand(expr, self.params) {
-                    *expr = arg;
-                    return;
-                }
+            if self.bind_list_param
+                && is_scalar_list(expr)
+                && let Some(arg) = extract_array_operand(expr, self.params)
+            {
+                *expr = arg;
+                return;
             }
 
             // Default post-order: recurse first, then maybe extract this node.
@@ -264,25 +253,40 @@ fn is_extractable_scalar_expr(expr: &stmt::Expr) -> bool {
     matches!(expr, stmt::Expr::Value(v) if is_extractable_scalar(v))
 }
 
-/// If `rhs` is a list literal of values, take it out, push one
+/// Whether `expr` is a literal list of scalar values — either an
+/// `Expr::List` of `Expr::Value(...)` items, or an already-collapsed
+/// `Expr::Value(Value::List(...))`. The canonicalizer (`fold::expr_list`)
+/// produces the latter shape, but lowering can still emit the former, so
+/// we cover both.
+fn is_scalar_list(expr: &stmt::Expr) -> bool {
+    match expr {
+        stmt::Expr::List(list) => list.items.iter().all(is_extractable_scalar_expr),
+        stmt::Expr::Value(stmt::Value::List(items)) => items.iter().all(is_extractable_scalar),
+        _ => false,
+    }
+}
+
+/// If `expr` is a list literal of values, take it out, push one
 /// `Param { value: Value::List(items), ty: Ty::List(<elem>) }` onto `params`,
-/// and return an `Expr::Arg(n)` to put back in its place.
+/// and return an `Expr::Arg(n)` to put back in its place. Used for both the
+/// `ANY/ALL` rhs operand and `Vec<scalar>` field literals on backends that
+/// bind arrays as a single protocol parameter.
 ///
 /// The element type starts as the value-inferred type of the first non-null
 /// item — or `Ty::Unknown` for empty / all-null lists. The synthesize/check
 /// pass refines it to the column type when one is known.
-fn extract_array_operand(rhs: &mut stmt::Expr, params: &mut Vec<Param>) -> Option<stmt::Expr> {
-    let items: Vec<stmt::Value> = match rhs {
+fn extract_array_operand(expr: &mut stmt::Expr, params: &mut Vec<Param>) -> Option<stmt::Expr> {
+    let items: Vec<stmt::Value> = match expr {
         stmt::Expr::Value(stmt::Value::List(_)) => {
             let stmt::Expr::Value(stmt::Value::List(items)) =
-                std::mem::replace(rhs, stmt::Expr::null())
+                std::mem::replace(expr, stmt::Expr::null())
             else {
                 unreachable!()
             };
             items
         }
         stmt::Expr::List(list) if list.items.iter().all(|i| matches!(i, stmt::Expr::Value(_))) => {
-            let stmt::Expr::List(list) = std::mem::replace(rhs, stmt::Expr::null()) else {
+            let stmt::Expr::List(list) = std::mem::replace(expr, stmt::Expr::null()) else {
                 unreachable!()
             };
             list.items
@@ -393,6 +397,28 @@ fn refine_stmt(stmt: &stmt::Statement, cx: &Cx<'_>, db_schema: &db::Schema, para
 /// expand to `Ty::List(Ty::Column(elem))` so they unify with values whose
 /// inferred shape is also `Ty::List(_)`; everything else stays as a flat
 /// `Ty::Column(_)`.
+///
+/// # Why this shape instead of widening `Ty::Column` to hold a `db::Type::List`?
+///
+/// `Ty` exists to carry *provenance* alongside the inferred type:
+/// `Ty::Column(_)` is authoritative (from the schema), `Ty::Inferred(_)` is a
+/// guess from a value. Merging the two is what propagates the column type
+/// down into argument placeholders.
+///
+/// A list arg comes in as `Ty::List(Ty::Inferred(elem))` because the
+/// element type is guessed from the first non-null value (see
+/// [`infer_ty`]). When the schema knows the column type, we need to merge
+/// the column-provenance element type *into* the list. That requires the
+/// two sides to agree on shape — `Ty::List(_)` vs `Ty::List(_)` — and merge
+/// element-wise via the existing list branch in [`merge`].
+///
+/// The alternative of carrying `Ty::Column(db::Type::List(_))` would put a
+/// list inside a "scalar" variant; merging it against `Ty::List(Inferred(_))`
+/// from a value would either require a special case or lose the element-level
+/// provenance the synthesize/check pass relies on. Expanding into
+/// `Ty::List(Ty::Column(_))` keeps the data structure uniform — every list
+/// is `Ty::List`, every scalar is `Ty::Column`/`Ty::Inferred` — and lets
+/// `merge` handle the cases with no extra branches.
 fn ty_from_column(storage_ty: db::Type) -> Ty {
     match storage_ty {
         db::Type::List(elem) => Ty::List(Box::new(ty_from_column(*elem))),

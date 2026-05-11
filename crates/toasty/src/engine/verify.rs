@@ -191,12 +191,13 @@ impl VerifyExpr<'_> {
             | Like(_)
             | InList(_)
             | InSubquery(_)
+            | Intersects(_)
             | IsNull(_)
+            | IsSuperset(_)
             | IsVariant(_)
             | Not(_)
             | Or(_)
             | StartsWith(_)
-            | Func(stmt::ExprFunc::IsSuperset { .. } | stmt::ExprFunc::Intersects { .. })
             | Value(stmt::Value::Bool(_)) => {}
             expr => panic!("Not a bool? {expr:#?}"),
         }

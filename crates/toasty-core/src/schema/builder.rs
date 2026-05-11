@@ -183,13 +183,18 @@ impl BuildSchema<'_> {
         for field in fields.iter_mut() {
             if let app::FieldTy::Primitive(primitive) = &mut field.ty {
                 if matches!(primitive.ty, stmt::Type::List(_)) && !self.db.native_array {
+                    let field_name = field.name.app.as_deref().unwrap_or_else(|| {
+                        panic!(
+                            "model `{model_name}` field has no app-level name; \
+                             expected every primitive field to carry one"
+                        )
+                    });
                     return Err(crate::Error::unsupported_feature(format!(
                         "model `{model_name}` field `{field_name}` is a `Vec<T>` collection, \
                          but this backend has no native array column type. \
                          Native array support is currently PostgreSQL-only; JSON-fallback \
                          storage on other backends is tracked in \
-                         `docs/dev/design/document-fields.md`.",
-                        field_name = field.name.app.as_deref().unwrap_or("<unnamed>")
+                         `docs/dev/design/document-fields.md`."
                     )));
                 }
 

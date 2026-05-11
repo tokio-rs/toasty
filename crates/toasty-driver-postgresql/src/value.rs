@@ -59,50 +59,15 @@ impl Value {
         // NOTE: unfortunately, the inner representation of the PostgreSQL type enum is not
         // accessible, so we must manually match each type like so.
         let core_value = if column.type_() == &Type::TEXT || column.type_() == &Type::VARCHAR {
-            let v = get_or_return_null!(String);
-            match expected_ty {
-                stmt::Type::String => stmt::Value::String(v),
-                stmt::Type::Uuid => stmt::Value::Uuid(
-                    v.parse()
-                        .unwrap_or_else(|_| panic!("uuid could not be parsed from text")),
-                ),
-                _ => stmt::Value::String(v), // Default to string
-            }
+            text_to_value(get_or_return_null!(String), expected_ty)
         } else if column.type_() == &Type::BOOL {
             stmt::Value::Bool(get_or_return_null!(bool))
         } else if column.type_() == &Type::INT2 {
-            let v = get_or_return_null!(i16);
-            match expected_ty {
-                stmt::Type::I8 => stmt::Value::I8(v as i8),
-                stmt::Type::I16 => stmt::Value::I16(v),
-                stmt::Type::U8 => stmt::Value::U8(
-                    u8::try_from(v).unwrap_or_else(|_| panic!("u8 value out of range: {v}")),
-                ),
-                stmt::Type::U16 => stmt::Value::U16(v as u16),
-                _ => panic!("unexpected type for INT2: {expected_ty:#?}"),
-            }
+            int2_to_value(get_or_return_null!(i16), expected_ty)
         } else if column.type_() == &Type::INT4 {
-            let v = get_or_return_null!(i32);
-            match expected_ty {
-                stmt::Type::I32 => stmt::Value::I32(v),
-                stmt::Type::U16 => stmt::Value::U16(
-                    u16::try_from(v).unwrap_or_else(|_| panic!("u16 value out of range: {v}")),
-                ),
-                stmt::Type::U32 => stmt::Value::U32(v as u32),
-                _ => stmt::Value::I32(v), // Default fallback
-            }
+            int4_to_value(get_or_return_null!(i32), expected_ty)
         } else if column.type_() == &Type::INT8 {
-            let v = get_or_return_null!(i64);
-            match expected_ty {
-                stmt::Type::I64 => stmt::Value::I64(v),
-                stmt::Type::U32 => stmt::Value::U32(
-                    u32::try_from(v).unwrap_or_else(|_| panic!("u32 value out of range: {v}")),
-                ),
-                stmt::Type::U64 => stmt::Value::U64(
-                    u64::try_from(v).unwrap_or_else(|_| panic!("u64 value out of range: {v}")),
-                ),
-                _ => stmt::Value::I64(v), // Default fallback
-            }
+            int8_to_value(get_or_return_null!(i64), expected_ty)
         } else if column.type_() == &Type::UUID {
             let v = get_or_return_null!(uuid::Uuid);
             match expected_ty {
@@ -157,19 +122,9 @@ impl Value {
                 panic!("TIME requires jiff feature to be enabled")
             }
         } else if column.type_() == &Type::FLOAT4 {
-            let v = get_or_return_null!(f32);
-            match expected_ty {
-                stmt::Type::F32 => stmt::Value::F32(v),
-                stmt::Type::F64 => stmt::Value::F64(v as f64),
-                _ => panic!("unexpected type for FLOAT4: {expected_ty:#?}"),
-            }
+            float4_to_value(get_or_return_null!(f32), expected_ty)
         } else if column.type_() == &Type::FLOAT8 {
-            let v = get_or_return_null!(f64);
-            match expected_ty {
-                stmt::Type::F32 => stmt::Value::F32(v as f32),
-                stmt::Type::F64 => stmt::Value::F64(v),
-                _ => panic!("unexpected type for FLOAT8: {expected_ty:#?}"),
-            }
+            float8_to_value(get_or_return_null!(f64), expected_ty)
         } else if column.type_() == &Type::NUMERIC {
             #[cfg(feature = "rust_decimal")]
             {
@@ -213,9 +168,84 @@ impl Value {
     }
 }
 
+// ============================================================================
+// Per-primitive conversions
+// ----------------------------------------------------------------------------
+// These functions translate a single decoded PostgreSQL primitive (the value
+// you get from `Row::get` or from an array element) into a `stmt::Value`,
+// respecting Toasty's expected element type. Sharing them between the column
+// path ([`Value::from_sql`]) and the array path ([`read_array_items`]) keeps
+// the two reading paths consistent: a `text[]` element and a `text` column
+// decode through the same logic.
+// ============================================================================
+
+fn text_to_value(v: String, expected_ty: &stmt::Type) -> stmt::Value {
+    match expected_ty {
+        stmt::Type::String => stmt::Value::String(v),
+        stmt::Type::Uuid => stmt::Value::Uuid(
+            v.parse()
+                .unwrap_or_else(|_| panic!("uuid could not be parsed from text")),
+        ),
+        _ => stmt::Value::String(v),
+    }
+}
+
+fn int2_to_value(v: i16, expected_ty: &stmt::Type) -> stmt::Value {
+    match expected_ty {
+        stmt::Type::I8 => stmt::Value::I8(v as i8),
+        stmt::Type::I16 => stmt::Value::I16(v),
+        stmt::Type::U8 => stmt::Value::U8(
+            u8::try_from(v).unwrap_or_else(|_| panic!("u8 value out of range: {v}")),
+        ),
+        stmt::Type::U16 => stmt::Value::U16(v as u16),
+        _ => panic!("unexpected type for INT2: {expected_ty:#?}"),
+    }
+}
+
+fn int4_to_value(v: i32, expected_ty: &stmt::Type) -> stmt::Value {
+    match expected_ty {
+        stmt::Type::I32 => stmt::Value::I32(v),
+        stmt::Type::U16 => stmt::Value::U16(
+            u16::try_from(v).unwrap_or_else(|_| panic!("u16 value out of range: {v}")),
+        ),
+        stmt::Type::U32 => stmt::Value::U32(v as u32),
+        _ => stmt::Value::I32(v),
+    }
+}
+
+fn int8_to_value(v: i64, expected_ty: &stmt::Type) -> stmt::Value {
+    match expected_ty {
+        stmt::Type::I64 => stmt::Value::I64(v),
+        stmt::Type::U32 => stmt::Value::U32(
+            u32::try_from(v).unwrap_or_else(|_| panic!("u32 value out of range: {v}")),
+        ),
+        stmt::Type::U64 => stmt::Value::U64(
+            u64::try_from(v).unwrap_or_else(|_| panic!("u64 value out of range: {v}")),
+        ),
+        _ => stmt::Value::I64(v),
+    }
+}
+
+fn float4_to_value(v: f32, expected_ty: &stmt::Type) -> stmt::Value {
+    match expected_ty {
+        stmt::Type::F32 => stmt::Value::F32(v),
+        stmt::Type::F64 => stmt::Value::F64(v as f64),
+        _ => panic!("unexpected type for FLOAT4: {expected_ty:#?}"),
+    }
+}
+
+fn float8_to_value(v: f64, expected_ty: &stmt::Type) -> stmt::Value {
+    match expected_ty {
+        stmt::Type::F32 => stmt::Value::F32(v as f32),
+        stmt::Type::F64 => stmt::Value::F64(v),
+        _ => panic!("unexpected type for FLOAT8: {expected_ty:#?}"),
+    }
+}
+
 /// Decode a PostgreSQL array column into a list of Toasty values. Returns
-/// `None` for SQL NULL. Each element is converted per `elem_ty` — the
-/// element-type cases mirror the scalar branches of [`Value::from_sql`].
+/// `None` for SQL NULL. Each element is converted via the per-primitive
+/// helpers above, the same ones used by [`Value::from_sql`] for scalar
+/// columns.
 fn read_array_items(
     index: usize,
     row: &Row,
@@ -246,56 +276,19 @@ fn read_array_items(
     }
 
     if elem_pg_ty == &Type::TEXT || elem_pg_ty == &Type::VARCHAR {
-        read_vec!(String, |v| match elem_ty {
-            stmt::Type::String => stmt::Value::String(v),
-            stmt::Type::Uuid => stmt::Value::Uuid(
-                v.parse()
-                    .unwrap_or_else(|_| panic!("uuid could not be parsed from text")),
-            ),
-            _ => stmt::Value::String(v),
-        })
+        read_vec!(String, |v| text_to_value(v, elem_ty))
     } else if elem_pg_ty == &Type::BOOL {
         read_vec!(bool, stmt::Value::Bool)
     } else if elem_pg_ty == &Type::INT2 {
-        read_vec!(i16, |v| match elem_ty {
-            stmt::Type::I8 => stmt::Value::I8(v as i8),
-            stmt::Type::I16 => stmt::Value::I16(v),
-            stmt::Type::U8 => stmt::Value::U8(
-                u8::try_from(v).unwrap_or_else(|_| panic!("u8 value out of range: {v}")),
-            ),
-            stmt::Type::U16 => stmt::Value::U16(v as u16),
-            _ => stmt::Value::I16(v),
-        })
+        read_vec!(i16, |v| int2_to_value(v, elem_ty))
     } else if elem_pg_ty == &Type::INT4 {
-        read_vec!(i32, |v| match elem_ty {
-            stmt::Type::I32 => stmt::Value::I32(v),
-            stmt::Type::U16 => stmt::Value::U16(
-                u16::try_from(v).unwrap_or_else(|_| panic!("u16 value out of range: {v}")),
-            ),
-            stmt::Type::U32 => stmt::Value::U32(v as u32),
-            _ => stmt::Value::I32(v),
-        })
+        read_vec!(i32, |v| int4_to_value(v, elem_ty))
     } else if elem_pg_ty == &Type::INT8 {
-        read_vec!(i64, |v| match elem_ty {
-            stmt::Type::I64 => stmt::Value::I64(v),
-            stmt::Type::U32 => stmt::Value::U32(
-                u32::try_from(v).unwrap_or_else(|_| panic!("u32 value out of range: {v}")),
-            ),
-            stmt::Type::U64 => stmt::Value::U64(
-                u64::try_from(v).unwrap_or_else(|_| panic!("u64 value out of range: {v}")),
-            ),
-            _ => stmt::Value::I64(v),
-        })
+        read_vec!(i64, |v| int8_to_value(v, elem_ty))
     } else if elem_pg_ty == &Type::FLOAT4 {
-        read_vec!(f32, |v| match elem_ty {
-            stmt::Type::F64 => stmt::Value::F64(v as f64),
-            _ => stmt::Value::F32(v),
-        })
+        read_vec!(f32, |v| float4_to_value(v, elem_ty))
     } else if elem_pg_ty == &Type::FLOAT8 {
-        read_vec!(f64, |v| match elem_ty {
-            stmt::Type::F32 => stmt::Value::F32(v as f32),
-            _ => stmt::Value::F64(v),
-        })
+        read_vec!(f64, |v| float8_to_value(v, elem_ty))
     } else if elem_pg_ty == &Type::UUID {
         read_vec!(uuid::Uuid, stmt::Value::Uuid)
     } else {

@@ -103,6 +103,19 @@ impl<T, U> Path<T, U> {
         }
     }
 
+    /// Re-tag this path's target type from `U` to `V` without changing the
+    /// underlying untyped representation. Analogous to [`Expr::cast`].
+    ///
+    /// Useful when a wrapper-typed field (e.g. `Vec<T>`) is exposed through
+    /// the API as a collection path (e.g. `Path<Origin, List<T>>`): the
+    /// runtime path is identical, only the type tag differs.
+    pub fn cast<V>(self) -> Path<T, V> {
+        Path {
+            untyped: self.untyped,
+            _p: PhantomData,
+        }
+    }
+
     /// Converts this path into a variant-rooted path for use in `.matches()`
     /// closures on embedded enum fields.
     ///
@@ -474,12 +487,14 @@ impl<T, U> Path<T, List<U>> {
     }
 }
 
-/// Container-style predicates on a `Vec<scalar>` model field. The element
-/// type `U` is constrained to a path-target scalar so the same `IntoExpr`
-/// infrastructure that powers `eq`/`in_list` covers the right-hand side.
-impl<T, U> Path<T, Vec<U>>
+/// Container-style predicates on a `Vec<scalar>` model field. The path target
+/// is the [`List<U>`] marker (matching `Field::Path<Origin>` for `Vec<U>`),
+/// and the element type `U` is constrained to a path-target scalar so the
+/// same `IntoExpr` infrastructure that powers `eq`/`in_list` covers the
+/// right-hand side.
+impl<T, U> Path<T, List<U>>
 where
-    U: crate::schema::IsCollectionElement,
+    U: crate::schema::Scalar,
 {
     /// Test whether the array contains `value`.
     ///

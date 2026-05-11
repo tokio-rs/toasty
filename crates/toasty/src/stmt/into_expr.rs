@@ -322,69 +322,11 @@ where
 }
 impl_assign_via_expr!({T, U: IntoExpr<T>} Vec<U> => List<T>);
 
-// Mirror impls for the concrete `Vec<T>` field type. Whole-value writes on a
-// model-level collection field need `Vec<U>: IntoExpr<Vec<T>>` (and the
-// derived `Assign<Vec<T>>`); slice and array literals are supported for
-// ergonomics on the right-hand side of `set`-style setters. The
-// [`IsCollectionElement`](crate::schema::IsCollectionElement) bound keeps
-// `Vec<u8>` (which is bytes, not a collection field) on its existing
-// scalar specialization.
-impl<T, U> IntoExpr<Vec<T>> for Vec<U>
-where
-    T: crate::schema::IsCollectionElement,
-    U: IntoExpr<T>,
-{
-    fn into_expr(self) -> Expr<Vec<T>> {
-        Expr::from_untyped(stmt::Expr::list(
-            self.into_iter().map(|item| item.into_expr().untyped),
-        ))
-    }
-
-    fn by_ref(&self) -> Expr<Vec<T>> {
-        Expr::from_untyped(stmt::Expr::list(
-            self.iter().map(|item| item.by_ref().untyped),
-        ))
-    }
-}
-impl_assign_via_expr!({T: crate::schema::IsCollectionElement, U: IntoExpr<T>} Vec<U> => Vec<T>);
-
-impl<T, U, const N: usize> IntoExpr<Vec<T>> for [U; N]
-where
-    T: crate::schema::IsCollectionElement,
-    U: IntoExpr<T>,
-{
-    fn into_expr(self) -> Expr<Vec<T>> {
-        Expr::from_untyped(stmt::Expr::list(
-            self.into_iter().map(|item| item.into_expr().untyped),
-        ))
-    }
-
-    fn by_ref(&self) -> Expr<Vec<T>> {
-        Expr::from_untyped(stmt::Expr::list(
-            self.iter().map(|item| U::by_ref(item).untyped),
-        ))
-    }
-}
-impl_assign_via_expr!({T: crate::schema::IsCollectionElement, U: IntoExpr<T>, const N: usize} [U; N] => Vec<T>);
-
-impl<T, E> IntoExpr<Vec<T>> for &[E]
-where
-    T: crate::schema::IsCollectionElement,
-    E: IntoExpr<T>,
-{
-    fn into_expr(self) -> Expr<Vec<T>> {
-        Expr::from_untyped(stmt::Expr::list(
-            self.iter().map(|item| E::by_ref(item).untyped),
-        ))
-    }
-
-    fn by_ref(&self) -> Expr<Vec<T>> {
-        Expr::from_untyped(stmt::Expr::list(
-            self.iter().map(|item| E::by_ref(item).untyped),
-        ))
-    }
-}
-impl_assign_via_expr!({T: crate::schema::IsCollectionElement, E: IntoExpr<T>} &[E] => Vec<T>);
+// `Vec<scalar>` model fields bind through the existing `IntoExpr<List<T>>`
+// impls (slice, array, `Vec<U>`, …) — the create/update builder macros emit
+// `IntoExpr<List<T>>` setter bounds (see `util::vec_scalar_inner`), so we
+// don't need a separate `IntoExpr<Vec<T>>` impl. `Vec<u8>` still goes
+// through its scalar `IntoExpr<Vec<u8>>` impl above.
 
 macro_rules! forward_impl {
     ( $( $ty:ty ,) *) => {

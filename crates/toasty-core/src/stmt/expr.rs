@@ -2,10 +2,10 @@ use crate::stmt::{ExprExists, Input};
 
 use super::{
     Entry, EntryMut, EntryPath, ExprAllOp, ExprAnd, ExprAny, ExprAnyOp, ExprArg, ExprBinaryOp,
-    ExprCast, ExprError, ExprFunc, ExprInList, ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet,
-    ExprLike, ExprList, ExprMap, ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord,
-    ExprStartsWith, ExprStmt, Node, Projection, Substitute, Value, Visit, VisitMut,
-    expr_reference::ExprReference,
+    ExprCast, ExprError, ExprFunc, ExprInList, ExprInSubquery, ExprIntersects, ExprIsNull,
+    ExprIsSuperset, ExprIsVariant, ExprLength, ExprLet, ExprLike, ExprList, ExprMap, ExprMatch,
+    ExprNot, ExprOr, ExprProject, ExprRecord, ExprStartsWith, ExprStmt, Node, Projection,
+    Substitute, Value, Visit, VisitMut, expr_reference::ExprReference,
 };
 use std::fmt;
 
@@ -84,12 +84,24 @@ pub enum Expr {
     /// `expr IN (SELECT ...)` membership test. See [`ExprInSubquery`].
     InSubquery(ExprInSubquery),
 
+    /// Boolean: two array operands share at least one element
+    /// (PostgreSQL `&&`). See [`ExprIntersects`].
+    Intersects(ExprIntersects),
+
     /// `IS [NOT] NULL` check. Separate from binary operators because of
     /// three-valued logic semantics in SQL. See [`ExprIsNull`].
     IsNull(ExprIsNull),
 
+    /// Boolean: an array operand contains every element of another
+    /// (PostgreSQL `@>`). See [`ExprIsSuperset`].
+    IsSuperset(ExprIsSuperset),
+
     /// Tests whether a value is a specific enum variant. See [`ExprIsVariant`].
     IsVariant(ExprIsVariant),
+
+    /// Integer: the cardinality of an array (PostgreSQL `cardinality(expr)`).
+    /// See [`ExprLength`].
+    Length(ExprLength),
 
     /// Scoped binding expression (transient -- inlined before planning).
     /// See [`ExprLet`].
@@ -221,6 +233,10 @@ impl Expr {
             Self::Exists(_) => true,
             // IN expressions always evaluate to true or false.
             Self::InList(_) | Self::InSubquery(_) => true,
+            // Array predicates always evaluate to true or false.
+            Self::IsSuperset(_) | Self::Intersects(_) => true,
+            // Array length is an integer — non-null when the array is non-null.
+            Self::Length(_) => true,
             // For other expressions, we cannot prove non-nullability.
             _ => false,
         }
@@ -299,6 +315,11 @@ impl Expr {
 
             // References and statements - stable (they reference existing data)
             Self::Reference(_) | Self::Arg(_) => true,
+
+            // Array predicates and length — stable if all operands are stable.
+            Self::IsSuperset(e) => e.lhs.is_stable() && e.rhs.is_stable(),
+            Self::Intersects(e) => e.lhs.is_stable() && e.rhs.is_stable(),
+            Self::Length(e) => e.expr.is_stable(),
 
             // Subqueries and functions - could be unstable
             // For now, conservatively mark as unstable
@@ -422,6 +443,15 @@ impl Expr {
                         .iter()
                         .all(|arm| arm.expr.is_const_at_depth(map_depth))
             }
+
+            // Array predicates and length: const iff all operands are const.
+            Self::IsSuperset(e) => {
+                e.lhs.is_const_at_depth(map_depth) && e.rhs.is_const_at_depth(map_depth)
+            }
+            Self::Intersects(e) => {
+                e.lhs.is_const_at_depth(map_depth) && e.rhs.is_const_at_depth(map_depth)
+            }
+            Self::Length(e) => e.expr.is_const_at_depth(map_depth),
         }
     }
 
@@ -478,6 +508,10 @@ impl Expr {
                 expr_match.subject.is_eval() && expr_match.arms.iter().all(|arm| arm.expr.is_eval())
             }
             Self::Func(_) => false,
+            // Array predicates and length: evaluable iff all operands are.
+            Self::IsSuperset(e) => e.lhs.is_eval() && e.rhs.is_eval(),
+            Self::Intersects(e) => e.lhs.is_eval() && e.rhs.is_eval(),
+            Self::Length(e) => e.expr.is_eval(),
         }
     }
 
@@ -640,8 +674,11 @@ impl fmt::Debug for Expr {
             Self::Ident(e) => write!(f, "Ident({e:?})"),
             Self::InList(e) => e.fmt(f),
             Self::InSubquery(e) => e.fmt(f),
+            Self::Intersects(e) => e.fmt(f),
             Self::IsNull(e) => e.fmt(f),
+            Self::IsSuperset(e) => e.fmt(f),
             Self::IsVariant(e) => e.fmt(f),
+            Self::Length(e) => e.fmt(f),
             Self::Let(e) => e.fmt(f),
             Self::Like(e) => e.fmt(f),
             Self::Map(e) => e.fmt(f),
