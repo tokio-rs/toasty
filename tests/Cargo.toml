@@ -15,9 +15,9 @@ pulldown-cmark = { workspace = true }
 default = ["sqlite"]
 sql = ["sqlite", "mysql", "postgresql"]
 sqlite = ["toasty/sqlite", "dep:toasty-driver-sqlite"]
-mysql = ["toasty/mysql", "dep:toasty-driver-mysql"]
-dynamodb = ["toasty/dynamodb", "dep:toasty-driver-dynamodb"]
-postgresql = ["toasty/postgresql", "dep:toasty-driver-postgresql"]
+mysql = ["toasty/mysql", "dep:toasty-driver-mysql", "dep:mysql_async"]
+dynamodb = ["toasty/dynamodb", "dep:toasty-driver-dynamodb", "dep:aws-config", "dep:aws-sdk-dynamodb"]
+postgresql = ["toasty/postgresql", "dep:toasty-driver-postgresql", "dep:tokio-postgres"]
 
 [dependencies]
 async-trait.workspace = true
@@ -38,6 +38,12 @@ toasty-driver-sqlite = { workspace = true, optional = true }
 toasty-driver-mysql = { workspace = true, optional = true }
 toasty-driver-postgresql = { workspace = true, optional = true }
 toasty-driver-dynamodb = { workspace = true, optional = true }
+
+# Database clients used directly by per-driver integration test binaries
+tokio-postgres = { workspace = true, optional = true }
+mysql_async = { workspace = true, optional = true }
+aws-config = { workspace = true, optional = true }
+aws-sdk-dynamodb = { workspace = true, optional = true }
 
 # Utilities
 trybuild.workspace = true
