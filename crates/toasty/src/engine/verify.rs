@@ -185,11 +185,15 @@ impl VerifyExpr<'_> {
 
         match expr {
             And(_)
+            | AllOp(_)
+            | AnyOp(_)
             | BinaryOp(_)
             | Like(_)
             | InList(_)
             | InSubquery(_)
+            | Intersects(_)
             | IsNull(_)
+            | IsSuperset(_)
             | IsVariant(_)
             | Not(_)
             | Or(_)

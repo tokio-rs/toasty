@@ -156,6 +156,19 @@ pub struct Capability {
     /// as predicates against an array-valued operand.
     /// Property of the dialect, not the bind layer.
     pub predicate_match_any: bool,
+
+    /// Whether the database can store a `Vec<scalar>` model field as a native
+    /// array column (e.g. PostgreSQL `text[]`, `int8[]`).
+    ///
+    /// When `true`, schema build maps `Type::List(elem)` to `db::Type::List(elem)`
+    /// and the driver's bind layer accepts `Value::List(items)` as a single
+    /// array-valued parameter.
+    ///
+    /// When `false`, models containing a `Vec<T>` collection field are rejected
+    /// at schema build time with a clear error pointing at this design. JSON
+    /// fallback storage on backends without native arrays is tracked as future
+    /// work in `docs/dev/design/document-fields.md`.
+    pub native_array: bool,
 }
 
 /// Maps application-level types to the concrete database column types used for
@@ -357,6 +370,10 @@ impl Capability {
         // engine still emits expanded `IN (?, ?, ?)` lists.
         bind_list_param: false,
         predicate_match_any: false,
+
+        // SQLite has no native array column type; `Vec<T>` model fields are
+        // rejected at schema build time. JSON fallback storage is future work.
+        native_array: false,
     };
 
     /// PostgreSQL capabilities
@@ -391,6 +408,10 @@ impl Capability {
         // `expr <op> ANY(array)` / `<op> ALL(array)` predicates.
         bind_list_param: true,
         predicate_match_any: true,
+
+        // PostgreSQL: native arrays (`text[]`, `int8[]`, …) are the storage
+        // representation for `Vec<scalar>` model fields.
+        native_array: true,
 
         ..Self::SQLITE
     };
@@ -466,6 +487,11 @@ impl Capability {
         // not apply.
         bind_list_param: false,
         predicate_match_any: false,
+
+        // DynamoDB has a native List `L` attribute, but the schema build path
+        // for `Vec<T>` model fields routes through `db::Type::List` which is a
+        // SQL-array concept. DynamoDB support is future work.
+        native_array: false,
     };
 }
 

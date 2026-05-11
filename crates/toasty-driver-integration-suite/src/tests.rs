@@ -78,6 +78,7 @@ pub mod starts_with;
 pub mod tx_atomic_stmt;
 pub mod tx_interactive;
 pub mod type_bigdecimal;
+pub mod type_collection;
 pub mod type_decimal;
 pub mod type_jiff;
 pub mod type_primitives;

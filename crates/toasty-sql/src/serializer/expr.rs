@@ -36,6 +36,27 @@ impl ToSql for &stmt::Expr {
             stmt::Expr::Func(stmt::ExprFunc::LastInsertId(_)) => {
                 fmt!(cx, f, "LAST_INSERT_ID()")
             }
+            stmt::Expr::IsSuperset(e) => match f.serializer.flavor {
+                Flavor::Postgresql => fmt!(cx, f, e.lhs.as_ref() " @> " e.rhs.as_ref()),
+                Flavor::Mysql | Flavor::Sqlite => unreachable!(
+                    "is_superset on a native array column requires PostgreSQL; schema build \
+                     rejects `Vec<T>` fields on this backend"
+                ),
+            },
+            stmt::Expr::Intersects(e) => match f.serializer.flavor {
+                Flavor::Postgresql => fmt!(cx, f, e.lhs.as_ref() " && " e.rhs.as_ref()),
+                Flavor::Mysql | Flavor::Sqlite => unreachable!(
+                    "intersects on a native array column requires PostgreSQL; schema build \
+                     rejects `Vec<T>` fields on this backend"
+                ),
+            },
+            stmt::Expr::Length(e) => match f.serializer.flavor {
+                Flavor::Postgresql => fmt!(cx, f, "cardinality(" e.expr.as_ref() ")"),
+                Flavor::Mysql | Flavor::Sqlite => unreachable!(
+                    "array length on a native array column requires PostgreSQL; schema build \
+                     rejects `Vec<T>` fields on this backend"
+                ),
+            },
             stmt::Expr::Ident(name) => {
                 fmt!(cx, f, Ident(name));
             }

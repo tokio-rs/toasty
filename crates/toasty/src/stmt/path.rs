@@ -474,6 +474,66 @@ impl<T, U> Path<T, List<U>> {
     }
 }
 
+/// Container-style predicates on a `Vec<scalar>` model field. The path target
+/// is the [`List<U>`] marker (matching `Field::Path<Origin>` for `Vec<U>`),
+/// and the element type `U` is constrained to a path-target scalar so the
+/// same `IntoExpr` infrastructure that powers `eq`/`in_list` covers the
+/// right-hand side.
+impl<T, U> Path<T, List<U>>
+where
+    U: crate::schema::Scalar,
+{
+    /// Test whether the array contains `value`.
+    ///
+    /// Mirrors [`Vec::contains`]. Lowers to `value = ANY(col)` on PostgreSQL.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// let filter = User::fields().tags().contains("admin");
+    /// ```
+    pub fn contains(self, value: impl IntoExpr<U>) -> Expr<bool> {
+        let value = value.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::any_op(value, stmt::BinaryOp::Eq, path))
+    }
+
+    /// Test whether the array contains every element of `values`.
+    ///
+    /// Mirrors [`HashSet::is_superset`](std::collections::HashSet::is_superset).
+    /// Lowers to `col @> values` (PostgreSQL `@>` operator).
+    pub fn is_superset(self, values: impl IntoExpr<List<U>>) -> Expr<bool> {
+        let values = values.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::array_is_superset(path, values))
+    }
+
+    /// Test whether the array shares at least one element with `values`.
+    ///
+    /// Negation of [`HashSet::is_disjoint`](std::collections::HashSet::is_disjoint).
+    /// Lowers to `col && values` (PostgreSQL `&&` operator).
+    pub fn intersects(self, values: impl IntoExpr<List<U>>) -> Expr<bool> {
+        let values = values.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::array_intersects(path, values))
+    }
+
+    /// Returns the array length.
+    ///
+    /// Mirrors [`Vec::len`]. Lowers to `cardinality(col)` on PostgreSQL.
+    pub fn len(self) -> Expr<i64> {
+        Expr::from_untyped(stmt::Expr::array_length(self.untyped.into_stmt()))
+    }
+
+    /// Returns `true` if the array is empty.
+    ///
+    /// Equivalent to `.len().eq(0)`. Mirrors [`Vec::is_empty`].
+    pub fn is_empty(self) -> Expr<bool> {
+        let untyped = stmt::Expr::eq(
+            stmt::Expr::array_length(self.untyped.into_stmt()),
+            stmt::Expr::Value(stmt::Value::I64(0)),
+        );
+        Expr::from_untyped(untyped)
+    }
+}
+
 impl<T, U> Path<T, Option<U>> {
     /// Test whether this optional field is `NULL`.
     ///

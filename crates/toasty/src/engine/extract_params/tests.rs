@@ -32,7 +32,7 @@ fn extract_scalar_from_simple_insert() {
         returning: None,
     });
 
-    let params = extract_params(&mut stmt, &schema);
+    let params = extract_params(&mut stmt, &schema, &toasty_core::driver::Capability::SQLITE);
 
     assert_eq!(params.len(), 2);
     assert_eq!(params[0].value, Value::from("abc"));
@@ -70,7 +70,7 @@ fn null_values_not_extracted() {
         returning: None,
     });
 
-    let params = extract_params(&mut stmt, &schema);
+    let params = extract_params(&mut stmt, &schema, &toasty_core::driver::Capability::SQLITE);
 
     // Only 'abc' should be extracted; NULL stays as literal
     assert_eq!(params.len(), 1);
@@ -99,7 +99,7 @@ fn extract_from_where_clause() {
 
     // Can't easily build a full SELECT with filter without a schema,
     // but we can test that extract_params handles an empty query
-    let params = extract_params(&mut stmt, &schema);
+    let params = extract_params(&mut stmt, &schema, &toasty_core::driver::Capability::SQLITE);
     assert_eq!(params.len(), 0);
 }
 
@@ -132,7 +132,7 @@ fn enum_insert_refines_type_to_enum() {
         returning: None,
     });
 
-    let params = extract_params(&mut stmt, &schema);
+    let params = extract_params(&mut stmt, &schema, &toasty_core::driver::Capability::SQLITE);
 
     assert_eq!(params.len(), 2);
 
@@ -163,7 +163,7 @@ fn non_enum_insert_keeps_default_types() {
         returning: None,
     });
 
-    let params = extract_params(&mut stmt, &schema);
+    let params = extract_params(&mut stmt, &schema, &toasty_core::driver::Capability::SQLITE);
 
     assert_eq!(params.len(), 2);
     assert!(matches!(&params[0].ty, db::Type::Text));

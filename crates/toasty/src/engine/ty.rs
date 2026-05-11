@@ -6,7 +6,7 @@ impl Engine {
     /// with `Expr::Arg(n)` placeholders. The returned `Vec<TypedValue>` is
     /// indexed by the `n` in each placeholder.
     pub(crate) fn extract_params(&self, stmt: &mut stmt::Statement) -> Vec<TypedValue> {
-        super::extract_params::extract_params(stmt, &self.schema)
+        super::extract_params::extract_params(stmt, &self.schema, self.capability())
     }
 
     pub(crate) fn infer_ty(&self, stmt: &stmt::Statement, args: &[stmt::Type]) -> stmt::Type {

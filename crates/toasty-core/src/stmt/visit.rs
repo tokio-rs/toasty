@@ -3,13 +3,13 @@
 use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAllOp, ExprAnd,
     ExprAny, ExprAnyOp, ExprArg, ExprBinaryOp, ExprCast, ExprColumn, ExprError, ExprExists,
-    ExprFunc, ExprInList, ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprLike, ExprList,
-    ExprMap, ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord, ExprReference, ExprSet,
-    ExprSetOp, ExprStartsWith, ExprStmt, Filter, FuncCount, FuncLastInsertId, Insert, InsertTarget,
-    Join, JoinOp, Limit, LimitCursor, LimitOffset, Node, OrderBy, OrderByExpr, Path, Projection,
-    Query, Returning, Select, Source, SourceModel, SourceTable, SourceTableId, Statement,
-    TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update, UpdateTarget, Value,
-    ValueRecord, Values, With,
+    ExprFunc, ExprInList, ExprInSubquery, ExprIntersects, ExprIsNull, ExprIsSuperset,
+    ExprIsVariant, ExprLength, ExprLet, ExprLike, ExprList, ExprMap, ExprMatch, ExprNot, ExprOr,
+    ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStartsWith, ExprStmt, Filter,
+    FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, LimitCursor,
+    LimitOffset, Node, OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select, Source,
+    SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor, TableRef,
+    TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
 };
 
 /// Immutable visitor trait for the statement AST.
@@ -189,6 +189,13 @@ pub trait Visit {
         visit_expr_in_subquery(self, i);
     }
 
+    /// Visits an [`ExprIntersects`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_intersects`].
+    fn visit_expr_intersects(&mut self, i: &ExprIntersects) {
+        visit_expr_intersects(self, i);
+    }
+
     /// Visits an [`ExprIsNull`] node.
     ///
     /// The default implementation delegates to [`visit_expr_is_null`].
@@ -196,11 +203,25 @@ pub trait Visit {
         visit_expr_is_null(self, i);
     }
 
+    /// Visits an [`ExprIsSuperset`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_is_superset`].
+    fn visit_expr_is_superset(&mut self, i: &ExprIsSuperset) {
+        visit_expr_is_superset(self, i);
+    }
+
     /// Visits an [`ExprIsVariant`] node.
     ///
     /// The default implementation delegates to [`visit_expr_is_variant`].
     fn visit_expr_is_variant(&mut self, i: &ExprIsVariant) {
         visit_expr_is_variant(self, i);
+    }
+
+    /// Visits an [`ExprLength`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_length`].
+    fn visit_expr_length(&mut self, i: &ExprLength) {
+        visit_expr_length(self, i);
     }
 
     /// Visits an [`ExprLet`] node.
@@ -603,12 +624,24 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_expr_in_subquery(&mut **self, i);
     }
 
+    fn visit_expr_intersects(&mut self, i: &ExprIntersects) {
+        Visit::visit_expr_intersects(&mut **self, i);
+    }
+
     fn visit_expr_is_null(&mut self, i: &ExprIsNull) {
         Visit::visit_expr_is_null(&mut **self, i);
     }
 
+    fn visit_expr_is_superset(&mut self, i: &ExprIsSuperset) {
+        Visit::visit_expr_is_superset(&mut **self, i);
+    }
+
     fn visit_expr_is_variant(&mut self, i: &ExprIsVariant) {
         Visit::visit_expr_is_variant(&mut **self, i);
+    }
+
+    fn visit_expr_length(&mut self, i: &ExprLength) {
+        Visit::visit_expr_length(&mut **self, i);
     }
 
     fn visit_expr_let(&mut self, i: &ExprLet) {
@@ -859,8 +892,11 @@ where
         Expr::Ident(_) => {}
         Expr::InList(expr) => v.visit_expr_in_list(expr),
         Expr::InSubquery(expr) => v.visit_expr_in_subquery(expr),
+        Expr::Intersects(expr) => v.visit_expr_intersects(expr),
         Expr::IsNull(expr) => v.visit_expr_is_null(expr),
+        Expr::IsSuperset(expr) => v.visit_expr_is_superset(expr),
         Expr::IsVariant(expr) => v.visit_expr_is_variant(expr),
+        Expr::Length(expr) => v.visit_expr_length(expr),
         Expr::Let(expr) => v.visit_expr_let(expr),
         Expr::Like(expr) => v.visit_expr_like(expr),
         Expr::Map(expr) => v.visit_expr_map(expr),
@@ -1019,8 +1055,34 @@ where
     v.visit_stmt_query(&node.query);
 }
 
+/// Default traversal for [`ExprIntersects`] nodes. Visits left and right operands.
+pub fn visit_expr_intersects<V>(v: &mut V, node: &ExprIntersects)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_expr(&node.lhs);
+    v.visit_expr(&node.rhs);
+}
+
 /// Default traversal for [`ExprIsNull`] nodes. Visits the inner expression.
 pub fn visit_expr_is_null<V>(v: &mut V, node: &ExprIsNull)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_expr(&node.expr);
+}
+
+/// Default traversal for [`ExprIsSuperset`] nodes. Visits left and right operands.
+pub fn visit_expr_is_superset<V>(v: &mut V, node: &ExprIsSuperset)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_expr(&node.lhs);
+    v.visit_expr(&node.rhs);
+}
+
+/// Default traversal for [`ExprLength`] nodes. Visits the inner expression.
+pub fn visit_expr_length<V>(v: &mut V, node: &ExprLength)
 where
     V: Visit + ?Sized,
 {

@@ -173,13 +173,14 @@ impl<T: Load<Output = T>> Load for Deferred<T> {
 }
 
 impl<T: Field<Output = T>> Field for Deferred<T> {
+    type ExprTarget = T::ExprTarget;
     type Path<Origin> = T::Path<Origin>;
     type ListPath<Origin> = T::ListPath<Origin>;
     type Update<'a> = T::Update<'a>;
     type Inner = T::Inner;
     const NULLABLE: bool = T::NULLABLE;
 
-    fn new_path<Origin>(_path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
+    fn new_path<Origin>(_path: stmt::Path<Origin, T::ExprTarget>) -> Self::Path<Origin> {
         // Deferred fields use a generated accessor that emits a path on the
         // inner type T directly (see `expand_primitive_field_method`'s
         // deferred arm). This impl is unreachable through normal codegen.
