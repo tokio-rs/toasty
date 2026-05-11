@@ -164,11 +164,16 @@ pub struct Capability {
     /// and the driver's bind layer accepts `Value::List(items)` as a single
     /// array-valued parameter.
     ///
-    /// When `false`, models containing a `Vec<T>` collection field are rejected
-    /// at schema build time with a clear error pointing at this design. JSON
-    /// fallback storage on backends without native arrays is tracked as future
-    /// work in `docs/dev/design/document-fields.md`.
+    /// When `false`, `Vec<T>` model fields use whatever fallback the backend
+    /// provides (JSON column on MySQL/SQLite, native List `L` on DynamoDB).
+    /// See [`Self::vec_scalar`] for the schema-build gate.
     pub native_array: bool,
+
+    /// Whether the driver supports `Vec<scalar>` model fields, by whatever
+    /// representation (native typed array column, JSON column, key-value
+    /// list attribute, ...). Used by the schema builder as the gate for
+    /// accepting `stmt::Type::List(_)` fields.
+    pub vec_scalar: bool,
 }
 
 /// Maps application-level types to the concrete database column types used for
@@ -366,14 +371,21 @@ impl Capability {
 
         backward_pagination: true,
 
-        // SQLite: list params are not bound as a single protocol parameter; the
-        // engine still emits expanded `IN (?, ?, ?)` lists.
-        bind_list_param: false,
+        // `Vec<scalar>` model fields land in a `TEXT` column holding a JSON
+        // document (JSON1 extension). The driver serializes `Value::List`
+        // to a JSON string at bind time, so the extract pass keeps the list
+        // as one `Value::List` parameter; the `InList` branch in
+        // `extract_params` covers the `IN (...)` case so this flag does
+        // not regress IN-list rendering. The predicate-side `ANY` rewrite
+        // is gated on `predicate_match_any`, which stays `false`, so
+        // `Path::contains` lowers to a `json_each` subquery instead.
+        bind_list_param: true,
         predicate_match_any: false,
 
-        // SQLite has no native array column type; `Vec<T>` model fields are
-        // rejected at schema build time. JSON fallback storage is future work.
+        // SQLite has no native typed-array column type; `Vec<scalar>`
+        // model fields are stored as a JSON document in a `TEXT` column.
         native_array: false,
+        vec_scalar: true,
     };
 
     /// PostgreSQL capabilities
@@ -412,6 +424,7 @@ impl Capability {
         // PostgreSQL: native arrays (`text[]`, `int8[]`, …) are the storage
         // representation for `Vec<scalar>` model fields.
         native_array: true,
+        vec_scalar: true,
 
         ..Self::SQLITE
     };
@@ -441,6 +454,15 @@ impl Capability {
         decimal_arbitrary_precision: false,
 
         test_connection_pool: true,
+
+        // `Vec<scalar>` model fields land in a `JSON` column. The driver
+        // serializes `Value::List` to a JSON string at bind time, so the
+        // extract pass keeps the list as one `Value::List` parameter
+        // instead of expanding it (the `InList` branch in
+        // `extract_params` covers the `IN (...)` case so this flag does
+        // not regress the IN-list rendering).
+        bind_list_param: true,
+        vec_scalar: true,
 
         ..Self::SQLITE
     };
@@ -488,10 +510,12 @@ impl Capability {
         bind_list_param: false,
         predicate_match_any: false,
 
-        // DynamoDB has a native List `L` attribute, but the schema build path
-        // for `Vec<T>` model fields routes through `db::Type::List` which is a
-        // SQL-array concept. DynamoDB support is future work.
+        // DynamoDB has no SQL-style typed-array column type; the
+        // `db::Type::List(elem)` storage shape doesn't apply. `Vec<scalar>`
+        // model fields land directly on a List `L` attribute via the driver's
+        // `AttributeValue` encoding.
         native_array: false,
+        vec_scalar: true,
     };
 }
 

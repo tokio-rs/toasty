@@ -30,6 +30,7 @@ toasty_driver_integration_suite::generate_driver_tests!(
     native_time: false,
     native_datetime: false,
     native_array: false,
+    vec_scalar: true,
     test_connection_pool: false,
 );
 

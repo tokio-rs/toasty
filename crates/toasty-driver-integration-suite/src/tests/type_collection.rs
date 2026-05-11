@@ -1,8 +1,9 @@
-//! Tests for `Vec<scalar>` model fields stored as native arrays on
-//! PostgreSQL. Backends without a native array column type are gated out at
-//! the `#[driver_test]` level via `requires(native_array)`; the negative
-//! schema-build path is covered by a dedicated `requires(not(native_array))`
-//! test.
+//! Tests for `Vec<scalar>` model fields. Storage is backend-chosen
+//! (`text[]` on PostgreSQL, List `L` on DynamoDB, JSON on MySQL/SQLite —
+//! the JSON paths are future work). Backends without `Vec<scalar>` support
+//! are gated out at the `#[driver_test]` level via `requires(vec_scalar)`;
+//! the negative schema-build path is covered by a dedicated
+//! `requires(not(vec_scalar))` test.
 
 use crate::prelude::*;
 
@@ -10,7 +11,7 @@ use crate::prelude::*;
 /// — covers both the PG bind path (driver receives `Value::List` as one
 /// `text[]` parameter) and the read path (`text[]` decoded back to
 /// `Value::List`).
-#[driver_test(id(ID), requires(native_array))]
+#[driver_test(id(ID), requires(vec_scalar))]
 pub async fn vec_string_create_get(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -36,7 +37,7 @@ pub async fn vec_string_create_get(t: &mut Test) -> Result<(), BoxError> {
 
 /// Whole-value replacement via the update builder. Verifies the PG bind
 /// path on UPDATE (assignment expression rather than INSERT row).
-#[driver_test(id(ID), requires(native_array))]
+#[driver_test(id(ID), requires(vec_scalar))]
 pub async fn vec_string_update_replace(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -67,7 +68,7 @@ pub async fn vec_string_update_replace(t: &mut Test) -> Result<(), BoxError> {
 /// `path.contains(value)` filter. Lowers to `value = ANY(col)` on
 /// PostgreSQL — a GIN-indexable predicate when the column has the
 /// appropriate index.
-#[driver_test(id(ID), requires(native_array))]
+#[driver_test(id(ID), requires(vec_scalar))]
 pub async fn vec_string_contains_filter(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -103,7 +104,7 @@ pub async fn vec_string_contains_filter(t: &mut Test) -> Result<(), BoxError> {
 
 /// `path.is_superset([...])` (PG `@>`). Matches rows whose array contains
 /// every element of the right-hand set.
-#[driver_test(id(ID), requires(native_array))]
+#[driver_test(id(ID), requires(vec_scalar))]
 pub async fn vec_string_is_superset_filter(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -138,7 +139,7 @@ pub async fn vec_string_is_superset_filter(t: &mut Test) -> Result<(), BoxError>
 
 /// `path.intersects([...])` (PG `&&`). Matches rows whose array shares at
 /// least one element with the right-hand set.
-#[driver_test(id(ID), requires(native_array))]
+#[driver_test(id(ID), requires(vec_scalar))]
 pub async fn vec_string_intersects_filter(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -171,10 +172,10 @@ pub async fn vec_string_intersects_filter(t: &mut Test) -> Result<(), BoxError> 
     Ok(())
 }
 
-/// On backends without `native_array` (everything except PostgreSQL today),
-/// a model containing a `Vec<scalar>` field is rejected at schema build with
-/// a clear error message.
-#[driver_test(id(ID), requires(not(native_array)))]
+/// On backends without `vec_scalar` support, a model containing a
+/// `Vec<scalar>` field is rejected at schema build with a clear error
+/// message.
+#[driver_test(id(ID), requires(not(vec_scalar)))]
 pub async fn vec_string_unsupported_backend(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -190,8 +191,8 @@ pub async fn vec_string_unsupported_backend(t: &mut Test) -> Result<(), BoxError
         Err(err) => {
             let msg = err.to_string();
             assert!(
-                msg.contains("Vec<T>") && msg.contains("document-fields.md"),
-                "expected error pointing at the design doc, got: {msg}"
+                msg.contains("Vec<T>") && msg.contains("does not yet support"),
+                "expected schema-build rejection naming the unsupported `Vec<T>` field, got: {msg}"
             );
         }
         Ok(_) => panic!("expected schema build to reject Vec<T> field on this backend"),
@@ -201,7 +202,7 @@ pub async fn vec_string_unsupported_backend(t: &mut Test) -> Result<(), BoxError
 }
 
 /// `path.len()` and `path.is_empty()` predicates. PG `cardinality(col)`.
-#[driver_test(id(ID), requires(native_array))]
+#[driver_test(id(ID), requires(vec_scalar))]
 pub async fn vec_string_len_filter(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]

@@ -203,6 +203,31 @@ fn extract_values(stmt: &mut stmt::Statement, params: &mut Vec<Param>, capabilit
                     }
                     return;
                 }
+                // `IN (...)` always renders as N separate placeholders on
+                // backends without `predicate_match_any` (the ones that
+                // could rewrite it to ANY have already done so during
+                // lowering). Force per-element expansion of the rhs list,
+                // regardless of `bind_list_param`, so `id IN (1, 2, 3)`
+                // doesn't degrade to `id IN ?` after we enable `bind_list_param`
+                // for backends that bind `Vec<scalar>` columns as one param.
+                stmt::Expr::InList(e) => {
+                    self.visit_expr_mut(&mut e.expr);
+                    if let stmt::Expr::Value(stmt::Value::List(_)) = e.list.as_ref() {
+                        let stmt::Expr::Value(stmt::Value::List(items)) =
+                            std::mem::replace(e.list.as_mut(), stmt::Expr::null())
+                        else {
+                            unreachable!()
+                        };
+                        let items = items
+                            .into_iter()
+                            .map(|v| value_to_extracted_expr(v, self.params, false))
+                            .collect();
+                        *e.list = stmt::Expr::List(stmt::ExprList { items });
+                    } else {
+                        self.visit_expr_mut(&mut e.list);
+                    }
+                    return;
+                }
                 _ => {}
             }
 

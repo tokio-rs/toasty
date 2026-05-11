@@ -47,4 +47,5 @@ impl toasty_driver_integration_suite::Setup for MySqlSetup {
 toasty_driver_integration_suite::generate_driver_tests!(MySqlSetup::new(),
     decimal_arbitrary_precision: false,
     native_array: false,
+    vec_scalar: true,
 );

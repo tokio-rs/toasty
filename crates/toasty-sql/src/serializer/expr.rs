@@ -38,24 +38,37 @@ impl ToSql for &stmt::Expr {
             }
             stmt::Expr::IsSuperset(e) => match f.serializer.flavor {
                 Flavor::Postgresql => fmt!(cx, f, e.lhs.as_ref() " @> " e.rhs.as_ref()),
-                Flavor::Mysql | Flavor::Sqlite => unreachable!(
-                    "is_superset on a native array column requires PostgreSQL; schema build \
-                     rejects `Vec<T>` fields on this backend"
+                // The rhs Value::List is bound as one JSON string. MySQL's
+                // `JSON_CONTAINS(target, candidate)` matches when every
+                // element of `candidate` appears in `target`.
+                Flavor::Mysql => {
+                    fmt!(cx, f, "JSON_CONTAINS(" e.lhs.as_ref() ", " e.rhs.as_ref() ")")
+                }
+                // SQLite has no direct superset operator; emulate via
+                // `NOT EXISTS (rhs element with no match in lhs)`.
+                Flavor::Sqlite => fmt!(
+                    cx, f,
+                    "NOT EXISTS (SELECT 1 FROM json_each(" e.rhs.as_ref()
+                    ") AS r WHERE r.value NOT IN (SELECT l.value FROM json_each("
+                    e.lhs.as_ref() ") AS l))"
                 ),
             },
             stmt::Expr::Intersects(e) => match f.serializer.flavor {
                 Flavor::Postgresql => fmt!(cx, f, e.lhs.as_ref() " && " e.rhs.as_ref()),
-                Flavor::Mysql | Flavor::Sqlite => unreachable!(
-                    "intersects on a native array column requires PostgreSQL; schema build \
-                     rejects `Vec<T>` fields on this backend"
+                Flavor::Mysql => {
+                    fmt!(cx, f, "JSON_OVERLAPS(" e.lhs.as_ref() ", " e.rhs.as_ref() ")")
+                }
+                Flavor::Sqlite => fmt!(
+                    cx, f,
+                    "EXISTS (SELECT 1 FROM json_each(" e.rhs.as_ref()
+                    ") AS r WHERE r.value IN (SELECT l.value FROM json_each("
+                    e.lhs.as_ref() ") AS l))"
                 ),
             },
             stmt::Expr::Length(e) => match f.serializer.flavor {
                 Flavor::Postgresql => fmt!(cx, f, "cardinality(" e.expr.as_ref() ")"),
-                Flavor::Mysql | Flavor::Sqlite => unreachable!(
-                    "array length on a native array column requires PostgreSQL; schema build \
-                     rejects `Vec<T>` fields on this backend"
-                ),
+                Flavor::Mysql => fmt!(cx, f, "JSON_LENGTH(" e.expr.as_ref() ")"),
+                Flavor::Sqlite => fmt!(cx, f, "json_array_length(" e.expr.as_ref() ")"),
             },
             stmt::Expr::Ident(name) => {
                 fmt!(cx, f, Ident(name));
@@ -63,9 +76,31 @@ impl ToSql for &stmt::Expr {
             stmt::Expr::InList(expr) => {
                 fmt!(cx, f, expr.expr " IN " expr.list);
             }
-            stmt::Expr::AnyOp(expr) => {
-                fmt!(cx, f, expr.lhs " " expr.op " ANY(" expr.rhs ")");
-            }
+            stmt::Expr::AnyOp(expr) => match f.serializer.flavor {
+                // `value = ANY(col)` — PostgreSQL's array membership operator.
+                // Drives `Path::contains` for native-array columns and the
+                // IN-list rewrite.
+                Flavor::Postgresql => {
+                    fmt!(cx, f, expr.lhs " " expr.op " ANY(" expr.rhs ")");
+                }
+                // MySQL's `value MEMBER OF (json_array)` (8.0.17+). Only the
+                // equality form makes sense; `Path::contains` is the only
+                // current emitter and the lowering pass never produces
+                // ANY on MySQL since `predicate_match_any` is false.
+                Flavor::Mysql if matches!(expr.op, stmt::BinaryOp::Eq) => {
+                    fmt!(cx, f, expr.lhs " MEMBER OF (" expr.rhs ")");
+                }
+                Flavor::Mysql => unreachable!("AnyOp with non-Eq operator on MySQL: {expr:?}"),
+                // SQLite renders `value = ANY(col)` (i.e. `Path::contains`)
+                // as `value IN (SELECT value FROM json_each(col))`.
+                Flavor::Sqlite if matches!(expr.op, stmt::BinaryOp::Eq) => {
+                    fmt!(
+                        cx, f,
+                        expr.lhs " IN (SELECT value FROM json_each(" expr.rhs "))"
+                    );
+                }
+                Flavor::Sqlite => unreachable!("AnyOp with non-Eq operator on SQLite: {expr:?}"),
+            },
             stmt::Expr::AllOp(expr) => {
                 fmt!(cx, f, expr.lhs " " expr.op " ALL(" expr.rhs ")");
             }

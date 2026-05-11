@@ -46,7 +46,10 @@ impl<'stmt> IndexMatch<'stmt> {
                 (_, stmt::Expr::Reference(rhs @ stmt::ExprReference::Column(_))) => {
                     self.match_expr_binary_op_column(cx, rhs, expr, e.op.commute())
                 }
-                _ => todo!("expr={:#?}", expr),
+                // Neither operand is a bare column reference (e.g.
+                // `LENGTH(col) = 0` for `Vec::is_empty()`). This shape is not
+                // an index match — return false rather than failing.
+                _ => false,
             },
             StartsWith(e) => match &*e.expr {
                 stmt::Expr::Reference(expr_column @ stmt::ExprReference::Column(_)) => {
