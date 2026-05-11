@@ -6,7 +6,7 @@ use std::{
 use toasty::{Db, schema::ModelSet};
 use tokio::runtime::Runtime;
 
-use crate::{Fault, Isolate, LoggingDriver, LoggingHandle, Setup};
+use crate::{Fault, InstrumentedDriver, InstrumentedHandle, Isolate, Setup};
 
 /// Global lock for coordinating serial vs parallel tests.
 /// Normal tests acquire a read lock (allowing parallelism).
@@ -26,10 +26,10 @@ pub struct Test {
     /// Tokio runtime used by the test
     runtime: Option<Runtime>,
 
-    /// Single handle controlling the logging driver test middleware:
+    /// Single handle controlling the instrumented driver test middleware:
     /// the operations log and the fault-injection queue. Populated by
     /// `try_setup_db_with`.
-    handle: LoggingHandle,
+    handle: InstrumentedHandle,
 
     /// List of all tables created during the test. These will need to be removed later.
     tables: Vec<String>,
@@ -49,7 +49,7 @@ impl Test {
             setup,
             isolate: Isolate::new(),
             runtime: Some(runtime),
-            handle: LoggingHandle::default(),
+            handle: InstrumentedHandle::default(),
             tables: vec![],
             serial: false,
         }
@@ -77,12 +77,12 @@ impl Test {
         // Apply caller customizations
         customize(&mut builder);
 
-        // Always wrap with logging
-        let logging_driver = LoggingDriver::new(self.setup.driver());
-        self.handle = logging_driver.handle();
+        // Always wrap with the instrumented test driver
+        let instrumented_driver = InstrumentedDriver::new(self.setup.driver());
+        self.handle = instrumented_driver.handle();
 
-        // Build the database with the logging driver
-        let db = builder.build(logging_driver).await?;
+        // Build the database with the instrumented driver
+        let db = builder.build(instrumented_driver).await?;
         db.push_schema().await?;
 
         for table in &db.schema().db.tables {
@@ -112,15 +112,15 @@ impl Test {
         self.setup.driver().capability()
     }
 
-    /// Get the logging-driver control handle. The handle exposes the
-    /// operation log (for assertions) and fault injection.
-    pub fn log(&self) -> &LoggingHandle {
+    /// Get the instrumented-driver control handle. The handle exposes
+    /// the operation log (for assertions) and fault injection.
+    pub fn log(&self) -> &InstrumentedHandle {
         &self.handle
     }
 
     /// Queue a fault to fire on the next driver `exec` call. Faults
     /// fire in FIFO order. Only useful after `setup_db` has installed
-    /// the logging driver.
+    /// the instrumented driver.
     pub fn inject_fault(&self, fault: Fault) {
         self.handle.inject_fault(fault);
     }

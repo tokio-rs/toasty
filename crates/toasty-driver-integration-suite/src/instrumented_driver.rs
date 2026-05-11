@@ -22,9 +22,9 @@ use toasty_core::{
 pub enum Fault {
     /// Causes the next `exec` to return `Error::connection_lost` without
     /// touching the underlying connection. The wrapping
-    /// `LoggingConnection`'s `is_valid` flips to `false`, mirroring what
-    /// a real connection-lost error would do and prompting the pool to
-    /// evict the connection.
+    /// `InstrumentedConnection`'s `is_valid` flips to `false`, mirroring
+    /// what a real connection-lost error would do and prompting the pool
+    /// to evict the connection.
     ConnectionLost,
 }
 
@@ -34,22 +34,22 @@ pub struct DriverOp {
     pub response: ExecResponse,
 }
 
-/// Single control handle for the [`LoggingDriver`] test middleware.
+/// Single control handle for the [`InstrumentedDriver`] test middleware.
 /// Exposes both the operation log (for assertions) and the fault queue
 /// (for injecting failures). Cheaply cloneable; every clone refers to
 /// the same shared state.
 #[derive(Clone, Default)]
-pub struct LoggingHandle {
-    inner: Arc<LoggingState>,
+pub struct InstrumentedHandle {
+    inner: Arc<InstrumentedState>,
 }
 
 #[derive(Default)]
-struct LoggingState {
+struct InstrumentedState {
     ops_log: Mutex<Vec<DriverOp>>,
     faults: Mutex<VecDeque<Fault>>,
 }
 
-impl LoggingHandle {
+impl InstrumentedHandle {
     /// Get the number of logged operations
     pub fn len(&self) -> usize {
         self.inner.ops_log.lock().unwrap().len()
@@ -92,36 +92,41 @@ impl LoggingHandle {
     }
 }
 
-impl fmt::Debug for LoggingHandle {
+impl fmt::Debug for InstrumentedHandle {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let ops = self.inner.ops_log.lock().unwrap();
-        f.debug_struct("LoggingHandle").field("ops", &*ops).finish()
+        f.debug_struct("InstrumentedHandle")
+            .field("ops", &*ops)
+            .finish()
     }
 }
 
+/// Test-only driver wrapper that instruments an underlying driver: it
+/// records every operation for later assertion and can inject faults
+/// (connection loss, etc.) to exercise error-handling paths.
 #[derive(Debug)]
-pub struct LoggingDriver {
+pub struct InstrumentedDriver {
     inner: Box<dyn Driver>,
-    handle: LoggingHandle,
+    handle: InstrumentedHandle,
 }
 
-impl LoggingDriver {
+impl InstrumentedDriver {
     pub fn new(driver: Box<dyn Driver>) -> Self {
         Self {
             inner: driver,
-            handle: LoggingHandle::default(),
+            handle: InstrumentedHandle::default(),
         }
     }
 
     /// Get the single control handle for this driver. The handle exposes
     /// both the operations log and the fault-injection queue.
-    pub fn handle(&self) -> LoggingHandle {
+    pub fn handle(&self) -> InstrumentedHandle {
         self.handle.clone()
     }
 }
 
 #[async_trait]
-impl Driver for LoggingDriver {
+impl Driver for InstrumentedDriver {
     fn url(&self) -> Cow<'_, str> {
         self.inner.url()
     }
@@ -131,7 +136,7 @@ impl Driver for LoggingDriver {
     }
 
     async fn connect(&self) -> Result<Box<dyn Connection>> {
-        Ok(Box::new(LoggingConnection {
+        Ok(Box::new(InstrumentedConnection {
             inner: self.inner.connect().await?,
             handle: self.handle.clone(),
             valid: AtomicBool::new(true),
@@ -147,14 +152,15 @@ impl Driver for LoggingDriver {
     }
 }
 
-/// A driver wrapper that logs all operations for testing purposes
+/// Per-connection counterpart of [`InstrumentedDriver`]: records each
+/// `exec` and consults the shared fault queue before delegating.
 #[derive(Debug)]
-pub struct LoggingConnection {
+pub struct InstrumentedConnection {
     /// The underlying driver that actually executes operations
     inner: Box<dyn Connection>,
 
     /// Shared handle: ops log + fault queue.
-    handle: LoggingHandle,
+    handle: InstrumentedHandle,
 
     /// Set to `false` once an injected `ConnectionLost` fault has fired
     /// against this connection. Surfaced through [`Connection::is_valid`]
@@ -164,7 +170,7 @@ pub struct LoggingConnection {
 }
 
 #[async_trait]
-impl Connection for LoggingConnection {
+impl Connection for InstrumentedConnection {
     async fn exec(&mut self, schema: &Arc<Schema>, operation: Operation) -> Result<ExecResponse> {
         // Pop a queued fault, if any, and short-circuit before reaching
         // the underlying driver.

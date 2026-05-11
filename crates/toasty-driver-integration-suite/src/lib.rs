@@ -9,8 +9,8 @@ pub use helpers::{column, columns, table_id};
 mod isolate;
 use isolate::Isolate;
 
-mod logging_driver;
-pub use logging_driver::{DriverOp, Fault, LoggingDriver, LoggingHandle};
+mod instrumented_driver;
+pub use instrumented_driver::{DriverOp, Fault, InstrumentedDriver, InstrumentedHandle};
 
 mod setup;
 pub use setup::Setup;
