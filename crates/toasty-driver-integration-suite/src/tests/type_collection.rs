@@ -24,11 +24,9 @@ pub async fn vec_string_create_get(t: &mut Test) -> Result<(), BoxError> {
     let mut db = t.setup_db(models!(Item)).await;
 
     let tags = vec!["rust".to_string(), "toasty".to_string()];
-    let item = toasty::create!(Item {
-        tags: tags.clone(),
-    })
-    .exec(&mut db)
-    .await?;
+    let item = toasty::create!(Item { tags: tags.clone() })
+        .exec(&mut db)
+        .await?;
 
     let reloaded = Item::get_by_id(&mut db, &item.id).await?;
     assert_eq!(reloaded.tags, tags);
