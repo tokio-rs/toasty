@@ -14,9 +14,9 @@ readme.workspace = true
 documentation = "https://docs.rs/toasty-driver-mysql"
 
 [features]
-rust_decimal = ["dep:rust_decimal", "toasty-core/rust_decimal"]
-bigdecimal = ["dep:bigdecimal", "toasty-core/bigdecimal"]
-jiff = ["dep:jiff", "toasty-core/jiff"]
+rust_decimal = ["dep:rust_decimal", "toasty-core/rust_decimal", "toasty-sql/rust_decimal"]
+bigdecimal = ["dep:bigdecimal", "toasty-core/bigdecimal", "toasty-sql/bigdecimal"]
+jiff = ["dep:jiff", "toasty-core/jiff", "toasty-sql/jiff"]
 
 [dependencies]
 async-trait.workspace = true

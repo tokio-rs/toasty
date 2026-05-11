@@ -24,9 +24,9 @@ tls = [
     "dep:rustls-pemfile",
     "dep:rustls-webpki",
 ]
-rust_decimal = ["dep:rust_decimal", "toasty-core/rust_decimal"]
-bigdecimal = ["dep:bigdecimal", "toasty-core/bigdecimal"]
-jiff = ["dep:jiff", "toasty-core/jiff", "postgres-types/with-jiff-0_2"]
+rust_decimal = ["dep:rust_decimal", "toasty-core/rust_decimal", "toasty-sql/rust_decimal"]
+bigdecimal = ["dep:bigdecimal", "toasty-core/bigdecimal", "toasty-sql/bigdecimal"]
+jiff = ["dep:jiff", "toasty-core/jiff", "toasty-sql/jiff", "postgres-types/with-jiff-0_2"]
 
 [dependencies]
 async-trait.workspace = true
