@@ -1,13 +1,12 @@
 use std::{
-    collections::VecDeque,
     error::Error,
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, RwLock},
 };
 
 use toasty::{Db, schema::ModelSet};
 use tokio::runtime::Runtime;
 
-use crate::{ExecLog, Fault, Isolate, LoggingDriver, Setup};
+use crate::{Fault, Isolate, LoggingDriver, LoggingHandle, Setup};
 
 /// Global lock for coordinating serial vs parallel tests.
 /// Normal tests acquire a read lock (allowing parallelism).
@@ -27,12 +26,10 @@ pub struct Test {
     /// Tokio runtime used by the test
     runtime: Option<Runtime>,
 
-    exec_log: ExecLog,
-
-    /// Handle to the logging driver's fault-injection queue, populated
-    /// by `try_setup_db_with`. Tests use [`Test::inject_fault`] to push
-    /// onto it.
-    faults: Arc<Mutex<VecDeque<Fault>>>,
+    /// Single handle controlling the logging driver test middleware:
+    /// the operations log and the fault-injection queue. Populated by
+    /// `try_setup_db_with`.
+    handle: LoggingHandle,
 
     /// List of all tables created during the test. These will need to be removed later.
     tables: Vec<String>,
@@ -52,8 +49,7 @@ impl Test {
             setup,
             isolate: Isolate::new(),
             runtime: Some(runtime),
-            exec_log: ExecLog::new(Arc::new(Mutex::new(Vec::new()))),
-            faults: Arc::new(Mutex::new(VecDeque::new())),
+            handle: LoggingHandle::default(),
             tables: vec![],
             serial: false,
         }
@@ -83,9 +79,7 @@ impl Test {
 
         // Always wrap with logging
         let logging_driver = LoggingDriver::new(self.setup.driver());
-        let ops_log = logging_driver.ops_log_handle();
-        self.exec_log = ExecLog::new(ops_log);
-        self.faults = logging_driver.faults_handle();
+        self.handle = logging_driver.handle();
 
         // Build the database with the logging driver
         let db = builder.build(logging_driver).await?;
@@ -118,19 +112,17 @@ impl Test {
         self.setup.driver().capability()
     }
 
-    /// Get the execution log for assertions
-    pub fn log(&mut self) -> &mut ExecLog {
-        &mut self.exec_log
+    /// Get the logging-driver control handle. The handle exposes the
+    /// operation log (for assertions) and fault injection.
+    pub fn log(&self) -> &LoggingHandle {
+        &self.handle
     }
 
     /// Queue a fault to fire on the next driver `exec` call. Faults
     /// fire in FIFO order. Only useful after `setup_db` has installed
     /// the logging driver.
     pub fn inject_fault(&self, fault: Fault) {
-        self.faults
-            .lock()
-            .expect("Failed to acquire faults lock")
-            .push_back(fault);
+        self.handle.inject_fault(fault);
     }
 
     /// Set whether this test requires exclusive (serial) execution

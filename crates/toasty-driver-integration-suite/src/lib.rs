@@ -3,9 +3,6 @@ mod macros;
 #[macro_use]
 mod util;
 
-mod exec_log;
-pub use exec_log::ExecLog;
-
 mod helpers;
 pub use helpers::{column, columns, table_id};
 
@@ -13,7 +10,7 @@ mod isolate;
 use isolate::Isolate;
 
 mod logging_driver;
-pub use logging_driver::{DriverOp, Fault, LoggingDriver};
+pub use logging_driver::{DriverOp, Fault, LoggingDriver, LoggingHandle};
 
 mod setup;
 pub use setup::Setup;

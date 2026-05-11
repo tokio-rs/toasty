@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use std::{
     borrow::Cow,
     collections::VecDeque,
+    fmt,
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
@@ -28,37 +29,94 @@ pub enum Fault {
 }
 
 #[derive(Debug)]
+pub struct DriverOp {
+    pub operation: Operation,
+    pub response: ExecResponse,
+}
+
+/// Single control handle for the [`LoggingDriver`] test middleware.
+/// Exposes both the operation log (for assertions) and the fault queue
+/// (for injecting failures). Cheaply cloneable; every clone refers to
+/// the same shared state.
+#[derive(Clone, Default)]
+pub struct LoggingHandle {
+    inner: Arc<LoggingState>,
+}
+
+#[derive(Default)]
+struct LoggingState {
+    ops_log: Mutex<Vec<DriverOp>>,
+    faults: Mutex<VecDeque<Fault>>,
+}
+
+impl LoggingHandle {
+    /// Get the number of logged operations
+    pub fn len(&self) -> usize {
+        self.inner.ops_log.lock().unwrap().len()
+    }
+
+    /// Check if the log is empty
+    pub fn is_empty(&self) -> bool {
+        self.inner.ops_log.lock().unwrap().is_empty()
+    }
+
+    /// Clear the log
+    pub fn clear(&self) {
+        self.inner.ops_log.lock().unwrap().clear();
+    }
+
+    /// Remove and return the first operation from the log
+    #[track_caller]
+    pub fn pop(&self) -> (Operation, ExecResponse) {
+        let mut ops = self.inner.ops_log.lock().unwrap();
+        if ops.is_empty() {
+            panic!("no operations in log");
+        }
+        let driver_op = ops.remove(0);
+        (driver_op.operation, driver_op.response)
+    }
+
+    #[track_caller]
+    pub fn pop_op(&self) -> Operation {
+        self.pop().0
+    }
+
+    /// Queue a fault to fire on the next driver `exec` call. Faults fire
+    /// in FIFO order across all connections produced by the driver.
+    pub fn inject_fault(&self, fault: Fault) {
+        self.inner
+            .faults
+            .lock()
+            .expect("Failed to acquire faults lock")
+            .push_back(fault);
+    }
+}
+
+impl fmt::Debug for LoggingHandle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let ops = self.inner.ops_log.lock().unwrap();
+        f.debug_struct("LoggingHandle").field("ops", &*ops).finish()
+    }
+}
+
+#[derive(Debug)]
 pub struct LoggingDriver {
     inner: Box<dyn Driver>,
-
-    /// Log of all operations executed through this driver.
-    ops_log: Arc<Mutex<Vec<DriverOp>>>,
-
-    /// Faults to inject on subsequent `exec` calls. Shared across all
-    /// connections vended by this driver so a test can set up a fault
-    /// before knowing which connection the pool will hand out.
-    faults: Arc<Mutex<VecDeque<Fault>>>,
+    handle: LoggingHandle,
 }
 
 impl LoggingDriver {
     pub fn new(driver: Box<dyn Driver>) -> Self {
         Self {
             inner: driver,
-            ops_log: Arc::new(Mutex::new(Vec::new())),
-            faults: Arc::new(Mutex::new(VecDeque::new())),
+            handle: LoggingHandle::default(),
         }
     }
 
-    /// Get a handle to access the operations log
-    pub fn ops_log_handle(&self) -> Arc<Mutex<Vec<DriverOp>>> {
-        self.ops_log.clone()
-    }
-
-    /// Get a handle to the fault-injection queue. Pushing a `Fault`
-    /// onto this queue causes it to fire on the next `exec` call
-    /// routed through any connection produced by this driver.
-    pub fn faults_handle(&self) -> Arc<Mutex<VecDeque<Fault>>> {
-        self.faults.clone()
+    /// Get the single control handle for this driver. The handle exposes
+    /// both the operations log and the fault-injection queue.
+    pub fn handle(&self) -> LoggingHandle {
+        self.handle.clone()
     }
 }
 
@@ -75,8 +133,7 @@ impl Driver for LoggingDriver {
     async fn connect(&self) -> Result<Box<dyn Connection>> {
         Ok(Box::new(LoggingConnection {
             inner: self.inner.connect().await?,
-            ops_log: self.ops_log_handle(),
-            faults: self.faults_handle(),
+            handle: self.handle.clone(),
             valid: AtomicBool::new(true),
         }))
     }
@@ -90,24 +147,14 @@ impl Driver for LoggingDriver {
     }
 }
 
-#[derive(Debug)]
-pub struct DriverOp {
-    pub operation: Operation,
-    pub response: ExecResponse,
-}
-
 /// A driver wrapper that logs all operations for testing purposes
 #[derive(Debug)]
 pub struct LoggingConnection {
     /// The underlying driver that actually executes operations
     inner: Box<dyn Connection>,
 
-    /// Log of all operations executed through this driver
-    /// Using Arc<Mutex> for thread-safe access from tests
-    ops_log: Arc<Mutex<Vec<DriverOp>>>,
-
-    /// Shared fault queue. See [`LoggingDriver::faults_handle`].
-    faults: Arc<Mutex<VecDeque<Fault>>>,
+    /// Shared handle: ops log + fault queue.
+    handle: LoggingHandle,
 
     /// Set to `false` once an injected `ConnectionLost` fault has fired
     /// against this connection. Surfaced through [`Connection::is_valid`]
@@ -122,6 +169,8 @@ impl Connection for LoggingConnection {
         // Pop a queued fault, if any, and short-circuit before reaching
         // the underlying driver.
         let fault = self
+            .handle
+            .inner
             .faults
             .lock()
             .expect("Failed to acquire faults lock")
@@ -152,7 +201,9 @@ impl Connection for LoggingConnection {
             response: duplicated_response,
         };
 
-        self.ops_log
+        self.handle
+            .inner
+            .ops_log
             .lock()
             .expect("Failed to acquire ops log lock")
             .push(driver_op);
