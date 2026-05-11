@@ -8,10 +8,12 @@
 //! required to be `Sync` on `exec` — and gives the connection its own
 //! lifecycle independent of the pool object that holds the handle.
 
+use std::sync::Arc;
+
 use toasty_core::driver::{Connection, Rows};
 use toasty_core::stmt::Value;
 use tokio::{
-    sync::{mpsc, oneshot},
+    sync::{Notify, mpsc, oneshot},
     task::JoinHandle,
 };
 
@@ -33,6 +35,13 @@ pub(crate) enum ConnectionOperation {
     PushSchema {
         tx: oneshot::Sender<crate::Result<()>>,
     },
+    /// Active liveness probe issued by the pool's background sweep
+    /// (and, eventually, per-acquire pre-ping). Routes through the
+    /// connection task so the ping is serialized against any in-flight
+    /// `exec` on the same connection.
+    Ping {
+        tx: oneshot::Sender<crate::Result<()>>,
+    },
 }
 
 /// Handle to a dedicated connection task.
@@ -46,13 +55,21 @@ pub(crate) struct ConnectionHandle {
 
 impl ConnectionHandle {
     /// Spawn a worker task that owns `connection` and serializes
-    /// operations against it. Returns a handle for sending messages.
-    pub(crate) fn spawn(connection: Box<dyn Connection>, engine: Engine) -> Self {
+    /// operations against it. `sweep_notify` is signalled whenever the
+    /// task observes that the connection went bad so the pool's
+    /// health-check sweep can escalate immediately rather than waiting
+    /// for its next periodic tick.
+    pub(crate) fn spawn(
+        connection: Box<dyn Connection>,
+        engine: Engine,
+        sweep_notify: Arc<Notify>,
+    ) -> Self {
         let (in_tx, in_rx) = mpsc::unbounded_channel::<ConnectionOperation>();
         let task = ConnectionTask {
             connection,
             engine,
             in_rx,
+            sweep_notify,
         };
         let join_handle = tokio::spawn(task.run());
         Self { in_tx, join_handle }
@@ -81,6 +98,7 @@ struct ConnectionTask {
     connection: Box<dyn Connection>,
     engine: Engine,
     in_rx: mpsc::UnboundedReceiver<ConnectionOperation>,
+    sweep_notify: Arc<Notify>,
 }
 
 impl ConnectionTask {
@@ -110,6 +128,10 @@ impl ConnectionTask {
             }
             ConnectionOperation::PushSchema { tx } => {
                 let result = self.connection.push_schema(&self.engine.schema).await;
+                self.respond(tx, result)
+            }
+            ConnectionOperation::Ping { tx } => {
+                let result = self.connection.ping().await;
                 self.respond(tx, result)
             }
         }
@@ -148,6 +170,13 @@ impl ConnectionTask {
     /// re-enters the pool sees `in_tx.is_closed() == true` in
     /// `Manager::recycle` and the slot is evicted — no race with this
     /// task's exit. Returns whether the task should keep running.
+    ///
+    /// Also wakes the pool's background sweep so it can escalate to a
+    /// full idle-pool ping pass without waiting for the next periodic
+    /// tick. A real connection-lost error usually means more than one
+    /// connection in the pool is affected (database restart, network
+    /// event), and catching the rest eagerly turns a multi-second
+    /// recovery window into one round-trip per idle slot.
     fn respond<T>(&mut self, tx: oneshot::Sender<T>, result: T) -> bool {
         if self.connection.is_valid() {
             let _ = tx.send(result);
@@ -155,6 +184,7 @@ impl ConnectionTask {
         } else {
             tracing::debug!("connection reported invalid; closing channel and exiting");
             self.in_rx.close();
+            self.sweep_notify.notify_one();
             let _ = tx.send(result);
             false
         }

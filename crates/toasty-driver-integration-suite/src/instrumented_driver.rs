@@ -232,6 +232,30 @@ impl Connection for InstrumentedConnection {
     fn is_valid(&self) -> bool {
         self.valid.load(Ordering::Acquire) && self.inner.is_valid()
     }
+
+    async fn ping(&mut self) -> Result<()> {
+        // Consume a queued fault before delegating, mirroring `exec`.
+        // A `ConnectionLost` fault here lets tests target the sweep's
+        // ping path the same way they target user query paths.
+        let fault = self
+            .handle
+            .inner
+            .faults
+            .lock()
+            .expect("Failed to acquire faults lock")
+            .pop_front();
+        if let Some(fault) = fault {
+            match fault {
+                Fault::ConnectionLost => {
+                    self.valid.store(false, Ordering::Release);
+                    return Err(toasty_core::Error::connection_lost(std::io::Error::other(
+                        "injected connection-lost fault",
+                    )));
+                }
+            }
+        }
+        self.inner.ping().await
+    }
 }
 
 /// Duplicate an ExecResponse, using ValueStream::dup() for value streams
