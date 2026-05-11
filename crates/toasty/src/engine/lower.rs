@@ -1,4 +1,5 @@
 mod association;
+mod expr_or;
 mod expr_pattern;
 mod include;
 mod insert;
@@ -305,6 +306,14 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 if let Some(lowered) = self.lower_expr_binary_op(e.op, &mut e.lhs, &mut e.rhs) {
                     *expr = lowered;
                 }
+            }
+            // App-level rewrite: an OR covering every variant of an enum
+            // via `IsVariant` is a tautology.  Must fire before the children
+            // walk lowers the `IsVariant` nodes into discriminant
+            // comparisons, since the rewrite pattern-matches on
+            // `Expr::IsVariant`.
+            stmt::Expr::Or(e) if expr_or::is_variant_tautology_or(self.expr_cx.schema(), e) => {
+                *expr = true.into();
             }
             stmt::Expr::InList(e) => {
                 self.visit_expr_in_list_mut(e);
