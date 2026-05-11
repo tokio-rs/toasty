@@ -24,7 +24,11 @@ pub async fn vec_string_create_get(t: &mut Test) -> Result<(), BoxError> {
     let mut db = t.setup_db(models!(Item)).await;
 
     let tags = vec!["rust".to_string(), "toasty".to_string()];
-    let item = Item::create().tags(tags.clone()).exec(&mut db).await?;
+    let item = toasty::create!(Item {
+        tags: tags.clone(),
+    })
+    .exec(&mut db)
+    .await?;
 
     let reloaded = Item::get_by_id(&mut db, &item.id).await?;
     assert_eq!(reloaded.tags, tags);
@@ -47,10 +51,11 @@ pub async fn vec_string_update_replace(t: &mut Test) -> Result<(), BoxError> {
 
     let mut db = t.setup_db(models!(Item)).await;
 
-    let mut item = Item::create()
-        .tags(vec!["a".to_string(), "b".to_string()])
-        .exec(&mut db)
-        .await?;
+    let mut item = toasty::create!(Item {
+        tags: vec!["a".to_string(), "b".to_string()],
+    })
+    .exec(&mut db)
+    .await?;
 
     let new_tags = vec!["x".to_string(), "y".to_string(), "z".to_string()];
     item.update().tags(new_tags.clone()).exec(&mut db).await?;
@@ -77,18 +82,13 @@ pub async fn vec_string_contains_filter(t: &mut Test) -> Result<(), BoxError> {
 
     let mut db = t.setup_db(models!(Item)).await;
 
-    Item::create()
-        .tags(vec!["admin".to_string(), "verified".to_string()])
-        .exec(&mut db)
-        .await?;
-    Item::create()
-        .tags(vec!["guest".to_string()])
-        .exec(&mut db)
-        .await?;
-    Item::create()
-        .tags(vec!["admin".to_string(), "moderator".to_string()])
-        .exec(&mut db)
-        .await?;
+    toasty::create!(Item::[
+        { tags: vec!["admin".to_string(), "verified".to_string()] },
+        { tags: vec!["guest".to_string()] },
+        { tags: vec!["admin".to_string(), "moderator".to_string()] },
+    ])
+    .exec(&mut db)
+    .await?;
 
     let admins = Item::filter(Item::fields().tags().contains("admin"))
         .exec(&mut db)
@@ -118,18 +118,13 @@ pub async fn vec_string_is_superset_filter(t: &mut Test) -> Result<(), BoxError>
 
     let mut db = t.setup_db(models!(Item)).await;
 
-    Item::create()
-        .tags(vec!["admin".to_string(), "verified".to_string()])
-        .exec(&mut db)
-        .await?;
-    Item::create()
-        .tags(vec!["admin".to_string()])
-        .exec(&mut db)
-        .await?;
-    Item::create()
-        .tags(vec!["verified".to_string()])
-        .exec(&mut db)
-        .await?;
+    toasty::create!(Item::[
+        { tags: vec!["admin".to_string(), "verified".to_string()] },
+        { tags: vec!["admin".to_string()] },
+        { tags: vec!["verified".to_string()] },
+    ])
+    .exec(&mut db)
+    .await?;
 
     let both = Item::filter(
         Item::fields()
@@ -158,18 +153,13 @@ pub async fn vec_string_intersects_filter(t: &mut Test) -> Result<(), BoxError> 
 
     let mut db = t.setup_db(models!(Item)).await;
 
-    Item::create()
-        .tags(vec!["admin".to_string()])
-        .exec(&mut db)
-        .await?;
-    Item::create()
-        .tags(vec!["moderator".to_string()])
-        .exec(&mut db)
-        .await?;
-    Item::create()
-        .tags(vec!["guest".to_string()])
-        .exec(&mut db)
-        .await?;
+    toasty::create!(Item::[
+        { tags: vec!["admin".to_string()] },
+        { tags: vec!["moderator".to_string()] },
+        { tags: vec!["guest".to_string()] },
+    ])
+    .exec(&mut db)
+    .await?;
 
     let priv_users = Item::filter(
         Item::fields()
@@ -226,18 +216,13 @@ pub async fn vec_string_len_filter(t: &mut Test) -> Result<(), BoxError> {
 
     let mut db = t.setup_db(models!(Item)).await;
 
-    Item::create()
-        .tags(Vec::<String>::new())
-        .exec(&mut db)
-        .await?;
-    Item::create()
-        .tags(vec!["a".to_string()])
-        .exec(&mut db)
-        .await?;
-    Item::create()
-        .tags(vec!["a".to_string(), "b".to_string(), "c".to_string()])
-        .exec(&mut db)
-        .await?;
+    toasty::create!(Item::[
+        { tags: Vec::<String>::new() },
+        { tags: vec!["a".to_string()] },
+        { tags: vec!["a".to_string(), "b".to_string(), "c".to_string()] },
+    ])
+    .exec(&mut db)
+    .await?;
 
     let empty = Item::filter(Item::fields().tags().is_empty())
         .exec(&mut db)
