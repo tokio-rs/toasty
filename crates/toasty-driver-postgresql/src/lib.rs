@@ -36,6 +36,28 @@ use url::Url;
 
 use crate::{oid_cache::OidCache, statement_cache::StatementCache};
 
+/// Classifies a `tokio_postgres::Error` into a Toasty error.
+///
+/// Errors that carry a server-side `DbError` are mapped to typed
+/// variants where one exists (`SerializationFailure`,
+/// `ReadOnlyTransaction`); everything else with a `DbError` becomes
+/// `DriverOperationFailed`. Errors *without* a `DbError` are
+/// classified as `ConnectionLost`: per `tokio-postgres`, those
+/// originate from the underlying socket or protocol layer (closed
+/// socket, IO error, end-of-stream during handshake), which the
+/// pool treats as evictable.
+fn classify_pg_error(e: tokio_postgres::Error) -> toasty_core::Error {
+    if let Some(db_err) = e.as_db_error() {
+        match db_err.code().code() {
+            "40001" => toasty_core::Error::serialization_failure(db_err.message()),
+            "25006" => toasty_core::Error::read_only_transaction(db_err.message()),
+            _ => toasty_core::Error::driver_operation_failed(e),
+        }
+    } else {
+        toasty_core::Error::connection_lost(e)
+    }
+}
+
 /// A PostgreSQL [`Driver`] that connects via `tokio-postgres`.
 ///
 /// # Examples
@@ -192,11 +214,11 @@ impl Driver for PostgreSQL {
         conn.client
             .execute(&format!("DROP DATABASE IF EXISTS \"{}\"", temp_dbname), &[])
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+            .map_err(classify_pg_error)?;
         conn.client
             .execute(&format!("CREATE DATABASE \"{}\"", temp_dbname), &[])
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+            .map_err(classify_pg_error)?;
         drop(conn);
 
         // Step 2: Connect to the temp DB, drop and recreate the target
@@ -209,15 +231,15 @@ impl Driver for PostgreSQL {
                 &[&dbname],
             )
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+            .map_err(classify_pg_error)?;
         conn.client
             .execute(&format!("DROP DATABASE IF EXISTS \"{}\"", dbname), &[])
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+            .map_err(classify_pg_error)?;
         conn.client
             .execute(&format!("CREATE DATABASE \"{}\"", dbname), &[])
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+            .map_err(classify_pg_error)?;
         drop(conn);
 
         // Step 3: Connect back to the target and clean up the temp DB
@@ -225,7 +247,7 @@ impl Driver for PostgreSQL {
         conn.client
             .execute(&format!("DROP DATABASE IF EXISTS \"{}\"", temp_dbname), &[])
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+            .map_err(classify_pg_error)?;
 
         Ok(())
     }
@@ -257,10 +279,7 @@ impl Connection {
         T: MakeTlsConnect<Socket> + 'static,
         T::Stream: Send,
     {
-        let (client, connection) = config
-            .connect(tls)
-            .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+        let (client, connection) = config.connect(tls).await.map_err(classify_pg_error)?;
 
         tokio::spawn(async move {
             if let Err(e) = connection.await {
@@ -283,7 +302,7 @@ impl Connection {
         self.client
             .execute(&sql, &[])
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+            .map_err(classify_pg_error)?;
 
         for index in &table.indices {
             if index.primary_key {
@@ -295,7 +314,7 @@ impl Connection {
             self.client
                 .execute(&sql, &[])
                 .await
-                .map_err(toasty_core::Error::driver_operation_failed)?;
+                .map_err(classify_pg_error)?;
         }
 
         Ok(())
@@ -315,17 +334,10 @@ impl toasty_core::driver::Connection for Connection {
 
         if let Operation::Transaction(ref t) = op {
             let sql = sql::Serializer::postgresql(&schema.db).serialize_transaction(t);
-            self.client.batch_execute(&sql).await.map_err(|e| {
-                if let Some(db_err) = e.as_db_error() {
-                    match db_err.code().code() {
-                        "40001" => toasty_core::Error::serialization_failure(db_err.message()),
-                        "25006" => toasty_core::Error::read_only_transaction(db_err.message()),
-                        _ => toasty_core::Error::driver_operation_failed(e),
-                    }
-                } else {
-                    toasty_core::Error::driver_operation_failed(e)
-                }
-            })?;
+            self.client
+                .batch_execute(&sql)
+                .await
+                .map_err(classify_pg_error)?;
             return Ok(ExecResponse::count(0));
         }
 
@@ -368,14 +380,14 @@ impl toasty_core::driver::Connection for Connection {
             .statement_cache
             .prepare_typed(&mut self.client, &sql_as_str, &param_types)
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+            .map_err(classify_pg_error)?;
 
         if width.is_none() {
             let count = self
                 .client
                 .execute(&statement, &params)
                 .await
-                .map_err(toasty_core::Error::driver_operation_failed)?;
+                .map_err(classify_pg_error)?;
             return Ok(ExecResponse::count(count));
         }
 
@@ -383,7 +395,7 @@ impl toasty_core::driver::Connection for Connection {
             .client
             .query(&statement, &params)
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+            .map_err(classify_pg_error)?;
 
         if width.is_none() {
             let [row] = &rows[..] else { todo!() };
@@ -431,7 +443,7 @@ impl toasty_core::driver::Connection for Connection {
                     self.client
                         .execute(&sql, &[])
                         .await
-                        .map_err(toasty_core::Error::driver_operation_failed)?;
+                        .map_err(classify_pg_error)?;
                 }
             }
         }
@@ -457,7 +469,7 @@ impl toasty_core::driver::Connection for Connection {
                 &[],
             )
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+            .map_err(classify_pg_error)?;
 
         // Query all applied migrations
         let rows = self
@@ -467,7 +479,7 @@ impl toasty_core::driver::Connection for Connection {
                 &[],
             )
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+            .map_err(classify_pg_error)?;
 
         Ok(rows
             .iter()
@@ -496,26 +508,19 @@ impl toasty_core::driver::Connection for Connection {
                 &[],
             )
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+            .map_err(classify_pg_error)?;
 
         // Start transaction
-        let transaction = self
-            .client
-            .transaction()
-            .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+        let transaction = self.client.transaction().await.map_err(classify_pg_error)?;
 
         // Execute each migration statement
         for statement in migration.statements() {
             if let Err(e) = transaction
                 .batch_execute(statement)
                 .await
-                .map_err(toasty_core::Error::driver_operation_failed)
+                .map_err(classify_pg_error)
             {
-                transaction
-                    .rollback()
-                    .await
-                    .map_err(toasty_core::Error::driver_operation_failed)?;
+                transaction.rollback().await.map_err(classify_pg_error)?;
                 return Err(e);
             }
         }
@@ -527,20 +532,18 @@ impl toasty_core::driver::Connection for Connection {
                 &[&(id as i64), &name],
             )
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)
+            .map_err(classify_pg_error)
         {
-            transaction
-                .rollback()
-                .await
-                .map_err(toasty_core::Error::driver_operation_failed)?;
+            transaction.rollback().await.map_err(classify_pg_error)?;
             return Err(e);
         }
 
         // Commit transaction
-        transaction
-            .commit()
-            .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+        transaction.commit().await.map_err(classify_pg_error)?;
         Ok(())
+    }
+
+    fn is_valid(&self) -> bool {
+        !self.client.is_closed()
     }
 }

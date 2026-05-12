@@ -2,13 +2,9 @@
 
 use deadpool::managed::Timeouts;
 use std::sync::Arc;
-use toasty_core::driver::{Capability, Driver, Rows};
-use toasty_core::stmt::Value;
-use tokio::{
-    sync::{mpsc, oneshot},
-    task::JoinHandle,
-};
+use toasty_core::driver::{Capability, Driver};
 
+use super::connection_task::ConnectionHandle;
 use crate::engine::Engine;
 
 /// Get the default maximum size of a pool, which is `cpu_core_count * 2`
@@ -31,42 +27,6 @@ impl Default for PoolConfig {
             timeouts: Default::default(),
         }
     }
-}
-
-/// Handle to a dedicated connection task.
-///
-/// When dropped, `in_tx` closes the channel, causing the background task to
-/// finish processing remaining messages and exit gracefully.
-pub(crate) struct ConnectionHandle {
-    pub(crate) in_tx: mpsc::UnboundedSender<ConnectionOperation>,
-    join_handle: JoinHandle<()>,
-}
-
-impl std::fmt::Debug for ConnectionHandle {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ConnectionHandle")
-            .field("channel_closed", &self.in_tx.is_closed())
-            .field("task_finished", &self.join_handle.is_finished())
-            .finish()
-    }
-}
-
-/// Operations sent to the connection task.
-pub(crate) enum ConnectionOperation {
-    /// Execute a statement (compile + run on the connection).
-    ExecStatement {
-        stmt: Box<toasty_core::stmt::Statement>,
-        in_transaction: bool,
-        tx: oneshot::Sender<crate::Result<toasty_core::driver::ExecResponse>>,
-    },
-    ExecOperation {
-        operation: Box<toasty_core::driver::operation::Operation>,
-        tx: oneshot::Sender<crate::Result<toasty_core::driver::ExecResponse>>,
-    },
-    /// Push schema to the database.
-    PushSchema {
-        tx: oneshot::Sender<crate::Result<()>>,
-    },
 }
 
 /// A connection pool that manages database connections with background tasks.
@@ -169,62 +129,10 @@ impl deadpool::managed::Manager for Manager {
 
     async fn create(&self) -> Result<Self::Type, Self::Error> {
         tracing::debug!("creating new pooled connection");
-        let mut connection = match self.driver.connect().await {
-            Ok(conn) => conn,
-            Err(e) => {
-                tracing::error!(error = %e, "failed to create database connection");
-                return Err(e);
-            }
-        };
-        let engine = self.engine.clone();
-
-        let (in_tx, mut in_rx) = mpsc::unbounded_channel::<ConnectionOperation>();
-
-        let join_handle = tokio::spawn(async move {
-            while let Some(op) = in_rx.recv().await {
-                match op {
-                    ConnectionOperation::ExecStatement {
-                        stmt,
-                        in_transaction,
-                        tx,
-                    } => {
-                        let single = stmt.is_single();
-                        let result = async {
-                            let mut response =
-                                engine.exec(&mut *connection, *stmt, in_transaction).await?;
-                            response.values.buffer().await?;
-
-                            if single {
-                                let Rows::Value(Value::List(mut items)) = response.values else {
-                                    unreachable!()
-                                };
-                                assert!(
-                                    items.len() <= 1,
-                                    "expected at most 1 row for single statement, got {}",
-                                    items.len()
-                                );
-                                response.values = Rows::Value(items.pop().unwrap_or(Value::Null));
-                            }
-
-                            Ok(response)
-                        }
-                        .await;
-
-                        let _ = tx.send(result);
-                    }
-                    ConnectionOperation::ExecOperation { operation, tx } => {
-                        let result = connection.exec(&engine.schema, *operation).await;
-                        let _ = tx.send(result);
-                    }
-                    ConnectionOperation::PushSchema { tx } => {
-                        let result = connection.push_schema(&engine.schema).await;
-                        let _ = tx.send(result);
-                    }
-                }
-            }
-        });
-
-        Ok(ConnectionHandle { in_tx, join_handle })
+        let connection = self.driver.connect().await.inspect_err(|e| {
+            tracing::error!(error = %e, "failed to create database connection");
+        })?;
+        Ok(ConnectionHandle::spawn(connection, self.engine.clone()))
     }
 
     async fn recycle(
@@ -232,7 +140,7 @@ impl deadpool::managed::Manager for Manager {
         obj: &mut Self::Type,
         _metrics: &deadpool::managed::Metrics,
     ) -> deadpool::managed::RecycleResult<Self::Error> {
-        if obj.in_tx.is_closed() || obj.join_handle.is_finished() {
+        if obj.in_tx.is_closed() || obj.is_finished() {
             tracing::debug!("discarding dead pooled connection");
             return Err(deadpool::managed::RecycleError::message(
                 "background task is no longer running",

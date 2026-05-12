@@ -20,7 +20,7 @@ use mysql_async::{
     Conn, OptsBuilder,
     prelude::{Queryable, ToValue},
 };
-use std::{borrow::Cow, sync::Arc};
+use std::{borrow::Cow, cell::Cell, sync::Arc};
 use toasty_core::{
     Result, Schema,
     driver::{Capability, Driver, ExecResponse, Operation},
@@ -29,6 +29,39 @@ use toasty_core::{
 };
 use toasty_sql::{self as sql};
 use url::Url;
+
+/// Classifies a `mysql_async::Error` into a Toasty error.
+///
+/// `Error::Io` (any TCP/TLS-level fault) and the IO-shaped `Driver`
+/// variants (`ConnectionClosed`, `PoolDisconnected`) become
+/// `ConnectionLost`. `Server` errors with known SQLSTATE codes are
+/// mapped to typed variants. Everything else is
+/// `DriverOperationFailed`.
+fn classify_mysql_error(e: mysql_async::Error) -> toasty_core::Error {
+    use mysql_async::{DriverError, Error};
+    match e {
+        Error::Io(_) => toasty_core::Error::connection_lost(e),
+        Error::Driver(DriverError::ConnectionClosed | DriverError::PoolDisconnected) => {
+            toasty_core::Error::connection_lost(e)
+        }
+        Error::Server(se) => match se.code {
+            1213 => toasty_core::Error::serialization_failure(se.message),
+            1792 => toasty_core::Error::read_only_transaction(se.message),
+            _ => toasty_core::Error::driver_operation_failed(Error::Server(se)),
+        },
+        other => toasty_core::Error::driver_operation_failed(other),
+    }
+}
+
+/// Classify a `mysql_async::Error`, also flipping the connection's
+/// validity flag if the error indicates the connection is gone.
+fn record_mysql_err(valid: &Cell<bool>, e: mysql_async::Error) -> toasty_core::Error {
+    let err = classify_mysql_error(e);
+    if err.is_connection_lost() {
+        valid.set(false);
+    }
+    err
+}
 
 /// A MySQL [`Driver`] that connects via `mysql_async`.
 ///
@@ -96,7 +129,7 @@ impl Driver for MySQL {
     async fn connect(&self) -> Result<Box<dyn toasty_core::driver::Connection>> {
         let conn = Conn::new(self.opts.clone())
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+            .map_err(classify_mysql_error)?;
         Ok(Box::new(Connection::new(conn)))
     }
 
@@ -114,7 +147,7 @@ impl Driver for MySQL {
     async fn reset_db(&self) -> toasty_core::Result<()> {
         let mut conn = Conn::new(self.opts.clone())
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+            .map_err(classify_mysql_error)?;
 
         let dbname = conn
             .opts()
@@ -126,15 +159,15 @@ impl Driver for MySQL {
 
         conn.query_drop(format!("DROP DATABASE IF EXISTS `{}`", dbname))
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+            .map_err(classify_mysql_error)?;
 
         conn.query_drop(format!("CREATE DATABASE `{}`", dbname))
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+            .map_err(classify_mysql_error)?;
 
         conn.query_drop(format!("USE `{}`", dbname))
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+            .map_err(classify_mysql_error)?;
 
         Ok(())
     }
@@ -144,12 +177,19 @@ impl Driver for MySQL {
 #[derive(Debug)]
 pub struct Connection {
     conn: Conn,
+    /// Set to `false` once `exec` has observed a connection-lost
+    /// error. `mysql_async::Conn` does not expose a passive flag, so
+    /// the driver tracks one itself. Read by [`is_valid`].
+    valid: Cell<bool>,
 }
 
 impl Connection {
     /// Wrap an existing [`mysql_async::Conn`] as a Toasty connection.
     pub fn new(conn: Conn) -> Self {
-        Self { conn }
+        Self {
+            conn,
+            valid: Cell::new(true),
+        }
     }
 
     /// Create a table and its indices from a schema definition.
@@ -161,7 +201,7 @@ impl Connection {
         self.conn
             .exec_drop(&sql, ())
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+            .map_err(|e| record_mysql_err(&self.valid, e))?;
 
         for index in &table.indices {
             if index.primary_key {
@@ -173,7 +213,7 @@ impl Connection {
             self.conn
                 .exec_drop(&sql, ())
                 .await
-                .map_err(toasty_core::Error::driver_operation_failed)?;
+                .map_err(|e| record_mysql_err(&self.valid, e))?;
         }
 
         Ok(())
@@ -182,7 +222,7 @@ impl Connection {
 
 impl From<Conn> for Connection {
     fn from(conn: Conn) -> Self {
-        Self { conn }
+        Self::new(conn)
     }
 }
 
@@ -200,16 +240,10 @@ impl toasty_core::driver::Connection for Connection {
             ),
             Operation::Transaction(op) => {
                 let sql = sql::Serializer::mysql(&schema.db).serialize_transaction(&op);
-                self.conn.query_drop(sql).await.map_err(|e| match e {
-                    mysql_async::Error::Server(se) => match se.code {
-                        1213 => toasty_core::Error::serialization_failure(se.message),
-                        1792 => toasty_core::Error::read_only_transaction(se.message),
-                        _ => toasty_core::Error::driver_operation_failed(
-                            mysql_async::Error::Server(se),
-                        ),
-                    },
-                    other => toasty_core::Error::driver_operation_failed(other),
-                })?;
+                self.conn
+                    .query_drop(sql)
+                    .await
+                    .map_err(|e| record_mysql_err(&self.valid, e))?;
                 return Ok(ExecResponse::count(0));
             }
             op => todo!("op={:#?}", op),
@@ -235,14 +269,14 @@ impl toasty_core::driver::Connection for Connection {
             .conn
             .prep(&sql_as_str)
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+            .map_err(|e| record_mysql_err(&self.valid, e))?;
 
         if ret.is_none() {
             let count = self
                 .conn
                 .exec_iter(&statement, mysql_async::Params::Positional(args))
                 .await
-                .map_err(toasty_core::Error::driver_operation_failed)?
+                .map_err(|e| record_mysql_err(&self.valid, e))?
                 .affected_rows();
 
             // Handle the last_insert_id_hack for MySQL INSERT with RETURNING
@@ -258,7 +292,7 @@ impl toasty_core::driver::Connection for Connection {
                     .conn
                     .query_first("SELECT LAST_INSERT_ID()")
                     .await
-                    .map_err(toasty_core::Error::driver_operation_failed)?
+                    .map_err(|e| record_mysql_err(&self.valid, e))?
                     .ok_or_else(|| {
                         toasty_core::Error::driver_operation_failed(std::io::Error::other(
                             "LAST_INSERT_ID() returned no rows",
@@ -284,7 +318,7 @@ impl toasty_core::driver::Connection for Connection {
             .conn
             .exec(&statement, &args)
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+            .map_err(|e| record_mysql_err(&self.valid, e))?;
 
         if let Some(returning) = ret {
             let results = rows.into_iter().map(move |mut row| {
@@ -343,14 +377,14 @@ impl toasty_core::driver::Connection for Connection {
                 (),
             )
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+            .map_err(|e| record_mysql_err(&self.valid, e))?;
 
         // Query all applied migrations
         let rows: Vec<u64> = self
             .conn
             .exec("SELECT id FROM __toasty_migrations ORDER BY applied_at", ())
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+            .map_err(|e| record_mysql_err(&self.valid, e))?;
 
         Ok(rows
             .into_iter()
@@ -376,26 +410,26 @@ impl toasty_core::driver::Connection for Connection {
                 (),
             )
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+            .map_err(|e| record_mysql_err(&self.valid, e))?;
 
         // Start transaction
         let mut transaction = self
             .conn
             .start_transaction(Default::default())
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+            .map_err(|e| record_mysql_err(&self.valid, e))?;
 
         // Execute each migration statement
         for statement in migration.statements() {
             if let Err(e) = transaction
                 .query_drop(statement)
                 .await
-                .map_err(toasty_core::Error::driver_operation_failed)
+                .map_err(|e| record_mysql_err(&self.valid, e))
             {
                 transaction
                     .rollback()
                     .await
-                    .map_err(toasty_core::Error::driver_operation_failed)?;
+                    .map_err(|e| record_mysql_err(&self.valid, e))?;
                 return Err(e);
             }
         }
@@ -407,12 +441,12 @@ impl toasty_core::driver::Connection for Connection {
                 (id, name),
             )
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)
+            .map_err(|e| record_mysql_err(&self.valid, e))
         {
             transaction
                 .rollback()
                 .await
-                .map_err(toasty_core::Error::driver_operation_failed)?;
+                .map_err(|e| record_mysql_err(&self.valid, e))?;
             return Err(e);
         }
 
@@ -420,7 +454,11 @@ impl toasty_core::driver::Connection for Connection {
         transaction
             .commit()
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+            .map_err(|e| record_mysql_err(&self.valid, e))?;
         Ok(())
+    }
+
+    fn is_valid(&self) -> bool {
+        self.valid.get()
     }
 }
