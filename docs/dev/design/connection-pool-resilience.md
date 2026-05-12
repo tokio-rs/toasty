@@ -593,11 +593,16 @@ Tracked in [#678]. The design lands in slices.
   sweep tokio task spawned by `Pool`, and the eager-escalation path
   triggered by an observed `Error::connection_lost`. PostgreSQL and MySQL
   drivers implement `ping`; SQLite and DynamoDB stay on the default no-op.
+- **Per-acquire pre-ping** — PR [#879]. Adds the `pool_pre_ping(bool)`
+  builder option (default `false`). When enabled, `Manager::recycle`
+  sends `Connection::ping()` after the passive `is_valid` check and
+  treats a failing ping like a connection-lost error so deadpool drops
+  the slot and tries another. The ping reuses the
+  `ConnectionOperation::Ping` plumbing from the sweep slice; no
+  driver-trait surface change.
 
 **Remaining**
 
-- **Per-acquire pre-ping.** Adds `pool_pre_ping(bool)`. Off by default.
-  Reuses `Connection::ping()` from the slice above.
 - **Connection lifetime caps.** Adds `pool_max_connection_lifetime` and
   `pool_max_connection_idle_time`. Pure `recycle`-time checks; no driver
   surface change.
@@ -606,3 +611,4 @@ When the last slice lands, delete this doc per the project convention.
 
 [#867]: https://github.com/tokio-rs/toasty/pull/867
 [#874]: https://github.com/tokio-rs/toasty/pull/874
+[#879]: https://github.com/tokio-rs/toasty/pull/879
