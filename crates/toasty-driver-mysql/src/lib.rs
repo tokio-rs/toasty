@@ -461,4 +461,19 @@ impl toasty_core::driver::Connection for Connection {
     fn is_valid(&self) -> bool {
         self.valid.get()
     }
+
+    async fn ping(&mut self) -> Result<()> {
+        // `COM_PING` is the cheapest server round-trip in the MySQL
+        // protocol. Any failure is surfaced as `connection_lost`: the
+        // only meaningful outcome of a ping is "the connection is
+        // alive" or "evict it." Also flip the validity flag so a
+        // subsequent `is_valid` check observes the dead connection.
+        match self.conn.ping().await {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                self.valid.set(false);
+                Err(toasty_core::Error::connection_lost(e))
+            }
+        }
+    }
 }

@@ -129,6 +129,25 @@ pub trait Connection: Debug + Send + 'static {
         true
     }
 
+    /// Active liveness probe. The pool's background health-check sweep
+    /// (and, when enabled, per-acquire pre-ping) calls this to verify
+    /// an idle connection is still usable.
+    ///
+    /// A failing ping **must** return [`crate::Error::connection_lost`]
+    /// rather than a generic operation error — the pool relies on that
+    /// classification to drop the slot rather than treat the failure
+    /// as a transient query error.
+    ///
+    /// Drivers should make this the cheapest round-trip the backend
+    /// supports (`SELECT 1`, `COM_PING`, etc.). The default returns
+    /// `Ok(())` without doing any I/O, which is the right answer for
+    /// drivers whose connection layer cannot fail in isolation
+    /// (SQLite) or that manage their own connection pool beneath the
+    /// driver surface (DynamoDB).
+    async fn ping(&mut self) -> crate::Result<()> {
+        Ok(())
+    }
+
     /// Creates tables and indices defined in the schema on the database.
     /// TODO: This will probably use database introspection in the future.
     async fn push_schema(&mut self, _schema: &Schema) -> crate::Result<()>;

@@ -546,4 +546,16 @@ impl toasty_core::driver::Connection for Connection {
     fn is_valid(&self) -> bool {
         !self.client.is_closed()
     }
+
+    async fn ping(&mut self) -> Result<()> {
+        // An empty `simple_query` is the lightest sync round-trip in
+        // the PG protocol — it skips parsing entirely. Any failure is
+        // surfaced as `connection_lost`: the only meaningful outcome
+        // of a ping is "the connection is alive" or "evict it."
+        self.client
+            .simple_query("")
+            .await
+            .map(|_| ())
+            .map_err(toasty_core::Error::connection_lost)
+    }
 }

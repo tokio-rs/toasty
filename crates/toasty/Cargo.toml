@@ -71,7 +71,8 @@ url.workspace = true
 [dev-dependencies]
 assert-struct.workspace = true
 proptest.workspace = true
-tokio = { workspace = true }
+tempfile.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
 toasty-driver-sqlite = { workspace = true }
 
 [lints]

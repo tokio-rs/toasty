@@ -575,3 +575,33 @@ to short-circuit the round-trip). **Resolved** in favor of two methods.
   synchronized 60-second sweeps could create a pingstorm. Acceptable
   at one ping per process per minute; revisit if benchmarks say
   otherwise.
+
+## Implementation status
+
+Tracked in [#678]. The design lands in slices.
+
+**Shipped**
+
+- **Passive detection** — PR [#867]. `Error::connection_lost` and the
+  `is_connection_lost()` predicate; `Connection::is_valid()` trait method
+  with default `true`; PostgreSQL and MySQL connection-lost classifiers;
+  the pool evicts a connection whose task observes `!is_valid()` after
+  an `exec`. SQLite and DynamoDB stay on trait defaults.
+
+**Remaining**
+
+- **Background sweep with eager escalation.** Adds `Connection::ping()`
+  to the driver trait, the `pool_health_check_interval` builder option,
+  the sweep tokio task spawned by `Pool`, and the eager-escalation path
+  triggered by an observed `Error::connection_lost`. This is the largest
+  user-visible win still outstanding — it closes the "first query after
+  a restart fails" gap.
+- **Per-acquire pre-ping.** Adds `pool_pre_ping(bool)`. Off by default.
+  Reuses `Connection::ping()` from the slice above.
+- **Connection lifetime caps.** Adds `pool_max_connection_lifetime` and
+  `pool_max_connection_idle_time`. Pure `recycle`-time checks; no driver
+  surface change.
+
+When the last slice lands, delete this doc per the project convention.
+
+[#867]: https://github.com/tokio-rs/toasty/pull/867

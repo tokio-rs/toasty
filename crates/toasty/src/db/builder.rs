@@ -114,6 +114,26 @@ impl Builder {
         self
     }
 
+    /// Configure how often the pool's background sweep pings an idle
+    /// connection to detect a silently-broken backend (a database
+    /// restart, a load-balancer-closed socket, a session timeout). On
+    /// success the connection is returned as most-recently-used; on
+    /// failure the pool eagerly pings every other idle connection and
+    /// drops the ones that fail, so a single bad result drains every
+    /// dead connection in one pass.
+    ///
+    /// The same eager sweep also fires when a user query observes
+    /// [`Error::is_connection_lost`](toasty_core::Error::is_connection_lost)
+    /// — so a restart usually costs at most one failed query rather
+    /// than one per pooled connection.
+    ///
+    /// Defaults to `Some(60s)`. Pass `None` to disable the sweep and
+    /// rely on passive error-driven recovery only.
+    pub fn pool_health_check_interval(&mut self, interval: Option<Duration>) -> &mut Self {
+        self.pool.health_check_interval = interval;
+        self
+    }
+
     /// Build and return the app-level schema from the registered models
     /// without opening a database connection.
     ///
