@@ -64,7 +64,7 @@ impl LoweringState<'_> {
         // itself via `LowerStatement::visit_expr_binary_op_mut`.
         association::RewriteVia::new(expr_cx).rewrite(&mut stmt);
 
-        Simplify::with_context(expr_cx).visit_mut(&mut stmt);
+        Simplify::with_context(expr_cx, self.engine.capability).visit_mut(&mut stmt);
 
         let stmt_id = self.hir.new_statement_info(self.dependencies.clone());
         let scope_id = self.scopes.push(Scope { stmt_id, row_index });
@@ -1202,7 +1202,8 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             // (`lift_in_subquery`, `rewrite_expr_in_list_when_model`,
             // `try_variant_tautology_or`) that the lowering visitor expects
             // to have already fired.
-            Simplify::with_context(child.expr_cx).visit_mut(&mut *stmt);
+            Simplify::with_context(child.expr_cx, child.state.engine.capability)
+                .visit_mut(&mut *stmt);
             // Lowering walk.
             child.visit_stmt_mut(&mut stmt);
             // Post-lower simplify: heavyweight rules on the lowered tree.

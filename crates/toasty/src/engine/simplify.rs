@@ -3,7 +3,9 @@ mod expr_any;
 mod expr_binary_op;
 mod expr_cast;
 mod expr_exists;
+mod expr_intersects;
 mod expr_is_null;
+mod expr_is_superset;
 mod expr_let;
 mod expr_list;
 mod expr_map;
@@ -15,6 +17,7 @@ mod stmt_query;
 // TODO: unify names
 mod lift_in_subquery;
 use toasty_core::{
+    driver::Capability,
     schema::*,
     stmt::{self, Expr, IntoExprTarget, Node, VisitMut},
 };
@@ -32,18 +35,24 @@ use crate::engine::{Engine, fold};
 pub(crate) struct Simplify<'a> {
     /// Expression context providing schema access and type information.
     cx: stmt::ExprContext<'a>,
+    /// Driver capabilities, consulted by passes that emit driver-specific shapes.
+    capability: &'a Capability,
 }
 
 impl Engine {
     /// Simplifies a statement or expression in place.
     pub(crate) fn simplify_stmt<T: Node>(&self, stmt: &mut T) {
-        Simplify::new(&self.schema).visit_mut(stmt);
+        Simplify::new(&self.schema, self.capability).visit_mut(stmt);
     }
 }
 
-/// Simplifies an expression in place using the given context.
-pub(crate) fn simplify_expr(cx: stmt::ExprContext<'_>, expr: &mut stmt::Expr) {
-    Simplify { cx }.visit_expr_mut(expr);
+/// Simplifies an expression in place using the given context and capability.
+pub(crate) fn simplify_expr(
+    cx: stmt::ExprContext<'_>,
+    capability: &Capability,
+    expr: &mut stmt::Expr,
+) {
+    Simplify { cx, capability }.visit_expr_mut(expr);
 }
 
 impl VisitMut for Simplify<'_> {
@@ -65,6 +74,8 @@ impl VisitMut for Simplify<'_> {
             Expr::Cast(expr) => self.simplify_expr_cast(expr),
             Expr::Exists(expr) => self.simplify_expr_exists(expr),
             Expr::InSubquery(expr) => self.lift_in_subquery(&expr.expr, &expr.query),
+            Expr::Intersects(expr) => self.simplify_expr_intersects(expr),
+            Expr::IsSuperset(expr) => self.simplify_expr_is_superset(expr),
             Expr::Let(expr) => self.simplify_expr_let(expr),
             Expr::List(expr) => self.simplify_expr_list(expr),
             Expr::Map(_) => self.simplify_expr_map(i),
@@ -215,12 +226,12 @@ impl VisitMut for Simplify<'_> {
 }
 
 impl<'a> Simplify<'a> {
-    pub(crate) fn new(schema: &'a Schema) -> Self {
-        Simplify::with_context(stmt::ExprContext::new(schema))
+    pub(crate) fn new(schema: &'a Schema, capability: &'a Capability) -> Self {
+        Simplify::with_context(stmt::ExprContext::new(schema), capability)
     }
 
-    pub(crate) fn with_context(cx: stmt::ExprContext<'a>) -> Self {
-        Simplify { cx }
+    pub(crate) fn with_context(cx: stmt::ExprContext<'a>, capability: &'a Capability) -> Self {
+        Simplify { cx, capability }
     }
 
     fn schema(&self) -> &'a Schema {
@@ -235,6 +246,7 @@ impl<'a> Simplify<'a> {
     ) -> Simplify<'scope> {
         Simplify {
             cx: self.cx.scope(target),
+            capability: self.capability,
         }
     }
 

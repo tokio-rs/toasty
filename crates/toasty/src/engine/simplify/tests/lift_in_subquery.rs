@@ -84,7 +84,7 @@ impl UserPostSchema {
 #[test]
 fn belongs_to_lifts_fk_constraint_to_direct_eq() {
     let s = UserPostSchema::new();
-    let simplify = Simplify::new(&s.schema);
+    let simplify = Simplify::new(&s.schema, &toasty_core::driver::Capability::SQLITE);
 
     let post_source: stmt::Source = s.post_model.into();
     let mut scoped_simplify = simplify.scope(&post_source);

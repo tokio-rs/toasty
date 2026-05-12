@@ -5,7 +5,7 @@ use toasty_core::stmt::{Expr, ExprOr};
 #[test]
 fn idempotent_two_identical() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `or(a, a) → a`
     let mut expr = ExprOr {
@@ -20,7 +20,7 @@ fn idempotent_two_identical() {
 #[test]
 fn idempotent_three_identical() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `or(a, a, a) → a`
     let mut expr = ExprOr {
@@ -35,7 +35,7 @@ fn idempotent_three_identical() {
 #[test]
 fn idempotent_with_different() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `or(a, b, a) → or(a, b)`
     let mut expr = ExprOr {
@@ -54,7 +54,7 @@ fn absorption_or_and() {
     use toasty_core::stmt::ExprAnd;
 
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `or(a, and(a, b))` → `a`
     let mut expr = ExprOr {
@@ -76,7 +76,7 @@ fn absorption_with_multiple_operands() {
     use toasty_core::stmt::ExprAnd;
 
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `or(a, b, and(a, c))` → `or(a, b)`
     let mut expr = ExprOr {
@@ -101,7 +101,7 @@ fn absorption_two_or_three_and() {
     use toasty_core::stmt::ExprAnd;
 
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `or(a, b, and(a, c, d))` → `or(a, b)`
     let mut expr = ExprOr {
@@ -126,7 +126,7 @@ fn factoring_basic() {
     use toasty_core::stmt::ExprAnd;
 
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `(a and b) or (a and c)` → `a and (b or c)`
     let mut expr = ExprOr {
@@ -161,7 +161,7 @@ fn factoring_multiple_common() {
     use toasty_core::stmt::ExprAnd;
 
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `(a and b and c) or (a and b and d)` → `a and b and (c or d)`
     let mut expr = ExprOr {
@@ -197,7 +197,7 @@ fn factoring_three_ands() {
     use toasty_core::stmt::ExprAnd;
 
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `(a and b) or (a and c) or (a and d)` → `a and (b or c or d)`
     let mut expr = ExprOr {
@@ -236,7 +236,7 @@ fn factoring_no_common() {
     use toasty_core::stmt::ExprAnd;
 
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `(a and b) or (c and d)` → no change (no common factor)
     let mut expr = ExprOr {
@@ -259,7 +259,7 @@ fn complement_basic() {
     use toasty_core::stmt::ExprNot;
 
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `a or not(a)` → `true` (where a is a non-nullable comparison)
     let a = Expr::eq(Expr::arg(0), Expr::arg(1));
@@ -277,7 +277,7 @@ fn complement_with_other_operands() {
     use toasty_core::stmt::ExprNot;
 
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `a or b or not(a)` → `true`
     let a = Expr::eq(Expr::arg(0), Expr::arg(1));
@@ -299,7 +299,7 @@ fn complement_nullable_not_simplified() {
     use toasty_core::stmt::ExprNot;
 
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `a or not(a)` where `a` is an arg (nullable) → no change
     let a = Expr::arg(0);
@@ -316,7 +316,7 @@ fn complement_multiple_repetitions() {
     use toasty_core::stmt::ExprNot;
 
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `a or a or not(a) or not(a)` → `true`
     let a = Expr::eq(Expr::arg(0), Expr::arg(1));
@@ -343,7 +343,7 @@ fn or_to_in_basic() {
     use toasty_core::stmt::Value;
 
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `a = 1 or a = 2 or a = 3` → `a in (1, 2, 3)`
     let mut expr = ExprOr {
@@ -367,7 +367,7 @@ fn or_to_in_two_values() {
     use toasty_core::stmt::Value;
 
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `a = 1 or a = 2` → `a in (1, 2)`
     let mut expr = ExprOr {
@@ -387,7 +387,7 @@ fn or_to_in_single_value_not_converted() {
     use toasty_core::stmt::Value;
 
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `a = 1` (single equality, not converted)
     let mut expr = ExprOr {
@@ -405,7 +405,7 @@ fn or_to_in_different_lhs_not_converted() {
     use toasty_core::stmt::Value;
 
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `a = 1 or b = 2` (different LHS, not converted to single IN)
     let mut expr = ExprOr {
@@ -426,7 +426,7 @@ fn or_to_in_mixed_keeps_other_operands() {
     use toasty_core::stmt::Value;
 
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `a = 1 or a = 2 or b = 3` → `a in (1, 2) or b = 3`
     let mut expr = ExprOr {
@@ -454,7 +454,7 @@ fn or_to_in_multiple_groups() {
     use toasty_core::stmt::Value;
 
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `a = 1 or a = 2 or b = 3 or b = 4` → `a in (1, 2) or b in (3, 4)`
     let mut expr = ExprOr {
@@ -480,7 +480,7 @@ fn or_to_in_with_non_equality_preserved() {
     use toasty_core::stmt::Value;
 
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `a = 1 or a = 2 or c` → `a in (1, 2) or c`
     let mut expr = ExprOr {
@@ -506,7 +506,7 @@ fn or_to_in_with_non_equality_preserved() {
 #[test]
 fn or_to_in_non_const_rhs_not_converted() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `a = b or a = c` (non-constant RHS, not converted)
     let mut expr = ExprOr {
@@ -534,7 +534,7 @@ fn or_to_in_non_const_rhs_not_converted() {
 #[test]
 fn idempotent_not_simplified_for_non_deterministic() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `LAST_INSERT_ID() OR LAST_INSERT_ID()` must retain both operands.
     let mut expr = ExprOr {
@@ -551,7 +551,7 @@ fn complement_not_simplified_for_non_deterministic() {
     use toasty_core::stmt::ExprNot;
 
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `f() = 1 OR NOT (f() = 1)` — both draws are independent, so the
     // complement law must NOT fire.
@@ -570,7 +570,7 @@ fn factoring_not_simplified_for_non_deterministic() {
     use toasty_core::stmt::ExprAnd;
 
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `(f() AND b) OR (f() AND c)` would factor to `f() AND (b OR c)` under
     // PartialEq, but the original evaluates `f()` twice while the factored
@@ -602,7 +602,7 @@ fn factoring_not_simplified_for_non_deterministic() {
 #[test]
 fn or_to_in_list_not_simplified_for_non_deterministic() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `f() = 1 OR f() = 2` must NOT be rewritten to `f() IN (1, 2)`: the
     // former evaluates `f()` twice (two draws against 1 and 2), the latter
@@ -651,7 +651,7 @@ mod variant_tautology {
     #[test]
     fn all_two_variants_becomes_true() {
         let schema = test_schema_with(&[TwoVariant::schema()]);
-        let mut simplify = Simplify::new(&schema);
+        let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
         let model_id = TwoVariant::id();
 
@@ -683,7 +683,7 @@ mod variant_tautology {
     #[test]
     fn all_three_variants_becomes_true() {
         let schema = test_schema_with(&[ThreeVariant::schema()]);
-        let mut simplify = Simplify::new(&schema);
+        let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
         let model_id = ThreeVariant::id();
 
@@ -722,7 +722,7 @@ mod variant_tautology {
     #[test]
     fn subset_of_variants_not_simplified() {
         let schema = test_schema_with(&[ThreeVariant::schema()]);
-        let mut simplify = Simplify::new(&schema);
+        let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
         let model_id = ThreeVariant::id();
 
@@ -753,7 +753,7 @@ mod variant_tautology {
     #[test]
     fn single_variant_of_two_not_simplified() {
         let schema = test_schema_with(&[TwoVariant::schema()]);
-        let mut simplify = Simplify::new(&schema);
+        let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
         let model_id = TwoVariant::id();
 
@@ -778,7 +778,7 @@ mod variant_tautology {
     #[test]
     fn all_variants_with_extra_operands_becomes_true() {
         let schema = test_schema_with(&[TwoVariant::schema()]);
-        let mut simplify = Simplify::new(&schema);
+        let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
         let model_id = TwoVariant::id();
 
@@ -811,7 +811,7 @@ mod variant_tautology {
     #[test]
     fn different_inner_exprs_not_simplified() {
         let schema = test_schema_with(&[TwoVariant::schema()]);
-        let mut simplify = Simplify::new(&schema);
+        let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
         let model_id = TwoVariant::id();
 
@@ -842,7 +842,7 @@ mod variant_tautology {
     #[test]
     fn duplicate_variants_not_simplified() {
         let schema = test_schema_with(&[ThreeVariant::schema()]);
-        let mut simplify = Simplify::new(&schema);
+        let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
         let model_id = ThreeVariant::id();
 
@@ -882,7 +882,7 @@ mod variant_tautology {
     #[test]
     fn reversed_order_becomes_true() {
         let schema = test_schema_with(&[TwoVariant::schema()]);
-        let mut simplify = Simplify::new(&schema);
+        let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
         let model_id = TwoVariant::id();
 
@@ -914,7 +914,7 @@ mod variant_tautology {
     #[test]
     fn no_is_variant_operands_not_simplified() {
         let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
+        let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
         // `arg(0) or arg(1)` — no IsVariant at all → no tautology
         let mut expr = ExprOr {

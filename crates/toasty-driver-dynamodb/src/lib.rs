@@ -414,48 +414,6 @@ fn ddb_expression(
             let path = ddb_expression(cx, attrs, primary, &any.rhs);
             format!("contains({path}, {value})")
         }
-        stmt::Expr::IsSuperset(expr) => {
-            // Empty-rhs has been folded to `true` upstream, so by the time
-            // we see the expression here the rhs has at least one element.
-            // The capability check (`native_array_set_predicates`) guarantees
-            // the rhs is a `Value::List` before the statement reaches the
-            // driver.
-            let path = ddb_expression(cx, attrs, primary, &expr.lhs);
-            let stmt::Expr::Value(stmt::Value::List(values)) = expr.rhs.as_ref() else {
-                unreachable!(
-                    "capability check guarantees Value::List rhs; got {:#?}",
-                    expr.rhs
-                );
-            };
-            values
-                .iter()
-                .map(|v| {
-                    let placeholder = attrs.value(v);
-                    format!("contains({path}, {placeholder})")
-                })
-                .collect::<Vec<_>>()
-                .join(" AND ")
-        }
-        stmt::Expr::Intersects(expr) => {
-            // Empty-rhs has been folded to `false` upstream. The capability
-            // check (`native_array_set_predicates`) guarantees the rhs is a
-            // `Value::List` before the statement reaches the driver.
-            let path = ddb_expression(cx, attrs, primary, &expr.lhs);
-            let stmt::Expr::Value(stmt::Value::List(values)) = expr.rhs.as_ref() else {
-                unreachable!(
-                    "capability check guarantees Value::List rhs; got {:#?}",
-                    expr.rhs
-                );
-            };
-            let parts: Vec<_> = values
-                .iter()
-                .map(|v| {
-                    let placeholder = attrs.value(v);
-                    format!("contains({path}, {placeholder})")
-                })
-                .collect();
-            format!("({})", parts.join(" OR "))
-        }
         stmt::Expr::Length(expr) => {
             let inner = ddb_expression(cx, attrs, primary, &expr.expr);
             format!("size({inner})")

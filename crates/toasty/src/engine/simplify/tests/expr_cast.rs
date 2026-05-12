@@ -17,7 +17,7 @@ fn redundant_cast_on_field_eliminated() {
 
     let schema = test_schema_with(&[User::schema()]);
     let model = schema.app.model(User::id());
-    let simplify = Simplify::new(&schema);
+    let simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
     let simplify = simplify.scope(model.as_root_unwrap());
 
     // `cast(name_field, String) → name_field`
@@ -50,7 +50,7 @@ fn non_redundant_cast_on_field_kept() {
 
     let schema = test_schema_with(&[User::schema()]);
     let model = schema.app.model(User::id());
-    let simplify = Simplify::new(&schema);
+    let simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
     let simplify = simplify.scope(model.as_root_unwrap());
 
     // `cast(name_field, I64)` — String field cast to I64, not redundant.
