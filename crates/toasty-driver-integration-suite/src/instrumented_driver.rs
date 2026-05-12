@@ -5,7 +5,7 @@ use std::{
     fmt,
     sync::{
         Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU32, Ordering},
     },
 };
 use toasty_core::{
@@ -47,6 +47,7 @@ pub struct InstrumentedHandle {
 struct InstrumentedState {
     ops_log: Mutex<Vec<DriverOp>>,
     faults: Mutex<VecDeque<Fault>>,
+    pings: AtomicU32,
 }
 
 impl InstrumentedHandle {
@@ -89,6 +90,13 @@ impl InstrumentedHandle {
             .lock()
             .expect("Failed to acquire faults lock")
             .push_back(fault);
+    }
+
+    /// Total number of times `ping` has been invoked on any connection
+    /// produced by this driver. Used by pool-sweep tests to assert how
+    /// many escalation passes ran.
+    pub fn ping_count(&self) -> u32 {
+        self.inner.pings.load(Ordering::Relaxed)
     }
 }
 
@@ -234,6 +242,8 @@ impl Connection for InstrumentedConnection {
     }
 
     async fn ping(&mut self) -> Result<()> {
+        self.handle.inner.pings.fetch_add(1, Ordering::Relaxed);
+
         // Consume a queued fault before delegating, mirroring `exec`.
         // A `ConnectionLost` fault here lets tests target the sweep's
         // ping path the same way they target user query paths.
