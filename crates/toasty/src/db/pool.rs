@@ -32,6 +32,7 @@ pub(crate) struct PoolConfig {
     pub(crate) max_size: usize,
     pub(crate) timeouts: Timeouts,
     pub(crate) health_check_interval: Option<Duration>,
+    pub(crate) pre_ping: bool,
 }
 
 impl Default for PoolConfig {
@@ -40,6 +41,7 @@ impl Default for PoolConfig {
             max_size: get_default_pool_max_size(),
             timeouts: Default::default(),
             health_check_interval: Some(Duration::from_secs(60)),
+            pre_ping: false,
         }
     }
 }
@@ -91,6 +93,7 @@ impl Pool {
             driver: Box::new(driver),
             engine,
             sweep_waker: sweep_waker.clone(),
+            pre_ping: config.pre_ping,
         })
         .runtime(deadpool::Runtime::Tokio1)
         .max_size(effective_max)
@@ -157,6 +160,7 @@ pub(super) struct Manager {
     driver: Box<dyn Driver>,
     engine: Engine,
     sweep_waker: Arc<SweepWaker>,
+    pre_ping: bool,
 }
 
 impl std::fmt::Debug for Manager {
@@ -193,6 +197,30 @@ impl deadpool::managed::Manager for Manager {
             return Err(deadpool::managed::RecycleError::message(
                 "background task is no longer running",
             ));
+        }
+        if self.pre_ping {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            if obj.in_tx.send(ConnectionOperation::Ping { tx }).is_err() {
+                tracing::debug!("pre-ping channel closed; discarding pooled connection");
+                return Err(deadpool::managed::RecycleError::message(
+                    "background task is no longer running",
+                ));
+            }
+            match rx.await {
+                Ok(Ok(())) => {}
+                Ok(Err(err)) => {
+                    tracing::debug!(error = %err, "pre-ping failed; discarding pooled connection");
+                    return Err(deadpool::managed::RecycleError::Backend(err));
+                }
+                Err(_) => {
+                    tracing::debug!(
+                        "pre-ping response channel dropped; discarding pooled connection"
+                    );
+                    return Err(deadpool::managed::RecycleError::message(
+                        "background task exited during pre-ping",
+                    ));
+                }
+            }
         }
         tracing::trace!("recycling pooled connection");
         Ok(())

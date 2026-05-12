@@ -134,6 +134,27 @@ impl Builder {
         self
     }
 
+    /// Validate every connection with an active ping before handing it
+    /// to the caller. Useful for deployments that cannot tolerate even
+    /// one failed user query — a public API behind a flaky network, an
+    /// idempotent worker that does not implement retry. A failing ping
+    /// evicts the connection and the pool reuses another idle slot or
+    /// opens a fresh one; the caller sees either a healthy connection
+    /// or a clean `connection_pool` error if no slot can be opened
+    /// within [`pool_create_timeout`](Self::pool_create_timeout).
+    ///
+    /// The trade-off is one round-trip per checkout. Combine with a
+    /// larger [`max_pool_size`](Self::max_pool_size) if the extra
+    /// latency starts queueing requests. Independent of the background
+    /// sweep — most deployments want one or the other, but enabling
+    /// both is safe.
+    ///
+    /// Defaults to `false`.
+    pub fn pool_pre_ping(&mut self, pre_ping: bool) -> &mut Self {
+        self.pool.pre_ping = pre_ping;
+        self
+    }
+
     /// Build and return the app-level schema from the registered models
     /// without opening a database connection.
     ///
