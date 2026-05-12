@@ -296,9 +296,7 @@ impl stmt::Visit for VerifyExpr<'_, '_> {
     }
 
     fn visit_expr_is_superset(&mut self, i: &stmt::ExprIsSuperset) {
-        if !self.capability.native_array_set_predicates
-            && !matches!(&*i.rhs, stmt::Expr::Value(stmt::Value::List(_)))
-        {
+        if !self.capability.native_array_set_predicates && !rhs_is_concrete_list(&i.rhs) {
             self.record(Error::unsupported_feature(
                 "is_superset on this driver requires a literal list on the right-hand side",
             ));
@@ -307,9 +305,7 @@ impl stmt::Visit for VerifyExpr<'_, '_> {
     }
 
     fn visit_expr_intersects(&mut self, i: &stmt::ExprIntersects) {
-        if !self.capability.native_array_set_predicates
-            && !matches!(&*i.rhs, stmt::Expr::Value(stmt::Value::List(_)))
-        {
+        if !self.capability.native_array_set_predicates && !rhs_is_concrete_list(&i.rhs) {
             self.record(Error::unsupported_feature(
                 "intersects on this driver requires a literal list on the right-hand side",
             ));
@@ -318,12 +314,28 @@ impl stmt::Visit for VerifyExpr<'_, '_> {
     }
 }
 
+/// True when the expression is — or will fold to — a `Value::List` of
+/// concrete values. Verify runs before the simplifier, so the user's
+/// `vec![…]` still appears as an `Expr::List` of `Expr::Value` items;
+/// `fold::expr_list` collapses that shape to `Value::List` during
+/// lowering, which is what the driver eventually sees.
+fn rhs_is_concrete_list(expr: &stmt::Expr) -> bool {
+    match expr {
+        stmt::Expr::Value(stmt::Value::List(_)) => true,
+        stmt::Expr::List(list) => list
+            .items
+            .iter()
+            .all(|item| matches!(item, stmt::Expr::Value(_))),
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::engine::test_util::test_schema;
     use toasty_core::driver::Capability;
-    use toasty_core::stmt::{Expr, ExprIsSuperset, Value};
+    use toasty_core::stmt::{Expr, ExprIsSuperset, ExprList, Value};
 
     fn verify_with(capability: &'static Capability, stmt: Statement) -> Result<()> {
         let schema = test_schema();
@@ -376,6 +388,17 @@ mod tests {
     #[test]
     fn is_superset_literal_rhs_accepted_on_ddb() {
         let expr = is_superset(Expr::Value(Value::List(vec![Value::I64(1)])));
+        assert!(verify_expr_with(&Capability::DYNAMODB, &expr).is_none());
+    }
+
+    #[test]
+    fn is_superset_pre_fold_expr_list_accepted_on_ddb() {
+        // Pre-simplifier shape produced by `is_superset(vec![…])`: an
+        // `Expr::List` of `Expr::Value` items. The fold pass will collapse
+        // this to `Value::List` during lowering.
+        let expr = is_superset(Expr::List(ExprList {
+            items: vec![Expr::Value(Value::I64(1)), Expr::Value(Value::I64(2))],
+        }));
         assert!(verify_expr_with(&Capability::DYNAMODB, &expr).is_none());
     }
 
