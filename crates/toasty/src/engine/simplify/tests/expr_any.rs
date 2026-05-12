@@ -25,7 +25,7 @@ fn value_list(values: Vec<Value>) -> Expr {
 #[test]
 fn non_map_returns_none() {
     let schema = test_schema();
-    let simplify = Simplify::new(&schema);
+    let simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     let expr = any_of(Expr::arg(0));
     let result = simplify.simplify_expr_any(&expr);
@@ -36,7 +36,7 @@ fn non_map_returns_none() {
 #[test]
 fn non_const_base_returns_none() {
     let schema = test_schema();
-    let simplify = Simplify::new(&schema);
+    let simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // Map with non-constant base (arg(0))
     let expr = any_of(map_expr(Expr::arg(0), Expr::arg(0)));
@@ -48,7 +48,7 @@ fn non_const_base_returns_none() {
 #[test]
 fn empty_const_list_becomes_false() {
     let schema = test_schema();
-    let simplify = Simplify::new(&schema);
+    let simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `any(map([], x => x)) → false`
     let expr = any_of(map_expr(value_list(vec![]), Expr::arg(0)));
@@ -61,7 +61,7 @@ fn empty_const_list_becomes_false() {
 #[test]
 fn single_item_unwrapped() {
     let schema = test_schema();
-    let simplify = Simplify::new(&schema);
+    let simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `any(map([42], x => x)) → 42`
     let expr = any_of(map_expr(value_list(vec![Value::from(42i64)]), Expr::arg(0)));
@@ -73,7 +73,7 @@ fn single_item_unwrapped() {
 #[test]
 fn multiple_items_become_or() {
     let schema = test_schema();
-    let simplify = Simplify::new(&schema);
+    let simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `any(map([1, 2], x => x)) → or(1, 2)`
     let expr = any_of(map_expr(

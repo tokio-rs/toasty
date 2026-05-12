@@ -12,7 +12,7 @@ use toasty_core::stmt::{self, Expr, ExprMatch, MatchArm, Projection, Value, Visi
 #[test]
 fn constant_subject_folds_to_arm_value() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `match I64(2) { 1 => "a", 2 => "b", 3 => "c" }` → `"b"`
     let mut expr = Expr::Match(ExprMatch {
@@ -45,7 +45,7 @@ fn constant_subject_folds_to_arm_value() {
 #[test]
 fn subject_simplified_before_folding() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // subject = `project([0], record([I64(1)]))` which simplifies to `I64(1)`
     let subject = stmt::ExprProject {
@@ -80,7 +80,7 @@ fn subject_simplified_before_folding() {
 #[test]
 fn dead_arms_not_visited_with_constant_subject() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // Arm 2 (`project([1], record([I64(1)]))`) would panic if simplified
     // because the record only has 1 element. Since subject is I64(1) → arm 1
@@ -115,7 +115,7 @@ fn dead_arms_not_visited_with_constant_subject() {
 #[test]
 fn non_constant_subject_simplifies_all_arms() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // Arms contain simplifiable sub-expressions (`record([x]) → {x}` when x
     // is constant). With a non-constant subject, both arms should be visited.
@@ -150,7 +150,7 @@ fn non_constant_subject_simplifies_all_arms() {
 #[test]
 fn constant_subject_no_match_folds_to_error_else() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `match 99 { 1 => "a" } else error("unexpected")` → `error("unexpected")`
     let mut expr = Expr::Match(ExprMatch {
@@ -172,7 +172,7 @@ fn constant_subject_no_match_folds_to_error_else() {
 #[test]
 fn constant_subject_matching_arm_is_error() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `match 1 { 1 => error("bad"), 2 => "ok" } else "default"` → `error("bad")`
     let mut expr = Expr::Match(ExprMatch {
@@ -200,7 +200,7 @@ fn constant_subject_matching_arm_is_error() {
 #[test]
 fn constant_subject_match_found_error_else_not_reached() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `match 1 { 1 => "ok" } else error("unexpected")` → `"ok"`
     let mut expr = Expr::Match(ExprMatch {

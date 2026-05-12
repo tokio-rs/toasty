@@ -36,6 +36,13 @@ impl Value {
             (Type::F64, AV::N(val)) => stmt::Value::from(val.parse::<f64>().unwrap()),
             (Type::Bytes, AV::B(val)) => stmt::Value::Bytes(val.clone().into_inner()),
             (Type::Uuid, AV::S(val)) => stmt::Value::from(val.parse::<uuid::Uuid>().unwrap()),
+            (Type::List(elem), AV::L(items)) => {
+                let items = items
+                    .iter()
+                    .map(|item| Value::from_ddb(elem, item).into_inner())
+                    .collect();
+                stmt::Value::List(items)
+            }
             _ => todo!("ty={:#?}; value={:#?}", ty, val),
         };
 

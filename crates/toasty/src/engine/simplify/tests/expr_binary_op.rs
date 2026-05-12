@@ -28,7 +28,7 @@ fn test_schema() -> toasty_core::Schema {
 #[test]
 fn non_id_cast_not_unwrapped() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `eq(cast(arg(0), String), "test")`, non-Id cast is not unwrapped
     let mut lhs = Expr::Cast(ExprCast {
@@ -47,7 +47,7 @@ fn non_id_cast_not_unwrapped() {
 fn self_comparison_eq_non_nullable_becomes_true() {
     let schema = test_schema();
     let model = schema.app.model(User::id());
-    let simplify = Simplify::new(&schema);
+    let simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
     let mut simplify = simplify.scope(model.as_root_unwrap());
 
     // `id = id` → `true` (non-nullable field)
@@ -69,7 +69,7 @@ fn self_comparison_eq_non_nullable_becomes_true() {
 fn self_comparison_ne_non_nullable_becomes_false() {
     let schema = test_schema();
     let model = schema.app.model(User::id());
-    let simplify = Simplify::new(&schema);
+    let simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
     let mut simplify = simplify.scope(model.as_root_unwrap());
 
     // `id != id` → `false` (non-nullable field)
@@ -91,7 +91,7 @@ fn self_comparison_ne_non_nullable_becomes_false() {
 fn self_comparison_nullable_not_simplified() {
     let schema = test_schema();
     let model = schema.app.model(User::id());
-    let simplify = Simplify::new(&schema);
+    let simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
     let mut simplify = simplify.scope(model.as_root_unwrap());
 
     // `name = name` is not simplified (nullable field)
@@ -113,7 +113,7 @@ fn self_comparison_nullable_not_simplified() {
 fn different_fields_not_simplified() {
     let schema = test_schema();
     let model = schema.app.model(User::id());
-    let simplify = Simplify::new(&schema);
+    let simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
     let mut simplify = simplify.scope(model.as_root_unwrap());
 
     // `id = name` is not simplified (different fields)
@@ -134,7 +134,7 @@ fn different_fields_not_simplified() {
 #[test]
 fn tuple_eq_decomposition_two_elements() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `(a, b) = (x, y)` → `a = x and b = y`
     let mut lhs = Expr::record([Expr::arg(0), Expr::arg(1)]);
@@ -153,7 +153,7 @@ fn tuple_eq_decomposition_two_elements() {
 #[test]
 fn tuple_eq_decomposition_three_elements() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `(a, b, c) = (x, y, z)` → `a = x and b = y and c = z`
     let mut lhs = Expr::record([Expr::arg(0), Expr::arg(1), Expr::arg(2)]);
@@ -170,7 +170,7 @@ fn tuple_eq_decomposition_three_elements() {
 #[test]
 fn tuple_ne_decomposition() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `(a, b) != (x, y)` → `a != x or b != y`
     let mut lhs = Expr::record([Expr::arg(0), Expr::arg(1)]);
@@ -189,7 +189,7 @@ fn tuple_ne_decomposition() {
 #[test]
 fn single_element_tuple_eq() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `(a) = (x)` → `a = x`
     let mut lhs = Expr::record([Expr::arg(0)]);
@@ -204,7 +204,7 @@ fn single_element_tuple_eq() {
 #[test]
 fn match_eq_constant_value() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // Match(col, [1 => Record([col, addr]), 2 => Record([col, num])],
     //       else: Record([col, Error])) == Value(Record([I64(1), "alice"]))
@@ -248,7 +248,7 @@ fn match_eq_constant_value() {
 #[test]
 fn match_eq_scalar_folds_matching_arm() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // Match(arg(0), [1 => "a", 2 => "b"], else: "__") == "a" → arg(0) == 1
     // The else value "__" != "a" folds to false, pruning the else term.
@@ -286,7 +286,7 @@ fn match_eq_scalar_folds_matching_arm() {
 #[test]
 fn match_eq_no_matching_arm_folds_to_false() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // Match(arg(0), [1 => "a", 2 => "b"], else: "__") == "c" → false (all arms pruned)
     // The else value "__" != "c" folds to false, pruning the else term too.
@@ -317,7 +317,7 @@ fn match_eq_no_matching_arm_folds_to_false() {
 #[test]
 fn match_on_rhs() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // "a" == Match(arg(0), [1 => "a", 2 => "b"], else: "__") → arg(0) == 1
     let mut expr = Expr::binary_op(
@@ -353,7 +353,7 @@ fn match_on_rhs() {
 #[test]
 fn match_ne_preserves_non_matching_arms() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // Match(arg(0), [1 => "a", 2 => "b"], else: "a") != "a"
     // arm 1: arg(0) == 1 AND "a" != "a" → false → pruned
@@ -393,7 +393,7 @@ fn match_ne_preserves_non_matching_arms() {
 fn match_with_non_constant_subject() {
     let schema = test_schema();
     let model = schema.app.model(User::id());
-    let simplify = Simplify::new(&schema);
+    let simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
     let mut simplify = simplify.scope(model.as_root_unwrap());
 
     // Match over a column reference (the real-world case)

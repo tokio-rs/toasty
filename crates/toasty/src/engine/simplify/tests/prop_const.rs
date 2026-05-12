@@ -95,7 +95,7 @@ proptest! {
         let oracle = expr.eval_const().expect("generated expr must be evaluable");
 
         let mut expr = expr;
-        Simplify::new(&schema).visit_expr_mut(&mut expr);
+        Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE).visit_expr_mut(&mut expr);
 
         let result = expr.eval_const().expect("simplified expr must be evaluable");
         prop_assert_eq!(oracle, result);

@@ -146,6 +146,20 @@ impl Value {
                 _ => todo!("ty={ty:#?}"),
             },
 
+            CT::MYSQL_TYPE_JSON => match ty {
+                stmt::Type::List(elem) => {
+                    let bytes: Vec<u8> = match row.take_opt(i).expect("value missing") {
+                        Ok(v) => v,
+                        Err(e) => {
+                            assert!(matches!(e.0, mysql_async::Value::NULL));
+                            return Value(stmt::Value::Null);
+                        }
+                    };
+                    json_bytes_to_value_list(&bytes, elem)
+                }
+                _ => todo!("MySQL JSON column with stmt::Type {ty:#?}"),
+            },
+
             CT::MYSQL_TYPE_NEWDECIMAL | CT::MYSQL_TYPE_DECIMAL => match ty {
                 #[cfg(feature = "rust_decimal")]
                 stmt::Type::Decimal => extract_or_null(row, i, |s: String| {
@@ -241,7 +255,22 @@ impl ToValue for Value {
                     (value.subsec_nanosecond() / 1000) as u32, // Convert nanoseconds to microseconds
                 )
             }
+            CoreValue::List(_) => {
+                // Bound to a MySQL `JSON` column — serialize the list to a
+                // JSON document and send it as text. MySQL accepts JSON as
+                // string or bytes; bytes avoids any utf8 round-trip.
+                let json = toasty_sql::value_json::value_list_to_json(&self.0);
+                mysql_async::Value::Bytes(
+                    serde_json::to_vec(&json).expect("serialize Vec<scalar> to JSON"),
+                )
+            }
             value => todo!("{:#?}", value),
         }
     }
+}
+
+fn json_bytes_to_value_list(bytes: &[u8], elem_ty: &stmt::Type) -> CoreValue {
+    let json: serde_json::Value =
+        serde_json::from_slice(bytes).expect("MySQL returned non-JSON for a JSON column");
+    toasty_sql::value_json::value_list_from_json(json, elem_ty)
 }

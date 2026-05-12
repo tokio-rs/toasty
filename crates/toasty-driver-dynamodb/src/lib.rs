@@ -406,6 +406,18 @@ fn ddb_expression(
                 "LIKE is not supported by the DynamoDB driver; use starts_with for prefix matching"
             )
         }
+        stmt::Expr::AnyOp(any) if matches!(any.op, stmt::BinaryOp::Eq) => {
+            // `Path::contains(value)` lowers to `value = ANY(col)`. On
+            // DynamoDB that's `contains(path, value)` — the standard List
+            // membership filter.
+            let value = ddb_expression(cx, attrs, primary, &any.lhs);
+            let path = ddb_expression(cx, attrs, primary, &any.rhs);
+            format!("contains({path}, {value})")
+        }
+        stmt::Expr::Length(expr) => {
+            let inner = ddb_expression(cx, attrs, primary, &expr.expr);
+            format!("size({inner})")
+        }
         _ => todo!("FILTER = {:#?}", expr),
     }
 }

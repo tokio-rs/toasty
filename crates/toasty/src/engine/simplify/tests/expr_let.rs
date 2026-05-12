@@ -7,7 +7,7 @@ use toasty_core::stmt::{self, Expr, ExprLet, MatchArm, Value, VisitMut};
 #[test]
 fn single_binding_inlined() {
     let schema = test_schema();
-    let simplify = Simplify::new(&schema);
+    let simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // Let { bindings: [I64(42)], body: Arg(0) } → I64(42)
     let mut expr_let = ExprLet {
@@ -22,7 +22,7 @@ fn single_binding_inlined() {
 #[test]
 fn multiple_bindings_inlined() {
     let schema = test_schema();
-    let simplify = Simplify::new(&schema);
+    let simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // Let { bindings: [I64(1), I64(2)], body: Record([Arg(1), Arg(0)]) }
     // → Record([I64(2), I64(1)])
@@ -41,7 +41,7 @@ fn multiple_bindings_inlined() {
 #[test]
 fn unstable_binding_not_inlined() {
     let schema = test_schema();
-    let simplify = Simplify::new(&schema);
+    let simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // Binding contains Default (unstable) → no inlining
     let mut expr_let = ExprLet {
@@ -56,7 +56,7 @@ fn unstable_binding_not_inlined() {
 #[test]
 fn body_with_match_inlined() {
     let schema = test_schema();
-    let simplify = Simplify::new(&schema);
+    let simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // The real-world pattern: nullable relation wrapping.
     // Let { bindings: [Arg(0)], body: Match(Arg(0), [Null → I64(0)], Arg(0)) }
@@ -89,7 +89,7 @@ fn body_with_match_inlined() {
 #[test]
 fn outer_arg_nesting_decremented() {
     let schema = test_schema();
-    let simplify = Simplify::new(&schema);
+    let simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // Body references both the Let binding (nesting=0) and an outer scope
     // (nesting=1). After inlining, the outer ref should become nesting=0.
@@ -115,7 +115,7 @@ fn outer_arg_nesting_decremented() {
 #[test]
 fn let_inlined_through_visit() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // End-to-end: visit_expr_mut should inline the Let.
     let mut expr = Expr::Let(ExprLet {
@@ -130,7 +130,7 @@ fn let_inlined_through_visit() {
 #[test]
 fn nested_let_inlined_bottom_up() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // Inner Let is inlined first (bottom-up), then the outer Let.
     // Outer: Let { bindings: [I64(10)], body: Let { bindings: [Arg(0)], body: Arg(0) } }
@@ -152,7 +152,7 @@ fn nested_let_inlined_bottom_up() {
 #[test]
 fn let_with_match_fully_simplified() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // Full pipeline: Let { bindings: [Null], body: Match(Arg(0), [Null→I64(0)], Arg(0)) }
     // Step 1 (Let inlining): Match(Null, [Null→I64(0)], Null)

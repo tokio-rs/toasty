@@ -666,6 +666,23 @@ preserve Rust width where the backend supports it (Mongo
 Int32/Int64; PG `jsonb` numeric). Floating-point NaN and infinity
 are rejected at encode time — JSON has no representation for them.
 
+**Collection element encoding.** A `Vec<T>`, `HashSet<T>`, or other
+collection that lands in a backend's document container — JSON on
+MySQL and SQLite, BSON array on MongoDB, List `L` or typed Set on
+DynamoDB — encodes each element using the same representation Toasty
+uses for a standalone column of type `T`. For JSON-backed containers:
+elements with a JSON-native form (`i64`, `f64`, `bool`, `String`)
+become JSON numbers, booleans, and strings; elements whose
+column-level encoding is text (`Uuid`, `Decimal`, `jiff::Timestamp`,
+etc.) become JSON strings carrying that same text form; `Vec<u8>`
+elements are rejected — `Vec<Vec<u8>>` requires a backend-specific
+binary encoding decision and is out of scope. For DynamoDB List `L`
+and typed Sets: each element is an `AttributeValue` of the type the
+column-level encoding would emit (`S` for strings / UUIDs / decimals
+/ timestamps, `N` for integers and floats, `BOOL` for booleans, `B`
+for bytes). Round-tripping a value through a collection field yields
+the same Rust value the column-level path would yield for `T`.
+
 **Enum discriminators.** Toasty uses **internal tagging** with the
 key `type` — the canonical serde convention
 (`#[serde(tag = "type")]` is the example in serde's own docs).
@@ -857,13 +874,22 @@ remove-at), but a few gaps stand out:
 
 **New schema artifacts.** Drivers see two new column-type families:
 
-- `ColumnType::Array(elem)` — PostgreSQL native array of `elem`.
-  Other SQL drivers reject this and the planner picks document
-  storage instead at schema-build time.
-- `ColumnType::Document { binary: bool }` — the dialect's document
+- `db::Type::List(elem)` — a typed homogeneous array column. Schema
+  build only emits it when the backend advertises
+  `Capability::native_array` (today: PostgreSQL only, mapping to
+  `elem[]` — `text[]`, `int8[]`, …). On backends without
+  `native_array`, schema build picks the document fallback below for
+  the same field type instead.
+- `db::Type::Document { binary: bool }` — the dialect's document
   type. `binary: true` maps to `jsonb` / `JSON` / JSON1 / BSON / `M`
   as appropriate; `binary: false` selects PG text `json` and is
-  ignored elsewhere.
+  ignored elsewhere. The same column type carries `Vec<scalar>` and
+  `Vec<struct>` payloads on backends that fall back to it (MySQL
+  `JSON`, SQLite JSON1) and is the natural representation on
+  MongoDB. DynamoDB does not surface this as a `db::Type` since its
+  schema is per-attribute rather than per-column; the equivalent
+  routing happens inside the DynamoDB driver, which picks `L` /
+  typed-Set / `M` for collection and map fields directly.
 
 **New operations.** SQL drivers gain new statement nodes for
 collection predicates, collection mutations, and document-specific

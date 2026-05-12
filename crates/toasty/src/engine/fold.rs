@@ -11,7 +11,9 @@ mod expr_and;
 mod expr_binary_op;
 mod expr_cast;
 mod expr_in_list;
+mod expr_intersects;
 mod expr_is_null;
+mod expr_is_superset;
 mod expr_list;
 mod expr_match;
 mod expr_not;
@@ -60,7 +62,9 @@ fn fold_one(i: &mut Expr) -> Option<Expr> {
         }
         Expr::Cast(expr) => expr_cast::fold_expr_cast(expr),
         Expr::InList(expr) => expr_in_list::fold_expr_in_list(expr),
+        Expr::Intersects(expr) => expr_intersects::fold_expr_intersects(expr),
         Expr::IsNull(expr) => expr_is_null::fold_expr_is_null(expr),
+        Expr::IsSuperset(expr) => expr_is_superset::fold_expr_is_superset(expr),
         Expr::List(expr) => expr_list::fold_expr_list(expr),
         Expr::Match(expr) => expr_match::fold_expr_match(expr),
         Expr::Not(expr) => expr_not::fold_expr_not(expr),
@@ -79,8 +83,6 @@ fn fold_one(i: &mut Expr) -> Option<Expr> {
         | Expr::Func(_)
         | Expr::Ident(_)
         | Expr::InSubquery(_)
-        | Expr::Intersects(_)
-        | Expr::IsSuperset(_)
         | Expr::IsVariant(_)
         | Expr::Length(_)
         | Expr::Let(_)

@@ -36,7 +36,8 @@ use toasty_core::{
 ///
 /// The execution pipeline follows this process:
 ///
-/// 1. **Verification.** Validate statement structure (debug builds only).
+/// 1. **Verification.** Validate statement structure and reject AST shapes
+///    the driver does not support.
 /// 2. **Lowering.** Convert to HIR with dependency tracking.
 /// 3. **Planning.** Build MIR operation graph.
 /// 4. **Execution.** Run actions against the database driver.
@@ -73,9 +74,7 @@ impl Engine {
     ) -> Result<toasty_core::driver::ExecResponse> {
         tracing::debug!(stmt.kind = stmt.name(), "executing statement");
 
-        if cfg!(debug_assertions) {
-            self.verify(&stmt);
-        }
+        self.verify(&stmt)?;
 
         if let stmt::Statement::Insert(stmt) = &stmt {
             assert!(matches!(
