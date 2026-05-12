@@ -13,10 +13,11 @@ use std::sync::Arc;
 use toasty_core::driver::{Connection, Rows};
 use toasty_core::stmt::Value;
 use tokio::{
-    sync::{Notify, mpsc, oneshot},
+    sync::{mpsc, oneshot},
     task::JoinHandle,
 };
 
+use super::pool::SweepWaker;
 use crate::engine::Engine;
 
 /// Operations sent to the connection task.
@@ -55,21 +56,21 @@ pub(crate) struct ConnectionHandle {
 
 impl ConnectionHandle {
     /// Spawn a worker task that owns `connection` and serializes
-    /// operations against it. `sweep_notify` is signalled whenever the
-    /// task observes that the connection went bad so the pool's
-    /// health-check sweep can escalate immediately rather than waiting
-    /// for its next periodic tick.
+    /// operations against it. `sweep_waker` is woken whenever the task
+    /// observes that the connection went bad so the pool's health-check
+    /// sweep can escalate immediately rather than waiting for its next
+    /// periodic tick.
     pub(crate) fn spawn(
         connection: Box<dyn Connection>,
         engine: Engine,
-        sweep_notify: Arc<Notify>,
+        sweep_waker: Arc<SweepWaker>,
     ) -> Self {
         let (in_tx, in_rx) = mpsc::unbounded_channel::<ConnectionOperation>();
         let task = ConnectionTask {
             connection,
             engine,
             in_rx,
-            sweep_notify,
+            sweep_waker,
         };
         let join_handle = tokio::spawn(task.run());
         Self { in_tx, join_handle }
@@ -98,7 +99,7 @@ struct ConnectionTask {
     connection: Box<dyn Connection>,
     engine: Engine,
     in_rx: mpsc::UnboundedReceiver<ConnectionOperation>,
-    sweep_notify: Arc<Notify>,
+    sweep_waker: Arc<SweepWaker>,
 }
 
 impl ConnectionTask {
@@ -184,7 +185,7 @@ impl ConnectionTask {
         } else {
             tracing::debug!("connection reported invalid; closing channel and exiting");
             self.in_rx.close();
-            self.sweep_notify.notify_one();
+            self.sweep_waker.wake();
             let _ = tx.send(result);
             false
         }
