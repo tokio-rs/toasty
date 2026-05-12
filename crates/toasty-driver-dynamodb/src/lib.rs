@@ -417,9 +417,15 @@ fn ddb_expression(
         stmt::Expr::IsSuperset(expr) => {
             // Empty-rhs has been folded to `true` upstream, so by the time
             // we see the expression here the rhs has at least one element.
+            // The capability check (`native_array_set_predicates`) guarantees
+            // the rhs is a `Value::List` before the statement reaches the
+            // driver.
             let path = ddb_expression(cx, attrs, primary, &expr.lhs);
             let stmt::Expr::Value(stmt::Value::List(values)) = expr.rhs.as_ref() else {
-                todo!("is_superset on DynamoDB only supports a literal list on the rhs");
+                unreachable!(
+                    "capability check guarantees Value::List rhs; got {:#?}",
+                    expr.rhs
+                );
             };
             values
                 .iter()
@@ -431,10 +437,15 @@ fn ddb_expression(
                 .join(" AND ")
         }
         stmt::Expr::Intersects(expr) => {
-            // Empty-rhs has been folded to `false` upstream.
+            // Empty-rhs has been folded to `false` upstream. The capability
+            // check (`native_array_set_predicates`) guarantees the rhs is a
+            // `Value::List` before the statement reaches the driver.
             let path = ddb_expression(cx, attrs, primary, &expr.lhs);
             let stmt::Expr::Value(stmt::Value::List(values)) = expr.rhs.as_ref() else {
-                todo!("intersects on DynamoDB only supports a literal list on the rhs");
+                unreachable!(
+                    "capability check guarantees Value::List rhs; got {:#?}",
+                    expr.rhs
+                );
             };
             let parts: Vec<_> = values
                 .iter()

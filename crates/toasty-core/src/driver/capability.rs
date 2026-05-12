@@ -174,6 +174,21 @@ pub struct Capability {
     /// list attribute, ...). Used by the schema builder as the gate for
     /// accepting `stmt::Type::List(_)` fields.
     pub vec_scalar: bool,
+
+    /// Whether the driver natively renders `IsSuperset` / `Intersects` array
+    /// predicates over an arbitrary right-hand-side expression.
+    ///
+    /// SQL drivers set this to `true`: each dialect has a single operator
+    /// (`@>` on PostgreSQL, `JSON_CONTAINS` on MySQL, a `json_each`
+    /// subquery on SQLite) that takes the rhs as a bound expression
+    /// regardless of its shape.
+    ///
+    /// DynamoDB sets this to `false`: it has no equivalent operator and
+    /// emulates the predicates by emitting one `contains(path, vN)` clause
+    /// per rhs element, which requires the rhs to be a concrete list of
+    /// values at filter-construction time. The capability check rejects
+    /// any other rhs shape before the driver is invoked.
+    pub native_array_set_predicates: bool,
 }
 
 /// Maps application-level types to the concrete database column types used for
@@ -386,6 +401,10 @@ impl Capability {
         // model fields are stored as a JSON document in a `TEXT` column.
         native_array: false,
         vec_scalar: true,
+
+        // SQLite renders `IsSuperset` / `Intersects` as `json_each`
+        // subqueries that accept any rhs expression.
+        native_array_set_predicates: true,
     };
 
     /// PostgreSQL capabilities
@@ -516,6 +535,12 @@ impl Capability {
         // `AttributeValue` encoding.
         native_array: false,
         vec_scalar: true,
+
+        // DynamoDB emulates `IsSuperset` / `Intersects` by expanding the rhs
+        // into one `contains(path, vN)` clause per element. The expansion
+        // requires the rhs to be a `Value::List` at filter-construction time
+        // — the capability check rejects any other rhs shape.
+        native_array_set_predicates: false,
     };
 }
 
