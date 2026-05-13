@@ -320,7 +320,7 @@ pub async fn filter_option_with_partition_key(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// Regression test for https://github.com/tokio-rs/toasty/issues/581
+/// Regression test for <https://github.com/tokio-rs/toasty/issues/581>
 ///
 /// `is_none()` on an `Option<ID>` field panics because the lowering phase
 /// does not strip the `ExprCast` wrapper from the column expression inside
