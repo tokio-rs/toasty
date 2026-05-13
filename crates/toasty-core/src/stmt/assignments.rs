@@ -54,6 +54,11 @@ pub enum Assignment {
     /// Remove one or more values from a set field.
     Remove(Expr),
 
+    /// Append every element of a list expression to the end of an ordered
+    /// collection field (e.g. `Vec<scalar>`). The expression must evaluate
+    /// to a list whose element type matches the target column.
+    Append(Expr),
+
     /// Multiple assignments on the same field.
     Batch(Vec<Assignment>),
 }
@@ -177,6 +182,21 @@ impl Assignments {
     {
         let key = key.into();
         let new = Assignment::Remove(expr.into());
+        self.assignments
+            .entry(key)
+            .and_modify(|existing| existing.push(new.clone()))
+            .or_insert(new);
+    }
+
+    /// Adds an `Append` assignment for the given projection. The expression
+    /// should evaluate to a list of elements to append to an ordered
+    /// collection field; multiple appends on the same projection batch.
+    pub fn append<Q>(&mut self, key: Q, expr: impl Into<Expr>)
+    where
+        Q: Into<Projection>,
+    {
+        let key = key.into();
+        let new = Assignment::Append(expr.into());
         self.assignments
             .entry(key)
             .and_modify(|existing| existing.push(new.clone()))

@@ -41,6 +41,7 @@ enum AssignmentKind {
     Set(stmt::Expr),
     Insert(stmt::Expr),
     Remove(stmt::Expr),
+    Append(stmt::Expr),
     Patch {
         path_projection: stmt::Projection,
         inner: Box<AssignmentKind>,
@@ -54,6 +55,7 @@ impl AssignmentKind {
             AssignmentKind::Set(expr) => assignments.set(projection, expr),
             AssignmentKind::Insert(expr) => assignments.insert(projection, expr),
             AssignmentKind::Remove(expr) => assignments.remove(projection, expr),
+            AssignmentKind::Append(expr) => assignments.append(projection, expr),
             AssignmentKind::Patch {
                 path_projection,
                 inner,
@@ -189,6 +191,72 @@ pub fn remove<T>(expr: impl IntoExpr<T>) -> Assignment<List<T>> {
 pub fn set<T>(expr: impl IntoExpr<T>) -> Assignment<T> {
     Assignment {
         kind: AssignmentKind::Set(expr.into_expr().untyped),
+        _p: PhantomData,
+    }
+}
+
+/// Append one element to an ordered collection field (e.g. `Vec<scalar>`).
+///
+/// Takes an expression of `T` (the element to append) and produces an
+/// assignment for `List<T>` (the collection). Lowers to the backend's
+/// native append operation — `array_append` / `||` on PostgreSQL,
+/// `JSON_ARRAY_APPEND` on MySQL, `json_insert` on SQLite, `list_append`
+/// on DynamoDB.
+///
+/// # Examples
+///
+/// ```ignore
+/// user.update()
+///     .tags(stmt::push("admin"))
+///     .exec(&mut db)
+///     .await?;
+/// ```
+pub fn push<T>(expr: impl IntoExpr<T>) -> Assignment<List<T>> {
+    let element = expr.into_expr().untyped;
+    Assignment {
+        kind: AssignmentKind::Append(stmt::Expr::list([element])),
+        _p: PhantomData,
+    }
+}
+
+/// Append every element of a list to an ordered collection field.
+///
+/// Takes a list-shaped expression (anything that converts to `List<T>`
+/// — `Vec<T>`, `[T; N]`, `&[T]`, …) and produces an assignment for
+/// `List<T>`. Elements are appended in order using the same backend
+/// operations as [`push`].
+///
+/// # Examples
+///
+/// ```ignore
+/// user.update()
+///     .tags(stmt::extend(["admin", "verified"]))
+///     .exec(&mut db)
+///     .await?;
+/// ```
+pub fn extend<T>(items: impl IntoExpr<List<T>>) -> Assignment<List<T>> {
+    Assignment {
+        kind: AssignmentKind::Append(items.into_expr().untyped),
+        _p: PhantomData,
+    }
+}
+
+/// Remove every element from an ordered collection field.
+///
+/// Produces an assignment for `List<T>` that replaces the column with an
+/// empty list. This is whole-value replace, atomic on every backend.
+///
+/// # Examples
+///
+/// ```ignore
+/// user.update()
+///     .tags(stmt::clear())
+///     .exec(&mut db)
+///     .await?;
+/// ```
+pub fn clear<T>() -> Assignment<List<T>> {
+    Assignment {
+        kind: AssignmentKind::Set(stmt::Expr::list(Vec::<stmt::Expr>::new())),
         _p: PhantomData,
     }
 }

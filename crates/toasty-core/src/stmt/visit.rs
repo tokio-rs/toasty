@@ -835,7 +835,10 @@ where
     V: Visit + ?Sized,
 {
     match node {
-        Assignment::Set(expr) | Assignment::Insert(expr) | Assignment::Remove(expr) => {
+        Assignment::Set(expr)
+        | Assignment::Insert(expr)
+        | Assignment::Remove(expr)
+        | Assignment::Append(expr) => {
             v.visit_expr(expr);
         }
         Assignment::Batch(entries) => {

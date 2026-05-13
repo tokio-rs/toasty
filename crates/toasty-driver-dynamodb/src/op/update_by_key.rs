@@ -158,8 +158,10 @@ impl Connection {
         let mut ret = vec![];
 
         for (projection, assignment) in op.assignments.iter() {
-            let stmt::Assignment::Set(expr) = assignment else {
-                todo!("only SET supported in DynamoDB; got {assignment:#?}");
+            let (expr, is_append) = match assignment {
+                stmt::Assignment::Set(expr) => (expr, false),
+                stmt::Assignment::Append(expr) => (expr, true),
+                _ => todo!("only SET / APPEND supported in DynamoDB; got {assignment:#?}"),
             };
             let value = match expr {
                 stmt::Expr::Value(value) => value,
@@ -170,7 +172,27 @@ impl Connection {
 
             let column = expr_attrs.column(table.resolve(projection)).to_string();
 
-            if value.is_null() {
+            if is_append {
+                // `stmt::push` / `stmt::extend` on a `Vec<scalar>` field map
+                // to DynamoDB's `list_append(path, :v)`, which atomically
+                // concatenates the given List `L` onto the existing list
+                // attribute (creating the attribute if absent).
+                let value = expr_attrs.value(value);
+
+                if !update_expression_set.is_empty() {
+                    write!(update_expression_set, ", ").unwrap();
+                }
+
+                write!(
+                    update_expression_set,
+                    "{column} = list_append(if_not_exists({column}, :__toasty_empty_list), {value})"
+                )
+                .unwrap();
+                expr_attrs.attr_values.insert(
+                    ":__toasty_empty_list".to_string(),
+                    aws_sdk_dynamodb::types::AttributeValue::L(Vec::new()),
+                );
+            } else if value.is_null() {
                 if !update_expression_remove.is_empty() {
                     write!(update_expression_remove, ", ").unwrap();
                 }
