@@ -345,6 +345,17 @@ struct Todo {
 The `partition` field determines which partition the record is stored in. The
 `local` field uniquely identifies the record within that partition.
 
+Each side accepts a single bare identifier (`partition = user_id`) or
+a bracketed list when more than one field belongs to that role:
+
+```rust,ignore
+#[key(partition = [tenant_id, org_id], local = [id])]
+```
+
+See [Indexes and Unique Constraints — Named mode](./indexes-and-unique-constraints.md#named-mode)
+for how multi-field partition keys map onto DynamoDB GSIs versus SQL
+composite indexes; the same rules apply to the primary key.
+
 With partition/local keys, Toasty generates methods to query by both fields or
 by the partition key alone:
 

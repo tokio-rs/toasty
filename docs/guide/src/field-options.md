@@ -450,6 +450,61 @@ Without `nullable`:
 - `None` maps to the JSON text `"null"` (a non-null string)
 - `Some(value)` maps to the JSON string representation
 
+## Scalar arrays
+
+A `Vec<T>` field where `T` is a scalar type (any primitive other than
+`u8`, plus `String`, `Uuid`, decimal types, and `jiff` date/time types)
+stores a homogeneous collection without wrapping it in JSON manually:
+
+```rust
+# use toasty::Model;
+#[derive(Debug, toasty::Model)]
+struct Post {
+    #[key]
+    #[auto]
+    id: u64,
+
+    title: String,
+
+    tags: Vec<String>,
+    weights: Vec<f64>,
+}
+```
+
+Storage depends on the driver:
+
+| Driver | Representation |
+|---|---|
+| PostgreSQL | Native array column (`text[]`, `int8[]`, `double precision[]`, …) |
+| MySQL | `JSON` column |
+| SQLite | JSON-encoded text |
+| DynamoDB | List `L` attribute |
+
+`Vec<u8>` keeps its existing meaning — a single binary blob, not an
+array of one-byte integers.
+
+### Querying scalar arrays
+
+Paths to scalar-array fields support array predicates:
+
+| Method | Meaning |
+|---|---|
+| `.contains(value)` | The array contains `value`. |
+| `.is_superset(values)` | The array contains every element of `values`. |
+| `.intersects(values)` | The array shares at least one element with `values`. |
+| `.len()` | The array's length as `Expr<i64>`. |
+| `.is_empty()` | The array is empty. |
+
+```rust,ignore
+let posts = Post::filter(Post::fields().tags().contains("rust"))
+    .exec(&mut db)
+    .await?;
+```
+
+Some predicates lower to PostgreSQL-specific operators (`@>`, `&&`,
+`= ANY(col)`). On document-backed drivers the engine substitutes
+equivalent JSON or list operations.
+
 ## Attribute summary
 
 | Attribute | Purpose | Applies on |
