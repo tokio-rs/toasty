@@ -485,18 +485,20 @@ fn refine_update(update: &stmt::Update, cx: &Cx<'_>, db_schema: &db::Schema, par
         let db_table = &db_schema.tables[table_id.0];
 
         for (projection, assignment) in update.assignments.iter() {
-            if let stmt::Assignment::Set(expr) = assignment {
-                let steps = projection.as_slice();
-                assert_eq!(
-                    steps.len(),
-                    1,
-                    "UPDATE assignment projection should be a single column index, got {steps:?}"
-                );
-                let col_idx = steps[0];
-                if let Some(col) = db_table.columns.get(col_idx) {
-                    let expected = ty_from_column(col.storage_ty.clone());
-                    check(expr, &expected, params);
-                }
+            let expr = match assignment {
+                stmt::Assignment::Set(expr) | stmt::Assignment::Append(expr) => expr,
+                _ => continue,
+            };
+            let steps = projection.as_slice();
+            assert_eq!(
+                steps.len(),
+                1,
+                "UPDATE assignment projection should be a single column index, got {steps:?}"
+            );
+            let col_idx = steps[0];
+            if let Some(col) = db_table.columns.get(col_idx) {
+                let expected = ty_from_column(col.storage_ty.clone());
+                check(expr, &expected, params);
             }
         }
     }

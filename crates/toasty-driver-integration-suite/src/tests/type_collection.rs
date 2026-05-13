@@ -201,6 +201,191 @@ pub async fn vec_string_unsupported_backend(t: &mut Test) -> Result<(), BoxError
     Ok(())
 }
 
+/// `stmt::push(value)` appends one element atomically. Validates the
+/// per-backend native append path (`||` on PG, `JSON_MERGE_PRESERVE` on
+/// MySQL, `json_each + json_group_array` on SQLite, `list_append` on
+/// DynamoDB).
+#[driver_test(id(ID), requires(vec_scalar))]
+pub async fn vec_string_push(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        tags: Vec<String>,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+
+    let mut item = toasty::create!(Item {
+        tags: vec!["a".to_string()],
+    })
+    .exec(&mut db)
+    .await?;
+
+    item.update()
+        .tags(toasty::stmt::push("b"))
+        .exec(&mut db)
+        .await?;
+
+    // In-memory model reflects the post-update value.
+    assert_eq!(item.tags, vec!["a".to_string(), "b".to_string()]);
+
+    let reloaded = Item::get_by_id(&mut db, &item.id).await?;
+    assert_eq!(reloaded.tags, vec!["a".to_string(), "b".to_string()]);
+
+    Ok(())
+}
+
+/// `stmt::push` onto a `Vec<String>` that was created empty. Covers the
+/// "initially empty" path — DynamoDB's `if_not_exists` guard and the
+/// PG / JSON-backed paths over an empty array literal.
+#[driver_test(id(ID), requires(vec_scalar))]
+pub async fn vec_string_push_to_empty(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        tags: Vec<String>,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+
+    let mut item = toasty::create!(Item {
+        tags: Vec::<String>::new(),
+    })
+    .exec(&mut db)
+    .await?;
+
+    item.update()
+        .tags(toasty::stmt::push("first"))
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(item.tags, vec!["first".to_string()]);
+
+    let reloaded = Item::get_by_id(&mut db, &item.id).await?;
+    assert_eq!(reloaded.tags, vec!["first".to_string()]);
+
+    Ok(())
+}
+
+/// `stmt::extend(iter)` appends every element in order. Validates that
+/// multi-element appends emit one append op per call (not one per
+/// element).
+#[driver_test(id(ID), requires(vec_scalar))]
+pub async fn vec_string_extend(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        tags: Vec<String>,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+
+    let mut item = toasty::create!(Item {
+        tags: vec!["a".to_string()],
+    })
+    .exec(&mut db)
+    .await?;
+
+    item.update()
+        .tags(toasty::stmt::extend(["b", "c", "d"]))
+        .exec(&mut db)
+        .await?;
+
+    let expected = vec![
+        "a".to_string(),
+        "b".to_string(),
+        "c".to_string(),
+        "d".to_string(),
+    ];
+    assert_eq!(item.tags, expected);
+
+    let reloaded = Item::get_by_id(&mut db, &item.id).await?;
+    assert_eq!(reloaded.tags, expected);
+
+    Ok(())
+}
+
+/// `stmt::extend(empty)` is a no-op append. Exercises the path where
+/// the appended list has no elements to infer an element type from —
+/// `refine_update` must push the column's element type down into the
+/// param so finalize doesn't see an unresolved `Ty::Unknown`.
+#[driver_test(id(ID), requires(vec_scalar))]
+pub async fn vec_string_extend_empty(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        tags: Vec<String>,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+
+    let mut item = toasty::create!(Item {
+        tags: vec!["a".to_string()],
+    })
+    .exec(&mut db)
+    .await?;
+
+    item.update()
+        .tags(toasty::stmt::extend(Vec::<String>::new()))
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(item.tags, vec!["a".to_string()]);
+
+    let reloaded = Item::get_by_id(&mut db, &item.id).await?;
+    assert_eq!(reloaded.tags, vec!["a".to_string()]);
+
+    Ok(())
+}
+
+/// `stmt::clear()` replaces the field with an empty list.
+#[driver_test(id(ID), requires(vec_scalar))]
+pub async fn vec_string_clear(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        tags: Vec<String>,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+
+    let mut item = toasty::create!(Item {
+        tags: vec!["a".to_string(), "b".to_string(), "c".to_string()],
+    })
+    .exec(&mut db)
+    .await?;
+
+    item.update()
+        .tags(toasty::stmt::clear())
+        .exec(&mut db)
+        .await?;
+
+    assert!(
+        item.tags.is_empty(),
+        "item.tags should be empty after clear"
+    );
+
+    let reloaded = Item::get_by_id(&mut db, &item.id).await?;
+    assert!(reloaded.tags.is_empty(), "tags should be empty after clear");
+
+    Ok(())
+}
+
 /// `path.len()` and `path.is_empty()` predicates. PG `cardinality(col)`.
 #[driver_test(id(ID), requires(vec_scalar))]
 pub async fn vec_string_len_filter(t: &mut Test) -> Result<(), BoxError> {

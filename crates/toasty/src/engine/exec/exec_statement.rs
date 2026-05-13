@@ -37,6 +37,21 @@ struct MySQLInsertReturning {
     auto_column_type: stmt::Type,
 }
 
+/// Information about a MySQL UPDATE with RETURNING that needs special handling.
+///
+/// MySQL doesn't support `RETURNING` on `UPDATE`. The workaround is to strip
+/// the returning, run the UPDATE, then run a follow-up `SELECT` over the same
+/// table and filter to fetch the post-update column values. The two
+/// statements are not atomic relative to concurrent writers — see #881 for
+/// the broader design discussion.
+#[derive(Debug)]
+struct MySQLUpdateReturning {
+    /// The `SELECT` statement that returns the post-update values. Carries
+    /// the same filter as the original `UPDATE` plus the projected
+    /// returning expression.
+    select_stmt: stmt::Statement,
+}
+
 #[derive(Debug)]
 pub(crate) struct ExecStatement {
     /// Where to get arguments for this action.
@@ -93,6 +108,10 @@ impl Exec<'_> {
         // IDs.
         let mysql_insert_returning = self.process_stmt_insert_with_returning_on_mysql(&mut stmt);
 
+        // MySQL does not support `RETURNING` on `UPDATE`. Strip the returning
+        // and capture an equivalent `SELECT` to run after the UPDATE.
+        let mysql_update_returning = self.process_stmt_update_with_returning_on_mysql(&mut stmt);
+
         // Short circuit if we can statically determine there are no results
         if let stmt::Statement::Query(query) = &stmt
             && let stmt::ExprSet::Values(values) = &query.body
@@ -132,6 +151,11 @@ impl Exec<'_> {
                 // For MySQL INSERT with RETURNING, we don't send RETURNING to the database
                 // (it doesn't support it). The driver will fetch auto-increment IDs using LAST_INSERT_ID().
                 None
+            } else if mysql_update_returning.is_some() {
+                // The UPDATE has had its RETURNING stripped; the driver runs
+                // a plain UPDATE that returns no rows. The follow-up SELECT
+                // below produces the returning values.
+                None
             } else {
                 action.output.ty.clone()
             },
@@ -169,6 +193,10 @@ impl Exec<'_> {
             res.values = Rows::Count(record[0].to_u64_unwrap());
         } else if let Some(mysql_info) = mysql_insert_returning {
             res.values = mysql_info.reconstruct_returning(res.values).await?;
+        } else if let Some(mysql_update) = mysql_update_returning {
+            res = self
+                .run_mysql_update_returning_select(mysql_update, action.output.ty.clone())
+                .await?;
         }
 
         // Apply pagination if configured
@@ -226,6 +254,69 @@ impl Exec<'_> {
 }
 
 impl Exec<'_> {
+    /// Detects an UPDATE with a non-empty `RETURNING` on a MySQL backend
+    /// and rewrites the statement for the workaround path:
+    ///
+    /// - The returning clause is stripped from the UPDATE so the SQL
+    ///   serializer doesn't reject it.
+    /// - An equivalent `SELECT` over the same table + filter is captured,
+    ///   carrying the original returning expression as its projection.
+    ///
+    /// Returns `None` when the backend supports `RETURNING` natively (PG,
+    /// SQLite) or when the statement is not an UPDATE with a returning
+    /// project. The two-statement path is not atomic relative to concurrent
+    /// writers — see #881.
+    fn process_stmt_update_with_returning_on_mysql(
+        &self,
+        stmt: &mut stmt::Statement,
+    ) -> Option<MySQLUpdateReturning> {
+        if self.engine.capability().returning_from_mutation {
+            return None;
+        }
+
+        let stmt::Statement::Update(update) = stmt else {
+            return None;
+        };
+
+        let table_id = match &update.target {
+            stmt::UpdateTarget::Table(table_id) => *table_id,
+            _ => return None,
+        };
+
+        let returning = update.returning.take()?;
+
+        let select = stmt::Select {
+            returning,
+            source: stmt::Source::table(table_id),
+            filter: update.filter.clone(),
+        };
+        let select_stmt =
+            stmt::Statement::Query(stmt::Query::new(stmt::ExprSet::Select(Box::new(select))));
+
+        Some(MySQLUpdateReturning { select_stmt })
+    }
+
+    /// Runs the follow-up `SELECT` for a MySQL UPDATE with stripped
+    /// `RETURNING`. The driver receives a plain query whose result rows
+    /// take the place of the original RETURNING output.
+    async fn run_mysql_update_returning_select(
+        &mut self,
+        mysql_update: MySQLUpdateReturning,
+        ret_ty: Option<Vec<stmt::Type>>,
+    ) -> Result<toasty_core::driver::ExecResponse> {
+        let mut select_stmt = mysql_update.select_stmt;
+        let select_params = self.engine.extract_params(&mut select_stmt);
+
+        let op = operation::QuerySql {
+            stmt: select_stmt,
+            params: select_params,
+            ret: ret_ty,
+            last_insert_id_hack: None,
+        };
+
+        self.connection.exec(&self.engine.schema, op.into()).await
+    }
+
     /// Processes INSERT statements with RETURNING on MySQL, which doesn't support RETURNING.
     ///
     /// Returns information needed to reconstruct the RETURNING results using LAST_INSERT_ID()
