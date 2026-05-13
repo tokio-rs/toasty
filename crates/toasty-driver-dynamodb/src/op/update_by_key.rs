@@ -3,7 +3,7 @@ use super::{
     TransactWriteItem, TransactWriteItemsError, Update, UpdateItemError, Value, db, ddb_expression,
     ddb_key, item_to_record, operation, stmt,
 };
-use aws_sdk_dynamodb::types::{AttributeValue, CancellationReason};
+use aws_sdk_dynamodb::types::{AttributeValue, CancellationReason, ReturnValue};
 use std::{collections::HashMap, fmt::Write};
 use toasty_core::{driver::ExecResponse, stmt::ExprContext};
 
@@ -156,6 +156,11 @@ impl Connection {
         let mut update_expression_set = String::new();
         let mut update_expression_remove = String::new();
         let mut ret = vec![];
+        // Indices in `ret` whose stored value is a placeholder (the appended
+        // elements, not the post-update column value). After the UpdateItem
+        // call we refresh these from the `UPDATED_NEW` response so the engine
+        // sees the actual new column value.
+        let mut refresh_after_update: Vec<(usize, &db::Column)> = vec![];
 
         for (projection, assignment) in op.assignments.iter() {
             let (expr, is_append) = match assignment {
@@ -168,9 +173,14 @@ impl Connection {
                 _ => todo!("op = {:#?}", op),
             };
 
+            let column_ref = table.resolve(projection);
+
+            if is_append {
+                refresh_after_update.push((ret.len(), column_ref));
+            }
             ret.push(value.clone());
 
-            let column = expr_attrs.column(table.resolve(projection)).to_string();
+            let column = expr_attrs.column(column_ref).to_string();
 
             if is_append {
                 // `stmt::push` / `stmt::extend` on a `Vec<scalar>` field map
@@ -219,6 +229,12 @@ impl Connection {
             write!(update_expression, " REMOVE {update_expression_remove}").unwrap();
         }
 
+        // When any assignment is relative (`Append`), the placeholder values
+        // in `ret` are not the post-update column values. Request
+        // `UPDATED_NEW` so the response carries the actual new attribute
+        // values and we can replace the placeholders below.
+        let needs_updated_new = !refresh_after_update.is_empty();
+
         match &unique_indices[..] {
             [] => {
                 if op.keys.len() == 1 {
@@ -240,22 +256,37 @@ impl Connection {
                         .return_values_on_condition_check_failure(
                             ReturnValuesOnConditionCheckFailure::AllOld,
                         )
+                        .set_return_values(needs_updated_new.then_some(ReturnValue::UpdatedNew))
                         .send()
                         .await;
 
-                    if let Err(SdkError::ServiceError(e)) = res {
-                        if let UpdateItemError::ConditionalCheckFailedException(cce) = e.err() {
-                            return on_update_item_condition_failed(
-                                cce.item(),
-                                cce.message.as_deref(),
-                                table,
-                                op.filter.as_ref(),
-                                op.returning,
-                            );
+                    let output = match res {
+                        Ok(output) => output,
+                        Err(SdkError::ServiceError(e)) => {
+                            if let UpdateItemError::ConditionalCheckFailedException(cce) = e.err() {
+                                return on_update_item_condition_failed(
+                                    cce.item(),
+                                    cce.message.as_deref(),
+                                    table,
+                                    op.filter.as_ref(),
+                                    op.returning,
+                                );
+                            }
+                            return Err(toasty_core::Error::driver_operation_failed(
+                                SdkError::ServiceError(e),
+                            ));
                         }
-                        return Err(toasty_core::Error::driver_operation_failed(
-                            SdkError::ServiceError(e),
-                        ));
+                        Err(other) => {
+                            return Err(toasty_core::Error::driver_operation_failed(other));
+                        }
+                    };
+
+                    if needs_updated_new && let Some(attrs) = output.attributes() {
+                        for (idx, column) in &refresh_after_update {
+                            if let Some(attr) = attrs.get(&column.name) {
+                                ret[*idx] = Value::from_ddb(&column.ty, attr).into_inner();
+                            }
+                        }
                     }
                 } else {
                     let mut transact_items = vec![];

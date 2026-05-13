@@ -229,6 +229,9 @@ pub async fn vec_string_push(t: &mut Test) -> Result<(), BoxError> {
         .exec(&mut db)
         .await?;
 
+    // In-memory model reflects the post-update value.
+    assert_eq!(item.tags, vec!["a".to_string(), "b".to_string()]);
+
     let reloaded = Item::get_by_id(&mut db, &item.id).await?;
     assert_eq!(reloaded.tags, vec!["a".to_string(), "b".to_string()]);
 
@@ -261,6 +264,8 @@ pub async fn vec_string_push_to_empty(t: &mut Test) -> Result<(), BoxError> {
         .tags(toasty::stmt::push("first"))
         .exec(&mut db)
         .await?;
+
+    assert_eq!(item.tags, vec!["first".to_string()]);
 
     let reloaded = Item::get_by_id(&mut db, &item.id).await?;
     assert_eq!(reloaded.tags, vec!["first".to_string()]);
@@ -295,16 +300,16 @@ pub async fn vec_string_extend(t: &mut Test) -> Result<(), BoxError> {
         .exec(&mut db)
         .await?;
 
+    let expected = vec![
+        "a".to_string(),
+        "b".to_string(),
+        "c".to_string(),
+        "d".to_string(),
+    ];
+    assert_eq!(item.tags, expected);
+
     let reloaded = Item::get_by_id(&mut db, &item.id).await?;
-    assert_eq!(
-        reloaded.tags,
-        vec![
-            "a".to_string(),
-            "b".to_string(),
-            "c".to_string(),
-            "d".to_string(),
-        ],
-    );
+    assert_eq!(reloaded.tags, expected);
 
     Ok(())
 }
@@ -337,6 +342,8 @@ pub async fn vec_string_extend_empty(t: &mut Test) -> Result<(), BoxError> {
         .exec(&mut db)
         .await?;
 
+    assert_eq!(item.tags, vec!["a".to_string()]);
+
     let reloaded = Item::get_by_id(&mut db, &item.id).await?;
     assert_eq!(reloaded.tags, vec!["a".to_string()]);
 
@@ -367,6 +374,11 @@ pub async fn vec_string_clear(t: &mut Test) -> Result<(), BoxError> {
         .tags(toasty::stmt::clear())
         .exec(&mut db)
         .await?;
+
+    assert!(
+        item.tags.is_empty(),
+        "item.tags should be empty after clear"
+    );
 
     let reloaded = Item::get_by_id(&mut db, &item.id).await?;
     assert!(reloaded.tags.is_empty(), "tags should be empty after clear");

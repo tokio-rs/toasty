@@ -348,16 +348,20 @@ impl stmt::Input for ConstantizeReturning<'_> {
             }
             ConstantizeSource::UpdateAssignments { assignments } => {
                 if let Some(assignment) = assignments.get(&[needle.id.index]) {
-                    let stmt::Assignment::Set(expr) = assignment else {
-                        // `Append`-assigned fields are excluded from the
-                        // auto-built returning in `visit_stmt_update_mut`,
-                        // so the only assignment kind reaching constantize
-                        // here is `Set`.
-                        todo!("only SET supported; got {assignment:#?}");
-                    };
-                    assert!(expr.is_const(), "TODO; assignment={assignment:#?}");
-
-                    Some(expr.clone())
+                    match assignment {
+                        stmt::Assignment::Set(expr) => {
+                            assert!(expr.is_const(), "TODO; assignment={assignment:#?}");
+                            Some(expr.clone())
+                        }
+                        // `Append` updates a column relative to its current
+                        // value — not constantizable from the input. Leave
+                        // the reference unresolved so the engine fetches
+                        // the post-update value from the driver: native
+                        // RETURNING on PG/SQLite, ReturnValues=UPDATED_NEW
+                        // on DynamoDB, or a follow-up SELECT on MySQL.
+                        stmt::Assignment::Append(_) => None,
+                        _ => todo!("only SET / APPEND supported; got {assignment:#?}"),
+                    }
                 } else {
                     None
                 }
