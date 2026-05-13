@@ -216,7 +216,7 @@ The query builder methods that translate cleanly to DynamoDB:
   against the base table.
 - [`filter_by_<partition>(...)` and
   `filter_by_<partition>_and_<local>(...)`](./querying-records.md#filtering-by-indexed-fields)
-   — `Query` against the base table with the supplied values forming
+  — `Query` against the base table with the supplied values forming
   the key condition.
 - `filter_by_<indexed_field>(...)` — `Query` against the GSI.
 - `find_by_<unique_field>(...)` — `Query` against the unique index
