@@ -254,9 +254,11 @@ field — shorthand for `order_by(field.desc())`:
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let mut q = Post::all();
-q.latest_by(Post::fields().id());
-let recent = q.limit(10).exec(&mut db).await?;
+let recent = Post::all()
+    .latest_by(Post::fields().id())
+    .limit(10)
+    .exec(&mut db)
+    .await?;
 # Ok(())
 # }
 ```
