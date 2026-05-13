@@ -198,10 +198,11 @@ pub fn set<T>(expr: impl IntoExpr<T>) -> Assignment<T> {
 /// Append one element to an ordered collection field (e.g. `Vec<scalar>`).
 ///
 /// Takes an expression of `T` (the element to append) and produces an
-/// assignment for `List<T>` (the collection). Lowers to the backend's
-/// native append operation — `array_append` / `||` on PostgreSQL,
-/// `JSON_ARRAY_APPEND` on MySQL, `json_insert` on SQLite, `list_append`
-/// on DynamoDB.
+/// assignment for `List<T>` (the collection). The append is atomic
+/// against the existing column value on every supported backend.
+///
+/// After `.exec()`, the instance's field reflects the post-update value
+/// (old contents followed by the appended element).
 ///
 /// # Examples
 ///
@@ -223,8 +224,11 @@ pub fn push<T>(expr: impl IntoExpr<T>) -> Assignment<List<T>> {
 ///
 /// Takes a list-shaped expression (anything that converts to `List<T>`
 /// — `Vec<T>`, `[T; N]`, `&[T]`, …) and produces an assignment for
-/// `List<T>`. Elements are appended in order using the same backend
-/// operations as [`push`].
+/// `List<T>`. Elements are appended in order and the operation is
+/// atomic against the existing column value, same as [`push`].
+///
+/// After `.exec()`, the instance's field reflects the post-update value.
+/// `stmt::extend(iter)` of an empty iterator is a no-op.
 ///
 /// # Examples
 ///
@@ -244,7 +248,8 @@ pub fn extend<T>(items: impl IntoExpr<List<T>>) -> Assignment<List<T>> {
 /// Remove every element from an ordered collection field.
 ///
 /// Produces an assignment for `List<T>` that replaces the column with an
-/// empty list. This is whole-value replace, atomic on every backend.
+/// empty list. Equivalent to passing an empty Vec to the field setter,
+/// just more explicit at the call site.
 ///
 /// # Examples
 ///
