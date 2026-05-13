@@ -153,6 +153,14 @@ impl Expand<'_> {
                 type OneField<__Origin> = #field_struct_ident<__Origin>;
                 type OptionOne = OptionOne;
 
+                fn one_from_query(query: #toasty::stmt::Query<#toasty::List<Self::Model>>) -> Self::One {
+                    One::from_stmt(query.one())
+                }
+
+                fn option_one_from_query(query: #toasty::stmt::Query<#toasty::List<Self::Model>>) -> Self::OptionOne {
+                    OptionOne::from_stmt(query.first())
+                }
+
                 fn new_many_field<__Origin>(
                     path: #toasty::Path<__Origin, #toasty::List<Self::Model>>,
                 ) -> #field_list_struct_ident<__Origin> {

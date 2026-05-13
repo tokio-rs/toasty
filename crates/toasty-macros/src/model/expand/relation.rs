@@ -22,11 +22,11 @@ impl Expand<'_> {
             }
 
             #vis struct One {
-                stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>,
+                stmt: #toasty::stmt::Query<#model_ident>,
             }
 
             #vis struct OptionOne {
-                stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>,
+                stmt: #toasty::stmt::Query<#toasty::Option<#model_ident>>,
             }
 
             impl Many {
@@ -78,45 +78,45 @@ impl Expand<'_> {
             }
 
             impl One {
-                #vis fn from_stmt(stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>) -> One {
+                #vis fn from_stmt(stmt: #toasty::stmt::Query<#model_ident>) -> One {
                     One { stmt }
                 }
 
                 /// Create a new associated record
                 #vis fn create(self) -> #create_builder_ident {
                     let mut builder = #create_builder_ident::default();
-                    builder.stmt.set_scope(self.stmt);
+                    builder.stmt.set_scope(self.stmt.to_list());
                     builder
                 }
 
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
-                    self.stmt.one().exec(executor).await
+                    self.stmt.exec(executor).await
                 }
             }
 
             impl #toasty::IntoStatement for One {
-                type Returning = #toasty::List<#model_ident>;
+                type Returning = #model_ident;
 
-                fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
+                fn into_statement(self) -> #toasty::Statement<#model_ident> {
                     use #toasty::IntoStatement;
                     self.stmt.into_statement()
                 }
             }
 
             impl OptionOne {
-                pub fn from_stmt(stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>) -> OptionOne {
+                pub fn from_stmt(stmt: #toasty::stmt::Query<#toasty::Option<#model_ident>>) -> OptionOne {
                     OptionOne { stmt }
                 }
 
                 /// Create a new associated record
                 #vis fn create(self) -> #create_builder_ident {
                     let mut builder = #create_builder_ident::default();
-                    builder.stmt.set_scope(self.stmt);
+                    builder.stmt.set_scope(self.stmt.into_rows());
                     builder
                 }
 
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#toasty::Option<#model_ident>> {
-                    self.stmt.first().exec(executor).await
+                    self.stmt.exec(executor).await
                 }
             }
 
@@ -297,7 +297,7 @@ impl Expand<'_> {
 
                 {
                     use #toasty::IntoStatement;
-                    <#ty as #toasty::Relation>::One::from_stmt(
+                    <#ty as #toasty::Relation>::one_from_query(
                         <#ty as #toasty::Relation>::Model::filter(#filter).into_statement().into_query().unwrap()
                     )
                 }
@@ -459,7 +459,7 @@ impl Expand<'_> {
 
                 {
                     use #toasty::IntoStatement;
-                    <#ty as #toasty::Relation>::One::from_stmt(
+                    <#ty as #toasty::Relation>::one_from_query(
                         #toasty::stmt::Association::one(
                             self.into_statement().into_query().unwrap().to_list(),
                             Self::fields().#field_ident().into()

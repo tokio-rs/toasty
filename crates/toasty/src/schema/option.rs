@@ -59,6 +59,16 @@ impl<T: Relation> Relation for Option<T> {
     type OneField<__Origin> = T::OneField<__Origin>;
     type OptionOne = T::OptionOne;
 
+    fn one_from_query(query: crate::stmt::Query<crate::stmt::List<Self::Model>>) -> Self::One {
+        T::option_one_from_query(query)
+    }
+
+    fn option_one_from_query(
+        query: crate::stmt::Query<crate::stmt::List<Self::Model>>,
+    ) -> Self::OptionOne {
+        T::option_one_from_query(query)
+    }
+
     fn new_many_field<__Origin>(
         path: crate::stmt::Path<__Origin, crate::stmt::List<Self::Model>>,
     ) -> Self::ManyField<__Origin> {
