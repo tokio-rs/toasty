@@ -120,7 +120,6 @@ the entry lands here.
 - DynamoDB Scan support ([design](design/ddb-scan.md), [#741])
 - Raw SQL escape hatch ([#93])
 - Connection pooling improvements ([#384])
-- Connection pool resilience after database restarts ([design](design/connection-pool-resilience.md), [#678])
 - New driver backends
   - MongoDB — `toasty-mongodb` ([#48])
   - DuckDB ([#608])
@@ -135,7 +134,6 @@ the entry lands here.
 [#384]: https://github.com/tokio-rs/toasty/issues/384
 [#608]: https://github.com/tokio-rs/toasty/issues/608
 [#669]: https://github.com/tokio-rs/toasty/issues/669
-[#678]: https://github.com/tokio-rs/toasty/issues/678
 [#741]: https://github.com/tokio-rs/toasty/issues/741
 
 ## Macros
