@@ -37,11 +37,25 @@ impl core::fmt::Display for ConnectionLost {
 impl Error {
     /// Creates a connection-lost error from an underlying driver error.
     ///
-    /// Drivers map their backend's "connection is gone" errors (a closed
-    /// `tokio_postgres` socket, `mysql_async::Error::Io`, etc.) to this
-    /// constructor so the connection pool can evict the dead connection
-    /// and so user code can branch on
-    /// [`is_connection_lost`](Error::is_connection_lost).
+    /// Drivers MUST map their backend's "connection is gone" errors (a
+    /// closed `tokio_postgres` socket, `mysql_async::Error::Io`, an
+    /// end-of-stream during the wire protocol, etc.) to this
+    /// constructor. The pool's recycle path branches on this variant:
+    ///
+    /// - The slot is evicted from the pool instead of being returned to
+    ///   the idle set.
+    /// - The pool's background sweep is woken to eagerly ping every
+    ///   other idle connection so a backend restart costs at most one
+    ///   failed query, not one per pooled connection.
+    /// - User code can branch on
+    ///   [`is_connection_lost`](Error::is_connection_lost) to decide
+    ///   whether to retry (the operation may or may not have reached
+    ///   the server — only the caller knows whether it is safe to
+    ///   retry).
+    ///
+    /// Returning a `driver_operation_failed` for a connection-level
+    /// fault instead of this variant leaks a dead slot back into the
+    /// pool.
     ///
     /// # Examples
     ///

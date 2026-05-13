@@ -8,7 +8,11 @@
 //! The query planner inspects [`Capability`] to decide which [`Operation`]
 //! variants to emit. SQL-based drivers receive [`Operation::QuerySql`] and
 //! [`Operation::Insert`], while key-value drivers (e.g., DynamoDB) receive
-//! [`Operation::GetByKey`], [`Operation::QueryPk`], etc.
+//! [`Operation::GetByKey`], [`Operation::QueryPk`], etc. The
+//! [`SchemaMutations`] sub-struct (`Capability::schema_mutations`) describes
+//! what the database can do to its own schema — for example, whether
+//! `ALTER COLUMN` can change a column's type — and the migration generator
+//! consults it to decide between an in-place alter and a table rebuild.
 //!
 //! # Architecture
 //!
@@ -18,6 +22,33 @@
 //!                        │
 //!               Driver::capability()
 //! ```
+//!
+//! # Error classification
+//!
+//! The pool and the engine branch on the error variant returned from
+//! [`Connection::exec`] and [`Connection::ping`]. Drivers MUST cooperate
+//! with those branches:
+//!
+//! - A connection-level fault (closed socket, broken pipe, protocol
+//!   error, end-of-stream during handshake) MUST be classified as
+//!   [`crate::Error::connection_lost`]. The pool uses that signal to
+//!   evict the slot and to wake the background sweep, which then pings
+//!   the remaining idle connections and drops any that also fail. Any
+//!   other error variant for the same condition leaks a dead connection
+//!   back into the pool.
+//!
+//! - A retryable transaction conflict (PostgreSQL SQLSTATE `40001`,
+//!   MySQL error `1213`) SHOULD be classified as
+//!   [`crate::Error::serialization_failure`]. The engine does not retry
+//!   automatically; the classification is propagated to user code so
+//!   the caller can decide.
+//!
+//! - A write attempted against a read-only session (PostgreSQL
+//!   `25006`, MySQL `1792`) SHOULD be classified as
+//!   [`crate::Error::read_only_transaction`].
+//!
+//! Other backend errors are typically wrapped with
+//! [`crate::Error::driver_operation_failed`].
 
 mod capability;
 pub use capability::{Capability, SchemaMutations, StorageTypes};
@@ -111,39 +142,61 @@ pub trait Connection: Debug + Send + 'static {
     /// backend-specific calls and returns an [`ExecResponse`].
     async fn exec(&mut self, schema: &Arc<Schema>, plan: Operation) -> crate::Result<ExecResponse>;
 
-    /// Returns `false` if this connection is known to be unusable.
+    /// Cheap, synchronous, local check that the driver's client object
+    /// still considers the connection open.
     ///
-    /// The pool consults this on every recycle. A `false` result causes
-    /// the connection to be evicted; the pool then falls back to another
-    /// idle connection or opens a fresh one.
+    /// Examples: a flag the driver flips when its background reader
+    /// reports a socket close (the MySQL driver does this), an
+    /// `is_closed()` accessor on the underlying client. Implementations
+    /// must not block and must not perform I/O — the check runs on the
+    /// hot path of every recycle and must complete in nanoseconds.
+    /// Drivers that cannot answer cheaply leave this at the default and
+    /// rely on the pool's [`ping`](Self::ping) sweep or the per-acquire
+    /// pre-ping option to catch a dead connection.
     ///
-    /// Implementations must be cheap and synchronous — no blocking, no
-    /// I/O. The check runs on the hot path of every connection checkout.
-    /// Drivers that cannot answer without a round-trip should leave this
-    /// at the default and rely on the pool's per-acquire ping instead.
+    /// The pool consults `is_valid()` whenever a connection is returned
+    /// to the idle set. A `false` result causes the slot to be dropped
+    /// before another caller can pick it up; the pool then returns
+    /// another idle connection or opens a fresh one. A connection is
+    /// also re-checked immediately after every [`Connection::exec`]; if
+    /// the operation flipped the flag (e.g. the driver classified the
+    /// error as connection-lost and updated its state), the worker task
+    /// exits and the slot is evicted.
     ///
     /// The default returns `true`. Drivers without a usable passive
-    /// signal stay on this default and are detected only when an
-    /// operation surfaces [`crate::Error::connection_lost`].
+    /// signal stay on this default and rely on the active path: an
+    /// operation surfaces [`crate::Error::connection_lost`], the pool
+    /// drops the slot, and the background sweep eagerly pings the rest
+    /// of the idle pool.
     fn is_valid(&self) -> bool {
         true
     }
 
     /// Active liveness probe. The pool's background health-check sweep
-    /// (and, when enabled, per-acquire pre-ping) calls this to verify
-    /// an idle connection is still usable.
+    /// calls this on the longest-idle connection on every tick, and on
+    /// every other idle connection when an escalation is triggered.
+    /// When `pool_pre_ping` is enabled, the pool also calls it on every
+    /// acquire.
     ///
-    /// A failing ping **must** return [`crate::Error::connection_lost`]
-    /// rather than a generic operation error — the pool relies on that
-    /// classification to drop the slot rather than treat the failure
-    /// as a transient query error.
+    /// Drivers MUST classify a failure here as
+    /// [`crate::Error::connection_lost`] rather than a generic operation
+    /// error. The pool branches on that classification to drop the slot
+    /// (vs. returning it to the idle set after a transient query
+    /// error), and a user-observed `connection_lost` is what wakes the
+    /// pool's sweep to eagerly check the rest of the pool. Returning
+    /// any other error variant from `ping` will leak a dead connection
+    /// back into rotation.
     ///
-    /// Drivers should make this the cheapest round-trip the backend
-    /// supports (`SELECT 1`, `COM_PING`, etc.). The default returns
-    /// `Ok(())` without doing any I/O, which is the right answer for
-    /// drivers whose connection layer cannot fail in isolation
-    /// (SQLite) or that manage their own connection pool beneath the
-    /// driver surface (DynamoDB).
+    /// Drivers SHOULD make this the cheapest round-trip the backend
+    /// supports (`SELECT 1`, `COM_PING`, etc.). A ping that runs slower
+    /// than the sweep's per-call timeout (5 seconds, internal) is
+    /// treated as failed.
+    ///
+    /// The default returns `Ok(())` without doing any I/O. That is the
+    /// right answer for drivers whose connection layer cannot fail in
+    /// isolation (the in-process SQLite driver) or whose backend
+    /// manages its own pool beneath this surface (DynamoDB, where each
+    /// `exec` is an HTTP call with its own retry policy).
     async fn ping(&mut self) -> crate::Result<()> {
         Ok(())
     }

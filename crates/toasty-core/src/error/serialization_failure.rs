@@ -2,8 +2,11 @@ use super::Error;
 
 /// Error when a transaction is aborted due to a serialization conflict.
 ///
-/// This maps to database-specific errors such as PostgreSQL SQLSTATE 40001
-/// or MySQL error 1213. The transaction must be retried.
+/// Drivers should classify retryable transaction conflicts here:
+/// PostgreSQL SQLSTATE `40001`, MySQL error `1213`, and equivalents on
+/// other backends. The engine does not retry automatically — the error
+/// propagates to the caller, who decides whether to re-run the
+/// transaction.
 #[derive(Debug)]
 pub(super) struct SerializationFailure {
     message: Box<str>,
