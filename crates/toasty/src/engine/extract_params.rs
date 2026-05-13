@@ -486,13 +486,7 @@ fn refine_update(update: &stmt::Update, cx: &Cx<'_>, db_schema: &db::Schema, par
 
         for (projection, assignment) in update.assignments.iter() {
             let expr = match assignment {
-                stmt::Assignment::Set(expr) => expr,
-                // `Append` carries a list expression whose elements share
-                // the column's element type, not the column type itself.
-                // The column-level type-check below is wrong for that
-                // shape, so skip refinement here; per-element inference
-                // already happens during expression synthesis.
-                stmt::Assignment::Append(_) => continue,
+                stmt::Assignment::Set(expr) | stmt::Assignment::Append(expr) => expr,
                 _ => continue,
             };
             let steps = projection.as_slice();
