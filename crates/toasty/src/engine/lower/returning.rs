@@ -348,17 +348,16 @@ impl stmt::Input for ConstantizeReturning<'_> {
             }
             ConstantizeSource::UpdateAssignments { assignments } => {
                 if let Some(assignment) = assignments.get(&[needle.id.index]) {
-                    match assignment {
-                        stmt::Assignment::Set(expr) => {
-                            assert!(expr.is_const(), "TODO; assignment={assignment:#?}");
-                            Some(expr.clone())
-                        }
-                        // `Append` updates a column relative to its current
-                        // value, so the returning value is not constantizable
-                        // — fall back to reading the column post-update.
-                        stmt::Assignment::Append(_) => None,
-                        _ => todo!("only SET / APPEND supported; got {assignment:#?}"),
-                    }
+                    let stmt::Assignment::Set(expr) = assignment else {
+                        // `Append`-assigned fields are excluded from the
+                        // auto-built returning in `visit_stmt_update_mut`,
+                        // so the only assignment kind reaching constantize
+                        // here is `Set`.
+                        todo!("only SET supported; got {assignment:#?}");
+                    };
+                    assert!(expr.is_const(), "TODO; assignment={assignment:#?}");
+
+                    Some(expr.clone())
                 } else {
                     None
                 }

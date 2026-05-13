@@ -743,8 +743,18 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
                 // Step 1 — build a mask of all primitives being changed by
                 // OR-ing each assigned field's coverage mask together.
+                //
+                // `Append` assignments are excluded from the returning: the
+                // new value depends on the existing column value, so it
+                // cannot be constantized from the input and would force the
+                // engine to emit a `RETURNING` clause that MySQL does not
+                // support. The in-memory model's field stays stale after the
+                // update; callers that need the new value should re-fetch.
                 let mut changed_bits = stmt::PathFieldSet::new();
-                for projection in stmt.assignments.keys() {
+                for (projection, assignment) in stmt.assignments.iter() {
+                    if matches!(assignment, stmt::Assignment::Append(_)) {
+                        continue;
+                    }
                     if let Some(mf) = mapping.resolve_field_mapping(projection) {
                         changed_bits |= mf.field_mask();
                     }
