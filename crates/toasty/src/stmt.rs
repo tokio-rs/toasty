@@ -46,6 +46,9 @@ use crate::{Executor, schema::Load};
 mod query;
 pub use query::Query;
 
+mod scope;
+pub use scope::IntoScope;
+
 mod update;
 pub use update::Update;
 
