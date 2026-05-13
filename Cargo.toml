@@ -99,7 +99,7 @@ heck = "0.5.0"
 indexmap = "2.13.0"
 index_vec = "0.1.4"
 inventory = "0.3.24"
-fallible-iterator = "0.2"
+fallible-iterator = "0.3"
 jiff = "0.2.23"
 lru = "0.18.0"
 mysql_async = { version = "0.36.2", default-features = false, features = [
