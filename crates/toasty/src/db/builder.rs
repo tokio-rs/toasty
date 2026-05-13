@@ -155,6 +155,42 @@ impl Builder {
         self
     }
 
+    /// Evict any pooled connection older than this duration when the
+    /// pool considers reusing it. Useful when an idle timeout on the
+    /// server, a load balancer, or a NAT in front of the database
+    /// silently closes long-lived sockets — capping the lifetime
+    /// bounds how long a connection can survive past such a close.
+    ///
+    /// The check runs in `recycle` (when the pool considers handing
+    /// the connection back out), not in the background. A query that
+    /// holds a connection past the cap is allowed to finish; the
+    /// connection is evicted on its next return.
+    ///
+    /// Recommended for any deployment that talks to a remote database:
+    /// pick a duration shorter than every idle timeout in the path
+    /// (server, load balancer, NAT). 30 minutes works for most clouds.
+    ///
+    /// Defaults to `None` (no cap).
+    pub fn pool_max_connection_lifetime(&mut self, lifetime: Option<Duration>) -> &mut Self {
+        self.pool.max_connection_lifetime = lifetime;
+        self
+    }
+
+    /// Evict any pooled connection that has been sitting unused for
+    /// longer than this duration. Complements
+    /// [`pool_max_connection_lifetime`](Self::pool_max_connection_lifetime):
+    /// the idle cap targets connections specifically held idle past a
+    /// known timeout, the lifetime cap targets all connections
+    /// regardless of recent use.
+    ///
+    /// Checked in `recycle`, not in the background.
+    ///
+    /// Defaults to `None` (no cap).
+    pub fn pool_max_connection_idle_time(&mut self, idle: Option<Duration>) -> &mut Self {
+        self.pool.max_connection_idle_time = idle;
+        self
+    }
+
     /// Build and return the app-level schema from the registered models
     /// without opening a database connection.
     ///

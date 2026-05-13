@@ -38,6 +38,7 @@ struct MockState {
     pings: AtomicU32,
     ping_fail_tokens: AtomicU32,
     exec_fail_tokens: AtomicU32,
+    connects: AtomicU32,
 }
 
 #[derive(Debug)]
@@ -77,6 +78,7 @@ impl Driver for MockDriver {
 
     async fn connect(&self) -> Result<Box<dyn Connection>> {
         let inner = self.inner.connect().await?;
+        self.state.connects.fetch_add(1, Ordering::Relaxed);
         Ok(Box::new(MockConnection {
             inner,
             state: self.state.clone(),
@@ -407,4 +409,142 @@ async fn pre_ping_runs_on_every_checkout() {
     .unwrap();
 
     assert_eq!(state.pings.load(Ordering::Relaxed) - pings_before, 2);
+}
+
+/// Lifetime cap: a connection older than `pool_max_connection_lifetime`
+/// is evicted by `recycle` and replaced with a fresh one. Uses real
+/// time because deadpool's `Metrics::age` reads `std::time::Instant`,
+/// which `tokio::time::pause` does not advance.
+#[tokio::test]
+async fn lifetime_cap_evicts_aged_connection() {
+    let driver = MockDriver::new();
+    let state = driver.state();
+
+    let mut db = toasty::Db::builder()
+        .models(toasty::models!(User))
+        .max_pool_size(1)
+        .pool_health_check_interval(None)
+        .pool_max_connection_lifetime(Some(Duration::from_millis(50)))
+        .build(driver)
+        .await
+        .unwrap();
+    db.push_schema().await.unwrap();
+
+    toasty::create!(User {
+        name: "alice",
+        age: 30
+    })
+    .exec(&mut db)
+    .await
+    .unwrap();
+
+    let connects_before = state.connects.load(Ordering::Relaxed);
+
+    // Real-time wait past the lifetime cap.
+    tokio::time::sleep(Duration::from_millis(150)).await;
+
+    toasty::create!(User {
+        name: "bob",
+        age: 30
+    })
+    .exec(&mut db)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        state.connects.load(Ordering::Relaxed) - connects_before,
+        1,
+        "recycle did not replace the over-lifetime connection",
+    );
+    assert_eq!(db.pool().status().size, 1);
+}
+
+/// Idle-time cap: a connection that has been sitting unused for longer
+/// than `pool_max_connection_idle_time` is evicted by `recycle` and
+/// replaced on the next checkout.
+#[tokio::test]
+async fn idle_time_cap_evicts_long_idle_connection() {
+    let driver = MockDriver::new();
+    let state = driver.state();
+
+    let mut db = toasty::Db::builder()
+        .models(toasty::models!(User))
+        .max_pool_size(1)
+        .pool_health_check_interval(None)
+        .pool_max_connection_idle_time(Some(Duration::from_millis(50)))
+        .build(driver)
+        .await
+        .unwrap();
+    db.push_schema().await.unwrap();
+
+    toasty::create!(User {
+        name: "alice",
+        age: 30
+    })
+    .exec(&mut db)
+    .await
+    .unwrap();
+
+    let connects_before = state.connects.load(Ordering::Relaxed);
+
+    // Real-time wait past the idle cap.
+    tokio::time::sleep(Duration::from_millis(150)).await;
+
+    toasty::create!(User {
+        name: "bob",
+        age: 30
+    })
+    .exec(&mut db)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        state.connects.load(Ordering::Relaxed) - connects_before,
+        1,
+        "recycle did not replace the over-idle connection",
+    );
+    assert_eq!(db.pool().status().size, 1);
+}
+
+/// A connection within both caps is reused — `recycle` must not evict
+/// a healthy young connection.
+#[tokio::test]
+async fn lifetime_and_idle_caps_do_not_evict_fresh_connection() {
+    let driver = MockDriver::new();
+    let state = driver.state();
+
+    let mut db = toasty::Db::builder()
+        .models(toasty::models!(User))
+        .max_pool_size(1)
+        .pool_health_check_interval(None)
+        .pool_max_connection_lifetime(Some(Duration::from_secs(60)))
+        .pool_max_connection_idle_time(Some(Duration::from_secs(60)))
+        .build(driver)
+        .await
+        .unwrap();
+    db.push_schema().await.unwrap();
+
+    toasty::create!(User {
+        name: "alice",
+        age: 30
+    })
+    .exec(&mut db)
+    .await
+    .unwrap();
+
+    let connects_before = state.connects.load(Ordering::Relaxed);
+
+    toasty::create!(User {
+        name: "bob",
+        age: 30
+    })
+    .exec(&mut db)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        state.connects.load(Ordering::Relaxed),
+        connects_before,
+        "recycle replaced a connection within both caps",
+    );
 }
