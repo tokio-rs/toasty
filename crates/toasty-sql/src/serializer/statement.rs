@@ -677,11 +677,46 @@ impl ToSql for (&db::Table, &stmt::Assignments) {
             column_name.to_sql(cx, f);
             f.dst.push_str(" = ");
 
-            let stmt::Assignment::Set(expr) = assignment else {
-                todo!("only SET supported in SQL serialization; got {assignment:#?}");
-            };
-            expr.to_sql(cx, f);
+            match assignment {
+                stmt::Assignment::Set(expr) => expr.to_sql(cx, f),
+                stmt::Assignment::Append(expr) => {
+                    serialize_append(cx, f, &column.name, expr);
+                }
+                _ => todo!("only SET / APPEND supported in SQL serialization; got {assignment:#?}"),
+            }
         }
+    }
+}
+
+/// Emit a backend-specific append expression for an `Assignment::Append`.
+///
+/// The right-hand side is a list expression (PG `text[]` bind for native
+/// arrays, JSON string bind for MySQL `JSON` and SQLite JSON1). The
+/// serializer renders the dialect's native append operator:
+///
+/// - PostgreSQL: `col || $1` — `text[] || text[]` concatenates arrays.
+/// - MySQL: `JSON_MERGE_PRESERVE(col, $1)` — preserves duplicates and
+///   appends every element of the right-hand array to the left-hand one.
+/// - SQLite: `(SELECT json_group_array(value) FROM (SELECT value FROM
+///   json_each(col) UNION ALL SELECT value FROM json_each($1)))` — a
+///   subquery that concatenates the two JSON arrays while preserving
+///   element order and types.
+fn serialize_append(
+    cx: &ExprContext<'_>,
+    f: &mut super::Formatter<'_>,
+    column_name: &str,
+    expr: &stmt::Expr,
+) {
+    match f.serializer.flavor {
+        Flavor::Postgresql => fmt!(cx, f, Ident(column_name) " || " expr),
+        Flavor::Mysql => {
+            fmt!(cx, f, "JSON_MERGE_PRESERVE(" Ident(column_name) ", " expr ")")
+        }
+        Flavor::Sqlite => fmt!(
+            cx, f,
+            "(SELECT json_group_array(value) FROM (SELECT value FROM json_each("
+            Ident(column_name) ") UNION ALL SELECT value FROM json_each(" expr ")))"
+        ),
     }
 }
 

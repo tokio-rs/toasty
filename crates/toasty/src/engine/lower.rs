@@ -231,8 +231,17 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
         for (projection, assignment) in &*i {
             // Phase 1: Lower the assignment expression
-            let stmt::Assignment::Set(expr) = assignment else {
-                todo!("only SET supported; got {assignment:#?}");
+            //
+            // `Append` (used by `stmt::push` / `stmt::extend`) flows through
+            // the same field-mapping pass as `Set` — for a `Vec<scalar>`
+            // field the mapping is identity (one column, no substitution
+            // beyond the field reference), so the lowering rewrites the
+            // expression in place and the per-backend serializer renders
+            // the native append operator.
+            let (expr, is_append) = match assignment {
+                stmt::Assignment::Set(expr) => (expr, false),
+                stmt::Assignment::Append(expr) => (expr, true),
+                _ => todo!("only SET / APPEND supported; got {assignment:#?}"),
             };
             let mut lowered_expr = expr.clone();
             self.visit_expr_mut(&mut lowered_expr);
@@ -262,7 +271,11 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
                 // Lower the result
                 self.visit_expr_mut(&mut lowering_expr);
-                assignments.set(column, lowering_expr);
+                if is_append {
+                    assignments.append(column, lowering_expr);
+                } else {
+                    assignments.set(column, lowering_expr);
+                }
             }
         }
 

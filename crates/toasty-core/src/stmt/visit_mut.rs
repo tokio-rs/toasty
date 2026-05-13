@@ -837,7 +837,10 @@ where
     V: VisitMut + ?Sized,
 {
     match node {
-        Assignment::Set(expr) | Assignment::Insert(expr) | Assignment::Remove(expr) => {
+        Assignment::Set(expr)
+        | Assignment::Insert(expr)
+        | Assignment::Remove(expr)
+        | Assignment::Append(expr) => {
             v.visit_expr_mut(expr);
         }
         Assignment::Batch(entries) => {

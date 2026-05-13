@@ -33,6 +33,8 @@ pub(crate) struct PoolConfig {
     pub(crate) timeouts: Timeouts,
     pub(crate) health_check_interval: Option<Duration>,
     pub(crate) pre_ping: bool,
+    pub(crate) max_connection_lifetime: Option<Duration>,
+    pub(crate) max_connection_idle_time: Option<Duration>,
 }
 
 impl Default for PoolConfig {
@@ -42,6 +44,8 @@ impl Default for PoolConfig {
             timeouts: Default::default(),
             health_check_interval: Some(Duration::from_secs(60)),
             pre_ping: false,
+            max_connection_lifetime: None,
+            max_connection_idle_time: None,
         }
     }
 }
@@ -94,6 +98,8 @@ impl Pool {
             engine,
             sweep_waker: sweep_waker.clone(),
             pre_ping: config.pre_ping,
+            max_connection_lifetime: config.max_connection_lifetime,
+            max_connection_idle_time: config.max_connection_idle_time,
         })
         .runtime(deadpool::Runtime::Tokio1)
         .max_size(effective_max)
@@ -161,6 +167,8 @@ pub(super) struct Manager {
     engine: Engine,
     sweep_waker: Arc<SweepWaker>,
     pre_ping: bool,
+    max_connection_lifetime: Option<Duration>,
+    max_connection_idle_time: Option<Duration>,
 }
 
 impl std::fmt::Debug for Manager {
@@ -190,8 +198,24 @@ impl deadpool::managed::Manager for Manager {
     async fn recycle(
         &self,
         obj: &mut Self::Type,
-        _metrics: &deadpool::managed::Metrics,
+        metrics: &deadpool::managed::Metrics,
     ) -> deadpool::managed::RecycleResult<Self::Error> {
+        if let Some(max) = self.max_connection_lifetime
+            && metrics.age() >= max
+        {
+            tracing::debug!(?max, "discarding pooled connection past max lifetime");
+            return Err(deadpool::managed::RecycleError::message(
+                "connection exceeded max lifetime",
+            ));
+        }
+        if let Some(max) = self.max_connection_idle_time
+            && metrics.last_used() >= max
+        {
+            tracing::debug!(?max, "discarding pooled connection past max idle time");
+            return Err(deadpool::managed::RecycleError::message(
+                "connection exceeded max idle time",
+            ));
+        }
         if obj.in_tx.is_closed() || obj.is_finished() {
             tracing::debug!("discarding dead pooled connection");
             return Err(deadpool::managed::RecycleError::message(

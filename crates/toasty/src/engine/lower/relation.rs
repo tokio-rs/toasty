@@ -166,6 +166,16 @@ impl LowerStatement<'_, '_> {
                     debug_assert!(!expr.is_value_null());
                     Mutation::Disassociate { expr }
                 }
+                stmt::Assignment::Append(_) => {
+                    // `stmt::push` / `stmt::extend` target `Vec<scalar>`
+                    // model fields, not relation fields. The type system
+                    // does not currently rule out passing them to a
+                    // has-many setter, but the engine has no Append-on-
+                    // relation lowering.
+                    unreachable!(
+                        "Append assignment on relation field — use stmt::insert for has-many"
+                    )
+                }
                 stmt::Assignment::Batch(_) => {
                     todo!("batch assignments for relations")
                 }
