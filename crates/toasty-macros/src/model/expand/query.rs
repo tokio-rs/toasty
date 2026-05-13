@@ -123,6 +123,20 @@ impl Expand<'_> {
                 }
             }
 
+            impl #toasty::stmt::IntoScope<#model_ident> for #query_struct_ident {
+                fn into_scope(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
+                    use #toasty::stmt::IntoScope;
+                    self.stmt.into_scope()
+                }
+            }
+
+            impl #toasty::stmt::IntoScope<#model_ident> for &#query_struct_ident {
+                fn into_scope(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
+                    use #toasty::stmt::IntoScope;
+                    self.stmt.clone().into_scope()
+                }
+            }
+
             impl #toasty::Default for #query_struct_ident {
                 fn default() -> #query_struct_ident {
                     #query_struct_ident { stmt: #toasty::stmt::Query::all() }
