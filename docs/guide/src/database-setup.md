@@ -69,6 +69,10 @@ Examples:
 .connect("dynamodb://us-east-1")
 ```
 
+For per-backend details — URL query parameters, TLS, type mapping,
+and per-driver behavior — see the
+[Database Backends](./postgresql.md) chapters.
+
 ## Using a driver directly
 
 If you need more control over the driver configuration, construct the driver
@@ -81,6 +85,52 @@ let mut db = toasty::Db::builder()
     .build(driver)
     .await?;
 ```
+
+## Connection pool
+
+`Db` owns a connection pool. Each query checks out a connection from the
+pool for the duration of the call and returns it when finished. The pool
+defaults work for typical applications; the builder exposes knobs for
+tuning size, timeouts, and broken-connection recovery.
+
+```rust,ignore
+use std::time::Duration;
+
+let mut db = toasty::Db::builder()
+    .models(toasty::models!(crate::*))
+    .max_pool_size(32)
+    .pool_wait_timeout(Some(Duration::from_secs(5)))
+    .pool_create_timeout(Some(Duration::from_secs(10)))
+    .connect("postgresql://user:pass@localhost/mydb")
+    .await?;
+```
+
+| Builder method | Default | Purpose |
+|---|---|---|
+| `max_pool_size(n)` | `num_cpus * 2` | Cap on simultaneous open connections. Drivers may enforce a lower cap (e.g., in-memory SQLite is single-connection). |
+| `pool_wait_timeout(Some(d))` | `None` | Maximum time `Db` waits for a free connection before returning an error. `None` waits indefinitely. |
+| `pool_create_timeout(Some(d))` | `None` | Maximum time to spend opening a new connection. |
+| `pool_health_check_interval(Some(d))` | `Some(60s)` | How often the background sweep pings an idle connection to detect a silently-broken backend. `None` disables the sweep. |
+| `pool_pre_ping(true)` | `false` | Ping every connection before handing it to the caller. Adds one round-trip per checkout in exchange for guaranteeing the caller sees a live connection. |
+
+### Recovering from a backend restart
+
+A database restart, a load-balancer-closed socket, or a backend session
+timeout leaves the pool holding TCP sockets that look open but reject
+the next query. Toasty handles this two ways:
+
+- **Background sweep.** Every `pool_health_check_interval`, the pool
+  pings one idle connection. If the ping fails, the pool drops the
+  failing connection and eagerly pings the rest of the idle slots so a
+  single bad result drains every dead connection in one pass.
+- **Reactive sweep.** When a user query observes a connection-lost
+  error, the same eager sweep runs immediately. A backend restart
+  typically costs one failed user query rather than one per pooled
+  connection.
+
+Enable `pool_pre_ping(true)` if even one failed query is unacceptable —
+for example, a public API behind a flaky network or an idempotent
+worker without retry. The cost is one extra round-trip per checkout.
 
 ## Table name prefix
 

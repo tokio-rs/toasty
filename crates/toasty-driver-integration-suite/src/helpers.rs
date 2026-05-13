@@ -34,7 +34,7 @@ pub fn column(
     columns(db, table_name, &[column_name])[0]
 }
 
-/// Helper function to generate a Vec<ColumnId> for specified table and columns
+/// Helper function to generate a `Vec<ColumnId>` for specified table and columns
 pub fn columns(
     db: &toasty::Db,
     table_name: &str,

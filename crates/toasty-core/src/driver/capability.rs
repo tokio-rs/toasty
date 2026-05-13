@@ -30,7 +30,11 @@ pub struct Capability {
     /// Column storage types supported by the database.
     pub storage_types: StorageTypes,
 
-    /// Schema mutation capabilities supported by the datbase.
+    /// What the database is able to change about its own schema. See
+    /// [`SchemaMutations`] for the individual fields; the migration
+    /// generator branches on them to choose between an in-place
+    /// `ALTER COLUMN` and a table rebuild, and between one combined
+    /// alter statement and several single-property ones.
     pub schema_mutations: SchemaMutations,
 
     /// SQL: supports update statements in CTE queries.
@@ -142,8 +146,29 @@ pub struct Capability {
     /// TODO: We only need this for the `connection_per_clone.rs` test, come up with a better way.
     pub test_connection_pool: bool,
 
-    /// Whether the driver supports backward (previous-page) pagination.
-    /// SQL: true. DynamoDB: false.
+    /// Whether the backend can walk a paginated query in reverse from a
+    /// cursor.
+    ///
+    /// Gates the `prev_cursor` field on a `Page` returned to user code.
+    /// When `true`, the executor extracts a previous-page cursor from the
+    /// first row of every page (see `apply_sql_pagination` in
+    /// `toasty/src/engine/exec/exec_statement.rs`). When `false`, the
+    /// executor leaves `prev_cursor` as `None`, so
+    /// `Page::has_prev()` returns `false` and `Page::prev(&db)` resolves
+    /// to `Ok(None)` without issuing a query. `Paginate::before(cursor)`
+    /// itself is not rejected — users who already hold a cursor can walk
+    /// backwards explicitly — but a driver that returns `false` is
+    /// declaring that it has no way to *produce* such a cursor.
+    ///
+    /// Drivers should set this to `true` when the backend can answer a
+    /// query equivalent to "rows ordered by K, descending from K = c,
+    /// limited to N" — i.e. the same `ORDER BY` clause reversed plus a
+    /// strict inequality on the cursor key. SQL backends meet this
+    /// trivially. DynamoDB does not: a `Query` with `ScanIndexForward =
+    /// false` returns rows in the opposite direction but cannot be
+    /// rooted at an arbitrary client-supplied cursor without an extra
+    /// `KeyConditionExpression`, and `Scan` has no order guarantee at
+    /// all.
     pub backward_pagination: bool,
 
     /// The driver's bind layer accepts a single parameter whose value is
@@ -255,9 +280,15 @@ pub struct StorageTypes {
 
 /// The database's capabilities to mutate the schema (tables, columns, indices).
 ///
-/// Used by the migration generator to decide how to express schema changes.
-/// For example, SQLite cannot alter column types so migrations must recreate
-/// the table instead.
+/// Used by the migration generator to decide how to express each
+/// column change. `alter_column_type` gates whether an in-place
+/// `ALTER COLUMN` is possible at all — SQLite has it set to `false`,
+/// and a type change there triggers a full table rebuild (create
+/// new table, copy rows, drop old). `alter_column_properties_atomic`
+/// decides whether several column-property changes (rename, retype,
+/// `NOT NULL`, default) collapse into one statement or emit one per
+/// property. MySQL sets both to `true`; PostgreSQL alters in place
+/// but requires one statement per property.
 ///
 /// Pre-built configurations: [`SQLITE`](Self::SQLITE),
 /// [`POSTGRESQL`](Self::POSTGRESQL), [`MYSQL`](Self::MYSQL),

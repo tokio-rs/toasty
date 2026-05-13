@@ -331,6 +331,32 @@ On SQL databases, the `partition`/`local` distinction is ignored — all fields
 are placed in the composite index in the order they appear, producing
 `CREATE INDEX ... ON matches (tournament_id, region, round)`.
 
+### Custom index names
+
+Toasty generates an index name from the table and field list (e.g.,
+`idx_users_email`). Override it with `name = "..."` inside `#[index(...)]`
+or `#[key(...)]`:
+
+```rust
+# use toasty::Model;
+#[derive(Debug, toasty::Model)]
+#[index(name = "scores_by_game", game_title, top_score)]
+struct GameScore {
+    #[key]
+    #[auto]
+    id: u64,
+    user_id: String,
+    game_title: String,
+    top_score: i64,
+}
+```
+
+This becomes `CREATE INDEX scores_by_game ON game_scores (...)` on SQL
+drivers and is used as the GSI name on DynamoDB. The name must be
+non-empty and may only appear once per attribute. Use a custom name
+when a migration tool or external query references it by name, or to
+keep generated names within a database's identifier-length limit.
+
 ### SQL vs DynamoDB behavior
 
 | Behavior | SQL | DynamoDB |

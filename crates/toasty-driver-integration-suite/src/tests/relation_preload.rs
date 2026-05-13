@@ -495,8 +495,8 @@ pub async fn preload_on_empty_query(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// HasMany<T> + BelongsTo<Option<T>>: nullable FK allows children to exist
-/// without a parent. Tests preloading from both directions.
+/// `HasMany<T>` + `BelongsTo<Option<T>>`: nullable FK allows children to
+/// exist without a parent. Tests preloading from both directions.
 #[driver_test(id(ID))]
 pub async fn preload_has_many_with_optional_belongs_to(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -569,9 +569,9 @@ pub async fn preload_has_many_with_optional_belongs_to(test: &mut Test) -> Resul
     Ok(())
 }
 
-/// HasOne<Option<T>> + BelongsTo<T> (required FK): the child always points to a
-/// parent, but the parent may or may not have a child. Tests preloading from
-/// both directions.
+/// `HasOne<Option<T>>` + `BelongsTo<T>` (required FK): the child always points
+/// to a parent, but the parent may or may not have a child. Tests preloading
+/// from both directions.
 #[driver_test(id(ID))]
 pub async fn preload_has_one_optional_with_required_belongs_to(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -643,7 +643,7 @@ pub async fn preload_has_one_optional_with_required_belongs_to(test: &mut Test) 
     Ok(())
 }
 
-/// HasOne<T> (required) + BelongsTo<Option<T>>: creating a parent requires
+/// `HasOne<T>` (required) + `BelongsTo<Option<T>>`: creating a parent requires
 /// providing a child, but the child FK is nullable. Tests preloading from both
 /// directions.
 #[driver_test(id(ID))]
