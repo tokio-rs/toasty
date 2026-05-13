@@ -69,26 +69,9 @@ Examples:
 .connect("dynamodb://us-east-1")
 ```
 
-### PostgreSQL connection options
-
-PostgreSQL accepts query parameters in the URL:
-
-| Parameter | Purpose |
-|---|---|
-| `application_name=<string>` | Reported to PostgreSQL as the connecting application name. Shows up in `pg_stat_activity` and the server log. |
-| `sslmode=<mode>` | TLS mode. Requires the `tls` feature on `toasty-driver-postgresql`. |
-| `sslrootcert=<path>` | Path to a PEM-encoded root certificate to trust. |
-| `sslcert=<path>` and `sslkey=<path>` | Paths to a client certificate and matching private key, for mutual TLS. |
-| `channel_binding=<mode>` | `disable`, `prefer` (default), or `require`. |
-| `sslnegotiation=<mode>` | `postgres` (default) or `direct`. |
-
-Supported `sslmode` values: `disable`, `prefer` (default), `require`,
-`verify-ca`, `verify-full`. Without the `tls` feature, any `sslmode`
-other than `disable` fails at connect time.
-
-```rust,ignore
-.connect("postgresql://user:pass@localhost/mydb?sslmode=require&application_name=myservice")
-```
+For per-backend details — URL query parameters, TLS, type mapping,
+and features that only light up on a given driver — see the
+[Database Backends](./postgresql.md) chapters.
 
 ## Using a driver directly
 
