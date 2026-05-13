@@ -237,7 +237,29 @@ let pairs: Vec<(u64, String)> = User::all()
 
 `.select()` works on any query — `all()`, `filter()`, and
 `filter_by_*()` — and lets the database skip reading columns the caller
-will not look at.
+will not look at. Chain it after a filter to project a subset of
+columns from the matching rows:
+
+```rust
+# use toasty::Model;
+# #[derive(Debug, toasty::Model)]
+# struct User {
+#     #[key]
+#     #[auto]
+#     id: u64,
+#     name: String,
+#     #[unique]
+#     email: String,
+# }
+# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
+let name: Option<String> = User::filter_by_email("alice@example.com")
+    .select(User::fields().name())
+    .first()
+    .exec(&mut db)
+    .await?;
+# Ok(())
+# }
+```
 
 ## Sorting by most recent
 
