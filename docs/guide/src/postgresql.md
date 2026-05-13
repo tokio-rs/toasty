@@ -111,13 +111,13 @@ want native `NUMERIC`.
 **`VARCHAR` length cap.** PostgreSQL's `VARCHAR(N)` allows `N` up to
 10,485,760. Toasty rejects larger values at schema-build time.
 
-## Features only PostgreSQL gets
+## Behavior specific to PostgreSQL
 
-These behaviors light up automatically when you run on PostgreSQL — no
-configuration required.
+Toasty enables these features automatically when the driver is
+PostgreSQL. No configuration is required.
 
-**Native arrays for `Vec<scalar>` fields.** A `tags: Vec<String>`
-field is a `text[]` column. The array predicates
+**Native arrays for [`Vec<scalar>` fields](./field-options.md#scalar-arrays).**
+A `tags: Vec<String>` field is a `text[]` column. The array predicates
 (`contains`, `is_superset`, `intersects`, `len`, `is_empty`) lower to
 PostgreSQL's native operators (`= ANY(col)`, `@>`, `&&`,
 `cardinality(col)`):
@@ -128,30 +128,34 @@ let admins = User::filter(User::fields().roles().contains("admin"))
     .await?;
 ```
 
-**Native `ILIKE`.** The `.ilike()` filter method lowers directly to
-the SQL `ILIKE` operator. On other SQL drivers `.ilike()` falls back
-to plain `LIKE`, which is case-sensitive on PostgreSQL — so the
-behavior actually differs between backends. Reach for `.ilike()` when
-you need case-insensitive matching here.
+**Native `ILIKE`.** The [`.ilike()`](./filtering-with-expressions.md#ilike)
+filter method lowers directly to the SQL `ILIKE` operator. On other
+SQL drivers `.ilike()` falls back to plain `LIKE`, which is
+case-sensitive on PostgreSQL — so the behavior actually differs
+between backends. Reach for `.ilike()` when you need case-insensitive
+matching here.
 
-**Native prefix match.** The `.starts_with()` filter lowers to
-PostgreSQL's `^@` operator. The optimizer can use a `text_pattern_ops`
-index for `^@` queries the same way it would for an anchored `LIKE
-'prefix%'`.
+**Native prefix match.** The
+[`.starts_with()`](./filtering-with-expressions.md#starts_with) filter
+lowers to PostgreSQL's `^@` operator. The optimizer can use a
+`text_pattern_ops` index for `^@` queries the same way it would for an
+anchored `LIKE 'prefix%'`.
 
-**Named enum types.** An `embed`-tagged Rust enum maps to a real
-PostgreSQL enum type created with `CREATE TYPE ... AS ENUM`. Adding a
-new variant requires an `ALTER TYPE ... ADD VALUE`, which the
-migration generator handles.
+**Named enum types.** An [`embed`-tagged Rust enum](./embedded-types.md)
+maps to a real PostgreSQL enum type created with `CREATE TYPE ... AS
+ENUM`. Adding a new variant requires an `ALTER TYPE ... ADD VALUE`,
+which the migration generator handles.
 
-**Row-level locking.** Generated transactions can use `SELECT ... FOR
-UPDATE` to lock rows for the duration of a transaction. SQLite and
-DynamoDB do not have row-level locking; Toasty's transaction layer
-falls back to serializable transaction isolation on those backends.
+**Row-level locking.** Generated [transactions](./transactions.md) can
+use `SELECT ... FOR UPDATE` to lock rows for the duration of a
+transaction. SQLite and DynamoDB do not have row-level locking;
+Toasty's transaction layer falls back to serializable transaction
+isolation on those backends.
 
-**Backward pagination.** `.paginate(per_page).prev(&db)` walks
-backwards from a page cursor. DynamoDB cannot do this; PostgreSQL
-(like the other SQL backends) can.
+**Backward pagination.**
+[`.paginate(per_page).prev(&db)`](./sorting-limits-and-pagination.md#navigating-pages)
+walks backwards from a page cursor. DynamoDB cannot do this;
+PostgreSQL (like the other SQL backends) can.
 
 ## Migrations
 

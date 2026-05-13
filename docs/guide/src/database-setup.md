@@ -70,7 +70,7 @@ Examples:
 ```
 
 For per-backend details — URL query parameters, TLS, type mapping,
-and features that only light up on a given driver — see the
+and per-driver behavior — see the
 [Database Backends](./postgresql.md) chapters.
 
 ## Using a driver directly
