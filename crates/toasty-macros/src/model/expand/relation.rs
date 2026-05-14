@@ -22,7 +22,7 @@ impl Expand<'_> {
             }
 
             #vis struct One {
-                stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>,
+                stmt: #toasty::stmt::Query<#model_ident>,
             }
 
             #vis struct OptionOne {
@@ -79,7 +79,7 @@ impl Expand<'_> {
 
             impl One {
                 #vis fn from_stmt(stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>) -> One {
-                    One { stmt }
+                    One { stmt: stmt.one() }
                 }
 
                 /// Create a new associated record
@@ -90,14 +90,14 @@ impl Expand<'_> {
                 }
 
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
-                    self.stmt.one().exec(executor).await
+                    self.stmt.exec(executor).await
                 }
             }
 
             impl #toasty::IntoStatement for One {
-                type Returning = #toasty::List<#model_ident>;
+                type Returning = #model_ident;
 
-                fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
+                fn into_statement(self) -> #toasty::Statement<#model_ident> {
                     use #toasty::IntoStatement;
                     self.stmt.into_statement()
                 }
