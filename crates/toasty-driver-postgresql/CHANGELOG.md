@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-postgresql-v0.5.0...toasty-driver-postgresql-v0.6.0) - 2026-05-14
+
+### Added
+
+- Add Vec<scalar> model field support to MySQL, SQLite, and DynamoDB ([#872])
+- Add Vec<scalar> support to PostgreSQL using native array storage ([#866])
+- Detect broken pool connections before the next query ([#874])
+- Automatically evict stale connections after backend restart ([#867])
+- Improve PostgreSQL IN-list query performance by using array parameter binding ([#818])
+
+[#818]: https://github.com/tokio-rs/toasty/pull/818
+[#866]: https://github.com/tokio-rs/toasty/pull/866
+[#867]: https://github.com/tokio-rs/toasty/pull/867
+[#872]: https://github.com/tokio-rs/toasty/pull/872
+[#874]: https://github.com/tokio-rs/toasty/pull/874
+
 ## [0.5.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-postgresql-v0.4.0...toasty-driver-postgresql-v0.5.0) - 2026-04-27
 
 ### Added

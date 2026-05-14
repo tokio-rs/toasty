@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-mysql-v0.5.0...toasty-driver-mysql-v0.6.0) - 2026-05-14
+
+### Added
+
+- Support for Vec<scalar> fields on MySQL, SQLite, and DynamoDB ([#872])
+- Detect and recover from broken pool connections before executing queries ([#874])
+- Automatically evict stale pooled connections after backend restart ([#867])
+
+[#867]: https://github.com/tokio-rs/toasty/pull/867
+[#872]: https://github.com/tokio-rs/toasty/pull/872
+[#874]: https://github.com/tokio-rs/toasty/pull/874
+
 ## [0.5.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-mysql-v0.4.0...toasty-driver-mysql-v0.5.0) - 2026-04-27
 
 ### Added

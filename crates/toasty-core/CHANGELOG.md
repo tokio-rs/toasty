@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.5.0...toasty-core-v0.6.0) - 2026-05-14
+
+### Added
+
+- Add Vec<scalar> model fields with push, extend, clear, pop, remove_at, and remove methods on PostgreSQL, MySQL, SQLite, and DynamoDB ([#866], [#880], [#887], [#872])
+- Improve connection pool reliability by detecting broken connections before the next query and evicting them after backend restart ([#874], [#867])
+- Support custom index names via `name = "..."` in macros ([#842])
+- Proxy Auto through tuple-newtype Embed types ([#836])
+- Add .select() projection through BelongsTo relations ([#827])
+- Optimize IN-list queries on PostgreSQL by binding as a single array parameter ([#818])
+- Add full-table scan support for DynamoDB ([#821])
+- Add #[deferred] field attribute and Deferred<T> wrapper, with support for embedded types ([#793], [#799])
+- Add backward pagination driver capability ([#757])
+- Add ilike() filter method ([#801])
+
+### Changed
+
+- [**breaking**] Rename Returning enum variants (Expr→Project, Value→Expr) ([#790])
+
+[#757]: https://github.com/tokio-rs/toasty/pull/757
+[#790]: https://github.com/tokio-rs/toasty/pull/790
+[#793]: https://github.com/tokio-rs/toasty/pull/793
+[#799]: https://github.com/tokio-rs/toasty/pull/799
+[#801]: https://github.com/tokio-rs/toasty/pull/801
+[#818]: https://github.com/tokio-rs/toasty/pull/818
+[#821]: https://github.com/tokio-rs/toasty/pull/821
+[#827]: https://github.com/tokio-rs/toasty/pull/827
+[#836]: https://github.com/tokio-rs/toasty/pull/836
+[#842]: https://github.com/tokio-rs/toasty/pull/842
+[#866]: https://github.com/tokio-rs/toasty/pull/866
+[#867]: https://github.com/tokio-rs/toasty/pull/867
+[#872]: https://github.com/tokio-rs/toasty/pull/872
+[#874]: https://github.com/tokio-rs/toasty/pull/874
+[#880]: https://github.com/tokio-rs/toasty/pull/880
+[#887]: https://github.com/tokio-rs/toasty/pull/887
+
 ## [0.5.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.4.0...toasty-core-v0.5.0) - 2026-04-27
 
 ### Added
