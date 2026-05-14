@@ -166,11 +166,22 @@ index_vec::define_index_type! {
     struct ScopeId = u32;
 }
 
-/// One of the relative collection mutations: value-remove, pop, or remove-at.
+/// Which field-value write `lower_field_value_assignment` emits per column.
 ///
-/// Used by `visit_assignments_mut` to dispatch the new `Vec<scalar>`
-/// operators down a separate lowering path from the column-value-shaped
-/// `Set` / `Append` assignments.
+/// `Set` and `Append` share the field-value lowering path — their argument
+/// has the field's shape — and differ only in the column-level assignment
+/// they produce.
+enum FieldWrite {
+    Set,
+    Append,
+}
+
+/// A collection-operator assignment: value-remove, pop, or remove-at.
+///
+/// These carry an *operator argument* — a single element, an index, or
+/// nothing — rather than a field-shaped value, so they lower through
+/// `lower_collection_op` rather than the `model_to_table` substitution
+/// that `Set` / `Append` use.
 enum CollectionOp {
     Remove(stmt::Expr),
     Pop,
@@ -178,17 +189,65 @@ enum CollectionOp {
 }
 
 impl LowerStatement<'_, '_> {
-    /// Lower a `Remove` / `Pop` / `RemoveAt` assignment on a `Vec<scalar>`
-    /// field.
+    /// Lower a `Set` / `Append` assignment — one whose argument carries a
+    /// value with the *field's* shape.
+    ///
+    /// The field may span multiple columns (embedded structs decompose
+    /// across columns; enums into a discriminant plus variant columns), so
+    /// this resolves the field mapping and, for each impacted column,
+    /// substitutes the lowered argument into that column's `model_to_table`
+    /// template before emitting the column-level write.
+    fn lower_field_value_assignment(
+        &mut self,
+        out: &mut stmt::Assignments,
+        mapping: &toasty_core::schema::mapping::Model,
+        projection: &stmt::Projection,
+        expr: &stmt::Expr,
+        write: FieldWrite,
+    ) {
+        let mut lowered_expr = expr.clone();
+        self.visit_expr_mut(&mut lowered_expr);
+
+        let Some(field) = mapping.resolve_field_mapping(projection) else {
+            self.state
+                .errors
+                .push(crate::Error::invalid_statement(format!(
+                    "invalid assignment projection: {projection:?}"
+                )));
+            return;
+        };
+
+        for (column, lowering_idx) in field.columns() {
+            let mut lowering_expr = mapping.model_to_table[lowering_idx].clone();
+
+            // Substitute the field reference in the column's lowering
+            // template with the lowered argument value.
+            lowering_expr.substitute(AssignmentInput {
+                assignment_projection: projection.clone(),
+                value: &lowered_expr,
+            });
+
+            self.visit_expr_mut(&mut lowering_expr);
+
+            match write {
+                FieldWrite::Set => out.set(column, lowering_expr),
+                FieldWrite::Append => out.append(column, lowering_expr),
+            }
+        }
+    }
+
+    /// Lower a `Remove` / `Pop` / `RemoveAt` assignment — one whose argument
+    /// is an operator argument rather than a field value.
     ///
     /// `Vec<scalar>` fields always resolve to a single primitive column, so
-    /// this skips the `model_to_table` substitution that `Set` / `Append`
-    /// flow through (the operator argument is not a column value).
-    /// Capability flags gate the operation; backends that don't advertise
-    /// the native form emit a clear error pending the RMW fallback.
-    fn lower_collection_mutation(
+    /// this skips the `model_to_table` substitution that
+    /// `lower_field_value_assignment` performs (the operator argument is not
+    /// a column value). Capability flags gate the operation; backends that
+    /// don't advertise the native form emit a clear error pending the RMW
+    /// fallback.
+    fn lower_collection_op(
         &mut self,
-        assignments: &mut stmt::Assignments,
+        out: &mut stmt::Assignments,
         mapping: &toasty_core::schema::mapping::Model,
         projection: &stmt::Projection,
         op: CollectionOp,
@@ -231,15 +290,15 @@ impl LowerStatement<'_, '_> {
             CollectionOp::Remove(expr) => {
                 let mut lowered = expr;
                 self.visit_expr_mut(&mut lowered);
-                assignments.remove(prim.column, lowered);
+                out.remove(prim.column, lowered);
             }
             CollectionOp::Pop => {
-                assignments.pop(prim.column);
+                out.pop(prim.column);
             }
             CollectionOp::RemoveAt(expr) => {
                 let mut lowered = expr;
                 self.visit_expr_mut(&mut lowered);
-                assignments.remove_at(prim.column, lowered);
+                out.remove_at(prim.column, lowered);
             }
         }
     }
@@ -305,78 +364,72 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     }
 
     fn visit_assignments_mut(&mut self, i: &mut stmt::Assignments) {
-        let mut assignments = stmt::Assignments::default();
+        let mut lowered = stmt::Assignments::default();
         let mapping = self.mapping_unwrap();
 
+        // The dividing line between the two lowering paths is the *shape of
+        // the assignment's data argument*, not "additive vs. removal":
+        //
+        // - `Set` / `Append` carry a value with the *field's* shape — Set's
+        //   is the whole field value, Append's is a list matching a
+        //   `Vec<scalar>` field. Both flow through `resolve_field_mapping`
+        //   plus the per-column `model_to_table` substitution, which
+        //   decomposes embeds/enums across columns and applies any
+        //   column-type cast.
+        //
+        // - `Remove` / `Pop` / `RemoveAt` carry an *operator argument*, not
+        //   a field value — a single element, an index, or nothing. They
+        //   only apply to a single `Vec<scalar>` column and bypass
+        //   `model_to_table` entirely: there is no field-shaped value for
+        //   it to transform.
         for (projection, assignment) in &*i {
-            // Relative collection mutations (`Remove`, `Pop`, `RemoveAt`)
-            // target `Vec<scalar>` fields, which always resolve to a single
-            // primitive column. Skip the `model_to_table` substitution and
-            // emit the variant directly against the resolved column — the
-            // value/index expression is a per-operator argument, not a
-            // column value, so the substitution machinery doesn't apply.
-            let collection_op = match assignment {
-                stmt::Assignment::Remove(expr) => Some(CollectionOp::Remove(expr.clone())),
-                stmt::Assignment::Pop => Some(CollectionOp::Pop),
-                stmt::Assignment::RemoveAt(expr) => Some(CollectionOp::RemoveAt(expr.clone())),
-                _ => None,
-            };
-
-            if let Some(op) = collection_op {
-                self.lower_collection_mutation(&mut assignments, mapping, projection, op);
-                continue;
-            }
-
-            // Phase 1: Lower the assignment expression
-            //
-            // `Append` (used by `stmt::push` / `stmt::extend`) flows through
-            // the same field-mapping pass as `Set` — for a `Vec<scalar>`
-            // field the mapping is identity (one column, no substitution
-            // beyond the field reference), so the lowering rewrites the
-            // expression in place and the per-backend serializer renders
-            // the native append operator.
-            let (expr, is_append) = match assignment {
-                stmt::Assignment::Set(expr) => (expr, false),
-                stmt::Assignment::Append(expr) => (expr, true),
-                _ => todo!("only SET / APPEND supported; got {assignment:#?}"),
-            };
-            let mut lowered_expr = expr.clone();
-            self.visit_expr_mut(&mut lowered_expr);
-
-            // Phase 2: Resolve field mapping (handles primitives, partial updates, and full replacements)
-            let Some(field) = mapping.resolve_field_mapping(projection) else {
-                self.state
-                    .errors
-                    .push(crate::Error::invalid_statement(format!(
-                        "invalid assignment projection: {:?}",
-                        projection
-                    )));
-                continue;
-            };
-
-            // Phase 3: Apply lowering expression
-            // Iterate over all columns impacted by this field
-            for (column, lowering_idx) in field.columns() {
-                let mut lowering_expr = mapping.model_to_table[lowering_idx].clone();
-
-                // Substitute field reference with value
-                let input = AssignmentInput {
-                    assignment_projection: projection.clone(),
-                    value: &lowered_expr,
-                };
-                lowering_expr.substitute(input);
-
-                // Lower the result
-                self.visit_expr_mut(&mut lowering_expr);
-                if is_append {
-                    assignments.append(column, lowering_expr);
-                } else {
-                    assignments.set(column, lowering_expr);
+            match assignment {
+                stmt::Assignment::Set(expr) => {
+                    self.lower_field_value_assignment(
+                        &mut lowered,
+                        mapping,
+                        projection,
+                        expr,
+                        FieldWrite::Set,
+                    );
+                }
+                stmt::Assignment::Append(expr) => {
+                    self.lower_field_value_assignment(
+                        &mut lowered,
+                        mapping,
+                        projection,
+                        expr,
+                        FieldWrite::Append,
+                    );
+                }
+                stmt::Assignment::Remove(expr) => {
+                    self.lower_collection_op(
+                        &mut lowered,
+                        mapping,
+                        projection,
+                        CollectionOp::Remove(expr.clone()),
+                    );
+                }
+                stmt::Assignment::Pop => {
+                    self.lower_collection_op(&mut lowered, mapping, projection, CollectionOp::Pop);
+                }
+                stmt::Assignment::RemoveAt(expr) => {
+                    self.lower_collection_op(
+                        &mut lowered,
+                        mapping,
+                        projection,
+                        CollectionOp::RemoveAt(expr.clone()),
+                    );
+                }
+                stmt::Assignment::Insert(_) | stmt::Assignment::Batch(_) => {
+                    todo!(
+                        "Insert / Batch assignments are not produced for table lowering; got {assignment:#?}"
+                    )
                 }
             }
         }
 
-        *i = assignments;
+        *i = lowered;
     }
 
     fn visit_expr_set_op_mut(&mut self, i: &mut stmt::ExprSetOp) {
