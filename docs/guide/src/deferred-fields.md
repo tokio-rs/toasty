@@ -95,9 +95,6 @@ let body: &String = doc.body.get();   // synchronous, no query
 # }
 ```
 
-Both mechanisms are covered in full below; the rest of this section
-first describes where `#[deferred]` can be applied.
-
 `#[deferred]` is supported on primitive fields and on embedded types
 (`#[derive(Embed)]` structs and enums). It does not compose with
 `#[belongs_to]`, `#[has_many]`, or `#[has_one]` — relations are already
