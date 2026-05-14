@@ -59,6 +59,17 @@ pub enum Assignment {
     /// to a list whose element type matches the target column.
     Append(Expr),
 
+    /// Drop the last element of an ordered collection field. Drives
+    /// [`stmt::pop`](crate::stmt::Assignment::Pop) on `Vec<scalar>` fields.
+    /// No-op on an empty collection.
+    Pop,
+
+    /// Drop the element at the given index from an ordered collection field.
+    /// The expression must evaluate to a `usize`-shaped value. Out-of-bounds
+    /// indices are a no-op rather than an error — per-row failure semantics
+    /// on a bulk update are rarely useful.
+    RemoveAt(Expr),
+
     /// Multiple assignments on the same field.
     Batch(Vec<Assignment>),
 }
@@ -197,6 +208,35 @@ impl Assignments {
     {
         let key = key.into();
         let new = Assignment::Append(expr.into());
+        self.assignments
+            .entry(key)
+            .and_modify(|existing| existing.push(new.clone()))
+            .or_insert(new);
+    }
+
+    /// Adds a `Pop` assignment for the given projection. Multiple pops on the
+    /// same projection batch.
+    pub fn pop<Q>(&mut self, key: Q)
+    where
+        Q: Into<Projection>,
+    {
+        let key = key.into();
+        let new = Assignment::Pop;
+        self.assignments
+            .entry(key)
+            .and_modify(|existing| existing.push(new.clone()))
+            .or_insert(new);
+    }
+
+    /// Adds a `RemoveAt` assignment for the given projection. The expression
+    /// should evaluate to the element index to drop. Multiple removals on the
+    /// same projection batch.
+    pub fn remove_at<Q>(&mut self, key: Q, expr: impl Into<Expr>)
+    where
+        Q: Into<Projection>,
+    {
+        let key = key.into();
+        let new = Assignment::RemoveAt(expr.into());
         self.assignments
             .entry(key)
             .and_modify(|existing| existing.push(new.clone()))

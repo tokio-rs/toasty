@@ -682,7 +682,18 @@ impl ToSql for (&db::Table, &stmt::Assignments) {
                 stmt::Assignment::Append(expr) => {
                     serialize_append(cx, f, &column.name, expr);
                 }
-                _ => todo!("only SET / APPEND supported in SQL serialization; got {assignment:#?}"),
+                stmt::Assignment::Remove(expr) => {
+                    serialize_remove(cx, f, &column.name, expr);
+                }
+                stmt::Assignment::Pop => {
+                    serialize_pop(cx, f, &column.name);
+                }
+                stmt::Assignment::RemoveAt(expr) => {
+                    serialize_remove_at(cx, f, &column.name, expr);
+                }
+                _ => todo!(
+                    "only SET / APPEND / REMOVE / POP / REMOVE_AT supported in SQL serialization; got {assignment:#?}"
+                ),
             }
         }
     }
@@ -716,6 +727,78 @@ fn serialize_append(
             cx, f,
             "(SELECT json_group_array(value) FROM (SELECT value FROM json_each("
             Ident(column_name) ") UNION ALL SELECT value FROM json_each(" expr ")))"
+        ),
+    }
+}
+
+/// Emit `stmt::remove(value)` against a `Vec<scalar>` column.
+///
+/// - PostgreSQL: `array_remove(col, $value)` — removes every element equal
+///   to `$value` from a `T[]` column. Atomic.
+/// - MySQL / SQLite: not yet supported — `vec_remove` is gated off and the
+///   lowering rejects these backends before reaching here.
+fn serialize_remove(
+    cx: &ExprContext<'_>,
+    f: &mut super::Formatter<'_>,
+    column_name: &str,
+    expr: &stmt::Expr,
+) {
+    match f.serializer.flavor {
+        Flavor::Postgresql => fmt!(cx, f, "array_remove(" Ident(column_name) ", " expr ")"),
+        Flavor::Mysql | Flavor::Sqlite => panic!(
+            "stmt::remove on a Vec<scalar> field is not yet implemented for this SQL flavor; \
+             the lowering should have rejected this before reaching the serializer",
+        ),
+    }
+}
+
+/// Emit `stmt::pop()` against a `Vec<scalar>` column.
+///
+/// - PostgreSQL: `col[1:cardinality(col) - 1]` — slices off the last
+///   element via 1-based PG array slicing. Atomic.
+/// - MySQL / SQLite: not yet supported — `vec_pop` is gated off and the
+///   lowering rejects these backends before reaching here.
+fn serialize_pop(cx: &ExprContext<'_>, f: &mut super::Formatter<'_>, column_name: &str) {
+    match f.serializer.flavor {
+        Flavor::Postgresql => fmt!(
+            cx, f,
+            Ident(column_name) "[1:cardinality(" Ident(column_name) ") - 1]"
+        ),
+        Flavor::Mysql | Flavor::Sqlite => panic!(
+            "stmt::pop on a Vec<scalar> field is not yet implemented for this SQL flavor; \
+             the lowering should have rejected this before reaching the serializer",
+        ),
+    }
+}
+
+/// Emit `stmt::remove_at(idx)` against a `Vec<scalar>` column.
+///
+/// `idx` is a 0-based `usize`. PostgreSQL arrays are 1-based, so the
+/// element at user-facing index `i` lives at PG position `i + 1`. The
+/// expression `col[1:i] || col[i + 2:cardinality(col)]` keeps the prefix
+/// up to (1-based) position `i` and the suffix from position `i + 2`,
+/// dropping the element at position `i + 1` (user index `i`).
+///
+/// Out-of-bounds indices are a no-op: when `i >= cardinality(col)`, the
+/// first slice yields the entire array and the second yields the empty
+/// slice, so the concatenation reproduces the input.
+///
+/// - MySQL / SQLite: not yet supported — `vec_remove_at` is gated off
+///   and the lowering rejects these backends before reaching here.
+fn serialize_remove_at(
+    cx: &ExprContext<'_>,
+    f: &mut super::Formatter<'_>,
+    column_name: &str,
+    expr: &stmt::Expr,
+) {
+    match f.serializer.flavor {
+        Flavor::Postgresql => fmt!(
+            cx, f,
+            Ident(column_name) "[1:" expr "] || " Ident(column_name) "[" expr " + 2:cardinality(" Ident(column_name) ")]"
+        ),
+        Flavor::Mysql | Flavor::Sqlite => panic!(
+            "stmt::remove_at on a Vec<scalar> field is not yet implemented for this SQL flavor; \
+             the lowering should have rejected this before reaching the serializer",
         ),
     }
 }

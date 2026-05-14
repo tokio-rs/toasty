@@ -838,9 +838,11 @@ where
         Assignment::Set(expr)
         | Assignment::Insert(expr)
         | Assignment::Remove(expr)
-        | Assignment::Append(expr) => {
+        | Assignment::Append(expr)
+        | Assignment::RemoveAt(expr) => {
             v.visit_expr(expr);
         }
+        Assignment::Pop => {}
         Assignment::Batch(entries) => {
             for entry in entries {
                 visit_assignment(v, entry);

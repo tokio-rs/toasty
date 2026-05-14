@@ -42,6 +42,8 @@ enum AssignmentKind {
     Insert(stmt::Expr),
     Remove(stmt::Expr),
     Append(stmt::Expr),
+    Pop,
+    RemoveAt(stmt::Expr),
     Patch {
         path_projection: stmt::Projection,
         inner: Box<AssignmentKind>,
@@ -56,6 +58,8 @@ impl AssignmentKind {
             AssignmentKind::Insert(expr) => assignments.insert(projection, expr),
             AssignmentKind::Remove(expr) => assignments.remove(projection, expr),
             AssignmentKind::Append(expr) => assignments.append(projection, expr),
+            AssignmentKind::Pop => assignments.pop(projection),
+            AssignmentKind::RemoveAt(expr) => assignments.remove_at(projection, expr),
             AssignmentKind::Patch {
                 path_projection,
                 inner,
@@ -140,13 +144,26 @@ pub fn insert<T>(expr: impl IntoExpr<T>) -> Assignment<List<T>> {
 /// Takes an expression of `T` (the item to remove) and produces an assignment
 /// for `List<T>` (the collection).
 ///
-/// What "remove" means depends on the belongs-to side of the relationship:
-/// - **Optional foreign key**: The foreign key is set to `NULL`.
-/// - **Required foreign key**: The related record is deleted.
+/// What "remove" means depends on the field kind:
+/// - **`Vec<scalar>` field**: every element equal to the value is removed.
+///   Atomic against the existing column value on every backend that
+///   advertises [`Capability::vec_remove`](toasty_core::driver::Capability::vec_remove)
+///   (currently PostgreSQL only); other backends emit an error at lowering
+///   time pending the RMW fallback.
+/// - **Has-many relation**: the related record is dissociated. With an
+///   optional foreign key the FK is set to `NULL`; with a required foreign
+///   key the related record is deleted.
 ///
 /// # Examples
 ///
 /// ```ignore
+/// // Vec<String> field
+/// user.update()
+///     .tags(stmt::remove("admin"))
+///     .exec(&mut db)
+///     .await?;
+///
+/// // Has-many relation
 /// user.update()
 ///     .todos(stmt::remove(&todo_a))
 ///     .exec(&mut db)
@@ -262,6 +279,61 @@ pub fn extend<T>(items: impl IntoExpr<List<T>>) -> Assignment<List<T>> {
 pub fn clear<T>() -> Assignment<List<T>> {
     Assignment {
         kind: AssignmentKind::Set(stmt::Expr::list(Vec::<stmt::Expr>::new())),
+        _p: PhantomData,
+    }
+}
+
+/// Drop the last element of an ordered collection field.
+///
+/// Produces an assignment for `List<T>` that removes the trailing element
+/// of the existing column value. The popped element is discarded — the
+/// assignment API does not return values. Empty-collection is a no-op
+/// rather than an error; for failure-on-empty semantics, filter the
+/// collection first.
+///
+/// Atomic against the existing column value on every backend that
+/// advertises [`Capability::vec_pop`](toasty_core::driver::Capability::vec_pop)
+/// (currently PostgreSQL only); other backends emit an error at lowering
+/// time pending the RMW fallback.
+///
+/// # Examples
+///
+/// ```ignore
+/// user.update()
+///     .tags(stmt::pop())
+///     .exec(&mut db)
+///     .await?;
+/// ```
+pub fn pop<T>() -> Assignment<List<T>> {
+    Assignment {
+        kind: AssignmentKind::Pop,
+        _p: PhantomData,
+    }
+}
+
+/// Drop the element at the given index from an ordered collection field.
+///
+/// Takes a `usize`-typed index and produces an assignment for `List<T>`
+/// that removes the element at that position. Out-of-bounds indices are
+/// a no-op rather than an error — per-row failure semantics on a bulk
+/// update are rarely useful.
+///
+/// Atomic against the existing column value on every backend that
+/// advertises [`Capability::vec_remove_at`](toasty_core::driver::Capability::vec_remove_at)
+/// (currently PostgreSQL only); other backends emit an error at lowering
+/// time pending the RMW fallback.
+///
+/// # Examples
+///
+/// ```ignore
+/// user.update()
+///     .tags(stmt::remove_at(0))
+///     .exec(&mut db)
+///     .await?;
+/// ```
+pub fn remove_at<T>(idx: impl IntoExpr<usize>) -> Assignment<List<T>> {
+    Assignment {
+        kind: AssignmentKind::RemoveAt(idx.into_expr().untyped),
         _p: PhantomData,
     }
 }

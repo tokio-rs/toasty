@@ -166,6 +166,85 @@ index_vec::define_index_type! {
     struct ScopeId = u32;
 }
 
+/// One of the relative collection mutations: value-remove, pop, or remove-at.
+///
+/// Used by `visit_assignments_mut` to dispatch the new `Vec<scalar>`
+/// operators down a separate lowering path from the column-value-shaped
+/// `Set` / `Append` assignments.
+enum CollectionOp {
+    Remove(stmt::Expr),
+    Pop,
+    RemoveAt(stmt::Expr),
+}
+
+impl LowerStatement<'_, '_> {
+    /// Lower a `Remove` / `Pop` / `RemoveAt` assignment on a `Vec<scalar>`
+    /// field.
+    ///
+    /// `Vec<scalar>` fields always resolve to a single primitive column, so
+    /// this skips the `model_to_table` substitution that `Set` / `Append`
+    /// flow through (the operator argument is not a column value).
+    /// Capability flags gate the operation; backends that don't advertise
+    /// the native form emit a clear error pending the RMW fallback.
+    fn lower_collection_mutation(
+        &mut self,
+        assignments: &mut stmt::Assignments,
+        mapping: &toasty_core::schema::mapping::Model,
+        projection: &stmt::Projection,
+        op: CollectionOp,
+    ) {
+        let Some(field) = mapping.resolve_field_mapping(projection) else {
+            self.state
+                .errors
+                .push(crate::Error::invalid_statement(format!(
+                    "invalid assignment projection: {projection:?}"
+                )));
+            return;
+        };
+
+        let Some(prim) = field.as_primitive() else {
+            self.state
+                .errors
+                .push(crate::Error::invalid_statement(format!(
+                    "collection mutation on non-primitive field: {projection:?}"
+                )));
+            return;
+        };
+
+        let cap = self.capability();
+        let (capability_ok, op_name) = match &op {
+            CollectionOp::Remove(_) => (cap.vec_remove, "stmt::remove"),
+            CollectionOp::Pop => (cap.vec_pop, "stmt::pop"),
+            CollectionOp::RemoveAt(_) => (cap.vec_remove_at, "stmt::remove_at"),
+        };
+
+        if !capability_ok {
+            self.state
+                .errors
+                .push(crate::Error::invalid_statement(format!(
+                    "{op_name} is not yet supported on this backend"
+                )));
+            return;
+        }
+
+        match op {
+            CollectionOp::Remove(expr) => {
+                let mut lowered = expr;
+                self.visit_expr_mut(&mut lowered);
+                assignments.remove(prim.column, lowered);
+            }
+            CollectionOp::Pop => {
+                assignments.pop(prim.column);
+            }
+            CollectionOp::RemoveAt(expr) => {
+                let mut lowered = expr;
+                self.visit_expr_mut(&mut lowered);
+                assignments.remove_at(prim.column, lowered);
+            }
+        }
+    }
+}
+
 impl LowerStatement<'_, '_> {
     fn new_dependency(&mut self, stmt: impl Into<stmt::Statement>) -> hir::StmtId {
         let row_index = match self.cx {
@@ -230,6 +309,24 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         let mapping = self.mapping_unwrap();
 
         for (projection, assignment) in &*i {
+            // Relative collection mutations (`Remove`, `Pop`, `RemoveAt`)
+            // target `Vec<scalar>` fields, which always resolve to a single
+            // primitive column. Skip the `model_to_table` substitution and
+            // emit the variant directly against the resolved column — the
+            // value/index expression is a per-operator argument, not a
+            // column value, so the substitution machinery doesn't apply.
+            let collection_op = match assignment {
+                stmt::Assignment::Remove(expr) => Some(CollectionOp::Remove(expr.clone())),
+                stmt::Assignment::Pop => Some(CollectionOp::Pop),
+                stmt::Assignment::RemoveAt(expr) => Some(CollectionOp::RemoveAt(expr.clone())),
+                _ => None,
+            };
+
+            if let Some(op) = collection_op {
+                self.lower_collection_mutation(&mut assignments, mapping, projection, op);
+                continue;
+            }
+
             // Phase 1: Lower the assignment expression
             //
             // `Append` (used by `stmt::push` / `stmt::extend`) flows through

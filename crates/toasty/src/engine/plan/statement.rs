@@ -647,7 +647,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 stmt::Assignment::Set(expr)
                 | stmt::Assignment::Insert(expr)
                 | stmt::Assignment::Remove(expr)
-                | stmt::Assignment::Append(expr) => expr,
+                | stmt::Assignment::Append(expr)
+                | stmt::Assignment::RemoveAt(expr) => expr,
+                stmt::Assignment::Pop => continue,
                 stmt::Assignment::Batch(_) => {
                     todo!("batch assignments in arg dependency rewriting")
                 }

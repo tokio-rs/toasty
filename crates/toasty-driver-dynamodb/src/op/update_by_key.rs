@@ -166,6 +166,18 @@ impl Connection {
             let (expr, is_append) = match assignment {
                 stmt::Assignment::Set(expr) => (expr, false),
                 stmt::Assignment::Append(expr) => (expr, true),
+                stmt::Assignment::Remove(_)
+                | stmt::Assignment::Pop
+                | stmt::Assignment::RemoveAt(_) => {
+                    // Collection mutations are gated by `vec_remove` /
+                    // `vec_pop` / `vec_remove_at` capability flags, all
+                    // currently `false` on DynamoDB. The lowering rejects
+                    // them before reaching the driver; if one slips through
+                    // it's a bug worth surfacing.
+                    unreachable!(
+                        "collection mutation reached DynamoDB driver — capability flag is off; assignment={assignment:#?}",
+                    )
+                }
                 _ => todo!("only SET / APPEND supported in DynamoDB; got {assignment:#?}"),
             };
             let value = match expr {

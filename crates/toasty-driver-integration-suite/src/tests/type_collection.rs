@@ -386,6 +386,295 @@ pub async fn vec_string_clear(t: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
+/// `stmt::pop()` drops the trailing element. PG slicing
+/// (`col[1:cardinality(col) - 1]`); other backends fall back to RMW (not
+/// yet implemented).
+#[driver_test(id(ID), requires(vec_pop))]
+pub async fn vec_string_pop(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        tags: Vec<String>,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+
+    let mut item = toasty::create!(Item {
+        tags: vec!["a".to_string(), "b".to_string(), "c".to_string()],
+    })
+    .exec(&mut db)
+    .await?;
+
+    item.update()
+        .tags(toasty::stmt::pop())
+        .exec(&mut db)
+        .await?;
+
+    let expected = vec!["a".to_string(), "b".to_string()];
+    assert_eq!(item.tags, expected);
+
+    let reloaded = Item::get_by_id(&mut db, &item.id).await?;
+    assert_eq!(reloaded.tags, expected);
+
+    Ok(())
+}
+
+/// `stmt::pop()` on an already-empty collection is a no-op rather than
+/// an error. Verifies the slicing expression handles the empty case
+/// cleanly.
+#[driver_test(id(ID), requires(vec_pop))]
+pub async fn vec_string_pop_on_empty(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        tags: Vec<String>,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+
+    let mut item = toasty::create!(Item {
+        tags: Vec::<String>::new(),
+    })
+    .exec(&mut db)
+    .await?;
+
+    item.update()
+        .tags(toasty::stmt::pop())
+        .exec(&mut db)
+        .await?;
+
+    assert!(item.tags.is_empty());
+
+    let reloaded = Item::get_by_id(&mut db, &item.id).await?;
+    assert!(reloaded.tags.is_empty());
+
+    Ok(())
+}
+
+/// `stmt::remove(value)` removes every matching element. PG
+/// `array_remove(col, $1)`; other backends fall back to RMW (not yet
+/// implemented).
+#[driver_test(id(ID), requires(vec_remove))]
+pub async fn vec_string_remove_value(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        tags: Vec<String>,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+
+    let mut item = toasty::create!(Item {
+        tags: vec!["admin".to_string(), "user".to_string()],
+    })
+    .exec(&mut db)
+    .await?;
+
+    item.update()
+        .tags(toasty::stmt::remove("admin"))
+        .exec(&mut db)
+        .await?;
+
+    let expected = vec!["user".to_string()];
+    assert_eq!(item.tags, expected);
+
+    let reloaded = Item::get_by_id(&mut db, &item.id).await?;
+    assert_eq!(reloaded.tags, expected);
+
+    Ok(())
+}
+
+/// `stmt::remove(value)` against an absent value is a no-op rather than
+/// an error.
+#[driver_test(id(ID), requires(vec_remove))]
+pub async fn vec_string_remove_value_missing(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        tags: Vec<String>,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+
+    let mut item = toasty::create!(Item {
+        tags: vec!["a".to_string(), "b".to_string()],
+    })
+    .exec(&mut db)
+    .await?;
+
+    item.update()
+        .tags(toasty::stmt::remove("missing"))
+        .exec(&mut db)
+        .await?;
+
+    let expected = vec!["a".to_string(), "b".to_string()];
+    assert_eq!(item.tags, expected);
+
+    let reloaded = Item::get_by_id(&mut db, &item.id).await?;
+    assert_eq!(reloaded.tags, expected);
+
+    Ok(())
+}
+
+/// `stmt::remove(value)` removes every element equal to the value, not
+/// just the first match. Matches `array_remove` on PG and aligns with
+/// the design's "remove all matching" semantic.
+#[driver_test(id(ID), requires(vec_remove))]
+pub async fn vec_string_remove_value_multiple_matches(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        tags: Vec<String>,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+
+    let mut item = toasty::create!(Item {
+        tags: vec![
+            "a".to_string(),
+            "dup".to_string(),
+            "b".to_string(),
+            "dup".to_string(),
+            "c".to_string(),
+        ],
+    })
+    .exec(&mut db)
+    .await?;
+
+    item.update()
+        .tags(toasty::stmt::remove("dup"))
+        .exec(&mut db)
+        .await?;
+
+    let expected = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+    assert_eq!(item.tags, expected);
+
+    let reloaded = Item::get_by_id(&mut db, &item.id).await?;
+    assert_eq!(reloaded.tags, expected);
+
+    Ok(())
+}
+
+/// `stmt::remove_at(idx)` drops the element at the given 0-based index.
+/// PG: `col[1:i] || col[i + 2:cardinality(col)]`.
+#[driver_test(id(ID), requires(vec_remove_at))]
+pub async fn vec_string_remove_at(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        tags: Vec<String>,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+
+    let mut item = toasty::create!(Item {
+        tags: vec!["a".to_string(), "b".to_string(), "c".to_string()],
+    })
+    .exec(&mut db)
+    .await?;
+
+    item.update()
+        .tags(toasty::stmt::remove_at(1usize))
+        .exec(&mut db)
+        .await?;
+
+    let expected = vec!["a".to_string(), "c".to_string()];
+    assert_eq!(item.tags, expected);
+
+    let reloaded = Item::get_by_id(&mut db, &item.id).await?;
+    assert_eq!(reloaded.tags, expected);
+
+    Ok(())
+}
+
+/// `stmt::remove_at(0)` drops the head element. Exercises the
+/// boundary case where the PG prefix slice (`col[1:0]`) is empty.
+#[driver_test(id(ID), requires(vec_remove_at))]
+pub async fn vec_string_remove_at_head(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        tags: Vec<String>,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+
+    let mut item = toasty::create!(Item {
+        tags: vec!["a".to_string(), "b".to_string(), "c".to_string()],
+    })
+    .exec(&mut db)
+    .await?;
+
+    item.update()
+        .tags(toasty::stmt::remove_at(0usize))
+        .exec(&mut db)
+        .await?;
+
+    let expected = vec!["b".to_string(), "c".to_string()];
+    assert_eq!(item.tags, expected);
+
+    let reloaded = Item::get_by_id(&mut db, &item.id).await?;
+    assert_eq!(reloaded.tags, expected);
+
+    Ok(())
+}
+
+/// `stmt::remove_at(i)` with `i >= len` is a no-op — per-row failure
+/// semantics on a bulk update are rarely useful.
+#[driver_test(id(ID), requires(vec_remove_at))]
+pub async fn vec_string_remove_at_out_of_bounds(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        tags: Vec<String>,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+
+    let mut item = toasty::create!(Item {
+        tags: vec!["a".to_string(), "b".to_string()],
+    })
+    .exec(&mut db)
+    .await?;
+
+    item.update()
+        .tags(toasty::stmt::remove_at(99usize))
+        .exec(&mut db)
+        .await?;
+
+    let expected = vec!["a".to_string(), "b".to_string()];
+    assert_eq!(item.tags, expected);
+
+    let reloaded = Item::get_by_id(&mut db, &item.id).await?;
+    assert_eq!(reloaded.tags, expected);
+
+    Ok(())
+}
+
 /// `path.len()` and `path.is_empty()` predicates. PG `cardinality(col)`.
 #[driver_test(id(ID), requires(vec_scalar))]
 pub async fn vec_string_len_filter(t: &mut Test) -> Result<(), BoxError> {
