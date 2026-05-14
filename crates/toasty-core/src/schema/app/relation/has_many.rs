@@ -1,13 +1,14 @@
 use crate::{
-    schema::app::{BelongsTo, FieldId, Model, ModelId, Name, Schema, Via},
+    schema::app::{BelongsTo, HasKind, Model, ModelId, Name, Schema},
     stmt,
 };
 
 /// The inverse side of a one-to-many relationship.
 ///
-/// A `HasMany` field on model A means "A has many Bs". The actual foreign key
-/// lives on model B as a [`BelongsTo`] field pointing back at A. The two
-/// sides are linked via the [`pair`](HasMany::pair) field.
+/// A `HasMany` field on model A means "A has many Bs". A direct `HasMany`
+/// pairs with a [`BelongsTo`] field on model B that holds the foreign key; a
+/// multi-step (`via`) `HasMany` reaches B by following a path of existing
+/// relations. Which one it is is recorded in [`kind`](HasMany::kind).
 ///
 /// # Examples
 ///
@@ -30,20 +31,10 @@ pub struct HasMany {
     /// names).
     pub singular: Name,
 
-    /// The [`BelongsTo`] field on the target model that pairs with this
-    /// relation. If a `#[has_many(pair = <field>)]` was supplied, the macro
-    /// resolves this at schema-construction time via `field_name_to_id` on
-    /// the target. Otherwise the linker fills it in by searching the target
-    /// model for a unique `BelongsTo` back to the source.
-    ///
-    /// Unused (and left as a placeholder) when [`via`](HasMany::via) is set —
-    /// a `via` relation has no foreign key of its own.
-    pub pair: FieldId,
-
-    /// When set, this is a multi-step relation: the target is reached by
-    /// following a path of existing relations rather than pairing with a
-    /// single `BelongsTo`. See [`Via`].
-    pub via: Option<Via>,
+    /// How this relation reaches its target — a paired `BelongsTo`
+    /// ([`HasKind::Direct`]) or a [`Via`](super::Via) path
+    /// ([`HasKind::Via`]).
+    pub kind: HasKind,
 }
 
 impl HasMany {
@@ -56,8 +47,13 @@ impl HasMany {
     ///
     /// # Panics
     ///
-    /// Panics if the paired field is not a `BelongsTo` variant.
+    /// Panics if this is a multi-step (`via`) relation — it has no pair — or
+    /// if the paired field is not a `BelongsTo` variant.
     pub fn pair<'a>(&self, schema: &'a Schema) -> &'a BelongsTo {
-        schema.field(self.pair).ty.as_belongs_to_unwrap()
+        let pair = self
+            .kind
+            .pair_id()
+            .expect("`via` relation has no paired `BelongsTo`");
+        schema.field(pair).ty.as_belongs_to_unwrap()
     }
 }

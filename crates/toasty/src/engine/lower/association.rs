@@ -91,27 +91,35 @@ impl<'a> RewriteVia<'a> {
         match &field.ty {
             // A multi-step (`via`) relation: unfold the path into a chain of
             // single-step associations and rewrite that instead.
-            app::FieldTy::HasMany(rel) if rel.via.is_some() => {
-                let via_path = rel.via.as_ref().unwrap().path().clone();
-                let expanded = self.expand_via(association, &via_path);
-                self.rewrite_association_as_filter(expanded)
-            }
-            app::FieldTy::HasOne(rel) if rel.via.is_some() => {
-                let via_path = rel.via.as_ref().unwrap().path().clone();
+            app::FieldTy::HasMany(app::HasMany {
+                kind: app::HasKind::Via(via),
+                ..
+            })
+            | app::FieldTy::HasOne(app::HasOne {
+                kind: app::HasKind::Via(via),
+                ..
+            }) => {
+                let via_path = via.path().clone();
                 let expanded = self.expand_via(association, &via_path);
                 self.rewrite_association_as_filter(expanded)
             }
             app::FieldTy::BelongsTo(rel) => {
                 self.rewrite_association_belongs_to_as_filter(rel, association)
             }
-            app::FieldTy::HasOne(rel) => {
-                stmt::Expr::in_subquery(stmt::Expr::ref_self_field(rel.pair), *association.source)
-                    .into()
-            }
-            app::FieldTy::HasMany(rel) => {
-                stmt::Expr::in_subquery(stmt::Expr::ref_self_field(rel.pair), *association.source)
-                    .into()
-            }
+            // Direct has-one / has-many: filter the target by its paired
+            // `BelongsTo` against the source query.
+            app::FieldTy::HasOne(app::HasOne {
+                kind: app::HasKind::Direct(pair),
+                ..
+            })
+            | app::FieldTy::HasMany(app::HasMany {
+                kind: app::HasKind::Direct(pair),
+                ..
+            }) => stmt::Expr::in_subquery(
+                stmt::Expr::ref_self_field(*pair),
+                *association.source,
+            )
+            .into(),
             _ => todo!("field={field:#?}"),
         }
     }

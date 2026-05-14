@@ -290,8 +290,8 @@ impl LowerStatement<'_, '_> {
         // not supported yet. Querying one directly
         // (`user.commented_articles()`) does work.
         let is_via = match &field.ty {
-            app::FieldTy::HasMany(rel) => rel.via.is_some(),
-            app::FieldTy::HasOne(rel) => rel.via.is_some(),
+            app::FieldTy::HasMany(rel) => rel.kind.via().is_some(),
+            app::FieldTy::HasOne(rel) => rel.kind.via().is_some(),
             _ => false,
         };
         if is_via {
@@ -307,7 +307,7 @@ impl LowerStatement<'_, '_> {
                     rel.target,
                     stmt::Expr::eq(
                         stmt::Expr::ref_parent_model(),
-                        stmt::Expr::ref_self_field(rel.pair),
+                        stmt::Expr::ref_self_field(direct_pair(&rel.kind)),
                     ),
                 ),
                 rel.target,
@@ -345,7 +345,7 @@ impl LowerStatement<'_, '_> {
                     rel.target,
                     stmt::Expr::eq(
                         stmt::Expr::ref_parent_model(),
-                        stmt::Expr::ref_self_field(rel.pair),
+                        stmt::Expr::ref_self_field(direct_pair(&rel.kind)),
                     ),
                 );
                 query.single = true;
@@ -410,6 +410,14 @@ impl FieldIncludes {
     fn self_included(&self) -> bool {
         self.include_self || !self.sub_paths.is_empty()
     }
+}
+
+/// The paired `BelongsTo` field of a direct has-relation. `.include()` of a
+/// `via` relation is rejected earlier in `build_relation_subquery`, so any
+/// relation reaching the direct-relation path has a pair.
+fn direct_pair(kind: &app::HasKind) -> app::FieldId {
+    kind.pair_id()
+        .expect("`via` relation reached the direct-relation include path")
 }
 
 /// Find the include paths that target field index `i` and split them by

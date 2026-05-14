@@ -1,4 +1,4 @@
-use super::{EnumVariant, Field, FieldId, FieldTy, Model, ModelId, VariantId};
+use super::{EnumVariant, Field, FieldId, FieldTy, HasKind, Model, ModelId, VariantId};
 
 use crate::{Result, stmt};
 use indexmap::IndexMap;
@@ -253,21 +253,21 @@ impl Builder {
 
                 if let FieldTy::HasMany(has_many) = &field.ty {
                     // `via` relations have no pair to link.
-                    if has_many.via.is_some() {
+                    let HasKind::Direct(pair) = has_many.kind else {
                         continue;
-                    }
+                    };
                     let target = has_many.target;
                     let field_name = field.name.app_unwrap().to_string();
-                    let pair = if has_many.pair.is_placeholder() {
+                    let pair = if pair.is_placeholder() {
                         self.find_has_many_pair(src, target, &field_name)?
                     } else {
-                        self.validate_pair(src, target, &field_name, has_many.pair)?;
-                        has_many.pair
+                        self.validate_pair(src, target, &field_name, pair)?;
+                        pair
                     };
                     self.models[curr].as_root_mut_unwrap().fields[index]
                         .ty
                         .as_has_many_mut_unwrap()
-                        .pair = pair;
+                        .kind = HasKind::Direct(pair);
                 }
             }
         }
@@ -283,12 +283,14 @@ impl Builder {
                 let field = &model.as_root_unwrap().fields[index];
 
                 match &field.ty {
-                    // `via` relations have no pair to link.
-                    FieldTy::HasOne(has_one) if has_one.via.is_some() => continue,
                     FieldTy::HasOne(has_one) => {
+                        // `via` relations have no pair to link.
+                        let HasKind::Direct(pair) = has_one.kind else {
+                            continue;
+                        };
                         let target = has_one.target;
                         let field_name = field.name.app_unwrap().to_string();
-                        let pair = if has_one.pair.is_placeholder() {
+                        let pair = if pair.is_placeholder() {
                             match self.find_belongs_to_pair(src, target, &field_name)? {
                                 Some(pair) => pair,
                                 None => {
@@ -300,14 +302,14 @@ impl Builder {
                                 }
                             }
                         } else {
-                            self.validate_pair(src, target, &field_name, has_one.pair)?;
-                            has_one.pair
+                            self.validate_pair(src, target, &field_name, pair)?;
+                            pair
                         };
 
                         self.models[curr].as_root_mut_unwrap().fields[index]
                             .ty
                             .as_has_one_mut_unwrap()
-                            .pair = pair;
+                            .kind = HasKind::Direct(pair);
                     }
                     FieldTy::BelongsTo(belongs_to) => {
                         assert!(!belongs_to.foreign_key.is_placeholder());
@@ -347,14 +349,18 @@ impl Builder {
                             pair = match &self.models[target].as_root_unwrap().fields[target_index]
                                 .ty
                             {
-                                FieldTy::HasMany(has_many) if has_many.pair == field_id => {
+                                FieldTy::HasMany(has_many)
+                                    if has_many.kind.pair_id() == Some(field_id) =>
+                                {
                                     assert!(pair.is_none());
                                     Some(
                                         self.models[target].as_root_unwrap().fields[target_index]
                                             .id,
                                     )
                                 }
-                                FieldTy::HasOne(has_one) if has_one.pair == field_id => {
+                                FieldTy::HasOne(has_one)
+                                    if has_one.kind.pair_id() == Some(field_id) =>
+                                {
                                     assert!(pair.is_none());
                                     Some(
                                         self.models[target].as_root_unwrap().fields[target_index]
@@ -397,11 +403,11 @@ impl Builder {
                 let field = &self.models[curr].as_root_unwrap().fields[index];
 
                 let (segments, target) = match &field.ty {
-                    FieldTy::HasMany(rel) => match &rel.via {
+                    FieldTy::HasMany(rel) => match rel.kind.via() {
                         Some(via) => (via.segments.clone(), rel.target),
                         None => continue,
                     },
-                    FieldTy::HasOne(rel) => match &rel.via {
+                    FieldTy::HasOne(rel) => match rel.kind.via() {
                         Some(via) => (via.segments.clone(), rel.target),
                         None => continue,
                     },
@@ -412,8 +418,8 @@ impl Builder {
                 let path = self.resolve_via_path(src, &segments, target, &field_name)?;
 
                 match &mut self.models[curr].as_root_mut_unwrap().fields[index].ty {
-                    FieldTy::HasMany(rel) => rel.via.as_mut().unwrap().path = Some(path),
-                    FieldTy::HasOne(rel) => rel.via.as_mut().unwrap().path = Some(path),
+                    FieldTy::HasMany(rel) => rel.kind.via_mut().unwrap().path = Some(path),
+                    FieldTy::HasOne(rel) => rel.kind.via_mut().unwrap().path = Some(path),
                     _ => unreachable!(),
                 }
             }
@@ -473,8 +479,8 @@ impl Builder {
 
             model = match &step.ty {
                 FieldTy::BelongsTo(rel) => rel.target,
-                FieldTy::HasMany(rel) if rel.via.is_none() => rel.target,
-                FieldTy::HasOne(rel) if rel.via.is_none() => rel.target,
+                FieldTy::HasMany(rel) if rel.kind.via().is_none() => rel.target,
+                FieldTy::HasOne(rel) if rel.kind.via().is_none() => rel.target,
                 FieldTy::HasMany(_) | FieldTy::HasOne(_) => {
                     return Err(crate::Error::invalid_schema(format!(
                         "field `{}::{}` has a `via` path that steps through `{}::{}`, another \

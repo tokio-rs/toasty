@@ -1,6 +1,7 @@
+use super::has_many::has_kind;
 use super::{Load, Register, Relation};
 
-use toasty_core::schema::app::{self, FieldId, FieldTy, ModelId};
+use toasty_core::schema::app::{self, FieldId, FieldTy};
 use toasty_core::stmt::{self, Value};
 
 use std::fmt;
@@ -86,13 +87,7 @@ impl<T: Relation> Relation for HasOne<T> {
         FieldTy::HasOne(app::HasOne {
             target: <T::Model as Register>::id(),
             expr_ty: stmt::Type::Model(<T::Model as Register>::id()),
-            // If unresolved, the pair is populated by the schema linker. A
-            // `via` relation has no pair and the placeholder is never read.
-            pair: pair.unwrap_or(FieldId {
-                model: ModelId(usize::MAX),
-                index: usize::MAX,
-            }),
-            via: via.map(app::Via::new),
+            kind: has_kind(pair, via),
         })
     }
 }

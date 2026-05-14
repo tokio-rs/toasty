@@ -225,14 +225,24 @@ impl LowerStatement<'_, '_> {
 
     fn plan_mut_has_many(&mut self, field: &Field, op: Mutation, source: &mut dyn RelationSource) {
         let has_many = field.ty.as_has_many_unwrap();
-        let pair = self.field(has_many.pair);
+        // `via` relations are read-only — no mutation methods are generated
+        // for them, so this is only reached for direct relations.
+        let pair = has_many
+            .kind
+            .pair_id()
+            .expect("cannot mutate through a multi-step `via` relation");
+        let pair = self.field(pair);
 
         self.plan_mut_has_n(field, pair, op, source);
     }
 
     fn plan_mut_has_one(&mut self, field: &Field, op: Mutation, source: &mut dyn RelationSource) {
         let has_one = field.ty.as_has_one_unwrap();
-        let pair = self.field(has_one.pair);
+        let pair = has_one
+            .kind
+            .pair_id()
+            .expect("cannot mutate through a multi-step `via` relation");
+        let pair = self.field(pair);
 
         self.plan_mut_has_n(field, pair, op, source);
     }

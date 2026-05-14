@@ -299,10 +299,8 @@ impl Field {
             FieldTy::Primitive(_) => None,
             FieldTy::Embedded(_) => None,
             FieldTy::BelongsTo(belongs_to) => belongs_to.pair,
-            FieldTy::HasMany(has_many) if has_many.via.is_some() => None,
-            FieldTy::HasMany(has_many) => Some(has_many.pair),
-            FieldTy::HasOne(has_one) if has_one.via.is_some() => None,
-            FieldTy::HasOne(has_one) => Some(has_one.pair),
+            FieldTy::HasMany(has_many) => has_many.kind.pair_id(),
+            FieldTy::HasOne(has_one) => has_one.kind.pair_id(),
         }
     }
 

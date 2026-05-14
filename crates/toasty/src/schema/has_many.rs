@@ -105,14 +105,22 @@ impl<T: Relation> Relation for HasMany<T> {
             target: <T::Model as Register>::id(),
             expr_ty: stmt::Type::List(Box::new(stmt::Type::Model(<T::Model as Register>::id()))),
             singular,
-            // If unresolved, the pair is populated by the schema linker. A
-            // `via` relation has no pair and the placeholder is never read.
-            pair: pair.unwrap_or(FieldId {
-                model: ModelId(usize::MAX),
-                index: usize::MAX,
-            }),
-            via: via.map(app::Via::new),
+            kind: has_kind(pair, via),
         })
+    }
+}
+
+/// Build a [`HasKind`](app::HasKind) from the macro-supplied `pair` / `via`
+/// attributes. `via` declares a multi-step relation; otherwise the relation is
+/// direct, and a direct relation with no explicit `pair` gets a placeholder
+/// that the schema linker resolves.
+pub(super) fn has_kind(pair: Option<FieldId>, via: Option<Vec<String>>) -> app::HasKind {
+    match via {
+        Some(segments) => app::HasKind::Via(app::Via::new(segments)),
+        None => app::HasKind::Direct(pair.unwrap_or(FieldId {
+            model: ModelId(usize::MAX),
+            index: usize::MAX,
+        })),
     }
 }
 

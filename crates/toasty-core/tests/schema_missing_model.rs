@@ -94,11 +94,10 @@ fn has_many_target_not_registered() {
                 target: MISSING,
                 expr_ty: stmt::Type::list(stmt::Type::Unknown),
                 singular: Name::new("talk"),
-                pair: FieldId {
+                kind: HasKind::Direct(FieldId {
                     model: MISSING,
                     index: 0,
-                },
-                via: None,
+                }),
             }),
         )],
     )];
@@ -120,11 +119,10 @@ fn has_one_target_not_registered() {
             FieldTy::HasOne(HasOne {
                 target: MISSING,
                 expr_ty: stmt::Type::Unknown,
-                pair: FieldId {
+                kind: HasKind::Direct(FieldId {
                     model: MISSING,
                     index: 0,
-                },
-                via: None,
+                }),
             }),
         )],
     )];
