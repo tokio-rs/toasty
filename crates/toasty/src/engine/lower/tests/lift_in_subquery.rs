@@ -1,5 +1,10 @@
+//! Tests for `lower::lift_in_subquery::lift_in_subquery`.
+//!
+//! Migrated from `simplify::tests::lift_in_subquery` when the rewrite
+//! moved out of simplify and into the lowering walk.
+
 use crate as toasty;
-use crate::engine::simplify::Simplify;
+use crate::engine::lower::lift_in_subquery::lift_in_subquery;
 use crate::schema::Register;
 use toasty_core::{
     driver::Capability,
@@ -7,7 +12,7 @@ use toasty_core::{
         Builder, app,
         app::{FieldId, ModelId},
     },
-    stmt::{self, Expr, ExprBinaryOp, Query, Value},
+    stmt::{self, Expr, ExprBinaryOp, ExprContext, Query, Value},
 };
 
 #[allow(dead_code)]
@@ -84,10 +89,10 @@ impl UserPostSchema {
 #[test]
 fn belongs_to_lifts_fk_constraint_to_direct_eq() {
     let s = UserPostSchema::new();
-    let simplify = Simplify::new(&s.schema, &toasty_core::driver::Capability::SQLITE);
+    let cx = ExprContext::new(&s.schema);
 
     let post_source: stmt::Source = s.post_model.into();
-    let mut scoped_simplify = simplify.scope(&post_source);
+    let scoped_cx = cx.scope(&post_source);
 
     // `lift_in_subquery(user, select(User, eq(id, 42))) → eq(user_id, 42)`
     let expr = Expr::ref_self_field(s.post_user);
@@ -97,7 +102,7 @@ fn belongs_to_lifts_fk_constraint_to_direct_eq() {
     );
     let query = Query::new_select(s.user_model, filter);
 
-    let result = scoped_simplify.lift_in_subquery(&expr, &query);
+    let result = lift_in_subquery(&scoped_cx, &expr, &query);
 
     assert!(result.is_some());
     let lifted = result.unwrap();

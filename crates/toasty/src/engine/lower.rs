@@ -3,6 +3,7 @@ mod expr_or;
 mod expr_pattern;
 mod include;
 mod insert;
+mod lift_in_subquery;
 mod paginate;
 mod relation;
 mod returning;
@@ -60,10 +61,13 @@ impl LoweringState<'_> {
     ) -> hir::StmtId {
         // App-level rewrites that lowering depends on. `Source::Model { via }`
         // must be converted to a WHERE filter before the lowering walk
-        // converts `Source::Model` into `Source::Table`.  The eq/ne operand
-        // rewrite (model→PK, BelongsTo→FK) fires inside the lowering walk
-        // itself via `LowerStatement::visit_expr_binary_op_mut`.
+        // converts `Source::Model` into `Source::Table`.  The IN-subquery
+        // lift fires here too: code paths outside the lowering walk (e.g.
+        // `ApplyInsertScope::apply_expr`) see the already-lifted form.
+        // The eq/ne operand rewrite (model→PK, BelongsTo→FK) fires inside
+        // the lowering walk itself via `LowerStatement::visit_expr_binary_op_mut`.
         association::RewriteVia::new(expr_cx).rewrite(&mut stmt);
+        lift_in_subquery::LiftInSubquery::new(expr_cx).rewrite(&mut stmt);
 
         Simplify::with_context(expr_cx, self.engine.capability).visit_mut(&mut stmt);
 
@@ -1203,14 +1207,14 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         let target_id = self.scope_statement(|child| {
             // Via-association rewrite: `Source::Model { via }` becomes an
             // explicit WHERE filter so the lowering walk only sees rewritten
-            // sources.  The eq/ne operand rewrite (model→PK, BelongsTo→FK)
-            // fires inside the lowering walk via
+            // sources.  The IN-subquery lift fires next so non-walk code
+            // paths see the lifted form.  The eq/ne operand rewrite
+            // (model→PK, BelongsTo→FK) fires inside the lowering walk via
             // `LowerStatement::visit_expr_binary_op_mut`.
             association::RewriteVia::new(child.expr_cx).rewrite(&mut stmt);
-            // Pre-lower simplify: remaining app-level rewrites
-            // (`lift_in_subquery`, `rewrite_expr_in_list_when_model`,
-            // `try_variant_tautology_or`) that the lowering visitor expects
-            // to have already fired.
+            lift_in_subquery::LiftInSubquery::new(child.expr_cx).rewrite(&mut stmt);
+            // Pre-lower simplify: remaining heavyweight rules the lowering
+            // visitor expects to have already fired.
             Simplify::with_context(child.expr_cx, child.state.engine.capability)
                 .visit_mut(&mut *stmt);
             // Lowering walk.

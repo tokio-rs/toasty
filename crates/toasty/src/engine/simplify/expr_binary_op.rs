@@ -1,5 +1,4 @@
 use super::Simplify;
-use toasty_core::schema::app::{FieldId, FieldTy};
 use toasty_core::stmt::{self, Expr, ResolvedRef, VisitMut};
 
 impl Simplify<'_> {
@@ -126,67 +125,9 @@ impl Simplify<'_> {
             return Some(Expr::null());
         }
 
-        // Relation field traversal: project(ref_self_field(relation), [idx...]) op rhs
-        // → relation_field IN (SELECT * FROM Target WHERE Target.idx op rhs)
-        // The commute on the swapped call preserves comparison direction for
-        // non-commutative ops (e.g. `5 < user.profile.score` becomes
-        // `user.profile.score > 5` once lifted).
-        if let Some(r) = self.try_lift_relation_path_comparison(op, lhs, rhs) {
-            return Some(r);
-        }
-        self.try_lift_relation_path_comparison(op.commute(), rhs, lhs)
-    }
-
-    /// Rewrites `project(ref_self_field(relation_field), [idx, ..]) op other`
-    /// into an IN subquery on the relation's target model, then defers to
-    /// [`lift_in_subquery`] to translate the relation reference into a
-    /// foreign-key comparison.
-    ///
-    /// Returns `None` if `project_side` is not a project through a relation
-    /// field reference.
-    fn try_lift_relation_path_comparison(
-        &mut self,
-        op: stmt::BinaryOp,
-        project_side: &stmt::Expr,
-        other_side: &stmt::Expr,
-    ) -> Option<stmt::Expr> {
-        let Expr::Project(project_expr) = project_side else {
-            return None;
-        };
-        let Expr::Reference(expr_ref) = &*project_expr.base else {
-            return None;
-        };
-        let ResolvedRef::Field(field) = self.cx.resolve_expr_reference(expr_ref) else {
-            return None;
-        };
-
-        let target_model_id = match &field.ty {
-            FieldTy::HasOne(rel) => rel.target,
-            FieldTy::BelongsTo(rel) => rel.target,
-            FieldTy::HasMany(rel) => rel.target,
-            _ => return None,
-        };
-
-        // Re-root the projection at the target model: the leading index
-        // points at the relation field itself, the rest indexes into the
-        // related model's fields.
-        let (head_idx, tail) = project_expr.projection.as_slice().split_first()?;
-        let target_field = Expr::ref_self_field(FieldId {
-            model: target_model_id,
-            index: *head_idx,
-        });
-        let target_lhs = if tail.is_empty() {
-            target_field
-        } else {
-            Expr::project(target_field, stmt::Projection::from(tail))
-        };
-
-        let subquery = stmt::Query::new_select(
-            stmt::Source::from(target_model_id),
-            Expr::binary_op(target_lhs, op, other_side.clone()),
-        );
-
-        self.lift_in_subquery(&project_expr.base, &subquery)
+        // Relation-path-comparison and IN-subquery lifting fire in the
+        // pre-lowering `lower::lift_in_subquery::*` pass, not here.
+        None
     }
 
     /// Returns `true` if `expr` is a column reference that resolves to a
