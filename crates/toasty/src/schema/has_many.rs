@@ -96,16 +96,22 @@ impl<T: Relation> Relation for HasMany<T> {
         T::nullable()
     }
 
-    fn has_many_field_ty(singular: Name, pair: Option<FieldId>) -> FieldTy {
+    fn has_many_field_ty(
+        singular: Name,
+        pair: Option<FieldId>,
+        via: Option<Vec<String>>,
+    ) -> FieldTy {
         FieldTy::HasMany(app::HasMany {
             target: <T::Model as Register>::id(),
             expr_ty: stmt::Type::List(Box::new(stmt::Type::Model(<T::Model as Register>::id()))),
             singular,
-            // If unresolved, the pair is populated by the schema linker.
+            // If unresolved, the pair is populated by the schema linker. A
+            // `via` relation has no pair and the placeholder is never read.
             pair: pair.unwrap_or(FieldId {
                 model: ModelId(usize::MAX),
                 index: usize::MAX,
             }),
+            via: via.map(app::Via::new),
         })
     }
 }

@@ -1,5 +1,5 @@
 use crate::{
-    schema::app::{BelongsTo, FieldId, FieldTy, Model, ModelId, Schema},
+    schema::app::{BelongsTo, FieldId, FieldTy, Model, ModelId, Schema, Via},
     stmt,
 };
 
@@ -31,7 +31,15 @@ pub struct HasOne {
     /// resolves this at schema-construction time via `field_name_to_id` on
     /// the target. Otherwise the linker fills it in by searching the target
     /// model for a unique `BelongsTo` back to the source.
+    ///
+    /// Unused (and left as a placeholder) when [`via`](HasOne::via) is set —
+    /// a `via` relation has no foreign key of its own.
     pub pair: FieldId,
+
+    /// When set, this is a multi-step relation: the target is reached by
+    /// following a path of existing relations rather than pairing with a
+    /// single `BelongsTo`. See [`Via`].
+    pub via: Option<Via>,
 }
 
 impl HasOne {

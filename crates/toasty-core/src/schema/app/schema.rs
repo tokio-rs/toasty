@@ -234,6 +234,11 @@ impl Builder {
         // process, models cannot be iterated as that would hold a reference to
         // `self`. Instead, we use index based iteration.
 
+        // Resolve `via` paths first. A `via` relation has no pair, so the
+        // pair-linking passes below skip it; resolving the path up front keeps
+        // that check simple.
+        self.resolve_via_relations()?;
+
         // First, link all HasMany relations. HasManys are linked first because
         // linking them may result in converting HasOne relations to BelongTo.
         // We need this conversion to happen before any of the other processing.
@@ -247,6 +252,10 @@ impl Builder {
                 let field = &model.as_root_unwrap().fields[index];
 
                 if let FieldTy::HasMany(has_many) = &field.ty {
+                    // `via` relations have no pair to link.
+                    if has_many.via.is_some() {
+                        continue;
+                    }
                     let target = has_many.target;
                     let field_name = field.name.app_unwrap().to_string();
                     let pair = if has_many.pair.is_placeholder() {
@@ -274,6 +283,8 @@ impl Builder {
                 let field = &model.as_root_unwrap().fields[index];
 
                 match &field.ty {
+                    // `via` relations have no pair to link.
+                    FieldTy::HasOne(has_one) if has_one.via.is_some() => continue,
                     FieldTy::HasOne(has_one) => {
                         let target = has_one.target;
                         let field_name = field.name.app_unwrap().to_string();
@@ -371,6 +382,137 @@ impl Builder {
         }
 
         Ok(())
+    }
+
+    /// Resolve the `via` path of every multi-step `HasMany`/`HasOne` relation
+    /// into a [`stmt::Path`] rooted at the declaring model.
+    fn resolve_via_relations(&mut self) -> crate::Result<()> {
+        for curr in 0..self.models.len() {
+            if self.models[curr].is_embedded() {
+                continue;
+            }
+
+            for index in 0..self.models[curr].as_root_unwrap().fields.len() {
+                let src = self.models[curr].id();
+                let field = &self.models[curr].as_root_unwrap().fields[index];
+
+                let (segments, target) = match &field.ty {
+                    FieldTy::HasMany(rel) => match &rel.via {
+                        Some(via) => (via.segments.clone(), rel.target),
+                        None => continue,
+                    },
+                    FieldTy::HasOne(rel) => match &rel.via {
+                        Some(via) => (via.segments.clone(), rel.target),
+                        None => continue,
+                    },
+                    _ => continue,
+                };
+
+                let field_name = field.name.app_unwrap().to_string();
+                let path = self.resolve_via_path(src, &segments, target, &field_name)?;
+
+                match &mut self.models[curr].as_root_mut_unwrap().fields[index].ty {
+                    FieldTy::HasMany(rel) => rel.via.as_mut().unwrap().path = Some(path),
+                    FieldTy::HasOne(rel) => rel.via.as_mut().unwrap().path = Some(path),
+                    _ => unreachable!(),
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Walk a `via` path's field-name segments, resolving each to a field
+    /// index and following relations from one model to the next. The path must
+    /// step through relations only and must end at `declared_target`.
+    fn resolve_via_path(
+        &self,
+        src: ModelId,
+        segments: &[String],
+        declared_target: ModelId,
+        field_name: &str,
+    ) -> crate::Result<stmt::Path> {
+        let src_name = || self.models[&src].name().upper_camel_case();
+
+        if segments.is_empty() {
+            return Err(crate::Error::invalid_schema(format!(
+                "field `{}::{}` has an empty `via` path",
+                src_name(),
+                field_name,
+            )));
+        }
+
+        let mut model = src;
+        let mut projection = Vec::with_capacity(segments.len());
+
+        for segment in segments {
+            let Some(current) = self.models[&model].as_root() else {
+                return Err(crate::Error::invalid_schema(format!(
+                    "field `{}::{}` has a `via` path that steps through an embedded model, \
+                     which is not yet supported",
+                    src_name(),
+                    field_name,
+                )));
+            };
+
+            let Some(step) = current
+                .fields
+                .iter()
+                .find(|f| f.name.app.as_deref() == Some(segment.as_str()))
+            else {
+                return Err(crate::Error::invalid_schema(format!(
+                    "field `{}::{}` has a `via` path referencing unknown field `{}` on `{}`",
+                    src_name(),
+                    field_name,
+                    segment,
+                    current.name.upper_camel_case(),
+                )));
+            };
+
+            projection.push(step.id.index);
+
+            model = match &step.ty {
+                FieldTy::BelongsTo(rel) => rel.target,
+                FieldTy::HasMany(rel) if rel.via.is_none() => rel.target,
+                FieldTy::HasOne(rel) if rel.via.is_none() => rel.target,
+                FieldTy::HasMany(_) | FieldTy::HasOne(_) => {
+                    return Err(crate::Error::invalid_schema(format!(
+                        "field `{}::{}` has a `via` path that steps through `{}::{}`, another \
+                         `via` relation; chaining `via` relations is not yet supported",
+                        src_name(),
+                        field_name,
+                        current.name.upper_camel_case(),
+                        segment,
+                    )));
+                }
+                _ => {
+                    return Err(crate::Error::invalid_schema(format!(
+                        "field `{}::{}` has a `via` path that steps through `{}::{}`, which is \
+                         not a relation",
+                        src_name(),
+                        field_name,
+                        current.name.upper_camel_case(),
+                        segment,
+                    )));
+                }
+            };
+        }
+
+        if model != declared_target {
+            return Err(crate::Error::invalid_schema(format!(
+                "field `{}::{}` has a `via` path resolving to `{}`, but the relation's declared \
+                 target is `{}`",
+                src_name(),
+                field_name,
+                self.models[&model].name().upper_camel_case(),
+                self.models[&declared_target].name().upper_camel_case(),
+            )));
+        }
+
+        Ok(stmt::Path {
+            root: stmt::PathRoot::Model(src),
+            projection: stmt::Projection::from(&projection[..]),
+        })
     }
 
     fn find_belongs_to_pair(

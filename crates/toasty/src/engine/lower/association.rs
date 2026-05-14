@@ -78,7 +78,10 @@ impl<'a> RewriteVia<'a> {
         // associations are rewritten before the outer filter is built.
         stmt::visit_mut::visit_stmt_query_mut(self, &mut association.source);
 
-        // For now, we only support paths with a single step
+        // The association path is always a single step. Multi-step (`via`)
+        // relations are still one step here — the step names the `via`
+        // relation field itself, which `expand_via` then unfolds into a chain
+        // of single-step associations.
         assert!(association.path.len() == 1, "TODO");
 
         let Some(field) = self.schema().app.resolve_field_path(&association.path) else {
@@ -86,6 +89,18 @@ impl<'a> RewriteVia<'a> {
         };
 
         match &field.ty {
+            // A multi-step (`via`) relation: unfold the path into a chain of
+            // single-step associations and rewrite that instead.
+            app::FieldTy::HasMany(rel) if rel.via.is_some() => {
+                let via_path = rel.via.as_ref().unwrap().path().clone();
+                let expanded = self.expand_via(association, &via_path);
+                self.rewrite_association_as_filter(expanded)
+            }
+            app::FieldTy::HasOne(rel) if rel.via.is_some() => {
+                let via_path = rel.via.as_ref().unwrap().path().clone();
+                let expanded = self.expand_via(association, &via_path);
+                self.rewrite_association_as_filter(expanded)
+            }
             app::FieldTy::BelongsTo(rel) => {
                 self.rewrite_association_belongs_to_as_filter(rel, association)
             }
@@ -101,12 +116,78 @@ impl<'a> RewriteVia<'a> {
         }
     }
 
+    /// Expand a multi-step (`via`) relation's association into a chain of
+    /// nested single-step associations.
+    ///
+    /// `via_path` is the relation's resolved field path, rooted at the model
+    /// `association.source` selects. Every step but the last is folded into a
+    /// nested `Source::Model { via }` query; the returned association pairs
+    /// that nested source with the path's final step. The surrounding walk
+    /// then rewrites each nested `via` in turn.
+    fn expand_via(
+        &self,
+        association: stmt::Association,
+        via_path: &stmt::Path,
+    ) -> stmt::Association {
+        let mut model = via_path.root.as_model_unwrap();
+        let steps = via_path.projection.as_slice();
+        assert!(!steps.is_empty(), "via path must have at least one step");
+
+        let mut source = *association.source;
+
+        for &field_index in &steps[..steps.len() - 1] {
+            let field = &self.schema().app.model(model).as_root_unwrap().fields[field_index];
+            let next = relation_target(&field.ty);
+
+            let assoc = stmt::Association {
+                source: Box::new(source),
+                path: stmt::Path::field(model, field_index),
+            };
+            source = stmt::Query::builder(stmt::SourceModel {
+                id: next,
+                via: Some(assoc),
+            })
+            .build();
+            model = next;
+        }
+
+        let last = *steps.last().unwrap();
+        stmt::Association {
+            source: Box::new(source),
+            path: stmt::Path::field(model, last),
+        }
+    }
+
     fn rewrite_association_belongs_to_as_filter(
         &mut self,
         rel: &app::BelongsTo,
         association: stmt::Association,
     ) -> stmt::Filter {
-        todo!("rel={rel:#?}, association={association:#?}");
+        // The surrounding statement selects `rel.target`. `association.source`
+        // selects the model that holds this `BelongsTo`. Keep the target rows
+        // that some source row's foreign key points at:
+        //
+        //   <target>.<fk.target> IN (SELECT <source>.<fk.source> FROM <source>)
+        let [fk] = &rel.foreign_key.fields[..] else {
+            todo!("composite foreign keys in `via` paths");
+        };
+
+        let mut source = *association.source;
+        source.body.as_select_mut_unwrap().returning =
+            stmt::Returning::Project(stmt::Expr::ref_self_field(fk.source));
+
+        stmt::Expr::in_subquery(stmt::Expr::ref_self_field(fk.target), source).into()
+    }
+}
+
+/// The target model of a relation field. Panics if the field is not a
+/// relation — a `via` path resolves only through relations.
+fn relation_target(ty: &app::FieldTy) -> app::ModelId {
+    match ty {
+        app::FieldTy::BelongsTo(rel) => rel.target,
+        app::FieldTy::HasMany(rel) => rel.target,
+        app::FieldTy::HasOne(rel) => rel.target,
+        _ => panic!("via path step is not a relation: {ty:#?}"),
     }
 }
 

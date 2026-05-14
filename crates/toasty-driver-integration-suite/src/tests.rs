@@ -68,6 +68,7 @@ pub mod relation_has_many_multi;
 pub mod relation_has_many_n_plus_1;
 pub mod relation_has_many_same_target;
 pub mod relation_has_many_scoped_query;
+pub mod relation_has_many_via;
 pub mod relation_has_one_crud;
 pub mod relation_preload;
 pub mod scan_no_index;

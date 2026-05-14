@@ -292,13 +292,16 @@ impl Field {
     ///
     /// For `BelongsTo` this returns the inverse `HasMany`/`HasOne` (if linked).
     /// For `HasMany` and `HasOne` this returns the paired `BelongsTo`.
-    /// Returns `None` for primitive and embedded fields.
+    /// Returns `None` for primitive and embedded fields, and for multi-step
+    /// (`via`) relations, which have no pair.
     pub fn pair(&self) -> Option<FieldId> {
         match &self.ty {
             FieldTy::Primitive(_) => None,
             FieldTy::Embedded(_) => None,
             FieldTy::BelongsTo(belongs_to) => belongs_to.pair,
+            FieldTy::HasMany(has_many) if has_many.via.is_some() => None,
             FieldTy::HasMany(has_many) => Some(has_many.pair),
+            FieldTy::HasOne(has_one) if has_one.via.is_some() => None,
             FieldTy::HasOne(has_one) => Some(has_one.pair),
         }
     }

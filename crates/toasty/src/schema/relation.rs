@@ -79,8 +79,15 @@ pub trait Relation: Load<Output = Self> {
     /// pair by searching the target for a unique `BelongsTo` back to the
     /// source.
     ///
+    /// `via` carries the field-name segments of a `#[has_many(via = a.b)]`
+    /// path; the schema linker resolves them. A `via` relation has no pair.
+    ///
     /// Only [`HasMany`](super::HasMany) overrides this.
-    fn has_many_field_ty(_singular: Name, _pair: Option<FieldId>) -> FieldTy {
+    fn has_many_field_ty(
+        _singular: Name,
+        _pair: Option<FieldId>,
+        _via: Option<Vec<String>>,
+    ) -> FieldTy {
         unimplemented!("not a HasMany relation wrapper")
     }
 
@@ -90,8 +97,11 @@ pub trait Relation: Load<Output = Self> {
     /// the pair by searching the target for a unique `BelongsTo` back to
     /// the source.
     ///
+    /// `via` carries the field-name segments of a `#[has_one(via = a.b)]`
+    /// path; the schema linker resolves them. A `via` relation has no pair.
+    ///
     /// Only [`HasOne`](super::HasOne) overrides this.
-    fn has_one_field_ty(_pair: Option<FieldId>) -> FieldTy {
+    fn has_one_field_ty(_pair: Option<FieldId>, _via: Option<Vec<String>>) -> FieldTy {
         unimplemented!("not a HasOne relation wrapper")
     }
 }

@@ -74,7 +74,11 @@ impl Verify<'_> {
             };
             for field in &root.fields {
                 if let Some(has_many) = field.ty.as_has_many() {
-                    assert_ne!(has_many.pair, FieldId::placeholder());
+                    // `via` relations have no pair; their `pair` stays a
+                    // placeholder.
+                    if has_many.via.is_none() {
+                        assert_ne!(has_many.pair, FieldId::placeholder());
+                    }
                 }
 
                 if let Some(belongs_to) = field.ty.as_belongs_to() {

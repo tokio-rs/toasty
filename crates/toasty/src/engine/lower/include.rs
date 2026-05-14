@@ -283,6 +283,24 @@ impl LowerStatement<'_, '_> {
     ) -> stmt::Expr {
         let field = &self.model_unwrap().fields[field_index];
 
+        // A multi-step (`via`) relation reaches its target through a path of
+        // existing relations. It lowers to a correlated `IN` subquery, which
+        // the `NestedMerge` planner cannot yet evaluate as a per-parent
+        // qualification — so `.include()` / `.select()` of a `via` relation is
+        // not supported yet. Querying one directly
+        // (`user.commented_articles()`) does work.
+        let is_via = match &field.ty {
+            app::FieldTy::HasMany(rel) => rel.via.is_some(),
+            app::FieldTy::HasOne(rel) => rel.via.is_some(),
+            _ => false,
+        };
+        if is_via {
+            todo!(
+                "`.include()` / `.select()` of a multi-step `via` relation is not yet supported; \
+                 query the relation directly instead"
+            );
+        }
+
         let (mut stmt, target_model_id) = match &field.ty {
             app::FieldTy::HasMany(rel) => (
                 stmt::Query::new_select(

@@ -174,16 +174,18 @@ impl Expand<'_> {
                     let ty = &rel.ty;
                     let singular_name = expand_name(toasty, &rel.singular);
                     let pair = expand_pair(toasty, ty, rel.pair.as_ref());
+                    let via = expand_via(rel.via.as_ref());
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
-                    field_ty = quote!(<#ty as #toasty::Relation>::has_many_field_ty(#singular_name, #pair));
+                    field_ty = quote!(<#ty as #toasty::Relation>::has_many_field_ty(#singular_name, #pair, #via));
                 }
                 FieldTy::HasOne(rel) => {
                     let ty = &rel.ty;
                     let pair = expand_pair(toasty, ty, rel.pair.as_ref());
+                    let via = expand_via(rel.via.as_ref());
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
-                    field_ty = quote!(<#ty as #toasty::Relation>::has_one_field_ty(#pair));
+                    field_ty = quote!(<#ty as #toasty::Relation>::has_one_field_ty(#pair, #via));
                 }
             }
 
@@ -488,6 +490,19 @@ fn expand_pair(
         Some(ident) => {
             let name = ident.to_string();
             quote! { Some(<#target_ty as #toasty::Relation>::field_name_to_id(#name)) }
+        }
+        None => quote! { None },
+    }
+}
+
+/// Emit the `via` argument for `has_many_field_ty` / `has_one_field_ty`: the
+/// field-name segments of a `#[has_many(via = a.b)]` path as `Vec<String>`,
+/// resolved to a field path by the schema linker.
+fn expand_via(via: Option<&Vec<syn::Ident>>) -> TokenStream {
+    match via {
+        Some(segments) => {
+            let parts = segments.iter().map(|segment| segment.to_string());
+            quote! { Some(vec![ #( #parts.to_string() ),* ]) }
         }
         None => quote! { None },
     }

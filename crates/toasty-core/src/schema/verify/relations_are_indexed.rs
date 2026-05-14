@@ -20,10 +20,18 @@ impl Verify<'_> {
     }
 
     fn verify_has_many_relation_is_indexed(&self, rel: &app::HasMany) {
+        // A `via` relation has no pair of its own; each step it traverses is a
+        // relation that is verified independently.
+        if rel.via.is_some() {
+            return;
+        }
         self.verify_has_relation_is_indexed(rel.target(&self.schema.app), rel.pair);
     }
 
     fn verify_has_one_relation_is_indexed(&self, rel: &app::HasOne) {
+        if rel.via.is_some() {
+            return;
+        }
         self.verify_has_relation_is_indexed(rel.target(&self.schema.app), rel.pair);
     }
 

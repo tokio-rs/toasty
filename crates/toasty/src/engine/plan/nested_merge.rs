@@ -1,5 +1,5 @@
 use indexmap::IndexSet;
-use toasty_core::stmt::{self, visit_mut};
+use toasty_core::stmt::{self, VisitMut, visit_mut};
 
 use crate::engine::{
     Engine, HirStatement, SelectItems, eval,
@@ -353,14 +353,44 @@ impl NestedMergePlanner<'_> {
         // entire where clause, but that can be improved later.
         let mut filter = select.filter.clone();
 
-        visit_mut::for_each_expr_mut(&mut filter, |expr| match expr {
+        let mut rewrite = NestedChildFilterRewrite {
+            planner: self,
+            stmt_state,
+            selection,
+            depth,
+            in_subquery: false,
+        };
+        rewrite.visit_filter_mut(&mut filter);
+
+        filter.into_expr()
+    }
+}
+
+/// Rewrites a nested child's `WHERE` clause into the per-parent-row
+/// qualification predicate.
+///
+/// Field references and correlation args are rewritten into `arg_project`s
+/// against the ancestor [`RowStack`](crate::engine::exec). References inside a
+/// nested `IN` subquery are scoped to that subquery — they are left untouched;
+/// only correlation [`Arg`](stmt::Expr::Arg)s are rewritten at any depth.
+struct NestedChildFilterRewrite<'a, 'p> {
+    planner: &'a NestedMergePlanner<'p>,
+    stmt_state: &'a hir::StatementInfo,
+    selection: &'a SelectItems,
+    depth: usize,
+    in_subquery: bool,
+}
+
+impl stmt::VisitMut for NestedChildFilterRewrite<'_, '_> {
+    fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
+        match expr {
             stmt::Expr::Arg(expr_arg) => {
                 let hir::Arg::Ref {
                     nesting,
                     stmt_id: target_id,
                     target_expr_ref,
                     ..
-                } = &stmt_state.args[expr_arg.position]
+                } = &self.stmt_state.args[expr_arg.position]
                 else {
                     todo!()
                 };
@@ -370,7 +400,7 @@ impl NestedMergePlanner<'_> {
                 // This is a bit of a roundabout way to get the data. We may
                 // want to find a better way to track the info for more direct
                 // access.
-                let target_stmt = &self.hir[target_id];
+                let target_stmt = &self.planner.hir[target_id];
 
                 let target_exec_statement_index = target_stmt
                     .load_data_select_items
@@ -378,16 +408,30 @@ impl NestedMergePlanner<'_> {
                     .unwrap()
                     .get_index_of_expr_reference(*target_expr_ref);
 
-                *expr = stmt::Expr::arg_project(depth - *nesting, [target_exec_statement_index]);
+                *expr =
+                    stmt::Expr::arg_project(self.depth - *nesting, [target_exec_statement_index]);
             }
             stmt::Expr::Reference(expr_reference) => {
-                let index = selection.get_index_of_expr_reference(*expr_reference);
-                *expr = stmt::Expr::arg_project(depth, [index]);
+                // A reference inside a nested subquery is scoped to that
+                // subquery, not to this child — leave it for the subquery's
+                // own lowering.
+                if !self.in_subquery {
+                    let index = self.selection.get_index_of_expr_reference(*expr_reference);
+                    *expr = stmt::Expr::arg_project(self.depth, [index]);
+                }
             }
-            _ => {}
-        });
+            stmt::Expr::InSubquery(e) => {
+                // The left-hand side is evaluated in this child's scope; the
+                // subquery body is its own scope (correlation args aside).
+                self.visit_expr_mut(&mut e.expr);
 
-        filter.into_expr()
+                let prev = self.in_subquery;
+                self.in_subquery = true;
+                self.visit_stmt_query_mut(&mut e.query);
+                self.in_subquery = prev;
+            }
+            _ => visit_mut::visit_expr_mut(self, expr),
+        }
     }
 }
 
