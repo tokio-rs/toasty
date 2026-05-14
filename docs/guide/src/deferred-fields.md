@@ -38,6 +38,66 @@ attribute directs the macro to omit the field from the default
 projection and to generate the per-field load method. The wrapper type
 provides the unloaded-state runtime API.
 
+A record from an ordinary query has `body` unloaded. Load it explicitly
+with a follow-up read keyed on the primary key:
+
+```rust
+# use toasty::Model;
+# #[derive(Debug, toasty::Model)]
+# struct Document {
+#     #[key]
+#     #[auto]
+#     id: u64,
+#     title: String,
+#     #[deferred]
+#     body: toasty::Deferred<String>,
+# }
+# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
+# let created = toasty::create!(Document {
+#     title: "Hello",
+#     body: "the long body",
+# }).exec(&mut db).await?;
+let doc = Document::filter_by_id(created.id).get(&mut db).await?;
+assert!(doc.body.is_unloaded());
+
+// Issue a follow-up read for just the deferred column.
+let body: String = doc.body().exec(&mut db).await?;
+# Ok(())
+# }
+```
+
+Or preload it with `.include()` so the value arrives on the record the
+query returns — no second round-trip:
+
+```rust
+# use toasty::Model;
+# #[derive(Debug, toasty::Model)]
+# struct Document {
+#     #[key]
+#     #[auto]
+#     id: u64,
+#     title: String,
+#     #[deferred]
+#     body: toasty::Deferred<String>,
+# }
+# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
+# let created = toasty::create!(Document {
+#     title: "Hello",
+#     body: "the long body",
+# }).exec(&mut db).await?;
+let doc = Document::filter_by_id(created.id)
+    .include(Document::fields().body())
+    .get(&mut db)
+    .await?;
+
+let body: &String = doc.body.get();   // synchronous, no query
+# Ok(())
+# }
+```
+
+Both mechanisms are covered in full below; the rest of this section
+first describes where `#[deferred]` can be applied.
+
 `#[deferred]` is supported on primitive fields and on embedded types
 (`#[derive(Embed)]` structs and enums). It does not compose with
 `#[belongs_to]`, `#[has_many]`, or `#[has_one]` — relations are already
