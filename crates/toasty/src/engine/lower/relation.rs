@@ -176,6 +176,14 @@ impl LowerStatement<'_, '_> {
                         "Append assignment on relation field — use stmt::insert for has-many"
                     )
                 }
+                stmt::Assignment::Pop | stmt::Assignment::RemoveAt(_) => {
+                    // `stmt::pop` / `stmt::remove_at` target ordered
+                    // `Vec<scalar>` fields. They have no relation analogue —
+                    // has-many removal is by relation key, not by position.
+                    unreachable!(
+                        "Pop / RemoveAt assignment on relation field — these only apply to Vec<scalar>"
+                    )
+                }
                 stmt::Assignment::Batch(_) => {
                     todo!("batch assignments for relations")
                 }

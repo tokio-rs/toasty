@@ -353,14 +353,20 @@ impl stmt::Input for ConstantizeReturning<'_> {
                             assert!(expr.is_const(), "TODO; assignment={assignment:#?}");
                             Some(expr.clone())
                         }
-                        // `Append` updates a column relative to its current
-                        // value — not constantizable from the input. Leave
-                        // the reference unresolved so the engine fetches
-                        // the post-update value from the driver: native
-                        // RETURNING on PG/SQLite, ReturnValues=UPDATED_NEW
-                        // on DynamoDB, or a follow-up SELECT on MySQL.
-                        stmt::Assignment::Append(_) => None,
-                        _ => todo!("only SET / APPEND supported; got {assignment:#?}"),
+                        // Relative mutations update a column from its
+                        // current value — not constantizable from the
+                        // input. Leave the reference unresolved so the
+                        // engine fetches the post-update value from the
+                        // driver: native RETURNING on PG/SQLite,
+                        // ReturnValues=UPDATED_NEW on DynamoDB, or a
+                        // follow-up SELECT on MySQL.
+                        stmt::Assignment::Append(_)
+                        | stmt::Assignment::Pop
+                        | stmt::Assignment::RemoveAt(_)
+                        | stmt::Assignment::Remove(_) => None,
+                        _ => todo!(
+                            "only SET / APPEND / collection mutations supported; got {assignment:#?}"
+                        ),
                     }
                 } else {
                     None

@@ -193,14 +193,17 @@ item.update()
 # }
 ```
 
-For incremental mutations, the `toasty::stmt` module provides three
-builders that produce one statement per call and refresh the instance
-field in place:
+For incremental mutations, the `toasty::stmt` module provides builders
+that produce one statement per call and refresh the instance field in
+place:
 
 | Function | What it does |
 |---|---|
 | `stmt::push(value)` | Append one element |
 | `stmt::extend(iter)` | Append every element of an iterator, in order |
+| `stmt::pop()` | Remove the last element |
+| `stmt::remove(value)` | Remove every element equal to the value |
+| `stmt::remove_at(idx)` | Remove the element at a 0-based index |
 | `stmt::clear()` | Replace the field with an empty list |
 
 ```rust
@@ -228,6 +231,24 @@ item.update()
     .exec(&mut db)
     .await?;
 
+// Remove the last element.
+item.update()
+    .tags(toasty::stmt::pop())
+    .exec(&mut db)
+    .await?;
+
+// Remove every element equal to "staff".
+item.update()
+    .tags(toasty::stmt::remove("staff"))
+    .exec(&mut db)
+    .await?;
+
+// Remove the element at index 0.
+item.update()
+    .tags(toasty::stmt::remove_at(0usize))
+    .exec(&mut db)
+    .await?;
+
 // Remove every element.
 item.update()
     .tags(toasty::stmt::clear())
@@ -237,14 +258,22 @@ item.update()
 # }
 ```
 
-The append operations are atomic against the existing column value on
-every supported backend: PostgreSQL uses `text[]` concatenation, MySQL
-uses `JSON_MERGE_PRESERVE`, SQLite reads and re-emits the JSON array in
-one statement, and DynamoDB uses `list_append`. After `.exec()`, the
-instance's field reflects the new value. Concurrent writers can still
-interleave (the next operation sees only what the database has, not
-what the local instance thinks), but each individual append is
-indivisible at the storage layer.
+`push`, `extend`, and `clear` work on every backend. Each append is
+atomic against the existing column value: PostgreSQL uses `text[]`
+concatenation, MySQL uses `JSON_MERGE_PRESERVE`, SQLite reads and
+re-emits the JSON array in one statement, and DynamoDB uses
+`list_append`.
+
+`pop`, `remove`, and `remove_at` currently require PostgreSQL, where
+they lower to `array_remove` and array slicing. Other backends return
+an error. `pop` on an empty list and `remove_at` past the end of the
+list are no-ops; `remove` deletes every matching element, not just the
+first.
+
+After `.exec()`, the instance's field reflects the new value.
+Concurrent writers can still interleave — the next operation sees what
+the database has, not what the local instance holds — but each
+individual operation is indivisible at the storage layer.
 
 ## What gets generated
 
