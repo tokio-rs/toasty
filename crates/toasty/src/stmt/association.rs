@@ -1,4 +1,4 @@
-use super::{IntoExpr, IntoStatement, List, Path, Statement};
+use super::{IntoExpr, IntoScope, IntoStatement, List, Path, Statement};
 use crate::schema::Model;
 use std::{fmt, marker::PhantomData};
 use toasty_core::stmt;
@@ -212,6 +212,12 @@ impl<T: Model> IntoStatement for Association<List<T>> {
     }
 }
 
+impl<M: Model> IntoScope<M> for Association<List<M>> {
+    fn into_scope(self) -> Statement<List<M>> {
+        self.into_statement()
+    }
+}
+
 impl<M: Model> Association<M> {
     /// Create a has-one or belongs-to association from `source` following
     /// `path`.
@@ -265,6 +271,12 @@ impl<T: Model> IntoStatement for Association<T> {
         })
         .build();
         Statement::from_untyped_stmt(query.into())
+    }
+}
+
+impl<M: Model> IntoScope<M> for Association<M> {
+    fn into_scope(self) -> Statement<List<M>> {
+        self.into_statement()
     }
 }
 

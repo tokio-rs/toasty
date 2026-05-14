@@ -1,4 +1,4 @@
-use super::{Expr, IntoStatement, List};
+use super::{Expr, IntoScope, List};
 use crate::schema::Model;
 use std::{fmt, marker::PhantomData};
 use toasty_core::stmt;
@@ -119,10 +119,10 @@ impl<M: Model> Insert<M> {
     /// ```
     pub fn set_scope<S>(&mut self, scope: S)
     where
-        S: IntoStatement<Returning = List<M>>,
+        S: IntoScope<M>,
     {
         self.untyped.target =
-            stmt::InsertTarget::Scope(Box::new(scope.into_statement().into_untyped_query()));
+            stmt::InsertTarget::Scope(Box::new(scope.into_scope().into_untyped_query()));
     }
 
     /// Set the value of the field at `field` index in the current record.
