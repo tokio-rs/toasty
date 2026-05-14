@@ -170,7 +170,8 @@ assert!(user.bio.is_none());
 ## Modifying a `Vec<scalar>` field
 
 A `Vec<scalar>` field (e.g. `tags: Vec<String>`) supports whole-value
-replacement through the setter:
+replacement through the setter, or the explicit
+`toasty::stmt::set(...)`, which does the same thing:
 
 ```rust
 # use toasty::Model;
@@ -205,6 +206,7 @@ place:
 | `stmt::remove(value)` | Remove every element equal to the value |
 | `stmt::remove_at(idx)` | Remove the element at a 0-based index |
 | `stmt::clear()` | Replace the field with an empty list |
+| `stmt::apply([ops])` | Apply several of the operations above in order, in one statement |
 
 ```rust
 # use toasty::Model;
@@ -254,9 +256,24 @@ item.update()
     .tags(toasty::stmt::clear())
     .exec(&mut db)
     .await?;
+
+// Apply several operations in one statement, in order.
+item.update()
+    .tags(toasty::stmt::apply([
+        toasty::stmt::push("admin"),
+        toasty::stmt::push("verified"),
+    ]))
+    .exec(&mut db)
+    .await?;
 # Ok(())
 # }
 ```
+
+`stmt::apply` combines the builders above into a single update
+statement. Each operation runs in the order given, against the result
+of the previous one. An `apply` is only valid where every operation it
+contains is valid — combining a `pop` with a `push`, for example,
+requires a backend that supports `pop`.
 
 `push`, `extend`, and `clear` work on every backend. Each append is
 atomic against the existing column value: PostgreSQL uses `text[]`

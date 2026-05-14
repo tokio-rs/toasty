@@ -514,7 +514,9 @@ let posts = Post::filter(Post::fields().tags().contains("rust"))
 
 Some predicates lower to PostgreSQL-specific operators (`@>`, `&&`,
 `= ANY(col)`). On document-backed drivers the engine substitutes
-equivalent JSON or list operations.
+equivalent JSON or list operations. A few predicates carry
+backend-specific restrictions — see the per-database pages (for
+example, [DynamoDB](./dynamodb.md)) for the details.
 
 ## Attribute summary
 
