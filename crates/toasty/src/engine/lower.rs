@@ -175,11 +175,11 @@ index_vec::define_index_type! {
 /// detail — the unifying property is that none carries a *field value*
 /// that decomposes across columns, so none needs the `model_to_table`
 /// substitution that `Set` flows through.
-enum CollectionOp {
-    Append(stmt::Expr),
-    Remove(stmt::Expr),
+enum CollectionOp<'a> {
+    Append(&'a mut stmt::Expr),
+    Remove(&'a mut stmt::Expr),
     Pop,
-    RemoveAt(stmt::Expr),
+    RemoveAt(&'a mut stmt::Expr),
 }
 
 impl LowerStatement<'_, '_> {
@@ -283,22 +283,19 @@ impl LowerStatement<'_, '_> {
 
         match op {
             CollectionOp::Append(expr) => {
-                let mut lowered = expr;
-                self.visit_expr_mut(&mut lowered);
-                out.append(prim.column, lowered);
+                self.visit_expr_mut(expr);
+                out.append(prim.column, expr.take());
             }
             CollectionOp::Remove(expr) => {
-                let mut lowered = expr;
-                self.visit_expr_mut(&mut lowered);
-                out.remove(prim.column, lowered);
+                self.visit_expr_mut(expr);
+                out.remove(prim.column, expr.take());
             }
             CollectionOp::Pop => {
                 out.pop(prim.column);
             }
             CollectionOp::RemoveAt(expr) => {
-                let mut lowered = expr;
-                self.visit_expr_mut(&mut lowered);
-                out.remove_at(prim.column, lowered);
+                self.visit_expr_mut(expr);
+                out.remove_at(prim.column, expr.take());
             }
         }
     }
@@ -388,7 +385,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                         &mut lowered,
                         mapping,
                         projection,
-                        CollectionOp::Append(expr.clone()),
+                        CollectionOp::Append(expr),
                     );
                 }
                 stmt::Assignment::Remove(expr) => {
@@ -396,7 +393,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                         &mut lowered,
                         mapping,
                         projection,
-                        CollectionOp::Remove(expr.clone()),
+                        CollectionOp::Remove(expr),
                     );
                 }
                 stmt::Assignment::Pop => {
@@ -407,7 +404,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                         &mut lowered,
                         mapping,
                         projection,
-                        CollectionOp::RemoveAt(expr.clone()),
+                        CollectionOp::RemoveAt(expr),
                     );
                 }
                 stmt::Assignment::Insert(_) | stmt::Assignment::Batch(_) => {
