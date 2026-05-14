@@ -18,6 +18,7 @@
 
 - [Indexes and Unique Constraints](./indexes-and-unique-constraints.md)
 - [Field Options](./field-options.md)
+- [`Vec<scalar>` Fields](./vec-scalar-fields.md)
 
 # Relationships
 
