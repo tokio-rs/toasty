@@ -196,10 +196,9 @@ impl LowerStatement<'_, '_> {
         out: &mut stmt::Assignments,
         mapping: &toasty_core::schema::mapping::Model,
         projection: &stmt::Projection,
-        expr: &stmt::Expr,
+        expr: &mut stmt::Expr,
     ) {
-        let mut lowered_expr = expr.clone();
-        self.visit_expr_mut(&mut lowered_expr);
+        self.visit_expr_mut(expr);
 
         let Some(field) = mapping.resolve_field_mapping(projection) else {
             self.state
@@ -217,7 +216,7 @@ impl LowerStatement<'_, '_> {
             // template with the lowered value.
             lowering_expr.substitute(AssignmentInput {
                 assignment_projection: projection.clone(),
-                value: &lowered_expr,
+                value: &expr,
             });
 
             self.visit_expr_mut(&mut lowering_expr);
@@ -236,7 +235,7 @@ impl LowerStatement<'_, '_> {
     ///
     /// `Append` is supported on every backend; the removal operators are
     /// gated by per-backend capability flags and emit a clear error where
-    /// the native form is not yet available (pending the RMW fallback).
+    /// the native form is not available.
     fn lower_collection_op(
         &mut self,
         out: &mut stmt::Assignments,
@@ -263,7 +262,7 @@ impl LowerStatement<'_, '_> {
         };
 
         // `Append` is universally supported; the removal operators are
-        // gated per backend pending the RMW fallback.
+        // gated per backend.
         let cap = self.capability();
         let unsupported = match &op {
             CollectionOp::Append(_) => None,
@@ -379,7 +378,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         //   operators*. They carry operator operands (a list, an element,
         //   an index, or nothing) and always target a single-column
         //   `Vec<scalar>` field, so none needs `model_to_table`.
-        for (projection, assignment) in &*i {
+        for (projection, assignment) in &mut *i {
             match assignment {
                 stmt::Assignment::Set(expr) => {
                     self.lower_set_assignment(&mut lowered, mapping, projection, expr);

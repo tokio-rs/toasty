@@ -194,18 +194,15 @@ pub struct Capability {
     /// equal to a given value from a `Vec<scalar>` field (`stmt::remove`).
     ///
     /// - PostgreSQL `text[]`: `true` — `array_remove(col, v)`.
-    /// - MySQL / SQLite JSON: `false` — no value-removal operator; RMW
-    ///   fallback (future work).
-    /// - DynamoDB List: `false` — no value-removal on Lists; RMW fallback
-    ///   (future work).
+    /// - MySQL / SQLite JSON: `false` — no value-removal operator.
+    /// - DynamoDB List: `false` — no value-removal on Lists.
     pub vec_remove: bool,
 
     /// Whether the driver supports atomic in-place removal of the last
     /// element of a `Vec<scalar>` field (`stmt::pop`).
     ///
     /// - PostgreSQL: `true` — array slicing.
-    /// - MySQL / SQLite: future work — `JSON_REMOVE` / `json_remove` with a
-    ///   computed-length path expression. Currently `false`.
+    /// - MySQL / SQLite: `false`.
     /// - DynamoDB: `false` — `UpdateExpression` indices must be literal
     ///   integers, so the last index cannot be expressed in one statement.
     pub vec_pop: bool,
@@ -214,10 +211,8 @@ pub struct Capability {
     /// given index from a `Vec<scalar>` field (`stmt::remove_at`).
     ///
     /// - PostgreSQL: `true` — array slicing.
-    /// - MySQL / SQLite: future work — `JSON_REMOVE` / `json_remove` with a
-    ///   path expression. Currently `false`.
-    /// - DynamoDB: future work — `REMOVE path[i]` for a literal index.
-    ///   Currently `false`.
+    /// - MySQL / SQLite: `false`.
+    /// - DynamoDB: `false`.
     pub vec_remove_at: bool,
 }
 
@@ -436,9 +431,9 @@ impl Capability {
         // subqueries that accept any rhs expression.
         native_array_set_predicates: true,
 
-        // SQLite JSON1 has no value-removal operator on JSON arrays, and
-        // pop / remove_at need a path expression built from
-        // `json_array_length`. Future work.
+        // SQLite JSON1 has no value-removal operator on JSON arrays; pop
+        // and remove_at need a path expression built from
+        // `json_array_length`.
         vec_remove: false,
         vec_pop: false,
         vec_remove_at: false,
@@ -585,9 +580,9 @@ impl Capability {
         // — the capability check rejects any other rhs shape.
         native_array_set_predicates: false,
 
-        // DynamoDB Lists have no atomic value-removal; pop cannot be
+        // DynamoDB Lists have no atomic value-removal, and pop cannot be
         // expressed because `UpdateExpression` indices must be literal
-        // integers. Native `remove_at(literal i)` is future work.
+        // integers.
         vec_remove: false,
         vec_pop: false,
         vec_remove_at: false,

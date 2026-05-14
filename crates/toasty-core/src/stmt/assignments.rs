@@ -292,6 +292,15 @@ impl<'a> IntoIterator for &'a Assignments {
     }
 }
 
+impl<'a> IntoIterator for &'a mut Assignments {
+    type Item = (&'a Projection, &'a mut Assignment);
+    type IntoIter = std::collections::btree_map::IterMut<'a, Projection, Assignment>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.assignments.iter_mut()
+    }
+}
+
 /// Indexes into the assignments by projection. Panics if no assignment exists
 /// for the given key.
 ///

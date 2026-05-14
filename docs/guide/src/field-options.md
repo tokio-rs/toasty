@@ -357,8 +357,9 @@ that Toasty doesn't natively support — for example, a third-party type
 or a struct you don't want to declare as `#[derive(toasty::Embed)]`.
 For `Vec<scalar>` fields, prefer the native form (`tags: Vec<String>`,
 documented in [Defining Models](./defining-models.md)) which is
-queryable and supports collection mutations via `stmt::push` /
-`stmt::extend` / `stmt::clear`.
+queryable and supports collection mutations via `stmt::push`,
+`stmt::extend`, `stmt::pop`, `stmt::remove`, `stmt::remove_at`, and
+`stmt::clear`.
 
 ```rust,ignore
 # use toasty::Model;

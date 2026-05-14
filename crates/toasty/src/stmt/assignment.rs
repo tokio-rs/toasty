@@ -145,11 +145,11 @@ pub fn insert<T>(expr: impl IntoExpr<T>) -> Assignment<List<T>> {
 /// for `List<T>` (the collection).
 ///
 /// What "remove" means depends on the field kind:
-/// - **`Vec<scalar>` field**: every element equal to the value is removed.
-///   Atomic against the existing column value on every backend that
-///   advertises [`Capability::vec_remove`](toasty_core::driver::Capability::vec_remove)
-///   (currently PostgreSQL only); other backends emit an error at lowering
-///   time pending the RMW fallback.
+/// - **`Vec<scalar>` field**: every element equal to the value is removed,
+///   atomically against the existing column value. Backends that advertise
+///   [`Capability::vec_remove`](toasty_core::driver::Capability::vec_remove)
+///   support this — currently PostgreSQL only; other backends return an
+///   error.
 /// - **Has-many relation**: the related record is dissociated. With an
 ///   optional foreign key the FK is set to `NULL`; with a required foreign
 ///   key the related record is deleted.
@@ -291,10 +291,10 @@ pub fn clear<T>() -> Assignment<List<T>> {
 /// rather than an error; for failure-on-empty semantics, filter the
 /// collection first.
 ///
-/// Atomic against the existing column value on every backend that
-/// advertises [`Capability::vec_pop`](toasty_core::driver::Capability::vec_pop)
-/// (currently PostgreSQL only); other backends emit an error at lowering
-/// time pending the RMW fallback.
+/// Atomic against the existing column value. Backends that advertise
+/// [`Capability::vec_pop`](toasty_core::driver::Capability::vec_pop)
+/// support this — currently PostgreSQL only; other backends return an
+/// error.
 ///
 /// # Examples
 ///
@@ -318,10 +318,10 @@ pub fn pop<T>() -> Assignment<List<T>> {
 /// a no-op rather than an error — per-row failure semantics on a bulk
 /// update are rarely useful.
 ///
-/// Atomic against the existing column value on every backend that
-/// advertises [`Capability::vec_remove_at`](toasty_core::driver::Capability::vec_remove_at)
-/// (currently PostgreSQL only); other backends emit an error at lowering
-/// time pending the RMW fallback.
+/// Atomic against the existing column value. Backends that advertise
+/// [`Capability::vec_remove_at`](toasty_core::driver::Capability::vec_remove_at)
+/// support this — currently PostgreSQL only; other backends return an
+/// error.
 ///
 /// # Examples
 ///
