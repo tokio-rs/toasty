@@ -216,7 +216,7 @@ impl LowerStatement<'_, '_> {
             // template with the lowered value.
             lowering_expr.substitute(AssignmentInput {
                 assignment_projection: projection.clone(),
-                value: &expr,
+                value: expr,
             });
 
             self.visit_expr_mut(&mut lowering_expr);
