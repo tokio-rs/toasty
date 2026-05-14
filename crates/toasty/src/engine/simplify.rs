@@ -13,9 +13,6 @@ mod expr_or;
 mod expr_project;
 mod stmt_query;
 
-// Simplifications
-// TODO: unify names
-mod lift_in_subquery;
 use toasty_core::{
     driver::Capability,
     schema::*,
@@ -73,7 +70,6 @@ impl VisitMut for Simplify<'_> {
             }
             Expr::Cast(expr) => self.simplify_expr_cast(expr),
             Expr::Exists(expr) => self.simplify_expr_exists(expr),
-            Expr::InSubquery(expr) => self.lift_in_subquery(&expr.expr, &expr.query),
             Expr::Intersects(expr) => self.simplify_expr_intersects(expr),
             Expr::IsSuperset(expr) => self.simplify_expr_is_superset(expr),
             Expr::Let(expr) => self.simplify_expr_let(expr),
@@ -232,10 +228,6 @@ impl<'a> Simplify<'a> {
 
     pub(crate) fn with_context(cx: stmt::ExprContext<'a>, capability: &'a Capability) -> Self {
         Simplify { cx, capability }
-    }
-
-    fn schema(&self) -> &'a Schema {
-        self.cx.schema()
     }
 
     /// Return a new `Simplify` instance that operates on a nested scope

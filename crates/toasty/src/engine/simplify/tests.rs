@@ -13,6 +13,5 @@ mod expr_map;
 mod expr_match;
 mod expr_or;
 mod expr_project;
-mod lift_in_subquery;
 mod prop_const;
 mod stmt_query;
