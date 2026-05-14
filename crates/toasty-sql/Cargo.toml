@@ -1,6 +1,6 @@
 [package]
 name = "toasty-sql"
-version = "0.5.0"
+version = "0.6.0"
 description = "SQL serialization layer for Toasty database drivers"
 authors.workspace = true
 edition.workspace = true

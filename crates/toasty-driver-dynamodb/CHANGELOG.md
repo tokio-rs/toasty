@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-dynamodb-v0.5.0...toasty-driver-dynamodb-v0.6.0) - 2026-05-14
+
+### Added
+
+- Add push, pop, extend, clear, remove_at, remove operations for vector scalar fields ([#887], [#880])
+- Add vector scalar field support on MySQL, SQLite, and DynamoDB ([#872])
+- Add full-table scan support for DynamoDB ([#821])
+
+[#821]: https://github.com/tokio-rs/toasty/pull/821
+[#872]: https://github.com/tokio-rs/toasty/pull/872
+[#880]: https://github.com/tokio-rs/toasty/pull/880
+[#887]: https://github.com/tokio-rs/toasty/pull/887
+
 ## [0.5.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-dynamodb-v0.4.0...toasty-driver-dynamodb-v0.5.0) - 2026-04-27
 
 ### Added

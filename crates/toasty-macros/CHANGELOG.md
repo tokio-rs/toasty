@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0](https://github.com/tokio-rs/toasty/compare/toasty-macros-v0.5.0...toasty-macros-v0.6.0) - 2026-05-14
+
+### Added
+
+- Add Vec<scalar> model fields with PostgreSQL native array storage ([#866])
+- Support custom index names via `name = "..."` ([#842])
+- Proxy Auto through tuple-newtype Embed types ([#836])
+- Add .select() column projection, including through BelongsTo relations ([#820], [#827])
+- Validate column storage types via type checker ([#832])
+- Add compile-time validation for create! macro field sets ([#648])
+- Add #[deferred] field attribute and Deferred<T> wrapper, with support for embedded types ([#793], [#799])
+- Add latest_by query ([#707])
+- Add all filter for associations ([#784])
+
+### Fixed
+
+- Validate explicit `#[auto(...)]` strategies via type checker ([#851])
+
+[#648]: https://github.com/tokio-rs/toasty/pull/648
+[#707]: https://github.com/tokio-rs/toasty/pull/707
+[#784]: https://github.com/tokio-rs/toasty/pull/784
+[#793]: https://github.com/tokio-rs/toasty/pull/793
+[#799]: https://github.com/tokio-rs/toasty/pull/799
+[#820]: https://github.com/tokio-rs/toasty/pull/820
+[#827]: https://github.com/tokio-rs/toasty/pull/827
+[#832]: https://github.com/tokio-rs/toasty/pull/832
+[#836]: https://github.com/tokio-rs/toasty/pull/836
+[#842]: https://github.com/tokio-rs/toasty/pull/842
+[#851]: https://github.com/tokio-rs/toasty/pull/851
+[#866]: https://github.com/tokio-rs/toasty/pull/866
+
 ## [0.5.0](https://github.com/tokio-rs/toasty/compare/toasty-macros-v0.4.0...toasty-macros-v0.5.0) - 2026-04-27
 
 ### Added
