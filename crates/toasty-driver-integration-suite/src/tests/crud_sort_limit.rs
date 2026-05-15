@@ -292,6 +292,32 @@ pub async fn order_by_multiple_columns_composes(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
+#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(sql))]
+pub async fn order_by_tuple(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    toasty::create!(User::[
+        { name: "Alice", age: 30 },
+        { name: "Carol", age: 20 },
+        { name: "Bob",   age: 30 },
+        { name: "Dave",  age: 20 },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    // A tuple of OrderByExpr sorts by each field in turn, equivalent to
+    // chaining `.order_by()` calls.
+    let users = User::all()
+        .order_by((User::fields().age().asc(), User::fields().name().desc()))
+        .exec(&mut db)
+        .await?;
+
+    let names: Vec<&str> = users.iter().map(|u| u.name.as_str()).collect();
+    assert_eq!(names, ["Dave", "Carol", "Bob", "Alice"]);
+
+    Ok(())
+}
+
 #[driver_test(requires(not(sql)))]
 pub async fn paginate_for_dynamodb(test: &mut Test) -> Result<()> {
     #[derive(toasty::Model)]
