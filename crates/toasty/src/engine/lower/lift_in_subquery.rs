@@ -273,7 +273,15 @@ fn lift_belongs_to_in_subquery(
 
     lift.visit_filter(&select.filter);
 
-    if lift.fail {
+    // Fall back to the IN-subquery form whenever we couldn't account for
+    // every FK column with a direct equality from the filter. This covers
+    // both `fail=true` (a binary op referenced something that isn't on the
+    // FK) and the case where the filter contained no liftable binary ops at
+    // all — e.g. when it's a nested `InSubquery` that the LiftBelongsTo
+    // visitor deliberately skips (see `visit_expr_in_subquery`).
+    let all_fks_matched = lift.fk_field_matches.iter().all(|m| *m);
+
+    if lift.fail || !all_fks_matched {
         let [fk_fields] = &belongs_to.foreign_key.fields[..] else {
             todo!("composite keys")
         };
@@ -333,6 +341,15 @@ fn lift_has_n_in_subquery(
 }
 
 impl Visit for LiftBelongsTo<'_> {
+    fn visit_expr_in_subquery(&mut self, _i: &stmt::ExprInSubquery) {
+        // Stop the walk at a nested IN-subquery boundary. Field references
+        // inside resolve in the nested query's own scope, but the visitor's
+        // `cx` is scoped to the current (outer) subquery's source — recursing
+        // would misresolve inner refs as outer-model fields and produce
+        // bogus FK matches. The main LiftInSubquery walker handles the
+        // nested subquery on its own pass, with the correct scope.
+    }
+
     fn visit_expr_binary_op(&mut self, i: &stmt::ExprBinaryOp) {
         match (&*i.lhs, &*i.rhs) {
             (stmt::Expr::Reference(expr_reference), other)
