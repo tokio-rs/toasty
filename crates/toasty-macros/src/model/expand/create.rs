@@ -223,23 +223,19 @@ impl Expand<'_> {
                             }
                         }
                     }
-                    FieldTy::Primitive(ty) if field.attrs.document.is_some() => {
-                        // Whole-value write for a `#[document]` field: bind
-                        // through `Document::ExprTarget`.
-                        quote! {
-                            #vis fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::Document>::ExprTarget>) -> Self {
-                                self.stmt.set(#index_tokenized, #name.into_expr());
-                                self
-                            }
-                        }
-                    }
                     FieldTy::Primitive(ty) => {
-                        // The setter binds through the field's
-                        // `Field::ExprTarget` — `Self` for scalars/`Vec<u8>`,
-                        // `List<T>` for `Vec<T: Scalar>`. Trait dispatch
-                        // routes each case correctly; no type parsing here.
+                        // The setter binds through `<Ty as Trait>::ExprTarget`
+                        // — `Self` for scalars/`Vec<u8>`, `List<T>` for
+                        // `Vec<T: Scalar>`. `#[document]` fields resolve
+                        // through `Document` instead of `Field`; same shape,
+                        // different trait.
+                        let trait_ident = if field.attrs.document.is_some() {
+                            quote!(Document)
+                        } else {
+                            quote!(Field)
+                        };
                         quote! {
-                            #vis fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::Field>::ExprTarget>) -> Self {
+                            #vis fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::#trait_ident>::ExprTarget>) -> Self {
                                 self.stmt.set(#index_tokenized, #name.into_expr());
                                 self
                             }
