@@ -157,11 +157,7 @@ impl Expand<'_> {
                 // `Self` for scalars, `List<T>` for `Vec<T: Scalar>`, and so
                 // on. `#[document]` fields resolve through `Document` instead
                 // of `Field` — same shape, different trait.
-                let trait_ident = if field.attrs.document.is_some() {
-                    quote!(Document)
-                } else {
-                    quote!(Field)
-                };
+                let trait_ident = field.trait_ident();
                 quote! {
                     #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::#trait_ident>::ExprTarget>) -> Self {
                         self.#set_field_ident(#field_ident);

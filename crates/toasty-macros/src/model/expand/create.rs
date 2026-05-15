@@ -229,11 +229,7 @@ impl Expand<'_> {
                         // `Vec<T: Scalar>`. `#[document]` fields resolve
                         // through `Document` instead of `Field`; same shape,
                         // different trait.
-                        let trait_ident = if field.attrs.document.is_some() {
-                            quote!(Document)
-                        } else {
-                            quote!(Field)
-                        };
+                        let trait_ident = field.trait_ident();
                         quote! {
                             #vis fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::#trait_ident>::ExprTarget>) -> Self {
                                 self.stmt.set(#index_tokenized, #name.into_expr());

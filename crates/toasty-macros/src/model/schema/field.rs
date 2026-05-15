@@ -317,6 +317,20 @@ impl FieldAttr {
 }
 
 impl Field {
+    /// The toasty schema trait this field's primitive codegen resolves
+    /// through — `Document` for `#[document]` fields, `Field` otherwise.
+    ///
+    /// The two traits expose the same shape (`ExprTarget`, `NULLABLE`,
+    /// `field_ty`, `register`), so callers can splice this ident into a
+    /// `<#ty as #toasty::#trait_ident>::…` path uniformly.
+    pub(crate) fn trait_ident(&self) -> proc_macro2::TokenStream {
+        if self.attrs.document.is_some() {
+            quote::quote!(Document)
+        } else {
+            quote::quote!(Field)
+        }
+    }
+
     pub(super) fn from_ast(
         field: &syn::Field,
         model_ident: &syn::Ident,

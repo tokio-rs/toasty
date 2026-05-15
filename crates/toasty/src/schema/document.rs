@@ -26,7 +26,7 @@ pub trait Document {
     /// the schema builder resolves it to a
     /// [`stmt::Type::Document`](toasty_core::stmt::Type::Document) once every
     /// embed is registered and its field names are known.
-    fn document_field_ty(
+    fn field_ty(
         storage_ty: Option<toasty_core::schema::db::Type>,
     ) -> toasty_core::schema::app::FieldTy;
 
@@ -38,7 +38,7 @@ pub trait Document {
 impl<T: Embed> Document for Vec<T> {
     type ExprTarget = List<T>;
 
-    fn document_field_ty(
+    fn field_ty(
         storage_ty: Option<toasty_core::schema::db::Type>,
     ) -> toasty_core::schema::app::FieldTy {
         toasty_core::schema::app::FieldTy::Primitive(toasty_core::schema::app::FieldPrimitive {
