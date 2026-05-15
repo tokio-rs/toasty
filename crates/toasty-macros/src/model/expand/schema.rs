@@ -121,6 +121,14 @@ impl Expand<'_> {
                         _ => quote!(None),
                     };
 
+                    if field.attrs.document.is_some() {
+                        // `#[document]` forces the field into document storage.
+                        // The `Document` trait resolves the field's type shape
+                        // at monomorphization time, mirroring how `Field`
+                        // resolves the column-expanded case.
+                        nullable = quote!(<#ty as #toasty::Document>::NULLABLE);
+                        field_ty = quote!(<#ty as #toasty::Document>::document_field_ty(#storage_ty));
+                    } else {
                     match &field.attrs.serialize {
                         Some(SerializeAttr { format, nullable: serialize_nullable }) => {
                             let serialize_format = match format {
@@ -143,6 +151,7 @@ impl Expand<'_> {
                             nullable = quote!(<#ty as #toasty::Field>::NULLABLE);
                             field_ty = quote!(<#ty as #toasty::Field>::field_ty(#storage_ty));
                         }
+                    }
                     }
                 }
                 FieldTy::BelongsTo(rel) => {
@@ -436,6 +445,13 @@ impl Expand<'_> {
                     // strings — they don't implement Field.
                     if field.attrs.serialize.is_some() {
                         return None;
+                    }
+                    // `#[document]` fields resolve through the `Document` trait,
+                    // which registers the embedded element type.
+                    if field.attrs.document.is_some() {
+                        return Some(quote! {
+                            <#ty as #toasty::Document>::register(model_set);
+                        });
                     }
                     // Primitives use Field::register which delegates to inner
                     // type if it's an embedded type (via the Field impl).

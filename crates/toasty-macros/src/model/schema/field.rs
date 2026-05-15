@@ -17,6 +17,21 @@ pub(crate) struct SerializeAttr {
     pub(crate) nullable: bool,
 }
 
+/// Parsed `#[document]` / `#[document(text)]` attribute data.
+///
+/// `#[document]` forces a field into document storage. The `text` modifier
+/// (`#[document(text)]`) selects PostgreSQL's text `json` over `jsonb`; it is
+/// parsed here but rejected during validation until the text encoding path is
+/// wired up.
+#[derive(Debug, Clone)]
+pub(crate) struct DocumentAttr {
+    /// True if `#[document(text)]` was written (the `binary: false` encoding).
+    pub(crate) text: bool,
+
+    /// The originating attribute, retained for span-accurate diagnostics.
+    pub(crate) attr: syn::Attribute,
+}
+
 #[derive(Debug)]
 pub(crate) struct Field {
     /// Index of field in the containing model
@@ -65,6 +80,9 @@ pub(crate) struct FieldAttr {
     /// Serialization info for the field: `#[serialize(json)]` or `#[serialize(json, nullable)]`
     pub(crate) serialize: Option<SerializeAttr>,
 
+    /// Document-storage info for the field: `#[document]` or `#[document(text)]`
+    pub(crate) document: Option<DocumentAttr>,
+
     /// True if the field tracks an OCC version counter
     pub(crate) versionable: bool,
 
@@ -100,6 +118,7 @@ impl FieldAttr {
             default_expr: None,
             update_expr: None,
             serialize: None,
+            document: None,
             versionable: false,
             deferred: false,
         };
@@ -240,6 +259,51 @@ impl FieldAttr {
                         }
                         Err(e) => errs.push(e),
                     }
+                }
+            } else if attr.path().is_ident("document") {
+                if field_attr.document.is_some() {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "duplicate #[document] attribute",
+                    ));
+                } else {
+                    let mut text = false;
+
+                    match &attr.meta {
+                        // Bare `#[document]`.
+                        syn::Meta::Path(_) => {}
+                        // `#[document(text)]` and friends.
+                        syn::Meta::List(_) => {
+                            match attr.parse_args_with(
+                                syn::punctuated::Punctuated::<syn::Ident, syn::Token![,]>::parse_terminated,
+                            ) {
+                                Ok(args) => {
+                                    for arg in &args {
+                                        if arg == "text" {
+                                            text = true;
+                                        } else {
+                                            errs.push(syn::Error::new_spanned(
+                                                arg,
+                                                "unsupported document argument; expected `text`",
+                                            ));
+                                        }
+                                    }
+                                }
+                                Err(e) => errs.push(e),
+                            }
+                        }
+                        syn::Meta::NameValue(_) => {
+                            errs.push(syn::Error::new_spanned(
+                                attr,
+                                "#[document] does not take a value; use `#[document]` or `#[document(text)]`",
+                            ));
+                        }
+                    }
+
+                    field_attr.document = Some(DocumentAttr {
+                        text,
+                        attr: attr.clone(),
+                    });
                 }
             }
         }
@@ -422,6 +486,73 @@ impl Field {
                 errs.push(syn::Error::new_spanned(
                     field,
                     "#[deferred] cannot be combined with #[key]",
+                ));
+            }
+        }
+
+        if let Some(doc) = &attrs.document {
+            // `#[document(text)]` is parsed but the text-encoding path is not
+            // yet implemented.
+            if doc.text {
+                errs.push(syn::Error::new_spanned(
+                    &doc.attr,
+                    "#[document(text)] is not yet supported",
+                ));
+            }
+
+            if ty.is_some() {
+                errs.push(syn::Error::new_spanned(
+                    field,
+                    "#[document] cannot be combined with relation attributes",
+                ));
+            }
+
+            if attrs.serialize.is_some() {
+                errs.push(syn::Error::new_spanned(
+                    field,
+                    "#[document] cannot be combined with #[serialize]",
+                ));
+            }
+
+            if attrs.key.is_some() {
+                errs.push(syn::Error::new_spanned(
+                    field,
+                    "#[document] cannot be combined with #[key]",
+                ));
+            }
+
+            if attrs.versionable {
+                errs.push(syn::Error::new_spanned(
+                    field,
+                    "#[document] cannot be combined with #[version]",
+                ));
+            }
+
+            if attrs.deferred {
+                errs.push(syn::Error::new_spanned(
+                    field,
+                    "#[document] cannot be combined with #[deferred]",
+                ));
+            }
+
+            if attrs.auto.is_some() {
+                errs.push(syn::Error::new_spanned(
+                    field,
+                    "#[document] cannot be combined with #[auto]",
+                ));
+            }
+
+            if attrs.is_indexed() {
+                errs.push(syn::Error::new_spanned(
+                    field,
+                    "#[index] / #[unique] on a #[document] field is not yet supported",
+                ));
+            }
+
+            if attrs.column.is_some() {
+                errs.push(syn::Error::new_spanned(
+                    field,
+                    "#[column] on a #[document] field is not yet supported",
                 ));
             }
         }

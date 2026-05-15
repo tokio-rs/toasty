@@ -1,23 +1,30 @@
 //! JSON encoding for `stmt::Value`s stored in document-backed columns
-//! (MySQL `JSON`, SQLite TEXT via the JSON1 extension, and eventually
-//! PostgreSQL `jsonb` for `#[document]`-marked fields). The conversion is
-//! intentionally a plain pair of functions rather than a `Serialize` /
-//! `Deserialize` impl on `stmt::Value`: the encoding is opinionated
-//! (UUIDs / decimals / timestamps as JSON strings) and matches the
-//! per-column TEXT encoding the same scalar would have at the SQL level.
-//! Backends with typed document storage (BSON, DynamoDB) need different
-//! representations.
+//! (MySQL `JSON`, SQLite TEXT via the JSON1 extension, and PostgreSQL `jsonb`
+//! for `#[document]`-marked fields). The conversion is intentionally a plain
+//! pair of functions rather than a `Serialize` / `Deserialize` impl on
+//! `stmt::Value`: the encoding is opinionated (UUIDs / decimals / timestamps
+//! as JSON strings) and matches the per-column TEXT encoding the same scalar
+//! would have at the SQL level. Backends with typed document storage (BSON,
+//! DynamoDB) need different representations.
 //!
-//! Decoding requires the element type from the schema — `Value::Uuid` vs
-//! `Value::String` are both JSON strings on the wire, and only the
-//! caller's `stmt::Type` distinguishes them.
+//! Encoding is purely structural: the engine hands the driver a
+//! [`Value::Object`] (named) for document-stored embeds, so this layer never
+//! needs the schema to *write* JSON. Decoding still requires the element type
+//! — `Value::Uuid` vs `Value::String` are both JSON strings on the wire, and
+//! only the caller's `stmt::Type` distinguishes them.
 
 use serde_json::Value as Json;
 use toasty_core::stmt::{self, Value};
 
-/// Encode a scalar `stmt::Value` as a `serde_json::Value`. Panics on
-/// shapes that have no JSON representation (`Record`, nested `List`,
-/// `Bytes`, `SparseRecord`, `Null` records, NaN / infinity).
+/// Encode a `stmt::Value` as a `serde_json::Value`.
+///
+/// Handles scalars, `List` (JSON array), and `Object` (JSON object). For
+/// objects, entries whose value is [`Value::Null`] are omitted entirely —
+/// `Option::None` fields produce a missing key, not an explicit `null`.
+///
+/// Panics on shapes that have no JSON representation (`Record` —
+/// document-stored values reach the driver as `Object`, not `Record` —
+/// `Bytes`, `SparseRecord`, NaN / infinity).
 pub fn value_to_json(value: &Value) -> Json {
     match value {
         Value::Null => Json::Null,
@@ -38,6 +45,15 @@ pub fn value_to_json(value: &Value) -> Json {
             .unwrap_or(Json::Null),
         Value::String(v) => Json::String(v.clone()),
         Value::Uuid(v) => Json::String(v.to_string()),
+        Value::List(items) => Json::Array(items.iter().map(value_to_json).collect()),
+        Value::Object(object) => Json::Object(
+            object
+                .iter()
+                // `Option::None` -> omit the key entirely.
+                .filter(|(_, v)| !v.is_null())
+                .map(|(k, v)| (k.clone(), value_to_json(v)))
+                .collect(),
+        ),
         #[cfg(feature = "rust_decimal")]
         Value::Decimal(v) => Json::String(v.to_string()),
         #[cfg(feature = "bigdecimal")]
@@ -75,6 +91,27 @@ pub fn value_from_json(json: Json, ty: &stmt::Type) -> Value {
         (stmt::Type::U64, Json::Number(n)) => Value::U64(n.as_u64().unwrap()),
         (stmt::Type::F32, Json::Number(n)) => Value::F32(n.as_f64().unwrap() as f32),
         (stmt::Type::F64, Json::Number(n)) => Value::F64(n.as_f64().unwrap()),
+        // A list document: decode each element with the element type.
+        (stmt::Type::List(elem), Json::Array(items)) => Value::List(
+            items
+                .into_iter()
+                .map(|v| value_from_json(v, elem))
+                .collect(),
+        ),
+        // A document decodes straight to a positional `Value::Record`: the
+        // driver has the `Type::Document` here, so there's no need to detour
+        // through `Value::Object` (which exists for the type-blind write-side
+        // bind path). A key that is absent — or explicitly `null` — decodes
+        // to `Value::Null`, which round-trips an `Option::None` field.
+        (stmt::Type::Document(doc), Json::Object(mut map)) => Value::record_from_vec(
+            doc.fields
+                .iter()
+                .map(|field| match map.remove(&field.name) {
+                    Some(json) => value_from_json(json, &field.ty),
+                    None => Value::Null,
+                })
+                .collect(),
+        ),
         #[cfg(feature = "rust_decimal")]
         (stmt::Type::Decimal, Json::String(v)) => {
             Value::Decimal(v.parse().expect("invalid Decimal in JSON"))
@@ -107,20 +144,16 @@ pub fn value_from_json(json: Json, ty: &stmt::Type) -> Value {
     }
 }
 
-/// Encode a `Value::List` as a JSON array document. The element type
-/// drives per-element encoding via [`value_to_json`].
+/// Encode a `Value::List` (or any structural `Value`) as a JSON document.
 pub fn value_list_to_json(value: &Value) -> Json {
-    let Value::List(items) = value else {
-        unreachable!("value_list_to_json called on {value:?}")
-    };
-    Json::Array(items.iter().map(value_to_json).collect())
+    value_to_json(value)
 }
 
 /// Decode a JSON array document into a `Value::List`, using `elem_ty`
 /// as the per-element type.
 pub fn value_list_from_json(json: Json, elem_ty: &stmt::Type) -> Value {
     let Json::Array(items) = json else {
-        panic!("expected JSON array for Vec<scalar> column, got {json:?}")
+        panic!("expected JSON array for collection column, got {json:?}")
     };
     Value::List(
         items

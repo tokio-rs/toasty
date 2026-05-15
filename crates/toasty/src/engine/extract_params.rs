@@ -357,7 +357,15 @@ fn value_to_extracted_expr(
             stmt::Expr::Record(stmt::ExprRecord::from_vec(fields))
         }
         stmt::Value::List(values)
-            if bind_list_param && values.iter().all(is_extractable_scalar) =>
+            if bind_list_param
+                && values.iter().all(|v| {
+                    // A `Vec<scalar>` collection, or a `#[document]`
+                    // collection of embedded structs (`Value::Record`
+                    // elements). Either way the whole list binds as one
+                    // parameter; `refine` resolves which storage applies and
+                    // — for documents — rewrites the records into objects.
+                    is_extractable_scalar(v) || matches!(v, stmt::Value::Record(_))
+                }) =>
         {
             let value = stmt::Value::List(values);
             let ty = infer_ty(&value);
@@ -457,26 +465,113 @@ fn refine_insert(
     db_schema: &db::Schema,
     params: &mut [Param],
 ) {
-    // Build expected type from column list (authoritative)
-    let expected = match &insert.target {
-        stmt::InsertTarget::Table(table) => {
-            let db_table = &db_schema.tables[table.table.0];
-            let field_types: Vec<Ty> = table
-                .columns
-                .iter()
-                .map(|col_id| ty_from_column(db_table.columns[col_id.index].storage_ty.clone()))
-                .collect();
-            Ty::Record(field_types)
-        }
-        _ => Ty::Unknown,
+    let stmt::InsertTarget::Table(table) = &insert.target else {
+        return;
     };
+    let db_table = &db_schema.tables[table.table.0];
+
+    // Build expected type from column list (authoritative)
+    let field_types: Vec<Ty> = table
+        .columns
+        .iter()
+        .map(|col_id| ty_from_column(db_table.columns[col_id.index].storage_ty.clone()))
+        .collect();
+    let expected = Ty::Record(field_types);
 
     // Push column types down into each VALUES row
     if let stmt::ExprSet::Values(values) = &insert.source.body {
         for row in &values.rows {
-            check(row, &expected, params);
+            // A row of `#[document]` columns can't go through the generic
+            // numeric/list `check` — its `Value::List(Record)` param has no
+            // shape the column type merges with. Handle those columns
+            // explicitly, field by field, and let `check` cover the rest.
+            if let stmt::Expr::Record(record) = row {
+                for (col_id, field_expr) in table.columns.iter().zip(&record.fields) {
+                    let col = &db_table.columns[col_id.index];
+                    if let Some(doc) = document_elem_ty(&col.ty) {
+                        refine_document_param(field_expr, doc, col.storage_ty.clone(), params);
+                    } else {
+                        check(field_expr, &ty_from_column(col.storage_ty.clone()), params);
+                    }
+                }
+            } else {
+                check(row, &expected, params);
+            }
         }
     }
+}
+
+/// If `ty` is the engine type of a `#[document]` collection column —
+/// `List(Document(..))` — return the inner [`stmt::TypeDocument`].
+fn document_elem_ty(ty: &stmt::Type) -> Option<&stmt::TypeDocument> {
+    match ty {
+        stmt::Type::List(elem) => match &**elem {
+            stmt::Type::Document(doc) => Some(doc),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Refine a `#[document]` collection param: pin its `db::Type` to the document
+/// storage type and rewrite the value from the positional `Value::List(Record)`
+/// shape into the named `Value::List(Object)` shape the driver serializes.
+/// `doc` supplies the field names.
+fn refine_document_param(
+    expr: &stmt::Expr,
+    doc: &stmt::TypeDocument,
+    storage_ty: db::Type,
+    params: &mut [Param],
+) {
+    // `None` for an `Option<Vec<..>>` field stays an `Expr::Value(Null)` —
+    // it is never extracted as a param, so there's nothing to refine.
+    let stmt::Expr::Arg(arg) = expr else {
+        return;
+    };
+    let param = &mut params[arg.position];
+    param.ty = Ty::Column(storage_ty);
+    let value = std::mem::replace(&mut param.value, stmt::Value::Null);
+    param.value = document_list_value(value, doc);
+}
+
+/// Convert a `Value::List` of positional `Value::Record`s into a `Value::List`
+/// of named `Value::Object`s using the document's field names. A non-list
+/// value (`Null`) passes through unchanged.
+fn document_list_value(value: stmt::Value, doc: &stmt::TypeDocument) -> stmt::Value {
+    match value {
+        stmt::Value::List(items) => stmt::Value::List(
+            items
+                .into_iter()
+                .map(|item| document_record_value(item, doc))
+                .collect(),
+        ),
+        other => other,
+    }
+}
+
+/// Convert one positional `Value::Record` into a named `Value::Object`,
+/// recursing through nested document fields.
+fn document_record_value(value: stmt::Value, doc: &stmt::TypeDocument) -> stmt::Value {
+    let stmt::Value::Record(record) = value else {
+        return value;
+    };
+    stmt::Value::Object(stmt::ValueObject::from_vec(
+        doc.fields
+            .iter()
+            .zip(record)
+            .map(|(field, v)| {
+                let v = match &field.ty {
+                    stmt::Type::Document(nested) => document_record_value(v, nested),
+                    stmt::Type::List(elem) => match &**elem {
+                        stmt::Type::Document(nested) => document_list_value(v, nested),
+                        _ => v,
+                    },
+                    _ => v,
+                };
+                (field.name.clone(), v)
+            })
+            .collect(),
+    ))
 }
 
 fn refine_update(update: &stmt::Update, cx: &Cx<'_>, db_schema: &db::Schema, params: &mut [Param]) {
@@ -500,8 +595,15 @@ fn refine_update(update: &stmt::Update, cx: &Cx<'_>, db_schema: &db::Schema, par
                 // The expression takes the column's full type (column for
                 // `Set`, list-shaped for `Append`).
                 stmt::Assignment::Set(expr) | stmt::Assignment::Append(expr) => {
-                    let expected = ty_from_column(col.storage_ty.clone());
-                    check(expr, &expected, params);
+                    if let Some(doc) = document_elem_ty(&col.ty) {
+                        // A whole-value write to a `#[document]` collection
+                        // column: bypass the generic numeric/list inference
+                        // and rewrite the param into the document shape.
+                        refine_document_param(expr, doc, col.storage_ty.clone(), params);
+                    } else {
+                        let expected = ty_from_column(col.storage_ty.clone());
+                        check(expr, &expected, params);
+                    }
                 }
                 // `Remove` is `array_remove(col, $1)`-shaped: the rhs binds
                 // as the column's element type, not the list type. Pull the

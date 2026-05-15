@@ -223,6 +223,16 @@ impl Expand<'_> {
                             }
                         }
                     }
+                    FieldTy::Primitive(ty) if field.attrs.document.is_some() => {
+                        // Whole-value write for a `#[document]` field: bind
+                        // through `Document::ExprTarget`.
+                        quote! {
+                            #vis fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::Document>::ExprTarget>) -> Self {
+                                self.stmt.set(#index_tokenized, #name.into_expr());
+                                self
+                            }
+                        }
+                    }
                     FieldTy::Primitive(ty) => {
                         // The setter binds through the field's
                         // `Field::ExprTarget` — `Self` for scalars/`Vec<u8>`,

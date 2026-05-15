@@ -257,6 +257,9 @@ pub use table_with_joins::TableWithJoins;
 mod ty;
 pub use ty::Type;
 
+mod ty_document;
+pub use ty_document::{DocumentField, TypeDocument};
+
 mod ty_union;
 pub use ty_union::TypeUnion;
 
@@ -276,6 +279,9 @@ pub use values::Values;
 
 #[cfg(feature = "jiff")]
 mod value_jiff;
+
+mod value_object;
+pub use value_object::ValueObject;
 
 mod value_record;
 pub use value_record::ValueRecord;

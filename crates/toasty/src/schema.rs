@@ -11,6 +11,9 @@ pub use create_meta::{CreateField, CreateMeta, ValidateCreate};
 mod deferred;
 pub use deferred::{Defer, Deferred, build_deferred_load};
 
+mod document;
+pub use document::Document;
+
 mod embed;
 pub use embed::Embed;
 

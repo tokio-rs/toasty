@@ -68,6 +68,12 @@ impl Expand<'_> {
                         // Serialized fields are stored as opaque JSON; no field accessor
                         TokenStream::new()
                     }
+                    Primitive(_) if field.attrs.document.is_some() => {
+                        // `#[document]` fields don't yet expose a path API into
+                        // the document; whole-value access goes through the
+                        // create / update builders.
+                        TokenStream::new()
+                    }
                     Primitive(ty) if field.attrs.deferred => {
                         let inner: syn::Type =
                             syn::parse_quote!(<#ty as #toasty::Defer>::Inner);
@@ -170,6 +176,7 @@ impl Expand<'_> {
 
                 match &field.ty {
                     Primitive(_) if field.attrs.serialize.is_some() => TokenStream::new(),
+                    Primitive(_) if field.attrs.document.is_some() => TokenStream::new(),
                     Primitive(ty) if field.attrs.deferred => {
                         let inner: syn::Type = syn::parse_quote!(<#ty as #toasty::Defer>::Inner);
                         self.expand_list_primitive_field_method(field_ident, &inner, &field_offset)

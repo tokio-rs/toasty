@@ -1,4 +1,4 @@
-use super::{PathFieldSet, TypeUnion, Value};
+use super::{PathFieldSet, TypeDocument, TypeUnion, Value};
 use crate::{
     Result,
     schema::app::{FieldId, ModelId},
@@ -123,6 +123,10 @@ pub enum Type {
     /// A fixed-length tuple where each item can have a different type.
     Record(Vec<Type>),
 
+    /// A document: a named, ordered set of fields, stored as a single value
+    /// (JSON, BSON, ...). The named counterpart to [`Type::Record`].
+    Document(TypeDocument),
+
     /// A byte array, more efficient than `List(U8)`.
     Bytes,
 
@@ -241,6 +245,11 @@ impl Type {
     /// Returns `true` if this is [`Type::Record`].
     pub fn is_record(&self) -> bool {
         matches!(self, Self::Record(..))
+    }
+
+    /// Returns `true` if this is [`Type::Document`].
+    pub fn is_document(&self) -> bool {
+        matches!(self, Self::Document(..))
     }
 
     /// Returns `true` if this is [`Type::Bytes`].
@@ -472,6 +481,27 @@ impl Type {
             // Record types: same length and all fields recursively assignable
             (Type::Record(a), Type::Record(b)) => {
                 a.len() == b.len() && a.iter().zip(b.iter()).all(|(a, b)| a.is_subtype_of(b))
+            }
+
+            // Document types: same field names (in order) and recursively
+            // assignable field types.
+            (Type::Document(a), Type::Document(b)) => {
+                a.fields.len() == b.fields.len()
+                    && a.fields
+                        .iter()
+                        .zip(b.fields.iter())
+                        .all(|(a, b)| a.name == b.name && a.ty.is_subtype_of(&b.ty))
+            }
+
+            // A positional record is assignable to a document type when the
+            // field types line up — `Value::Record` is the positional form
+            // of a document value, and drivers decode document columns
+            // straight to records.
+            (Type::Record(a), Type::Document(b)) => {
+                a.len() == b.fields.len()
+                    && a.iter()
+                        .zip(b.fields.iter())
+                        .all(|(a, b)| a.is_subtype_of(&b.ty))
             }
 
             // Sparse records must have the same field set
