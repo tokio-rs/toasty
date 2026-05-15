@@ -72,21 +72,28 @@ impl<'a> RewriteVia<'a> {
 
     pub(super) fn rewrite_association_as_filter(
         &mut self,
-        mut association: stmt::Association,
+        association: stmt::Association,
     ) -> stmt::Filter {
-        // Unfold multi-step paths into a chain of nested single-step
-        // associations. Each iteration peels the first step off the path and
-        // wraps the source query in a `Source::Model { via }` that captures
-        // just that step. After this loop, `path.len() == 1`.
-        while association.path.len() > 1 {
-            association = self.peel_first_step(association);
-        }
+        // Unfold any multi-step path into a chain of nested single-step
+        // `Source::Model { via }` wrappers via a single recursive descent.
+        // The recursion threads the source query through by value and borrows
+        // path steps as a slice — no per-step `Vec` rebuilds.
+        let stmt::Association { source, path } = association;
+        let steps = path.projection.as_slice();
+        assert!(!steps.is_empty(), "via path must have at least one step");
+
+        let source_model_id = source.body.as_select_unwrap().source.model_id_unwrap();
+        let (source, root_model_id, last_step) = self.unfold_path(source, source_model_id, steps);
+        let mut association = stmt::Association {
+            source,
+            path: stmt::Path::from_index(root_model_id, last_step),
+        };
 
         // Run the visitor's overridden `visit_stmt_query_mut` on the source
-        // so a `Source::Model { via: Some(_) }` introduced by unfolding (or
-        // present from the caller) is rewritten on its own merits before the
-        // outer single-step filter is built. The free-function walker would
-        // skip the override on the source query itself.
+        // so any `Source::Model { via: Some(_) }` introduced by unfolding is
+        // rewritten on its own merits before the outer single-step filter is
+        // built. The free-function walker would skip the override on the
+        // source query itself.
         self.visit_stmt_query_mut(&mut association.source);
 
         let Some(field) = self.schema().app.resolve_field_path(&association.path) else {
@@ -109,52 +116,46 @@ impl<'a> RewriteVia<'a> {
         }
     }
 
-    /// Peel the first step off `association.path` and absorb it into a fresh
-    /// `Source::Model { via }` wrapped as the new source. The returned
-    /// association has its path shortened by one step and rooted at the model
-    /// reached by that step.
-    fn peel_first_step(&self, mut association: stmt::Association) -> stmt::Association {
-        let source_model_id = association
-            .source
-            .body
-            .as_select_unwrap()
-            .source
-            .model_id_unwrap();
+    /// Recursively wrap every step but the last into a nested
+    /// `Source::Model { via }`, threading the source query through by value.
+    /// Returns the fully-wrapped source plus the (root, step) pair for the
+    /// remaining single-step outer association the caller will build.
+    fn unfold_path(
+        &self,
+        source: Box<stmt::Query>,
+        source_model_id: app::ModelId,
+        steps: &[usize],
+    ) -> (Box<stmt::Query>, app::ModelId, usize) {
+        let [first, rest @ ..] = steps else {
+            unreachable!("unfold_path called with empty steps")
+        };
+
+        // Base case: the last step stays on the outer association.
+        if rest.is_empty() {
+            return (source, source_model_id, *first);
+        }
+
         let source_model = self.schema().app.model(source_model_id).as_root_unwrap();
-
-        let steps = association.path.projection.as_slice();
-        let first_step = steps[0];
-        let rest: Vec<usize> = steps[1..].to_vec();
-
-        let next_model_id = match &source_model.fields[first_step].ty {
+        let next_model_id = match &source_model.fields[*first].ty {
             app::FieldTy::HasMany(rel) => rel.target,
             app::FieldTy::HasOne(rel) => rel.target,
             app::FieldTy::BelongsTo(rel) => rel.target,
             other => todo!("non-relation field in via path: {other:#?}"),
         };
 
-        let first_step_path = stmt::Path::from_index(source_model_id, first_step);
-        let inner_assoc = stmt::Association {
-            source: association.source,
-            path: first_step_path,
+        let inner = stmt::Association {
+            source,
+            path: stmt::Path::from_index(source_model_id, *first),
         };
-
-        let new_source = stmt::Query::new_select(
+        let new_source = Box::new(stmt::Query::new_select(
             stmt::Source::Model(stmt::SourceModel {
                 id: next_model_id,
-                via: Some(inner_assoc),
+                via: Some(inner),
             }),
             stmt::Expr::Value(stmt::Value::Bool(true)),
-        );
+        ));
 
-        let mut new_path = stmt::Path::model(next_model_id);
-        for step in rest {
-            new_path.projection.push(step);
-        }
-
-        association.source = Box::new(new_source);
-        association.path = new_path;
-        association
+        self.unfold_path(new_source, next_model_id, rest)
     }
 
     fn rewrite_association_belongs_to_as_filter(
