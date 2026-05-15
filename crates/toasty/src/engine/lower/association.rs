@@ -72,18 +72,22 @@ impl<'a> RewriteVia<'a> {
 
     pub(super) fn rewrite_association_as_filter(
         &mut self,
-        association: stmt::Association,
+        mut association: stmt::Association,
     ) -> stmt::Filter {
+        assert!(
+            !association.path.projection.is_empty(),
+            "via path must have at least one step"
+        );
+
         // Unfold any multi-step path into a chain of nested single-step
         // `Source::Model { via }` wrappers via a single recursive descent.
         // The recursion threads the source query through by value and borrows
         // path steps as a slice — no per-step `Vec` rebuilds.
-        let stmt::Association { source, path } = association;
-        let steps = path.projection.as_slice();
-        assert!(!steps.is_empty(), "via path must have at least one step");
-
-        let source_model_id = source.body.as_select_unwrap().source.model_id_unwrap();
-        let mut association = self.unfold_path(source, source_model_id, steps);
+        if association.path.projection.len() > 1 {
+            let stmt::Association { source, path } = association;
+            let source_model_id = source.body.as_select_unwrap().source.model_id_unwrap();
+            association = self.unfold_path(source, source_model_id, path.projection.as_slice());
+        }
 
         // Run the visitor's overridden `visit_stmt_query_mut` on the source
         // so any `Source::Model { via: Some(_) }` introduced by unfolding is
