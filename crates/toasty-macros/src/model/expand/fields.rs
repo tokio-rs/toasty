@@ -257,6 +257,16 @@ impl Expand<'_> {
                     self.path
                 }
             }
+
+            impl<__Origin> #toasty::IntoExpr<#toasty::List<#model_ident>> for #field_list_struct_ident<__Origin> {
+                fn into_expr(self) -> #toasty::stmt::Expr<#toasty::List<#model_ident>> {
+                    self.path.into_expr()
+                }
+
+                fn by_ref(&self) -> #toasty::stmt::Expr<#toasty::List<#model_ident>> {
+                    self.path.by_ref()
+                }
+            }
         )
     }
 
