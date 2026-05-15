@@ -380,6 +380,156 @@ pub async fn three_step_chain(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// A 4-step chain (`Org → Team → Project → Issue → Tag`) drives the
+/// `peel_first_step` loop through three iterations before reducing to a
+/// single-step rewrite. Guards against regressions in the depth-independent
+/// part of the unfolder.
+#[driver_test]
+pub async fn four_step_chain(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Org {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        name: String,
+        #[has_many]
+        teams: toasty::HasMany<Team>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Team {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        #[index]
+        org_id: uuid::Uuid,
+        #[belongs_to(key = org_id, references = id)]
+        org: toasty::BelongsTo<Org>,
+        name: String,
+        #[has_many]
+        projects: toasty::HasMany<Project>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Project {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        #[index]
+        team_id: uuid::Uuid,
+        #[belongs_to(key = team_id, references = id)]
+        team: toasty::BelongsTo<Team>,
+        name: String,
+        #[has_many]
+        issues: toasty::HasMany<Issue>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Issue {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        #[index]
+        project_id: uuid::Uuid,
+        #[belongs_to(key = project_id, references = id)]
+        project: toasty::BelongsTo<Project>,
+        title: String,
+        #[index]
+        tag_id: uuid::Uuid,
+        #[belongs_to(key = tag_id, references = id)]
+        tag: toasty::BelongsTo<Tag>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Tag {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        name: String,
+        #[has_many]
+        issues: toasty::HasMany<Issue>,
+    }
+
+    let mut db = test.setup_db(models!(Org, Team, Project, Issue, Tag)).await;
+
+    let mine = toasty::create!(Org { name: "Mine" }).exec(&mut db).await?;
+    let theirs = toasty::create!(Org { name: "Theirs" })
+        .exec(&mut db)
+        .await?;
+
+    let core = toasty::create!(Team {
+        name: "core",
+        org: &mine
+    })
+    .exec(&mut db)
+    .await?;
+    let ops = toasty::create!(Team {
+        name: "ops",
+        org: &mine
+    })
+    .exec(&mut db)
+    .await?;
+    let outside = toasty::create!(Team {
+        name: "outside",
+        org: &theirs
+    })
+    .exec(&mut db)
+    .await?;
+
+    let backend = toasty::create!(Project {
+        name: "backend",
+        team: &core
+    })
+    .exec(&mut db)
+    .await?;
+    let frontend = toasty::create!(Project {
+        name: "frontend",
+        team: &core
+    })
+    .exec(&mut db)
+    .await?;
+    let infra = toasty::create!(Project {
+        name: "infra",
+        team: &ops
+    })
+    .exec(&mut db)
+    .await?;
+    let unrelated = toasty::create!(Project {
+        name: "unrelated",
+        team: &outside
+    })
+    .exec(&mut db)
+    .await?;
+
+    let bug = toasty::create!(Tag { name: "bug" }).exec(&mut db).await?;
+    let feat = toasty::create!(Tag { name: "feature" })
+        .exec(&mut db)
+        .await?;
+    let chore = toasty::create!(Tag { name: "chore" }).exec(&mut db).await?;
+    let unused = toasty::create!(Tag { name: "unused" })
+        .exec(&mut db)
+        .await?;
+
+    toasty::create!(Issue::[
+        { title: "fix login", project: &backend, tag: &bug },
+        { title: "dark mode", project: &frontend, tag: &feat },
+        { title: "rotate keys", project: &infra, tag: &chore },
+        { title: "duplicate", project: &backend, tag: &bug },
+        { title: "their issue", project: &unrelated, tag: &unused },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let mut tags = mine.teams().projects().issues().tag().exec(&mut db).await?;
+    tags.sort_by_key(|t| t.name.clone());
+
+    let ids: Vec<_> = tags.iter().map(|t| t.id).collect();
+    assert_unique!(ids);
+    let names: Vec<_> = tags.iter().map(|t| t.name.clone()).collect();
+    assert_eq!(names, vec!["bug", "chore", "feature"]);
+    Ok(())
+}
+
 /// `BelongsTo<Option<_>>` in the chain skips `NULL` foreign keys. Todos with
 /// no category contribute nothing to the chain.
 #[driver_test]
