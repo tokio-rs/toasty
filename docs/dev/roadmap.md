@@ -86,6 +86,9 @@ the entry lands here.
 - Many-to-many
 - Polymorphic associations
 - Nested preloading — multi-level `.include()`
+- Item collections / single-table design for DynamoDB ([design](design/item-collections.md), [#830])
+
+[#830]: https://github.com/tokio-rs/toasty/issues/830
 
 ## Data Modification
 
