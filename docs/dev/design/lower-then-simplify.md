@@ -92,9 +92,9 @@ Every rule in `engine/simplify/` falls into one of three locations.
 
 ### Move to lower (app-shaped rewrites)
 
-Match on `Reference::Model`, `Reference::Field`, `IsVariant`, or
-`Source::Model { via }`, and have nothing to match on after
-lowering:
+Match on `Reference::Model`, `Reference::Field`, `IsVariant`,
+`Source::Model { via }`, or `UpdateTarget::Query`, and have
+nothing to match on after lowering:
 
 - `simplify_via_association_for_{delete,insert,query}`
   (`association.rs`).
@@ -103,6 +103,14 @@ lowering:
   and BelongsTo→FK rewriting.
 - `rewrite_expr_in_list_when_model` (`expr_in_list.rs:33-71`).
 - `try_variant_tautology_or` (`expr_or.rs:203-241`).
+- **`UpdateTarget::Query` rewrite** (`simplify.rs:190-209`,
+  `visit_stmt_update_mut`). `Update { target: Query(q), filter, .. }`
+  becomes `Update { target: Model(m), filter: filter ∧ q.filter, .. }`
+  by lifting the query's source model and merging its filter.
+  `UpdateTarget::Query` does not exist post-lowering; the lowering
+  walk's `visit_update_target_mut` panics on it. Moves into `lower`
+  as a standalone pre-pass visitor, in the same pattern as
+  `RewriteVia` and `LiftInSubquery`.
 
 ### Schema-aware peepholes (placement is implementation choice)
 
@@ -162,7 +170,17 @@ subsequent rules can rely on canonical input:
 - **IN-list dedup**, single-item IN → equality.
 - **Empty propagation**: empty-VALUES collapse, empty-source
   elimination, set-op flattening, set-op single-operand reduction.
-- **`Let` inlining** over stable bindings.
+- **`Let` inlining** over stable bindings. Today this rule lives
+  in `simplify/expr_let.rs`; the refactor moves it into `fold`.
+  This is load-bearing for the exec-time
+  `Cast(Arg) → Cast(Value) → Value` collapse: lowering's
+  `cast_expr` wraps `Arg` operands in `Cast(Arg, target_ty)` as a
+  type-cast marker (`lower.rs:1586-1589`). When the surrounding
+  statement is a `Let`, lowering converts `Stmt → Arg` bindings,
+  the bindings become stable, `Let` inlining substitutes the
+  binding's `Value` into the body, and the resulting `Cast(Value)`
+  folds. Without `Let` inlining in `fold`, `Cast(Arg)` survives
+  past extract-params and panics the SQL serializer.
 
 ### `simplify` — the heavyweight stage
 
