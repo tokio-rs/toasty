@@ -57,8 +57,12 @@ pub async fn query_returns_distinct_targets(test: &mut Test) -> Result<()> {
 pub async fn query_with_no_intermediates_is_empty(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
-    let user = toasty::create!(User { name: "Alice" }).exec(&mut db).await?;
-    toasty::create!(Article { title: "Rust" }).exec(&mut db).await?;
+    let user = toasty::create!(User { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+    toasty::create!(Article { title: "Rust" })
+        .exec(&mut db)
+        .await?;
 
     let commented = user.commented_articles().exec(&mut db).await?;
     assert!(commented.is_empty());
@@ -76,7 +80,9 @@ pub async fn query_with_no_intermediates_is_empty(test: &mut Test) -> Result<()>
 pub async fn via_relation_query_can_be_filtered(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
-    let alice = toasty::create!(User { name: "Alice" }).exec(&mut db).await?;
+    let alice = toasty::create!(User { name: "Alice" })
+        .exec(&mut db)
+        .await?;
 
     let articles = toasty::create!(Article::[
         { title: "Rust" },

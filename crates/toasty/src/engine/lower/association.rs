@@ -115,11 +115,8 @@ impl<'a> RewriteVia<'a> {
             | app::FieldTy::HasMany(app::HasMany {
                 kind: app::HasKind::Direct(pair),
                 ..
-            }) => stmt::Expr::in_subquery(
-                stmt::Expr::ref_self_field(*pair),
-                *association.source,
-            )
-            .into(),
+            }) => stmt::Expr::in_subquery(stmt::Expr::ref_self_field(*pair), *association.source)
+                .into(),
             _ => todo!("field={field:#?}"),
         }
     }
