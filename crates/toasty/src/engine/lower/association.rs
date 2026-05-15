@@ -83,11 +83,7 @@ impl<'a> RewriteVia<'a> {
         assert!(!steps.is_empty(), "via path must have at least one step");
 
         let source_model_id = source.body.as_select_unwrap().source.model_id_unwrap();
-        let (source, root_model_id, last_step) = self.unfold_path(source, source_model_id, steps);
-        let mut association = stmt::Association {
-            source,
-            path: stmt::Path::from_index(root_model_id, last_step),
-        };
+        let mut association = self.unfold_path(source, source_model_id, steps);
 
         // Run the visitor's overridden `visit_stmt_query_mut` on the source
         // so any `Source::Model { via: Some(_) }` introduced by unfolding is
@@ -118,21 +114,23 @@ impl<'a> RewriteVia<'a> {
 
     /// Recursively wrap every step but the last into a nested
     /// `Source::Model { via }`, threading the source query through by value.
-    /// Returns the fully-wrapped source plus the (root, step) pair for the
-    /// remaining single-step outer association the caller will build.
+    /// Returns the outer single-step association the caller filters against.
     fn unfold_path(
         &self,
         source: Box<stmt::Query>,
         source_model_id: app::ModelId,
         steps: &[usize],
-    ) -> (Box<stmt::Query>, app::ModelId, usize) {
+    ) -> stmt::Association {
         let [first, rest @ ..] = steps else {
             unreachable!("unfold_path called with empty steps")
         };
 
         // Base case: the last step stays on the outer association.
         if rest.is_empty() {
-            return (source, source_model_id, *first);
+            return stmt::Association {
+                source,
+                path: stmt::Path::from_index(source_model_id, *first),
+            };
         }
 
         let source_model = self.schema().app.model(source_model_id).as_root_unwrap();
