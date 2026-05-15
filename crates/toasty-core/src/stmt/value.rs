@@ -323,11 +323,11 @@ impl Value {
                     .iter()
                     .zip(fields.iter())
                     .all(|(value, ty)| value.is_a(ty)),
-                // A positional record satisfies a document type when the
-                // field types line up — a `Value::Record` is the positional
-                // form of a document value. Drivers decode document columns
-                // straight to `Value::Record`; the named `Value::Object`
-                // shape only exists on the write-side bind path.
+                // `Value::Record` is the engine's canonical load form for
+                // a document value — positional, names dropped. Drivers
+                // produce `Value::Object` (structural, named); the engine
+                // collapses to `Value::Record` at the receive boundary via
+                // `Value::normalize_for_load`.
                 Type::Document(doc) if value.len() == doc.fields.len() => value
                     .fields
                     .iter()
@@ -453,6 +453,77 @@ impl Value {
         }
 
         ret
+    }
+
+    /// Convert this value into the canonical form `Load` consumes for the
+    /// given type. The engine calls this at the driver-receive boundary so
+    /// the rest of the pipeline — eval, projection, load — sees a single
+    /// shape per type.
+    ///
+    /// Drivers produce `Value::Object` for document columns (structural,
+    /// no schema needed to encode or decode). The engine collapses each
+    /// `Object` to the positional `Value::Record` using the
+    /// [`TypeDocument`] field order, dropping the names. Recursion walks
+    /// into lists and records so a document nested inside a row is
+    /// converted as well. Other shapes pass through unchanged; the
+    /// conversion is idempotent.
+    pub fn normalize_for_load(self, ty: &Type) -> Self {
+        match (self, ty) {
+            (Self::List(items), Type::List(elem)) => Self::List(
+                items
+                    .into_iter()
+                    .map(|v| v.normalize_for_load(elem))
+                    .collect(),
+            ),
+            (Self::Record(record), Type::Record(field_tys))
+                if record.fields.len() == field_tys.len() =>
+            {
+                Self::record_from_vec(
+                    record
+                        .fields
+                        .into_iter()
+                        .zip(field_tys.iter())
+                        .map(|(v, t)| v.normalize_for_load(t))
+                        .collect(),
+                )
+            }
+            (Self::Object(object), Type::Document(doc)) => {
+                // Drop the names, keep the positional order. Look up by
+                // name rather than zipping — the driver builds entries in
+                // `doc.fields` order today, but that's a codec invariant
+                // we shouldn't depend on here.
+                let mut entries = object.entries;
+                Self::record_from_vec(
+                    doc.fields
+                        .iter()
+                        .map(|field| {
+                            let value = entries
+                                .iter()
+                                .position(|(k, _)| k == &field.name)
+                                .map(|i| entries.swap_remove(i).1)
+                                .unwrap_or(Self::Null);
+                            value.normalize_for_load(&field.ty)
+                        })
+                        .collect(),
+                )
+            }
+            // A positional record matched against a document type: already
+            // in load shape, but recurse so nested documents inside it get
+            // normalized.
+            (Self::Record(record), Type::Document(doc))
+                if record.fields.len() == doc.fields.len() =>
+            {
+                Self::record_from_vec(
+                    record
+                        .fields
+                        .into_iter()
+                        .zip(doc.fields.iter())
+                        .map(|(v, field)| v.normalize_for_load(&field.ty))
+                        .collect(),
+                )
+            }
+            (value, _) => value,
+        }
     }
 
     /// Takes the value out, replacing it with [`Value::Null`].

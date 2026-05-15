@@ -493,10 +493,9 @@ impl Type {
                         .all(|(a, b)| a.name == b.name && a.ty.is_subtype_of(&b.ty))
             }
 
-            // A positional record is assignable to a document type when the
-            // field types line up — `Value::Record` is the positional form
-            // of a document value, and drivers decode document columns
-            // straight to records.
+            // `Value::Record` is the engine's canonical load form for a
+            // document value — positional, names dropped. See
+            // `Value::normalize_for_load`.
             (Type::Record(a), Type::Document(b)) => {
                 a.len() == b.fields.len()
                     && a.iter()

@@ -14,7 +14,7 @@
 //! only the caller's `stmt::Type` distinguishes them.
 
 use serde_json::Value as Json;
-use toasty_core::stmt::{self, Value};
+use toasty_core::stmt::{self, Value, ValueObject};
 
 /// Encode a `stmt::Value` as a `serde_json::Value`.
 ///
@@ -98,20 +98,25 @@ pub fn value_from_json(json: Json, ty: &stmt::Type) -> Value {
                 .map(|v| value_from_json(v, elem))
                 .collect(),
         ),
-        // A document decodes straight to a positional `Value::Record`: the
-        // driver has the `Type::Document` here, so there's no need to detour
-        // through `Value::Object` (which exists for the type-blind write-side
-        // bind path). A key that is absent — or explicitly `null` — decodes
-        // to `Value::Null`, which round-trips an `Option::None` field.
-        (stmt::Type::Document(doc), Json::Object(mut map)) => Value::record_from_vec(
+        // A document column decodes to a `Value::Object` — the structural,
+        // named form. The engine collapses `Object` to the positional
+        // `Value::Record` `Load` consumes at the driver-receive boundary
+        // (`Value::normalize_for_load`); the codec itself stays purely
+        // structural and doesn't decide how Rust types are shaped. A key
+        // that is absent — or explicitly `null` — decodes to `Value::Null`,
+        // which round-trips an `Option::None` field.
+        (stmt::Type::Document(doc), Json::Object(mut map)) => Value::Object(ValueObject::from_vec(
             doc.fields
                 .iter()
-                .map(|field| match map.remove(&field.name) {
-                    Some(json) => value_from_json(json, &field.ty),
-                    None => Value::Null,
+                .map(|field| {
+                    let value = match map.remove(&field.name) {
+                        Some(json) => value_from_json(json, &field.ty),
+                        None => Value::Null,
+                    };
+                    (field.name.clone(), value)
                 })
                 .collect(),
-        ),
+        )),
         #[cfg(feature = "rust_decimal")]
         (stmt::Type::Decimal, Json::String(v)) => {
             Value::Decimal(v.parse().expect("invalid Decimal in JSON"))
