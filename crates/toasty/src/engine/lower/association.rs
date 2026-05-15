@@ -74,12 +74,20 @@ impl<'a> RewriteVia<'a> {
         &mut self,
         mut association: stmt::Association,
     ) -> stmt::Filter {
-        // First, recurse into the association source so any nested via
-        // associations are rewritten before the outer filter is built.
-        stmt::visit_mut::visit_stmt_query_mut(self, &mut association.source);
+        // Unfold multi-step paths into a chain of nested single-step
+        // associations. Each iteration peels the first step off the path and
+        // wraps the source query in a `Source::Model { via }` that captures
+        // just that step. After this loop, `path.len() == 1`.
+        while association.path.len() > 1 {
+            association = self.peel_first_step(association);
+        }
 
-        // For now, we only support paths with a single step
-        assert!(association.path.len() == 1, "TODO");
+        // Run the visitor's overridden `visit_stmt_query_mut` on the source
+        // so a `Source::Model { via: Some(_) }` introduced by unfolding (or
+        // present from the caller) is rewritten on its own merits before the
+        // outer single-step filter is built. The free-function walker would
+        // skip the override on the source query itself.
+        self.visit_stmt_query_mut(&mut association.source);
 
         let Some(field) = self.schema().app.resolve_field_path(&association.path) else {
             todo!()
@@ -101,12 +109,75 @@ impl<'a> RewriteVia<'a> {
         }
     }
 
+    /// Peel the first step off `association.path` and absorb it into a fresh
+    /// `Source::Model { via }` wrapped as the new source. The returned
+    /// association has its path shortened by one step and rooted at the model
+    /// reached by that step.
+    fn peel_first_step(&self, mut association: stmt::Association) -> stmt::Association {
+        let source_model_id = association
+            .source
+            .body
+            .as_select_unwrap()
+            .source
+            .model_id_unwrap();
+        let source_model = self.schema().app.model(source_model_id).as_root_unwrap();
+
+        let steps = association.path.projection.as_slice();
+        let first_step = steps[0];
+        let rest: Vec<usize> = steps[1..].to_vec();
+
+        let next_model_id = match &source_model.fields[first_step].ty {
+            app::FieldTy::HasMany(rel) => rel.target,
+            app::FieldTy::HasOne(rel) => rel.target,
+            app::FieldTy::BelongsTo(rel) => rel.target,
+            other => todo!("non-relation field in via path: {other:#?}"),
+        };
+
+        let first_step_path = stmt::Path::from_index(source_model_id, first_step);
+        let inner_assoc = stmt::Association {
+            source: association.source,
+            path: first_step_path,
+        };
+
+        let new_source = stmt::Query::new_select(
+            stmt::Source::Model(stmt::SourceModel {
+                id: next_model_id,
+                via: Some(inner_assoc),
+            }),
+            stmt::Expr::Value(stmt::Value::Bool(true)),
+        );
+
+        let mut new_path = stmt::Path::model(next_model_id);
+        for step in rest {
+            new_path.projection.push(step);
+        }
+
+        association.source = Box::new(new_source);
+        association.path = new_path;
+        association
+    }
+
     fn rewrite_association_belongs_to_as_filter(
         &mut self,
         rel: &app::BelongsTo,
         association: stmt::Association,
     ) -> stmt::Filter {
-        todo!("rel={rel:#?}, association={association:#?}");
+        // The FK lives on the source model; the target model carries the
+        // referenced fields. Filter is: `self.<fk.target> IN (SELECT
+        // <fk.source> FROM <source>)`. Single-column FKs only for now —
+        // composite keys can be added by switching to tuple-style IN.
+        assert_eq!(
+            rel.foreign_key.fields.len(),
+            1,
+            "composite foreign keys in BelongsTo via paths not yet supported"
+        );
+        let fk = &rel.foreign_key.fields[0];
+
+        let mut source = *association.source;
+        source.body.as_select_mut_unwrap().returning =
+            stmt::Returning::Project(stmt::Expr::ref_self_field(fk.source));
+
+        stmt::Expr::in_subquery(stmt::Expr::ref_self_field(fk.target), source).into()
     }
 }
 
