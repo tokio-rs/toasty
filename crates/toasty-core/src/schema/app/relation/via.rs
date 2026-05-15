@@ -37,50 +37,27 @@ impl HasKind {
             HasKind::Direct(_) => None,
         }
     }
-
-    /// Mutable access to the [`Via`] path, or `None` for a direct relation.
-    pub fn via_mut(&mut self) -> Option<&mut Via> {
-        match self {
-            HasKind::Via(via) => Some(via),
-            HasKind::Direct(_) => None,
-        }
-    }
 }
 
 /// A multi-step relation path.
 ///
 /// A `HasMany` or `HasOne` declared with `#[has_many(via = a.b)]` reaches its
 /// target by following a path of existing relations rather than pairing with a
-/// single `BelongsTo`. The path is written as field-name segments in the
-/// attribute and resolved to a [`stmt::Path`] by the schema linker.
+/// single `BelongsTo`. The path is resolved at macro-expansion time — the
+/// derive emits a chained call on the model's `Fields` struct
+/// (e.g. `User::fields().comments().article()`) and converts it into a
+/// [`stmt::Path`], so a misspelled or otherwise unresolvable segment is a
+/// Rust compile error rather than a runtime schema validation failure.
 #[derive(Debug, Clone)]
 pub struct Via {
-    /// Field-name segments from the `via = ...` attribute, e.g.
-    /// `["comments", "article"]` for `via = comments.article`.
-    pub segments: Vec<String>,
-
     /// The resolved field path, rooted at the model that declares the via
-    /// relation. Populated by the schema linker; `None` until linking runs.
-    pub path: Option<stmt::Path>,
+    /// relation.
+    pub path: stmt::Path,
 }
 
 impl Via {
-    /// Create an unresolved `Via` from the attribute's field-name segments.
-    pub fn new(segments: Vec<String>) -> Self {
-        Self {
-            segments,
-            path: None,
-        }
-    }
-
-    /// The resolved field path.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the schema linker has not resolved the path yet.
-    pub fn path(&self) -> &stmt::Path {
-        self.path
-            .as_ref()
-            .expect("via path has not been resolved by the schema linker")
+    /// Create a `Via` from its fully resolved field path.
+    pub fn new(path: stmt::Path) -> Self {
+        Self { path }
     }
 }

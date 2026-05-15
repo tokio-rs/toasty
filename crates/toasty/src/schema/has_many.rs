@@ -99,7 +99,7 @@ impl<T: Relation> Relation for HasMany<T> {
     fn has_many_field_ty(
         singular: Name,
         pair: Option<FieldId>,
-        via: Option<Vec<String>>,
+        via: Option<stmt::Path>,
     ) -> FieldTy {
         FieldTy::HasMany(app::HasMany {
             target: <T::Model as Register>::id(),
@@ -111,12 +111,13 @@ impl<T: Relation> Relation for HasMany<T> {
 }
 
 /// Build a [`HasKind`](app::HasKind) from the macro-supplied `pair` / `via`
-/// attributes. `via` declares a multi-step relation; otherwise the relation is
+/// attributes. `via` declares a multi-step relation and carries the fully
+/// resolved [`stmt::Path`] emitted by the derive; otherwise the relation is
 /// direct, and a direct relation with no explicit `pair` gets a placeholder
 /// that the schema linker resolves.
-pub(super) fn has_kind(pair: Option<FieldId>, via: Option<Vec<String>>) -> app::HasKind {
+pub(super) fn has_kind(pair: Option<FieldId>, via: Option<stmt::Path>) -> app::HasKind {
     match via {
-        Some(segments) => app::HasKind::Via(app::Via::new(segments)),
+        Some(path) => app::HasKind::Via(app::Via::new(path)),
         None => app::HasKind::Direct(pair.unwrap_or(FieldId {
             model: ModelId(usize::MAX),
             index: usize::MAX,

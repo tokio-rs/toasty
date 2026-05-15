@@ -3,6 +3,7 @@ use crate::stmt::{IntoExpr, IntoInsert, List, Path};
 
 use toasty_core::schema::Name;
 use toasty_core::schema::app::{FieldId, FieldTy, ForeignKey};
+use toasty_core::stmt;
 
 /// Describes how a model participates in associations.
 ///
@@ -79,14 +80,15 @@ pub trait Relation: Load<Output = Self> {
     /// pair by searching the target for a unique `BelongsTo` back to the
     /// source.
     ///
-    /// `via` carries the field-name segments of a `#[has_many(via = a.b)]`
-    /// path; the schema linker resolves them. A `via` relation has no pair.
+    /// `via` carries the fully resolved [`stmt::Path`] of a
+    /// `#[has_many(via = a.b)]` multi-step relation, rooted at the declaring
+    /// model. A `via` relation has no pair.
     ///
     /// Only [`HasMany`](super::HasMany) overrides this.
     fn has_many_field_ty(
         _singular: Name,
         _pair: Option<FieldId>,
-        _via: Option<Vec<String>>,
+        _via: Option<stmt::Path>,
     ) -> FieldTy {
         unimplemented!("not a HasMany relation wrapper")
     }
@@ -97,11 +99,12 @@ pub trait Relation: Load<Output = Self> {
     /// the pair by searching the target for a unique `BelongsTo` back to
     /// the source.
     ///
-    /// `via` carries the field-name segments of a `#[has_one(via = a.b)]`
-    /// path; the schema linker resolves them. A `via` relation has no pair.
+    /// `via` carries the fully resolved [`stmt::Path`] of a
+    /// `#[has_one(via = a.b)]` multi-step relation, rooted at the declaring
+    /// model. A `via` relation has no pair.
     ///
     /// Only [`HasOne`](super::HasOne) overrides this.
-    fn has_one_field_ty(_pair: Option<FieldId>, _via: Option<Vec<String>>) -> FieldTy {
+    fn has_one_field_ty(_pair: Option<FieldId>, _via: Option<stmt::Path>) -> FieldTy {
         unimplemented!("not a HasOne relation wrapper")
     }
 }

@@ -99,7 +99,7 @@ impl<'a> RewriteVia<'a> {
                 kind: app::HasKind::Via(via),
                 ..
             }) => {
-                let via_path = via.path().clone();
+                let via_path = via.path.clone();
                 let expanded = self.expand_via(association, &via_path);
                 self.rewrite_association_as_filter(expanded)
             }
