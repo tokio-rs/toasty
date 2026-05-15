@@ -42,7 +42,7 @@ impl Expand<'_> {
                     self.into_statement().exec(executor).await
                 }
 
-                #vis fn query(
+                #vis fn filter(
                     self,
                     filter: #toasty::stmt::Expr<bool>
                 ) -> #query_ident {
