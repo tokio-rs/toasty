@@ -4,14 +4,23 @@ on:
   push:
     branches:
       - main
+    tags:
+      # release-plz creates one tag per workspace crate, but every crate
+      # shares a version via `version_group`, so filtering to the main
+      # crate's tag fires the workflow exactly once per release.
+      - 'toasty-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to (re)build, e.g. 0.6.0. Builds from the toasty-v<version> tag.'
+        required: true
+        type: string
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: pages
+  group: docs-deploy
   cancel-in-progress: false
 
 env:
@@ -22,10 +31,32 @@ env:
 jobs:
   build:
     if: github.repository == 'tokio-rs/toasty'
-    name: Build docs
+    name: Build and deploy docs
     runs-on: ubuntu-latest
     steps:
+      - name: Determine deploy target
+        id: target
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "${INPUT_VERSION:-}" != "" ]]; then
+            echo "dir=${INPUT_VERSION}" >> "$GITHUB_OUTPUT"
+            echo "label=${INPUT_VERSION}" >> "$GITHUB_OUTPUT"
+            echo "ref=toasty-v${INPUT_VERSION}" >> "$GITHUB_OUTPUT"
+          elif [[ "$GITHUB_REF" == refs/tags/toasty-v* ]]; then
+            version="${GITHUB_REF#refs/tags/toasty-v}"
+            echo "dir=$version" >> "$GITHUB_OUTPUT"
+            echo "label=$version" >> "$GITHUB_OUTPUT"
+            echo "ref=$GITHUB_REF" >> "$GITHUB_OUTPUT"
+          else
+            echo "dir=nightly" >> "$GITHUB_OUTPUT"
+            echo "label=nightly" >> "$GITHUB_OUTPUT"
+            echo "ref=$GITHUB_REF" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.target.outputs.ref }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
@@ -45,34 +76,54 @@ jobs:
         env:
           TOASTY_GUIDE_URL: ../../guide/
 
-      - name: Assemble site
+      - name: Assemble site directory
         run: |
-          mkdir -p _site/nightly
-          cp -r docs/guide/book/html _site/nightly/guide
-          cp -r target/doc _site/nightly/api
-          cp docs/api/index.html _site/nightly/api/index.html
-          cat > _site/index.html << 'HEREDOC'
+          mkdir -p site/guide site/api
+          cp -r docs/guide/book/html/. site/guide/
+          cp -r target/doc/. site/api/
+          cp docs/api/index.html site/api/index.html
+
+      - name: Publish to gh-pages
+        env:
+          DEST: ${{ steps.target.outputs.dir }}
+          LABEL: ${{ steps.target.outputs.label }}
+        run: |
+          set -euo pipefail
+
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            git fetch origin gh-pages:gh-pages --depth=1
+            git worktree add gh-pages-tree gh-pages
+          else
+            git worktree add --detach gh-pages-tree
+            (cd gh-pages-tree && git checkout --orphan gh-pages && git rm -rf . 2>/dev/null || true)
+          fi
+
+          rm -rf "gh-pages-tree/${DEST}"
+          mkdir -p "gh-pages-tree/${DEST}"
+          cp -r site/. "gh-pages-tree/${DEST}/"
+
+          if [ ! -f gh-pages-tree/index.html ]; then
+            cat > gh-pages-tree/index.html <<'HTML'
           <!DOCTYPE html>
           <html>
             <head><meta http-equiv="refresh" content="0; url=nightly/guide/"></head>
             <body><a href="nightly/guide/">Redirect to Toasty Guide</a></body>
           </html>
-          HEREDOC
+          HTML
+          fi
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v5
-        with:
-          path: _site
+          # Prevent GitHub Pages from running Jekyll, which would skip dirs
+          # whose names start with an underscore (e.g. mdbook's _FontAwesome).
+          touch gh-pages-tree/.nojekyll
 
-  deploy:
-    if: github.repository == 'tokio-rs/toasty'
-    name: Deploy to GitHub Pages
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v5
+          cd gh-pages-tree
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to deploy."
+            exit 0
+          fi
+          git commit -m "Deploy ${LABEL} from ${GITHUB_SHA}"
+          git push origin gh-pages
