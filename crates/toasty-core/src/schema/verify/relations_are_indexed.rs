@@ -90,9 +90,20 @@ impl Verify<'_> {
             // The index is not a match
         }
 
-        // No covering index was found. Build a message that names the offending
-        // relation and suggests what the user needs to add.
-        let owner_name = &owner.name();
+        Err(self.missing_relation_index_error(owner, field, target_root, pair, belongs_to))
+    }
+
+    /// Build a helpful `invalid_schema` error explaining that no covering
+    /// index exists for `belongs_to` and suggesting how to add one.
+    fn missing_relation_index_error(
+        &self,
+        owner: &Model,
+        field: &Field,
+        target_root: &ModelRoot,
+        pair: FieldId,
+        belongs_to: &app::BelongsTo,
+    ) -> Error {
+        let owner_name = owner.name();
         let target_name = &target_root.name;
         let rel_field = &field.name;
         let pair_field = &self.schema.app.field(pair).name;
@@ -134,12 +145,12 @@ impl Verify<'_> {
             )
         };
 
-        Err(Error::invalid_schema(format!(
+        Error::invalid_schema(format!(
             "relation `{owner_name}::{rel_field}` cannot be queried: \
              no index on `{target_name}` covers the foreign key \
              declared by `{target_name}::{pair_field}` (fields: {}). \
              Hint: {hint}.",
             fk_field_names.join(", "),
-        )))
+        ))
     }
 }
