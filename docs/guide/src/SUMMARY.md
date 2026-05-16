@@ -42,6 +42,7 @@
 - [Concurrency Control](./concurrency-control.md)
 - [Database Setup](./database-setup.md)
 - [Migrations and Schema Management](./schema-management.md)
+- [Tracing](./tracing.md)
 
 # Database Backends
 
