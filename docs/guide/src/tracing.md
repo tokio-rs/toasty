@@ -45,19 +45,25 @@ Run the program with:
 RUST_LOG=toasty=debug cargo run
 ```
 
-Each query produces a line like:
+Each query produces two events. The engine logs the statement kind, and
+the driver logs the SQL it sends:
 
 ```text
-DEBUG executing SQL db.system="postgresql" db.statement="SELECT \"id\", \"name\" FROM \"users\" WHERE \"id\" = $1" params=1
+DEBUG toasty::engine: executing statement stmt.kind="query"
+DEBUG toasty_driver_sqlite: executing SQL db.system="sqlite" db.statement=SELECT tbl_0_0."id", tbl_0_0."name" FROM "users" AS tbl_0_0 WHERE tbl_0_0."id" = ?1; params=1
 ```
 
-The event carries three fields:
+The SQL event carries three fields:
 
 | Field | Meaning |
 |---|---|
 | `db.system` | Driver that ran the statement: `sqlite`, `postgresql`, or `mysql`. |
-| `db.statement` | The serialized SQL, with `?` or `$N` placeholders for parameters. |
+| `db.statement` | The serialized SQL, with `?N` (SQLite, MySQL) or `$N` (PostgreSQL) placeholders for parameters. |
 | `params` | Number of bound parameters. The values themselves are not logged. |
+
+`db.statement` is recorded with the `Display` representation, so the SQL
+appears bare in the default `fmt` subscriber — no surrounding quotes,
+no escaping of the identifier quotes inside.
 
 Parameter values are passed to the driver as typed bindings and are not
 included in the trace. To inspect a specific parameter, log it from your
@@ -90,9 +96,15 @@ RUST_LOG=toasty_driver_mysql=debug cargo run
 The `info` level reports lifecycle events: schema build, database ready,
 and applied migrations. Enable it with `RUST_LOG=toasty=info`.
 
+At `debug`, the engine also dumps the decoded result of each statement
+(`Final result from var ...`) alongside the SQL event. This is verbose
+on large result sets; filter it out with
+`RUST_LOG=toasty=debug,toasty::engine::exec=info` if you only want the
+SQL.
+
 The `trace` level adds per-operation detail — driver dispatch, execution
-plan size, transaction begin/commit/rollback, and the final query
-result. It is verbose; reach for it when `debug` does not show enough.
+plan size, and transaction begin/commit/rollback. It is verbose; reach
+for it when `debug` does not show enough.
 
 ```sh
 RUST_LOG=toasty=trace cargo run
