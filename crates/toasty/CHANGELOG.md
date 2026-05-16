@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1](https://github.com/tokio-rs/toasty/compare/toasty-v0.6.0...toasty-v0.6.1) - 2026-05-16
+
+### Added
+
+- Chain relation methods through multiple steps ([#903])
+- Order by multiple fields ([#901])
+
+### Fixed
+
+- Composite foreign keys in relation traversal ([#915])
+- Belongs-to relations with embed-typed primary keys ([#912])
+- Queries with composite keys in equality conditions ([#906])
+- Multiple order_by expressions now stack correctly ([#899])
+
+[#899]: https://github.com/tokio-rs/toasty/pull/899
+[#901]: https://github.com/tokio-rs/toasty/pull/901
+[#903]: https://github.com/tokio-rs/toasty/pull/903
+[#906]: https://github.com/tokio-rs/toasty/pull/906
+[#912]: https://github.com/tokio-rs/toasty/pull/912
+[#915]: https://github.com/tokio-rs/toasty/pull/915
+
 ## [0.6.0](https://github.com/tokio-rs/toasty/compare/toasty-v0.5.0...toasty-v0.6.0) - 2026-05-14
 
 ### Added

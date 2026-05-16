@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-v0.6.0...toasty-driver-integration-suite-v0.6.1) - 2026-05-16
+
+### Added
+
+- .select() projections through HasMany relations ([#894])
+- Chain relation methods on Many for multi-step queries ([#903])
+- Order by multiple fields ([#901])
+
+### Fixed
+
+- Support composite foreign keys in relation-chain queries ([#915])
+- Enable belongs_to with embed-typed primary keys ([#912])
+- Support composite keys in equality comparisons ([#906])
+- Improved syntax and error messages for composite-key belongs_to ([#905])
+- Multiple order_by expressions are now combined instead of replacing ([#899])
+
+[#894]: https://github.com/tokio-rs/toasty/pull/894
+[#899]: https://github.com/tokio-rs/toasty/pull/899
+[#901]: https://github.com/tokio-rs/toasty/pull/901
+[#903]: https://github.com/tokio-rs/toasty/pull/903
+[#905]: https://github.com/tokio-rs/toasty/pull/905
+[#906]: https://github.com/tokio-rs/toasty/pull/906
+[#912]: https://github.com/tokio-rs/toasty/pull/912
+[#915]: https://github.com/tokio-rs/toasty/pull/915
+
 ## [0.6.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-v0.5.0...toasty-driver-integration-suite-v0.6.0) - 2026-05-14
 
 ### Added
