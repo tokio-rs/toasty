@@ -513,13 +513,10 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 if self.capability().sql {
                     self.visit_expr_in_subquery_mut(e);
 
-                    let maybe_res = self.lower_expr_binary_op(
-                        stmt::BinaryOp::Eq,
+                    self.lower_in_subquery_operands(
                         &mut e.expr,
                         e.query.returning_mut_unwrap().as_project_mut_unwrap(),
                     );
-
-                    assert!(maybe_res.is_none(), "TODO");
 
                     let returning = e.query.returning_mut_unwrap().as_project_mut_unwrap();
 
@@ -552,13 +549,10 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
                     self.track_dependency(target_id);
 
-                    let maybe_res = self.lower_expr_binary_op(
-                        stmt::BinaryOp::Eq,
+                    self.lower_in_subquery_operands(
                         &mut e.expr,
                         e.query.returning_mut_unwrap().as_project_mut_unwrap(),
                     );
-
-                    assert!(maybe_res.is_none(), "TODO");
 
                     let stmt::Expr::InSubquery(e) = expr.take() else {
                         panic!()
@@ -1137,6 +1131,26 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             stmt::Expr::and_from_vec(comparisons)
         } else {
             stmt::Expr::or_from_vec(comparisons)
+        }
+    }
+
+    /// Lower the LHS and RHS of an `IN (subquery)` in place. When both sides
+    /// are records of equal arity (as produced for composite-key FK
+    /// comparisons) the per-element lowering is applied pair-wise so
+    /// element-level transforms (NULLs, casts) still fire while the
+    /// surrounding `IN` is preserved. Otherwise a single binary-op lowering
+    /// is applied across both sides.
+    fn lower_in_subquery_operands(&mut self, lhs: &mut stmt::Expr, rhs: &mut stmt::Expr) {
+        if let (stmt::Expr::Record(lhs_rec), stmt::Expr::Record(rhs_rec)) = (&mut *lhs, &mut *rhs)
+            && lhs_rec.len() == rhs_rec.len()
+        {
+            for (l, r) in lhs_rec.fields.iter_mut().zip(rhs_rec.fields.iter_mut()) {
+                let maybe_res = self.lower_expr_binary_op(stmt::BinaryOp::Eq, l, r);
+                assert!(maybe_res.is_none(), "TODO");
+            }
+        } else {
+            let maybe_res = self.lower_expr_binary_op(stmt::BinaryOp::Eq, lhs, rhs);
+            assert!(maybe_res.is_none(), "TODO");
         }
     }
 

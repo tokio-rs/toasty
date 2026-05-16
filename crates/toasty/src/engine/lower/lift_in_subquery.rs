@@ -242,10 +242,10 @@ pub(super) fn try_lift_relation_path_comparison(
 /// BelongsTo branch: try to lift the subquery's filter into direct FK
 /// comparisons.  When the filter references only FK-mapped fields, return
 /// the AND of per-FK equalities.  Otherwise, fall back to an IN subquery
-/// on the foreign-key column.
+/// on the foreign-key column(s) — a tuple-form IN for composite FKs.
 ///
 /// Returns `None` when the subquery does not target the BelongsTo's
-/// target model.  Currently only supports single-field foreign keys.
+/// target model.
 fn lift_belongs_to_in_subquery(
     cx: &ExprContext,
     belongs_to: &BelongsTo,
@@ -276,16 +276,14 @@ fn lift_belongs_to_in_subquery(
     let all_fks_matched = lift.fk_field_matches.iter().all(|m| *m);
 
     if lift.fail || !all_fks_matched {
-        let [fk_fields] = &belongs_to.foreign_key.fields[..] else {
-            todo!("composite keys")
-        };
         let mut subquery = query.clone();
 
-        subquery.body.as_select_mut_unwrap().returning =
-            stmt::Returning::Project(stmt::Expr::ref_self_field(fk_fields.target));
+        subquery.body.as_select_mut_unwrap().returning = stmt::Returning::Project(fk_field_record(
+            belongs_to.foreign_key.fields.iter().map(|fk| fk.target),
+        ));
 
         Some(stmt::Expr::in_subquery(
-            stmt::Expr::ref_self_field(fk_fields.source),
+            fk_field_record(belongs_to.foreign_key.fields.iter().map(|fk| fk.source)),
             subquery,
         ))
     } else {
@@ -301,7 +299,9 @@ fn lift_belongs_to_in_subquery(
 }
 
 /// HasOne/HasMany branch: rewrite to a foreign-key IN subquery against
-/// the related table.
+/// the related table. Single-column FKs produce a scalar IN; composite
+/// FKs produce a tuple-form IN that the SQL serializer renders as
+/// `(a, b) IN (SELECT a, b FROM ...)`.
 fn lift_has_n_in_subquery(
     target: ModelId,
     pair: &BelongsTo,
@@ -311,27 +311,39 @@ fn lift_has_n_in_subquery(
         return None;
     }
 
-    let (self_field, child_field) = match &pair.foreign_key.fields[..] {
-        [fk_field] => (fk_field.target, fk_field.source),
-        _ => todo!("composite keys"),
-    };
-
     let mut subquery = query.clone();
 
     match &mut subquery.body {
         stmt::ExprSet::Select(select) => {
-            select.returning = stmt::Returning::Project(stmt::Expr::ref_self_field(child_field));
+            select.returning = stmt::Returning::Project(fk_field_record(
+                pair.foreign_key.fields.iter().map(|fk| fk.source),
+            ));
         }
         _ => todo!(),
     }
 
     Some(
         stmt::ExprInSubquery {
-            expr: Box::new(stmt::Expr::ref_self_field(self_field)),
+            expr: Box::new(fk_field_record(
+                pair.foreign_key.fields.iter().map(|fk| fk.target),
+            )),
             query: Box::new(subquery),
         }
         .into(),
     )
+}
+
+/// Build the LHS / projection shape for an FK comparison: a single field
+/// reference for a single-column FK, a `Record` of references for a
+/// composite FK. The composite form pairs with `lower_in_subquery_operands`
+/// in the lowering walk (which decomposes element-wise) and with the
+/// `(a, b) IN (SELECT a, b FROM ...)` SQL form.
+fn fk_field_record(mut fields: impl ExactSizeIterator<Item = FieldId>) -> stmt::Expr {
+    if fields.len() == 1 {
+        stmt::Expr::ref_self_field(fields.next().unwrap())
+    } else {
+        stmt::Expr::record(fields.map(stmt::Expr::ref_self_field))
+    }
 }
 
 impl Visit for LiftBelongsTo<'_> {
