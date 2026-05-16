@@ -48,6 +48,7 @@ the entry lands here.
 
 ## Query Engine
 
+- Null-safe equality on `Option<T>` fields and `IS DISTINCT FROM` ([design](design/null-equality.md), [#188])
 - String predicates — `contains`, `ends_with`, case-insensitive matching, regex ([#774])
 - Range and set predicates — `NOT IN`, `BETWEEN`, `IS DISTINCT FROM`
 - Relation filtering — filter by fields on an associated model
@@ -70,6 +71,7 @@ the entry lands here.
 - Pre-compiled query plans — parameterized plans that skip re-planning on repeated calls ([#266])
 - Query result caching — cache results for repeated identical queries
 
+[#188]: https://github.com/tokio-rs/toasty/issues/188
 [#266]: https://github.com/tokio-rs/toasty/issues/266
 [#324]: https://github.com/tokio-rs/toasty/issues/324
 [#419]: https://github.com/tokio-rs/toasty/issues/419
