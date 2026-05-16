@@ -31,7 +31,7 @@ async fn main() -> toasty::Result<()> {
 
     let db = toasty::Db::builder()
         .models(toasty::models!(crate::*))
-        .connect("postgresql://user:pass@localhost/mydb")
+        .connect("sqlite::memory:")
         .await?;
 
     // ... queries here ...
