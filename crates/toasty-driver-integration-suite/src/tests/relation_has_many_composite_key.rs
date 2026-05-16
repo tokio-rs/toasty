@@ -367,7 +367,6 @@ pub async fn composite_associate_new_user_with_todo_on_update_query_via_creation
 }
 
 #[driver_test(id(ID), scenario(crate::scenarios::composite_has_many_belongs_to))]
-#[ignore = "composite keys: unimplemented in engine/lower::rewrite_eq_operand (todo!(\"handle composite keys\"))"]
 pub async fn composite_assign_todo_that_already_has_user_on_create(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -398,7 +397,6 @@ pub async fn composite_assign_todo_that_already_has_user_on_create(test: &mut Te
 }
 
 #[driver_test(id(ID), scenario(crate::scenarios::composite_has_many_belongs_to))]
-#[ignore = "composite keys: unimplemented in engine/lower::rewrite_eq_operand (todo!(\"handle composite keys\"))"]
 pub async fn composite_assign_todo_that_already_has_user_on_update(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -627,7 +625,6 @@ pub async fn composite_remove_add_single_relation_option_belongs_to(test: &mut T
 }
 
 #[driver_test(id(ID), scenario(crate::scenarios::composite_has_many_belongs_to))]
-#[ignore = "composite keys: unimplemented in engine/lower::rewrite_eq_operand (todo!(\"handle composite keys\"))"]
 pub async fn composite_add_remove_single_relation_required_belongs_to(
     test: &mut Test,
 ) -> Result<()> {
@@ -659,7 +656,6 @@ pub async fn composite_add_remove_single_relation_required_belongs_to(
 }
 
 #[driver_test(id(ID), scenario(crate::scenarios::composite_has_many_belongs_to))]
-#[ignore = "composite keys: unimplemented in engine/lower::rewrite_eq_operand (todo!(\"handle composite keys\"))"]
 pub async fn composite_reassign_relation_required_belongs_to(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
