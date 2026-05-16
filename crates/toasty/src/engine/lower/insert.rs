@@ -116,41 +116,35 @@ impl LowerStatement<'_, '_> {
                     continue;
                 }
 
-                if rel.foreign_key.fields.len() == 1 {
+                let fk_fields = &rel.foreign_key.fields;
+                let is_record = field_expr
+                    .as_expr()
+                    .is_some_and(|e| e.record_len().is_some());
+
+                // Distribute the BelongsTo value into its FK source column(s):
+                //   - composite FK: the value is a record (`Expr::Record` from
+                //     the tuple `IntoExpr` for composite-PK targets, or
+                //     `Expr::Value(Value::Record)` from a literal); one item
+                //     per FK column via `into_record_items`.
+                //   - single FK: the value is a scalar; it goes whole into the
+                //     single FK column.
+                if is_record {
+                    let items = field_expr.take().into_record_items().unwrap();
+                    let mut count = 0;
+                    for (fk_field, item) in fk_fields.iter().zip(items) {
+                        expr.entry_mut(fk_field.source.index).insert(item);
+                        count += 1;
+                    }
+                    assert_eq!(count, fk_fields.len());
+                } else {
                     if !field_expr.is_value() {
                         continue;
                     }
-                    let fk_field = &rel.foreign_key.fields[0];
+                    let [fk_field] = &fk_fields[..] else {
+                        panic!("composite FK expected a record value, got scalar");
+                    };
                     let e = field_expr.take();
                     expr.entry_mut(fk_field.source.index).insert(e);
-                } else {
-                    // Composite FK: split the BelongsTo record into per-column
-                    // values. The value is either an `Expr::Record` (when set
-                    // from a model reference, via the tuple `IntoExpr`) or
-                    // `Expr::Value(Value::Record)` (when set from a literal
-                    // record).
-                    let items: Vec<stmt::Expr> = match field_expr.as_expr() {
-                        Some(stmt::Expr::Record(_)) => {
-                            let stmt::Expr::Record(record) = field_expr.take() else {
-                                unreachable!()
-                            };
-                            record.fields
-                        }
-                        Some(stmt::Expr::Value(stmt::Value::Record(_))) => {
-                            let stmt::Expr::Value(stmt::Value::Record(record)) = field_expr.take()
-                            else {
-                                unreachable!()
-                            };
-                            record.into_iter().map(stmt::Expr::Value).collect()
-                        }
-                        _ => continue,
-                    };
-
-                    assert_eq!(items.len(), rel.foreign_key.fields.len());
-
-                    for (fk_field, item) in rel.foreign_key.fields.iter().zip(items) {
-                        expr.entry_mut(fk_field.source.index).insert(item);
-                    }
                 }
             }
         }
