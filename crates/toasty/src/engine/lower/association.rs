@@ -74,12 +74,27 @@ impl<'a> RewriteVia<'a> {
         &mut self,
         mut association: stmt::Association,
     ) -> stmt::Filter {
-        // First, recurse into the association source so any nested via
-        // associations are rewritten before the outer filter is built.
-        stmt::visit_mut::visit_stmt_query_mut(self, &mut association.source);
+        assert!(
+            !association.path.projection.is_empty(),
+            "via path must have at least one step"
+        );
 
-        // For now, we only support paths with a single step
-        assert!(association.path.len() == 1, "TODO");
+        // Unfold any multi-step path into a chain of nested single-step
+        // `Source::Model { via }` wrappers via a single recursive descent.
+        // The recursion threads the source query through by value and borrows
+        // path steps as a slice — no per-step `Vec` rebuilds.
+        if association.path.projection.len() > 1 {
+            let stmt::Association { source, path } = association;
+            let source_model_id = source.body.as_select_unwrap().source.model_id_unwrap();
+            association = self.unfold_path(source, source_model_id, path.projection.as_slice());
+        }
+
+        // Run the visitor's overridden `visit_stmt_query_mut` on the source
+        // so any `Source::Model { via: Some(_) }` introduced by unfolding is
+        // rewritten on its own merits before the outer single-step filter is
+        // built. The free-function walker would skip the override on the
+        // source query itself.
+        self.visit_stmt_query_mut(&mut association.source);
 
         let Some(field) = self.schema().app.resolve_field_path(&association.path) else {
             todo!()
@@ -101,12 +116,71 @@ impl<'a> RewriteVia<'a> {
         }
     }
 
+    /// Recursively wrap every step but the last into a nested
+    /// `Source::Model { via }`, threading the source query through by value.
+    /// Returns the outer single-step association the caller filters against.
+    fn unfold_path(
+        &self,
+        source: Box<stmt::Query>,
+        source_model_id: app::ModelId,
+        steps: &[usize],
+    ) -> stmt::Association {
+        let [first, rest @ ..] = steps else {
+            unreachable!("unfold_path called with empty steps")
+        };
+
+        // Base case: the last step stays on the outer association.
+        if rest.is_empty() {
+            return stmt::Association {
+                source,
+                path: stmt::Path::from_index(source_model_id, *first),
+            };
+        }
+
+        let source_model = self.schema().app.model(source_model_id).as_root_unwrap();
+        let next_model_id = match &source_model.fields[*first].ty {
+            app::FieldTy::HasMany(rel) => rel.target,
+            app::FieldTy::HasOne(rel) => rel.target,
+            app::FieldTy::BelongsTo(rel) => rel.target,
+            other => todo!("non-relation field in via path: {other:#?}"),
+        };
+
+        let inner = stmt::Association {
+            source,
+            path: stmt::Path::from_index(source_model_id, *first),
+        };
+        let new_source = Box::new(stmt::Query::new_select(
+            stmt::Source::Model(stmt::SourceModel {
+                id: next_model_id,
+                via: Some(inner),
+            }),
+            stmt::Expr::Value(stmt::Value::Bool(true)),
+        ));
+
+        self.unfold_path(new_source, next_model_id, rest)
+    }
+
     fn rewrite_association_belongs_to_as_filter(
         &mut self,
         rel: &app::BelongsTo,
         association: stmt::Association,
     ) -> stmt::Filter {
-        todo!("rel={rel:#?}, association={association:#?}");
+        // The FK lives on the source model; the target model carries the
+        // referenced fields. Filter is: `self.<fk.target> IN (SELECT
+        // <fk.source> FROM <source>)`. Single-column FKs only for now —
+        // composite keys can be added by switching to tuple-style IN.
+        assert_eq!(
+            rel.foreign_key.fields.len(),
+            1,
+            "composite foreign keys in BelongsTo via paths not yet supported"
+        );
+        let fk = &rel.foreign_key.fields[0];
+
+        let mut source = *association.source;
+        source.body.as_select_mut_unwrap().returning =
+            stmt::Returning::Project(stmt::Expr::ref_self_field(fk.source));
+
+        stmt::Expr::in_subquery(stmt::Expr::ref_self_field(fk.target), source).into()
     }
 }
 

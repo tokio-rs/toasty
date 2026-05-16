@@ -534,11 +534,20 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                         child.visit_stmt_query_mut(&mut e.query);
                     });
 
-                    // For now, we wonly support independent sub-queries. I.e.
-                    // the subquery must be able to be executed without any
-                    // context from the parent query.
+                    // The subquery must be executable without parent context:
+                    // no `Arg::Ref` (which would reach back into a parent
+                    // scope) and no `back_refs` (columns the parent must
+                    // batch-load on its behalf). `Arg::Sub` is fine — it's a
+                    // forward dependency on the subquery's own child, which
+                    // the planner chains in execution order.
                     let target_stmt_info = &self.state.hir[target_id];
-                    debug_assert!(target_stmt_info.args.is_empty(), "TODO");
+                    debug_assert!(
+                        target_stmt_info
+                            .args
+                            .iter()
+                            .all(|arg| matches!(arg, hir::Arg::Sub { .. })),
+                        "TODO: sub-statement references parent scope"
+                    );
                     debug_assert!(target_stmt_info.back_refs.is_empty(), "TODO");
 
                     self.track_dependency(target_id);
