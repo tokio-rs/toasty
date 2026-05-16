@@ -110,7 +110,7 @@ the entry lands here.
 ## Migrations
 
 - Schema migration system ([#190])
-- `toasty-cli` for schema management ([#190])
+- `toasty-cli` for schema management ([design](design/standalone-cli.md), [#190])
 - Schema lock file for tracking applied migrations ([#136])
 
 [#136]: https://github.com/tokio-rs/toasty/issues/136
