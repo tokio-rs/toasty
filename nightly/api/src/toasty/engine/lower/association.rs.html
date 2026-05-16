@@ -166,38 +166,34 @@
 <a href=#166 id=166 data-nosnippet>166</a>        association: stmt::Association,
 <a href=#167 id=167 data-nosnippet>167</a>    ) -&gt; stmt::Filter {
 <a href=#168 id=168 data-nosnippet>168</a>        <span class="comment">// The FK lives on the source model; the target model carries the
-<a href=#169 id=169 data-nosnippet>169</a>        // referenced fields. Filter is: `self.&lt;fk.target&gt; IN (SELECT
-<a href=#170 id=170 data-nosnippet>170</a>        // &lt;fk.source&gt; FROM &lt;source&gt;)`. Single-column FKs only for now —
-<a href=#171 id=171 data-nosnippet>171</a>        // composite keys can be added by switching to tuple-style IN.
-<a href=#172 id=172 data-nosnippet>172</a>        </span><span class="macro">assert_eq!</span>(
-<a href=#173 id=173 data-nosnippet>173</a>            rel.foreign_key.fields.len(),
-<a href=#174 id=174 data-nosnippet>174</a>            <span class="number">1</span>,
-<a href=#175 id=175 data-nosnippet>175</a>            <span class="string">"composite foreign keys in BelongsTo via paths not yet supported"
-<a href=#176 id=176 data-nosnippet>176</a>        </span>);
-<a href=#177 id=177 data-nosnippet>177</a>        <span class="kw">let </span>fk = <span class="kw-2">&amp;</span>rel.foreign_key.fields[<span class="number">0</span>];
+<a href=#169 id=169 data-nosnippet>169</a>        // referenced fields. Filter is `&lt;fk.target...&gt; IN (SELECT
+<a href=#170 id=170 data-nosnippet>170</a>        // &lt;fk.source...&gt; FROM &lt;source&gt;)` — a single field reference on each
+<a href=#171 id=171 data-nosnippet>171</a>        // side for single-column FKs, a record of references for composite
+<a href=#172 id=172 data-nosnippet>172</a>        // FKs (lowered to a tuple-style IN by the SQL serializer).
+<a href=#173 id=173 data-nosnippet>173</a>        </span><span class="kw">let </span>target = <span class="kw">super</span>::key_field_refs(<span class="number">0</span>, rel.foreign_key.fields.iter().map(|fk| fk.target));
+<a href=#174 id=174 data-nosnippet>174</a>        <span class="kw">let </span>returning = <span class="kw">super</span>::key_field_refs(<span class="number">0</span>, rel.foreign_key.fields.iter().map(|fk| fk.source));
+<a href=#175 id=175 data-nosnippet>175</a>
+<a href=#176 id=176 data-nosnippet>176</a>        <span class="kw">let </span><span class="kw-2">mut </span>source = <span class="kw-2">*</span>association.source;
+<a href=#177 id=177 data-nosnippet>177</a>        source.body.as_select_mut_unwrap().returning = stmt::Returning::Project(returning);
 <a href=#178 id=178 data-nosnippet>178</a>
-<a href=#179 id=179 data-nosnippet>179</a>        <span class="kw">let </span><span class="kw-2">mut </span>source = <span class="kw-2">*</span>association.source;
-<a href=#180 id=180 data-nosnippet>180</a>        source.body.as_select_mut_unwrap().returning =
-<a href=#181 id=181 data-nosnippet>181</a>            stmt::Returning::Project(stmt::Expr::ref_self_field(fk.source));
+<a href=#179 id=179 data-nosnippet>179</a>        stmt::Expr::in_subquery(target, source).into()
+<a href=#180 id=180 data-nosnippet>180</a>    }
+<a href=#181 id=181 data-nosnippet>181</a>}
 <a href=#182 id=182 data-nosnippet>182</a>
-<a href=#183 id=183 data-nosnippet>183</a>        stmt::Expr::in_subquery(stmt::Expr::ref_self_field(fk.target), source).into()
-<a href=#184 id=184 data-nosnippet>184</a>    }
-<a href=#185 id=185 data-nosnippet>185</a>}
-<a href=#186 id=186 data-nosnippet>186</a>
-<a href=#187 id=187 data-nosnippet>187</a><span class="kw">impl </span>VisitMut <span class="kw">for </span>RewriteVia&lt;<span class="lifetime">'_</span>&gt; {
-<a href=#188 id=188 data-nosnippet>188</a>    <span class="kw">fn </span>visit_stmt_delete_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: <span class="kw-2">&amp;mut </span>stmt::Delete) {
-<a href=#189 id=189 data-nosnippet>189</a>        <span class="self">self</span>.rewrite_via_for_delete(i);
-<a href=#190 id=190 data-nosnippet>190</a>        stmt::visit_mut::visit_stmt_delete_mut(<span class="self">self</span>, i);
-<a href=#191 id=191 data-nosnippet>191</a>    }
-<a href=#192 id=192 data-nosnippet>192</a>
-<a href=#193 id=193 data-nosnippet>193</a>    <span class="kw">fn </span>visit_stmt_insert_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: <span class="kw-2">&amp;mut </span>stmt::Insert) {
-<a href=#194 id=194 data-nosnippet>194</a>        <span class="self">self</span>.rewrite_via_for_insert(i);
-<a href=#195 id=195 data-nosnippet>195</a>        stmt::visit_mut::visit_stmt_insert_mut(<span class="self">self</span>, i);
-<a href=#196 id=196 data-nosnippet>196</a>    }
-<a href=#197 id=197 data-nosnippet>197</a>
-<a href=#198 id=198 data-nosnippet>198</a>    <span class="kw">fn </span>visit_stmt_query_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: <span class="kw-2">&amp;mut </span>stmt::Query) {
-<a href=#199 id=199 data-nosnippet>199</a>        <span class="self">self</span>.rewrite_via_for_query(i);
-<a href=#200 id=200 data-nosnippet>200</a>        stmt::visit_mut::visit_stmt_query_mut(<span class="self">self</span>, i);
-<a href=#201 id=201 data-nosnippet>201</a>    }
-<a href=#202 id=202 data-nosnippet>202</a>}
+<a href=#183 id=183 data-nosnippet>183</a><span class="kw">impl </span>VisitMut <span class="kw">for </span>RewriteVia&lt;<span class="lifetime">'_</span>&gt; {
+<a href=#184 id=184 data-nosnippet>184</a>    <span class="kw">fn </span>visit_stmt_delete_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: <span class="kw-2">&amp;mut </span>stmt::Delete) {
+<a href=#185 id=185 data-nosnippet>185</a>        <span class="self">self</span>.rewrite_via_for_delete(i);
+<a href=#186 id=186 data-nosnippet>186</a>        stmt::visit_mut::visit_stmt_delete_mut(<span class="self">self</span>, i);
+<a href=#187 id=187 data-nosnippet>187</a>    }
+<a href=#188 id=188 data-nosnippet>188</a>
+<a href=#189 id=189 data-nosnippet>189</a>    <span class="kw">fn </span>visit_stmt_insert_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: <span class="kw-2">&amp;mut </span>stmt::Insert) {
+<a href=#190 id=190 data-nosnippet>190</a>        <span class="self">self</span>.rewrite_via_for_insert(i);
+<a href=#191 id=191 data-nosnippet>191</a>        stmt::visit_mut::visit_stmt_insert_mut(<span class="self">self</span>, i);
+<a href=#192 id=192 data-nosnippet>192</a>    }
+<a href=#193 id=193 data-nosnippet>193</a>
+<a href=#194 id=194 data-nosnippet>194</a>    <span class="kw">fn </span>visit_stmt_query_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: <span class="kw-2">&amp;mut </span>stmt::Query) {
+<a href=#195 id=195 data-nosnippet>195</a>        <span class="self">self</span>.rewrite_via_for_query(i);
+<a href=#196 id=196 data-nosnippet>196</a>        stmt::visit_mut::visit_stmt_query_mut(<span class="self">self</span>, i);
+<a href=#197 id=197 data-nosnippet>197</a>    }
+<a href=#198 id=198 data-nosnippet>198</a>}
 </code></pre></div></section></main></body></html>

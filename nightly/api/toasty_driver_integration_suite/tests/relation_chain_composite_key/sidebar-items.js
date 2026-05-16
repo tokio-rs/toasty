@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["category_todos_filter","category_todos_respects_revision","category_todos_user_composite_first_hop","composite_chain_from_empty_source_is_empty","composite_chain_then_filter","composite_has_many_through_has_many","filtered_category_todos_user_composite","user_todos_category_composite","user_todos_category_distinguishes_by_revision"]};
