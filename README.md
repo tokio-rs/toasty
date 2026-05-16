@@ -1,9 +1,26 @@
-# Toasty
+<div align="center">
+  <h1>Toasty</h1>
+</div>
+
+<br/>
+<div align="center">
+  <h3>The cozy, easy ORM for Rust</h3>
+  <a href="https://tokio-rs.github.io/toasty/0.6.0/guide/">Guide</a> •
+  <a href="https://docs.rs/toasty">API Docs</a> •
+  <a href="https://crates.io/crates/toasty">Crates.io</a> •
+  <a href="https://discord.gg/tokio">Discord</a>
+</div>
+
+<br/>
+
+<div align="center">
 
 [![Crates.io][crates-badge]][crates-url]
 [![MIT licensed][mit-badge]][mit-url]
 [![Build Status][actions-badge]][actions-url]
 [![Discord chat][discord-badge]][discord-url]
+
+</div>
 
 [crates-badge]: https://img.shields.io/crates/v/toasty.svg
 [crates-url]: https://crates.io/crates/toasty
@@ -14,18 +31,9 @@
 [discord-badge]: https://img.shields.io/discord/500028886025895936.svg?logo=discord&style=flat-square
 [discord-url]: https://discord.gg/tokio
 
-Toasty is an ORM for the Rust programming language that prioritizes ease-of-use.
-It currently supports SQL databases (SQLite, PostgreSQL, MySQL) and DynamoDB.
-Note that Toasty does not hide database capabilities. Instead, Toasty exposes
-features based on the target database.
-
-Current status: Preview — Most major features are in place and Toasty should be
-complete enough to build applications with. The API is not yet stable and
-breaking changes may still occur. Contributions are welcome.
-
-[User guide](https://tokio-rs.github.io/toasty/nightly/guide/): Explore Toasty in depth.
-
-[Nightly API docs](https://tokio-rs.github.io/toasty/nightly/api/): API reference built from the latest commit.
+Toasty supports SQL databases (SQLite, PostgreSQL, MySQL) and DynamoDB. It does
+not hide database capabilities — it exposes features based on the target
+database.
 
 ## Using Toasty
 
