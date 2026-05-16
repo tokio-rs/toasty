@@ -1,0 +1,9 @@
+(function() {
+    const implementors = Object.fromEntries([["toasty",[["impl <a class=\"trait\" href=\"toasty/db/trait.Driver.html\" title=\"trait toasty::db::Driver\">Driver</a> for <a class=\"struct\" href=\"toasty/db/struct.Connect.html\" title=\"struct toasty::db::Connect\">Connect</a>",0]]],["toasty_driver_dynamodb",[["impl <a class=\"trait\" href=\"toasty_core/driver/trait.Driver.html\" title=\"trait toasty_core::driver::Driver\">Driver</a> for <a class=\"struct\" href=\"toasty_driver_dynamodb/struct.DynamoDb.html\" title=\"struct toasty_driver_dynamodb::DynamoDb\">DynamoDb</a>",0]]],["toasty_driver_integration_suite",[["impl <a class=\"trait\" href=\"toasty_core/driver/trait.Driver.html\" title=\"trait toasty_core::driver::Driver\">Driver</a> for <a class=\"struct\" href=\"toasty_driver_integration_suite/struct.InstrumentedDriver.html\" title=\"struct toasty_driver_integration_suite::InstrumentedDriver\">InstrumentedDriver</a>",0]]],["toasty_driver_mysql",[["impl Driver for <a class=\"struct\" href=\"toasty_driver_mysql/struct.MySQL.html\" title=\"struct toasty_driver_mysql::MySQL\">MySQL</a>",0]]],["toasty_driver_postgresql",[["impl <a class=\"trait\" href=\"toasty_core/driver/trait.Driver.html\" title=\"trait toasty_core::driver::Driver\">Driver</a> for <a class=\"struct\" href=\"toasty_driver_postgresql/struct.PostgreSQL.html\" title=\"struct toasty_driver_postgresql::PostgreSQL\">PostgreSQL</a>",0]]],["toasty_driver_sqlite",[["impl Driver for <a class=\"enum\" href=\"toasty_driver_sqlite/enum.Sqlite.html\" title=\"enum toasty_driver_sqlite::Sqlite\">Sqlite</a>",0]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":59,"fragment_lengths":[237,300,357,169,312,169]}

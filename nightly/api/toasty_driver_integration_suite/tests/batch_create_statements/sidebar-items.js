@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["batch_create_query_create","batch_create_then_query","batch_creates_from_array","batch_creates_from_vec","batch_query_and_create","batch_two_creates_different_models","batch_two_creates_same_model"]};

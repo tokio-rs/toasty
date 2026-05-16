@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"derive":["Embed","Model"],"macro":["create","models","query"],"mod":["db","schema","stmt"],"struct":["Error","ModelSet"],"trait":["UpdateTarget"],"type":["Result"]};

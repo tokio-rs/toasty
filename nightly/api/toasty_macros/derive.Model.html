@@ -1,0 +1,281 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Derive macro that turns a struct into a Toasty model backed by a database table."><title>Model in toasty_macros - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="toasty_macros" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc derive"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Model</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../toasty_macros/index.html">toasty_<wbr>macros</a><span class="version">0.6.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Model</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#overview" title="Overview">Overview</a></li><li><a href="#struct-level-attributes" title="Struct-level attributes">Struct-level attributes</a><ul><li><a href="#key--primary-key" title="`#[key(...)]` — primary key"><code>#[key(...)]</code> — primary key</a></li><li><a href="#table--name--custom-table-name" title="`#[table = &#34;name&#34;]` — custom table name"><code>#[table = "name"]</code> — custom table name</a></li></ul></li><li><a href="#field-level-attributes" title="Field-level attributes">Field-level attributes</a><ul><li><a href="#key--mark-a-field-as-a-primary-key-column" title="`#[key]` — mark a field as a primary key column"><code>#[key]</code> — mark a field as a primary key column</a></li><li><a href="#auto--automatic-value-generation" title="`#[auto]` — automatic value generation"><code>#[auto]</code> — automatic value generation</a></li><li><a href="#defaultexpr--default-value-on-create" title="`#[default(expr)]` — default value on create"><code>#[default(expr)]</code> — default value on create</a></li><li><a href="#updateexpr--value-applied-on-create-and-update" title="`#[update(expr)]` — value applied on create and update"><code>#[update(expr)]</code> — value applied on create and update</a></li><li><a href="#index--add-a-database-index" title="`#[index]` — add a database index"><code>#[index]</code> — add a database index</a></li><li><a href="#unique--add-a-unique-constraint" title="`#[unique]` — add a unique constraint"><code>#[unique]</code> — add a unique constraint</a></li><li><a href="#column--customize-the-database-column" title="`#[column(...)]` — customize the database column"><code>#[column(...)]</code> — customize the database column</a></li><li><a href="#serializejson--serialize-complex-types-as-json" title="`#[serialize(json)]` — serialize complex types as JSON"><code>#[serialize(json)]</code> — serialize complex types as JSON</a></li></ul></li><li><a href="#relation-attributes" title="Relation attributes">Relation attributes</a><ul><li><a href="#belongs_to--foreign-key-reference" title="`#[belongs_to(...)]` — foreign-key reference"><code>#[belongs_to(...)]</code> — foreign-key reference</a></li><li><a href="#has_many--one-to-many-association" title="`#[has_many]` — one-to-many association"><code>#[has_many]</code> — one-to-many association</a></li><li><a href="#has_one--one-to-one-association" title="`#[has_one]` — one-to-one association"><code>#[has_one]</code> — one-to-one association</a></li></ul></li><li><a href="#constraints" title="Constraints">Constraints</a></li><li><a href="#full-example" title="Full example">Full example</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate toasty_<wbr>macros</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">toasty_macros</a></div><h1>Derive Macro <span class="derive">Model</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/toasty_macros/lib.rs.html#584-589">Source</a> </span></div><pre class="rust item-decl"><code>#[derive(Model)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[key]
+    #[auto]
+    #[default]
+    #[update]
+    #[column]
+    #[index]
+    #[unique]
+    #[table]
+    #[has_many]
+    #[has_one]
+    #[belongs_to]
+    #[serialize]
+    #[version]
+    #[deferred]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Derive macro that turns a struct into a Toasty model backed by a database
+table.</p>
+<p>For a tutorial-style introduction, see the <a href="../../guide/">Toasty guide</a>.</p>
+<h2 id="overview"><a class="doc-anchor" href="#overview">§</a>Overview</h2>
+<p>Applying <code>#[derive(Model)]</code> to a named struct generates:</p>
+<ul>
+<li>A <a href="toasty::schema::Model"><code>Model</code></a> trait implementation, including the associated <code>Query</code>,
+<code>Create</code>, and <code>Update</code> builder types.</li>
+<li>A <a href="toasty::schema::Load"><code>Load</code></a> implementation for deserializing rows from the database.</li>
+<li>A <a href="toasty::schema::Register"><code>Register</code></a> implementation for schema registration at runtime.</li>
+<li>Static query methods such as <code>all()</code>, <code>filter(expr)</code>,
+<code>filter_by_&lt;field&gt;()</code>, and <code>get_by_&lt;key&gt;()</code>.</li>
+<li>Instance methods <code>update()</code> and <code>delete()</code>.</li>
+<li>A <code>Fields</code> struct returned by <code>&lt;Model&gt;::fields()</code> for building typed
+filter expressions.</li>
+</ul>
+<p>The struct must have named fields and no generic parameters.</p>
+<h2 id="struct-level-attributes"><a class="doc-anchor" href="#struct-level-attributes">§</a>Struct-level attributes</h2><h3 id="key--primary-key"><a class="doc-anchor" href="#key--primary-key">§</a><code>#[key(...)]</code> — primary key</h3>
+<p>Defines the primary key at the struct level. Mutually exclusive with
+field-level <code>#[key]</code>.</p>
+<p><strong>Simple form</strong> — every listed field becomes a partition key:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Model)]
+#[key(name)]
+</span><span class="kw">struct </span>Widget {
+    name: String,
+    value: i64,
+}</code></pre></div>
+<p><strong>Composite key with partition/local scoping:</strong></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Model)]
+#[key(partition = user_id, local = id)]
+</span><span class="kw">struct </span>Todo {
+    <span class="attr">#[auto]
+    </span>id: uuid::Uuid,
+    user_id: String,
+    title: String,
+}</code></pre></div>
+<p>The <code>partition</code> fields determine data distribution (relevant for
+DynamoDB); <code>local</code> fields scope within a partition. For SQL databases
+both behave as a regular composite primary key.</p>
+<p>Multiple <code>partition</code> and <code>local</code> fields are allowed using bracket syntax:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[key(partition = [tenant, org]</span>, local = [id])]</code></pre></div>
+<p>When using named <code>partition</code>/<code>local</code> syntax, at least one of each is
+required. You cannot mix the simple and named forms.</p>
+<h3 id="table--name--custom-table-name"><a class="doc-anchor" href="#table--name--custom-table-name">§</a><code>#[table = "name"]</code> — custom table name</h3>
+<p>Overrides the default table name. Without this attribute the table name
+is the pluralized, snake_case form of the struct name (e.g. <code>User</code> →
+<code>users</code>).</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Model)]
+#[table = <span class="string">"legacy_users"</span>]
+</span><span class="kw">struct </span>User {
+    <span class="attr">#[key]
+    #[auto]
+    </span>id: i64,
+    name: String,
+}</code></pre></div><h2 id="field-level-attributes"><a class="doc-anchor" href="#field-level-attributes">§</a>Field-level attributes</h2><h3 id="key--mark-a-field-as-a-primary-key-column"><a class="doc-anchor" href="#key--mark-a-field-as-a-primary-key-column">§</a><code>#[key]</code> — mark a field as a primary key column</h3>
+<p>Marks one or more fields as the primary key. When used on multiple
+fields each becomes a partition key column (equivalent to listing them
+in <code>#[key(...)]</code> at the struct level).</p>
+<p>Cannot be combined with a struct-level <code>#[key(...)]</code> attribute.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Model)]
+</span><span class="kw">struct </span>User {
+    <span class="attr">#[key]
+    #[auto]
+    </span>id: i64,
+    name: String,
+}</code></pre></div><h3 id="auto--automatic-value-generation"><a class="doc-anchor" href="#auto--automatic-value-generation">§</a><code>#[auto]</code> — automatic value generation</h3>
+<p>Tells Toasty to generate this field’s value automatically. The strategy
+depends on the field type and optional arguments:</p>
+<div><table><thead><tr><th>Syntax</th><th>Behavior</th></tr></thead><tbody>
+<tr><td><code>#[auto]</code> on <code>uuid::Uuid</code></td><td>UUID v7 (timestamp-sortable)</td></tr>
+<tr><td><code>#[auto(uuid(v4))]</code></td><td>UUID v4 (random)</td></tr>
+<tr><td><code>#[auto(uuid(v7))]</code></td><td>UUID v7 (explicit)</td></tr>
+<tr><td><code>#[auto]</code> on integer types (<code>i8</code>–<code>i64</code>, <code>u8</code>–<code>u64</code>)</td><td>Auto-increment</td></tr>
+<tr><td><code>#[auto(increment)]</code></td><td>Auto-increment (explicit)</td></tr>
+<tr><td><code>#[auto]</code> on a field named <code>created_at</code></td><td>Expands to <code>#[default(jiff::Timestamp::now())]</code></td></tr>
+<tr><td><code>#[auto]</code> on a field named <code>updated_at</code></td><td>Expands to <code>#[update(jiff::Timestamp::now())]</code></td></tr>
+</tbody></table>
+</div>
+<p>The <code>created_at</code>/<code>updated_at</code> expansion requires the <code>jiff</code> feature and
+a field type compatible with <code>jiff::Timestamp</code>.</p>
+<p>Cannot be combined with <code>#[default]</code> or <code>#[update]</code> on the same field.</p>
+<h3 id="defaultexpr--default-value-on-create"><a class="doc-anchor" href="#defaultexpr--default-value-on-create">§</a><code>#[default(expr)]</code> — default value on create</h3>
+<p>Sets a default value that is used when the field is not explicitly
+provided during creation. The expression is any valid Rust expression.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[default(<span class="number">0</span>)]
+</span>view_count: i64,
+
+<span class="attr">#[default(<span class="string">"draft"</span>.to_string())]
+</span>status: String,</code></pre></div>
+<p>The default can be overridden by calling the corresponding setter on the
+create builder.</p>
+<p>Cannot be combined with <code>#[auto]</code> on the same field. Can be combined
+with <code>#[update]</code> (the default applies on create; the update expression
+applies on subsequent updates).</p>
+<h3 id="updateexpr--value-applied-on-create-and-update"><a class="doc-anchor" href="#updateexpr--value-applied-on-create-and-update">§</a><code>#[update(expr)]</code> — value applied on create and update</h3>
+<p>Sets a value that Toasty applies every time a record is created or
+updated, unless the field is explicitly set on the builder.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[update(jiff::Timestamp::now())]
+</span>updated_at: jiff::Timestamp,</code></pre></div>
+<p>Cannot be combined with <code>#[auto]</code> on the same field.</p>
+<h3 id="index--add-a-database-index"><a class="doc-anchor" href="#index--add-a-database-index">§</a><code>#[index]</code> — add a database index</h3>
+<p>Creates a non-unique index on the field. Toasty generates a
+<code>filter_by_&lt;field&gt;</code> method for indexed fields.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[index]
+</span>email: String,</code></pre></div><h3 id="unique--add-a-unique-constraint"><a class="doc-anchor" href="#unique--add-a-unique-constraint">§</a><code>#[unique]</code> — add a unique constraint</h3>
+<p>Creates a unique index on the field. Like <code>#[index]</code>, this generates
+<code>filter_by_&lt;field&gt;</code>. The database enforces uniqueness.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[unique]
+</span>email: String,</code></pre></div><h3 id="column--customize-the-database-column"><a class="doc-anchor" href="#column--customize-the-database-column">§</a><code>#[column(...)]</code> — customize the database column</h3>
+<p>Overrides the column name and/or type for a field.</p>
+<p><strong>Custom name:</strong></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[column(<span class="string">"user_email"</span>)]
+</span>email: String,</code></pre></div>
+<p><strong>Custom type:</strong></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[column(<span class="kw">type </span>= varchar(<span class="number">255</span>))]
+</span>email: String,</code></pre></div>
+<p><strong>Both:</strong></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[column(<span class="string">"user_email"</span>, <span class="kw">type </span>= varchar(<span class="number">255</span>))]
+</span>email: String,</code></pre></div><h4 id="supported-column-types"><a class="doc-anchor" href="#supported-column-types">§</a>Supported column types</h4><div><table><thead><tr><th>Syntax</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>boolean</code></td><td>Boolean</td></tr>
+<tr><td><code>i8</code>, <code>i16</code>, <code>i32</code>, <code>i64</code></td><td>Signed integer (1/2/4/8 bytes)</td></tr>
+<tr><td><code>int(N)</code></td><td>Signed integer with N-byte width</td></tr>
+<tr><td><code>u8</code>, <code>u16</code>, <code>u32</code>, <code>u64</code></td><td>Unsigned integer (1/2/4/8 bytes)</td></tr>
+<tr><td><code>uint(N)</code></td><td>Unsigned integer with N-byte width</td></tr>
+<tr><td><code>text</code></td><td>Unbounded text</td></tr>
+<tr><td><code>varchar(N)</code></td><td>Text with max length N</td></tr>
+<tr><td><code>numeric</code></td><td>Arbitrary-precision numeric</td></tr>
+<tr><td><code>numeric(P, S)</code></td><td>Numeric with precision P and scale S</td></tr>
+<tr><td><code>binary(N)</code></td><td>Fixed-size binary with N bytes</td></tr>
+<tr><td><code>blob</code></td><td>Variable-length binary</td></tr>
+<tr><td><code>timestamp(P)</code></td><td>Timestamp with P fractional-second digits</td></tr>
+<tr><td><code>date</code></td><td>Date without time</td></tr>
+<tr><td><code>time(P)</code></td><td>Time with P fractional-second digits</td></tr>
+<tr><td><code>datetime(P)</code></td><td>Date and time with P fractional-second digits</td></tr>
+<tr><td><code>"custom"</code></td><td>Arbitrary type string passed through to the driver</td></tr>
+</tbody></table>
+</div>
+<p>Cannot be used on relation fields.</p>
+<h3 id="serializejson--serialize-complex-types-as-json"><a class="doc-anchor" href="#serializejson--serialize-complex-types-as-json">§</a><code>#[serialize(json)]</code> — serialize complex types as JSON</h3>
+<p>Stores the field as a JSON string in the database. Requires the <code>serde</code>
+feature and that the field type implements <code>serde::Serialize</code> and
+<code>serde::Deserialize</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[serialize(json)]
+</span>tags: Vec&lt;String&gt;,</code></pre></div>
+<p>For <code>Option&lt;T&gt;</code> fields, add <code>nullable</code> so that <code>None</code> maps to SQL
+<code>NULL</code> rather than the JSON string <code>"null"</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[serialize(json, nullable)]
+</span>metadata: <span class="prelude-ty">Option</span>&lt;HashMap&lt;String, String&gt;&gt;,</code></pre></div>
+<p>Cannot be used on relation fields.</p>
+<h2 id="relation-attributes"><a class="doc-anchor" href="#relation-attributes">§</a>Relation attributes</h2><h3 id="belongs_to--foreign-key-reference"><a class="doc-anchor" href="#belongs_to--foreign-key-reference">§</a><code>#[belongs_to(...)]</code> — foreign-key reference</h3>
+<p>Declares a many-to-one (or one-to-one) association through a foreign
+key stored on this model.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[belongs_to(key = user_id, references = id)]
+</span>user: toasty::BelongsTo&lt;User&gt;,</code></pre></div><div><table><thead><tr><th>Parameter</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>key = &lt;field&gt;</code></td><td>Local field holding the foreign key value</td></tr>
+<tr><td><code>references = &lt;field&gt;</code></td><td>Field on the target model being referenced</td></tr>
+</tbody></table>
+</div>
+<p>For composite foreign keys, pass arrays to <code>key</code> and <code>references</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[belongs_to(key = [org_id, tenant_id]</span>, references = [id, tenant_id])]
+org: toasty::BelongsTo&lt;Org&gt;,</code></pre></div>
+<p>The number of fields in <code>key</code> must equal the number of fields in
+<code>references</code>.</p>
+<p>Wrap the target type in <code>Option</code> for an optional (nullable) foreign key:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[index]
+</span>manager_id: <span class="prelude-ty">Option</span>&lt;i64&gt;,
+
+<span class="attr">#[belongs_to(key = manager_id, references = id)]
+</span>manager: toasty::BelongsTo&lt;<span class="prelude-ty">Option</span>&lt;User&gt;&gt;,</code></pre></div><h3 id="has_many--one-to-many-association"><a class="doc-anchor" href="#has_many--one-to-many-association">§</a><code>#[has_many]</code> — one-to-many association</h3>
+<p>Declares a collection of related models. The target model must have a
+<code>#[belongs_to]</code> field pointing back to this model.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[has_many]
+</span>posts: toasty::HasMany&lt;Post&gt;,</code></pre></div>
+<p>Toasty generates an accessor method (e.g. <code>.posts()</code>) and an insert
+helper (e.g. <code>.insert_post()</code>), where the insert helper name is the
+auto-singularized field name.</p>
+<h4 id="pair--disambiguate-self-referential-or-multiple-relations"><a class="doc-anchor" href="#pair--disambiguate-self-referential-or-multiple-relations">§</a><code>pair</code> — disambiguate self-referential or multiple relations</h4>
+<p>When the target model has more than one <code>#[belongs_to]</code> pointing to
+the same model (or points to itself), use <code>pair</code> to specify which
+<code>belongs_to</code> field this <code>has_many</code> corresponds to:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[has_many(pair = parent)]
+</span>children: toasty::HasMany&lt;Person&gt;,</code></pre></div><h3 id="has_one--one-to-one-association"><a class="doc-anchor" href="#has_one--one-to-one-association">§</a><code>#[has_one]</code> — one-to-one association</h3>
+<p>Declares a single related model. The target model must have a
+<code>#[belongs_to]</code> field pointing back to this model.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[has_one]
+</span>profile: toasty::HasOne&lt;Profile&gt;,</code></pre></div>
+<p>Wrap in <code>Option</code> for an optional association:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[has_one]
+</span>profile: toasty::HasOne&lt;<span class="prelude-ty">Option</span>&lt;Profile&gt;&gt;,</code></pre></div><h2 id="constraints"><a class="doc-anchor" href="#constraints">§</a>Constraints</h2>
+<ul>
+<li>The struct must have named fields (tuple structs are not supported).</li>
+<li>Generic parameters are not supported.</li>
+<li>Every root model must have a primary key, defined either by a
+struct-level <code>#[key(...)]</code> or by one or more field-level <code>#[key]</code>
+attributes, but not both.</li>
+<li><code>#[auto]</code> cannot be combined with <code>#[default]</code> or <code>#[update]</code> on the
+same field.</li>
+<li><code>#[column]</code>, <code>#[default]</code>, <code>#[update]</code>, and <code>#[serialize]</code> cannot be
+used on relation fields (<code>BelongsTo</code>, <code>HasMany</code>, <code>HasOne</code>).</li>
+<li>A field can have at most one relation attribute.</li>
+<li><code>Self</code> can be used as a type in relation fields for self-referential
+models.</li>
+</ul>
+<h2 id="full-example"><a class="doc-anchor" href="#full-example">§</a>Full example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Debug, toasty::Model)]
+</span><span class="kw">struct </span>User {
+    <span class="attr">#[key]
+    #[auto]
+    </span>id: i64,
+
+    <span class="attr">#[unique]
+    </span>email: String,
+
+    name: String,
+
+    <span class="attr">#[default(jiff::Timestamp::now())]
+    </span>created_at: jiff::Timestamp,
+
+    <span class="attr">#[update(jiff::Timestamp::now())]
+    </span>updated_at: jiff::Timestamp,
+
+    <span class="attr">#[has_many]
+    </span>posts: toasty::HasMany&lt;Post&gt;,
+}
+
+<span class="attr">#[derive(Debug, toasty::Model)]
+</span><span class="kw">struct </span>Post {
+    <span class="attr">#[key]
+    #[auto]
+    </span>id: i64,
+
+    title: String,
+
+    <span class="attr">#[serialize(json)]
+    </span>tags: Vec&lt;String&gt;,
+
+    <span class="attr">#[index]
+    </span>user_id: i64,
+
+    <span class="attr">#[belongs_to(key = user_id, references = id)]
+    </span>user: toasty::BelongsTo&lt;User&gt;,
+}</code></pre></div></div></details></section></div></main></body></html>

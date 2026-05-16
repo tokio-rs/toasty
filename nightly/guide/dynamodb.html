@@ -1,0 +1,540 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>DynamoDB - Toasty Guide</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="favicon-8114d1fc.png">
+        <link rel="stylesheet" href="css/variables-8adf115d.css">
+        <link rel="stylesheet" href="css/general-2459343d.css">
+        <link rel="stylesheet" href="css/chrome-ae938929.css">
+        <link rel="stylesheet" href="css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "searchindex-30805f85.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc-46081a54.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Toasty Guide</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="dynamodb"><a class="header" href="#dynamodb">DynamoDB</a></h1>
+<p>Toasty’s DynamoDB driver uses the official <a href="https://docs.rs/aws-sdk-dynamodb"><code>aws-sdk-dynamodb</code></a> crate.
+DynamoDB is a key-value / document store, not a SQL database, so the
+mapping is meaningfully different from the SQL backends. Most Toasty
+model code still works — <a href="./creating-records.html"><code>create!</code></a>,
+<a href="./querying-records.html"><code>find_by_pk</code></a>,
+<a href="./querying-records.html#filtering-by-indexed-fields"><code>filter_by_&lt;indexed&gt;</code></a>,
+<a href="./indexes-and-unique-constraints.html#unique-fields"><code>#[unique]</code></a>,
+<a href="./concurrency-control.html"><code>#[version]</code></a>,
+<a href="./field-options.html#scalar-arrays"><code>Vec&lt;scalar&gt;</code> fields</a> — but the set
+of queries you can write is narrower, and the chapter below catalogues
+the gaps so you can avoid building a model that the driver cannot
+serve.</p>
+<h2 id="enabling-the-driver"><a class="header" href="#enabling-the-driver">Enabling the driver</a></h2>
+<p>Add the <code>dynamodb</code> feature to Toasty in <code>Cargo.toml</code>:</p>
+<pre><code class="language-toml">[dependencies]
+toasty = { version = "0.6", features = ["dynamodb"] }
+</code></pre>
+<p>Then pass a <code>dynamodb://</code> URL to <code>Db::builder</code>:</p>
+<pre><code class="language-rust ignore">let db = toasty::Db::builder()
+    .models(toasty::models!(crate::*))
+    .connect("dynamodb://us-east-1")
+    .await?;</code></pre>
+<p>The URL is opaque to the driver — only the scheme matters. AWS region,
+credentials, and the optional endpoint override come from the standard
+AWS configuration sources: <code>AWS_REGION</code>, <code>AWS_ACCESS_KEY_ID</code> /
+<code>AWS_SECRET_ACCESS_KEY</code>, the shared <code>~/.aws/credentials</code> file, IAM
+instance profiles, and so on. The driver calls
+<code>aws_config::defaults(BehaviorVersion::latest())</code> and uses whatever
+that resolves.</p>
+<p>To point at a local DynamoDB instance for development or tests, set
+<code>AWS_ENDPOINT_URL_DYNAMODB</code>:</p>
+<pre><code class="language-bash">AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8000 \
+AWS_REGION=us-east-1 \
+AWS_ACCESS_KEY_ID=dummy AWS_SECRET_ACCESS_KEY=dummy \
+cargo run
+</code></pre>
+<p>The Toasty repository’s <code>compose.yaml</code> boots <code>amazon/dynamodb-local</code> on
+port 8000 for this purpose.</p>
+<p>The connection pool described in <a href="./database-setup.html">Database Setup</a>
+does not apply: the AWS SDK manages its own HTTP connections internally,
+so <code>max_pool_size</code> and the related knobs have no effect on this backend.</p>
+<h2 id="behavior-specific-to-dynamodb"><a class="header" href="#behavior-specific-to-dynamodb">Behavior specific to DynamoDB</a></h2>
+<p>Most of the Toasty surface works the same way on DynamoDB as on a SQL
+backend: <a href="./defining-models.html">define a model</a>, derive <code>Model</code>, and
+call <a href="./creating-records.html"><code>create!</code></a>,
+<a href="./querying-records.html"><code>find_by_pk</code></a>,
+<a href="./querying-records.html#filtering-by-indexed-fields"><code>filter_by_&lt;field&gt;</code></a>,
+<a href="./updating-records.html"><code>update()</code></a>, and
+<a href="./deleting-records.html"><code>delete()</code></a>.
+<a href="./relationships.html">Associations</a>,
+<a href="./embedded-types.html">embedded structs and enums</a>,
+<a href="./indexes-and-unique-constraints.html#unique-fields"><code>#[unique]</code></a>, and
+<a href="./concurrency-control.html"><code>#[version]</code></a> all work.</p>
+<p>What’s different falls into three buckets:</p>
+<ol>
+<li><strong>No native types.</strong> DynamoDB has three scalar attribute types:
+string (<code>S</code>), number (<code>N</code>), and binary (<code>B</code>). Everything else —
+UUIDs, timestamps, dates, decimals, enums — rides on top of those.</li>
+<li><strong>A narrower set of supported queries.</strong> No <code>LIKE</code>, no <code>!=</code> on the
+primary key, no backward pagination, no <code>ORDER BY</code> on a full-table
+scan.</li>
+<li><strong>No interactive transactions and no migrations.</strong> The driver
+creates tables on <code>push_schema</code> but does not generate or apply
+migrations, and <code>db.transaction()</code> returns an error.</li>
+</ol>
+<p>The rest of this chapter walks through each of these.</p>
+<h2 id="type-mapping"><a class="header" href="#type-mapping">Type mapping</a></h2>
+<p>DynamoDB attributes are one of three scalar types or a List. Toasty
+encodes Rust values into them as follows:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Rust type</th><th>DynamoDB attribute</th></tr>
+</thead>
+<tbody>
+<tr><td><code>bool</code></td><td><code>BOOL</code></td></tr>
+<tr><td><code>i8</code>, <code>i16</code>, <code>i32</code>, <code>i64</code></td><td><code>N</code> (number, stringified on the wire)</td></tr>
+<tr><td><code>u8</code>, <code>u16</code>, <code>u32</code>, <code>u64</code></td><td><code>N</code></td></tr>
+<tr><td><code>f32</code>, <code>f64</code></td><td><code>N</code></td></tr>
+<tr><td><code>String</code></td><td><code>S</code></td></tr>
+<tr><td><code>Vec&lt;u8&gt;</code></td><td><code>B</code></td></tr>
+<tr><td><code>uuid::Uuid</code></td><td><code>S</code> (hyphenated form)</td></tr>
+<tr><td><code>rust_decimal::Decimal</code> <em>(feature)</em></td><td><code>S</code></td></tr>
+<tr><td><code>jiff::Timestamp</code> <em>(feature)</em></td><td><code>S</code> (ISO 8601)</td></tr>
+<tr><td><code>jiff::civil::Date</code> / <code>Time</code> / <code>DateTime</code> <em>(feature)</em></td><td><code>S</code></td></tr>
+<tr><td>Embedded <code>enum</code></td><td><code>S</code> (variant tag) plus per-variant data attributes</td></tr>
+<tr><td><code>Vec&lt;T&gt;</code> <em>(T scalar)</em></td><td><code>L</code> (DynamoDB list of element attributes)</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="notes-on-the-type-mapping"><a class="header" href="#notes-on-the-type-mapping">Notes on the type mapping</a></h3>
+<p><strong>Numbers ride as strings.</strong> DynamoDB’s <code>N</code> type is a decimal string on
+the wire with up to 38 digits of precision. Integers and floats all
+flow through this representation; Toasty parses them back into the Rust
+type declared on the field. A <code>u64</code> field accepts the full unsigned
+range — unlike the SQL backends, which cap unsigned integers at
+<code>i64::MAX</code> because they ride a signed column.</p>
+<p><strong>No native temporal types.</strong> Timestamps, dates, times, and datetimes
+all serialize to ISO 8601 strings. Sort order on a string-encoded
+timestamp matches chronological order, so range queries on a sort key
+work as expected — but the database has no awareness that the column is
+a date.</p>
+<p><strong>No native decimal type.</strong> <code>rust_decimal::Decimal</code> round-trips through
+a string. Comparison still works, but the database does not normalize
+or round.</p>
+<p><strong>No native enum type.</strong> An <code>embed</code>-tagged enum stores the variant tag
+in one attribute and the variant’s data fields in further attributes on
+the same item — there is no separate enum type object.</p>
+<p><strong><code>Vec&lt;scalar&gt;</code> lives on the <code>L</code> attribute.</strong> A <code>tags: Vec&lt;String&gt;</code>
+field maps to a single List attribute containing one <code>S</code> element per
+tag. See <a href="./field-options.html">Field Options</a> for the model-level
+details.</p>
+<h2 id="keys-and-indexes"><a class="header" href="#keys-and-indexes">Keys and indexes</a></h2>
+<p>Every DynamoDB table has a primary key built from a <strong>partition key</strong>
+and an optional <strong>sort key</strong> (called the “local key” in Toasty’s macro
+syntax). Use <code>#[key(partition = ..., local = ...)]</code> to map a model onto
+that layout (see <a href="./keys-and-auto-generation.html">Keys and Auto-Generation</a>):</p>
+<pre><code class="language-rust ignore">#[derive(Debug, toasty::Model)]
+#[key(partition = user_id, local = id)]
+struct Post {
+    user_id: uuid::Uuid,
+    id: uuid::Uuid,
+    title: String,
+}</code></pre>
+<p>A single <code>#[key]</code> field on a regular type compiles to a partition-only
+table.</p>
+<h3 id="what-works-as-a-key-type"><a class="header" href="#what-works-as-a-key-type">What works as a key type</a></h3>
+<p>The partition and sort key columns must be a string, a number, or a
+binary blob — DynamoDB has no other key types. Toasty maps Rust types
+onto those: <code>String</code> and <code>uuid::Uuid</code> become <code>S</code>, all integer and float
+types become <code>N</code>, and <code>Vec&lt;u8&gt;</code> becomes <code>B</code>. Anything else as the key
+type is a schema-build error.</p>
+<h3 id="auto-generation"><a class="header" href="#auto-generation">Auto-generation</a></h3>
+<p><code>#[auto]</code> on a <code>uuid::Uuid</code> key works as on the SQL backends — it
+generates a UUID v7 client-side. Auto-incrementing integer keys
+(<code>#[auto]</code> on <code>i64</code>, <code>u64</code>, etc.) do <strong>not</strong> work on DynamoDB; the
+database has no equivalent. Either pre-generate the key value yourself
+or pick <code>uuid::Uuid</code> as the key type.</p>
+<h3 id="secondary-indexes"><a class="header" href="#secondary-indexes">Secondary indexes</a></h3>
+<p>A <code>#[index]</code> on a non-key field becomes a Global Secondary Index (GSI)
+that projects all attributes. The GSI is built when <code>push_schema</code>
+creates the table and can be queried through the usual
+<code>filter_by_&lt;field&gt;</code> accessor.</p>
+<h3 id="uniqueness"><a class="header" href="#uniqueness">Uniqueness</a></h3>
+<p><code>#[unique]</code> on a non-key field is enforced through a separate index
+table — DynamoDB has no native unique constraint. For each unique
+index Toasty creates a second table keyed on the unique value, and
+inserts/updates that touch a unique field run through
+<code>TransactWriteItems</code>: one <code>Put</code> against the main table plus one <code>Put</code>
+against the index table guarded by <code>attribute_not_exists</code>. A duplicate
+fails the conditional check and the entire transaction rolls back, so
+the main table and the index table stay consistent.</p>
+<p>Two operational consequences worth knowing:</p>
+<ul>
+<li>Every insert that touches a unique field issues two writes (one to
+the base table, one to each index table). The cost shows up in the
+AWS bill.</li>
+<li>Updates that <em>change</em> a unique value read the old value first, then
+delete the old index entry and insert the new one inside a single
+transaction. The transaction’s condition expression catches
+concurrent writers atomically.</li>
+</ul>
+<p>See <a href="./indexes-and-unique-constraints.html">Indexes and Unique Constraints</a>
+for the model-level syntax.</p>
+<h3 id="billing-mode"><a class="header" href="#billing-mode">Billing mode</a></h3>
+<p>Tables and GSIs are created with on-demand (PAY_PER_REQUEST) billing.
+Toasty does not currently expose a knob to switch to provisioned
+capacity — change that on the AWS console after the table exists if
+your workload needs it.</p>
+<h2 id="supported-queries"><a class="header" href="#supported-queries">Supported queries</a></h2>
+<p>The query builder methods that translate cleanly to DynamoDB:</p>
+<ul>
+<li><a href="./querying-records.html"><code>find_by_pk(...)</code></a> — single-item <code>GetItem</code>
+against the base table.</li>
+<li><a href="./querying-records.html#filtering-by-indexed-fields"><code>filter_by_&lt;partition&gt;(...)</code> and
+<code>filter_by_&lt;partition&gt;_and_&lt;local&gt;(...)</code></a>
+— <code>Query</code> against the base table with the supplied values forming
+the key condition.</li>
+<li><code>filter_by_&lt;indexed_field&gt;(...)</code> — <code>Query</code> against the GSI.</li>
+<li><code>find_by_&lt;unique_field&gt;(...)</code> — <code>Query</code> against the unique index
+table to fetch the primary key, followed by <code>GetItem</code> on the base
+table.</li>
+<li><a href="./sorting-limits-and-pagination.html#limiting-results"><code>.limit(n)</code> and <code>.limit(n).offset(m)</code></a>
+— server-side <code>Limit</code> plus cursor paging; <code>offset</code> is emulated by
+fetching <code>n + m</code> items and discarding the first <code>m</code>.</li>
+<li><a href="./sorting-limits-and-pagination.html#sorting-with-order_by"><code>.order_by(field.asc())</code> /
+<code>.order_by(field.desc())</code></a>
+on a sort key or GSI sort key — <code>Query</code> flips <code>ScanIndexForward</code>.</li>
+<li><a href="./querying-records.html#projecting-columns-with-select"><code>.select(...)</code></a>
+for column-narrow reads — projected to <code>ProjectionExpression</code> on the
+underlying operation.</li>
+<li><a href="./filtering-with-expressions.html#starts_with"><code>.starts_with("prefix")</code></a>
+on a string column — native <code>begins_with()</code>.</li>
+<li><a href="./field-options.html#scalar-arrays"><code>Vec&lt;scalar&gt;</code> predicates</a>:
+<code>.contains(v)</code>, <code>.len()</code>, <code>.is_empty()</code> lower to DynamoDB’s
+<code>contains()</code> and <code>size()</code> functions.</li>
+</ul>
+<p><a href="./sorting-limits-and-pagination.html#cursor-based-pagination">Cursor-based pagination</a>
+(<code>.paginate(per_page).next()</code>) works and tracks DynamoDB’s
+<code>LastEvaluatedKey</code> under the hood. The 1 MB-per-response cap that
+DynamoDB imposes on <code>Query</code> and <code>Scan</code> is transparent: the driver
+follows <code>LastEvaluatedKey</code> automatically when the caller hasn’t passed
+a <code>limit</code>.</p>
+<h2 id="unsupported-queries"><a class="header" href="#unsupported-queries">Unsupported queries</a></h2>
+<p>These will either fail at planning time, fall back to a full-table
+scan, or panic in the driver:</p>
+<p><strong><code>!=</code> on the primary key.</strong> The query planner removes the predicate
+from the index key condition and applies it as a post-filter, which
+forces a <code>Scan</code> instead of a <code>Query</code>. Avoid <code>!=</code> against the partition
+or sort key — it defeats the index.</p>
+<p><strong><code>LIKE</code> and <code>ILIKE</code>.</strong> DynamoDB has no <code>LIKE</code> operator. Calling
+<a href="./filtering-with-expressions.html#string-pattern-matching"><code>.like(...)</code> or <code>.ilike(...)</code></a>
+on a string field panics inside the driver. Use <code>.starts_with(...)</code>
+for prefix matching; substring and suffix matching are not supported
+by the backend at all and have to be done client-side after fetching
+the rows.</p>
+<p><strong>Backward pagination.</strong>
+<a href="./sorting-limits-and-pagination.html#navigating-pages"><code>.paginate(per_page).prev(&amp;db)</code></a>
+does not work — the driver does not produce a <code>prev_cursor</code>. DynamoDB
+itself can walk a query in either direction, but Toasty does not
+currently generate the reverse cursor.</p>
+<p><strong><code>ORDER BY</code> on a full-table scan.</strong> DynamoDB’s <code>Scan</code> API returns
+items in an arbitrary order with no server-side sort. A query that
+needs both a scan <em>and</em> an ordering returns an unsupported-feature
+error at planning time. Order is only available on a <code>Query</code>, which
+means the partition key must be pinned.</p>
+<p><strong><code>is_superset</code> / <code>intersects</code> with a non-literal right-hand side.</strong>
+For <a href="./field-options.html#scalar-arrays"><code>Vec&lt;scalar&gt;</code> fields</a> these
+predicates expand to one <code>contains()</code> clause per element on the
+right-hand side, so the right-hand side has to be a concrete <code>Vec&lt;T&gt;</code>
+known at query-construction time. A column
+reference or a subquery on the right is rejected with an
+unsupported-feature error. On the SQL backends the same predicates
+take any expression on the right.</p>
+<pre><code class="language-rust ignore">// Works — concrete Vec on the right.
+let admins = User::filter(User::fields().roles().is_superset(vec!["admin", "owner"]))
+    .all(&amp;mut db)
+    .await?;</code></pre>
+<h2 id="scans-vs-queries"><a class="header" href="#scans-vs-queries">Scans vs queries</a></h2>
+<p>A <code>Query</code> against DynamoDB is bounded by a partition key — it touches
+only the items in one partition and is paid for by the bytes returned.
+A <code>Scan</code> reads every item in the table and pays for every byte read.
+Costs and latency between the two diverge sharply once a table grows.</p>
+<p>The Toasty engine picks between them based on which fields the filter
+touches:</p>
+<ul>
+<li>A filter that pins the partition key (and optionally constrains the
+sort key) compiles to a <code>Query</code>.</li>
+<li>A filter on a <code>#[index]</code> field compiles to a <code>Query</code> against that
+GSI.</li>
+<li>A filter on a <code>#[unique]</code> field compiles to a <code>Query</code> against the
+unique index table.</li>
+<li>A filter that pins no key — or one that uses <code>!=</code> on the partition
+key — falls back to a <code>Scan</code> with a <code>FilterExpression</code>.</li>
+</ul>
+<p>Scan results come back unordered, so <code>.order_by(...)</code> combined with a
+scan returns an error rather than silently re-sorting client-side. If
+you need ordered access to every row, the model needs a partition key
+you can pin (a synthetic “all rows” partition is a common pattern) and
+a sort key to order on.</p>
+<p>A <code>Scan</code> with no <code>limit</code> follows <code>LastEvaluatedKey</code> to drain every
+page; a <code>Scan</code> with <code>.limit(n)</code> stops after the page that satisfies
+the limit. Either way, full-table scans are expensive enough that the
+driver does not emit them for queries that could match an index.</p>
+<h2 id="transactions-and-concurrency"><a class="header" href="#transactions-and-concurrency">Transactions and concurrency</a></h2>
+<p><strong>No interactive transactions.</strong>
+<a href="./transactions.html"><code>db.transaction()</code></a> returns an error on DynamoDB. The <code>Operation::Transaction</code> variant that the SQL drivers
+handle is rejected with an unsupported-feature error before it reaches
+the wire. DynamoDB <em>does</em> have <code>TransactWriteItems</code>, but it’s a single
+RPC that takes the full batch up front — not the begin/execute/commit
+sequence the Toasty <code>Transaction</code> API exposes. Toasty uses
+<code>TransactWriteItems</code> internally for unique-index maintenance and for
+batched writes that need conditional checks, but it does not surface
+as a transaction handle.</p>
+<p><strong>No row-level locking.</strong> DynamoDB has no equivalent of <code>SELECT ... FOR UPDATE</code>. The engine relies on optimistic concurrency control
+(<code>#[version]</code>) and on DynamoDB’s per-item conditional expressions for
+mutation-time safety.</p>
+<p><strong>Optimistic concurrency works.</strong> A <code>#[version]</code> field on a model
+maps to a conditional <code>UpdateItem</code> (or a conditional <code>Put</code> inside a
+transaction): the driver builds the right <code>attribute_not_exists</code> check
+on insert and the right <code>version = :old</code> check on update. A concurrent
+writer causes the conditional check to fail, and the engine surfaces
+the failure as a serialization error so the caller can retry. See
+<a href="./concurrency-control.html">Concurrency Control</a> for the model-level
+syntax.</p>
+<p><strong>Unique-index updates are atomic with the main item.</strong> Updating a
+record’s unique field issues a single <code>TransactWriteItems</code> that
+covers the base-table update, the old index entry’s delete, and the
+new index entry’s insert. Either everything commits or nothing does;
+the index table will not drift out of sync with the main table.</p>
+<h2 id="migrations"><a class="header" href="#migrations">Migrations</a></h2>
+<p>The driver supports schema creation but does not generate migrations.
+On first run, <code>push_schema</code> issues <code>CreateTable</code> for each model — base
+tables plus one auxiliary table per unique index — with the GSIs and
+attribute definitions filled in from the model. Tables are created
+with on-demand billing.</p>
+<p><code>generate_migration</code> and <code>apply_migration</code> are not implemented and
+will panic if called. The driver does not change column types, add
+GSIs, or rename attributes on an existing table — DynamoDB itself
+treats most of those as expensive or impossible operations, and Toasty
+does not paper over the difference.</p>
+<p>The practical upshot: model evolution on DynamoDB is a manual process
+today. Adding a new attribute to a model is generally fine (DynamoDB
+items are schemaless and new fields on new writes coexist with old
+items that don’t have them), but adding a GSI or a <code>#[unique]</code>
+constraint to an existing model requires deleting and recreating the
+table, or doing the schema change through the AWS console and
+back-filling the index data yourself. The <a href="./schema-management.html">Migrations and Schema
+Management</a> chapter has more on what Toasty’s
+migration tooling does on the SQL backends — none of it currently
+applies here.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="sqlite.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                            </a>
+
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="sqlite.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                    </a>
+
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr-ef4e11c1.min.js"></script>
+        <script src="mark-09e88c2c.min.js"></script>
+        <script src="searcher-c2a407aa.js"></script>
+
+        <script src="clipboard-1626706a.min.js"></script>
+        <script src="highlight-abc7f01d.js"></script>
+        <script src="book-a0b12cfe.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

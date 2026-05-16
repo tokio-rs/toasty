@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["native_enum_filter_operations"],"mod":["native_enum_crud_lifecycle","native_enum_custom_type_name","native_enum_multiple_fields"]};

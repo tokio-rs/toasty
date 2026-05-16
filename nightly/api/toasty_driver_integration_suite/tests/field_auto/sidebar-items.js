@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["auto_increment_explicit","auto_increment_with_composite_key_errors"],"mod":["auto_increment_implicit","auto_increment_with_associations","auto_uuid_v4","auto_uuid_v7"]};

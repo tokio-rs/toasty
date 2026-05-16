@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["app","db","mapping"],"struct":["Builder","Name","Schema"]};

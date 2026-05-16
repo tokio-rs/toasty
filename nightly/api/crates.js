@@ -1,0 +1,2 @@
+window.ALL_CRATES = ["example_composite_key","example_hello_toasty","example_todo_with_cli","example_user_has_one_profile","tests","tests_fixture_post","tests_fixture_user","toasty","toasty_cli","toasty_core","toasty_driver_dynamodb","toasty_driver_integration_suite","toasty_driver_integration_suite_macros","toasty_driver_mysql","toasty_driver_postgresql","toasty_driver_sqlite","toasty_macros","toasty_sql","todo_app","todo_cli"];
+//{"start":21,"fragment_lengths":[23,23,24,31,8,21,21,9,13,14,25,34,41,22,27,23,16,13,11,11]}

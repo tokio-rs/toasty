@@ -1,0 +1,137 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A live database session that can execute `Operation`s."><title>Connection in toasty_core::driver - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="toasty_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Connection</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../toasty_core/index.html">toasty_<wbr>core</a><span class="version">0.6.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Connection</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li></ul><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.applied_migrations" title="applied_migrations">applied_migrations</a></li><li><a href="#tymethod.apply_migration" title="apply_migration">apply_migration</a></li><li><a href="#tymethod.exec" title="exec">exec</a></li><li><a href="#tymethod.push_schema" title="push_schema">push_schema</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.is_valid" title="is_valid">is_valid</a></li><li><a href="#method.ping" title="ping">ping</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2><a href="index.html">In toasty_<wbr>core::<wbr>driver</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">toasty_core</a>::<wbr><a href="index.html">driver</a></div><h1>Trait <span class="trait">Connection</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/toasty_core/driver.rs.html#136-218">Source</a> </span></div><pre class="rust item-decl"><code>pub trait Connection:
+    <a class="trait" href="https://doc.rust-lang.org/1.95.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a>
+    + <a class="trait" href="https://doc.rust-lang.org/1.95.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a>
+    + 'static {
+    // Required methods
+    fn <a href="#tymethod.exec" class="fn">exec</a>&lt;'life0, 'life1, 'async_trait&gt;(
+        &amp;'life0 mut self,
+        schema: &amp;'life1 <a class="struct" href="https://doc.rust-lang.org/1.95.0/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;<a class="struct" href="../schema/struct.Schema.html" title="struct toasty_core::schema::Schema">Schema</a>&gt;,
+        plan: <a class="enum" href="operation/enum.Operation.html" title="enum toasty_core::driver::operation::Operation">Operation</a>,
+    ) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.95.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.95.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.95.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type toasty_core::Result">Result</a>&lt;<a class="struct" href="struct.ExecResponse.html" title="struct toasty_core::driver::ExecResponse">ExecResponse</a>&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.95.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
+       <span class="where">where Self: 'async_trait,
+             'life0: 'async_trait,
+             'life1: 'async_trait</span>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.push_schema" class="fn">push_schema</a>&lt;'life0, 'life1, 'async_trait&gt;(
+        &amp;'life0 mut self,
+        _schema: &amp;'life1 <a class="struct" href="../schema/struct.Schema.html" title="struct toasty_core::schema::Schema">Schema</a>,
+    ) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.95.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.95.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.95.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type toasty_core::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.95.0/std/primitive.unit.html">()</a>&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.95.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
+       <span class="where">where Self: 'async_trait,
+             'life0: 'async_trait,
+             'life1: 'async_trait</span>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.applied_migrations" class="fn">applied_migrations</a>&lt;'life0, 'async_trait&gt;(
+        &amp;'life0 mut self,
+    ) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.95.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.95.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.95.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type toasty_core::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.95.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="struct" href="../schema/db/struct.AppliedMigration.html" title="struct toasty_core::schema::db::AppliedMigration">AppliedMigration</a>&gt;&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.95.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
+       <span class="where">where Self: 'async_trait,
+             'life0: 'async_trait</span>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.apply_migration" class="fn">apply_migration</a>&lt;'life0, 'life1, 'life2, 'async_trait&gt;(
+        &amp;'life0 mut self,
+        id: <a class="primitive" href="https://doc.rust-lang.org/1.95.0/std/primitive.u64.html">u64</a>,
+        name: &amp;'life1 <a class="primitive" href="https://doc.rust-lang.org/1.95.0/std/primitive.str.html">str</a>,
+        migration: &amp;'life2 <a class="enum" href="../schema/db/enum.Migration.html" title="enum toasty_core::schema::db::Migration">Migration</a>,
+    ) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.95.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.95.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.95.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type toasty_core::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.95.0/std/primitive.unit.html">()</a>&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.95.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
+       <span class="where">where Self: 'async_trait,
+             'life0: 'async_trait,
+             'life1: 'async_trait,
+             'life2: 'async_trait</span>;
+
+    // Provided methods
+    fn <a href="#method.is_valid" class="fn">is_valid</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.95.0/std/primitive.bool.html">bool</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.ping" class="fn">ping</a>&lt;'life0, 'async_trait&gt;(
+        &amp;'life0 mut self,
+    ) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.95.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.95.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.95.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type toasty_core::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.95.0/std/primitive.unit.html">()</a>&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.95.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
+       <span class="where">where Self: 'async_trait,
+             'life0: 'async_trait</span> { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A live database session that can execute <a href="operation/enum.Operation.html" title="enum toasty_core::driver::operation::Operation"><code>Operation</code></a>s.</p>
+<p>Connections are obtained from <a href="trait.Driver.html#tymethod.connect" title="method toasty_core::driver::Driver::connect"><code>Driver::connect</code></a> and are managed by the
+connection pool. All query execution flows through <a href="trait.Connection.html#tymethod.exec" title="method toasty_core::driver::Connection::exec"><code>Connection::exec</code></a>,
+which accepts an <a href="operation/enum.Operation.html" title="enum toasty_core::driver::operation::Operation"><code>Operation</code></a> and returns an <a href="struct.ExecResponse.html" title="struct toasty_core::driver::ExecResponse"><code>ExecResponse</code></a>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>toasty_core::driver::{Connection, Operation, ExecResponse};
+<span class="kw">use </span>toasty_core::driver::operation::Transaction;
+
+<span class="comment">// Execute a transaction start operation on a connection:
+</span><span class="kw">let </span>response = conn.exec(<span class="kw-2">&amp;</span>schema, Transaction::start().into()).<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div></div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.exec" class="method"><a class="src rightside" href="../../src/toasty_core/driver.rs.html#143">Source</a><h4 class="code-header">fn <a href="#tymethod.exec" class="fn">exec</a>&lt;'life0, 'life1, 'async_trait&gt;(
+    &amp;'life0 mut self,
+    schema: &amp;'life1 <a class="struct" href="https://doc.rust-lang.org/1.95.0/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;<a class="struct" href="../schema/struct.Schema.html" title="struct toasty_core::schema::Schema">Schema</a>&gt;,
+    plan: <a class="enum" href="operation/enum.Operation.html" title="enum toasty_core::driver::operation::Operation">Operation</a>,
+) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.95.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.95.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.95.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type toasty_core::Result">Result</a>&lt;<a class="struct" href="struct.ExecResponse.html" title="struct toasty_core::driver::ExecResponse">ExecResponse</a>&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.95.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<div class="where">where
+    Self: 'async_trait,
+    'life0: 'async_trait,
+    'life1: 'async_trait,</div></h4></section></summary><div class="docblock"><p>Executes a database operation and returns the result.</p>
+<p>This is the single entry point for all database interactions. The
+query engine compiles user queries into <a href="operation/enum.Operation.html" title="enum toasty_core::driver::operation::Operation"><code>Operation</code></a> values and
+dispatches them here. The driver translates each operation into
+backend-specific calls and returns an <a href="struct.ExecResponse.html" title="struct toasty_core::driver::ExecResponse"><code>ExecResponse</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.push_schema" class="method"><a class="src rightside" href="../../src/toasty_core/driver.rs.html#206">Source</a><h4 class="code-header">fn <a href="#tymethod.push_schema" class="fn">push_schema</a>&lt;'life0, 'life1, 'async_trait&gt;(
+    &amp;'life0 mut self,
+    _schema: &amp;'life1 <a class="struct" href="../schema/struct.Schema.html" title="struct toasty_core::schema::Schema">Schema</a>,
+) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.95.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.95.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.95.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type toasty_core::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.95.0/std/primitive.unit.html">()</a>&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.95.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<div class="where">where
+    Self: 'async_trait,
+    'life0: 'async_trait,
+    'life1: 'async_trait,</div></h4></section></summary><div class="docblock"><p>Creates tables and indices defined in the schema on the database.
+TODO: This will probably use database introspection in the future.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.applied_migrations" class="method"><a class="src rightside" href="../../src/toasty_core/driver.rs.html#209">Source</a><h4 class="code-header">fn <a href="#tymethod.applied_migrations" class="fn">applied_migrations</a>&lt;'life0, 'async_trait&gt;(
+    &amp;'life0 mut self,
+) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.95.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.95.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.95.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type toasty_core::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.95.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="struct" href="../schema/db/struct.AppliedMigration.html" title="struct toasty_core::schema::db::AppliedMigration">AppliedMigration</a>&gt;&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.95.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<div class="where">where
+    Self: 'async_trait,
+    'life0: 'async_trait,</div></h4></section></summary><div class="docblock"><p>Returns a list of currently applied database migrations.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.apply_migration" class="method"><a class="src rightside" href="../../src/toasty_core/driver.rs.html#212-217">Source</a><h4 class="code-header">fn <a href="#tymethod.apply_migration" class="fn">apply_migration</a>&lt;'life0, 'life1, 'life2, 'async_trait&gt;(
+    &amp;'life0 mut self,
+    id: <a class="primitive" href="https://doc.rust-lang.org/1.95.0/std/primitive.u64.html">u64</a>,
+    name: &amp;'life1 <a class="primitive" href="https://doc.rust-lang.org/1.95.0/std/primitive.str.html">str</a>,
+    migration: &amp;'life2 <a class="enum" href="../schema/db/enum.Migration.html" title="enum toasty_core::schema::db::Migration">Migration</a>,
+) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.95.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.95.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.95.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type toasty_core::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.95.0/std/primitive.unit.html">()</a>&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.95.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<div class="where">where
+    Self: 'async_trait,
+    'life0: 'async_trait,
+    'life1: 'async_trait,
+    'life2: 'async_trait,</div></h4></section></summary><div class="docblock"><p>Applies a single migration to the database and records it as applied.</p>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.is_valid" class="method"><a class="src rightside" href="../../src/toasty_core/driver.rs.html#171-173">Source</a><h4 class="code-header">fn <a href="#method.is_valid" class="fn">is_valid</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.95.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Cheap, synchronous, local check that the driver’s client object
+still considers the connection open.</p>
+<p>Examples: a flag the driver flips when its background reader
+reports a socket close (the MySQL driver does this), an
+<code>is_closed()</code> accessor on the underlying client. Implementations
+must not block and must not perform I/O — the check runs on the
+hot path of every recycle and must complete in nanoseconds.
+Drivers that cannot answer cheaply leave this at the default and
+rely on the pool’s <a href="trait.Connection.html#method.ping" title="method toasty_core::driver::Connection::ping"><code>ping</code></a> sweep or the per-acquire
+pre-ping option to catch a dead connection.</p>
+<p>The pool consults <code>is_valid()</code> whenever a connection is returned
+to the idle set. A <code>false</code> result causes the slot to be dropped
+before another caller can pick it up; the pool then returns
+another idle connection or opens a fresh one. A connection is
+also re-checked immediately after every <a href="trait.Connection.html#tymethod.exec" title="method toasty_core::driver::Connection::exec"><code>Connection::exec</code></a>; if
+the operation flipped the flag (e.g. the driver classified the
+error as connection-lost and updated its state), the worker task
+exits and the slot is evicted.</p>
+<p>The default returns <code>true</code>. Drivers without a usable passive
+signal stay on this default and rely on the active path: an
+operation surfaces <a href="../struct.Error.html#method.connection_lost" title="associated function toasty_core::Error::connection_lost"><code>crate::Error::connection_lost</code></a>, the pool
+drops the slot, and the background sweep eagerly pings the rest
+of the idle pool.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.ping" class="method"><a class="src rightside" href="../../src/toasty_core/driver.rs.html#200-202">Source</a><h4 class="code-header">fn <a href="#method.ping" class="fn">ping</a>&lt;'life0, 'async_trait&gt;(
+    &amp;'life0 mut self,
+) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.95.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.95.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.95.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type toasty_core::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.95.0/std/primitive.unit.html">()</a>&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.95.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<div class="where">where
+    Self: 'async_trait,
+    'life0: 'async_trait,</div></h4></section></summary><div class="docblock"><p>Active liveness probe. The pool’s background health-check sweep
+calls this on the longest-idle connection on every tick, and on
+every other idle connection when an escalation is triggered.
+When <code>pool_pre_ping</code> is enabled, the pool also calls it on every
+acquire.</p>
+<p>Drivers MUST classify a failure here as
+<a href="../struct.Error.html#method.connection_lost" title="associated function toasty_core::Error::connection_lost"><code>crate::Error::connection_lost</code></a> rather than a generic operation
+error. The pool branches on that classification to drop the slot
+(vs. returning it to the idle set after a transient query
+error), and a user-observed <code>connection_lost</code> is what wakes the
+pool’s sweep to eagerly check the rest of the pool. Returning
+any other error variant from <code>ping</code> will leak a dead connection
+back into rotation.</p>
+<p>Drivers SHOULD make this the cheapest round-trip the backend
+supports (<code>SELECT 1</code>, <code>COM_PING</code>, etc.). A ping that runs slower
+than the sweep’s per-call timeout (5 seconds, internal) is
+treated as failed.</p>
+<p>The default returns <code>Ok(())</code> without doing any I/O. That is the
+right answer for drivers whose connection layer cannot fail in
+isolation (the in-process SQLite driver) or whose backend
+manages its own pool beneath this surface (DynamoDB, where each
+<code>exec</code> is an HTTP call with its own retry policy).</p>
+</div></details></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../../trait.impl/toasty_core/driver/trait.Connection.js" async></script></section></div></main></body></html>
