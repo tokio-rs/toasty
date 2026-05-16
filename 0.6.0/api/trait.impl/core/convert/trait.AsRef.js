@@ -1,0 +1,9 @@
+(function() {
+    const implementors = Object.fromEntries([["toasty",[["impl&lt;M&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.95.0/core/convert/trait.AsRef.html\" title=\"trait core::convert::AsRef\">AsRef</a>&lt;Update&gt; for <a class=\"struct\" href=\"toasty/stmt/struct.Update.html\" title=\"struct toasty::stmt::Update\">Update</a>&lt;M&gt;",0]]],["toasty_core",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.95.0/core/convert/trait.AsRef.html\" title=\"trait core::convert::AsRef\">AsRef</a>&lt;<a class=\"enum\" href=\"toasty_core/stmt/enum.Value.html\" title=\"enum toasty_core::stmt::Value\">Value</a>&gt; for <a class=\"enum\" href=\"toasty_core/stmt/enum.Value.html\" title=\"enum toasty_core::stmt::Value\">Value</a>",0],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.95.0/core/convert/trait.AsRef.html\" title=\"trait core::convert::AsRef\">AsRef</a>&lt;[<a class=\"enum\" href=\"toasty_core/stmt/enum.Expr.html\" title=\"enum toasty_core::stmt::Expr\">Expr</a>]&gt; for <a class=\"struct\" href=\"toasty_core/stmt/struct.ExprRecord.html\" title=\"struct toasty_core::stmt::ExprRecord\">ExprRecord</a>",0],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.95.0/core/convert/trait.AsRef.html\" title=\"trait core::convert::AsRef\">AsRef</a>&lt;[<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.95.0/std/primitive.usize.html\">usize</a>]&gt; for <a class=\"struct\" href=\"toasty_core/stmt/struct.Projection.html\" title=\"struct toasty_core::stmt::Projection\">Projection</a>",0]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":59,"fragment_lengths":[306,1191]}

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["crud_person_self_referential"]};

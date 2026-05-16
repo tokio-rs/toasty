@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["select_has_one_basic","select_has_one_first","select_has_one_with_filter"]};

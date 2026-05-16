@@ -1,0 +1,252 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Derive macro that turns a struct or enum into an embedded type stored inline in a parent model’s table."><title>Embed in toasty_macros - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="toasty_macros" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc derive"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Embed</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../toasty_macros/index.html">toasty_<wbr>macros</a><span class="version">0.6.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Embed</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#structs" title="Structs">Structs</a><ul><li><a href="#nesting" title="Nesting">Nesting</a></li></ul></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#newtype-auto-proxying" title="Newtype `Auto` proxying">Newtype <code>Auto</code> proxying</a></li><li><a href="#field-level-attributes" title="Field-level attributes">Field-level attributes</a><ul><li><a href="#column--customize-the-database-column" title="`#[column(...)]` — customize the database column"><code>#[column(...)]</code> — customize the database column</a></li><li><a href="#index--add-a-database-index" title="`#[index]` — add a database index"><code>#[index]</code> — add a database index</a></li><li><a href="#unique--add-a-unique-constraint" title="`#[unique]` — add a unique constraint"><code>#[unique]</code> — add a unique constraint</a></li></ul></li><li><a href="#using-embedded-types-in-a-model" title="Using embedded types in a model">Using embedded types in a model</a></li><li><a href="#constraints" title="Constraints">Constraints</a></li><li><a href="#full-example" title="Full example">Full example</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate toasty_<wbr>macros</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">toasty_macros</a></div><h1>Derive Macro <span class="derive">Embed</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/toasty_macros/lib.rs.html#933-938">Source</a> </span></div><pre class="rust item-decl"><code>#[derive(Embed)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[column]
+    #[deferred]
+    #[index]
+    #[unique]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Derive macro that turns a struct or enum into an embedded type stored
+inline in a parent model’s table.</p>
+<p>Embedded types do not have their own tables or primary keys. Their
+fields are flattened into the parent model’s columns. Use <code>Embed</code> for
+value objects (addresses, coordinates, metadata) and enums
+(status codes, contact info variants).</p>
+<h2 id="structs"><a class="doc-anchor" href="#structs">§</a>Structs</h2>
+<p>An embedded struct’s fields become columns in the parent table, prefixed
+with the field name. For example, an <code>address: Address</code> field with
+<code>street</code> and <code>city</code> produces columns <code>address_street</code> and
+<code>address_city</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(toasty::Embed)]
+</span><span class="kw">struct </span>Address {
+    street: String,
+    city: String,
+}
+
+<span class="attr">#[derive(toasty::Model)]
+</span><span class="kw">struct </span>User {
+    <span class="attr">#[key]
+    #[auto]
+    </span>id: i64,
+    name: String,
+    address: Address,
+}</code></pre></div>
+<p>Applying <code>#[derive(Embed)]</code> to a struct generates:</p>
+<ul>
+<li>An <a href="toasty::Embed"><code>Embed</code></a> trait implementation (which extends <a href="toasty::Register"><code>Register</code></a>).</li>
+<li>A <code>Fields</code> struct returned by <code>&lt;Type&gt;::fields()</code> for building
+filter expressions on individual fields.</li>
+<li>An <code>Update</code> struct used by the parent model’s update builder for
+partial field updates.</li>
+</ul>
+<h3 id="nesting"><a class="doc-anchor" href="#nesting">§</a>Nesting</h3>
+<p>Embedded structs can contain other embedded types. Columns are
+flattened with chained prefixes:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(toasty::Embed)]
+</span><span class="kw">struct </span>Location {
+    lat: i64,
+    lon: i64,
+}
+
+<span class="attr">#[derive(toasty::Embed)]
+</span><span class="kw">struct </span>Address {
+    street: String,
+    city: Location,
+}</code></pre></div>
+<p>When <code>Address</code> is embedded as <code>address</code> in a parent model, this
+produces columns <code>address_street</code>, <code>address_city_lat</code>, and
+<code>address_city_lon</code>.</p>
+<h2 id="enums"><a class="doc-anchor" href="#enums">§</a>Enums</h2>
+<p>An embedded enum stores a discriminant value identifying the active
+variant. Each variant must have a <code>#[column(variant = N)]</code> attribute
+assigning a stable integer discriminant.</p>
+<p><strong>Unit-only enum:</strong></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(toasty::Embed)]
+</span><span class="kw">enum </span>Status {
+    <span class="attr">#[column(variant = <span class="number">1</span>)]
+    </span>Pending,
+    <span class="attr">#[column(variant = <span class="number">2</span>)]
+    </span>Active,
+    <span class="attr">#[column(variant = <span class="number">3</span>)]
+    </span>Archived,
+}</code></pre></div>
+<p>A unit-only enum occupies a single column in the parent table. The
+column stores the discriminant as an integer.</p>
+<p><strong>Data-carrying enum:</strong></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(toasty::Embed)]
+</span><span class="kw">enum </span>ContactInfo {
+    <span class="attr">#[column(variant = <span class="number">1</span>)]
+    </span>Email { address: String },
+    <span class="attr">#[column(variant = <span class="number">2</span>)]
+    </span>Phone { number: String },
+}</code></pre></div>
+<p>A data-carrying enum stores the discriminant column plus one nullable
+column per variant field. For example, a <code>contact: ContactInfo</code> field
+produces columns <code>contact</code> (discriminant), <code>contact_address</code>, and
+<code>contact_number</code>. Only the columns belonging to the active variant
+contain values; the rest are <code>NULL</code>.</p>
+<p><strong>Mixed enum</strong> (unit and data variants together):</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(toasty::Embed)]
+</span><span class="kw">enum </span>Status {
+    <span class="attr">#[column(variant = <span class="number">1</span>)]
+    </span>Pending,
+    <span class="attr">#[column(variant = <span class="number">2</span>)]
+    </span>Failed { reason: String },
+    <span class="attr">#[column(variant = <span class="number">3</span>)]
+    </span>Done,
+}</code></pre></div>
+<p>Applying <code>#[derive(Embed)]</code> to an enum generates:</p>
+<ul>
+<li>An <a href="toasty::Embed"><code>Embed</code></a> trait implementation (which extends <a href="toasty::Register"><code>Register</code></a>).</li>
+<li>A <code>Fields</code> struct with <code>is_&lt;variant&gt;()</code> methods and comparison
+methods (<code>eq</code>, <code>ne</code>, <code>in_list</code>).</li>
+<li>For data-carrying variants, per-variant handle types with a
+<code>matches(closure)</code> method for pattern matching and field access.</li>
+</ul>
+<h2 id="newtype-auto-proxying"><a class="doc-anchor" href="#newtype-auto-proxying">§</a>Newtype <code>Auto</code> proxying</h2>
+<p>A tuple-newtype embedded struct (one unnamed field) automatically
+implements <code>Auto</code> whenever its inner type does — no annotation
+required. Toasty emits a <code>NewtypeOf</code> marker carrying the inner type
+and a blanket <code>Auto</code> impl resolves through it:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(toasty::Embed)]
+</span><span class="kw">struct </span>UserId(uuid::Uuid);
+
+<span class="attr">#[derive(toasty::Model)]
+</span><span class="kw">struct </span>User {
+    <span class="attr">#[key]
+    #[auto]
+    </span>id: UserId,
+    name: String,
+}</code></pre></div>
+<p>Newtypes wrapping non-<code>Auto</code> types stay non-<code>Auto</code>; nesting works
+transparently (<code>Outer(Inner(u64))</code> proxies through both layers).</p>
+<h2 id="field-level-attributes"><a class="doc-anchor" href="#field-level-attributes">§</a>Field-level attributes</h2><h3 id="column--customize-the-database-column"><a class="doc-anchor" href="#column--customize-the-database-column">§</a><code>#[column(...)]</code> — customize the database column</h3>
+<p><strong>On struct fields</strong>, overrides the column name and/or type:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(toasty::Embed)]
+</span><span class="kw">struct </span>Address {
+    <span class="attr">#[column(<span class="string">"addr_street"</span>)]
+    </span>street: String,
+
+    <span class="attr">#[column(<span class="kw">type </span>= varchar(<span class="number">255</span>))]
+    </span>city: String,
+}</code></pre></div>
+<p>See <a href="derive.Model.html" title="derive toasty_macros::Model"><code>Model</code></a> for the full list of supported column
+types.</p>
+<p><strong>On enum variants</strong>, <code>#[column(variant = N)]</code> is <strong>required</strong> and
+assigns the integer discriminant stored in the database:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[column(variant = <span class="number">1</span>)]
+</span>Pending,</code></pre></div>
+<p>Discriminant values must be unique across all variants of the enum.
+They are stored as <code>i64</code>.</p>
+<h3 id="index--add-a-database-index"><a class="doc-anchor" href="#index--add-a-database-index">§</a><code>#[index]</code> — add a database index</h3>
+<p>Creates a non-unique index on the field’s flattened column.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(toasty::Embed)]
+</span><span class="kw">struct </span>Contact {
+    <span class="attr">#[index]
+    </span>country: String,
+}</code></pre></div><h3 id="unique--add-a-unique-constraint"><a class="doc-anchor" href="#unique--add-a-unique-constraint">§</a><code>#[unique]</code> — add a unique constraint</h3>
+<p>Creates a unique index on the field’s flattened column. The database
+enforces uniqueness.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(toasty::Embed)]
+</span><span class="kw">struct </span>Contact {
+    <span class="attr">#[unique]
+    </span>email: String,
+}</code></pre></div><h2 id="using-embedded-types-in-a-model"><a class="doc-anchor" href="#using-embedded-types-in-a-model">§</a>Using embedded types in a model</h2>
+<p>Reference an embedded type as a field on a <a href="derive.Model.html" title="derive toasty_macros::Model"><code>Model</code></a>
+struct. The parent model’s create and update builders gain a setter for
+the embedded field. Partial updates of individual sub-fields use
+<code>stmt::patch</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>toasty::stmt;
+
+<span class="comment">// Full replacement
+</span>user.update()
+    .address(Address { street: <span class="string">"456 Oak Ave"</span>.into(), city: <span class="string">"Seattle"</span>.into() })
+    .exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;
+
+<span class="comment">// Partial update — updates city, leaves street unchanged
+</span>user.update()
+    .address(stmt::patch(Address::fields().city(), <span class="string">"Portland"</span>))
+    .exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div>
+<p>Embedded struct fields are queryable through the parent model’s
+<code>fields()</code> accessor:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>users = User::filter(User::fields().address().city().eq(<span class="string">"Seattle"</span>))
+    .exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div><h2 id="constraints"><a class="doc-anchor" href="#constraints">§</a>Constraints</h2>
+<ul>
+<li>Embedded structs must have named fields (tuple structs are not
+supported).</li>
+<li>Generic parameters are not supported.</li>
+<li>Every enum variant must have a <code>#[column(variant = N)]</code> attribute
+with a unique discriminant value.</li>
+<li>Enum variants may be unit variants or have named fields. Tuple
+variants are not supported.</li>
+<li>Embedded types cannot have primary keys, relations, <code>#[auto]</code>,
+<code>#[default]</code>, <code>#[update]</code>, or <code>#[serialize]</code> attributes.</li>
+</ul>
+<h2 id="full-example"><a class="doc-anchor" href="#full-example">§</a>Full example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Debug, PartialEq, toasty::Embed)]
+</span><span class="kw">enum </span>Priority {
+    <span class="attr">#[column(variant = <span class="number">1</span>)]
+    </span>Low,
+    <span class="attr">#[column(variant = <span class="number">2</span>)]
+    </span>Normal,
+    <span class="attr">#[column(variant = <span class="number">3</span>)]
+    </span>High,
+}
+
+<span class="attr">#[derive(Debug, toasty::Embed)]
+</span><span class="kw">struct </span>Metadata {
+    version: i64,
+    status: String,
+    priority: Priority,
+}
+
+<span class="attr">#[derive(Debug, toasty::Model)]
+</span><span class="kw">struct </span>Document {
+    <span class="attr">#[key]
+    #[auto]
+    </span>id: i64,
+
+    title: String,
+
+    <span class="attr">#[unique]
+    </span>slug: String,
+
+    meta: Metadata,
+}
+
+<span class="comment">// Create
+</span><span class="kw">let </span><span class="kw-2">mut </span>doc = Document::create()
+    .title(<span class="string">"Design doc"</span>)
+    .slug(<span class="string">"design-doc"</span>)
+    .meta(Metadata {
+        version: <span class="number">1</span>,
+        status: <span class="string">"draft"</span>.to_string(),
+        priority: Priority::Normal,
+    })
+    .exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;
+
+<span class="comment">// Query by embedded field
+</span><span class="kw">let </span>drafts = Document::filter(
+    Document::fields().meta().status().eq(<span class="string">"draft"</span>)
+).exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;
+
+<span class="comment">// Partial update
+</span><span class="kw">use </span>toasty::stmt;
+doc.update()
+    .meta(stmt::apply([
+        stmt::patch(Metadata::fields().version(), <span class="number">2</span>),
+        stmt::patch(Metadata::fields().status(), <span class="string">"published"</span>),
+    ]))
+    .exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div></div></details></section></div></main></body></html>

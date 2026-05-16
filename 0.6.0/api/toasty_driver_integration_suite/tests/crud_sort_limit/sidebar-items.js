@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["paginate_for_dynamodb"],"mod":["first_narrows_to_single_row","limit_offset","paginate","sort_asc"]};

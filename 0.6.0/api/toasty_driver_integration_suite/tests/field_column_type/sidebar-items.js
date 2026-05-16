@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["specify_constrained_string_field","specify_invalid_varchar_size","specify_uuid_as_bytes","specify_uuid_as_text","specify_varchar_ty_when_not_supported"]};

@@ -1,0 +1,162 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Expands struct-literal syntax into create builder method chains. Returns one or more create builders — call `.exec(&#38;mut db).await?` to insert the record(s)."><title>create in toasty - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="toasty" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc macro"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">create</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../toasty/index.html">toasty</a><span class="version">0.6.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">create</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#syntax-forms" title="Syntax forms">Syntax forms</a><ul><li><a href="#field-syntax" title="Field syntax">Field syntax</a></li><li><a href="#single-creation" title="Single creation">Single creation</a></li><li><a href="#scoped-creation" title="Scoped creation">Scoped creation</a></li><li><a href="#typed-batch" title="Typed batch">Typed batch</a></li><li><a href="#tuple" title="Tuple">Tuple</a></li><li><a href="#mixed-tuple" title="Mixed tuple">Mixed tuple</a></li></ul></li><li><a href="#field-values" title="Field values">Field values</a><ul><li><a href="#expressions" title="Expressions">Expressions</a></li><li><a href="#nested-struct-belongsto--hasone" title="Nested struct (BelongsTo / HasOne)">Nested struct (BelongsTo / HasOne)</a></li><li><a href="#nested-list-hasmany" title="Nested list (HasMany)">Nested list (HasMany)</a></li><li><a href="#deep-nesting" title="Deep nesting">Deep nesting</a></li></ul></li><li><a href="#fields-that-can-be-omitted" title="Fields that can be omitted">Fields that can be omitted</a></li><li><a href="#compile-errors" title="Compile errors">Compile errors</a></li><li><a href="#return-type" title="Return type">Return type</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate toasty</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">toasty</a></div><h1>Macro <span class="macro">create</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/toasty_macros/lib.rs.html#1773">Source</a> </span></div><pre class="rust item-decl"><code>create!() { <span class="comment">/* proc-macro */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Expands struct-literal syntax into create builder method chains. Returns one
+or more create builders — call <code>.exec(&amp;mut db).await?</code> to insert the
+record(s).</p>
+<h2 id="syntax-forms"><a class="doc-anchor" href="#syntax-forms">§</a>Syntax forms</h2><h3 id="field-syntax"><a class="doc-anchor" href="#field-syntax">§</a>Field syntax</h3>
+<p>Fields inside <code>{ ... }</code> can use either explicit or shorthand syntax:</p>
+<ul>
+<li><strong>Explicit:</strong> <code>field: expr</code> — sets the field to the given expression.</li>
+<li><strong>Shorthand:</strong> <code>field</code> — equivalent to <code>field: field</code>, using a variable
+with the same name as the field.</li>
+</ul>
+<p>These can be mixed freely, just like Rust struct literals:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">let </span>name = <span class="string">"Alice"</span>.to_string();
+<span class="macro">toasty::create!</span>(User { name, email: <span class="string">"alice@example.com" </span>})</code></pre></div><h3 id="single-creation"><a class="doc-anchor" href="#single-creation">§</a>Single creation</h3>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">toasty::create!</span>(Type { field: value, ... })</code></pre></div>
+<p>Expands to <code>Type::create().field(value)...</code> and returns the model’s create
+builder (e.g., <code>UserCreate</code>).</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>user = <span class="macro">toasty::create!</span>(User {
+    name: <span class="string">"Alice"</span>,
+    email: <span class="string">"alice@example.com"
+</span>})
+.exec(<span class="kw-2">&amp;mut </span>db)
+.<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div><h3 id="scoped-creation"><a class="doc-anchor" href="#scoped-creation">§</a>Scoped creation</h3>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">toasty::create!</span>(<span class="kw">in </span>expr { field: value, ... })</code></pre></div>
+<p>Expands to <code>expr.create().field(value)...</code>. Creates a record through a
+relation accessor. The foreign key is set automatically.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>todo = <span class="macro">toasty::create!</span>(<span class="kw">in </span>user.todos() { title: <span class="string">"buy milk" </span>})
+    .exec(<span class="kw-2">&amp;mut </span>db)
+    .<span class="kw">await</span><span class="question-mark">?</span>;
+
+<span class="comment">// todo.user_id == user.id</span></code></pre></div><h3 id="typed-batch"><a class="doc-anchor" href="#typed-batch">§</a>Typed batch</h3>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">toasty::create!</span>(Type::[ { fields }, { fields }, ... ])</code></pre></div>
+<p>Expands to <code>toasty::batch([builder1, builder2, ...])</code> and returns
+<code>Vec&lt;Type&gt;</code> when executed:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>users = <span class="macro">toasty::create!</span>(User::[
+    { name: <span class="string">"Alice" </span>},
+    { name: <span class="string">"Bob" </span>},
+])
+.exec(<span class="kw-2">&amp;mut </span>db)
+.<span class="kw">await</span><span class="question-mark">?</span>;
+<span class="comment">// users: Vec&lt;User&gt;</span></code></pre></div><h3 id="tuple"><a class="doc-anchor" href="#tuple">§</a>Tuple</h3>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">toasty::create!</span>((
+    Type1 { fields },
+    Type2 { fields },
+    ...
+))</code></pre></div>
+<p>Expands to <code>toasty::batch((builder1, builder2, ...))</code> and returns a
+tuple matching the input types:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>(user, post) = <span class="macro">toasty::create!</span>((
+    User { name: <span class="string">"Alice" </span>},
+    Post { title: <span class="string">"Hello" </span>},
+))
+.exec(<span class="kw-2">&amp;mut </span>db)
+.<span class="kw">await</span><span class="question-mark">?</span>;
+<span class="comment">// (User, Post)</span></code></pre></div><h3 id="mixed-tuple"><a class="doc-anchor" href="#mixed-tuple">§</a>Mixed tuple</h3>
+<p>Typed batches and single creates can be mixed inside a tuple:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>(users, post) = <span class="macro">toasty::create!</span>((
+    User::[ { name: <span class="string">"Alice" </span>}, { name: <span class="string">"Bob" </span>} ],
+    Post { title: <span class="string">"Hello" </span>},
+))
+.exec(<span class="kw-2">&amp;mut </span>db)
+.<span class="kw">await</span><span class="question-mark">?</span>;
+<span class="comment">// (Vec&lt;User&gt;, Post)</span></code></pre></div><h2 id="field-values"><a class="doc-anchor" href="#field-values">§</a>Field values</h2><h3 id="expressions"><a class="doc-anchor" href="#expressions">§</a>Expressions</h3>
+<p>Any Rust expression is valid as a field value — literals, variables, and
+function calls all work. When a variable has the same name as the field,
+you can use the shorthand syntax (just <code>name</code> instead of <code>name: name</code>):</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>name = <span class="string">"Alice"</span>;
+<span class="kw">let _ </span>= <span class="macro">toasty::create!</span>(User { name, email: <span class="macro">format!</span>(<span class="string">"{}@example.com"</span>, name) });</code></pre></div>
+<p>When the variable name differs from the field name, use the explicit
+<code>field: expr</code> form:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>user_name = <span class="string">"Alice"</span>;
+<span class="kw">let _ </span>= <span class="macro">toasty::create!</span>(User { name: user_name });</code></pre></div><h3 id="nested-struct-belongsto--hasone"><a class="doc-anchor" href="#nested-struct-belongsto--hasone">§</a>Nested struct (BelongsTo / HasOne)</h3>
+<p>Use <code>{ ... }</code> <strong>without</strong> a type prefix to create a related record inline.
+The macro expands the nested fields into a create builder and passes it
+to the field’s setter method.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let _ </span>= <span class="macro">toasty::create!</span>(Todo {
+    title: <span class="string">"buy milk"</span>,
+    user: { name: <span class="string">"Alice" </span>}
+});
+<span class="comment">// Expands to:
+// Todo::create()
+//     .title("buy milk")
+//     .user(Todo::fields().user().create().name("Alice"))</span></code></pre></div>
+<p>The related record is created first and the foreign key is set
+automatically.</p>
+<h3 id="nested-list-hasmany"><a class="doc-anchor" href="#nested-list-hasmany">§</a>Nested list (HasMany)</h3>
+<p>Use <code>[{ ... }, { ... }]</code> to create multiple related records. The macro
+expands each entry into a create builder and passes them as an array to
+the plural field setter.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let _ </span>= <span class="macro">toasty::create!</span>(User {
+    name: <span class="string">"Alice"</span>,
+    todos: [{ title: <span class="string">"first" </span>}, { title: <span class="string">"second" </span>}]
+});
+<span class="comment">// Expands to:
+// User::create()
+//     .name("Alice")
+//     .todos([
+//         User::fields().todos().create().title("first"),
+//         User::fields().todos().create().title("second"),
+//     ])</span></code></pre></div>
+<p>Items in a nested list can also be plain expressions (e.g., an existing
+builder value).</p>
+<h3 id="deep-nesting"><a class="doc-anchor" href="#deep-nesting">§</a>Deep nesting</h3>
+<p>Nesting composes to arbitrary depth:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let _ </span>= <span class="macro">toasty::create!</span>(User {
+    name: <span class="string">"Alice"</span>,
+    todos: [{
+        title: <span class="string">"task"</span>,
+        tags: [{ name: <span class="string">"urgent" </span>}, { name: <span class="string">"work" </span>}]
+    }]
+});</code></pre></div>
+<p>This creates a <code>User</code>, then a <code>Todo</code> linked to that user, then two <code>Tag</code>
+records linked to that todo.</p>
+<h2 id="fields-that-can-be-omitted"><a class="doc-anchor" href="#fields-that-can-be-omitted">§</a>Fields that can be omitted</h2><div><table><thead><tr><th>Field type</th><th>Behavior when omitted</th></tr></thead><tbody>
+<tr><td><code>#[auto]</code></td><td>Value generated by the database or Toasty</td></tr>
+<tr><td><code>Option&lt;T&gt;</code></td><td>Defaults to <code>None</code> (<code>NULL</code>)</td></tr>
+<tr><td><code>#[default(expr)]</code></td><td>Uses the default expression</td></tr>
+<tr><td><code>#[update(expr)]</code></td><td>Uses the expression as the initial value</td></tr>
+<tr><td><code>HasMany&lt;T&gt;</code></td><td>No related records created</td></tr>
+<tr><td><code>HasOne&lt;Option&lt;T&gt;&gt;</code></td><td>No related record created</td></tr>
+<tr><td><code>BelongsTo&lt;Option&lt;T&gt;&gt;</code></td><td>Foreign key set to <code>NULL</code></td></tr>
+</tbody></table>
+</div>
+<p>Required fields (<code>String</code>, <code>i64</code>, non-optional <code>BelongsTo</code>, etc.) that are
+missing do not cause a compile-time error. The insert fails at runtime with
+a database constraint violation.</p>
+<h2 id="compile-errors"><a class="doc-anchor" href="#compile-errors">§</a>Compile errors</h2>
+<p><strong>Type prefix on nested struct:</strong></p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="comment">// Error: remove the type prefix `User` — use `{ ... }` without a type name
+</span><span class="macro">toasty::create!</span>(Todo { user: User { name: <span class="string">"Alice" </span>} })</code></pre></div>
+<p>Correct:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let _ </span>= <span class="macro">toasty::create!</span>(Todo { user: { name: <span class="string">"Alice" </span>} });</code></pre></div>
+<p>Nested struct values infer their type from the field.</p>
+<p><strong>Nested lists:</strong></p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="comment">// Error: nested lists are not supported in create!
+</span><span class="macro">toasty::create!</span>(User { field: [[{ }]] })</code></pre></div>
+<p><strong>Missing braces or batch bracket:</strong></p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="comment">// Error: expected `{` for single creation or `::[` for batch creation after type path
+</span><span class="macro">toasty::create!</span>(User)</code></pre></div><h2 id="return-type"><a class="doc-anchor" href="#return-type">§</a>Return type</h2><div><table><thead><tr><th>Form</th><th>Returns</th></tr></thead><tbody>
+<tr><td><code>Type { ... }</code></td><td><code>TypeCreate</code> (single builder)</td></tr>
+<tr><td><code>in expr { ... }</code></td><td>Builder for the relation’s model</td></tr>
+<tr><td><code>Type::[ ... ]</code></td><td><code>Batch</code> — executes to <code>Vec&lt;Type&gt;</code></td></tr>
+<tr><td><code>( ... )</code></td><td><code>Batch</code> — executes to tuple of results</td></tr>
+</tbody></table>
+</div>
+<p>Single and scoped forms return a builder — call <code>.exec(&amp;mut db).await?</code>.
+Batch and tuple forms return a <code>Batch</code> — also call <code>.exec(&amp;mut db).await?</code>.</p>
+</div></details></section></div></main></body></html>

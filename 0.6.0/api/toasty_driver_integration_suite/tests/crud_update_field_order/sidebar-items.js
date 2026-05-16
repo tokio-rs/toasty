@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["query_update_non_declaration_order","successive_single_field_updates","update_fields_reverse_order","update_last_field_only","update_middle_field_mixed_types"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["add_remove_multiple_relation_option_belongs_to","add_remove_single_relation_required_belongs_to","reassign_relation_required_belongs_to","remove_add_single_relation_option_belongs_to"]};

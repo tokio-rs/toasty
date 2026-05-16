@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["crud_no_fields","crud_one_string","required_field_create_without_setting","unique_index_no_update","unique_index_nullable_field_update","unique_index_required_field_update","unique_index_set_same_value","update_and_delete_snippets","update_multiple_fields"]};

@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Toasty API Documentation</title>
+    <style>
+        :root {
+            --main-bg: #fff;
+            --main-color: #000;
+            --sidebar-bg: #f5f5f5;
+            --border-color: #e0e0e0;
+            --heading-border: #ddd;
+            --link-color: #3873ad;
+            --link-hover: #265a88;
+            --mod-link: #3873ad;
+            --desc-color: #666;
+            --code-bg: #f5f5f5;
+            --badge-bg: #f0f0f0;
+            --badge-color: #666;
+            --banner-bg: #fff5d6;
+            --banner-border: #ff8e00;
+            --banner-color: #6e4200;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --main-bg: #353535;
+                --main-color: #ddd;
+                --sidebar-bg: #505050;
+                --border-color: #505050;
+                --heading-border: #555;
+                --link-color: #d2991d;
+                --link-hover: #fdbf35;
+                --mod-link: #d2991d;
+                --desc-color: #aaa;
+                --code-bg: #2a2a2a;
+                --badge-bg: #444;
+                --badge-color: #aaa;
+                --banner-bg: #314559;
+                --banner-border: #ff8e00;
+                --banner-color: #e6e1cf;
+            }
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: "Source Serif 4", NanumBarunGothic, serif;
+            background-color: var(--main-bg);
+            color: var(--main-color);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 1.5rem 2rem 3rem;
+        }
+
+        header {
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--heading-border);
+            margin-bottom: 1.5rem;
+        }
+
+        header h1 {
+            font-size: 1.5rem;
+            font-weight: 500;
+            letter-spacing: -0.01em;
+        }
+
+        header h1 span {
+            font-weight: 400;
+            color: var(--desc-color);
+            font-size: 1rem;
+            margin-left: 0.5rem;
+        }
+
+        .banner {
+            background: var(--banner-bg);
+            border-left: 3px solid var(--banner-border);
+            color: var(--banner-color);
+            padding: 0.6rem 1rem;
+            margin-bottom: 1.5rem;
+            font-size: 0.875rem;
+            border-radius: 0 4px 4px 0;
+        }
+
+        .section {
+            margin-bottom: 1.75rem;
+        }
+
+        .section h2 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--main-color);
+            padding-bottom: 0.4rem;
+            border-bottom: 1px solid var(--heading-border);
+            margin-bottom: 0.75rem;
+        }
+
+        .crate-list {
+            list-style: none;
+        }
+
+        .crate-list li {
+            display: flex;
+            align-items: baseline;
+            gap: 0.75rem;
+            padding: 0.4rem 0.6rem;
+            border-radius: 4px;
+        }
+
+        .crate-list li:hover {
+            background: var(--sidebar-bg);
+        }
+
+        .crate-list a {
+            font-family: "Source Code Pro", Consolas, "Ubuntu Mono", Menlo, monospace;
+            font-size: 0.925rem;
+            color: var(--mod-link);
+            text-decoration: none;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .crate-list a:hover {
+            text-decoration: underline;
+        }
+
+        .crate-desc {
+            color: var(--desc-color);
+            font-size: 0.875rem;
+        }
+
+        .sep {
+            color: var(--desc-color);
+            user-select: none;
+        }
+
+        .badge {
+            font-family: "Source Code Pro", Consolas, monospace;
+            font-size: 0.7rem;
+            background: var(--badge-bg);
+            color: var(--badge-color);
+            padding: 0.1rem 0.4rem;
+            border-radius: 3px;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        footer {
+            margin-top: 2rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--heading-border);
+            font-size: 0.8rem;
+            color: var(--desc-color);
+        }
+
+        footer a {
+            color: var(--link-color);
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Toasty API Documentation <span>— nightly</span></h1>
+        </header>
+
+        <div class="banner">
+            Toasty is incubating. APIs are evolving and not yet stable.
+        </div>
+
+        <div class="section">
+            <h2>Core Crates</h2>
+            <ul class="crate-list">
+                <li>
+                    <a href="toasty/index.html">toasty</a>
+                    <span class="sep">&mdash;</span>
+                    <span class="crate-desc">User-facing API: database handle, query engine, and runtime</span>
+                </li>
+                <li>
+                    <a href="toasty_core/index.html">toasty_core</a>
+                    <span class="sep">&mdash;</span>
+                    <span class="crate-desc">Shared types: schema representations, statement AST, driver interface</span>
+                </li>
+                <li>
+                    <a href="toasty_macros/index.html">toasty_macros</a>
+                    <span class="sep">&mdash;</span>
+                    <span class="crate-desc">Proc-macro entry points (<code>#[derive(Model)]</code>, <code>#[derive(Embed)]</code>)</span>
+                </li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>Utilities</h2>
+            <ul class="crate-list">
+                <li>
+                    <a href="toasty_cli/index.html">toasty_cli</a>
+                    <span class="sep">&mdash;</span>
+                    <span class="crate-desc">Command-line interface</span>
+                </li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>Database Drivers</h2>
+            <ul class="crate-list">
+                <li>
+                    <a href="toasty_sql/index.html">toasty_sql</a>
+                    <span class="sep">&mdash;</span>
+                    <span class="crate-desc">Common utilities for SQL-based drivers</span>
+                </li>
+                <li>
+                    <a href="toasty_driver_sqlite/index.html">toasty_driver_sqlite</a>
+                    <span class="sep">&mdash;</span>
+                    <span class="crate-desc">SQLite driver</span>
+                </li>
+                <li>
+                    <a href="toasty_driver_postgresql/index.html">toasty_driver_postgresql</a>
+                    <span class="sep">&mdash;</span>
+                    <span class="crate-desc">PostgreSQL driver</span>
+                </li>
+                <li>
+                    <a href="toasty_driver_mysql/index.html">toasty_driver_mysql</a>
+                    <span class="sep">&mdash;</span>
+                    <span class="crate-desc">MySQL driver</span>
+                </li>
+                <li>
+                    <a href="toasty_driver_dynamodb/index.html">toasty_driver_dynamodb</a>
+                    <span class="sep">&mdash;</span>
+                    <span class="crate-desc">DynamoDB driver</span>
+                </li>
+                <li>
+                    <a href="toasty_driver_integration_suite/index.html">toasty_driver_integration_suite</a>
+                    <span class="sep">&mdash;</span>
+                    <span class="crate-desc">Shared integration test suite for driver implementors to verify their driver</span>
+                </li>
+            </ul>
+        </div>
+
+        <footer>
+            <a href="../guide/">User Guide</a> &middot;
+            <a href="../dev/">Developer Docs</a> &middot;
+            <a href="https://github.com/tokio-rs/toasty">GitHub</a>
+        </footer>
+    </div>
+</body>
+</html>
