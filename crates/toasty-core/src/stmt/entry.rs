@@ -141,6 +141,18 @@ impl Entry<'_> {
         )
     }
 
+    /// Returns `true` if this entry holds a record, either as an
+    /// `Expr::Record`, an `Expr::Value(Value::Record)`, or a bare
+    /// `Value::Record`.
+    pub fn is_record(&self) -> bool {
+        match self {
+            Entry::Expr(Expr::Record(_)) => true,
+            Entry::Expr(Expr::Value(value)) => value.is_record(),
+            Entry::Value(value) => value.is_record(),
+            Entry::Expr(_) => false,
+        }
+    }
+
     /// Returns a reference to the contained value, or `None` if this entry
     /// holds a non-value expression.
     pub fn as_value(&self) -> Option<&Value> {

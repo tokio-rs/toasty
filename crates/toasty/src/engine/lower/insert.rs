@@ -117,9 +117,6 @@ impl LowerStatement<'_, '_> {
                 }
 
                 let fk_fields = &rel.foreign_key.fields;
-                let is_record = field_expr
-                    .as_expr()
-                    .is_some_and(|e| e.record_len().is_some());
 
                 // Distribute the BelongsTo value into its FK source column(s):
                 //   - composite FK: the value is a record (`Expr::Record` from
@@ -128,7 +125,7 @@ impl LowerStatement<'_, '_> {
                 //     per FK column via `into_record_items`.
                 //   - single FK: the value is a scalar; it goes whole into the
                 //     single FK column.
-                if is_record {
+                if field_expr.is_record() {
                     let items = field_expr.take().into_record_items().unwrap();
                     let mut count = 0;
                     for (fk_field, item) in fk_fields.iter().zip(items) {
