@@ -223,13 +223,13 @@ database with a null foreign key.
 The relation accessor supports scoped queries — filtering, updating, and
 deleting within the parent's children.
 
-### Filtering with `.query()`
+### Filtering with `.filter()`
 
 ```rust,ignore
 // Find posts with a specific condition
 let drafts = user
     .posts()
-    .query(Post::fields().published().eq(false))
+    .filter(Post::fields().published().eq(false))
     .exec(&mut db)
     .await?;
 ```
@@ -292,7 +292,7 @@ For a `User` model with `#[has_many] posts: HasMany<Post>`, Toasty generates:
 | `.exec(&mut db)` | `Result<Vec<Post>>` | All posts belonging to this user |
 | `.create()` | Create builder | Create a post with the foreign key pre-filled |
 | `.get_by_id(&mut db, &id)` | `Result<Post>` | Get a post by ID within the scope |
-| `.query(expr)` | Query builder | Filter posts within the scope |
+| `.filter(expr)` | Query builder | Filter posts within the scope |
 | `.insert(&mut db, &post)` | `Result<()>` | Associate an existing post with the user |
 | `.remove(&mut db, &post)` | `Result<()>` | Disassociate a post from the user |
 

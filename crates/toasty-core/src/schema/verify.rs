@@ -28,7 +28,7 @@ impl Verify<'_> {
                 continue;
             };
             for field in &root.fields {
-                self.verify_relations_are_indexed(field);
+                self.verify_relations_are_indexed(model, field)?;
                 self.verify_auto_field_type(field);
             }
         }

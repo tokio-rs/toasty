@@ -103,7 +103,7 @@ pub async fn via_relation_query_can_be_filtered(test: &mut Test) -> Result<()> {
 
     let filtered: Vec<_> = alice
         .commented_articles()
-        .query(Article::fields().title().eq("Toasty"))
+        .filter(Article::fields().title().eq("Toasty"))
         .exec(&mut db)
         .await?;
     assert_eq_unordered!(filtered.iter().map(|a| &a.title[..]), ["Toasty"]);

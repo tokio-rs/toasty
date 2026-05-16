@@ -170,110 +170,11 @@ assert!(user.bio.is_none());
 ## Modifying a `Vec<scalar>` field
 
 A `Vec<scalar>` field (e.g. `tags: Vec<String>`) supports whole-value
-replacement through the setter:
-
-```rust
-# use toasty::Model;
-# #[derive(Debug, toasty::Model)]
-# struct Item {
-#     #[key]
-#     #[auto]
-#     id: u64,
-#     tags: Vec<String>,
-# }
-# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-# let mut item = toasty::create!(Item { tags: vec!["a".to_string()] })
-#     .exec(&mut db)
-#     .await?;
-item.update()
-    .tags(vec!["x".to_string(), "y".to_string()])
-    .exec(&mut db)
-    .await?;
-# Ok(())
-# }
-```
-
-For incremental mutations, the `toasty::stmt` module provides builders
-that produce one statement per call and refresh the instance field in
-place:
-
-| Function | What it does |
-|---|---|
-| `stmt::push(value)` | Append one element |
-| `stmt::extend(iter)` | Append every element of an iterator, in order |
-| `stmt::pop()` | Remove the last element |
-| `stmt::remove(value)` | Remove every element equal to the value |
-| `stmt::remove_at(idx)` | Remove the element at a 0-based index |
-| `stmt::clear()` | Replace the field with an empty list |
-
-```rust
-# use toasty::Model;
-# #[derive(Debug, toasty::Model)]
-# struct Item {
-#     #[key]
-#     #[auto]
-#     id: u64,
-#     tags: Vec<String>,
-# }
-# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-# let mut item = toasty::create!(Item { tags: vec!["a".to_string()] })
-#     .exec(&mut db)
-#     .await?;
-// Append one element.
-item.update()
-    .tags(toasty::stmt::push("admin"))
-    .exec(&mut db)
-    .await?;
-
-// Append several. `stmt::extend(empty)` is a no-op.
-item.update()
-    .tags(toasty::stmt::extend(["verified", "staff"]))
-    .exec(&mut db)
-    .await?;
-
-// Remove the last element.
-item.update()
-    .tags(toasty::stmt::pop())
-    .exec(&mut db)
-    .await?;
-
-// Remove every element equal to "staff".
-item.update()
-    .tags(toasty::stmt::remove("staff"))
-    .exec(&mut db)
-    .await?;
-
-// Remove the element at index 0.
-item.update()
-    .tags(toasty::stmt::remove_at(0usize))
-    .exec(&mut db)
-    .await?;
-
-// Remove every element.
-item.update()
-    .tags(toasty::stmt::clear())
-    .exec(&mut db)
-    .await?;
-# Ok(())
-# }
-```
-
-`push`, `extend`, and `clear` work on every backend. Each append is
-atomic against the existing column value: PostgreSQL uses `text[]`
-concatenation, MySQL uses `JSON_MERGE_PRESERVE`, SQLite reads and
-re-emits the JSON array in one statement, and DynamoDB uses
-`list_append`.
-
-`pop`, `remove`, and `remove_at` currently require PostgreSQL, where
-they lower to `array_remove` and array slicing. Other backends return
-an error. `pop` on an empty list and `remove_at` past the end of the
-list are no-ops; `remove` deletes every matching element, not just the
-first.
-
-After `.exec()`, the instance's field reflects the new value.
-Concurrent writers can still interleave — the next operation sees what
-the database has, not what the local instance holds — but each
-individual operation is indivisible at the storage layer.
+replacement through the setter and a set of incremental builders —
+`stmt::push`, `stmt::extend`, `stmt::pop`, `stmt::remove`,
+`stmt::remove_at`, `stmt::clear`, and `stmt::apply`. See
+[`Vec<scalar>` Fields](./vec-scalar-fields.md#updating) for the full
+treatment, including which builders each driver supports.
 
 ## What gets generated
 

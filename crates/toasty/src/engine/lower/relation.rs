@@ -526,6 +526,19 @@ impl LowerStatement<'_, '_> {
 
                 lower.set_relation_field(field, expr, source);
             }
+            // Composite FK: a record whose fields are each a scalar value or
+            // reference — produced by the tuple `IntoExpr` impl when the
+            // target model has a composite primary key. `set_relation_field`
+            // destructures it via `record_len()` / `into_record_items()` and
+            // assigns each component to the matching FK source column.
+            stmt::Expr::Record(record)
+                if record
+                    .fields
+                    .iter()
+                    .all(|f| f.is_value() || f.is_expr_reference()) =>
+            {
+                lower.set_relation_field(field, stmt::Expr::Record(record), source);
+            }
             stmt::Expr::Stmt(expr_stmt) => {
                 lower.plan_mut_belongs_to_associate_stmt(field, *expr_stmt.stmt, source);
             }

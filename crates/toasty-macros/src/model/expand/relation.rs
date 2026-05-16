@@ -15,6 +15,7 @@ impl Expand<'_> {
         let field_struct_ident = &root.field_struct_ident;
         let field_list_struct_ident = &root.field_list_struct_ident;
         let filter_methods = self.expand_relation_filter_methods();
+        let chain_methods = self.expand_many_chain_methods();
 
         quote! {
             #vis struct Many {
@@ -22,7 +23,7 @@ impl Expand<'_> {
             }
 
             #vis struct One {
-                stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>,
+                stmt: #toasty::stmt::Query<#model_ident>,
             }
 
             #vis struct OptionOne {
@@ -36,13 +37,15 @@ impl Expand<'_> {
 
                 #filter_methods
 
+                #chain_methods
+
                 /// Iterate all entries in the relation
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<Vec<#model_ident>> {
                     use #toasty::IntoStatement;
                     self.into_statement().exec(executor).await
                 }
 
-                #vis fn query(
+                #vis fn filter(
                     self,
                     filter: #toasty::stmt::Expr<bool>
                 ) -> #query_ident {
@@ -79,7 +82,7 @@ impl Expand<'_> {
 
             impl One {
                 #vis fn from_stmt(stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>) -> One {
-                    One { stmt }
+                    One { stmt: stmt.one() }
                 }
 
                 /// Create a new associated record
@@ -90,14 +93,14 @@ impl Expand<'_> {
                 }
 
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
-                    self.stmt.one().exec(executor).await
+                    self.stmt.exec(executor).await
                 }
             }
 
             impl #toasty::IntoStatement for One {
-                type Returning = #toasty::List<#model_ident>;
+                type Returning = #model_ident;
 
-                fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
+                fn into_statement(self) -> #toasty::Statement<#model_ident> {
                     use #toasty::IntoStatement;
                     self.stmt.into_statement()
                 }
@@ -197,6 +200,40 @@ impl Expand<'_> {
         }
     }
 
+    /// For each relation field on this model, emit a method on `Many` that
+    /// chains the field as the next path step and returns the target's `Many`.
+    /// This is the runtime analog of [`expand_list_relation_field_method`] on
+    /// the field-list builder — a list-context traversal always yields a list,
+    /// so all relation kinds (HasMany / HasOne / BelongsTo) flatten to the
+    /// target's `Many`.
+    pub(super) fn expand_many_chain_methods(&self) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+
+        self.model
+            .fields
+            .iter()
+            .filter_map(|field| {
+                let ty = match &field.ty {
+                    FieldTy::BelongsTo(rel) => &rel.ty,
+                    FieldTy::HasMany(rel) => &rel.ty,
+                    FieldTy::HasOne(rel) => &rel.ty,
+                    FieldTy::Primitive(_) => return None,
+                };
+                let field_ident = &field.name.ident;
+                let field_offset = util::int(field.id);
+
+                Some(quote! {
+                    #vis fn #field_ident(self) -> <#ty as #toasty::Relation>::Many {
+                        <#ty as #toasty::Relation>::Many::from_stmt(
+                            self.stmt.chain_field(#field_offset)
+                        )
+                    }
+                })
+            })
+            .collect()
+    }
+
     pub(super) fn expand_model_relation_methods(&self) -> TokenStream {
         self.model
             .fields
@@ -260,10 +297,15 @@ impl Expand<'_> {
             let source_field_ident = &source.name.ident;
             let target = &fk_field.target;
 
+            // `fields().#target()` returns the target field's
+            // `<Field>::Path<Origin>` — `Path<Origin, T>` for primitives and a
+            // wrapping `{Embed}Fields<Origin>` for embedded types. Both
+            // convert into `Path<Origin, T>` via `Into`, which is what
+            // `key_constraint` expects.
             quote! {
                 #toasty::Field::key_constraint(
                     &self.#source_field_ident,
-                    <#ty as #toasty::Relation>::Model::fields().#target(),
+                    <#ty as #toasty::Relation>::Model::fields().#target().into(),
                 )
             }
         });

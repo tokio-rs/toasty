@@ -197,6 +197,18 @@ impl<M: Model> Association<List<M>> {
             _p: PhantomData,
         }
     }
+
+    /// Append a single field step to this association's path, retargeting it
+    /// to `NewTarget`. Used by macro-generated chain methods on the `Many`
+    /// struct — `field_index` must identify a relation field on `M`.
+    #[doc(hidden)]
+    pub fn chain_field<NewTarget>(mut self, field_index: usize) -> Association<List<NewTarget>> {
+        self.untyped.path.projection.push(field_index);
+        Association {
+            untyped: self.untyped,
+            _p: PhantomData,
+        }
+    }
 }
 
 impl<T: Model> IntoStatement for Association<List<T>> {

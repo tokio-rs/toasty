@@ -57,7 +57,7 @@ Examples:
 .connect("sqlite::memory:")
 
 // SQLite file
-.connect("sqlite://path/to/db.sqlite")
+.connect("sqlite:./path/to/db.sqlite")
 
 // PostgreSQL
 .connect("postgresql://user:pass@localhost:5432/mydb")
