@@ -86,6 +86,7 @@ the entry lands here.
 - Many-to-many
 - Polymorphic associations
 - Nested preloading — multi-level `.include()`
+- Filtering included relations — `.filter(...)` on a relation path inside `.include(...)` ([design](design/include-filters.md))
 
 ## Data Modification
 
