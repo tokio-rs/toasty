@@ -257,12 +257,6 @@ fn lift_belongs_to_in_subquery(
 
     let select = query.body.as_select_unwrap();
 
-    assert_eq!(
-        belongs_to.foreign_key.fields.len(),
-        1,
-        "TODO: composite keys"
-    );
-
     let mut lift = LiftBelongsTo {
         cx: cx.scope(&select.source),
         belongs_to,
