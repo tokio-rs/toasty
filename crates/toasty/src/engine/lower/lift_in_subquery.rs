@@ -278,12 +278,12 @@ fn lift_belongs_to_in_subquery(
     if lift.fail || !all_fks_matched {
         let mut subquery = query.clone();
 
-        subquery.body.as_select_mut_unwrap().returning = stmt::Returning::Project(fk_field_record(
-            belongs_to.foreign_key.fields.iter().map(|fk| fk.target),
-        ));
+        subquery.body.as_select_mut_unwrap().returning = stmt::Returning::Project(
+            super::key_field_refs(0, belongs_to.foreign_key.fields.iter().map(|fk| fk.target)),
+        );
 
         Some(stmt::Expr::in_subquery(
-            fk_field_record(belongs_to.foreign_key.fields.iter().map(|fk| fk.source)),
+            super::key_field_refs(0, belongs_to.foreign_key.fields.iter().map(|fk| fk.source)),
             subquery,
         ))
     } else {
@@ -315,7 +315,8 @@ fn lift_has_n_in_subquery(
 
     match &mut subquery.body {
         stmt::ExprSet::Select(select) => {
-            select.returning = stmt::Returning::Project(fk_field_record(
+            select.returning = stmt::Returning::Project(super::key_field_refs(
+                0,
                 pair.foreign_key.fields.iter().map(|fk| fk.source),
             ));
         }
@@ -324,26 +325,14 @@ fn lift_has_n_in_subquery(
 
     Some(
         stmt::ExprInSubquery {
-            expr: Box::new(fk_field_record(
+            expr: Box::new(super::key_field_refs(
+                0,
                 pair.foreign_key.fields.iter().map(|fk| fk.target),
             )),
             query: Box::new(subquery),
         }
         .into(),
     )
-}
-
-/// Build the LHS / projection shape for an FK comparison: a single field
-/// reference for a single-column FK, a `Record` of references for a
-/// composite FK. The composite form pairs with `lower_in_subquery_operands`
-/// in the lowering walk (which decomposes element-wise) and with the
-/// `(a, b) IN (SELECT a, b FROM ...)` SQL form.
-fn fk_field_record(mut fields: impl ExactSizeIterator<Item = FieldId>) -> stmt::Expr {
-    if fields.len() == 1 {
-        stmt::Expr::ref_self_field(fields.next().unwrap())
-    } else {
-        stmt::Expr::record(fields.map(stmt::Expr::ref_self_field))
-    }
 }
 
 impl Visit for LiftBelongsTo<'_> {

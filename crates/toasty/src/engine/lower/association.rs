@@ -170,26 +170,13 @@ impl<'a> RewriteVia<'a> {
         // <fk.source...> FROM <source>)` — a single field reference on each
         // side for single-column FKs, a record of references for composite
         // FKs (lowered to a tuple-style IN by the SQL serializer).
-        let target = fk_field_refs(rel.foreign_key.fields.iter().map(|fk| fk.target));
-        let returning = fk_field_refs(rel.foreign_key.fields.iter().map(|fk| fk.source));
+        let target = super::key_field_refs(0, rel.foreign_key.fields.iter().map(|fk| fk.target));
+        let returning = super::key_field_refs(0, rel.foreign_key.fields.iter().map(|fk| fk.source));
 
         let mut source = *association.source;
         source.body.as_select_mut_unwrap().returning = stmt::Returning::Project(returning);
 
         stmt::Expr::in_subquery(target, source).into()
-    }
-}
-
-/// Build the LHS / projection shape for an FK comparison: a single field
-/// reference for a single-column FK, a `Record` of field references for a
-/// composite FK. The latter pairs with the `Record == Record` lowering in
-/// `lower_expr_binary_op` and the `(a, b) IN (SELECT a, b FROM ...)` SQL
-/// form.
-fn fk_field_refs(mut fields: impl ExactSizeIterator<Item = app::FieldId>) -> stmt::Expr {
-    if fields.len() == 1 {
-        stmt::Expr::ref_self_field(fields.next().unwrap())
-    } else {
-        stmt::Expr::record(fields.map(stmt::Expr::ref_self_field))
     }
 }
 

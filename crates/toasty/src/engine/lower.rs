@@ -1620,12 +1620,14 @@ impl LoweringContext<'_> {
     }
 }
 
-/// Build the LHS shape of an equality whose RHS is a key value:
-/// a single field reference for a single-column key, a record of field
-/// references for a composite key. The surrounding `==` is then decomposed
-/// into pairwise comparisons by `lower_expr_binary_op`'s `Record == Record`
-/// (or `Record == Value::Record`) handler.
-fn key_field_refs(
+/// Build a scalar-or-record expression of field references for a key
+/// (primary or foreign): a single `ref_field` for a single-column key, a
+/// `Record` of `ref_field`s for a composite key. Used both for the
+/// eq-operand rewrite (where the surrounding `==` decomposes pair-wise via
+/// `lower_expr_binary_op`'s `Record == Record` handler) and for composite
+/// FK IN-subquery comparisons (where the tuple LHS pairs with a tuple
+/// projection on the RHS).
+pub(super) fn key_field_refs(
     nesting: usize,
     mut fields: impl ExactSizeIterator<Item = app::FieldId>,
 ) -> stmt::Expr {
