@@ -5,7 +5,7 @@ use toasty_core::stmt::{Expr, Value};
 #[test]
 fn const_base_with_identity_map() {
     let schema = test_schema();
-    let simplify = Simplify::new(&schema);
+    let simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `map([1, 2, 3], x => x) → [1, 2, 3]`
     let mut expr = Expr::map(
@@ -31,7 +31,7 @@ fn const_base_with_identity_map() {
 #[test]
 fn non_const_base_not_simplified() {
     let schema = test_schema();
-    let simplify = Simplify::new(&schema);
+    let simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `map(arg(0), x => x)`, non-constant base, not simplified
     let mut expr = Expr::map(Expr::arg(0), Expr::arg(0));

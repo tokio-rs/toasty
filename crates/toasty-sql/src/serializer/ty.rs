@@ -130,6 +130,15 @@ impl ToSql for &db::Type {
                 // SQLite: TEXT column (CHECK constraint added in ColumnDef).
                 Flavor::Sqlite => fmt!(cx, f, "TEXT"),
             },
+            db::Type::List(elem) => match f.serializer.flavor {
+                Flavor::Postgresql => fmt!(cx, f, elem.as_ref() "[]"),
+                // MySQL stores `Vec<scalar>` as a JSON document; SQLite uses
+                // TEXT (JSON1 functions operate on either, but TEXT is the
+                // idiomatic affinity). The element type is tracked by the
+                // engine — it doesn't surface in the column DDL.
+                Flavor::Mysql => fmt!(cx, f, "JSON"),
+                Flavor::Sqlite => fmt!(cx, f, "TEXT"),
+            },
             db::Type::Custom(custom) => fmt!(cx, f, custom.as_str()),
         }
     }

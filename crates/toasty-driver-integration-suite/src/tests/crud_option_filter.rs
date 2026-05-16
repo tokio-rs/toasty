@@ -1,4 +1,9 @@
-//! Test filtering models by Option fields using is_some() and is_none()
+//! Test filtering models by Option fields using is_some() and is_none().
+//!
+//! Gated on `requires(sql)` until [#854] is fixed — `IS NULL` / `IS NOT NULL`
+//! currently fail on DynamoDB scan with an empty `ExpressionAttributeValues`.
+//!
+//! [#854]: https://github.com/tokio-rs/toasty/issues/854
 
 use crate::prelude::*;
 
@@ -315,7 +320,7 @@ pub async fn filter_option_with_partition_key(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// Regression test for https://github.com/tokio-rs/toasty/issues/581
+/// Regression test for <https://github.com/tokio-rs/toasty/issues/581>
 ///
 /// `is_none()` on an `Option<ID>` field panics because the lowering phase
 /// does not strip the `ExprCast` wrapper from the column expression inside

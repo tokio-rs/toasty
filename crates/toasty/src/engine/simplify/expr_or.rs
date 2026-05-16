@@ -1,33 +1,12 @@
 use super::Simplify;
-use bit_set::BitSet;
 use std::mem;
 use toasty_core::stmt;
 
 impl Simplify<'_> {
+    /// Heavyweight OR rewrites. Cheap canonicalization (flatten, true
+    /// short-circuit, drop false, null propagation) runs in `fold::expr_or`
+    /// before this is reached.
     pub(super) fn simplify_expr_or(&mut self, expr: &mut stmt::ExprOr) -> Option<stmt::Expr> {
-        // Flatten any nested ors
-        for i in 0..expr.operands.len() {
-            if let stmt::Expr::Or(or) = &mut expr.operands[i] {
-                let mut nested = mem::take(&mut or.operands);
-                expr.operands[i] = false.into();
-                expr.operands.append(&mut nested);
-            }
-        }
-
-        // `or(..., true, ...) → true`
-        if expr.operands.iter().any(|e| e.is_true()) {
-            return Some(true.into());
-        }
-
-        // `or(..., false, ...) → or(..., ...)`
-        expr.operands.retain(|expr| !expr.is_false());
-
-        // Null propagation, `null or null` → `null`
-        // After removing false values, if all operands are null, return null.
-        if !expr.operands.is_empty() && expr.operands.iter().all(|e| e.is_value_null()) {
-            return Some(stmt::Expr::null());
-        }
-
         // Idempotent law, `a or a` → `a`
         // Note: O(n) lookups are acceptable here since operand lists are typically small.
         // `is_equivalent_to` (not `PartialEq`) keeps this sound for non-deterministic
@@ -75,11 +54,9 @@ impl Simplify<'_> {
             return Some(true.into());
         }
 
-        // Variant tautology: `is_variant(x, 0) or is_variant(x, 1)` covering all
-        // variants of the enum → `true`
-        if self.try_variant_tautology_or(expr) {
-            return Some(true.into());
-        }
+        // The variant-tautology rewrite (`is_variant(x, 0) or is_variant(x, 1)`
+        // covering all variants → `true`) fires in the pre-lowering
+        // `LowerStatement::visit_expr_mut` `Expr::Or` arm, not here.
 
         // OR-to-IN conversion, `a = 1 or a = 2 or a = 3` → `a in (1, 2, 3)`
         if let Some(in_list) = self.try_or_to_in_list(expr) {
@@ -194,50 +171,6 @@ impl Simplify<'_> {
         }
 
         false
-    }
-
-    /// Checks for variant tautology: when all variants of an enum are tested
-    /// via `IsVariant` on the same expression, the OR is always true.
-    ///
-    /// `is_variant(x, 0) or is_variant(x, 1)` over `{0, 1}` → `true`
-    fn try_variant_tautology_or(&self, expr: &stmt::ExprOr) -> bool {
-        // Find the first IsVariant to use as anchor
-        let Some(first) = expr.operands.iter().find_map(|op| match op {
-            stmt::Expr::IsVariant(iv) => Some(iv),
-            _ => None,
-        }) else {
-            return false;
-        };
-
-        let anchor_expr = &first.expr;
-        let model_id = first.variant.model;
-        let num_variants = self
-            .schema()
-            .app
-            .model(model_id)
-            .as_embedded_enum_unwrap()
-            .variants
-            .len();
-
-        let mut seen = BitSet::with_capacity(num_variants);
-
-        for operand in &expr.operands {
-            let stmt::Expr::IsVariant(iv) = operand else {
-                continue;
-            };
-
-            // Every `IsVariant` subject must be equivalent to the anchor:
-            // two syntactically different (or non-deterministic) subjects could
-            // disagree at runtime, so covering all variants of the anchor tells
-            // us nothing about them.
-            if !iv.expr.is_equivalent_to(anchor_expr) || iv.variant.model != model_id {
-                return false;
-            }
-
-            seen.insert(iv.variant.index);
-        }
-
-        seen.count() == num_variants
     }
 
     /// Converts disjunctive equality chains to IN lists.

@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.5.0...toasty-sql-v0.6.0) - 2026-05-14
+
+### Added
+
+- Add Vec<scalar> field support on PostgreSQL, MySQL, SQLite, and DynamoDB ([#866], [#872])
+- Add mutating methods for Vec<scalar> fields: push, extend, clear, pop, remove_at, remove ([#880], [#887])
+- Bind IN-list as a single array parameter on PostgreSQL ([#818])
+- Add ilike() filter method ([#801])
+
+[#801]: https://github.com/tokio-rs/toasty/pull/801
+[#818]: https://github.com/tokio-rs/toasty/pull/818
+[#866]: https://github.com/tokio-rs/toasty/pull/866
+[#872]: https://github.com/tokio-rs/toasty/pull/872
+[#880]: https://github.com/tokio-rs/toasty/pull/880
+[#887]: https://github.com/tokio-rs/toasty/pull/887
+
 ## [0.5.0](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.4.0...toasty-sql-v0.5.0) - 2026-04-27
 
 ### Added

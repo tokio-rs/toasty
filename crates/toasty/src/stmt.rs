@@ -17,7 +17,9 @@ mod insert;
 pub use insert::Insert;
 
 mod assignment;
-pub use assignment::{Assign, Assignment, apply, insert, patch, remove, set};
+pub use assignment::{
+    Assign, Assignment, apply, clear, extend, insert, patch, pop, push, remove, remove_at, set,
+};
 
 mod into_expr;
 pub use into_expr::IntoExpr;
@@ -45,6 +47,9 @@ use crate::{Executor, schema::Load};
 
 mod query;
 pub use query::Query;
+
+mod scope;
+pub use scope::IntoScope;
 
 mod update;
 pub use update::Update;

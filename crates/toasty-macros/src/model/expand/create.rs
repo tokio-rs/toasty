@@ -118,7 +118,10 @@ impl Expand<'_> {
                 };
                 let index_tokenized = util::int(index);
                 Some(quote! {
-                    s.stmt.set(#index_tokenized, <#ty as #toasty::IntoExpr<#ty>>::into_expr(#expr));
+                    s.stmt.set(
+                        #index_tokenized,
+                        <#ty as #toasty::IntoExpr<<#ty as #toasty::Field>::ExprTarget>>::into_expr(#expr),
+                    );
                 })
             })
             .collect()
@@ -221,8 +224,12 @@ impl Expand<'_> {
                         }
                     }
                     FieldTy::Primitive(ty) => {
+                        // The setter binds through the field's
+                        // `Field::ExprTarget` — `Self` for scalars/`Vec<u8>`,
+                        // `List<T>` for `Vec<T: Scalar>`. Trait dispatch
+                        // routes each case correctly; no type parsing here.
                         quote! {
-                            #vis fn #name(mut self, #name: impl #toasty::IntoExpr<#ty>) -> Self {
+                            #vis fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::Field>::ExprTarget>) -> Self {
                                 self.stmt.set(#index_tokenized, #name.into_expr());
                                 self
                             }

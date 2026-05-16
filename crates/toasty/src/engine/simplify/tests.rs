@@ -1,21 +1,17 @@
 pub use crate::engine::test_util::*;
 
-mod association;
 mod expr_and;
 mod expr_any;
 mod expr_binary_op;
 mod expr_cast;
 mod expr_exists;
-mod expr_in_list;
+mod expr_intersects;
 mod expr_is_null;
+mod expr_is_superset;
 mod expr_let;
-mod expr_list;
 mod expr_map;
 mod expr_match;
-mod expr_not;
 mod expr_or;
 mod expr_project;
-mod expr_record;
-mod lift_in_subquery;
 mod prop_const;
 mod stmt_query;

@@ -1,8 +1,15 @@
+mod association;
+mod expr_or;
 mod expr_pattern;
+mod include;
 mod insert;
+mod lift_in_subquery;
 mod paginate;
 mod relation;
 mod returning;
+
+#[cfg(test)]
+mod tests;
 
 use std::cell::Cell;
 
@@ -13,14 +20,14 @@ use toasty_core::{
     Result, Schema,
     driver::Capability,
     schema::{
-        app::{self, FieldTy, ModelRoot},
+        app::{self, ModelRoot},
         db::ColumnId,
         mapping,
     },
     stmt::{self, IntoExprTarget, VisitMut, visit_mut},
 };
 
-use crate::engine::{Engine, HirStatement, hir, simplify::Simplify};
+use crate::engine::{Engine, HirStatement, fold, hir, simplify::Simplify};
 
 impl Engine {
     pub(super) fn lower_stmt(&self, stmt: stmt::Statement) -> Result<HirStatement> {
@@ -52,7 +59,17 @@ impl LoweringState<'_> {
         row_index: Option<usize>,
         mut stmt: stmt::Statement,
     ) -> hir::StmtId {
-        Simplify::with_context(expr_cx).visit_mut(&mut stmt);
+        // App-level rewrites that lowering depends on. `Source::Model { via }`
+        // must be converted to a WHERE filter before the lowering walk
+        // converts `Source::Model` into `Source::Table`.  The IN-subquery
+        // lift fires here too: code paths outside the lowering walk (e.g.
+        // `ApplyInsertScope::apply_expr`) see the already-lifted form.
+        // The eq/ne operand rewrite (model→PK, BelongsTo→FK) fires inside
+        // the lowering walk itself via `LowerStatement::visit_expr_binary_op_mut`.
+        association::RewriteVia::new(expr_cx).rewrite(&mut stmt);
+        lift_in_subquery::LiftInSubquery::new(expr_cx).rewrite(&mut stmt);
+
+        Simplify::with_context(expr_cx, self.engine.capability).visit_mut(&mut stmt);
 
         let stmt_id = self.hir.new_statement_info(self.dependencies.clone());
         let scope_id = self.scopes.push(Scope { stmt_id, row_index });
@@ -153,6 +170,141 @@ index_vec::define_index_type! {
     struct ScopeId = u32;
 }
 
+/// A collection operator on a `Vec<scalar>` field.
+///
+/// `Append`, `Remove`, `Pop`, and `RemoveAt` are all collection operators:
+/// they target a single-column `Vec<scalar>` field and carry operator
+/// operands (a list of elements, a single element, an index, or nothing).
+/// Whether the operand is a list or a scalar is a per-operator encoding
+/// detail — the unifying property is that none carries a *field value*
+/// that decomposes across columns, so none needs the `model_to_table`
+/// substitution that `Set` flows through.
+enum CollectionOp<'a> {
+    Append(&'a mut stmt::Expr),
+    Remove(&'a mut stmt::Expr),
+    Pop,
+    RemoveAt(&'a mut stmt::Expr),
+}
+
+impl LowerStatement<'_, '_> {
+    /// Lower a `Set` assignment — the only assignment that carries a whole
+    /// *field value*.
+    ///
+    /// The field may span multiple columns (embedded structs decompose
+    /// across columns; enums into a discriminant plus variant columns), so
+    /// this resolves the field mapping and, for each impacted column,
+    /// substitutes the lowered value into that column's `model_to_table`
+    /// template before emitting the column-level write.
+    fn lower_set_assignment(
+        &mut self,
+        out: &mut stmt::Assignments,
+        mapping: &toasty_core::schema::mapping::Model,
+        projection: &stmt::Projection,
+        expr: &mut stmt::Expr,
+    ) {
+        self.visit_expr_mut(expr);
+
+        let Some(field) = mapping.resolve_field_mapping(projection) else {
+            self.state
+                .errors
+                .push(crate::Error::invalid_statement(format!(
+                    "invalid assignment projection: {projection:?}"
+                )));
+            return;
+        };
+
+        for (column, lowering_idx) in field.columns() {
+            let mut lowering_expr = mapping.model_to_table[lowering_idx].clone();
+
+            // Substitute the field reference in the column's lowering
+            // template with the lowered value.
+            lowering_expr.substitute(AssignmentInput {
+                assignment_projection: projection.clone(),
+                value: expr,
+            });
+
+            self.visit_expr_mut(&mut lowering_expr);
+
+            out.set(column, lowering_expr);
+        }
+    }
+
+    /// Lower a collection operator (`Append` / `Remove` / `Pop` /
+    /// `RemoveAt`) on a `Vec<scalar>` field.
+    ///
+    /// `Vec<scalar>` fields always resolve to a single primitive column, so
+    /// this skips the `model_to_table` substitution that `lower_set_assignment`
+    /// performs — the operands are operator arguments, not a field value,
+    /// and for a single-column field `model_to_table` is identity anyway.
+    ///
+    /// `Append` is supported on every backend; the removal operators are
+    /// gated by per-backend capability flags and emit a clear error where
+    /// the native form is not available.
+    fn lower_collection_op(
+        &mut self,
+        out: &mut stmt::Assignments,
+        mapping: &toasty_core::schema::mapping::Model,
+        projection: &stmt::Projection,
+        op: CollectionOp,
+    ) {
+        let Some(field) = mapping.resolve_field_mapping(projection) else {
+            self.state
+                .errors
+                .push(crate::Error::invalid_statement(format!(
+                    "invalid assignment projection: {projection:?}"
+                )));
+            return;
+        };
+
+        let Some(prim) = field.as_primitive() else {
+            self.state
+                .errors
+                .push(crate::Error::invalid_statement(format!(
+                    "collection operator on non-primitive field: {projection:?}"
+                )));
+            return;
+        };
+
+        // `Append` is universally supported; the removal operators are
+        // gated per backend.
+        let cap = self.capability();
+        let unsupported = match &op {
+            CollectionOp::Append(_) => None,
+            CollectionOp::Remove(_) if !cap.vec_remove => Some("stmt::remove"),
+            CollectionOp::Pop if !cap.vec_pop => Some("stmt::pop"),
+            CollectionOp::RemoveAt(_) if !cap.vec_remove_at => Some("stmt::remove_at"),
+            _ => None,
+        };
+
+        if let Some(op_name) = unsupported {
+            self.state
+                .errors
+                .push(crate::Error::invalid_statement(format!(
+                    "{op_name} is not yet supported on this backend"
+                )));
+            return;
+        }
+
+        match op {
+            CollectionOp::Append(expr) => {
+                self.visit_expr_mut(expr);
+                out.append(prim.column, expr.take());
+            }
+            CollectionOp::Remove(expr) => {
+                self.visit_expr_mut(expr);
+                out.remove(prim.column, expr.take());
+            }
+            CollectionOp::Pop => {
+                out.pop(prim.column);
+            }
+            CollectionOp::RemoveAt(expr) => {
+                self.visit_expr_mut(expr);
+                out.remove_at(prim.column, expr.take());
+            }
+        }
+    }
+}
+
 impl LowerStatement<'_, '_> {
     fn new_dependency(&mut self, stmt: impl Into<stmt::Statement>) -> hir::StmtId {
         let row_index = match self.cx {
@@ -213,51 +365,90 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     }
 
     fn visit_assignments_mut(&mut self, i: &mut stmt::Assignments) {
-        let mut assignments = stmt::Assignments::default();
+        let mut lowered = stmt::Assignments::default();
         let mapping = self.mapping_unwrap();
 
-        for (projection, assignment) in &*i {
-            // Phase 1: Lower the assignment expression
-            let stmt::Assignment::Set(expr) = assignment else {
-                todo!("only SET supported; got {assignment:#?}");
-            };
-            let mut lowered_expr = expr.clone();
-            self.visit_expr_mut(&mut lowered_expr);
-
-            // Phase 2: Resolve field mapping (handles primitives, partial updates, and full replacements)
-            let Some(field) = mapping.resolve_field_mapping(projection) else {
-                self.state
-                    .errors
-                    .push(crate::Error::invalid_statement(format!(
-                        "invalid assignment projection: {:?}",
-                        projection
-                    )));
-                continue;
-            };
-
-            // Phase 3: Apply lowering expression
-            // Iterate over all columns impacted by this field
-            for (column, lowering_idx) in field.columns() {
-                let mut lowering_expr = mapping.model_to_table[lowering_idx].clone();
-
-                // Substitute field reference with value
-                let input = AssignmentInput {
-                    assignment_projection: projection.clone(),
-                    value: &lowered_expr,
-                };
-                lowering_expr.substitute(input);
-
-                // Lower the result
-                self.visit_expr_mut(&mut lowering_expr);
-                assignments.set(column, lowering_expr);
+        // Two lowering paths, divided by what the assignment carries:
+        //
+        // - `Set` carries a whole *field value*. It is the only assignment
+        //   that can target a multi-column field (embedded structs decompose
+        //   across columns, enums into a discriminant plus variants), so it
+        //   is the only one that needs the `model_to_table` substitution.
+        //
+        // - `Append` / `Remove` / `Pop` / `RemoveAt` are *collection
+        //   operators*. They carry operator operands (a list, an element,
+        //   an index, or nothing) and always target a single-column
+        //   `Vec<scalar>` field, so none needs `model_to_table`.
+        for (projection, assignment) in &mut *i {
+            match assignment {
+                stmt::Assignment::Set(expr) => {
+                    self.lower_set_assignment(&mut lowered, mapping, projection, expr);
+                }
+                stmt::Assignment::Append(expr) => {
+                    self.lower_collection_op(
+                        &mut lowered,
+                        mapping,
+                        projection,
+                        CollectionOp::Append(expr),
+                    );
+                }
+                stmt::Assignment::Remove(expr) => {
+                    self.lower_collection_op(
+                        &mut lowered,
+                        mapping,
+                        projection,
+                        CollectionOp::Remove(expr),
+                    );
+                }
+                stmt::Assignment::Pop => {
+                    self.lower_collection_op(&mut lowered, mapping, projection, CollectionOp::Pop);
+                }
+                stmt::Assignment::RemoveAt(expr) => {
+                    self.lower_collection_op(
+                        &mut lowered,
+                        mapping,
+                        projection,
+                        CollectionOp::RemoveAt(expr),
+                    );
+                }
+                stmt::Assignment::Insert(_) | stmt::Assignment::Batch(_) => {
+                    todo!(
+                        "Insert / Batch assignments are not produced for table lowering; got {assignment:#?}"
+                    )
+                }
             }
         }
 
-        *i = assignments;
+        *i = lowered;
     }
 
     fn visit_expr_set_op_mut(&mut self, i: &mut stmt::ExprSetOp) {
         todo!("stmt={i:#?}");
+    }
+
+    fn visit_expr_binary_op_mut(&mut self, i: &mut stmt::ExprBinaryOp) {
+        // App-level operand rewrite for `eq` / `ne` (`Reference::Model` →
+        // primary-key field, `BelongsTo` → foreign-key field).  Must fire
+        // before the operands are walked, since walking lowers the field
+        // references into column references and the rewrite has nothing to
+        // match on.  Nested binary ops are handled by the recursive walk
+        // through `visit_expr_mut`.
+        if i.op.is_eq() || i.op.is_ne() {
+            self.rewrite_eq_operand(&mut i.lhs);
+            self.rewrite_eq_operand(&mut i.rhs);
+        }
+
+        stmt::visit_mut::visit_expr_binary_op_mut(self, i);
+    }
+
+    fn visit_expr_in_list_mut(&mut self, i: &mut stmt::ExprInList) {
+        // App-level operand rewrite: `Reference::Model { nesting } IN list`
+        // becomes `<pk_field> IN list`.  Must fire before the LHS is walked,
+        // since walking lowers the model reference into something the rewrite
+        // can no longer match on.
+        self.rewrite_in_list_model_operand(i);
+
+        stmt::visit_mut::visit_expr_in_list_mut(self, i);
     }
 
     fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
@@ -269,11 +460,53 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     *expr = lowered;
                 }
             }
+            // App-level rewrite: an OR covering every variant of an enum
+            // via `IsVariant` is a tautology.  Must fire before the children
+            // walk lowers the `IsVariant` nodes into discriminant
+            // comparisons, since the rewrite pattern-matches on
+            // `Expr::IsVariant`.
+            stmt::Expr::Or(e) if expr_or::is_variant_tautology_or(self.expr_cx.schema(), e) => {
+                *expr = true.into();
+            }
             stmt::Expr::InList(e) => {
                 self.visit_expr_in_list_mut(e);
 
                 if let Some(lowered) = self.lower_expr_in_list(&mut e.expr, &mut e.list) {
                     *expr = lowered;
+                }
+
+                // PostgreSQL-style: `x IN (a, b, c)` → `x = ANY($1)` with the
+                // list bound as a single array param.
+                if let stmt::Expr::InList(e) = expr
+                    && self.supports_any_rewrite()
+                    && in_list_is_value_list(e)
+                {
+                    let stmt::Expr::InList(e) = expr.take() else {
+                        unreachable!()
+                    };
+                    *expr = stmt::Expr::any_op(*e.expr, stmt::BinaryOp::Eq, *e.list);
+                }
+            }
+            stmt::Expr::Not(e) if matches!(*e.expr, stmt::Expr::InList(_)) => {
+                // Recurse into inner first so the InList itself is lowered.
+                self.visit_expr_not_mut(e);
+
+                // If the inner is still an InList (not yet rewritten because
+                // the gate is off or the list shape doesn't qualify), leave
+                // `Not(InList)` alone and let the SQL serializer render
+                // `NOT IN`. Otherwise, rewrite `NOT (x = ANY(arr))` into the
+                // canonical `x <> ALL(arr)` form.
+                if self.supports_any_rewrite()
+                    && let stmt::Expr::AnyOp(any) = e.expr.as_mut()
+                    && any.op == stmt::BinaryOp::Eq
+                {
+                    let stmt::Expr::Not(not) = expr.take() else {
+                        unreachable!()
+                    };
+                    let stmt::Expr::AnyOp(any) = *not.expr else {
+                        unreachable!()
+                    };
+                    *expr = stmt::Expr::all_op(*any.lhs, stmt::BinaryOp::Ne, *any.rhs);
                 }
             }
             stmt::Expr::InSubquery(e) => {
@@ -361,6 +594,17 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             }
             stmt::Expr::Reference(expr_reference) => {
                 match expr_reference {
+                    // A reference to a relation field inside a Returning
+                    // clause becomes a subquery that loads the related
+                    // model(s).  This is the `.select(rel_field)` path; it
+                    // mirrors the include-subquery machinery that
+                    // `.include(...)` uses for `Returning::Model`.
+                    stmt::ExprReference::Field { nesting: 0, index }
+                        if matches!(self.cx, LoweringContext::Returning(_))
+                            && self.model_unwrap().fields[*index].ty.is_relation() =>
+                    {
+                        *expr = self.build_relation_subquery(*index, &[]);
+                    }
                     stmt::ExprReference::Field { nesting, index } => {
                         *expr = self.lower_expr_field(*nesting, *index);
                         self.visit_expr_mut(expr);
@@ -415,7 +659,10 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     visit_mut::visit_expr_stmt_mut(child, &mut expr_stmt);
                 });
 
-                self.state.engine.simplify_stmt(&mut *expr_stmt.stmt);
+                // Cheap canonicalization is enough here: the parent statement's
+                // post-lowering simplify will recursively visit this embedded
+                // sub-statement and apply the heavyweight rules.
+                fold::fold_stmt(&mut *expr_stmt.stmt);
 
                 *expr = self.new_sub_statement(source_id, target_id, expr_stmt.stmt);
 
@@ -441,7 +688,10 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 });
 
                 let mut stmt = stmt::Statement::Query(*expr_exists.subquery);
-                self.state.engine.simplify_stmt(&mut stmt);
+                // Cheap canonicalization is enough here: the parent statement's
+                // post-lowering simplify will recursively visit this embedded
+                // sub-statement and apply the heavyweight rules.
+                fold::fold_stmt(&mut stmt);
 
                 let arg = self.new_sub_statement(source_id, target_id, Box::new(stmt));
 
@@ -499,73 +749,16 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
     fn visit_returning_mut(&mut self, i: &mut stmt::Returning) {
         if let stmt::Returning::Model { include } = i {
-            // Capture the include clause as we will be using it to generate
-            // inclusion statements.
-            let mut include = std::mem::take(include);
-
-            let mut returning = self.mapping_unwrap().table_to_model.lower_returning_model();
-
-            // Sort by first field so paths sharing a prefix are contiguous,
-            // then emit one merged subquery per group — without this, each
-            // `.include()` call would overwrite the previous subquery at the
-            // same field slot (see issue #691).
-            include.sort_by_key(|p| *p.projection.as_slice().first().expect("empty include path"));
-
-            // Track which top-level fields are explicitly included so that
-            // deferred fields are not masked when the caller asked for them.
-            let mut included_top_fields = stmt::PathFieldSet::new();
-
-            let mut nested: Vec<stmt::Projection> = vec![];
-            let mut current: Option<usize> = None;
-
-            for path in include {
-                let [first, rest @ ..] = path.projection.as_slice() else {
-                    unreachable!("guaranteed non-empty by sort_by_key above")
-                };
-
-                included_top_fields.insert(*first);
-
-                if current != Some(*first) {
-                    if let Some(field) = current {
-                        self.build_include_subquery(&mut returning, field, &nested);
-                        nested.clear();
-                    }
-                    current = Some(*first);
-                }
-                nested.push(stmt::Projection::from(rest));
-            }
-            if let Some(field) = current {
-                self.build_include_subquery(&mut returning, field, &nested);
-            }
-
-            // Encode each deferred slot so the row decoder can distinguish
-            // "loaded" from "unloaded" — critical when the inner type is
-            // `Option<T>`, where a NULL column value is otherwise
-            // indistinguishable from the unloaded state.
-            //
-            // - Loaded slots wrap the column reference in a 1-element record
-            //   `Record([col])`, so an actual NULL value comes back as
-            //   `Record([Null])` and decodes to `Some(None)`.
-            // - Unloaded slots emit a bare `Null`, which decodes to the
-            //   unloaded state.
-            //
-            // INSERT...RETURNING always projects deferred fields (the caller
-            // just supplied the value and expects to read it back).
-            let model = self.model_unwrap();
+            // Start from the schema's pre-computed default returning — every
+            // `#[deferred]` field, top-level or nested, is already `Null`.
+            // `process_top_level_includes` then splices loaded forms in for
+            // the fields named by include paths (and for every deferred field
+            // when this is an `INSERT ... RETURNING`).
+            let mut returning = self.mapping_unwrap().default_returning.clone();
+            let include_paths = std::mem::take(include);
             let is_insert = self.cx.is_insert();
-            for (index, field) in model.fields.iter().enumerate() {
-                if !field.deferred {
-                    continue;
-                }
-                let loaded = is_insert || included_top_fields.contains(index);
-                let mut entry = returning.entry_mut(index);
-                if loaded {
-                    let inner = entry.take();
-                    entry.insert(stmt::Expr::record([inner]));
-                } else {
-                    entry.insert(stmt::Expr::from(stmt::Value::Null));
-                }
-            }
+
+            self.process_top_level_includes(&mut returning, &include_paths, is_insert);
 
             *i = stmt::Returning::Project(returning);
         }
@@ -760,6 +953,107 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 }
 
 impl<'a, 'b> LowerStatement<'a, 'b> {
+    /// App-level operand rewrite for `eq` and `ne` binary ops.
+    ///
+    /// `Reference::Model { nesting }` becomes a reference to the model's
+    /// primary-key field; a `BelongsTo` field reference becomes a reference
+    /// to the relation's foreign-key field.  Both rewrites only match on
+    /// app-level shapes; after the surrounding lowering walk converts the
+    /// references to columns, this method has nothing to rewrite.
+    ///
+    /// Must fire before the operand's children are visited, since lowering
+    /// otherwise replaces the field reference with a column reference and
+    /// the rewrite has no app-level shape to match on.
+    fn rewrite_eq_operand(&self, operand: &mut stmt::Expr) {
+        if let stmt::Expr::Reference(expr_reference) = operand {
+            match &*expr_reference {
+                stmt::ExprReference::Model { nesting } => {
+                    let model = self
+                        .expr_cx
+                        .resolve_expr_reference(expr_reference)
+                        .as_model_unwrap();
+
+                    let [pk_field] = &model.primary_key.fields[..] else {
+                        todo!("handle composite keys");
+                    };
+
+                    *operand = stmt::Expr::ref_field(*nesting, pk_field);
+                }
+                stmt::ExprReference::Field { .. } => {
+                    let field = self
+                        .expr_cx
+                        .resolve_expr_reference(expr_reference)
+                        .as_field_unwrap();
+
+                    match &field.ty {
+                        app::FieldTy::Primitive(_) | app::FieldTy::Embedded(_) => {}
+                        app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => todo!(),
+                        app::FieldTy::BelongsTo(rel) => {
+                            let [fk_field] = &rel.foreign_key.fields[..] else {
+                                todo!("handle composite keys");
+                            };
+
+                            let stmt::ExprReference::Field { index, .. } = expr_reference else {
+                                panic!()
+                            };
+                            *index = fk_field.source.index;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// App-level rewrite for the LHS of an `IN`-list expression:
+    /// `Reference::Model { nesting } IN list` becomes `<pk_field> IN list`.
+    ///
+    /// Must fire before the LHS is walked, since walking lowers the model
+    /// reference into a column reference and the rewrite has nothing to
+    /// match on.
+    fn rewrite_in_list_model_operand(&self, expr: &mut stmt::ExprInList) {
+        let (nesting, pk_field_id) = {
+            let stmt::Expr::Reference(expr_ref @ stmt::ExprReference::Model { nesting }) =
+                &*expr.expr
+            else {
+                return;
+            };
+            let nesting = *nesting;
+            let model = self
+                .expr_cx
+                .resolve_expr_reference(expr_ref)
+                .as_model_unwrap();
+            let [pk_field_id] = &model.primary_key.fields[..] else {
+                todo!()
+            };
+            (nesting, *pk_field_id)
+        };
+
+        let pk = self.expr_cx.schema().app.field(pk_field_id);
+
+        // Sanity-check the RHS shape against the PK type.
+        match &mut *expr.list {
+            stmt::Expr::List(expr_list) => {
+                for item in &mut expr_list.items {
+                    match item {
+                        stmt::Expr::Value(value) => {
+                            assert!(value.is_a(&pk.ty.as_primitive_unwrap().ty));
+                        }
+                        _ => todo!("{item:#?}"),
+                    }
+                }
+            }
+            stmt::Expr::Value(stmt::Value::List(values)) => {
+                for value in values {
+                    assert!(value.is_a(&pk.ty.as_primitive_unwrap().ty));
+                }
+            }
+            _ => todo!("expr={expr:#?}"),
+        }
+
+        *expr.expr = stmt::Expr::ref_field(nesting, pk.id());
+    }
+
     fn lower_expr_binary_op(
         &mut self,
         op: stmt::BinaryOp,
@@ -778,6 +1072,35 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                     _ => todo!(),
                 })
             }
+            // Record-vs-record decomposition for eq/ne. Embedded fields lower
+            // to record expressions, so a comparison like
+            // `Record([cast(col, T)]) == Record([val])` only exposes the
+            // cast (and the cast-stripping rule below) once the record is
+            // split per-element. Recurse into each pair so cast handling
+            // fires.
+            //
+            // Mirrors the two record shapes handled in `simplify_expr_binary_op`:
+            // both sides `Expr::Record`, or one side folded to
+            // `Expr::Value(Value::Record)`.
+            (stmt::Expr::Record(lhs_rec), stmt::Expr::Record(rhs_rec))
+                if (op.is_eq() || op.is_ne()) && lhs_rec.len() == rhs_rec.len() =>
+            {
+                Some(self.combine_record_op(
+                    op,
+                    std::mem::take(&mut lhs_rec.fields),
+                    std::mem::take(&mut rhs_rec.fields),
+                ))
+            }
+            (stmt::Expr::Record(rec), stmt::Expr::Value(stmt::Value::Record(val_rec)))
+            | (stmt::Expr::Value(stmt::Value::Record(val_rec)), stmt::Expr::Record(rec))
+                if (op.is_eq() || op.is_ne()) && rec.len() == val_rec.len() =>
+            {
+                let val_exprs = std::mem::take(&mut val_rec.fields)
+                    .into_iter()
+                    .map(stmt::Expr::Value)
+                    .collect();
+                Some(self.combine_record_op(op, std::mem::take(&mut rec.fields), val_exprs))
+            }
             (stmt::Expr::Cast(expr_cast), _) | (_, stmt::Expr::Cast(expr_cast)) => {
                 let target_ty = self.capability().native_type_for(&expr_cast.ty);
                 self.cast_expr(lhs, &target_ty);
@@ -785,6 +1108,32 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 None
             }
             _ => None,
+        }
+    }
+
+    /// Combines per-element comparisons of two record-shaped operands into a
+    /// single boolean expression: AND for `eq`, OR for `ne`. Each pair is
+    /// recursed through `lower_expr_binary_op` so any inner cast handling
+    /// fires as if the comparison had been written elementwise.
+    fn combine_record_op(
+        &mut self,
+        op: stmt::BinaryOp,
+        lhs_fields: Vec<stmt::Expr>,
+        rhs_fields: Vec<stmt::Expr>,
+    ) -> stmt::Expr {
+        let comparisons: Vec<_> = lhs_fields
+            .into_iter()
+            .zip(rhs_fields)
+            .map(|(mut l, mut r)| {
+                self.lower_expr_binary_op(op, &mut l, &mut r)
+                    .unwrap_or_else(|| stmt::Expr::binary_op(l, op, r))
+            })
+            .collect();
+
+        if op.is_eq() {
+            stmt::Expr::and_from_vec(comparisons)
+        } else {
+            stmt::Expr::or_from_vec(comparisons)
         }
     }
 
@@ -884,130 +1233,6 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             }
             _ => todo!("cx={:#?}", self.cx),
         }
-    }
-
-    fn build_include_subquery(
-        &mut self,
-        returning: &mut stmt::Expr,
-        field_index: usize,
-        nested: &[stmt::Projection],
-    ) {
-        let field = &self.model_unwrap().fields[field_index];
-
-        // Primitive deferred field: the column reference is already in the
-        // returning record (built from `table_to_model`), so an include is
-        // a no-op here. The masking step in `visit_returning_mut` will skip
-        // this field's slot since it appears in the include set.
-        if field.deferred && field.ty.is_primitive() {
-            for path in nested {
-                assert!(
-                    path.is_empty(),
-                    "include sub-paths on deferred primitive fields are not supported"
-                );
-            }
-            return;
-        }
-
-        let (mut stmt, target_model_id) = match &field.ty {
-            FieldTy::HasMany(rel) => (
-                stmt::Query::new_select(
-                    rel.target,
-                    stmt::Expr::eq(
-                        stmt::Expr::ref_parent_model(),
-                        stmt::Expr::ref_self_field(rel.pair),
-                    ),
-                ),
-                rel.target,
-            ),
-            // To handle single relations, we need a new query modifier that
-            // returns a single record and not a list. This matters for the type
-            // system.
-            FieldTy::BelongsTo(rel) => {
-                let source_fk;
-                let target_pk;
-
-                if let [fk_field] = &rel.foreign_key.fields[..] {
-                    source_fk = stmt::Expr::ref_parent_field(fk_field.source);
-                    target_pk = stmt::Expr::ref_self_field(fk_field.target);
-                } else {
-                    let mut source_fk_fields = vec![];
-                    let mut target_pk_fields = vec![];
-
-                    for fk_field in &rel.foreign_key.fields {
-                        source_fk_fields.push(stmt::Expr::ref_parent_field(fk_field.source));
-                        target_pk_fields.push(stmt::Expr::ref_parent_field(fk_field.source));
-                    }
-
-                    source_fk = stmt::Expr::record_from_vec(source_fk_fields);
-                    target_pk = stmt::Expr::record_from_vec(target_pk_fields);
-                }
-
-                let mut query =
-                    stmt::Query::new_select(rel.target, stmt::Expr::eq(source_fk, target_pk));
-                query.single = true;
-                (query, rel.target)
-            }
-            FieldTy::HasOne(rel) => {
-                let mut query = stmt::Query::new_select(
-                    rel.target,
-                    stmt::Expr::eq(
-                        stmt::Expr::ref_parent_model(),
-                        stmt::Expr::ref_self_field(rel.pair),
-                    ),
-                );
-                query.single = true;
-                (query, rel.target)
-            }
-            _ => todo!(),
-        };
-
-        // Attach each non-empty remainder as a nested include on the subquery.
-        // Empty remainders (from a bare `.include(posts())`) need no nested
-        // include — the subquery itself satisfies them. The lowering pipeline
-        // will recursively group and process the nested includes when it
-        // encounters `Returning::Model` on this subquery.
-        for rest in nested {
-            if !rest.is_empty() {
-                stmt.include(stmt::Path {
-                    root: stmt::PathRoot::Model(target_model_id),
-                    projection: rest.clone(),
-                });
-            }
-        }
-
-        // Simplify the new stmt to handle relations.
-        Simplify::with_context(self.expr_cx).visit_stmt_query_mut(&mut stmt);
-
-        let mut sub_expr = stmt::Expr::stmt(stmt);
-
-        // For nullable single relations (HasOne<Option<T>>, BelongsTo<Option<T>>),
-        // wrap the sub-expression with a Let + Match to encode the result using
-        // variant-encoded values that distinguish loaded-None from unloaded.
-        //
-        //   Let {
-        //     binding: Stmt(query),
-        //     body: Match {
-        //       subject: Arg(0),
-        //       arms: [Null → I64(0)],
-        //       else_: Arg(0)
-        //     }
-        //   }
-        if field.nullable() && !field.ty.is_has_many() {
-            sub_expr = stmt::Expr::Let(stmt::ExprLet {
-                bindings: vec![sub_expr],
-                body: Box::new(stmt::Expr::match_expr(
-                    stmt::Expr::arg(0),
-                    vec![stmt::MatchArm {
-                        pattern: stmt::Value::Null,
-                        expr: stmt::Expr::from(0i64),
-                    }],
-                    // Non-null: pass through as-is (raw model record)
-                    stmt::Expr::arg(0),
-                )),
-            });
-        }
-
-        returning.entry_mut(field_index).insert(sub_expr);
     }
 
     /// Returns the ArgId for the new reference
@@ -1114,12 +1339,70 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         stmt::Expr::arg(arg)
     }
 
+    /// Run the canonical pipeline (pre-lower simplify, lowering walk, post-lower
+    /// simplify) on a synthesized sub-statement and stitch it onto the parent
+    /// as an `Expr::Arg`.
+    ///
+    /// Used at sites where lowering itself synthesizes a new statement to embed
+    /// in the parent's `Returning` (include subqueries, child inserts for
+    /// relation planning).  Equivalent to a recursive `lower_stmt` call that
+    /// passes through the `Expr::Stmt` arm in `visit_expr_mut`, but expressed
+    /// directly so the synthesized statement does not have to round-trip
+    /// through an `Expr::Stmt` placeholder.
+    fn lower_sub_stmt(&mut self, stmt: stmt::Statement) -> stmt::Expr {
+        let source_id = self.scope_stmt_id();
+        let mut stmt = Box::new(stmt);
+
+        let target_id = self.scope_statement(|child| {
+            // Via-association rewrite: `Source::Model { via }` becomes an
+            // explicit WHERE filter so the lowering walk only sees rewritten
+            // sources.  The IN-subquery lift fires next so non-walk code
+            // paths see the lifted form.  The eq/ne operand rewrite
+            // (model→PK, BelongsTo→FK) fires inside the lowering walk via
+            // `LowerStatement::visit_expr_binary_op_mut`.
+            association::RewriteVia::new(child.expr_cx).rewrite(&mut stmt);
+            lift_in_subquery::LiftInSubquery::new(child.expr_cx).rewrite(&mut stmt);
+            // Pre-lower simplify: remaining heavyweight rules the lowering
+            // visitor expects to have already fired.
+            Simplify::with_context(child.expr_cx, child.state.engine.capability)
+                .visit_mut(&mut *stmt);
+            // Lowering walk.
+            child.visit_stmt_mut(&mut stmt);
+            // Post-lower simplify: heavyweight rules on the lowered tree.
+            child.state.engine.simplify_stmt(&mut *stmt);
+        });
+
+        // Sub-statements built via this helper always live in the parent's
+        // Returning clause (include subqueries, child inserts for relation
+        // planning).  Force the new `Arg::Sub`'s `returning` flag accordingly:
+        // `plan_nested_merge` keys off `returning: true` to discover include
+        // subqueries, and the line-399 `Expr::Stmt` arm gets the same flag
+        // because it fires during the parent's Returning walk.
+        let saved_cx = std::mem::replace(&mut self.cx, LoweringContext::Returning(None));
+        let arg = self.new_sub_statement(source_id, target_id, stmt);
+        self.cx = saved_cx;
+
+        if self.state.hir[target_id].independent {
+            self.curr_stmt_info().deps.insert(target_id);
+        }
+
+        arg
+    }
+
     fn schema(&self) -> &'b Schema {
         &self.state.engine.schema
     }
 
     fn capability(&self) -> &Capability {
         self.state.engine.capability()
+    }
+
+    /// Both flags must be true to rewrite `IN (...)` into `= ANY(<array>)`:
+    /// the dialect must accept the predicate, and the bind layer must accept
+    /// a single array-valued parameter.
+    fn supports_any_rewrite(&self) -> bool {
+        let cap = self.capability();
+        cap.bind_list_param && cap.predicate_match_any
     }
 
     fn field(&self, id: impl Into<app::FieldId>) -> &'b app::Field {
@@ -1429,4 +1712,25 @@ fn build_update_returning(
         stmt::ExprRecord::from_vec(exprs),
         stmt::Type::SparseRecord(field_set),
     )
+}
+
+/// True when an `IN` list is a candidate for the `= ANY($1)` rewrite:
+///
+/// - The lhs is scalar (not a `Record`). Composite-key `IN` would need a PG
+///   row-array bind which the current driver doesn't support.
+/// - The list is a constant collection of scalar values. Lists containing
+///   references, sub-statements, or record values stay as expanded `IN`.
+fn in_list_is_value_list(e: &stmt::ExprInList) -> bool {
+    if matches!(*e.expr, stmt::Expr::Record(_)) {
+        return false;
+    }
+    let scalar = |v: &stmt::Value| !matches!(v, stmt::Value::Record(_) | stmt::Value::List(_));
+    match &*e.list {
+        stmt::Expr::Value(stmt::Value::List(items)) => items.iter().all(scalar),
+        stmt::Expr::List(list) => list
+            .items
+            .iter()
+            .all(|i| matches!(i, stmt::Expr::Value(v) if scalar(v))),
+        _ => false,
+    }
 }

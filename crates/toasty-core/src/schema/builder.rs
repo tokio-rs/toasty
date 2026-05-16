@@ -144,6 +144,7 @@ impl Builder {
                     fields: vec![], // Will be populated during mapping phase
                     model_to_table: stmt::ExprRecord::default(),
                     table_to_model: TableToModel::default(),
+                    default_returning: stmt::Expr::null(),
                 },
             );
         }
@@ -173,6 +174,7 @@ impl Default for Builder {
 
 impl BuildSchema<'_> {
     fn build_model_constraints(&self, model: &mut app::Model) -> Result<()> {
+        let model_name = model.name().to_string();
         let fields = match model {
             app::Model::Root(root) => &mut root.fields[..],
             app::Model::EmbeddedStruct(embedded) => &mut embedded.fields[..],
@@ -180,6 +182,19 @@ impl BuildSchema<'_> {
         };
         for field in fields.iter_mut() {
             if let app::FieldTy::Primitive(primitive) = &mut field.ty {
+                if matches!(primitive.ty, stmt::Type::List(_)) && !self.db.vec_scalar {
+                    let field_name = field.name.app.as_deref().unwrap_or_else(|| {
+                        panic!(
+                            "model `{model_name}` field has no app-level name; \
+                             expected every primitive field to carry one"
+                        )
+                    });
+                    return Err(crate::Error::unsupported_feature(format!(
+                        "model `{model_name}` field `{field_name}` is a `Vec<T>` collection, \
+                         but this backend does not yet support `Vec<scalar>` model fields."
+                    )));
+                }
+
                 let storage_ty = db::Type::from_app(
                     &primitive.ty,
                     primitive.storage_ty.as_ref(),

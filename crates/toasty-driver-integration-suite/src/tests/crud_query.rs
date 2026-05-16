@@ -338,9 +338,13 @@ pub async fn query_or_basic(test: &mut Test) -> Result<()> {
                 }),
             }),
         }));
+    } else if test.capability().scan {
+        let users = result?;
+        assert_eq!(2, users.len());
+        let mut names: Vec<_> = users.iter().map(|u| u.name.as_str()).collect();
+        names.sort();
+        assert_eq!(names, ["Alice", "Charlie"]);
     } else {
-        // DynamoDB requires key conditions for queries - OR filters without
-        // key conditions should return an error
         assert!(
             result.is_err(),
             "Expected error for OR query without key condition on non-SQL database"
@@ -381,15 +385,13 @@ pub async fn query_or_multiple(test: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await;
 
-    if test.capability().sql {
+    if test.capability().sql || test.capability().scan {
         let users = result?;
         assert_eq!(3, users.len());
         let mut names: Vec<_> = users.iter().map(|u| u.name.as_str()).collect();
         names.sort();
         assert_eq!(names, ["Alice", "Charlie", "Diana"]);
     } else {
-        // DynamoDB requires key conditions for queries - OR filters without
-        // key conditions should return an error
         assert!(
             result.is_err(),
             "Expected error for OR query without key condition on non-SQL database"
@@ -444,15 +446,13 @@ pub async fn query_or_and_combined(test: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await;
 
-    if test.capability().sql {
+    if test.capability().sql || test.capability().scan {
         let users = result?;
         assert_eq!(2, users.len());
         let mut names: Vec<_> = users.iter().map(|u| u.name.as_str()).collect();
         names.sort();
         assert_eq!(names, ["Alice", "Charlie"]);
     } else {
-        // DynamoDB requires key conditions for queries - OR filters without
-        // key conditions should return an error
         assert!(
             result.is_err(),
             "Expected error for OR query without key condition on non-SQL database"
@@ -711,7 +711,7 @@ pub async fn query_or_with_comparisons(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(scan))]
 pub async fn query_arbitrary_constraint(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Event {
@@ -882,15 +882,13 @@ pub async fn query_not_basic(test: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await;
 
-    if test.capability().sql {
+    if test.capability().sql || test.capability().scan {
         let users = result?;
         assert_eq!(3, users.len());
         let mut names: Vec<_> = users.iter().map(|u| u.name.as_str()).collect();
         names.sort();
         assert_eq!(names, ["Bob", "Charlie", "Diana"]);
     } else {
-        // DynamoDB requires key conditions for queries - NOT filters without
-        // key conditions should return an error
         assert!(
             result.is_err(),
             "Expected error for NOT query without key condition on non-SQL database"
@@ -945,7 +943,7 @@ pub async fn query_not_and_combined(test: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await;
 
-    if test.capability().sql {
+    if test.capability().sql || test.capability().scan {
         let users = result?;
         assert_eq!(1, users.len());
         assert_eq!("Charlie", users[0].name);
@@ -991,7 +989,7 @@ pub async fn query_not_or_combined(test: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await;
 
-    if test.capability().sql {
+    if test.capability().sql || test.capability().scan {
         let users = result?;
         assert_eq!(2, users.len());
         let mut names: Vec<_> = users.iter().map(|u| u.name.as_str()).collect();

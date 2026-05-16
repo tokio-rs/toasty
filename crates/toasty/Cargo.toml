@@ -1,6 +1,6 @@
 [package]
 name = "toasty"
-version = "0.5.0"
+version = "0.6.0"
 description = "An async ORM for Rust supporting SQL and NoSQL databases"
 authors.workspace = true
 edition.workspace = true
@@ -71,7 +71,8 @@ url.workspace = true
 [dev-dependencies]
 assert-struct.workspace = true
 proptest.workspace = true
-tokio = { workspace = true }
+tempfile.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
 toasty-driver-sqlite = { workspace = true }
 
 [lints]

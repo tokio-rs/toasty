@@ -47,6 +47,7 @@ fn build_model(fields: Vec<Field>, version_field: Option<FieldId>) -> Model {
         table_name: None,
         indices: vec![Index {
             id: pk_index_id,
+            name: None,
             fields: vec![IndexField {
                 field: id.field(0),
                 op: IndexOp::Eq,

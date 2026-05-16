@@ -336,3 +336,114 @@ pub async fn sort_composite_key(test: &mut Test) -> Result<()> {
 
     Ok(())
 }
+
+#[driver_test(requires(backward_pagination))]
+pub async fn paginate_composite_key_prev(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = kind, local = seq)]
+    struct Event {
+        kind: String,
+        seq: i64,
+    }
+
+    let mut db = test.setup_db(models!(Event)).await;
+
+    for i in 0..20 {
+        Event::create().kind("info").seq(i).exec(&mut db).await?;
+    }
+
+    test.log().clear();
+
+    // Retrieve two pages
+    let page1: Page<_> = Event::filter_by_kind("info")
+        .order_by(Event::fields().seq().asc())
+        .paginate(10)
+        .exec(&mut db)
+        .await?;
+    let page2: Page<_> = page1.next(&mut db).await?.unwrap();
+
+    // Check that it is possible to access the previous page
+    assert!(page2.has_prev());
+    let prev: Option<Page<_>> = page2.prev(&mut db).await?;
+    assert!(prev.is_some());
+
+    // Check the number and order of the items in the previous page
+    let prev_page = prev.unwrap();
+    assert_eq!(prev_page.len(), 10);
+    for i in 0..10 {
+        assert_eq!(prev_page[i].seq, i as i64);
+    }
+
+    Ok(())
+}
+
+#[driver_test(requires(backward_pagination))]
+pub async fn paginate_composite_key_prev_desc(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = kind, local = seq)]
+    struct Event {
+        kind: String,
+        seq: i64,
+    }
+
+    let mut db = test.setup_db(models!(Event)).await;
+
+    for i in 0..20 {
+        Event::create().kind("info").seq(i).exec(&mut db).await?;
+    }
+
+    test.log().clear();
+
+    // Retrieve two pages in descending order
+    let page1: Page<_> = Event::filter_by_kind("info")
+        .order_by(Event::fields().seq().desc())
+        .paginate(10)
+        .exec(&mut db)
+        .await?;
+    let page2: Page<_> = page1.next(&mut db).await?.unwrap();
+
+    // Check the number and order of the items in the previous page
+    assert!(page2.has_prev());
+    let prev: Option<Page<_>> = page2.prev(&mut db).await?;
+    assert!(prev.is_some());
+    let prev_page: Page<Event> = prev.unwrap();
+    assert_eq!(prev_page.len(), 10);
+    for (i, expected) in (10..20).rev().enumerate() {
+        assert_eq!(prev_page[i].seq, expected);
+    }
+
+    Ok(())
+}
+
+#[driver_test(requires(not(backward_pagination)))]
+pub async fn paginate_composite_key_no_prev(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = kind, local = seq)]
+    struct Event {
+        kind: String,
+        seq: i64,
+    }
+
+    let mut db = test.setup_db(models!(Event)).await;
+
+    for i in 0..20 {
+        Event::create().kind("info").seq(i).exec(&mut db).await?;
+    }
+
+    test.log().clear();
+
+    // Retrieve two pages
+    let page1: Page<_> = Event::filter_by_kind("info")
+        .order_by(Event::fields().seq().asc())
+        .paginate(10)
+        .exec(&mut db)
+        .await?;
+    let page2: Page<_> = page1.next(&mut db).await?.unwrap();
+
+    // Check that it is not possible to access the previous page
+    assert!(!page2.has_prev());
+    let prev: Option<Page<_>> = page2.prev(&mut db).await?;
+    assert!(prev.is_none());
+
+    Ok(())
+}

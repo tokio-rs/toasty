@@ -26,12 +26,12 @@ pub struct OrderByExpr {
 }
 
 impl OrderByExpr {
-    /// Flips the sort direction. `Desc` becomes default (ascending); default
-    /// and `Asc` become `Asc` (explicit ascending, since the default changed).
+    /// Flips the sort direction. `Desc` becomes `Asc`; default (ascending)
+    /// and `Asc` become `Desc`.
     pub fn reverse(&mut self) {
         self.order = match self.order {
-            Some(Direction::Desc) => None,
-            _ => Some(Direction::Asc),
+            Some(Direction::Desc) => Some(Direction::Asc),
+            _ => Some(Direction::Desc),
         }
     }
 }

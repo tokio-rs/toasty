@@ -218,58 +218,47 @@ the other?" Put the FK on the dependent model with `BelongsTo`, and declare
 
 ## Composite foreign keys
 
-When a parent model has a composite primary key, the `#[belongs_to]` attribute
-accepts multiple `key`/`references` pairs — one for each column in the composite
-key:
+When a parent model has a composite primary key, the foreign key on the child
+spans the same set of columns. Pass arrays to `key` and `references` to list
+each column:
 
 ```rust
 # use toasty::Model;
 #[derive(Debug, toasty::Model)]
-struct User {
+#[key(org_id, id)]
+struct Team {
+    org_id: u64,
+    id: u64,
+
+    #[has_many]
+    members: toasty::HasMany<Member>,
+}
+
+#[derive(Debug, toasty::Model)]
+#[index(org_id, team_id)]
+struct Member {
     #[key]
     #[auto]
     id: u64,
 
-    #[has_many]
-    todos: toasty::HasMany<Todo>,
-}
+    org_id: u64,
+    team_id: u64,
 
-#[derive(Debug, toasty::Model)]
-#[key(partition = user_id, local = id)]
-struct Todo {
-    #[auto]
-    id: uuid::Uuid,
-
-    user_id: u64,
-
-    #[belongs_to(key = user_id, references = id)]
-    user: toasty::BelongsTo<User>,
-
-    title: String,
+    #[belongs_to(key = [org_id, team_id], references = [org_id, id])]
+    team: toasty::BelongsTo<Team>,
 }
 ```
 
-In this example, `Todo` uses a composite primary key (`user_id` + `id`). The
-`user_id` field serves double duty: it is part of the Todo's own primary key
-*and* the foreign key pointing to `User`.
+The first field in `key` pairs with the first field in `references`, the second
+with the second, and so on, so the two arrays must have the same length. With
+a single-column foreign key, the arrays can be omitted: `key = user_id,
+references = id` is equivalent to `key = [user_id], references = [id]`.
 
-When the parent itself has a composite primary key, list each column pair:
-
-```rust,ignore
-#[belongs_to(key = org_id, references = org_id, key = team_id, references = id)]
-team: toasty::BelongsTo<Team>,
-```
-
-The number of `key` entries must match the number of `references` entries. Toasty
-pairs them positionally: the first `key` maps to the first `references`, the
-second to the second, and so on.
-
-Composite foreign key fields should be indexed together so that Toasty can query
-efficiently:
-
-```rust,ignore
-#[index(fields(org_id, team_id))]
-```
+The foreign key fields need a model-level composite index that covers them in
+order — `#[index(org_id, team_id)]` on the struct, not a separate `#[index]`
+on each field. Two single-column indexes don't compose into a covering index
+for a composite foreign key. Without one, schema verification rejects the
+model and suggests the exact attribute to add.
 
 ## What the following chapters cover
 

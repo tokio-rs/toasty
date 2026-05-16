@@ -2,197 +2,17 @@ use super::test_schema;
 use crate::engine::simplify::Simplify;
 use toasty_core::stmt::{self, Expr, ExprMatch, MatchArm, Projection, Value, VisitMut};
 
-// --- simplify_expr_match unit tests ---
-
-#[test]
-fn constant_subject_matches_arm() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // `match I64(1) { 0 => "a", 1 => "b" }` → `"b"`
-    let mut expr = ExprMatch {
-        subject: Box::new(Expr::from(1i64)),
-        arms: vec![
-            MatchArm {
-                pattern: Value::from(0i64),
-                expr: Expr::from("a"),
-            },
-            MatchArm {
-                pattern: Value::from(1i64),
-                expr: Expr::from("b"),
-            },
-        ],
-        else_expr: Box::new(Expr::null()),
-    };
-
-    let result = simplify.simplify_expr_match(&mut expr);
-
-    assert!(matches!(result, Some(Expr::Value(Value::String(ref s))) if s == "b"));
-}
-
-#[test]
-fn constant_subject_no_matching_arm_folds_to_else() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // `match I64(99) { 0 => "a", 1 => "b" else => null }` — no arm matches, folds to else
-    let mut expr = ExprMatch {
-        subject: Box::new(Expr::from(99i64)),
-        arms: vec![
-            MatchArm {
-                pattern: Value::from(0i64),
-                expr: Expr::from("a"),
-            },
-            MatchArm {
-                pattern: Value::from(1i64),
-                expr: Expr::from("b"),
-            },
-        ],
-        else_expr: Box::new(Expr::null()),
-    };
-
-    let result = simplify.simplify_expr_match(&mut expr);
-    assert!(matches!(result, Some(Expr::Value(Value::Null))));
-}
-
-#[test]
-fn non_constant_subject_not_simplified() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // Non-constant subject → no simplification.
-    let mut expr = ExprMatch {
-        subject: Box::new(Expr::arg(0)),
-        arms: vec![
-            MatchArm {
-                pattern: Value::from(0i64),
-                expr: Expr::from("a"),
-            },
-            MatchArm {
-                pattern: Value::from(1i64),
-                expr: Expr::from("b"),
-            },
-        ],
-        else_expr: Box::new(Expr::null()),
-    };
-
-    let result = simplify.simplify_expr_match(&mut expr);
-
-    assert!(result.is_none());
-}
-
-#[test]
-fn uniform_arms_and_else_folds_to_single_expr() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // Match(arg(0), [0 => arg(1), 1 => arg(1)], else: arg(1)) → arg(1)
-    let mut expr = ExprMatch {
-        subject: Box::new(Expr::arg(0)),
-        arms: vec![
-            MatchArm {
-                pattern: Value::from(0i64),
-                expr: Expr::arg(1),
-            },
-            MatchArm {
-                pattern: Value::from(1i64),
-                expr: Expr::arg(1),
-            },
-        ],
-        else_expr: Box::new(Expr::arg(1)),
-    };
-
-    let result = simplify.simplify_expr_match(&mut expr);
-    assert_eq!(result, Some(Expr::arg(1)));
-}
-
-#[test]
-fn uniform_arms_but_different_else_not_simplified() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // Match(arg(0), [0 => arg(1), 1 => arg(1)], else: null) — arms match but
-    // else differs, so the Match cannot be folded away.
-    let mut expr = ExprMatch {
-        subject: Box::new(Expr::arg(0)),
-        arms: vec![
-            MatchArm {
-                pattern: Value::from(0i64),
-                expr: Expr::arg(1),
-            },
-            MatchArm {
-                pattern: Value::from(1i64),
-                expr: Expr::arg(1),
-            },
-        ],
-        else_expr: Box::new(Expr::null()),
-    };
-
-    let result = simplify.simplify_expr_match(&mut expr);
-    assert!(result.is_none());
-}
-
-#[test]
-fn non_uniform_arms_not_simplified() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // Match(arg(0), [0 => arg(1), 1 => arg(2)]) — different arm exprs, no fold.
-    let mut expr = ExprMatch {
-        subject: Box::new(Expr::arg(0)),
-        arms: vec![
-            MatchArm {
-                pattern: Value::from(0i64),
-                expr: Expr::arg(1),
-            },
-            MatchArm {
-                pattern: Value::from(1i64),
-                expr: Expr::arg(2),
-            },
-        ],
-        else_expr: Box::new(Expr::null()),
-    };
-
-    let result = simplify.simplify_expr_match(&mut expr);
-    assert!(result.is_none());
-}
-
-#[test]
-fn false_arm_expr_not_dropped() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // `arm.expr = false` is a return *value*, not a filter predicate.
-    // The arm must be kept so that subj=0 returns `false`, not `null`.
-    let mut expr = ExprMatch {
-        subject: Box::new(Expr::arg(0)),
-        arms: vec![
-            MatchArm {
-                pattern: Value::from(0i64),
-                expr: Expr::FALSE,
-            },
-            MatchArm {
-                pattern: Value::from(1i64),
-                expr: Expr::from("b"),
-            },
-        ],
-        else_expr: Box::new(Expr::null()),
-    };
-
-    let result = simplify.simplify_expr_match(&mut expr);
-
-    assert!(result.is_none());
-    assert_eq!(expr.arms.len(), 2, "false-valued arm must not be dropped");
-}
-
-// --- visit_expr_mut end-to-end tests ---
+// End-to-end `visit_expr_mut` tests. The cheap fold rules themselves are
+// covered in `engine::fold::tests::expr_match`; these tests focus on the
+// `visit_expr_match_mut` override that prevents the simplifier from
+// recursing into dead-code arms.
 
 /// `visit_expr_mut` on a `Match` with a constant subject folds the whole
-/// expression to the matching arm's value (end-to-end through the override).
+/// expression to the matching arm's value.
 #[test]
 fn constant_subject_folds_to_arm_value() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `match I64(2) { 1 => "a", 2 => "b", 3 => "c" }` → `"b"`
     let mut expr = Expr::Match(ExprMatch {
@@ -225,7 +45,7 @@ fn constant_subject_folds_to_arm_value() {
 #[test]
 fn subject_simplified_before_folding() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // subject = `project([0], record([I64(1)]))` which simplifies to `I64(1)`
     let subject = stmt::ExprProject {
@@ -254,13 +74,13 @@ fn subject_simplified_before_folding() {
 }
 
 /// Dead-code arms are NOT visited when the subject is constant. This is the
-/// critical bug prevention: a dead arm containing an invalid projection such as
-/// `project([1], record([I64(1)]))` (index out of bounds) must not be
+/// critical bug prevention: a dead arm containing an invalid projection such
+/// as `project([1], record([I64(1)]))` (index out of bounds) must not be
 /// simplified, otherwise the simplifier would panic.
 #[test]
 fn dead_arms_not_visited_with_constant_subject() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // Arm 2 (`project([1], record([I64(1)]))`) would panic if simplified
     // because the record only has 1 element. Since subject is I64(1) → arm 1
@@ -295,7 +115,7 @@ fn dead_arms_not_visited_with_constant_subject() {
 #[test]
 fn non_constant_subject_simplifies_all_arms() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // Arms contain simplifiable sub-expressions (`record([x]) → {x}` when x
     // is constant). With a non-constant subject, both arms should be visited.
@@ -330,7 +150,7 @@ fn non_constant_subject_simplifies_all_arms() {
 #[test]
 fn constant_subject_no_match_folds_to_error_else() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `match 99 { 1 => "a" } else error("unexpected")` → `error("unexpected")`
     let mut expr = Expr::Match(ExprMatch {
@@ -352,7 +172,7 @@ fn constant_subject_no_match_folds_to_error_else() {
 #[test]
 fn constant_subject_matching_arm_is_error() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `match 1 { 1 => error("bad"), 2 => "ok" } else "default"` → `error("bad")`
     let mut expr = Expr::Match(ExprMatch {
@@ -380,7 +200,7 @@ fn constant_subject_matching_arm_is_error() {
 #[test]
 fn constant_subject_match_found_error_else_not_reached() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `match 1 { 1 => "ok" } else error("unexpected")` → `"ok"`
     let mut expr = Expr::Match(ExprMatch {

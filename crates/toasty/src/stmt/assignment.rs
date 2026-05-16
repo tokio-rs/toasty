@@ -41,6 +41,9 @@ enum AssignmentKind {
     Set(stmt::Expr),
     Insert(stmt::Expr),
     Remove(stmt::Expr),
+    Append(stmt::Expr),
+    Pop,
+    RemoveAt(stmt::Expr),
     Patch {
         path_projection: stmt::Projection,
         inner: Box<AssignmentKind>,
@@ -54,6 +57,9 @@ impl AssignmentKind {
             AssignmentKind::Set(expr) => assignments.set(projection, expr),
             AssignmentKind::Insert(expr) => assignments.insert(projection, expr),
             AssignmentKind::Remove(expr) => assignments.remove(projection, expr),
+            AssignmentKind::Append(expr) => assignments.append(projection, expr),
+            AssignmentKind::Pop => assignments.pop(projection),
+            AssignmentKind::RemoveAt(expr) => assignments.remove_at(projection, expr),
             AssignmentKind::Patch {
                 path_projection,
                 inner,
@@ -138,13 +144,26 @@ pub fn insert<T>(expr: impl IntoExpr<T>) -> Assignment<List<T>> {
 /// Takes an expression of `T` (the item to remove) and produces an assignment
 /// for `List<T>` (the collection).
 ///
-/// What "remove" means depends on the belongs-to side of the relationship:
-/// - **Optional foreign key**: The foreign key is set to `NULL`.
-/// - **Required foreign key**: The related record is deleted.
+/// What "remove" means depends on the field kind:
+/// - **`Vec<scalar>` field**: every element equal to the value is removed,
+///   atomically against the existing column value. Backends that advertise
+///   [`Capability::vec_remove`](toasty_core::driver::Capability::vec_remove)
+///   support this — currently PostgreSQL only; other backends return an
+///   error.
+/// - **Has-many relation**: the related record is dissociated. With an
+///   optional foreign key the FK is set to `NULL`; with a required foreign
+///   key the related record is deleted.
 ///
 /// # Examples
 ///
 /// ```ignore
+/// // Vec<String> field
+/// user.update()
+///     .tags(stmt::remove("admin"))
+///     .exec(&mut db)
+///     .await?;
+///
+/// // Has-many relation
 /// user.update()
 ///     .todos(stmt::remove(&todo_a))
 ///     .exec(&mut db)
@@ -189,6 +208,132 @@ pub fn remove<T>(expr: impl IntoExpr<T>) -> Assignment<List<T>> {
 pub fn set<T>(expr: impl IntoExpr<T>) -> Assignment<T> {
     Assignment {
         kind: AssignmentKind::Set(expr.into_expr().untyped),
+        _p: PhantomData,
+    }
+}
+
+/// Append one element to an ordered collection field (e.g. `Vec<scalar>`).
+///
+/// Takes an expression of `T` (the element to append) and produces an
+/// assignment for `List<T>` (the collection). The append is atomic
+/// against the existing column value on every supported backend.
+///
+/// After `.exec()`, the instance's field reflects the post-update value
+/// (old contents followed by the appended element).
+///
+/// # Examples
+///
+/// ```ignore
+/// user.update()
+///     .tags(stmt::push("admin"))
+///     .exec(&mut db)
+///     .await?;
+/// ```
+pub fn push<T>(expr: impl IntoExpr<T>) -> Assignment<List<T>> {
+    let element = expr.into_expr().untyped;
+    Assignment {
+        kind: AssignmentKind::Append(stmt::Expr::list([element])),
+        _p: PhantomData,
+    }
+}
+
+/// Append every element of a list to an ordered collection field.
+///
+/// Takes a list-shaped expression (anything that converts to `List<T>`
+/// — `Vec<T>`, `[T; N]`, `&[T]`, …) and produces an assignment for
+/// `List<T>`. Elements are appended in order and the operation is
+/// atomic against the existing column value, same as [`push`].
+///
+/// After `.exec()`, the instance's field reflects the post-update value.
+/// `stmt::extend(iter)` of an empty iterator is a no-op.
+///
+/// # Examples
+///
+/// ```ignore
+/// user.update()
+///     .tags(stmt::extend(["admin", "verified"]))
+///     .exec(&mut db)
+///     .await?;
+/// ```
+pub fn extend<T>(items: impl IntoExpr<List<T>>) -> Assignment<List<T>> {
+    Assignment {
+        kind: AssignmentKind::Append(items.into_expr().untyped),
+        _p: PhantomData,
+    }
+}
+
+/// Remove every element from an ordered collection field.
+///
+/// Produces an assignment for `List<T>` that replaces the column with an
+/// empty list. Equivalent to passing an empty Vec to the field setter,
+/// just more explicit at the call site.
+///
+/// # Examples
+///
+/// ```ignore
+/// user.update()
+///     .tags(stmt::clear())
+///     .exec(&mut db)
+///     .await?;
+/// ```
+pub fn clear<T>() -> Assignment<List<T>> {
+    Assignment {
+        kind: AssignmentKind::Set(stmt::Expr::list(Vec::<stmt::Expr>::new())),
+        _p: PhantomData,
+    }
+}
+
+/// Drop the last element of an ordered collection field.
+///
+/// Produces an assignment for `List<T>` that removes the trailing element
+/// of the existing column value. The popped element is discarded — the
+/// assignment API does not return values. Empty-collection is a no-op
+/// rather than an error; for failure-on-empty semantics, filter the
+/// collection first.
+///
+/// Atomic against the existing column value. Backends that advertise
+/// [`Capability::vec_pop`](toasty_core::driver::Capability::vec_pop)
+/// support this — currently PostgreSQL only; other backends return an
+/// error.
+///
+/// # Examples
+///
+/// ```ignore
+/// user.update()
+///     .tags(stmt::pop())
+///     .exec(&mut db)
+///     .await?;
+/// ```
+pub fn pop<T>() -> Assignment<List<T>> {
+    Assignment {
+        kind: AssignmentKind::Pop,
+        _p: PhantomData,
+    }
+}
+
+/// Drop the element at the given index from an ordered collection field.
+///
+/// Takes a `usize`-typed index and produces an assignment for `List<T>`
+/// that removes the element at that position. Out-of-bounds indices are
+/// a no-op rather than an error — per-row failure semantics on a bulk
+/// update are rarely useful.
+///
+/// Atomic against the existing column value. Backends that advertise
+/// [`Capability::vec_remove_at`](toasty_core::driver::Capability::vec_remove_at)
+/// support this — currently PostgreSQL only; other backends return an
+/// error.
+///
+/// # Examples
+///
+/// ```ignore
+/// user.update()
+///     .tags(stmt::remove_at(0))
+///     .exec(&mut db)
+///     .await?;
+/// ```
+pub fn remove_at<T>(idx: impl IntoExpr<usize>) -> Assignment<List<T>> {
+    Assignment {
+        kind: AssignmentKind::RemoveAt(idx.into_expr().untyped),
         _p: PhantomData,
     }
 }

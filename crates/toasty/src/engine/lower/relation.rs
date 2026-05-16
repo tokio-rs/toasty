@@ -166,6 +166,24 @@ impl LowerStatement<'_, '_> {
                     debug_assert!(!expr.is_value_null());
                     Mutation::Disassociate { expr }
                 }
+                stmt::Assignment::Append(_) => {
+                    // `stmt::push` / `stmt::extend` target `Vec<scalar>`
+                    // model fields, not relation fields. The type system
+                    // does not currently rule out passing them to a
+                    // has-many setter, but the engine has no Append-on-
+                    // relation lowering.
+                    unreachable!(
+                        "Append assignment on relation field — use stmt::insert for has-many"
+                    )
+                }
+                stmt::Assignment::Pop | stmt::Assignment::RemoveAt(_) => {
+                    // `stmt::pop` / `stmt::remove_at` target ordered
+                    // `Vec<scalar>` fields. They have no relation analogue —
+                    // has-many removal is by relation key, not by position.
+                    unreachable!(
+                        "Pop / RemoveAt assignment on relation field — these only apply to Vec<scalar>"
+                    )
+                }
                 stmt::Assignment::Batch(_) => {
                     todo!("batch assignments for relations")
                 }
@@ -394,8 +412,10 @@ impl LowerStatement<'_, '_> {
             stmt.source.single = false;
         }
 
-        self.state.engine.simplify_stmt(&mut stmt);
-        source.set_returning_field(_field.id, stmt.into());
+        // Run the canonical pipeline on the synthesized child insert and
+        // stitch it onto the parent as an `Expr::Arg`.
+        let arg = self.lower_sub_stmt(stmt::Statement::Insert(stmt));
+        source.set_returning_field(_field.id, arg);
     }
 
     fn plan_mut_belongs_to(

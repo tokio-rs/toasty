@@ -5,7 +5,8 @@ use crate::model::schema::{
 };
 
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{quote, quote_spanned};
+use syn::spanned::Spanned;
 
 impl Expand<'_> {
     pub(super) fn expand_model_schema(&self) -> TokenStream {
@@ -282,6 +283,10 @@ impl Expand<'_> {
                 let index_tokenized = util::int(index);
                 let unique = &model_index.unique;
                 let primary_key = &model_index.primary_key;
+                let name = match &model_index.name {
+                    Some(value) => quote!(Some(#value.to_string())),
+                    None => quote!(None),
+                };
 
                 let fields = model_index.fields.iter().map(|index_field| {
                     let field_tokenized = util::int(index_field.field);
@@ -310,6 +315,7 @@ impl Expand<'_> {
                             model: id,
                             index: #index_tokenized,
                         },
+                        name: #name,
                         fields: vec![ #( #fields ),* ],
                         unique: #unique,
                         primary_key: #primary_key,
@@ -333,6 +339,85 @@ impl Expand<'_> {
 }
 
 impl Expand<'_> {
+    /// Emit one obligation per primitive field with `#[column(type = ...)]`
+    /// that the field's Rust type implements
+    /// `codegen_support::storage::CompatibleWith<Tag>` for the matching tag.
+    ///
+    /// The check leans on the Rust type checker — the macro does not inspect
+    /// the field type, it only names it. Type aliases, re-exports, and
+    /// generic parameters resolve through normal trait resolution.
+    pub(super) fn expand_storage_compat_checks(&self) -> TokenStream {
+        let toasty = &self.toasty;
+
+        let checks = self.model.fields.iter().filter_map(|field| {
+            // `#[serialize]` stores the field as a JSON string regardless of
+            // the underlying Rust type — skip the storage compat check.
+            if field.attrs.serialize.is_some() {
+                return None;
+            }
+
+            let FieldTy::Primitive(ty) = &field.ty else {
+                return None;
+            };
+
+            let col_ty = field.attrs.column.as_ref().and_then(|c| c.ty.as_ref())?;
+            let marker = col_ty.compat_marker(toasty)?;
+
+            // Pin the diagnostic at the field type's span so the error lands
+            // on the user's declaration, not the derive call site.
+            Some(quote_spanned! { ty.span()=>
+                const _: () = {
+                    fn _check<__T>()
+                    where
+                        __T: #toasty::storage::CompatibleWith<#marker>,
+                    {}
+                    let _ = _check::<#ty>;
+                };
+            })
+        });
+
+        quote! { #( #checks )* }
+    }
+
+    /// Emit one obligation per field with an explicit `#[auto(...)]` strategy
+    /// that the field's Rust type implements
+    /// `codegen_support::auto::AutoCompatible<Tag>` for the matching tag.
+    ///
+    /// The bare `#[auto]` form already gets a `T: Auto` obligation from the
+    /// `STRATEGY` const lookup in `expand_model_fields`, so it does not need
+    /// a separate check here.
+    pub(super) fn expand_auto_compat_checks(&self) -> TokenStream {
+        let toasty = &self.toasty;
+
+        let checks = self.model.fields.iter().filter_map(|field| {
+            let auto = field.attrs.auto.as_ref()?;
+
+            let FieldTy::Primitive(ty) = &field.ty else {
+                return None;
+            };
+
+            let tag = match auto {
+                AutoStrategy::Unspecified => return None,
+                AutoStrategy::Uuid(_) => quote! { #toasty::auto::tag::Uuid },
+                AutoStrategy::Increment => quote! { #toasty::auto::tag::Increment },
+            };
+
+            // Pin the diagnostic at the field type's span so the error lands
+            // on the user's declaration, not the derive call site.
+            Some(quote_spanned! { ty.span()=>
+                const _: () = {
+                    fn _check<__T>()
+                    where
+                        __T: #toasty::auto::AutoCompatible<#tag>,
+                    {}
+                    let _ = _check::<#ty>;
+                };
+            })
+        });
+
+        quote! { #( #checks )* }
+    }
+
     /// Generate calls to register all models reachable from this model's fields.
     ///
     /// For primitive fields, no call is emitted (the default `Field::register`

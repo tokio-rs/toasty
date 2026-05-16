@@ -128,33 +128,4 @@ pub use toasty_macros::{Embed, Model, create, query};
 
 pub use toasty_core::{Error, Result, schema::app::ModelSet};
 
-#[doc(hidden)]
-pub mod codegen_support {
-    pub use crate::schema::inventory;
-    pub use crate::{
-        Db, Error, Executor, Result, Statement,
-        schema::{
-            Auto, BelongsTo, Defer, Deferred, DiscoverItem, Embed, Field, HasMany, HasOne, Load,
-            Model, Register, Relation, Scope, build_deferred_load, generate_unique_id,
-        },
-        stmt::CreateMany,
-        stmt::{self, Assign, IntoExpr, IntoInsert, IntoStatement, List, Path},
-        update_target::UpdateTarget,
-    };
-    #[cfg(feature = "serde")]
-    pub use serde_json;
-    pub use std::{convert::Into, default::Default, option::Option};
-
-    pub use toasty_core as core;
-
-    /// Infer the [`Scope`] type from a scope expression and return its fields
-    /// path.
-    ///
-    /// The `create!` macro uses this in the scoped form (`in expr { ... }`) to
-    /// obtain the field struct for nested builders. Because the macro has no
-    /// type information, it cannot call `S::new_path_root()` directly — this function
-    /// lets Rust infer `S` from the scope argument.
-    pub fn scope_fields<S: Scope>(_scope: &S) -> S::Path<S::Item> {
-        S::new_path_root()
-    }
-}
+pub mod codegen_support;

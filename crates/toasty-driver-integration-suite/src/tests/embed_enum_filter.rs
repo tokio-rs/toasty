@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 /// Filtering by a data-carrying enum value using a SQL WHERE clause.
 /// DynamoDB does not support arbitrary filter predicates, so this is SQL-only.
-#[driver_test(requires(sql))]
+#[driver_test(requires(scan))]
 pub async fn filter_data_enum(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum ContactInfo {
@@ -53,7 +53,7 @@ pub async fn filter_data_enum(t: &mut Test) -> Result<()> {
 }
 
 /// Filtering by variant alone (discriminant-only check) using `is_{variant}()`.
-#[driver_test(requires(sql))]
+#[driver_test(requires(scan))]
 pub async fn filter_data_enum_by_variant(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum ContactInfo {
@@ -116,7 +116,7 @@ pub async fn filter_data_enum_by_variant(t: &mut Test) -> Result<()> {
 }
 
 /// Filtering a unit-only enum by variant using `is_{variant}()`.
-#[driver_test(requires(sql))]
+#[driver_test(requires(scan))]
 pub async fn filter_unit_enum_by_variant(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum Status {

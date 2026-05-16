@@ -613,5 +613,6 @@ impl TestCx {
     fn plan_basic_query_with_filter(&self, filter: stmt::Expr) -> Result<IndexPlan<'_>> {
         let stmt = self.basic_query_with_filter(filter);
         plan_index_path(&self.schema, self.capability, &stmt)
+            .map(|opt| opt.expect("test expects an index plan, not a scan fallback"))
     }
 }

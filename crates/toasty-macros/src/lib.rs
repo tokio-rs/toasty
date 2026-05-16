@@ -365,15 +365,14 @@ use proc_macro::TokenStream;
 /// | `key = <field>` | Local field holding the foreign key value |
 /// | `references = <field>` | Field on the target model being referenced |
 ///
-/// For composite foreign keys, repeat `key`/`references` pairs:
+/// For composite foreign keys, pass arrays to `key` and `references`:
 ///
 /// ```
 /// # use toasty::Model;
 /// # #[derive(Model)]
+/// # #[key(id, tenant_id)]
 /// # struct Org {
-/// #     #[key]
 /// #     id: i64,
-/// #     #[key]
 /// #     tenant_id: i64,
 /// # }
 /// # #[derive(Model)]
@@ -383,13 +382,13 @@ use proc_macro::TokenStream;
 /// #     id: i64,
 /// #     org_id: i64,
 /// #     tenant_id: i64,
-/// #[belongs_to(key = org_id, references = id, key = tenant_id, references = tenant_id)]
+/// #[belongs_to(key = [org_id, tenant_id], references = [id, tenant_id])]
 /// org: toasty::BelongsTo<Org>,
 /// # }
 /// ```
 ///
-/// The number of `key` entries must equal the number of `references`
-/// entries.
+/// The number of fields in `key` must equal the number of fields in
+/// `references`.
 ///
 /// Wrap the target type in `Option` for an optional (nullable) foreign key:
 ///
@@ -715,6 +714,29 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// - For data-carrying variants, per-variant handle types with a
 ///   `matches(closure)` method for pattern matching and field access.
 ///
+/// # Newtype `Auto` proxying
+///
+/// A tuple-newtype embedded struct (one unnamed field) automatically
+/// implements `Auto` whenever its inner type does — no annotation
+/// required. Toasty emits a `NewtypeOf` marker carrying the inner type
+/// and a blanket `Auto` impl resolves through it:
+///
+/// ```
+/// #[derive(toasty::Embed)]
+/// struct UserId(uuid::Uuid);
+///
+/// #[derive(toasty::Model)]
+/// struct User {
+///     #[key]
+///     #[auto]
+///     id: UserId,
+///     name: String,
+/// }
+/// ```
+///
+/// Newtypes wrapping non-`Auto` types stay non-`Auto`; nesting works
+/// transparently (`Outer(Inner(u64))` proxies through both layers).
+///
 /// # Field-level attributes
 ///
 /// ## `#[column(...)]` — customize the database column
@@ -906,7 +928,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 ///
 /// [`Embed`]: toasty::Embed
 /// [`Register`]: toasty::Register
-#[proc_macro_derive(Embed, attributes(column, index, unique))]
+#[proc_macro_derive(Embed, attributes(column, deferred, index, unique))]
 pub fn derive_embed(input: TokenStream) -> TokenStream {
     match model::generate_embed(input.into()) {
         Ok(output) => output.into(),

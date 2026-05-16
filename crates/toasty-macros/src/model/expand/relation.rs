@@ -22,11 +22,11 @@ impl Expand<'_> {
             }
 
             #vis struct One {
-                stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>,
+                stmt: #toasty::stmt::Query<#model_ident>,
             }
 
             #vis struct OptionOne {
-                stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>,
+                stmt: #toasty::stmt::Query<#toasty::Option<#model_ident>>,
             }
 
             impl Many {
@@ -42,7 +42,7 @@ impl Expand<'_> {
                     self.into_statement().exec(executor).await
                 }
 
-                #vis fn query(
+                #vis fn filter(
                     self,
                     filter: #toasty::stmt::Expr<bool>
                 ) -> #query_ident {
@@ -79,7 +79,7 @@ impl Expand<'_> {
 
             impl One {
                 #vis fn from_stmt(stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>) -> One {
-                    One { stmt }
+                    One { stmt: stmt.one() }
                 }
 
                 /// Create a new associated record
@@ -90,14 +90,14 @@ impl Expand<'_> {
                 }
 
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
-                    self.stmt.one().exec(executor).await
+                    self.stmt.exec(executor).await
                 }
             }
 
             impl #toasty::IntoStatement for One {
-                type Returning = #toasty::List<#model_ident>;
+                type Returning = #model_ident;
 
-                fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
+                fn into_statement(self) -> #toasty::Statement<#model_ident> {
                     use #toasty::IntoStatement;
                     self.stmt.into_statement()
                 }
@@ -105,7 +105,7 @@ impl Expand<'_> {
 
             impl OptionOne {
                 pub fn from_stmt(stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>) -> OptionOne {
-                    OptionOne { stmt }
+                    OptionOne { stmt: stmt.first() }
                 }
 
                 /// Create a new associated record
@@ -116,7 +116,7 @@ impl Expand<'_> {
                 }
 
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#toasty::Option<#model_ident>> {
-                    self.stmt.first().exec(executor).await
+                    self.stmt.exec(executor).await
                 }
             }
 
@@ -175,6 +175,24 @@ impl Expand<'_> {
                 fn new_path_root() -> Self::Path<Self::Item> {
                     #field_struct_ident::from_path(#toasty::Path::root())
                 }
+            }
+
+            #[diagnostic::do_not_recommend]
+            impl #toasty::ValidateCreate for Many {
+                const CREATE_META: &'static #toasty::CreateMeta =
+                    &<#model_ident as #toasty::Model>::CREATE_META;
+            }
+
+            #[diagnostic::do_not_recommend]
+            impl #toasty::ValidateCreate for One {
+                const CREATE_META: &'static #toasty::CreateMeta =
+                    &<#model_ident as #toasty::Model>::CREATE_META;
+            }
+
+            #[diagnostic::do_not_recommend]
+            impl #toasty::ValidateCreate for OptionOne {
+                const CREATE_META: &'static #toasty::CreateMeta =
+                    &<#model_ident as #toasty::Model>::CREATE_META;
             }
         }
     }

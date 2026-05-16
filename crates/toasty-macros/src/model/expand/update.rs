@@ -152,13 +152,16 @@ impl Expand<'_> {
                 }
             }
             FieldTy::Primitive(ty) => {
+                // Bind through `Field::ExprTarget` so each field's setter
+                // accepts whatever its expression-level type permits —
+                // `Self` for scalars, `List<T>` for `Vec<T: Scalar>`.
                 quote! {
-                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<#ty>) -> Self {
+                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::Field>::ExprTarget>) -> Self {
                         self.#set_field_ident(#field_ident);
                         self
                     }
 
-                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<#ty>) -> &mut Self {
+                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::Field>::ExprTarget>) -> &mut Self {
                         let projection = #projection;
                         #field_ident.assign(&mut self.assignments, projection);
                         self
@@ -223,7 +226,7 @@ impl Expand<'_> {
                 Some(quote! {
                     self.assignments.set(
                         #toasty::stmt::Projection::from_index(#index_tokenized),
-                        <#ty as #toasty::IntoExpr<#ty>>::into_expr(#expr),
+                        <#ty as #toasty::IntoExpr<<#ty as #toasty::Field>::ExprTarget>>::into_expr(#expr),
                     );
                 })
             })

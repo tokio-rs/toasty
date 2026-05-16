@@ -6,12 +6,23 @@ name: Claude Triage
 # community labels are left for humans. See docs/dev/labels.md.
 
 # SECURITY: the PR job uses `pull_request_target`, which runs in the base
-# repo's context with full secrets. PR contents (branch, files, scripts,
-# Cargo.toml, build.rs, etc.) are UNTRUSTED — a malicious fork could use
-# them to exfiltrate secrets. This workflow must never execute code from
-# the PR: no `actions/checkout` of the PR ref, no `cargo build`, no `npm
-# install`, no running of fork-supplied scripts. The only safe operations
-# are reading PR metadata via `gh` and applying labels.
+# repo's context with full secrets. PR title/body/files are UNTRUSTED —
+# a malicious fork could try to use them as a prompt-injection channel
+# to exfiltrate secrets or mutate other PRs.
+#
+# Defenses (see scripts/claude-triage-pr.sh):
+#   1. The base ref is checked out, never the PR head — no fork code
+#      executes (no `cargo build`, no `npm install` of PR deps, no
+#      `build.rs`).
+#   2. Claude runs as a pure classifier: `--allowed-tools ""` (no Bash,
+#      Read, Edit, Write, MCP) under Claude Code's sandbox with a
+#      managed-scope allowlist of only `api.anthropic.com`.
+#   3. Claude's chosen labels are intersected against a hardcoded
+#      allowlist in the script before any `gh pr edit` runs, so
+#      injection-driven label choice is bounded to a known-safe set.
+#   4. `gh` invocations live in the script, not Claude's sandbox: the
+#      PR number is pinned to the triggering event and the verb is
+#      always `--add-label`.
 
 on:
   issues:
@@ -98,6 +109,13 @@ jobs:
           claude_args: |
             --allowed-tools "Bash(gh issue view:*),Bash(gh issue edit:*),Bash(gh label list:*)"
 
+  # Hardened PR triage:
+  #   - Claude runs headless with no tools, under sandbox + managed
+  #     allowlist (only api.anthropic.com reachable).
+  #   - All `gh` calls live in the script, not in Claude's sandbox.
+  #   - Claude's chosen labels are intersected against a hardcoded
+  #     allowlist before being applied.
+  # See scripts/claude-triage-pr.sh for the threat-model write-up.
   triage-pr:
     if: github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
@@ -109,76 +127,14 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 1
-      - name: Run Claude Code for PR Triage
-        uses: anthropics/claude-code-action@v1
-        with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          allowed_non_write_users: "*"
-          prompt: |
-            You are a triage bot for the toasty repository. Apply GitHub labels
-            to PR #${{ github.event.pull_request.number }} based on its title
-            and changed files.
-
-            Steps:
-
-            1. Read the PR metadata and file list:
-               gh pr view ${{ github.event.pull_request.number }} --json title,body,labels,files
-
-            2. Choose EXACTLY ONE category label. The title is a Conventional
-               Commit (feat:, fix:, docs:, refactor:, chore:, ci:, build:,
-               test:, perf:, style:) — use it as a strong hint, verified
-               against the diff:
-               - C-bug          fix:
-               - C-feature      feat:
-               - C-enhancement  improvement to existing feature (often feat: or perf:)
-               - C-refactor     refactor:
-               - C-docs         docs:
-               - C-chore        chore:, ci:, build:
-
-            3. Choose area labels. Most PRs carry 0, 1, or 2 A- labels.
-               More than 2 is unusual and requires each area to be a
-               genuine focus of the PR.
-
-               Area paths (necessary but not sufficient):
-               - A-engine     crates/toasty/src/engine/**
-               - A-macros     crates/toasty-macros/**
-               - A-schema     crates/toasty-core/src/schema/**
-               - A-sql        crates/toasty-sql/**
-               - A-driver     crates/toasty-driver-*/**
-               - A-migration  crates/toasty-cli/**
-               - A-tests      crates/toasty-driver-integration-suite/**, tests/**
-               - A-docs       docs/**
-               - A-ci         .github/**, scripts/**
-
-               Apply A-<area> only when the PR meaningfully changes that
-               area: modifies its logic, behavior, or public API, or fixes
-               a bug specific to it. Tests added alongside a feature or
-               fix are covered by the PR's primary area — they do not
-               earn A-tests on their own. Apply A-tests only when the PR
-               is primarily a testing effort.
-
-               Do NOT apply an A- label for:
-               - Mechanical or sweeping changes that touch a crate
-                 without changing its behavior: dependency swaps, import
-                 rewrites, mass renames, formatting passes. These often
-                 warrant C-refactor or C-chore with zero A- labels.
-               - Incidental touches: a handful of lines changed only
-                 because a helper moved, a type was renamed, or an API
-                 shifted elsewhere.
-               - Pure Cargo.toml dependency bumps.
-
-               When in doubt, leave the label off. Fewer labels beats
-               over-labeling.
-
-            4. Apply labels, skipping any already present:
-               gh pr edit ${{ github.event.pull_request.number }} --add-label <label>
-
-            NEVER apply (reserved for humans):
-            C-sketch, C-tracking, C-discussion, all P-*, all I-*, all S-*,
-            good first issue, help wanted.
-
-            Do nothing else: no review, no comments, no edits to the PR
-            description, no merges. Do not run tests or build commands.
-          claude_args: |
-            --allowed-tools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr edit:*),Bash(gh label list:*)"
+      - name: Install Claude CLI and sandbox dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y bubblewrap socat
+          npm install -g @anthropic-ai/claude-code
+      - name: Run triage
+        env:
+          PR: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: ./scripts/claude-triage-pr.sh

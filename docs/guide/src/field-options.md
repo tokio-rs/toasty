@@ -348,8 +348,18 @@ struct Event {
 
 ## JSON serialization
 
-Use `#[serialize(json)]` to store a Rust value as a JSON string in the database.
-The field type must implement `serde::Serialize` and `serde::Deserialize`.
+Use `#[serialize(json)]` to store an arbitrary serde-serializable Rust
+value as a JSON string in the database. The field type must implement
+`serde::Serialize` and `serde::Deserialize`.
+
+Reach for `#[serialize(json)]` when the field is a serde-typed value
+that Toasty doesn't natively support — for example, a third-party type
+or a struct you don't want to declare as `#[derive(toasty::Embed)]`.
+For `Vec<scalar>` fields, prefer the native form (`tags: Vec<String>`,
+documented in [Defining Models](./defining-models.md)) which is
+queryable and supports collection mutations via `stmt::push`,
+`stmt::extend`, `stmt::pop`, `stmt::remove`, `stmt::remove_at`, and
+`stmt::clear`.
 
 ```rust,ignore
 # use toasty::Model;
@@ -369,9 +379,11 @@ struct Post {
 
     title: String,
 
-    #[serialize(json)]
+    // Native `Vec<scalar>` storage — no attribute needed.
     tags: Vec<String>,
 
+    // Arbitrary serde type — `#[serialize(json)]` stores it as one
+    // opaque JSON column. Toasty cannot query into it.
     #[serialize(json)]
     meta: Metadata,
 }
@@ -397,7 +409,6 @@ that support `varchar`.
 #     #[auto]
 #     id: u64,
 #     title: String,
-#     #[serialize(json)]
 #     tags: Vec<String>,
 #     #[serialize(json)]
 #     meta: Metadata,
@@ -449,6 +460,13 @@ With `nullable`:
 Without `nullable`:
 - `None` maps to the JSON text `"null"` (a non-null string)
 - `Some(value)` maps to the JSON string representation
+
+## Scalar arrays
+
+A `Vec<T>` field where `T` is a scalar type stores a homogeneous,
+ordered collection in a single column. These fields have their own
+guide page covering the element types, storage per driver, creation,
+querying, and updates — see [`Vec<scalar>` Fields](./vec-scalar-fields.md).
 
 ## Attribute summary
 

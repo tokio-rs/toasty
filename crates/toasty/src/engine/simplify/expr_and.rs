@@ -3,30 +3,10 @@ use std::mem;
 use toasty_core::stmt::{self, BinaryOp, Expr};
 
 impl Simplify<'_> {
+    /// Heavyweight AND rewrites. Cheap canonicalization (flatten, drop unit
+    /// literals, null propagation, single/empty collapse on canonical input)
+    /// runs in `fold::expr_and` before this is reached.
     pub(super) fn simplify_expr_and(&mut self, expr: &mut stmt::ExprAnd) -> Option<stmt::Expr> {
-        // Flatten any nested ands
-        for i in 0..expr.operands.len() {
-            if let stmt::Expr::And(and) = &mut expr.operands[i] {
-                let mut nested = mem::take(&mut and.operands);
-                expr.operands[i] = true.into();
-                expr.operands.append(&mut nested);
-            }
-        }
-
-        // `and(..., false, ...) → false`
-        if expr.operands.iter().any(|e| e.is_false()) {
-            return Some(false.into());
-        }
-
-        // `and(..., true, ...) → and(..., ...)`
-        expr.operands.retain(|expr| !expr.is_true());
-
-        // Null propagation, `null and null` → `null`
-        // After removing true values, if all operands are null, return null.
-        if !expr.operands.is_empty() && expr.operands.iter().all(|e| e.is_value_null()) {
-            return Some(Expr::null());
-        }
-
         // Idempotent law, `a and a` → `a`
         // Note: O(n) lookups are acceptable here since operand lists are typically small.
         // `is_equivalent_to` (not `PartialEq`) keeps this sound for non-deterministic

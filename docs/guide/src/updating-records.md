@@ -167,6 +167,15 @@ assert!(user.bio.is_none());
 # }
 ```
 
+## Modifying a `Vec<scalar>` field
+
+A `Vec<scalar>` field (e.g. `tags: Vec<String>`) supports whole-value
+replacement through the setter and a set of incremental builders —
+`stmt::push`, `stmt::extend`, `stmt::pop`, `stmt::remove`,
+`stmt::remove_at`, `stmt::clear`, and `stmt::apply`. See
+[`Vec<scalar>` Fields](./vec-scalar-fields.md#updating) for the full
+treatment, including which builders each driver supports.
+
 ## What gets generated
 
 For a model with `#[key]` on `id` and `#[unique]` on `email`, Toasty generates:

@@ -160,7 +160,42 @@ impl<T, U> Path<T, U> {
         }
     }
 
+    /// Build a filter `Expr<bool>` from this path, automatically wrapping
+    /// the body with an `is_variant(parent, variant_id)` AND-gate when the
+    /// path is variant-rooted.
+    ///
+    /// All boolean-producing methods on `Path` (`eq`, `ne`, `gt`, `is_none`,
+    /// `starts_with`, `any`, …) funnel through this so that filter-context
+    /// uses of a variant-rooted path implicitly require the variant to
+    /// match. Path-yielding contexts (`include`, `order_by`, `chain`)
+    /// bypass this helper and keep the bare path.
+    fn build_filter<F>(self, build_body: F) -> Expr<bool>
+    where
+        F: FnOnce(stmt::Expr) -> stmt::Expr,
+    {
+        let gate = match &self.untyped.root {
+            stmt::PathRoot::Variant { parent, variant_id } => {
+                let parent_stmt = parent.as_ref().clone().into_stmt();
+                Some(stmt::Expr::is_variant(parent_stmt, *variant_id))
+            }
+            _ => None,
+        };
+        let body = build_body(self.untyped.into_stmt());
+        let untyped = match gate {
+            Some(g) => stmt::Expr::and(g, body),
+            None => body,
+        };
+        Expr {
+            untyped,
+            _p: PhantomData,
+        }
+    }
+
     /// Test whether this field equals `rhs`.
+    ///
+    /// For a variant-rooted path (e.g. `contact().email().address()`), the
+    /// resulting filter implicitly requires the variant to match — it
+    /// expands to `is_email(contact) AND address == rhs`.
     ///
     /// # Examples
     ///
@@ -174,10 +209,8 @@ impl<T, U> Path<T, U> {
     /// let filter = User::fields().name().eq("Alice");
     /// ```
     pub fn eq(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
-        Expr {
-            untyped: stmt::Expr::eq(self.untyped.into_stmt(), rhs.into_expr().untyped),
-            _p: PhantomData,
-        }
+        let rhs = rhs.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::eq(path, rhs))
     }
 
     /// Test whether this field does not equal `rhs`.
@@ -194,10 +227,8 @@ impl<T, U> Path<T, U> {
     /// let filter = User::fields().name().ne("Alice");
     /// ```
     pub fn ne(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
-        Expr {
-            untyped: stmt::Expr::ne(self.untyped.into_stmt(), rhs.into_expr().untyped),
-            _p: PhantomData,
-        }
+        let rhs = rhs.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::ne(path, rhs))
     }
 
     /// Test whether this field is greater than `rhs`.
@@ -214,10 +245,8 @@ impl<T, U> Path<T, U> {
     /// let filter = User::fields().id().gt(10);
     /// ```
     pub fn gt(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
-        Expr {
-            untyped: stmt::Expr::gt(self.untyped.into_stmt(), rhs.into_expr().untyped),
-            _p: PhantomData,
-        }
+        let rhs = rhs.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::gt(path, rhs))
     }
 
     /// Test whether this field is greater than or equal to `rhs`.
@@ -234,10 +263,8 @@ impl<T, U> Path<T, U> {
     /// let filter = User::fields().id().ge(1);
     /// ```
     pub fn ge(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
-        Expr {
-            untyped: stmt::Expr::ge(self.untyped.into_stmt(), rhs.into_expr().untyped),
-            _p: PhantomData,
-        }
+        let rhs = rhs.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::ge(path, rhs))
     }
 
     /// Test whether this field is less than `rhs`.
@@ -254,10 +281,8 @@ impl<T, U> Path<T, U> {
     /// let filter = User::fields().id().lt(100);
     /// ```
     pub fn lt(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
-        Expr {
-            untyped: stmt::Expr::lt(self.untyped.into_stmt(), rhs.into_expr().untyped),
-            _p: PhantomData,
-        }
+        let rhs = rhs.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::lt(path, rhs))
     }
 
     /// Test whether this field is less than or equal to `rhs`.
@@ -274,10 +299,8 @@ impl<T, U> Path<T, U> {
     /// let filter = User::fields().id().le(100);
     /// ```
     pub fn le(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
-        Expr {
-            untyped: stmt::Expr::le(self.untyped.into_stmt(), rhs.into_expr().untyped),
-            _p: PhantomData,
-        }
+        let rhs = rhs.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::le(path, rhs))
     }
 
     /// Test whether this field's value is in `rhs`.
@@ -297,10 +320,8 @@ impl<T, U> Path<T, U> {
     /// let filter = User::fields().id().in_list([1_i64, 2, 3]);
     /// ```
     pub fn in_list(self, rhs: impl IntoExpr<List<U>>) -> Expr<bool> {
-        Expr {
-            untyped: stmt::Expr::in_list(self.untyped.into_stmt(), rhs.into_expr().untyped),
-            _p: PhantomData,
-        }
+        let rhs = rhs.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::in_list(path, rhs))
     }
 
     /// Test whether this field's value appears in the result set of a
@@ -328,10 +349,7 @@ impl<T, U> Path<T, U> {
         Q: IntoStatement<Returning = List<U>>,
     {
         let query = rhs.into_statement().into_untyped_query();
-        Expr {
-            untyped: stmt::Expr::in_subquery(self.untyped.into_stmt(), query),
-            _p: PhantomData,
-        }
+        self.build_filter(move |path| stmt::Expr::in_subquery(path, query))
     }
 
     /// Produce an ascending [`OrderByExpr`] for this path.
@@ -412,11 +430,7 @@ impl<T, U> Path<T, List<U>> {
     {
         // Build a query on the child model filtered by `filter`
         let child_query = super::Query::<List<U>>::filter(filter);
-
-        Expr {
-            untyped: stmt::Expr::in_subquery(self.untyped.into_stmt(), child_query.untyped),
-            _p: PhantomData,
-        }
+        self.build_filter(move |path| stmt::Expr::in_subquery(path, child_query.untyped))
     }
 
     /// Build a `NOT IN subquery` expression that tests whether **all** associated
@@ -454,14 +468,69 @@ impl<T, U> Path<T, List<U>> {
     {
         // parent NOT IN (SELECT child_fk FROM child WHERE NOT filter)
         let child_query = super::Query::<List<U>>::filter(filter.not());
+        self.build_filter(move |path| {
+            stmt::Expr::not(stmt::Expr::in_subquery(path, child_query.untyped))
+        })
+    }
+}
 
-        Expr {
-            untyped: stmt::Expr::not(stmt::Expr::in_subquery(
-                self.untyped.into_stmt(),
-                child_query.untyped,
-            )),
-            _p: PhantomData,
-        }
+/// Container-style predicates on a `Vec<scalar>` model field. The path target
+/// is the [`List<U>`] marker (matching `Field::Path<Origin>` for `Vec<U>`),
+/// and the element type `U` is constrained to a path-target scalar so the
+/// same `IntoExpr` infrastructure that powers `eq`/`in_list` covers the
+/// right-hand side.
+impl<T, U> Path<T, List<U>>
+where
+    U: crate::schema::Scalar,
+{
+    /// Test whether the array contains `value`.
+    ///
+    /// Mirrors [`Vec::contains`]. Lowers to `value = ANY(col)` on PostgreSQL.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// let filter = User::fields().tags().contains("admin");
+    /// ```
+    pub fn contains(self, value: impl IntoExpr<U>) -> Expr<bool> {
+        let value = value.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::any_op(value, stmt::BinaryOp::Eq, path))
+    }
+
+    /// Test whether the array contains every element of `values`.
+    ///
+    /// Mirrors [`HashSet::is_superset`](std::collections::HashSet::is_superset).
+    /// Lowers to `col @> values` (PostgreSQL `@>` operator).
+    pub fn is_superset(self, values: impl IntoExpr<List<U>>) -> Expr<bool> {
+        let values = values.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::array_is_superset(path, values))
+    }
+
+    /// Test whether the array shares at least one element with `values`.
+    ///
+    /// Negation of [`HashSet::is_disjoint`](std::collections::HashSet::is_disjoint).
+    /// Lowers to `col && values` (PostgreSQL `&&` operator).
+    pub fn intersects(self, values: impl IntoExpr<List<U>>) -> Expr<bool> {
+        let values = values.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::array_intersects(path, values))
+    }
+
+    /// Returns the array length.
+    ///
+    /// Mirrors [`Vec::len`]. Lowers to `cardinality(col)` on PostgreSQL.
+    pub fn len(self) -> Expr<i64> {
+        Expr::from_untyped(stmt::Expr::array_length(self.untyped.into_stmt()))
+    }
+
+    /// Returns `true` if the array is empty.
+    ///
+    /// Equivalent to `.len().eq(0)`. Mirrors [`Vec::is_empty`].
+    pub fn is_empty(self) -> Expr<bool> {
+        let untyped = stmt::Expr::eq(
+            stmt::Expr::array_length(self.untyped.into_stmt()),
+            stmt::Expr::Value(stmt::Value::I64(0)),
+        );
+        Expr::from_untyped(untyped)
     }
 }
 
@@ -481,10 +550,7 @@ impl<T, U> Path<T, Option<U>> {
     /// let filter = User::fields().bio().is_none();
     /// ```
     pub fn is_none(self) -> Expr<bool> {
-        Expr {
-            untyped: stmt::Expr::is_null(self.untyped.into_stmt()),
-            _p: PhantomData,
-        }
+        self.build_filter(stmt::Expr::is_null)
     }
 
     /// Test whether this optional field is not `NULL`.
@@ -502,10 +568,7 @@ impl<T, U> Path<T, Option<U>> {
     /// let filter = User::fields().bio().is_some();
     /// ```
     pub fn is_some(self) -> Expr<bool> {
-        Expr {
-            untyped: stmt::Expr::is_not_null(self.untyped.into_stmt()),
-            _p: PhantomData,
-        }
+        self.build_filter(stmt::Expr::is_not_null)
     }
 }
 
@@ -534,10 +597,8 @@ where
     /// let filter = User::fields().nickname().starts_with("Al".to_string());
     /// ```
     pub fn starts_with(self, prefix: impl IntoExpr<String>) -> Expr<bool> {
-        Expr {
-            untyped: stmt::Expr::starts_with(self.untyped.into_stmt(), prefix.into_expr().untyped),
-            _p: PhantomData,
-        }
+        let prefix = prefix.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::starts_with(path, prefix))
     }
 
     /// Test whether this string field matches a SQL `LIKE` pattern.
@@ -562,10 +623,8 @@ where
     /// let filter = User::fields().nickname().like("Al%".to_string());
     /// ```
     pub fn like(self, pattern: impl IntoExpr<String>) -> Expr<bool> {
-        Expr {
-            untyped: stmt::Expr::like(self.untyped.into_stmt(), pattern.into_expr().untyped),
-            _p: PhantomData,
-        }
+        let pattern = pattern.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::like(path, pattern))
     }
 
     /// Case-insensitive variant of [`like`](Self::like).

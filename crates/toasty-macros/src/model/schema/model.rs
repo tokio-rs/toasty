@@ -254,6 +254,7 @@ impl Model {
                 fields: pk_index_fields,
                 unique: true,
                 primary_key: true,
+                name: model_attr.key.as_ref().and_then(|k| k.name.clone()),
             });
 
             // Iterate all extras rather than bailing on the first so every
@@ -334,6 +335,7 @@ impl Model {
                 fields: index_fields,
                 unique: false,
                 primary_key: false,
+                name: index_attr.name.clone(),
             });
         }
 
@@ -361,14 +363,6 @@ impl Model {
             ),
             ModelKind::EmbeddedStruct(_) | ModelKind::EmbeddedEnum(_) => None,
         }
-    }
-
-    /// True if any field can be the target of `.include()` — relations or
-    /// `#[deferred]` primitives.
-    pub(crate) fn has_includable_fields(&self) -> bool {
-        self.fields
-            .iter()
-            .any(|f| f.ty.is_relation() || f.attrs.deferred)
     }
 
     pub(crate) fn from_enum_ast(ast: &syn::ItemEnum) -> syn::Result<Self> {
@@ -435,6 +429,12 @@ impl Model {
             for (index, ast_field) in ast_fields.iter().enumerate() {
                 let mut field =
                     Field::from_ast(ast_field, &model_ident, global_field_index, index, &names)?;
+                if field.attrs.deferred {
+                    errs.push(syn::Error::new_spanned(
+                        ast_field,
+                        "#[deferred] is not yet supported on embedded enum variant fields",
+                    ));
+                }
                 field.variant = Some(variant_index);
                 all_fields.push(field);
                 global_field_index += 1;
@@ -577,6 +577,7 @@ fn collect_field_indices(fields: &[Field], indices: &mut Vec<Index>) {
                 }],
                 unique: field.attrs.unique,
                 primary_key: false,
+                name: None,
             });
         }
     }

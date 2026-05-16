@@ -271,6 +271,47 @@ impl syn::parse::Parse for ColumnType {
 }
 
 impl ColumnType {
+    /// Expand to a `#toasty::storage::tag::*` token stream identifying the
+    /// storage marker for this column type, or `None` when the variant has
+    /// no compile-time compatibility check (e.g. `Custom`, `Numeric`,
+    /// `Enum`). `toasty` is the path prefix used elsewhere in codegen, which
+    /// already resolves to `codegen_support`.
+    pub(crate) fn compat_marker(
+        &self,
+        toasty: &proc_macro2::TokenStream,
+    ) -> Option<proc_macro2::TokenStream> {
+        let tag = quote! { #toasty::storage::tag };
+        let marker = match self {
+            Self::Boolean => quote! { #tag::Boolean },
+            Self::Integer(1) => quote! { #tag::I8 },
+            Self::Integer(2) => quote! { #tag::I16 },
+            Self::Integer(4) => quote! { #tag::I32 },
+            Self::Integer(8) => quote! { #tag::I64 },
+            Self::UnsignedInteger(1) => quote! { #tag::U8 },
+            Self::UnsignedInteger(2) => quote! { #tag::U16 },
+            Self::UnsignedInteger(4) => quote! { #tag::U32 },
+            Self::UnsignedInteger(8) => quote! { #tag::U64 },
+            Self::Float(4) => quote! { #tag::F32 },
+            Self::Float(8) => quote! { #tag::F64 },
+            Self::Text => quote! { #tag::Text },
+            Self::VarChar(_) => quote! { #tag::VarChar },
+            Self::Binary(_) => quote! { #tag::Binary },
+            Self::Blob => quote! { #tag::Blob },
+            Self::Timestamp(_) => quote! { #tag::Timestamp },
+            Self::Date => quote! { #tag::Date },
+            Self::Time(_) => quote! { #tag::Time },
+            Self::DateTime(_) => quote! { #tag::DateTime },
+            // No compile-time check for non-standard widths or escape hatches.
+            Self::Integer(_)
+            | Self::UnsignedInteger(_)
+            | Self::Float(_)
+            | Self::Numeric(_)
+            | Self::Enum(_)
+            | Self::Custom(_) => return None,
+        };
+        Some(marker)
+    }
+
     /// Expand to a fully qualified `#toasty::core::schema::db::Type::...` token stream.
     pub(crate) fn expand_with(
         &self,

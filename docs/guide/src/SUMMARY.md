@@ -18,6 +18,7 @@
 
 - [Indexes and Unique Constraints](./indexes-and-unique-constraints.md)
 - [Field Options](./field-options.md)
+- [`Vec<scalar>` Fields](./vec-scalar-fields.md)
 
 # Relationships
 
@@ -41,3 +42,10 @@
 - [Concurrency Control](./concurrency-control.md)
 - [Database Setup](./database-setup.md)
 - [Migrations and Schema Management](./schema-management.md)
+
+# Database Backends
+
+- [PostgreSQL](./postgresql.md)
+- [MySQL](./mysql.md)
+- [SQLite](./sqlite.md)
+- [DynamoDB](./dynamodb.md)

@@ -374,7 +374,7 @@ pub async fn query_embedded_struct_fields(t: &mut Test) -> Result<()> {
 /// Tests comparison operators (gt, lt, ge, le, ne) on embedded struct fields.
 /// SQL-only: DynamoDB doesn't support range queries on non-key attributes.
 /// Validates that all comparison operators work correctly with embedded fields.
-#[driver_test(requires(sql))]
+#[driver_test(requires(scan))]
 pub async fn query_embedded_fields_comparison_ops(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     struct Stats {
@@ -437,7 +437,7 @@ pub async fn query_embedded_fields_comparison_ops(t: &mut Test) -> Result<()> {
 /// Tests querying by multiple embedded fields in a single query (AND conditions).
 /// SQL-only: DynamoDB requires partition key in queries.
 /// Validates that complex filters with multiple embedded fields work correctly.
-#[driver_test(requires(sql))]
+#[driver_test(requires(scan))]
 pub async fn query_embedded_multiple_fields(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     struct Coordinates {

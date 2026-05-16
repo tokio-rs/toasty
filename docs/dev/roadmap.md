@@ -26,7 +26,7 @@ the entry lands here.
 - Native PostgreSQL enum types ([#641])
 - Migrations for enum representation changes ([#724])
 - Serde-serialized fields (JSON/JSONB for arbitrary Rust types) ([design](design/serialize-fields.md), [#672])
-- Embedded collections (arrays, maps, sets)
+- Document and collection fields — `Vec`, `HashSet`, `HashMap`, with backend-chosen storage and a `#[document]` override ([design](design/document-fields.md))
 - Foreign key constraints ([#366])
 - Server-side check constraints ([#644])
 - Database-side column defaults ([#642])
@@ -60,7 +60,7 @@ the entry lands here.
 - Recursive queries / CTEs ([#420])
 - Lateral joins ([#419])
 - Full-text search ([#423])
-- JSON field queries
+- Document field queries — path predicates, sub-document containment, collection operators ([design](design/document-fields.md))
 - Dynamic / conditional query building — optional-filter pattern (SeaORM-style `Condition::add_option`, Diesel `BoxableExpression`)
 - Query ordering & limits — multi-column `.then_by()`, direct `.limit()`, `.last()`
 - Pagination with complex ORDER BY expressions ([#723])
@@ -138,9 +138,13 @@ the entry lands here.
 
 ## Macros
 
-- `toasty::query!()` — succinct query syntax ([design](design/query-macro.md))
+- `toasty::query!()` — succinct query syntax ([design](design/query-macro.md), [#808])
 - `toasty::create!()` — concise record creation ([design](design/static-assertions-create-macro.md))
 - `toasty::update!()` — concise updates
+- Derive macro for populating a struct from a query result ([#828])
+
+[#808]: https://github.com/tokio-rs/toasty/issues/808
+[#828]: https://github.com/tokio-rs/toasty/issues/828
 
 ## Runtime
 

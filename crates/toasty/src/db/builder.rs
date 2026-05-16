@@ -114,6 +114,83 @@ impl Builder {
         self
     }
 
+    /// Configure how often the pool's background sweep pings an idle
+    /// connection to detect a silently-broken backend (a database
+    /// restart, a load-balancer-closed socket, a session timeout). On
+    /// success the connection is returned as most-recently-used; on
+    /// failure the pool eagerly pings every other idle connection and
+    /// drops the ones that fail, so a single bad result drains every
+    /// dead connection in one pass.
+    ///
+    /// The same eager sweep also fires when a user query observes
+    /// [`Error::is_connection_lost`](toasty_core::Error::is_connection_lost)
+    /// — so a restart usually costs at most one failed query rather
+    /// than one per pooled connection.
+    ///
+    /// Defaults to `Some(60s)`. Pass `None` to disable the sweep and
+    /// rely on passive error-driven recovery only.
+    pub fn pool_health_check_interval(&mut self, interval: Option<Duration>) -> &mut Self {
+        self.pool.health_check_interval = interval;
+        self
+    }
+
+    /// Validate every connection with an active ping before handing it
+    /// to the caller. Useful for deployments that cannot tolerate even
+    /// one failed user query — a public API behind a flaky network, an
+    /// idempotent worker that does not implement retry. A failing ping
+    /// evicts the connection and the pool reuses another idle slot or
+    /// opens a fresh one; the caller sees either a healthy connection
+    /// or a clean `connection_pool` error if no slot can be opened
+    /// within [`pool_create_timeout`](Self::pool_create_timeout).
+    ///
+    /// The trade-off is one round-trip per checkout. Combine with a
+    /// larger [`max_pool_size`](Self::max_pool_size) if the extra
+    /// latency starts queueing requests. Independent of the background
+    /// sweep — most deployments want one or the other, but enabling
+    /// both is safe.
+    ///
+    /// Defaults to `false`.
+    pub fn pool_pre_ping(&mut self, pre_ping: bool) -> &mut Self {
+        self.pool.pre_ping = pre_ping;
+        self
+    }
+
+    /// Evict any pooled connection older than this duration when the
+    /// pool considers reusing it. Useful when an idle timeout on the
+    /// server, a load balancer, or a NAT in front of the database
+    /// silently closes long-lived sockets — capping the lifetime
+    /// bounds how long a connection can survive past such a close.
+    ///
+    /// The check runs in `recycle` (when the pool considers handing
+    /// the connection back out), not in the background. A query that
+    /// holds a connection past the cap is allowed to finish; the
+    /// connection is evicted on its next return.
+    ///
+    /// Recommended for any deployment that talks to a remote database:
+    /// pick a duration shorter than every idle timeout in the path
+    /// (server, load balancer, NAT). 30 minutes works for most clouds.
+    ///
+    /// Defaults to `None` (no cap).
+    pub fn pool_max_connection_lifetime(&mut self, lifetime: Option<Duration>) -> &mut Self {
+        self.pool.max_connection_lifetime = lifetime;
+        self
+    }
+
+    /// Evict any pooled connection that has been sitting unused for
+    /// longer than this duration. Complements
+    /// [`pool_max_connection_lifetime`](Self::pool_max_connection_lifetime):
+    /// the idle cap targets connections specifically held idle past a
+    /// known timeout, the lifetime cap targets all connections
+    /// regardless of recent use.
+    ///
+    /// Checked in `recycle`, not in the background.
+    ///
+    /// Defaults to `None` (no cap).
+    pub fn pool_max_connection_idle_time(&mut self, idle: Option<Duration>) -> &mut Self {
+        self.pool.max_connection_idle_time = idle;
+        self
+    }
+
     /// Build and return the app-level schema from the registered models
     /// without opening a database connection.
     ///

@@ -30,7 +30,11 @@ pub struct Capability {
     /// Column storage types supported by the database.
     pub storage_types: StorageTypes,
 
-    /// Schema mutation capabilities supported by the datbase.
+    /// What the database is able to change about its own schema. See
+    /// [`SchemaMutations`] for the individual fields; the migration
+    /// generator branches on them to choose between an in-place
+    /// `ALTER COLUMN` and a table rebuild, and between one combined
+    /// alter statement and several single-property ones.
     pub schema_mutations: SchemaMutations,
 
     /// SQL: supports update statements in CTE queries.
@@ -118,9 +122,123 @@ pub struct Capability {
     /// will not produce one.
     pub native_like: bool,
 
+    /// Whether the driver can answer queries that don't match any primary key
+    /// or index — i.e. supports unindexed full-table reads.
+    ///
+    /// SQL drivers set this to `true`: unindexed queries go through
+    /// [`QuerySql`](super::operation::QuerySql), so the SQL engine handles
+    /// them transparently. DynamoDB also sets this to `true`; the planner
+    /// emits [`Operation::Scan`](super::Operation::Scan) for the unindexed
+    /// case. A hypothetical pure key-value store with no full-scan capability
+    /// would set this to `false`.
+    pub scan: bool,
+
+    /// Whether scan operations support ordering results.
+    ///
+    /// SQL drivers do not use `Operation::Scan`, so this is `true` for them
+    /// (ordering is handled inside `QuerySql`). DynamoDB's `Scan` API returns
+    /// items in an arbitrary order with no server-side sort, so this is `false`
+    /// for DynamoDB. When `false`, the planner rejects queries that combine a
+    /// scan path with `ORDER BY`.
+    pub scan_supports_sort: bool,
+
     /// Whether to test connection pool behavior.
     /// TODO: We only need this for the `connection_per_clone.rs` test, come up with a better way.
     pub test_connection_pool: bool,
+
+    /// Whether the backend can walk a paginated query in reverse from a
+    /// cursor.
+    ///
+    /// Gates the `prev_cursor` field on a `Page` returned to user code.
+    /// When `true`, the executor extracts a previous-page cursor from the
+    /// first row of every page (see `apply_sql_pagination` in
+    /// `toasty/src/engine/exec/exec_statement.rs`). When `false`, the
+    /// executor leaves `prev_cursor` as `None`, so
+    /// `Page::has_prev()` returns `false` and `Page::prev(&db)` resolves
+    /// to `Ok(None)` without issuing a query. `Paginate::before(cursor)`
+    /// itself is not rejected — users who already hold a cursor can walk
+    /// backwards explicitly — but a driver that returns `false` is
+    /// declaring that it has no way to *produce* such a cursor.
+    ///
+    /// Drivers should set this to `true` when the backend can answer a
+    /// query equivalent to "rows ordered by K, descending from K = c,
+    /// limited to N" — i.e. the same `ORDER BY` clause reversed plus a
+    /// strict inequality on the cursor key. SQL backends meet this
+    /// trivially. DynamoDB does not: a `Query` with `ScanIndexForward =
+    /// false` returns rows in the opposite direction but cannot be
+    /// rooted at an arbitrary client-supplied cursor without an extra
+    /// `KeyConditionExpression`, and `Scan` has no order guarantee at
+    /// all.
+    pub backward_pagination: bool,
+
+    /// The driver's bind layer accepts a single parameter whose value is
+    /// `Value::List(items)` and type is `Type::List(elem)`, sending it as
+    /// one protocol-level parameter (not N separate scalars).
+    /// Property of the driver bind impl, not the SQL dialect.
+    pub bind_list_param: bool,
+
+    /// The SQL dialect parses `expr <op> ANY(<array>)` and `expr <op> ALL(<array>)`
+    /// as predicates against an array-valued operand.
+    /// Property of the dialect, not the bind layer.
+    pub predicate_match_any: bool,
+
+    /// Whether the database can store a `Vec<scalar>` model field as a native
+    /// array column (e.g. PostgreSQL `text[]`, `int8[]`).
+    ///
+    /// When `true`, schema build maps `Type::List(elem)` to `db::Type::List(elem)`
+    /// and the driver's bind layer accepts `Value::List(items)` as a single
+    /// array-valued parameter.
+    ///
+    /// When `false`, `Vec<T>` model fields use whatever fallback the backend
+    /// provides (JSON column on MySQL/SQLite, native List `L` on DynamoDB).
+    /// See [`Self::vec_scalar`] for the schema-build gate.
+    pub native_array: bool,
+
+    /// Whether the driver supports `Vec<scalar>` model fields, by whatever
+    /// representation (native typed array column, JSON column, key-value
+    /// list attribute, ...). Used by the schema builder as the gate for
+    /// accepting `stmt::Type::List(_)` fields.
+    pub vec_scalar: bool,
+
+    /// Whether the driver natively renders `IsSuperset` / `Intersects` array
+    /// predicates over an arbitrary right-hand-side expression.
+    ///
+    /// SQL drivers set this to `true`: each dialect has a single operator
+    /// (`@>` on PostgreSQL, `JSON_CONTAINS` on MySQL, a `json_each`
+    /// subquery on SQLite) that takes the rhs as a bound expression
+    /// regardless of its shape.
+    ///
+    /// DynamoDB sets this to `false`: it has no equivalent operator and
+    /// emulates the predicates by emitting one `contains(path, vN)` clause
+    /// per rhs element, which requires the rhs to be a concrete list of
+    /// values at filter-construction time. The capability check rejects
+    /// any other rhs shape before the driver is invoked.
+    pub native_array_set_predicates: bool,
+
+    /// Whether the driver supports atomic in-place removal of every element
+    /// equal to a given value from a `Vec<scalar>` field (`stmt::remove`).
+    ///
+    /// - PostgreSQL `text[]`: `true` — `array_remove(col, v)`.
+    /// - MySQL / SQLite JSON: `false` — no value-removal operator.
+    /// - DynamoDB List: `false` — no value-removal on Lists.
+    pub vec_remove: bool,
+
+    /// Whether the driver supports atomic in-place removal of the last
+    /// element of a `Vec<scalar>` field (`stmt::pop`).
+    ///
+    /// - PostgreSQL: `true` — array slicing.
+    /// - MySQL / SQLite: `false`.
+    /// - DynamoDB: `false` — `UpdateExpression` indices must be literal
+    ///   integers, so the last index cannot be expressed in one statement.
+    pub vec_pop: bool,
+
+    /// Whether the driver supports atomic in-place removal of an element at a
+    /// given index from a `Vec<scalar>` field (`stmt::remove_at`).
+    ///
+    /// - PostgreSQL: `true` — array slicing.
+    /// - MySQL / SQLite: `false`.
+    /// - DynamoDB: `false`.
+    pub vec_remove_at: bool,
 }
 
 /// Maps application-level types to the concrete database column types used for
@@ -187,9 +305,15 @@ pub struct StorageTypes {
 
 /// The database's capabilities to mutate the schema (tables, columns, indices).
 ///
-/// Used by the migration generator to decide how to express schema changes.
-/// For example, SQLite cannot alter column types so migrations must recreate
-/// the table instead.
+/// Used by the migration generator to decide how to express each
+/// column change. `alter_column_type` gates whether an in-place
+/// `ALTER COLUMN` is possible at all — SQLite has it set to `false`,
+/// and a type change there triggers a full table rebuild (create
+/// new table, copy rows, drop old). `alter_column_properties_atomic`
+/// decides whether several column-property changes (rename, retype,
+/// `NOT NULL`, default) collapse into one statement or emit one per
+/// property. MySQL sets both to `true`; PostgreSQL alters in place
+/// but requires one statement per property.
 ///
 /// Pre-built configurations: [`SQLITE`](Self::SQLITE),
 /// [`POSTGRESQL`](Self::POSTGRESQL), [`MYSQL`](Self::MYSQL),
@@ -310,7 +434,40 @@ impl Capability {
         native_starts_with: false,
         native_like: true,
 
+        // SQL drivers handle unindexed queries via QuerySql (see field doc).
+        scan: true,
+        scan_supports_sort: true,
+
         test_connection_pool: false,
+
+        backward_pagination: true,
+
+        // `Vec<scalar>` model fields land in a `TEXT` column holding a JSON
+        // document (JSON1 extension). The driver serializes `Value::List`
+        // to a JSON string at bind time, so the extract pass keeps the list
+        // as one `Value::List` parameter; the `InList` branch in
+        // `extract_params` covers the `IN (...)` case so this flag does
+        // not regress IN-list rendering. The predicate-side `ANY` rewrite
+        // is gated on `predicate_match_any`, which stays `false`, so
+        // `Path::contains` lowers to a `json_each` subquery instead.
+        bind_list_param: true,
+        predicate_match_any: false,
+
+        // SQLite has no native typed-array column type; `Vec<scalar>`
+        // model fields are stored as a JSON document in a `TEXT` column.
+        native_array: false,
+        vec_scalar: true,
+
+        // SQLite renders `IsSuperset` / `Intersects` as `json_each`
+        // subqueries that accept any rhs expression.
+        native_array_set_predicates: true,
+
+        // SQLite JSON1 has no value-removal operator on JSON arrays; pop
+        // and remove_at need a path expression built from
+        // `json_array_length`.
+        vec_remove: false,
+        vec_pop: false,
+        vec_remove_at: false,
     };
 
     /// PostgreSQL capabilities
@@ -341,6 +498,22 @@ impl Capability {
 
         test_connection_pool: true,
 
+        // PostgreSQL accepts a single array-valued bind param and supports
+        // `expr <op> ANY(array)` / `<op> ALL(array)` predicates.
+        bind_list_param: true,
+        predicate_match_any: true,
+
+        // PostgreSQL: native arrays (`text[]`, `int8[]`, …) are the storage
+        // representation for `Vec<scalar>` model fields.
+        native_array: true,
+        vec_scalar: true,
+
+        // PostgreSQL: all three collection removals are atomic via native
+        // array operators / slicing.
+        vec_remove: true,
+        vec_pop: true,
+        vec_remove_at: true,
+
         ..Self::SQLITE
     };
 
@@ -369,6 +542,15 @@ impl Capability {
         decimal_arbitrary_precision: false,
 
         test_connection_pool: true,
+
+        // `Vec<scalar>` model fields land in a `JSON` column. The driver
+        // serializes `Value::List` to a JSON string at bind time, so the
+        // extract pass keeps the list as one `Value::List` parameter
+        // instead of expanding it (the `InList` branch in
+        // `extract_params` covers the `IN (...)` case so this flag does
+        // not regress the IN-list rendering).
+        bind_list_param: true,
+        vec_scalar: true,
 
         ..Self::SQLITE
     };
@@ -404,7 +586,37 @@ impl Capability {
         native_starts_with: true,
         native_like: false,
 
+        scan: true,
+        scan_supports_sort: false,
+
         test_connection_pool: false,
+
+        backward_pagination: false,
+
+        // DynamoDB: not SQL-based; the array-bind/`ANY`-predicate features do
+        // not apply.
+        bind_list_param: false,
+        predicate_match_any: false,
+
+        // DynamoDB has no SQL-style typed-array column type; the
+        // `db::Type::List(elem)` storage shape doesn't apply. `Vec<scalar>`
+        // model fields land directly on a List `L` attribute via the driver's
+        // `AttributeValue` encoding.
+        native_array: false,
+        vec_scalar: true,
+
+        // DynamoDB emulates `IsSuperset` / `Intersects` by expanding the rhs
+        // into one `contains(path, vN)` clause per element. The expansion
+        // requires the rhs to be a `Value::List` at filter-construction time
+        // — the capability check rejects any other rhs shape.
+        native_array_set_predicates: false,
+
+        // DynamoDB Lists have no atomic value-removal, and pop cannot be
+        // expressed because `UpdateExpression` indices must be literal
+        // integers.
+        vec_remove: false,
+        vec_pop: false,
+        vec_remove_at: false,
     };
 }
 

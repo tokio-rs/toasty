@@ -200,6 +200,95 @@ let users = User::filter_by_name("Alice")
 
 Each `.filter()` call adds an AND condition to the query.
 
+## Projecting columns with `.select()`
+
+By default a query returns full model rows. `.select()` replaces the
+projection so the query returns one or more chosen field values
+instead. The terminal `.exec()` then yields `Vec<T>` where `T` matches
+the projection — a single field path yields `Vec<FieldType>`, a tuple
+yields `Vec<(...)>`.
+
+```rust
+# use toasty::Model;
+# #[derive(Debug, toasty::Model)]
+# struct User {
+#     #[key]
+#     #[auto]
+#     id: u64,
+#     name: String,
+#     #[unique]
+#     email: String,
+# }
+# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
+// Just the names.
+let names: Vec<String> = User::all()
+    .select(User::fields().name())
+    .exec(&mut db)
+    .await?;
+
+// A tuple of two fields.
+let pairs: Vec<(u64, String)> = User::all()
+    .select((User::fields().id(), User::fields().name()))
+    .exec(&mut db)
+    .await?;
+# Ok(())
+# }
+```
+
+`.select()` works on any query — `all()`, `filter()`, and
+`filter_by_*()` — and lets the database skip reading columns the caller
+will not look at. Chain it after a filter to project a subset of
+columns from the matching rows:
+
+```rust
+# use toasty::Model;
+# #[derive(Debug, toasty::Model)]
+# struct User {
+#     #[key]
+#     #[auto]
+#     id: u64,
+#     name: String,
+#     #[unique]
+#     email: String,
+# }
+# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
+let name: Option<String> = User::filter_by_email("alice@example.com")
+    .select(User::fields().name())
+    .first()
+    .exec(&mut db)
+    .await?;
+# Ok(())
+# }
+```
+
+## Sorting by most recent
+
+`.latest_by(field)` sorts the query in descending order of the named
+field — shorthand for `order_by(field.desc())`:
+
+```rust
+# use toasty::Model;
+# #[derive(Debug, toasty::Model)]
+# struct Post {
+#     #[key]
+#     #[auto]
+#     id: u64,
+#     title: String,
+# }
+# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
+let recent = Post::all()
+    .latest_by(Post::fields().id())
+    .limit(10)
+    .exec(&mut db)
+    .await?;
+# Ok(())
+# }
+```
+
+Use it when the natural ordering for a model is "newest first" and the
+sort field doubles as a recency proxy — auto-incrementing keys, UUIDv7
+keys, or a `created_at` timestamp.
+
 ## What gets generated
 
 For a model with `#[key]` on `id` and `#[unique]` on `email`, Toasty generates:

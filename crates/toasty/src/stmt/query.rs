@@ -1,4 +1,4 @@
-use super::{Delete, Expr, IntoStatement, List, Statement, Value};
+use super::{Delete, Expr, IntoExpr, IntoStatement, List, Statement, Value};
 use crate::{
     Executor, Result,
     schema::{Load, Model},
@@ -150,10 +150,13 @@ impl<T> Query<T> {
         self
     }
 
-    /// Set the sort order for this query.
+    /// Add a sort order to this query.
     ///
     /// Pass an [`OrderByExpr`](toasty_core::stmt::OrderByExpr) obtained from
-    /// [`Path::asc`] or [`Path::desc`]:
+    /// [`Path::asc`] or [`Path::desc`], or a tuple of them to sort by several
+    /// fields at once. Calling `order_by` multiple times appends each
+    /// expression to the existing order, so later calls act as tie-breakers
+    /// for earlier ones.
     ///
     /// # Examples
     ///
@@ -163,14 +166,19 @@ impl<T> Query<T> {
     /// #     #[key]
     /// #     id: i64,
     /// #     name: String,
+    /// #     age: i64,
     /// # }
     /// use toasty::stmt::{List, Query};
     ///
     /// let mut q = Query::<List<User>>::all();
-    /// q.order_by(User::fields().name().desc());
+    /// q.order_by((User::fields().age().desc(), User::fields().name().asc()));
     /// ```
     pub fn order_by(&mut self, order_by: impl Into<stmt::OrderBy>) -> &mut Self {
-        self.untyped.order_by = Some(order_by.into());
+        let order_by = order_by.into();
+        match &mut self.untyped.order_by {
+            Some(existing) => existing.exprs.extend(order_by.exprs),
+            None => self.untyped.order_by = Some(order_by),
+        }
         self
     }
 
@@ -453,6 +461,55 @@ impl<M: Model> Query<List<M>> {
         // Set the returning clause to COUNT(*)
         *self.untyped.returning_mut_unwrap() = Returning::Project(stmt::Expr::count_star());
         self.untyped.single = true;
+
+        Query::from_untyped(self.untyped)
+    }
+
+    /// Project this list query onto an expression, narrowing the returned
+    /// shape from `M` to `T`.
+    ///
+    /// `projection` can be any expression source: a single field path
+    /// (returning `Vec<T>` for the field's Rust type), a tuple of field paths
+    /// (returning `Vec` of a tuple), or any other type that implements
+    /// `IntoExpr<T>`.  The default model projection is replaced wholesale by
+    /// the columns the projection expression references.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// # let driver = toasty_driver_sqlite::Sqlite::in_memory();
+    /// # let mut db = toasty::Db::builder().models(toasty::models!(User)).build(driver).await.unwrap();
+    /// # db.push_schema().await.unwrap();
+    /// use toasty::stmt::{List, Query};
+    ///
+    /// // Single-field projection: returns `Vec<String>`.
+    /// let names: Vec<String> = Query::<List<User>>::all()
+    ///     .select(User::fields().name())
+    ///     .exec(&mut db)
+    ///     .await
+    ///     .unwrap();
+    ///
+    /// // Tuple projection: returns `Vec<(i64, String)>`.
+    /// let pairs: Vec<(i64, String)> = Query::<List<User>>::all()
+    ///     .select((User::fields().id(), User::fields().name()))
+    ///     .exec(&mut db)
+    ///     .await
+    ///     .unwrap();
+    /// # });
+    /// ```
+    pub fn select<E, T>(mut self, projection: E) -> Query<List<T>>
+    where
+        E: IntoExpr<T>,
+        T: Load,
+    {
+        *self.untyped.returning_mut_unwrap() = Returning::Project(projection.into_expr().untyped);
 
         Query::from_untyped(self.untyped)
     }

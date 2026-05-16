@@ -1,5 +1,6 @@
 use super::Transaction;
-use super::pool::{ConnectionHandle, ConnectionOperation, Manager};
+use super::connection_task::{ConnectionHandle, ConnectionOperation};
+use super::pool::Manager;
 use super::tx::ConnRef;
 
 use async_trait::async_trait;

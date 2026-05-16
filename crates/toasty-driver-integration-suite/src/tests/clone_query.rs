@@ -3,7 +3,7 @@
 use crate::prelude::*;
 
 /// Clone a filtered query and apply different modifiers to each copy.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(scan))]
 pub async fn clone_query_with_different_modifiers(t: &mut Test) -> Result<()> {
     #[derive(toasty::Model)]
     struct Item {
@@ -57,7 +57,7 @@ pub async fn clone_create_builder(t: &mut Test) -> Result<()> {
 }
 
 /// Clone a query-based update builder, then change the value on the second copy.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(scan))]
 pub async fn clone_update_builder(t: &mut Test) -> Result<()> {
     #[derive(toasty::Model)]
     struct Item {

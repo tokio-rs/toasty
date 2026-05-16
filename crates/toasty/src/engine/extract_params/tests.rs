@@ -2,12 +2,11 @@ use crate as toasty;
 use crate::engine::test_util::*;
 use crate::schema::Register;
 use toasty_core::{
-    driver::operation::TypedValue,
     schema::db,
     stmt::{self, Expr, Value},
 };
 
-use super::extract_params;
+use super::{Param, Ty, extract_params};
 
 // ============================================================================
 // Basic extraction
@@ -33,7 +32,7 @@ fn extract_scalar_from_simple_insert() {
         returning: None,
     });
 
-    let params = extract_params(&mut stmt, &schema);
+    let params = extract_params(&mut stmt, &schema, &toasty_core::driver::Capability::SQLITE);
 
     assert_eq!(params.len(), 2);
     assert_eq!(params[0].value, Value::from("abc"));
@@ -71,7 +70,7 @@ fn null_values_not_extracted() {
         returning: None,
     });
 
-    let params = extract_params(&mut stmt, &schema);
+    let params = extract_params(&mut stmt, &schema, &toasty_core::driver::Capability::SQLITE);
 
     // Only 'abc' should be extracted; NULL stays as literal
     assert_eq!(params.len(), 1);
@@ -100,7 +99,7 @@ fn extract_from_where_clause() {
 
     // Can't easily build a full SELECT with filter without a schema,
     // but we can test that extract_params handles an empty query
-    let params = extract_params(&mut stmt, &schema);
+    let params = extract_params(&mut stmt, &schema, &toasty_core::driver::Capability::SQLITE);
     assert_eq!(params.len(), 0);
 }
 
@@ -133,7 +132,7 @@ fn enum_insert_refines_type_to_enum() {
         returning: None,
     });
 
-    let params = extract_params(&mut stmt, &schema);
+    let params = extract_params(&mut stmt, &schema, &toasty_core::driver::Capability::SQLITE);
 
     assert_eq!(params.len(), 2);
 
@@ -164,7 +163,7 @@ fn non_enum_insert_keeps_default_types() {
         returning: None,
     });
 
-    let params = extract_params(&mut stmt, &schema);
+    let params = extract_params(&mut stmt, &schema, &toasty_core::driver::Capability::SQLITE);
 
     assert_eq!(params.len(), 2);
     assert!(matches!(&params[0].ty, db::Type::Text));
@@ -183,24 +182,24 @@ fn synthesize_multi_step_projection() {
     // Given: Record([Text, Record([Integer(4), Boolean])])
     // Project [1, 0] should yield Integer(4)
 
-    use super::{Ty, synthesize};
+    use super::synthesize;
 
     let schema = test_schema();
 
     // Directly test the synthesize function with a constructed expression
     // that has a multi-step projection
     let mut params = vec![
-        TypedValue {
+        Param {
             value: Value::from("a"),
-            ty: db::Type::Text,
+            ty: Ty::Inferred(db::Type::Text),
         },
-        TypedValue {
+        Param {
             value: Value::from(1i32),
-            ty: db::Type::Integer(4),
+            ty: Ty::Inferred(db::Type::Integer(4)),
         },
-        TypedValue {
+        Param {
             value: Value::from(true),
-            ty: db::Type::Boolean,
+            ty: Ty::Inferred(db::Type::Boolean),
         },
     ];
 
@@ -252,9 +251,9 @@ fn synthesize_project_step_out_of_bounds_panics() {
 
     let schema = test_schema();
     let cx = stmt::ExprContext::new(&schema.db);
-    let mut params = vec![TypedValue {
+    let mut params = vec![Param {
         value: Value::from("a"),
-        ty: db::Type::Text,
+        ty: Ty::Inferred(db::Type::Text),
     }];
 
     // Record with 1 field, projecting step 5
@@ -273,9 +272,9 @@ fn synthesize_project_from_scalar_panics() {
 
     let schema = test_schema();
     let cx = stmt::ExprContext::new(&schema.db);
-    let mut params = vec![TypedValue {
+    let mut params = vec![Param {
         value: Value::from(42i64),
-        ty: db::Type::Integer(8),
+        ty: Ty::Inferred(db::Type::Integer(8)),
     }];
 
     // Project from a scalar Arg (not a record)

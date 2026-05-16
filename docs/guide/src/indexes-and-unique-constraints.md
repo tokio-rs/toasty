@@ -6,13 +6,12 @@ generated.
 
 ## Unique fields
 
-Add `#[unique]` to a field to create a unique index. On databases that support
-unique constraints (SQLite, PostgreSQL, MySQL), the database enforces that no
-two records can have the same value for this field. Toasty applies the
-constraint on a best-effort basis — if the underlying database does not support
-unique indexes (e.g., DynamoDB on non-key attributes), the `#[unique]` attribute
-still generates the same query methods but uniqueness is not enforced at the
-storage level.
+Add `#[unique]` to a field to create a unique index. Toasty enforces uniqueness
+on all supported databases. SQL databases (SQLite, PostgreSQL, MySQL) use a
+native unique index. DynamoDB uses a separate index table keyed on the unique
+attribute; inserts and updates write to both tables in a single
+`TransactWriteItems` call with an `attribute_not_exists` condition that rejects
+duplicates.
 
 ```rust
 # use toasty::Model;
@@ -331,6 +330,32 @@ The generated methods require all partition fields:
 On SQL databases, the `partition`/`local` distinction is ignored — all fields
 are placed in the composite index in the order they appear, producing
 `CREATE INDEX ... ON matches (tournament_id, region, round)`.
+
+### Custom index names
+
+Toasty generates an index name from the table and field list (e.g.,
+`idx_users_email`). Override it with `name = "..."` inside `#[index(...)]`
+or `#[key(...)]`:
+
+```rust
+# use toasty::Model;
+#[derive(Debug, toasty::Model)]
+#[index(name = "scores_by_game", game_title, top_score)]
+struct GameScore {
+    #[key]
+    #[auto]
+    id: u64,
+    user_id: String,
+    game_title: String,
+    top_score: i64,
+}
+```
+
+This becomes `CREATE INDEX scores_by_game ON game_scores (...)` on SQL
+drivers and is used as the GSI name on DynamoDB. The name must be
+non-empty and may only appear once per attribute. Use a custom name
+when a migration tool or external query references it by name, or to
+keep generated names within a database's identifier-length limit.
 
 ### SQL vs DynamoDB behavior
 

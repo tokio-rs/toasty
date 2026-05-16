@@ -13,19 +13,22 @@ env:
     # Pinned so a new Rust release cannot break CI on its own. Bumped
     # automatically by Renovate; see .github/renovate.json5.
     RUST_STABLE_VERSION: "1.95.0"
-    TOASTY_TEST_POSTGRES_URL: "postgresql://toasty:toasty@localhost/toasty"
-    TOASTY_TEST_MYSQL_URL: "mysql://toasty:toasty@localhost/toasty"
     AWS_REGION: "us-east-1"
     AWS_ENDPOINT_URL_DYNAMODB: http://localhost:8000
     AWS_ACCESS_KEY_ID: test
     AWS_SECRET_ACCESS_KEY: test
+    # NOTE: `TOASTY_TEST_POSTGRES_URL` / `TOASTY_TEST_MYSQL_URL` are set per-job
+    # below — only on workers that actually run the matching service. Setting
+    # them globally caused the `test-all-os` worker to inherit a non-functional
+    # URL, so live-PG tests panicked with "connection refused" instead of
+    # short-circuiting on a missing env var.
 
 jobs:
     check:
         name: cargo check
         runs-on: ubuntu-latest
         steps:
-        - uses: actions/checkout@v4
+        - uses: actions/checkout@v6
         - uses: dtolnay/rust-toolchain@master
           with:
             toolchain: ${{ env.RUST_STABLE_VERSION }}
@@ -42,7 +45,7 @@ jobs:
         name: cargo clippy
         runs-on: ubuntu-latest
         steps:
-        - uses: actions/checkout@v4
+        - uses: actions/checkout@v6
         - uses: dtolnay/rust-toolchain@master
           with:
             toolchain: ${{ env.RUST_STABLE_VERSION }}
@@ -58,7 +61,7 @@ jobs:
         name: Check MSRV
         runs-on: ubuntu-latest
         steps:
-        - uses: actions/checkout@v4
+        - uses: actions/checkout@v6
         - name: Read MSRV from Cargo.toml
           id: msrv
           run: |
@@ -82,15 +85,20 @@ jobs:
       name: Run tests for Sqlite
       runs-on: ubuntu-latest
       steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_STABLE_VERSION }}
       - uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
+      # Default-members covers everything except the driver crates (see
+      # workspace `default-members`); the second invocation runs the SQLite
+      # driver's own crate-local tests.
       - name: cargo test
-        run: cargo test --workspace --no-default-features --features sqlite
+        run: cargo test --no-default-features --features sqlite
+      - name: cargo test -p toasty-driver-sqlite
+        run: cargo test -p toasty-driver-sqlite
       - name: doc-tests
         run: cargo test -p tests --doc
 
@@ -111,8 +119,9 @@ jobs:
             options: --health-cmd "mysqladmin ping -h localhost" --health-interval 10s --health-timeout 5s --health-retries 5
         env:
             TOASTY_CONNECTION_URL: mysql://toasty:toasty@localhost:3306/toasty
+            TOASTY_TEST_MYSQL_URL: mysql://toasty:toasty@localhost/toasty
         steps:
-        - uses: actions/checkout@v4
+        - uses: actions/checkout@v6
         - uses: dtolnay/rust-toolchain@master
           with:
             toolchain: ${{ env.RUST_STABLE_VERSION }}
@@ -120,7 +129,9 @@ jobs:
           with:
             save-if: ${{ github.ref == 'refs/heads/main' }}
         - name: cargo test
-          run: cargo test --workspace --no-default-features --features mysql
+          run: cargo test --no-default-features --features mysql
+        - name: cargo test -p toasty-driver-mysql
+          run: cargo test -p toasty-driver-mysql
         - name: cargo run --bin example-hello-toasty
           run: cargo run --bin example-hello-toasty --features mysql
 
@@ -130,7 +141,7 @@ jobs:
         runs-on: ubuntu-latest
         services:
           postgresql:
-            image: postgres:17
+            image: postgres:18
             env:
               POSTGRES_USER: toasty
               POSTGRES_PASSWORD: toasty
@@ -140,9 +151,10 @@ jobs:
             options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
         env:
             TOASTY_CONNECTION_URL: postgresql://toasty:toasty@localhost/toasty
+            TOASTY_TEST_POSTGRES_URL: postgresql://toasty:toasty@localhost/toasty
             TOASTY_TEST_POSTGRES_TLS_URL: postgresql://toasty:toasty@localhost:5433/toasty
         steps:
-        - uses: actions/checkout@v4
+        - uses: actions/checkout@v6
         - uses: dtolnay/rust-toolchain@master
           with:
             toolchain: ${{ env.RUST_STABLE_VERSION }}
@@ -160,7 +172,9 @@ jobs:
               sleep 1
             done
         - name: cargo test
-          run: cargo test --workspace --no-default-features --features postgresql
+          run: cargo test --no-default-features --features postgresql
+        - name: cargo test -p toasty-driver-postgresql
+          run: cargo test -p toasty-driver-postgresql
         - name: cargo run --bin example-hello-toasty
           run: cargo run --bin example-hello-toasty --features postgresql
 
@@ -169,7 +183,7 @@ jobs:
         name: Run tests for DynamoDB
         runs-on: ubuntu-latest
         steps:
-        - uses: actions/checkout@v4
+        - uses: actions/checkout@v6
         - uses: dtolnay/rust-toolchain@master
           with:
             toolchain: ${{ env.RUST_STABLE_VERSION }}
@@ -179,7 +193,9 @@ jobs:
         - name: Start dynamodb-local
           run: sudo docker run --name dynamodb -d -p 8000:8000 amazon/dynamodb-local:latest -jar DynamoDBLocal.jar -port 8000
         - name: cargo test
-          run: cargo test --workspace --no-default-features --features dynamodb -- --test-threads 1
+          run: cargo test --no-default-features --features dynamodb -- --test-threads 1
+        - name: cargo test -p toasty-driver-dynamodb
+          run: cargo test -p toasty-driver-dynamodb -- --test-threads 1
 
     test-all-os:
         needs: check
@@ -192,7 +208,7 @@ jobs:
               - ubuntu-latest
               - macos-latest
         steps:
-        - uses: actions/checkout@v4
+        - uses: actions/checkout@v6
         - uses: dtolnay/rust-toolchain@master
           with:
             toolchain: ${{ env.RUST_STABLE_VERSION }}
@@ -209,7 +225,7 @@ jobs:
         name: Build the `hello-toasty` example with each feature
         runs-on: ubuntu-latest
         steps:
-        - uses: actions/checkout@v4
+        - uses: actions/checkout@v6
         - uses: dtolnay/rust-toolchain@master
           with:
             toolchain: ${{ env.RUST_STABLE_VERSION }}

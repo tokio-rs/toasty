@@ -80,15 +80,6 @@ pub(crate) enum FieldTy {
     HasOne(HasOne),
 }
 
-impl FieldTy {
-    pub(crate) fn is_relation(&self) -> bool {
-        matches!(
-            self,
-            Self::BelongsTo(..) | Self::HasMany(..) | Self::HasOne(..)
-        )
-    }
-}
-
 impl FieldAttr {
     pub(crate) fn is_indexed(&self) -> bool {
         self.unique || self.index

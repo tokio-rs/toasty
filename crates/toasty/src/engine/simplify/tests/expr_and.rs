@@ -2,192 +2,16 @@ use super::test_schema;
 use crate::engine::simplify::Simplify;
 use toasty_core::stmt::{BinaryOp, Expr, ExprAnd, ExprOr};
 
-/// Builds `and(a, and(b, c))`, a nested AND structure for testing
-/// flattening.
-fn nested_and(a: Expr, b: Expr, c: Expr) -> ExprAnd {
-    ExprAnd {
-        operands: vec![
-            a,
-            Expr::And(ExprAnd {
-                operands: vec![b, c],
-            }),
-        ],
-    }
-}
-
-#[test]
-fn flatten_all_symbolic() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // `and(A, and(B, C)) → and(A, B, C)`
-    let mut expr = nested_and(Expr::arg(0), Expr::arg(1), Expr::arg(2));
-    let result = simplify.simplify_expr_and(&mut expr);
-
-    assert!(result.is_none()); // Modified in place
-    assert_eq!(expr.operands.len(), 3);
-    assert_eq!(expr.operands[0], Expr::arg(0));
-    assert_eq!(expr.operands[1], Expr::arg(1));
-    assert_eq!(expr.operands[2], Expr::arg(2));
-}
-
-#[test]
-fn flatten_with_true_in_outer() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // `and(true, and(B, C)) → and(B, C)`
-    let mut expr = nested_and(true.into(), Expr::arg(1), Expr::arg(2));
-    let result = simplify.simplify_expr_and(&mut expr);
-
-    assert!(result.is_none());
-    assert_eq!(expr.operands.len(), 2);
-    assert_eq!(expr.operands[0], Expr::arg(1));
-    assert_eq!(expr.operands[1], Expr::arg(2));
-}
-
-#[test]
-fn flatten_with_true_in_nested_first() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // `and(A, and(true, C)) → and(A, C)`
-    let mut expr = nested_and(Expr::arg(0), true.into(), Expr::arg(2));
-    let result = simplify.simplify_expr_and(&mut expr);
-
-    assert!(result.is_none());
-    assert_eq!(expr.operands.len(), 2);
-    assert_eq!(expr.operands[0], Expr::arg(0));
-    assert_eq!(expr.operands[1], Expr::arg(2));
-}
-
-#[test]
-fn flatten_with_true_in_nested_second() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // `and(A, and(B, true)) → and(A, B)`
-    let mut expr = nested_and(Expr::arg(0), Expr::arg(1), true.into());
-    let result = simplify.simplify_expr_and(&mut expr);
-
-    assert!(result.is_none());
-    assert_eq!(expr.operands.len(), 2);
-    assert_eq!(expr.operands[0], Expr::arg(0));
-    assert_eq!(expr.operands[1], Expr::arg(1));
-}
-
-#[test]
-fn flatten_outer_true_nested_one_true() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // `and(true, and(true, C)) → C`
-    let mut expr = nested_and(true.into(), true.into(), Expr::arg(2));
-    let result = simplify.simplify_expr_and(&mut expr);
-
-    assert!(result.is_some());
-    assert_eq!(result.unwrap(), Expr::arg(2));
-}
-
-#[test]
-fn flatten_outer_symbolic_nested_all_true() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // `and(A, and(true, true)) → A`
-    let mut expr = nested_and(Expr::arg(0), true.into(), true.into());
-    let result = simplify.simplify_expr_and(&mut expr);
-
-    assert!(result.is_some());
-    assert_eq!(result.unwrap(), Expr::arg(0));
-}
-
-#[test]
-fn flatten_all_true() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // `and(true, and(true, true)) → true`
-    let mut expr = nested_and(true.into(), true.into(), true.into());
-    let result = simplify.simplify_expr_and(&mut expr);
-
-    assert!(result.is_some());
-    assert!(result.unwrap().is_true());
-}
-
-#[test]
-fn flatten_with_false_in_outer() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // `and(false, and(B, C)) → false`
-    let mut expr = nested_and(false.into(), Expr::arg(1), Expr::arg(2));
-    let result = simplify.simplify_expr_and(&mut expr);
-
-    assert!(result.is_some());
-    assert!(result.unwrap().is_false());
-}
-
-#[test]
-fn flatten_with_false_in_nested() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // `and(A, and(false, C)) → false`
-    let mut expr = nested_and(Expr::arg(0), false.into(), Expr::arg(2));
-    let result = simplify.simplify_expr_and(&mut expr);
-
-    assert!(result.is_some());
-    assert!(result.unwrap().is_false());
-}
-
-#[test]
-fn flatten_true_and_false_mixed() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // `and(true, and(false, true)) → false`
-    let mut expr = nested_and(true.into(), false.into(), true.into());
-    let result = simplify.simplify_expr_and(&mut expr);
-
-    assert!(result.is_some());
-    assert!(result.unwrap().is_false());
-}
-
-#[test]
-fn single_operand_unwrapped() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // `and(arg(0)) → arg(0)`
-    let mut expr = ExprAnd {
-        operands: vec![Expr::arg(0)],
-    };
-    let result = simplify.simplify_expr_and(&mut expr);
-
-    assert!(result.is_some());
-    assert_eq!(result.unwrap(), Expr::arg(0));
-}
-
-#[test]
-fn empty_after_removing_true() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // `and(true, true) → true`
-    let mut expr = ExprAnd {
-        operands: vec![true.into(), true.into()],
-    };
-    let result = simplify.simplify_expr_and(&mut expr);
-
-    assert!(result.is_some());
-    assert!(result.unwrap().is_true());
-}
+// Cheap canonicalization (flatten, drop unit literals, null propagation,
+// single/empty collapse on canonical input) is exercised in
+// `engine::fold::tests::expr_and`. Tests here cover the heavyweight rules
+// only: idempotent law, absorption, complement, range-to-equality,
+// contradiction detection, and OR-branch pruning.
 
 #[test]
 fn idempotent_two_identical() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `and(a, a) → a`
     let mut expr = ExprAnd {
@@ -202,7 +26,7 @@ fn idempotent_two_identical() {
 #[test]
 fn idempotent_three_identical() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `and(a, a, a) → a`
     let mut expr = ExprAnd {
@@ -217,7 +41,7 @@ fn idempotent_three_identical() {
 #[test]
 fn idempotent_with_different() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `and(a, b, a) → and(a, b)`
     let mut expr = ExprAnd {
@@ -234,7 +58,7 @@ fn idempotent_with_different() {
 #[test]
 fn absorption_and_or() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `and(a, or(a, b))` → `a`
     let mut expr = ExprAnd {
@@ -254,7 +78,7 @@ fn absorption_and_or() {
 #[test]
 fn absorption_with_multiple_operands() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `and(a, b, or(a, c))` → `and(a, b)`
     let mut expr = ExprAnd {
@@ -277,7 +101,7 @@ fn absorption_with_multiple_operands() {
 #[test]
 fn absorption_two_and_three_or() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `and(a, b, or(a, c, d))` → `and(a, b)`
     let mut expr = ExprAnd {
@@ -302,7 +126,7 @@ fn complement_basic() {
     use toasty_core::stmt::ExprNot;
 
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `a and not(a)` → `false` (where a is a non-nullable comparison)
     let a = Expr::eq(Expr::arg(0), Expr::arg(1));
@@ -320,7 +144,7 @@ fn complement_with_other_operands() {
     use toasty_core::stmt::ExprNot;
 
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `a and b and not(a)` → `false`
     let a = Expr::eq(Expr::arg(0), Expr::arg(1));
@@ -342,7 +166,7 @@ fn complement_nullable_not_simplified() {
     use toasty_core::stmt::ExprNot;
 
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `a and not(a)` where `a` is an arg (nullable) → no change
     let a = Expr::arg(0);
@@ -359,7 +183,7 @@ fn complement_multiple_repetitions() {
     use toasty_core::stmt::ExprNot;
 
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `a and a and not(a) and not(a)` → `false`
     let a = Expr::eq(Expr::arg(0), Expr::arg(1));
@@ -382,7 +206,7 @@ fn complement_multiple_repetitions() {
 #[test]
 fn range_to_equality_ge_le() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `a >= 5 and a <= 5` → `a = 5`
     let mut expr = ExprAnd {
@@ -402,7 +226,7 @@ fn range_to_equality_ge_le() {
 #[test]
 fn range_to_equality_le_ge() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `a <= 5 and a >= 5` → `a = 5` (opposite order)
     let mut expr = ExprAnd {
@@ -422,7 +246,7 @@ fn range_to_equality_le_ge() {
 #[test]
 fn range_to_equality_different_bounds_not_simplified() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `a >= 5 and a <= 10` is not simplified (different bounds)
     let mut expr = ExprAnd {
@@ -440,7 +264,7 @@ fn range_to_equality_different_bounds_not_simplified() {
 #[test]
 fn range_to_equality_different_exprs_not_simplified() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `a >= 5 and b <= 5` is not simplified (different expressions)
     let mut expr = ExprAnd {
@@ -458,7 +282,7 @@ fn range_to_equality_different_exprs_not_simplified() {
 #[test]
 fn range_to_equality_with_other_operands() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `x and a >= 5 and a <= 5` → `x and a = 5`
     let mut expr = ExprAnd {
@@ -484,7 +308,7 @@ fn range_to_equality_with_other_operands() {
 #[test]
 fn range_to_equality_uneven_repetitions() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `a >= 5 and a >= 5 and a <= 5` → `a = 5`
     let mut expr = ExprAnd {
@@ -503,177 +327,6 @@ fn range_to_equality_uneven_repetitions() {
     assert!(bin_op.op.is_eq());
 }
 
-// Null propagation tests
-
-#[test]
-fn null_and_null_becomes_null() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // `null and null` → `null`
-    let mut expr = ExprAnd {
-        operands: vec![Expr::null(), Expr::null()],
-    };
-    let result = simplify.simplify_expr_and(&mut expr);
-
-    assert!(result.is_some());
-    assert!(result.unwrap().is_value_null());
-}
-
-#[test]
-fn null_and_true_becomes_null() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // `null and true` → `null` (true is removed, leaving only null)
-    let mut expr = ExprAnd {
-        operands: vec![Expr::null(), true.into()],
-    };
-    let result = simplify.simplify_expr_and(&mut expr);
-
-    assert!(result.is_some());
-    assert!(result.unwrap().is_value_null());
-}
-
-#[test]
-fn true_and_null_becomes_null() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // `true and null` → `null` (true is removed, leaving only null)
-    let mut expr = ExprAnd {
-        operands: vec![true.into(), Expr::null()],
-    };
-    let result = simplify.simplify_expr_and(&mut expr);
-
-    assert!(result.is_some());
-    assert!(result.unwrap().is_value_null());
-}
-
-#[test]
-fn null_and_false_becomes_false() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // `null and false` → `false` (false short-circuits)
-    let mut expr = ExprAnd {
-        operands: vec![Expr::null(), false.into()],
-    };
-    let result = simplify.simplify_expr_and(&mut expr);
-
-    assert!(result.is_some());
-    assert!(result.unwrap().is_false());
-}
-
-#[test]
-fn false_and_null_becomes_false() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // `false and null` → `false` (false short-circuits)
-    let mut expr = ExprAnd {
-        operands: vec![false.into(), Expr::null()],
-    };
-    let result = simplify.simplify_expr_and(&mut expr);
-
-    assert!(result.is_some());
-    assert!(result.unwrap().is_false());
-}
-
-#[test]
-fn null_and_symbolic_not_simplified() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // `null and a` → no change (symbolic operand present)
-    let mut expr = ExprAnd {
-        operands: vec![Expr::null(), Expr::arg(0)],
-    };
-    let result = simplify.simplify_expr_and(&mut expr);
-
-    assert!(result.is_none());
-    assert_eq!(expr.operands.len(), 2);
-}
-
-#[test]
-fn multiple_nulls_become_null() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // `null and null and null` → `null`
-    let mut expr = ExprAnd {
-        operands: vec![Expr::null(), Expr::null(), Expr::null()],
-    };
-    let result = simplify.simplify_expr_and(&mut expr);
-
-    assert!(result.is_some());
-    assert!(result.unwrap().is_value_null());
-}
-
-#[test]
-fn multiple_nulls_and_true_becomes_null() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // `null and true and null and true` → `null`
-    let mut expr = ExprAnd {
-        operands: vec![Expr::null(), true.into(), Expr::null(), true.into()],
-    };
-    let result = simplify.simplify_expr_and(&mut expr);
-
-    assert!(result.is_some());
-    assert!(result.unwrap().is_value_null());
-}
-
-// Error operand tests
-
-#[test]
-fn error_operand_not_simplified_in_and() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // `and(error("boom"), arg(0))` → no simplification.
-    // Error represents an unreachable branch; it does not poison the AND.
-    // In practice, other operands (guards) will drive the AND to false.
-    let mut expr = ExprAnd {
-        operands: vec![Expr::error("boom"), Expr::arg(0)],
-    };
-    let result = simplify.simplify_expr_and(&mut expr);
-
-    assert!(result.is_none());
-    assert_eq!(expr.operands.len(), 2);
-}
-
-#[test]
-fn error_and_true_keeps_error() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // `and(error("boom"), true)` → `error("boom")` (true is removed, error remains)
-    let mut expr = ExprAnd {
-        operands: vec![Expr::error("boom"), true.into()],
-    };
-    let result = simplify.simplify_expr_and(&mut expr);
-
-    assert!(result.is_some());
-    assert!(matches!(&result.unwrap(), Expr::Error(e) if e.message == "boom"));
-}
-
-#[test]
-fn error_and_false_becomes_false() {
-    let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
-
-    // `and(error("boom"), false)` → `false` (false short-circuits AND)
-    let mut expr = ExprAnd {
-        operands: vec![Expr::error("boom"), false.into()],
-    };
-    let result = simplify.simplify_expr_and(&mut expr);
-
-    assert!(result.is_some());
-    assert!(result.unwrap().is_false());
-}
-
 // --- AND-over-OR branch pruning tests ---
 
 /// The core enum variant+field pattern: disc == 1 in the outer AND
@@ -684,7 +337,7 @@ fn error_and_false_becomes_false() {
 #[test]
 fn prune_or_branch_contradicting_outer_eq() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     let disc_eq_1 = Expr::eq(Expr::arg(0), Expr::from(1i64));
     let addr_eq_alice = Expr::eq(Expr::arg(1), Expr::from("alice"));
@@ -722,7 +375,7 @@ fn prune_or_branch_contradicting_outer_eq() {
 #[test]
 fn prune_or_multiple_contradicting_branches() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     let x_eq_1 = Expr::eq(Expr::arg(0), Expr::from(1i64));
     let x_eq_2 = Expr::eq(Expr::arg(0), Expr::from(2i64));
@@ -753,7 +406,7 @@ fn prune_or_multiple_contradicting_branches() {
 #[test]
 fn prune_or_no_contradiction_preserved() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // AND(x == 1, OR(AND(y == 2, a), AND(y == 3, b)))
     // x == 1 doesn't contradict y == 2 or y == 3 — no pruning.
@@ -781,7 +434,7 @@ fn prune_or_no_contradiction_preserved() {
 #[test]
 fn prune_or_all_branches_contradicted() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // AND(x == 1, OR(AND(x == 2, a), AND(x == 3, b)))
     // Both branches contradict x == 1, so OR → false → AND → false.
@@ -811,7 +464,7 @@ fn prune_or_all_branches_contradicted() {
 #[test]
 fn prune_or_non_and_branch() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     let x_eq_1 = Expr::eq(Expr::arg(0), Expr::from(1i64));
     let x_eq_2 = Expr::eq(Expr::arg(0), Expr::from(2i64));
@@ -844,7 +497,7 @@ fn prune_or_non_and_branch() {
 #[test]
 fn prune_or_multiple_constraints() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     let x_eq_1 = Expr::eq(Expr::arg(0), Expr::from(1i64));
     let y_eq_2 = Expr::eq(Expr::arg(1), Expr::from(2i64));
@@ -877,7 +530,7 @@ fn prune_or_multiple_constraints() {
 #[test]
 fn prune_or_no_constraints_no_change() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // AND(OR(a, b), OR(c, d)) — no non-OR constraints to propagate.
     let mut expr = ExprAnd {
@@ -908,7 +561,7 @@ fn prune_or_end_to_end_via_visit() {
     use toasty_core::stmt::{ExprMatch, MatchArm, Value, VisitMut};
 
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     let disc = Expr::arg(0);
     let addr = Expr::arg(1);
@@ -957,7 +610,7 @@ fn prune_or_end_to_end_via_visit() {
 #[test]
 fn idempotent_not_simplified_for_non_deterministic() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `LAST_INSERT_ID() AND LAST_INSERT_ID()` must retain both operands.
     let mut expr = ExprAnd {
@@ -976,7 +629,7 @@ fn absorption_not_simplified_for_non_deterministic() {
     use toasty_core::stmt::ExprOr;
 
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `x AND (x OR y)` would absorb to `x` under PartialEq, but with a
     // non-deterministic `x` the two occurrences are independent draws, so
@@ -1001,7 +654,7 @@ fn complement_not_simplified_for_non_deterministic() {
     use toasty_core::stmt::ExprNot;
 
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `f() = 1 AND NOT (f() = 1)` — both `f()` calls are independent
     // evaluations, so complement must NOT fire.  (Compare with
@@ -1019,7 +672,7 @@ fn complement_not_simplified_for_non_deterministic() {
 #[test]
 fn range_to_equality_not_simplified_for_non_deterministic() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `f() >= 5 AND f() <= 5` — two independent draws of `f()` bracketed
     // by the same constant do not imply the draws are equal to 5.
@@ -1038,7 +691,7 @@ fn range_to_equality_not_simplified_for_non_deterministic() {
 #[test]
 fn contradicting_eq_not_simplified_for_non_deterministic() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `f() == 1 AND f() == 2` — two independent draws can produce 1 and 2
     // respectively, so this is NOT a contradiction.
