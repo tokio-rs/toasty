@@ -132,14 +132,14 @@ impl Verify<'_> {
             format!(
                 "each foreign-key field already has its own `#[index]`, but a \
                  composite foreign key needs a single covering index. Replace \
-                 the per-field `#[index]` annotations with a model-level \
-                 `#[index({})]` on `{}`",
+                 the per-field `#[index]` annotations with a struct-level \
+                 `#[index({})]` attribute on `{}`",
                 fk_field_names.join(", "),
                 target_name,
             )
         } else {
             format!(
-                "add `#[index({})]` to model `{}`",
+                "add a struct-level `#[index({})]` attribute to `{}`",
                 fk_field_names.join(", "),
                 target_name,
             )
