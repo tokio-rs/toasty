@@ -197,92 +197,104 @@
 <a href=#197 id=197 data-nosnippet>197</a>            _p: PhantomData,
 <a href=#198 id=198 data-nosnippet>198</a>        }
 <a href=#199 id=199 data-nosnippet>199</a>    }
-<a href=#200 id=200 data-nosnippet>200</a>}
-<a href=#201 id=201 data-nosnippet>201</a>
-<a href=#202 id=202 data-nosnippet>202</a><span class="kw">impl</span>&lt;T: Model&gt; IntoStatement <span class="kw">for </span>Association&lt;List&lt;T&gt;&gt; {
-<a href=#203 id=203 data-nosnippet>203</a>    <span class="kw">type </span>Returning = List&lt;T&gt;;
-<a href=#204 id=204 data-nosnippet>204</a>
-<a href=#205 id=205 data-nosnippet>205</a>    <span class="kw">fn </span>into_statement(<span class="self">self</span>) -&gt; Statement&lt;List&lt;T&gt;&gt; {
-<a href=#206 id=206 data-nosnippet>206</a>        <span class="kw">let </span>query = stmt::Query::builder(stmt::SourceModel {
-<a href=#207 id=207 data-nosnippet>207</a>            id: T::id(),
-<a href=#208 id=208 data-nosnippet>208</a>            via: <span class="prelude-val">Some</span>(<span class="self">self</span>.untyped),
-<a href=#209 id=209 data-nosnippet>209</a>        })
-<a href=#210 id=210 data-nosnippet>210</a>        .build();
-<a href=#211 id=211 data-nosnippet>211</a>        Statement::from_untyped_stmt(query.into())
-<a href=#212 id=212 data-nosnippet>212</a>    }
-<a href=#213 id=213 data-nosnippet>213</a>}
-<a href=#214 id=214 data-nosnippet>214</a>
-<a href=#215 id=215 data-nosnippet>215</a><span class="kw">impl</span>&lt;M: Model&gt; IntoScope&lt;M&gt; <span class="kw">for </span>Association&lt;List&lt;M&gt;&gt; {
-<a href=#216 id=216 data-nosnippet>216</a>    <span class="kw">fn </span>into_scope(<span class="self">self</span>) -&gt; Statement&lt;List&lt;M&gt;&gt; {
-<a href=#217 id=217 data-nosnippet>217</a>        <span class="self">self</span>.into_statement()
-<a href=#218 id=218 data-nosnippet>218</a>    }
-<a href=#219 id=219 data-nosnippet>219</a>}
-<a href=#220 id=220 data-nosnippet>220</a>
-<a href=#221 id=221 data-nosnippet>221</a><span class="kw">impl</span>&lt;M: Model&gt; Association&lt;M&gt; {
-<a href=#222 id=222 data-nosnippet>222</a>    <span class="doccomment">/// Create a has-one or belongs-to association from `source` following
-<a href=#223 id=223 data-nosnippet>223</a>    /// `path`.
-<a href=#224 id=224 data-nosnippet>224</a>    ///
-<a href=#225 id=225 data-nosnippet>225</a>    /// # Panics
-<a href=#226 id=226 data-nosnippet>226</a>    ///
-<a href=#227 id=227 data-nosnippet>227</a>    /// Panics if the root of `path` does not match the model id of `T`.
-<a href=#228 id=228 data-nosnippet>228</a>    ///
-<a href=#229 id=229 data-nosnippet>229</a>    /// # Examples
-<a href=#230 id=230 data-nosnippet>230</a>    ///
-<a href=#231 id=231 data-nosnippet>231</a>    /// ```
-<a href=#232 id=232 data-nosnippet>232</a>    /// # #[derive(Debug, toasty::Model)]
-<a href=#233 id=233 data-nosnippet>233</a>    /// # struct User {
-<a href=#234 id=234 data-nosnippet>234</a>    /// #     #[key]
-<a href=#235 id=235 data-nosnippet>235</a>    /// #     id: i64,
-<a href=#236 id=236 data-nosnippet>236</a>    /// #     name: String,
-<a href=#237 id=237 data-nosnippet>237</a>    /// # }
-<a href=#238 id=238 data-nosnippet>238</a>    /// # #[derive(Debug, toasty::Model)]
-<a href=#239 id=239 data-nosnippet>239</a>    /// # struct Todo {
-<a href=#240 id=240 data-nosnippet>240</a>    /// #     #[key]
-<a href=#241 id=241 data-nosnippet>241</a>    /// #     id: i64,
-<a href=#242 id=242 data-nosnippet>242</a>    /// #     user_id: i64,
-<a href=#243 id=243 data-nosnippet>243</a>    /// #     title: String,
-<a href=#244 id=244 data-nosnippet>244</a>    /// # }
-<a href=#245 id=245 data-nosnippet>245</a>    /// use toasty::stmt::{Association, List, Path, Query};
-<a href=#246 id=246 data-nosnippet>246</a>    ///
-<a href=#247 id=247 data-nosnippet>247</a>    /// let source = Query::&lt;List&lt;Todo&gt;&gt;::filter(Todo::fields().id().eq(1));
-<a href=#248 id=248 data-nosnippet>248</a>    /// let path = Path::&lt;Todo, User&gt;::from_field_index(1);
-<a href=#249 id=249 data-nosnippet>249</a>    /// let _assoc = Association::one(source, path);
-<a href=#250 id=250 data-nosnippet>250</a>    /// ```
-<a href=#251 id=251 data-nosnippet>251</a>    </span><span class="kw">pub fn </span>one&lt;T: Model&gt;(source: <span class="kw">super</span>::Query&lt;List&lt;T&gt;&gt;, path: Path&lt;T, M&gt;) -&gt; <span class="self">Self </span>{
-<a href=#252 id=252 data-nosnippet>252</a>        <span class="macro">assert_eq!</span>(path.untyped.root.as_model_unwrap(), T::id());
-<a href=#253 id=253 data-nosnippet>253</a>
-<a href=#254 id=254 data-nosnippet>254</a>        <span class="self">Self </span>{
-<a href=#255 id=255 data-nosnippet>255</a>            untyped: stmt::Association {
-<a href=#256 id=256 data-nosnippet>256</a>                source: Box::new(source.untyped),
-<a href=#257 id=257 data-nosnippet>257</a>                path: path.untyped,
-<a href=#258 id=258 data-nosnippet>258</a>            },
-<a href=#259 id=259 data-nosnippet>259</a>            _p: PhantomData,
-<a href=#260 id=260 data-nosnippet>260</a>        }
-<a href=#261 id=261 data-nosnippet>261</a>    }
-<a href=#262 id=262 data-nosnippet>262</a>}
-<a href=#263 id=263 data-nosnippet>263</a>
-<a href=#264 id=264 data-nosnippet>264</a><span class="kw">impl</span>&lt;T: Model&gt; IntoStatement <span class="kw">for </span>Association&lt;T&gt; {
-<a href=#265 id=265 data-nosnippet>265</a>    <span class="kw">type </span>Returning = List&lt;T&gt;;
-<a href=#266 id=266 data-nosnippet>266</a>
-<a href=#267 id=267 data-nosnippet>267</a>    <span class="kw">fn </span>into_statement(<span class="self">self</span>) -&gt; Statement&lt;List&lt;T&gt;&gt; {
-<a href=#268 id=268 data-nosnippet>268</a>        <span class="kw">let </span>query = stmt::Query::builder(stmt::SourceModel {
-<a href=#269 id=269 data-nosnippet>269</a>            id: T::id(),
-<a href=#270 id=270 data-nosnippet>270</a>            via: <span class="prelude-val">Some</span>(<span class="self">self</span>.untyped),
-<a href=#271 id=271 data-nosnippet>271</a>        })
-<a href=#272 id=272 data-nosnippet>272</a>        .build();
-<a href=#273 id=273 data-nosnippet>273</a>        Statement::from_untyped_stmt(query.into())
-<a href=#274 id=274 data-nosnippet>274</a>    }
-<a href=#275 id=275 data-nosnippet>275</a>}
-<a href=#276 id=276 data-nosnippet>276</a>
-<a href=#277 id=277 data-nosnippet>277</a><span class="kw">impl</span>&lt;M: Model&gt; IntoScope&lt;M&gt; <span class="kw">for </span>Association&lt;M&gt; {
-<a href=#278 id=278 data-nosnippet>278</a>    <span class="kw">fn </span>into_scope(<span class="self">self</span>) -&gt; Statement&lt;List&lt;M&gt;&gt; {
-<a href=#279 id=279 data-nosnippet>279</a>        <span class="self">self</span>.into_statement()
-<a href=#280 id=280 data-nosnippet>280</a>    }
-<a href=#281 id=281 data-nosnippet>281</a>}
-<a href=#282 id=282 data-nosnippet>282</a>
-<a href=#283 id=283 data-nosnippet>283</a><span class="kw">impl</span>&lt;M&gt; fmt::Debug <span class="kw">for </span>Association&lt;M&gt; {
-<a href=#284 id=284 data-nosnippet>284</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, fmt: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
-<a href=#285 id=285 data-nosnippet>285</a>        <span class="self">self</span>.untyped.fmt(fmt)
+<a href=#200 id=200 data-nosnippet>200</a>
+<a href=#201 id=201 data-nosnippet>201</a>    <span class="doccomment">/// Append a single field step to this association's path, retargeting it
+<a href=#202 id=202 data-nosnippet>202</a>    /// to `NewTarget`. Used by macro-generated chain methods on the `Many`
+<a href=#203 id=203 data-nosnippet>203</a>    /// struct — `field_index` must identify a relation field on `M`.
+<a href=#204 id=204 data-nosnippet>204</a>    </span><span class="attr">#[doc(hidden)]
+<a href=#205 id=205 data-nosnippet>205</a>    </span><span class="kw">pub fn </span>chain_field&lt;NewTarget&gt;(<span class="kw-2">mut </span><span class="self">self</span>, field_index: usize) -&gt; Association&lt;List&lt;NewTarget&gt;&gt; {
+<a href=#206 id=206 data-nosnippet>206</a>        <span class="self">self</span>.untyped.path.projection.push(field_index);
+<a href=#207 id=207 data-nosnippet>207</a>        Association {
+<a href=#208 id=208 data-nosnippet>208</a>            untyped: <span class="self">self</span>.untyped,
+<a href=#209 id=209 data-nosnippet>209</a>            _p: PhantomData,
+<a href=#210 id=210 data-nosnippet>210</a>        }
+<a href=#211 id=211 data-nosnippet>211</a>    }
+<a href=#212 id=212 data-nosnippet>212</a>}
+<a href=#213 id=213 data-nosnippet>213</a>
+<a href=#214 id=214 data-nosnippet>214</a><span class="kw">impl</span>&lt;T: Model&gt; IntoStatement <span class="kw">for </span>Association&lt;List&lt;T&gt;&gt; {
+<a href=#215 id=215 data-nosnippet>215</a>    <span class="kw">type </span>Returning = List&lt;T&gt;;
+<a href=#216 id=216 data-nosnippet>216</a>
+<a href=#217 id=217 data-nosnippet>217</a>    <span class="kw">fn </span>into_statement(<span class="self">self</span>) -&gt; Statement&lt;List&lt;T&gt;&gt; {
+<a href=#218 id=218 data-nosnippet>218</a>        <span class="kw">let </span>query = stmt::Query::builder(stmt::SourceModel {
+<a href=#219 id=219 data-nosnippet>219</a>            id: T::id(),
+<a href=#220 id=220 data-nosnippet>220</a>            via: <span class="prelude-val">Some</span>(<span class="self">self</span>.untyped),
+<a href=#221 id=221 data-nosnippet>221</a>        })
+<a href=#222 id=222 data-nosnippet>222</a>        .build();
+<a href=#223 id=223 data-nosnippet>223</a>        Statement::from_untyped_stmt(query.into())
+<a href=#224 id=224 data-nosnippet>224</a>    }
+<a href=#225 id=225 data-nosnippet>225</a>}
+<a href=#226 id=226 data-nosnippet>226</a>
+<a href=#227 id=227 data-nosnippet>227</a><span class="kw">impl</span>&lt;M: Model&gt; IntoScope&lt;M&gt; <span class="kw">for </span>Association&lt;List&lt;M&gt;&gt; {
+<a href=#228 id=228 data-nosnippet>228</a>    <span class="kw">fn </span>into_scope(<span class="self">self</span>) -&gt; Statement&lt;List&lt;M&gt;&gt; {
+<a href=#229 id=229 data-nosnippet>229</a>        <span class="self">self</span>.into_statement()
+<a href=#230 id=230 data-nosnippet>230</a>    }
+<a href=#231 id=231 data-nosnippet>231</a>}
+<a href=#232 id=232 data-nosnippet>232</a>
+<a href=#233 id=233 data-nosnippet>233</a><span class="kw">impl</span>&lt;M: Model&gt; Association&lt;M&gt; {
+<a href=#234 id=234 data-nosnippet>234</a>    <span class="doccomment">/// Create a has-one or belongs-to association from `source` following
+<a href=#235 id=235 data-nosnippet>235</a>    /// `path`.
+<a href=#236 id=236 data-nosnippet>236</a>    ///
+<a href=#237 id=237 data-nosnippet>237</a>    /// # Panics
+<a href=#238 id=238 data-nosnippet>238</a>    ///
+<a href=#239 id=239 data-nosnippet>239</a>    /// Panics if the root of `path` does not match the model id of `T`.
+<a href=#240 id=240 data-nosnippet>240</a>    ///
+<a href=#241 id=241 data-nosnippet>241</a>    /// # Examples
+<a href=#242 id=242 data-nosnippet>242</a>    ///
+<a href=#243 id=243 data-nosnippet>243</a>    /// ```
+<a href=#244 id=244 data-nosnippet>244</a>    /// # #[derive(Debug, toasty::Model)]
+<a href=#245 id=245 data-nosnippet>245</a>    /// # struct User {
+<a href=#246 id=246 data-nosnippet>246</a>    /// #     #[key]
+<a href=#247 id=247 data-nosnippet>247</a>    /// #     id: i64,
+<a href=#248 id=248 data-nosnippet>248</a>    /// #     name: String,
+<a href=#249 id=249 data-nosnippet>249</a>    /// # }
+<a href=#250 id=250 data-nosnippet>250</a>    /// # #[derive(Debug, toasty::Model)]
+<a href=#251 id=251 data-nosnippet>251</a>    /// # struct Todo {
+<a href=#252 id=252 data-nosnippet>252</a>    /// #     #[key]
+<a href=#253 id=253 data-nosnippet>253</a>    /// #     id: i64,
+<a href=#254 id=254 data-nosnippet>254</a>    /// #     user_id: i64,
+<a href=#255 id=255 data-nosnippet>255</a>    /// #     title: String,
+<a href=#256 id=256 data-nosnippet>256</a>    /// # }
+<a href=#257 id=257 data-nosnippet>257</a>    /// use toasty::stmt::{Association, List, Path, Query};
+<a href=#258 id=258 data-nosnippet>258</a>    ///
+<a href=#259 id=259 data-nosnippet>259</a>    /// let source = Query::&lt;List&lt;Todo&gt;&gt;::filter(Todo::fields().id().eq(1));
+<a href=#260 id=260 data-nosnippet>260</a>    /// let path = Path::&lt;Todo, User&gt;::from_field_index(1);
+<a href=#261 id=261 data-nosnippet>261</a>    /// let _assoc = Association::one(source, path);
+<a href=#262 id=262 data-nosnippet>262</a>    /// ```
+<a href=#263 id=263 data-nosnippet>263</a>    </span><span class="kw">pub fn </span>one&lt;T: Model&gt;(source: <span class="kw">super</span>::Query&lt;List&lt;T&gt;&gt;, path: Path&lt;T, M&gt;) -&gt; <span class="self">Self </span>{
+<a href=#264 id=264 data-nosnippet>264</a>        <span class="macro">assert_eq!</span>(path.untyped.root.as_model_unwrap(), T::id());
+<a href=#265 id=265 data-nosnippet>265</a>
+<a href=#266 id=266 data-nosnippet>266</a>        <span class="self">Self </span>{
+<a href=#267 id=267 data-nosnippet>267</a>            untyped: stmt::Association {
+<a href=#268 id=268 data-nosnippet>268</a>                source: Box::new(source.untyped),
+<a href=#269 id=269 data-nosnippet>269</a>                path: path.untyped,
+<a href=#270 id=270 data-nosnippet>270</a>            },
+<a href=#271 id=271 data-nosnippet>271</a>            _p: PhantomData,
+<a href=#272 id=272 data-nosnippet>272</a>        }
+<a href=#273 id=273 data-nosnippet>273</a>    }
+<a href=#274 id=274 data-nosnippet>274</a>}
+<a href=#275 id=275 data-nosnippet>275</a>
+<a href=#276 id=276 data-nosnippet>276</a><span class="kw">impl</span>&lt;T: Model&gt; IntoStatement <span class="kw">for </span>Association&lt;T&gt; {
+<a href=#277 id=277 data-nosnippet>277</a>    <span class="kw">type </span>Returning = List&lt;T&gt;;
+<a href=#278 id=278 data-nosnippet>278</a>
+<a href=#279 id=279 data-nosnippet>279</a>    <span class="kw">fn </span>into_statement(<span class="self">self</span>) -&gt; Statement&lt;List&lt;T&gt;&gt; {
+<a href=#280 id=280 data-nosnippet>280</a>        <span class="kw">let </span>query = stmt::Query::builder(stmt::SourceModel {
+<a href=#281 id=281 data-nosnippet>281</a>            id: T::id(),
+<a href=#282 id=282 data-nosnippet>282</a>            via: <span class="prelude-val">Some</span>(<span class="self">self</span>.untyped),
+<a href=#283 id=283 data-nosnippet>283</a>        })
+<a href=#284 id=284 data-nosnippet>284</a>        .build();
+<a href=#285 id=285 data-nosnippet>285</a>        Statement::from_untyped_stmt(query.into())
 <a href=#286 id=286 data-nosnippet>286</a>    }
 <a href=#287 id=287 data-nosnippet>287</a>}
+<a href=#288 id=288 data-nosnippet>288</a>
+<a href=#289 id=289 data-nosnippet>289</a><span class="kw">impl</span>&lt;M: Model&gt; IntoScope&lt;M&gt; <span class="kw">for </span>Association&lt;M&gt; {
+<a href=#290 id=290 data-nosnippet>290</a>    <span class="kw">fn </span>into_scope(<span class="self">self</span>) -&gt; Statement&lt;List&lt;M&gt;&gt; {
+<a href=#291 id=291 data-nosnippet>291</a>        <span class="self">self</span>.into_statement()
+<a href=#292 id=292 data-nosnippet>292</a>    }
+<a href=#293 id=293 data-nosnippet>293</a>}
+<a href=#294 id=294 data-nosnippet>294</a>
+<a href=#295 id=295 data-nosnippet>295</a><span class="kw">impl</span>&lt;M&gt; fmt::Debug <span class="kw">for </span>Association&lt;M&gt; {
+<a href=#296 id=296 data-nosnippet>296</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, fmt: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+<a href=#297 id=297 data-nosnippet>297</a>        <span class="self">self</span>.untyped.fmt(fmt)
+<a href=#298 id=298 data-nosnippet>298</a>    }
+<a href=#299 id=299 data-nosnippet>299</a>}
 </code></pre></div></section></main></body></html>
