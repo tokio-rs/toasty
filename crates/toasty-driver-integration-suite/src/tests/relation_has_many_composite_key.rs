@@ -2,10 +2,17 @@
 //! multiple columns. These parallel the single-key relation tests so we can
 //! make sure composite-key behavior matches.
 //!
-//! The shared scenario lives in
-//! [`crate::scenarios::composite_has_many_belongs_to`]: a `User` with a
-//! single-column auto PK and a `Todo` whose PK is
-//! `#[key(partition = user_id, local = id)]`.
+//! Two scenarios are used:
+//!
+//! - [`crate::scenarios::composite_has_many_belongs_to`] — `User` with a
+//!   single-column auto PK and a `Todo` whose PK is
+//!   `#[key(partition = user_id, local = id)]`. The FK column is part of
+//!   the child's identity, so reassignment isn't supported on backends that
+//!   can't mutate primary-key columns (DynamoDB).
+//! - [`crate::scenarios::composite_fk_has_many_belongs_to`] — `User` with a
+//!   composite PK `(id, revision)`, and `Todo` with single PK and a
+//!   two-column indexed FK. Used by the reassignment tests, which need the
+//!   FK to be a plain updatable column.
 //!
 //! See: https://github.com/tokio-rs/toasty/discussions/904
 
@@ -319,13 +326,14 @@ pub async fn composite_delete_when_belongs_to_optional(test: &mut Test) -> Resul
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::composite_has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::composite_fk_has_many_belongs_to))]
 pub async fn composite_associate_new_user_with_todo_on_update_via_creation(
     test: &mut Test,
 ) -> Result<()> {
     let mut db = setup(test).await;
 
     let u1 = User::create()
+        .revision(1)
         .name("User 1")
         .todo(Todo::create().title("hello world"))
         .exec(&mut db)
@@ -336,19 +344,20 @@ pub async fn composite_associate_new_user_with_todo_on_update_via_creation(
     let mut todo = todos.into_iter().next().unwrap();
 
     todo.update()
-        .user(User::create().name("User 2"))
+        .user(User::create().revision(1).name("User 2"))
         .exec(&mut db)
         .await?;
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::composite_has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::composite_fk_has_many_belongs_to))]
 pub async fn composite_associate_new_user_with_todo_on_update_query_via_creation(
     test: &mut Test,
 ) -> Result<()> {
     let mut db = setup(test).await;
 
     let u1 = User::create()
+        .revision(1)
         .name("User 1")
         .todo(Todo::create().title("a todo"))
         .exec(&mut db)
@@ -358,34 +367,36 @@ pub async fn composite_associate_new_user_with_todo_on_update_query_via_creation
     assert_eq!(1, todos.len());
     let todo = todos.into_iter().next().unwrap();
 
-    Todo::filter_by_user_id_and_id(todo.user_id, todo.id)
+    Todo::filter_by_id(todo.id)
         .update()
-        .user(User::create().name("User 2"))
+        .user(User::create().revision(1).name("User 2"))
         .exec(&mut db)
         .await?;
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::composite_has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::composite_fk_has_many_belongs_to))]
 pub async fn composite_assign_todo_that_already_has_user_on_create(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
     let todo = Todo::create()
         .title("a todo")
-        .user(User::create().name("User 1"))
+        .user(User::create().revision(1).name("User 1"))
         .exec(&mut db)
         .await?;
 
     let u1 = todo.user().exec(&mut db).await?;
 
     let u2 = User::create()
+        .revision(1)
         .name("User 2")
         .todo(&todo)
         .exec(&mut db)
         .await?;
 
-    let todo_reload = Todo::get_by_user_id_and_id(&mut db, &u2.id, &todo.id).await?;
+    let todo_reload = Todo::get_by_id(&mut db, &todo.id).await?;
     assert_eq!(u2.id, todo_reload.user_id);
+    assert_eq!(u2.revision, todo_reload.user_revision);
 
     let todos: Vec<_> = u1.todos().exec(&mut db).await?;
     assert_eq!(0, todos.len());
@@ -396,27 +407,32 @@ pub async fn composite_assign_todo_that_already_has_user_on_create(test: &mut Te
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::composite_has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::composite_fk_has_many_belongs_to))]
 pub async fn composite_assign_todo_that_already_has_user_on_update(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
     let todo = Todo::create()
         .title("a todo")
-        .user(User::create().name("User 1"))
+        .user(User::create().revision(1).name("User 1"))
         .exec(&mut db)
         .await?;
 
     let u1 = todo.user().exec(&mut db).await?;
 
-    let mut u2 = User::create().name("User 2").exec(&mut db).await?;
+    let mut u2 = User::create()
+        .revision(1)
+        .name("User 2")
+        .exec(&mut db)
+        .await?;
 
     u2.update()
         .todos(toasty::stmt::insert(&todo))
         .exec(&mut db)
         .await?;
 
-    let todo_reload = Todo::get_by_user_id_and_id(&mut db, &u2.id, &todo.id).await?;
+    let todo_reload = Todo::get_by_id(&mut db, &todo.id).await?;
     assert_eq!(u2.id, todo_reload.user_id);
+    assert_eq!(u2.revision, todo_reload.user_revision);
 
     let todos: Vec<_> = u1.todos().exec(&mut db).await?;
     assert_eq!(0, todos.len());
@@ -427,23 +443,28 @@ pub async fn composite_assign_todo_that_already_has_user_on_update(test: &mut Te
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::composite_has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::composite_fk_has_many_belongs_to))]
 pub async fn composite_assign_existing_user_to_todo(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
     let mut todo = Todo::create()
         .title("hello")
-        .user(User::create().name("User 1"))
+        .user(User::create().revision(1).name("User 1"))
         .exec(&mut db)
         .await?;
 
     let u1 = todo.user().exec(&mut db).await?;
-    let u2 = User::create().name("User 2").exec(&mut db).await?;
+    let u2 = User::create()
+        .revision(1)
+        .name("User 2")
+        .exec(&mut db)
+        .await?;
 
     todo.update().user(&u2).exec(&mut db).await?;
 
-    let todo_reload = Todo::get_by_user_id_and_id(&mut db, &u2.id, &todo.id).await?;
+    let todo_reload = Todo::get_by_id(&mut db, &todo.id).await?;
     assert_eq!(u2.id, todo_reload.user_id);
+    assert_eq!(u2.revision, todo_reload.user_revision);
 
     let todos: Vec<_> = u1.todos().exec(&mut db).await?;
     assert_eq!(0, todos.len());
@@ -655,12 +676,20 @@ pub async fn composite_add_remove_single_relation_required_belongs_to(
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::composite_has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::composite_fk_has_many_belongs_to))]
 pub async fn composite_reassign_relation_required_belongs_to(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
-    let u1 = User::create().name("User 1").exec(&mut db).await?;
-    let u2 = User::create().name("User 2").exec(&mut db).await?;
+    let u1 = User::create()
+        .revision(1)
+        .name("User 1")
+        .exec(&mut db)
+        .await?;
+    let u2 = User::create()
+        .revision(1)
+        .name("User 2")
+        .exec(&mut db)
+        .await?;
 
     let t1 = u1.todos().create().title("a todo").exec(&mut db).await?;
 

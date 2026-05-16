@@ -110,18 +110,48 @@ impl LowerStatement<'_, '_> {
         // values
         for field in &model.fields {
             if let app::FieldTy::BelongsTo(rel) = &field.ty {
-                let [fk_field] = &rel.foreign_key.fields[..] else {
-                    todo!()
-                };
-
                 let mut field_expr = expr.entry_mut(field.id.index);
 
-                if !field_expr.is_value() || field_expr.is_value_null() {
+                if field_expr.is_value_null() {
                     continue;
                 }
 
-                let e = field_expr.take();
-                expr.entry_mut(fk_field.source.index).insert(e);
+                if rel.foreign_key.fields.len() == 1 {
+                    if !field_expr.is_value() {
+                        continue;
+                    }
+                    let fk_field = &rel.foreign_key.fields[0];
+                    let e = field_expr.take();
+                    expr.entry_mut(fk_field.source.index).insert(e);
+                } else {
+                    // Composite FK: split the BelongsTo record into per-column
+                    // values. The value is either an `Expr::Record` (when set
+                    // from a model reference, via the tuple `IntoExpr`) or
+                    // `Expr::Value(Value::Record)` (when set from a literal
+                    // record).
+                    let items: Vec<stmt::Expr> = match field_expr.as_expr() {
+                        Some(stmt::Expr::Record(_)) => {
+                            let stmt::Expr::Record(record) = field_expr.take() else {
+                                unreachable!()
+                            };
+                            record.fields
+                        }
+                        Some(stmt::Expr::Value(stmt::Value::Record(_))) => {
+                            let stmt::Expr::Value(stmt::Value::Record(record)) = field_expr.take()
+                            else {
+                                unreachable!()
+                            };
+                            record.into_iter().map(stmt::Expr::Value).collect()
+                        }
+                        _ => continue,
+                    };
+
+                    assert_eq!(items.len(), rel.foreign_key.fields.len());
+
+                    for (fk_field, item) in rel.foreign_key.fields.iter().zip(items) {
+                        expr.entry_mut(fk_field.source.index).insert(item);
+                    }
+                }
             }
         }
 
