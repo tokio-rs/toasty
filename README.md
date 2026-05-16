@@ -2,7 +2,6 @@
   <h1>Toasty</h1>
 </div>
 
-<br/>
 <div align="center">
   <h3>The cozy, easy ORM for Rust</h3>
   <a href="https://tokio-rs.github.io/toasty/0.6.0/guide/">Guide</a> •
