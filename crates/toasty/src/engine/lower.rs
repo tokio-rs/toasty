@@ -977,18 +977,16 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         if let stmt::Expr::Reference(expr_reference) = operand {
             match &*expr_reference {
                 stmt::ExprReference::Model { nesting } => {
+                    let nesting = *nesting;
                     let model = self
                         .expr_cx
                         .resolve_expr_reference(expr_reference)
                         .as_model_unwrap();
 
-                    let [pk_field] = &model.primary_key.fields[..] else {
-                        todo!("handle composite keys");
-                    };
-
-                    *operand = stmt::Expr::ref_field(*nesting, pk_field);
+                    *operand = key_field_refs(nesting, model.primary_key.fields.iter().copied());
                 }
-                stmt::ExprReference::Field { .. } => {
+                stmt::ExprReference::Field { nesting, .. } => {
+                    let nesting = *nesting;
                     let field = self
                         .expr_cx
                         .resolve_expr_reference(expr_reference)
@@ -998,14 +996,10 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                         app::FieldTy::Primitive(_) | app::FieldTy::Embedded(_) => {}
                         app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => todo!(),
                         app::FieldTy::BelongsTo(rel) => {
-                            let [fk_field] = &rel.foreign_key.fields[..] else {
-                                todo!("handle composite keys");
-                            };
-
-                            let stmt::ExprReference::Field { index, .. } = expr_reference else {
-                                panic!()
-                            };
-                            *index = fk_field.source.index;
+                            *operand = key_field_refs(
+                                nesting,
+                                rel.foreign_key.fields.iter().map(|fk| fk.source),
+                            );
                         }
                     }
                 }
@@ -1609,6 +1603,22 @@ impl LoweringContext<'_> {
 
     fn is_returning(&self) -> bool {
         matches!(self, LoweringContext::Returning(_))
+    }
+}
+
+/// Build the LHS shape of an equality whose RHS is a key value:
+/// a single field reference for a single-column key, a record of field
+/// references for a composite key. The surrounding `==` is then decomposed
+/// into pairwise comparisons by `lower_expr_binary_op`'s `Record == Record`
+/// (or `Record == Value::Record`) handler.
+fn key_field_refs(
+    nesting: usize,
+    mut fields: impl ExactSizeIterator<Item = app::FieldId>,
+) -> stmt::Expr {
+    if fields.len() == 1 {
+        stmt::Expr::ref_field(nesting, fields.next().unwrap())
+    } else {
+        stmt::Expr::record(fields.map(|field| stmt::Expr::ref_field(nesting, field)))
     }
 }
 

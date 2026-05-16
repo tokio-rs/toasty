@@ -365,15 +365,14 @@ use proc_macro::TokenStream;
 /// | `key = <field>` | Local field holding the foreign key value |
 /// | `references = <field>` | Field on the target model being referenced |
 ///
-/// For composite foreign keys, repeat `key`/`references` pairs:
+/// For composite foreign keys, pass arrays to `key` and `references`:
 ///
 /// ```
 /// # use toasty::Model;
 /// # #[derive(Model)]
+/// # #[key(id, tenant_id)]
 /// # struct Org {
-/// #     #[key]
 /// #     id: i64,
-/// #     #[key]
 /// #     tenant_id: i64,
 /// # }
 /// # #[derive(Model)]
@@ -383,13 +382,13 @@ use proc_macro::TokenStream;
 /// #     id: i64,
 /// #     org_id: i64,
 /// #     tenant_id: i64,
-/// #[belongs_to(key = org_id, references = id, key = tenant_id, references = tenant_id)]
+/// #[belongs_to(key = [org_id, tenant_id], references = [id, tenant_id])]
 /// org: toasty::BelongsTo<Org>,
 /// # }
 /// ```
 ///
-/// The number of `key` entries must equal the number of `references`
-/// entries.
+/// The number of fields in `key` must equal the number of fields in
+/// `references`.
 ///
 /// Wrap the target type in `Option` for an optional (nullable) foreign key:
 ///

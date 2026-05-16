@@ -297,10 +297,15 @@ impl Expand<'_> {
             let source_field_ident = &source.name.ident;
             let target = &fk_field.target;
 
+            // `fields().#target()` returns the target field's
+            // `<Field>::Path<Origin>` — `Path<Origin, T>` for primitives and a
+            // wrapping `{Embed}Fields<Origin>` for embedded types. Both
+            // convert into `Path<Origin, T>` via `Into`, which is what
+            // `key_constraint` expects.
             quote! {
                 #toasty::Field::key_constraint(
                     &self.#source_field_ident,
-                    <#ty as #toasty::Relation>::Model::fields().#target(),
+                    <#ty as #toasty::Relation>::Model::fields().#target().into(),
                 )
             }
         });
