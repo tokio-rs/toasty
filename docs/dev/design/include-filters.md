@@ -10,6 +10,12 @@ writes `.include(User::fields().todos())` can write
 to preload only the unfinished todos for each user. Works the same way
 for `HasOne` / `BelongsTo` relations.
 
+Because a filtered include no longer contains the full set the relation
+field denotes, `HasMany` and `HasOne` grow a third state alongside
+`Unloaded` and `Loaded`: `Partial`. The type-level distinction keeps
+`.get()` honest — code that asks for the full set of `user.todos` cannot
+be silently handed a filtered subset.
+
 ## Motivation
 
 `include(...)` currently has no way to restrict which related records
@@ -29,6 +35,16 @@ two are complementary — see "Behavior" — and users routinely want both.
 Nested includes are common (preload a user's posts, and for each post
 its comments). Today those work via plain path chains; the same
 chains should accept filters at any level.
+
+A relation field like `User::todos` denotes a set — *the* todos
+belonging to a user. Today, `HasMany::Loaded(vec)` carries that whole
+set, and code reading `user.todos.get()` can rely on it. Once filtered
+includes exist, two `User` values with the same id can have `todos`
+"loaded" with different subsets depending on which query produced them,
+and `.get()` callers cannot tell. The design preserves the invariant by
+splitting loaded into two states (see [Distinguishing loaded from
+partial](#distinguishing-loaded-from-partial)) so the field's type
+reflects whether it carries the full set or a known-subset.
 
 ## User-facing API
 
@@ -50,15 +66,15 @@ let users: Vec<User> = User::all()
     .await?;
 
 for user in &users {
-    // `user.todos.get()` contains only incomplete todos.
-    for todo in user.todos.get() {
+    // The relation is `Partial`, not `Loaded` — use `.get_partial()`.
+    for todo in user.todos.get_partial() {
         assert!(!todo.completed);
     }
 }
 ```
 
-A user with no matching todos still comes back — their `todos` is
-loaded as an empty `Vec`, distinct from "not loaded".
+A user with no matching todos still comes back — their `todos` is in
+the `Partial` state with an empty `Vec`, distinct from "not loaded".
 
 ### Filtering a `HasOne` / `BelongsTo` include
 
@@ -73,15 +89,17 @@ let user = User::filter_by_id(id)
     .get(&mut db)
     .await?;
 
-match user.profile.get() {
+match user.profile.get_partial() {
     Some(profile) => { /* loaded and matches the filter */ }
     None => { /* either no profile exists, or it failed the filter */ }
 }
 ```
 
-The relation is still considered loaded; `.get()` does not panic. From
-the parent's perspective a filtered-out 1-1 looks the same as a missing
-relation.
+The relation is in the `Partial` state — `.get_partial()` returns
+`Option<&Profile>` and does not panic. From the parent's perspective a
+filtered-out 1-1 looks the same as a missing relation. Calling plain
+`.get()` on a `Partial` relation panics, because the caller would not
+be able to tell which case it is.
 
 ### Nested includes with filters
 
@@ -123,6 +141,49 @@ let users: Vec<User> = User::all()
 The two forms are interchangeable. Use whichever reads better.
 Filters at the same step combine with AND, regardless of which form
 introduced them.
+
+### Distinguishing loaded from partial
+
+Eagerly loaded associations now sit in one of three states:
+
+- `Unloaded` — the relation was never fetched.
+- `Loaded` — the relation was fetched in full. `user.todos` carries
+  every todo for that user.
+- `Partial` — the relation was fetched with a filter. `user.todos`
+  carries a known subset; the remaining todos exist in the database
+  but were not returned.
+
+The state is determined by how the relation was included. A bare
+`.include(User::fields().todos())` produces `Loaded`. An include with
+any `.filter(...)` at that step produces `Partial`. If the same step
+is included both with and without a filter, the result is `Partial` —
+the merged predicate is the filter, and the absent rows are absent.
+
+`.get()` returns the records only when the relation is `Loaded` and
+panics for both `Unloaded` and `Partial`. Code that wants to consume a
+filtered subset uses `.get_partial()`, which returns the records for
+both `Loaded` and `Partial` (and still panics for `Unloaded`).
+
+```rust
+match user.todos.is_partial() {
+    true => {
+        // Filtered subset — only iterate, do not treat as the full set.
+        for todo in user.todos.get_partial() {
+            // ...
+        }
+    }
+    false => {
+        // Full set — safe to count, paginate, derive aggregates.
+        let total = user.todos.get().len();
+        // ...
+    }
+}
+```
+
+The split is intentional: a function that takes `&User` and reads
+`user.todos.get()` should keep working only when the caller actually
+loaded the full set. Callers that opt into filtered includes opt into
+the more explicit accessor.
 
 ### Composing the predicate
 
@@ -189,9 +250,14 @@ unchanged — a bare path is an unfiltered include.
   order the engine already produces for an unfiltered include. For
   `HasOne` / `BelongsTo`, the relation loads as `Some(record)` if the
   (single) related row matches, otherwise `None`.
+- **Loaded vs. partial.** A step with no `.filter(...)` produces the
+  `Loaded` state for that relation. A step with any `.filter(...)`
+  produces `Partial`. The state propagates per-step: in a nested
+  include, each level's state is determined independently by whether
+  that level has a filter.
 - **Empty matches.** A `HasMany` parent with no matching children is
-  still returned with an empty preloaded `Vec`. An include filter
-  never removes parents.
+  still returned, with its relation in `Partial` carrying an empty
+  `Vec`. An include filter never removes parents.
 - **Nested filters.** Each filter is evaluated in its own step's
   scope. A filter at depth 2 (e.g. on `comments` under `posts`) only
   excludes comment rows; posts that match the depth-1 filter still
@@ -201,7 +267,9 @@ unchanged — a bare path is an unfiltered include.
   the same path step contribute filters to that step. They combine
   with `AND`. This applies whether the duplicate steps come from
   separate calls or the same chained expression — the engine cannot
-  tell them apart.
+  tell them apart. If any of the merged calls contributes a filter,
+  the step is `Partial`; only steps where every contributing call is
+  unfiltered are `Loaded`.
 - **Predicate language.** `.filter(...)` accepts any `Expr<bool>`,
   composed with the same combinators (`.and`, `.or`, `.not`,
   `.any`, `.all`, comparisons, `in_set`, …) as a top-level
@@ -209,8 +277,10 @@ unchanged — a bare path is an unfiltered include.
   top level can express that an include filter cannot.
 - **Errors.** A predicate that references fields outside the relation
   step's model is a compile error (the typed path machinery already
-  enforces this for `.any` / `.all`). Runtime errors from the driver
-  propagate as `toasty::Error` exactly as for unfiltered includes.
+  enforces this for `.any` / `.all`). Calling `.get()` on a `Partial`
+  relation panics with a message naming the filtered step — use
+  `.get_partial()` instead. Runtime errors from the driver propagate
+  as `toasty::Error` exactly as for unfiltered includes.
 - **Interaction with transactions.** None. Filtered includes use the
   same statements as unfiltered ones with extra `WHERE` predicates.
 
@@ -229,6 +299,30 @@ unchanged — a bare path is an unfiltered include.
 
 ## Out of scope
 
+- **Named filtered relations as model fields.** A complementary
+  approach is to give a recurring filtered view its own field:
+
+  ```rust
+  #[derive(Model)]
+  struct User {
+      #[has_many]
+      todos: HasMany<Todo>,
+
+      #[has_many(filter = Todo::fields().active().eq(true))]
+      active_todos: HasMany<Todo>,
+  }
+  ```
+
+  `active_todos` would be a relation in its own right —
+  `.include(User::fields().active_todos())` preloads it, and because
+  the field denotes the filtered set, it can be returned as `Loaded`
+  rather than `Partial`. This is a real feature worth having and
+  composes cleanly with include filters (the unnamed case stays
+  `.filter(...)`; the named case gets a stable identity). It is
+  deferred to its own design — the macro surface, the syntax for the
+  embedded predicate, and the interaction with `.any` / `.all` on the
+  named relation each need their own treatment. Include filters land
+  first; named filtered relations follow.
 - **`.limit` / `.order_by` on includes** — separate design.
 - **Cross-scope predicates.** A filter like
   `Todo::fields().user_id().eq(User::fields().id())` (referencing
