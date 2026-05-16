@@ -257,119 +257,129 @@
 <a href=#257 id=257 data-nosnippet>257</a>                    <span class="self">self</span>.path
 <a href=#258 id=258 data-nosnippet>258</a>                }
 <a href=#259 id=259 data-nosnippet>259</a>            }
-<a href=#260 id=260 data-nosnippet>260</a>        )
-<a href=#261 id=261 data-nosnippet>261</a>    }
-<a href=#262 id=262 data-nosnippet>262</a>
-<a href=#263 id=263 data-nosnippet>263</a>    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>expand_model_field_struct_init(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TokenStream {
-<a href=#264 id=264 data-nosnippet>264</a>        <span class="kw">let </span>toasty = <span class="kw-2">&amp;</span><span class="self">self</span>.toasty;
-<a href=#265 id=265 data-nosnippet>265</a>        <span class="kw">let </span>vis = <span class="kw-2">&amp;</span><span class="self">self</span>.model.vis;
-<a href=#266 id=266 data-nosnippet>266</a>        <span class="kw">let </span>field_struct_ident = <span class="self">self</span>.field_struct_ident();
-<a href=#267 id=267 data-nosnippet>267</a>        <span class="kw">let </span>model_ident = <span class="kw-2">&amp;</span><span class="self">self</span>.model.ident;
-<a href=#268 id=268 data-nosnippet>268</a>
-<a href=#269 id=269 data-nosnippet>269</a>        <span class="comment">// Generate fields() as a method instead of const to avoid const initialization issues
-<a href=#270 id=270 data-nosnippet>270</a>        // This will be placed inside the existing impl block for the model
-<a href=#271 id=271 data-nosnippet>271</a>        </span><span class="macro">quote!</span>(
-<a href=#272 id=272 data-nosnippet>272</a>            #vis <span class="kw">fn </span>fields() -&gt; #field_struct_ident&lt;#model_ident&gt; {
-<a href=#273 id=273 data-nosnippet>273</a>                #field_struct_ident {
-<a href=#274 id=274 data-nosnippet>274</a>                    path: #toasty::Path::root(),
-<a href=#275 id=275 data-nosnippet>275</a>                }
-<a href=#276 id=276 data-nosnippet>276</a>            }
-<a href=#277 id=277 data-nosnippet>277</a>        )
-<a href=#278 id=278 data-nosnippet>278</a>    }
-<a href=#279 id=279 data-nosnippet>279</a>
-<a href=#280 id=280 data-nosnippet>280</a>    <span class="kw">fn </span>field_struct_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>syn::Ident {
-<a href=#281 id=281 data-nosnippet>281</a>        <span class="kw">use </span><span class="kw">crate</span>::model::schema::ModelKind;
-<a href=#282 id=282 data-nosnippet>282</a>
-<a href=#283 id=283 data-nosnippet>283</a>        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.model.kind {
-<a href=#284 id=284 data-nosnippet>284</a>            ModelKind::Root(root) =&gt; <span class="kw-2">&amp;</span>root.field_struct_ident,
-<a href=#285 id=285 data-nosnippet>285</a>            ModelKind::EmbeddedStruct(embedded) =&gt; <span class="kw-2">&amp;</span>embedded.field_struct_ident,
-<a href=#286 id=286 data-nosnippet>286</a>            ModelKind::EmbeddedEnum(e) =&gt; <span class="kw-2">&amp;</span>e.field_struct_ident,
-<a href=#287 id=287 data-nosnippet>287</a>        }
+<a href=#260 id=260 data-nosnippet>260</a>
+<a href=#261 id=261 data-nosnippet>261</a>            <span class="kw">impl</span>&lt;__Origin&gt; #toasty::IntoExpr&lt;#toasty::List&lt;#model_ident&gt;&gt; <span class="kw">for </span>#field_list_struct_ident&lt;__Origin&gt; {
+<a href=#262 id=262 data-nosnippet>262</a>                <span class="kw">fn </span>into_expr(<span class="self">self</span>) -&gt; #toasty::stmt::Expr&lt;#toasty::List&lt;#model_ident&gt;&gt; {
+<a href=#263 id=263 data-nosnippet>263</a>                    <span class="self">self</span>.path.into_expr()
+<a href=#264 id=264 data-nosnippet>264</a>                }
+<a href=#265 id=265 data-nosnippet>265</a>
+<a href=#266 id=266 data-nosnippet>266</a>                <span class="kw">fn </span>by_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; #toasty::stmt::Expr&lt;#toasty::List&lt;#model_ident&gt;&gt; {
+<a href=#267 id=267 data-nosnippet>267</a>                    <span class="self">self</span>.path.by_ref()
+<a href=#268 id=268 data-nosnippet>268</a>                }
+<a href=#269 id=269 data-nosnippet>269</a>            }
+<a href=#270 id=270 data-nosnippet>270</a>        )
+<a href=#271 id=271 data-nosnippet>271</a>    }
+<a href=#272 id=272 data-nosnippet>272</a>
+<a href=#273 id=273 data-nosnippet>273</a>    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>expand_model_field_struct_init(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TokenStream {
+<a href=#274 id=274 data-nosnippet>274</a>        <span class="kw">let </span>toasty = <span class="kw-2">&amp;</span><span class="self">self</span>.toasty;
+<a href=#275 id=275 data-nosnippet>275</a>        <span class="kw">let </span>vis = <span class="kw-2">&amp;</span><span class="self">self</span>.model.vis;
+<a href=#276 id=276 data-nosnippet>276</a>        <span class="kw">let </span>field_struct_ident = <span class="self">self</span>.field_struct_ident();
+<a href=#277 id=277 data-nosnippet>277</a>        <span class="kw">let </span>model_ident = <span class="kw-2">&amp;</span><span class="self">self</span>.model.ident;
+<a href=#278 id=278 data-nosnippet>278</a>
+<a href=#279 id=279 data-nosnippet>279</a>        <span class="comment">// Generate fields() as a method instead of const to avoid const initialization issues
+<a href=#280 id=280 data-nosnippet>280</a>        // This will be placed inside the existing impl block for the model
+<a href=#281 id=281 data-nosnippet>281</a>        </span><span class="macro">quote!</span>(
+<a href=#282 id=282 data-nosnippet>282</a>            #vis <span class="kw">fn </span>fields() -&gt; #field_struct_ident&lt;#model_ident&gt; {
+<a href=#283 id=283 data-nosnippet>283</a>                #field_struct_ident {
+<a href=#284 id=284 data-nosnippet>284</a>                    path: #toasty::Path::root(),
+<a href=#285 id=285 data-nosnippet>285</a>                }
+<a href=#286 id=286 data-nosnippet>286</a>            }
+<a href=#287 id=287 data-nosnippet>287</a>        )
 <a href=#288 id=288 data-nosnippet>288</a>    }
 <a href=#289 id=289 data-nosnippet>289</a>
-<a href=#290 id=290 data-nosnippet>290</a>    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>field_list_struct_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>syn::Ident {
+<a href=#290 id=290 data-nosnippet>290</a>    <span class="kw">fn </span>field_struct_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>syn::Ident {
 <a href=#291 id=291 data-nosnippet>291</a>        <span class="kw">use </span><span class="kw">crate</span>::model::schema::ModelKind;
 <a href=#292 id=292 data-nosnippet>292</a>
 <a href=#293 id=293 data-nosnippet>293</a>        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.model.kind {
-<a href=#294 id=294 data-nosnippet>294</a>            ModelKind::Root(root) =&gt; <span class="kw-2">&amp;</span>root.field_list_struct_ident,
-<a href=#295 id=295 data-nosnippet>295</a>            ModelKind::EmbeddedStruct(embedded) =&gt; <span class="kw-2">&amp;</span>embedded.field_list_struct_ident,
-<a href=#296 id=296 data-nosnippet>296</a>            ModelKind::EmbeddedEnum(e) =&gt; <span class="kw-2">&amp;</span>e.field_list_struct_ident,
+<a href=#294 id=294 data-nosnippet>294</a>            ModelKind::Root(root) =&gt; <span class="kw-2">&amp;</span>root.field_struct_ident,
+<a href=#295 id=295 data-nosnippet>295</a>            ModelKind::EmbeddedStruct(embedded) =&gt; <span class="kw-2">&amp;</span>embedded.field_struct_ident,
+<a href=#296 id=296 data-nosnippet>296</a>            ModelKind::EmbeddedEnum(e) =&gt; <span class="kw-2">&amp;</span>e.field_struct_ident,
 <a href=#297 id=297 data-nosnippet>297</a>        }
 <a href=#298 id=298 data-nosnippet>298</a>    }
 <a href=#299 id=299 data-nosnippet>299</a>
-<a href=#300 id=300 data-nosnippet>300</a>    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>expand_field_name_to_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TokenStream {
-<a href=#301 id=301 data-nosnippet>301</a>        <span class="kw">let </span>toasty = <span class="kw-2">&amp;</span><span class="self">self</span>.toasty;
+<a href=#300 id=300 data-nosnippet>300</a>    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>field_list_struct_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>syn::Ident {
+<a href=#301 id=301 data-nosnippet>301</a>        <span class="kw">use </span><span class="kw">crate</span>::model::schema::ModelKind;
 <a href=#302 id=302 data-nosnippet>302</a>
-<a href=#303 id=303 data-nosnippet>303</a>        <span class="kw">let </span>fields = <span class="self">self
-<a href=#304 id=304 data-nosnippet>304</a>            </span>.model
-<a href=#305 id=305 data-nosnippet>305</a>            .fields
-<a href=#306 id=306 data-nosnippet>306</a>            .iter()
-<a href=#307 id=307 data-nosnippet>307</a>            .enumerate()
-<a href=#308 id=308 data-nosnippet>308</a>            .map(<span class="kw">move </span>|(offset, field)| {
-<a href=#309 id=309 data-nosnippet>309</a>                <span class="kw">let </span>field_name = field.name.as_str();
-<a href=#310 id=310 data-nosnippet>310</a>                <span class="kw">let </span>field_offset = util::int(offset);
-<a href=#311 id=311 data-nosnippet>311</a>
-<a href=#312 id=312 data-nosnippet>312</a>                <span class="macro">quote!</span>( #field_name =&gt; #toasty::core::schema::app::FieldId { model: <span class="self">Self</span>::id(), index: #field_offset }, )
-<a href=#313 id=313 data-nosnippet>313</a>            });
-<a href=#314 id=314 data-nosnippet>314</a>
-<a href=#315 id=315 data-nosnippet>315</a>        <span class="macro">quote!</span> {
-<a href=#316 id=316 data-nosnippet>316</a>            <span class="kw">fn </span>field_name_to_id(name: <span class="kw-2">&amp;</span>str) -&gt; #toasty::core::schema::app::FieldId {
-<a href=#317 id=317 data-nosnippet>317</a>                <span class="kw">use </span>#toasty::{Model, Register};
-<a href=#318 id=318 data-nosnippet>318</a>
-<a href=#319 id=319 data-nosnippet>319</a>                <span class="kw">match </span>name {
-<a href=#320 id=320 data-nosnippet>320</a>                    #( #fields )*
-<a href=#321 id=321 data-nosnippet>321</a>                    <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(<span class="string">"field_name_to_id: {}"</span>, name),
-<a href=#322 id=322 data-nosnippet>322</a>                }
-<a href=#323 id=323 data-nosnippet>323</a>            }
-<a href=#324 id=324 data-nosnippet>324</a>        }
-<a href=#325 id=325 data-nosnippet>325</a>    }
-<a href=#326 id=326 data-nosnippet>326</a>
-<a href=#327 id=327 data-nosnippet>327</a>    <span class="doccomment">/// Generates a field accessor method for a primitive field on the list
-<a href=#328 id=328 data-nosnippet>328</a>    /// fields struct, using `Field::new_list_path`.
-<a href=#329 id=329 data-nosnippet>329</a>    </span><span class="kw">fn </span>expand_list_primitive_field_method(
-<a href=#330 id=330 data-nosnippet>330</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#331 id=331 data-nosnippet>331</a>        field_ident: <span class="kw-2">&amp;</span>syn::Ident,
-<a href=#332 id=332 data-nosnippet>332</a>        ty: <span class="kw-2">&amp;</span>syn::Type,
-<a href=#333 id=333 data-nosnippet>333</a>        field_offset: <span class="kw-2">&amp;</span>TokenStream,
-<a href=#334 id=334 data-nosnippet>334</a>    ) -&gt; TokenStream {
-<a href=#335 id=335 data-nosnippet>335</a>        <span class="kw">let </span>toasty = <span class="kw-2">&amp;</span><span class="self">self</span>.toasty;
-<a href=#336 id=336 data-nosnippet>336</a>        <span class="kw">let </span>vis = <span class="kw-2">&amp;</span><span class="self">self</span>.model.vis;
-<a href=#337 id=337 data-nosnippet>337</a>        <span class="kw">let </span>model_ident = <span class="kw-2">&amp;</span><span class="self">self</span>.model.ident;
-<a href=#338 id=338 data-nosnippet>338</a>        <span class="kw">let </span>span = field_ident.span();
-<a href=#339 id=339 data-nosnippet>339</a>
-<a href=#340 id=340 data-nosnippet>340</a>        <span class="macro">quote_spanned!</span> { span=&gt;
-<a href=#341 id=341 data-nosnippet>341</a>            #vis <span class="kw">fn </span>#field_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; &lt;#ty <span class="kw">as </span>#toasty::Field&gt;::ListPath&lt;__Origin&gt; {
-<a href=#342 id=342 data-nosnippet>342</a>                &lt;#ty <span class="kw">as </span>#toasty::Field&gt;::new_list_path(
-<a href=#343 id=343 data-nosnippet>343</a>                    <span class="self">self</span>.path().chain(
-<a href=#344 id=344 data-nosnippet>344</a>                        #toasty::Path::&lt;#model_ident, <span class="kw">_</span>&gt;::from_field_index(#field_offset)
-<a href=#345 id=345 data-nosnippet>345</a>                    )
-<a href=#346 id=346 data-nosnippet>346</a>                )
-<a href=#347 id=347 data-nosnippet>347</a>            }
-<a href=#348 id=348 data-nosnippet>348</a>        }
-<a href=#349 id=349 data-nosnippet>349</a>    }
-<a href=#350 id=350 data-nosnippet>350</a>
-<a href=#351 id=351 data-nosnippet>351</a>    <span class="doccomment">/// Generates a relation accessor method on the list fields struct.
-<a href=#352 id=352 data-nosnippet>352</a>    /// All relations from a list context return the ManyField (list) variant.
-<a href=#353 id=353 data-nosnippet>353</a>    </span><span class="kw">fn </span>expand_list_relation_field_method(
-<a href=#354 id=354 data-nosnippet>354</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#355 id=355 data-nosnippet>355</a>        field_ident: <span class="kw-2">&amp;</span>syn::Ident,
-<a href=#356 id=356 data-nosnippet>356</a>        ty: <span class="kw-2">&amp;</span>syn::Type,
-<a href=#357 id=357 data-nosnippet>357</a>        field_offset: <span class="kw-2">&amp;</span>TokenStream,
-<a href=#358 id=358 data-nosnippet>358</a>    ) -&gt; TokenStream {
-<a href=#359 id=359 data-nosnippet>359</a>        <span class="kw">let </span>toasty = <span class="kw-2">&amp;</span><span class="self">self</span>.toasty;
-<a href=#360 id=360 data-nosnippet>360</a>        <span class="kw">let </span>vis = <span class="kw-2">&amp;</span><span class="self">self</span>.model.vis;
-<a href=#361 id=361 data-nosnippet>361</a>        <span class="kw">let </span>model_ident = <span class="kw-2">&amp;</span><span class="self">self</span>.model.ident;
-<a href=#362 id=362 data-nosnippet>362</a>        <span class="kw">let </span>span = field_ident.span();
-<a href=#363 id=363 data-nosnippet>363</a>
-<a href=#364 id=364 data-nosnippet>364</a>        <span class="macro">quote_spanned!</span> { span=&gt;
-<a href=#365 id=365 data-nosnippet>365</a>            #vis <span class="kw">fn </span>#field_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; &lt;#ty <span class="kw">as </span>#toasty::Relation&gt;::ManyField&lt;__Origin&gt; {
-<a href=#366 id=366 data-nosnippet>366</a>                &lt;#ty <span class="kw">as </span>#toasty::Relation&gt;::ManyField::from_path(
-<a href=#367 id=367 data-nosnippet>367</a>                    <span class="self">self</span>.path().chain(
-<a href=#368 id=368 data-nosnippet>368</a>                        #toasty::Path::&lt;#model_ident, <span class="kw">_</span>&gt;::from_field_index(#field_offset)
-<a href=#369 id=369 data-nosnippet>369</a>                    )
-<a href=#370 id=370 data-nosnippet>370</a>                )
-<a href=#371 id=371 data-nosnippet>371</a>            }
-<a href=#372 id=372 data-nosnippet>372</a>        }
-<a href=#373 id=373 data-nosnippet>373</a>    }
-<a href=#374 id=374 data-nosnippet>374</a>}
+<a href=#303 id=303 data-nosnippet>303</a>        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.model.kind {
+<a href=#304 id=304 data-nosnippet>304</a>            ModelKind::Root(root) =&gt; <span class="kw-2">&amp;</span>root.field_list_struct_ident,
+<a href=#305 id=305 data-nosnippet>305</a>            ModelKind::EmbeddedStruct(embedded) =&gt; <span class="kw-2">&amp;</span>embedded.field_list_struct_ident,
+<a href=#306 id=306 data-nosnippet>306</a>            ModelKind::EmbeddedEnum(e) =&gt; <span class="kw-2">&amp;</span>e.field_list_struct_ident,
+<a href=#307 id=307 data-nosnippet>307</a>        }
+<a href=#308 id=308 data-nosnippet>308</a>    }
+<a href=#309 id=309 data-nosnippet>309</a>
+<a href=#310 id=310 data-nosnippet>310</a>    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>expand_field_name_to_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TokenStream {
+<a href=#311 id=311 data-nosnippet>311</a>        <span class="kw">let </span>toasty = <span class="kw-2">&amp;</span><span class="self">self</span>.toasty;
+<a href=#312 id=312 data-nosnippet>312</a>
+<a href=#313 id=313 data-nosnippet>313</a>        <span class="kw">let </span>fields = <span class="self">self
+<a href=#314 id=314 data-nosnippet>314</a>            </span>.model
+<a href=#315 id=315 data-nosnippet>315</a>            .fields
+<a href=#316 id=316 data-nosnippet>316</a>            .iter()
+<a href=#317 id=317 data-nosnippet>317</a>            .enumerate()
+<a href=#318 id=318 data-nosnippet>318</a>            .map(<span class="kw">move </span>|(offset, field)| {
+<a href=#319 id=319 data-nosnippet>319</a>                <span class="kw">let </span>field_name = field.name.as_str();
+<a href=#320 id=320 data-nosnippet>320</a>                <span class="kw">let </span>field_offset = util::int(offset);
+<a href=#321 id=321 data-nosnippet>321</a>
+<a href=#322 id=322 data-nosnippet>322</a>                <span class="macro">quote!</span>( #field_name =&gt; #toasty::core::schema::app::FieldId { model: <span class="self">Self</span>::id(), index: #field_offset }, )
+<a href=#323 id=323 data-nosnippet>323</a>            });
+<a href=#324 id=324 data-nosnippet>324</a>
+<a href=#325 id=325 data-nosnippet>325</a>        <span class="macro">quote!</span> {
+<a href=#326 id=326 data-nosnippet>326</a>            <span class="kw">fn </span>field_name_to_id(name: <span class="kw-2">&amp;</span>str) -&gt; #toasty::core::schema::app::FieldId {
+<a href=#327 id=327 data-nosnippet>327</a>                <span class="kw">use </span>#toasty::{Model, Register};
+<a href=#328 id=328 data-nosnippet>328</a>
+<a href=#329 id=329 data-nosnippet>329</a>                <span class="kw">match </span>name {
+<a href=#330 id=330 data-nosnippet>330</a>                    #( #fields )*
+<a href=#331 id=331 data-nosnippet>331</a>                    <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(<span class="string">"field_name_to_id: {}"</span>, name),
+<a href=#332 id=332 data-nosnippet>332</a>                }
+<a href=#333 id=333 data-nosnippet>333</a>            }
+<a href=#334 id=334 data-nosnippet>334</a>        }
+<a href=#335 id=335 data-nosnippet>335</a>    }
+<a href=#336 id=336 data-nosnippet>336</a>
+<a href=#337 id=337 data-nosnippet>337</a>    <span class="doccomment">/// Generates a field accessor method for a primitive field on the list
+<a href=#338 id=338 data-nosnippet>338</a>    /// fields struct, using `Field::new_list_path`.
+<a href=#339 id=339 data-nosnippet>339</a>    </span><span class="kw">fn </span>expand_list_primitive_field_method(
+<a href=#340 id=340 data-nosnippet>340</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#341 id=341 data-nosnippet>341</a>        field_ident: <span class="kw-2">&amp;</span>syn::Ident,
+<a href=#342 id=342 data-nosnippet>342</a>        ty: <span class="kw-2">&amp;</span>syn::Type,
+<a href=#343 id=343 data-nosnippet>343</a>        field_offset: <span class="kw-2">&amp;</span>TokenStream,
+<a href=#344 id=344 data-nosnippet>344</a>    ) -&gt; TokenStream {
+<a href=#345 id=345 data-nosnippet>345</a>        <span class="kw">let </span>toasty = <span class="kw-2">&amp;</span><span class="self">self</span>.toasty;
+<a href=#346 id=346 data-nosnippet>346</a>        <span class="kw">let </span>vis = <span class="kw-2">&amp;</span><span class="self">self</span>.model.vis;
+<a href=#347 id=347 data-nosnippet>347</a>        <span class="kw">let </span>model_ident = <span class="kw-2">&amp;</span><span class="self">self</span>.model.ident;
+<a href=#348 id=348 data-nosnippet>348</a>        <span class="kw">let </span>span = field_ident.span();
+<a href=#349 id=349 data-nosnippet>349</a>
+<a href=#350 id=350 data-nosnippet>350</a>        <span class="macro">quote_spanned!</span> { span=&gt;
+<a href=#351 id=351 data-nosnippet>351</a>            #vis <span class="kw">fn </span>#field_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; &lt;#ty <span class="kw">as </span>#toasty::Field&gt;::ListPath&lt;__Origin&gt; {
+<a href=#352 id=352 data-nosnippet>352</a>                &lt;#ty <span class="kw">as </span>#toasty::Field&gt;::new_list_path(
+<a href=#353 id=353 data-nosnippet>353</a>                    <span class="self">self</span>.path().chain(
+<a href=#354 id=354 data-nosnippet>354</a>                        #toasty::Path::&lt;#model_ident, <span class="kw">_</span>&gt;::from_field_index(#field_offset)
+<a href=#355 id=355 data-nosnippet>355</a>                    )
+<a href=#356 id=356 data-nosnippet>356</a>                )
+<a href=#357 id=357 data-nosnippet>357</a>            }
+<a href=#358 id=358 data-nosnippet>358</a>        }
+<a href=#359 id=359 data-nosnippet>359</a>    }
+<a href=#360 id=360 data-nosnippet>360</a>
+<a href=#361 id=361 data-nosnippet>361</a>    <span class="doccomment">/// Generates a relation accessor method on the list fields struct.
+<a href=#362 id=362 data-nosnippet>362</a>    /// All relations from a list context return the ManyField (list) variant.
+<a href=#363 id=363 data-nosnippet>363</a>    </span><span class="kw">fn </span>expand_list_relation_field_method(
+<a href=#364 id=364 data-nosnippet>364</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#365 id=365 data-nosnippet>365</a>        field_ident: <span class="kw-2">&amp;</span>syn::Ident,
+<a href=#366 id=366 data-nosnippet>366</a>        ty: <span class="kw-2">&amp;</span>syn::Type,
+<a href=#367 id=367 data-nosnippet>367</a>        field_offset: <span class="kw-2">&amp;</span>TokenStream,
+<a href=#368 id=368 data-nosnippet>368</a>    ) -&gt; TokenStream {
+<a href=#369 id=369 data-nosnippet>369</a>        <span class="kw">let </span>toasty = <span class="kw-2">&amp;</span><span class="self">self</span>.toasty;
+<a href=#370 id=370 data-nosnippet>370</a>        <span class="kw">let </span>vis = <span class="kw-2">&amp;</span><span class="self">self</span>.model.vis;
+<a href=#371 id=371 data-nosnippet>371</a>        <span class="kw">let </span>model_ident = <span class="kw-2">&amp;</span><span class="self">self</span>.model.ident;
+<a href=#372 id=372 data-nosnippet>372</a>        <span class="kw">let </span>span = field_ident.span();
+<a href=#373 id=373 data-nosnippet>373</a>
+<a href=#374 id=374 data-nosnippet>374</a>        <span class="macro">quote_spanned!</span> { span=&gt;
+<a href=#375 id=375 data-nosnippet>375</a>            #vis <span class="kw">fn </span>#field_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; &lt;#ty <span class="kw">as </span>#toasty::Relation&gt;::ManyField&lt;__Origin&gt; {
+<a href=#376 id=376 data-nosnippet>376</a>                &lt;#ty <span class="kw">as </span>#toasty::Relation&gt;::ManyField::from_path(
+<a href=#377 id=377 data-nosnippet>377</a>                    <span class="self">self</span>.path().chain(
+<a href=#378 id=378 data-nosnippet>378</a>                        #toasty::Path::&lt;#model_ident, <span class="kw">_</span>&gt;::from_field_index(#field_offset)
+<a href=#379 id=379 data-nosnippet>379</a>                    )
+<a href=#380 id=380 data-nosnippet>380</a>                )
+<a href=#381 id=381 data-nosnippet>381</a>            }
+<a href=#382 id=382 data-nosnippet>382</a>        }
+<a href=#383 id=383 data-nosnippet>383</a>    }
+<a href=#384 id=384 data-nosnippet>384</a>}
 </code></pre></div></section></main></body></html>
