@@ -119,13 +119,16 @@ impl LowerStatement<'_, '_> {
                 let fk_fields = &rel.foreign_key.fields;
 
                 // Distribute the BelongsTo value into its FK source column(s):
-                //   - composite FK: the value is a record (`Expr::Record` from
-                //     the tuple `IntoExpr` for composite-PK targets, or
-                //     `Expr::Value(Value::Record)` from a literal); one item
-                //     per FK column via `into_record_items`.
-                //   - single FK: the value is a scalar; it goes whole into the
-                //     single FK column.
-                if field_expr.is_record() {
+                //   - composite FK (`fk_fields.len() > 1`): the value is a
+                //     record (`Expr::Record` from the tuple `IntoExpr` for
+                //     composite-PK targets, or `Expr::Value(Value::Record)`
+                //     from a literal); one item per FK column via
+                //     `into_record_items`.
+                //   - single FK: the value goes whole into the single FK
+                //     column, whether it is a scalar or a record (an
+                //     `Embed`-typed PK produces an `Expr::Record` whose shape
+                //     matches the embed-typed FK source).
+                if fk_fields.len() > 1 && field_expr.is_record() {
                     let items = field_expr.take().into_record_items().unwrap();
                     let mut count = 0;
                     for (fk_field, item) in fk_fields.iter().zip(items) {
@@ -134,7 +137,7 @@ impl LowerStatement<'_, '_> {
                     }
                     assert_eq!(count, fk_fields.len());
                 } else {
-                    if !field_expr.is_value() {
+                    if !field_expr.is_value() && !field_expr.is_record() {
                         continue;
                     }
                     let [fk_field] = &fk_fields[..] else {
