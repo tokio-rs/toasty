@@ -61,6 +61,7 @@ pub mod relation_belongs_to_self_referential;
 pub mod relation_filter_association;
 pub mod relation_has_many_batch_create;
 pub mod relation_has_many_boxed_fk;
+pub mod relation_has_many_composite_key;
 pub mod relation_has_many_crud;
 pub mod relation_has_many_filter;
 pub mod relation_has_many_link_unlink;
