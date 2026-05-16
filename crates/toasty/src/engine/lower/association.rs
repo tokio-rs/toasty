@@ -166,21 +166,17 @@ impl<'a> RewriteVia<'a> {
         association: stmt::Association,
     ) -> stmt::Filter {
         // The FK lives on the source model; the target model carries the
-        // referenced fields. Filter is: `self.<fk.target> IN (SELECT
-        // <fk.source> FROM <source>)`. Single-column FKs only for now —
-        // composite keys can be added by switching to tuple-style IN.
-        assert_eq!(
-            rel.foreign_key.fields.len(),
-            1,
-            "composite foreign keys in BelongsTo via paths not yet supported"
-        );
-        let fk = &rel.foreign_key.fields[0];
+        // referenced fields. Filter is `<fk.target...> IN (SELECT
+        // <fk.source...> FROM <source>)` — a single field reference on each
+        // side for single-column FKs, a record of references for composite
+        // FKs (lowered to a tuple-style IN by the SQL serializer).
+        let target = super::key_field_refs(0, rel.foreign_key.fields.iter().map(|fk| fk.target));
+        let returning = super::key_field_refs(0, rel.foreign_key.fields.iter().map(|fk| fk.source));
 
         let mut source = *association.source;
-        source.body.as_select_mut_unwrap().returning =
-            stmt::Returning::Project(stmt::Expr::ref_self_field(fk.source));
+        source.body.as_select_mut_unwrap().returning = stmt::Returning::Project(returning);
 
-        stmt::Expr::in_subquery(stmt::Expr::ref_self_field(fk.target), source).into()
+        stmt::Expr::in_subquery(target, source).into()
     }
 }
 
