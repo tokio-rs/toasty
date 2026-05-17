@@ -13,8 +13,8 @@ pub use crate::{
     Db, Error, Executor, Result, Statement,
     schema::create_meta::{assert_create_fields, const_contains},
     schema::{
-        Auto, BelongsTo, CreateField, CreateMeta, Defer, Deferred, DiscoverItem, Embed, Field,
-        HasMany, HasOne, Load, Model, Register, Relation, Scope, ValidateCreate,
+        Auto, BelongsTo, CreateField, CreateMeta, Defer, Deferred, DiscoverItem, Document, Embed,
+        Field, HasMany, HasOne, Load, Model, Register, Relation, Scope, ValidateCreate,
         build_deferred_load, generate_unique_id,
     },
     stmt::CreateMany,

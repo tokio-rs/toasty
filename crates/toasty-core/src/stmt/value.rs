@@ -1,4 +1,7 @@
-use super::{Entry, EntryPath, Type, TypeUnion, ValueRecord, sparse_record::SparseRecord};
+use super::{
+    DocumentField, Entry, EntryPath, Type, TypeDocument, TypeUnion, ValueObject, ValueRecord,
+    sparse_record::SparseRecord,
+};
 use std::cmp::Ordering;
 
 /// A dynamically typed value used throughout Toasty's query engine.
@@ -74,6 +77,11 @@ pub enum Value {
 
     /// Record value, either borrowed or owned
     Record(ValueRecord),
+
+    /// A document value: a named, ordered set of fields. The named counterpart
+    /// to [`Value::Record`]. Produced by the engine at the driver boundary for
+    /// document-stored fields, and consumed structurally by drivers.
+    Object(ValueObject),
 
     /// A list of values of the same type
     List(Vec<Value>),
@@ -153,6 +161,33 @@ impl Value {
     /// Returns `true` if this value is a [`Value::Record`].
     pub const fn is_record(&self) -> bool {
         matches!(self, Self::Record(_))
+    }
+
+    /// Returns `true` if this value is a [`Value::Object`].
+    pub const fn is_object(&self) -> bool {
+        matches!(self, Self::Object(_))
+    }
+
+    /// Returns a reference to the contained [`ValueObject`] if this is a
+    /// [`Value::Object`], or `None` otherwise.
+    pub fn as_object(&self) -> Option<&ValueObject> {
+        match self {
+            Self::Object(object) => Some(object),
+            _ => None,
+        }
+    }
+
+    /// Consumes this value and returns the contained [`ValueObject`],
+    /// panicking if this is not a [`Value::Object`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the value is not an `Object` variant.
+    pub fn into_object(self) -> ValueObject {
+        match self {
+            Self::Object(object) => object,
+            _ => panic!("expected Value::Object; actual={self:#?}"),
+        }
     }
 
     /// Creates a [`Value::Record`] from a vector of field values.
@@ -288,6 +323,24 @@ impl Value {
                     .iter()
                     .zip(fields.iter())
                     .all(|(value, ty)| value.is_a(ty)),
+                // `Value::Record` is the engine's canonical load form for
+                // a document value — positional, names dropped. Drivers
+                // produce `Value::Object` (structural, named); the engine
+                // collapses to `Value::Record` at the receive boundary via
+                // `Value::normalize_for_load`.
+                Type::Document(doc) if value.len() == doc.fields.len() => value
+                    .fields
+                    .iter()
+                    .zip(doc.fields.iter())
+                    .all(|(value, field)| value.is_a(&field.ty)),
+                _ => false,
+            },
+            Self::Object(value) => match ty {
+                Type::Document(doc) if value.len() == doc.fields.len() => value
+                    .entries
+                    .iter()
+                    .zip(doc.fields.iter())
+                    .all(|((name, value), field)| *name == field.name && value.is_a(&field.ty)),
                 _ => false,
             },
             Self::SparseRecord(value) => match ty {
@@ -334,6 +387,16 @@ impl Value {
             Value::SparseRecord(v) => Type::SparseRecord(v.fields.clone()),
             Value::Null => Type::Null,
             Value::Record(v) => Type::Record(v.fields.iter().map(Self::infer_ty).collect()),
+            Value::Object(v) => Type::Document(TypeDocument {
+                fields: v
+                    .entries
+                    .iter()
+                    .map(|(name, value)| DocumentField {
+                        name: name.clone(),
+                        ty: value.infer_ty(),
+                    })
+                    .collect(),
+            }),
             Value::String(_) => Type::String,
             Value::List(items) if items.is_empty() => Type::list(Type::Null),
             Value::List(items) => {
@@ -390,6 +453,77 @@ impl Value {
         }
 
         ret
+    }
+
+    /// Convert this value into the canonical form `Load` consumes for the
+    /// given type. The engine calls this at the driver-receive boundary so
+    /// the rest of the pipeline — eval, projection, load — sees a single
+    /// shape per type.
+    ///
+    /// Drivers produce `Value::Object` for document columns (structural,
+    /// no schema needed to encode or decode). The engine collapses each
+    /// `Object` to the positional `Value::Record` using the
+    /// [`TypeDocument`] field order, dropping the names. Recursion walks
+    /// into lists and records so a document nested inside a row is
+    /// converted as well. Other shapes pass through unchanged; the
+    /// conversion is idempotent.
+    pub fn normalize_for_load(self, ty: &Type) -> Self {
+        match (self, ty) {
+            (Self::List(items), Type::List(elem)) => Self::List(
+                items
+                    .into_iter()
+                    .map(|v| v.normalize_for_load(elem))
+                    .collect(),
+            ),
+            (Self::Record(record), Type::Record(field_tys))
+                if record.fields.len() == field_tys.len() =>
+            {
+                Self::record_from_vec(
+                    record
+                        .fields
+                        .into_iter()
+                        .zip(field_tys.iter())
+                        .map(|(v, t)| v.normalize_for_load(t))
+                        .collect(),
+                )
+            }
+            (Self::Object(object), Type::Document(doc)) => {
+                // Drop the names, keep the positional order. Look up by
+                // name rather than zipping — the driver builds entries in
+                // `doc.fields` order today, but that's a codec invariant
+                // we shouldn't depend on here.
+                let mut entries = object.entries;
+                Self::record_from_vec(
+                    doc.fields
+                        .iter()
+                        .map(|field| {
+                            let value = entries
+                                .iter()
+                                .position(|(k, _)| k == &field.name)
+                                .map(|i| entries.swap_remove(i).1)
+                                .unwrap_or(Self::Null);
+                            value.normalize_for_load(&field.ty)
+                        })
+                        .collect(),
+                )
+            }
+            // A positional record matched against a document type: already
+            // in load shape, but recurse so nested documents inside it get
+            // normalized.
+            (Self::Record(record), Type::Document(doc))
+                if record.fields.len() == doc.fields.len() =>
+            {
+                Self::record_from_vec(
+                    record
+                        .fields
+                        .into_iter()
+                        .zip(doc.fields.iter())
+                        .map(|(v, field)| v.normalize_for_load(&field.ty))
+                        .collect(),
+                )
+            }
+            (value, _) => value,
+        }
     }
 
     /// Takes the value out, replacing it with [`Value::Null`].

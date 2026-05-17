@@ -140,8 +140,12 @@ impl Expand<'_> {
                             ));
                         }
                         None => {
-                            nullable = quote!(<#ty as #toasty::Field>::NULLABLE);
-                            field_ty = quote!(<#ty as #toasty::Field>::field_ty(#storage_ty));
+                            // `#[document]` fields resolve through `Document`;
+                            // the rest go through `Field`. Both traits expose
+                            // the same `NULLABLE` / `field_ty` surface.
+                            let trait_ident = field.trait_ident();
+                            nullable = quote!(<#ty as #toasty::#trait_ident>::NULLABLE);
+                            field_ty = quote!(<#ty as #toasty::#trait_ident>::field_ty(#storage_ty));
                         }
                     }
                 }
@@ -437,10 +441,11 @@ impl Expand<'_> {
                     if field.attrs.serialize.is_some() {
                         return None;
                     }
-                    // Primitives use Field::register which delegates to inner
-                    // type if it's an embedded type (via the Field impl).
+                    // Field / Document both expose `register`; pick the right
+                    // trait for the field.
+                    let trait_ident = field.trait_ident();
                     Some(quote! {
-                        <#ty as #toasty::Field>::register(model_set);
+                        <#ty as #toasty::#trait_ident>::register(model_set);
                     })
                 }
                 FieldTy::BelongsTo(rel) => {

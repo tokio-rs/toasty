@@ -86,6 +86,7 @@ pub mod tx_interactive;
 pub mod type_bigdecimal;
 pub mod type_collection;
 pub mod type_decimal;
+pub mod type_document;
 pub mod type_jiff;
 pub mod type_primitives;
 pub mod type_serialize;

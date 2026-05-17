@@ -599,6 +599,7 @@ impl Expand<'_> {
                     || field.attrs.default_expr.is_some()
                     || field.attrs.update_expr.is_some()
                     || field.attrs.serialize.is_some()
+                    || field.attrs.document.is_some()
                     || field.attrs.versionable
                 {
                     return None;

@@ -41,6 +41,7 @@ tracing.workspace = true
 percent-encoding.workspace = true
 postgres-protocol.workspace = true
 postgres-types.workspace = true
+serde_json.workspace = true
 fallible-iterator.workspace = true
 tokio.workspace = true
 tokio-postgres.workspace = true
