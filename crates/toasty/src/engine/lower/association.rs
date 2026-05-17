@@ -72,22 +72,17 @@ impl<'a> RewriteVia<'a> {
 
     pub(super) fn rewrite_association_as_filter(
         &mut self,
-        mut association: stmt::Association,
+        association: stmt::Association,
     ) -> stmt::Filter {
         assert!(
             !association.path.projection.is_empty(),
             "via path must have at least one step"
         );
 
-        // Unfold any multi-step path into a chain of nested single-step
-        // `Source::Model { via }` wrappers via a single recursive descent.
-        // The recursion threads the source query through by value and borrows
-        // path steps as a slice — no per-step `Vec` rebuilds.
-        if association.path.projection.len() > 1 {
-            let stmt::Association { source, path } = association;
-            let source_model_id = source.body.as_select_unwrap().source.model_id_unwrap();
-            association = self.unfold_path(source, source_model_id, path.projection.as_slice());
-        }
+        // Resolve every via in the path and unfold the chain into nested
+        // single-step `Source::Model { via }` wrappers. After this the path
+        // is one step and the terminal field is guaranteed not to be a via.
+        let mut association = self.unfold_path(association);
 
         // Run the visitor's overridden `visit_stmt_query_mut` on the source
         // so any `Source::Model { via: Some(_) }` introduced by unfolding is
@@ -101,25 +96,12 @@ impl<'a> RewriteVia<'a> {
         };
 
         match &field.ty {
-            // A multi-step (`via`) relation: substitute its resolved path for
-            // the single via-field step and recurse. The top-of-function
-            // unfolding then handles the chain.
-            app::FieldTy::HasMany(app::HasMany {
-                kind: app::HasKind::Via(via),
-                ..
-            })
-            | app::FieldTy::HasOne(app::HasOne {
-                kind: app::HasKind::Via(via),
-                ..
-            }) => {
-                association.path = via.path.clone();
-                self.rewrite_association_as_filter(association)
-            }
             app::FieldTy::BelongsTo(rel) => {
                 self.rewrite_association_belongs_to_as_filter(rel, association)
             }
             // Direct has-one / has-many: filter the target by its paired
-            // `BelongsTo` against the source query.
+            // `BelongsTo` against the source query. Via relations were
+            // already unfolded, so only direct kinds reach this arm.
             app::FieldTy::HasOne(app::HasOne {
                 kind: app::HasKind::Direct(pair),
                 ..
@@ -133,20 +115,63 @@ impl<'a> RewriteVia<'a> {
         }
     }
 
-    /// Recursively wrap every step but the last into a nested
-    /// `Source::Model { via }`, threading the source query through by value.
+    /// Entry point for path unfolding. Pulls the seed `source_model_id` off
+    /// the association's source query and delegates to the recursive
+    /// [`unfold_steps`](Self::unfold_steps) helper. Returns an association
+    /// whose path is a single step that does **not** name a via relation.
+    fn unfold_path(&self, association: stmt::Association) -> stmt::Association {
+        let stmt::Association { source, path } = association;
+        let source_model_id = source.body.as_select_unwrap().source.model_id_unwrap();
+        self.unfold_steps(source, source_model_id, path.projection.as_slice())
+    }
+
+    /// Walk `steps`, splicing each via relation's resolved path inline and
+    /// wrapping every intermediate step in a nested `Source::Model { via }`.
     /// Returns the outer single-step association the caller filters against.
-    fn unfold_path(
+    ///
+    /// Via splicing allocates a `Vec<usize>` per via segment so the recursion
+    /// can borrow it as a slice. Paths are short (typically 1-3 steps) and
+    /// vias are rare, so this is cheap in practice.
+    fn unfold_steps(
         &self,
         source: Box<stmt::Query>,
         source_model_id: app::ModelId,
         steps: &[usize],
     ) -> stmt::Association {
         let [first, rest @ ..] = steps else {
-            unreachable!("unfold_path called with empty steps")
+            unreachable!("unfold_steps called with empty steps")
         };
 
-        // Base case: the last step stays on the outer association.
+        let field = &self
+            .schema()
+            .app
+            .model(source_model_id)
+            .as_root_unwrap()
+            .fields[*first];
+
+        // If this step names a via relation, splice the via's resolved path
+        // in place of the via field and continue. Handles via-of-via
+        // naturally because the recursion re-examines the spliced steps.
+        let via_path = match &field.ty {
+            app::FieldTy::HasMany(app::HasMany {
+                kind: app::HasKind::Via(via),
+                ..
+            })
+            | app::FieldTy::HasOne(app::HasOne {
+                kind: app::HasKind::Via(via),
+                ..
+            }) => Some(via.path.projection.as_slice()),
+            _ => None,
+        };
+        if let Some(via_steps) = via_path {
+            let mut spliced = Vec::with_capacity(via_steps.len() + rest.len());
+            spliced.extend_from_slice(via_steps);
+            spliced.extend_from_slice(rest);
+            return self.unfold_steps(source, source_model_id, &spliced);
+        }
+
+        // Base case: a single direct relation step stays on the outer
+        // association.
         if rest.is_empty() {
             return stmt::Association {
                 source,
@@ -154,8 +179,7 @@ impl<'a> RewriteVia<'a> {
             };
         }
 
-        let source_model = self.schema().app.model(source_model_id).as_root_unwrap();
-        let next_model_id = match &source_model.fields[*first].ty {
+        let next_model_id = match &field.ty {
             app::FieldTy::HasMany(rel) => rel.target,
             app::FieldTy::HasOne(rel) => rel.target,
             app::FieldTy::BelongsTo(rel) => rel.target,
@@ -174,7 +198,7 @@ impl<'a> RewriteVia<'a> {
             stmt::Expr::Value(stmt::Value::Bool(true)),
         ));
 
-        self.unfold_path(new_source, next_model_id, rest)
+        self.unfold_steps(new_source, next_model_id, rest)
     }
 
     fn rewrite_association_belongs_to_as_filter(
