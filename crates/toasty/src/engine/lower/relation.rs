@@ -913,8 +913,13 @@ impl RelationSource for InsertRelationSource<'_> {
 /// INSERTs are folded into one multi-row INSERT via `Insert::merge`. Other
 /// op kinds (`Remove`, `Set`, …) hit `todo!()` for now and need per-entry
 /// dispatch through `plan_mut_relation_field` plus returning-slot merging.
+///
+/// Empty input yields an empty list expression — the surface `stmt::apply`
+/// API can't actually produce an empty `Batch` (the empty Apply loop adds
+/// no entry to the assignments map), but the helper doesn't depend on
+/// that: an empty list dispatches to a no-op in
+/// `plan_mut_has_n_associate_expr`.
 fn lower_has_many_batch(entries: Vec<stmt::Assignment>) -> stmt::Expr {
-    assert!(!entries.is_empty(), "Batch must contain at least one entry");
     let mut combined: Option<stmt::Insert> = None;
     for entry in entries {
         match entry {
@@ -932,7 +937,10 @@ fn lower_has_many_batch(entries: Vec<stmt::Assignment>) -> stmt::Expr {
             other => todo!("batch entry kind not yet supported on has-many: {other:#?}"),
         }
     }
-    stmt::Expr::from(combined.unwrap())
+    match combined {
+        Some(insert) => stmt::Expr::from(insert),
+        None => stmt::Expr::list_from_vec(vec![]),
+    }
 }
 
 fn set_returning_slot(record: &mut stmt::ExprRecord, index: usize, expr: stmt::Expr) {

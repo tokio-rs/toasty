@@ -310,8 +310,11 @@ impl LowerStatement<'_, '_> {
 /// `stmt::apply([stmt::push(..), ..])` / `stmt::extend`; other shapes
 /// (mixed Append/Pop/RemoveAt, …) need per-entry dispatch plus driver-side
 /// Batch composition. See #717.
+///
+/// Empty input yields an empty list expression — the surface `stmt::apply`
+/// API can't actually produce an empty `Batch`, but the helper doesn't
+/// depend on that: an empty list flows through as a no-op Append.
 fn fold_append_batch(entries: Vec<stmt::Assignment>) -> stmt::Expr {
-    assert!(!entries.is_empty(), "Batch must contain at least one entry");
     let mut items = Vec::new();
     for entry in entries {
         match entry {
