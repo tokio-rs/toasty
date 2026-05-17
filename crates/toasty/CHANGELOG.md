@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.2](https://github.com/tokio-rs/toasty/compare/toasty-v0.6.1...toasty-v0.6.2) - 2026-05-17
+
+### Added
+
+- Non-panicking `try_get` method for relation types ([#918])
+
+[#918]: https://github.com/tokio-rs/toasty/pull/918
+
 ## [0.6.1](https://github.com/tokio-rs/toasty/compare/toasty-v0.6.0...toasty-v0.6.1) - 2026-05-16
 
 ### Added
