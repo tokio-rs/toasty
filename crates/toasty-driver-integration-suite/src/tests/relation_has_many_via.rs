@@ -9,7 +9,11 @@ use crate::prelude::*;
 
 /// Querying a `via` relation returns the distinct targets reachable through
 /// the path — a target is listed once however many intermediates reach it.
-#[driver_test(id(ID), scenario(crate::scenarios::user_comment_article))]
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::user_comment_article)
+)]
 pub async fn query_returns_distinct_targets(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -53,7 +57,11 @@ pub async fn query_returns_distinct_targets(test: &mut Test) -> Result<()> {
 }
 
 /// A user with no comments reaches no articles — an empty result, no error.
-#[driver_test(id(ID), scenario(crate::scenarios::user_comment_article))]
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::user_comment_article)
+)]
 pub async fn query_with_no_intermediates_is_empty(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -74,7 +82,7 @@ pub async fn query_with_no_intermediates_is_empty(test: &mut Test) -> Result<()>
 /// query.
 #[driver_test(
     id(ID),
-    requires(scan),
+    requires(sql),
     scenario(crate::scenarios::user_comment_article)
 )]
 pub async fn via_relation_query_can_be_filtered(test: &mut Test) -> Result<()> {
