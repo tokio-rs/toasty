@@ -185,6 +185,61 @@ pub async fn has_many_insert_on_update(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// `stmt::apply([])` on a has-many is a no-op: the surface API's empty
+/// Apply loop adds no entry to the assignments map, so the relation
+/// field is treated as unchanged. Run alongside a separate scalar
+/// change because the engine verifier rejects updates with no
+/// assignments at all.
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
+pub async fn has_many_apply_empty_is_noop(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let mut user = User::create().name("Alice").exec(&mut db).await?;
+    user.todos()
+        .create()
+        .title("existing")
+        .exec(&mut db)
+        .await?;
+
+    user.update()
+        .name("Bob")
+        .todos(toasty::stmt::apply::<toasty::stmt::List<Todo>>([]))
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(user.name, "Bob");
+    let todos: Vec<_> = user.todos().exec(&mut db).await?;
+    assert_eq!(todos.len(), 1);
+    assert_eq!(todos[0].title, "existing");
+    Ok(())
+}
+
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
+pub async fn has_many_apply_multiple_inserts(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let mut user = User::create().name("Alice").exec(&mut db).await?;
+
+    user.update()
+        .todos(toasty::stmt::apply([
+            toasty::stmt::insert(Todo::create().title("Buy groceries")),
+            toasty::stmt::insert(Todo::create().title("Walk the dog")),
+        ]))
+        .exec(&mut db)
+        .await?;
+
+    let mut titles: Vec<_> = user
+        .todos()
+        .exec(&mut db)
+        .await?
+        .into_iter()
+        .map(|t| t.title)
+        .collect();
+    titles.sort();
+    assert_eq!(titles, ["Buy groceries", "Walk the dog"]);
+    Ok(())
+}
+
 #[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn scoped_find_by_id(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
