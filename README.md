@@ -4,7 +4,7 @@
 
 <div align="center">
   <h3>The cozy, easy ORM for Rust</h3>
-  <a href="https://tokio-rs.github.io/toasty/0.6.0/guide/">Guide</a> •
+  <a href="https://tokio-rs.github.io/toasty/0.6.1/guide/">Guide</a> •
   <a href="https://docs.rs/toasty">API Docs</a> •
   <a href="https://crates.io/crates/toasty">Crates.io</a> •
   <a href="https://discord.gg/tokio">Discord</a>
