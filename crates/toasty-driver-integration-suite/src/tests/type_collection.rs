@@ -238,6 +238,51 @@ pub async fn vec_string_push(t: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
+/// `stmt::apply([push(a), push(b)])` chains multiple pushes on a single
+/// `Vec<scalar>` field. The Apply surface API folds same-projection ops
+/// into `Assignment::Batch`; lowering folds the entries into one
+/// equivalent `Append`.
+#[driver_test(id(ID), requires(vec_scalar))]
+pub async fn vec_string_apply_pushes(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        tags: Vec<String>,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+
+    let mut item = toasty::create!(Item {
+        tags: vec!["a".to_string()],
+    })
+    .exec(&mut db)
+    .await?;
+
+    item.update()
+        .tags(toasty::stmt::apply([
+            toasty::stmt::push("b"),
+            toasty::stmt::push("c"),
+        ]))
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(
+        item.tags,
+        vec!["a".to_string(), "b".to_string(), "c".to_string()]
+    );
+
+    let reloaded = Item::get_by_id(&mut db, &item.id).await?;
+    assert_eq!(
+        reloaded.tags,
+        vec!["a".to_string(), "b".to_string(), "c".to_string()]
+    );
+
+    Ok(())
+}
+
 /// `stmt::push` onto a `Vec<String>` that was created empty. Covers the
 /// "initially empty" path — DynamoDB's `if_not_exists` guard and the
 /// PG / JSON-backed paths over an empty array literal.
