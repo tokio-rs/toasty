@@ -1,0 +1,93 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Toasty is an async ORM for Rust supporting both SQL (SQLite, PostgreSQL, MySQL) and NoSQL (DynamoDB) databases."><title>toasty - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="toasty" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Crate toasty</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../toasty/index.html">toasty</a><span class="version">0.6.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#modules" title="Modules">Modules</a><ul><li><a href="#db--database-handle-and-connection-pool" title="`db` — database handle and connection pool"><code>db</code> — database handle and connection pool</a></li><li><a href="#schema--model-relation-and-schema-inspection" title="`schema` — model, relation, and schema inspection"><code>schema</code> — model, relation, and schema inspection</a></li><li><a href="#stmt--typed-statement-and-expression-types" title="`stmt` — typed statement and expression types"><code>stmt</code> — typed statement and expression types</a></li></ul></li><li><a href="#key-traits" title="Key traits">Key traits</a></li><li><a href="#other-key-types" title="Other key types">Other key types</a></li><li><a href="#derive-macros" title="Derive macros">Derive macros</a></li><li><a href="#feature-flags" title="Feature flags">Feature flags</a></li><li><a href="#other-crates-in-the-workspace" title="Other crates in the workspace">Other crates in the workspace</a></li></ul><h3><a href="#reexports">Crate Items</a></h3><ul class="block"><li><a href="#reexports" title="Re-exports">Re-exports</a></li><li><a href="#modules-1" title="Modules">Modules</a></li><li><a href="#macros" title="Macros">Macros</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#traits" title="Traits">Traits</a></li><li><a href="#types" title="Type Aliases">Type Aliases</a></li><li><a href="#derives" title="Derive Macros">Derive Macros</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1>Crate <span>toasty</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/toasty/lib.rs.html#1-131">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Toasty is an async ORM for Rust supporting both SQL (SQLite, PostgreSQL,
+MySQL) and NoSQL (DynamoDB) databases.</p>
+<p>This crate is the user-facing API. It contains the database handle,
+query execution traits, and the types that generated code builds on. For
+a tutorial-style introduction, see the <a href="../../guide/">Toasty guide</a>.</p>
+<h2 id="modules"><a class="doc-anchor" href="#modules">§</a>Modules</h2><h3 id="db--database-handle-and-connection-pool"><a class="doc-anchor" href="#db--database-handle-and-connection-pool">§</a><a href="db/index.html" title="mod toasty::db"><code>db</code></a> — database handle and connection pool</h3>
+<p>The <a href="db/struct.Db.html" title="struct toasty::db::Db"><code>Db</code></a> type is the entry point for all database interaction. It owns
+a connection pool and provides <a href="db/struct.Db.html#method.builder" title="associated function toasty::db::Db::builder"><code>Db::builder</code></a> for configuration. The
+module also contains <a href="db/struct.Builder.html" title="struct toasty::db::Builder"><code>Builder</code></a> and the pool internals.</p>
+<h3 id="schema--model-relation-and-schema-inspection"><a class="doc-anchor" href="#schema--model-relation-and-schema-inspection">§</a><a href="schema/index.html" title="mod toasty::schema"><code>schema</code></a> — model, relation, and schema inspection</h3>
+<p>The <a href="schema/trait.Model.html" title="trait toasty::schema::Model"><code>Model</code></a> trait represents a root model that maps to a
+database table. It is implemented by <code>#[derive(Model)]</code> — users do not
+implement it manually. The module also contains <a href="schema/trait.Field.html" title="trait toasty::schema::Field"><code>Field</code></a>,
+which provides schema registration and runtime helpers for field types, and
+<a href="schema/trait.Auto.html" title="trait toasty::schema::Auto"><code>Auto</code></a>, a wrapper for auto-generated values such as
+database-assigned IDs.</p>
+<p>The module also provides the types that represent associations between
+models: <a href="schema/struct.HasMany.html" title="struct toasty::schema::HasMany"><code>HasMany</code></a>, <a href="schema/struct.HasOne.html" title="struct toasty::schema::HasOne"><code>HasOne</code></a>, and
+<a href="schema/struct.BelongsTo.html" title="struct toasty::schema::BelongsTo"><code>BelongsTo</code></a>. These appear as fields on model structs
+and are populated through the generated relation accessors.</p>
+<p>The module also re-exports from <code>toasty-core</code> for inspecting the
+app-level and db-level schema representations at runtime.</p>
+<h3 id="stmt--typed-statement-and-expression-types"><a class="doc-anchor" href="#stmt--typed-statement-and-expression-types">§</a><a href="stmt/index.html" title="mod toasty::stmt"><code>stmt</code></a> — typed statement and expression types</h3>
+<p>Contains the typed wrappers around the statement AST:
+<a href="stmt/struct.Query.html" title="struct toasty::stmt::Query"><code>Query</code></a>, <a href="stmt/struct.Insert.html" title="struct toasty::stmt::Insert"><code>Insert</code></a>,
+<a href="stmt/struct.Update.html" title="struct toasty::stmt::Update"><code>Update</code></a>, <a href="stmt/struct.Delete.html" title="struct toasty::stmt::Delete"><code>Delete</code></a>, and
+<a href="stmt/struct.Statement.html" title="struct toasty::stmt::Statement"><code>Statement</code></a>. Also includes expression helpers like <a href="stmt/struct.Expr.html" title="struct toasty::stmt::Expr"><code>Expr</code></a>,
+<a href="stmt/struct.Path.html" title="struct toasty::stmt::Path"><code>Path</code></a>, and the <a href="stmt/fn.in_list.html" title="fn toasty::stmt::in_list"><code>in_list</code></a> function.
+Generated query builders (e.g. <code>find_by_*</code>, <code>filter_by_*</code>) produce these
+types.</p>
+<h2 id="key-traits"><a class="doc-anchor" href="#key-traits">§</a>Key traits</h2>
+<ul>
+<li><a href="schema/trait.Model.html" title="trait toasty::schema::Model"><code>Model</code></a> — a root model backed by a database table.
+Implemented by <code>#[derive(Model)]</code>.</li>
+<li><a href="schema/trait.Embed.html" title="trait toasty::schema::Embed"><code>Embed</code></a> — an embedded type whose fields are flattened
+into the parent model’s table. Implemented by <code>#[derive(Embed)]</code>.</li>
+<li><a href="db/trait.Executor.html" title="trait toasty::db::Executor"><code>Executor</code></a> — the dyn-compatible interface for running statements.
+<a href="db/struct.Db.html" title="struct toasty::db::Db"><code>Db</code></a> and <a href="db/struct.Transaction.html" title="struct toasty::db::Transaction"><code>Transaction</code></a> both implement it. The generic
+<a href="Executor::exec"><code>exec</code></a> method on <code>dyn Executor</code> accepts any typed
+<a href="stmt/struct.Statement.html" title="struct toasty::stmt::Statement"><code>Statement&lt;T&gt;</code></a>.</li>
+<li><a href="schema/trait.Load.html" title="trait toasty::schema::Load"><code>Load</code></a> — deserializes a model instance from the database
+value representation.</li>
+</ul>
+<h2 id="other-key-types"><a class="doc-anchor" href="#other-key-types">§</a>Other key types</h2>
+<ul>
+<li><a href="db/struct.Transaction.html" title="struct toasty::db::Transaction"><code>Transaction</code></a> / <a href="db/struct.TransactionBuilder.html" title="struct toasty::db::TransactionBuilder"><code>TransactionBuilder</code></a> — transactions with
+auto-rollback on drop and nested savepoint support.</li>
+<li><a href="stmt/struct.Page.html" title="struct toasty::stmt::Page"><code>Page</code></a> — a page of results from a paginated query, with cursor-based
+navigation.</li>
+<li><a href="stmt/struct.Batch.html" title="struct toasty::stmt::Batch"><code>Batch</code></a> — groups multiple queries into a single round-trip.</li>
+<li><a href="struct.Error.html" title="struct toasty::Error"><code>Error</code></a> / <a href="type.Result.html" title="type toasty::Result"><code>Result</code></a> — re-exported from <code>toasty-core</code>.</li>
+</ul>
+<h2 id="derive-macros"><a class="doc-anchor" href="#derive-macros">§</a>Derive macros</h2>
+<ul>
+<li><a href="derive.Model.html" title="derive toasty::Model"><code>#[derive(Model)]</code></a> — generates the
+<a href="schema/trait.Model.html" title="trait toasty::schema::Model"><code>Model</code></a> impl, query builders, create/update builders,
+relation accessors, and schema registration for a struct.</li>
+<li><a href="derive.Embed.html" title="derive toasty::Embed"><code>#[derive(Embed)]</code></a> — generates the
+<a href="schema/trait.Embed.html" title="trait toasty::schema::Embed"><code>Embed</code></a> impl for a type whose fields are stored inline
+in a parent model’s table.</li>
+</ul>
+<h2 id="feature-flags"><a class="doc-anchor" href="#feature-flags">§</a>Feature flags</h2>
+<p>Each database driver is behind an optional feature flag:</p>
+<div><table><thead><tr><th>Feature</th><th>Driver crate</th></tr></thead><tbody>
+<tr><td><code>sqlite</code></td><td><code>toasty-driver-sqlite</code></td></tr>
+<tr><td><code>postgresql</code></td><td><code>toasty-driver-postgresql</code></td></tr>
+<tr><td><code>mysql</code></td><td><code>toasty-driver-mysql</code></td></tr>
+<tr><td><code>dynamodb</code></td><td><code>toasty-driver-dynamodb</code></td></tr>
+</tbody></table>
+</div>
+<p>Additional feature flags: <code>rust_decimal</code>, <code>bigdecimal</code>, <code>jiff</code> (date/time
+via the <code>jiff</code> crate), and <code>serde</code> (JSON serialization support).</p>
+<h2 id="other-crates-in-the-workspace"><a class="doc-anchor" href="#other-crates-in-the-workspace">§</a>Other crates in the workspace</h2>
+<p><code>toasty</code> depends on several internal crates that most users do not need
+to use directly:</p>
+<ul>
+<li><strong><code>toasty-core</code></strong> — shared types used across the workspace: the schema
+representations (app-level and db-level), the statement AST, the
+<a href="driver::Driver"><code>Driver</code></a> trait, and <a href="struct.Error.html" title="struct toasty::Error"><code>Error</code></a> / <a href="type.Result.html" title="type toasty::Result"><code>Result</code></a>.</li>
+<li><strong><code>toasty-macros</code></strong> — the proc-macro entry points and the code generation
+logic they call.</li>
+<li><strong><code>toasty-sql</code></strong> — serializes the statement AST to SQL strings. Used by
+the SQL driver crates.</li>
+<li><strong><code>toasty-driver-*</code></strong> — one crate per database backend.</li>
+</ul>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><dl class="item-table reexports"><dt id="reexport.Batch"><code>pub use stmt::<a class="struct" href="stmt/struct.Batch.html" title="struct toasty::stmt::Batch">Batch</a>;</code></dt><dt id="reexport.batch"><code>pub use stmt::<a class="fn" href="stmt/fn.batch.html" title="fn toasty::stmt::batch">batch</a>;</code></dt><dt id="reexport.Connection"><code>pub use db::<a class="struct" href="db/struct.Connection.html" title="struct toasty::db::Connection">Connection</a>;</code></dt><dt id="reexport.Db"><code>pub use db::<a class="struct" href="db/struct.Db.html" title="struct toasty::db::Db">Db</a>;</code></dt><dt id="reexport.Executor"><code>pub use db::<a class="trait" href="db/trait.Executor.html" title="trait toasty::db::Executor">Executor</a>;</code></dt><dt id="reexport.Transaction"><code>pub use db::<a class="struct" href="db/struct.Transaction.html" title="struct toasty::db::Transaction">Transaction</a>;</code></dt><dt id="reexport.TransactionBuilder"><code>pub use db::<a class="struct" href="db/struct.TransactionBuilder.html" title="struct toasty::db::TransactionBuilder">TransactionBuilder</a>;</code></dt><dt id="reexport.BelongsTo"><code>pub use schema::<a class="struct" href="schema/struct.BelongsTo.html" title="struct toasty::schema::BelongsTo">BelongsTo</a>;</code></dt><dt id="reexport.Deferred"><code>pub use schema::<a class="struct" href="schema/struct.Deferred.html" title="struct toasty::schema::Deferred">Deferred</a>;</code></dt><dt id="reexport.HasMany"><code>pub use schema::<a class="struct" href="schema/struct.HasMany.html" title="struct toasty::schema::HasMany">HasMany</a>;</code></dt><dt id="reexport.HasOne"><code>pub use schema::<a class="struct" href="schema/struct.HasOne.html" title="struct toasty::schema::HasOne">HasOne</a>;</code></dt><dt id="reexport.Statement"><code>pub use stmt::<a class="struct" href="stmt/struct.Statement.html" title="struct toasty::stmt::Statement">Statement</a>;</code></dt></dl><h2 id="modules-1" class="section-header">Modules<a href="#modules-1" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="db/index.html" title="mod toasty::db">db</a></dt><dd>Database handle, connection pool, executor trait, and transaction support.</dd><dt><a class="mod" href="schema/index.html" title="mod toasty::schema">schema</a></dt><dd>Model, relation, and schema inspection types.</dd><dt><a class="mod" href="stmt/index.html" title="mod toasty::stmt">stmt</a></dt><dd>Typed statement, expression, and query builder types.</dd></dl><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><dl class="item-table"><dt><a class="macro" href="macro.create.html" title="macro toasty::create">create</a></dt><dd>Expands struct-literal syntax into create builder method chains. Returns one
+or more create builders — call <code>.exec(&amp;mut db).await?</code> to insert the
+record(s).</dd><dt><a class="macro" href="macro.models.html" title="macro toasty::models">models</a></dt><dd>Creates a <a href="struct.ModelSet.html" title="struct toasty::ModelSet"><code>ModelSet</code></a> containing the specified models.</dd><dt><a class="macro" href="macro.query.html" title="macro toasty::query">query</a></dt><dd>Builds a query using the Toasty query language. The macro expands into
+the equivalent method-chain calls on the query builder API. It does
+not execute the query — chain <code>.exec(&amp;mut db).await?</code> on the result to run
+it.</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Error.html" title="struct toasty::Error">Error</a></dt><dd>The error type used throughout Toasty.</dd><dt><a class="struct" href="struct.ModelSet.html" title="struct toasty::ModelSet">Model<wbr>Set</a></dt><dd>An ordered collection of <a href="schema/app/enum.Model.html" title="enum toasty::schema::app::Model"><code>Model</code></a> definitions.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.UpdateTarget.html" title="trait toasty::UpdateTarget">Update<wbr>Target</a></dt><dd>Trait for types that can serve as the target of an update operation.</dd></dl><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><dl class="item-table"><dt><a class="type" href="type.Result.html" title="type toasty::Result">Result</a></dt><dd>A <code>Result</code> type alias that uses Toasty’s <a href="struct.Error.html" title="struct toasty::Error"><code>Error</code></a> type.</dd></dl><h2 id="derives" class="section-header">Derive Macros<a href="#derives" class="anchor">§</a></h2><dl class="item-table"><dt><a class="derive" href="derive.Embed.html" title="derive toasty::Embed">Embed</a></dt><dd>Derive macro that turns a struct or enum into an embedded type stored
+inline in a parent model’s table.</dd><dt><a class="derive" href="derive.Model.html" title="derive toasty::Model">Model</a></dt><dd>Derive macro that turns a struct into a Toasty model backed by a database
+table.</dd></dl></section></div></main></body></html>

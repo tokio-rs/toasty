@@ -1,0 +1,416 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>PostgreSQL - Toasty Guide</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="favicon-8114d1fc.png">
+        <link rel="stylesheet" href="css/variables-8adf115d.css">
+        <link rel="stylesheet" href="css/general-2459343d.css">
+        <link rel="stylesheet" href="css/chrome-ae938929.css">
+        <link rel="stylesheet" href="css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "searchindex-30805f85.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc-46081a54.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Toasty Guide</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="postgresql"><a class="header" href="#postgresql">PostgreSQL</a></h1>
+<p>Toasty’s PostgreSQL driver uses <a href="https://docs.rs/tokio-postgres"><code>tokio-postgres</code></a> under the hood. It
+covers the full SQL feature set Toasty exercises — row locking, native
+arrays, native temporal types, named enum types, and <code>ILIKE</code> — and
+integrates with Toasty’s connection pool for retry and recovery.</p>
+<h2 id="enabling-the-driver"><a class="header" href="#enabling-the-driver">Enabling the driver</a></h2>
+<p>Add the <code>postgresql</code> feature to Toasty in <code>Cargo.toml</code>:</p>
+<pre><code class="language-toml">[dependencies]
+toasty = { version = "0.6", features = ["postgresql"] }
+</code></pre>
+<p>Then pass a <code>postgresql://</code> (or <code>postgres://</code>) URL to <code>Db::builder</code>:</p>
+<pre><code class="language-rust ignore">let db = toasty::Db::builder()
+    .models(toasty::models!(crate::*))
+    .connect("postgresql://user:pass@localhost:5432/mydb")
+    .await?;</code></pre>
+<p>TLS support is on by default through the driver’s <code>tls</code> feature, which
+pulls in <code>rustls</code>. To build the driver without TLS, depend on
+<code>toasty-driver-postgresql</code> directly with <code>default-features = false</code>.</p>
+<h2 id="connection-url-options"><a class="header" href="#connection-url-options">Connection URL options</a></h2>
+<p>Append query parameters to the URL to tune the connection:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Parameter</th><th>Purpose</th></tr>
+</thead>
+<tbody>
+<tr><td><code>application_name=&lt;string&gt;</code></td><td>Reported to PostgreSQL as the connecting client. Appears in <code>pg_stat_activity</code> and the server log — useful for distinguishing services sharing a database.</td></tr>
+<tr><td><code>sslmode=&lt;mode&gt;</code></td><td>TLS negotiation mode. See the table below.</td></tr>
+<tr><td><code>sslrootcert=&lt;path&gt;</code></td><td>PEM file with root certificates to trust.</td></tr>
+<tr><td><code>sslcert=&lt;path&gt;</code> and <code>sslkey=&lt;path&gt;</code></td><td>Client certificate and matching private key, for mutual TLS.</td></tr>
+<tr><td><code>channel_binding=&lt;mode&gt;</code></td><td><code>disable</code>, <code>prefer</code> (default), or <code>require</code>.</td></tr>
+<tr><td><code>sslnegotiation=&lt;mode&gt;</code></td><td><code>postgres</code> (default — SSL request over a plain socket) or <code>direct</code> (TLS from the first byte).</td></tr>
+</tbody>
+</table>
+</div>
+<pre><code class="language-rust ignore">.connect("postgresql://app:secret@db.internal/store\
+          ?sslmode=verify-full&amp;application_name=store-api")</code></pre>
+<h3 id="tls-modes"><a class="header" href="#tls-modes">TLS modes</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th><code>sslmode</code></th><th>What it does</th></tr>
+</thead>
+<tbody>
+<tr><td><code>disable</code></td><td>Plain TCP. The driver does not negotiate TLS.</td></tr>
+<tr><td><code>prefer</code> <em>(default)</em></td><td>Attempt TLS; fall back to plain if the server rejects it. The certificate is not verified.</td></tr>
+<tr><td><code>require</code></td><td>Require TLS, but accept any certificate.</td></tr>
+<tr><td><code>verify-ca</code></td><td>Require TLS and verify the certificate chains to a trusted root.</td></tr>
+<tr><td><code>verify-full</code></td><td><code>verify-ca</code> plus verify the certificate matches the server hostname.</td></tr>
+</tbody>
+</table>
+</div>
+<p>Without the driver’s <code>tls</code> feature, any <code>sslmode</code> other than <code>disable</code>
+fails at connect time.</p>
+<h2 id="type-mapping"><a class="header" href="#type-mapping">Type mapping</a></h2>
+<p>Toasty maps Rust types to PostgreSQL columns as follows. Most types
+land in their native PostgreSQL form; the exceptions are called out
+below the table.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Rust type</th><th>PostgreSQL column type</th></tr>
+</thead>
+<tbody>
+<tr><td><code>bool</code></td><td><code>BOOL</code></td></tr>
+<tr><td><code>i8</code>, <code>i16</code></td><td><code>SMALLINT</code> (<code>INT2</code>)</td></tr>
+<tr><td><code>i32</code></td><td><code>INTEGER</code> (<code>INT4</code>)</td></tr>
+<tr><td><code>i64</code></td><td><code>BIGINT</code> (<code>INT8</code>)</td></tr>
+<tr><td><code>u8</code></td><td><code>SMALLINT</code> (<code>INT2</code>)</td></tr>
+<tr><td><code>u16</code></td><td><code>INTEGER</code> (<code>INT4</code>)</td></tr>
+<tr><td><code>u32</code>, <code>u64</code></td><td><code>BIGINT</code> (<code>INT8</code>)</td></tr>
+<tr><td><code>f32</code></td><td><code>REAL</code> (<code>FLOAT4</code>)</td></tr>
+<tr><td><code>f64</code></td><td><code>DOUBLE PRECISION</code> (<code>FLOAT8</code>)</td></tr>
+<tr><td><code>String</code></td><td><code>TEXT</code> by default; <code>VARCHAR(N)</code> with <code>#[column(type = varchar(N))]</code></td></tr>
+<tr><td><code>Vec&lt;u8&gt;</code></td><td><code>BYTEA</code></td></tr>
+<tr><td><code>uuid::Uuid</code></td><td><code>UUID</code></td></tr>
+<tr><td><code>rust_decimal::Decimal</code> <em>(feature)</em></td><td><code>NUMERIC</code></td></tr>
+<tr><td><code>jiff::Timestamp</code> <em>(feature)</em></td><td><code>TIMESTAMPTZ</code> with microsecond precision</td></tr>
+<tr><td><code>jiff::civil::Date</code> <em>(feature)</em></td><td><code>DATE</code></td></tr>
+<tr><td><code>jiff::civil::Time</code> <em>(feature)</em></td><td><code>TIME</code> with microsecond precision</td></tr>
+<tr><td><code>jiff::civil::DateTime</code> <em>(feature)</em></td><td><code>TIMESTAMP</code> with microsecond precision</td></tr>
+<tr><td><code>Vec&lt;T&gt;</code> <em>(T scalar)</em></td><td>Native array (<code>text[]</code>, <code>int8[]</code>, <code>uuid[]</code>, …)</td></tr>
+<tr><td>Embedded <code>enum</code></td><td>Native <code>ENUM</code> type (<code>CREATE TYPE ... AS ENUM</code>)</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="notes-on-the-type-mapping"><a class="header" href="#notes-on-the-type-mapping">Notes on the type mapping</a></h3>
+<p><strong>Unsigned integers cap at <code>i64::MAX</code>.</strong> PostgreSQL has no unsigned
+integer types, so Toasty stores them in the next-wider signed type
+(<code>u8</code> in <code>SMALLINT</code>, <code>u16</code> in <code>INTEGER</code>, <code>u32</code>/<code>u64</code> in <code>BIGINT</code>).
+A <code>u64</code> value above <code>i64::MAX</code> (≈9.22 × 10¹⁸) rejects on insert.</p>
+<p><strong><code>jiff::Timestamp</code> vs <code>jiff::civil::DateTime</code>.</strong> <code>Timestamp</code> is an
+instant in time; it stores in <code>TIMESTAMPTZ</code> and round-trips as UTC.
+<code>civil::DateTime</code> is a wall-clock value with no zone; it stores in
+<code>TIMESTAMP</code> (without time zone). Pick the one that matches the
+semantics you want.</p>
+<p><strong><code>jiff::Zoned</code> and <code>bigdecimal::BigDecimal</code> store as <code>TEXT</code>.</strong>
+PostgreSQL’s <code>TIMESTAMPTZ</code> does not carry an IANA zone name (only an
+instant), so a true zoned value round-trips through text. Likewise
+<code>bigdecimal::BigDecimal</code> does not yet ride PostgreSQL’s <code>NUMERIC</code> wire
+encoding and falls back to text. Use <code>rust_decimal::Decimal</code> if you
+want native <code>NUMERIC</code>.</p>
+<p><strong><code>VARCHAR</code> length cap.</strong> PostgreSQL’s <code>VARCHAR(N)</code> allows <code>N</code> up to
+10,485,760. Toasty rejects larger values at schema-build time.</p>
+<h2 id="behavior-specific-to-postgresql"><a class="header" href="#behavior-specific-to-postgresql">Behavior specific to PostgreSQL</a></h2>
+<p>Toasty enables these features automatically when the driver is
+PostgreSQL. No configuration is required.</p>
+<p><strong>Native arrays for <a href="./field-options.html#scalar-arrays"><code>Vec&lt;scalar&gt;</code> fields</a>.</strong>
+A <code>tags: Vec&lt;String&gt;</code> field is a <code>text[]</code> column. The array predicates
+(<code>contains</code>, <code>is_superset</code>, <code>intersects</code>, <code>len</code>, <code>is_empty</code>) lower to
+PostgreSQL’s native operators (<code>= ANY(col)</code>, <code>@&gt;</code>, <code>&amp;&amp;</code>,
+<code>cardinality(col)</code>):</p>
+<pre><code class="language-rust ignore">let admins = User::filter(User::fields().roles().contains("admin"))
+    .exec(&amp;mut db)
+    .await?;</code></pre>
+<p><strong>Native <code>ILIKE</code>.</strong> The <a href="./filtering-with-expressions.html#ilike"><code>.ilike()</code></a>
+filter method lowers directly to the SQL <code>ILIKE</code> operator. On other
+SQL drivers <code>.ilike()</code> falls back to plain <code>LIKE</code>, which is
+case-sensitive on PostgreSQL — so the behavior actually differs
+between backends. Reach for <code>.ilike()</code> when you need case-insensitive
+matching here.</p>
+<p><strong>Native prefix match.</strong> The
+<a href="./filtering-with-expressions.html#starts_with"><code>.starts_with()</code></a> filter
+lowers to PostgreSQL’s <code>^@</code> operator. The optimizer can use a
+<code>text_pattern_ops</code> index for <code>^@</code> queries the same way it would for an
+anchored <code>LIKE 'prefix%'</code>.</p>
+<p><strong>Named enum types.</strong> An <a href="./embedded-types.html"><code>embed</code>-tagged Rust enum</a>
+maps to a real PostgreSQL enum type created with <code>CREATE TYPE ... AS ENUM</code>. Adding a new variant requires an <code>ALTER TYPE ... ADD VALUE</code>,
+which the migration generator handles.</p>
+<p><strong>Row-level locking.</strong> Generated <a href="./transactions.html">transactions</a> can
+use <code>SELECT ... FOR UPDATE</code> to lock rows for the duration of a
+transaction. SQLite and DynamoDB do not have row-level locking;
+Toasty’s transaction layer falls back to serializable transaction
+isolation on those backends.</p>
+<p><strong>Backward pagination.</strong>
+<a href="./sorting-limits-and-pagination.html#navigating-pages"><code>.paginate(per_page).prev(&amp;db)</code></a>
+walks backwards from a page cursor. DynamoDB cannot do this;
+PostgreSQL (like the other SQL backends) can.</p>
+<h2 id="migrations"><a class="header" href="#migrations">Migrations</a></h2>
+<p>The migration generator emits DDL that PostgreSQL can apply inside a
+single transaction, and <code>apply_migration</code> wraps each migration in
+<code>BEGIN</code> / <code>COMMIT</code>. A failure rolls back cleanly.</p>
+<p>Two PostgreSQL-specific behaviors worth knowing:</p>
+<p><strong>Enum types come first.</strong> Each migration emits <code>CREATE TYPE</code> or
+<code>ALTER TYPE</code> statements for enum types before any <code>CREATE TABLE</code> /
+<code>ALTER TABLE</code> that references them.</p>
+<p><strong>Column changes are not always atomic.</strong> PostgreSQL can <code>ALTER TABLE ... ALTER COLUMN</code> to change a column’s type, but Toasty emits each
+property change (type, name, NOT NULL, default) as a separate
+statement. Inside a single migration this is invisible — they all
+commit together — but at the SQL level the change is several
+statements, not one.</p>
+<p>The migration tooling does not yet manage zero-downtime online
+migrations on PostgreSQL (concurrent index creation, dual-write
+schemes, etc.); migrations assume exclusive access to the schema for
+their duration.</p>
+<h2 id="errors-and-the-connection-pool"><a class="header" href="#errors-and-the-connection-pool">Errors and the connection pool</a></h2>
+<p>The driver classifies <code>tokio-postgres</code> errors into Toasty’s typed
+error variants so the pool and caller can react sensibly.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>SQLSTATE or condition</th><th>Toasty error</th></tr>
+</thead>
+<tbody>
+<tr><td><code>40001</code> <em>(serialization_failure)</em></td><td><code>Error::SerializationFailure</code> — retryable. The transaction lost an optimistic conflict and should be retried by the caller.</td></tr>
+<tr><td><code>25006</code> <em>(read_only_sql_transaction)</em></td><td><code>Error::ReadOnlyTransaction</code> — the connection is read-only.</td></tr>
+<tr><td>Other server errors with a SQLSTATE</td><td><code>Error::DriverOperationFailed</code></td></tr>
+<tr><td>Socket / protocol errors (closed connection, broken pipe, end-of-stream during handshake)</td><td><code>Error::ConnectionLost</code></td></tr>
+</tbody>
+</table>
+</div>
+<p>A <code>ConnectionLost</code> error tells the pool to evict the failed
+connection. The next acquire pings idle connections, drops the ones
+that fail, and opens a fresh slot if needed — so a backend restart
+typically costs one failed user query rather than one per pooled
+connection. See <a href="./database-setup.html#connection-pool">Database Setup</a>
+for the pool knobs (<code>max_pool_size</code>, <code>pool_pre_ping</code>,
+<code>pool_health_check_interval</code>, …) and what they do.</p>
+<p>The driver caches prepared statements and enum type OIDs per
+connection. Both caches are invalidated automatically when a
+connection is dropped, so they do not cause stale-state issues after
+an eviction.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="tracing.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                            </a>
+
+                            <a rel="next prefetch" href="mysql.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="tracing.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                    </a>
+
+                    <a rel="next prefetch" href="mysql.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                    </a>
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr-ef4e11c1.min.js"></script>
+        <script src="mark-09e88c2c.min.js"></script>
+        <script src="searcher-c2a407aa.js"></script>
+
+        <script src="clipboard-1626706a.min.js"></script>
+        <script src="highlight-abc7f01d.js"></script>
+        <script src="book-a0b12cfe.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

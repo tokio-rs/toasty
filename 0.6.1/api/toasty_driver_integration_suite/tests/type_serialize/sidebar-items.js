@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["serialize_custom_struct","serialize_non_nullable_option","serialize_nullable","serialize_vec_string"]};

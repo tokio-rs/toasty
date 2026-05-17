@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["float_fields_column_type_override","float_fields_crud"]};

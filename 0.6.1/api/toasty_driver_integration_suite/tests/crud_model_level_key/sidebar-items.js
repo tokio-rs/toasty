@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["model_level_composite_key","model_level_single_key"]};

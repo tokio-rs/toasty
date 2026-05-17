@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["batch_query_across_relations","batch_scoped_across_relations","batch_scoped_all_four_crud","batch_scoped_delete_with_root_update","batch_scoped_different_parents","batch_scoped_update_and_delete_same_relation","batch_scoped_with_root_statements","batch_two_scoped_creates_same_relation","batch_two_scoped_queries_same_relation"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["batch_array_of_queries","batch_nested_tuple_with_vec","batch_vec_all_empty","batch_vec_of_queries","batch_vec_some_empty"]};

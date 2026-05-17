@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["filter_by_belongs_to_field","filter_by_has_one_field","filter_by_nested_has_one_chain"]};

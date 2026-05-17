@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["ilike_lowercase_pattern","ilike_no_match","ilike_optional_field","ilike_uppercase_pattern"]};

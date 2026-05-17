@@ -1,0 +1,172 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Builds a query using the Toasty query language. The macro expands into the equivalent method-chain calls on the query builder API. It does not execute the query — chain `.exec(&#38;mut db).await?` on the result to run it."><title>query in toasty_macros - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="toasty_macros" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc macro"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">query</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../toasty_macros/index.html">toasty_<wbr>macros</a><span class="version">0.6.1</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">query</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#syntax" title="Syntax">Syntax</a></li><li><a href="#basic-queries" title="Basic queries">Basic queries</a></li><li><a href="#filter-expressions" title="Filter expressions">Filter expressions</a><ul><li><a href="#comparison-operators" title="Comparison operators">Comparison operators</a></li><li><a href="#boolean-operators" title="Boolean operators">Boolean operators</a></li><li><a href="#operator-precedence" title="Operator precedence">Operator precedence</a></li><li><a href="#boolean-and-integer-literals" title="Boolean and integer literals">Boolean and integer literals</a></li></ul></li><li><a href="#referencing-surrounding-code" title="Referencing surrounding code">Referencing surrounding code</a></li><li><a href="#dot-prefixed-field-paths" title="Dot-prefixed field paths">Dot-prefixed field paths</a></li><li><a href="#order-by" title="ORDER BY">ORDER BY</a></li><li><a href="#limit-and-offset" title="LIMIT and OFFSET">LIMIT and OFFSET</a></li><li><a href="#combining-clauses" title="Combining clauses">Combining clauses</a></li><li><a href="#case-insensitive-keywords" title="Case-insensitive keywords">Case-insensitive keywords</a></li><li><a href="#expansion-details" title="Expansion details">Expansion details</a><ul><li><a href="#no-filter" title="No filter">No filter</a></li><li><a href="#filter" title="Filter">Filter</a></li><li><a href="#logical-operators" title="Logical operators">Logical operators</a></li><li><a href="#order-by-1" title="ORDER BY">ORDER BY</a></li><li><a href="#limit--offset" title="LIMIT / OFFSET">LIMIT / OFFSET</a></li><li><a href="#external-references" title="External references">External references</a></li></ul></li><li><a href="#errors" title="Errors">Errors</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate toasty_<wbr>macros</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">toasty_macros</a></div><h1>Macro <span class="macro">query</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/toasty_macros/lib.rs.html#1302-1307">Source</a> </span></div><pre class="rust item-decl"><code>query!() { <span class="comment">/* proc-macro */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Builds a query using the Toasty query language. The macro expands into
+the equivalent method-chain calls on the query builder API. It does
+not execute the query — chain <code>.exec(&amp;mut db).await?</code> on the result to run
+it.</p>
+<h2 id="syntax"><a class="doc-anchor" href="#syntax">§</a>Syntax</h2><div class="example-wrap"><pre class="language-text"><code>query!(Source [FILTER expr] [ORDER BY .field ASC|DESC] [OFFSET n] [LIMIT n])</code></pre></div>
+<p><code>Source</code> is a model type path (e.g., <code>User</code>). All clauses are optional and
+can appear in any combination, but must follow the order shown above when
+present. All keywords are case-insensitive: <code>FILTER</code>, <code>filter</code>, and <code>Filter</code>
+all work.</p>
+<h2 id="basic-queries"><a class="doc-anchor" href="#basic-queries">§</a>Basic queries</h2>
+<p>With no clauses, <code>query!</code> returns all records of the given model.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// Returns all users — expands to User::all()
+</span><span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User);</code></pre></div><h2 id="filter-expressions"><a class="doc-anchor" href="#filter-expressions">§</a>Filter expressions</h2>
+<p>The <code>FILTER</code> clause accepts an expression built from field comparisons,
+boolean operators, and external references.</p>
+<h3 id="comparison-operators"><a class="doc-anchor" href="#comparison-operators">§</a>Comparison operators</h3>
+<p>Dot-prefixed field paths (<code>.name</code>, <code>.age</code>) refer to fields on the source
+model. The right-hand side is a literal or external reference.</p>
+<div><table><thead><tr><th>Operator</th><th>Expansion</th></tr></thead><tbody>
+<tr><td><code>==</code></td><td><code>.eq(val)</code></td></tr>
+<tr><td><code>!=</code></td><td><code>.ne(val)</code></td></tr>
+<tr><td><code>&gt;</code></td><td><code>.gt(val)</code></td></tr>
+<tr><td><code>&gt;=</code></td><td><code>.ge(val)</code></td></tr>
+<tr><td><code>&lt;</code></td><td><code>.lt(val)</code></td></tr>
+<tr><td><code>&lt;=</code></td><td><code>.le(val)</code></td></tr>
+</tbody></table>
+</div>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// Equality — expands to User::filter(User::fields().name().eq("Alice"))
+</span><span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User FILTER .name == <span class="string">"Alice"</span>);
+
+<span class="comment">// Not equal
+</span><span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User FILTER .name != <span class="string">"Bob"</span>);
+
+<span class="comment">// Greater than
+</span><span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User FILTER .age &gt; <span class="number">18</span>);
+
+<span class="comment">// Greater than or equal
+</span><span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User FILTER .age &gt;= <span class="number">21</span>);
+
+<span class="comment">// Less than
+</span><span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User FILTER .age &lt; <span class="number">65</span>);
+
+<span class="comment">// Less than or equal
+</span><span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User FILTER .age &lt;= <span class="number">99</span>);</code></pre></div><h3 id="boolean-operators"><a class="doc-anchor" href="#boolean-operators">§</a>Boolean operators</h3>
+<p><code>AND</code>, <code>OR</code>, and <code>NOT</code> combine filter expressions. Precedence follows
+standard boolean logic: <code>NOT</code> binds tightest, then <code>AND</code>, then <code>OR</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// AND — both conditions must match
+</span><span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User FILTER .name == <span class="string">"Alice" </span>AND .age &gt; <span class="number">18</span>);
+
+<span class="comment">// OR — either condition matches
+</span><span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User FILTER .name == <span class="string">"Alice" </span>OR .name == <span class="string">"Bob"</span>);
+
+<span class="comment">// NOT — negates the following expression
+</span><span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User FILTER NOT .active == <span class="bool-val">true</span>);
+
+<span class="comment">// Combining all three
+</span><span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User FILTER NOT .active == <span class="bool-val">true </span>AND (.name == <span class="string">"Alice" </span>OR .age &gt;= <span class="number">21</span>));</code></pre></div><h3 id="operator-precedence"><a class="doc-anchor" href="#operator-precedence">§</a>Operator precedence</h3>
+<p>Without parentheses, <code>NOT</code> binds tightest, then <code>AND</code>, then <code>OR</code>. Use
+parentheses to override.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// Without parens: parsed as (.name == "A" AND .age &gt; 0) OR .active == false
+</span><span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User FILTER .name == <span class="string">"A" </span>AND .age &gt; <span class="number">0 </span>OR .active == <span class="bool-val">false</span>);
+
+<span class="comment">// With parens: forces OR to bind first
+</span><span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User FILTER .name == <span class="string">"A" </span>AND (.age &gt; <span class="number">0 </span>OR .active == <span class="bool-val">false</span>));</code></pre></div><h3 id="boolean-and-integer-literals"><a class="doc-anchor" href="#boolean-and-integer-literals">§</a>Boolean and integer literals</h3>
+<p>Boolean fields can be compared against <code>true</code> and <code>false</code> literals.
+Integer literals work as expected.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User FILTER .active == <span class="bool-val">true</span>);
+<span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User FILTER .active == <span class="bool-val">false</span>);
+<span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User FILTER .age == <span class="number">42</span>);</code></pre></div><h2 id="referencing-surrounding-code"><a class="doc-anchor" href="#referencing-surrounding-code">§</a>Referencing surrounding code</h2>
+<p><code>#ident</code> pulls a variable from the surrounding scope. <code>#(expr)</code> embeds an
+arbitrary Rust expression.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// Variable reference — expands to User::filter(User::fields().name().eq(name))
+</span><span class="kw">let </span>name = <span class="string">"Carl"</span>;
+<span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User FILTER .name == #name);
+
+<span class="comment">// Expression reference
+</span><span class="kw">fn </span>min_age() -&gt; i64 { <span class="number">18 </span>}
+<span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User FILTER .age &gt; #(min_age()));</code></pre></div><h2 id="dot-prefixed-field-paths"><a class="doc-anchor" href="#dot-prefixed-field-paths">§</a>Dot-prefixed field paths</h2>
+<p>A leading <code>.</code> starts a field path rooted at the source model’s <code>fields()</code>
+method. Chained dots navigate multi-segment paths.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// .name expands to User::fields().name()
+</span><span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User FILTER .name == <span class="string">"Alice"</span>);
+
+<span class="comment">// Multiple fields in a single expression
+</span><span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User FILTER .id == <span class="number">1 </span>AND .name == <span class="string">"X" </span>AND .age &gt; <span class="number">0</span>);</code></pre></div><h2 id="order-by"><a class="doc-anchor" href="#order-by">§</a>ORDER BY</h2>
+<p>Sort results by a field in ascending (<code>ASC</code>) or descending (<code>DESC</code>) order.
+If no direction is specified, ascending is the default.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// Ascending order (explicit)
+</span><span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User ORDER BY .name ASC);
+
+<span class="comment">// Descending order
+</span><span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User ORDER BY .age DESC);
+
+<span class="comment">// Combined with filter
+</span><span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User FILTER .active == <span class="bool-val">true </span>ORDER BY .name ASC);</code></pre></div><h2 id="limit-and-offset"><a class="doc-anchor" href="#limit-and-offset">§</a>LIMIT and OFFSET</h2>
+<p><code>LIMIT</code> restricts the number of returned records. <code>OFFSET</code> skips a number
+of records before returning. Both accept integer literals, <code>#ident</code>
+variables, and <code>#(expr)</code> expressions.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// Return at most 10 records
+</span><span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User LIMIT <span class="number">10</span>);
+
+<span class="comment">// Skip 20, then return 10
+</span><span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User OFFSET <span class="number">20 </span>LIMIT <span class="number">10</span>);
+
+<span class="comment">// Variable pagination
+</span><span class="kw">let </span>page_size = <span class="number">25usize</span>;
+<span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User LIMIT #page_size);
+
+<span class="comment">// Expression pagination
+</span><span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User LIMIT #(<span class="number">5 </span>+ <span class="number">5</span>));</code></pre></div><h2 id="combining-clauses"><a class="doc-anchor" href="#combining-clauses">§</a>Combining clauses</h2>
+<p>All clauses can be combined. When present, they must appear in this order:
+<code>FILTER</code>, <code>ORDER BY</code>, <code>OFFSET</code>, <code>LIMIT</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User FILTER .active == <span class="bool-val">true </span>ORDER BY .name ASC LIMIT <span class="number">10</span>);
+<span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User FILTER .age &gt; <span class="number">18 </span>ORDER BY .age DESC OFFSET <span class="number">0 </span>LIMIT <span class="number">50</span>);</code></pre></div><h2 id="case-insensitive-keywords"><a class="doc-anchor" href="#case-insensitive-keywords">§</a>Case-insensitive keywords</h2>
+<p>All keywords — <code>FILTER</code>, <code>AND</code>, <code>OR</code>, <code>NOT</code>, <code>ORDER</code>, <code>BY</code>, <code>ASC</code>, <code>DESC</code>,
+<code>OFFSET</code>, <code>LIMIT</code> — are matched case-insensitively. Any casing works.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// These are all equivalent
+</span><span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User FILTER .name == <span class="string">"A"</span>);
+<span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User filter .name == <span class="string">"A"</span>);
+<span class="kw">let _ </span>= <span class="macro">toasty::query!</span>(User Filter .name == <span class="string">"A"</span>);</code></pre></div><h2 id="expansion-details"><a class="doc-anchor" href="#expansion-details">§</a>Expansion details</h2>
+<p>The macro translates each syntactic element into method-chain calls on the
+query builder.</p>
+<h3 id="no-filter"><a class="doc-anchor" href="#no-filter">§</a>No filter</h3><div class="example-wrap"><pre class="language-text"><code>query!(User)          →  User::all()</code></pre></div><h3 id="filter"><a class="doc-anchor" href="#filter">§</a>Filter</h3><div class="example-wrap"><pre class="language-text"><code>query!(User FILTER .name == &quot;A&quot;)
+    →  User::filter(User::fields().name().eq(&quot;A&quot;))</code></pre></div><h3 id="logical-operators"><a class="doc-anchor" href="#logical-operators">§</a>Logical operators</h3><div class="example-wrap"><pre class="language-text"><code>query!(User FILTER .a == 1 AND .b == 2)
+    →  User::filter(User::fields().a().eq(1).and(User::fields().b().eq(2)))
+
+query!(User FILTER .a == 1 OR .b == 2)
+    →  User::filter(User::fields().a().eq(1).or(User::fields().b().eq(2)))
+
+query!(User FILTER NOT .a == 1)
+    →  User::filter((User::fields().a().eq(1)).not())</code></pre></div><h3 id="order-by-1"><a class="doc-anchor" href="#order-by-1">§</a>ORDER BY</h3><div class="example-wrap"><pre class="language-text"><code>query!(User ORDER BY .name ASC)
+    →  { let mut q = User::all(); q = q.order_by(User::fields().name().asc()); q }</code></pre></div><h3 id="limit--offset"><a class="doc-anchor" href="#limit--offset">§</a>LIMIT / OFFSET</h3><div class="example-wrap"><pre class="language-text"><code>query!(User LIMIT 10)
+    →  { let mut q = User::all(); q = q.limit(10); q }
+
+query!(User OFFSET 5 LIMIT 10)
+    →  { let mut q = User::all(); q = q.limit(10); q = q.offset(5); q }</code></pre></div>
+<p>Note: in the expansion, <code>limit</code> is called before <code>offset</code> because the
+API requires it.</p>
+<h3 id="external-references"><a class="doc-anchor" href="#external-references">§</a>External references</h3><div class="example-wrap"><pre class="language-text"><code>let x = &quot;Carl&quot;;
+query!(User FILTER .name == #x)
+    →  User::filter(User::fields().name().eq(x))
+
+query!(User FILTER .age &gt; #(compute()))
+    →  User::filter(User::fields().age().gt(compute()))</code></pre></div><h2 id="errors"><a class="doc-anchor" href="#errors">§</a>Errors</h2>
+<p>The macro produces compile-time errors for:</p>
+<ul>
+<li><strong>Missing model path</strong>: the first token must be a valid type path.</li>
+<li><strong>Unknown fields</strong>: dot-prefixed paths that don’t match a field on the
+model produce a type error from the generated <code>fields()</code> method.</li>
+<li><strong>Type mismatches</strong>: comparing a field to a value of the wrong type
+produces a standard Rust type error (e.g., <code>.age == "not a number"</code>).</li>
+<li><strong>Unexpected tokens</strong>: tokens after the last recognized clause cause
+<code>"unexpected tokens after query"</code>.</li>
+<li><strong>Invalid clause order</strong>: placing <code>FILTER</code> after <code>ORDER BY</code> or <code>LIMIT</code>
+before <code>OFFSET</code> causes a parse error since the clauses are parsed in
+fixed order.</li>
+<li><strong>Missing <code>BY</code> after <code>ORDER</code></strong>: writing <code>ORDER .name</code> instead of
+<code>ORDER BY .name</code> produces <code>"expected 'BY' after 'ORDER'"</code>.</li>
+<li><strong>Invalid pagination value</strong>: <code>LIMIT</code> and <code>OFFSET</code> require an integer
+literal, <code>#variable</code>, or <code>#(expression)</code>.</li>
+</ul>
+</div></details></section></div></main></body></html>
