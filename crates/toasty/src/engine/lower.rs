@@ -305,6 +305,35 @@ impl LowerStatement<'_, '_> {
     }
 }
 
+/// Fold a `Batch` of column-level ops into a single equivalent `Append`
+/// expression. Currently only handles the all-`Append` shape produced by
+/// `stmt::apply([stmt::push(..), ..])` / `stmt::extend`; other shapes
+/// (mixed Append/Pop/RemoveAt, …) need per-entry dispatch plus driver-side
+/// Batch composition. See #717.
+///
+/// Empty input yields an empty list expression — the surface `stmt::apply`
+/// API can't actually produce an empty `Batch`, but the helper doesn't
+/// depend on that: an empty list flows through as a no-op Append.
+fn fold_append_batch(entries: Vec<stmt::Assignment>) -> stmt::Expr {
+    let mut items = Vec::new();
+    for entry in entries {
+        match entry {
+            // `stmt::push` builds `Expr::List([elem])`; the fold pass
+            // collapses literal-only lists to `Expr::Value(Value::List)`.
+            stmt::Assignment::Append(stmt::Expr::List(list)) => {
+                items.extend(list.items);
+            }
+            stmt::Assignment::Append(stmt::Expr::Value(stmt::Value::List(values))) => {
+                items.extend(values.into_iter().map(stmt::Expr::from));
+            }
+            // Other batch entry kinds need per-entry dispatch and
+            // driver-side Batch composition.
+            other => todo!("batch entry kind not yet supported on Vec<scalar>: {other:#?}"),
+        }
+    }
+    stmt::Expr::list_from_vec(items)
+}
+
 impl LowerStatement<'_, '_> {
     fn new_dependency(&mut self, stmt: impl Into<stmt::Statement>) -> hir::StmtId {
         let row_index = match self.cx {
@@ -411,9 +440,27 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                         CollectionOp::RemoveAt(expr),
                     );
                 }
-                stmt::Assignment::Insert(_) | stmt::Assignment::Batch(_) => {
+                stmt::Assignment::Batch(entries) => {
+                    // A `Batch` of column-level ops on the same field; built
+                    // when the `stmt::apply` surface API folds same-projection
+                    // ops together. Each entry should dispatch through the
+                    // per-op arms above — today only the all-`Append` shape
+                    // is wired up (see `fold_append_batch`). Other shapes
+                    // need driver-side Batch composition; see #717.
+                    let mut folded = fold_append_batch(std::mem::take(entries));
+                    self.lower_collection_op(
+                        &mut lowered,
+                        mapping,
+                        projection,
+                        CollectionOp::Append(&mut folded),
+                    );
+                }
+                stmt::Assignment::Insert(_) => {
+                    // `Insert` only applies to has-many relation fields,
+                    // which `plan_stmt_update_relations` consumes before
+                    // table-level lowering runs.
                     todo!(
-                        "Insert / Batch assignments are not produced for table lowering; got {assignment:#?}"
+                        "Insert assignment is not produced for table lowering; got {assignment:#?}"
                     )
                 }
             }
