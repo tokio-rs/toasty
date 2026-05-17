@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-30805f85.js";
+            window.path_to_searchindex_js = "searchindex-74ecc8ff.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-46081a54.js"></script>
@@ -4406,6 +4406,33 @@ database.</p>
 </div>
 <p>Calling <code>.get()</code> on an unloaded relation panics. Only use <code>.get()</code> when you know
 the relation was preloaded.</p>
+<h3 id="try_get-when-the-load-state-is-uncertain"><a class="header" href="#try_get-when-the-load-state-is-uncertain"><code>.try_get()</code> when the load state is uncertain</a></h3>
+<p>When a function receives a record from a caller it does not control, it may not
+know whether a given relation was preloaded. Use <code>.try_get()</code> to access the
+loaded value without panicking — it returns <code>None</code> if the relation has not been
+loaded:</p>
+<pre><code class="language-rust ignore">fn post_count(user: &amp;User) -&gt; Option&lt;usize&gt; {
+    user.posts.try_get().map(&lt;[_]&gt;::len)
+}</code></pre>
+<p><code>.try_get()</code> is available on all three relation types and returns the same
+reference shape as <code>.get()</code> wrapped in an <code>Option</code>:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Relation type</th><th><code>.get()</code> returns</th><th><code>.try_get()</code> returns</th></tr>
+</thead>
+<tbody>
+<tr><td><code>BelongsTo&lt;T&gt;</code></td><td><code>&amp;T</code></td><td><code>Option&lt;&amp;T&gt;</code></td></tr>
+<tr><td><code>HasOne&lt;T&gt;</code></td><td><code>&amp;T</code></td><td><code>Option&lt;&amp;T&gt;</code></td></tr>
+<tr><td><code>HasMany&lt;T&gt;</code></td><td><code>&amp;[T]</code></td><td><code>Option&lt;&amp;[T]&gt;</code></td></tr>
+</tbody>
+</table>
+</div>
+<p>For <code>HasMany</code>, an empty slice means the association was loaded and the record
+has no related rows, while <code>None</code> means the association was not loaded.</p>
+<p>Prefer <code>.get()</code> in code paths that control the query (the call site can see the
+matching <code>.include()</code>); reserve <code>.try_get()</code> for code that accepts records from
+elsewhere and needs to fall back when the data is missing.</p>
 <h2 id="preloading-belongsto"><a class="header" href="#preloading-belongsto">Preloading BelongsTo</a></h2>
 <p>Preload a parent record from the child side:</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -4567,6 +4594,7 @@ for user in &amp;users {
 <tr><td><code>model.relation.get()</code></td><td>Access preloaded HasMany data (returns <code>&amp;[T]</code>)</td></tr>
 <tr><td><code>model.relation.get()</code></td><td>Access preloaded BelongsTo data (returns <code>&amp;T</code>)</td></tr>
 <tr><td><code>model.relation.get()</code></td><td>Access preloaded HasOne data (returns <code>&amp;T</code> or <code>&amp;Option&lt;T&gt;</code>)</td></tr>
+<tr><td><code>model.relation.try_get()</code></td><td>Non-panicking access; returns <code>None</code> if not preloaded</td></tr>
 <tr><td><code>model.relation.is_unloaded()</code></td><td>Check if a relation was preloaded</td></tr>
 </tbody>
 </table>
