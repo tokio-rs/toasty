@@ -1,6 +1,6 @@
 [package]
 name = "toasty"
-version = "0.6.1"
+version = "0.6.2"
 description = "An async ORM for Rust supporting SQL and NoSQL databases"
 authors.workspace = true
 edition.workspace = true

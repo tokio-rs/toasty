@@ -1,6 +1,6 @@
 [package]
 name = "toasty-driver-sqlite"
-version = "0.6.1"
+version = "0.6.2"
 description = "SQLite driver for Toasty"
 authors.workspace = true
 edition.workspace = true
