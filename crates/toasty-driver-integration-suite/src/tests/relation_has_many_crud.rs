@@ -186,6 +186,32 @@ pub async fn has_many_insert_on_update(test: &mut Test) -> Result<()> {
 }
 
 #[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
+pub async fn has_many_apply_multiple_inserts(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let mut user = User::create().name("Alice").exec(&mut db).await?;
+
+    user.update()
+        .todos(toasty::stmt::apply([
+            toasty::stmt::insert(Todo::create().title("Buy groceries")),
+            toasty::stmt::insert(Todo::create().title("Walk the dog")),
+        ]))
+        .exec(&mut db)
+        .await?;
+
+    let mut titles: Vec<_> = user
+        .todos()
+        .exec(&mut db)
+        .await?
+        .into_iter()
+        .map(|t| t.title)
+        .collect();
+    titles.sort();
+    assert_eq!(titles, ["Buy groceries", "Walk the dog"]);
+    Ok(())
+}
+
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn scoped_find_by_id(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
