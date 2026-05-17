@@ -45,6 +45,8 @@ impl Expand<'_> {
         let create_meta_fields = self.expand_create_meta_fields();
         let check_required_fn = self.expand_check_required_fn();
         let version_update_stmts = self.expand_version_update_stmts();
+        let primary_key_ty = self.expand_primary_key_ty();
+        let find_by_primary_key_body = self.expand_find_by_primary_key_body();
 
         quote! {
             impl #model_ident {
@@ -131,6 +133,7 @@ impl Expand<'_> {
                 type Update<'a> = #update_struct_ident<&'a mut Self>;
                 type UpdateQuery = #update_struct_ident;
                 type Path<__Origin> = #field_struct_ident<__Origin>;
+                type PrimaryKey = #primary_key_ty;
 
                 const CREATE_META: #toasty::CreateMeta = #toasty::CreateMeta {
                     fields: &[ #create_meta_fields ],
@@ -139,6 +142,10 @@ impl Expand<'_> {
 
                 fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
                     #field_struct_ident::from_path(path)
+                }
+
+                fn find_by_primary_key(id: #toasty::stmt::Expr<Self::PrimaryKey>) -> Self::Query {
+                    #find_by_primary_key_body
                 }
             }
 
@@ -282,6 +289,68 @@ impl Expand<'_> {
                     )
                 )
             )
+        }
+    }
+
+    /// Emit the Rust type used for `Model::PrimaryKey`: the scalar type for
+    /// single-column keys, or a tuple of column types for composite keys.
+    fn expand_primary_key_ty(&self) -> TokenStream {
+        let pk_fields: Vec<_> = self
+            .model
+            .primary_key_fields()
+            .expect("expand_primary_key_ty called on model without primary key")
+            .collect();
+
+        let types: Vec<&syn::Type> = pk_fields
+            .iter()
+            .map(|field| match &field.ty {
+                FieldTy::Primitive(ty) => ty,
+                _ => panic!("primary key fields must be primitive"),
+            })
+            .collect();
+
+        if types.len() == 1 {
+            let ty = &types[0];
+            quote!(#ty)
+        } else {
+            quote!(( #( #types ),* ))
+        }
+    }
+
+    /// Emit the body of `Model::find_by_primary_key`.
+    ///
+    /// For a single-column PK, delegate to the inherent `filter_by_<pk>` method
+    /// (which takes `impl IntoExpr<T>`; `Expr<T>` satisfies that bound).
+    ///
+    /// For a composite PK, the inherent `filter_by_<pk1>_and_<pk2>` takes
+    /// positional args — we only have a single opaque `Expr<(T1, T2)>`, so we
+    /// build a record expression of the PK column paths and compare to it
+    /// instead. The simplifier decomposes `Record == Record` into per-column
+    /// equalities.
+    fn expand_find_by_primary_key_body(&self) -> TokenStream {
+        let toasty = &self.toasty;
+        let model_ident = &self.model.ident;
+        let filter = self.primary_key_filter();
+        let pk_fields: Vec<_> = self
+            .model
+            .primary_key_fields()
+            .expect("expand_find_by_primary_key_body called on model without primary key")
+            .collect();
+
+        if pk_fields.len() == 1 {
+            let filter_method_ident = &filter.filter_method_ident;
+            quote! {
+                Self::#filter_method_ident(id)
+            }
+        } else {
+            let field_idents = pk_fields.iter().map(|f| &f.name.ident);
+            quote! {
+                let pk_expr: #toasty::stmt::Expr<Self::PrimaryKey> =
+                    #toasty::IntoExpr::into_expr((
+                        #( #model_ident::fields().#field_idents() ),*
+                    ));
+                Self::filter(pk_expr.eq(id))
+            }
         }
     }
 

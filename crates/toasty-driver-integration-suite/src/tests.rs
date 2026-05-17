@@ -12,6 +12,7 @@ pub mod crud_composite_key_in_list;
 pub mod crud_composite_key_pagination;
 pub mod crud_create_macro;
 pub mod crud_driver_ops;
+pub mod crud_model_find_by_primary_key;
 pub mod crud_model_level_key;
 pub mod crud_option_filter;
 pub mod crud_partitioned;
