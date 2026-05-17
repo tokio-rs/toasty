@@ -1,3 +1,4 @@
+pub mod composite_chain_relations;
 pub mod composite_fk_has_many_belongs_to;
 pub mod composite_has_many_belongs_to;
 pub mod deferred_document;

@@ -50,13 +50,26 @@ impl<T: Relation> HasMany<T> {
     ///
     /// # Panics
     ///
-    /// Panics if the association has not been loaded.
+    /// Panics if the association has not been loaded. Use [`try_get`] to
+    /// handle the unloaded state without panicking.
+    ///
+    /// [`try_get`]: HasMany::try_get
     #[track_caller]
     pub fn get(&self) -> &[T] {
         self.values
             .as_ref()
             .expect("association not loaded")
             .as_slice()
+    }
+
+    /// Returns a slice of the loaded associated records, or `None` if the
+    /// association has not been loaded.
+    ///
+    /// This is the non-panicking counterpart to [`get`](HasMany::get). An
+    /// empty slice means the association is loaded and the record has no
+    /// related rows; `None` means the association has not been loaded.
+    pub fn try_get(&self) -> Option<&[T]> {
+        self.values.as_deref()
     }
 
     /// Returns `true` if the association has not been loaded yet.

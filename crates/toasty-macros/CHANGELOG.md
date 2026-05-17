@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1](https://github.com/tokio-rs/toasty/compare/toasty-macros-v0.6.0...toasty-macros-v0.6.1) - 2026-05-16
+
+### Added
+
+- Add `.select()` projection through HasMany relations ([#894])
+- Chain relation methods on `Many` for multi-step queries via paths ([#903])
+- Enforce stricter validation on field-level `#[index]` attributes ([#909])
+- Give `One` and `OptionOne` precise query types ([#889])
+
+### Fixed
+
+- Enable `belongs_to` with embed-typed primary keys ([#912])
+- Improve `belongs_to` syntax and diagnostics for composite keys ([#905])
+
+[#889]: https://github.com/tokio-rs/toasty/pull/889
+[#894]: https://github.com/tokio-rs/toasty/pull/894
+[#903]: https://github.com/tokio-rs/toasty/pull/903
+[#905]: https://github.com/tokio-rs/toasty/pull/905
+[#909]: https://github.com/tokio-rs/toasty/pull/909
+[#912]: https://github.com/tokio-rs/toasty/pull/912
+
 ## [0.6.0](https://github.com/tokio-rs/toasty/compare/toasty-macros-v0.5.0...toasty-macros-v0.6.0) - 2026-05-14
 
 ### Added

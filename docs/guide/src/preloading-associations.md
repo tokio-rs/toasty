@@ -100,6 +100,35 @@ There are two ways to access a relation, depending on whether it was preloaded:
 Calling `.get()` on an unloaded relation panics. Only use `.get()` when you know
 the relation was preloaded.
 
+### `.try_get()` when the load state is uncertain
+
+When a function receives a record from a caller it does not control, it may not
+know whether a given relation was preloaded. Use `.try_get()` to access the
+loaded value without panicking — it returns `None` if the relation has not been
+loaded:
+
+```rust,ignore
+fn post_count(user: &User) -> Option<usize> {
+    user.posts.try_get().map(<[_]>::len)
+}
+```
+
+`.try_get()` is available on all three relation types and returns the same
+reference shape as `.get()` wrapped in an `Option`:
+
+| Relation type | `.get()` returns | `.try_get()` returns |
+|---|---|---|
+| `BelongsTo<T>` | `&T` | `Option<&T>` |
+| `HasOne<T>` | `&T` | `Option<&T>` |
+| `HasMany<T>` | `&[T]` | `Option<&[T]>` |
+
+For `HasMany`, an empty slice means the association was loaded and the record
+has no related rows, while `None` means the association was not loaded.
+
+Prefer `.get()` in code paths that control the query (the call site can see the
+matching `.include()`); reserve `.try_get()` for code that accepts records from
+elsewhere and needs to fall back when the data is missing.
+
 ## Preloading BelongsTo
 
 Preload a parent record from the child side:
@@ -277,4 +306,5 @@ for user in &users {
 | `model.relation.get()` | Access preloaded HasMany data (returns `&[T]`) |
 | `model.relation.get()` | Access preloaded BelongsTo data (returns `&T`) |
 | `model.relation.get()` | Access preloaded HasOne data (returns `&T` or `&Option<T>`) |
+| `model.relation.try_get()` | Non-panicking access; returns `None` if not preloaded |
 | `model.relation.is_unloaded()` | Check if a relation was preloaded |
