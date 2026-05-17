@@ -283,13 +283,31 @@ impl LowerStatement<'_, '_> {
     ) -> stmt::Expr {
         let field = &self.model_unwrap().fields[field_index];
 
+        // A multi-step (`via`) relation reaches its target through a path of
+        // existing relations. It lowers to a correlated `IN` subquery, which
+        // the `NestedMerge` planner cannot yet evaluate as a per-parent
+        // qualification — so `.include()` / `.select()` of a `via` relation is
+        // not supported yet. Querying one directly
+        // (`user.commented_articles()`) does work.
+        let is_via = match &field.ty {
+            app::FieldTy::HasMany(rel) => rel.kind.via().is_some(),
+            app::FieldTy::HasOne(rel) => rel.kind.via().is_some(),
+            _ => false,
+        };
+        if is_via {
+            todo!(
+                "`.include()` / `.select()` of a multi-step `via` relation is not yet supported; \
+                 query the relation directly instead"
+            );
+        }
+
         let (mut stmt, target_model_id) = match &field.ty {
             app::FieldTy::HasMany(rel) => (
                 stmt::Query::new_select(
                     rel.target,
                     stmt::Expr::eq(
                         stmt::Expr::ref_parent_model(),
-                        stmt::Expr::ref_self_field(rel.pair),
+                        stmt::Expr::ref_self_field(direct_pair(&rel.kind)),
                     ),
                 ),
                 rel.target,
@@ -327,7 +345,7 @@ impl LowerStatement<'_, '_> {
                     rel.target,
                     stmt::Expr::eq(
                         stmt::Expr::ref_parent_model(),
-                        stmt::Expr::ref_self_field(rel.pair),
+                        stmt::Expr::ref_self_field(direct_pair(&rel.kind)),
                     ),
                 );
                 query.single = true;
@@ -392,6 +410,14 @@ impl FieldIncludes {
     fn self_included(&self) -> bool {
         self.include_self || !self.sub_paths.is_empty()
     }
+}
+
+/// The paired `BelongsTo` field of a direct has-relation. `.include()` of a
+/// `via` relation is rejected earlier in `build_relation_subquery`, so any
+/// relation reaching the direct-relation path has a pair.
+fn direct_pair(kind: &app::HasKind) -> app::FieldId {
+    kind.pair_id()
+        .expect("`via` relation reached the direct-relation include path")
 }
 
 /// Find the include paths that target field index `i` and split them by

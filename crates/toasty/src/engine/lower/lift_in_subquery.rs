@@ -175,13 +175,17 @@ pub(super) fn lift_in_subquery(
         }
     };
 
-    // If the field is not a relation, abort.
+    // If the field is not a relation, abort. Multi-step (`via`) relations
+    // have no paired BelongsTo to lift through — they are already rewritten
+    // into nested IN subqueries by `RewriteVia` earlier in the lowering
+    // pipeline, so any reference reaching here that still names one is not
+    // something this pass can handle.
     match &field.ty {
         FieldTy::BelongsTo(belongs_to) => lift_belongs_to_in_subquery(cx, belongs_to, query),
-        FieldTy::HasOne(has_one) => {
+        FieldTy::HasOne(has_one) if has_one.kind.pair_id().is_some() => {
             lift_has_n_in_subquery(has_one.target, has_one.pair(&cx.schema().app), query)
         }
-        FieldTy::HasMany(has_many) => {
+        FieldTy::HasMany(has_many) if has_many.kind.pair_id().is_some() => {
             lift_has_n_in_subquery(has_many.target, has_many.pair(&cx.schema().app), query)
         }
         _ => None,

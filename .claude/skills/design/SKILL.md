@@ -32,10 +32,17 @@ Length is not a virtue; clarity is.
 
 ## Rust examples
 
-Rust code blocks in design docs are illustrative and are **not** run
-through rustdoc. Do not add `#`-prefixed hidden boilerplate (imports,
-`fn main`, etc.) just to make the snippet compile. Show only the lines
-that matter to the reader.
+Rust code blocks in design docs are illustrative. They **do not need to
+compile** and are **not** run through rustdoc or any other test.
+
+Do **not** add `#`-prefixed hidden boilerplate — no `# use …` imports, no
+`# async fn __example(…) { … }` wrappers, no `# fn main`, nothing hidden
+to satisfy a compiler. Show only the lines that matter to the reader, even
+if the snippet would not compile on its own.
+
+This overrides the doctest-preamble instruction in `_template.md`'s
+`User-facing API` section: that preamble is for the user guide, where
+examples *are* tested. Design docs are not.
 
 ## Framing
 
@@ -48,8 +55,9 @@ the two audiences the template names:
 Describe what those audiences will see, call, and have to do. Omit
 internal module layouts and implementation choices that have no
 observable effect on either audience. The `User-facing API` section
-should read like a chapter of the user guide — prose with runnable
-examples, not an API catalog.
+should read like a chapter of the user guide — prose with worked
+examples, not an API catalog. The examples are still illustrative only
+(see `Rust examples` above) — do not add doctest boilerplate to them.
 
 ## Workflow
 

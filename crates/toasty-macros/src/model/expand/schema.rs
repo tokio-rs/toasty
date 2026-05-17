@@ -174,16 +174,18 @@ impl Expand<'_> {
                     let ty = &rel.ty;
                     let singular_name = expand_name(toasty, &rel.singular);
                     let pair = expand_pair(toasty, ty, rel.pair.as_ref());
+                    let via = expand_via(toasty, model_ident, rel.via.as_ref());
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
-                    field_ty = quote!(<#ty as #toasty::Relation>::has_many_field_ty(#singular_name, #pair));
+                    field_ty = quote!(<#ty as #toasty::Relation>::has_many_field_ty(#singular_name, #pair, #via));
                 }
                 FieldTy::HasOne(rel) => {
                     let ty = &rel.ty;
                     let pair = expand_pair(toasty, ty, rel.pair.as_ref());
+                    let via = expand_via(toasty, model_ident, rel.via.as_ref());
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
-                    field_ty = quote!(<#ty as #toasty::Relation>::has_one_field_ty(#pair));
+                    field_ty = quote!(<#ty as #toasty::Relation>::has_one_field_ty(#pair, #via));
                 }
             }
 
@@ -490,5 +492,38 @@ fn expand_pair(
             quote! { Some(<#target_ty as #toasty::Relation>::field_name_to_id(#name)) }
         }
         None => quote! { None },
+    }
+}
+
+/// Emit the `via` argument for `has_many_field_ty` / `has_one_field_ty`: a
+/// fully resolved [`stmt::Path`] built by chaining the named segments onto the
+/// model's `Fields` struct (e.g. `User::fields().comments().article()`).
+///
+/// Resolution happens at Rust-compile time — a misspelled segment surfaces as
+/// "no method named `foo` found for struct `UserFields`", not as a runtime
+/// schema validation error. The two `.into()` conversions go via
+/// `FieldsStruct: Into<Path<Origin, T>>` and `Path<T, U>: Into<stmt::Path>`;
+/// the intermediate `Path<#model_ident, _>` ascription is what disambiguates
+/// them.
+fn expand_via(
+    toasty: &TokenStream,
+    model_ident: &syn::Ident,
+    via: Option<&Vec<syn::Ident>>,
+) -> TokenStream {
+    let Some(segments) = via else {
+        return quote! { None };
+    };
+
+    let mut chain = quote! { #model_ident::fields() };
+    for segment in segments {
+        chain = quote_spanned! { segment.span()=> #chain.#segment() };
+    }
+
+    quote! {
+        Some({
+            let __via_typed: #toasty::Path<#model_ident, _> = (#chain).into();
+            let __via_untyped: #toasty::core::stmt::Path = __via_typed.into();
+            __via_untyped
+        })
     }
 }
