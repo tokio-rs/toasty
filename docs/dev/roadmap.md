@@ -83,6 +83,7 @@ the entry lands here.
 
 ## Relationships
 
+- Multi-step relations — `has_many` / `has_one` via a path of existing relations ([design](design/has-many-via.md))
 - Many-to-many
 - Polymorphic associations
 - Nested preloading — multi-level `.include()`
