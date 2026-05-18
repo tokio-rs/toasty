@@ -208,16 +208,11 @@ fn insert_with_returning() {
 }
 
 #[test]
+#[should_panic(expected = "MySQL does not support the RETURNING clause with INSERT")]
 fn insert_returning_panics_on_mysql() {
     let schema = users_schema();
     let returning = Some(Returning::Project(Expr::record([col(0, 0)])));
-    let result =
-        std::panic::catch_unwind(|| render(Flavor::Mysql, &schema, insert_basic(returning)));
-    assert!(
-        result.is_err(),
-        "expected MySQL INSERT+RETURNING to panic, got: {:?}",
-        result.ok()
-    );
+    render(Flavor::Mysql, &schema, insert_basic(returning));
 }
 
 // -----------------------------------------------------------------------------
@@ -270,16 +265,11 @@ fn update_with_returning() {
 }
 
 #[test]
+#[should_panic(expected = "MySQL does not support the RETURNING clause with UPDATE")]
 fn update_returning_panics_on_mysql() {
     let schema = users_schema();
     let returning = Some(Returning::Project(Expr::record([col(0, 0)])));
-    let result =
-        std::panic::catch_unwind(|| render(Flavor::Mysql, &schema, update_stmt(true, returning)));
-    assert!(
-        result.is_err(),
-        "expected MySQL UPDATE+RETURNING to panic, got: {:?}",
-        result.ok()
-    );
+    render(Flavor::Mysql, &schema, update_stmt(true, returning));
 }
 
 // -----------------------------------------------------------------------------
@@ -317,17 +307,18 @@ fn delete_with_where() {
 
 /// MySQL has no `RETURNING` clause for any DML statement, so the serializer
 /// must reject a `DELETE ... RETURNING` on this flavor.
+///
+/// The panic today comes from the unconditional `assert!(returning.is_none())`
+/// in the Delete serializer, so the message is the assert text — once the
+/// serializer learns to emit RETURNING for PG/SQLite (see #[ignore]'d tests
+/// below), the MySQL branch should become an explicit panic mirroring INSERT
+/// and UPDATE, and this `expected` substring should track it.
 #[test]
+#[should_panic(expected = "self.returning.is_none()")]
 fn delete_with_returning_panics_on_mysql() {
     let schema = users_schema();
     let returning = Some(Returning::Project(Expr::record([col(0, 0)])));
-    let result =
-        std::panic::catch_unwind(|| render(Flavor::Mysql, &schema, delete_stmt(true, returning)));
-    assert!(
-        result.is_err(),
-        "expected MySQL DELETE+RETURNING to panic, got: {:?}",
-        result.ok()
-    );
+    render(Flavor::Mysql, &schema, delete_stmt(true, returning));
 }
 
 // PostgreSQL has supported `DELETE ... RETURNING` since 8.2; SQLite since

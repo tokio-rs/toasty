@@ -228,37 +228,26 @@ fn remove_assignment_postgresql() {
     );
 }
 
+// The MySQL/SQLite branches of `serialize_remove` are `panic!` — the
+// lowering is supposed to reject `vec_remove` on these backends before
+// reaching the serializer.
+
 #[test]
+#[should_panic(expected = "stmt::remove on a Vec<scalar> field is not yet implemented")]
 fn remove_assignment_mysql_panics() {
-    // The MySQL branch of `serialize_remove` is a `panic!` — the lowering
-    // is supposed to reject `vec_remove` on this backend before reaching
-    // the serializer.
     let schema = users_schema();
     let mut assignments = Assignments::default();
     assignments.remove(2usize, Expr::from(7i64));
-
-    let result =
-        std::panic::catch_unwind(|| render(Flavor::Mysql, &schema, update_with(assignments)));
-    assert!(
-        result.is_err(),
-        "expected MySQL `Remove` serialization to panic, got: {:?}",
-        result.ok()
-    );
+    render(Flavor::Mysql, &schema, update_with(assignments));
 }
 
 #[test]
+#[should_panic(expected = "stmt::remove on a Vec<scalar> field is not yet implemented")]
 fn remove_assignment_sqlite_panics() {
     let schema = users_schema();
     let mut assignments = Assignments::default();
     assignments.remove(2usize, Expr::from(7i64));
-
-    let result =
-        std::panic::catch_unwind(|| render(Flavor::Sqlite, &schema, update_with(assignments)));
-    assert!(
-        result.is_err(),
-        "expected SQLite `Remove` serialization to panic, got: {:?}",
-        result.ok()
-    );
+    render(Flavor::Sqlite, &schema, update_with(assignments));
 }
 
 // -----------------------------------------------------------------------------
@@ -280,33 +269,21 @@ fn pop_assignment_postgresql() {
 }
 
 #[test]
+#[should_panic(expected = "stmt::pop on a Vec<scalar> field is not yet implemented")]
 fn pop_assignment_mysql_panics() {
     let schema = users_schema();
     let mut assignments = Assignments::default();
     assignments.pop(2usize);
-
-    let result =
-        std::panic::catch_unwind(|| render(Flavor::Mysql, &schema, update_with(assignments)));
-    assert!(
-        result.is_err(),
-        "expected MySQL `Pop` serialization to panic, got: {:?}",
-        result.ok()
-    );
+    render(Flavor::Mysql, &schema, update_with(assignments));
 }
 
 #[test]
+#[should_panic(expected = "stmt::pop on a Vec<scalar> field is not yet implemented")]
 fn pop_assignment_sqlite_panics() {
     let schema = users_schema();
     let mut assignments = Assignments::default();
     assignments.pop(2usize);
-
-    let result =
-        std::panic::catch_unwind(|| render(Flavor::Sqlite, &schema, update_with(assignments)));
-    assert!(
-        result.is_err(),
-        "expected SQLite `Pop` serialization to panic, got: {:?}",
-        result.ok()
-    );
+    render(Flavor::Sqlite, &schema, update_with(assignments));
 }
 
 // -----------------------------------------------------------------------------
@@ -338,31 +315,19 @@ fn remove_at_assignment_postgresql() {
 }
 
 #[test]
+#[should_panic(expected = "stmt::remove_at on a Vec<scalar> field is not yet implemented")]
 fn remove_at_assignment_mysql_panics() {
     let schema = users_schema();
     let mut assignments = Assignments::default();
     assignments.remove_at(2usize, Expr::from(3i64));
-
-    let result =
-        std::panic::catch_unwind(|| render(Flavor::Mysql, &schema, update_with(assignments)));
-    assert!(
-        result.is_err(),
-        "expected MySQL `RemoveAt` serialization to panic, got: {:?}",
-        result.ok()
-    );
+    render(Flavor::Mysql, &schema, update_with(assignments));
 }
 
 #[test]
+#[should_panic(expected = "stmt::remove_at on a Vec<scalar> field is not yet implemented")]
 fn remove_at_assignment_sqlite_panics() {
     let schema = users_schema();
     let mut assignments = Assignments::default();
     assignments.remove_at(2usize, Expr::from(3i64));
-
-    let result =
-        std::panic::catch_unwind(|| render(Flavor::Sqlite, &schema, update_with(assignments)));
-    assert!(
-        result.is_err(),
-        "expected SQLite `RemoveAt` serialization to panic, got: {:?}",
-        result.ok()
-    );
+    render(Flavor::Sqlite, &schema, update_with(assignments));
 }

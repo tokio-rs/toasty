@@ -3,11 +3,9 @@
 //!
 //! Each non-`todo!()` `(Type variant × flavor)` combination is exercised
 //! through a `CREATE TABLE` migration so the rendered column type surfaces in
-//! the generated DDL. `todo!()` combinations are asserted via
-//! `std::panic::catch_unwind` so the test suite documents which combinations
-//! intentionally panic today.
-
-use std::panic;
+//! the generated DDL. `todo!()` combinations are pinned with
+//! `#[should_panic(expected = "...")]` so the test suite documents which
+//! combinations intentionally panic today and tracks the exact panic message.
 
 use toasty_core::{
     driver::Capability,
@@ -104,12 +102,6 @@ fn render_type(flavor: &str, storage_ty: Type) -> Vec<String> {
     let diff = SchemaDiff::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, capability_for(flavor));
     serialize_migration(&stmts, flavor)
-}
-
-/// Try to render a storage type; return `Err` if rendering panics (e.g. the
-/// serializer hits a `todo!()` arm).
-fn try_render_type(flavor: &'static str, storage_ty: Type) -> std::thread::Result<Vec<String>> {
-    panic::catch_unwind(move || render_type(flavor, storage_ty))
 }
 
 /// Convenience: assert that the `CREATE TABLE` for column `col` contains the
@@ -368,15 +360,15 @@ fn uuid_postgresql() {
 }
 
 #[test]
+#[should_panic(expected = "Unsupported type UUID")]
 fn uuid_mysql_panics() {
-    let result = try_render_type("mysql", Type::Uuid);
-    assert!(result.is_err(), "expected MySQL UUID rendering to panic");
+    render_type("mysql", Type::Uuid);
 }
 
 #[test]
+#[should_panic(expected = "Unsupported type UUID")]
 fn uuid_sqlite_panics() {
-    let result = try_render_type("sqlite", Type::Uuid);
-    assert!(result.is_err(), "expected SQLite UUID rendering to panic");
+    render_type("sqlite", Type::Uuid);
 }
 
 // ---------------------------------------------------------------------------
@@ -402,30 +394,21 @@ fn numeric_with_precision_mysql() {
 }
 
 #[test]
+#[should_panic(expected = "MySQL does not support arbitrary-precision NUMERIC")]
 fn numeric_unconstrained_mysql_panics() {
-    let result = try_render_type("mysql", Type::Numeric(None));
-    assert!(
-        result.is_err(),
-        "expected MySQL unconstrained NUMERIC rendering to panic"
-    );
+    render_type("mysql", Type::Numeric(None));
 }
 
 #[test]
+#[should_panic(expected = "SQLite does not support NUMERIC type")]
 fn numeric_unconstrained_sqlite_panics() {
-    let result = try_render_type("sqlite", Type::Numeric(None));
-    assert!(
-        result.is_err(),
-        "expected SQLite NUMERIC rendering to panic"
-    );
+    render_type("sqlite", Type::Numeric(None));
 }
 
 #[test]
+#[should_panic(expected = "SQLite does not support NUMERIC type")]
 fn numeric_with_precision_sqlite_panics() {
-    let result = try_render_type("sqlite", Type::Numeric(Some((10, 2))));
-    assert!(
-        result.is_err(),
-        "expected SQLite NUMERIC(p, s) rendering to panic"
-    );
+    render_type("sqlite", Type::Numeric(Some((10, 2))));
 }
 
 // ---------------------------------------------------------------------------
@@ -439,21 +422,15 @@ fn binary_mysql() {
 }
 
 #[test]
+#[should_panic(expected = "Unsupported fixed size binary type")]
 fn binary_postgresql_panics() {
-    let result = try_render_type("postgresql", Type::Binary(16));
-    assert!(
-        result.is_err(),
-        "expected PostgreSQL BINARY(n) rendering to panic"
-    );
+    render_type("postgresql", Type::Binary(16));
 }
 
 #[test]
+#[should_panic(expected = "Unsupported fixed size binary type")]
 fn binary_sqlite_panics() {
-    let result = try_render_type("sqlite", Type::Binary(16));
-    assert!(
-        result.is_err(),
-        "expected SQLite BINARY(n) rendering to panic"
-    );
+    render_type("sqlite", Type::Binary(16));
 }
 
 // ---------------------------------------------------------------------------
@@ -495,12 +472,9 @@ fn timestamp_mysql_timestamp() {
 }
 
 #[test]
+#[should_panic(expected = "SQLite does not support Timestamp")]
 fn timestamp_sqlite_panics() {
-    let result = try_render_type("sqlite", Type::Timestamp(6));
-    assert!(
-        result.is_err(),
-        "expected SQLite Timestamp rendering to panic"
-    );
+    render_type("sqlite", Type::Timestamp(6));
 }
 
 // ---------------------------------------------------------------------------
@@ -520,9 +494,9 @@ fn date_mysql() {
 }
 
 #[test]
+#[should_panic(expected = "SQLite does not support Date")]
 fn date_sqlite_panics() {
-    let result = try_render_type("sqlite", Type::Date);
-    assert!(result.is_err(), "expected SQLite Date rendering to panic");
+    render_type("sqlite", Type::Date);
 }
 
 // ---------------------------------------------------------------------------
@@ -542,9 +516,9 @@ fn time_mysql() {
 }
 
 #[test]
+#[should_panic(expected = "SQLite does not support Time")]
 fn time_sqlite_panics() {
-    let result = try_render_type("sqlite", Type::Time(3));
-    assert!(result.is_err(), "expected SQLite Time rendering to panic");
+    render_type("sqlite", Type::Time(3));
 }
 
 // ---------------------------------------------------------------------------
@@ -564,12 +538,9 @@ fn datetime_mysql_datetime() {
 }
 
 #[test]
+#[should_panic(expected = "SQLite does not support DateTime")]
 fn datetime_sqlite_panics() {
-    let result = try_render_type("sqlite", Type::DateTime(6));
-    assert!(
-        result.is_err(),
-        "expected SQLite DateTime rendering to panic"
-    );
+    render_type("sqlite", Type::DateTime(6));
 }
 
 // ---------------------------------------------------------------------------
