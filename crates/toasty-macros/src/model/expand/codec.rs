@@ -57,6 +57,28 @@ impl Expand<'_> {
         }
     }
 
+    /// The `Statement<T>` returning type for a `#[deferred]` field's lazy-load
+    /// accessor.
+    ///
+    /// Plain `#[deferred]` resolves to the inner `T` via `Defer::Inner`, so
+    /// `.exec()` returns the user's type directly through its `Load` impl.
+    /// `#[serialize] + #[deferred]` instead routes through `stmt::Json<T>` —
+    /// a `Load` adapter (`Output = T`) that pulls the column as a JSON
+    /// `String` and deserializes — because the user's type only implements
+    /// `serde::Deserialize`, not Toasty's [`Load`].
+    pub(super) fn deferred_load_return_ty(&self, field: &Field) -> TokenStream {
+        let toasty = &self.toasty;
+        let FieldTy::Primitive(ty) = &field.ty else {
+            unreachable!("deferred_load_return_ty called on non-primitive field");
+        };
+        let inner = quote!(<#ty as #toasty::Defer>::Inner);
+        if field.attrs.serialize.is_some() {
+            quote!(#toasty::stmt::Json<#inner>)
+        } else {
+            inner
+        }
+    }
+
     /// Wrap an in-memory decoded value in `Deferred::from(...)`.
     ///
     /// Pins the intermediate type to `<Field as Defer>::Inner` so that `?`

@@ -246,28 +246,21 @@ impl Expand<'_> {
                     Some(self.expand_model_relation_has_many_method(rel, field))
                 }
                 FieldTy::HasOne(rel) => Some(self.expand_model_relation_has_one_method(rel, field)),
-                FieldTy::Primitive(ty) if field.attrs.deferred => {
-                    Some(self.expand_model_deferred_load_method(ty, field))
+                FieldTy::Primitive(_) if field.attrs.deferred => {
+                    Some(self.expand_model_deferred_load_method(field))
                 }
                 FieldTy::Primitive(_) => None,
             })
             .collect()
     }
 
-    fn expand_model_deferred_load_method(&self, ty: &syn::Type, field: &Field) -> TokenStream {
+    fn expand_model_deferred_load_method(&self, field: &Field) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
         let field_ident = &field.name.ident;
         let field_index = util::int(field.id);
-        // For `#[serialize] + #[deferred]`, decode the column through
-        // `stmt::Json<T>` so `.exec()` returns the JSON-deserialized inner
-        // value rather than the raw `String` stored in the column.
-        let return_ty = if field.attrs.serialize.is_some() {
-            quote!(#toasty::stmt::Json<<#ty as #toasty::Defer>::Inner>)
-        } else {
-            quote!(<#ty as #toasty::Defer>::Inner)
-        };
+        let return_ty = self.deferred_load_return_ty(field);
 
         let pk_filter = self.primary_key_filter();
         let filter_method_ident = &pk_filter.filter_method_ident;
