@@ -132,12 +132,13 @@ where
     }
 
     fn load(value: stmt::Value) -> crate::Result<Self> {
-        // A `NULL` cell decodes as the JSON literal `null` so
-        // `Json<Option<T>>` sees `None` here without a per-call branch.
-        let json = match value {
-            stmt::Value::Null => std::borrow::Cow::Borrowed("null"),
-            v => std::borrow::Cow::Owned(<String as Load>::load(v)?),
-        };
+        // SQL `NULL` never reaches here: a nullable JSON column is typed
+        // `Option<Json<T>>`, and `Option<T>: Load` intercepts `Value::Null`
+        // before delegating to the inner type. `Json<Option<T>>` stores the
+        // JSON literal `"null"` as a non-null string, so its `None` case
+        // comes through as `Value::String("null")` and `serde_json` decodes
+        // it. A bare `Value::Null` at this point is a driver bug.
+        let json = <String as Load>::load(value)?;
         serde_json::from_str(&json).map(Json).map_err(|e| {
             toasty_core::Error::from_args(format_args!("failed to deserialize JSON field: {e}"))
         })
