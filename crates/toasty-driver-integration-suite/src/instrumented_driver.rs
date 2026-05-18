@@ -11,7 +11,7 @@ use std::{
 use toasty_core::{
     Result, Schema,
     driver::{Capability, Connection, Driver, ExecResponse, Operation, Rows},
-    schema::db::{AppliedMigration, Migration, SchemaDiff},
+    schema::db::{AppliedMigration, Migration, diff},
 };
 
 /// A fault that can be injected into the next operation routed through
@@ -143,7 +143,7 @@ impl Driver for InstrumentedDriver {
         }))
     }
 
-    fn generate_migration(&self, schema_diff: &SchemaDiff<'_>) -> Migration {
+    fn generate_migration(&self, schema_diff: &diff::Schema<'_>) -> Migration {
         self.inner.generate_migration(schema_diff)
     }
 

@@ -24,7 +24,7 @@ use std::{borrow::Cow, cell::Cell, sync::Arc};
 use toasty_core::{
     Result, Schema,
     driver::{Capability, Driver, ExecResponse, Operation},
-    schema::db::{self, Migration, SchemaDiff, Table},
+    schema::db::{self, Migration, Table, diff},
     stmt::{self, ValueRecord},
 };
 use toasty_sql::{self as sql};
@@ -133,7 +133,7 @@ impl Driver for MySQL {
         Ok(Box::new(Connection::new(conn)))
     }
 
-    fn generate_migration(&self, schema_diff: &SchemaDiff<'_>) -> Migration {
+    fn generate_migration(&self, schema_diff: &diff::Schema<'_>) -> Migration {
         let statements = sql::MigrationStatement::from_diff(schema_diff, &Capability::MYSQL);
 
         let sql_strings: Vec<String> = statements

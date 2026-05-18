@@ -10,10 +10,7 @@ use std::fs;
 use toasty::migration::{History, HistoryEntry};
 use toasty::{
     Db,
-    schema::db::{
-        ColumnId, ColumnsDiffItem, IndexId, IndicesDiffItem, Migration, RenameHints, Schema,
-        SchemaDiff, TableId, TablesDiffItem,
-    },
+    schema::db::{ColumnId, IndexId, Migration, Schema, TableId, diff},
 };
 
 /// Generates a new SQL migration from the current schema diff.
@@ -36,21 +33,21 @@ pub struct GenerateCommand {
 }
 
 /// Collects rename hints by interactively asking the user about potential renames
-fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<RenameHints> {
-    let mut hints = RenameHints::default();
+fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<diff::RenameHints> {
+    let mut hints = diff::RenameHints::default();
     let mut ignored_tables = HashSet::<TableId>::new();
     let mut ignored_columns = HashMap::<TableId, HashSet<ColumnId>>::new();
     let mut ignored_indices = HashMap::<TableId, HashSet<IndexId>>::new();
 
     'main: loop {
-        let diff = SchemaDiff::from(previous_schema, schema, &hints);
+        let diff = diff::Schema::from(previous_schema, schema, &hints);
 
         // Check for table renames
         let dropped_tables: Vec<_> = diff
             .tables()
             .iter()
             .filter_map(|item| match item {
-                TablesDiffItem::DropTable(table) if !ignored_tables.contains(&table.id) => {
+                diff::TablesItem::DropTable(table) if !ignored_tables.contains(&table.id) => {
                     Some(*table)
                 }
                 _ => None,
@@ -61,7 +58,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<Ren
             .tables()
             .iter()
             .filter_map(|item| match item {
-                TablesDiffItem::CreateTable(table) => Some(*table),
+                diff::TablesItem::CreateTable(table) => Some(*table),
                 _ => None,
             })
             .collect();
@@ -98,7 +95,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<Ren
 
         // Check for column and index renames within altered tables
         for item in diff.tables().iter() {
-            if let TablesDiffItem::AlterTable {
+            if let diff::TablesItem::AlterTable {
                 previous,
                 next: _,
                 columns,
@@ -109,7 +106,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<Ren
                 let dropped_columns: Vec<_> = columns
                     .iter()
                     .filter_map(|item| match item {
-                        ColumnsDiffItem::DropColumn(column)
+                        diff::ColumnsItem::DropColumn(column)
                             if !ignored_columns
                                 .get(&previous.id)
                                 .is_some_and(|set| set.contains(&column.id)) =>
@@ -123,7 +120,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<Ren
                 let added_columns: Vec<_> = columns
                     .iter()
                     .filter_map(|item| match item {
-                        ColumnsDiffItem::AddColumn(column) => Some(*column),
+                        diff::ColumnsItem::AddColumn(column) => Some(*column),
                         _ => None,
                     })
                     .collect();
@@ -167,7 +164,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<Ren
                 let dropped_indices: Vec<_> = indices
                     .iter()
                     .filter_map(|item| match item {
-                        IndicesDiffItem::DropIndex(index)
+                        diff::IndicesItem::DropIndex(index)
                             if !ignored_indices
                                 .get(&previous.id)
                                 .is_some_and(|set| set.contains(&index.id)) =>
@@ -181,7 +178,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<Ren
                 let added_indices: Vec<_> = indices
                     .iter()
                     .filter_map(|item| match item {
-                        IndicesDiffItem::CreateIndex(index) => Some(*index),
+                        diff::IndicesItem::CreateIndex(index) => Some(*index),
                         _ => None,
                     })
                     .collect();
@@ -261,7 +258,7 @@ impl GenerateCommand {
         let schema = toasty::schema::db::Schema::clone(&db.schema().db);
 
         let rename_hints = collect_rename_hints(&previous_schema, &schema)?;
-        let diff = SchemaDiff::from(&previous_schema, &schema, &rename_hints);
+        let diff = diff::Schema::from(&previous_schema, &schema, &rename_hints);
 
         if diff.is_empty() {
             println!(

@@ -21,7 +21,7 @@ use tempfile::TempDir;
 use toasty_core::{
     Result, Schema,
     driver::{Capability, Connection, Driver, ExecResponse, Operation},
-    schema::db::{AppliedMigration, Migration, SchemaDiff},
+    schema::db::{AppliedMigration, Migration, diff},
 };
 
 #[derive(Debug, toasty::Model)]
@@ -86,7 +86,7 @@ impl Driver for MockDriver {
         }))
     }
 
-    fn generate_migration(&self, diff: &SchemaDiff<'_>) -> Migration {
+    fn generate_migration(&self, diff: &diff::Schema<'_>) -> Migration {
         self.inner.generate_migration(diff)
     }
 

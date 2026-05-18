@@ -1,6 +1,4 @@
-use super::{
-    Column, ColumnId, DiffContext, Index, IndexId, RenameHints, Table, TableId, TablesDiff,
-};
+use super::{Column, ColumnId, Index, IndexId, Table, TableId};
 
 /// The complete database-level schema: a collection of tables.
 ///
@@ -92,64 +90,5 @@ impl Schema {
     /// Panics if the table index is out of bounds.
     pub fn table_mut(&mut self, id: impl Into<TableId>) -> &mut Table {
         self.tables.get_mut(id.into().0).expect("invalid table ID")
-    }
-}
-
-/// The top-level diff between two database schemas.
-///
-/// Contains a [`TablesDiff`] describing created, dropped, and altered tables.
-/// Constructed via [`SchemaDiff::from`].
-///
-/// # Examples
-///
-/// ```ignore
-/// use toasty_core::schema::db::{SchemaDiff, RenameHints, Schema};
-///
-/// let previous = Schema::default();
-/// let next = Schema::default();
-/// let hints = RenameHints::new();
-/// let diff = SchemaDiff::from(&previous, &next, &hints);
-/// assert!(diff.is_empty());
-/// ```
-pub struct SchemaDiff<'a> {
-    previous: &'a Schema,
-    next: &'a Schema,
-    tables: TablesDiff<'a>,
-}
-
-impl<'a> SchemaDiff<'a> {
-    /// Computes the diff between two schemas, using the provided rename hints.
-    pub fn from(from: &'a Schema, to: &'a Schema, rename_hints: &'a RenameHints) -> Self {
-        let cx = &DiffContext::new(from, to, rename_hints);
-        Self {
-            previous: from,
-            next: to,
-            tables: TablesDiff::from(cx, &from.tables, &to.tables),
-        }
-    }
-
-    /// Computes the enum type diff between the two schemas.
-    pub fn types(&self) -> super::TypesDiff<'a> {
-        super::TypesDiff::from(self.previous, self.next)
-    }
-
-    /// Returns the table-level diff.
-    pub fn tables(&self) -> &TablesDiff<'a> {
-        &self.tables
-    }
-
-    /// Returns `true` if no tables were created, dropped, or altered.
-    pub fn is_empty(&self) -> bool {
-        self.tables.is_empty()
-    }
-
-    /// Returns the schema before the change.
-    pub fn previous(&self) -> &'a Schema {
-        self.previous
-    }
-
-    /// Returns the schema after the change.
-    pub fn next(&self) -> &'a Schema {
-        self.next
     }
 }
