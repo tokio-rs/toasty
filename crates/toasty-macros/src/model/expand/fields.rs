@@ -64,16 +64,26 @@ impl Expand<'_> {
                 let field_offset = util::int(offset);
 
                 match &field.ty {
-                    Primitive(ty) if field.attrs.serialize.is_some() && field.attrs.deferred => {
-                        // Serialized + deferred: expose a `Path<_, Json<T>>`
-                        // accessor solely so `.include()` can name the column.
-                        // The path is constructed directly — going through
-                        // `Field::Path` would force a stub `Field` impl on
-                        // `Json<T>` with no real surface (predicate / update
-                        // / FK behavior all undefined for a JSON column).
-                        let inner: syn::Type = syn::parse_quote!(
-                            #toasty::stmt::Json<<#ty as #toasty::Defer>::Inner>
-                        );
+                    Primitive(ty) if field.attrs.serialize.is_some() => {
+                        // Expose a `Path<_, Json<T>>` accessor — typed by what
+                        // the column logically stores (JSON-encoded `T`), not
+                        // the raw `String`. The path is constructed directly
+                        // rather than via `expand_primitive_field_method` so
+                        // `Json<T>` doesn't need a `Field` impl (which would
+                        // be all stubs — no usable predicate / update / FK
+                        // surface on a JSON column).
+                        //
+                        // The `Json<T>` typing leaves only path-to-path
+                        // comparison, ordering, and `.include()` reachable —
+                        // string-literal `.eq("…")`, `.like(…)`, and the
+                        // other String-specific footguns aren't callable.
+                        let inner: syn::Type = if field.attrs.deferred {
+                            syn::parse_quote!(
+                                #toasty::stmt::Json<<#ty as #toasty::Defer>::Inner>
+                            )
+                        } else {
+                            syn::parse_quote!(#toasty::stmt::Json<#ty>)
+                        };
                         let span = field_ident.span();
                         quote_spanned! { span=>
                             #vis fn #field_ident(&self) -> #toasty::Path<__Origin, #inner> {
@@ -82,10 +92,6 @@ impl Expand<'_> {
                                 )
                             }
                         }
-                    }
-                    Primitive(_) if field.attrs.serialize.is_some() => {
-                        // Serialized fields are stored as opaque JSON; no field accessor
-                        TokenStream::new()
                     }
                     Primitive(ty) if field.attrs.deferred => {
                         let inner: syn::Type =
