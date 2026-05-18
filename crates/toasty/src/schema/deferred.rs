@@ -89,36 +89,6 @@ pub fn build_deferred_load<T, S: IntoStatement>(stmt: S, field_index: usize) -> 
     Statement::from_untyped_stmt(untyped)
 }
 
-/// Decode a `#[deferred]` field's column value into `Deferred<L::Output>`.
-///
-/// Lowering wraps a loaded deferred field in a 1-element record and emits
-/// a bare `Null` when the column was excluded from the SELECT — matching
-/// what [`<Deferred<T> as Load>::load`](Deferred) does. This helper
-/// performs the same envelope handling but routes the inner value through
-/// an arbitrary `L: Load` instead of requiring the value type itself to
-/// implement [`Load`], so it composes with adapters like
-/// [`stmt::Json<T>`](crate::stmt::Json) for `#[serialize] + #[deferred]`
-/// fields where the user's type only implements `serde::Deserialize`.
-///
-/// `field_name` is included in the mismatch error so generated code can
-/// surface which column produced an unexpected envelope shape.
-#[doc(hidden)]
-pub fn decode_deferred<L: Load>(
-    value: toasty_core::stmt::Value,
-    field_name: &str,
-) -> crate::Result<Deferred<L::Output>> {
-    match value {
-        toasty_core::stmt::Value::Null => Ok(Deferred::default()),
-        toasty_core::stmt::Value::Record(record) if record.fields.len() == 1 => {
-            let inner = record.fields.into_iter().next().unwrap();
-            Ok(Deferred::from(L::load(inner)?))
-        }
-        value => Err(toasty_core::Error::from_args(format_args!(
-            "deferred field '{field_name}' decoder expected Null or single-field Record, got {value:?}"
-        ))),
-    }
-}
-
 impl<T> Default for Deferred<T> {
     fn default() -> Self {
         Self { value: None }
@@ -163,23 +133,30 @@ impl<T: IntoExpr<T>> IntoExpr<T> for &Deferred<T> {
     }
 }
 
-impl<T: Load<Output = T>> Load for Deferred<T> {
-    type Output = Self;
+impl<T: Load> Load for Deferred<T> {
+    /// The decoded field type. For plain `T: Load<Output = T>` (e.g.
+    /// `String`), `Deferred<T::Output>` collapses to `Self`. For adapter
+    /// inners like [`stmt::Json<U>`](crate::stmt::Json) (where
+    /// `Output = U ≠ Self`), this lets the envelope decoder yield
+    /// `Deferred<U>` — what the user's field actually stores — so the
+    /// same trait route handles `#[serialize] + #[deferred]` without a
+    /// parallel runtime helper.
+    type Output = Deferred<T::Output>;
 
     fn ty() -> toasty_core::stmt::Type {
         T::ty()
     }
 
-    fn load(value: toasty_core::stmt::Value) -> crate::Result<Self> {
+    fn load(value: toasty_core::stmt::Value) -> crate::Result<Deferred<T::Output>> {
         // The lowering wraps a loaded deferred field in a 1-element record
         // and emits a bare Null when unloaded, so the two states are
         // distinguishable even when the inner column value is NULL (i.e. the
         // `Deferred<Option<T>>` case).
         match value {
-            toasty_core::stmt::Value::Null => Ok(Self { value: None }),
+            toasty_core::stmt::Value::Null => Ok(Deferred { value: None }),
             toasty_core::stmt::Value::Record(record) if record.fields.len() == 1 => {
                 let mut iter = record.fields.into_iter();
-                Ok(Self {
+                Ok(Deferred {
                     value: Some(T::load(iter.next().unwrap())?),
                 })
             }
@@ -189,7 +166,10 @@ impl<T: Load<Output = T>> Load for Deferred<T> {
         }
     }
 
-    fn reload(target: &mut Self, value: toasty_core::stmt::Value) -> crate::Result<()> {
+    fn reload(
+        target: &mut Deferred<T::Output>,
+        value: toasty_core::stmt::Value,
+    ) -> crate::Result<()> {
         // The caller already supplied the value as part of the update, so the
         // field becomes loaded regardless of its prior state — no follow-up
         // fetch is needed to read what was just written.

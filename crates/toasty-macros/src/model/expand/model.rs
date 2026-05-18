@@ -477,7 +477,6 @@ impl Expand<'_> {
         let field_loads = self.model.fields.iter().enumerate().map(|(index, field)| {
             let field_ident = &field.name.ident;
             let index_tokenized = util::int(index);
-            let field_name_str = field.name.as_str();
 
             let field_name = if fields_named {
                 quote!(#field_ident:)
@@ -487,17 +486,16 @@ impl Expand<'_> {
 
             match &field.ty {
                 FieldTy::Primitive(ty) if field.attrs.serialize.is_some() => {
-                    // For `#[serialize] + #[deferred]`, the runtime helper
-                    // `decode_deferred::<Json<T>>` handles both the deferred
-                    // envelope (Null = unloaded, Record([loaded]) = loaded)
-                    // and the inner JSON decode in one call.
+                    // For `#[serialize] + #[deferred]`, route the column
+                    // value through `<Deferred<Json<T>> as Load>::load` —
+                    // the relaxed `Load` impl on `Deferred` peels the
+                    // envelope, and `Json<T>` decodes the inner JSON
+                    // String, both via the standard trait route.
                     if field.attrs.deferred {
                         let inner_ty = quote!(<#ty as #toasty::Defer>::Inner);
+                        let load_ty = quote!(#toasty::Deferred<#toasty::stmt::Json<#inner_ty>>);
                         quote! {
-                            #field_name #toasty::decode_deferred::<#toasty::stmt::Json<#inner_ty>>(
-                                record[#index_tokenized].take(),
-                                #field_name_str,
-                            )?,
+                            #field_name <#load_ty as #toasty::Load>::load(record[#index_tokenized].take())?,
                         }
                     } else {
                         let decoded = self.expand_serialize_decode(field);
