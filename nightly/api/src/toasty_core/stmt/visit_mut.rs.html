@@ -1282,7 +1282,7 @@
 <a href=#1282 id=1282 data-nosnippet>1282</a>{
 <a href=#1283 id=1283 data-nosnippet>1283</a>    v.visit_source_table_id_mut(<span class="kw-2">&amp;mut </span>node.table);
 <a href=#1284 id=1284 data-nosnippet>1284</a>    <span class="kw">match </span><span class="kw-2">&amp;mut </span>node.constraint {
-<a href=#1285 id=1285 data-nosnippet>1285</a>        JoinOp::Left(expr) =&gt; v.visit_expr_mut(expr),
+<a href=#1285 id=1285 data-nosnippet>1285</a>        JoinOp::Inner(expr) | JoinOp::Left(expr) =&gt; v.visit_expr_mut(expr),
 <a href=#1286 id=1286 data-nosnippet>1286</a>    }
 <a href=#1287 id=1287 data-nosnippet>1287</a>}
 <a href=#1288 id=1288 data-nosnippet>1288</a>

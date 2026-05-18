@@ -26,18 +26,19 @@
 <a href=#26 id=26 data-nosnippet>26</a>
 <a href=#27 id=27 data-nosnippet>27</a><span class="doccomment">/// The type of join and its ON condition.
 <a href=#28 id=28 data-nosnippet>28</a>///
-<a href=#29 id=29 data-nosnippet>29</a>/// Currently only left joins are supported.
+<a href=#29 id=29 data-nosnippet>29</a>/// # Examples
 <a href=#30 id=30 data-nosnippet>30</a>///
-<a href=#31 id=31 data-nosnippet>31</a>/// # Examples
-<a href=#32 id=32 data-nosnippet>32</a>///
-<a href=#33 id=33 data-nosnippet>33</a>/// ```ignore
-<a href=#34 id=34 data-nosnippet>34</a>/// use toasty_core::stmt::{JoinOp, Expr};
-<a href=#35 id=35 data-nosnippet>35</a>///
-<a href=#36 id=36 data-nosnippet>36</a>/// let op = JoinOp::Left(Expr::TRUE);
-<a href=#37 id=37 data-nosnippet>37</a>/// ```
-<a href=#38 id=38 data-nosnippet>38</a></span><span class="attr">#[derive(Debug, Clone, PartialEq)]
-<a href=#39 id=39 data-nosnippet>39</a></span><span class="kw">pub enum </span>JoinOp {
-<a href=#40 id=40 data-nosnippet>40</a>    <span class="doccomment">/// A `LEFT JOIN` with the given ON condition.
-<a href=#41 id=41 data-nosnippet>41</a>    </span>Left(Expr),
-<a href=#42 id=42 data-nosnippet>42</a>}
+<a href=#31 id=31 data-nosnippet>31</a>/// ```ignore
+<a href=#32 id=32 data-nosnippet>32</a>/// use toasty_core::stmt::{JoinOp, Expr};
+<a href=#33 id=33 data-nosnippet>33</a>///
+<a href=#34 id=34 data-nosnippet>34</a>/// let op = JoinOp::Left(Expr::TRUE);
+<a href=#35 id=35 data-nosnippet>35</a>/// ```
+<a href=#36 id=36 data-nosnippet>36</a></span><span class="attr">#[derive(Debug, Clone, PartialEq)]
+<a href=#37 id=37 data-nosnippet>37</a></span><span class="kw">pub enum </span>JoinOp {
+<a href=#38 id=38 data-nosnippet>38</a>    <span class="doccomment">/// An `INNER JOIN` with the given ON condition.
+<a href=#39 id=39 data-nosnippet>39</a>    </span>Inner(Expr),
+<a href=#40 id=40 data-nosnippet>40</a>
+<a href=#41 id=41 data-nosnippet>41</a>    <span class="doccomment">/// A `LEFT JOIN` with the given ON condition.
+<a href=#42 id=42 data-nosnippet>42</a>    </span>Left(Expr),
+<a href=#43 id=43 data-nosnippet>43</a>}
 </code></pre></div></section></main></body></html>
