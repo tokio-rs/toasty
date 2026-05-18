@@ -1,4 +1,6 @@
+#[cfg(feature = "serde")]
 use crate::schema::Load;
+#[cfg(feature = "serde")]
 use std::marker::PhantomData;
 
 /// A sized marker type representing "JSON-encoded `T`".
