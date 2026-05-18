@@ -1,4 +1,3 @@
-use super::HistoryFile;
 use crate::{Config, theme::dialoguer_theme};
 use anyhow::Result;
 use clap::Parser;
@@ -6,6 +5,7 @@ use console::style;
 use dialoguer::Select;
 use std::fs;
 use toasty::Db;
+use toasty::migration::History;
 
 /// Removes a migration from the history and deletes its files on disk.
 ///
@@ -27,9 +27,9 @@ pub struct DropCommand {
 impl DropCommand {
     pub(crate) fn run(self, _db: &Db, config: &Config) -> Result<()> {
         let history_path = config.migration.get_history_file_path();
-        let mut history = HistoryFile::load_or_default(&history_path)?;
+        let mut history = History::load_or_default(&history_path)?;
 
-        if history.migrations().is_empty() {
+        if history.entries().is_empty() {
             eprintln!("{}", style("No migrations found in history").red().bold());
             anyhow::bail!("No migrations found in history");
         }
@@ -37,11 +37,11 @@ impl DropCommand {
         // Determine which migration to drop
         let migration_index = if self.latest {
             // Drop the latest migration
-            history.migrations().len() - 1
+            history.entries().len() - 1
         } else if let Some(name) = &self.name {
             // Find migration by name
             history
-                .migrations()
+                .entries()
                 .iter()
                 .position(|m| m.name == *name)
                 .ok_or_else(|| anyhow::anyhow!("Migration '{}' not found", name))?
@@ -52,7 +52,7 @@ impl DropCommand {
             println!();
 
             let migration_display: Vec<String> = history
-                .migrations()
+                .entries()
                 .iter()
                 .map(|m| format!("  {}", m.name))
                 .collect();
@@ -66,7 +66,7 @@ impl DropCommand {
 
         println!();
 
-        let migration = &history.migrations()[migration_index];
+        let migration = &history.entries()[migration_index];
         let migration_name = migration.name.clone();
         let snapshot_name = migration.snapshot_name.clone();
 
@@ -109,7 +109,7 @@ impl DropCommand {
         }
 
         // Remove from history
-        history.remove_migration(migration_index);
+        history.remove_entry(migration_index);
         history.save(&history_path)?;
 
         println!(

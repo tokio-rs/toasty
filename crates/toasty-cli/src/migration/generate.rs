@@ -1,4 +1,4 @@
-use super::{HistoryFile, HistoryFileMigration, SnapshotFile};
+use super::SnapshotFile;
 use crate::{Config, theme::dialoguer_theme};
 use anyhow::Result;
 use clap::Parser;
@@ -7,6 +7,7 @@ use dialoguer::Select;
 use hashbrown::{HashMap, HashSet};
 use rand::RngExt;
 use std::fs;
+use toasty::migration::{History, HistoryEntry};
 use toasty::{
     Db,
     schema::db::{
@@ -244,10 +245,10 @@ impl GenerateCommand {
         fs::create_dir_all(config.migration.get_snapshots_dir())?;
         fs::create_dir_all(history_path.parent().unwrap())?;
 
-        let mut history = HistoryFile::load_or_default(&history_path)?;
+        let mut history = History::load_or_default(&history_path)?;
 
         let previous_snapshot = history
-            .migrations()
+            .entries()
             .last()
             .map(|f| {
                 SnapshotFile::load(config.migration.get_snapshots_dir().join(&f.snapshot_name))
@@ -294,7 +295,7 @@ impl GenerateCommand {
 
         let migration = db.driver().generate_migration(&diff);
 
-        history.add_migration(HistoryFileMigration {
+        history.add_entry(HistoryEntry {
             // Some databases only supported signed 64-bit integers.
             id: rand::rng().random_range(0..i64::MAX) as u64,
             name: migration_name.clone(),
