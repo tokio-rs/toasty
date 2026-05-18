@@ -1282,7 +1282,7 @@ where
 {
     v.visit_source_table_id_mut(&mut node.table);
     match &mut node.constraint {
-        JoinOp::Left(expr) => v.visit_expr_mut(expr),
+        JoinOp::Inner(expr) | JoinOp::Left(expr) => v.visit_expr_mut(expr),
     }
 }
 

@@ -1280,7 +1280,7 @@ where
 {
     v.visit_source_table_id(&node.table);
     match &node.constraint {
-        JoinOp::Left(expr) => v.visit_expr(expr),
+        JoinOp::Inner(expr) | JoinOp::Left(expr) => v.visit_expr(expr),
     }
 }
 

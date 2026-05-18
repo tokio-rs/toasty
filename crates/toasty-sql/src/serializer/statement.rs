@@ -574,16 +574,16 @@ impl ToSql for &stmt::SourceTable {
 
             // Serialize the joins
             for join in &table_with_joins.joins {
-                match &join.constraint {
-                    stmt::JoinOp::Left(expr) => {
-                        let join_table_ref = &self.tables[join.table.0];
-                        let alias = TableAlias {
-                            depth: f.depth,
-                            table: join.table,
-                        };
-                        fmt!(cx, f, " LEFT JOIN " join_table_ref " AS " alias " ON " expr);
-                    }
-                }
+                let (kw, expr) = match &join.constraint {
+                    stmt::JoinOp::Inner(expr) => (" INNER JOIN ", expr),
+                    stmt::JoinOp::Left(expr) => (" LEFT JOIN ", expr),
+                };
+                let join_table_ref = &self.tables[join.table.0];
+                let alias = TableAlias {
+                    depth: f.depth,
+                    table: join.table,
+                };
+                fmt!(cx, f, kw join_table_ref " AS " alias " ON " expr);
             }
         }
     }
