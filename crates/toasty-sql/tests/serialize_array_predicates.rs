@@ -7,6 +7,7 @@
 //! serializer is tested in isolation, including operators (e.g. `>`) the
 //! engine does not currently emit but that the node generalizes to.
 
+use expect_test::expect;
 use toasty_core::{
     schema::db::Schema,
     stmt::{self, BinaryOp, Expr, ExprAllOp, ExprAnyOp},
@@ -32,11 +33,7 @@ fn any_op_eq() {
         rhs: Box::new(Expr::arg(1)),
     }
     .into();
-    let sql = render(expr);
-    assert!(
-        sql.contains("$1 = ANY($2)"),
-        "expected `$1 = ANY($2)` in: {sql}"
-    );
+    expect!["VALUES ($1 = ANY($2));"].assert_eq(&render(expr));
 }
 
 #[test]
@@ -47,11 +44,7 @@ fn all_op_ne() {
         rhs: Box::new(Expr::arg(1)),
     }
     .into();
-    let sql = render(expr);
-    assert!(
-        sql.contains("$1 <> ALL($2)"),
-        "expected `$1 <> ALL($2)` in: {sql}"
-    );
+    expect!["VALUES ($1 <> ALL($2));"].assert_eq(&render(expr));
 }
 
 #[test]
@@ -65,9 +58,5 @@ fn any_op_gt_generalizes_to_other_operators() {
         rhs: Box::new(Expr::arg(1)),
     }
     .into();
-    let sql = render(expr);
-    assert!(
-        sql.contains("$1 > ANY($2)"),
-        "expected `$1 > ANY($2)` in: {sql}"
-    );
+    expect!["VALUES ($1 > ANY($2));"].assert_eq(&render(expr));
 }

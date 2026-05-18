@@ -25,5 +25,8 @@ rust_decimal = ["dep:rust_decimal", "toasty-core/rust_decimal"]
 bigdecimal = ["dep:bigdecimal", "toasty-core/bigdecimal"]
 jiff = ["dep:jiff", "toasty-core/jiff"]
 
+[dev-dependencies]
+expect-test.workspace = true
+
 [lints]
 workspace = true
