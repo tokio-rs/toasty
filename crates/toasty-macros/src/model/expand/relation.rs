@@ -260,14 +260,21 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let field_ident = &field.name.ident;
         let field_index = util::int(field.id);
-        let inner = quote!(<#ty as #toasty::Defer>::Inner);
+        // For `#[serialize] + #[deferred]`, decode the column through
+        // `LoadJson<T>` so `.exec()` returns the JSON-deserialized inner value
+        // rather than the raw `String` stored in the column.
+        let return_ty = if field.attrs.serialize.is_some() {
+            quote!(#toasty::LoadJson<<#ty as #toasty::Defer>::Inner>)
+        } else {
+            quote!(<#ty as #toasty::Defer>::Inner)
+        };
 
         let pk_filter = self.primary_key_filter();
         let filter_method_ident = &pk_filter.filter_method_ident;
         let arg_idents: Vec<_> = self.expand_filter_arg_idents(pk_filter).collect();
 
         quote! {
-            #vis fn #field_ident(&self) -> #toasty::Statement<#inner> {
+            #vis fn #field_ident(&self) -> #toasty::Statement<#return_ty> {
                 // Suppress unused field warning: a never-loaded #[deferred]
                 // field still compiles cleanly even if no other code reads it.
                 if false {

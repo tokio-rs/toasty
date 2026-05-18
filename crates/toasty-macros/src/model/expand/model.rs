@@ -486,30 +486,39 @@ impl Expand<'_> {
             };
 
             match &field.ty {
-                FieldTy::Primitive(_ty) if field.attrs.serialize.is_some() => {
-                    let serialize_attr = field.attrs.serialize.as_ref().unwrap();
+                FieldTy::Primitive(_) if field.attrs.serialize.is_some() => {
+                    let decoded = self.expand_serialize_decode(field);
 
-                    let json_deserialize = quote! {
-                        let json_str = <String as #toasty::Load>::load(value)?;
-                        #toasty::serde_json::from_str(&json_str)
-                            .map_err(|e| #toasty::Error::from_args(
-                                format_args!("failed to deserialize field '{}': {}", #field_name_str, e)
-                            ))?
-                    };
-
-                    let field_value = if serialize_attr.nullable {
+                    // For `#[deferred]` + `#[serialize]`, lowering wraps a
+                    // loaded value in a 1-element record and emits a bare Null
+                    // when the field was excluded from the SELECT — matching
+                    // `<Deferred<T> as Load>::load`. Peel that envelope first,
+                    // then JSON-decode the inner column, then re-wrap as a
+                    // loaded `Deferred<T>`.
+                    if field.attrs.deferred {
+                        let wrap = self.wrap_in_deferred(field, decoded);
                         quote! {
-                            if value.is_null() { None } else { Some({ #json_deserialize }) }
+                            #field_name {
+                                match record[#index_tokenized].take() {
+                                    #toasty::core::stmt::Value::Null => #toasty::Deferred::default(),
+                                    #toasty::core::stmt::Value::Record(inner) if inner.fields.len() == 1 => {
+                                        let value = inner.fields.into_iter().next().unwrap();
+                                        #wrap
+                                    }
+                                    value => return Err(#toasty::Error::from_args(format_args!(
+                                        "deferred serialized field '{}' decoder expected Null or single-field Record, got {value:?}",
+                                        #field_name_str
+                                    ))),
+                                }
+                            },
                         }
                     } else {
-                        json_deserialize
-                    };
-
-                    quote! {
-                        #field_name {
-                            let value = record[#index_tokenized].take();
-                            #field_value
-                        },
+                        quote! {
+                            #field_name {
+                                let value = record[#index_tokenized].take();
+                                #decoded
+                            },
+                        }
                     }
                 }
                 FieldTy::Primitive(ty) => {
@@ -563,53 +572,41 @@ impl Expand<'_> {
     pub(super) fn expand_embedded_reload_body(&self, fields_named: bool) -> TokenStream {
         let toasty = &self.toasty;
 
-        let reload_arms: Vec<_> = self.model.fields.iter().enumerate().map(|(index, field)| {
-            let i = util::int(index);
-            let field_name_str = field.name.as_str();
+        let reload_arms: Vec<_> = self
+            .model
+            .fields
+            .iter()
+            .enumerate()
+            .map(|(index, field)| {
+                let i = util::int(index);
 
-            // For newtypes, access via tuple index (target.0); otherwise by name
-            let field_access = if fields_named {
-                let field_ident = &field.name.ident;
-                quote!(target.#field_ident)
-            } else {
-                let idx = syn::Index::from(index);
-                quote!(target.#idx)
-            };
+                // For newtypes, access via tuple index (target.0); otherwise by name
+                let field_access = if fields_named {
+                    let field_ident = &field.name.ident;
+                    quote!(target.#field_ident)
+                } else {
+                    let idx = syn::Index::from(index);
+                    quote!(target.#idx)
+                };
 
-            match &field.ty {
-                FieldTy::Primitive(_ty) if field.attrs.serialize.is_some() => {
-                    let serialize_attr = field.attrs.serialize.as_ref().unwrap();
-
-                    let json_deserialize = quote! {
-                        let json_str = <String as #toasty::Load>::load(value)?;
-                        #toasty::serde_json::from_str(&json_str)
-                            .map_err(|e| #toasty::Error::from_args(
-                                format_args!("failed to deserialize field '{}': {}", #field_name_str, e)
-                            ))?
-                    };
-
-                    let assign = if serialize_attr.nullable {
+                match &field.ty {
+                    FieldTy::Primitive(_) if field.attrs.serialize.is_some() => {
+                        let assign = self.expand_serialize_decode(field);
                         quote! {
-                            if value.is_null() { None } else { Some({ #json_deserialize }) }
-                        }
-                    } else {
-                        quote! { { #json_deserialize } }
-                    };
-
-                    quote! {
-                        #i => {
-                            #field_access = #assign;
+                            #i => {
+                                #field_access = #assign;
+                            }
                         }
                     }
+                    FieldTy::Primitive(ty) => {
+                        quote!(#i => <#ty as #toasty::Load>::reload(&mut #field_access, value)?,)
+                    }
+                    _ => {
+                        quote!(#i => #field_access.unload(),)
+                    }
                 }
-                FieldTy::Primitive(ty) => {
-                    quote!(#i => <#ty as #toasty::Load>::reload(&mut #field_access, value)?,)
-                }
-                _ => {
-                    quote!(#i => #field_access.unload(),)
-                }
-            }
-        }).collect();
+            })
+            .collect();
 
         quote! {
             match value {

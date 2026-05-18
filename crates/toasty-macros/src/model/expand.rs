@@ -1,3 +1,4 @@
+mod codec;
 mod create;
 mod embedded_enum;
 mod fields;

@@ -3,6 +3,7 @@ pub mod composite_fk_has_many_belongs_to;
 pub mod composite_has_many_belongs_to;
 pub mod deferred_document;
 pub mod deferred_optional_document;
+pub mod deferred_serialize_document;
 pub mod has_many_belongs_to;
 pub mod has_many_multi_relation;
 pub mod has_many_same_target;

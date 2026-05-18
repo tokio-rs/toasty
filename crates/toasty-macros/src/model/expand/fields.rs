@@ -64,6 +64,22 @@ impl Expand<'_> {
                 let field_offset = util::int(offset);
 
                 match &field.ty {
+                    Primitive(_) if field.attrs.serialize.is_some() && field.attrs.deferred => {
+                        // Serialized + deferred: expose a `String`-typed path
+                        // (matching the JSON storage type) so `.include()` can
+                        // reference the column. There is no useful predicate
+                        // surface, so no other accessors are emitted.
+                        let span = field_ident.span();
+                        quote_spanned! { span=>
+                            #vis fn #field_ident(&self) -> <String as #toasty::Field>::Path<__Origin> {
+                                <String as #toasty::Field>::new_path(
+                                    self.path().chain(
+                                        #toasty::Path::<#model_ident, <String as #toasty::Field>::ExprTarget>::from_field_index(#field_offset)
+                                    )
+                                )
+                            }
+                        }
+                    }
                     Primitive(_) if field.attrs.serialize.is_some() => {
                         // Serialized fields are stored as opaque JSON; no field accessor
                         TokenStream::new()

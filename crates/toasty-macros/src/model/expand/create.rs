@@ -184,13 +184,14 @@ impl Expand<'_> {
                             }
                         }
                     }
-                    FieldTy::Primitive(ty) if field.attrs.serialize.is_some() => {
+                    FieldTy::Primitive(_) if field.attrs.serialize.is_some() => {
                         let serialize_attr = field.attrs.serialize.as_ref().unwrap();
+                        let arg_ty = self.serialize_setter_input_ty(field);
                         if serialize_attr.nullable {
                             // For nullable serialized fields, extract the inner type from Option<T>
                             // Accept Option<InnerType>, serialize Some(v) as JSON, None as NULL
                             quote! {
-                                #vis fn #name(mut self, #name: #ty) -> Self {
+                                #vis fn #name(mut self, #name: #arg_ty) -> Self {
                                     match &#name {
                                         Some(v) => {
                                             let json = #toasty::serde_json::to_string(v).expect("failed to serialize");
@@ -206,7 +207,7 @@ impl Expand<'_> {
                         } else {
                             // Non-nullable serialized field: accept T directly, serialize to JSON
                             quote! {
-                                #vis fn #name(mut self, #name: #ty) -> Self {
+                                #vis fn #name(mut self, #name: #arg_ty) -> Self {
                                     let json = #toasty::serde_json::to_string(&#name).expect("failed to serialize");
                                     self.stmt.set(#index_tokenized, <String as #toasty::IntoExpr<String>>::into_expr(json));
                                     self
