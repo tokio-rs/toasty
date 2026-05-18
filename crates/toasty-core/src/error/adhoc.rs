@@ -54,3 +54,9 @@ impl Error {
         matches!(self.kind(), super::ErrorKind::Adhoc(_))
     }
 }
+
+impl From<std::io::Error> for Error {
+    fn from(err: std::io::Error) -> Error {
+        Error::from_args(format_args!("{err}"))
+    }
+}

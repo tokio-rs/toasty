@@ -95,24 +95,20 @@ impl History {
 
     /// Load history from a TOML file.
     pub fn load(path: impl AsRef<Path>) -> Result<Self> {
-        let contents = std::fs::read_to_string(path.as_ref())
-            .map_err(|err| Error::from_args(format_args!("{err}")))?;
+        let contents = std::fs::read_to_string(path.as_ref())?;
         contents.parse()
     }
 
     /// Save the history to a TOML file.
     pub fn save(&self, path: impl AsRef<Path>) -> Result<()> {
-        std::fs::write(path.as_ref(), self.to_string())
-            .map_err(|err| Error::from_args(format_args!("{err}")))?;
+        std::fs::write(path.as_ref(), self.to_string())?;
         Ok(())
     }
 
     /// Loads the history file, or returns an empty one if it does not exist.
     pub fn load_or_default(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
-        let exists =
-            std::fs::exists(path).map_err(|err| Error::from_args(format_args!("{err}")))?;
-        if exists {
+        if std::fs::exists(path)? {
             return Self::load(path);
         }
         Ok(Self::default())
