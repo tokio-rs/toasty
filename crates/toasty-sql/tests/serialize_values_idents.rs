@@ -246,9 +246,10 @@ fn name_renders_qualified_period_separated() {
 /// subquery — the underlying schema column name isn't visible at that scope,
 /// so the serializer uses a positional alias.
 ///
-/// PostgreSQL / SQLite use 1-based `column<n+1>` (e.g. `column1`); MySQL uses
-/// 0-based `column_<n>` (e.g. `column_0`). The format is set by
-/// `serializer/column.rs::ColumnAlias::to_sql`.
+/// The per-flavor format matches each engine's auto-naming convention for
+/// derived-table columns. MySQL's `VALUES ROW(...) AS t` exposes columns as
+/// `column_0`, `column_1`, ...; PG and SQLite use `column1`, `column2`, ...
+/// in equivalent contexts. See `serializer/column.rs` for the rationale.
 fn select_from_cte() -> stmt::Statement {
     let cte_query = {
         let source = Source::Table(SourceTable {
@@ -311,7 +312,7 @@ fn column_alias_format_per_flavor() {
     let mysql = Serializer::mysql(&schema).serialize(&sql_stmt);
     assert!(
         mysql.contains("column_0"),
-        "expected 0-based `column_0` in MySQL: {mysql}"
+        "expected 0-based `column_0` in MySQL (matches `VALUES ROW(...) AS t` auto-naming): {mysql}"
     );
 }
 
