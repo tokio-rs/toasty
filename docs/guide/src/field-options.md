@@ -428,7 +428,7 @@ let post = toasty::create!(Post {
 .await?;
 
 assert_eq!(post.tags, vec!["rust", "toasty"]);
-assert_eq!(post.meta.0.version, 1);
+assert_eq!(post.meta.version, 1);
 # Ok(())
 # }
 ```
