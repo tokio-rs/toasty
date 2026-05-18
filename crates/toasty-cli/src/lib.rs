@@ -36,8 +36,11 @@ mod migration;
 mod theme;
 mod utility;
 
-pub use config::*;
-pub use migration::*;
+pub use config::Config;
+pub use migration::{
+    ApplyCommand, DropCommand, GenerateCommand, MigrationCommand, MigrationConfig,
+    MigrationPrefixStyle, ResetCommand, SnapshotCommand, SnapshotFile,
+};
 
 use anyhow::Result;
 use clap::Parser;
