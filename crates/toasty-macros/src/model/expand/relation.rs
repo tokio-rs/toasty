@@ -415,7 +415,10 @@ impl Expand<'_> {
         let pair_check = if rel.via.is_some() {
             quote! {}
         } else {
-            let pair_ident = syn::Ident::new(&self.model.name.ident.to_string(), rel.span);
+            let pair_ident = rel.pair.clone().unwrap_or(syn::Ident::new(
+                &self.model.name.ident.to_string(),
+                rel.span,
+            ));
             self.expand_pair_belongs_to_check(
                 &pair_ident,
                 field_ident,
