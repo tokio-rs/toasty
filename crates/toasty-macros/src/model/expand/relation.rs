@@ -261,10 +261,10 @@ impl Expand<'_> {
         let field_ident = &field.name.ident;
         let field_index = util::int(field.id);
         // For `#[serialize] + #[deferred]`, decode the column through
-        // `LoadJson<T>` so `.exec()` returns the JSON-deserialized inner value
-        // rather than the raw `String` stored in the column.
+        // `stmt::Json<T>` so `.exec()` returns the JSON-deserialized inner
+        // value rather than the raw `String` stored in the column.
         let return_ty = if field.attrs.serialize.is_some() {
-            quote!(#toasty::LoadJson<<#ty as #toasty::Defer>::Inner>)
+            quote!(#toasty::stmt::Json<<#ty as #toasty::Defer>::Inner>)
         } else {
             quote!(<#ty as #toasty::Defer>::Inner)
         };

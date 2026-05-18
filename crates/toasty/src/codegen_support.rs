@@ -8,8 +8,6 @@ pub mod auto;
 pub mod newtype;
 pub mod storage;
 
-#[cfg(feature = "serde")]
-pub use crate::schema::LoadJson;
 pub use crate::schema::inventory;
 pub use crate::{
     Db, Error, Executor, Result, Statement,
