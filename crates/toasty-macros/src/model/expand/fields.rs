@@ -66,15 +66,22 @@ impl Expand<'_> {
                 match &field.ty {
                     Primitive(ty) if field.attrs.serialize.is_some() && field.attrs.deferred => {
                         // Serialized + deferred: expose a `Path<_, Json<T>>`
-                        // (typed by what the column logically stores, not the
-                        // raw `String`) so `.include()` can reference the
-                        // column. The `Json<T>` field impl is path-only —
-                        // there's no usable predicate or update surface for a
-                        // JSON-encoded column.
+                        // accessor solely so `.include()` can name the column.
+                        // The path is constructed directly — going through
+                        // `Field::Path` would force a stub `Field` impl on
+                        // `Json<T>` with no real surface (predicate / update
+                        // / FK behavior all undefined for a JSON column).
                         let inner: syn::Type = syn::parse_quote!(
                             #toasty::stmt::Json<<#ty as #toasty::Defer>::Inner>
                         );
-                        self.expand_primitive_field_method(field_ident, &inner, &field_offset)
+                        let span = field_ident.span();
+                        quote_spanned! { span=>
+                            #vis fn #field_ident(&self) -> #toasty::Path<__Origin, #inner> {
+                                self.path().chain(
+                                    #toasty::Path::<#model_ident, #inner>::from_field_index(#field_offset)
+                                )
+                            }
+                        }
                     }
                     Primitive(_) if field.attrs.serialize.is_some() => {
                         // Serialized fields are stored as opaque JSON; no field accessor
