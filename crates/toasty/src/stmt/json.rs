@@ -27,6 +27,22 @@ use std::fmt;
 /// | `Option<Json<T>>`    | SQL `NULL`               |
 /// | `Json<Option<T>>`    | JSON literal `"null"`    |
 ///
+/// # Setter ergonomics
+///
+/// The crate provides an `IntoExpr<Json<T>>` impl for any
+/// `T: serde::Serialize`, so create / update setters and the `create!`
+/// macro accept the bare inner value without an explicit `Json(...)`
+/// wrapper. Both forms produce the same expression:
+///
+/// ```ignore
+/// // for a `payload: Json<Payload>` (or `Deferred<Json<Payload>>`) field
+/// Repository::create().payload(my_payload.clone()).exec(&mut db).await?;
+/// Repository::create().payload(Json(my_payload.clone())).exec(&mut db).await?;
+/// ```
+///
+/// The `Json(...)` form is still useful when type inference needs a
+/// nudge (e.g., comparison expressions like `.eq(Json("hello"))`).
+///
 /// # Composition with `Deferred`
 ///
 /// `Json<T>` is the only wrapper allowed inside [`Deferred`](crate::Deferred)
@@ -199,7 +215,49 @@ where
 // `IntoExpr<Json<T>>` for `&Json<T>` comes from the blanket
 // `impl<T: IntoExpr<T>> IntoExpr<T> for &T` in `stmt::into_expr`.
 
+/// Accept a bare `T` wherever the API expects `IntoExpr<Json<T>>`, so
+/// callers don't have to spell `Json(value)` at setter sites:
+///
+/// ```ignore
+/// // both forms work for a `payload: Json<Payload>` field
+/// Repository::create().payload(Json(payload.clone())).exec(&mut db).await?;
+/// Repository::create().payload(payload.clone()).exec(&mut db).await?;
+/// ```
+///
+/// The blanket only fires when `T: serde::Serialize`; it doesn't overlap
+/// the explicit `IntoExpr<Json<T>> for Json<T>` impl because `Json<U>`
+/// itself is not `Serialize` (no derive on the wrapper).
+impl<T> IntoExpr<Json<T>> for T
+where
+    T: serde_core::Serialize,
+{
+    fn into_expr(self) -> Expr<Json<T>> {
+        let json = serde_json::to_string(&self).expect("failed to serialize");
+        Expr::<String>::from_value(Value::from(json)).cast()
+    }
+
+    fn by_ref(&self) -> Expr<Json<T>> {
+        let json = serde_json::to_string(self).expect("failed to serialize");
+        Expr::<String>::from_value(Value::from(json)).cast()
+    }
+}
+
 impl<T> super::assignment::Assign<Json<T>> for Json<T>
+where
+    T: serde_core::Serialize,
+{
+    fn into_assignment(self) -> super::assignment::Assignment<Json<T>> {
+        super::set(<Self as IntoExpr<Json<T>>>::into_expr(self))
+    }
+}
+
+/// Mirrors the `IntoExpr<Json<T>> for T` blanket on the assignment side so
+/// update builders accept a bare value too:
+///
+/// ```ignore
+/// repo.update().payload(payload.clone()).exec(&mut db).await?;
+/// ```
+impl<T> super::assignment::Assign<Json<T>> for T
 where
     T: serde_core::Serialize,
 {

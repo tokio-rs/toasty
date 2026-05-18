@@ -44,14 +44,13 @@ pub async fn json_vec_string(t: &mut Test) -> Result<(), BoxError> {
 
     let mut db = t.setup_db(models!(Item)).await;
 
-    // Insert — driver receives JSON string
+    // Insert — driver receives JSON string. The bare `Vec<String>` is
+    // accepted via the `IntoExpr<Json<T>> for T` blanket on `Json<T>`,
+    // so callers don't need to spell `Json(value)` at setter sites.
     t.log().clear();
     let tags = vec!["rust".to_string(), "toasty".to_string()];
     let expected_json = serde_json::to_string(&tags).unwrap();
-    let mut record = Item::create()
-        .tags(Json(tags.clone()))
-        .exec(&mut db)
-        .await?;
+    let mut record = Item::create().tags(tags.clone()).exec(&mut db).await?;
 
     let (op, _) = t.log().pop();
     let val_pos = if driver_test_cfg!(id_u64) { 0 } else { 1 };
@@ -62,15 +61,11 @@ pub async fn json_vec_string(t: &mut Test) -> Result<(), BoxError> {
         Json(tags.clone())
     );
 
-    // Update — driver receives JSON string
+    // Update — same blanket lets the update builder take the bare value.
     t.log().clear();
     let new_tags = vec!["b".to_string(), "c".to_string()];
     let expected_json = serde_json::to_string(&new_tags).unwrap();
-    record
-        .update()
-        .tags(Json(new_tags.clone()))
-        .exec(&mut db)
-        .await?;
+    record.update().tags(new_tags.clone()).exec(&mut db).await?;
 
     let (op, resp) = t.log().pop();
     if t.capability().sql {
@@ -108,14 +103,13 @@ pub async fn json_option_outside_sql_null(t: &mut Test) -> Result<(), BoxError> 
 
     let mut db = t.setup_db(models!(Item)).await;
 
-    // Some — driver receives JSON string
+    // Some — driver receives JSON string. The `Option<Json<T>>` field
+    // also accepts a bare `Json(value)` via the `IntoExpr<Option<T>> for T`
+    // blanket, so the `Some(...)` wrapping is optional.
     t.log().clear();
     let map = HashMap::from([("key".to_string(), "value".to_string())]);
     let expected_json = serde_json::to_string(&map).unwrap();
-    let record = Item::create()
-        .data(Some(Json(map.clone())))
-        .exec(&mut db)
-        .await?;
+    let record = Item::create().data(Json(map.clone())).exec(&mut db).await?;
 
     let (op, _) = t.log().pop();
     let val_pos = if driver_test_cfg!(id_u64) { 0 } else { 1 };
@@ -157,9 +151,11 @@ pub async fn json_option_inside_json_null(t: &mut Test) -> Result<(), BoxError> 
 
     let mut db = t.setup_db(models!(Item)).await;
 
-    // None → JSON text "null", not SQL NULL
+    // None → JSON text "null", not SQL NULL.
+    // `Option<String>` decodes through the `IntoExpr<Json<T>> for T`
+    // blanket — `T` here is `Option<String>`, which is `Serialize`.
     t.log().clear();
-    let empty_record = Item::create().extra(Json(None)).exec(&mut db).await?;
+    let empty_record = Item::create().extra(None).exec(&mut db).await?;
 
     let (op, _) = t.log().pop();
     let val_pos = if driver_test_cfg!(id_u64) { 0 } else { 1 };
@@ -174,7 +170,7 @@ pub async fn json_option_inside_json_null(t: &mut Test) -> Result<(), BoxError> 
     t.log().clear();
     let expected_json = serde_json::to_string(&Some("hello")).unwrap();
     let record = Item::create()
-        .extra(Json(Some("hello".to_string())))
+        .extra(Some("hello".to_string()))
         .exec(&mut db)
         .await?;
 
@@ -214,10 +210,7 @@ pub async fn json_custom_struct(t: &mut Test) -> Result<(), BoxError> {
         labels: vec!["alpha".to_string(), "beta".to_string()],
     };
     let expected_json = serde_json::to_string(&meta).unwrap();
-    let record = Item::create()
-        .meta(Json(meta.clone()))
-        .exec(&mut db)
-        .await?;
+    let record = Item::create().meta(meta.clone()).exec(&mut db).await?;
 
     let (op, _) = t.log().pop();
     let val_pos = if driver_test_cfg!(id_u64) { 0 } else { 1 };

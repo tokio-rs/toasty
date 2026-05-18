@@ -368,7 +368,7 @@ pub async fn deferred_json_create_returns_loaded(t: &mut Test) -> Result<()> {
 
     let created = toasty::create!(Repository {
         name: "main".to_string(),
-        payload: toasty::Json(initial.clone()),
+        payload: initial.clone(),
     })
     .exec(&mut db)
     .await?;
@@ -391,10 +391,10 @@ pub async fn deferred_json_default_load_leaves_unloaded(t: &mut Test) -> Result<
 
     let created = toasty::create!(Repository {
         name: "main".to_string(),
-        payload: toasty::Json(Payload {
+        payload: Payload {
             name: "users".to_string(),
             version: 1,
-        }),
+        },
     })
     .exec(&mut db)
     .await?;
@@ -420,7 +420,7 @@ pub async fn deferred_json_exec_lazy_loads_value(t: &mut Test) -> Result<()> {
 
     let created = toasty::create!(Repository {
         name: "main".to_string(),
-        payload: toasty::Json(initial.clone()),
+        payload: initial.clone(),
     })
     .exec(&mut db)
     .await?;
@@ -452,7 +452,7 @@ pub async fn deferred_json_include_eager_loads_value(t: &mut Test) -> Result<()>
 
     let created = toasty::create!(Repository {
         name: "main".to_string(),
-        payload: toasty::Json(initial.clone()),
+        payload: initial.clone(),
     })
     .exec(&mut db)
     .await?;
@@ -489,7 +489,7 @@ pub async fn deferred_json_update_refreshes_loaded_value(t: &mut Test) -> Result
 
     let created = toasty::create!(Repository {
         name: "main".to_string(),
-        payload: toasty::Json(initial),
+        payload: initial,
     })
     .exec(&mut db)
     .await?;
@@ -499,10 +499,7 @@ pub async fn deferred_json_update_refreshes_loaded_value(t: &mut Test) -> Result
 
     // The update echoes the assigned value back through the reload path,
     // which JSON-decodes and re-wraps in `Deferred`.
-    doc.update()
-        .payload(toasty::Json(next.clone()))
-        .exec(&mut db)
-        .await?;
+    doc.update().payload(next.clone()).exec(&mut db).await?;
     assert!(!doc.payload.is_unloaded());
     assert_eq!(&next, &doc.payload.get().0);
 

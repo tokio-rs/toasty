@@ -417,10 +417,12 @@ that support `varchar`.
 let post = toasty::create!(Post {
     title: "Hello",
     tags: vec!["rust".to_string(), "toasty".to_string()],
-    meta: toasty::Json(Metadata {
+    // The bare value is accepted via the `IntoExpr<Json<T>> for T`
+    // blanket — wrapping with `toasty::Json(...)` is optional.
+    meta: Metadata {
         version: 1,
         labels: vec!["alpha".to_string()],
-    }),
+    },
 })
 .exec(&mut db)
 .await?;
