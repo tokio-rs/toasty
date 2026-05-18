@@ -89,6 +89,36 @@ pub fn build_deferred_load<T, S: IntoStatement>(stmt: S, field_index: usize) -> 
     Statement::from_untyped_stmt(untyped)
 }
 
+/// Decode a `#[deferred]` field's column value into `Deferred<L::Output>`.
+///
+/// Lowering wraps a loaded deferred field in a 1-element record and emits
+/// a bare `Null` when the column was excluded from the SELECT — matching
+/// what [`<Deferred<T> as Load>::load`](Deferred) does. This helper
+/// performs the same envelope handling but routes the inner value through
+/// an arbitrary `L: Load` instead of requiring the value type itself to
+/// implement [`Load`], so it composes with adapters like
+/// [`stmt::Json<T>`](crate::stmt::Json) for `#[serialize] + #[deferred]`
+/// fields where the user's type only implements `serde::Deserialize`.
+///
+/// `field_name` is included in the mismatch error so generated code can
+/// surface which column produced an unexpected envelope shape.
+#[doc(hidden)]
+pub fn decode_deferred<L: Load>(
+    value: toasty_core::stmt::Value,
+    field_name: &str,
+) -> crate::Result<Deferred<L::Output>> {
+    match value {
+        toasty_core::stmt::Value::Null => Ok(Deferred::default()),
+        toasty_core::stmt::Value::Record(record) if record.fields.len() == 1 => {
+            let inner = record.fields.into_iter().next().unwrap();
+            Ok(Deferred::from(L::load(inner)?))
+        }
+        value => Err(toasty_core::Error::from_args(format_args!(
+            "deferred field '{field_name}' decoder expected Null or single-field Record, got {value:?}"
+        ))),
+    }
+}
+
 impl<T> Default for Deferred<T> {
     fn default() -> Self {
         Self { value: None }

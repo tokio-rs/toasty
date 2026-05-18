@@ -486,33 +486,21 @@ impl Expand<'_> {
             };
 
             match &field.ty {
-                FieldTy::Primitive(_) if field.attrs.serialize.is_some() => {
-                    let decoded = self.expand_serialize_decode(field);
-
-                    // For `#[deferred]` + `#[serialize]`, lowering wraps a
-                    // loaded value in a 1-element record and emits a bare Null
-                    // when the field was excluded from the SELECT — matching
-                    // `<Deferred<T> as Load>::load`. Peel that envelope first,
-                    // then JSON-decode the inner column, then re-wrap as a
-                    // loaded `Deferred<T>`.
+                FieldTy::Primitive(ty) if field.attrs.serialize.is_some() => {
+                    // For `#[serialize] + #[deferred]`, the runtime helper
+                    // `decode_deferred::<Json<T>>` handles both the deferred
+                    // envelope (Null = unloaded, Record([loaded]) = loaded)
+                    // and the inner JSON decode in one call.
                     if field.attrs.deferred {
-                        let wrap = self.wrap_in_deferred(field, decoded);
+                        let inner_ty = quote!(<#ty as #toasty::Defer>::Inner);
                         quote! {
-                            #field_name {
-                                match record[#index_tokenized].take() {
-                                    #toasty::core::stmt::Value::Null => #toasty::Deferred::default(),
-                                    #toasty::core::stmt::Value::Record(inner) if inner.fields.len() == 1 => {
-                                        let value = inner.fields.into_iter().next().unwrap();
-                                        #wrap
-                                    }
-                                    value => return Err(#toasty::Error::from_args(format_args!(
-                                        "deferred serialized field '{}' decoder expected Null or single-field Record, got {value:?}",
-                                        #field_name_str
-                                    ))),
-                                }
-                            },
+                            #field_name #toasty::decode_deferred::<#toasty::stmt::Json<#inner_ty>>(
+                                record[#index_tokenized].take(),
+                                #field_name_str,
+                            )?,
                         }
                     } else {
+                        let decoded = self.expand_serialize_decode(field);
                         quote! {
                             #field_name {
                                 let value = record[#index_tokenized].take();

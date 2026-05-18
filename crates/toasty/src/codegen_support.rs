@@ -15,7 +15,7 @@ pub use crate::{
     schema::{
         Auto, BelongsTo, CreateField, CreateMeta, Defer, Deferred, DiscoverItem, Embed, Field,
         HasMany, HasOne, Load, Model, Register, Relation, Scope, ValidateCreate,
-        build_deferred_load, generate_unique_id,
+        build_deferred_load, decode_deferred, generate_unique_id,
     },
     stmt::CreateMany,
     stmt::{self, Assign, IntoExpr, IntoInsert, IntoStatement, List, Path},
