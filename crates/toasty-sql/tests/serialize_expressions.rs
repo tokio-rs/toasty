@@ -137,25 +137,37 @@ fn ilike_renders_on_postgresql() {
     assert!(sql.contains("$1 ILIKE $2"), "expected ` ILIKE ` in: {sql}");
 }
 
-#[test]
-fn ilike_falls_back_to_like_on_mysql_and_sqlite() {
-    // The `Like` serializer only emits ILIKE on PostgreSQL; for other flavors
-    // it falls back to plain `LIKE`, treating `case_insensitive` as a no-op
-    // at the SQL layer (collations / lower() handle case folding upstream).
-    let expr_mysql = Expr::ilike(Expr::arg(0), Expr::arg(1));
-    let sql = render_mysql(expr_mysql);
-    assert!(sql.contains("LIKE"), "expected LIKE on MySQL in: {sql}");
-    assert!(
-        !sql.contains("ILIKE"),
-        "MySQL should not render ILIKE in: {sql}"
-    );
+// MySQL and SQLite do not have `ILIKE`. The serializer currently emits plain
+// `LIKE`, which happens to match case-insensitively for ASCII because of the
+// default collations on both engines — but SQLite's `LIKE` is case-sensitive
+// for non-ASCII characters, so `.ilike("café%")` silently fails to match
+// `CAFÉ`. See https://github.com/tokio-rs/toasty/issues/802.
+//
+// The tests below pin the expected behavior once the serializer is fixed —
+// likely by wrapping both sides in `LOWER(...)` (the most portable option)
+// or by adding a `COLLATE` clause. They assert the most-likely shape; if
+// the eventual fix lands a different mechanism the assertion should be
+// adjusted at that point.
 
-    let expr_sqlite = Expr::ilike(Expr::arg(0), Expr::arg(1));
-    let sql = render_sqlite(expr_sqlite);
-    assert!(sql.contains("LIKE"), "expected LIKE on SQLite in: {sql}");
+#[ignore = "ilike case-insensitivity for non-ASCII is broken on MySQL/SQLite — see #802"]
+#[test]
+fn ilike_handles_non_ascii_case_insensitivity_on_mysql() {
+    let expr = Expr::ilike(Expr::arg(0), Expr::arg(1));
+    let sql = render_mysql(expr);
     assert!(
-        !sql.contains("ILIKE"),
-        "SQLite should not render ILIKE in: {sql}"
+        sql.contains("LOWER("),
+        "expected case-folding wrapper (e.g. LOWER) in: {sql}"
+    );
+}
+
+#[ignore = "ilike case-insensitivity for non-ASCII is broken on MySQL/SQLite — see #802"]
+#[test]
+fn ilike_handles_non_ascii_case_insensitivity_on_sqlite() {
+    let expr = Expr::ilike(Expr::arg(0), Expr::arg(1));
+    let sql = render_sqlite(expr);
+    assert!(
+        sql.contains("LOWER("),
+        "expected case-folding wrapper (e.g. LOWER) in: {sql}"
     );
 }
 
