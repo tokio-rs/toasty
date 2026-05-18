@@ -77,18 +77,6 @@ use std::fmt;
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Json<T>(pub T);
 
-impl<T> Json<T> {
-    /// Construct a new `Json<T>` wrapping `value`.
-    pub const fn new(value: T) -> Self {
-        Json(value)
-    }
-
-    /// Consume the wrapper and return the inner value.
-    pub fn into_inner(self) -> T {
-        self.0
-    }
-}
-
 impl<T> From<T> for Json<T> {
     fn from(value: T) -> Self {
         Json(value)
