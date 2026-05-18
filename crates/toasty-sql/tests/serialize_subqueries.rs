@@ -157,7 +157,9 @@ fn values_multiple_rows_postgresql() {
 #[test]
 fn values_uses_row_wrapper_on_mysql_outside_insert() {
     // Outside of INSERT, MySQL's table value constructor requires each row to
-    // be wrapped in `ROW(...)`.
+    // be wrapped in `ROW(...)`. The fields go directly inside `ROW(...)`,
+    // not wrapped in an extra layer of parens — `ROW((1, 'a'))` is rejected
+    // by MySQL as a single row-typed operand.
     let schema = Schema::default();
     let values = Values::new(vec![
         Expr::record([Expr::from(1i64), Expr::from("a")]),
@@ -166,15 +168,13 @@ fn values_uses_row_wrapper_on_mysql_outside_insert() {
     let stmt: stmt::Statement = stmt::Query::values(values).into();
     let sql = render_mysql(&schema, stmt);
 
-    // Each row is a `Record`, which serializes with parens — so MySQL emits
-    // `ROW((...))` (the `ROW(` wrapper around the record's own `(...)`).
     assert!(
-        sql.contains("ROW(("),
-        "expected `ROW((...))` wrappers in MySQL: {sql}"
+        sql.contains("ROW(1, 'a'), ROW(2, 'b')"),
+        "expected canonical `ROW(...)` wrappers in MySQL: {sql}"
     );
     assert!(
-        sql.matches("ROW(").count() == 2,
-        "expected one `ROW(` per row in MySQL: {sql}"
+        !sql.contains("ROW(("),
+        "did not expect `ROW((...))` double-paren in MySQL: {sql}"
     );
 }
 
