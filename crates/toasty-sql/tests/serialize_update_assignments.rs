@@ -11,6 +11,7 @@
 //! Tests construct the AST directly so the serializer is exercised in
 //! isolation — no lowering pipeline involved.
 
+use expect_test::expect;
 use toasty_core::{
     schema::db::{Column, ColumnId, PrimaryKey, Schema, Table, TableId, Type as StorageType},
     stmt::{self, Assignments, Expr, Filter, Update, UpdateTarget},
@@ -123,11 +124,11 @@ fn set_assignment_postgresql() {
     let mut assignments = Assignments::default();
     assignments.set(1usize, Expr::from("x"));
 
-    let sql = render(Flavor::Postgresql, &schema, update_with(assignments));
-    assert!(
-        sql.contains(r#"SET "name" = 'x'"#),
-        "expected `SET \"name\" = 'x'` in: {sql}"
-    );
+    expect![[r#"UPDATE "users" AS tbl_0_0 SET "name" = 'x';"#]].assert_eq(&render(
+        Flavor::Postgresql,
+        &schema,
+        update_with(assignments),
+    ));
 }
 
 #[test]
@@ -136,11 +137,11 @@ fn set_assignment_mysql() {
     let mut assignments = Assignments::default();
     assignments.set(1usize, Expr::from("x"));
 
-    let sql = render(Flavor::Mysql, &schema, update_with(assignments));
-    assert!(
-        sql.contains("SET `name` = 'x'"),
-        "expected ``SET `name` = 'x'`` in: {sql}"
-    );
+    expect!["UPDATE `users` AS tbl_0_0 SET `name` = 'x';"].assert_eq(&render(
+        Flavor::Mysql,
+        &schema,
+        update_with(assignments),
+    ));
 }
 
 #[test]
@@ -149,11 +150,11 @@ fn set_assignment_sqlite() {
     let mut assignments = Assignments::default();
     assignments.set(1usize, Expr::from("x"));
 
-    let sql = render(Flavor::Sqlite, &schema, update_with(assignments));
-    assert!(
-        sql.contains(r#"SET "name" = 'x'"#),
-        "expected `SET \"name\" = 'x'` in: {sql}"
-    );
+    expect![[r#"UPDATE "users" AS tbl_0_0 SET "name" = 'x';"#]].assert_eq(&render(
+        Flavor::Sqlite,
+        &schema,
+        update_with(assignments),
+    ));
 }
 
 // -----------------------------------------------------------------------------
@@ -167,12 +168,11 @@ fn append_assignment_postgresql() {
     let mut assignments = Assignments::default();
     assignments.append(2usize, Expr::list([Expr::from(7i64)]));
 
-    let sql = render(Flavor::Postgresql, &schema, update_with(assignments));
-    // PostgreSQL uses `text[] || text[]` array concatenation.
-    assert!(
-        sql.contains(r#""tags" = "tags" || "#),
-        "expected `\"tags\" = \"tags\" || ...` in: {sql}"
-    );
+    expect![[r#"UPDATE "users" AS tbl_0_0 SET "tags" = "tags" || (7);"#]].assert_eq(&render(
+        Flavor::Postgresql,
+        &schema,
+        update_with(assignments),
+    ));
 }
 
 #[test]
@@ -181,12 +181,8 @@ fn append_assignment_mysql() {
     let mut assignments = Assignments::default();
     assignments.append(2usize, Expr::list([Expr::from(7i64)]));
 
-    let sql = render(Flavor::Mysql, &schema, update_with(assignments));
-    // MySQL uses JSON_MERGE_PRESERVE for JSON-array append semantics.
-    assert!(
-        sql.contains("JSON_MERGE_PRESERVE(`tags`, "),
-        "expected `JSON_MERGE_PRESERVE(`tags`, ...)` in: {sql}"
-    );
+    expect!["UPDATE `users` AS tbl_0_0 SET `tags` = JSON_MERGE_PRESERVE(`tags`, (7));"]
+        .assert_eq(&render(Flavor::Mysql, &schema, update_with(assignments)));
 }
 
 #[test]
@@ -195,20 +191,7 @@ fn append_assignment_sqlite() {
     let mut assignments = Assignments::default();
     assignments.append(2usize, Expr::list([Expr::from(7i64)]));
 
-    let sql = render(Flavor::Sqlite, &schema, update_with(assignments));
-    // SQLite uses a `json_group_array` / `json_each` UNION ALL subquery.
-    assert!(
-        sql.contains("SELECT json_group_array(value) FROM"),
-        "expected SQLite json_group_array subquery in: {sql}"
-    );
-    assert!(
-        sql.contains(r#"json_each("tags")"#),
-        "expected `json_each(\"tags\")` in: {sql}"
-    );
-    assert!(
-        sql.contains("UNION ALL SELECT value FROM json_each("),
-        "expected UNION ALL json_each(rhs) in: {sql}"
-    );
+    expect![[r#"UPDATE "users" AS tbl_0_0 SET "tags" = (SELECT json_group_array(value) FROM (SELECT value FROM json_each("tags") UNION ALL SELECT value FROM json_each((7))));"#]].assert_eq(&render(Flavor::Sqlite, &schema, update_with(assignments)));
 }
 
 // -----------------------------------------------------------------------------
@@ -221,10 +204,8 @@ fn remove_assignment_postgresql() {
     let mut assignments = Assignments::default();
     assignments.remove(2usize, Expr::from(7i64));
 
-    let sql = render(Flavor::Postgresql, &schema, update_with(assignments));
-    assert!(
-        sql.contains(r#"array_remove("tags", "#),
-        "expected `array_remove(\"tags\", ...)` in: {sql}"
+    expect![[r#"UPDATE "users" AS tbl_0_0 SET "tags" = array_remove("tags", 7);"#]].assert_eq(
+        &render(Flavor::Postgresql, &schema, update_with(assignments)),
     );
 }
 
@@ -260,12 +241,12 @@ fn pop_assignment_postgresql() {
     let mut assignments = Assignments::default();
     assignments.pop(2usize);
 
-    let sql = render(Flavor::Postgresql, &schema, update_with(assignments));
-    // PG: `col[1:cardinality(col) - 1]` — drops the last element via slicing.
-    assert!(
-        sql.contains(r#""tags" = "tags"[1:cardinality("tags") - 1]"#),
-        "expected PG array slice `\"tags\"[1:cardinality(\"tags\") - 1]` in: {sql}"
-    );
+    expect![[r#"UPDATE "users" AS tbl_0_0 SET "tags" = "tags"[1:cardinality("tags") - 1];"#]]
+        .assert_eq(&render(
+            Flavor::Postgresql,
+            &schema,
+            update_with(assignments),
+        ));
 }
 
 #[test]
@@ -296,22 +277,11 @@ fn remove_at_assignment_postgresql() {
     let mut assignments = Assignments::default();
     assignments.remove_at(2usize, Expr::from(3i64));
 
-    let sql = render(Flavor::Postgresql, &schema, update_with(assignments));
-    // `col[1:idx] || col[idx + 2:cardinality(col)]` — keep prefix, drop the
-    // element at user-facing index `idx`, append suffix. PG arrays are
-    // 1-based, so element at user index `i` lives at PG position `i + 1`.
-    assert!(
-        sql.contains(r#""tags"[1:3]"#),
-        "expected prefix slice `\"tags\"[1:3]` in: {sql}"
-    );
-    assert!(
-        sql.contains(r#""tags"[3 + 2:cardinality("tags")]"#),
-        "expected suffix slice `\"tags\"[3 + 2:cardinality(\"tags\")]` in: {sql}"
-    );
-    assert!(
-        sql.contains(r#""tags"[1:3] || "tags"[3 + 2:cardinality("tags")]"#),
-        "expected concat of prefix and suffix slices in: {sql}"
-    );
+    expect![[r#"UPDATE "users" AS tbl_0_0 SET "tags" = "tags"[1:3] || "tags"[3 + 2:cardinality("tags")];"#]].assert_eq(&render(
+        Flavor::Postgresql,
+        &schema,
+        update_with(assignments),
+    ));
 }
 
 #[test]

@@ -7,6 +7,7 @@
 //! `#[should_panic(expected = "...")]` so the test suite documents which
 //! combinations intentionally panic today and tracks the exact panic message.
 
+use expect_test::expect;
 use toasty_core::{
     driver::Capability,
     schema::db::{
@@ -104,15 +105,6 @@ fn render_type(flavor: &str, storage_ty: Type) -> Vec<String> {
     serialize_migration(&stmts, flavor)
 }
 
-/// Convenience: assert that the `CREATE TABLE` for column `col` contains the
-/// expected substring (the rendered storage type).
-fn assert_col_type(sql: &[String], expected: &str) {
-    assert!(
-        sql.iter().any(|s| s.contains(expected)),
-        "expected column type {expected:?} in: {sql:?}"
-    );
-}
-
 fn make_enum_type(name: Option<&str>, variants: &[&str]) -> TypeEnum {
     TypeEnum {
         name: name.map(|s| s.to_string()),
@@ -131,20 +123,35 @@ fn make_enum_type(name: Option<&str>, variants: &[&str]) -> TypeEnum {
 
 #[test]
 fn boolean_postgresql() {
-    let sql = render_type("postgresql", Type::Boolean);
-    assert_col_type(&sql, "\"col\" BOOLEAN");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" BOOLEAN NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("postgresql", Type::Boolean).join("\n"));
 }
 
 #[test]
 fn boolean_mysql() {
-    let sql = render_type("mysql", Type::Boolean);
-    assert_col_type(&sql, "`col` BOOLEAN");
+    expect![[r#"
+        CREATE TABLE `t` (
+            `id` BIGINT NOT NULL,
+            `col` BOOLEAN NOT NULL,
+            PRIMARY KEY (`id`)
+        );"#]]
+    .assert_eq(&render_type("mysql", Type::Boolean).join("\n"));
 }
 
 #[test]
 fn boolean_sqlite() {
-    let sql = render_type("sqlite", Type::Boolean);
-    assert_col_type(&sql, "\"col\" BOOLEAN");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" BOOLEAN NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("sqlite", Type::Boolean).join("\n"));
 }
 
 // ---------------------------------------------------------------------------
@@ -153,56 +160,101 @@ fn boolean_sqlite() {
 
 #[test]
 fn integer_2_postgresql_smallint() {
-    let sql = render_type("postgresql", Type::Integer(2));
-    assert_col_type(&sql, "\"col\" SMALLINT");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" SMALLINT NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("postgresql", Type::Integer(2)).join("\n"));
 }
 
 #[test]
 fn integer_2_mysql_smallint() {
-    let sql = render_type("mysql", Type::Integer(2));
-    assert_col_type(&sql, "`col` SMALLINT");
+    expect![[r#"
+        CREATE TABLE `t` (
+            `id` BIGINT NOT NULL,
+            `col` SMALLINT NOT NULL,
+            PRIMARY KEY (`id`)
+        );"#]]
+    .assert_eq(&render_type("mysql", Type::Integer(2)).join("\n"));
 }
 
 #[test]
 fn integer_2_sqlite_smallint() {
-    let sql = render_type("sqlite", Type::Integer(2));
-    assert_col_type(&sql, "\"col\" SMALLINT");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" SMALLINT NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("sqlite", Type::Integer(2)).join("\n"));
 }
 
 #[test]
 fn integer_4_postgresql_integer() {
-    let sql = render_type("postgresql", Type::Integer(4));
-    assert_col_type(&sql, "\"col\" INTEGER");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" INTEGER NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("postgresql", Type::Integer(4)).join("\n"));
 }
 
 #[test]
 fn integer_4_mysql_integer() {
-    let sql = render_type("mysql", Type::Integer(4));
-    assert_col_type(&sql, "`col` INTEGER");
+    expect![[r#"
+        CREATE TABLE `t` (
+            `id` BIGINT NOT NULL,
+            `col` INTEGER NOT NULL,
+            PRIMARY KEY (`id`)
+        );"#]]
+    .assert_eq(&render_type("mysql", Type::Integer(4)).join("\n"));
 }
 
 #[test]
 fn integer_4_sqlite_integer() {
-    let sql = render_type("sqlite", Type::Integer(4));
-    assert_col_type(&sql, "\"col\" INTEGER");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" INTEGER NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("sqlite", Type::Integer(4)).join("\n"));
 }
 
 #[test]
 fn integer_8_postgresql_bigint() {
-    let sql = render_type("postgresql", Type::Integer(8));
-    assert_col_type(&sql, "\"col\" BIGINT");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" BIGINT NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("postgresql", Type::Integer(8)).join("\n"));
 }
 
 #[test]
 fn integer_8_mysql_bigint() {
-    let sql = render_type("mysql", Type::Integer(8));
-    assert_col_type(&sql, "`col` BIGINT");
+    expect![[r#"
+        CREATE TABLE `t` (
+            `id` BIGINT NOT NULL,
+            `col` BIGINT NOT NULL,
+            PRIMARY KEY (`id`)
+        );"#]]
+    .assert_eq(&render_type("mysql", Type::Integer(8)).join("\n"));
 }
 
 #[test]
 fn integer_8_sqlite_bigint() {
-    let sql = render_type("sqlite", Type::Integer(8));
-    assert_col_type(&sql, "\"col\" BIGINT");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" BIGINT NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("sqlite", Type::Integer(8)).join("\n"));
 }
 
 // ---------------------------------------------------------------------------
@@ -211,62 +263,112 @@ fn integer_8_sqlite_bigint() {
 
 #[test]
 fn unsigned_integer_1_mysql_tinyint_unsigned() {
-    let sql = render_type("mysql", Type::UnsignedInteger(1));
-    assert_col_type(&sql, "`col` TINYINT UNSIGNED");
+    expect![[r#"
+        CREATE TABLE `t` (
+            `id` BIGINT NOT NULL,
+            `col` TINYINT UNSIGNED NOT NULL,
+            PRIMARY KEY (`id`)
+        );"#]]
+    .assert_eq(&render_type("mysql", Type::UnsignedInteger(1)).join("\n"));
 }
 
 #[test]
 fn unsigned_integer_2_mysql_smallint_unsigned() {
-    let sql = render_type("mysql", Type::UnsignedInteger(2));
-    assert_col_type(&sql, "`col` SMALLINT UNSIGNED");
+    expect![[r#"
+        CREATE TABLE `t` (
+            `id` BIGINT NOT NULL,
+            `col` SMALLINT UNSIGNED NOT NULL,
+            PRIMARY KEY (`id`)
+        );"#]]
+    .assert_eq(&render_type("mysql", Type::UnsignedInteger(2)).join("\n"));
 }
 
 #[test]
 fn unsigned_integer_4_mysql_int_unsigned() {
-    let sql = render_type("mysql", Type::UnsignedInteger(4));
-    assert_col_type(&sql, "`col` INT UNSIGNED");
+    expect![[r#"
+        CREATE TABLE `t` (
+            `id` BIGINT NOT NULL,
+            `col` INT UNSIGNED NOT NULL,
+            PRIMARY KEY (`id`)
+        );"#]]
+    .assert_eq(&render_type("mysql", Type::UnsignedInteger(4)).join("\n"));
 }
 
 #[test]
 fn unsigned_integer_8_mysql_bigint_unsigned() {
-    let sql = render_type("mysql", Type::UnsignedInteger(8));
-    assert_col_type(&sql, "`col` BIGINT UNSIGNED");
+    expect![[r#"
+        CREATE TABLE `t` (
+            `id` BIGINT NOT NULL,
+            `col` BIGINT UNSIGNED NOT NULL,
+            PRIMARY KEY (`id`)
+        );"#]]
+    .assert_eq(&render_type("mysql", Type::UnsignedInteger(8)).join("\n"));
 }
 
 #[test]
 fn unsigned_integer_1_postgresql_promotes_to_smallint() {
-    let sql = render_type("postgresql", Type::UnsignedInteger(1));
-    assert_col_type(&sql, "\"col\" SMALLINT");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" SMALLINT NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("postgresql", Type::UnsignedInteger(1)).join("\n"));
 }
 
 #[test]
 fn unsigned_integer_2_postgresql_promotes_to_integer() {
-    let sql = render_type("postgresql", Type::UnsignedInteger(2));
-    assert_col_type(&sql, "\"col\" INTEGER");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" INTEGER NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("postgresql", Type::UnsignedInteger(2)).join("\n"));
 }
 
 #[test]
 fn unsigned_integer_4_postgresql_promotes_to_bigint() {
-    let sql = render_type("postgresql", Type::UnsignedInteger(4));
-    assert_col_type(&sql, "\"col\" BIGINT");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" BIGINT NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("postgresql", Type::UnsignedInteger(4)).join("\n"));
 }
 
 #[test]
 fn unsigned_integer_8_postgresql_promotes_to_bigint() {
-    let sql = render_type("postgresql", Type::UnsignedInteger(8));
-    assert_col_type(&sql, "\"col\" BIGINT");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" BIGINT NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("postgresql", Type::UnsignedInteger(8)).join("\n"));
 }
 
 #[test]
 fn unsigned_integer_4_sqlite_integer() {
-    let sql = render_type("sqlite", Type::UnsignedInteger(4));
-    assert_col_type(&sql, "\"col\" INTEGER");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" INTEGER NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("sqlite", Type::UnsignedInteger(4)).join("\n"));
 }
 
 #[test]
 fn unsigned_integer_8_sqlite_integer() {
-    let sql = render_type("sqlite", Type::UnsignedInteger(8));
-    assert_col_type(&sql, "\"col\" INTEGER");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" INTEGER NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("sqlite", Type::UnsignedInteger(8)).join("\n"));
 }
 
 // ---------------------------------------------------------------------------
@@ -275,38 +377,68 @@ fn unsigned_integer_8_sqlite_integer() {
 
 #[test]
 fn float_4_postgresql_real() {
-    let sql = render_type("postgresql", Type::Float(4));
-    assert_col_type(&sql, "\"col\" REAL");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" REAL NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("postgresql", Type::Float(4)).join("\n"));
 }
 
 #[test]
 fn float_8_postgresql_double_precision() {
-    let sql = render_type("postgresql", Type::Float(8));
-    assert_col_type(&sql, "\"col\" DOUBLE PRECISION");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" DOUBLE PRECISION NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("postgresql", Type::Float(8)).join("\n"));
 }
 
 #[test]
 fn float_4_mysql_float() {
-    let sql = render_type("mysql", Type::Float(4));
-    assert_col_type(&sql, "`col` FLOAT");
+    expect![[r#"
+        CREATE TABLE `t` (
+            `id` BIGINT NOT NULL,
+            `col` FLOAT NOT NULL,
+            PRIMARY KEY (`id`)
+        );"#]]
+    .assert_eq(&render_type("mysql", Type::Float(4)).join("\n"));
 }
 
 #[test]
 fn float_8_mysql_double() {
-    let sql = render_type("mysql", Type::Float(8));
-    assert_col_type(&sql, "`col` DOUBLE");
+    expect![[r#"
+        CREATE TABLE `t` (
+            `id` BIGINT NOT NULL,
+            `col` DOUBLE NOT NULL,
+            PRIMARY KEY (`id`)
+        );"#]]
+    .assert_eq(&render_type("mysql", Type::Float(8)).join("\n"));
 }
 
 #[test]
 fn float_4_sqlite_real() {
-    let sql = render_type("sqlite", Type::Float(4));
-    assert_col_type(&sql, "\"col\" REAL");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" REAL NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("sqlite", Type::Float(4)).join("\n"));
 }
 
 #[test]
 fn float_8_sqlite_real() {
-    let sql = render_type("sqlite", Type::Float(8));
-    assert_col_type(&sql, "\"col\" REAL");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" REAL NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("sqlite", Type::Float(8)).join("\n"));
 }
 
 // ---------------------------------------------------------------------------
@@ -315,38 +447,68 @@ fn float_8_sqlite_real() {
 
 #[test]
 fn text_postgresql() {
-    let sql = render_type("postgresql", Type::Text);
-    assert_col_type(&sql, "\"col\" TEXT");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" TEXT NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("postgresql", Type::Text).join("\n"));
 }
 
 #[test]
 fn text_mysql() {
-    let sql = render_type("mysql", Type::Text);
-    assert_col_type(&sql, "`col` TEXT");
+    expect![[r#"
+        CREATE TABLE `t` (
+            `id` BIGINT NOT NULL,
+            `col` TEXT NOT NULL,
+            PRIMARY KEY (`id`)
+        );"#]]
+    .assert_eq(&render_type("mysql", Type::Text).join("\n"));
 }
 
 #[test]
 fn text_sqlite() {
-    let sql = render_type("sqlite", Type::Text);
-    assert_col_type(&sql, "\"col\" TEXT");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" TEXT NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("sqlite", Type::Text).join("\n"));
 }
 
 #[test]
 fn varchar_postgresql() {
-    let sql = render_type("postgresql", Type::VarChar(255));
-    assert_col_type(&sql, "\"col\" VARCHAR(255)");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" VARCHAR(255) NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("postgresql", Type::VarChar(255)).join("\n"));
 }
 
 #[test]
 fn varchar_mysql() {
-    let sql = render_type("mysql", Type::VarChar(255));
-    assert_col_type(&sql, "`col` VARCHAR(255)");
+    expect![[r#"
+        CREATE TABLE `t` (
+            `id` BIGINT NOT NULL,
+            `col` VARCHAR(255) NOT NULL,
+            PRIMARY KEY (`id`)
+        );"#]]
+    .assert_eq(&render_type("mysql", Type::VarChar(255)).join("\n"));
 }
 
 #[test]
 fn varchar_sqlite() {
-    let sql = render_type("sqlite", Type::VarChar(255));
-    assert_col_type(&sql, "\"col\" VARCHAR(255)");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" VARCHAR(255) NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("sqlite", Type::VarChar(255)).join("\n"));
 }
 
 // ---------------------------------------------------------------------------
@@ -355,8 +517,13 @@ fn varchar_sqlite() {
 
 #[test]
 fn uuid_postgresql() {
-    let sql = render_type("postgresql", Type::Uuid);
-    assert_col_type(&sql, "\"col\" UUID");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" UUID NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("postgresql", Type::Uuid).join("\n"));
 }
 
 #[test]
@@ -377,20 +544,35 @@ fn uuid_sqlite_panics() {
 
 #[test]
 fn numeric_unconstrained_postgresql() {
-    let sql = render_type("postgresql", Type::Numeric(None));
-    assert_col_type(&sql, "\"col\" NUMERIC");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" NUMERIC NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("postgresql", Type::Numeric(None)).join("\n"));
 }
 
 #[test]
 fn numeric_with_precision_postgresql() {
-    let sql = render_type("postgresql", Type::Numeric(Some((10, 2))));
-    assert_col_type(&sql, "\"col\" NUMERIC(10, 2)");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" NUMERIC(10, 2) NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("postgresql", Type::Numeric(Some((10, 2)))).join("\n"));
 }
 
 #[test]
 fn numeric_with_precision_mysql() {
-    let sql = render_type("mysql", Type::Numeric(Some((10, 2))));
-    assert_col_type(&sql, "`col` DECIMAL(10, 2)");
+    expect![[r#"
+        CREATE TABLE `t` (
+            `id` BIGINT NOT NULL,
+            `col` DECIMAL(10, 2) NOT NULL,
+            PRIMARY KEY (`id`)
+        );"#]]
+    .assert_eq(&render_type("mysql", Type::Numeric(Some((10, 2)))).join("\n"));
 }
 
 #[test]
@@ -417,8 +599,13 @@ fn numeric_with_precision_sqlite_panics() {
 
 #[test]
 fn binary_mysql() {
-    let sql = render_type("mysql", Type::Binary(16));
-    assert_col_type(&sql, "`col` BINARY(16)");
+    expect![[r#"
+        CREATE TABLE `t` (
+            `id` BIGINT NOT NULL,
+            `col` BINARY(16) NOT NULL,
+            PRIMARY KEY (`id`)
+        );"#]]
+    .assert_eq(&render_type("mysql", Type::Binary(16)).join("\n"));
 }
 
 #[test]
@@ -439,20 +626,35 @@ fn binary_sqlite_panics() {
 
 #[test]
 fn blob_postgresql_bytea() {
-    let sql = render_type("postgresql", Type::Blob);
-    assert_col_type(&sql, "\"col\" BYTEA");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" BYTEA NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("postgresql", Type::Blob).join("\n"));
 }
 
 #[test]
 fn blob_mysql_blob() {
-    let sql = render_type("mysql", Type::Blob);
-    assert_col_type(&sql, "`col` BLOB");
+    expect![[r#"
+        CREATE TABLE `t` (
+            `id` BIGINT NOT NULL,
+            `col` BLOB NOT NULL,
+            PRIMARY KEY (`id`)
+        );"#]]
+    .assert_eq(&render_type("mysql", Type::Blob).join("\n"));
 }
 
 #[test]
 fn blob_sqlite_blob() {
-    let sql = render_type("sqlite", Type::Blob);
-    assert_col_type(&sql, "\"col\" BLOB");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" BLOB NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("sqlite", Type::Blob).join("\n"));
 }
 
 // ---------------------------------------------------------------------------
@@ -461,14 +663,24 @@ fn blob_sqlite_blob() {
 
 #[test]
 fn timestamp_postgresql_timestamptz() {
-    let sql = render_type("postgresql", Type::Timestamp(6));
-    assert_col_type(&sql, "\"col\" TIMESTAMPTZ(6)");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" TIMESTAMPTZ(6) NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("postgresql", Type::Timestamp(6)).join("\n"));
 }
 
 #[test]
 fn timestamp_mysql_timestamp() {
-    let sql = render_type("mysql", Type::Timestamp(6));
-    assert_col_type(&sql, "`col` TIMESTAMP(6)");
+    expect![[r#"
+        CREATE TABLE `t` (
+            `id` BIGINT NOT NULL,
+            `col` TIMESTAMP(6) NOT NULL,
+            PRIMARY KEY (`id`)
+        );"#]]
+    .assert_eq(&render_type("mysql", Type::Timestamp(6)).join("\n"));
 }
 
 #[test]
@@ -483,14 +695,24 @@ fn timestamp_sqlite_panics() {
 
 #[test]
 fn date_postgresql() {
-    let sql = render_type("postgresql", Type::Date);
-    assert_col_type(&sql, "\"col\" DATE");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" DATE NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("postgresql", Type::Date).join("\n"));
 }
 
 #[test]
 fn date_mysql() {
-    let sql = render_type("mysql", Type::Date);
-    assert_col_type(&sql, "`col` DATE");
+    expect![[r#"
+        CREATE TABLE `t` (
+            `id` BIGINT NOT NULL,
+            `col` DATE NOT NULL,
+            PRIMARY KEY (`id`)
+        );"#]]
+    .assert_eq(&render_type("mysql", Type::Date).join("\n"));
 }
 
 #[test]
@@ -505,14 +727,24 @@ fn date_sqlite_panics() {
 
 #[test]
 fn time_postgresql() {
-    let sql = render_type("postgresql", Type::Time(3));
-    assert_col_type(&sql, "\"col\" TIME(3)");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" TIME(3) NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("postgresql", Type::Time(3)).join("\n"));
 }
 
 #[test]
 fn time_mysql() {
-    let sql = render_type("mysql", Type::Time(3));
-    assert_col_type(&sql, "`col` TIME(3)");
+    expect![[r#"
+        CREATE TABLE `t` (
+            `id` BIGINT NOT NULL,
+            `col` TIME(3) NOT NULL,
+            PRIMARY KEY (`id`)
+        );"#]]
+    .assert_eq(&render_type("mysql", Type::Time(3)).join("\n"));
 }
 
 #[test]
@@ -527,14 +759,24 @@ fn time_sqlite_panics() {
 
 #[test]
 fn datetime_postgresql_timestamp() {
-    let sql = render_type("postgresql", Type::DateTime(6));
-    assert_col_type(&sql, "\"col\" TIMESTAMP(6)");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" TIMESTAMP(6) NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("postgresql", Type::DateTime(6)).join("\n"));
 }
 
 #[test]
 fn datetime_mysql_datetime() {
-    let sql = render_type("mysql", Type::DateTime(6));
-    assert_col_type(&sql, "`col` DATETIME(6)");
+    expect![[r#"
+        CREATE TABLE `t` (
+            `id` BIGINT NOT NULL,
+            `col` DATETIME(6) NOT NULL,
+            PRIMARY KEY (`id`)
+        );"#]]
+    .assert_eq(&render_type("mysql", Type::DateTime(6)).join("\n"));
 }
 
 #[test]
@@ -550,26 +792,38 @@ fn datetime_sqlite_panics() {
 #[test]
 fn enum_postgresql_named_type() {
     let status = make_enum_type(Some("status"), &["pending", "active", "done"]);
-    let sql = render_type("postgresql", Type::Enum(status));
-    // Postgres references the named enum type; the actual `CREATE TYPE` is a
-    // separate statement. The column DDL just names the type.
-    assert_col_type(&sql, "\"col\" status NOT NULL");
+    expect![[r#"
+        CREATE TYPE "status" AS ENUM ('pending', 'active', 'done');
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" status NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("postgresql", Type::Enum(status)).join("\n"));
 }
 
 #[test]
 fn enum_mysql_inline() {
     let status = make_enum_type(None, &["pending", "active", "done"]);
-    let sql = render_type("mysql", Type::Enum(status));
-    assert_col_type(&sql, "`col` ENUM('pending', 'active', 'done')");
+    expect![[r#"
+        CREATE TABLE `t` (
+            `id` BIGINT NOT NULL,
+            `col` ENUM('pending', 'active', 'done') NOT NULL,
+            PRIMARY KEY (`id`)
+        );"#]]
+    .assert_eq(&render_type("mysql", Type::Enum(status)).join("\n"));
 }
 
 #[test]
 fn enum_sqlite_text_with_check() {
     let status = make_enum_type(None, &["pending", "active", "done"]);
-    let sql = render_type("sqlite", Type::Enum(status));
-    // SQLite renders TEXT and adds a CHECK constraint in the column def.
-    assert_col_type(&sql, "\"col\" TEXT");
-    assert_col_type(&sql, "CHECK (\"col\" IN ('pending', 'active', 'done'))");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" TEXT NOT NULL CHECK ("col" IN ('pending', 'active', 'done')),
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("sqlite", Type::Enum(status)).join("\n"));
 }
 
 // ---------------------------------------------------------------------------
@@ -578,26 +832,46 @@ fn enum_sqlite_text_with_check() {
 
 #[test]
 fn list_postgresql_array_suffix() {
-    let sql = render_type("postgresql", Type::List(Box::new(Type::Integer(8))));
-    assert_col_type(&sql, "\"col\" BIGINT[]");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" BIGINT[] NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("postgresql", Type::List(Box::new(Type::Integer(8)))).join("\n"));
 }
 
 #[test]
 fn list_postgresql_text_array() {
-    let sql = render_type("postgresql", Type::List(Box::new(Type::Text)));
-    assert_col_type(&sql, "\"col\" TEXT[]");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" TEXT[] NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("postgresql", Type::List(Box::new(Type::Text))).join("\n"));
 }
 
 #[test]
 fn list_mysql_json() {
-    let sql = render_type("mysql", Type::List(Box::new(Type::Integer(8))));
-    assert_col_type(&sql, "`col` JSON");
+    expect![[r#"
+        CREATE TABLE `t` (
+            `id` BIGINT NOT NULL,
+            `col` JSON NOT NULL,
+            PRIMARY KEY (`id`)
+        );"#]]
+    .assert_eq(&render_type("mysql", Type::List(Box::new(Type::Integer(8)))).join("\n"));
 }
 
 #[test]
 fn list_sqlite_text() {
-    let sql = render_type("sqlite", Type::List(Box::new(Type::Integer(8))));
-    assert_col_type(&sql, "\"col\" TEXT");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" TEXT NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("sqlite", Type::List(Box::new(Type::Integer(8)))).join("\n"));
 }
 
 // ---------------------------------------------------------------------------
@@ -606,18 +880,33 @@ fn list_sqlite_text() {
 
 #[test]
 fn custom_pass_through_postgresql() {
-    let sql = render_type("postgresql", Type::Custom("CITEXT".to_string()));
-    assert_col_type(&sql, "\"col\" CITEXT");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" CITEXT NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("postgresql", Type::Custom("CITEXT".to_string())).join("\n"));
 }
 
 #[test]
 fn custom_pass_through_mysql() {
-    let sql = render_type("mysql", Type::Custom("MEDIUMTEXT".to_string()));
-    assert_col_type(&sql, "`col` MEDIUMTEXT");
+    expect![[r#"
+        CREATE TABLE `t` (
+            `id` BIGINT NOT NULL,
+            `col` MEDIUMTEXT NOT NULL,
+            PRIMARY KEY (`id`)
+        );"#]]
+    .assert_eq(&render_type("mysql", Type::Custom("MEDIUMTEXT".to_string())).join("\n"));
 }
 
 #[test]
 fn custom_pass_through_sqlite() {
-    let sql = render_type("sqlite", Type::Custom("ANY".to_string()));
-    assert_col_type(&sql, "\"col\" ANY");
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" ANY NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("sqlite", Type::Custom("ANY".to_string())).join("\n"));
 }

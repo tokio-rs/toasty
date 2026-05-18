@@ -9,6 +9,7 @@
 
 use std::panic;
 
+use expect_test::expect;
 use toasty_core::{
     schema::db::Schema,
     stmt::{
@@ -49,22 +50,23 @@ fn render_sqlite(expr: Expr) -> String {
 
 #[test]
 fn binary_op_all_comparison_operators() {
-    let cases: &[(BinaryOp, &str)] = &[
-        (BinaryOp::Eq, "$1 = $2"),
-        (BinaryOp::Ne, "$1 <> $2"),
-        (BinaryOp::Lt, "$1 < $2"),
-        (BinaryOp::Le, "$1 <= $2"),
-        (BinaryOp::Gt, "$1 > $2"),
-        (BinaryOp::Ge, "$1 >= $2"),
-    ];
-    for (op, expected) in cases {
-        let expr = Expr::binary_op(Expr::arg(0), *op, Expr::arg(1));
-        let sql = render_pg(expr);
-        assert!(
-            sql.contains(expected),
-            "expected `{expected}` for op {op:?} in: {sql}"
-        );
-    }
+    let expr = Expr::binary_op(Expr::arg(0), BinaryOp::Eq, Expr::arg(1));
+    expect!["VALUES ($1 = $2);"].assert_eq(&render_pg(expr));
+
+    let expr = Expr::binary_op(Expr::arg(0), BinaryOp::Ne, Expr::arg(1));
+    expect!["VALUES ($1 <> $2);"].assert_eq(&render_pg(expr));
+
+    let expr = Expr::binary_op(Expr::arg(0), BinaryOp::Lt, Expr::arg(1));
+    expect!["VALUES ($1 < $2);"].assert_eq(&render_pg(expr));
+
+    let expr = Expr::binary_op(Expr::arg(0), BinaryOp::Le, Expr::arg(1));
+    expect!["VALUES ($1 <= $2);"].assert_eq(&render_pg(expr));
+
+    let expr = Expr::binary_op(Expr::arg(0), BinaryOp::Gt, Expr::arg(1));
+    expect!["VALUES ($1 > $2);"].assert_eq(&render_pg(expr));
+
+    let expr = Expr::binary_op(Expr::arg(0), BinaryOp::Ge, Expr::arg(1));
+    expect!["VALUES ($1 >= $2);"].assert_eq(&render_pg(expr));
 }
 
 // ---------- Logical ----------
@@ -81,11 +83,7 @@ fn and_chain_joins_operands_with_and_keyword() {
         ],
     }
     .into();
-    let sql = render_pg(expr);
-    assert!(
-        sql.contains("$1 = $2 AND $3 = $4 AND $5 = $6"),
-        "expected three operands joined by AND in: {sql}"
-    );
+    expect!["VALUES ($1 = $2 AND $3 = $4 AND $5 = $6);"].assert_eq(&render_pg(expr));
 }
 
 #[test]
@@ -98,11 +96,7 @@ fn or_chain_joins_operands_with_or_keyword() {
         ],
     }
     .into();
-    let sql = render_pg(expr);
-    assert!(
-        sql.contains("$1 = $2 OR $3 = $4 OR $5 = $6"),
-        "expected three operands joined by OR in: {sql}"
-    );
+    expect!["VALUES ($1 = $2 OR $3 = $4 OR $5 = $6);"].assert_eq(&render_pg(expr));
 }
 
 // ---------- LIKE family ----------
@@ -110,8 +104,7 @@ fn or_chain_joins_operands_with_or_keyword() {
 #[test]
 fn like_renders_with_like_keyword() {
     let expr = Expr::like(Expr::arg(0), Expr::arg(1));
-    let sql = render_pg(expr);
-    assert!(sql.contains("$1 LIKE $2"), "expected ` LIKE ` in: {sql}");
+    expect!["VALUES ($1 LIKE $2);"].assert_eq(&render_pg(expr));
 }
 
 #[test]
@@ -123,18 +116,13 @@ fn like_with_escape_appends_escape_clause() {
         case_insensitive: false,
     }
     .into();
-    let sql = render_pg(expr);
-    assert!(
-        sql.contains("$1 LIKE $2 ESCAPE "),
-        "expected ESCAPE clause in: {sql}"
-    );
+    expect![[r#"VALUES ($1 LIKE $2 ESCAPE '\');"#]].assert_eq(&render_pg(expr));
 }
 
 #[test]
 fn ilike_renders_on_postgresql() {
     let expr = Expr::ilike(Expr::arg(0), Expr::arg(1));
-    let sql = render_pg(expr);
-    assert!(sql.contains("$1 ILIKE $2"), "expected ` ILIKE ` in: {sql}");
+    expect!["VALUES ($1 ILIKE $2);"].assert_eq(&render_pg(expr));
 }
 
 // MySQL and SQLite do not have `ILIKE`. The serializer currently emits plain
@@ -153,29 +141,20 @@ fn ilike_renders_on_postgresql() {
 #[test]
 fn ilike_handles_non_ascii_case_insensitivity_on_mysql() {
     let expr = Expr::ilike(Expr::arg(0), Expr::arg(1));
-    let sql = render_mysql(expr);
-    assert!(
-        sql.contains("LOWER("),
-        "expected case-folding wrapper (e.g. LOWER) in: {sql}"
-    );
+    expect![[r#""#]].assert_eq(&render_mysql(expr));
 }
 
 #[ignore = "ilike case-insensitivity for non-ASCII is broken on MySQL/SQLite — see #802"]
 #[test]
 fn ilike_handles_non_ascii_case_insensitivity_on_sqlite() {
     let expr = Expr::ilike(Expr::arg(0), Expr::arg(1));
-    let sql = render_sqlite(expr);
-    assert!(
-        sql.contains("LOWER("),
-        "expected case-folding wrapper (e.g. LOWER) in: {sql}"
-    );
+    expect![[r#""#]].assert_eq(&render_sqlite(expr));
 }
 
 #[test]
 fn starts_with_uses_postgresql_prefix_operator() {
     let expr = Expr::starts_with(Expr::arg(0), Expr::arg(1));
-    let sql = render_pg(expr);
-    assert!(sql.contains("$1 ^@ $2"), "expected `^@` in: {sql}");
+    expect!["VALUES ($1 ^@ $2);"].assert_eq(&render_pg(expr));
 }
 
 #[test]
@@ -201,8 +180,7 @@ fn starts_with_panics_on_non_postgresql_flavors() {
 
 #[test]
 fn count_star_renders_as_count_star() {
-    let sql = render_pg(Expr::count_star());
-    assert!(sql.contains("COUNT(*)"), "expected COUNT(*) in: {sql}");
+    expect!["VALUES (COUNT(*));"].assert_eq(&render_pg(Expr::count_star()));
 }
 
 #[test]
@@ -212,11 +190,7 @@ fn count_star_with_filter_renders_filter_clause_on_postgresql() {
         filter: Some(Box::new(Expr::eq(Expr::arg(0), Expr::arg(1)))),
     }
     .into();
-    let sql = render_pg(expr);
-    assert!(
-        sql.contains("COUNT(*) FILTER (WHERE $1 = $2)"),
-        "expected FILTER clause in: {sql}"
-    );
+    expect!["VALUES (COUNT(*) FILTER (WHERE $1 = $2));"].assert_eq(&render_pg(expr));
 }
 
 #[test]
@@ -228,22 +202,14 @@ fn count_star_with_filter_rewrites_to_case_on_mysql() {
         filter: Some(Box::new(Expr::eq(Expr::arg(0), Expr::arg(1)))),
     }
     .into();
-    let sql = render_mysql(expr);
-    assert!(
-        sql.contains("COUNT(CASE WHEN ? = ? THEN 1 END)"),
-        "expected CASE rewrite in: {sql}"
-    );
+    expect!["VALUES ROW(COUNT(CASE WHEN ? = ? THEN 1 END));"].assert_eq(&render_mysql(expr));
 }
 
 // ---------- LAST_INSERT_ID ----------
 
 #[test]
 fn last_insert_id_renders_on_mysql() {
-    let sql = render_mysql(Expr::last_insert_id());
-    assert!(
-        sql.contains("LAST_INSERT_ID()"),
-        "expected LAST_INSERT_ID() in: {sql}"
-    );
+    expect!["VALUES ROW(LAST_INSERT_ID());"].assert_eq(&render_mysql(Expr::last_insert_id()));
 }
 
 // ---------- IsSuperset ----------
@@ -255,8 +221,7 @@ fn is_superset_uses_at_gt_on_postgresql() {
         rhs: Box::new(Expr::arg(1)),
     }
     .into();
-    let sql = render_pg(expr);
-    assert!(sql.contains("$1 @> $2"), "expected `@>` in: {sql}");
+    expect!["VALUES ($1 @> $2);"].assert_eq(&render_pg(expr));
 }
 
 #[test]
@@ -266,11 +231,7 @@ fn is_superset_uses_json_contains_on_mysql() {
         rhs: Box::new(Expr::arg(1)),
     }
     .into();
-    let sql = render_mysql(expr);
-    assert!(
-        sql.contains("JSON_CONTAINS("),
-        "expected JSON_CONTAINS( in: {sql}"
-    );
+    expect!["VALUES ROW(JSON_CONTAINS(?, ?));"].assert_eq(&render_mysql(expr));
 }
 
 #[test]
@@ -280,11 +241,7 @@ fn is_superset_uses_not_exists_on_sqlite() {
         rhs: Box::new(Expr::arg(1)),
     }
     .into();
-    let sql = render_sqlite(expr);
-    assert!(
-        sql.contains("NOT EXISTS ("),
-        "expected NOT EXISTS ( in: {sql}"
-    );
+    expect!["VALUES (NOT EXISTS (SELECT 1 FROM json_each(?2) AS r WHERE r.value NOT IN (SELECT l.value FROM json_each(?1) AS l)));"].assert_eq(&render_sqlite(expr));
 }
 
 // ---------- Intersects (overlap) ----------
@@ -296,8 +253,7 @@ fn intersects_uses_amp_amp_on_postgresql() {
         rhs: Box::new(Expr::arg(1)),
     }
     .into();
-    let sql = render_pg(expr);
-    assert!(sql.contains("$1 && $2"), "expected `&&` in: {sql}");
+    expect!["VALUES ($1 && $2);"].assert_eq(&render_pg(expr));
 }
 
 #[test]
@@ -307,11 +263,7 @@ fn intersects_uses_json_overlaps_on_mysql() {
         rhs: Box::new(Expr::arg(1)),
     }
     .into();
-    let sql = render_mysql(expr);
-    assert!(
-        sql.contains("JSON_OVERLAPS("),
-        "expected JSON_OVERLAPS( in: {sql}"
-    );
+    expect!["VALUES ROW(JSON_OVERLAPS(?, ?));"].assert_eq(&render_mysql(expr));
 }
 
 #[test]
@@ -321,12 +273,7 @@ fn intersects_uses_exists_on_sqlite() {
         rhs: Box::new(Expr::arg(1)),
     }
     .into();
-    let sql = render_sqlite(expr);
-    assert!(sql.contains("EXISTS ("), "expected EXISTS ( in: {sql}");
-    assert!(
-        !sql.contains("NOT EXISTS ("),
-        "Intersects should not emit NOT EXISTS on SQLite in: {sql}"
-    );
+    expect!["VALUES (EXISTS (SELECT 1 FROM json_each(?2) AS r WHERE r.value IN (SELECT l.value FROM json_each(?1) AS l)));"].assert_eq(&render_sqlite(expr));
 }
 
 // ---------- Length ----------
@@ -337,11 +284,7 @@ fn length_uses_cardinality_on_postgresql() {
         expr: Box::new(Expr::arg(0)),
     }
     .into();
-    let sql = render_pg(expr);
-    assert!(
-        sql.contains("cardinality($1)"),
-        "expected cardinality(...) in: {sql}"
-    );
+    expect!["VALUES (cardinality($1));"].assert_eq(&render_pg(expr));
 }
 
 #[test]
@@ -350,11 +293,7 @@ fn length_uses_json_length_on_mysql() {
         expr: Box::new(Expr::arg(0)),
     }
     .into();
-    let sql = render_mysql(expr);
-    assert!(
-        sql.contains("JSON_LENGTH(?)"),
-        "expected JSON_LENGTH(...) in: {sql}"
-    );
+    expect!["VALUES ROW(JSON_LENGTH(?));"].assert_eq(&render_mysql(expr));
 }
 
 #[test]
@@ -363,27 +302,14 @@ fn length_uses_json_array_length_on_sqlite() {
         expr: Box::new(Expr::arg(0)),
     }
     .into();
-    let sql = render_sqlite(expr);
-    assert!(
-        sql.contains("json_array_length(?1)"),
-        "expected json_array_length(...) in: {sql}"
-    );
+    expect!["VALUES (json_array_length(?1));"].assert_eq(&render_sqlite(expr));
 }
 
 // ---------- Default ----------
 
 #[test]
 fn default_renders_default_on_postgresql_and_mysql_and_null_on_sqlite() {
-    let pg = render_pg(Expr::Default);
-    assert!(pg.contains("DEFAULT"), "expected DEFAULT on PG in: {pg}");
-
-    let my = render_mysql(Expr::Default);
-    assert!(my.contains("DEFAULT"), "expected DEFAULT on MySQL in: {my}");
-
-    let lite = render_sqlite(Expr::Default);
-    assert!(lite.contains("NULL"), "expected NULL on SQLite in: {lite}");
-    assert!(
-        !lite.contains("DEFAULT"),
-        "SQLite should not render DEFAULT in: {lite}"
-    );
+    expect!["VALUES (DEFAULT);"].assert_eq(&render_pg(Expr::Default));
+    expect!["VALUES ROW(DEFAULT);"].assert_eq(&render_mysql(Expr::Default));
+    expect!["VALUES (NULL);"].assert_eq(&render_sqlite(Expr::Default));
 }

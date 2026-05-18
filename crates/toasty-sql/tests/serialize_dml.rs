@@ -5,6 +5,7 @@
 //! Tests construct the AST directly so the serializer is exercised in
 //! isolation — no lowering pipeline involved.
 
+use expect_test::expect;
 use toasty_core::{
     schema::db::{Column, ColumnId, PrimaryKey, Schema, Table, TableId, Type as StorageType},
     stmt::{
@@ -160,14 +161,6 @@ fn delete_stmt(with_where: bool, returning: Option<Returning>) -> stmt::Statemen
     .into()
 }
 
-/// Backtick (MySQL) or double-quote (PG/SQLite) ident quote char.
-fn q(flavor: Flavor) -> char {
-    match flavor {
-        Flavor::Mysql => '`',
-        _ => '"',
-    }
-}
-
 // -----------------------------------------------------------------------------
 // INSERT
 // -----------------------------------------------------------------------------
@@ -175,36 +168,33 @@ fn q(flavor: Flavor) -> char {
 #[test]
 fn insert_basic_values() {
     let schema = users_schema();
-    for flavor in [Flavor::Sqlite, Flavor::Postgresql, Flavor::Mysql] {
-        let sql = render(flavor, &schema, insert_basic(None));
-        let q = q(flavor);
-        let expected = format!("INSERT INTO {q}users{q} ({q}id{q}, {q}name{q}) VALUES (1, 'a');");
-        assert_eq!(sql, expected, "flavor mismatch for {expected:?}");
-        assert!(
-            !sql.contains("RETURNING"),
-            "did not expect RETURNING in: {sql}"
-        );
-    }
+    expect![[r#"INSERT INTO "users" ("id", "name") VALUES (1, 'a');"#]].assert_eq(&render(
+        Flavor::Sqlite,
+        &schema,
+        insert_basic(None),
+    ));
+    expect![[r#"INSERT INTO "users" ("id", "name") VALUES (1, 'a');"#]].assert_eq(&render(
+        Flavor::Postgresql,
+        &schema,
+        insert_basic(None),
+    ));
+    expect!["INSERT INTO `users` (`id`, `name`) VALUES (1, 'a');"].assert_eq(&render(
+        Flavor::Mysql,
+        &schema,
+        insert_basic(None),
+    ));
 }
 
 #[test]
 fn insert_with_returning() {
     let schema = users_schema();
     let returning = Some(Returning::Project(Expr::record([col(0, 0)])));
-    for flavor in [Flavor::Sqlite, Flavor::Postgresql] {
-        let sql = render(flavor, &schema, insert_basic(returning.clone()));
-        assert!(
-            sql.contains("RETURNING "),
-            "expected `RETURNING ` in: {sql}"
-        );
-        // The returning projection references the `id` column.
-        let q = q(flavor);
-        let ident = format!("{q}id{q}");
-        assert!(
-            sql.contains(&ident),
-            "expected `{ident}` in returning: {sql}"
-        );
-    }
+    expect![[r#"INSERT INTO "users" ("id", "name") VALUES (1, 'a')RETURNING "id";"#]].assert_eq(
+        &render(Flavor::Sqlite, &schema, insert_basic(returning.clone())),
+    );
+    expect![[r#"INSERT INTO "users" ("id", "name") VALUES (1, 'a')RETURNING "id";"#]].assert_eq(
+        &render(Flavor::Postgresql, &schema, insert_basic(returning)),
+    );
 }
 
 #[test]
@@ -222,46 +212,59 @@ fn insert_returning_panics_on_mysql() {
 #[test]
 fn update_basic() {
     let schema = users_schema();
-    for flavor in [Flavor::Sqlite, Flavor::Postgresql, Flavor::Mysql] {
-        let sql = render(flavor, &schema, update_stmt(false, None));
-        let q = q(flavor);
-        // `UPDATE "users" AS tbl_0_0 SET "name" = 'b';`
-        let expected = format!("UPDATE {q}users{q} AS tbl_0_0 SET {q}name{q} = 'b';");
-        assert_eq!(sql, expected, "flavor mismatch for {expected:?}");
-        assert!(!sql.contains(" WHERE "), "did not expect WHERE in: {sql}");
-        assert!(
-            !sql.contains("RETURNING"),
-            "did not expect RETURNING in: {sql}"
-        );
-    }
+    expect![[r#"UPDATE "users" AS tbl_0_0 SET "name" = 'b';"#]].assert_eq(&render(
+        Flavor::Sqlite,
+        &schema,
+        update_stmt(false, None),
+    ));
+    expect![[r#"UPDATE "users" AS tbl_0_0 SET "name" = 'b';"#]].assert_eq(&render(
+        Flavor::Postgresql,
+        &schema,
+        update_stmt(false, None),
+    ));
+    expect!["UPDATE `users` AS tbl_0_0 SET `name` = 'b';"].assert_eq(&render(
+        Flavor::Mysql,
+        &schema,
+        update_stmt(false, None),
+    ));
 }
 
 #[test]
 fn update_with_where() {
     let schema = users_schema();
-    for flavor in [Flavor::Sqlite, Flavor::Postgresql, Flavor::Mysql] {
-        let sql = render(flavor, &schema, update_stmt(true, None));
-        assert!(sql.contains(" SET "), "expected ` SET ` in: {sql}");
-        assert!(sql.contains(" WHERE "), "expected ` WHERE ` in: {sql}");
-        // The Update serializer disables alias prefixing — `WHERE "id" = 1`,
-        // not `WHERE tbl_0_0."id" = 1`.
-        let q = q(flavor);
-        let needle = format!("WHERE {q}id{q} = 1");
-        assert!(sql.contains(&needle), "expected `{needle}` in: {sql}");
-    }
+    expect![[r#"UPDATE "users" AS tbl_0_0 SET "name" = 'b' WHERE "id" = 1;"#]].assert_eq(&render(
+        Flavor::Sqlite,
+        &schema,
+        update_stmt(true, None),
+    ));
+    expect![[r#"UPDATE "users" AS tbl_0_0 SET "name" = 'b' WHERE "id" = 1;"#]].assert_eq(&render(
+        Flavor::Postgresql,
+        &schema,
+        update_stmt(true, None),
+    ));
+    expect!["UPDATE `users` AS tbl_0_0 SET `name` = 'b' WHERE `id` = 1;"].assert_eq(&render(
+        Flavor::Mysql,
+        &schema,
+        update_stmt(true, None),
+    ));
 }
 
 #[test]
 fn update_with_returning() {
     let schema = users_schema();
     let returning = Some(Returning::Project(Expr::record([col(0, 0)])));
-    for flavor in [Flavor::Sqlite, Flavor::Postgresql] {
-        let sql = render(flavor, &schema, update_stmt(true, returning.clone()));
-        assert!(
-            sql.contains(" RETURNING "),
-            "expected ` RETURNING ` in: {sql}"
-        );
-    }
+    expect![[r#"UPDATE "users" AS tbl_0_0 SET "name" = 'b' WHERE "id" = 1 RETURNING "id";"#]]
+        .assert_eq(&render(
+            Flavor::Sqlite,
+            &schema,
+            update_stmt(true, returning.clone()),
+        ));
+    expect![[r#"UPDATE "users" AS tbl_0_0 SET "name" = 'b' WHERE "id" = 1 RETURNING "id";"#]]
+        .assert_eq(&render(
+            Flavor::Postgresql,
+            &schema,
+            update_stmt(true, returning),
+        ));
 }
 
 #[test]
@@ -279,30 +282,41 @@ fn update_returning_panics_on_mysql() {
 #[test]
 fn delete_basic() {
     let schema = users_schema();
-    for flavor in [Flavor::Sqlite, Flavor::Postgresql, Flavor::Mysql] {
-        let sql = render(flavor, &schema, delete_stmt(false, None));
-        let q = q(flavor);
-        let expected = format!("DELETE FROM {q}users{q} AS tbl_0_0;");
-        assert_eq!(sql, expected, "flavor mismatch for {expected:?}");
-        assert!(!sql.contains(" WHERE "), "did not expect WHERE in: {sql}");
-    }
+    expect![[r#"DELETE FROM "users" AS tbl_0_0;"#]].assert_eq(&render(
+        Flavor::Sqlite,
+        &schema,
+        delete_stmt(false, None),
+    ));
+    expect![[r#"DELETE FROM "users" AS tbl_0_0;"#]].assert_eq(&render(
+        Flavor::Postgresql,
+        &schema,
+        delete_stmt(false, None),
+    ));
+    expect!["DELETE FROM `users` AS tbl_0_0;"].assert_eq(&render(
+        Flavor::Mysql,
+        &schema,
+        delete_stmt(false, None),
+    ));
 }
 
 #[test]
 fn delete_with_where() {
     let schema = users_schema();
-    for flavor in [Flavor::Sqlite, Flavor::Postgresql, Flavor::Mysql] {
-        let sql = render(flavor, &schema, delete_stmt(true, None));
-        assert!(
-            sql.starts_with("DELETE FROM "),
-            "expected DELETE FROM prefix in: {sql}"
-        );
-        assert!(sql.contains(" WHERE "), "expected ` WHERE ` in: {sql}");
-        // Delete enables alias prefixing — `WHERE tbl_0_0."id" = 1`.
-        let q = q(flavor);
-        let needle = format!("tbl_0_0.{q}id{q} = 1");
-        assert!(sql.contains(&needle), "expected `{needle}` in: {sql}");
-    }
+    expect![[r#"DELETE FROM "users" AS tbl_0_0 WHERE tbl_0_0."id" = 1;"#]].assert_eq(&render(
+        Flavor::Sqlite,
+        &schema,
+        delete_stmt(true, None),
+    ));
+    expect![[r#"DELETE FROM "users" AS tbl_0_0 WHERE tbl_0_0."id" = 1;"#]].assert_eq(&render(
+        Flavor::Postgresql,
+        &schema,
+        delete_stmt(true, None),
+    ));
+    expect!["DELETE FROM `users` AS tbl_0_0 WHERE tbl_0_0.`id` = 1;"].assert_eq(&render(
+        Flavor::Mysql,
+        &schema,
+        delete_stmt(true, None),
+    ));
 }
 
 /// MySQL has no `RETURNING` clause for any DML statement, so the serializer
@@ -333,15 +347,13 @@ fn delete_with_returning_panics_on_mysql() {
 fn delete_with_returning_postgresql() {
     let schema = users_schema();
     let returning = Some(Returning::Project(Expr::record([col(0, 0)])));
-    let sql = render(Flavor::Postgresql, &schema, delete_stmt(true, returning));
-    assert!(
-        sql.contains(" RETURNING "),
-        "expected ` RETURNING ` in: {sql}"
-    );
-    assert!(
-        sql.contains(r#"tbl_0_0."id""#),
-        "expected projected column in: {sql}"
-    );
+    // Expected string stays empty — will be populated when the serializer
+    // learns to emit DELETE+RETURNING.
+    expect![[r#""#]].assert_eq(&render(
+        Flavor::Postgresql,
+        &schema,
+        delete_stmt(true, returning),
+    ));
 }
 
 #[ignore = "DELETE+RETURNING is not yet implemented; serializer panics unconditionally"]
@@ -349,13 +361,11 @@ fn delete_with_returning_postgresql() {
 fn delete_with_returning_sqlite() {
     let schema = users_schema();
     let returning = Some(Returning::Project(Expr::record([col(0, 0)])));
-    let sql = render(Flavor::Sqlite, &schema, delete_stmt(true, returning));
-    assert!(
-        sql.contains(" RETURNING "),
-        "expected ` RETURNING ` in: {sql}"
-    );
-    assert!(
-        sql.contains(r#"tbl_0_0."id""#),
-        "expected projected column in: {sql}"
-    );
+    // Expected string stays empty — will be populated when the serializer
+    // learns to emit DELETE+RETURNING.
+    expect![[r#""#]].assert_eq(&render(
+        Flavor::Sqlite,
+        &schema,
+        delete_stmt(true, returning),
+    ));
 }

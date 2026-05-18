@@ -6,6 +6,7 @@
 //! The test constructs the AST directly so the serializer is exercised in
 //! isolation — no lowering pipeline involved.
 
+use expect_test::expect;
 use toasty_core::{
     schema::db::{Column, ColumnId, PrimaryKey, Schema, Table, TableId, Type as StorageType},
     stmt::{
@@ -111,21 +112,7 @@ fn left_join_renders_left_join_with_on_clause() {
     };
 
     let on = Expr::eq(col(1, 1), col(0, 0));
-    let sql = render_sqlite(&schema, select_with_join(JoinOp::Left(on)));
-
-    assert!(
-        sql.contains(" LEFT JOIN "),
-        "expected ` LEFT JOIN ` in: {sql}"
-    );
-    assert!(
-        !sql.contains("INNER JOIN"),
-        "did not expect INNER in: {sql}"
-    );
-    // Joined-table alias + ON predicate referencing both sides.
-    assert!(
-        sql.contains(r#""posts" AS tbl_0_1 ON tbl_0_1."user_id" = tbl_0_0."id""#),
-        "expected aliased ON clause in: {sql}"
-    );
+    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 LEFT JOIN "posts" AS tbl_0_1 ON tbl_0_1."user_id" = tbl_0_0."id";"#]].assert_eq(&render_sqlite(&schema, select_with_join(JoinOp::Left(on))));
 }
 
 #[test]
@@ -138,17 +125,7 @@ fn inner_join_renders_inner_join_with_on_clause() {
     };
 
     let on = Expr::eq(col(1, 1), col(0, 0));
-    let sql = render_sqlite(&schema, select_with_join(JoinOp::Inner(on)));
-
-    assert!(
-        sql.contains(" INNER JOIN "),
-        "expected ` INNER JOIN ` in: {sql}"
-    );
-    assert!(!sql.contains("LEFT JOIN"), "did not expect LEFT in: {sql}");
-    assert!(
-        sql.contains(r#""posts" AS tbl_0_1 ON tbl_0_1."user_id" = tbl_0_0."id""#),
-        "expected aliased ON clause in: {sql}"
-    );
+    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 INNER JOIN "posts" AS tbl_0_1 ON tbl_0_1."user_id" = tbl_0_0."id";"#]].assert_eq(&render_sqlite(&schema, select_with_join(JoinOp::Inner(on))));
 }
 
 /// Multi-step join: `users LEFT JOIN posts ON ... LEFT JOIN comments ON ...`.
@@ -190,19 +167,7 @@ fn multi_step_left_join_chain() {
         filter: Filter::ALL,
     };
     let stmt = stmt::Statement::Query(stmt::Query::builder(select).build());
-    let sql = render_sqlite(&schema, stmt);
-
-    // Order matters: posts is joined before comments.
-    let posts = sql
-        .find(r#"LEFT JOIN "posts" AS tbl_0_1 ON tbl_0_1."user_id" = tbl_0_0."id""#)
-        .unwrap_or_else(|| panic!("expected posts join in: {sql}"));
-    let comments = sql
-        .find(r#"LEFT JOIN "comments" AS tbl_0_2 ON tbl_0_2."post_id" = tbl_0_1."id""#)
-        .unwrap_or_else(|| panic!("expected comments join in: {sql}"));
-    assert!(
-        posts < comments,
-        "expected posts join to precede comments join in: {sql}"
-    );
+    expect![[r#"SELECT tbl_0_0."id", tbl_0_1."id", tbl_0_2."id" FROM "users" AS tbl_0_0 LEFT JOIN "posts" AS tbl_0_1 ON tbl_0_1."user_id" = tbl_0_0."id" LEFT JOIN "comments" AS tbl_0_2 ON tbl_0_2."post_id" = tbl_0_1."id";"#]].assert_eq(&render_sqlite(&schema, stmt));
 }
 
 /// Mixed-kind chain: `users INNER JOIN posts ON ... LEFT JOIN comments ON ...`.
@@ -244,13 +209,5 @@ fn mixed_inner_then_left_join() {
         filter: Filter::ALL,
     };
     let stmt = stmt::Statement::Query(stmt::Query::builder(select).build());
-    let sql = render_sqlite(&schema, stmt);
-
-    let inner = sql
-        .find(r#"INNER JOIN "posts" AS tbl_0_1"#)
-        .unwrap_or_else(|| panic!("expected INNER posts join in: {sql}"));
-    let left = sql
-        .find(r#"LEFT JOIN "comments" AS tbl_0_2"#)
-        .unwrap_or_else(|| panic!("expected LEFT comments join in: {sql}"));
-    assert!(inner < left, "expected INNER before LEFT in: {sql}");
+    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 INNER JOIN "posts" AS tbl_0_1 ON tbl_0_1."user_id" = tbl_0_0."id" LEFT JOIN "comments" AS tbl_0_2 ON tbl_0_2."post_id" = tbl_0_1."id";"#]].assert_eq(&render_sqlite(&schema, stmt));
 }

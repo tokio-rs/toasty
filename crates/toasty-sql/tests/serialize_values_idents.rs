@@ -8,6 +8,7 @@
 //! identifiers actually get emitted. Each test constructs the AST directly so
 //! the serializer is exercised in isolation — no lowering pipeline involved.
 
+use expect_test::expect;
 use toasty_core::{
     schema::db::{Column, ColumnId, PrimaryKey, Schema, Table, TableId, Type as StorageType},
     stmt::{
@@ -119,47 +120,40 @@ fn users_schema() -> Schema {
 
 #[test]
 fn value_null() {
-    let sql = render_values_pg(Expr::Value(stmt::Value::Null));
-    assert!(sql.contains("NULL"), "expected `NULL` in: {sql}");
+    expect!["VALUES (NULL);"].assert_eq(&render_values_pg(Expr::Value(stmt::Value::Null)));
 }
 
 #[test]
 fn value_bool_true_and_false() {
-    let t = render_values_pg(Expr::Value(stmt::Value::Bool(true)));
-    assert!(t.contains("TRUE"), "expected `TRUE` in: {t}");
-
-    let f = render_values_pg(Expr::Value(stmt::Value::Bool(false)));
-    assert!(f.contains("FALSE"), "expected `FALSE` in: {f}");
+    expect!["VALUES (TRUE);"].assert_eq(&render_values_pg(Expr::Value(stmt::Value::Bool(true))));
+    expect!["VALUES (FALSE);"].assert_eq(&render_values_pg(Expr::Value(stmt::Value::Bool(false))));
 }
 
 #[test]
 fn value_i64() {
-    let sql = render_values_pg(Expr::Value(stmt::Value::I64(42)));
-    assert!(sql.contains("42"), "expected `42` in: {sql}");
+    expect!["VALUES (42);"].assert_eq(&render_values_pg(Expr::Value(stmt::Value::I64(42))));
 }
 
 #[test]
 fn value_string_simple() {
-    let sql = render_values_pg(Expr::Value(stmt::Value::String("hello".into())));
-    assert!(sql.contains("'hello'"), "expected `'hello'` in: {sql}");
+    expect!["VALUES ('hello');"].assert_eq(&render_values_pg(Expr::Value(stmt::Value::String(
+        "hello".into(),
+    ))));
 }
 
 #[test]
 fn value_string_with_single_quote() {
     // Embedded single quotes are SQL-escaped by doubling them: `O'Brien`
     // serializes as `'O''Brien'`.
-    let sql = render_values_pg(Expr::Value(stmt::Value::String("O'Brien".into())));
-    assert!(
-        sql.contains("'O''Brien'"),
-        "expected escaped `'O''Brien'` in: {sql}"
-    );
+    expect!["VALUES ('O''Brien');"].assert_eq(&render_values_pg(Expr::Value(stmt::Value::String(
+        "O'Brien".into(),
+    ))));
 }
 
 #[test]
 fn value_list() {
     let list = stmt::Value::List(vec![stmt::Value::I64(1), stmt::Value::I64(2)]);
-    let sql = render_values_pg(Expr::Value(list));
-    assert!(sql.contains("(1, 2)"), "expected `(1, 2)` in: {sql}");
+    expect!["VALUES ((1, 2));"].assert_eq(&render_values_pg(Expr::Value(list)));
 }
 
 #[test]
@@ -170,8 +164,7 @@ fn value_record() {
         stmt::Value::I64(1),
         stmt::Value::I64(2),
     ]));
-    let sql = render_values_pg(Expr::Value(record));
-    assert!(sql.contains("(1, 2)"), "expected `(1, 2)` in: {sql}");
+    expect!["VALUES ((1, 2));"].assert_eq(&render_values_pg(Expr::Value(record)));
 }
 
 // -----------------------------------------------------------------------------
@@ -184,8 +177,7 @@ fn ident_quoting_postgresql_double_quote() {
     let stmt = select_id_from_users();
     let sql = Serializer::postgresql(&schema).serialize(&SqlStatement::from(stmt));
 
-    assert!(sql.contains(r#""users""#), "expected `\"users\"` in: {sql}");
-    assert!(sql.contains(r#""id""#), "expected `\"id\"` in: {sql}");
+    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0;"#]].assert_eq(&sql);
 }
 
 #[test]
@@ -194,8 +186,7 @@ fn ident_quoting_sqlite_double_quote() {
     let stmt = select_id_from_users();
     let sql = Serializer::sqlite(&schema).serialize(&SqlStatement::from(stmt));
 
-    assert!(sql.contains(r#""users""#), "expected `\"users\"` in: {sql}");
-    assert!(sql.contains(r#""id""#), "expected `\"id\"` in: {sql}");
+    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0;"#]].assert_eq(&sql);
 }
 
 #[test]
@@ -204,15 +195,7 @@ fn ident_quoting_mysql_backtick() {
     let stmt = select_id_from_users();
     let sql = Serializer::mysql(&schema).serialize(&SqlStatement::from(stmt));
 
-    assert!(
-        sql.contains("`users`"),
-        "expected backticked `users` in: {sql}"
-    );
-    assert!(sql.contains("`id`"), "expected backticked `id` in: {sql}");
-    assert!(
-        !sql.contains(r#""users""#),
-        "did not expect double quotes in MySQL: {sql}"
-    );
+    expect!["SELECT tbl_0_0.`id` FROM `users` AS tbl_0_0;"].assert_eq(&sql);
 }
 
 // -----------------------------------------------------------------------------
@@ -232,10 +215,7 @@ fn name_renders_qualified_period_separated() {
     let stmt: SqlStatement = drop.into();
     let sql = Serializer::postgresql(&schema).serialize(&stmt);
 
-    assert!(
-        sql.contains(r#""public"."users""#),
-        "expected `\"public\".\"users\"` in: {sql}"
-    );
+    expect![[r#"DROP TABLE "public"."users";"#]].assert_eq(&sql);
 }
 
 // -----------------------------------------------------------------------------
@@ -298,22 +278,13 @@ fn column_alias_format_per_flavor() {
     let sql_stmt = SqlStatement::from(stmt);
 
     let pg = Serializer::postgresql(&schema).serialize(&sql_stmt);
-    assert!(
-        pg.contains("column1"),
-        "expected 1-based `column1` in PG: {pg}"
-    );
+    expect![[r#"WITH cte_0_0 as (SELECT tbl_1_0."id" FROM "users" AS tbl_1_0) SELECT tbl_0_0.column1 FROM cte_0_0 AS tbl_0_0;"#]].assert_eq(&pg);
 
     let sqlite = Serializer::sqlite(&schema).serialize(&sql_stmt);
-    assert!(
-        sqlite.contains("column1"),
-        "expected 1-based `column1` in SQLite: {sqlite}"
-    );
+    expect![[r#"WITH cte_0_0 as (SELECT tbl_1_0."id" FROM "users" AS tbl_1_0) SELECT tbl_0_0.column1 FROM cte_0_0 AS tbl_0_0;"#]].assert_eq(&sqlite);
 
     let mysql = Serializer::mysql(&schema).serialize(&sql_stmt);
-    assert!(
-        mysql.contains("column_0"),
-        "expected 0-based `column_0` in MySQL (matches `VALUES ROW(...) AS t` auto-naming): {mysql}"
-    );
+    expect!["WITH cte_0_0 as (SELECT tbl_1_0.`id` FROM `users` AS tbl_1_0) SELECT tbl_0_0.column_0 FROM cte_0_0 AS tbl_0_0;"].assert_eq(&mysql);
 }
 
 // -----------------------------------------------------------------------------
@@ -329,8 +300,7 @@ fn placeholder_postgresql_dollar_n() {
     let core_stmt: stmt::Statement = stmt::Query::values(values).into();
     let sql = Serializer::postgresql(&Schema::default()).serialize(&SqlStatement::from(core_stmt));
 
-    assert!(sql.contains("$1"), "expected `$1` in PG: {sql}");
-    assert!(sql.contains("$2"), "expected `$2` in PG: {sql}");
+    expect!["VALUES ($1, $2);"].assert_eq(&sql);
 }
 
 #[test]
@@ -342,17 +312,7 @@ fn placeholder_mysql_question_mark() {
     let core_stmt: stmt::Statement = stmt::Query::values(values).into();
     let sql = Serializer::mysql(&Schema::default()).serialize(&SqlStatement::from(core_stmt));
 
-    assert!(sql.contains("?"), "expected `?` in MySQL: {sql}");
-    assert!(
-        !sql.contains("$1") && !sql.contains("?1"),
-        "MySQL placeholder should not be indexed: {sql}"
-    );
-    // Two args -> two `?`.
-    assert_eq!(
-        sql.matches('?').count(),
-        2,
-        "expected two `?` placeholders in MySQL: {sql}"
-    );
+    expect!["VALUES ROW(?, ?);"].assert_eq(&sql);
 }
 
 #[test]
@@ -362,8 +322,7 @@ fn placeholder_sqlite_question_n() {
     let core_stmt: stmt::Statement = stmt::Query::values(values).into();
     let sql = Serializer::sqlite(&Schema::default()).serialize(&SqlStatement::from(core_stmt));
 
-    assert!(sql.contains("?1"), "expected `?1` in SQLite: {sql}");
-    assert!(sql.contains("?2"), "expected `?2` in SQLite: {sql}");
+    expect!["VALUES (?1, ?2);"].assert_eq(&sql);
 }
 
 #[test]
@@ -377,12 +336,11 @@ fn placeholder_mysql_arg_order_reordering() {
     let record = Expr::record([Expr::arg(1), Expr::arg(0)]);
     let values = stmt::Values::new(vec![record]);
     let core_stmt: stmt::Statement = stmt::Query::values(values).into();
-    let (_sql, arg_order) = Serializer::mysql(&Schema::default())
+    let (sql, arg_order) = Serializer::mysql(&Schema::default())
         .serialize_with_arg_order(&SqlStatement::from(core_stmt));
 
-    assert_eq!(
-        arg_order,
-        vec![1, 0],
-        "expected arg_order [1, 0] tracking SQL occurrence: got {arg_order:?}"
-    );
+    expect![[r#"
+        VALUES ROW(?, ?);
+        [1, 0]"#]]
+    .assert_eq(&format!("{}\n{:?}", sql, arg_order));
 }

@@ -5,6 +5,7 @@
 //! clauses around the `SELECT` body. Each test constructs the AST directly so
 //! the serializer is exercised in isolation — no lowering pipeline involved.
 
+use expect_test::expect;
 use toasty_core::{
     schema::db::{Column, ColumnId, PrimaryKey, Schema, Table, TableId, Type as StorageType},
     stmt::{
@@ -81,16 +82,6 @@ enum Flavor {
     Mysql,
 }
 
-impl Flavor {
-    fn name(self) -> &'static str {
-        match self {
-            Flavor::Sqlite => "sqlite",
-            Flavor::Postgresql => "postgresql",
-            Flavor::Mysql => "mysql",
-        }
-    }
-}
-
 fn render(flavor: Flavor, schema: &Schema, stmt: stmt::Statement) -> String {
     let sql_stmt = SqlStatement::from(stmt);
     let serializer = match flavor {
@@ -138,51 +129,44 @@ fn make_query(
     stmt::Statement::Query(query)
 }
 
-/// Returns the identifier quote character used by `flavor` — `"` for
-/// SQLite/PostgreSQL, `` ` `` for MySQL.
-fn q(flavor: Flavor) -> char {
-    match flavor {
-        Flavor::Sqlite | Flavor::Postgresql => '"',
-        Flavor::Mysql => '`',
-    }
-}
-
 #[test]
 fn select_basic() {
     let schema = users_schema();
-    for flavor in [Flavor::Sqlite, Flavor::Postgresql, Flavor::Mysql] {
-        let stmt = make_query(Filter::ALL, None, None, vec![]);
-        let sql = render(flavor, &schema, stmt);
-        let q = q(flavor);
-        let expected = format!("SELECT tbl_0_0.{q}id{q} FROM {q}users{q} AS tbl_0_0");
-        assert!(
-            sql.contains(&expected),
-            "[{}] expected `{expected}` in: {sql}",
-            flavor.name()
-        );
-        assert!(
-            !sql.contains("WHERE"),
-            "[{}] did not expect WHERE in: {sql}",
-            flavor.name()
-        );
-    }
+    let stmt = make_query(Filter::ALL, None, None, vec![]);
+    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0;"#]].assert_eq(&render(
+        Flavor::Sqlite,
+        &schema,
+        stmt,
+    ));
+    let stmt = make_query(Filter::ALL, None, None, vec![]);
+    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0;"#]].assert_eq(&render(
+        Flavor::Postgresql,
+        &schema,
+        stmt,
+    ));
+    let stmt = make_query(Filter::ALL, None, None, vec![]);
+    expect!["SELECT tbl_0_0.`id` FROM `users` AS tbl_0_0;"].assert_eq(&render(
+        Flavor::Mysql,
+        &schema,
+        stmt,
+    ));
 }
 
 #[test]
 fn select_with_where() {
     let schema = users_schema();
-    for flavor in [Flavor::Sqlite, Flavor::Postgresql, Flavor::Mysql] {
-        let filter = Filter::from(Expr::eq(col(0, 0), Expr::from(1i64)));
-        let stmt = make_query(filter, None, None, vec![]);
-        let sql = render(flavor, &schema, stmt);
-        let q = q(flavor);
-        let expected = format!("WHERE tbl_0_0.{q}id{q} = 1");
-        assert!(
-            sql.contains(&expected),
-            "[{}] expected `{expected}` in: {sql}",
-            flavor.name()
-        );
-    }
+    let filter = Filter::from(Expr::eq(col(0, 0), Expr::from(1i64)));
+    let stmt = make_query(filter, None, None, vec![]);
+    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 WHERE tbl_0_0."id" = 1;"#]]
+        .assert_eq(&render(Flavor::Sqlite, &schema, stmt));
+    let filter = Filter::from(Expr::eq(col(0, 0), Expr::from(1i64)));
+    let stmt = make_query(filter, None, None, vec![]);
+    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 WHERE tbl_0_0."id" = 1;"#]]
+        .assert_eq(&render(Flavor::Postgresql, &schema, stmt));
+    let filter = Filter::from(Expr::eq(col(0, 0), Expr::from(1i64)));
+    let stmt = make_query(filter, None, None, vec![]);
+    expect!["SELECT tbl_0_0.`id` FROM `users` AS tbl_0_0 WHERE tbl_0_0.`id` = 1;"]
+        .assert_eq(&render(Flavor::Mysql, &schema, stmt));
 }
 
 #[test]
@@ -193,11 +177,7 @@ fn select_with_and_filter() {
         Expr::eq(col(0, 1), Expr::from("foo")),
     ));
     let stmt = make_query(filter, None, None, vec![]);
-    let sql = render(Flavor::Sqlite, &schema, stmt);
-    assert!(
-        sql.contains(r#"WHERE tbl_0_0."id" = 1 AND tbl_0_0."name" = 'foo'"#),
-        "expected AND filter in: {sql}"
-    );
+    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 WHERE tbl_0_0."id" = 1 AND tbl_0_0."name" = 'foo';"#]].assert_eq(&render(Flavor::Sqlite, &schema, stmt));
 }
 
 #[test]
@@ -208,11 +188,10 @@ fn select_with_or_filter() {
         Expr::eq(col(0, 0), Expr::from(2i64)),
     ));
     let stmt = make_query(filter, None, None, vec![]);
-    let sql = render(Flavor::Sqlite, &schema, stmt);
-    assert!(
-        sql.contains(r#"WHERE tbl_0_0."id" = 1 OR tbl_0_0."id" = 2"#),
-        "expected OR filter in: {sql}"
-    );
+    expect![[
+        r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 WHERE tbl_0_0."id" = 1 OR tbl_0_0."id" = 2;"#
+    ]]
+    .assert_eq(&render(Flavor::Sqlite, &schema, stmt));
 }
 
 #[test]
@@ -225,11 +204,8 @@ fn select_with_order_by_asc() {
         }],
     };
     let stmt = make_query(Filter::ALL, Some(order_by), None, vec![]);
-    let sql = render(Flavor::Sqlite, &schema, stmt);
-    assert!(
-        sql.contains(r#"ORDER BY tbl_0_0."id" ASC"#),
-        "expected `ORDER BY tbl_0_0.\"id\" ASC` in: {sql}"
-    );
+    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 ORDER BY tbl_0_0."id" ASC;"#]]
+        .assert_eq(&render(Flavor::Sqlite, &schema, stmt));
 }
 
 #[test]
@@ -242,11 +218,8 @@ fn select_with_order_by_desc() {
         }],
     };
     let stmt = make_query(Filter::ALL, Some(order_by), None, vec![]);
-    let sql = render(Flavor::Sqlite, &schema, stmt);
-    assert!(
-        sql.contains(r#"ORDER BY tbl_0_0."id" DESC"#),
-        "expected `ORDER BY tbl_0_0.\"id\" DESC` in: {sql}"
-    );
+    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 ORDER BY tbl_0_0."id" DESC;"#]]
+        .assert_eq(&render(Flavor::Sqlite, &schema, stmt));
 }
 
 #[test]
@@ -265,11 +238,7 @@ fn select_with_order_by_multiple_columns() {
         ],
     };
     let stmt = make_query(Filter::ALL, Some(order_by), None, vec![]);
-    let sql = render(Flavor::Sqlite, &schema, stmt);
-    assert!(
-        sql.contains(r#"ORDER BY tbl_0_0."name" ASC, tbl_0_0."id" DESC"#),
-        "expected multi-column ORDER BY in: {sql}"
-    );
+    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 ORDER BY tbl_0_0."name" ASC, tbl_0_0."id" DESC;"#]].assert_eq(&render(Flavor::Sqlite, &schema, stmt));
 }
 
 #[test]
@@ -280,9 +249,11 @@ fn select_with_limit() {
         offset: None,
     });
     let stmt = make_query(Filter::ALL, None, Some(limit), vec![]);
-    let sql = render(Flavor::Sqlite, &schema, stmt);
-    assert!(sql.contains("LIMIT 10"), "expected `LIMIT 10` in: {sql}");
-    assert!(!sql.contains("OFFSET"), "did not expect OFFSET in: {sql}");
+    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 LIMIT 10;"#]].assert_eq(&render(
+        Flavor::Sqlite,
+        &schema,
+        stmt,
+    ));
 }
 
 #[test]
@@ -293,11 +264,8 @@ fn select_with_limit_and_offset() {
         offset: Some(Expr::from(20i64)),
     });
     let stmt = make_query(Filter::ALL, None, Some(limit), vec![]);
-    let sql = render(Flavor::Sqlite, &schema, stmt);
-    assert!(
-        sql.contains("LIMIT 10 OFFSET 20"),
-        "expected `LIMIT 10 OFFSET 20` in: {sql}"
-    );
+    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 LIMIT 10 OFFSET 20;"#]]
+        .assert_eq(&render(Flavor::Sqlite, &schema, stmt));
 }
 
 #[test]
@@ -305,15 +273,24 @@ fn select_with_for_update() {
     let schema = users_schema();
     // SQLite has no row-level locks, but the serializer renders `FOR UPDATE`
     // unconditionally — verify that for all three flavors.
-    for flavor in [Flavor::Sqlite, Flavor::Postgresql, Flavor::Mysql] {
-        let stmt = make_query(Filter::ALL, None, None, vec![Lock::Update]);
-        let sql = render(flavor, &schema, stmt);
-        assert!(
-            sql.contains("FOR UPDATE"),
-            "[{}] expected `FOR UPDATE` in: {sql}",
-            flavor.name()
-        );
-    }
+    let stmt = make_query(Filter::ALL, None, None, vec![Lock::Update]);
+    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 FOR UPDATE;"#]].assert_eq(&render(
+        Flavor::Sqlite,
+        &schema,
+        stmt,
+    ));
+    let stmt = make_query(Filter::ALL, None, None, vec![Lock::Update]);
+    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 FOR UPDATE;"#]].assert_eq(&render(
+        Flavor::Postgresql,
+        &schema,
+        stmt,
+    ));
+    let stmt = make_query(Filter::ALL, None, None, vec![Lock::Update]);
+    expect!["SELECT tbl_0_0.`id` FROM `users` AS tbl_0_0 FOR UPDATE;"].assert_eq(&render(
+        Flavor::Mysql,
+        &schema,
+        stmt,
+    ));
 }
 
 #[test]
@@ -321,13 +298,22 @@ fn select_with_for_share() {
     let schema = users_schema();
     // As with `FOR UPDATE`, the serializer renders `FOR SHARE` unconditionally
     // across flavors; database compatibility is enforced at execution, not here.
-    for flavor in [Flavor::Sqlite, Flavor::Postgresql, Flavor::Mysql] {
-        let stmt = make_query(Filter::ALL, None, None, vec![Lock::Share]);
-        let sql = render(flavor, &schema, stmt);
-        assert!(
-            sql.contains("FOR SHARE"),
-            "[{}] expected `FOR SHARE` in: {sql}",
-            flavor.name()
-        );
-    }
+    let stmt = make_query(Filter::ALL, None, None, vec![Lock::Share]);
+    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 FOR SHARE;"#]].assert_eq(&render(
+        Flavor::Sqlite,
+        &schema,
+        stmt,
+    ));
+    let stmt = make_query(Filter::ALL, None, None, vec![Lock::Share]);
+    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 FOR SHARE;"#]].assert_eq(&render(
+        Flavor::Postgresql,
+        &schema,
+        stmt,
+    ));
+    let stmt = make_query(Filter::ALL, None, None, vec![Lock::Share]);
+    expect!["SELECT tbl_0_0.`id` FROM `users` AS tbl_0_0 FOR SHARE;"].assert_eq(&render(
+        Flavor::Mysql,
+        &schema,
+        stmt,
+    ));
 }

@@ -10,6 +10,7 @@
 //! Each test constructs the AST directly so the serializer is exercised in
 //! isolation — no lowering pipeline involved.
 
+use expect_test::expect;
 use toasty_core::{
     schema::db::{Column, ColumnId, PrimaryKey, Schema, Table, TableId, Type as StorageType},
     stmt::{
@@ -122,16 +123,8 @@ fn values_single_row_postgresql() {
     let schema = Schema::default();
     let values = Values::new(vec![Expr::record([Expr::from(1i64), Expr::from("a")])]);
     let stmt: stmt::Statement = stmt::Query::values(values).into();
-    let sql = render_postgresql(&schema, stmt);
 
-    assert!(
-        sql.contains("VALUES (1, 'a')"),
-        "expected `VALUES (1, 'a')` in: {sql}"
-    );
-    assert!(
-        !sql.contains("ROW("),
-        "did not expect ROW(...) wrapper in PG: {sql}"
-    );
+    expect!["VALUES (1, 'a');"].assert_eq(&render_postgresql(&schema, stmt));
 }
 
 #[test]
@@ -142,16 +135,8 @@ fn values_multiple_rows_postgresql() {
         Expr::record([Expr::from(2i64), Expr::from("b")]),
     ]);
     let stmt: stmt::Statement = stmt::Query::values(values).into();
-    let sql = render_postgresql(&schema, stmt);
 
-    assert!(
-        sql.contains("VALUES (1, 'a'), (2, 'b')"),
-        "expected comma-separated bare rows in: {sql}"
-    );
-    assert!(
-        !sql.contains("ROW("),
-        "did not expect ROW(...) wrapper in PG: {sql}"
-    );
+    expect!["VALUES (1, 'a'), (2, 'b');"].assert_eq(&render_postgresql(&schema, stmt));
 }
 
 #[test]
@@ -166,16 +151,8 @@ fn values_uses_row_wrapper_on_mysql_outside_insert() {
         Expr::record([Expr::from(2i64), Expr::from("b")]),
     ]);
     let stmt: stmt::Statement = stmt::Query::values(values).into();
-    let sql = render_mysql(&schema, stmt);
 
-    assert!(
-        sql.contains("ROW(1, 'a'), ROW(2, 'b')"),
-        "expected canonical `ROW(...)` wrappers in MySQL: {sql}"
-    );
-    assert!(
-        !sql.contains("ROW(("),
-        "did not expect `ROW((...))` double-paren in MySQL: {sql}"
-    );
+    expect!["VALUES ROW(1, 'a'), ROW(2, 'b');"].assert_eq(&render_mysql(&schema, stmt));
 }
 
 #[test]
@@ -199,16 +176,8 @@ fn values_inside_insert_no_row_wrapper_on_mysql() {
         returning: None,
     }
     .into();
-    let sql = render_mysql(&schema, stmt);
 
-    assert!(
-        sql.contains("VALUES (1), (2)"),
-        "expected comma-separated bare rows in INSERT: {sql}"
-    );
-    assert!(
-        !sql.contains("ROW("),
-        "did not expect ROW(...) wrapper inside INSERT on MySQL: {sql}"
-    );
+    expect!["INSERT INTO `users` (`id`) VALUES (1), (2);"].assert_eq(&render_mysql(&schema, stmt));
 }
 
 // -----------------------------------------------------------------------------
@@ -250,25 +219,7 @@ fn select_with_single_cte() {
             .build(),
     );
 
-    let sql = render_sqlite(&schema, stmt);
-
-    // Top-level query renders at depth 0, so the CTE binding is `cte_0_0`
-    // and the outer FROM aliases it as `tbl_0_0`. The inner subquery is at
-    // depth 1.
-    assert!(
-        sql.contains("WITH cte_0_0 as ("),
-        "expected `WITH cte_0_0 as (` in: {sql}"
-    );
-    assert!(
-        sql.contains("FROM cte_0_0 AS tbl_0_0"),
-        "expected outer FROM to alias the CTE in: {sql}"
-    );
-    // The outer projection of `column 0` of a CTE renders as `ColumnAlias`
-    // (`column1`, 1-based), not the underlying schema column name.
-    assert!(
-        sql.contains("tbl_0_0.column1"),
-        "expected outer projection to use ColumnAlias in: {sql}"
-    );
+    expect![[r#"WITH cte_0_0 as (SELECT tbl_1_0."id" FROM "users" AS tbl_1_0) SELECT tbl_0_0.column1 FROM cte_0_0 AS tbl_0_0;"#]].assert_eq(&render_sqlite(&schema, stmt));
 }
 
 #[test]
@@ -305,22 +256,7 @@ fn select_with_multiple_ctes() {
             .build(),
     );
 
-    let sql = render_sqlite(&schema, stmt);
-
-    // Both CTEs appear, comma-separated, with `_0` and `_1` indices.
-    let first = sql
-        .find("cte_0_0 as (")
-        .unwrap_or_else(|| panic!("expected first CTE in: {sql}"));
-    let second = sql
-        .find("cte_0_1 as (")
-        .unwrap_or_else(|| panic!("expected second CTE in: {sql}"));
-    assert!(first < second, "expected CTE order in: {sql}");
-    // The two CTE bindings are separated by `, ` (rendered by the `Comma`
-    // delimiter wrapping the enumerated CTE list).
-    assert!(
-        sql.contains("), cte_0_1 as ("),
-        "expected comma-separated CTEs in: {sql}"
-    );
+    expect![[r#"WITH cte_0_0 as (SELECT tbl_1_0."id" FROM "users" AS tbl_1_0), cte_0_1 as (SELECT tbl_1_0."id" FROM "users" AS tbl_1_0) SELECT tbl_0_0.column1 FROM cte_0_0 AS tbl_0_0;"#]].assert_eq(&render_sqlite(&schema, stmt));
 }
 
 // -----------------------------------------------------------------------------
@@ -349,20 +285,10 @@ fn select_from_derived_subquery() {
     };
     let stmt = stmt::Statement::Query(stmt::Query::builder(outer_select).build());
 
-    let sql = render_sqlite(&schema, stmt);
-
-    // Top-level query is depth 0; the derived subquery renders at depth 1.
-    // The outer column reference uses `ColumnAlias` (`column1`, 1-based)
-    // because the underlying table is a derived subquery, not a schema
-    // table.
-    assert!(
-        sql.contains(r#"FROM (SELECT tbl_1_0."id" FROM "users" AS tbl_1_0) AS tbl_0_0"#),
-        "expected derived `FROM (...) AS tbl_0_0` in: {sql}"
-    );
-    assert!(
-        sql.contains("tbl_0_0.column1"),
-        "expected outer projection to use ColumnAlias in: {sql}"
-    );
+    expect![[
+        r#"SELECT tbl_0_0.column1 FROM (SELECT tbl_1_0."id" FROM "users" AS tbl_1_0) AS tbl_0_0;"#
+    ]]
+    .assert_eq(&render_sqlite(&schema, stmt));
 }
 
 // -----------------------------------------------------------------------------
@@ -390,25 +316,11 @@ fn expr_exists_subquery() {
     let schema = users_schema();
     let exists = Expr::exists(select_id_from_users());
 
-    for (label, sql) in [
-        (
-            "postgresql",
-            render_postgresql(&schema, select_users_with_filter(exists.clone())),
-        ),
-        (
-            "sqlite",
-            render_sqlite(&schema, select_users_with_filter(exists)),
-        ),
-    ] {
-        assert!(
-            sql.contains("WHERE EXISTS ("),
-            "[{label}] expected `WHERE EXISTS (` in: {sql}"
-        );
-        assert!(
-            !sql.contains("NOT EXISTS"),
-            "[{label}] did not expect NOT EXISTS in: {sql}"
-        );
-    }
+    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 WHERE EXISTS (SELECT tbl_1_0."id" FROM "users" AS tbl_1_0);"#]].assert_eq(&render_postgresql(
+        &schema,
+        select_users_with_filter(exists.clone()),
+    ));
+    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 WHERE EXISTS (SELECT tbl_1_0."id" FROM "users" AS tbl_1_0);"#]].assert_eq(&render_sqlite(&schema, select_users_with_filter(exists)));
 }
 
 #[test]
@@ -418,21 +330,14 @@ fn expr_not_exists_subquery() {
     // as `NOT (EXISTS (...))`.
     let not_exists = Expr::not_exists(select_id_from_users());
 
-    for (label, sql) in [
-        (
-            "postgresql",
-            render_postgresql(&schema, select_users_with_filter(not_exists.clone())),
-        ),
-        (
-            "sqlite",
-            render_sqlite(&schema, select_users_with_filter(not_exists)),
-        ),
-    ] {
-        assert!(
-            sql.contains("NOT (EXISTS ("),
-            "[{label}] expected `NOT (EXISTS (` in: {sql}"
-        );
-    }
+    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 WHERE NOT (EXISTS (SELECT tbl_1_0."id" FROM "users" AS tbl_1_0));"#]].assert_eq(&render_postgresql(
+        &schema,
+        select_users_with_filter(not_exists.clone()),
+    ));
+    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 WHERE NOT (EXISTS (SELECT tbl_1_0."id" FROM "users" AS tbl_1_0));"#]].assert_eq(&render_sqlite(
+        &schema,
+        select_users_with_filter(not_exists),
+    ));
 }
 
 // -----------------------------------------------------------------------------
@@ -444,19 +349,9 @@ fn expr_in_subquery() {
     let schema = users_schema();
     let in_sub = Expr::in_subquery(col(0, 0), select_id_from_users());
 
-    for (label, sql) in [
-        (
-            "postgresql",
-            render_postgresql(&schema, select_users_with_filter(in_sub.clone())),
-        ),
-        (
-            "sqlite",
-            render_sqlite(&schema, select_users_with_filter(in_sub)),
-        ),
-    ] {
-        assert!(
-            sql.contains(r#"WHERE tbl_0_0."id" IN (SELECT "#),
-            "[{label}] expected `id IN (SELECT ...)` predicate in: {sql}"
-        );
-    }
+    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 WHERE tbl_0_0."id" IN (SELECT tbl_0_0."id" FROM "users" AS tbl_0_0);"#]].assert_eq(&render_postgresql(
+        &schema,
+        select_users_with_filter(in_sub.clone()),
+    ));
+    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 WHERE tbl_0_0."id" IN (SELECT tbl_0_0."id" FROM "users" AS tbl_0_0);"#]].assert_eq(&render_sqlite(&schema, select_users_with_filter(in_sub)));
 }
