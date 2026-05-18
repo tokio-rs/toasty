@@ -30,6 +30,11 @@ pub use into_insert::IntoInsert;
 mod into_statement;
 pub use into_statement::IntoStatement;
 
+#[cfg(feature = "serde")]
+mod json;
+#[cfg(feature = "serde")]
+pub use json::Json;
+
 mod list;
 pub use list::List;
 

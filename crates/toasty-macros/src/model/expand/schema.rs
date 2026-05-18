@@ -1,8 +1,5 @@
 use super::{Expand, util};
-use crate::model::schema::SerializeAttr;
-use crate::model::schema::{
-    AutoStrategy, Column, FieldTy, ModelKind, Name, SerializeFormat, UuidVersion,
-};
+use crate::model::schema::{AutoStrategy, Column, FieldTy, ModelKind, Name, UuidVersion};
 
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
@@ -121,29 +118,8 @@ impl Expand<'_> {
                         _ => quote!(None),
                     };
 
-                    match &field.attrs.serialize {
-                        Some(SerializeAttr { format, nullable: serialize_nullable }) => {
-                            let serialize_format = match format {
-                                SerializeFormat::Json => {
-                                    quote!(Some(#toasty::core::schema::app::SerializeFormat::Json))
-                                }
-                            };
-                            let nullable_lit = *serialize_nullable;
-
-                            nullable = quote!(#nullable_lit);
-                            field_ty = quote!(#toasty::core::schema::app::FieldTy::Primitive(
-                                #toasty::core::schema::app::FieldPrimitive {
-                                    ty: #toasty::core::stmt::Type::String,
-                                    storage_ty: #storage_ty,
-                                    serialize: #serialize_format,
-                                }
-                            ));
-                        }
-                        None => {
-                            nullable = quote!(<#ty as #toasty::Field>::NULLABLE);
-                            field_ty = quote!(<#ty as #toasty::Field>::field_ty(#storage_ty));
-                        }
-                    }
+                    nullable = quote!(<#ty as #toasty::Field>::NULLABLE);
+                    field_ty = quote!(<#ty as #toasty::Field>::field_ty(#storage_ty));
                 }
                 FieldTy::BelongsTo(rel) => {
                     let ty = &rel.ty;
@@ -352,12 +328,6 @@ impl Expand<'_> {
         let toasty = &self.toasty;
 
         let checks = self.model.fields.iter().filter_map(|field| {
-            // `#[serialize]` stores the field as a JSON string regardless of
-            // the underlying Rust type — skip the storage compat check.
-            if field.attrs.serialize.is_some() {
-                return None;
-            }
-
             let FieldTy::Primitive(ty) = &field.ty else {
                 return None;
             };
@@ -432,36 +402,31 @@ impl Expand<'_> {
         self.model
             .fields
             .iter()
-            .filter_map(|field| match &field.ty {
+            .map(|field| match &field.ty {
                 FieldTy::Primitive(ty) => {
-                    // Fields with #[serialize] store arbitrary types as JSON
-                    // strings — they don't implement Field.
-                    if field.attrs.serialize.is_some() {
-                        return None;
-                    }
                     // Primitives use Field::register which delegates to inner
                     // type if it's an embedded type (via the Field impl).
-                    Some(quote! {
+                    quote! {
                         <#ty as #toasty::Field>::register(model_set);
-                    })
+                    }
                 }
                 FieldTy::BelongsTo(rel) => {
                     let ty = &rel.ty;
-                    Some(quote! {
+                    quote! {
                         <<#ty as #toasty::Relation>::Model as #toasty::Register>::register(model_set);
-                    })
+                    }
                 }
                 FieldTy::HasMany(rel) => {
                     let ty = &rel.ty;
-                    Some(quote! {
+                    quote! {
                         <<#ty as #toasty::Relation>::Model as #toasty::Register>::register(model_set);
-                    })
+                    }
                 }
                 FieldTy::HasOne(rel) => {
                     let ty = &rel.ty;
-                    Some(quote! {
+                    quote! {
                         <<#ty as #toasty::Relation>::Model as #toasty::Register>::register(model_set);
-                    })
+                    }
                 }
             })
             .collect()
