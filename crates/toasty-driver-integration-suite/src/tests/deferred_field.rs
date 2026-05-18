@@ -353,7 +353,11 @@ pub async fn deferred_update_refreshes_loaded_value(t: &mut Test) -> Result<()> 
 // `Load` directly. Each behavior is exercised in isolation against the
 // shared scenario.
 
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::deferred_serialize_document))]
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::deferred_serialize_document)
+)]
 pub async fn deferred_serialize_create_returns_loaded(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -377,7 +381,11 @@ pub async fn deferred_serialize_create_returns_loaded(t: &mut Test) -> Result<()
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::deferred_serialize_document))]
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::deferred_serialize_document)
+)]
 pub async fn deferred_serialize_default_load_leaves_unloaded(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -397,7 +405,11 @@ pub async fn deferred_serialize_default_load_leaves_unloaded(t: &mut Test) -> Re
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::deferred_serialize_document))]
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::deferred_serialize_document)
+)]
 pub async fn deferred_serialize_exec_lazy_loads_value(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -425,7 +437,11 @@ pub async fn deferred_serialize_exec_lazy_loads_value(t: &mut Test) -> Result<()
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::deferred_serialize_document))]
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::deferred_serialize_document)
+)]
 pub async fn deferred_serialize_include_eager_loads_value(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -454,7 +470,11 @@ pub async fn deferred_serialize_include_eager_loads_value(t: &mut Test) -> Resul
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::deferred_serialize_document))]
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::deferred_serialize_document)
+)]
 pub async fn deferred_serialize_update_refreshes_loaded_value(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
