@@ -345,3 +345,163 @@ pub async fn deferred_update_refreshes_loaded_value(t: &mut Test) -> Result<()> 
 
     Ok(())
 }
+
+// ---------- `Deferred<Json<T>>` on a single field ----------
+//
+// The column is stored as JSON, the in-memory field is `Deferred<Json<T>>`,
+// and `T` only implements `serde::{Serialize, Deserialize}` — never
+// Toasty's `Load` directly. Each behavior is exercised in isolation
+// against the shared scenario.
+
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::deferred_json_document)
+)]
+pub async fn deferred_json_create_returns_loaded(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    let initial = Payload {
+        name: "users".to_string(),
+        version: 1,
+    };
+
+    let created = toasty::create!(Repository {
+        name: "main".to_string(),
+        payload: initial.clone(),
+    })
+    .exec(&mut db)
+    .await?;
+
+    // INSERT...RETURNING echoes the value the caller supplied, so the field
+    // comes back already loaded — even though normal SELECTs would skip it.
+    assert!(!created.payload.is_unloaded());
+    assert_eq!(&initial, &created.payload.get().0);
+
+    Ok(())
+}
+
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::deferred_json_document)
+)]
+pub async fn deferred_json_default_load_leaves_unloaded(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    let created = toasty::create!(Repository {
+        name: "main".to_string(),
+        payload: Payload {
+            name: "users".to_string(),
+            version: 1,
+        },
+    })
+    .exec(&mut db)
+    .await?;
+
+    let read = Repository::filter_by_id(created.id).get(&mut db).await?;
+    assert!(read.payload.is_unloaded());
+
+    Ok(())
+}
+
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::deferred_json_document)
+)]
+pub async fn deferred_json_exec_lazy_loads_value(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    let initial = Payload {
+        name: "users".to_string(),
+        version: 1,
+    };
+
+    let created = toasty::create!(Repository {
+        name: "main".to_string(),
+        payload: initial.clone(),
+    })
+    .exec(&mut db)
+    .await?;
+
+    let read = Repository::filter_by_id(created.id).get(&mut db).await?;
+    // The per-field accessor returns a Statement<Json<Payload>>; .exec()
+    // hands back the JSON-deserialized value through Json<T>'s Load impl.
+    let payload: toasty::Json<Payload> = read.payload().exec(&mut db).await?;
+    assert_eq!(initial, payload.0);
+
+    // The in-memory record is not mutated by `.exec()`.
+    assert!(read.payload.is_unloaded());
+
+    Ok(())
+}
+
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::deferred_json_document)
+)]
+pub async fn deferred_json_include_eager_loads_value(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    let initial = Payload {
+        name: "users".to_string(),
+        version: 1,
+    };
+
+    let created = toasty::create!(Repository {
+        name: "main".to_string(),
+        payload: initial.clone(),
+    })
+    .exec(&mut db)
+    .await?;
+
+    // `.include()` projects the JSON column into the SELECT; the model
+    // loader peels the deferred envelope, JSON-decodes the inner String,
+    // and wraps the resulting `Json<Payload>` back in a loaded `Deferred`.
+    let read = Repository::filter_by_id(created.id)
+        .include(Repository::fields().payload())
+        .get(&mut db)
+        .await?;
+    assert!(!read.payload.is_unloaded());
+    assert_eq!(&initial, &read.payload.get().0);
+
+    Ok(())
+}
+
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::deferred_json_document)
+)]
+pub async fn deferred_json_update_refreshes_loaded_value(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    let initial = Payload {
+        name: "users".to_string(),
+        version: 1,
+    };
+    let next = Payload {
+        name: "users".to_string(),
+        version: 2,
+    };
+
+    let created = toasty::create!(Repository {
+        name: "main".to_string(),
+        payload: initial,
+    })
+    .exec(&mut db)
+    .await?;
+
+    let mut doc = Repository::filter_by_id(created.id).get(&mut db).await?;
+    assert!(doc.payload.is_unloaded());
+
+    // The update echoes the assigned value back through the reload path,
+    // which JSON-decodes and re-wraps in `Deferred`.
+    doc.update().payload(next.clone()).exec(&mut db).await?;
+    assert!(!doc.payload.is_unloaded());
+    assert_eq!(&next, &doc.payload.get().0);
+
+    Ok(())
+}

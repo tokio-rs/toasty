@@ -305,6 +305,35 @@ impl LowerStatement<'_, '_> {
     }
 }
 
+/// Fold a `Batch` of column-level ops into a single equivalent `Append`
+/// expression. Currently only handles the all-`Append` shape produced by
+/// `stmt::apply([stmt::push(..), ..])` / `stmt::extend`; other shapes
+/// (mixed Append/Pop/RemoveAt, …) need per-entry dispatch plus driver-side
+/// Batch composition. See #717.
+///
+/// Empty input yields an empty list expression — the surface `stmt::apply`
+/// API can't actually produce an empty `Batch`, but the helper doesn't
+/// depend on that: an empty list flows through as a no-op Append.
+fn fold_append_batch(entries: Vec<stmt::Assignment>) -> stmt::Expr {
+    let mut items = Vec::new();
+    for entry in entries {
+        match entry {
+            // `stmt::push` builds `Expr::List([elem])`; the fold pass
+            // collapses literal-only lists to `Expr::Value(Value::List)`.
+            stmt::Assignment::Append(stmt::Expr::List(list)) => {
+                items.extend(list.items);
+            }
+            stmt::Assignment::Append(stmt::Expr::Value(stmt::Value::List(values))) => {
+                items.extend(values.into_iter().map(stmt::Expr::from));
+            }
+            // Other batch entry kinds need per-entry dispatch and
+            // driver-side Batch composition.
+            other => todo!("batch entry kind not yet supported on Vec<scalar>: {other:#?}"),
+        }
+    }
+    stmt::Expr::list_from_vec(items)
+}
+
 impl LowerStatement<'_, '_> {
     fn new_dependency(&mut self, stmt: impl Into<stmt::Statement>) -> hir::StmtId {
         let row_index = match self.cx {
@@ -411,9 +440,27 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                         CollectionOp::RemoveAt(expr),
                     );
                 }
-                stmt::Assignment::Insert(_) | stmt::Assignment::Batch(_) => {
+                stmt::Assignment::Batch(entries) => {
+                    // A `Batch` of column-level ops on the same field; built
+                    // when the `stmt::apply` surface API folds same-projection
+                    // ops together. Each entry should dispatch through the
+                    // per-op arms above — today only the all-`Append` shape
+                    // is wired up (see `fold_append_batch`). Other shapes
+                    // need driver-side Batch composition; see #717.
+                    let mut folded = fold_append_batch(std::mem::take(entries));
+                    self.lower_collection_op(
+                        &mut lowered,
+                        mapping,
+                        projection,
+                        CollectionOp::Append(&mut folded),
+                    );
+                }
+                stmt::Assignment::Insert(_) => {
+                    // `Insert` only applies to has-many relation fields,
+                    // which `plan_stmt_update_relations` consumes before
+                    // table-level lowering runs.
                     todo!(
-                        "Insert / Batch assignments are not produced for table lowering; got {assignment:#?}"
+                        "Insert assignment is not produced for table lowering; got {assignment:#?}"
                     )
                 }
             }
@@ -513,13 +560,10 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 if self.capability().sql {
                     self.visit_expr_in_subquery_mut(e);
 
-                    let maybe_res = self.lower_expr_binary_op(
-                        stmt::BinaryOp::Eq,
+                    self.lower_in_subquery_operands(
                         &mut e.expr,
                         e.query.returning_mut_unwrap().as_project_mut_unwrap(),
                     );
-
-                    assert!(maybe_res.is_none(), "TODO");
 
                     let returning = e.query.returning_mut_unwrap().as_project_mut_unwrap();
 
@@ -534,22 +578,28 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                         child.visit_stmt_query_mut(&mut e.query);
                     });
 
-                    // For now, we wonly support independent sub-queries. I.e.
-                    // the subquery must be able to be executed without any
-                    // context from the parent query.
+                    // The subquery must be executable without parent context:
+                    // no `Arg::Ref` (which would reach back into a parent
+                    // scope) and no `back_refs` (columns the parent must
+                    // batch-load on its behalf). `Arg::Sub` is fine — it's a
+                    // forward dependency on the subquery's own child, which
+                    // the planner chains in execution order.
                     let target_stmt_info = &self.state.hir[target_id];
-                    debug_assert!(target_stmt_info.args.is_empty(), "TODO");
+                    debug_assert!(
+                        target_stmt_info
+                            .args
+                            .iter()
+                            .all(|arg| matches!(arg, hir::Arg::Sub { .. })),
+                        "TODO: sub-statement references parent scope"
+                    );
                     debug_assert!(target_stmt_info.back_refs.is_empty(), "TODO");
 
                     self.track_dependency(target_id);
 
-                    let maybe_res = self.lower_expr_binary_op(
-                        stmt::BinaryOp::Eq,
+                    self.lower_in_subquery_operands(
                         &mut e.expr,
                         e.query.returning_mut_unwrap().as_project_mut_unwrap(),
                     );
-
-                    assert!(maybe_res.is_none(), "TODO");
 
                     let stmt::Expr::InSubquery(e) = expr.take() else {
                         panic!()
@@ -968,18 +1018,16 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         if let stmt::Expr::Reference(expr_reference) = operand {
             match &*expr_reference {
                 stmt::ExprReference::Model { nesting } => {
+                    let nesting = *nesting;
                     let model = self
                         .expr_cx
                         .resolve_expr_reference(expr_reference)
                         .as_model_unwrap();
 
-                    let [pk_field] = &model.primary_key.fields[..] else {
-                        todo!("handle composite keys");
-                    };
-
-                    *operand = stmt::Expr::ref_field(*nesting, pk_field);
+                    *operand = key_field_refs(nesting, model.primary_key.fields.iter().copied());
                 }
-                stmt::ExprReference::Field { .. } => {
+                stmt::ExprReference::Field { nesting, .. } => {
+                    let nesting = *nesting;
                     let field = self
                         .expr_cx
                         .resolve_expr_reference(expr_reference)
@@ -989,14 +1037,10 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                         app::FieldTy::Primitive(_) | app::FieldTy::Embedded(_) => {}
                         app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => todo!(),
                         app::FieldTy::BelongsTo(rel) => {
-                            let [fk_field] = &rel.foreign_key.fields[..] else {
-                                todo!("handle composite keys");
-                            };
-
-                            let stmt::ExprReference::Field { index, .. } = expr_reference else {
-                                panic!()
-                            };
-                            *index = fk_field.source.index;
+                            *operand = key_field_refs(
+                                nesting,
+                                rel.foreign_key.fields.iter().map(|fk| fk.source),
+                            );
                         }
                     }
                 }
@@ -1134,6 +1178,26 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             stmt::Expr::and_from_vec(comparisons)
         } else {
             stmt::Expr::or_from_vec(comparisons)
+        }
+    }
+
+    /// Lower the LHS and RHS of an `IN (subquery)` in place. When both sides
+    /// are records of equal arity (as produced for composite-key FK
+    /// comparisons) the per-element lowering is applied pair-wise so
+    /// element-level transforms (NULLs, casts) still fire while the
+    /// surrounding `IN` is preserved. Otherwise a single binary-op lowering
+    /// is applied across both sides.
+    fn lower_in_subquery_operands(&mut self, lhs: &mut stmt::Expr, rhs: &mut stmt::Expr) {
+        if let (stmt::Expr::Record(lhs_rec), stmt::Expr::Record(rhs_rec)) = (&mut *lhs, &mut *rhs)
+            && lhs_rec.len() == rhs_rec.len()
+        {
+            for (l, r) in lhs_rec.fields.iter_mut().zip(rhs_rec.fields.iter_mut()) {
+                let maybe_res = self.lower_expr_binary_op(stmt::BinaryOp::Eq, l, r);
+                assert!(maybe_res.is_none(), "TODO");
+            }
+        } else {
+            let maybe_res = self.lower_expr_binary_op(stmt::BinaryOp::Eq, lhs, rhs);
+            assert!(maybe_res.is_none(), "TODO");
         }
     }
 
@@ -1600,6 +1664,24 @@ impl LoweringContext<'_> {
 
     fn is_returning(&self) -> bool {
         matches!(self, LoweringContext::Returning(_))
+    }
+}
+
+/// Build a scalar-or-record expression of field references for a key
+/// (primary or foreign): a single `ref_field` for a single-column key, a
+/// `Record` of `ref_field`s for a composite key. Used both for the
+/// eq-operand rewrite (where the surrounding `==` decomposes pair-wise via
+/// `lower_expr_binary_op`'s `Record == Record` handler) and for composite
+/// FK IN-subquery comparisons (where the tuple LHS pairs with a tuple
+/// projection on the RHS).
+pub(super) fn key_field_refs(
+    nesting: usize,
+    mut fields: impl ExactSizeIterator<Item = app::FieldId>,
+) -> stmt::Expr {
+    if fields.len() == 1 {
+        stmt::Expr::ref_field(nesting, fields.next().unwrap())
+    } else {
+        stmt::Expr::record(fields.map(|field| stmt::Expr::ref_field(nesting, field)))
     }
 }
 

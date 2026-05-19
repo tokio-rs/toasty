@@ -110,18 +110,42 @@ impl LowerStatement<'_, '_> {
         // values
         for field in &model.fields {
             if let app::FieldTy::BelongsTo(rel) = &field.ty {
-                let [fk_field] = &rel.foreign_key.fields[..] else {
-                    todo!()
-                };
-
                 let mut field_expr = expr.entry_mut(field.id.index);
 
-                if !field_expr.is_value() || field_expr.is_value_null() {
+                if field_expr.is_value_null() {
                     continue;
                 }
 
-                let e = field_expr.take();
-                expr.entry_mut(fk_field.source.index).insert(e);
+                let fk_fields = &rel.foreign_key.fields;
+
+                // Distribute the BelongsTo value into its FK source column(s):
+                //   - composite FK (`fk_fields.len() > 1`): the value is a
+                //     record (`Expr::Record` from the tuple `IntoExpr` for
+                //     composite-PK targets, or `Expr::Value(Value::Record)`
+                //     from a literal); one item per FK column via
+                //     `into_record_items`.
+                //   - single FK: the value goes whole into the single FK
+                //     column, whether it is a scalar or a record (an
+                //     `Embed`-typed PK produces an `Expr::Record` whose shape
+                //     matches the embed-typed FK source).
+                if fk_fields.len() > 1 && field_expr.is_record() {
+                    let items = field_expr.take().into_record_items().unwrap();
+                    let mut count = 0;
+                    for (fk_field, item) in fk_fields.iter().zip(items) {
+                        expr.entry_mut(fk_field.source.index).insert(item);
+                        count += 1;
+                    }
+                    assert_eq!(count, fk_fields.len());
+                } else {
+                    if !field_expr.is_value() && !field_expr.is_record() {
+                        continue;
+                    }
+                    let [fk_field] = &fk_fields[..] else {
+                        panic!("composite FK expected a record value, got scalar");
+                    };
+                    let e = field_expr.take();
+                    expr.entry_mut(fk_field.source.index).insert(e);
+                }
             }
         }
 

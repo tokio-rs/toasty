@@ -87,6 +87,18 @@ impl EntryMut<'_> {
         )
     }
 
+    /// Returns `true` if this entry holds a record, either as an
+    /// `Expr::Record`, an `Expr::Value(Value::Record)`, or a bare
+    /// `Value::Record`.
+    pub fn is_record(&self) -> bool {
+        match self {
+            EntryMut::Expr(Expr::Record(_)) => true,
+            EntryMut::Expr(Expr::Value(value)) => value.is_record(),
+            EntryMut::Value(value) => value.is_record(),
+            EntryMut::Expr(_) => false,
+        }
+    }
+
     /// Returns `true` if this entry is `Expr::Default`.
     pub fn is_default(&self) -> bool {
         matches!(self, EntryMut::Expr(Expr::Default))

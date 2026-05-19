@@ -150,10 +150,13 @@ impl<T> Query<T> {
         self
     }
 
-    /// Set the sort order for this query.
+    /// Add a sort order to this query.
     ///
     /// Pass an [`OrderByExpr`](toasty_core::stmt::OrderByExpr) obtained from
-    /// [`Path::asc`] or [`Path::desc`]:
+    /// [`Path::asc`] or [`Path::desc`], or a tuple of them to sort by several
+    /// fields at once. Calling `order_by` multiple times appends each
+    /// expression to the existing order, so later calls act as tie-breakers
+    /// for earlier ones.
     ///
     /// # Examples
     ///
@@ -163,14 +166,19 @@ impl<T> Query<T> {
     /// #     #[key]
     /// #     id: i64,
     /// #     name: String,
+    /// #     age: i64,
     /// # }
     /// use toasty::stmt::{List, Query};
     ///
     /// let mut q = Query::<List<User>>::all();
-    /// q.order_by(User::fields().name().desc());
+    /// q.order_by((User::fields().age().desc(), User::fields().name().asc()));
     /// ```
     pub fn order_by(&mut self, order_by: impl Into<stmt::OrderBy>) -> &mut Self {
-        self.untyped.order_by = Some(order_by.into());
+        let order_by = order_by.into();
+        match &mut self.untyped.order_by {
+            Some(existing) => existing.exprs.extend(order_by.exprs),
+            None => self.untyped.order_by = Some(order_by),
+        }
         self
     }
 

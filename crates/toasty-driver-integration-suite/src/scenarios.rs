@@ -1,4 +1,8 @@
+pub mod composite_chain_relations;
+pub mod composite_fk_has_many_belongs_to;
+pub mod composite_has_many_belongs_to;
 pub mod deferred_document;
+pub mod deferred_json_document;
 pub mod deferred_optional_document;
 pub mod has_many_belongs_to;
 pub mod has_many_multi_relation;
@@ -7,6 +11,7 @@ pub mod has_one_optional_belongs_to;
 pub mod in_list_item;
 pub mod tagged_item;
 pub mod two_models;
+pub mod user_comment_article;
 pub mod user_unique_email;
 pub mod user_with_age;
 pub mod versioned_item;

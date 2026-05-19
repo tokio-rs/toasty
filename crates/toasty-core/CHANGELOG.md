@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.6.0...toasty-core-v0.6.1) - 2026-05-16
+
+### Added
+
+- Field-level `#[index]` attributes now reject arguments ([#909])
+- Support ordering by multiple fields ([#901])
+
+### Fixed
+
+- Fixed equality operations with composite keys ([#906])
+- Improved `belongs_to` syntax and error messages for composite keys ([#905])
+
+[#901]: https://github.com/tokio-rs/toasty/pull/901
+[#905]: https://github.com/tokio-rs/toasty/pull/905
+[#906]: https://github.com/tokio-rs/toasty/pull/906
+[#909]: https://github.com/tokio-rs/toasty/pull/909
+
 ## [0.6.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.5.0...toasty-core-v0.6.0) - 2026-05-14
 
 ### Added

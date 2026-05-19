@@ -5,7 +5,7 @@ use std::borrow::Cow;
 use toasty_core::driver::{Capability, Driver};
 use toasty_core::{
     driver::Connection,
-    schema::db::{Migration, SchemaDiff},
+    schema::db::{Migration, diff},
 };
 
 use url::Url;
@@ -121,7 +121,7 @@ impl Driver for Connect {
         self.driver.connect().await
     }
 
-    fn generate_migration(&self, schema_diff: &SchemaDiff<'_>) -> Migration {
+    fn generate_migration(&self, schema_diff: &diff::Schema<'_>) -> Migration {
         self.driver.generate_migration(schema_diff)
     }
 

@@ -1,6 +1,7 @@
+use super::has_many::has_kind;
 use super::{Load, Register, Relation};
 
-use toasty_core::schema::app::{self, FieldId, FieldTy, ModelId};
+use toasty_core::schema::app::{self, FieldId, FieldTy};
 use toasty_core::stmt::{self, Value};
 
 use std::fmt;
@@ -39,10 +40,24 @@ impl<T: Relation> HasOne<T> {
     ///
     /// # Panics
     ///
-    /// Panics if the association has not been loaded.
+    /// Panics if the association has not been loaded. Use [`try_get`] to
+    /// handle the unloaded state without panicking.
+    ///
+    /// [`try_get`]: HasOne::try_get
     #[track_caller]
     pub fn get(&self) -> &T {
         self.value.as_ref().expect("association not loaded")
+    }
+
+    /// Returns a reference to the loaded associated record, or `None` if the
+    /// association has not been loaded.
+    ///
+    /// This is the non-panicking counterpart to [`get`](HasOne::get). For an
+    /// optional has-one (`HasOne<Option<T>>`), the inner `Option` reports
+    /// whether the related row exists; the outer `Option` returned here
+    /// reports whether the association was loaded.
+    pub fn try_get(&self) -> Option<&T> {
+        self.value.as_deref()
     }
 
     /// Returns `true` if the association has not been loaded yet.
@@ -82,15 +97,11 @@ impl<T: Relation> Relation for HasOne<T> {
         T::nullable()
     }
 
-    fn has_one_field_ty(pair: Option<FieldId>) -> FieldTy {
+    fn has_one_field_ty(pair: Option<FieldId>, via: Option<stmt::Path>) -> FieldTy {
         FieldTy::HasOne(app::HasOne {
             target: <T::Model as Register>::id(),
             expr_ty: stmt::Type::Model(<T::Model as Register>::id()),
-            // If unresolved, the pair is populated by the schema linker.
-            pair: pair.unwrap_or(FieldId {
-                model: ModelId(usize::MAX),
-                index: usize::MAX,
-            }),
+            kind: has_kind(pair, via),
         })
     }
 }

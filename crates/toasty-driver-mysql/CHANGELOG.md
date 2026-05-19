@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1](https://github.com/tokio-rs/toasty/compare/toasty-driver-mysql-v0.6.0...toasty-driver-mysql-v0.6.1) - 2026-05-16
+
+- Internal improvements only.
+
 ## [0.6.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-mysql-v0.5.0...toasty-driver-mysql-v0.6.0) - 2026-05-14
 
 ### Added

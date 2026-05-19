@@ -33,7 +33,7 @@ use toasty_core::{
         Capability, Driver, ExecResponse,
         operation::{IsolationLevel, Operation, Transaction},
     },
-    schema::db::{self, Migration, SchemaDiff, Table},
+    schema::db::{self, Migration, Table, diff},
     stmt,
 };
 use toasty_sql::{self as sql};
@@ -112,7 +112,7 @@ impl Driver for Sqlite {
         matches!(self, Self::InMemory).then_some(1)
     }
 
-    fn generate_migration(&self, schema_diff: &SchemaDiff<'_>) -> Migration {
+    fn generate_migration(&self, schema_diff: &diff::Schema<'_>) -> Migration {
         let statements = sql::MigrationStatement::from_diff(schema_diff, &Capability::SQLITE);
 
         let sql_strings: Vec<String> = statements

@@ -17,8 +17,8 @@
 //! - [`Config`] / [`MigrationConfig`] — configure migration paths, prefix
 //!   styles, and checksum behavior. Loaded from a `Toasty.toml` file or built
 //!   programmatically.
-//! - [`HistoryFile`] / [`HistoryFileMigration`] — read and write the TOML
-//!   history that tracks which migrations exist.
+//! - [`toasty::migration::History`] / [`toasty::migration::HistoryEntry`] —
+//!   read and write the TOML history that tracks which migrations exist.
 //! - [`SnapshotFile`] — read and write schema snapshot TOML files.
 //!
 //! # Examples
@@ -36,8 +36,11 @@ mod migration;
 mod theme;
 mod utility;
 
-pub use config::*;
-pub use migration::*;
+pub use config::Config;
+pub use migration::{
+    ApplyCommand, DropCommand, GenerateCommand, MigrationCommand, MigrationConfig,
+    MigrationPrefixStyle, ResetCommand, SnapshotCommand, SnapshotFile,
+};
 
 use anyhow::Result;
 use clap::Parser;

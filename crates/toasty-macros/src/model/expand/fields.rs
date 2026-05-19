@@ -64,10 +64,6 @@ impl Expand<'_> {
                 let field_offset = util::int(offset);
 
                 match &field.ty {
-                    Primitive(_) if field.attrs.serialize.is_some() => {
-                        // Serialized fields are stored as opaque JSON; no field accessor
-                        TokenStream::new()
-                    }
                     Primitive(_) if field.attrs.document.is_some() => {
                         // `#[document]` fields don't yet expose a path API into
                         // the document; whole-value access goes through the
@@ -175,7 +171,6 @@ impl Expand<'_> {
                 let field_offset = util::int(offset);
 
                 match &field.ty {
-                    Primitive(_) if field.attrs.serialize.is_some() => TokenStream::new(),
                     Primitive(_) if field.attrs.document.is_some() => TokenStream::new(),
                     Primitive(ty) if field.attrs.deferred => {
                         let inner: syn::Type = syn::parse_quote!(<#ty as #toasty::Defer>::Inner);
@@ -262,6 +257,16 @@ impl Expand<'_> {
             impl<__Origin> Into<#toasty::Path<__Origin, #toasty::List<#model_ident>>> for #field_list_struct_ident<__Origin> {
                 fn into(self) -> #toasty::Path<__Origin, #toasty::List<#model_ident>> {
                     self.path
+                }
+            }
+
+            impl<__Origin> #toasty::IntoExpr<#toasty::List<#model_ident>> for #field_list_struct_ident<__Origin> {
+                fn into_expr(self) -> #toasty::stmt::Expr<#toasty::List<#model_ident>> {
+                    self.path.into_expr()
+                }
+
+                fn by_ref(&self) -> #toasty::stmt::Expr<#toasty::List<#model_ident>> {
+                    self.path.by_ref()
                 }
             }
         )

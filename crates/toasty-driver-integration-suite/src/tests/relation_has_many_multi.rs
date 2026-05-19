@@ -108,14 +108,14 @@ pub async fn crud_user_todos_categories(test: &mut Test) -> Result<()> {
 
     let list = category
         .todos()
-        .query(Todo::fields().user().eq(&user))
+        .filter(Todo::fields().user().eq(&user))
         .exec(&mut db)
         .await?;
     check_todo_list(&mut db, &expect, list).await?;
 
     let list = user
         .todos()
-        .query(Todo::fields().category().eq(&category))
+        .filter(Todo::fields().category().eq(&category))
         .exec(&mut db)
         .await?;
     check_todo_list(&mut db, &expect, list).await?;

@@ -38,6 +38,45 @@ let items = Item::all()
 `Item::fields().order()` returns a field path. Calling `.asc()` or `.desc()` on
 it produces an ordering expression that `.order_by()` accepts.
 
+### Sorting by multiple fields
+
+Pass a tuple of ordering expressions to sort by several fields at once. Each
+field beyond the first acts as a tie-breaker for the ones before it:
+
+```rust
+# use toasty::Model;
+# #[derive(Debug, toasty::Model)]
+# struct User {
+#     #[key]
+#     #[auto]
+#     id: u64,
+#     name: String,
+#     age: i64,
+# }
+# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
+// Sort by age ascending; users with the same age are ordered by name descending
+let users = User::all()
+    .order_by((
+        User::fields().age().asc(),
+        User::fields().name().desc(),
+    ))
+    .exec(&mut db)
+    .await?;
+# Ok(())
+# }
+```
+
+Chained `.order_by()` calls behave the same way — each call appends its
+expressions to the existing order rather than replacing them, so the two forms
+below are equivalent:
+
+```rust,ignore
+q.order_by((User::fields().age().asc(), User::fields().name().desc()));
+
+q.order_by(User::fields().age().asc())
+ .order_by(User::fields().name().desc());
+```
+
 Sorting works with filters too:
 
 ```rust
@@ -312,6 +351,7 @@ Methods available on query builders:
 |---|---|
 | `.order_by(field.asc())` | Sort ascending by field |
 | `.order_by(field.desc())` | Sort descending by field |
+| `.order_by((a.asc(), b.desc()))` | Sort by multiple fields; later fields are tie-breakers |
 | `.limit(n)` | Return at most `n` records |
 | `.offset(n)` | Skip first `n` records (requires `.limit()`) |
 | `.paginate(per_page)` | Cursor-based pagination (requires `.order_by()`) |

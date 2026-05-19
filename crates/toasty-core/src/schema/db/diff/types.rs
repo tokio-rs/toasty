@@ -1,16 +1,16 @@
-use super::{EnumVariant, Schema, TypeEnum};
+use crate::schema::db::{EnumVariant, Schema, TypeEnum};
 
 /// The diff between named enum types across two schema versions.
 ///
 /// Enum types are not top-level schema objects — they are embedded in column
 /// definitions. This diff collects all named `TypeEnum` types from both schemas
 /// (by scanning columns) and computes the changes.
-pub struct TypesDiff<'a> {
-    items: Vec<TypesDiffItem<'a>>,
+pub struct Types<'a> {
+    items: Vec<TypesItem<'a>>,
 }
 
 /// A single change to a named enum type.
-pub enum TypesDiffItem<'a> {
+pub enum TypesItem<'a> {
     /// A new named enum type must be created.
     CreateType(&'a TypeEnum),
 
@@ -23,7 +23,7 @@ pub enum TypesDiffItem<'a> {
     },
 }
 
-impl<'a> TypesDiff<'a> {
+impl<'a> Types<'a> {
     /// Computes the enum type diff between two schemas.
     ///
     /// Collects all named `TypeEnum` types from column definitions in both
@@ -42,11 +42,9 @@ impl<'a> TypesDiff<'a> {
         for (name, next_ty) in &next_types {
             match prev_types.get(name) {
                 None => {
-                    // New enum type
-                    items.push(TypesDiffItem::CreateType(next_ty));
+                    items.push(TypesItem::CreateType(next_ty));
                 }
                 Some(prev_ty) => {
-                    // Existing enum type — check for changes
                     let prev_names: Vec<&str> =
                         prev_ty.variants.iter().map(|v| v.name.as_str()).collect();
                     let next_names: Vec<&str> =
@@ -60,7 +58,6 @@ impl<'a> TypesDiff<'a> {
                         next_names.len()
                     );
 
-                    // The first N variants must match exactly (same names, same order)
                     for (i, prev_name) in prev_names.iter().enumerate() {
                         assert!(
                             next_names[i] == *prev_name,
@@ -71,11 +68,10 @@ impl<'a> TypesDiff<'a> {
                         );
                     }
 
-                    // Collect newly added variants (appended after existing ones)
                     if next_names.len() > prev_names.len() {
                         let added: Vec<&'a EnumVariant> =
                             next_ty.variants[prev_names.len()..].iter().collect();
-                        items.push(TypesDiffItem::AddVariants { ty: next_ty, added });
+                        items.push(TypesItem::AddVariants { ty: next_ty, added });
                     }
                 }
             }
@@ -85,7 +81,7 @@ impl<'a> TypesDiff<'a> {
     }
 
     /// Returns an iterator over the diff items.
-    pub fn iter(&self) -> impl Iterator<Item = &TypesDiffItem<'a>> {
+    pub fn iter(&self) -> impl Iterator<Item = &TypesItem<'a>> {
         self.items.iter()
     }
 
@@ -95,15 +91,11 @@ impl<'a> TypesDiff<'a> {
     }
 }
 
-/// Collects all named `TypeEnum` types from column definitions across all tables.
-///
-/// If the same type name appears on multiple columns, the first occurrence wins
-/// (they must be identical per the schema verifier).
 fn collect_named_enums(schema: &Schema) -> hashbrown::HashMap<&str, &TypeEnum> {
     let mut result = hashbrown::HashMap::new();
     for table in &schema.tables {
         for column in &table.columns {
-            if let super::Type::Enum(type_enum) = &column.storage_ty
+            if let crate::schema::db::Type::Enum(type_enum) = &column.storage_ty
                 && let Some(name) = &type_enum.name
             {
                 result.entry(name.as_str()).or_insert(type_enum);

@@ -1,0 +1,5 @@
+error: field-level `#[index]` does not take arguments; for a composite index spanning multiple fields, use a struct-level `#[index(field1, field2, ...)]` attribute on the model
+  --> tests/ui/index_with_args_on_field.rs:10:5
+   |
+10 |     #[index(other)]
+   |     ^^^^^^^^^^^^^^^

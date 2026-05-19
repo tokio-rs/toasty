@@ -1,8 +1,8 @@
-use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::path::Path;
 use std::str::FromStr;
+use toasty::{Error, Result};
 use toasty_core::schema::db::Schema;
 use toml_edit::{DocumentMut, Item};
 
@@ -62,18 +62,17 @@ impl SnapshotFile {
 }
 
 impl FromStr for SnapshotFile {
-    type Err = anyhow::Error;
+    type Err = Error;
 
     fn from_str(s: &str) -> Result<Self> {
-        let file: SnapshotFile = toml::from_str(s)?;
+        let file: SnapshotFile =
+            toml::from_str(s).map_err(|err| Error::from_args(format_args!("{err}")))?;
 
-        // Validate version
         if file.version != SNAPSHOT_FILE_VERSION {
-            bail!(
-                "Unsupported snapshot file version: {}. Expected version {}",
-                file.version,
-                SNAPSHOT_FILE_VERSION
-            );
+            return Err(Error::from_args(format_args!(
+                "unsupported snapshot file version: {}. Expected version {}",
+                file.version, SNAPSHOT_FILE_VERSION
+            )));
         }
 
         Ok(file)
@@ -89,7 +88,8 @@ impl fmt::Display for SnapshotFile {
 
 impl SnapshotFile {
     fn to_toml_document(&self) -> Result<DocumentMut> {
-        let mut doc = toml_edit::ser::to_document(self)?;
+        let mut doc = toml_edit::ser::to_document(self)
+            .map_err(|err| Error::from_args(format_args!("{err}")))?;
         for (_key, item) in doc.as_table_mut().iter_mut() {
             if item.is_inline_table() {
                 let mut placeholder = Item::None;

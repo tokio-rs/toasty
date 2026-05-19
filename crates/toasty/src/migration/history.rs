@@ -1,50 +1,51 @@
-use anyhow::{Result, bail};
+use crate::{Error, Result};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::path::Path;
 use std::str::FromStr;
 
-const HISTORY_FILE_VERSION: u32 = 1;
+const HISTORY_VERSION: u32 = 1;
 
 /// A TOML-serializable record of all migrations that have been generated.
 ///
 /// The history file lives at `<migration_path>/history.toml` and is the
 /// source of truth for which migrations exist and what order they were
-/// created in. Each entry is a [`HistoryFileMigration`].
+/// created in. Each entry is a [`HistoryEntry`].
 ///
-/// The file carries a version number. [`HistoryFile::load`] and the
-/// [`FromStr`] implementation reject files whose version does not match the
-/// current format.
+/// The file carries a version number. [`History::load`] and the [`FromStr`]
+/// implementation reject files whose version does not match the current
+/// format.
 ///
 /// # Examples
 ///
 /// ```
-/// use toasty_cli::{HistoryFile, HistoryFileMigration};
+/// use toasty::migration::{History, HistoryEntry};
 ///
-/// let mut history = HistoryFile::new();
+/// let mut history = History::new();
 /// assert_eq!(history.next_migration_number(), 0);
 ///
-/// history.add_migration(HistoryFileMigration {
+/// history.add_entry(HistoryEntry {
 ///     id: 100,
 ///     name: "0000_init.sql".to_string(),
 ///     snapshot_name: "0000_snapshot.toml".to_string(),
 ///     checksum: None,
 /// });
 /// assert_eq!(history.next_migration_number(), 1);
-/// assert_eq!(history.migrations().len(), 1);
+/// assert_eq!(history.entries().len(), 1);
 ///
 /// // Round-trip through TOML serialization
 /// let serialized = history.to_string();
-/// let restored: HistoryFile = serialized.parse().unwrap();
-/// assert_eq!(restored.migrations()[0].id, 100);
+/// let restored: History = serialized.parse().unwrap();
+/// assert_eq!(restored.entries()[0].id, 100);
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HistoryFile {
+pub struct History {
     /// History file format version
     version: u32,
 
     /// Migration history
-    migrations: Vec<HistoryFileMigration>,
+    #[serde(rename = "migrations")]
+    entries: Vec<HistoryEntry>,
 }
 
 /// A single entry in the migration history.
@@ -56,9 +57,9 @@ pub struct HistoryFile {
 /// # Examples
 ///
 /// ```
-/// use toasty_cli::HistoryFileMigration;
+/// use toasty::migration::HistoryEntry;
 ///
-/// let entry = HistoryFileMigration {
+/// let entry = HistoryEntry {
 ///     id: 42,
 ///     name: "0001_create_users.sql".to_string(),
 ///     snapshot_name: "0001_snapshot.toml".to_string(),
@@ -68,7 +69,7 @@ pub struct HistoryFile {
 /// assert_eq!(entry.name, "0001_create_users.sql");
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HistoryFileMigration {
+pub struct HistoryEntry {
     /// Random unique identifier for this migration.
     pub id: u64,
 
@@ -83,110 +84,107 @@ pub struct HistoryFileMigration {
     pub checksum: Option<String>,
 }
 
-impl HistoryFile {
-    /// Create a new empty history file
+impl History {
+    /// Create a new empty history.
     pub fn new() -> Self {
         Self {
-            version: HISTORY_FILE_VERSION,
-            migrations: Vec::new(),
+            version: HISTORY_VERSION,
+            entries: Vec::new(),
         }
     }
 
-    /// Load a history file from a TOML file
+    /// Load history from a TOML file.
     pub fn load(path: impl AsRef<Path>) -> Result<Self> {
         let contents = std::fs::read_to_string(path.as_ref())?;
         contents.parse()
     }
 
-    /// Save the history file to a TOML file
+    /// Save the history to a TOML file.
     pub fn save(&self, path: impl AsRef<Path>) -> Result<()> {
         std::fs::write(path.as_ref(), self.to_string())?;
         Ok(())
     }
 
-    /// Loads the history file, or returns an empty one if it does not exist
+    /// Loads the history file, or returns an empty one if it does not exist.
     pub fn load_or_default(path: impl AsRef<Path>) -> Result<Self> {
-        if std::fs::exists(&path)? {
+        let path = path.as_ref();
+        if std::fs::exists(path)? {
             return Self::load(path);
         }
         Ok(Self::default())
     }
 
-    /// Returns the ordered list of migrations in this history.
+    /// Returns the ordered list of entries in this history.
     ///
-    /// Migrations appear in the order they were added. An empty slice means no
+    /// Entries appear in the order they were added. An empty slice means no
     /// migrations have been recorded yet.
     ///
     /// # Examples
     ///
     /// ```
-    /// use toasty_cli::{HistoryFile, HistoryFileMigration};
+    /// use toasty::migration::{History, HistoryEntry};
     ///
-    /// let mut history = HistoryFile::new();
-    /// assert!(history.migrations().is_empty());
+    /// let mut history = History::new();
+    /// assert!(history.entries().is_empty());
     ///
-    /// history.add_migration(HistoryFileMigration {
+    /// history.add_entry(HistoryEntry {
     ///     id: 1,
     ///     name: "0001_init.sql".to_string(),
     ///     snapshot_name: "0001_snapshot.toml".to_string(),
     ///     checksum: None,
     /// });
-    /// assert_eq!(history.migrations().len(), 1);
-    /// assert_eq!(history.migrations()[0].name, "0001_init.sql");
+    /// assert_eq!(history.entries().len(), 1);
+    /// assert_eq!(history.entries()[0].name, "0001_init.sql");
     /// ```
-    pub fn migrations(&self) -> &[HistoryFileMigration] {
-        &self.migrations
+    pub fn entries(&self) -> &[HistoryEntry] {
+        &self.entries
     }
 
-    /// Get the next migration number by parsing the last migration's name
+    /// Get the next migration number by parsing the last entry's name.
     pub fn next_migration_number(&self) -> u32 {
-        self.migrations
+        self.entries
             .last()
-            .and_then(|m| {
-                // Extract the first 4 digits from the migration name (e.g., "0001_migration.sql" -> 1)
-                m.name.split('_').next()?.parse::<u32>().ok()
-            })
+            .and_then(|m| m.name.split('_').next()?.parse::<u32>().ok())
             .map(|n| n + 1)
             .unwrap_or(0)
     }
 
-    /// Add a migration to the history
-    pub fn add_migration(&mut self, migration: HistoryFileMigration) {
-        self.migrations.push(migration);
+    /// Add an entry to the history.
+    pub fn add_entry(&mut self, entry: HistoryEntry) {
+        self.entries.push(entry);
     }
 
-    /// Remove a migration from the history by index
-    pub fn remove_migration(&mut self, index: usize) {
-        self.migrations.remove(index);
+    /// Remove an entry from the history by index.
+    pub fn remove_entry(&mut self, index: usize) {
+        self.entries.remove(index);
     }
 }
 
-impl Default for HistoryFile {
+impl Default for History {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl FromStr for HistoryFile {
-    type Err = anyhow::Error;
+impl FromStr for History {
+    type Err = Error;
 
     fn from_str(s: &str) -> Result<Self> {
-        let file: HistoryFile = toml::from_str(s)?;
+        let history: History =
+            toml::from_str(s).map_err(|err| Error::from_args(format_args!("{err}")))?;
 
-        // Validate version
-        if file.version != HISTORY_FILE_VERSION {
-            bail!(
-                "Unsupported history file version: {}. Expected version {}",
-                file.version,
-                HISTORY_FILE_VERSION
-            );
+        if history.version != HISTORY_VERSION {
+            return Err(Error::from_args(format_args!(
+                "unsupported history file version: {}. Expected version {}",
+                history.version, HISTORY_VERSION
+            )));
         }
 
-        Ok(file)
+        Ok(history)
     }
 }
 
-impl fmt::Display for HistoryFile {
+impl fmt::Display for History {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let toml_str = toml::to_string_pretty(self).map_err(|_| fmt::Error)?;
         write!(f, "{}", toml_str)

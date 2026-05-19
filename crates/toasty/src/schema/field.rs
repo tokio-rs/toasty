@@ -284,6 +284,16 @@ impl<T: Field> Field for Option<T> {
     ) -> Self::Update<'a> {
     }
 
+    /// Delegate the field-type description to `T` so wrappers carrying
+    /// schema-relevant metadata (e.g. `Json<U>::serialize = Some(Json)`)
+    /// propagate through `Option<_>` instead of getting flattened to the
+    /// default `serialize: None`.
+    fn field_ty(
+        storage_ty: Option<toasty_core::schema::db::Type>,
+    ) -> toasty_core::schema::app::FieldTy {
+        T::field_ty(storage_ty)
+    }
+
     fn key_constraint<Origin>(&self, target: stmt::Path<Origin, Self::Inner>) -> Expr<bool> {
         match self {
             Some(value) => T::key_constraint(value, target),

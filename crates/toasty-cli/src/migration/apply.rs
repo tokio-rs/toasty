@@ -1,4 +1,3 @@
-use super::HistoryFile;
 use crate::Config;
 use anyhow::Result;
 use clap::Parser;
@@ -6,6 +5,7 @@ use console::style;
 use hashbrown::HashSet;
 use std::fs;
 use toasty::Db;
+use toasty::migration::History;
 use toasty::schema::db::Migration;
 
 /// Applies pending migrations to the database.
@@ -42,9 +42,9 @@ pub(crate) async fn apply_migrations(db: &Db, config: &Config) -> Result<()> {
     let history_path = config.migration.get_history_file_path();
 
     // Load migration history
-    let history = HistoryFile::load_or_default(&history_path)?;
+    let history = History::load_or_default(&history_path)?;
 
-    if history.migrations().is_empty() {
+    if history.entries().is_empty() {
         println!(
             "  {}",
             style("No migrations found in history file.")
@@ -64,7 +64,7 @@ pub(crate) async fn apply_migrations(db: &Db, config: &Config) -> Result<()> {
 
     // Find migrations that haven't been applied yet
     let pending_migrations: Vec<_> = history
-        .migrations()
+        .entries()
         .iter()
         .filter(|m| !applied_ids.contains(&m.id))
         .collect();

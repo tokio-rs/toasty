@@ -59,9 +59,52 @@ jobs:
       - name: Install Claude Code CLI
         run: npm install -g @anthropic-ai/claude-code
       - name: Run release-plz
+        id: release-plz
         uses: release-plz/action@v0.5
         with:
           command: release-pr
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+      # The README links to the released guide / API docs at a specific
+      # version. Source of truth is the `toasty` version pinned in
+      # `[workspace.dependencies]`, which release-plz bumps on the PR
+      # branch. Re-applied on every run because release-plz force-pushes
+      # its branch.
+      - name: Sync README version with release PR
+        if: ${{ steps.release-plz.outputs.prs != '' && steps.release-plz.outputs.prs != '[]' }}
+        env:
+          PRS: ${{ steps.release-plz.outputs.prs }}
+        run: |
+          set -euo pipefail
+          branch=$(jq -r '.[0].head_branch' <<<"$PRS")
+          if [ -z "$branch" ] || [ "$branch" = "null" ]; then
+            echo "No release branch detected; skipping README update."
+            exit 0
+          fi
+
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git fetch origin "$branch"
+          git checkout "$branch"
+
+          version=$(grep -m1 '^toasty = { version' Cargo.toml \
+            | sed -E 's/.*version = "([^"]+)".*/\1/')
+          if [ -z "$version" ]; then
+            echo "Failed to parse toasty version from Cargo.toml" >&2
+            exit 1
+          fi
+
+          sed -i -E \
+            "s|tokio-rs\\.github\\.io/toasty/[0-9]+\\.[0-9]+\\.[0-9]+/|tokio-rs.github.io/toasty/${version}/|g" \
+            README.md
+
+          if git diff --quiet README.md; then
+            echo "README already on version ${version}; nothing to update."
+            exit 0
+          fi
+
+          git add README.md
+          git commit -m "chore: point README docs links at ${version}"
+          git push origin "$branch"

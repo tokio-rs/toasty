@@ -39,10 +39,24 @@ impl<T: Relation> BelongsTo<T> {
     ///
     /// # Panics
     ///
-    /// Panics if the association has not been loaded.
+    /// Panics if the association has not been loaded. Use [`try_get`] to
+    /// handle the unloaded state without panicking.
+    ///
+    /// [`try_get`]: BelongsTo::try_get
     #[track_caller]
     pub fn get(&self) -> &T {
         self.value.as_ref().expect("association not loaded")
+    }
+
+    /// Returns a reference to the loaded associated record, or `None` if the
+    /// association has not been loaded.
+    ///
+    /// This is the non-panicking counterpart to [`get`](BelongsTo::get). Use
+    /// it when the caller cannot guarantee that the association was preloaded
+    /// (for example, in code paths that may receive a record loaded without
+    /// an `.include()`).
+    pub fn try_get(&self) -> Option<&T> {
+        self.value.as_deref()
     }
 
     /// Returns `true` if the association has not been loaded yet.

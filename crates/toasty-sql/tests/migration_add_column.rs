@@ -1,9 +1,6 @@
 use toasty_core::{
     driver::Capability,
-    schema::db::{
-        Column, ColumnId, IndexId, PrimaryKey, RenameHints, Schema, SchemaDiff, Table, TableId,
-        Type,
-    },
+    schema::db::{Column, ColumnId, IndexId, PrimaryKey, Schema, Table, TableId, Type, diff},
     stmt as core_stmt,
 };
 use toasty_sql::{Serializer, migration::MigrationStatement};
@@ -77,8 +74,8 @@ fn add_column_sql(new_col: Column, capability: &Capability, flavor: &str) -> Str
         )],
     };
 
-    let hints = RenameHints::new();
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, capability);
     let sql = serialize_migration(&stmts, flavor);
     assert_eq!(sql.len(), 1);
@@ -181,8 +178,8 @@ fn add_multiple_columns() {
         )],
     };
 
-    let hints = RenameHints::new();
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::SQLITE);
     let sql = serialize_migration(&stmts, "sqlite");
 

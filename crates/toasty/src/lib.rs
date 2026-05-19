@@ -114,6 +114,10 @@ pub use db::{Connection, Db, Executor, Transaction, TransactionBuilder};
 
 mod engine;
 
+/// Schema migration types: history files, snapshots, and supporting
+/// configuration.
+pub mod migration;
+
 /// Model, relation, and schema inspection types.
 pub mod schema;
 pub use schema::{BelongsTo, Deferred, HasMany, HasOne};
@@ -122,6 +126,8 @@ pub use schema::{BelongsTo, Deferred, HasMany, HasOne};
 
 /// Typed statement, expression, and query builder types.
 pub mod stmt;
+#[cfg(feature = "serde")]
+pub use stmt::Json;
 pub use stmt::Statement;
 
 pub use toasty_macros::{Embed, Model, create, query};

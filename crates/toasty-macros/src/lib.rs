@@ -298,11 +298,11 @@ use proc_macro::TokenStream;
 ///
 /// Cannot be used on relation fields.
 ///
-/// ## `#[serialize(json)]` — serialize complex types as JSON
+/// ## JSON-encoded fields via [`Json<T>`](toasty::stmt::Json)
 ///
-/// Stores the field as a JSON string in the database. Requires the `serde`
-/// feature and that the field type implements `serde::Serialize` and
-/// `serde::Deserialize`.
+/// Wrap a serde-typed value in [`toasty::Json<T>`](toasty::stmt::Json) to
+/// store it as a JSON string in the database. Requires the `serde` feature
+/// and that `T` implements `serde::Serialize` and `serde::Deserialize`.
 ///
 /// ```
 /// # use toasty::Model;
@@ -311,13 +311,12 @@ use proc_macro::TokenStream;
 /// #     #[key]
 /// #     #[auto]
 /// #     id: i64,
-/// #[serialize(json)]
-/// tags: Vec<String>,
+/// tags: toasty::Json<Vec<String>>,
 /// # }
 /// ```
 ///
-/// For `Option<T>` fields, add `nullable` so that `None` maps to SQL
-/// `NULL` rather than the JSON string `"null"`:
+/// For nullable JSON columns, wrap `Json<T>` in `Option` — `None` maps to
+/// SQL `NULL`:
 ///
 /// ```
 /// # use toasty::Model;
@@ -327,12 +326,12 @@ use proc_macro::TokenStream;
 /// #     #[key]
 /// #     #[auto]
 /// #     id: i64,
-/// #[serialize(json, nullable)]
-/// metadata: Option<HashMap<String, String>>,
+/// metadata: Option<toasty::Json<HashMap<String, String>>>,
 /// # }
 /// ```
 ///
-/// Cannot be used on relation fields.
+/// To instead store `None` as the JSON literal `"null"` (no SQL `NULL`),
+/// wrap the other way: `Json<Option<T>>`.
 ///
 /// # Relation attributes
 ///
@@ -365,15 +364,14 @@ use proc_macro::TokenStream;
 /// | `key = <field>` | Local field holding the foreign key value |
 /// | `references = <field>` | Field on the target model being referenced |
 ///
-/// For composite foreign keys, repeat `key`/`references` pairs:
+/// For composite foreign keys, pass arrays to `key` and `references`:
 ///
 /// ```
 /// # use toasty::Model;
 /// # #[derive(Model)]
+/// # #[key(id, tenant_id)]
 /// # struct Org {
-/// #     #[key]
 /// #     id: i64,
-/// #     #[key]
 /// #     tenant_id: i64,
 /// # }
 /// # #[derive(Model)]
@@ -383,13 +381,13 @@ use proc_macro::TokenStream;
 /// #     id: i64,
 /// #     org_id: i64,
 /// #     tenant_id: i64,
-/// #[belongs_to(key = org_id, references = id, key = tenant_id, references = tenant_id)]
+/// #[belongs_to(key = [org_id, tenant_id], references = [id, tenant_id])]
 /// org: toasty::BelongsTo<Org>,
 /// # }
 /// ```
 ///
-/// The number of `key` entries must equal the number of `references`
-/// entries.
+/// The number of fields in `key` must equal the number of fields in
+/// `references`.
 ///
 /// Wrap the target type in `Option` for an optional (nullable) foreign key:
 ///
@@ -527,8 +525,8 @@ use proc_macro::TokenStream;
 ///   attributes, but not both.
 /// - `#[auto]` cannot be combined with `#[default]` or `#[update]` on the
 ///   same field.
-/// - `#[column]`, `#[default]`, `#[update]`, and `#[serialize]` cannot be
-///   used on relation fields (`BelongsTo`, `HasMany`, `HasOne`).
+/// - `#[column]`, `#[default]`, and `#[update]` cannot be used on relation
+///   fields (`BelongsTo`, `HasMany`, `HasOne`).
 /// - A field can have at most one relation attribute.
 /// - `Self` can be used as a type in relation fields for self-referential
 ///   models.
@@ -565,8 +563,7 @@ use proc_macro::TokenStream;
 ///
 ///     title: String,
 ///
-///     #[serialize(json)]
-///     tags: Vec<String>,
+///     tags: toasty::Json<Vec<String>>,
 ///
 ///     #[index]
 ///     user_id: i64,
@@ -579,7 +576,7 @@ use proc_macro::TokenStream;
     Model,
     attributes(
         key, auto, default, update, column, index, unique, table, has_many, has_one, belongs_to,
-        serialize, version, deferred, document
+        version, deferred, document
     )
 )]
 pub fn derive_model(input: TokenStream) -> TokenStream {
@@ -862,7 +859,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// - Enum variants may be unit variants or have named fields. Tuple
 ///   variants are not supported.
 /// - Embedded types cannot have primary keys, relations, `#[auto]`,
-///   `#[default]`, `#[update]`, or `#[serialize]` attributes.
+///   `#[default]`, or `#[update]` attributes.
 ///
 /// # Full example
 ///
