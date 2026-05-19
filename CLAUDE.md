@@ -102,3 +102,4 @@ To add a new integration test, add a file to `crates/toasty-driver-integration-s
 - `docs/dev/architecture/README.md` — architectural overview
 - `docs/dev/architecture/query-engine.md` — detailed query engine documentation
 - `docs/dev/architecture/type-system.md` — type system design
+- `docs/dev/dynamodb-notes.md` — DynamoDB-specific API notes (features that post-date training data)
