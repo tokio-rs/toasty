@@ -418,6 +418,18 @@ fn ddb_expression(
             let inner = ddb_expression(cx, attrs, primary, &expr.expr);
             format!("size({inner})")
         }
+        // A single-field record is a newtype embed (e.g. `Version(u64)`).
+        // DynamoDB stores the inner value as a flat attribute, so unwrap one
+        // level and recurse — `Record([Column(c)])` is equivalent to `Column(c)`.
+        stmt::Expr::Record(expr_record) => {
+            let [inner] = expr_record.fields.as_slice() else {
+                todo!(
+                    "multi-column embedded struct in DynamoDB filter: {:#?}",
+                    expr_record
+                );
+            };
+            ddb_expression(cx, attrs, primary, inner)
+        }
         _ => todo!("FILTER = {:#?}", expr),
     }
 }
