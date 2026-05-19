@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ColumnsItem","IndicesItem","TablesItem","TypesItem"],"struct":["Columns","Context","Indices","RenameHints","Schema","Tables","Types"]};

@@ -61,7 +61,7 @@
 <a href=#61 id=61 data-nosnippet>61</a>
 <a href=#62 id=62 data-nosnippet>62</a><span class="kw">use </span><span class="kw">crate</span>::schema::{
 <a href=#63 id=63 data-nosnippet>63</a>    Schema,
-<a href=#64 id=64 data-nosnippet>64</a>    db::{AppliedMigration, Migration, SchemaDiff},
+<a href=#64 id=64 data-nosnippet>64</a>    db::{AppliedMigration, Migration, diff},
 <a href=#65 id=65 data-nosnippet>65</a>};
 <a href=#66 id=66 data-nosnippet>66</a>
 <a href=#67 id=67 data-nosnippet>67</a><span class="kw">use </span>async_trait::async_trait;
@@ -108,8 +108,8 @@
 <a href=#108 id=108 data-nosnippet>108</a>        <span class="prelude-val">None
 <a href=#109 id=109 data-nosnippet>109</a>    </span>}
 <a href=#110 id=110 data-nosnippet>110</a>
-<a href=#111 id=111 data-nosnippet>111</a>    <span class="doccomment">/// Generates a migration from a [`SchemaDiff`].
-<a href=#112 id=112 data-nosnippet>112</a>    </span><span class="kw">fn </span>generate_migration(<span class="kw-2">&amp;</span><span class="self">self</span>, schema_diff: <span class="kw-2">&amp;</span>SchemaDiff&lt;<span class="lifetime">'_</span>&gt;) -&gt; Migration;
+<a href=#111 id=111 data-nosnippet>111</a>    <span class="doccomment">/// Generates a migration from a [`diff::Schema`].
+<a href=#112 id=112 data-nosnippet>112</a>    </span><span class="kw">fn </span>generate_migration(<span class="kw-2">&amp;</span><span class="self">self</span>, schema_diff: <span class="kw-2">&amp;</span>diff::Schema&lt;<span class="lifetime">'_</span>&gt;) -&gt; Migration;
 <a href=#113 id=113 data-nosnippet>113</a>
 <a href=#114 id=114 data-nosnippet>114</a>    <span class="doccomment">/// Drops the entire database and recreates an empty one without applying migrations.
 <a href=#115 id=115 data-nosnippet>115</a>    ///

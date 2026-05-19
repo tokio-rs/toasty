@@ -33,7 +33,7 @@
 <a href=#33 id=33 data-nosnippet>33</a>        Capability, Driver, ExecResponse,
 <a href=#34 id=34 data-nosnippet>34</a>        operation::{IsolationLevel, Operation, Transaction},
 <a href=#35 id=35 data-nosnippet>35</a>    },
-<a href=#36 id=36 data-nosnippet>36</a>    schema::db::{<span class="self">self</span>, Migration, SchemaDiff, Table},
+<a href=#36 id=36 data-nosnippet>36</a>    schema::db::{<span class="self">self</span>, Migration, Table, diff},
 <a href=#37 id=37 data-nosnippet>37</a>    stmt,
 <a href=#38 id=38 data-nosnippet>38</a>};
 <a href=#39 id=39 data-nosnippet>39</a><span class="kw">use </span>toasty_sql::{<span class="self">self </span><span class="kw">as </span>sql};
@@ -112,7 +112,7 @@
 <a href=#112 id=112 data-nosnippet>112</a>        <span class="macro">matches!</span>(<span class="self">self</span>, <span class="self">Self</span>::InMemory).then_some(<span class="number">1</span>)
 <a href=#113 id=113 data-nosnippet>113</a>    }
 <a href=#114 id=114 data-nosnippet>114</a>
-<a href=#115 id=115 data-nosnippet>115</a>    <span class="kw">fn </span>generate_migration(<span class="kw-2">&amp;</span><span class="self">self</span>, schema_diff: <span class="kw-2">&amp;</span>SchemaDiff&lt;<span class="lifetime">'_</span>&gt;) -&gt; Migration {
+<a href=#115 id=115 data-nosnippet>115</a>    <span class="kw">fn </span>generate_migration(<span class="kw-2">&amp;</span><span class="self">self</span>, schema_diff: <span class="kw-2">&amp;</span>diff::Schema&lt;<span class="lifetime">'_</span>&gt;) -&gt; Migration {
 <a href=#116 id=116 data-nosnippet>116</a>        <span class="kw">let </span>statements = sql::MigrationStatement::from_diff(schema_diff, <span class="kw-2">&amp;</span>Capability::SQLITE);
 <a href=#117 id=117 data-nosnippet>117</a>
 <a href=#118 id=118 data-nosnippet>118</a>        <span class="kw">let </span>sql_strings: Vec&lt;String&gt; = statements

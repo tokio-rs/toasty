@@ -24,7 +24,7 @@
 <a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>toasty_core::{
 <a href=#25 id=25 data-nosnippet>25</a>    <span class="prelude-ty">Result</span>, Schema,
 <a href=#26 id=26 data-nosnippet>26</a>    driver::{Capability, Driver, ExecResponse, Operation},
-<a href=#27 id=27 data-nosnippet>27</a>    schema::db::{<span class="self">self</span>, Migration, SchemaDiff, Table},
+<a href=#27 id=27 data-nosnippet>27</a>    schema::db::{<span class="self">self</span>, Migration, Table, diff},
 <a href=#28 id=28 data-nosnippet>28</a>    stmt::{<span class="self">self</span>, ValueRecord},
 <a href=#29 id=29 data-nosnippet>29</a>};
 <a href=#30 id=30 data-nosnippet>30</a><span class="kw">use </span>toasty_sql::{<span class="self">self </span><span class="kw">as </span>sql};
@@ -133,7 +133,7 @@
 <a href=#133 id=133 data-nosnippet>133</a>        <span class="prelude-val">Ok</span>(Box::new(Connection::new(conn)))
 <a href=#134 id=134 data-nosnippet>134</a>    }
 <a href=#135 id=135 data-nosnippet>135</a>
-<a href=#136 id=136 data-nosnippet>136</a>    <span class="kw">fn </span>generate_migration(<span class="kw-2">&amp;</span><span class="self">self</span>, schema_diff: <span class="kw-2">&amp;</span>SchemaDiff&lt;<span class="lifetime">'_</span>&gt;) -&gt; Migration {
+<a href=#136 id=136 data-nosnippet>136</a>    <span class="kw">fn </span>generate_migration(<span class="kw-2">&amp;</span><span class="self">self</span>, schema_diff: <span class="kw-2">&amp;</span>diff::Schema&lt;<span class="lifetime">'_</span>&gt;) -&gt; Migration {
 <a href=#137 id=137 data-nosnippet>137</a>        <span class="kw">let </span>statements = sql::MigrationStatement::from_diff(schema_diff, <span class="kw-2">&amp;</span>Capability::MYSQL);
 <a href=#138 id=138 data-nosnippet>138</a>
 <a href=#139 id=139 data-nosnippet>139</a>        <span class="kw">let </span>sql_strings: Vec&lt;String&gt; = statements

@@ -11,7 +11,7 @@
 <a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>toasty_core::{
 <a href=#12 id=12 data-nosnippet>12</a>    <span class="prelude-ty">Result</span>, Schema,
 <a href=#13 id=13 data-nosnippet>13</a>    driver::{Capability, Connection, Driver, ExecResponse, Operation, Rows},
-<a href=#14 id=14 data-nosnippet>14</a>    schema::db::{AppliedMigration, Migration, SchemaDiff},
+<a href=#14 id=14 data-nosnippet>14</a>    schema::db::{AppliedMigration, Migration, diff},
 <a href=#15 id=15 data-nosnippet>15</a>};
 <a href=#16 id=16 data-nosnippet>16</a>
 <a href=#17 id=17 data-nosnippet>17</a><span class="doccomment">/// A fault that can be injected into the next operation routed through
@@ -143,7 +143,7 @@
 <a href=#143 id=143 data-nosnippet>143</a>        }))
 <a href=#144 id=144 data-nosnippet>144</a>    }
 <a href=#145 id=145 data-nosnippet>145</a>
-<a href=#146 id=146 data-nosnippet>146</a>    <span class="kw">fn </span>generate_migration(<span class="kw-2">&amp;</span><span class="self">self</span>, schema_diff: <span class="kw-2">&amp;</span>SchemaDiff&lt;<span class="lifetime">'_</span>&gt;) -&gt; Migration {
+<a href=#146 id=146 data-nosnippet>146</a>    <span class="kw">fn </span>generate_migration(<span class="kw-2">&amp;</span><span class="self">self</span>, schema_diff: <span class="kw-2">&amp;</span>diff::Schema&lt;<span class="lifetime">'_</span>&gt;) -&gt; Migration {
 <a href=#147 id=147 data-nosnippet>147</a>        <span class="self">self</span>.inner.generate_migration(schema_diff)
 <a href=#148 id=148 data-nosnippet>148</a>    }
 <a href=#149 id=149 data-nosnippet>149</a>
