@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["app","db","mapping"],"struct":["Builder","Name","Schema"]};
+window.SIDEBAR_ITEMS = {"mod":["app","db","diff","mapping"],"struct":["Builder","Name","Schema"]};
