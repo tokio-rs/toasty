@@ -17,16 +17,10 @@
 //! | [`PrimaryKey`] | The primary key definition for a table |
 //! | [`Migration`] | A SQL migration generated from a schema diff |
 //!
-//! # Schema diffing
-//!
-//! The [`diff`] submodule provides types that compare two schema versions and
-//! produce a list of structural changes. The entry point is
-//! [`diff::Schema::from`]; rename detection is steered by [`diff::RenameHints`].
+//! Schema diffing types live in [`super::diff`].
 
 mod column;
 pub use column::{Column, ColumnId};
-
-pub mod diff;
 
 mod index;
 pub use index::{Index, IndexColumn, IndexId, IndexOp, IndexScope};

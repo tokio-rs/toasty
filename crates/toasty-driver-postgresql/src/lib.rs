@@ -26,7 +26,10 @@ use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     Result, Schema,
     driver::{Capability, Driver, ExecResponse, Operation},
-    schema::db::{self, Migration, Table, diff},
+    schema::{
+        db::{self, Migration, Table},
+        diff,
+    },
     stmt,
     stmt::ValueRecord,
 };

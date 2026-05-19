@@ -1,6 +1,9 @@
 use toasty_core::{
     driver::Capability,
-    schema::db::{Column, ColumnId, IndexId, PrimaryKey, Schema, Table, TableId, Type, diff},
+    schema::{
+        db::{Column, ColumnId, IndexId, PrimaryKey, Schema, Table, TableId, Type},
+        diff,
+    },
     stmt as core_stmt,
 };
 use toasty_sql::{Serializer, migration::MigrationStatement};

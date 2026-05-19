@@ -24,7 +24,10 @@ use std::{borrow::Cow, cell::Cell, sync::Arc};
 use toasty_core::{
     Result, Schema,
     driver::{Capability, Driver, ExecResponse, Operation},
-    schema::db::{self, Migration, Table, diff},
+    schema::{
+        db::{self, Migration, Table},
+        diff,
+    },
     stmt::{self, ValueRecord},
 };
 use toasty_sql::{self as sql};

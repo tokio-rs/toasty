@@ -12,10 +12,10 @@ use std::ops::Deref;
 /// # Examples
 ///
 /// ```ignore
-/// use toasty_core::schema::db::{Schema, diff};
+/// use toasty_core::schema::{db, diff};
 ///
-/// let previous = Schema::default();
-/// let next = Schema::default();
+/// let previous = db::Schema::default();
+/// let next = db::Schema::default();
 /// let hints = diff::RenameHints::new();
 /// let cx = diff::Context::new(&previous, &next, &hints);
 /// let d = diff::Indices::from(&cx, &[], &[]);
