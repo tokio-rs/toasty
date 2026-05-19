@@ -392,6 +392,10 @@ impl Expand<'_> {
         quote! {
             impl #toasty::newtype::NewtypeOf for #model_ident {
                 type Inner = #inner_ty;
+
+                fn into_inner(self) -> #inner_ty {
+                    self.0
+                }
             }
         }
     }
