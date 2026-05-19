@@ -398,6 +398,10 @@ impl Expand<'_> {
                 fn into_inner(self) -> #inner_ty {
                     self.0
                 }
+
+                fn from_inner(inner: #inner_ty) -> Self {
+                    Self(inner)
+                }
             }
         }
     }
