@@ -48,7 +48,7 @@ pub use scope::Scope;
 
 use crate::Result;
 
-pub use toasty_core::schema::{app, app::ModelSet, db, mapping};
+pub use toasty_core::schema::{app, app::ModelSet, db, diff, mapping};
 
 /// Build an [`app::Schema`] from a slice of model definitions produced by
 /// `#[derive(Model)]`.

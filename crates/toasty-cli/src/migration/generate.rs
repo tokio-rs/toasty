@@ -10,7 +10,10 @@ use std::fs;
 use toasty::migration::{History, HistoryEntry};
 use toasty::{
     Db,
-    schema::db::{ColumnId, IndexId, Migration, Schema, TableId, diff},
+    schema::{
+        db::{ColumnId, IndexId, Migration, Schema, TableId},
+        diff,
+    },
 };
 
 /// Generates a new SQL migration from the current schema diff.

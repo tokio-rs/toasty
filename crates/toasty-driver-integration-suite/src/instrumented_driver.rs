@@ -11,7 +11,10 @@ use std::{
 use toasty_core::{
     Result, Schema,
     driver::{Capability, Connection, Driver, ExecResponse, Operation, Rows},
-    schema::db::{AppliedMigration, Migration, diff},
+    schema::{
+        db::{AppliedMigration, Migration},
+        diff,
+    },
 };
 
 /// A fault that can be injected into the next operation routed through

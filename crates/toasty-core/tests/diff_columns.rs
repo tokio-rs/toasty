@@ -1,5 +1,5 @@
-use toasty_core::schema::db::{
-    Column, ColumnId, IndexId, PrimaryKey, Schema, Table, TableId, Type,
+use toasty_core::schema::{
+    db::{Column, ColumnId, IndexId, PrimaryKey, Schema, Table, TableId, Type},
     diff::{self, Columns, ColumnsItem},
 };
 use toasty_core::stmt;

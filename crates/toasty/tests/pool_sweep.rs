@@ -21,7 +21,10 @@ use tempfile::TempDir;
 use toasty_core::{
     Result, Schema,
     driver::{Capability, Connection, Driver, ExecResponse, Operation},
-    schema::db::{AppliedMigration, Migration, diff},
+    schema::{
+        db::{AppliedMigration, Migration},
+        diff,
+    },
 };
 
 #[derive(Debug, toasty::Model)]

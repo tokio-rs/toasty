@@ -1,7 +1,8 @@
 use toasty_core::{
     driver::Capability,
-    schema::db::{
-        Column, ColumnId, EnumVariant, PrimaryKey, Schema, Table, TableId, Type, TypeEnum, diff,
+    schema::{
+        db::{Column, ColumnId, EnumVariant, PrimaryKey, Schema, Table, TableId, Type, TypeEnum},
+        diff,
     },
     stmt as core_stmt,
 };
