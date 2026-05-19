@@ -39,6 +39,7 @@ impl Expand<'_> {
         let validate_create_impls = self.expand_validate_create_impls();
         let storage_compat_checks = self.expand_storage_compat_checks();
         let auto_compat_checks = self.expand_auto_compat_checks();
+        let version_compat_checks = self.expand_version_compat_checks();
 
         wrap_in_const(quote! {
             #model_impls
@@ -51,6 +52,7 @@ impl Expand<'_> {
             #validate_create_impls
             #storage_compat_checks
             #auto_compat_checks
+            #version_compat_checks
         })
     }
 }

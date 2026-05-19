@@ -400,16 +400,6 @@ impl Field {
             ));
         }
 
-        if attrs.versionable {
-            let is_u64 = matches!(&field.ty, syn::Type::Path(p) if p.path.is_ident("u64"));
-            if !is_u64 {
-                errs.push(syn::Error::new_spanned(
-                    &field.ty,
-                    "#[version] can only be applied to a u64 field",
-                ));
-            }
-        }
-
         if attrs.deferred {
             if ty.is_some() {
                 errs.push(syn::Error::new_spanned(
