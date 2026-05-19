@@ -126,11 +126,13 @@
 <a href=#126 id=126 data-nosnippet>126</a>
 <a href=#127 id=127 data-nosnippet>127</a></span><span class="doccomment">/// Typed statement, expression, and query builder types.
 <a href=#128 id=128 data-nosnippet>128</a></span><span class="kw">pub mod </span>stmt;
-<a href=#129 id=129 data-nosnippet>129</a><span class="kw">pub use </span>stmt::Statement;
-<a href=#130 id=130 data-nosnippet>130</a>
-<a href=#131 id=131 data-nosnippet>131</a><span class="kw">pub use </span>toasty_macros::{Embed, Model, create, query};
+<a href=#129 id=129 data-nosnippet>129</a><span class="attr">#[cfg(feature = <span class="string">"serde"</span>)]
+<a href=#130 id=130 data-nosnippet>130</a></span><span class="kw">pub use </span>stmt::Json;
+<a href=#131 id=131 data-nosnippet>131</a><span class="kw">pub use </span>stmt::Statement;
 <a href=#132 id=132 data-nosnippet>132</a>
-<a href=#133 id=133 data-nosnippet>133</a><span class="kw">pub use </span>toasty_core::{Error, <span class="prelude-ty">Result</span>, schema::app::ModelSet};
+<a href=#133 id=133 data-nosnippet>133</a><span class="kw">pub use </span>toasty_macros::{Embed, Model, create, query};
 <a href=#134 id=134 data-nosnippet>134</a>
-<a href=#135 id=135 data-nosnippet>135</a><span class="kw">pub mod </span>codegen_support;
+<a href=#135 id=135 data-nosnippet>135</a><span class="kw">pub use </span>toasty_core::{Error, <span class="prelude-ty">Result</span>, schema::app::ModelSet};
+<a href=#136 id=136 data-nosnippet>136</a>
+<a href=#137 id=137 data-nosnippet>137</a><span class="kw">pub mod </span>codegen_support;
 </code></pre></div></section></main></body></html>

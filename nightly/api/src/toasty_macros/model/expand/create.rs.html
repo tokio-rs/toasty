@@ -184,60 +184,30 @@
 <a href=#184 id=184 data-nosnippet>184</a>                            </span>}
 <a href=#185 id=185 data-nosnippet>185</a>                        }
 <a href=#186 id=186 data-nosnippet>186</a>                    }
-<a href=#187 id=187 data-nosnippet>187</a>                    FieldTy::Primitive(ty) <span class="kw">if </span>field.attrs.serialize.is_some() =&gt; {
-<a href=#188 id=188 data-nosnippet>188</a>                        <span class="kw">let </span>serialize_attr = field.attrs.serialize.as_ref().unwrap();
-<a href=#189 id=189 data-nosnippet>189</a>                        <span class="kw">if </span>serialize_attr.nullable {
-<a href=#190 id=190 data-nosnippet>190</a>                            <span class="comment">// For nullable serialized fields, extract the inner type from Option&lt;T&gt;
-<a href=#191 id=191 data-nosnippet>191</a>                            // Accept Option&lt;InnerType&gt;, serialize Some(v) as JSON, None as NULL
-<a href=#192 id=192 data-nosnippet>192</a>                            </span><span class="macro">quote!</span> {
-<a href=#193 id=193 data-nosnippet>193</a>                                #vis <span class="kw">fn </span>#name(<span class="kw-2">mut </span><span class="self">self</span>, #name: #ty) -&gt; <span class="self">Self </span>{
-<a href=#194 id=194 data-nosnippet>194</a>                                    <span class="kw">match </span><span class="kw-2">&amp;</span>#name {
-<a href=#195 id=195 data-nosnippet>195</a>                                        <span class="prelude-val">Some</span>(v) =&gt; {
-<a href=#196 id=196 data-nosnippet>196</a>                                            <span class="kw">let </span>json = #toasty::serde_json::to_string(v).expect(<span class="string">"failed to serialize"</span>);
-<a href=#197 id=197 data-nosnippet>197</a>                                            <span class="self">self</span>.stmt.set(#index_tokenized, &lt;String <span class="kw">as </span>#toasty::IntoExpr&lt;String&gt;&gt;::into_expr(json));
-<a href=#198 id=198 data-nosnippet>198</a>                                        }
-<a href=#199 id=199 data-nosnippet>199</a>                                        <span class="prelude-val">None </span>=&gt; {
-<a href=#200 id=200 data-nosnippet>200</a>                                            <span class="self">self</span>.stmt.set(#index_tokenized, #toasty::stmt::Expr::&lt;String&gt;::from_untyped(#toasty::core::stmt::Expr::Value(#toasty::core::stmt::Value::Null)));
-<a href=#201 id=201 data-nosnippet>201</a>                                        }
-<a href=#202 id=202 data-nosnippet>202</a>                                    }
-<a href=#203 id=203 data-nosnippet>203</a>                                    <span class="self">self
-<a href=#204 id=204 data-nosnippet>204</a>                                </span>}
-<a href=#205 id=205 data-nosnippet>205</a>                            }
-<a href=#206 id=206 data-nosnippet>206</a>                        } <span class="kw">else </span>{
-<a href=#207 id=207 data-nosnippet>207</a>                            <span class="comment">// Non-nullable serialized field: accept T directly, serialize to JSON
-<a href=#208 id=208 data-nosnippet>208</a>                            </span><span class="macro">quote!</span> {
-<a href=#209 id=209 data-nosnippet>209</a>                                #vis <span class="kw">fn </span>#name(<span class="kw-2">mut </span><span class="self">self</span>, #name: #ty) -&gt; <span class="self">Self </span>{
-<a href=#210 id=210 data-nosnippet>210</a>                                    <span class="kw">let </span>json = #toasty::serde_json::to_string(<span class="kw-2">&amp;</span>#name).expect(<span class="string">"failed to serialize"</span>);
-<a href=#211 id=211 data-nosnippet>211</a>                                    <span class="self">self</span>.stmt.set(#index_tokenized, &lt;String <span class="kw">as </span>#toasty::IntoExpr&lt;String&gt;&gt;::into_expr(json));
-<a href=#212 id=212 data-nosnippet>212</a>                                    <span class="self">self
-<a href=#213 id=213 data-nosnippet>213</a>                                </span>}
-<a href=#214 id=214 data-nosnippet>214</a>                            }
-<a href=#215 id=215 data-nosnippet>215</a>                        }
-<a href=#216 id=216 data-nosnippet>216</a>                    }
-<a href=#217 id=217 data-nosnippet>217</a>                    FieldTy::Primitive(ty) <span class="kw">if </span>field.attrs.deferred =&gt; {
-<a href=#218 id=218 data-nosnippet>218</a>                        <span class="kw">let </span>inner = <span class="macro">quote!</span>(&lt;#ty <span class="kw">as </span>#toasty::Defer&gt;::Inner);
-<a href=#219 id=219 data-nosnippet>219</a>                        <span class="macro">quote!</span> {
-<a href=#220 id=220 data-nosnippet>220</a>                            #vis <span class="kw">fn </span>#name(<span class="kw-2">mut </span><span class="self">self</span>, #name: <span class="kw">impl </span>#toasty::IntoExpr&lt;#inner&gt;) -&gt; <span class="self">Self </span>{
-<a href=#221 id=221 data-nosnippet>221</a>                                <span class="self">self</span>.stmt.set(#index_tokenized, #name.into_expr());
-<a href=#222 id=222 data-nosnippet>222</a>                                <span class="self">self
-<a href=#223 id=223 data-nosnippet>223</a>                            </span>}
-<a href=#224 id=224 data-nosnippet>224</a>                        }
-<a href=#225 id=225 data-nosnippet>225</a>                    }
-<a href=#226 id=226 data-nosnippet>226</a>                    FieldTy::Primitive(ty) =&gt; {
-<a href=#227 id=227 data-nosnippet>227</a>                        <span class="comment">// The setter binds through the field's
-<a href=#228 id=228 data-nosnippet>228</a>                        // `Field::ExprTarget` — `Self` for scalars/`Vec&lt;u8&gt;`,
-<a href=#229 id=229 data-nosnippet>229</a>                        // `List&lt;T&gt;` for `Vec&lt;T: Scalar&gt;`. Trait dispatch
-<a href=#230 id=230 data-nosnippet>230</a>                        // routes each case correctly; no type parsing here.
-<a href=#231 id=231 data-nosnippet>231</a>                        </span><span class="macro">quote!</span> {
-<a href=#232 id=232 data-nosnippet>232</a>                            #vis <span class="kw">fn </span>#name(<span class="kw-2">mut </span><span class="self">self</span>, #name: <span class="kw">impl </span>#toasty::IntoExpr&lt;&lt;#ty <span class="kw">as </span>#toasty::Field&gt;::ExprTarget&gt;) -&gt; <span class="self">Self </span>{
-<a href=#233 id=233 data-nosnippet>233</a>                                <span class="self">self</span>.stmt.set(#index_tokenized, #name.into_expr());
-<a href=#234 id=234 data-nosnippet>234</a>                                <span class="self">self
-<a href=#235 id=235 data-nosnippet>235</a>                            </span>}
-<a href=#236 id=236 data-nosnippet>236</a>                        }
-<a href=#237 id=237 data-nosnippet>237</a>                    }
-<a href=#238 id=238 data-nosnippet>238</a>                }
-<a href=#239 id=239 data-nosnippet>239</a>            })
-<a href=#240 id=240 data-nosnippet>240</a>            .collect()
-<a href=#241 id=241 data-nosnippet>241</a>    }
-<a href=#242 id=242 data-nosnippet>242</a>}
+<a href=#187 id=187 data-nosnippet>187</a>                    FieldTy::Primitive(ty) <span class="kw">if </span>field.attrs.deferred =&gt; {
+<a href=#188 id=188 data-nosnippet>188</a>                        <span class="kw">let </span>inner = <span class="macro">quote!</span>(&lt;#ty <span class="kw">as </span>#toasty::Defer&gt;::Inner);
+<a href=#189 id=189 data-nosnippet>189</a>                        <span class="macro">quote!</span> {
+<a href=#190 id=190 data-nosnippet>190</a>                            #vis <span class="kw">fn </span>#name(<span class="kw-2">mut </span><span class="self">self</span>, #name: <span class="kw">impl </span>#toasty::IntoExpr&lt;#inner&gt;) -&gt; <span class="self">Self </span>{
+<a href=#191 id=191 data-nosnippet>191</a>                                <span class="self">self</span>.stmt.set(#index_tokenized, #name.into_expr());
+<a href=#192 id=192 data-nosnippet>192</a>                                <span class="self">self
+<a href=#193 id=193 data-nosnippet>193</a>                            </span>}
+<a href=#194 id=194 data-nosnippet>194</a>                        }
+<a href=#195 id=195 data-nosnippet>195</a>                    }
+<a href=#196 id=196 data-nosnippet>196</a>                    FieldTy::Primitive(ty) =&gt; {
+<a href=#197 id=197 data-nosnippet>197</a>                        <span class="comment">// The setter binds through the field's
+<a href=#198 id=198 data-nosnippet>198</a>                        // `Field::ExprTarget` — `Self` for scalars/`Vec&lt;u8&gt;`,
+<a href=#199 id=199 data-nosnippet>199</a>                        // `List&lt;T&gt;` for `Vec&lt;T: Scalar&gt;`. Trait dispatch
+<a href=#200 id=200 data-nosnippet>200</a>                        // routes each case correctly; no type parsing here.
+<a href=#201 id=201 data-nosnippet>201</a>                        </span><span class="macro">quote!</span> {
+<a href=#202 id=202 data-nosnippet>202</a>                            #vis <span class="kw">fn </span>#name(<span class="kw-2">mut </span><span class="self">self</span>, #name: <span class="kw">impl </span>#toasty::IntoExpr&lt;&lt;#ty <span class="kw">as </span>#toasty::Field&gt;::ExprTarget&gt;) -&gt; <span class="self">Self </span>{
+<a href=#203 id=203 data-nosnippet>203</a>                                <span class="self">self</span>.stmt.set(#index_tokenized, #name.into_expr());
+<a href=#204 id=204 data-nosnippet>204</a>                                <span class="self">self
+<a href=#205 id=205 data-nosnippet>205</a>                            </span>}
+<a href=#206 id=206 data-nosnippet>206</a>                        }
+<a href=#207 id=207 data-nosnippet>207</a>                    }
+<a href=#208 id=208 data-nosnippet>208</a>                }
+<a href=#209 id=209 data-nosnippet>209</a>            })
+<a href=#210 id=210 data-nosnippet>210</a>            .collect()
+<a href=#211 id=211 data-nosnippet>211</a>    }
+<a href=#212 id=212 data-nosnippet>212</a>}
 </code></pre></div></section></main></body></html>

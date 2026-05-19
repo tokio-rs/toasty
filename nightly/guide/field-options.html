@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-74ecc8ff.js";
+            window.path_to_searchindex_js = "searchindex-cfb9c3cf.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-46081a54.js"></script>
@@ -508,13 +508,13 @@ struct Event {
 }
 <span class="boring">}</span></code></pre>
 <h2 id="json-serialization"><a class="header" href="#json-serialization">JSON serialization</a></h2>
-<p>Use <code>#[serialize(json)]</code> to store an arbitrary serde-serializable Rust
-value as a JSON string in the database. The field type must implement
-<code>serde::Serialize</code> and <code>serde::Deserialize</code>.</p>
-<p>Reach for <code>#[serialize(json)]</code> when the field is a serde-typed value
-that Toasty doesn’t natively support — for example, a third-party type
-or a struct you don’t want to declare as <code>#[derive(toasty::Embed)]</code>.
-For <code>Vec&lt;scalar&gt;</code> fields, prefer the native form (<code>tags: Vec&lt;String&gt;</code>,
+<p>Wrap a field type in <a href="https://docs.rs/toasty/latest/toasty/stmt/struct.Json.html"><code>toasty::Json&lt;T&gt;</code></a> to store it as a JSON
+string in the database. The inner <code>T</code> must implement <code>serde::Serialize</code>
+and <code>serde::Deserialize</code>.</p>
+<p>Reach for <code>Json&lt;T&gt;</code> when the field is a serde-typed value that Toasty
+doesn’t natively support — for example, a third-party type or a struct
+you don’t want to declare as <code>#[derive(toasty::Embed)]</code>. For
+<code>Vec&lt;scalar&gt;</code> fields, prefer the native form (<code>tags: Vec&lt;String&gt;</code>,
 documented in <a href="./defining-models.html">Defining Models</a>) which is
 queryable and supports collection mutations via <code>stmt::push</code>,
 <code>stmt::extend</code>, <code>stmt::pop</code>, <code>stmt::remove</code>, <code>stmt::remove_at</code>, and
@@ -536,13 +536,12 @@ struct Post {
 
     title: String,
 
-    // Native `Vec&lt;scalar&gt;` storage — no attribute needed.
+    // Native `Vec&lt;scalar&gt;` storage — no wrapper needed.
     tags: Vec&lt;String&gt;,
 
-    // Arbitrary serde type — `#[serialize(json)]` stores it as one
-    // opaque JSON column. Toasty cannot query into it.
-    #[serialize(json)]
-    meta: Metadata,
+    // Arbitrary serde type — `Json&lt;T&gt;` stores it as one opaque JSON
+    // column. Toasty cannot query into it.
+    meta: toasty::Json&lt;Metadata&gt;,
 }</code></pre>
 <p>Toasty serializes the value to a JSON string on insert and update, and
 deserializes it back when reading. The default database column type is <code>TEXT</code>.
@@ -563,13 +562,14 @@ that support <code>varchar</code>.</p>
 </span><span class="boring">    id: u64,
 </span><span class="boring">    title: String,
 </span><span class="boring">    tags: Vec&lt;String&gt;,
-</span><span class="boring">    #[serialize(json)]
-</span><span class="boring">    meta: Metadata,
+</span><span class="boring">    meta: toasty::Json&lt;Metadata&gt;,
 </span><span class="boring">}
 </span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
 </span>let post = toasty::create!(Post {
     title: "Hello",
     tags: vec!["rust".to_string(), "toasty".to_string()],
+    // The bare value is accepted via the `IntoExpr&lt;Json&lt;T&gt;&gt; for T`
+    // blanket — wrapping with `toasty::Json(...)` is optional.
     meta: Metadata {
         version: 1,
         labels: vec!["alpha".to_string()],
@@ -583,13 +583,10 @@ assert_eq!(post.meta.version, 1);
 <span class="boring">Ok(())
 </span><span class="boring">}</span></code></pre>
 <h3 id="nullable-json-fields"><a class="header" href="#nullable-json-fields">Nullable JSON fields</a></h3>
-<p>By default, <code>#[serialize(json)]</code> creates a <code>NOT NULL</code> column. An <code>Option&lt;T&gt;</code>
-field with <code>#[serialize(json)]</code> serializes <code>None</code> as the JSON text <code>"null"</code> —
-the column still stores a non-null string.</p>
-<p>To allow SQL <code>NULL</code> in the column, add the <code>nullable</code> modifier:</p>
-<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span><span class="boring">use toasty::Model;
+<p><code>Json&lt;T&gt;</code> composes with <code>Option</code> in two distinct, both-useful ways
+depending on whether <code>None</code> should land in a SQL <code>NULL</code> cell or be
+encoded inside the JSON itself:</p>
+<pre><code class="language-rust ignore"><span class="boring">use toasty::Model;
 </span><span class="boring">use std::collections::HashMap;
 </span><span class="boring">#[derive(Debug, toasty::Model)]
 </span><span class="boring">struct Post {
@@ -597,20 +594,16 @@ the column still stores a non-null string.</p>
 </span><span class="boring">    #[auto]
 </span><span class="boring">    id: u64,
 </span><span class="boring">    title: String,
-</span>#[serialize(json, nullable)]
-metadata: Option&lt;HashMap&lt;String, String&gt;&gt;,
-<span class="boring">}
-</span><span class="boring">}</span></code></pre>
-<p>With <code>nullable</code>:</p>
-<ul>
-<li><code>None</code> maps to SQL <code>NULL</code> in the database</li>
-<li><code>Some(value)</code> maps to the JSON string representation</li>
-</ul>
-<p>Without <code>nullable</code>:</p>
-<ul>
-<li><code>None</code> maps to the JSON text <code>"null"</code> (a non-null string)</li>
-<li><code>Some(value)</code> maps to the JSON string representation</li>
-</ul>
+</span>// `None` maps to SQL `NULL`; `Some(v)` to a JSON string.
+metadata: Option&lt;toasty::Json&lt;HashMap&lt;String, String&gt;&gt;&gt;,
+
+// `None` maps to the JSON literal `"null"` (still a non-null string);
+// `Some(v)` to a JSON string.
+labels: toasty::Json&lt;Option&lt;Vec&lt;String&gt;&gt;&gt;,
+<span class="boring">}</span></code></pre>
+<p><code>Option&lt;Json&lt;T&gt;&gt;</code> is the common case — pick it when the database should
+see a <code>NULL</code> for missing values. Use <code>Json&lt;Option&lt;T&gt;&gt;</code> when callers
+expect the column to always contain valid JSON.</p>
 <h2 id="scalar-arrays"><a class="header" href="#scalar-arrays">Scalar arrays</a></h2>
 <p>A <code>Vec&lt;T&gt;</code> field where <code>T</code> is a scalar type stores a homogeneous,
 ordered collection in a single column. These fields have their own
@@ -629,11 +622,13 @@ querying, and updates — see <a href="./vec-scalar-fields.html"><code>Vec&lt;sc
 <tr><td><code>#[update(expr)]</code></td><td>Automatic value</td><td>Create and update</td></tr>
 <tr><td><code>#[auto]</code> on <code>created_at</code></td><td>Shorthand for <code>#[default(jiff::Timestamp::now())]</code></td><td>Create only</td></tr>
 <tr><td><code>#[auto]</code> on <code>updated_at</code></td><td>Shorthand for <code>#[update(jiff::Timestamp::now())]</code></td><td>Create and update</td></tr>
-<tr><td><code>#[serialize(json)]</code></td><td>Store as JSON text</td><td>Create and update</td></tr>
-<tr><td><code>#[serialize(json, nullable)]</code></td><td>Store as JSON text with SQL NULL support</td><td>Create and update</td></tr>
 </tbody>
 </table>
 </div>
+<p>JSON storage is handled by the <a href="https://docs.rs/toasty/latest/toasty/stmt/struct.Json.html"><code>toasty::Json&lt;T&gt;</code></a> field
+wrapper — see <a href="#json-serialization">JSON serialization</a> above. Use
+<code>Option&lt;Json&lt;T&gt;&gt;</code> to allow SQL <code>NULL</code>, or <code>Json&lt;Option&lt;T&gt;&gt;</code> to embed
+the JSON literal <code>"null"</code> instead.</p>
 <p>See <a href="./concurrency-control.html">Concurrency Control</a> for the <code>#[version]</code>
 attribute.</p>
 
