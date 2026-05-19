@@ -415,99 +415,102 @@
 <a href=#415 id=415 data-nosnippet>415</a>        </span><span class="kw">let </span>pair_check = <span class="kw">if </span>rel.via.is_some() {
 <a href=#416 id=416 data-nosnippet>416</a>            <span class="macro">quote!</span> {}
 <a href=#417 id=417 data-nosnippet>417</a>        } <span class="kw">else </span>{
-<a href=#418 id=418 data-nosnippet>418</a>            <span class="kw">let </span>pair_ident = syn::Ident::new(<span class="kw-2">&amp;</span><span class="self">self</span>.model.name.ident.to_string(), rel.span);
-<a href=#419 id=419 data-nosnippet>419</a>            <span class="self">self</span>.expand_pair_belongs_to_check(
-<a href=#420 id=420 data-nosnippet>420</a>                <span class="kw-2">&amp;</span>pair_ident,
-<a href=#421 id=421 data-nosnippet>421</a>                field_ident,
-<a href=#422 id=422 data-nosnippet>422</a>                ty,
-<a href=#423 id=423 data-nosnippet>423</a>                rel.span,
-<a href=#424 id=424 data-nosnippet>424</a>                <span class="string">"HasOne"</span>,
-<a href=#425 id=425 data-nosnippet>425</a>                <span class="string">"Has one associations require the target to include a back-reference"</span>,
-<a href=#426 id=426 data-nosnippet>426</a>            )
-<a href=#427 id=427 data-nosnippet>427</a>        };
-<a href=#428 id=428 data-nosnippet>428</a>
-<a href=#429 id=429 data-nosnippet>429</a>        <span class="macro">quote!</span> {
-<a href=#430 id=430 data-nosnippet>430</a>            #vis <span class="kw">fn </span>#field_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; &lt;#ty <span class="kw">as </span>#toasty::Relation&gt;::One {
-<a href=#431 id=431 data-nosnippet>431</a>                <span class="comment">// Suppress the unused field warning
-<a href=#432 id=432 data-nosnippet>432</a>                </span><span class="kw">if </span><span class="bool-val">false </span>{
-<a href=#433 id=433 data-nosnippet>433</a>                    <span class="kw">let _ </span>= <span class="kw-2">&amp;</span><span class="self">self</span>.#field_ident;
-<a href=#434 id=434 data-nosnippet>434</a>                }
-<a href=#435 id=435 data-nosnippet>435</a>
-<a href=#436 id=436 data-nosnippet>436</a>                #pair_check
-<a href=#437 id=437 data-nosnippet>437</a>
-<a href=#438 id=438 data-nosnippet>438</a>                {
-<a href=#439 id=439 data-nosnippet>439</a>                    <span class="kw">use </span>#toasty::IntoStatement;
-<a href=#440 id=440 data-nosnippet>440</a>                    &lt;#ty <span class="kw">as </span>#toasty::Relation&gt;::One::from_stmt(
-<a href=#441 id=441 data-nosnippet>441</a>                        #toasty::stmt::Association::one(
-<a href=#442 id=442 data-nosnippet>442</a>                            <span class="self">self</span>.into_statement().into_query().unwrap().to_list(),
-<a href=#443 id=443 data-nosnippet>443</a>                            <span class="self">Self</span>::fields().#field_ident().into()
-<a href=#444 id=444 data-nosnippet>444</a>                        ).into_statement().into_query().unwrap()
-<a href=#445 id=445 data-nosnippet>445</a>                    )
-<a href=#446 id=446 data-nosnippet>446</a>                }
-<a href=#447 id=447 data-nosnippet>447</a>            }
-<a href=#448 id=448 data-nosnippet>448</a>        }
-<a href=#449 id=449 data-nosnippet>449</a>    }
-<a href=#450 id=450 data-nosnippet>450</a>
-<a href=#451 id=451 data-nosnippet>451</a>    <span class="doccomment">/// Emit a compile-time check that the target model has a `BelongsTo&lt;Self&gt;`
-<a href=#452 id=452 data-nosnippet>452</a>    /// (or `BelongsTo&lt;Option&lt;Self&gt;&gt;`) field named `pair_ident`. Shared by the
-<a href=#453 id=453 data-nosnippet>453</a>    /// has-many and has-one accessor expansions; the relation kind ("HasMany"
-<a href=#454 id=454 data-nosnippet>454</a>    /// / "HasOne") and `label` are woven into the `on_unimplemented` diagnostic.
-<a href=#455 id=455 data-nosnippet>455</a>    </span><span class="kw">fn </span>expand_pair_belongs_to_check(
-<a href=#456 id=456 data-nosnippet>456</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#457 id=457 data-nosnippet>457</a>        pair_ident: <span class="kw-2">&amp;</span>syn::Ident,
-<a href=#458 id=458 data-nosnippet>458</a>        field_ident: <span class="kw-2">&amp;</span>syn::Ident,
-<a href=#459 id=459 data-nosnippet>459</a>        ty: <span class="kw-2">&amp;</span>syn::Type,
-<a href=#460 id=460 data-nosnippet>460</a>        rel_span: proc_macro2::Span,
-<a href=#461 id=461 data-nosnippet>461</a>        relation_kind: <span class="kw-2">&amp;</span>str,
-<a href=#462 id=462 data-nosnippet>462</a>        label: <span class="kw-2">&amp;</span>str,
-<a href=#463 id=463 data-nosnippet>463</a>    ) -&gt; TokenStream {
-<a href=#464 id=464 data-nosnippet>464</a>        <span class="kw">let </span>toasty = <span class="kw-2">&amp;</span><span class="self">self</span>.toasty;
-<a href=#465 id=465 data-nosnippet>465</a>        <span class="kw">let </span>model_ident = <span class="kw-2">&amp;</span><span class="self">self</span>.model.ident;
-<a href=#466 id=466 data-nosnippet>466</a>
-<a href=#467 id=467 data-nosnippet>467</a>        <span class="kw">let </span>verify_pair_belongs_to_exists_for_field = syn::Ident::new(
-<a href=#468 id=468 data-nosnippet>468</a>            <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"verify_pair_belongs_to_exists_for_{pair_ident}"</span>),
-<a href=#469 id=469 data-nosnippet>469</a>            field_ident.span(),
-<a href=#470 id=470 data-nosnippet>470</a>        );
-<a href=#471 id=471 data-nosnippet>471</a>
-<a href=#472 id=472 data-nosnippet>472</a>        <span class="kw">let </span>verify_a = util::ident(<span class="string">"A"</span>);
-<a href=#473 id=473 data-nosnippet>473</a>        <span class="kw">let </span>verify_t = util::ident(<span class="string">"T"</span>);
+<a href=#418 id=418 data-nosnippet>418</a>            <span class="kw">let </span>pair_ident = rel.pair.clone().unwrap_or(syn::Ident::new(
+<a href=#419 id=419 data-nosnippet>419</a>                <span class="kw-2">&amp;</span><span class="self">self</span>.model.name.ident.to_string(),
+<a href=#420 id=420 data-nosnippet>420</a>                rel.span,
+<a href=#421 id=421 data-nosnippet>421</a>            ));
+<a href=#422 id=422 data-nosnippet>422</a>            <span class="self">self</span>.expand_pair_belongs_to_check(
+<a href=#423 id=423 data-nosnippet>423</a>                <span class="kw-2">&amp;</span>pair_ident,
+<a href=#424 id=424 data-nosnippet>424</a>                field_ident,
+<a href=#425 id=425 data-nosnippet>425</a>                ty,
+<a href=#426 id=426 data-nosnippet>426</a>                rel.span,
+<a href=#427 id=427 data-nosnippet>427</a>                <span class="string">"HasOne"</span>,
+<a href=#428 id=428 data-nosnippet>428</a>                <span class="string">"Has one associations require the target to include a back-reference"</span>,
+<a href=#429 id=429 data-nosnippet>429</a>            )
+<a href=#430 id=430 data-nosnippet>430</a>        };
+<a href=#431 id=431 data-nosnippet>431</a>
+<a href=#432 id=432 data-nosnippet>432</a>        <span class="macro">quote!</span> {
+<a href=#433 id=433 data-nosnippet>433</a>            #vis <span class="kw">fn </span>#field_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; &lt;#ty <span class="kw">as </span>#toasty::Relation&gt;::One {
+<a href=#434 id=434 data-nosnippet>434</a>                <span class="comment">// Suppress the unused field warning
+<a href=#435 id=435 data-nosnippet>435</a>                </span><span class="kw">if </span><span class="bool-val">false </span>{
+<a href=#436 id=436 data-nosnippet>436</a>                    <span class="kw">let _ </span>= <span class="kw-2">&amp;</span><span class="self">self</span>.#field_ident;
+<a href=#437 id=437 data-nosnippet>437</a>                }
+<a href=#438 id=438 data-nosnippet>438</a>
+<a href=#439 id=439 data-nosnippet>439</a>                #pair_check
+<a href=#440 id=440 data-nosnippet>440</a>
+<a href=#441 id=441 data-nosnippet>441</a>                {
+<a href=#442 id=442 data-nosnippet>442</a>                    <span class="kw">use </span>#toasty::IntoStatement;
+<a href=#443 id=443 data-nosnippet>443</a>                    &lt;#ty <span class="kw">as </span>#toasty::Relation&gt;::One::from_stmt(
+<a href=#444 id=444 data-nosnippet>444</a>                        #toasty::stmt::Association::one(
+<a href=#445 id=445 data-nosnippet>445</a>                            <span class="self">self</span>.into_statement().into_query().unwrap().to_list(),
+<a href=#446 id=446 data-nosnippet>446</a>                            <span class="self">Self</span>::fields().#field_ident().into()
+<a href=#447 id=447 data-nosnippet>447</a>                        ).into_statement().into_query().unwrap()
+<a href=#448 id=448 data-nosnippet>448</a>                    )
+<a href=#449 id=449 data-nosnippet>449</a>                }
+<a href=#450 id=450 data-nosnippet>450</a>            }
+<a href=#451 id=451 data-nosnippet>451</a>        }
+<a href=#452 id=452 data-nosnippet>452</a>    }
+<a href=#453 id=453 data-nosnippet>453</a>
+<a href=#454 id=454 data-nosnippet>454</a>    <span class="doccomment">/// Emit a compile-time check that the target model has a `BelongsTo&lt;Self&gt;`
+<a href=#455 id=455 data-nosnippet>455</a>    /// (or `BelongsTo&lt;Option&lt;Self&gt;&gt;`) field named `pair_ident`. Shared by the
+<a href=#456 id=456 data-nosnippet>456</a>    /// has-many and has-one accessor expansions; the relation kind ("HasMany"
+<a href=#457 id=457 data-nosnippet>457</a>    /// / "HasOne") and `label` are woven into the `on_unimplemented` diagnostic.
+<a href=#458 id=458 data-nosnippet>458</a>    </span><span class="kw">fn </span>expand_pair_belongs_to_check(
+<a href=#459 id=459 data-nosnippet>459</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#460 id=460 data-nosnippet>460</a>        pair_ident: <span class="kw-2">&amp;</span>syn::Ident,
+<a href=#461 id=461 data-nosnippet>461</a>        field_ident: <span class="kw-2">&amp;</span>syn::Ident,
+<a href=#462 id=462 data-nosnippet>462</a>        ty: <span class="kw-2">&amp;</span>syn::Type,
+<a href=#463 id=463 data-nosnippet>463</a>        rel_span: proc_macro2::Span,
+<a href=#464 id=464 data-nosnippet>464</a>        relation_kind: <span class="kw-2">&amp;</span>str,
+<a href=#465 id=465 data-nosnippet>465</a>        label: <span class="kw-2">&amp;</span>str,
+<a href=#466 id=466 data-nosnippet>466</a>    ) -&gt; TokenStream {
+<a href=#467 id=467 data-nosnippet>467</a>        <span class="kw">let </span>toasty = <span class="kw-2">&amp;</span><span class="self">self</span>.toasty;
+<a href=#468 id=468 data-nosnippet>468</a>        <span class="kw">let </span>model_ident = <span class="kw-2">&amp;</span><span class="self">self</span>.model.ident;
+<a href=#469 id=469 data-nosnippet>469</a>
+<a href=#470 id=470 data-nosnippet>470</a>        <span class="kw">let </span>verify_pair_belongs_to_exists_for_field = syn::Ident::new(
+<a href=#471 id=471 data-nosnippet>471</a>            <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"verify_pair_belongs_to_exists_for_{pair_ident}"</span>),
+<a href=#472 id=472 data-nosnippet>472</a>            field_ident.span(),
+<a href=#473 id=473 data-nosnippet>473</a>        );
 <a href=#474 id=474 data-nosnippet>474</a>
-<a href=#475 id=475 data-nosnippet>475</a>        <span class="kw">let </span>msg = <span class="macro">format!</span>(
-<a href=#476 id=476 data-nosnippet>476</a>            <span class="string">"{relation_kind} requires the {{{verify_a}}}::{pair_ident} field to be of type `BelongsTo&lt;Self&gt;`, but it was `{{Self}}` instead"
-<a href=#477 id=477 data-nosnippet>477</a>        </span>);
-<a href=#478 id=478 data-nosnippet>478</a>
-<a href=#479 id=479 data-nosnippet>479</a>        <span class="macro">quote::quote_spanned!</span> {rel_span=&gt;
-<a href=#480 id=480 data-nosnippet>480</a>            <span class="comment">// Reference the field to generate a compiler error if it is missing.
-<a href=#481 id=481 data-nosnippet>481</a>            </span><span class="attr">#[allow(unreachable_code)]
-<a href=#482 id=482 data-nosnippet>482</a>            </span><span class="kw">if </span><span class="bool-val">false </span>{
-<a href=#483 id=483 data-nosnippet>483</a>                <span class="kw">fn </span>load&lt;#verify_t: #toasty::Model&gt;() -&gt; #verify_t {
-<a href=#484 id=484 data-nosnippet>484</a>                    #verify_t::load(<span class="macro">todo!</span>()).unwrap()
-<a href=#485 id=485 data-nosnippet>485</a>                }
-<a href=#486 id=486 data-nosnippet>486</a>
-<a href=#487 id=487 data-nosnippet>487</a>                <span class="attr">#[diagnostic::on_unimplemented(
-<a href=#488 id=488 data-nosnippet>488</a>                    message = #msg,
-<a href=#489 id=489 data-nosnippet>489</a>                    label = #label,
-<a href=#490 id=490 data-nosnippet>490</a>                    note = <span class="string">"Note 1"</span>,
-<a href=#491 id=491 data-nosnippet>491</a>                    <span class="comment">// note = "Note 2"
-<a href=#492 id=492 data-nosnippet>492</a>                </span>)]
-<a href=#493 id=493 data-nosnippet>493</a>                </span><span class="kw">trait </span>Verify&lt;#verify_a&gt; {
-<a href=#494 id=494 data-nosnippet>494</a>                }
-<a href=#495 id=495 data-nosnippet>495</a>
-<a href=#496 id=496 data-nosnippet>496</a>                <span class="attr">#[diagnostic::do_not_recommend]
-<a href=#497 id=497 data-nosnippet>497</a>                </span><span class="kw">impl</span>&lt;#verify_a&gt; Verify&lt;#verify_a&gt; <span class="kw">for </span>#toasty::BelongsTo&lt;#model_ident&gt; {
-<a href=#498 id=498 data-nosnippet>498</a>                }
-<a href=#499 id=499 data-nosnippet>499</a>
-<a href=#500 id=500 data-nosnippet>500</a>                <span class="attr">#[diagnostic::do_not_recommend]
-<a href=#501 id=501 data-nosnippet>501</a>                </span><span class="kw">impl</span>&lt;#verify_a&gt; Verify&lt;#verify_a&gt; <span class="kw">for </span>#toasty::BelongsTo&lt;<span class="prelude-ty">Option</span>&lt;#model_ident&gt;&gt; {
-<a href=#502 id=502 data-nosnippet>502</a>                }
-<a href=#503 id=503 data-nosnippet>503</a>
-<a href=#504 id=504 data-nosnippet>504</a>                <span class="kw">fn </span>verify&lt;#verify_t: Verify&lt;#verify_a&gt;, #verify_a&gt;(<span class="kw">_</span>: <span class="kw-2">&amp;</span>#verify_t) {
+<a href=#475 id=475 data-nosnippet>475</a>        <span class="kw">let </span>verify_a = util::ident(<span class="string">"A"</span>);
+<a href=#476 id=476 data-nosnippet>476</a>        <span class="kw">let </span>verify_t = util::ident(<span class="string">"T"</span>);
+<a href=#477 id=477 data-nosnippet>477</a>
+<a href=#478 id=478 data-nosnippet>478</a>        <span class="kw">let </span>msg = <span class="macro">format!</span>(
+<a href=#479 id=479 data-nosnippet>479</a>            <span class="string">"{relation_kind} requires the {{{verify_a}}}::{pair_ident} field to be of type `BelongsTo&lt;Self&gt;`, but it was `{{Self}}` instead"
+<a href=#480 id=480 data-nosnippet>480</a>        </span>);
+<a href=#481 id=481 data-nosnippet>481</a>
+<a href=#482 id=482 data-nosnippet>482</a>        <span class="macro">quote::quote_spanned!</span> {rel_span=&gt;
+<a href=#483 id=483 data-nosnippet>483</a>            <span class="comment">// Reference the field to generate a compiler error if it is missing.
+<a href=#484 id=484 data-nosnippet>484</a>            </span><span class="attr">#[allow(unreachable_code)]
+<a href=#485 id=485 data-nosnippet>485</a>            </span><span class="kw">if </span><span class="bool-val">false </span>{
+<a href=#486 id=486 data-nosnippet>486</a>                <span class="kw">fn </span>load&lt;#verify_t: #toasty::Model&gt;() -&gt; #verify_t {
+<a href=#487 id=487 data-nosnippet>487</a>                    #verify_t::load(<span class="macro">todo!</span>()).unwrap()
+<a href=#488 id=488 data-nosnippet>488</a>                }
+<a href=#489 id=489 data-nosnippet>489</a>
+<a href=#490 id=490 data-nosnippet>490</a>                <span class="attr">#[diagnostic::on_unimplemented(
+<a href=#491 id=491 data-nosnippet>491</a>                    message = #msg,
+<a href=#492 id=492 data-nosnippet>492</a>                    label = #label,
+<a href=#493 id=493 data-nosnippet>493</a>                    note = <span class="string">"Note 1"</span>,
+<a href=#494 id=494 data-nosnippet>494</a>                    <span class="comment">// note = "Note 2"
+<a href=#495 id=495 data-nosnippet>495</a>                </span>)]
+<a href=#496 id=496 data-nosnippet>496</a>                </span><span class="kw">trait </span>Verify&lt;#verify_a&gt; {
+<a href=#497 id=497 data-nosnippet>497</a>                }
+<a href=#498 id=498 data-nosnippet>498</a>
+<a href=#499 id=499 data-nosnippet>499</a>                <span class="attr">#[diagnostic::do_not_recommend]
+<a href=#500 id=500 data-nosnippet>500</a>                </span><span class="kw">impl</span>&lt;#verify_a&gt; Verify&lt;#verify_a&gt; <span class="kw">for </span>#toasty::BelongsTo&lt;#model_ident&gt; {
+<a href=#501 id=501 data-nosnippet>501</a>                }
+<a href=#502 id=502 data-nosnippet>502</a>
+<a href=#503 id=503 data-nosnippet>503</a>                <span class="attr">#[diagnostic::do_not_recommend]
+<a href=#504 id=504 data-nosnippet>504</a>                </span><span class="kw">impl</span>&lt;#verify_a&gt; Verify&lt;#verify_a&gt; <span class="kw">for </span>#toasty::BelongsTo&lt;<span class="prelude-ty">Option</span>&lt;#model_ident&gt;&gt; {
 <a href=#505 id=505 data-nosnippet>505</a>                }
 <a href=#506 id=506 data-nosnippet>506</a>
-<a href=#507 id=507 data-nosnippet>507</a>                <span class="kw">let </span>instance = load::&lt;&lt;#ty <span class="kw">as </span>#toasty::Relation&gt;::Model&gt;();
-<a href=#508 id=508 data-nosnippet>508</a>                verify::&lt;<span class="kw">_</span>, &lt;#ty <span class="kw">as </span>#toasty::Relation&gt;::Model&gt;(instance.#verify_pair_belongs_to_exists_for_field());
-<a href=#509 id=509 data-nosnippet>509</a>            }
-<a href=#510 id=510 data-nosnippet>510</a>        }
-<a href=#511 id=511 data-nosnippet>511</a>    }
-<a href=#512 id=512 data-nosnippet>512</a>}
+<a href=#507 id=507 data-nosnippet>507</a>                <span class="kw">fn </span>verify&lt;#verify_t: Verify&lt;#verify_a&gt;, #verify_a&gt;(<span class="kw">_</span>: <span class="kw-2">&amp;</span>#verify_t) {
+<a href=#508 id=508 data-nosnippet>508</a>                }
+<a href=#509 id=509 data-nosnippet>509</a>
+<a href=#510 id=510 data-nosnippet>510</a>                <span class="kw">let </span>instance = load::&lt;&lt;#ty <span class="kw">as </span>#toasty::Relation&gt;::Model&gt;();
+<a href=#511 id=511 data-nosnippet>511</a>                verify::&lt;<span class="kw">_</span>, &lt;#ty <span class="kw">as </span>#toasty::Relation&gt;::Model&gt;(instance.#verify_pair_belongs_to_exists_for_field());
+<a href=#512 id=512 data-nosnippet>512</a>            }
+<a href=#513 id=513 data-nosnippet>513</a>        }
+<a href=#514 id=514 data-nosnippet>514</a>    }
+<a href=#515 id=515 data-nosnippet>515</a>}
 </code></pre></div></section></main></body></html>
