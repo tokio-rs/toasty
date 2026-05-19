@@ -222,7 +222,8 @@ pub async fn batch_create_inside_transaction_uses_savepoints(t: &mut Test) -> Re
         t.log().pop_op(),
         Operation::Transaction(Transaction::Start {
             isolation: None,
-            read_only: false
+            read_only: false,
+            ..
         })
     );
 

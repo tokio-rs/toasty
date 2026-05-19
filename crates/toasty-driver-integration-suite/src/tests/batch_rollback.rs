@@ -30,7 +30,8 @@ pub async fn batch_two_creates_rolls_back_on_second_failure(t: &mut Test) -> Res
         t.log().pop_op(),
         Operation::Transaction(Transaction::Start {
             isolation: None,
-            read_only: false
+            read_only: false,
+            ..
         })
     );
     assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // first INSERT
@@ -80,7 +81,8 @@ pub async fn batch_create_and_update_rolls_back_on_update_failure(t: &mut Test) 
         t.log().pop_op(),
         Operation::Transaction(Transaction::Start {
             isolation: None,
-            read_only: false
+            read_only: false,
+            ..
         })
     );
     assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT
@@ -132,7 +134,8 @@ pub async fn batch_update_and_create_rolls_back_on_create_failure(t: &mut Test) 
         t.log().pop_op(),
         Operation::Transaction(Transaction::Start {
             isolation: None,
-            read_only: false
+            read_only: false,
+            ..
         })
     );
     assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // UPDATE
@@ -185,7 +188,8 @@ pub async fn batch_array_creates_rolls_back_on_failure(t: &mut Test) -> Result<(
         t.log().pop_op(),
         Operation::Transaction(Transaction::Start {
             isolation: None,
-            read_only: false
+            read_only: false,
+            ..
         })
     );
     assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT first
@@ -246,7 +250,8 @@ pub async fn batch_different_models_rolls_back_on_failure(t: &mut Test) -> Resul
         t.log().pop_op(),
         Operation::Transaction(Transaction::Start {
             isolation: None,
-            read_only: false
+            read_only: false,
+            ..
         })
     );
     assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT user

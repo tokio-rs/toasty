@@ -32,7 +32,7 @@ mod scan;
 pub use scan::Scan;
 
 mod transaction;
-pub use transaction::{IsolationLevel, Transaction};
+pub use transaction::{IsolationLevel, Transaction, TransactionMode};
 
 mod typed_value;
 pub use typed_value::TypedValue;

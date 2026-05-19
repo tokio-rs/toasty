@@ -24,7 +24,8 @@ pub async fn batch_two_creates_same_model(t: &mut Test) -> Result<()> {
         t.log().pop_op(),
         Operation::Transaction(Transaction::Start {
             isolation: None,
-            read_only: false
+            read_only: false,
+            ..
         })
     );
     assert_struct!(t.log().pop_op(), Operation::QuerySql({
@@ -64,7 +65,8 @@ pub async fn batch_two_creates_different_models(t: &mut Test) -> Result<()> {
         t.log().pop_op(),
         Operation::Transaction(Transaction::Start {
             isolation: None,
-            read_only: false
+            read_only: false,
+            ..
         })
     );
     assert_struct!(t.log().pop_op(), Operation::QuerySql({
@@ -100,7 +102,8 @@ pub async fn batch_query_and_create(t: &mut Test) -> Result<()> {
         t.log().pop_op(),
         Operation::Transaction(Transaction::Start {
             isolation: None,
-            read_only: false
+            read_only: false,
+            ..
         })
     );
     assert_struct!(t.log().pop_op(), Operation::QuerySql({
@@ -135,7 +138,8 @@ pub async fn batch_create_then_query(t: &mut Test) -> Result<()> {
         t.log().pop_op(),
         Operation::Transaction(Transaction::Start {
             isolation: None,
-            read_only: false
+            read_only: false,
+            ..
         })
     );
     assert_struct!(t.log().pop_op(), Operation::QuerySql({
@@ -174,7 +178,8 @@ pub async fn batch_create_query_create(t: &mut Test) -> Result<()> {
         t.log().pop_op(),
         Operation::Transaction(Transaction::Start {
             isolation: None,
-            read_only: false
+            read_only: false,
+            ..
         })
     );
     assert_struct!(t.log().pop_op(), Operation::QuerySql({
@@ -213,7 +218,8 @@ pub async fn batch_creates_from_array(t: &mut Test) -> Result<()> {
         t.log().pop_op(),
         Operation::Transaction(Transaction::Start {
             isolation: None,
-            read_only: false
+            read_only: false,
+            ..
         })
     );
     for _ in 0..3 {
@@ -251,7 +257,8 @@ pub async fn batch_creates_from_vec(t: &mut Test) -> Result<()> {
         t.log().pop_op(),
         Operation::Transaction(Transaction::Start {
             isolation: None,
-            read_only: false
+            read_only: false,
+            ..
         })
     );
     for _ in 0..3 {

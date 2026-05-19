@@ -85,6 +85,7 @@ toasty_driver_integration_suite::generate_driver_tests!(DynamoDbSetup::new(),
     vec_remove_at: false,
     backward_pagination: false,
     test_connection_pool: false,
+    transaction_lock_mode: false,
 );
 
 // ─────────────────────────────────────────────────────────────────────────────

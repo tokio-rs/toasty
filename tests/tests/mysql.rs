@@ -51,4 +51,5 @@ toasty_driver_integration_suite::generate_driver_tests!(MySqlSetup::new(),
     vec_remove: false,
     vec_pop: false,
     vec_remove_at: false,
+    transaction_lock_mode: false,
 );

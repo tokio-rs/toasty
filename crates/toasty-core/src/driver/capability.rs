@@ -146,6 +146,14 @@ pub struct Capability {
     /// TODO: We only need this for the `connection_per_clone.rs` test, come up with a better way.
     pub test_connection_pool: bool,
 
+    /// Whether the driver honors non-`Default`
+    /// [`TransactionMode`](super::operation::TransactionMode) variants
+    /// (`Immediate`, `Exclusive`). Currently `true` only for SQLite, which
+    /// maps them to `BEGIN IMMEDIATE` / `BEGIN EXCLUSIVE`. Drivers that
+    /// leave this `false` reject non-`Default` modes with
+    /// [`Error::unsupported_feature`](crate::Error::unsupported_feature).
+    pub transaction_lock_mode: bool,
+
     /// Whether the backend can walk a paginated query in reverse from a
     /// cursor.
     ///
@@ -440,6 +448,10 @@ impl Capability {
 
         test_connection_pool: false,
 
+        // SQLite exposes `BEGIN DEFERRED|IMMEDIATE|EXCLUSIVE` for
+        // lock-acquisition policy.
+        transaction_lock_mode: true,
+
         backward_pagination: true,
 
         // `Vec<scalar>` model fields land in a `TEXT` column holding a JSON
@@ -498,6 +510,9 @@ impl Capability {
 
         test_connection_pool: true,
 
+        // PostgreSQL has no SQLite-style lock-mode keyword on BEGIN.
+        transaction_lock_mode: false,
+
         // PostgreSQL accepts a single array-valued bind param and supports
         // `expr <op> ANY(array)` / `<op> ALL(array)` predicates.
         bind_list_param: true,
@@ -542,6 +557,9 @@ impl Capability {
         decimal_arbitrary_precision: false,
 
         test_connection_pool: true,
+
+        // MySQL has no SQLite-style lock-mode keyword on START TRANSACTION.
+        transaction_lock_mode: false,
 
         // `Vec<scalar>` model fields land in a `JSON` column. The driver
         // serializes `Value::List` to a JSON string at bind time, so the
@@ -590,6 +608,9 @@ impl Capability {
         scan_supports_sort: false,
 
         test_connection_pool: false,
+
+        // DynamoDB rejects `Operation::Transaction` wholesale.
+        transaction_lock_mode: false,
 
         backward_pagination: false,
 
