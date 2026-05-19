@@ -35,7 +35,12 @@ impl Verify<'_> {
         field: &Field,
         rel: &app::HasMany,
     ) -> Result<()> {
-        self.verify_has_relation_is_indexed(owner, field, rel.target(&self.schema.app), rel.pair)
+        // A `via` relation has no pair of its own; each step it traverses is
+        // a relation that is verified on its own model.
+        let Some(pair) = rel.kind.pair_id() else {
+            return Ok(());
+        };
+        self.verify_has_relation_is_indexed(owner, field, rel.target(&self.schema.app), pair)
     }
 
     fn verify_has_one_relation_is_indexed(
@@ -44,7 +49,10 @@ impl Verify<'_> {
         field: &Field,
         rel: &app::HasOne,
     ) -> Result<()> {
-        self.verify_has_relation_is_indexed(owner, field, rel.target(&self.schema.app), rel.pair)
+        let Some(pair) = rel.kind.pair_id() else {
+            return Ok(());
+        };
+        self.verify_has_relation_is_indexed(owner, field, rel.target(&self.schema.app), pair)
     }
 
     fn verify_has_relation_is_indexed(

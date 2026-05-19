@@ -574,16 +574,16 @@ impl ToSql for &stmt::SourceTable {
 
             // Serialize the joins
             for join in &table_with_joins.joins {
-                match &join.constraint {
-                    stmt::JoinOp::Left(expr) => {
-                        let join_table_ref = &self.tables[join.table.0];
-                        let alias = TableAlias {
-                            depth: f.depth,
-                            table: join.table,
-                        };
-                        fmt!(cx, f, " LEFT JOIN " join_table_ref " AS " alias " ON " expr);
-                    }
-                }
+                let (kw, expr) = match &join.constraint {
+                    stmt::JoinOp::Inner(expr) => (" INNER JOIN ", expr),
+                    stmt::JoinOp::Left(expr) => (" LEFT JOIN ", expr),
+                };
+                let join_table_ref = &self.tables[join.table.0];
+                let alias = TableAlias {
+                    depth: f.depth,
+                    table: join.table,
+                };
+                fmt!(cx, f, kw join_table_ref " AS " alias " ON " expr);
             }
         }
     }
@@ -822,11 +822,33 @@ impl ToSql for &stmt::UpdateTarget {
 
 impl ToSql for &stmt::Values {
     fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
-        // MySQL requires ROW() keyword for table value constructors when used
-        // in subqueries, but NOT in INSERT statements
+        // MySQL requires the `ROW(...)` keyword for table value constructors
+        // when used in subqueries, but NOT in INSERT statements.
+        //
+        // Rows are `Expr::Record`s, which serialize with their own `(...)`.
+        // Inside `ROW(...)` we need the fields comma-separated *without*
+        // those parens — otherwise MySQL parses `ROW((1, 'a'))` as a single
+        // row-expression operand and rejects it with "Operand should contain
+        // 1 column(s)".
         if f.serializer.is_mysql() && !f.in_insert {
-            let rows = Comma(self.rows.iter().map(|row| ("ROW(", row, ")")));
-            fmt!(cx, f, "VALUES " rows)
+            // `Expr::Record` serializes with its own `(...)`; render its
+            // fields directly inside `ROW(...)` so we don't end up with
+            // `ROW((a, b))` (which MySQL parses as a single row-typed
+            // operand and rejects). Other expression shapes are wrapped
+            // as-is — a single-scalar row `ROW(x)` is well-formed.
+            for (i, row) in self.rows.iter().enumerate() {
+                if i == 0 {
+                    fmt!(cx, f, "VALUES ");
+                } else {
+                    fmt!(cx, f, ", ");
+                }
+                match row {
+                    stmt::Expr::Record(record) => {
+                        fmt!(cx, f, "ROW(" Comma(record.fields.iter()) ")")
+                    }
+                    _ => fmt!(cx, f, "ROW(" row ")"),
+                }
+            }
         } else {
             let rows = Comma(self.rows.iter());
             fmt!(cx, f, "VALUES " rows)

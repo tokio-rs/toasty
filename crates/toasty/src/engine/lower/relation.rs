@@ -184,8 +184,21 @@ impl LowerStatement<'_, '_> {
                         "Pop / RemoveAt assignment on relation field — these only apply to Vec<scalar>"
                     )
                 }
-                stmt::Assignment::Batch(_) => {
-                    todo!("batch assignments for relations")
+                stmt::Assignment::Batch(entries) => {
+                    // A `Batch` carries a sequence of discrete ops on the same
+                    // projection, built by the `stmt::apply` surface API. Each
+                    // entry should dispatch as its own `Mutation` — but only
+                    // the all-`Insert` shape is wired up right now (see
+                    // `lower_has_many_batch`). Extending to `Remove`, `Set`,
+                    // or mixed batches means dispatching each entry through
+                    // `plan_mut_relation_field` individually, which in turn
+                    // requires `set_returning_slot` to merge multiple
+                    // sub-statement args into a single returning slot.
+                    assert!(field.ty.is_has_many());
+                    Mutation::Associate {
+                        expr: lower_has_many_batch(entries),
+                        exclusive: false,
+                    }
                 }
             };
 
@@ -225,14 +238,24 @@ impl LowerStatement<'_, '_> {
 
     fn plan_mut_has_many(&mut self, field: &Field, op: Mutation, source: &mut dyn RelationSource) {
         let has_many = field.ty.as_has_many_unwrap();
-        let pair = self.field(has_many.pair);
+        // `via` relations are read-only — no mutation methods are generated
+        // for them, so this is only reached for direct relations.
+        let pair = has_many
+            .kind
+            .pair_id()
+            .expect("cannot mutate through a multi-step `via` relation");
+        let pair = self.field(pair);
 
         self.plan_mut_has_n(field, pair, op, source);
     }
 
     fn plan_mut_has_one(&mut self, field: &Field, op: Mutation, source: &mut dyn RelationSource) {
         let has_one = field.ty.as_has_one_unwrap();
-        let pair = self.field(has_one.pair);
+        let pair = has_one
+            .kind
+            .pair_id()
+            .expect("cannot mutate through a multi-step `via` relation");
+        let pair = self.field(pair);
 
         self.plan_mut_has_n(field, pair, op, source);
     }
@@ -889,6 +912,44 @@ impl RelationSource for InsertRelationSource<'_> {
 
     fn needs_existence_check(&self) -> bool {
         false
+    }
+}
+
+/// Lower a `Batch` of ops on a has-many relation into a single combined
+/// expression suitable for `Mutation::Associate`.
+///
+/// Each entry in a `Batch` should be dispatched as its own `Mutation`, but
+/// today only the all-`Insert` shape is supported: the per-entry single-row
+/// INSERTs are folded into one multi-row INSERT via `Insert::merge`. Other
+/// op kinds (`Remove`, `Set`, …) hit `todo!()` for now and need per-entry
+/// dispatch through `plan_mut_relation_field` plus returning-slot merging.
+///
+/// Empty input yields an empty list expression — the surface `stmt::apply`
+/// API can't actually produce an empty `Batch` (the empty Apply loop adds
+/// no entry to the assignments map), but the helper doesn't depend on
+/// that: an empty list dispatches to a no-op in
+/// `plan_mut_has_n_associate_expr`.
+fn lower_has_many_batch(entries: Vec<stmt::Assignment>) -> stmt::Expr {
+    let mut combined: Option<stmt::Insert> = None;
+    for entry in entries {
+        match entry {
+            stmt::Assignment::Insert(stmt::Expr::Stmt(expr_stmt)) => {
+                let insert = match *expr_stmt.stmt {
+                    stmt::Statement::Insert(insert) => insert,
+                    other => todo!("non-Insert sub-statement in has-many Batch: {other:#?}"),
+                };
+                match &mut combined {
+                    None => combined = Some(insert),
+                    Some(acc) => acc.merge(insert),
+                }
+            }
+            // Other batch entry kinds need per-entry Mutation dispatch.
+            other => todo!("batch entry kind not yet supported on has-many: {other:#?}"),
+        }
+    }
+    match combined {
+        Some(insert) => stmt::Expr::from(insert),
+        None => stmt::Expr::list_from_vec(vec![]),
     }
 }
 

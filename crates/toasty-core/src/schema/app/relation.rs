@@ -14,3 +14,6 @@ pub use has_many::HasMany;
 
 mod has_one;
 pub use has_one::HasOne;
+
+mod via;
+pub use via::{HasKind, Via};

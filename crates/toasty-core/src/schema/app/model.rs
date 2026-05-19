@@ -1,4 +1,4 @@
-use super::{Field, FieldId, FieldPrimitive, Index, Name, PrimaryKey};
+use super::{Field, FieldId, FieldPrimitive, FieldTy, HasKind, Index, Name, PrimaryKey};
 use crate::{Result, driver, stmt};
 use indexmap::IndexMap;
 use std::fmt;
@@ -222,6 +222,25 @@ impl ModelRoot {
     pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
         for field in &self.fields {
             field.verify(db)?;
+
+            // Multi-step (`via`) relations lower to nested `IN` subqueries.
+            // Only SQL drivers can evaluate them today; key-value drivers
+            // would need a separate per-step batched fetch strategy that
+            // is not yet implemented.
+            let is_via = match &field.ty {
+                FieldTy::HasMany(rel) => matches!(rel.kind, HasKind::Via(_)),
+                FieldTy::HasOne(rel) => matches!(rel.kind, HasKind::Via(_)),
+                _ => false,
+            };
+            if is_via && !db.sql {
+                return Err(crate::Error::invalid_schema(format!(
+                    "field `{}::{}` declares a multi-step `via` relation, which \
+                     requires a SQL-capable driver; the configured driver does not \
+                     support SQL",
+                    self.name.upper_camel_case(),
+                    field.name,
+                )));
+            }
         }
         Ok(())
     }
