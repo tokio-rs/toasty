@@ -4,19 +4,6 @@ use super::{BelongsTo, Column, ErrorSet, HasMany, HasOne, Name};
 
 use syn::spanned::Spanned;
 
-/// Codegen-level representation of a serialization format.
-#[derive(Debug, Clone)]
-pub(crate) enum SerializeFormat {
-    Json,
-}
-
-/// Parsed `#[serialize(...)]` attribute data.
-#[derive(Debug, Clone)]
-pub(crate) struct SerializeAttr {
-    pub(crate) format: SerializeFormat,
-    pub(crate) nullable: bool,
-}
-
 #[derive(Debug)]
 pub(crate) struct Field {
     /// Index of field in the containing model
@@ -62,9 +49,6 @@ pub(crate) struct FieldAttr {
     /// Expression to apply on create and update: `#[update(<expr>)]`
     pub(crate) update_expr: Option<syn::Expr>,
 
-    /// Serialization info for the field: `#[serialize(json)]` or `#[serialize(json, nullable)]`
-    pub(crate) serialize: Option<SerializeAttr>,
-
     /// True if the field tracks an OCC version counter
     pub(crate) versionable: bool,
 
@@ -99,7 +83,6 @@ impl FieldAttr {
             column: None,
             default_expr: None,
             update_expr: None,
-            serialize: None,
             versionable: false,
             deferred: false,
         };
@@ -200,54 +183,17 @@ impl FieldAttr {
                     field_attr.deferred = true;
                 }
             } else if attr.path().is_ident("serialize") {
-                if field_attr.serialize.is_some() {
-                    errs.push(syn::Error::new_spanned(
-                        attr,
-                        "duplicate #[serialize] attribute",
-                    ));
-                } else {
-                    match attr.parse_args_with(
-                        syn::punctuated::Punctuated::<syn::Ident, syn::Token![,]>::parse_terminated,
-                    ) {
-                        Ok(args) => {
-                            let mut format = None;
-                            let mut nullable = false;
-
-                            for arg in &args {
-                                if arg == "json" {
-                                    if format.is_some() {
-                                        errs.push(syn::Error::new_spanned(
-                                            arg,
-                                            "duplicate format specifier",
-                                        ));
-                                    } else {
-                                        format = Some(SerializeFormat::Json);
-                                    }
-                                } else if arg == "nullable" {
-                                    nullable = true;
-                                } else {
-                                    errs.push(syn::Error::new_spanned(
-                                        arg,
-                                        "unsupported serialize argument; expected `json` or `nullable`",
-                                    ));
-                                }
-                            }
-
-                            match format {
-                                Some(format) => {
-                                    field_attr.serialize = Some(SerializeAttr { format, nullable });
-                                }
-                                None => {
-                                    errs.push(syn::Error::new_spanned(
-                                        attr,
-                                        "missing serialization format; expected `json`",
-                                    ));
-                                }
-                            }
-                        }
-                        Err(e) => errs.push(e),
-                    }
-                }
+                // The `#[serialize(json)]` attribute has been replaced by the
+                // `toasty::Json<T>` field wrapper. The wrapper handles the
+                // same encoding through trait dispatch, composes cleanly with
+                // `Option<T>` and `Deferred<T>`, and works in expressions
+                // (e.g. `.eq(Json("hello"))`).
+                errs.push(syn::Error::new_spanned(
+                    attr,
+                    "the `#[serialize(json)]` attribute has been removed; \
+                     wrap the field type in `toasty::Json<T>` instead \
+                     (e.g. `tags: toasty::Json<Vec<String>>`)",
+                ));
             }
         }
 
@@ -362,13 +308,6 @@ impl Field {
             errs.push(syn::Error::new_spanned(
                 field,
                 "#[update] cannot be used on relation fields",
-            ));
-        }
-
-        if ty.is_some() && attrs.serialize.is_some() {
-            errs.push(syn::Error::new_spanned(
-                field,
-                "#[serialize] cannot be used on relation fields",
             ));
         }
 

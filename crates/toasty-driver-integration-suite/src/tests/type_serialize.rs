@@ -2,6 +2,7 @@ use crate::prelude::*;
 
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
+use toasty::Json;
 use toasty_core::{
     driver::{Operation, Rows},
     stmt::{Assignment, Expr, ExprSet, Statement, Value},
@@ -32,19 +33,20 @@ fn assert_insert_serialized(t: &Test, op: &Operation, pos: usize, expected: &str
 }
 
 #[driver_test(id(ID))]
-pub async fn serialize_vec_string(t: &mut Test) -> Result<(), BoxError> {
+pub async fn json_vec_string(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     struct Item {
         #[key]
         #[auto]
         id: ID,
-        #[serialize(json)]
-        tags: Vec<String>,
+        tags: Json<Vec<String>>,
     }
 
     let mut db = t.setup_db(models!(Item)).await;
 
-    // Insert — driver receives JSON string
+    // Insert — driver receives JSON string. The bare `Vec<String>` is
+    // accepted via the `IntoExpr<Json<T>> for T` blanket on `Json<T>`,
+    // so callers don't need to spell `Json(value)` at setter sites.
     t.log().clear();
     let tags = vec!["rust".to_string(), "toasty".to_string()];
     let expected_json = serde_json::to_string(&tags).unwrap();
@@ -54,9 +56,12 @@ pub async fn serialize_vec_string(t: &mut Test) -> Result<(), BoxError> {
     let val_pos = if driver_test_cfg!(id_u64) { 0 } else { 1 };
     assert_insert_serialized(t, &op, val_pos, &expected_json);
 
-    assert_eq!(Item::get_by_id(&mut db, &record.id).await?.tags, tags);
+    assert_eq!(
+        Item::get_by_id(&mut db, &record.id).await?.tags,
+        Json(tags.clone())
+    );
 
-    // Update — driver receives JSON string
+    // Update — same blanket lets the update builder take the bare value.
     t.log().clear();
     let new_tags = vec!["b".to_string(), "c".to_string()];
     let expected_json = serde_json::to_string(&new_tags).unwrap();
@@ -77,38 +82,45 @@ pub async fn serialize_vec_string(t: &mut Test) -> Result<(), BoxError> {
     }
     assert_struct!(resp, { values: Rows::Count(1) });
 
-    assert_eq!(Item::get_by_id(&mut db, &record.id).await?.tags, new_tags);
+    assert_eq!(
+        Item::get_by_id(&mut db, &record.id).await?.tags,
+        Json(new_tags)
+    );
 
     Ok(())
 }
 
 #[driver_test(id(ID))]
-pub async fn serialize_nullable(t: &mut Test) -> Result<(), BoxError> {
+pub async fn json_option_outside_sql_null(t: &mut Test) -> Result<(), BoxError> {
+    // `Option<Json<T>>` — None maps to SQL `NULL`, Some(v) to a JSON string.
     #[derive(Debug, toasty::Model)]
     struct Item {
         #[key]
         #[auto]
         id: ID,
-        #[serialize(json, nullable)]
-        data: Option<HashMap<String, String>>,
+        data: Option<Json<HashMap<String, String>>>,
     }
 
     let mut db = t.setup_db(models!(Item)).await;
 
-    // Some — driver receives JSON string
+    // Some — driver receives JSON string. The `Option<Json<T>>` field
+    // also accepts a bare `Json(value)` via the `IntoExpr<Option<T>> for T`
+    // blanket, so the `Some(...)` wrapping is optional.
     t.log().clear();
     let map = HashMap::from([("key".to_string(), "value".to_string())]);
     let expected_json = serde_json::to_string(&map).unwrap();
-    let record = Item::create().data(Some(map.clone())).exec(&mut db).await?;
+    let record = Item::create().data(Json(map.clone())).exec(&mut db).await?;
 
     let (op, _) = t.log().pop();
     let val_pos = if driver_test_cfg!(id_u64) { 0 } else { 1 };
     assert_insert_serialized(t, &op, val_pos, &expected_json);
 
-    assert_eq!(Item::get_by_id(&mut db, &record.id).await?.data, Some(map));
+    assert_eq!(
+        Item::get_by_id(&mut db, &record.id).await?.data,
+        Some(Json(map))
+    );
 
-    // None — driver receives SQL NULL. NULL stays inline (extractable scalars
-    // only), so the row structure matches for both paths.
+    // None — driver receives SQL NULL.
     t.log().clear();
     let empty_record = Item::create().data(None).exec(&mut db).await?;
 
@@ -127,19 +139,21 @@ pub async fn serialize_nullable(t: &mut Test) -> Result<(), BoxError> {
 }
 
 #[driver_test(id(ID))]
-pub async fn serialize_non_nullable_option(t: &mut Test) -> Result<(), BoxError> {
+pub async fn json_option_inside_json_null(t: &mut Test) -> Result<(), BoxError> {
+    // `Json<Option<T>>` — None maps to the JSON literal `"null"`, not SQL `NULL`.
     #[derive(Debug, toasty::Model)]
     struct Item {
         #[key]
         #[auto]
         id: ID,
-        #[serialize(json)]
-        extra: Option<String>,
+        extra: Json<Option<String>>,
     }
 
     let mut db = t.setup_db(models!(Item)).await;
 
-    // None → JSON text "null", not SQL NULL
+    // None → JSON text "null", not SQL NULL.
+    // `Option<String>` decodes through the `IntoExpr<Json<T>> for T`
+    // blanket — `T` here is `Option<String>`, which is `Serialize`.
     t.log().clear();
     let empty_record = Item::create().extra(None).exec(&mut db).await?;
 
@@ -149,7 +163,7 @@ pub async fn serialize_non_nullable_option(t: &mut Test) -> Result<(), BoxError>
 
     assert_eq!(
         Item::get_by_id(&mut db, &empty_record.id).await?.extra,
-        None
+        Json(None)
     );
 
     // Some → JSON string with quotes
@@ -166,14 +180,14 @@ pub async fn serialize_non_nullable_option(t: &mut Test) -> Result<(), BoxError>
 
     assert_eq!(
         Item::get_by_id(&mut db, &record.id).await?.extra,
-        Some("hello".to_string())
+        Json(Some("hello".to_string()))
     );
 
     Ok(())
 }
 
 #[driver_test(id(ID))]
-pub async fn serialize_custom_struct(t: &mut Test) -> Result<(), BoxError> {
+pub async fn json_custom_struct(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
     struct Metadata {
         version: u32,
@@ -185,8 +199,7 @@ pub async fn serialize_custom_struct(t: &mut Test) -> Result<(), BoxError> {
         #[key]
         #[auto]
         id: ID,
-        #[serialize(json)]
-        meta: Metadata,
+        meta: Json<Metadata>,
     }
 
     let mut db = t.setup_db(models!(Item)).await;
@@ -203,7 +216,7 @@ pub async fn serialize_custom_struct(t: &mut Test) -> Result<(), BoxError> {
     let val_pos = if driver_test_cfg!(id_u64) { 0 } else { 1 };
     assert_insert_serialized(t, &op, val_pos, &expected_json);
 
-    assert_eq!(Item::get_by_id(&mut db, &record.id).await?.meta, meta);
+    assert_eq!(Item::get_by_id(&mut db, &record.id).await?.meta, Json(meta));
 
     Ok(())
 }

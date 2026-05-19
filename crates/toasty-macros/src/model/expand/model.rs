@@ -477,7 +477,6 @@ impl Expand<'_> {
         let field_loads = self.model.fields.iter().enumerate().map(|(index, field)| {
             let field_ident = &field.name.ident;
             let index_tokenized = util::int(index);
-            let field_name_str = field.name.as_str();
 
             let field_name = if fields_named {
                 quote!(#field_ident:)
@@ -486,32 +485,6 @@ impl Expand<'_> {
             };
 
             match &field.ty {
-                FieldTy::Primitive(_ty) if field.attrs.serialize.is_some() => {
-                    let serialize_attr = field.attrs.serialize.as_ref().unwrap();
-
-                    let json_deserialize = quote! {
-                        let json_str = <String as #toasty::Load>::load(value)?;
-                        #toasty::serde_json::from_str(&json_str)
-                            .map_err(|e| #toasty::Error::from_args(
-                                format_args!("failed to deserialize field '{}': {}", #field_name_str, e)
-                            ))?
-                    };
-
-                    let field_value = if serialize_attr.nullable {
-                        quote! {
-                            if value.is_null() { None } else { Some({ #json_deserialize }) }
-                        }
-                    } else {
-                        json_deserialize
-                    };
-
-                    quote! {
-                        #field_name {
-                            let value = record[#index_tokenized].take();
-                            #field_value
-                        },
-                    }
-                }
                 FieldTy::Primitive(ty) => {
                     quote!(#field_name <#ty as #toasty::Load>::load(record[#index_tokenized].take())?,)
                 }
@@ -563,53 +536,33 @@ impl Expand<'_> {
     pub(super) fn expand_embedded_reload_body(&self, fields_named: bool) -> TokenStream {
         let toasty = &self.toasty;
 
-        let reload_arms: Vec<_> = self.model.fields.iter().enumerate().map(|(index, field)| {
-            let i = util::int(index);
-            let field_name_str = field.name.as_str();
+        let reload_arms: Vec<_> = self
+            .model
+            .fields
+            .iter()
+            .enumerate()
+            .map(|(index, field)| {
+                let i = util::int(index);
 
-            // For newtypes, access via tuple index (target.0); otherwise by name
-            let field_access = if fields_named {
-                let field_ident = &field.name.ident;
-                quote!(target.#field_ident)
-            } else {
-                let idx = syn::Index::from(index);
-                quote!(target.#idx)
-            };
+                // For newtypes, access via tuple index (target.0); otherwise by name
+                let field_access = if fields_named {
+                    let field_ident = &field.name.ident;
+                    quote!(target.#field_ident)
+                } else {
+                    let idx = syn::Index::from(index);
+                    quote!(target.#idx)
+                };
 
-            match &field.ty {
-                FieldTy::Primitive(_ty) if field.attrs.serialize.is_some() => {
-                    let serialize_attr = field.attrs.serialize.as_ref().unwrap();
-
-                    let json_deserialize = quote! {
-                        let json_str = <String as #toasty::Load>::load(value)?;
-                        #toasty::serde_json::from_str(&json_str)
-                            .map_err(|e| #toasty::Error::from_args(
-                                format_args!("failed to deserialize field '{}': {}", #field_name_str, e)
-                            ))?
-                    };
-
-                    let assign = if serialize_attr.nullable {
-                        quote! {
-                            if value.is_null() { None } else { Some({ #json_deserialize }) }
-                        }
-                    } else {
-                        quote! { { #json_deserialize } }
-                    };
-
-                    quote! {
-                        #i => {
-                            #field_access = #assign;
-                        }
+                match &field.ty {
+                    FieldTy::Primitive(ty) => {
+                        quote!(#i => <#ty as #toasty::Load>::reload(&mut #field_access, value)?,)
+                    }
+                    _ => {
+                        quote!(#i => #field_access.unload(),)
                     }
                 }
-                FieldTy::Primitive(ty) => {
-                    quote!(#i => <#ty as #toasty::Load>::reload(&mut #field_access, value)?,)
-                }
-                _ => {
-                    quote!(#i => #field_access.unload(),)
-                }
-            }
-        }).collect();
+            })
+            .collect();
 
         quote! {
             match value {
@@ -642,7 +595,7 @@ impl Expand<'_> {
     /// Collect the fields that participate in `CREATE_META`.
     ///
     /// Returns `(field_ident_name_str, field_rust_type)` pairs for primitive
-    /// fields that are not auto, default, update, serialize, or FK source.
+    /// fields that are not auto, default, update, or FK source.
     fn create_meta_field_entries(&self) -> Vec<(String, &syn::Type)> {
         let fk_sources: HashSet<usize> = self
             .model
@@ -667,7 +620,6 @@ impl Expand<'_> {
                 if field.attrs.auto.is_some()
                     || field.attrs.default_expr.is_some()
                     || field.attrs.update_expr.is_some()
-                    || field.attrs.serialize.is_some()
                     || field.attrs.versionable
                 {
                     return None;

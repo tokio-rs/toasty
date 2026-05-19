@@ -64,10 +64,6 @@ impl Expand<'_> {
                 let field_offset = util::int(offset);
 
                 match &field.ty {
-                    Primitive(_) if field.attrs.serialize.is_some() => {
-                        // Serialized fields are stored as opaque JSON; no field accessor
-                        TokenStream::new()
-                    }
                     Primitive(ty) if field.attrs.deferred => {
                         let inner: syn::Type =
                             syn::parse_quote!(<#ty as #toasty::Defer>::Inner);
@@ -169,7 +165,6 @@ impl Expand<'_> {
                 let field_offset = util::int(offset);
 
                 match &field.ty {
-                    Primitive(_) if field.attrs.serialize.is_some() => TokenStream::new(),
                     Primitive(ty) if field.attrs.deferred => {
                         let inner: syn::Type = syn::parse_quote!(<#ty as #toasty::Defer>::Inner);
                         self.expand_list_primitive_field_method(field_ident, &inner, &field_offset)
