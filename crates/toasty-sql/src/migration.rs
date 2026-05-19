@@ -2,16 +2,13 @@ use std::borrow::Cow;
 
 use toasty_core::{
     driver::Capability,
-    schema::db::{
-        Column, ColumnsDiff, ColumnsDiffItem, IndicesDiffItem, Schema, SchemaDiff, Table,
-        TablesDiffItem, Type, TypeEnum, TypesDiffItem,
-    },
+    schema::db::{Column, Schema, Table, Type, TypeEnum, diff},
 };
 
 use crate::stmt::{AlterColumnChanges, AlterTable, AlterTableAction, DropTable, Name, Statement};
 
 /// Returns `true` if the only difference between two columns is the variant
-/// list of a named enum type. These changes are handled by `TypesDiff`
+/// list of a named enum type. These changes are handled by `diff::Types`
 /// (`ALTER TYPE ... ADD VALUE`) and should not produce column-level DDL.
 fn is_named_enum_variant_only_change(previous: &Column, next: &Column) -> bool {
     if previous.name != next.name
@@ -46,14 +43,14 @@ impl<'a> MigrationStatement<'a> {
         MigrationStatement { statement, schema }
     }
 
-    /// Generates migration statements from a [`SchemaDiff`].
+    /// Generates migration statements from a [`diff::Schema`].
     ///
     /// Walks the diff's type, table, column, and index changes and produces
     /// the corresponding DDL statements. Type changes (CREATE TYPE, ALTER
     /// TYPE) are emitted before table changes. On databases that lack
     /// `ALTER COLUMN` support (e.g. SQLite), column type changes trigger a
     /// full table recreation sequence.
-    pub fn from_diff(schema_diff: &'a SchemaDiff<'a>, capability: &Capability) -> Vec<Self> {
+    pub fn from_diff(schema_diff: &'a diff::Schema<'a>, capability: &Capability) -> Vec<Self> {
         let mut result = Vec::new();
 
         // Emit enum type changes before table changes (tables may reference
@@ -62,13 +59,13 @@ impl<'a> MigrationStatement<'a> {
             let types_diff = schema_diff.types();
             for item in types_diff.iter() {
                 match item {
-                    TypesDiffItem::CreateType(ty) => {
+                    diff::TypesItem::CreateType(ty) => {
                         result.push(Self::new(
                             Statement::create_enum_type(ty),
                             Cow::Borrowed(schema_diff.next()),
                         ));
                     }
-                    TypesDiffItem::AddVariants { ty, added } => {
+                    diff::TypesItem::AddVariants { ty, added } => {
                         let type_name = ty.name.as_deref().expect("named enum type");
                         for variant in added {
                             result.push(Self::new(
@@ -83,7 +80,7 @@ impl<'a> MigrationStatement<'a> {
 
         for table in schema_diff.tables().iter() {
             match table {
-                TablesDiffItem::CreateTable(table) => {
+                diff::TablesItem::CreateTable(table) => {
                     result.push(Self::new(
                         Statement::create_table(table, capability),
                         Cow::Borrowed(schema_diff.next()),
@@ -98,11 +95,11 @@ impl<'a> MigrationStatement<'a> {
                         ));
                     }
                 }
-                TablesDiffItem::DropTable(table) => result.push(Self::new(
+                diff::TablesItem::DropTable(table) => result.push(Self::new(
                     Statement::drop_table(table),
                     Cow::Borrowed(schema_diff.previous()),
                 )),
-                TablesDiffItem::AlterTable {
+                diff::TablesItem::AlterTable {
                     previous,
                     next,
                     columns,
@@ -124,7 +121,7 @@ impl<'a> MigrationStatement<'a> {
                         && columns.iter().any(|item| {
                             matches!(
                                 item,
-                                ColumnsDiffItem::AlterColumn {
+                                diff::ColumnsItem::AlterColumn {
                                     previous: prev_col,
                                     next: next_col
                                 } if AlterColumnChanges::from_diff(prev_col, next_col).has_type_change()
@@ -149,19 +146,19 @@ impl<'a> MigrationStatement<'a> {
                     // Indices diff
                     for item in indices.iter() {
                         match item {
-                            IndicesDiffItem::CreateIndex(index) => {
+                            diff::IndicesItem::CreateIndex(index) => {
                                 result.push(Self::new(
                                     Statement::create_index(index),
                                     Cow::Borrowed(schema_diff.next()),
                                 ));
                             }
-                            IndicesDiffItem::DropIndex(index) => {
+                            diff::IndicesItem::DropIndex(index) => {
                                 result.push(Self::new(
                                     Statement::drop_index(index),
                                     Cow::Borrowed(schema_diff.previous()),
                                 ));
                             }
-                            IndicesDiffItem::AlterIndex { previous, next } => {
+                            diff::IndicesItem::AlterIndex { previous, next } => {
                                 result.push(Self::new(
                                     Statement::drop_index(previous),
                                     Cow::Borrowed(schema_diff.previous()),
@@ -184,7 +181,7 @@ impl<'a> MigrationStatement<'a> {
         schema: Cow<'a, Schema>,
         previous: &Table,
         next: &Table,
-        columns: &ColumnsDiff<'_>,
+        columns: &diff::Columns<'_>,
         capability: &Capability,
     ) {
         let current_name = schema.table(previous.id).name.clone();
@@ -218,7 +215,7 @@ impl<'a> MigrationStatement<'a> {
                 // Skip added columns (no source data)
                 !columns
                     .iter()
-                    .any(|item| matches!(item, ColumnsDiffItem::AddColumn(c) if c.id == col.id))
+                    .any(|item| matches!(item, diff::ColumnsItem::AddColumn(c) if c.id == col.id))
             })
             .map(|col| {
                 let target_name = Name::from(&col.name[..]);
@@ -226,7 +223,7 @@ impl<'a> MigrationStatement<'a> {
                 let source_name = columns
                     .iter()
                     .find_map(|item| match item {
-                        ColumnsDiffItem::AlterColumn {
+                        diff::ColumnsItem::AlterColumn {
                             previous: prev_col,
                             next: next_col,
                         } if next_col.id == col.id && prev_col.name != next_col.name => {
@@ -278,26 +275,26 @@ impl<'a> MigrationStatement<'a> {
     fn emit_column_changes(
         result: &mut Vec<Self>,
         schema: Cow<'a, Schema>,
-        columns: &ColumnsDiff<'_>,
+        columns: &diff::Columns<'_>,
         capability: &Capability,
     ) {
         for item in columns.iter() {
             match item {
-                ColumnsDiffItem::AddColumn(column) => {
+                diff::ColumnsItem::AddColumn(column) => {
                     result.push(Self::new(
                         Statement::add_column(column, capability),
                         schema.clone(),
                     ));
                 }
-                ColumnsDiffItem::DropColumn(column) => {
+                diff::ColumnsItem::DropColumn(column) => {
                     result.push(Self::new(Statement::drop_column(column), schema.clone()));
                 }
-                ColumnsDiffItem::AlterColumn {
+                diff::ColumnsItem::AlterColumn {
                     previous,
                     next: col_next,
                 } => {
                     // Skip column-level DDL for named enum variant changes — those
-                    // are handled by TypesDiff (ALTER TYPE ... ADD VALUE).
+                    // are handled by diff::Types (ALTER TYPE ... ADD VALUE).
                     if capability.named_enum_types
                         && is_named_enum_variant_only_change(previous, col_next)
                     {

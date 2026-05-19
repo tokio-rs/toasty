@@ -114,6 +114,10 @@ pub use db::{Connection, Db, Executor, Transaction, TransactionBuilder};
 
 mod engine;
 
+/// Schema migration types: history files, snapshots, and supporting
+/// configuration.
+pub mod migration;
+
 /// Model, relation, and schema inspection types.
 pub mod schema;
 pub use schema::{BelongsTo, Deferred, HasMany, HasOne};

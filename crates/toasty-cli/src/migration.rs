@@ -2,19 +2,17 @@ mod apply;
 mod config;
 mod drop;
 mod generate;
-mod history_file;
 mod reset;
 mod snapshot;
 mod snapshot_file;
 
-pub use apply::*;
-pub use config::*;
-pub use drop::*;
-pub use generate::*;
-pub use history_file::*;
-pub use reset::*;
-pub use snapshot::*;
-pub use snapshot_file::*;
+pub use apply::ApplyCommand;
+pub use config::{MigrationConfig, MigrationPrefixStyle};
+pub use drop::DropCommand;
+pub use generate::GenerateCommand;
+pub use reset::ResetCommand;
+pub use snapshot::SnapshotCommand;
+pub use snapshot_file::SnapshotFile;
 
 use crate::Config;
 use anyhow::Result;
