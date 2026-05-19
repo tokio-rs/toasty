@@ -8,7 +8,7 @@ use toasty_core::{
 use crate::stmt::{AlterColumnChanges, AlterTable, AlterTableAction, DropTable, Name, Statement};
 
 /// Returns `true` if the only difference between two columns is the variant
-/// list of a named enum type. These changes are handled by `TypesDiff`
+/// list of a named enum type. These changes are handled by `diff::Types`
 /// (`ALTER TYPE ... ADD VALUE`) and should not produce column-level DDL.
 fn is_named_enum_variant_only_change(previous: &Column, next: &Column) -> bool {
     if previous.name != next.name
@@ -294,7 +294,7 @@ impl<'a> MigrationStatement<'a> {
                     next: col_next,
                 } => {
                     // Skip column-level DDL for named enum variant changes — those
-                    // are handled by TypesDiff (ALTER TYPE ... ADD VALUE).
+                    // are handled by diff::Types (ALTER TYPE ... ADD VALUE).
                     if capability.named_enum_types
                         && is_named_enum_variant_only_change(previous, col_next)
                     {

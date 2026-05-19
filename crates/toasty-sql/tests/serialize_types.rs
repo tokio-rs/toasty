@@ -11,8 +11,7 @@ use expect_test::expect;
 use toasty_core::{
     driver::Capability,
     schema::db::{
-        Column, ColumnId, EnumVariant, PrimaryKey, RenameHints, Schema, SchemaDiff, Table, TableId,
-        Type, TypeEnum,
+        Column, ColumnId, EnumVariant, PrimaryKey, Schema, Table, TableId, Type, TypeEnum, diff,
     },
     stmt as core_stmt,
 };
@@ -99,8 +98,8 @@ fn render_type(flavor: &str, storage_ty: Type) -> Vec<String> {
         )],
     };
 
-    let hints = RenameHints::new();
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, capability_for(flavor));
     serialize_migration(&stmts, flavor)
 }
