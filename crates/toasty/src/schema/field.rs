@@ -262,7 +262,40 @@ impl Scalar for rust_decimal::Decimal {}
 #[cfg(feature = "bigdecimal")]
 impl Scalar for bigdecimal::BigDecimal {}
 
-impl<T: Field> Field for Option<T> {
+/// Reflexive type-equality witness: `U: SameType<V>` holds if and only if `U`
+/// and `V` are the same type.
+///
+/// Used to express "`T`'s [`Field::Inner`] is `T` itself" as an ordinary trait
+/// bound rather than an associated-type projection equality. The difference is
+/// purely diagnostic: a failed projection equality reports as a confusing
+/// `type mismatch`, while a failed trait bound reports as a "trait bound not
+/// satisfied" error that carries the [`NotNullable`] breadcrumb.
+#[doc(hidden)]
+pub trait SameType<T: ?Sized> {}
+impl<T: ?Sized> SameType<T> for T {}
+
+/// Marker for field types that may serve as the inner type of a nullable
+/// field wrapper — i.e. types that are not themselves nullable.
+///
+/// It is the bound on the [`Field`] impl for `Option<T>`, so `Option<T>` is a
+/// valid model-field type only when `T: NotNullable`. The blanket impl below
+/// covers every leaf field type (their [`Field::Inner`] is `Self`) but
+/// deliberately does **not** cover `Option<U>` (whose `Inner` is `U::Inner`,
+/// never `Self`). A model field of type `Option<Option<U>>` therefore fails to
+/// compile, naming `NotNullable` in the error.
+///
+/// Nested nullability has no on-the-wire encoding: both `Option` layers map to
+/// the single column's `NULL` channel, so a `Some(None)` value round-trips
+/// indistinguishably from `None` (silent data loss). Rejecting it at the type
+/// level — rather than via a syntactic macro check — is robust through type
+/// aliases and also rejects nested forms like `Deferred<Option<Option<U>>>`.
+/// If you genuinely need an optional inside an optional, wrap the inner value
+/// in [`toasty::Json<_>`](crate::Json), which carries its own `null` encoding.
+pub trait NotNullable {}
+
+impl<T: Field> NotNullable for T where <T as Field>::Inner: SameType<T> {}
+
+impl<T: Field + NotNullable> Field for Option<T> {
     type ExprTarget = Self;
     type Path<Origin> = stmt::Path<Origin, Self>;
     type ListPath<Origin> = stmt::Path<Origin, List<Self>>;

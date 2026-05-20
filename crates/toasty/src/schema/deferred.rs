@@ -145,12 +145,18 @@ impl<T: Load<Output = T>> Load for Deferred<T> {
         // and emits a bare Null when unloaded, so the two states are
         // distinguishable even when the inner column value is NULL (i.e. the
         // `Deferred<Option<T>>` case).
+        //
+        // After peeling the record wrapper, the inner value is decoded through
+        // `T::load_relation` — the same hook the relation wrappers use — so a
+        // peeled `Null` is recognized as a loaded-`None` rather than mistaken
+        // for an inner decode error. For a non-`Option` `T`, `load_relation`
+        // defaults to `load`, so this is a no-op there.
         match value {
             toasty_core::stmt::Value::Null => Ok(Self { value: None }),
             toasty_core::stmt::Value::Record(record) if record.fields.len() == 1 => {
                 let mut iter = record.fields.into_iter();
                 Ok(Self {
-                    value: Some(T::load(iter.next().unwrap())?),
+                    value: Some(T::load_relation(iter.next().unwrap())?),
                 })
             }
             value => Err(toasty_core::Error::from_args(format_args!(

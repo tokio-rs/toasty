@@ -1,0 +1,29 @@
+error[E0277]: the trait bound `bool: schema::field::SameType<Option<bool>>` is not satisfied
+  --> tests/ui/nested_option_deferred.rs:13:5
+   |
+13 |     flag: toasty::Deferred<Option<Option<bool>>>,
+   |     ^^^^ the trait `schema::field::SameType<Option<bool>>` is not implemented for `bool`
+   |
+help: the trait `toasty::schema::Field` is implemented for `Option<T>`
+  --> $WORKSPACE/crates/toasty/src/schema/field.rs
+   |
+   | impl<T: Field + NotNullable> Field for Option<T> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = note: required for `Option<bool>` to implement `NotNullable`
+   = note: required for `Option<Option<bool>>` to implement `toasty::schema::Field`
+
+error[E0277]: the trait bound `bool: schema::field::SameType<Option<bool>>` is not satisfied
+  --> tests/ui/nested_option_deferred.rs:13:11
+   |
+13 |     flag: toasty::Deferred<Option<Option<bool>>>,
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `schema::field::SameType<Option<bool>>` is not implemented for `bool`
+   |
+help: the trait `toasty::schema::Field` is implemented for `Deferred<T>`
+  --> $WORKSPACE/crates/toasty/src/schema/deferred.rs
+   |
+   | impl<T: Field<Output = T>> Field for Deferred<T> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = note: required for `Option<bool>` to implement `NotNullable`
+   = note: required for `Option<Option<bool>>` to implement `toasty::schema::Field`
+   = note: 1 redundant requirement hidden
+   = note: required for `Deferred<Option<Option<bool>>>` to implement `toasty::schema::Field`
