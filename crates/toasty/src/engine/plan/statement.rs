@@ -1675,6 +1675,13 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     ) -> mir::NodeId {
         // First check for nested merge
         if let Some(node_id) = self.planner.plan_nested_merge(self.stmt_id) {
+            // `plan_nested_merge` builds its own MIR node directly on
+            // `self.planner.mir`, so the parent statement's remaining HIR
+            // deps (e.g. a sibling `Disassociate` DELETE in an
+            // `stmt::apply([insert, remove])` batch) are never consumed.
+            // Attach them to the NestedMerge so the dep statements stay
+            // reachable from `completion` and end up in the exec plan.
+            self.apply_dependencies_to_node(node_id);
             return node_id;
         }
 

@@ -142,77 +142,83 @@ impl LowerStatement<'_, '_> {
                 continue;
             };
 
-            let mutation = match assignment {
-                stmt::Assignment::Set(expr) => {
-                    if expr.is_value_null() {
-                        Mutation::DisassociateAll { delete: false }
-                    } else {
-                        Mutation::Associate {
-                            expr,
-                            exclusive: true,
-                        }
-                    }
-                }
-                stmt::Assignment::Insert(expr) => {
+            // A `Batch` carries a sequence of discrete ops on the same
+            // projection, built by the `stmt::apply` surface API. Dispatch
+            // each entry as its own `Mutation`; `Insert` entries are first
+            // folded into one multi-row INSERT because only one Insert can
+            // own the relation's returning slot per update (a second
+            // Insert's `set_returning_slot` call would clobber the first).
+            // `Remove` entries pass through individually — they don't write
+            // to the returning slot.
+            let entries: Vec<stmt::Assignment> = match assignment {
+                stmt::Assignment::Batch(mut entries) => {
                     assert!(field.ty.is_has_many());
-                    debug_assert!(!expr.is_value_null());
-                    Mutation::Associate {
-                        expr,
-                        exclusive: false,
-                    }
+                    flatten_relation_batch(&mut entries);
+                    entries
                 }
-                stmt::Assignment::Remove(expr) => {
-                    assert!(field.ty.is_has_many());
-                    debug_assert!(!expr.is_value_null());
-                    Mutation::Disassociate { expr }
-                }
-                stmt::Assignment::Append(_) => {
-                    // `stmt::push` / `stmt::extend` target `Vec<scalar>`
-                    // model fields, not relation fields. The type system
-                    // does not currently rule out passing them to a
-                    // has-many setter, but the engine has no Append-on-
-                    // relation lowering.
-                    unreachable!(
-                        "Append assignment on relation field — use stmt::insert for has-many"
-                    )
-                }
-                stmt::Assignment::Pop | stmt::Assignment::RemoveAt(_) => {
-                    // `stmt::pop` / `stmt::remove_at` target ordered
-                    // `Vec<scalar>` fields. They have no relation analogue —
-                    // has-many removal is by relation key, not by position.
-                    unreachable!(
-                        "Pop / RemoveAt assignment on relation field — these only apply to Vec<scalar>"
-                    )
-                }
-                stmt::Assignment::Batch(entries) => {
-                    // A `Batch` carries a sequence of discrete ops on the same
-                    // projection, built by the `stmt::apply` surface API. Each
-                    // entry should dispatch as its own `Mutation` — but only
-                    // the all-`Insert` shape is wired up right now (see
-                    // `lower_has_many_batch`). Extending to `Remove`, `Set`,
-                    // or mixed batches means dispatching each entry through
-                    // `plan_mut_relation_field` individually, which in turn
-                    // requires `set_returning_slot` to merge multiple
-                    // sub-statement args into a single returning slot.
-                    assert!(field.ty.is_has_many());
-                    Mutation::Associate {
-                        expr: lower_has_many_batch(entries),
-                        exclusive: false,
-                    }
-                }
+                other => vec![other],
             };
 
-            self.plan_mut_relation_field(
-                field,
-                mutation,
-                &mut UpdateRelationSource {
-                    model,
-                    filter,
-                    assignments: &mut *assignments,
-                    returning,
-                    returning_changed,
-                },
-            );
+            for entry in entries {
+                let mutation = match entry {
+                    stmt::Assignment::Set(expr) => {
+                        if expr.is_value_null() {
+                            Mutation::DisassociateAll { delete: false }
+                        } else {
+                            Mutation::Associate {
+                                expr,
+                                exclusive: true,
+                            }
+                        }
+                    }
+                    stmt::Assignment::Insert(expr) => {
+                        assert!(field.ty.is_has_many());
+                        debug_assert!(!expr.is_value_null());
+                        Mutation::Associate {
+                            expr,
+                            exclusive: false,
+                        }
+                    }
+                    stmt::Assignment::Remove(expr) => {
+                        assert!(field.ty.is_has_many());
+                        debug_assert!(!expr.is_value_null());
+                        Mutation::Disassociate { expr }
+                    }
+                    stmt::Assignment::Append(_) => {
+                        // `stmt::push` / `stmt::extend` target `Vec<scalar>`
+                        // model fields, not relation fields. The type system
+                        // does not currently rule out passing them to a
+                        // has-many setter, but the engine has no Append-on-
+                        // relation lowering.
+                        unreachable!(
+                            "Append assignment on relation field — use stmt::insert for has-many"
+                        )
+                    }
+                    stmt::Assignment::Pop | stmt::Assignment::RemoveAt(_) => {
+                        // `stmt::pop` / `stmt::remove_at` target ordered
+                        // `Vec<scalar>` fields. They have no relation analogue —
+                        // has-many removal is by relation key, not by position.
+                        unreachable!(
+                            "Pop / RemoveAt assignment on relation field — these only apply to Vec<scalar>"
+                        )
+                    }
+                    stmt::Assignment::Batch(_) => {
+                        unreachable!("Batch entries are flattened above")
+                    }
+                };
+
+                self.plan_mut_relation_field(
+                    field,
+                    mutation,
+                    &mut UpdateRelationSource {
+                        model,
+                        filter,
+                        assignments: &mut *assignments,
+                        returning,
+                        returning_changed,
+                    },
+                );
+            }
         }
     }
 
@@ -915,41 +921,45 @@ impl RelationSource for InsertRelationSource<'_> {
     }
 }
 
-/// Lower a `Batch` of ops on a has-many relation into a single combined
-/// expression suitable for `Mutation::Associate`.
+/// Flatten a has-many `Batch` in place into single-op assignments that
+/// `plan_stmt_update_relations` can dispatch one at a time.
 ///
-/// Each entry in a `Batch` should be dispatched as its own `Mutation`, but
-/// today only the all-`Insert` shape is supported: the per-entry single-row
-/// INSERTs are folded into one multi-row INSERT via `Insert::merge`. Other
-/// op kinds (`Remove`, `Set`, …) hit `todo!()` for now and need per-entry
-/// dispatch through `plan_mut_relation_field` plus returning-slot merging.
-///
-/// Empty input yields an empty list expression — the surface `stmt::apply`
-/// API can't actually produce an empty `Batch` (the empty Apply loop adds
-/// no entry to the assignments map), but the helper doesn't depend on
-/// that: an empty list dispatches to a no-op in
-/// `plan_mut_has_n_associate_expr`.
-fn lower_has_many_batch(entries: Vec<stmt::Assignment>) -> stmt::Expr {
-    let mut combined: Option<stmt::Insert> = None;
-    for entry in entries {
-        match entry {
-            stmt::Assignment::Insert(stmt::Expr::Stmt(expr_stmt)) => {
-                let insert = match *expr_stmt.stmt {
-                    stmt::Statement::Insert(insert) => insert,
-                    other => todo!("non-Insert sub-statement in has-many Batch: {other:#?}"),
-                };
-                match &mut combined {
-                    None => combined = Some(insert),
-                    Some(acc) => acc.merge(insert),
-                }
-            }
-            // Other batch entry kinds need per-entry Mutation dispatch.
-            other => todo!("batch entry kind not yet supported on has-many: {other:#?}"),
+/// `Insert` entries are folded into one multi-row INSERT via `Insert::merge`
+/// — only one Insert can own the relation's returning slot per update, so
+/// multiple inserts have to share a single sub-statement. The fold is done
+/// in place via `retain_mut` (no extra allocation): non-`Insert` entries
+/// (`Remove`, `Set`, …) keep their relative order, and the merged Insert is
+/// appended last. Insert/Remove ops are independent, so the final
+/// association set does not depend on their relative order.
+fn flatten_relation_batch(entries: &mut Vec<stmt::Assignment>) {
+    let mut merged: Option<stmt::Insert> = None;
+
+    entries.retain_mut(|entry| {
+        // Keep everything that isn't an Insert sub-statement in place.
+        if !matches!(entry, stmt::Assignment::Insert(stmt::Expr::Stmt(_))) {
+            return true;
         }
-    }
-    match combined {
-        Some(insert) => stmt::Expr::from(insert),
-        None => stmt::Expr::list_from_vec(vec![]),
+
+        // Move the Insert out, leaving a throwaway placeholder that
+        // `retain_mut` immediately drops since we return `false`.
+        let stmt::Assignment::Insert(stmt::Expr::Stmt(expr_stmt)) =
+            std::mem::replace(entry, stmt::Assignment::Pop)
+        else {
+            unreachable!()
+        };
+        let insert = match *expr_stmt.stmt {
+            stmt::Statement::Insert(insert) => insert,
+            other => todo!("non-Insert sub-statement in has-many Batch: {other:#?}"),
+        };
+        match &mut merged {
+            None => merged = Some(insert),
+            Some(acc) => acc.merge(insert),
+        }
+        false
+    });
+
+    if let Some(insert) = merged {
+        entries.push(stmt::Assignment::Insert(stmt::Expr::from(insert)));
     }
 }
 
