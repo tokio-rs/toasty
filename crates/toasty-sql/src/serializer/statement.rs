@@ -1,9 +1,7 @@
-use std::mem;
-
 use super::{ColumnAlias, Comma, Delimited, Ident, ToSql};
 
 use crate::{
-    serializer::{ExprContext, Flavor},
+    serializer::Flavor,
     stmt::{self, AlterColumnChanges, ColumnDef},
 };
 use toasty_core::{schema::db, stmt::SourceTableId};
@@ -11,7 +9,7 @@ use toasty_core::{schema::db, stmt::SourceTableId};
 struct ColumnsWithConstraints<'a>(&'a stmt::CreateTable);
 
 impl ToSql for ColumnsWithConstraints<'_> {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         // SQLite needs the PK specified with the auto increment
         let trailing_pk = if f.serializer.is_sqlite() {
             // Sqlite only supports auto incrementing columns if they are the only primary key.
@@ -47,21 +45,21 @@ impl ToSql for ColumnsWithConstraints<'_> {
         let has_trailing_pk = self.0.primary_key.is_some() && trailing_pk;
 
         for (index, column) in self.0.columns.iter().enumerate() {
-            fmt!(cx, f, "\n    " column);
+            fmt!(f, "\n    " column);
             if index < self.0.columns.len() - 1 || has_trailing_pk {
-                fmt!(cx, f, ",");
+                fmt!(f, ",");
             }
         }
 
         match &self.0.primary_key {
-            Some(pk) if trailing_pk => fmt!(cx, f, "\n    PRIMARY KEY " pk "\n"),
-            _ => fmt!(cx, f, "\n"),
+            Some(pk) if trailing_pk => fmt!(f, "\n    PRIMARY KEY " pk "\n"),
+            _ => fmt!(f, "\n"),
         }
     }
 }
 
 impl ToSql for &stmt::CreateIndex {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         let index = f.serializer.index(self.index);
         let table = f.serializer.table(self.on);
         let index_name = Ident(&index.name);
@@ -70,35 +68,35 @@ impl ToSql for &stmt::CreateIndex {
         let unique = if self.unique { "UNIQUE " } else { "" };
 
         // Create a new expression scope to serialize the statement
-        let cx = cx.scope(table);
+        let mut f = f.scope(table);
 
         fmt!(
-            &cx, f, "CREATE " unique "INDEX " index_name " ON " table_name " (" columns ")"
+            &mut f, "CREATE " unique "INDEX " index_name " ON " table_name " (" columns ")"
         );
     }
 }
 
 impl ToSql for &stmt::AddColumn {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         let table = f.serializer.table(self.table);
         let table_name = Ident(&table.name);
 
         // Create new expression scope to serialize the statement
-        let cx = cx.scope(table);
+        let mut f = f.scope(table);
 
         fmt!(
-            &cx, f, "ALTER TABLE " table_name " ADD COLUMN " self.column
+            &mut f, "ALTER TABLE " table_name " ADD COLUMN " self.column
         );
     }
 }
 
 impl ToSql for &stmt::AlterColumn {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         let table = f.serializer.table(self.id.table);
         let table_name = Ident(&table.name);
 
         // Create new expression scope to serialize the statement
-        let cx = cx.scope(table);
+        let mut f = f.scope(table);
 
         let column_name = Ident(&self.column_def.name);
 
@@ -110,7 +108,7 @@ impl ToSql for &stmt::AlterColumn {
                     new_not_null: None,
                     new_auto_increment: None,
                 } => {
-                    fmt!(&cx, f, "ALTER TABLE " table_name " RENAME COLUMN " column_name " TO " Ident(name.as_str()))
+                    fmt!(&mut f, "ALTER TABLE " table_name " RENAME COLUMN " column_name " TO " Ident(name.as_str()))
                 }
                 AlterColumnChanges {
                     new_name: None,
@@ -118,7 +116,7 @@ impl ToSql for &stmt::AlterColumn {
                     new_not_null: None,
                     new_auto_increment: None,
                 } => {
-                    fmt!(&cx, f, "ALTER TABLE " table_name " ALTER COLUMN " column_name " TYPE " ty)
+                    fmt!(&mut f, "ALTER TABLE " table_name " ALTER COLUMN " column_name " TYPE " ty)
                 }
                 AlterColumnChanges {
                     new_name: None,
@@ -126,7 +124,7 @@ impl ToSql for &stmt::AlterColumn {
                     new_not_null: Some(true),
                     new_auto_increment: None,
                 } => {
-                    fmt!(&cx, f, "ALTER TABLE " table_name " ALTER COLUMN " column_name " SET NOT NULL")
+                    fmt!(&mut f, "ALTER TABLE " table_name " ALTER COLUMN " column_name " SET NOT NULL")
                 }
                 AlterColumnChanges {
                     new_name: None,
@@ -134,7 +132,7 @@ impl ToSql for &stmt::AlterColumn {
                     new_not_null: Some(false),
                     new_auto_increment: None,
                 } => {
-                    fmt!(&cx, f, "ALTER TABLE " table_name " ALTER COLUMN " column_name " DROP NOT NULL")
+                    fmt!(&mut f, "ALTER TABLE " table_name " ALTER COLUMN " column_name " DROP NOT NULL")
                 }
                 AlterColumnChanges {
                     new_name: None,
@@ -142,7 +140,7 @@ impl ToSql for &stmt::AlterColumn {
                     new_not_null: None,
                     new_auto_increment: Some(true),
                 } => {
-                    fmt!(&cx, f, "ALTER TABLE " table_name " ALTER COLUMN " column_name " ADD GENERATED BY DEFAULT AS IDENTITY")
+                    fmt!(&mut f, "ALTER TABLE " table_name " ALTER COLUMN " column_name " ADD GENERATED BY DEFAULT AS IDENTITY")
                 }
                 AlterColumnChanges {
                     new_name: None,
@@ -150,7 +148,7 @@ impl ToSql for &stmt::AlterColumn {
                     new_not_null: None,
                     new_auto_increment: Some(false),
                 } => {
-                    fmt!(&cx, f, "ALTER TABLE " table_name " ALTER COLUMN " column_name " DROP IDENTITY")
+                    fmt!(&mut f, "ALTER TABLE " table_name " ALTER COLUMN " column_name " DROP IDENTITY")
                 }
                 _ => panic!(
                     "PostgreSQL does not support modifying multiple column properties in one ALTER TABLE statement"
@@ -180,7 +178,7 @@ impl ToSql for &stmt::AlterColumn {
                         .unwrap_or(self.column_def.auto_increment),
                     check: self.column_def.check.clone(),
                 };
-                fmt!(&cx, f, "ALTER TABLE " table_name " CHANGE COLUMN " column_name " " new_column_def)
+                fmt!(&mut f, "ALTER TABLE " table_name " CHANGE COLUMN " column_name " " new_column_def)
             }
             Flavor::Sqlite => match &self.changes {
                 AlterColumnChanges {
@@ -189,7 +187,7 @@ impl ToSql for &stmt::AlterColumn {
                     new_not_null: None,
                     new_auto_increment: None,
                 } => {
-                    fmt!(&cx, f, "ALTER TABLE " table_name " RENAME COLUMN " column_name " TO " Ident(name.as_str()))
+                    fmt!(&mut f, "ALTER TABLE " table_name " RENAME COLUMN " column_name " TO " Ident(name.as_str()))
                 }
                 _ => panic!("SQLite only supports renaming columns in ALTER TABLE statement"),
             },
@@ -198,40 +196,40 @@ impl ToSql for &stmt::AlterColumn {
 }
 
 impl ToSql for &stmt::AlterTable {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         match &self.action {
             stmt::AlterTableAction::RenameTo(new_name) => {
-                fmt!(cx, f, "ALTER TABLE " self.name " RENAME TO " new_name);
+                fmt!(f, "ALTER TABLE " self.name " RENAME TO " new_name);
             }
         }
     }
 }
 
 impl ToSql for &stmt::CopyTable {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         let target_cols = Comma(self.columns.iter().map(|(target, _)| target));
         let source_cols = Comma(self.columns.iter().map(|(_, source)| source));
-        fmt!(cx, f, "INSERT INTO " self.target " (" target_cols ") SELECT " source_cols " FROM " self.source);
+        fmt!(f, "INSERT INTO " self.target " (" target_cols ") SELECT " source_cols " FROM " self.source);
     }
 }
 
 impl ToSql for &stmt::CreateTable {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         let table = f.serializer.table(self.table);
         let name = Ident(&table.name);
         let columns = ColumnsWithConstraints(self);
 
         // Create new expression scope to serialize the statement
-        let cx = cx.scope(table);
+        let mut f = f.scope(table);
 
         fmt!(
-            &cx, f, "CREATE TABLE " name " (" columns ")"
+            &mut f, "CREATE TABLE " name " (" columns ")"
         );
     }
 }
 
 impl ToSql for &stmt::CreateType {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         use toasty_core::stmt::Value;
 
         let name = self
@@ -241,103 +239,100 @@ impl ToSql for &stmt::CreateType {
             .expect("CREATE TYPE requires a type name");
         let name = Ident(name);
 
-        fmt!(cx, f, "CREATE TYPE " name " AS ENUM (");
+        fmt!(f, "CREATE TYPE " name " AS ENUM (");
         for (i, variant) in self.ty.variants.iter().enumerate() {
             if i > 0 {
                 f.dst.push_str(", ");
             }
-            Value::String(variant.name.clone()).to_sql(cx, f);
+            Value::String(variant.name.clone()).to_sql(f);
         }
         f.dst.push(')');
     }
 }
 
 impl ToSql for &stmt::AlterType {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         use toasty_core::stmt::Value;
 
         let name = Ident(&self.type_name);
 
-        fmt!(cx, f, "ALTER TYPE " name " ADD VALUE ");
-        Value::String(self.variant.name.clone()).to_sql(cx, f);
+        fmt!(f, "ALTER TYPE " name " ADD VALUE ");
+        Value::String(self.variant.name.clone()).to_sql(f);
     }
 }
 
 impl ToSql for &stmt::Delete {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
-        let prev = mem::replace(&mut f.alias, true);
-
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         assert!(self.returning.is_none());
 
         // Create a new expression scope to serialize the statement
-        let cx = cx.scope(self);
+        let mut f = f.scope(self);
+        f.alias = true;
 
-        fmt!(&cx, f, "DELETE FROM " self.from self.filter);
-
-        f.alias = prev;
+        fmt!(&mut f, "DELETE FROM " self.from self.filter);
     }
 }
 
 impl ToSql for &stmt::Filter {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         if let Some(expr) = &self.expr {
-            fmt!(&cx, f, " WHERE " expr);
+            fmt!(f, " WHERE " expr);
         }
     }
 }
 
 impl ToSql for &stmt::Direction {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         match self {
-            stmt::Direction::Asc => fmt!(cx, f, "ASC"),
-            stmt::Direction::Desc => fmt!(cx, f, "DESC"),
+            stmt::Direction::Asc => fmt!(f, "ASC"),
+            stmt::Direction::Desc => fmt!(f, "DESC"),
         }
     }
 }
 
 impl ToSql for &stmt::DropColumn {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         let table = f.serializer.table(self.table);
         let table_name = Ident(&table.name);
         let if_exists = if self.if_exists { "IF EXISTS " } else { "" };
 
         // Create new expression scope to serialize the statement
-        let cx = cx.scope(table);
+        let mut f = f.scope(table);
 
-        fmt!(&cx, f, "ALTER TABLE " table_name " DROP COLUMN " if_exists self.name);
+        fmt!(&mut f, "ALTER TABLE " table_name " DROP COLUMN " if_exists self.name);
     }
 }
 
 impl ToSql for &stmt::DropIndex {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         let if_exists = if self.if_exists { "IF EXISTS " } else { "" };
-        fmt!(cx, f, "DROP INDEX " if_exists self.name);
+        fmt!(f, "DROP INDEX " if_exists self.name);
     }
 }
 
 impl ToSql for &stmt::Pragma {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         if !f.serializer.is_sqlite() {
             panic!("\"PRAGMA\" statements only supported in SQLite");
         }
         match &self.value {
-            Some(value) => fmt!(cx, f, "PRAGMA " self.name.as_str() " = " value.as_str()),
-            None => fmt!(cx, f, "PRAGMA " self.name.as_str()),
+            Some(value) => fmt!(f, "PRAGMA " self.name.as_str() " = " value.as_str()),
+            None => fmt!(f, "PRAGMA " self.name.as_str()),
         }
     }
 }
 
 impl ToSql for &stmt::DropTable {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         let if_exists = if self.if_exists { "IF EXISTS " } else { "" };
-        fmt!(cx, f, "DROP TABLE " if_exists self.name);
+        fmt!(f, "DROP TABLE " if_exists self.name);
     }
 }
 
 impl ToSql for &stmt::Insert {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         // Create a new expression scope to serialize the statement
-        let cx = cx.scope(self);
+        let mut f = f.scope(self);
 
         let returning = self
             .returning
@@ -350,19 +345,16 @@ impl ToSql for &stmt::Insert {
             );
         }
 
-        let prev_in_insert = f.in_insert;
         f.in_insert = true;
 
         fmt!(
-            &cx, f, "INSERT INTO " self.target " " self.source returning
+            &mut f, "INSERT INTO " self.target " " self.source returning
         );
-
-        f.in_insert = prev_in_insert;
     }
 }
 
 impl ToSql for &stmt::InsertTarget {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         match self {
             stmt::InsertTarget::Table(insert_table) => {
                 let table_name = f.serializer.table_name(insert_table);
@@ -373,7 +365,7 @@ impl ToSql for &stmt::InsertTarget {
                         .map(|column_id| f.serializer.column_name(*column_id)),
                 );
 
-                fmt!(cx, f, table_name " (" columns ")");
+                fmt!(f, table_name " (" columns ")");
             }
             _ => todo!("self={self:?}"),
         }
@@ -381,19 +373,19 @@ impl ToSql for &stmt::InsertTarget {
 }
 
 impl ToSql for &stmt::Limit {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         match self {
             stmt::Limit::Cursor(cursor) => {
                 assert!(
                     cursor.after.is_none(),
                     "Limit::Cursor with after cannot be serialized to SQL, should already be lowered"
                 );
-                fmt!(cx, f, "LIMIT " cursor.page_size);
+                fmt!(f, "LIMIT " cursor.page_size);
             }
             stmt::Limit::Offset(limit_offset) => {
-                fmt!(cx, f, "LIMIT " limit_offset.limit);
+                fmt!(f, "LIMIT " limit_offset.limit);
                 if let Some(offset) = limit_offset.offset.as_ref() {
-                    fmt!(cx, f, " OFFSET " offset);
+                    fmt!(f, " OFFSET " offset);
                 }
             }
         }
@@ -401,10 +393,10 @@ impl ToSql for &stmt::Limit {
 }
 
 impl ToSql for &stmt::Query {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
-        let prev = mem::replace(&mut f.alias, true);
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         // Create a new expression scope to serialize the statement
-        let cx = cx.scope(self);
+        let mut f = f.scope(self);
+        f.alias = true;
 
         let locks = if self.locks.is_empty() {
             None
@@ -416,43 +408,41 @@ impl ToSql for &stmt::Query {
         let order_by = self.order_by.as_ref().map(|order_by| (" ", order_by));
         let limit = self.limit.as_ref().map(|limit| (" ", limit));
 
-        fmt!(&cx, f, self.with body order_by limit locks);
-
-        f.alias = prev;
+        fmt!(&mut f, self.with body order_by limit locks);
     }
 }
 
 impl ToSql for &stmt::ExprSet {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         match self {
-            stmt::ExprSet::Select(expr) => expr.to_sql(cx, f),
-            stmt::ExprSet::Values(expr) => expr.to_sql(cx, f),
-            stmt::ExprSet::Update(expr) => expr.to_sql(cx, f),
+            stmt::ExprSet::Select(expr) => expr.to_sql(f),
+            stmt::ExprSet::Values(expr) => expr.to_sql(f),
+            stmt::ExprSet::Update(expr) => expr.to_sql(f),
             _ => todo!("self={self:?}"),
         }
     }
 }
 
 impl ToSql for &stmt::OrderBy {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         let order_by = Comma(&self.exprs);
 
-        fmt!(cx, f, "ORDER BY " order_by);
+        fmt!(f, "ORDER BY " order_by);
     }
 }
 
 impl ToSql for &stmt::OrderByExpr {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         if let Some(order) = &self.order {
-            fmt!(cx, f, self.expr " " order);
+            fmt!(f, self.expr " " order);
         } else {
-            fmt!(cx, f, self.expr);
+            fmt!(f, self.expr);
         }
     }
 }
 
 impl ToSql for &stmt::Returning {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         match self {
             stmt::Returning::Project(stmt::Expr::Record(expr_record)) => {
                 let fields = expr_record
@@ -466,10 +456,10 @@ impl ToSql for &stmt::Returning {
                         _ => (expr, Some(" AS "), Some(ColumnAlias(i))),
                     });
 
-                fmt!(cx, f, Comma(fields));
+                fmt!(f, Comma(fields));
             }
             stmt::Returning::Project(stmt::Expr::Value(stmt::Value::Record(value_record))) => {
-                fmt!(cx, f, Comma(&value_record.fields));
+                fmt!(f, Comma(&value_record.fields));
             }
             _ => todo!("returning={self:#?}"),
         }
@@ -477,7 +467,7 @@ impl ToSql for &stmt::Returning {
 }
 
 impl ToSql for &stmt::Select {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         let source_table = self.source.as_table_unwrap();
         let select = if self.distinct {
             "SELECT DISTINCT "
@@ -486,27 +476,27 @@ impl ToSql for &stmt::Select {
         };
 
         if source_table.from.is_empty() {
-            fmt!(cx, f, select self.returning)
+            fmt!(f, select self.returning)
         } else {
-            fmt!(cx, f, select self.returning " FROM " self.source self.filter);
+            fmt!(f, select self.returning " FROM " self.source self.filter);
         }
     }
 }
 
 impl ToSql for &stmt::Lock {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         match self {
-            stmt::Lock::Update => fmt!(cx, f, "FOR UPDATE"),
-            stmt::Lock::Share => fmt!(cx, f, "FOR SHARE"),
+            stmt::Lock::Update => fmt!(f, "FOR UPDATE"),
+            stmt::Lock::Share => fmt!(f, "FOR SHARE"),
         }
     }
 }
 
 impl ToSql for &stmt::Source {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         match self {
             stmt::Source::Table(source_table) => {
-                source_table.to_sql(cx, f);
+                source_table.to_sql(f);
             }
             _ => todo!("self={self:?}"),
         }
@@ -514,16 +504,16 @@ impl ToSql for &stmt::Source {
 }
 
 impl ToSql for &toasty_core::stmt::Statement {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         use toasty_core::stmt::Statement::*;
 
         f.depth += 1;
 
         match self {
-            Delete(stmt) => stmt.to_sql(cx, f),
-            Insert(stmt) => stmt.to_sql(cx, f),
-            Query(stmt) => stmt.to_sql(cx, f),
-            Update(stmt) => stmt.to_sql(cx, f),
+            Delete(stmt) => stmt.to_sql(f),
+            Insert(stmt) => stmt.to_sql(f),
+            Query(stmt) => stmt.to_sql(f),
+            Update(stmt) => stmt.to_sql(f),
         }
 
         f.depth -= 1;
@@ -531,34 +521,34 @@ impl ToSql for &toasty_core::stmt::Statement {
 }
 
 impl ToSql for &stmt::Statement {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         match self {
-            stmt::Statement::AddColumn(stmt) => stmt.to_sql(cx, f),
-            stmt::Statement::AlterColumn(stmt) => stmt.to_sql(cx, f),
-            stmt::Statement::AlterTable(stmt) => stmt.to_sql(cx, f),
-            stmt::Statement::AlterType(stmt) => stmt.to_sql(cx, f),
-            stmt::Statement::CopyTable(stmt) => stmt.to_sql(cx, f),
-            stmt::Statement::CreateIndex(stmt) => stmt.to_sql(cx, f),
-            stmt::Statement::CreateTable(stmt) => stmt.to_sql(cx, f),
-            stmt::Statement::CreateType(stmt) => stmt.to_sql(cx, f),
-            stmt::Statement::DropColumn(stmt) => stmt.to_sql(cx, f),
-            stmt::Statement::DropIndex(stmt) => stmt.to_sql(cx, f),
-            stmt::Statement::DropTable(stmt) => stmt.to_sql(cx, f),
-            stmt::Statement::Pragma(stmt) => stmt.to_sql(cx, f),
-            stmt::Statement::Delete(stmt) => stmt.to_sql(cx, f),
-            stmt::Statement::Insert(stmt) => stmt.to_sql(cx, f),
-            stmt::Statement::Query(stmt) => stmt.to_sql(cx, f),
-            stmt::Statement::Update(stmt) => stmt.to_sql(cx, f),
+            stmt::Statement::AddColumn(stmt) => stmt.to_sql(f),
+            stmt::Statement::AlterColumn(stmt) => stmt.to_sql(f),
+            stmt::Statement::AlterTable(stmt) => stmt.to_sql(f),
+            stmt::Statement::AlterType(stmt) => stmt.to_sql(f),
+            stmt::Statement::CopyTable(stmt) => stmt.to_sql(f),
+            stmt::Statement::CreateIndex(stmt) => stmt.to_sql(f),
+            stmt::Statement::CreateTable(stmt) => stmt.to_sql(f),
+            stmt::Statement::CreateType(stmt) => stmt.to_sql(f),
+            stmt::Statement::DropColumn(stmt) => stmt.to_sql(f),
+            stmt::Statement::DropIndex(stmt) => stmt.to_sql(f),
+            stmt::Statement::DropTable(stmt) => stmt.to_sql(f),
+            stmt::Statement::Pragma(stmt) => stmt.to_sql(f),
+            stmt::Statement::Delete(stmt) => stmt.to_sql(f),
+            stmt::Statement::Insert(stmt) => stmt.to_sql(f),
+            stmt::Statement::Query(stmt) => stmt.to_sql(f),
+            stmt::Statement::Update(stmt) => stmt.to_sql(f),
         }
     }
 }
 
 impl ToSql for &stmt::SourceTable {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         // Iterate over each TableWithJoins in the from clause
         for (i, table_with_joins) in self.from.iter().enumerate() {
             if i > 0 {
-                fmt!(cx, f, ", ");
+                fmt!(f, ", ");
             }
 
             // Serialize the main table relation
@@ -570,7 +560,7 @@ impl ToSql for &stmt::SourceTable {
                         table: *table_id,
                     };
 
-                    fmt!(cx, f, table_ref " AS " alias);
+                    fmt!(f, table_ref " AS " alias);
                 }
             }
 
@@ -585,25 +575,25 @@ impl ToSql for &stmt::SourceTable {
                     depth: f.depth,
                     table: join.table,
                 };
-                fmt!(cx, f, kw join_table_ref " AS " alias " ON " expr);
+                fmt!(f, kw join_table_ref " AS " alias " ON " expr);
             }
         }
     }
 }
 
 impl ToSql for &stmt::TableRef {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         match self {
             stmt::TableRef::Table(table_id) => {
                 let table_name = f.serializer.table_name(*table_id);
-                fmt!(cx, f, table_name);
+                fmt!(f, table_name);
             }
-            stmt::TableRef::Derived(table_derived) => fmt!(cx, f, table_derived),
+            stmt::TableRef::Derived(table_derived) => fmt!(f, table_derived),
             stmt::TableRef::Cte { nesting, index } => {
                 assert!(f.depth >= *nesting, "nesting={nesting} depth={}", f.depth);
 
                 let depth = f.depth - nesting;
-                fmt!(cx, f, "cte_" depth "_" index);
+                fmt!(f, "cte_" depth "_" index);
             }
             stmt::TableRef::Arg(..) => panic!("unexpected TableRef argument; table_ref={self:#?}"),
         }
@@ -611,11 +601,11 @@ impl ToSql for &stmt::TableRef {
 }
 
 impl ToSql for &stmt::TableDerived {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         debug_assert!(f.alias);
 
         f.depth += 1;
-        fmt!(cx, f, "(" self.subquery ")");
+        fmt!(f, "(" self.subquery ")");
         f.depth -= 1;
     }
 }
@@ -626,20 +616,19 @@ struct TableAlias {
 }
 
 impl ToSql for &TableAlias {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
-        fmt!(cx, f, "tbl_" self.depth "_" self.table.0);
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
+        fmt!(f, "tbl_" self.depth "_" self.table.0);
     }
 }
 
 impl ToSql for &stmt::Update {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
-        let prev = mem::replace(&mut f.alias, false);
-
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         let table = f.serializer.schema.table(self.target.as_table_unwrap());
         let assignments = (table, &self.assignments);
 
         // Create a new expression scope to serialize the statement
-        let cx = cx.scope(self);
+        let mut f = f.scope(self);
+        f.alias = false;
 
         let returning = self
             .returning
@@ -657,14 +646,12 @@ impl ToSql for &stmt::Update {
             "SQL does not support update conditions"
         );
 
-        fmt!(&cx, f, "UPDATE " self.target " SET " assignments self.filter returning);
-
-        f.alias = prev;
+        fmt!(&mut f, "UPDATE " self.target " SET " assignments self.filter returning);
     }
 }
 
 impl ToSql for (&db::Table, &stmt::Assignments) {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         let assignments: Vec<_> = self.1.iter().collect();
 
         for (i, (projection, assignment)) in assignments.iter().enumerate() {
@@ -676,22 +663,22 @@ impl ToSql for (&db::Table, &stmt::Assignments) {
             let column_name = Ident(&column.name);
 
             // Serialize column name and equals sign
-            column_name.to_sql(cx, f);
+            column_name.to_sql(f);
             f.dst.push_str(" = ");
 
             match assignment {
-                stmt::Assignment::Set(expr) => expr.to_sql(cx, f),
+                stmt::Assignment::Set(expr) => expr.to_sql(f),
                 stmt::Assignment::Append(expr) => {
-                    serialize_append(cx, f, &column.name, expr);
+                    serialize_append(f, &column.name, expr);
                 }
                 stmt::Assignment::Remove(expr) => {
-                    serialize_remove(cx, f, &column.name, expr);
+                    serialize_remove(f, &column.name, expr);
                 }
                 stmt::Assignment::Pop => {
-                    serialize_pop(cx, f, &column.name);
+                    serialize_pop(f, &column.name);
                 }
                 stmt::Assignment::RemoveAt(expr) => {
-                    serialize_remove_at(cx, f, &column.name, expr);
+                    serialize_remove_at(f, &column.name, expr);
                 }
                 _ => todo!(
                     "only SET / APPEND / REMOVE / POP / REMOVE_AT supported in SQL serialization; got {assignment:#?}"
@@ -714,19 +701,14 @@ impl ToSql for (&db::Table, &stmt::Assignments) {
 ///   json_each(col) UNION ALL SELECT value FROM json_each($1)))` — a
 ///   subquery that concatenates the two JSON arrays while preserving
 ///   element order and types.
-fn serialize_append(
-    cx: &ExprContext<'_>,
-    f: &mut super::Formatter<'_>,
-    column_name: &str,
-    expr: &stmt::Expr,
-) {
+fn serialize_append(f: &mut super::Formatter<'_>, column_name: &str, expr: &stmt::Expr) {
     match f.serializer.flavor {
-        Flavor::Postgresql => fmt!(cx, f, Ident(column_name) " || " expr),
+        Flavor::Postgresql => fmt!(f, Ident(column_name) " || " expr),
         Flavor::Mysql => {
-            fmt!(cx, f, "JSON_MERGE_PRESERVE(" Ident(column_name) ", " expr ")")
+            fmt!(f, "JSON_MERGE_PRESERVE(" Ident(column_name) ", " expr ")")
         }
         Flavor::Sqlite => fmt!(
-            cx, f,
+            f,
             "(SELECT json_group_array(value) FROM (SELECT value FROM json_each("
             Ident(column_name) ") UNION ALL SELECT value FROM json_each(" expr ")))"
         ),
@@ -739,14 +721,9 @@ fn serialize_append(
 ///   to `$value` from a `T[]` column. Atomic.
 /// - MySQL / SQLite: not yet supported — `vec_remove` is gated off and the
 ///   lowering rejects these backends before reaching here.
-fn serialize_remove(
-    cx: &ExprContext<'_>,
-    f: &mut super::Formatter<'_>,
-    column_name: &str,
-    expr: &stmt::Expr,
-) {
+fn serialize_remove(f: &mut super::Formatter<'_>, column_name: &str, expr: &stmt::Expr) {
     match f.serializer.flavor {
-        Flavor::Postgresql => fmt!(cx, f, "array_remove(" Ident(column_name) ", " expr ")"),
+        Flavor::Postgresql => fmt!(f, "array_remove(" Ident(column_name) ", " expr ")"),
         Flavor::Mysql | Flavor::Sqlite => panic!(
             "stmt::remove on a Vec<scalar> field is not yet implemented for this SQL flavor; \
              the lowering should have rejected this before reaching the serializer",
@@ -760,10 +737,10 @@ fn serialize_remove(
 ///   element via 1-based PG array slicing. Atomic.
 /// - MySQL / SQLite: not yet supported — `vec_pop` is gated off and the
 ///   lowering rejects these backends before reaching here.
-fn serialize_pop(cx: &ExprContext<'_>, f: &mut super::Formatter<'_>, column_name: &str) {
+fn serialize_pop(f: &mut super::Formatter<'_>, column_name: &str) {
     match f.serializer.flavor {
         Flavor::Postgresql => fmt!(
-            cx, f,
+            f,
             Ident(column_name) "[1:cardinality(" Ident(column_name) ") - 1]"
         ),
         Flavor::Mysql | Flavor::Sqlite => panic!(
@@ -787,15 +764,10 @@ fn serialize_pop(cx: &ExprContext<'_>, f: &mut super::Formatter<'_>, column_name
 ///
 /// - MySQL / SQLite: not yet supported — `vec_remove_at` is gated off
 ///   and the lowering rejects these backends before reaching here.
-fn serialize_remove_at(
-    cx: &ExprContext<'_>,
-    f: &mut super::Formatter<'_>,
-    column_name: &str,
-    expr: &stmt::Expr,
-) {
+fn serialize_remove_at(f: &mut super::Formatter<'_>, column_name: &str, expr: &stmt::Expr) {
     match f.serializer.flavor {
         Flavor::Postgresql => fmt!(
-            cx, f,
+            f,
             Ident(column_name) "[1:" expr "] || " Ident(column_name) "[" expr " + 2:cardinality(" Ident(column_name) ")]"
         ),
         Flavor::Mysql | Flavor::Sqlite => panic!(
@@ -806,7 +778,7 @@ fn serialize_remove_at(
 }
 
 impl ToSql for &stmt::UpdateTarget {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         match self {
             stmt::UpdateTarget::Table(table_id) => {
                 let table_name = f.serializer.table_name(*table_id);
@@ -815,7 +787,7 @@ impl ToSql for &stmt::UpdateTarget {
                     table: SourceTableId(0),
                 };
 
-                fmt!(cx, f, table_name " AS " alias);
+                fmt!(f, table_name " AS " alias);
             }
             _ => todo!(),
         }
@@ -823,7 +795,7 @@ impl ToSql for &stmt::UpdateTarget {
 }
 
 impl ToSql for &stmt::Values {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         // MySQL requires the `ROW(...)` keyword for table value constructors
         // when used in subqueries, but NOT in INSERT statements.
         //
@@ -840,20 +812,20 @@ impl ToSql for &stmt::Values {
             // as-is — a single-scalar row `ROW(x)` is well-formed.
             for (i, row) in self.rows.iter().enumerate() {
                 if i == 0 {
-                    fmt!(cx, f, "VALUES ");
+                    fmt!(f, "VALUES ");
                 } else {
-                    fmt!(cx, f, ", ");
+                    fmt!(f, ", ");
                 }
                 match row {
                     stmt::Expr::Record(record) => {
-                        fmt!(cx, f, "ROW(" Comma(record.fields.iter()) ")")
+                        fmt!(f, "ROW(" Comma(record.fields.iter()) ")")
                     }
-                    _ => fmt!(cx, f, "ROW(" row ")"),
+                    _ => fmt!(f, "ROW(" row ")"),
                 }
             }
         } else {
             let rows = Comma(self.rows.iter());
-            fmt!(cx, f, "VALUES " rows)
+            fmt!(f, "VALUES " rows)
         }
     }
 }
