@@ -1,15 +1,15 @@
 use super::{Comma, ToSql};
 
-use crate::{serializer::ExprContext, stmt};
+use crate::stmt;
 
 impl ToSql for &stmt::Value {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         use stmt::Value::*;
 
         match self {
             Record(value) => {
                 let fields = Comma(value.fields.iter());
-                fmt!(cx, f, "(" fields ")");
+                fmt!(f, "(" fields ")");
             }
             List(values) => {
                 f.dst.push('(');
@@ -17,7 +17,7 @@ impl ToSql for &stmt::Value {
                     if i > 0 {
                         f.dst.push_str(", ");
                     }
-                    value.to_sql(cx, f);
+                    value.to_sql(f);
                 }
                 f.dst.push(')');
             }

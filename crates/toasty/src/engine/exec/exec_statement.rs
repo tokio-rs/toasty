@@ -289,6 +289,7 @@ impl Exec<'_> {
             returning,
             source: stmt::Source::table(table_id),
             filter: update.filter.clone(),
+            distinct: false,
         };
         let select_stmt =
             stmt::Statement::Query(stmt::Query::new(stmt::ExprSet::Select(Box::new(select))));

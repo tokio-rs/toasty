@@ -1,5 +1,3 @@
-use crate::serializer::ExprContext;
-
 use super::{Formatter, ToSql};
 
 /// A positional bind-parameter placeholder.
@@ -18,7 +16,7 @@ use super::{Formatter, ToSql};
 pub struct Placeholder(pub usize);
 
 impl ToSql for Placeholder {
-    fn to_sql(self, _cx: &ExprContext<'_>, f: &mut Formatter<'_>) {
+    fn to_sql(self, f: &mut Formatter<'_>) {
         use std::fmt::Write;
 
         match f.serializer.flavor {

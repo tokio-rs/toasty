@@ -121,6 +121,7 @@ fn make_query(
         returning: Returning::Project(Expr::record([col(0, 0)])),
         source: users_source(),
         filter,
+        distinct: false,
     };
     let mut query = stmt::Query::builder(select).build();
     query.order_by = order_by;
@@ -149,6 +150,37 @@ fn select_basic() {
         Flavor::Mysql,
         &schema,
         stmt,
+    ));
+}
+
+#[test]
+fn select_distinct() {
+    let schema = users_schema();
+    // `make_query` hard-codes `distinct: false`, so build the `Select`
+    // directly. `render` consumes the statement, so rebuild it per flavor.
+    let distinct_query = || {
+        let select = Select {
+            returning: Returning::Project(Expr::record([col(0, 0)])),
+            source: users_source(),
+            filter: Filter::ALL,
+            distinct: true,
+        };
+        stmt::Statement::Query(stmt::Query::builder(select).build())
+    };
+    expect![[r#"SELECT DISTINCT tbl_0_0."id" FROM "users" AS tbl_0_0;"#]].assert_eq(&render(
+        Flavor::Sqlite,
+        &schema,
+        distinct_query(),
+    ));
+    expect![[r#"SELECT DISTINCT tbl_0_0."id" FROM "users" AS tbl_0_0;"#]].assert_eq(&render(
+        Flavor::Postgresql,
+        &schema,
+        distinct_query(),
+    ));
+    expect!["SELECT DISTINCT tbl_0_0.`id` FROM `users` AS tbl_0_0;"].assert_eq(&render(
+        Flavor::Mysql,
+        &schema,
+        distinct_query(),
     ));
 }
 
