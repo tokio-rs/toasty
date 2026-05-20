@@ -446,8 +446,13 @@ match — it works across all drivers.
 ### `ilike`
 
 `.ilike()` is the case-insensitive form of `.like()`. **SQL-only.** On
-PostgreSQL it lowers to `ILIKE`; on SQLite and MySQL, plain `LIKE` is
-already ASCII-case-insensitive, so the same query works.
+PostgreSQL it lowers to `ILIKE`, which folds case across the full Unicode
+range. On SQLite and MySQL it lowers to plain `LIKE`, whose case folding is
+not equivalent: SQLite ignores case only for ASCII (so `.ilike("CAFÉ")` does
+**not** match `"café"`), and MySQL's behavior depends on the column collation.
+Treat `.ilike()` as reliably case-insensitive only for ASCII unless you have
+verified the engine's Unicode behavior. See the
+[SQLite](./sqlite.md) and [MySQL](./mysql.md) backend notes for details.
 
 ```rust
 # use toasty::Model;

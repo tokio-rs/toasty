@@ -135,13 +135,15 @@ mutations, [batch operations](./batch-operations.md),
 serializable [transactions](./transactions.md) all run natively. A few
 behaviors differ from the other SQL backends:
 
-**`LIKE` is case-insensitive for ASCII.** SQLite's default `LIKE`
-ignores case for ASCII characters. The
-[`.ilike()`](./filtering-with-expressions.md#ilike) filter lowers to
-the same `LIKE`, so case-insensitive matching works — but a
-`.like("Rust")` filter also matches `"rust"` and `"RUST"`. Use
-`GLOB` (which Toasty does not currently expose) or a `CHECK` against
-exact bytes if you need case-sensitive pattern matching.
+**`LIKE` is case-insensitive for ASCII only.** SQLite's default `LIKE`
+ignores case for ASCII characters but is case-sensitive for everything
+else. Two consequences follow. A `.like("Rust")` filter also matches
+`"rust"` and `"RUST"`; use `GLOB` (which Toasty does not currently
+expose) or a `CHECK` against exact bytes if you need case-sensitive
+pattern matching. And [`.ilike()`](./filtering-with-expressions.md#ilike)
+lowers to the same `LIKE`, so it is case-insensitive only for ASCII —
+`.ilike("CAFÉ")` does **not** match `"café"`. SQLite needs the ICU
+extension for Unicode-aware case folding, which Toasty does not load.
 
 **No native prefix-match operator.**
 [`.starts_with("abc")`](./filtering-with-expressions.md#starts_with)
