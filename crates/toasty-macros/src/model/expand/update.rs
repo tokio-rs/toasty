@@ -191,8 +191,8 @@ impl Expand<'_> {
 
         quote! {
             {
-                let current: u64 = <#field_ty as #toasty::Versionable>::as_u64(s.target.#field_ident);
-                let next = <#field_ty as #toasty::Versionable>::from_u64(current + 1);
+                let current: u64 = <#field_ty as #toasty::Version>::as_u64(s.target.#field_ident);
+                let next = <#field_ty as #toasty::Version>::from_u64(current + 1);
                 s.assignments.set(
                     #toasty::stmt::Projection::from_index(#index_tokenized),
                     <#field_ty as #toasty::IntoExpr<#field_ty>>::into_expr(next),

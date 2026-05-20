@@ -26,7 +26,7 @@ pub use crate::{
 pub use serde_json;
 pub use std::{convert::Into, default::Default, option::Option};
 
-pub use self::version::Versionable;
+pub use self::version::Version;
 pub use toasty_core as core;
 
 /// Infer the [`Scope`] type from a scope expression and return its fields

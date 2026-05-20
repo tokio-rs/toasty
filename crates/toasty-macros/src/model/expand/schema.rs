@@ -421,12 +421,12 @@ impl Expand<'_> {
     }
 
     /// Emit a compile-time obligation that every `#[version]` field's Rust type
-    /// implements [`Versionable`].
+    /// implements [`Version`].
     ///
     /// The bare `u64` type satisfies the bound directly; tuple-newtype embeds
     /// satisfy it via the blanket in `codegen_support::version`. Any other type
     /// produces a compiler error with the `#[diagnostic::on_unimplemented]`
-    /// message on [`Versionable`].
+    /// message on [`Version`].
     pub(super) fn expand_version_compat_checks(&self) -> TokenStream {
         let toasty = &self.toasty;
 
@@ -441,7 +441,7 @@ impl Expand<'_> {
 
             Some(quote_spanned! { ty.span()=>
                 const _: () = {
-                    fn _check<__T: #toasty::Versionable>() {}
+                    fn _check<__T: #toasty::Version>() {}
                     let _ = _check::<#ty>;
                 };
             })
