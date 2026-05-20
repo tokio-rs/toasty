@@ -133,6 +133,8 @@ macro_rules! impl_field_primitive {
                 target.eq(self)
             }
         }
+
+        impl NotNullable for $ty {}
     };
 }
 
@@ -177,6 +179,8 @@ impl Field for Vec<u8> {
         target.eq(self)
     }
 }
+
+impl NotNullable for Vec<u8> {}
 
 /// `Vec<T>` of a non-byte element type is a collection model field. The
 /// bounds on `T` correspond to what the trait machinery does with elements:
@@ -226,6 +230,8 @@ where
     }
 }
 
+impl<T: Field<Output = T> + Scalar> NotNullable for Vec<T> {}
+
 /// Marks scalar (non-composite) types that are valid as the element type of a
 /// model-level `Vec<T>` collection field. The trait is implemented for every
 /// primitive `Field` (string, integers, uuid, …); `Vec<u8>` is intentionally
@@ -262,27 +268,15 @@ impl Scalar for rust_decimal::Decimal {}
 #[cfg(feature = "bigdecimal")]
 impl Scalar for bigdecimal::BigDecimal {}
 
-/// Reflexive type-equality witness: `U: SameType<V>` holds if and only if `U`
-/// and `V` are the same type.
-///
-/// Used to express "`T`'s [`Field::Inner`] is `T` itself" as an ordinary trait
-/// bound rather than an associated-type projection equality. The difference is
-/// purely diagnostic: a failed projection equality reports as a confusing
-/// `type mismatch`, while a failed trait bound reports as a "trait bound not
-/// satisfied" error that carries the [`NotNullable`] breadcrumb.
-#[doc(hidden)]
-pub trait SameType<T: ?Sized> {}
-impl<T: ?Sized> SameType<T> for T {}
-
 /// Marker for field types that may serve as the inner type of a nullable
 /// field wrapper — i.e. types that are not themselves nullable.
 ///
 /// It is the bound on the [`Field`] impl for `Option<T>`, so `Option<T>` is a
-/// valid model-field type only when `T: NotNullable`. The blanket impl below
-/// covers every leaf field type (their [`Field::Inner`] is `Self`) but
-/// deliberately does **not** cover `Option<U>` (whose `Inner` is `U::Inner`,
-/// never `Self`). A model field of type `Option<Option<U>>` therefore fails to
-/// compile, naming `NotNullable` in the error.
+/// valid model-field type only when `T: NotNullable`. It is implemented for
+/// every leaf field type (primitives, `Vec`, [`Json`](crate::Json), …) and
+/// forwarded through the non-nullable smart-pointer wrappers (`Box`/`Arc`/`Rc`),
+/// but deliberately **not** for `Option<U>`. A model field of type
+/// `Option<Option<U>>` therefore fails to compile.
 ///
 /// Nested nullability has no on-the-wire encoding: both `Option` layers map to
 /// the single column's `NULL` channel, so a `Some(None)` value round-trips
@@ -290,10 +284,20 @@ impl<T: ?Sized> SameType<T> for T {}
 /// level — rather than via a syntactic macro check — is robust through type
 /// aliases and also rejects nested forms like `Deferred<Option<Option<U>>>`.
 /// If you genuinely need an optional inside an optional, wrap the inner value
-/// in [`toasty::Json<_>`](crate::Json), which carries its own `null` encoding.
+/// in [`Json<_>`](crate::Json), which carries its own `null` encoding.
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` cannot be the inner type of a nullable Toasty field",
+    label = "`Option<{Self}>` is not a supported field type",
+    note = "a Toasty field can be nullable at most once; nested `Option<Option<_>>` has no on-the-wire encoding, since both layers collapse onto the column's single NULL channel and `Some(None)` becomes indistinguishable from `None`",
+    note = "for an optional-of-optional, wrap the inner value in `toasty::Json<_>`, which carries its own `null` encoding"
+)]
 pub trait NotNullable {}
 
-impl<T: Field> NotNullable for T where <T as Field>::Inner: SameType<T> {}
+// The smart-pointer wrappers are transparent to nullability: a `Box<T>` (or
+// `Arc`/`Rc`) is a valid `Option` inner exactly when its payload is.
+impl<T: NotNullable> NotNullable for Box<T> {}
+impl<T: NotNullable> NotNullable for std::sync::Arc<T> {}
+impl<T: NotNullable> NotNullable for std::rc::Rc<T> {}
 
 impl<T: Field + NotNullable> Field for Option<T> {
     type ExprTarget = Self;

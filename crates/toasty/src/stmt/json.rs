@@ -1,5 +1,5 @@
 use super::{Expr, IntoExpr, List, Path, Value};
-use crate::schema::{Field, Load};
+use crate::schema::{Field, Load, NotNullable};
 use toasty_core::schema::app::{FieldPrimitive, FieldTy, SerializeFormat};
 use toasty_core::{schema::db, stmt};
 
@@ -184,6 +184,14 @@ where
         // satisfy it with a panic rather than admitting nonsense semantics.
         unreachable!("Json<T> fields cannot be used as foreign-key targets")
     }
+}
+
+// `Json<T>` is itself a non-nullable column (`Option<Json<T>>` is the nullable
+// form), so it is a valid `Option` inner regardless of whether `T` is an
+// `Option`: the inner optionality is encoded inside the JSON, not as SQL NULL.
+impl<T> NotNullable for Json<T> where
+    T: serde_core::Serialize + for<'de> serde_core::Deserialize<'de>
+{
 }
 
 impl<T> IntoExpr<Json<T>> for Json<T>

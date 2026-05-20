@@ -1,6 +1,6 @@
 use crate::{
     Result,
-    schema::{Field, Load},
+    schema::{Field, Load, NotNullable},
     stmt::{Expr, List, Path},
 };
 
@@ -55,6 +55,8 @@ macro_rules! impl_field_numeric {
                     target.eq(self)
                 }
             }
+
+            impl NotNullable for $ty {}
         )*
     };
 }

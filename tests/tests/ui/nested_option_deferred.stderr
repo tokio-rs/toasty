@@ -1,29 +1,43 @@
-error[E0277]: the trait bound `bool: schema::field::SameType<Option<bool>>` is not satisfied
+error[E0277]: `Option<bool>` cannot be the inner type of a nullable Toasty field
   --> tests/ui/nested_option_deferred.rs:13:5
    |
 13 |     flag: toasty::Deferred<Option<Option<bool>>>,
-   |     ^^^^ the trait `schema::field::SameType<Option<bool>>` is not implemented for `bool`
+   |     ^^^^ `Option<Option<bool>>` is not a supported field type
    |
-help: the trait `toasty::schema::Field` is implemented for `Option<T>`
-  --> $WORKSPACE/crates/toasty/src/schema/field.rs
-   |
-   | impl<T: Field + NotNullable> Field for Option<T> {
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   = note: required for `Option<bool>` to implement `NotNullable`
+   = help: the trait `NotNullable` is not implemented for `Option<bool>`
+   = note: a Toasty field can be nullable at most once; nested `Option<Option<_>>` has no on-the-wire encoding, since both layers collapse onto the column's single NULL channel and `Some(None)` becomes indistinguishable from `None`
+   = note: for an optional-of-optional, wrap the inner value in `toasty::Json<_>`, which carries its own `null` encoding
+   = help: the following other types implement trait `NotNullable`:
+             Arc<T>
+             Box<T>
+             Rc<T>
+             Vec<T>
+             Vec<u8>
+             bigdecimal::BigDecimal
+             bool
+             f32
+           and $N others
    = note: required for `Option<Option<bool>>` to implement `toasty::schema::Field`
 
-error[E0277]: the trait bound `bool: schema::field::SameType<Option<bool>>` is not satisfied
+error[E0277]: `Option<bool>` cannot be the inner type of a nullable Toasty field
   --> tests/ui/nested_option_deferred.rs:13:11
    |
 13 |     flag: toasty::Deferred<Option<Option<bool>>>,
-   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `schema::field::SameType<Option<bool>>` is not implemented for `bool`
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Option<Option<bool>>` is not a supported field type
    |
-help: the trait `toasty::schema::Field` is implemented for `Deferred<T>`
-  --> $WORKSPACE/crates/toasty/src/schema/deferred.rs
-   |
-   | impl<T: Field<Output = T>> Field for Deferred<T> {
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   = note: required for `Option<bool>` to implement `NotNullable`
+   = help: the trait `NotNullable` is not implemented for `Option<bool>`
+   = note: a Toasty field can be nullable at most once; nested `Option<Option<_>>` has no on-the-wire encoding, since both layers collapse onto the column's single NULL channel and `Some(None)` becomes indistinguishable from `None`
+   = note: for an optional-of-optional, wrap the inner value in `toasty::Json<_>`, which carries its own `null` encoding
+   = help: the following other types implement trait `NotNullable`:
+             Arc<T>
+             Box<T>
+             Rc<T>
+             Vec<T>
+             Vec<u8>
+             bigdecimal::BigDecimal
+             bool
+             f32
+           and $N others
    = note: required for `Option<Option<bool>>` to implement `toasty::schema::Field`
    = note: 1 redundant requirement hidden
    = note: required for `Deferred<Option<Option<bool>>>` to implement `toasty::schema::Field`
