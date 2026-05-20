@@ -149,7 +149,7 @@ impl Expand<'_> {
 
         quote! {
             {
-                let current = s.target.#field_ident;
+                let current = #toasty::version::VersionCounter::into_u64(s.target.#field_ident);
                 s.assignments.set(
                     #toasty::stmt::Projection::from_index(#index_tokenized),
                     <u64 as #toasty::IntoExpr<u64>>::into_expr(current + 1),

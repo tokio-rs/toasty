@@ -1,0 +1,37 @@
+error[E0277]: `#[version]` field type `i64` must be `u64`
+ --> tests/ui/version_on_non_u64.rs:6:10
+  |
+6 | #[derive(toasty::Model)]
+  |          ^^^^^^^^^^^^^ invalid Rust type for `#[version]`
+  |
+  = help: the trait `toasty::codegen_support::version::VersionCounter` is not implemented for `i64`
+  = note: the version counter is incremented and compared as a `u64`
+help: the trait `toasty::codegen_support::version::VersionCounter` is implemented for `u64`
+ --> $WORKSPACE/crates/toasty/src/codegen_support/version.rs
+  |
+  | impl VersionCounter for u64 {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: `#[version]` field type `i64` must be `u64`
+  --> tests/ui/version_on_non_u64.rs:13:14
+   |
+13 |     version: i64,
+   |              ^^^ invalid Rust type for `#[version]`
+   |
+   = help: the trait `toasty::codegen_support::version::VersionCounter` is not implemented for `i64`
+   = note: the version counter is incremented and compared as a `u64`
+help: the trait `toasty::codegen_support::version::VersionCounter` is implemented for `u64`
+  --> $WORKSPACE/crates/toasty/src/codegen_support/version.rs
+   |
+   | impl VersionCounter for u64 {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `_check`
+  --> tests/ui/version_on_non_u64.rs:6:10
+   |
+ 6 | #[derive(toasty::Model)]
+   |          ^^^^^^^^^^^^^ required by this bound in `_check`
+...
+13 |     version: i64,
+   |              --- required by a bound in this function
+   = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)

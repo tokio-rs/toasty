@@ -390,6 +390,41 @@ impl Expand<'_> {
         quote! { #( #checks )* }
     }
 
+    /// Emit one obligation per `#[version]` field that the field's Rust type
+    /// implements `codegen_support::version::VersionCounter` (only `u64` does).
+    ///
+    /// As with the storage and auto checks, the macro names the field type but
+    /// does not inspect it — trait resolution runs against the resolved type,
+    /// so a `type V = u64;` alias is accepted while any non-`u64` type is
+    /// rejected with a field-spanned diagnostic.
+    pub(super) fn expand_version_compat_checks(&self) -> TokenStream {
+        let toasty = &self.toasty;
+
+        let checks = self.model.fields.iter().filter_map(|field| {
+            if !field.attrs.versionable {
+                return None;
+            }
+
+            let FieldTy::Primitive(ty) = &field.ty else {
+                return None;
+            };
+
+            // Pin the diagnostic at the field type's span so the error lands
+            // on the user's declaration, not the derive call site.
+            Some(quote_spanned! { ty.span()=>
+                const _: () = {
+                    fn _check<__T>()
+                    where
+                        __T: #toasty::version::VersionCounter,
+                    {}
+                    let _ = _check::<#ty>;
+                };
+            })
+        });
+
+        quote! { #( #checks )* }
+    }
+
     /// Generate calls to register all models reachable from this model's fields.
     ///
     /// For primitive fields, no call is emitted (the default `Field::register`

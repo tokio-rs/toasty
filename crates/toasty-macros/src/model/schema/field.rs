@@ -339,14 +339,17 @@ impl Field {
             ));
         }
 
-        if attrs.versionable {
-            let is_u64 = matches!(&field.ty, syn::Type::Path(p) if p.path.is_ident("u64"));
-            if !is_u64 {
-                errs.push(syn::Error::new_spanned(
-                    &field.ty,
-                    "#[version] can only be applied to a u64 field",
-                ));
-            }
+        // The field type must be `u64`, but the macro must not decide that by
+        // inspecting the type token — it cannot see through aliases or
+        // re-exports. The constraint is enforced in generated code via a
+        // `version::VersionCounter` obligation, which trait resolution checks
+        // against the resolved type. Here we only reject the cases that have no
+        // primitive type to bound: relation fields.
+        if attrs.versionable && ty.is_some() {
+            errs.push(syn::Error::new_spanned(
+                field,
+                "#[version] cannot be applied to relation fields",
+            ));
         }
 
         if attrs.deferred {

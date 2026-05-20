@@ -7,6 +7,7 @@
 pub mod auto;
 pub mod newtype;
 pub mod storage;
+pub mod version;
 
 pub use crate::schema::inventory;
 pub use crate::{

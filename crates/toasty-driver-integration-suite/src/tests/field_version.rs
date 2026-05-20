@@ -222,6 +222,39 @@ pub async fn unique_index_stale_update_fails(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// A `#[version]` field may be declared through a type alias that resolves to
+/// `u64`. The derive names the field type and defers the `u64` requirement to
+/// trait resolution, so the alias is accepted and behaves like a plain `u64`
+/// counter. Regression test against the macro inspecting the raw type token.
+#[driver_test(requires(not(sql)))]
+pub async fn version_field_accepts_u64_alias(test: &mut Test) -> Result<()> {
+    type Version = u64;
+
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+
+        name: String,
+
+        #[version]
+        version: Version,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+
+    let mut item = toasty::create!(Item { name: "hello" })
+        .exec(&mut db)
+        .await?;
+    assert_eq!(item.version, 1);
+
+    item.update().name("world").exec(&mut db).await?;
+    assert_eq!(item.version, 2);
+
+    Ok(())
+}
+
 /// Deleting a record checks the version — a fresh handle succeeds.
 #[driver_test(requires(not(sql)), scenario(crate::scenarios::versioned_item))]
 pub async fn delete_checks_version(test: &mut Test) -> Result<()> {

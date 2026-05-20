@@ -284,7 +284,9 @@ impl Expand<'_> {
                             }
                         ),
                         #toasty::core::stmt::Expr::Value(
-                            #toasty::core::stmt::Value::U64(self.#field_ident)
+                            #toasty::core::stmt::Value::U64(
+                                #toasty::version::VersionCounter::into_u64(self.#field_ident)
+                            )
                         ),
                     )
                 )
