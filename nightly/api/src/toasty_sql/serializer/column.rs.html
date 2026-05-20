@@ -4,7 +4,7 @@
 <a href=#4 id=4 data-nosnippet>4</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>ColumnAlias(<span class="kw">pub</span>(<span class="kw">crate</span>) usize);
 <a href=#5 id=5 data-nosnippet>5</a>
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">impl </span>ToSql <span class="kw">for </span>ColumnAlias {
-<a href=#7 id=7 data-nosnippet>7</a>    <span class="kw">fn </span>to_sql(<span class="self">self</span>, cx: <span class="kw-2">&amp;</span><span class="kw">super</span>::ExprContext&lt;<span class="lifetime">'_</span>&gt;, f: <span class="kw-2">&amp;mut </span><span class="kw">super</span>::Formatter&lt;<span class="lifetime">'_</span>&gt;) {
+<a href=#7 id=7 data-nosnippet>7</a>    <span class="kw">fn </span>to_sql(<span class="self">self</span>, f: <span class="kw-2">&amp;mut </span><span class="kw">super</span>::Formatter&lt;<span class="lifetime">'_</span>&gt;) {
 <a href=#8 id=8 data-nosnippet>8</a>        <span class="comment">// The per-flavor format matches each engine's auto-naming convention
 <a href=#9 id=9 data-nosnippet>9</a>        // for derived-table columns. MySQL's `VALUES ROW(...) AS t` exposes
 <a href=#10 id=10 data-nosnippet>10</a>        // columns as `column_0`, `column_1`, ...; PG and SQLite use
@@ -13,10 +13,10 @@
 <a href=#13 id=13 data-nosnippet>13</a>        // (e.g. `tbl_1_0.column_0`) must match what the engine sees.
 <a href=#14 id=14 data-nosnippet>14</a>        </span><span class="kw">if </span>f.serializer.is_mysql() {
 <a href=#15 id=15 data-nosnippet>15</a>            <span class="kw">let </span>i = <span class="self">self</span>.<span class="number">0</span>;
-<a href=#16 id=16 data-nosnippet>16</a>            <span class="macro">fmt!</span>(cx, f, <span class="string">"column_" </span>i);
+<a href=#16 id=16 data-nosnippet>16</a>            <span class="macro">fmt!</span>(f, <span class="string">"column_" </span>i);
 <a href=#17 id=17 data-nosnippet>17</a>        } <span class="kw">else </span>{
 <a href=#18 id=18 data-nosnippet>18</a>            <span class="kw">let </span>i = <span class="self">self</span>.<span class="number">0 </span>+ <span class="number">1</span>;
-<a href=#19 id=19 data-nosnippet>19</a>            <span class="macro">fmt!</span>(cx, f, <span class="string">"column" </span>i);
+<a href=#19 id=19 data-nosnippet>19</a>            <span class="macro">fmt!</span>(f, <span class="string">"column" </span>i);
 <a href=#20 id=20 data-nosnippet>20</a>        }
 <a href=#21 id=21 data-nosnippet>21</a>    }
 <a href=#22 id=22 data-nosnippet>22</a>}
