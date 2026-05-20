@@ -32,6 +32,12 @@ pub struct Select {
 
     /// The filter (`WHERE` clause).
     pub filter: Filter,
+
+    /// When `true`, the query removes duplicate rows (`SELECT DISTINCT`).
+    /// Used by multi-step (`via`) `.include()` lowering, where a `JOIN`
+    /// through the path can yield duplicate target rows that must collapse
+    /// to distinct targets.
+    pub distinct: bool,
 }
 
 impl Select {
@@ -42,6 +48,7 @@ impl Select {
             returning: Returning::Model { include: vec![] },
             source: source.into(),
             filter: filter.into(),
+            distinct: false,
         }
     }
 

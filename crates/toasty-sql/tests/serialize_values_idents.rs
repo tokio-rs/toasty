@@ -104,6 +104,7 @@ fn select_id_from_users() -> stmt::Statement {
         returning: Returning::Project(Expr::record([col(0, 0)])),
         source,
         filter: Filter::ALL,
+        distinct: false,
     };
     stmt::Statement::Query(stmt::Query::builder(select).build())
 }
@@ -243,6 +244,7 @@ fn select_from_cte() -> stmt::Statement {
             returning: Returning::Project(Expr::record([col(0, 0)])),
             source,
             filter: Filter::ALL,
+            distinct: false,
         };
         stmt::Query::builder(select).build()
     };
@@ -261,6 +263,7 @@ fn select_from_cte() -> stmt::Statement {
         returning: Returning::Project(Expr::record([col(0, 0)])),
         source: outer_source,
         filter: Filter::ALL,
+        distinct: false,
     };
     stmt::Statement::Query(
         stmt::Query::builder(outer_select)

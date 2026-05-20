@@ -479,14 +479,16 @@ impl ToSql for &stmt::Returning {
 impl ToSql for &stmt::Select {
     fn to_sql(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_>) {
         let source_table = self.source.as_table_unwrap();
+        let select = if self.distinct {
+            "SELECT DISTINCT "
+        } else {
+            "SELECT "
+        };
 
         if source_table.from.is_empty() {
-            fmt!(cx, f, "SELECT " self.returning)
+            fmt!(cx, f, select self.returning)
         } else {
-            fmt!(
-                cx, f,
-                "SELECT " self.returning " FROM " self.source self.filter
-            );
+            fmt!(cx, f, select self.returning " FROM " self.source self.filter);
         }
     }
 }
