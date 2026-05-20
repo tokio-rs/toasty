@@ -29,6 +29,12 @@ use toasty_core::schema::app::AutoStrategy;
 pub trait NewtypeOf {
     /// The inner field's type.
     type Inner;
+
+    /// Unwrap the newtype, returning the inner value.
+    fn into_inner(self) -> Self::Inner;
+
+    /// Wrap an inner value in the newtype.
+    fn from_inner(inner: Self::Inner) -> Self;
 }
 
 // `do_not_recommend` keeps the blanket out of error suggestions so the

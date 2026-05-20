@@ -7,6 +7,7 @@
 pub mod auto;
 pub mod newtype;
 pub mod storage;
+pub mod version;
 
 pub use crate::schema::inventory;
 pub use crate::{
@@ -25,6 +26,7 @@ pub use crate::{
 pub use serde_json;
 pub use std::{convert::Into, default::Default, option::Option};
 
+pub use self::version::Versionable;
 pub use toasty_core as core;
 
 /// Infer the [`Scope`] type from a scope expression and return its fields
