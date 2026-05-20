@@ -56,6 +56,7 @@ macro_rules! impl_field_numeric {
                 }
             }
 
+            #[diagnostic::do_not_recommend]
             impl Present for $ty {}
         )*
     };

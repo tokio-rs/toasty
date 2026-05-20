@@ -134,6 +134,7 @@ macro_rules! impl_field_primitive {
             }
         }
 
+        #[diagnostic::do_not_recommend]
         impl Present for $ty {}
     };
 }
@@ -180,6 +181,7 @@ impl Field for Vec<u8> {
     }
 }
 
+#[diagnostic::do_not_recommend]
 impl Present for Vec<u8> {}
 
 /// `Vec<T>` of a non-byte element type is a collection model field. The
@@ -230,6 +232,7 @@ where
     }
 }
 
+#[diagnostic::do_not_recommend]
 impl<T: Field<Output = T> + Scalar> Present for Vec<T> {}
 
 /// Marks scalar (non-composite) types that are valid as the element type of a
@@ -268,36 +271,39 @@ impl Scalar for rust_decimal::Decimal {}
 #[cfg(feature = "bigdecimal")]
 impl Scalar for bigdecimal::BigDecimal {}
 
-/// Marker for a field type whose value is always present — i.e. a
-/// non-nullable field type, which is exactly what may serve as the inner type
-/// of a nullable wrapper (`Option<T>`).
+/// Marker for a field type whose value is always present — a non-nullable
+/// field type, which is what may serve as the inner type of a nullable wrapper
+/// (`Option<T>`).
 ///
 /// It is the bound on the [`Field`] impl for `Option<T>`, so `Option<T>` is a
-/// valid model-field type only when `T: Present`. It is implemented for
-/// every leaf field type (primitives, `Vec`, [`Json`](crate::Json), …) and
-/// forwarded through the smart-pointer wrappers (`Box`/`Arc`/`Rc`), which are
-/// transparent to nullability, but deliberately **not** for `Option<U>`. A
-/// model field of type `Option<Option<U>>` therefore fails to compile.
+/// valid model-field type only when `T: Present`. It is implemented for every
+/// leaf field type (primitives, `Vec`, [`Json`](crate::Json), …) and forwarded
+/// through the `Box`/`Arc`/`Rc` wrappers, which do not change nullability, but
+/// deliberately **not** for `Option<U>`. A model field of type
+/// `Option<Option<U>>` therefore fails to compile.
 ///
-/// Nested nullability has no on-the-wire encoding: both `Option` layers map to
-/// the single column's `NULL` channel, so a `Some(None)` value round-trips
-/// indistinguishably from `None` (silent data loss). Rejecting it at the type
-/// level — rather than via a syntactic macro check — is robust through type
-/// aliases and also rejects nested forms like `Deferred<Option<Option<U>>>`.
-/// If you genuinely need an optional inside an optional, wrap the inner value
-/// in [`Json<_>`](crate::Json), which carries its own `null` encoding.
+/// Nested nullability cannot be represented: a column has one NULL value, so
+/// both `Option` layers collapse onto it and `Some(None)` reads back as `None`
+/// (silent data loss). A trait bound checks this on the resolved type, so type
+/// aliases and nested forms like `Deferred<Option<Option<U>>>` are rejected
+/// too — a syntactic macro check would miss them. For an optional value inside
+/// an optional, wrap the inner value in [`Json<_>`](crate::Json), which encodes
+/// `null` itself.
 #[diagnostic::on_unimplemented(
     message = "`{Self}` cannot be the inner type of a nullable Toasty field",
     label = "`Option<{Self}>` is not a supported field type",
-    note = "a Toasty field can be nullable at most once; nested `Option<Option<_>>` has no on-the-wire encoding, since both layers collapse onto the column's single NULL channel and `Some(None)` becomes indistinguishable from `None`",
-    note = "for an optional-of-optional, wrap the inner value in `toasty::Json<_>`, which carries its own `null` encoding"
+    note = "a Toasty field can be nullable at most once; a column has one NULL value, so the two `Option` layers of `Option<Option<_>>` collapse onto it and `Some(None)` reads back as `None`",
+    note = "for an optional value inside an optional, wrap the inner value in `toasty::Json<_>`, which encodes `null` itself"
 )]
 pub trait Present {}
 
-// The smart-pointer wrappers are transparent to nullability: a `Box<T>` (or
-// `Arc`/`Rc`) is a valid `Option` inner exactly when its payload is.
+// `Box`/`Arc`/`Rc` do not change nullability: each is a valid `Option` inner
+// when its contents are.
+#[diagnostic::do_not_recommend]
 impl<T: Present> Present for Box<T> {}
+#[diagnostic::do_not_recommend]
 impl<T: Present> Present for std::sync::Arc<T> {}
+#[diagnostic::do_not_recommend]
 impl<T: Present> Present for std::rc::Rc<T> {}
 
 impl<T: Field + Present> Field for Option<T> {

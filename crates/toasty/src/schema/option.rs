@@ -30,22 +30,21 @@ impl<T: Load> Load for Option<T> {
     }
 
     fn load_relation(value: Value) -> Result<Self::Output, crate::Error> {
-        // This is the single decode hook for a nullable wrapper's "loaded as
-        // None" state (see the contract on [`Load::load_relation`]). The
-        // sentinel arrives in one of two shapes depending on the wrapper:
+        // Decodes a nullable wrapper's "loaded as None" state for both relation
+        // targets and deferred fields (see the contract on
+        // [`Load::load_relation`]). The sentinel takes one of two forms:
         //
         // - Nullable single relations (`BelongsTo<Option<_>>` /
-        //   `HasOne<Option<_>>`) encode no-matching-row as `I64(0)`. The
-        //   include lowering rewrites the subquery's `Null` result into
-        //   `I64(0)` so it stays distinct from the `Null` that means
-        //   "unloaded" — which the relation wrapper's `load` intercepts before
-        //   this method is ever called.
-        // - Nullable deferred fields (`Deferred<Option<_>>`) wrap the
-        //   projected slot in a 1-element record, so a loaded-`None` reaches
-        //   here as a bare `Null` once `Deferred::load` has peeled that record.
+        //   `HasOne<Option<_>>`) encode a missing row as `I64(0)`. The include
+        //   lowering rewrites the subquery's `Null` result to `I64(0)` so it
+        //   stays distinct from the `Null` that means "unloaded", which the
+        //   relation wrapper's `load` handles before calling this method.
+        // - Nullable deferred fields (`Deferred<Option<_>>`) wrap the value in
+        //   a single-field record, so a loaded `None` reaches this method as a
+        //   bare `Null` after `Deferred::load` reads that field.
         match value {
             Value::I64(0) | Value::Null => Ok(None),
-            // Any other value is the raw inner value: a model record for a
+            // Any other value is the present inner value: a model record for a
             // relation, or the column value for a deferred field.
             v => Ok(Some(T::load(v)?)),
         }

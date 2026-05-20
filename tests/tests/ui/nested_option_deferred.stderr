@@ -5,18 +5,13 @@ error[E0277]: `Option<bool>` cannot be the inner type of a nullable Toasty field
    |     ^^^^ `Option<Option<bool>>` is not a supported field type
    |
    = help: the trait `Present` is not implemented for `Option<bool>`
-   = note: a Toasty field can be nullable at most once; nested `Option<Option<_>>` has no on-the-wire encoding, since both layers collapse onto the column's single NULL channel and `Some(None)` becomes indistinguishable from `None`
-   = note: for an optional-of-optional, wrap the inner value in `toasty::Json<_>`, which carries its own `null` encoding
-   = help: the following other types implement trait `Present`:
-             Arc<T>
-             Box<T>
-             Rc<T>
-             Vec<T>
-             Vec<u8>
-             bigdecimal::BigDecimal
-             bool
-             f32
-           and $N others
+   = note: a Toasty field can be nullable at most once; a column has one NULL value, so the two `Option` layers of `Option<Option<_>>` collapse onto it and `Some(None)` reads back as `None`
+   = note: for an optional value inside an optional, wrap the inner value in `toasty::Json<_>`, which encodes `null` itself
+help: the trait `toasty::schema::Field` is implemented for `Option<T>`
+  --> $WORKSPACE/crates/toasty/src/schema/field.rs
+   |
+   | impl<T: Field + Present> Field for Option<T> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    = note: required for `Option<Option<bool>>` to implement `toasty::schema::Field`
 
 error[E0277]: `Option<bool>` cannot be the inner type of a nullable Toasty field
@@ -26,18 +21,13 @@ error[E0277]: `Option<bool>` cannot be the inner type of a nullable Toasty field
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Option<Option<bool>>` is not a supported field type
    |
    = help: the trait `Present` is not implemented for `Option<bool>`
-   = note: a Toasty field can be nullable at most once; nested `Option<Option<_>>` has no on-the-wire encoding, since both layers collapse onto the column's single NULL channel and `Some(None)` becomes indistinguishable from `None`
-   = note: for an optional-of-optional, wrap the inner value in `toasty::Json<_>`, which carries its own `null` encoding
-   = help: the following other types implement trait `Present`:
-             Arc<T>
-             Box<T>
-             Rc<T>
-             Vec<T>
-             Vec<u8>
-             bigdecimal::BigDecimal
-             bool
-             f32
-           and $N others
+   = note: a Toasty field can be nullable at most once; a column has one NULL value, so the two `Option` layers of `Option<Option<_>>` collapse onto it and `Some(None)` reads back as `None`
+   = note: for an optional value inside an optional, wrap the inner value in `toasty::Json<_>`, which encodes `null` itself
+help: the trait `toasty::schema::Field` is implemented for `Deferred<T>`
+  --> $WORKSPACE/crates/toasty/src/schema/deferred.rs
+   |
+   | impl<T: Field<Output = T>> Field for Deferred<T> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    = note: required for `Option<Option<bool>>` to implement `toasty::schema::Field`
    = note: 1 redundant requirement hidden
    = note: required for `Deferred<Option<Option<bool>>>` to implement `toasty::schema::Field`

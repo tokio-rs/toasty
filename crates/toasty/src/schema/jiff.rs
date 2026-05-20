@@ -53,6 +53,7 @@ macro_rules! impl_jiff_field {
             }
         }
 
+        #[diagnostic::do_not_recommend]
         impl Present for $ty {}
     };
 }

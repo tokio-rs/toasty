@@ -186,9 +186,10 @@ where
     }
 }
 
-// `Json<T>` is itself a non-nullable column (`Option<Json<T>>` is the nullable
-// form), so it is a valid `Option` inner regardless of whether `T` is an
-// `Option`: the inner optionality is encoded inside the JSON, not as SQL NULL.
+// A `Json<T>` field is non-nullable (`Option<Json<T>>` is the nullable form),
+// so it is a valid `Option` inner even when `T` is itself `Option<_>`: that
+// inner optionality is encoded in the JSON, not as a SQL NULL.
+#[diagnostic::do_not_recommend]
 impl<T> Present for Json<T> where T: serde_core::Serialize + for<'de> serde_core::Deserialize<'de> {}
 
 impl<T> IntoExpr<Json<T>> for Json<T>

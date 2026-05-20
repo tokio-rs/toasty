@@ -32,27 +32,25 @@ pub trait Load {
     /// Returns an error if the value cannot be converted to this type.
     fn load(value: stmt::Value) -> Result<Self::Output, Error>;
 
-    /// Deserialize a value held in a load-state wrapper slot — a relation
-    /// target (`BelongsTo`/`HasOne`) or a deferred field (`Deferred`).
+    /// Deserialize a value held by a load-state wrapper — a relation target
+    /// (`BelongsTo`/`HasOne`) or a deferred field (`Deferred`).
     ///
-    /// This is the single decode hook that distinguishes "loaded as `None`"
-    /// from a present value for a nullable wrapper. Only [`Option<T>`] needs
-    /// to override it; every other type uses the default, which delegates to
-    /// [`load`](Self::load).
+    /// This method distinguishes "loaded as `None`" from a present value for a
+    /// nullable wrapper. Only [`Option<T>`] overrides it; every other type uses
+    /// the default, which delegates to [`load`](Self::load).
     ///
-    /// The contract is keyed on the wrapper, which always intercepts a bare
-    /// `Null` as "unloaded" before calling this method. By the time a value
-    /// reaches here it is therefore one of:
+    /// The wrapper handles a bare `Null` as "unloaded" before calling this
+    /// method, so a value that reaches here is one of:
     ///
     /// - `I64(0)` — a nullable single relation whose row did not match. The
-    ///   include lowering rewrites the subquery's `Null` into this sentinel so
-    ///   it stays distinct from the "unloaded" `Null`.
+    ///   include lowering rewrites the subquery's `Null` to this sentinel so it
+    ///   stays distinct from the "unloaded" `Null`.
     /// - a bare `Null` — a nullable deferred field loaded as `None`. The
-    ///   deferred slot is wrapped in a 1-element record by the lowering;
-    ///   [`Deferred::load`](crate::Deferred) peels that record and forwards the
-    ///   inner value (here, `Null`) through this hook.
-    /// - any other value — the present inner value (a model record for a
-    ///   relation, a column value for a deferred field).
+    ///   lowering wraps the deferred value in a single-field record, and
+    ///   [`Deferred::load`](crate::Deferred) reads that field and passes the
+    ///   inner value (here, `Null`) to this method.
+    /// - any other value — the present inner value: a model record for a
+    ///   relation, or a column value for a deferred field.
     fn load_relation(value: stmt::Value) -> Result<Self::Output, Error> {
         Self::load(value)
     }
