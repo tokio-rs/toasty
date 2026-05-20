@@ -197,6 +197,7 @@ impl Expand<'_> {
                     #toasty::stmt::Projection::from_index(#index_tokenized),
                     <#field_ty as #toasty::IntoExpr<#field_ty>>::into_expr(next),
                 );
+                let current_val = <#field_ty as #toasty::Version>::from_u64(current);
                 s.condition = Some(
                     #toasty::core::stmt::Expr::eq(
                         #toasty::core::stmt::Expr::Reference(
@@ -205,9 +206,7 @@ impl Expand<'_> {
                                 index: #index_tokenized,
                             }
                         ),
-                        #toasty::core::stmt::Expr::Value(
-                            #toasty::core::stmt::Value::U64(current)
-                        ),
+                        #toasty::into_untyped_expr::<#field_ty, _>(current_val),
                     )
                 );
             }
