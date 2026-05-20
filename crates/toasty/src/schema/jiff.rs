@@ -1,4 +1,4 @@
-use super::{Field, Load, NotNullable};
+use super::{Field, Load, Present};
 use crate::stmt::{Expr, List, Path};
 use toasty_core::{
     Result,
@@ -53,7 +53,7 @@ macro_rules! impl_jiff_field {
             }
         }
 
-        impl NotNullable for $ty {}
+        impl Present for $ty {}
     };
 }
 

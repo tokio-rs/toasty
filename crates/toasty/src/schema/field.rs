@@ -134,7 +134,7 @@ macro_rules! impl_field_primitive {
             }
         }
 
-        impl NotNullable for $ty {}
+        impl Present for $ty {}
     };
 }
 
@@ -180,7 +180,7 @@ impl Field for Vec<u8> {
     }
 }
 
-impl NotNullable for Vec<u8> {}
+impl Present for Vec<u8> {}
 
 /// `Vec<T>` of a non-byte element type is a collection model field. The
 /// bounds on `T` correspond to what the trait machinery does with elements:
@@ -230,7 +230,7 @@ where
     }
 }
 
-impl<T: Field<Output = T> + Scalar> NotNullable for Vec<T> {}
+impl<T: Field<Output = T> + Scalar> Present for Vec<T> {}
 
 /// Marks scalar (non-composite) types that are valid as the element type of a
 /// model-level `Vec<T>` collection field. The trait is implemented for every
@@ -268,15 +268,16 @@ impl Scalar for rust_decimal::Decimal {}
 #[cfg(feature = "bigdecimal")]
 impl Scalar for bigdecimal::BigDecimal {}
 
-/// Marker for field types that may serve as the inner type of a nullable
-/// field wrapper — i.e. types that are not themselves nullable.
+/// Marker for a field type whose value is always present — i.e. a
+/// non-nullable field type, which is exactly what may serve as the inner type
+/// of a nullable wrapper (`Option<T>`).
 ///
 /// It is the bound on the [`Field`] impl for `Option<T>`, so `Option<T>` is a
-/// valid model-field type only when `T: NotNullable`. It is implemented for
+/// valid model-field type only when `T: Present`. It is implemented for
 /// every leaf field type (primitives, `Vec`, [`Json`](crate::Json), …) and
-/// forwarded through the non-nullable smart-pointer wrappers (`Box`/`Arc`/`Rc`),
-/// but deliberately **not** for `Option<U>`. A model field of type
-/// `Option<Option<U>>` therefore fails to compile.
+/// forwarded through the smart-pointer wrappers (`Box`/`Arc`/`Rc`), which are
+/// transparent to nullability, but deliberately **not** for `Option<U>`. A
+/// model field of type `Option<Option<U>>` therefore fails to compile.
 ///
 /// Nested nullability has no on-the-wire encoding: both `Option` layers map to
 /// the single column's `NULL` channel, so a `Some(None)` value round-trips
@@ -291,15 +292,15 @@ impl Scalar for bigdecimal::BigDecimal {}
     note = "a Toasty field can be nullable at most once; nested `Option<Option<_>>` has no on-the-wire encoding, since both layers collapse onto the column's single NULL channel and `Some(None)` becomes indistinguishable from `None`",
     note = "for an optional-of-optional, wrap the inner value in `toasty::Json<_>`, which carries its own `null` encoding"
 )]
-pub trait NotNullable {}
+pub trait Present {}
 
 // The smart-pointer wrappers are transparent to nullability: a `Box<T>` (or
 // `Arc`/`Rc`) is a valid `Option` inner exactly when its payload is.
-impl<T: NotNullable> NotNullable for Box<T> {}
-impl<T: NotNullable> NotNullable for std::sync::Arc<T> {}
-impl<T: NotNullable> NotNullable for std::rc::Rc<T> {}
+impl<T: Present> Present for Box<T> {}
+impl<T: Present> Present for std::sync::Arc<T> {}
+impl<T: Present> Present for std::rc::Rc<T> {}
 
-impl<T: Field + NotNullable> Field for Option<T> {
+impl<T: Field + Present> Field for Option<T> {
     type ExprTarget = Self;
     type Path<Origin> = stmt::Path<Origin, Self>;
     type ListPath<Origin> = stmt::Path<Origin, List<Self>>;

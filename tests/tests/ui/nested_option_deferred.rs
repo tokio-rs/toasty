@@ -1,7 +1,7 @@
 // The nested-`Option` rejection also covers a deferred field whose inner type
 // is `Option<Option<T>>`: `Deferred<T>: Field` requires `T: Field`, and
 // `Option<Option<T>>` does not satisfy it because the inner `Option<T>` is not
-// `NotNullable`.
+// `Present`.
 
 #[derive(Debug, toasty::Model)]
 struct Doc {

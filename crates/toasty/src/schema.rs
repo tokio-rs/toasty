@@ -15,7 +15,7 @@ mod embed;
 pub use embed::Embed;
 
 mod field;
-pub use field::{Field, NotNullable, Scalar};
+pub use field::{Field, Present, Scalar};
 
 #[cfg(feature = "jiff")]
 mod jiff;

@@ -2,7 +2,7 @@
 // `Option` layers collapse onto the column's single NULL channel, so a
 // `Some(None)` value would round-trip indistinguishably from `None` (silent
 // data loss). Toasty rejects nested `Option` at compile time via the
-// `NotNullable` bound on `Field for Option<T>`.
+// `Present` bound on `Field for Option<T>`.
 
 #[derive(Debug, toasty::Model)]
 struct Doc {

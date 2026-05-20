@@ -4,10 +4,10 @@ error[E0277]: `Option<bool>` cannot be the inner type of a nullable Toasty field
 13 |     flag: toasty::Deferred<Option<Option<bool>>>,
    |     ^^^^ `Option<Option<bool>>` is not a supported field type
    |
-   = help: the trait `NotNullable` is not implemented for `Option<bool>`
+   = help: the trait `Present` is not implemented for `Option<bool>`
    = note: a Toasty field can be nullable at most once; nested `Option<Option<_>>` has no on-the-wire encoding, since both layers collapse onto the column's single NULL channel and `Some(None)` becomes indistinguishable from `None`
    = note: for an optional-of-optional, wrap the inner value in `toasty::Json<_>`, which carries its own `null` encoding
-   = help: the following other types implement trait `NotNullable`:
+   = help: the following other types implement trait `Present`:
              Arc<T>
              Box<T>
              Rc<T>
@@ -25,10 +25,10 @@ error[E0277]: `Option<bool>` cannot be the inner type of a nullable Toasty field
 13 |     flag: toasty::Deferred<Option<Option<bool>>>,
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Option<Option<bool>>` is not a supported field type
    |
-   = help: the trait `NotNullable` is not implemented for `Option<bool>`
+   = help: the trait `Present` is not implemented for `Option<bool>`
    = note: a Toasty field can be nullable at most once; nested `Option<Option<_>>` has no on-the-wire encoding, since both layers collapse onto the column's single NULL channel and `Some(None)` becomes indistinguishable from `None`
    = note: for an optional-of-optional, wrap the inner value in `toasty::Json<_>`, which carries its own `null` encoding
-   = help: the following other types implement trait `NotNullable`:
+   = help: the following other types implement trait `Present`:
              Arc<T>
              Box<T>
              Rc<T>
