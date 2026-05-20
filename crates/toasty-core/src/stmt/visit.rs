@@ -3,7 +3,7 @@
 use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAllOp, ExprAnd,
     ExprAny, ExprAnyOp, ExprArg, ExprBetween, ExprBinaryOp, ExprCast, ExprColumn, ExprError,
-    ExprExists, ExprFunc, ExprInList, ExprInSubquery, ExprIntersects, ExprIsNull, ExprIsSuperset,
+    ExprExists, ExprFunc, ExprInList, ExprInSubquery, ExprIntersects, ExprIsModel, ExprIsNull, ExprIsSuperset,
     ExprIsVariant, ExprLength, ExprLet, ExprLike, ExprList, ExprMap, ExprMatch, ExprNot, ExprOr,
     ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStartsWith, ExprStmt, Filter,
     FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, LimitCursor,
@@ -201,6 +201,13 @@ pub trait Visit {
     /// The default implementation delegates to [`visit_expr_intersects`].
     fn visit_expr_intersects(&mut self, i: &ExprIntersects) {
         visit_expr_intersects(self, i);
+    }
+
+    /// Visits an [`ExprIsModel`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_is_model`].
+    fn visit_expr_is_model(&mut self, i: &ExprIsModel) {
+        visit_expr_is_model(self, i);
     }
 
     /// Visits an [`ExprIsNull`] node.
@@ -912,6 +919,7 @@ where
         Expr::InList(expr) => v.visit_expr_in_list(expr),
         Expr::InSubquery(expr) => v.visit_expr_in_subquery(expr),
         Expr::Intersects(expr) => v.visit_expr_intersects(expr),
+        Expr::IsModel(expr) => v.visit_expr_is_model(expr),
         Expr::IsNull(expr) => v.visit_expr_is_null(expr),
         Expr::IsSuperset(expr) => v.visit_expr_is_superset(expr),
         Expr::IsVariant(expr) => v.visit_expr_is_variant(expr),
@@ -1091,6 +1099,13 @@ where
 {
     v.visit_expr(&node.lhs);
     v.visit_expr(&node.rhs);
+}
+
+/// Default traversal for [`ExprIsModel`] nodes.
+pub fn visit_expr_is_model<V>(v: &mut V, node: &ExprIsModel)
+where
+    V: Visit + ?Sized,
+{
 }
 
 /// Default traversal for [`ExprIsNull`] nodes. Visits the inner expression.

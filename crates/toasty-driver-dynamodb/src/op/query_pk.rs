@@ -32,6 +32,7 @@ impl Connection {
                 sk_cols: &sk_cols,
                 sk_components: HashMap::new(),
                 pk_component: None,
+                schema: schema.clone(),
             }
             .build(&cx, &op.pk_filter)
         } else {
@@ -85,8 +86,7 @@ impl Connection {
                     .transpose()
                     .map_err(toasty_core::Error::driver_operation_failed)?
                 {
-                    rows.push(item_to_record(&item, cols(), &sk_cols)
-                        .map(stmt::Value::from)?);
+                    rows.push(item_to_record(&item, cols(), &sk_cols).map(stmt::Value::from)?);
                 }
 
                 Ok(ExecResponse {
@@ -151,7 +151,9 @@ impl Connection {
                         .map_err(toasty_core::Error::driver_operation_failed)?
                     {
                         Some(item) => {
-                            rows.push(item_to_record(&item, cols(), &sk_cols).map(stmt::Value::from)?);
+                            rows.push(
+                                item_to_record(&item, cols(), &sk_cols).map(stmt::Value::from)?,
+                            );
                         }
                         None => break,
                     }

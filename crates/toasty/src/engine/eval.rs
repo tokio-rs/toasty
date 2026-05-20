@@ -96,6 +96,7 @@ fn verify_expr(expr: &stmt::Expr) -> bool {
         Reference(_) => false,
         Func(_) => false,
         Value(_) => true,
+        IsModel(_) => false,
         _ => todo!("expr={expr:#?}"),
     }
 }

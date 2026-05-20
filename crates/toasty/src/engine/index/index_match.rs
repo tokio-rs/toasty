@@ -77,6 +77,25 @@ impl<'stmt> IndexMatch<'stmt> {
                 }
                 _ => todo!("expr={:#?}", expr),
             },
+            IsModel(e) => {
+                let model = cx.schema().mapping_for(e.model);
+                let Some(disc_col_id) = model.item_collection.model_column else {
+                    // Model has no discriminator column — shouldn't2 happen if lowering
+                    // emitted IsModel correctly.
+                    return false;
+                };
+                let mut matched = false;
+                for (i, index_column) in self.index.columns.iter().enumerate() {
+                    if disc_col_id != index_column.column {
+                        continue;
+                    }
+                    self.columns[i]
+                        .exprs
+                        .insert(ByAddress(expr), ExprMatch { eq: true });
+                    matched = true;
+                }
+                matched
+            }
             And(and_exprs) => {
                 let matched = self.match_all_restrictions(cx, and_exprs);
 
@@ -451,6 +470,8 @@ impl<'stmt> IndexMatch<'stmt> {
                     (true.into(), true.into())
                 }
             }
+            // IsModel is always part of the sort key.
+            IsModel(_) => (expr.clone(), true.into()),
             _ => todo!("partition_filter={:#?}", expr),
         }
     }

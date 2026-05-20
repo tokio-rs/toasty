@@ -228,7 +228,10 @@ pub async fn include_todos(test: &mut Test) -> Result<()> {
             .await?;
     }
 
-    let mut users = User::filter_by_id(user.id).include(User::fields().todos()).exec(&mut db).await?;
+    let mut users = User::filter_by_id(user.id)
+        .include(User::fields().todos())
+        .exec(&mut db)
+        .await?;
     assert_eq!(1, users.len());
     let user = users.pop().unwrap();
     assert_eq!(5, user.todos.get().len());

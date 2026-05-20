@@ -362,7 +362,9 @@ fn extract_pre_filter(expr: &stmt::Expr) -> (Option<stmt::Expr>, stmt::Expr) {
 fn references_column(expr: &stmt::Expr) -> bool {
     let mut found = false;
     stmt::visit::for_each_expr(expr, |e| {
-        if matches!(e, stmt::Expr::Reference(stmt::ExprReference::Column(_))) {
+        if matches!(e, stmt::Expr::Reference(stmt::ExprReference::Column(_)))
+            || matches!(e, stmt::Expr::IsModel(_))
+        {
             found = true;
         }
     });

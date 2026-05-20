@@ -384,6 +384,12 @@ impl NestedMergePlanner<'_> {
                 let index = selection.get_index_of_expr_reference(*expr_reference);
                 *expr = stmt::Expr::arg_project(depth, [index]);
             }
+            stmt::Expr::IsModel(_) => {
+                // The discriminator was already enforced by the storage driver
+                // when these child rows were loaded; in-memory qualification has
+                // no column to evaluate against.
+                *expr = stmt::Expr::Value(stmt::Value::Bool(true));
+            }
             _ => {}
         });
 

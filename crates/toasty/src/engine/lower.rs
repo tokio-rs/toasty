@@ -1499,28 +1499,11 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         let Some(model) = self.model() else { return };
         let mapping = self.state.engine.schema.mapping_for(model);
 
-        let Some(model_col_id) = mapping.item_collection.model_column else {
+        let Some(_) = mapping.item_collection.model_column else {
             return;
         };
 
-        let model_name = self
-            .state
-            .engine
-            .schema
-            .app
-            .model(model.id)
-            .name()
-            .upper_camel_case()
-            .to_string();
-
-        let col_expr = stmt::Expr::column(stmt::ExprColumn {
-            nesting: 0,
-            table: 0,
-            column: model_col_id.index,
-        });
-        let discriminator_cond = stmt::Expr::eq(col_expr, stmt::Value::String(model_name));
-
-        filter.add_filter(discriminator_cond);
+        filter.add_filter(stmt::Expr::is_model(model.id));
     }
 
     fn lower_expr_field(&self, nesting: usize, index: usize) -> stmt::Expr {

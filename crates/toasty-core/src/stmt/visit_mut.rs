@@ -3,7 +3,7 @@
 use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAllOp, ExprAnd,
     ExprAny, ExprAnyOp, ExprArg, ExprBetween, ExprBinaryOp, ExprCast, ExprColumn, ExprError,
-    ExprExists, ExprFunc, ExprInList, ExprInSubquery, ExprIntersects, ExprIsNull, ExprIsSuperset,
+    ExprExists, ExprFunc, ExprInList, ExprInSubquery, ExprIntersects, ExprIsModel, ExprIsNull, ExprIsSuperset,
     ExprIsVariant, ExprLength, ExprLet, ExprLike, ExprList, ExprMap, ExprMatch, ExprNot, ExprOr,
     ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStartsWith, ExprStmt, Filter,
     FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, LimitCursor,
@@ -203,6 +203,13 @@ pub trait VisitMut {
     /// The default implementation delegates to [`visit_expr_intersects_mut`].
     fn visit_expr_intersects_mut(&mut self, i: &mut ExprIntersects) {
         visit_expr_intersects_mut(self, i);
+    }
+
+    /// Visits an [`ExprIsModel`] node mutably.
+    ///
+    /// The default implementation delegates to [`visit_expr_is_model_mut`].
+    fn visit_expr_is_model_mut(&mut self, i: &mut ExprIsModel) {
+        visit_expr_is_model_mut(self, i);
     }
 
     /// Visits an [`ExprIsNull`] node mutably.
@@ -914,6 +921,7 @@ where
         Expr::InList(expr) => v.visit_expr_in_list_mut(expr),
         Expr::InSubquery(expr) => v.visit_expr_in_subquery_mut(expr),
         Expr::Intersects(expr) => v.visit_expr_intersects_mut(expr),
+        Expr::IsModel(expr) => v.visit_expr_is_model_mut(expr),
         Expr::IsNull(expr) => v.visit_expr_is_null_mut(expr),
         Expr::IsSuperset(expr) => v.visit_expr_is_superset_mut(expr),
         Expr::IsVariant(expr) => v.visit_expr_is_variant_mut(expr),
@@ -1093,6 +1101,13 @@ where
 {
     v.visit_expr_mut(&mut node.lhs);
     v.visit_expr_mut(&mut node.rhs);
+}
+
+/// Default mutable traversal for [`ExprIsNull`] nodes. Visits the inner expression.
+pub fn visit_expr_is_model_mut<V>(v: &mut V, node: &mut ExprIsModel)
+where
+    V: VisitMut + ?Sized,
+{
 }
 
 /// Default mutable traversal for [`ExprIsNull`] nodes. Visits the inner expression.

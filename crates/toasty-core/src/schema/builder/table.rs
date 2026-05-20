@@ -467,7 +467,10 @@ impl BuildTableFromModels<'_> {
             name: col_name,
             ty: storage_ty.bridge_type(&primitive.ty),
             storage_ty,
-            nullable: true, // child fields always nullable
+            // Mark all non-pk fields as nullable.
+            // definitionally if a row exists, it has a pk
+            // additionally, this is required to pass index verification later.
+            nullable: !field.primary_key,
             primary_key: false,
             auto_increment: false,
             versionable: false,

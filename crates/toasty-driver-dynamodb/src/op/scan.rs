@@ -2,13 +2,13 @@ use super::{
     Connection, ExprAttrs, Result, Schema, ddb_expression, deserialize_ddb_cursor, item_to_record,
     operation, serialize_ddb_cursor, stmt,
 };
+use crate::sort_key_columns;
 use std::sync::Arc;
 use toasty_core::{
     driver::{ExecResponse, operation::Pagination},
     schema::db::ColumnId,
     stmt::ExprContext,
 };
-use crate::sort_key_columns;
 
 impl Connection {
     pub(crate) async fn exec_scan(
@@ -128,7 +128,9 @@ impl Connection {
                         .map_err(toasty_core::Error::driver_operation_failed)?
                     {
                         Some(item) => {
-                            rows.push(item_to_record(&item, cols(), &sk_cols).map(stmt::Value::from)?);
+                            rows.push(
+                                item_to_record(&item, cols(), &sk_cols).map(stmt::Value::from)?,
+                            );
                         }
                         None => break,
                     }
