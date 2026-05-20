@@ -1,15 +1,15 @@
 //! Schema-diff types.
 //!
-//! Compares two [`Schema`](super::Schema) versions and produces structured
-//! changes consumed by drivers to generate migrations.
+//! Compares two [`db::Schema`](super::db::Schema) versions and produces
+//! structured changes consumed by drivers to generate migrations.
 //!
 //! # Examples
 //!
 //! ```ignore
-//! use toasty_core::schema::db::{Schema, diff};
+//! use toasty_core::schema::{db, diff};
 //!
-//! let previous = Schema::default();
-//! let next = Schema::default();
+//! let previous = db::Schema::default();
+//! let next = db::Schema::default();
 //! let hints = diff::RenameHints::new();
 //! let d = diff::Schema::from(&previous, &next, &hints);
 //! assert!(d.is_empty());
@@ -40,7 +40,7 @@ use crate::schema::db::{ColumnId, IndexId, Schema as DbSchema, TableId};
 /// # Examples
 ///
 /// ```ignore
-/// use toasty_core::schema::db::{TableId, diff};
+/// use toasty_core::schema::{db::TableId, diff};
 ///
 /// let mut hints = diff::RenameHints::new();
 /// hints.add_table_hint(TableId(0), TableId(1));
@@ -93,16 +93,16 @@ impl RenameHints {
 
 /// Shared context passed to all diff computations.
 ///
-/// Holds references to both the previous and next [`Schema`](super::Schema)
+/// Holds references to both the previous and next [`db::Schema`](super::db::Schema)
 /// versions and the [`RenameHints`] that guide rename detection.
 ///
 /// # Examples
 ///
 /// ```ignore
-/// use toasty_core::schema::db::{Schema, diff};
+/// use toasty_core::schema::{db, diff};
 ///
-/// let previous = Schema::default();
-/// let next = Schema::default();
+/// let previous = db::Schema::default();
+/// let next = db::Schema::default();
 /// let hints = diff::RenameHints::new();
 /// let cx = diff::Context::new(&previous, &next, &hints);
 /// assert!(cx.previous().tables.is_empty());

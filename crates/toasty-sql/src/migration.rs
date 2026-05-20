@@ -2,7 +2,10 @@ use std::borrow::Cow;
 
 use toasty_core::{
     driver::Capability,
-    schema::db::{Column, Schema, Table, Type, TypeEnum, diff},
+    schema::{
+        db::{Column, Schema, Table, Type, TypeEnum},
+        diff,
+    },
 };
 
 use crate::stmt::{AlterColumnChanges, AlterTable, AlterTableAction, DropTable, Name, Statement};

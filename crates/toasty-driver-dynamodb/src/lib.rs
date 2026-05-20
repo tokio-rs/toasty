@@ -25,7 +25,10 @@ use async_trait::async_trait;
 use toasty_core::{
     Error, Result, Schema,
     driver::{Capability, Driver, ExecResponse, operation::Operation},
-    schema::db::{self, Column, ColumnId, Migration, Table, diff},
+    schema::{
+        db::{self, Column, ColumnId, Migration, Table},
+        diff,
+    },
     stmt::{self, ExprContext},
 };
 

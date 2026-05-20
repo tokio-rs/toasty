@@ -1,4 +1,4 @@
-/// A database migration generated from a [`diff::Schema`](super::diff::Schema) by a driver.
+/// A database migration generated from a [`diff::Schema`](super::super::diff::Schema) by a driver.
 ///
 /// Currently only SQL migrations are supported. Multiple SQL statements
 /// within a single migration are separated by breakpoint markers

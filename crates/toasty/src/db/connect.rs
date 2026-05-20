@@ -5,7 +5,7 @@ use std::borrow::Cow;
 use toasty_core::driver::{Capability, Driver};
 use toasty_core::{
     driver::Connection,
-    schema::db::{Migration, diff},
+    schema::{db::Migration, diff},
 };
 
 use url::Url;

@@ -33,7 +33,10 @@ use toasty_core::{
         Capability, Driver, ExecResponse,
         operation::{IsolationLevel, Operation, Transaction},
     },
-    schema::db::{self, Migration, Table, diff},
+    schema::{
+        db::{self, Migration, Table},
+        diff,
+    },
     stmt,
 };
 use toasty_sql::{self as sql};

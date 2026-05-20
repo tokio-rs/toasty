@@ -1,6 +1,8 @@
-use toasty_core::schema::db::{
-    Column, ColumnId, Index, IndexColumn, IndexId, IndexOp, IndexScope, PrimaryKey, Schema, Table,
-    TableId, Type,
+use toasty_core::schema::{
+    db::{
+        Column, ColumnId, Index, IndexColumn, IndexId, IndexOp, IndexScope, PrimaryKey, Schema,
+        Table, TableId, Type,
+    },
     diff::{self, Indices, IndicesItem},
 };
 use toasty_core::stmt;

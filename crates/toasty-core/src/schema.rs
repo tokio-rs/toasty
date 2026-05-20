@@ -31,6 +31,9 @@ pub use builder::Builder;
 /// Database-level (table/column-oriented) schema definitions.
 pub mod db;
 
+/// Schema-diff types: compare two schema versions and produce structural changes.
+pub mod diff;
+
 /// Mapping between the app layer and the database layer.
 pub mod mapping;
 use mapping::Mapping;

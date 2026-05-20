@@ -9,7 +9,7 @@ use crate::schema::db::Schema as DbSchema;
 /// # Examples
 ///
 /// ```ignore
-/// use toasty_core::schema::db::{Schema as DbSchema, diff};
+/// use toasty_core::schema::{db::Schema as DbSchema, diff};
 ///
 /// let previous = DbSchema::default();
 /// let next = DbSchema::default();
