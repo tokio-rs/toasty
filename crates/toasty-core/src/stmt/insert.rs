@@ -39,8 +39,16 @@ impl Insert {
     pub fn merge(&mut self, other: Self) {
         match (&self.target, &other.target) {
             (InsertTarget::Model(a), InsertTarget::Model(b)) if a == b => {}
-            _ => todo!("handle this case"),
-        }
+            (InsertTarget::Scope(a), InsertTarget::Scope(b)) if a == b => {
+                // Same scope-shape: same target model and same parent reference.
+                // Merging is safe — the appended rows bind to the same scope.
+            }
+            (InsertTarget::Scope(_), InsertTarget::Scope(_)) => {
+                // Two scoped inserts with different parent references. Need
+                // per-row scope tracking; not yet supported.
+                todo!("merge of scoped inserts with differing parent scopes")
+            }
+            _ => todo!("merge of mismatched insert targets: {:?} vs {:?}", self.target, other.target),        }
 
         match (&mut self.source.body, other.source.body) {
             (stmt::ExprSet::Values(self_values), stmt::ExprSet::Values(other_values)) => {

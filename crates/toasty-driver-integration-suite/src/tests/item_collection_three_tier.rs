@@ -277,6 +277,86 @@ pub async fn three_tier_scoped_update(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// Batch-create children at the deepest tier. Each row's scope is
+/// `alice.todos()` — the same parent Scope target — so `Insert::merge`
+/// must collapse them into one VALUES list. The composite FK (tenant_id,
+/// user_id) on Todo is what stresses the merge path beyond the 2-tier case.
+#[driver_test(requires(native_starts_with))]
+pub async fn three_tier_batch_create_deepest(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let acme = toasty::create!(Tenant { name: "Acme" })
+        .exec(&mut db)
+        .await?;
+
+    let alice = toasty::create!(in acme.users() {
+        id: "alice".to_string(),
+        name: "Alice",
+    })
+    .exec(&mut db)
+    .await?;
+
+    let mut builder = Todo::create_many();
+    for i in 0..5 {
+        builder = builder.item(toasty::create!(in alice.todos() {
+            id: format!("t{i}"),
+            title: format!("todo {i}"),
+        }));
+    }
+    let todos = builder.exec(&mut db).await?;
+    assert_eq!(5, todos.len());
+
+    let mut titles: Vec<String> = alice
+        .todos()
+        .exec(&mut db)
+        .await?
+        .into_iter()
+        .map(|t| t.title)
+        .collect();
+    titles.sort();
+    assert_eq!(
+        titles,
+        vec!["todo 0", "todo 1", "todo 2", "todo 3", "todo 4"]
+    );
+
+    Ok(())
+}
+
+/// Batch-create middle-tier children under a Tenant. Single-FK scope
+/// (tenant_id only). Confirms the 2-tier merge fix continues to work
+/// when the Scope target is one level deep, even though the schema also
+/// has a deeper tier defined.
+#[driver_test(requires(native_starts_with))]
+pub async fn three_tier_batch_create_middle(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let acme = toasty::create!(Tenant { name: "Acme" })
+        .exec(&mut db)
+        .await?;
+
+    let mut builder = User::create_many();
+    for name in ["Alice", "Bob", "Carol"] {
+        builder = builder.item(toasty::create!(in acme.users() {
+            id: name.to_lowercase(),
+            name: name,
+        }));
+    }
+    let users = builder.exec(&mut db).await?;
+    assert_eq!(3, users.len());
+
+    let mut names: Vec<String> = acme
+        .users()
+        .exec(&mut db)
+        .await?
+        .into_iter()
+        .map(|u| u.name)
+        .collect();
+    names.sort();
+    assert_eq!(names, vec!["Alice", "Bob", "Carol"]);
+
+    Ok(())
+}
+
 /// Cascade delete from the root: deleting a Tenant removes its Users
 /// and their Todos. Verifies the cascade chain reaches two levels deep.
 #[driver_test(requires(native_starts_with))]

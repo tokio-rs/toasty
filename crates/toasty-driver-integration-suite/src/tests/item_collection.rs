@@ -472,3 +472,39 @@ pub async fn update_child_with_filter(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// Batch-create multiple child rows under one parent. Exercises
+/// `Insert::merge` for `InsertTarget::Scope` targets — the planner builds
+/// one INSERT per row and merges them into a single VALUES list before
+/// dispatching to the driver. All rows must round-trip and remain
+/// addressable by the user's scope.
+#[driver_test(requires(native_starts_with))]
+pub async fn batch_create_children(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let user = User::create().exec(&mut db).await?;
+
+    let mut builder = Todo::create_many();
+    for i in 0..5 {
+        builder = builder.item(
+            user.todos().create().title(format!("todo {i}")),
+        );
+    }
+    let todos = builder.exec(&mut db).await?;
+    assert_eq!(5, todos.len());
+
+    let mut titles: Vec<String> = user
+        .todos()
+        .exec(&mut db)
+        .await?
+        .into_iter()
+        .map(|t| t.title)
+        .collect();
+    titles.sort();
+    assert_eq!(
+        titles,
+        vec!["todo 0", "todo 1", "todo 2", "todo 3", "todo 4"]
+    );
+
+    Ok(())
+}
+
