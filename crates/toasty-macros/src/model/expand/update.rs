@@ -146,14 +146,19 @@ impl Expand<'_> {
         let field = &self.model.fields[version_index];
         let index_tokenized = util::int(version_index);
         let field_ident = &field.name.ident;
+        let FieldTy::Primitive(field_ty) = &field.ty else {
+            unreachable!("version field must be primitive");
+        };
 
         quote! {
             {
-                let current = s.target.#field_ident;
+                let current: u64 = <#field_ty as #toasty::Version>::as_u64(s.target.#field_ident);
+                let next = <#field_ty as #toasty::Version>::from_u64(current + 1);
                 s.assignments.set(
                     #toasty::stmt::Projection::from_index(#index_tokenized),
-                    <u64 as #toasty::IntoExpr<u64>>::into_expr(current + 1),
+                    <#field_ty as #toasty::IntoExpr<#field_ty>>::into_expr(next),
                 );
+                let current_val = <#field_ty as #toasty::Version>::from_u64(current);
                 s.condition = Some(
                     #toasty::core::stmt::Expr::eq(
                         #toasty::core::stmt::Expr::Reference(
@@ -162,9 +167,7 @@ impl Expand<'_> {
                                 index: #index_tokenized,
                             }
                         ),
-                        #toasty::core::stmt::Expr::Value(
-                            #toasty::core::stmt::Value::U64(current)
-                        ),
+                        #toasty::into_untyped_expr::<#field_ty, _>(current_val),
                     )
                 );
             }

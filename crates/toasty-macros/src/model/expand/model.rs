@@ -272,6 +272,9 @@ impl Expand<'_> {
         let field = &self.model.fields[version_index];
         let index_tokenized = util::int(version_index);
         let field_ident = &field.name.ident;
+        let FieldTy::Primitive(field_ty) = &field.ty else {
+            unreachable!("version field must be primitive");
+        };
 
         quote! {
             __delete.set_condition(
@@ -283,9 +286,7 @@ impl Expand<'_> {
                                 index: #index_tokenized,
                             }
                         ),
-                        #toasty::core::stmt::Expr::Value(
-                            #toasty::core::stmt::Value::U64(self.#field_ident)
-                        ),
+                        #toasty::into_untyped_expr::<#field_ty, _>(self.#field_ident),
                     )
                 )
             )
