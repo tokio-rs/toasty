@@ -155,7 +155,8 @@ pub async fn driver_sees_begin_commit(t: &mut Test) -> Result<()> {
         t.log().pop_op(),
         Operation::Transaction(Transaction::Start {
             isolation: None,
-            read_only: false
+            read_only: false,
+            ..
         })
     );
     assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT
@@ -183,7 +184,8 @@ pub async fn driver_sees_begin_rollback(t: &mut Test) -> Result<()> {
         t.log().pop_op(),
         Operation::Transaction(Transaction::Start {
             isolation: None,
-            read_only: false
+            read_only: false,
+            ..
         })
     );
     assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT
@@ -314,7 +316,8 @@ pub async fn nested_driver_sees_savepoint_ops(t: &mut Test) -> Result<()> {
         t.log().pop_op(),
         Operation::Transaction(Transaction::Start {
             isolation: None,
-            read_only: false
+            read_only: false,
+            ..
         })
     );
     // INSERT Alice
@@ -362,7 +365,8 @@ pub async fn nested_driver_sees_rollback_to_savepoint(t: &mut Test) -> Result<()
         t.log().pop_op(),
         Operation::Transaction(Transaction::Start {
             isolation: None,
-            read_only: false
+            read_only: false,
+            ..
         })
     );
     // SAVEPOINT
@@ -440,7 +444,8 @@ pub async fn multi_op_inside_tx_uses_savepoints(t: &mut Test) -> Result<()> {
         t.log().pop_op(),
         Operation::Transaction(Transaction::Start {
             isolation: None,
-            read_only: false
+            read_only: false,
+            ..
         })
     );
     // SAVEPOINT (engine wraps the multi-op plan)
@@ -526,7 +531,8 @@ pub async fn builder_with_isolation_level(t: &mut Test) -> Result<()> {
         t.log().pop_op(),
         Operation::Transaction(Transaction::Start {
             isolation: Some(IsolationLevel::Serializable),
-            read_only: false
+            read_only: false,
+            ..
         })
     );
 
@@ -547,7 +553,8 @@ pub async fn builder_with_read_only(t: &mut Test) -> Result<()> {
         t.log().pop_op(),
         Operation::Transaction(Transaction::Start {
             isolation: None,
-            read_only: true
+            read_only: true,
+            ..
         })
     );
 
@@ -573,7 +580,8 @@ pub async fn builder_with_all_options(t: &mut Test) -> Result<()> {
         t.log().pop_op(),
         Operation::Transaction(Transaction::Start {
             isolation: Some(IsolationLevel::Serializable),
-            read_only: true
+            read_only: true,
+            ..
         })
     );
 

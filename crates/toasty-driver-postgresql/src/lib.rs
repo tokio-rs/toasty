@@ -25,7 +25,10 @@ use percent_encoding::percent_decode_str;
 use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     Result, Schema,
-    driver::{Capability, Driver, ExecResponse, Operation},
+    driver::{
+        Capability, Driver, ExecResponse, Operation,
+        operation::{Transaction, TransactionMode},
+    },
     schema::{
         db::{self, Migration, Table},
         diff,
@@ -336,6 +339,18 @@ impl toasty_core::driver::Connection for Connection {
         tracing::trace!(driver = "postgresql", op = %op.name(), "driver exec");
 
         if let Operation::Transaction(ref t) = op {
+            // PostgreSQL has no `BEGIN IMMEDIATE` / `BEGIN EXCLUSIVE`
+            // analogue; reject non-Default modes loudly rather than
+            // silently dropping them at the serializer.
+            if let Transaction::Start {
+                mode: mode @ (TransactionMode::Immediate | TransactionMode::Exclusive),
+                ..
+            } = t
+            {
+                return Err(toasty_core::Error::unsupported_feature(format!(
+                    "PostgreSQL does not support TransactionMode::{mode:?}"
+                )));
+            }
             let sql = sql::Serializer::postgresql(&schema.db).serialize_transaction(t);
             self.client
                 .batch_execute(&sql)

@@ -86,6 +86,7 @@ pub mod select_projection_has_one;
 pub mod starts_with;
 pub mod tx_atomic_stmt;
 pub mod tx_interactive;
+pub mod tx_lock_mode;
 pub mod type_bigdecimal;
 pub mod type_collection;
 pub mod type_decimal;

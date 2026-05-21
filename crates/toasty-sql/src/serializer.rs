@@ -30,7 +30,7 @@ mod value;
 use crate::stmt::Statement;
 
 use toasty_core::{
-    driver::operation::{IsolationLevel, Transaction},
+    driver::operation::{IsolationLevel, Transaction, TransactionMode},
     schema::db::{self, Index, Table},
     stmt::IntoExprTarget,
 };
@@ -166,9 +166,10 @@ impl<'a> Serializer<'a> {
                 Transaction::Start {
                     isolation,
                     read_only,
+                    mode,
                 } => fmt!(
                     &mut f,
-                    self.serialize_transaction_start(*isolation, *read_only)
+                    self.serialize_transaction_start(*isolation, *read_only, *mode)
                 ),
                 Transaction::Commit => fmt!(&mut f, "COMMIT"),
                 Transaction::Rollback => fmt!(&mut f, "ROLLBACK"),
@@ -192,6 +193,7 @@ impl<'a> Serializer<'a> {
         &self,
         isolation: Option<IsolationLevel>,
         read_only: bool,
+        mode: TransactionMode,
     ) -> String {
         fn isolation_level_str(level: IsolationLevel) -> &'static str {
             match level {
@@ -203,6 +205,8 @@ impl<'a> Serializer<'a> {
         }
 
         match self.flavor {
+            // MySQL has no SQLite-style lock-mode keyword; drivers
+            // reject non-Default `mode` before reaching the serializer.
             Flavor::Mysql => {
                 let mut sql = String::new();
                 if let Some(level) = isolation {
@@ -216,6 +220,8 @@ impl<'a> Serializer<'a> {
                 }
                 sql
             }
+            // PostgreSQL has no SQLite-style lock-mode keyword; drivers
+            // reject non-Default `mode` before reaching the serializer.
             Flavor::Postgresql => {
                 let mut sql = String::from("BEGIN");
                 if let Some(level) = isolation {
@@ -227,10 +233,16 @@ impl<'a> Serializer<'a> {
                 }
                 sql
             }
-            Flavor::Sqlite => {
-                // SQLite doesn't support per-transaction isolation levels or read-only mode
-                "BEGIN".to_string()
-            }
+            // SQLite has no per-transaction isolation level or read-only
+            // keyword; the lock-acquisition mode is the only knob. SQLite's
+            // natural default is DEFERRED, so `Default` and `Deferred` emit
+            // the same SQL — the distinction only manifests on drivers
+            // whose default differs (Turso MVCC).
+            Flavor::Sqlite => match mode {
+                TransactionMode::Default | TransactionMode::Deferred => "BEGIN".to_string(),
+                TransactionMode::Immediate => "BEGIN IMMEDIATE".to_string(),
+                TransactionMode::Exclusive => "BEGIN EXCLUSIVE".to_string(),
+            },
         }
     }
 

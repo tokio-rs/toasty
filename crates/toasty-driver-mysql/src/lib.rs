@@ -23,7 +23,10 @@ use mysql_async::{
 use std::{borrow::Cow, cell::Cell, sync::Arc};
 use toasty_core::{
     Result, Schema,
-    driver::{Capability, Driver, ExecResponse, Operation},
+    driver::{
+        Capability, Driver, ExecResponse, Operation,
+        operation::{Transaction, TransactionMode},
+    },
     schema::{
         db::{self, Migration, Table},
         diff,
@@ -242,6 +245,18 @@ impl toasty_core::driver::Connection for Connection {
                 op.last_insert_id_hack,
             ),
             Operation::Transaction(op) => {
+                // MySQL has no `BEGIN IMMEDIATE` / `BEGIN EXCLUSIVE`
+                // analogue; reject non-Default modes loudly rather than
+                // silently dropping them at the serializer.
+                if let Transaction::Start {
+                    mode: mode @ (TransactionMode::Immediate | TransactionMode::Exclusive),
+                    ..
+                } = &op
+                {
+                    return Err(toasty_core::Error::unsupported_feature(format!(
+                        "MySQL does not support TransactionMode::{mode:?}"
+                    )));
+                }
                 let sql = sql::Serializer::mysql(&schema.db).serialize_transaction(&op);
                 self.conn
                     .query_drop(sql)
