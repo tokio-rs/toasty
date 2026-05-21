@@ -590,6 +590,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 }],
             }),
             filter,
+            distinct: false,
         };
 
         stmt.filter_mut_unwrap().set(stmt::Expr::exists(sub_query));
@@ -1058,6 +1059,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                                 },
                             ),
                         ])),
+                        distinct: false,
                     }),
                 )),
                 condition: Condition::default(),
@@ -1116,6 +1118,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             ),
             filter: stmt::Filter::new(true),
             returning: stmt::Returning::Project(stmt::Expr::record_from_vec(columns)),
+            distinct: false,
         })
         .with(ctes)
         .build()

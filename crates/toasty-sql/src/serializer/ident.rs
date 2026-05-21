@@ -1,11 +1,9 @@
-use crate::serializer::ExprContext;
-
 use super::{Flavor, Formatter, ToSql};
 
 pub(super) struct Ident<S>(pub(super) S);
 
 impl<S: AsRef<str>> ToSql for Ident<S> {
-    fn to_sql(self, _cx: &ExprContext<'_>, f: &mut Formatter<'_>) {
+    fn to_sql(self, f: &mut Formatter<'_>) {
         match f.serializer.flavor {
             Flavor::Mysql => {
                 f.dst.push('`');

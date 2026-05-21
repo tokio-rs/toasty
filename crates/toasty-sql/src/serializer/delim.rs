@@ -1,5 +1,3 @@
-use crate::serializer::ExprContext;
-
 use super::{Formatter, ToSql};
 
 /// Comma delimited
@@ -16,8 +14,8 @@ where
     L: IntoIterator,
     L::Item: ToSql,
 {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut Formatter<'_>) {
-        Delimited(self.0, ", ").to_sql(cx, f);
+    fn to_sql(self, f: &mut Formatter<'_>) {
+        Delimited(self.0, ", ").to_sql(f);
     }
 }
 
@@ -26,8 +24,8 @@ where
     L: IntoIterator,
     L::Item: ToSql,
 {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut Formatter<'_>) {
-        Delimited(self.0, ".").to_sql(cx, f);
+    fn to_sql(self, f: &mut Formatter<'_>) {
+        Delimited(self.0, ".").to_sql(f);
     }
 }
 
@@ -36,10 +34,10 @@ where
     L: IntoIterator,
     L::Item: ToSql,
 {
-    fn to_sql(self, cx: &ExprContext<'_>, f: &mut Formatter<'_>) {
+    fn to_sql(self, f: &mut Formatter<'_>) {
         let mut s = "";
         for i in self.0.into_iter() {
-            fmt!(cx, f, s i);
+            fmt!(f, s i);
             s = self.1;
         }
     }
