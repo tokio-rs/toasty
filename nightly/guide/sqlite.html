@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-cfb9c3cf.js";
+            window.path_to_searchindex_js = "searchindex-f437a29e.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-46081a54.js"></script>
@@ -289,13 +289,16 @@ mutations, <a href="./batch-operations.html">batch operations</a>,
 <a href="./preloading-associations.html">association preloading</a>, and
 serializable <a href="./transactions.html">transactions</a> all run natively. A few
 behaviors differ from the other SQL backends:</p>
-<p><strong><code>LIKE</code> is case-insensitive for ASCII.</strong> SQLite’s default <code>LIKE</code>
-ignores case for ASCII characters. The
-<a href="./filtering-with-expressions.html#ilike"><code>.ilike()</code></a> filter lowers to
-the same <code>LIKE</code>, so case-insensitive matching works — but a
-<code>.like("Rust")</code> filter also matches <code>"rust"</code> and <code>"RUST"</code>. Use
-<code>GLOB</code> (which Toasty does not currently expose) or a <code>CHECK</code> against
-exact bytes if you need case-sensitive pattern matching.</p>
+<p><strong><code>LIKE</code> is case-insensitive for ASCII.</strong> SQLite’s <code>LIKE</code> ignores case for ASCII
+characters but is case-sensitive for non-ASCII ones. A
+<a href="./filtering-with-expressions.html#like"><code>.like("Rust")</code></a> filter also matches
+<code>"rust"</code> and <code>"RUST"</code>, but <code>.like("café")</code> does not match <code>"CAFÉ"</code>. Use <code>GLOB</code>
+(which Toasty does not currently expose) or a <code>CHECK</code> against exact bytes if you
+need case-sensitive pattern matching.</p>
+<p><strong>No <code>ILIKE</code>.</strong> SQLite has no <code>ILIKE</code> operator, so
+<a href="./filtering-with-expressions.html#ilike"><code>.ilike()</code></a> is rejected with an
+<code>unsupported_feature</code> error. Since SQLite’s <code>LIKE</code> already folds ASCII case, use
+<code>.like()</code> for case-insensitive ASCII matching.</p>
 <p><strong>No native prefix-match operator.</strong>
 <a href="./filtering-with-expressions.html#starts_with"><code>.starts_with("abc")</code></a>
 lowers to <code>LIKE 'abc%'</code>. The optimizer can use a regular index for the
@@ -329,7 +332,8 @@ the duration of a transaction.</p>
 <p><strong>Only <code>Serializable</code> isolation.</strong> Starting a transaction with any
 other isolation level returns <code>Error::UnsupportedFeature</code>. The
 default (no explicit level) is accepted and runs as serializable.</p>
-<pre><code class="language-rust ignore">let users = User::filter(User::fields().email().ilike("%@example.com"))
+<pre><code class="language-rust ignore">// SQLite's LIKE folds ASCII case, so this matches "%@Example.com" too.
+let users = User::filter(User::fields().email().like("%@example.com"))
     .exec(&amp;mut db)
     .await?;</code></pre>
 <h2 id="in-memory-databases"><a class="header" href="#in-memory-databases">In-memory databases</a></h2>

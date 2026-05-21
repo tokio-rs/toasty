@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-cfb9c3cf.js";
+            window.path_to_searchindex_js = "searchindex-f437a29e.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-46081a54.js"></script>
@@ -385,12 +385,13 @@ scan, or panic in the driver:</p>
 from the index key condition and applies it as a post-filter, which
 forces a <code>Scan</code> instead of a <code>Query</code>. Avoid <code>!=</code> against the partition
 or sort key — it defeats the index.</p>
-<p><strong><code>LIKE</code> and <code>ILIKE</code>.</strong> DynamoDB has no <code>LIKE</code> operator. Calling
-<a href="./filtering-with-expressions.html#string-pattern-matching"><code>.like(...)</code> or <code>.ilike(...)</code></a>
-on a string field panics inside the driver. Use <code>.starts_with(...)</code>
-for prefix matching; substring and suffix matching are not supported
-by the backend at all and have to be done client-side after fetching
-the rows.</p>
+<p><strong><code>LIKE</code> and <code>ILIKE</code>.</strong> DynamoDB has neither operator. An
+<a href="./filtering-with-expressions.html#ilike"><code>.ilike(...)</code></a> query is rejected with an
+<code>unsupported_feature</code> error; <a href="./filtering-with-expressions.html#like"><code>.like(...)</code></a>
+panics inside the driver. Use
+<a href="./filtering-with-expressions.html#starts_with"><code>.starts_with(...)</code></a> for prefix
+matching; substring and suffix matching are not supported by the backend at all
+and have to be done client-side after fetching the rows.</p>
 <p><strong>Backward pagination.</strong>
 <a href="./sorting-limits-and-pagination.html#navigating-pages"><code>.paginate(per_page).prev(&amp;db)</code></a>
 does not work — the driver does not produce a <code>prev_cursor</code>. DynamoDB

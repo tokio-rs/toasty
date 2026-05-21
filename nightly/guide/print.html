@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-cfb9c3cf.js";
+            window.path_to_searchindex_js = "searchindex-f437a29e.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-46081a54.js"></script>
@@ -4614,9 +4614,9 @@ checking for null — use <code>Model::filter()</code> with field expressions.</
 <tr><td><a href="#membership-with-in_list"><code>.in_list([...])</code></a></td><td>Value in list</td><td><code>IN (...)</code></td></tr>
 <tr><td><a href="#null-checks"><code>.is_none()</code></a></td><td>Null check (<code>Option</code> fields)</td><td><code>IS NULL</code></td></tr>
 <tr><td><a href="#null-checks"><code>.is_some()</code></a></td><td>Not-null check (<code>Option</code> fields)</td><td><code>IS NOT NULL</code></td></tr>
-<tr><td><a href="#string-pattern-matching"><code>.starts_with(prefix)</code></a></td><td>Prefix match</td><td><code>begins_with(field, prefix)</code> / <code>LIKE 'prefix%'</code></td></tr>
-<tr><td><a href="#string-pattern-matching"><code>.like(pattern)</code></a></td><td>SQL pattern match</td><td><code>LIKE pattern</code></td></tr>
-<tr><td><a href="#string-pattern-matching"><code>.ilike(pattern)</code></a></td><td>Case-insensitive SQL pattern match</td><td><code>ILIKE pattern</code></td></tr>
+<tr><td><a href="#starts_with"><code>.starts_with(prefix)</code></a></td><td>Prefix match</td><td><code>begins_with(field, prefix)</code> / <code>LIKE 'prefix%'</code></td></tr>
+<tr><td><a href="#like"><code>.like(pattern)</code></a></td><td>Pattern match, behavior per backend</td><td><code>LIKE pattern</code></td></tr>
+<tr><td><a href="#ilike"><code>.ilike(pattern)</code></a></td><td>Case-insensitive pattern match, PostgreSQL only</td><td><code>ILIKE pattern</code></td></tr>
 <tr><td><a href="#combining-with-and"><code>.and(expr)</code></a></td><td>Both conditions true</td><td><code>AND</code></td></tr>
 <tr><td><a href="#combining-with-or"><code>.or(expr)</code></a></td><td>Either condition true</td><td><code>OR</code></td></tr>
 <tr><td><a href="#negation-with-not"><code>.not()</code> / <code>!expr</code></a></td><td>Negate condition</td><td><code>NOT</code></td></tr>
@@ -4974,6 +4974,11 @@ let users = User::filter(
 </span><span class="boring">}
 </span><span class="boring">}</span></code></pre>
 <h2 id="string-pattern-matching"><a class="header" href="#string-pattern-matching">String pattern matching</a></h2>
+<p><code>.like()</code> and <code>.ilike()</code> map directly onto the database’s own <code>LIKE</code> and <code>ILIKE</code>
+operators. Toasty passes them through and keeps each backend’s behavior rather
+than normalizing it, so <code>.like()</code>’s case sensitivity varies by backend and
+<code>.ilike()</code> is only supported where the database has <code>ILIKE</code> — see the sections
+below.</p>
 <h3 id="starts_with"><a class="header" href="#starts_with"><code>starts_with</code></a></h3>
 <p><code>.starts_with()</code> tests whether a string field starts with the given prefix. It
 works on all supported databases — SQL drivers translate it to <code>LIKE 'prefix%'</code>,
@@ -4998,9 +5003,24 @@ let users = User::filter(User::fields().name().starts_with("Al"))
 </span><span class="boring">}</span></code></pre>
 <h3 id="like"><a class="header" href="#like"><code>like</code></a></h3>
 <p><code>.like()</code> tests a string field against a SQL <code>LIKE</code> pattern. <code>%</code> matches any
-sequence of characters; <code>_</code> matches any single character. <strong>This operator is
-only supported on SQL databases (SQLite, PostgreSQL, MySQL).</strong> Calling it
-against DynamoDB will panic at runtime.</p>
+sequence of characters; <code>_</code> matches any single character. <strong>SQL only</strong> —
+DynamoDB has no <code>LIKE</code> operator, so calling <code>.like()</code> against it panics in the
+driver. Use <a href="#starts_with"><code>.starts_with()</code></a> for prefix matching on DynamoDB.</p>
+<p><code>.like()</code> is a pass-through to the database’s own <code>LIKE</code>, whose case sensitivity
+differs between backends:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Backend</th><th>Case behavior of <code>.like()</code></th></tr>
+</thead>
+<tbody>
+<tr><td>PostgreSQL</td><td>Case-sensitive.</td></tr>
+<tr><td>MySQL</td><td>Set by the column’s collation — <code>_ci</code> collations match case-insensitively, <code>_bin</code> and binary collations case-sensitively.</td></tr>
+<tr><td>SQLite</td><td>Case-insensitive for ASCII; case-sensitive for non-ASCII characters.</td></tr>
+</tbody>
+</table>
+</div>
+<p>For a case-insensitive match on PostgreSQL, use <a href="#ilike"><code>.ilike()</code></a>.</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">use toasty::Model;
@@ -5022,9 +5042,16 @@ let users = User::filter(User::fields().name().like("Al%"))
 <p>Prefer <code>.starts_with()</code> over <code>.like("prefix%")</code> when you only need a prefix
 match — it works across all drivers.</p>
 <h3 id="ilike"><a class="header" href="#ilike"><code>ilike</code></a></h3>
-<p><code>.ilike()</code> is the case-insensitive form of <code>.like()</code>. <strong>SQL-only.</strong> On
-PostgreSQL it lowers to <code>ILIKE</code>; on SQLite and MySQL, plain <code>LIKE</code> is
-already ASCII-case-insensitive, so the same query works.</p>
+<p><code>.ilike()</code> is the case-insensitive form of <code>.like()</code> and maps to PostgreSQL’s
+<code>ILIKE</code> operator. <strong>PostgreSQL only.</strong> Toasty does not emulate <code>ILIKE</code> on
+backends that lack it: on MySQL, SQLite, and DynamoDB the query is rejected with
+an <code>unsupported_feature</code> error.</p>
+<p>PostgreSQL’s <code>LIKE</code> is case-sensitive, so PostgreSQL provides <code>ILIKE</code> for
+case-insensitive matching. The other backends have no operator with matching
+semantics for <code>.ilike()</code> to pass through to — SQLite’s <code>LIKE</code> already folds ASCII
+case, and MySQL’s case behavior is set by the column collation. For
+case-insensitive matching there, rely on SQLite’s ASCII folding or pick a
+case-folding collation on MySQL (see <a href="#like"><code>.like()</code></a>).</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">use toasty::Model;
@@ -5036,7 +5063,7 @@ already ASCII-case-insensitive, so the same query works.</p>
 </span><span class="boring">    name: String,
 </span><span class="boring">}
 </span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
-</span>// Matches "Alice", "ALICIA", "alfred", and so on.
+</span>// On PostgreSQL, matches "Alice", "ALICIA", "alfred", and so on.
 let users = User::filter(User::fields().name().ilike("al%".to_string()))
     .exec(&amp;mut db)
     .await?;
@@ -7240,12 +7267,12 @@ PostgreSQL’s native operators (<code>= ANY(col)</code>, <code>@&gt;</code>, <c
 <pre><code class="language-rust ignore">let admins = User::filter(User::fields().roles().contains("admin"))
     .exec(&amp;mut db)
     .await?;</code></pre>
-<p><strong>Native <code>ILIKE</code>.</strong> The <a href="#ilike"><code>.ilike()</code></a>
-filter method lowers directly to the SQL <code>ILIKE</code> operator. On other
-SQL drivers <code>.ilike()</code> falls back to plain <code>LIKE</code>, which is
-case-sensitive on PostgreSQL — so the behavior actually differs
-between backends. Reach for <code>.ilike()</code> when you need case-insensitive
-matching here.</p>
+<p><strong>Native <code>ILIKE</code>.</strong> PostgreSQL’s <code>LIKE</code> is case-sensitive, and PostgreSQL is the
+only backend with a native case-insensitive <code>ILIKE</code> operator. The
+<a href="#ilike"><code>.ilike()</code></a> filter maps directly to
+<code>ILIKE</code> and is supported only here; on the other backends it is rejected with an
+<code>unsupported_feature</code> error. Reach for <code>.ilike()</code> when you need case-insensitive
+matching.</p>
 <p><strong>Native prefix match.</strong> The
 <a href="#starts_with"><code>.starts_with()</code></a> filter
 lowers to PostgreSQL’s <code>^@</code> operator. The optimizer can use a
@@ -7450,13 +7477,13 @@ transaction.</p>
 <a href="#navigating-pages"><code>.paginate(per_page).prev(&amp;db)</code></a>
 walks backwards from a page cursor.</p>
 <p>A few things that exist on PostgreSQL are absent here:</p>
-<p><strong>No <code>ILIKE</code>.</strong> MySQL’s <a href="#ilike"><code>.ilike()</code></a>
-filter lowers to plain <code>LIKE</code>, whose case sensitivity depends on the
-collation of the column.
-<code>utf8mb4_unicode_ci</code> and similar <code>_ci</code> collations match
-case-insensitively for free; binary or <code>_bin</code> collations match
-case-sensitively. Pick the collation that matches the semantics you
-want when declaring the column.</p>
+<p><strong>No <code>ILIKE</code>.</strong> MySQL has no <code>ILIKE</code> operator, so
+<a href="#ilike"><code>.ilike()</code></a> is rejected with an
+<code>unsupported_feature</code> error. MySQL’s <code>LIKE</code> case sensitivity is set by the
+column’s collation: <code>utf8mb4_unicode_ci</code> and other <code>_ci</code> collations match
+case-insensitively, while binary and <code>_bin</code> collations match case-sensitively.
+Pick the collation that matches the semantics you want when declaring the
+column, then use <a href="#like"><code>.like()</code></a>.</p>
 <p><strong>No <code>RETURNING</code> from INSERT or UPDATE.</strong> MySQL does not support
 <code>RETURNING</code> clauses on mutations. For inserts into a table with an
 auto-increment primary key, Toasty fetches the generated ID with
@@ -7634,13 +7661,16 @@ mutations, <a href="#batch-operations">batch operations</a>,
 <a href="#preloading-associations">association preloading</a>, and
 serializable <a href="#transactions">transactions</a> all run natively. A few
 behaviors differ from the other SQL backends:</p>
-<p><strong><code>LIKE</code> is case-insensitive for ASCII.</strong> SQLite’s default <code>LIKE</code>
-ignores case for ASCII characters. The
-<a href="#ilike"><code>.ilike()</code></a> filter lowers to
-the same <code>LIKE</code>, so case-insensitive matching works — but a
-<code>.like("Rust")</code> filter also matches <code>"rust"</code> and <code>"RUST"</code>. Use
-<code>GLOB</code> (which Toasty does not currently expose) or a <code>CHECK</code> against
-exact bytes if you need case-sensitive pattern matching.</p>
+<p><strong><code>LIKE</code> is case-insensitive for ASCII.</strong> SQLite’s <code>LIKE</code> ignores case for ASCII
+characters but is case-sensitive for non-ASCII ones. A
+<a href="#like"><code>.like("Rust")</code></a> filter also matches
+<code>"rust"</code> and <code>"RUST"</code>, but <code>.like("café")</code> does not match <code>"CAFÉ"</code>. Use <code>GLOB</code>
+(which Toasty does not currently expose) or a <code>CHECK</code> against exact bytes if you
+need case-sensitive pattern matching.</p>
+<p><strong>No <code>ILIKE</code>.</strong> SQLite has no <code>ILIKE</code> operator, so
+<a href="#ilike"><code>.ilike()</code></a> is rejected with an
+<code>unsupported_feature</code> error. Since SQLite’s <code>LIKE</code> already folds ASCII case, use
+<code>.like()</code> for case-insensitive ASCII matching.</p>
 <p><strong>No native prefix-match operator.</strong>
 <a href="#starts_with"><code>.starts_with("abc")</code></a>
 lowers to <code>LIKE 'abc%'</code>. The optimizer can use a regular index for the
@@ -7674,7 +7704,8 @@ the duration of a transaction.</p>
 <p><strong>Only <code>Serializable</code> isolation.</strong> Starting a transaction with any
 other isolation level returns <code>Error::UnsupportedFeature</code>. The
 default (no explicit level) is accepted and runs as serializable.</p>
-<pre><code class="language-rust ignore">let users = User::filter(User::fields().email().ilike("%@example.com"))
+<pre><code class="language-rust ignore">// SQLite's LIKE folds ASCII case, so this matches "%@Example.com" too.
+let users = User::filter(User::fields().email().like("%@example.com"))
     .exec(&amp;mut db)
     .await?;</code></pre>
 <h2 id="in-memory-databases"><a class="header" href="#in-memory-databases">In-memory databases</a></h2>
@@ -7953,12 +7984,13 @@ scan, or panic in the driver:</p>
 from the index key condition and applies it as a post-filter, which
 forces a <code>Scan</code> instead of a <code>Query</code>. Avoid <code>!=</code> against the partition
 or sort key — it defeats the index.</p>
-<p><strong><code>LIKE</code> and <code>ILIKE</code>.</strong> DynamoDB has no <code>LIKE</code> operator. Calling
-<a href="#string-pattern-matching"><code>.like(...)</code> or <code>.ilike(...)</code></a>
-on a string field panics inside the driver. Use <code>.starts_with(...)</code>
-for prefix matching; substring and suffix matching are not supported
-by the backend at all and have to be done client-side after fetching
-the rows.</p>
+<p><strong><code>LIKE</code> and <code>ILIKE</code>.</strong> DynamoDB has neither operator. An
+<a href="#ilike"><code>.ilike(...)</code></a> query is rejected with an
+<code>unsupported_feature</code> error; <a href="#like"><code>.like(...)</code></a>
+panics inside the driver. Use
+<a href="#starts_with"><code>.starts_with(...)</code></a> for prefix
+matching; substring and suffix matching are not supported by the backend at all
+and have to be done client-side after fetching the rows.</p>
 <p><strong>Backward pagination.</strong>
 <a href="#navigating-pages"><code>.paginate(per_page).prev(&amp;db)</code></a>
 does not work — the driver does not produce a <code>prev_cursor</code>. DynamoDB

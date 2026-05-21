@@ -295,125 +295,175 @@
 <a href=#295 id=295 data-nosnippet>295</a>        .visit(<span class="kw-2">&amp;*</span>i.query);
 <a href=#296 id=296 data-nosnippet>296</a>    }
 <a href=#297 id=297 data-nosnippet>297</a>
-<a href=#298 id=298 data-nosnippet>298</a>    <span class="kw">fn </span>visit_expr_is_superset(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: <span class="kw-2">&amp;</span>stmt::ExprIsSuperset) {
-<a href=#299 id=299 data-nosnippet>299</a>        <span class="kw">if </span>!<span class="self">self</span>.capability.native_array_set_predicates &amp;&amp; !rhs_is_concrete_list(<span class="kw-2">&amp;</span>i.rhs) {
-<a href=#300 id=300 data-nosnippet>300</a>            <span class="self">self</span>.record(Error::unsupported_feature(
-<a href=#301 id=301 data-nosnippet>301</a>                <span class="string">"is_superset on this driver requires a literal list on the right-hand side"</span>,
-<a href=#302 id=302 data-nosnippet>302</a>            ));
-<a href=#303 id=303 data-nosnippet>303</a>        }
-<a href=#304 id=304 data-nosnippet>304</a>        stmt::visit::visit_expr_is_superset(<span class="self">self</span>, i);
-<a href=#305 id=305 data-nosnippet>305</a>    }
-<a href=#306 id=306 data-nosnippet>306</a>
-<a href=#307 id=307 data-nosnippet>307</a>    <span class="kw">fn </span>visit_expr_intersects(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: <span class="kw-2">&amp;</span>stmt::ExprIntersects) {
-<a href=#308 id=308 data-nosnippet>308</a>        <span class="kw">if </span>!<span class="self">self</span>.capability.native_array_set_predicates &amp;&amp; !rhs_is_concrete_list(<span class="kw-2">&amp;</span>i.rhs) {
-<a href=#309 id=309 data-nosnippet>309</a>            <span class="self">self</span>.record(Error::unsupported_feature(
-<a href=#310 id=310 data-nosnippet>310</a>                <span class="string">"intersects on this driver requires a literal list on the right-hand side"</span>,
-<a href=#311 id=311 data-nosnippet>311</a>            ));
-<a href=#312 id=312 data-nosnippet>312</a>        }
-<a href=#313 id=313 data-nosnippet>313</a>        stmt::visit::visit_expr_intersects(<span class="self">self</span>, i);
-<a href=#314 id=314 data-nosnippet>314</a>    }
-<a href=#315 id=315 data-nosnippet>315</a>}
-<a href=#316 id=316 data-nosnippet>316</a>
-<a href=#317 id=317 data-nosnippet>317</a><span class="doccomment">/// True when the expression is — or will fold to — a `Value::List` of
-<a href=#318 id=318 data-nosnippet>318</a>/// concrete values. Verify runs before the simplifier, so the user's
-<a href=#319 id=319 data-nosnippet>319</a>/// `vec![…]` still appears as an `Expr::List` of `Expr::Value` items;
-<a href=#320 id=320 data-nosnippet>320</a>/// `fold::expr_list` collapses that shape to `Value::List` during
-<a href=#321 id=321 data-nosnippet>321</a>/// lowering, which is what the driver eventually sees.
-<a href=#322 id=322 data-nosnippet>322</a></span><span class="kw">fn </span>rhs_is_concrete_list(expr: <span class="kw-2">&amp;</span>stmt::Expr) -&gt; bool {
-<a href=#323 id=323 data-nosnippet>323</a>    <span class="kw">match </span>expr {
-<a href=#324 id=324 data-nosnippet>324</a>        stmt::Expr::Value(stmt::Value::List(<span class="kw">_</span>)) =&gt; <span class="bool-val">true</span>,
-<a href=#325 id=325 data-nosnippet>325</a>        stmt::Expr::List(list) =&gt; list
-<a href=#326 id=326 data-nosnippet>326</a>            .items
-<a href=#327 id=327 data-nosnippet>327</a>            .iter()
-<a href=#328 id=328 data-nosnippet>328</a>            .all(|item| <span class="macro">matches!</span>(item, stmt::Expr::Value(<span class="kw">_</span>))),
-<a href=#329 id=329 data-nosnippet>329</a>        <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
-<a href=#330 id=330 data-nosnippet>330</a>    }
-<a href=#331 id=331 data-nosnippet>331</a>}
-<a href=#332 id=332 data-nosnippet>332</a>
-<a href=#333 id=333 data-nosnippet>333</a><span class="attr">#[cfg(test)]
-<a href=#334 id=334 data-nosnippet>334</a></span><span class="kw">mod </span>tests {
-<a href=#335 id=335 data-nosnippet>335</a>    <span class="kw">use </span>super::<span class="kw-2">*</span>;
-<a href=#336 id=336 data-nosnippet>336</a>    <span class="kw">use </span><span class="kw">crate</span>::engine::test_util::test_schema;
-<a href=#337 id=337 data-nosnippet>337</a>    <span class="kw">use </span>toasty_core::driver::Capability;
-<a href=#338 id=338 data-nosnippet>338</a>    <span class="kw">use </span>toasty_core::stmt::{Expr, ExprIsSuperset, ExprList, Value};
-<a href=#339 id=339 data-nosnippet>339</a>
-<a href=#340 id=340 data-nosnippet>340</a>    <span class="kw">fn </span>verify_with(capability: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>Capability, stmt: Statement) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#341 id=341 data-nosnippet>341</a>        <span class="kw">let </span>schema = test_schema();
-<a href=#342 id=342 data-nosnippet>342</a>        <span class="kw">let </span><span class="kw-2">mut </span>error = <span class="prelude-val">None</span>;
-<a href=#343 id=343 data-nosnippet>343</a>        Verify {
-<a href=#344 id=344 data-nosnippet>344</a>            schema: <span class="kw-2">&amp;</span>schema,
-<a href=#345 id=345 data-nosnippet>345</a>            capability,
-<a href=#346 id=346 data-nosnippet>346</a>            error: <span class="kw-2">&amp;mut </span>error,
-<a href=#347 id=347 data-nosnippet>347</a>        }
-<a href=#348 id=348 data-nosnippet>348</a>        .visit(<span class="kw-2">&amp;</span>stmt);
-<a href=#349 id=349 data-nosnippet>349</a>        <span class="kw">match </span>error {
-<a href=#350 id=350 data-nosnippet>350</a>            <span class="prelude-val">Some</span>(err) =&gt; <span class="prelude-val">Err</span>(err),
-<a href=#351 id=351 data-nosnippet>351</a>            <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Ok</span>(()),
-<a href=#352 id=352 data-nosnippet>352</a>        }
-<a href=#353 id=353 data-nosnippet>353</a>    }
-<a href=#354 id=354 data-nosnippet>354</a>
-<a href=#355 id=355 data-nosnippet>355</a>    <span class="kw">fn </span>verify_expr_with(capability: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>Capability, expr: <span class="kw-2">&amp;</span>Expr) -&gt; <span class="prelude-ty">Option</span>&lt;Error&gt; {
-<a href=#356 id=356 data-nosnippet>356</a>        <span class="kw">let </span>schema = test_schema();
-<a href=#357 id=357 data-nosnippet>357</a>        <span class="kw">let </span><span class="kw-2">mut </span>error = <span class="prelude-val">None</span>;
-<a href=#358 id=358 data-nosnippet>358</a>        <span class="comment">// ModelId is only used by projection-checking visitor methods, which
-<a href=#359 id=359 data-nosnippet>359</a>        // these expression-only tests don't trigger.
-<a href=#360 id=360 data-nosnippet>360</a>        </span>VerifyExpr {
-<a href=#361 id=361 data-nosnippet>361</a>            schema: <span class="kw-2">&amp;</span>schema,
-<a href=#362 id=362 data-nosnippet>362</a>            capability,
-<a href=#363 id=363 data-nosnippet>363</a>            model: toasty_core::schema::app::ModelId(<span class="number">0</span>),
-<a href=#364 id=364 data-nosnippet>364</a>            error: <span class="kw-2">&amp;mut </span>error,
-<a href=#365 id=365 data-nosnippet>365</a>        }
-<a href=#366 id=366 data-nosnippet>366</a>        .visit_expr(expr);
-<a href=#367 id=367 data-nosnippet>367</a>        error
-<a href=#368 id=368 data-nosnippet>368</a>    }
-<a href=#369 id=369 data-nosnippet>369</a>
-<a href=#370 id=370 data-nosnippet>370</a>    <span class="kw">fn </span>is_superset(rhs: Expr) -&gt; Expr {
-<a href=#371 id=371 data-nosnippet>371</a>        Expr::IsSuperset(ExprIsSuperset {
-<a href=#372 id=372 data-nosnippet>372</a>            lhs: Box::new(Expr::arg(<span class="number">0</span>)),
-<a href=#373 id=373 data-nosnippet>373</a>            rhs: Box::new(rhs),
-<a href=#374 id=374 data-nosnippet>374</a>        })
-<a href=#375 id=375 data-nosnippet>375</a>    }
-<a href=#376 id=376 data-nosnippet>376</a>
-<a href=#377 id=377 data-nosnippet>377</a>    <span class="attr">#[test]
-<a href=#378 id=378 data-nosnippet>378</a>    #[should_panic(expected = <span class="string">"Offset offset must be a Value::I64 literal"</span>)]
-<a href=#379 id=379 data-nosnippet>379</a>    </span><span class="kw">fn </span>offset_with_non_i64_limit_panics() {
-<a href=#380 id=380 data-nosnippet>380</a>        <span class="kw">let </span><span class="kw-2">mut </span>query = stmt::Query::unit();
-<a href=#381 id=381 data-nosnippet>381</a>        query.limit = <span class="prelude-val">Some</span>(stmt::Limit::Offset(stmt::LimitOffset {
-<a href=#382 id=382 data-nosnippet>382</a>            limit: stmt::Value::I64(<span class="number">10</span>).into(),
-<a href=#383 id=383 data-nosnippet>383</a>            offset: <span class="prelude-val">Some</span>(stmt::Value::U64(<span class="number">5</span>).into()),
-<a href=#384 id=384 data-nosnippet>384</a>        }));
-<a href=#385 id=385 data-nosnippet>385</a>        verify_with(<span class="kw-2">&amp;</span>Capability::SQLITE, Statement::Query(query)).unwrap();
-<a href=#386 id=386 data-nosnippet>386</a>    }
-<a href=#387 id=387 data-nosnippet>387</a>
-<a href=#388 id=388 data-nosnippet>388</a>    <span class="attr">#[test]
-<a href=#389 id=389 data-nosnippet>389</a>    </span><span class="kw">fn </span>is_superset_literal_rhs_accepted_on_ddb() {
-<a href=#390 id=390 data-nosnippet>390</a>        <span class="kw">let </span>expr = is_superset(Expr::Value(Value::List(<span class="macro">vec!</span>[Value::I64(<span class="number">1</span>)])));
-<a href=#391 id=391 data-nosnippet>391</a>        <span class="macro">assert!</span>(verify_expr_with(<span class="kw-2">&amp;</span>Capability::DYNAMODB, <span class="kw-2">&amp;</span>expr).is_none());
-<a href=#392 id=392 data-nosnippet>392</a>    }
-<a href=#393 id=393 data-nosnippet>393</a>
-<a href=#394 id=394 data-nosnippet>394</a>    <span class="attr">#[test]
-<a href=#395 id=395 data-nosnippet>395</a>    </span><span class="kw">fn </span>is_superset_pre_fold_expr_list_accepted_on_ddb() {
-<a href=#396 id=396 data-nosnippet>396</a>        <span class="comment">// Pre-simplifier shape produced by `is_superset(vec![…])`: an
-<a href=#397 id=397 data-nosnippet>397</a>        // `Expr::List` of `Expr::Value` items. The fold pass will collapse
-<a href=#398 id=398 data-nosnippet>398</a>        // this to `Value::List` during lowering.
-<a href=#399 id=399 data-nosnippet>399</a>        </span><span class="kw">let </span>expr = is_superset(Expr::List(ExprList {
-<a href=#400 id=400 data-nosnippet>400</a>            items: <span class="macro">vec!</span>[Expr::Value(Value::I64(<span class="number">1</span>)), Expr::Value(Value::I64(<span class="number">2</span>))],
-<a href=#401 id=401 data-nosnippet>401</a>        }));
-<a href=#402 id=402 data-nosnippet>402</a>        <span class="macro">assert!</span>(verify_expr_with(<span class="kw-2">&amp;</span>Capability::DYNAMODB, <span class="kw-2">&amp;</span>expr).is_none());
-<a href=#403 id=403 data-nosnippet>403</a>    }
-<a href=#404 id=404 data-nosnippet>404</a>
-<a href=#405 id=405 data-nosnippet>405</a>    <span class="attr">#[test]
-<a href=#406 id=406 data-nosnippet>406</a>    </span><span class="kw">fn </span>is_superset_non_literal_rhs_rejected_on_ddb() {
-<a href=#407 id=407 data-nosnippet>407</a>        <span class="kw">let </span>expr = is_superset(Expr::arg(<span class="number">1</span>));
-<a href=#408 id=408 data-nosnippet>408</a>        <span class="kw">let </span>err = verify_expr_with(<span class="kw-2">&amp;</span>Capability::DYNAMODB, <span class="kw-2">&amp;</span>expr)
-<a href=#409 id=409 data-nosnippet>409</a>            .expect(<span class="string">"expected unsupported_feature error"</span>);
-<a href=#410 id=410 data-nosnippet>410</a>        <span class="macro">assert!</span>(err.is_unsupported_feature());
-<a href=#411 id=411 data-nosnippet>411</a>    }
-<a href=#412 id=412 data-nosnippet>412</a>
-<a href=#413 id=413 data-nosnippet>413</a>    <span class="attr">#[test]
-<a href=#414 id=414 data-nosnippet>414</a>    </span><span class="kw">fn </span>is_superset_non_literal_rhs_accepted_on_sqlite() {
-<a href=#415 id=415 data-nosnippet>415</a>        <span class="kw">let </span>expr = is_superset(Expr::arg(<span class="number">1</span>));
-<a href=#416 id=416 data-nosnippet>416</a>        <span class="macro">assert!</span>(verify_expr_with(<span class="kw-2">&amp;</span>Capability::SQLITE, <span class="kw-2">&amp;</span>expr).is_none());
+<a href=#298 id=298 data-nosnippet>298</a>    <span class="kw">fn </span>visit_expr_like(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: <span class="kw-2">&amp;</span>stmt::ExprLike) {
+<a href=#299 id=299 data-nosnippet>299</a>        <span class="comment">// `.ilike()` is a pass-through to the database's own case-insensitive
+<a href=#300 id=300 data-nosnippet>300</a>        // LIKE operator. Only PostgreSQL has one (`ILIKE`), so reject a
+<a href=#301 id=301 data-nosnippet>301</a>        // case-insensitive match on any other backend rather than silently
+<a href=#302 id=302 data-nosnippet>302</a>        // emitting plain `LIKE`, whose case behavior differs across engines.
+<a href=#303 id=303 data-nosnippet>303</a>        </span><span class="kw">if </span>i.case_insensitive &amp;&amp; !<span class="self">self</span>.capability.native_ilike {
+<a href=#304 id=304 data-nosnippet>304</a>            <span class="self">self</span>.record(Error::unsupported_feature(
+<a href=#305 id=305 data-nosnippet>305</a>                <span class="string">"ilike requires a native ILIKE operator, which only PostgreSQL provides; \
+<a href=#306 id=306 data-nosnippet>306</a>                 use like instead"</span>,
+<a href=#307 id=307 data-nosnippet>307</a>            ));
+<a href=#308 id=308 data-nosnippet>308</a>        }
+<a href=#309 id=309 data-nosnippet>309</a>        stmt::visit::visit_expr_like(<span class="self">self</span>, i);
+<a href=#310 id=310 data-nosnippet>310</a>    }
+<a href=#311 id=311 data-nosnippet>311</a>
+<a href=#312 id=312 data-nosnippet>312</a>    <span class="kw">fn </span>visit_expr_is_superset(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: <span class="kw-2">&amp;</span>stmt::ExprIsSuperset) {
+<a href=#313 id=313 data-nosnippet>313</a>        <span class="kw">if </span>!<span class="self">self</span>.capability.native_array_set_predicates &amp;&amp; !rhs_is_concrete_list(<span class="kw-2">&amp;</span>i.rhs) {
+<a href=#314 id=314 data-nosnippet>314</a>            <span class="self">self</span>.record(Error::unsupported_feature(
+<a href=#315 id=315 data-nosnippet>315</a>                <span class="string">"is_superset on this driver requires a literal list on the right-hand side"</span>,
+<a href=#316 id=316 data-nosnippet>316</a>            ));
+<a href=#317 id=317 data-nosnippet>317</a>        }
+<a href=#318 id=318 data-nosnippet>318</a>        stmt::visit::visit_expr_is_superset(<span class="self">self</span>, i);
+<a href=#319 id=319 data-nosnippet>319</a>    }
+<a href=#320 id=320 data-nosnippet>320</a>
+<a href=#321 id=321 data-nosnippet>321</a>    <span class="kw">fn </span>visit_expr_intersects(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: <span class="kw-2">&amp;</span>stmt::ExprIntersects) {
+<a href=#322 id=322 data-nosnippet>322</a>        <span class="kw">if </span>!<span class="self">self</span>.capability.native_array_set_predicates &amp;&amp; !rhs_is_concrete_list(<span class="kw-2">&amp;</span>i.rhs) {
+<a href=#323 id=323 data-nosnippet>323</a>            <span class="self">self</span>.record(Error::unsupported_feature(
+<a href=#324 id=324 data-nosnippet>324</a>                <span class="string">"intersects on this driver requires a literal list on the right-hand side"</span>,
+<a href=#325 id=325 data-nosnippet>325</a>            ));
+<a href=#326 id=326 data-nosnippet>326</a>        }
+<a href=#327 id=327 data-nosnippet>327</a>        stmt::visit::visit_expr_intersects(<span class="self">self</span>, i);
+<a href=#328 id=328 data-nosnippet>328</a>    }
+<a href=#329 id=329 data-nosnippet>329</a>}
+<a href=#330 id=330 data-nosnippet>330</a>
+<a href=#331 id=331 data-nosnippet>331</a><span class="doccomment">/// True when the expression is — or will fold to — a `Value::List` of
+<a href=#332 id=332 data-nosnippet>332</a>/// concrete values. Verify runs before the simplifier, so the user's
+<a href=#333 id=333 data-nosnippet>333</a>/// `vec![…]` still appears as an `Expr::List` of `Expr::Value` items;
+<a href=#334 id=334 data-nosnippet>334</a>/// `fold::expr_list` collapses that shape to `Value::List` during
+<a href=#335 id=335 data-nosnippet>335</a>/// lowering, which is what the driver eventually sees.
+<a href=#336 id=336 data-nosnippet>336</a></span><span class="kw">fn </span>rhs_is_concrete_list(expr: <span class="kw-2">&amp;</span>stmt::Expr) -&gt; bool {
+<a href=#337 id=337 data-nosnippet>337</a>    <span class="kw">match </span>expr {
+<a href=#338 id=338 data-nosnippet>338</a>        stmt::Expr::Value(stmt::Value::List(<span class="kw">_</span>)) =&gt; <span class="bool-val">true</span>,
+<a href=#339 id=339 data-nosnippet>339</a>        stmt::Expr::List(list) =&gt; list
+<a href=#340 id=340 data-nosnippet>340</a>            .items
+<a href=#341 id=341 data-nosnippet>341</a>            .iter()
+<a href=#342 id=342 data-nosnippet>342</a>            .all(|item| <span class="macro">matches!</span>(item, stmt::Expr::Value(<span class="kw">_</span>))),
+<a href=#343 id=343 data-nosnippet>343</a>        <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
+<a href=#344 id=344 data-nosnippet>344</a>    }
+<a href=#345 id=345 data-nosnippet>345</a>}
+<a href=#346 id=346 data-nosnippet>346</a>
+<a href=#347 id=347 data-nosnippet>347</a><span class="attr">#[cfg(test)]
+<a href=#348 id=348 data-nosnippet>348</a></span><span class="kw">mod </span>tests {
+<a href=#349 id=349 data-nosnippet>349</a>    <span class="kw">use </span>super::<span class="kw-2">*</span>;
+<a href=#350 id=350 data-nosnippet>350</a>    <span class="kw">use </span><span class="kw">crate</span>::engine::test_util::test_schema;
+<a href=#351 id=351 data-nosnippet>351</a>    <span class="kw">use </span>toasty_core::driver::Capability;
+<a href=#352 id=352 data-nosnippet>352</a>    <span class="kw">use </span>toasty_core::stmt::{Expr, ExprIsSuperset, ExprList, Value};
+<a href=#353 id=353 data-nosnippet>353</a>
+<a href=#354 id=354 data-nosnippet>354</a>    <span class="kw">fn </span>verify_with(capability: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>Capability, stmt: Statement) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#355 id=355 data-nosnippet>355</a>        <span class="kw">let </span>schema = test_schema();
+<a href=#356 id=356 data-nosnippet>356</a>        <span class="kw">let </span><span class="kw-2">mut </span>error = <span class="prelude-val">None</span>;
+<a href=#357 id=357 data-nosnippet>357</a>        Verify {
+<a href=#358 id=358 data-nosnippet>358</a>            schema: <span class="kw-2">&amp;</span>schema,
+<a href=#359 id=359 data-nosnippet>359</a>            capability,
+<a href=#360 id=360 data-nosnippet>360</a>            error: <span class="kw-2">&amp;mut </span>error,
+<a href=#361 id=361 data-nosnippet>361</a>        }
+<a href=#362 id=362 data-nosnippet>362</a>        .visit(<span class="kw-2">&amp;</span>stmt);
+<a href=#363 id=363 data-nosnippet>363</a>        <span class="kw">match </span>error {
+<a href=#364 id=364 data-nosnippet>364</a>            <span class="prelude-val">Some</span>(err) =&gt; <span class="prelude-val">Err</span>(err),
+<a href=#365 id=365 data-nosnippet>365</a>            <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Ok</span>(()),
+<a href=#366 id=366 data-nosnippet>366</a>        }
+<a href=#367 id=367 data-nosnippet>367</a>    }
+<a href=#368 id=368 data-nosnippet>368</a>
+<a href=#369 id=369 data-nosnippet>369</a>    <span class="kw">fn </span>verify_expr_with(capability: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>Capability, expr: <span class="kw-2">&amp;</span>Expr) -&gt; <span class="prelude-ty">Option</span>&lt;Error&gt; {
+<a href=#370 id=370 data-nosnippet>370</a>        <span class="kw">let </span>schema = test_schema();
+<a href=#371 id=371 data-nosnippet>371</a>        <span class="kw">let </span><span class="kw-2">mut </span>error = <span class="prelude-val">None</span>;
+<a href=#372 id=372 data-nosnippet>372</a>        <span class="comment">// ModelId is only used by projection-checking visitor methods, which
+<a href=#373 id=373 data-nosnippet>373</a>        // these expression-only tests don't trigger.
+<a href=#374 id=374 data-nosnippet>374</a>        </span>VerifyExpr {
+<a href=#375 id=375 data-nosnippet>375</a>            schema: <span class="kw-2">&amp;</span>schema,
+<a href=#376 id=376 data-nosnippet>376</a>            capability,
+<a href=#377 id=377 data-nosnippet>377</a>            model: toasty_core::schema::app::ModelId(<span class="number">0</span>),
+<a href=#378 id=378 data-nosnippet>378</a>            error: <span class="kw-2">&amp;mut </span>error,
+<a href=#379 id=379 data-nosnippet>379</a>        }
+<a href=#380 id=380 data-nosnippet>380</a>        .visit_expr(expr);
+<a href=#381 id=381 data-nosnippet>381</a>        error
+<a href=#382 id=382 data-nosnippet>382</a>    }
+<a href=#383 id=383 data-nosnippet>383</a>
+<a href=#384 id=384 data-nosnippet>384</a>    <span class="kw">fn </span>is_superset(rhs: Expr) -&gt; Expr {
+<a href=#385 id=385 data-nosnippet>385</a>        Expr::IsSuperset(ExprIsSuperset {
+<a href=#386 id=386 data-nosnippet>386</a>            lhs: Box::new(Expr::arg(<span class="number">0</span>)),
+<a href=#387 id=387 data-nosnippet>387</a>            rhs: Box::new(rhs),
+<a href=#388 id=388 data-nosnippet>388</a>        })
+<a href=#389 id=389 data-nosnippet>389</a>    }
+<a href=#390 id=390 data-nosnippet>390</a>
+<a href=#391 id=391 data-nosnippet>391</a>    <span class="attr">#[test]
+<a href=#392 id=392 data-nosnippet>392</a>    #[should_panic(expected = <span class="string">"Offset offset must be a Value::I64 literal"</span>)]
+<a href=#393 id=393 data-nosnippet>393</a>    </span><span class="kw">fn </span>offset_with_non_i64_limit_panics() {
+<a href=#394 id=394 data-nosnippet>394</a>        <span class="kw">let </span><span class="kw-2">mut </span>query = stmt::Query::unit();
+<a href=#395 id=395 data-nosnippet>395</a>        query.limit = <span class="prelude-val">Some</span>(stmt::Limit::Offset(stmt::LimitOffset {
+<a href=#396 id=396 data-nosnippet>396</a>            limit: stmt::Value::I64(<span class="number">10</span>).into(),
+<a href=#397 id=397 data-nosnippet>397</a>            offset: <span class="prelude-val">Some</span>(stmt::Value::U64(<span class="number">5</span>).into()),
+<a href=#398 id=398 data-nosnippet>398</a>        }));
+<a href=#399 id=399 data-nosnippet>399</a>        verify_with(<span class="kw-2">&amp;</span>Capability::SQLITE, Statement::Query(query)).unwrap();
+<a href=#400 id=400 data-nosnippet>400</a>    }
+<a href=#401 id=401 data-nosnippet>401</a>
+<a href=#402 id=402 data-nosnippet>402</a>    <span class="attr">#[test]
+<a href=#403 id=403 data-nosnippet>403</a>    </span><span class="kw">fn </span>is_superset_literal_rhs_accepted_on_ddb() {
+<a href=#404 id=404 data-nosnippet>404</a>        <span class="kw">let </span>expr = is_superset(Expr::Value(Value::List(<span class="macro">vec!</span>[Value::I64(<span class="number">1</span>)])));
+<a href=#405 id=405 data-nosnippet>405</a>        <span class="macro">assert!</span>(verify_expr_with(<span class="kw-2">&amp;</span>Capability::DYNAMODB, <span class="kw-2">&amp;</span>expr).is_none());
+<a href=#406 id=406 data-nosnippet>406</a>    }
+<a href=#407 id=407 data-nosnippet>407</a>
+<a href=#408 id=408 data-nosnippet>408</a>    <span class="attr">#[test]
+<a href=#409 id=409 data-nosnippet>409</a>    </span><span class="kw">fn </span>is_superset_pre_fold_expr_list_accepted_on_ddb() {
+<a href=#410 id=410 data-nosnippet>410</a>        <span class="comment">// Pre-simplifier shape produced by `is_superset(vec![…])`: an
+<a href=#411 id=411 data-nosnippet>411</a>        // `Expr::List` of `Expr::Value` items. The fold pass will collapse
+<a href=#412 id=412 data-nosnippet>412</a>        // this to `Value::List` during lowering.
+<a href=#413 id=413 data-nosnippet>413</a>        </span><span class="kw">let </span>expr = is_superset(Expr::List(ExprList {
+<a href=#414 id=414 data-nosnippet>414</a>            items: <span class="macro">vec!</span>[Expr::Value(Value::I64(<span class="number">1</span>)), Expr::Value(Value::I64(<span class="number">2</span>))],
+<a href=#415 id=415 data-nosnippet>415</a>        }));
+<a href=#416 id=416 data-nosnippet>416</a>        <span class="macro">assert!</span>(verify_expr_with(<span class="kw-2">&amp;</span>Capability::DYNAMODB, <span class="kw-2">&amp;</span>expr).is_none());
 <a href=#417 id=417 data-nosnippet>417</a>    }
-<a href=#418 id=418 data-nosnippet>418</a>}
+<a href=#418 id=418 data-nosnippet>418</a>
+<a href=#419 id=419 data-nosnippet>419</a>    <span class="attr">#[test]
+<a href=#420 id=420 data-nosnippet>420</a>    </span><span class="kw">fn </span>is_superset_non_literal_rhs_rejected_on_ddb() {
+<a href=#421 id=421 data-nosnippet>421</a>        <span class="kw">let </span>expr = is_superset(Expr::arg(<span class="number">1</span>));
+<a href=#422 id=422 data-nosnippet>422</a>        <span class="kw">let </span>err = verify_expr_with(<span class="kw-2">&amp;</span>Capability::DYNAMODB, <span class="kw-2">&amp;</span>expr)
+<a href=#423 id=423 data-nosnippet>423</a>            .expect(<span class="string">"expected unsupported_feature error"</span>);
+<a href=#424 id=424 data-nosnippet>424</a>        <span class="macro">assert!</span>(err.is_unsupported_feature());
+<a href=#425 id=425 data-nosnippet>425</a>    }
+<a href=#426 id=426 data-nosnippet>426</a>
+<a href=#427 id=427 data-nosnippet>427</a>    <span class="attr">#[test]
+<a href=#428 id=428 data-nosnippet>428</a>    </span><span class="kw">fn </span>is_superset_non_literal_rhs_accepted_on_sqlite() {
+<a href=#429 id=429 data-nosnippet>429</a>        <span class="kw">let </span>expr = is_superset(Expr::arg(<span class="number">1</span>));
+<a href=#430 id=430 data-nosnippet>430</a>        <span class="macro">assert!</span>(verify_expr_with(<span class="kw-2">&amp;</span>Capability::SQLITE, <span class="kw-2">&amp;</span>expr).is_none());
+<a href=#431 id=431 data-nosnippet>431</a>    }
+<a href=#432 id=432 data-nosnippet>432</a>
+<a href=#433 id=433 data-nosnippet>433</a>    <span class="attr">#[test]
+<a href=#434 id=434 data-nosnippet>434</a>    </span><span class="kw">fn </span>ilike_accepted_on_postgresql() {
+<a href=#435 id=435 data-nosnippet>435</a>        <span class="kw">let </span>expr = Expr::ilike(Expr::arg(<span class="number">0</span>), Expr::arg(<span class="number">1</span>));
+<a href=#436 id=436 data-nosnippet>436</a>        <span class="macro">assert!</span>(verify_expr_with(<span class="kw-2">&amp;</span>Capability::POSTGRESQL, <span class="kw-2">&amp;</span>expr).is_none());
+<a href=#437 id=437 data-nosnippet>437</a>    }
+<a href=#438 id=438 data-nosnippet>438</a>
+<a href=#439 id=439 data-nosnippet>439</a>    <span class="attr">#[test]
+<a href=#440 id=440 data-nosnippet>440</a>    </span><span class="kw">fn </span>ilike_rejected_on_sqlite() {
+<a href=#441 id=441 data-nosnippet>441</a>        <span class="kw">let </span>expr = Expr::ilike(Expr::arg(<span class="number">0</span>), Expr::arg(<span class="number">1</span>));
+<a href=#442 id=442 data-nosnippet>442</a>        <span class="kw">let </span>err = verify_expr_with(<span class="kw-2">&amp;</span>Capability::SQLITE, <span class="kw-2">&amp;</span>expr)
+<a href=#443 id=443 data-nosnippet>443</a>            .expect(<span class="string">"expected unsupported_feature error"</span>);
+<a href=#444 id=444 data-nosnippet>444</a>        <span class="macro">assert!</span>(err.is_unsupported_feature());
+<a href=#445 id=445 data-nosnippet>445</a>    }
+<a href=#446 id=446 data-nosnippet>446</a>
+<a href=#447 id=447 data-nosnippet>447</a>    <span class="attr">#[test]
+<a href=#448 id=448 data-nosnippet>448</a>    </span><span class="kw">fn </span>ilike_rejected_on_mysql() {
+<a href=#449 id=449 data-nosnippet>449</a>        <span class="kw">let </span>expr = Expr::ilike(Expr::arg(<span class="number">0</span>), Expr::arg(<span class="number">1</span>));
+<a href=#450 id=450 data-nosnippet>450</a>        <span class="kw">let </span>err = verify_expr_with(<span class="kw-2">&amp;</span>Capability::MYSQL, <span class="kw-2">&amp;</span>expr)
+<a href=#451 id=451 data-nosnippet>451</a>            .expect(<span class="string">"expected unsupported_feature error"</span>);
+<a href=#452 id=452 data-nosnippet>452</a>        <span class="macro">assert!</span>(err.is_unsupported_feature());
+<a href=#453 id=453 data-nosnippet>453</a>    }
+<a href=#454 id=454 data-nosnippet>454</a>
+<a href=#455 id=455 data-nosnippet>455</a>    <span class="attr">#[test]
+<a href=#456 id=456 data-nosnippet>456</a>    </span><span class="kw">fn </span>ilike_rejected_on_dynamodb() {
+<a href=#457 id=457 data-nosnippet>457</a>        <span class="kw">let </span>expr = Expr::ilike(Expr::arg(<span class="number">0</span>), Expr::arg(<span class="number">1</span>));
+<a href=#458 id=458 data-nosnippet>458</a>        <span class="kw">let </span>err = verify_expr_with(<span class="kw-2">&amp;</span>Capability::DYNAMODB, <span class="kw-2">&amp;</span>expr)
+<a href=#459 id=459 data-nosnippet>459</a>            .expect(<span class="string">"expected unsupported_feature error"</span>);
+<a href=#460 id=460 data-nosnippet>460</a>        <span class="macro">assert!</span>(err.is_unsupported_feature());
+<a href=#461 id=461 data-nosnippet>461</a>    }
+<a href=#462 id=462 data-nosnippet>462</a>
+<a href=#463 id=463 data-nosnippet>463</a>    <span class="attr">#[test]
+<a href=#464 id=464 data-nosnippet>464</a>    </span><span class="kw">fn </span>case_sensitive_like_accepted_on_sqlite() {
+<a href=#465 id=465 data-nosnippet>465</a>        <span class="kw">let </span>expr = Expr::like(Expr::arg(<span class="number">0</span>), Expr::arg(<span class="number">1</span>));
+<a href=#466 id=466 data-nosnippet>466</a>        <span class="macro">assert!</span>(verify_expr_with(<span class="kw-2">&amp;</span>Capability::SQLITE, <span class="kw-2">&amp;</span>expr).is_none());
+<a href=#467 id=467 data-nosnippet>467</a>    }
+<a href=#468 id=468 data-nosnippet>468</a>}
 </code></pre></div></section></main></body></html>

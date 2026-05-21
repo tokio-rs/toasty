@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-cfb9c3cf.js";
+            window.path_to_searchindex_js = "searchindex-f437a29e.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-46081a54.js"></script>
@@ -289,12 +289,12 @@ PostgreSQL’s native operators (<code>= ANY(col)</code>, <code>@&gt;</code>, <c
 <pre><code class="language-rust ignore">let admins = User::filter(User::fields().roles().contains("admin"))
     .exec(&amp;mut db)
     .await?;</code></pre>
-<p><strong>Native <code>ILIKE</code>.</strong> The <a href="./filtering-with-expressions.html#ilike"><code>.ilike()</code></a>
-filter method lowers directly to the SQL <code>ILIKE</code> operator. On other
-SQL drivers <code>.ilike()</code> falls back to plain <code>LIKE</code>, which is
-case-sensitive on PostgreSQL — so the behavior actually differs
-between backends. Reach for <code>.ilike()</code> when you need case-insensitive
-matching here.</p>
+<p><strong>Native <code>ILIKE</code>.</strong> PostgreSQL’s <code>LIKE</code> is case-sensitive, and PostgreSQL is the
+only backend with a native case-insensitive <code>ILIKE</code> operator. The
+<a href="./filtering-with-expressions.html#ilike"><code>.ilike()</code></a> filter maps directly to
+<code>ILIKE</code> and is supported only here; on the other backends it is rejected with an
+<code>unsupported_feature</code> error. Reach for <code>.ilike()</code> when you need case-insensitive
+matching.</p>
 <p><strong>Native prefix match.</strong> The
 <a href="./filtering-with-expressions.html#starts_with"><code>.starts_with()</code></a> filter
 lowers to PostgreSQL’s <code>^@</code> operator. The optimizer can use a

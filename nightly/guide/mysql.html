@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-cfb9c3cf.js";
+            window.path_to_searchindex_js = "searchindex-f437a29e.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-46081a54.js"></script>
@@ -316,13 +316,13 @@ transaction.</p>
 <a href="./sorting-limits-and-pagination.html#navigating-pages"><code>.paginate(per_page).prev(&amp;db)</code></a>
 walks backwards from a page cursor.</p>
 <p>A few things that exist on PostgreSQL are absent here:</p>
-<p><strong>No <code>ILIKE</code>.</strong> MySQL’s <a href="./filtering-with-expressions.html#ilike"><code>.ilike()</code></a>
-filter lowers to plain <code>LIKE</code>, whose case sensitivity depends on the
-collation of the column.
-<code>utf8mb4_unicode_ci</code> and similar <code>_ci</code> collations match
-case-insensitively for free; binary or <code>_bin</code> collations match
-case-sensitively. Pick the collation that matches the semantics you
-want when declaring the column.</p>
+<p><strong>No <code>ILIKE</code>.</strong> MySQL has no <code>ILIKE</code> operator, so
+<a href="./filtering-with-expressions.html#ilike"><code>.ilike()</code></a> is rejected with an
+<code>unsupported_feature</code> error. MySQL’s <code>LIKE</code> case sensitivity is set by the
+column’s collation: <code>utf8mb4_unicode_ci</code> and other <code>_ci</code> collations match
+case-insensitively, while binary and <code>_bin</code> collations match case-sensitively.
+Pick the collation that matches the semantics you want when declaring the
+column, then use <a href="./filtering-with-expressions.html#like"><code>.like()</code></a>.</p>
 <p><strong>No <code>RETURNING</code> from INSERT or UPDATE.</strong> MySQL does not support
 <code>RETURNING</code> clauses on mutations. For inserts into a table with an
 auto-increment primary key, Toasty fetches the generated ID with
