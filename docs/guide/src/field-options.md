@@ -87,8 +87,9 @@ Supported type values:
 Not all databases support all column types. Toasty validates explicit column
 types against the database's capabilities when you call `db.push_schema()`. If a
 type is not supported, schema creation fails with an error. For example,
-`varchar` is supported by PostgreSQL and MySQL but not by SQLite or DynamoDB —
-using `#[column(type = varchar(100))]` with SQLite produces an error like
+`varchar` is supported by PostgreSQL and MySQL but not by SQLite, Turso, or
+DynamoDB — using `#[column(type = varchar(100))]` with SQLite produces an
+error like
 `"unsupported feature: VARCHAR type is not supported by this database"`. If the
 requested size exceeds the database's maximum, Toasty reports that as well.
 

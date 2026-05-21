@@ -1,11 +1,17 @@
 # SQLite
 
-Toasty's SQLite driver uses [`rusqlite`] under the hood. It runs the
+Toasty's SQLite driver uses [`rusqlite`]. It runs the
 full Toasty query surface — `SELECT`, `INSERT`, `UPDATE`, `DELETE`,
 `RETURNING`, transactions, scalar arrays via JSON1 — against either a
 file-backed database or an ephemeral in-memory one.
 
 [`rusqlite`]: https://docs.rs/rusqlite
+
+> Toasty also ships an async-native [Turso](./turso.md) driver. It
+> speaks the same SQL dialect as SQLite and shares this chapter's
+> type mapping and feature set; the [Turso](./turso.md) chapter
+> covers the differences (in-memory pool sharing, MVCC concurrent
+> writes, experimental flags).
 
 ## Enabling the driver
 

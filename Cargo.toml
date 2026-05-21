@@ -12,6 +12,7 @@ members = [
     "crates/toasty-driver-mysql",
     "crates/toasty-driver-postgresql",
     "crates/toasty-driver-sqlite",
+    "crates/toasty-driver-turso",
 
     # Driver integration test suite
     "crates/toasty-driver-integration-suite",
@@ -75,6 +76,7 @@ toasty-driver-dynamodb = { version = "0.6.1", path = "crates/toasty-driver-dynam
 toasty-driver-mysql = { version = "0.6.1", path = "crates/toasty-driver-mysql" }
 toasty-driver-postgresql = { version = "0.6.1", path = "crates/toasty-driver-postgresql" }
 toasty-driver-sqlite = { version = "0.6.1", path = "crates/toasty-driver-sqlite" }
+toasty-driver-turso = { version = "0.6.1", path = "crates/toasty-driver-turso" }
 
 # Driver integration test suite dependencies
 toasty-driver-integration-suite = { version = "0.6.1", path = "crates/toasty-driver-integration-suite" }
@@ -137,6 +139,7 @@ rustls-pemfile = "2"
 rustls-webpki = { version = "0.103", default-features = false, features = ["alloc", "std"] }
 tokio-stream = { version = "0.1.18", default-features = false }
 tracing = "0.1"
+turso = "0.6"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 trybuild = { version = "1.0.116", features = ["diff"] }
 url = "2.5.8"

@@ -1,8 +1,8 @@
 # Transactions
 
 A transaction groups multiple database operations so they either all succeed or
-all fail. Toasty supports interactive transactions on SQL databases (SQLite,
-PostgreSQL, MySQL).
+all fail. Toasty supports interactive transactions on SQL databases
+(SQLite/Turso, PostgreSQL, MySQL).
 
 > **Tip:** If you just need multiple operations to execute atomically, consider
 > using [batch operations](./batch-operations.md) first. Batch operations are
@@ -221,10 +221,42 @@ Toasty supports four isolation levels:
 | `RepeatableRead` | Consistent reads within the transaction |
 | `Serializable` | Full isolation between transactions |
 
-Driver support varies. SQLite only supports `Serializable`. PostgreSQL and MySQL
-support all four levels.
+Driver support varies. SQLite and Turso only support `Serializable`. PostgreSQL
+and MySQL support all four levels.
 
 ### Read-only transactions
 
 Set `.read_only(true)` to create a read-only transaction. The database rejects
 write operations inside a read-only transaction.
+
+### Lock-acquisition modes
+
+`TransactionMode` is a separate axis from isolation level: where the isolation
+level describes which anomalies a transaction can observe, the mode describes
+when the transaction acquires its locks. The builder accepts a mode via
+`.mode(...)`:
+
+```rust,ignore
+use toasty_core::driver::operation::TransactionMode;
+
+let mut tx = db.transaction_builder()
+    .mode(TransactionMode::Immediate)
+    .begin()
+    .await?;
+```
+
+| Mode | SQLite SQL | Purpose |
+|---|---|---|
+| `Default` | `BEGIN` | The driver's natural default. |
+| `Deferred` | `BEGIN` | Explicit deferred locking. |
+| `Immediate` | `BEGIN IMMEDIATE` | Acquire the write lock at begin time, so later writes inside the transaction cannot fail with `BUSY`. |
+| `Exclusive` | `BEGIN EXCLUSIVE` | Hold an exclusive lock for the entire transaction. |
+
+PostgreSQL and MySQL accept only `Default` and `Deferred`; calling
+`.mode(TransactionMode::Immediate)` or `Exclusive` against either returns
+`Error::UnsupportedFeature`.
+
+`Default` and `Deferred` look identical on SQLite — both emit `BEGIN` — but
+they diverge on Turso under [`concurrent_writes()`](./turso.md#concurrent-writes):
+`Default` issues `BEGIN CONCURRENT` (MVCC) and `Deferred` is the way to opt
+out and request classic locking on a single transaction.

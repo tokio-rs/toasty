@@ -236,8 +236,8 @@ println!("post id: {}", post.id); // 1, 2, 3, ...
 # }
 ```
 
-Auto-increment requires database support. SQLite, PostgreSQL, and MySQL all
-support auto-incrementing columns. DynamoDB does not.
+Auto-increment requires database support. SQLite, Turso, PostgreSQL, and MySQL
+all support auto-incrementing columns. DynamoDB does not.
 
 ## Composite keys
 

@@ -7,7 +7,7 @@ generated.
 ## Unique fields
 
 Add `#[unique]` to a field to create a unique index. Toasty enforces uniqueness
-on all supported databases. SQL databases (SQLite, PostgreSQL, MySQL) use a
+on all supported databases. SQL databases (SQLite/Turso, PostgreSQL, MySQL) use a
 native unique index. DynamoDB uses a separate index table keyed on the unique
 attribute; inserts and updates write to both tables in a single
 `TransactWriteItems` call with an `attribute_not_exists` condition that rejects

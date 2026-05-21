@@ -44,6 +44,15 @@ pub struct Serializer<'a> {
     /// The database flavor handles the differences between SQL dialects and
     /// supported features.
     flavor: Flavor,
+
+    /// SQL emitted for [`TransactionMode::Default`] under the SQLite flavor.
+    /// Constructors that don't override this leave it at `"BEGIN"`, which is
+    /// SQLite's natural default (DEFERRED). A driver that wants `Default` to
+    /// mean something engine-specific — Turso under `concurrent_writes()`
+    /// uses `"BEGIN CONCURRENT"` — sets this through
+    /// [`Self::sqlite_with_default_begin`]. The non-`Default` variants
+    /// (`Deferred`, `Immediate`, `Exclusive`) always emit fixed SQL.
+    sqlite_default_begin: &'static str,
 }
 
 struct Formatter<'a> {
@@ -234,12 +243,14 @@ impl<'a> Serializer<'a> {
                 sql
             }
             // SQLite has no per-transaction isolation level or read-only
-            // keyword; the lock-acquisition mode is the only knob. SQLite's
-            // natural default is DEFERRED, so `Default` and `Deferred` emit
-            // the same SQL — the distinction only manifests on drivers
-            // whose default differs (Turso MVCC).
+            // keyword; the lock-acquisition mode is the only knob. `Default`
+            // emits whatever the serializer was configured with at
+            // construction (`BEGIN` by default, or e.g. `BEGIN CONCURRENT`
+            // for Turso under MVCC). `Deferred`/`Immediate`/`Exclusive` are
+            // explicit caller requests with fixed SQL.
             Flavor::Sqlite => match mode {
-                TransactionMode::Default | TransactionMode::Deferred => "BEGIN".to_string(),
+                TransactionMode::Default => self.sqlite_default_begin.to_string(),
+                TransactionMode::Deferred => "BEGIN".to_string(),
                 TransactionMode::Immediate => "BEGIN IMMEDIATE".to_string(),
                 TransactionMode::Exclusive => "BEGIN EXCLUSIVE".to_string(),
             },

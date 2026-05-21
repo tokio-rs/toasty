@@ -1,6 +1,6 @@
 # Introduction
 
-Toasty is an async ORM for Rust. It supports both SQL databases (SQLite,
+Toasty is an async ORM for Rust. It supports both SQL databases (SQLite/Turso,
 PostgreSQL, MySQL) and NoSQL databases (DynamoDB).
 
 You define your models as Rust structs and annotate them with
