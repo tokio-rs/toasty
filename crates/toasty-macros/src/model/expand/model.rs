@@ -286,11 +286,7 @@ impl Expand<'_> {
                                 index: #index_tokenized,
                             }
                         ),
-                        #toasty::core::stmt::Expr::Value(
-                            #toasty::core::stmt::Value::U64(
-                                <#field_ty as #toasty::Version>::as_u64(self.#field_ident)
-                            )
-                        ),
+                        #toasty::into_untyped_expr::<#field_ty, _>(self.#field_ident),
                     )
                 )
             )
