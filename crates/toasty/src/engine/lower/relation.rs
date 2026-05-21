@@ -1,9 +1,10 @@
+use hashbrown::HashSet;
 use toasty_core::{
     schema::app::{self, Field, FieldId, FieldTy},
     stmt,
 };
 
-use crate::engine::lower::LowerStatement;
+use crate::engine::{hir, lower::LowerStatement};
 
 #[derive(Debug)]
 enum Mutation {
@@ -159,65 +160,41 @@ impl LowerStatement<'_, '_> {
                 other => vec![other],
             };
 
-            for entry in entries {
-                let mutation = match entry {
-                    stmt::Assignment::Set(expr) => {
-                        if expr.is_value_null() {
-                            Mutation::DisassociateAll { delete: false }
-                        } else {
-                            Mutation::Associate {
-                                expr,
-                                exclusive: true,
-                            }
-                        }
-                    }
-                    stmt::Assignment::Insert(expr) => {
-                        assert!(field.ty.is_has_many());
-                        debug_assert!(!expr.is_value_null());
-                        Mutation::Associate {
-                            expr,
-                            exclusive: false,
-                        }
-                    }
-                    stmt::Assignment::Remove(expr) => {
-                        assert!(field.ty.is_has_many());
-                        debug_assert!(!expr.is_value_null());
-                        Mutation::Disassociate { expr }
-                    }
-                    stmt::Assignment::Append(_) => {
-                        // `stmt::push` / `stmt::extend` target `Vec<scalar>`
-                        // model fields, not relation fields. The type system
-                        // does not currently rule out passing them to a
-                        // has-many setter, but the engine has no Append-on-
-                        // relation lowering.
-                        unreachable!(
-                            "Append assignment on relation field — use stmt::insert for has-many"
-                        )
-                    }
-                    stmt::Assignment::Pop | stmt::Assignment::RemoveAt(_) => {
-                        // `stmt::pop` / `stmt::remove_at` target ordered
-                        // `Vec<scalar>` fields. They have no relation analogue —
-                        // has-many removal is by relation key, not by position.
-                        unreachable!(
-                            "Pop / RemoveAt assignment on relation field — these only apply to Vec<scalar>"
-                        )
-                    }
-                    stmt::Assignment::Batch(_) => {
-                        unreachable!("Batch entries are flattened above")
-                    }
-                };
+            // Execute the batch's entries in order. Each entry's statements
+            // depend on the previous entry's, so operations that touch the
+            // same target are sequenced deterministically rather than racing
+            // in the dependency graph. This matters when one op constrains a
+            // later one — associating then dissociating the same existing row,
+            // a unique-value swap that must delete before it re-inserts, or a
+            // leading `set`'s exclusive clear that must not wipe freshly
+            // inserted rows. (`flatten_relation_batch` has already placed the
+            // merged create-new Insert last.)
+            let mut source = UpdateRelationSource {
+                model,
+                filter,
+                assignments: &mut *assignments,
+                returning: &mut *returning,
+                returning_changed,
+            };
 
-                self.plan_mut_relation_field(
-                    field,
-                    mutation,
-                    &mut UpdateRelationSource {
-                        model,
-                        filter,
-                        assignments: &mut *assignments,
-                        returning,
-                        returning_changed,
-                    },
-                );
+            let mut prev_deps: HashSet<hir::StmtId> = HashSet::new();
+            for entry in entries {
+                let emitted = self.collect_dependencies(|lower| {
+                    lower.with_dependencies(prev_deps.clone(), |lower| {
+                        lower.plan_mut_relation_field(
+                            field,
+                            relation_mutation(field, entry),
+                            &mut source,
+                        );
+                    });
+                });
+
+                // Chain the next entry onto this one's statements. An entry
+                // that emits nothing leaves the chain pointing at the last
+                // real statement.
+                if !emitted.is_empty() {
+                    prev_deps = emitted;
+                }
             }
         }
     }
@@ -918,6 +895,51 @@ impl RelationSource for InsertRelationSource<'_> {
 
     fn needs_existence_check(&self) -> bool {
         false
+    }
+}
+
+/// Map a single flattened relation assignment to its `Mutation`.
+fn relation_mutation(field: &Field, entry: stmt::Assignment) -> Mutation {
+    match entry {
+        stmt::Assignment::Set(expr) => {
+            if expr.is_value_null() {
+                Mutation::DisassociateAll { delete: false }
+            } else {
+                Mutation::Associate {
+                    expr,
+                    exclusive: true,
+                }
+            }
+        }
+        stmt::Assignment::Insert(expr) => {
+            assert!(field.ty.is_has_many());
+            debug_assert!(!expr.is_value_null());
+            Mutation::Associate {
+                expr,
+                exclusive: false,
+            }
+        }
+        stmt::Assignment::Remove(expr) => {
+            assert!(field.ty.is_has_many());
+            debug_assert!(!expr.is_value_null());
+            Mutation::Disassociate { expr }
+        }
+        // `stmt::push` / `stmt::extend` target `Vec<scalar>` model fields, not
+        // relation fields. The type system does not currently rule out passing
+        // them to a has-many setter, but the engine has no Append-on-relation
+        // lowering.
+        stmt::Assignment::Append(_) => {
+            unreachable!("Append assignment on relation field — use stmt::insert for has-many")
+        }
+        // `stmt::pop` / `stmt::remove_at` target ordered `Vec<scalar>` fields.
+        // They have no relation analogue — has-many removal is by relation key,
+        // not by position.
+        stmt::Assignment::Pop | stmt::Assignment::RemoveAt(_) => {
+            unreachable!(
+                "Pop / RemoveAt assignment on relation field — these only apply to Vec<scalar>"
+            )
+        }
+        stmt::Assignment::Batch(_) => unreachable!("Batch entries are flattened above"),
     }
 }
 
