@@ -48,7 +48,12 @@ impl Insert {
                 // per-row scope tracking; not yet supported.
                 todo!("merge of scoped inserts with differing parent scopes")
             }
-            _ => todo!("merge of mismatched insert targets: {:?} vs {:?}", self.target, other.target),        }
+            _ => todo!(
+                "merge of mismatched insert targets: {:?} vs {:?}",
+                self.target,
+                other.target
+            ),
+        }
 
         match (&mut self.source.body, other.source.body) {
             (stmt::ExprSet::Values(self_values), stmt::ExprSet::Values(other_values)) => {

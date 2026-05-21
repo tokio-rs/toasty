@@ -96,8 +96,7 @@ pub async fn three_tier_create_each_tier(test: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await?;
 
-    let reloaded_user =
-        User::get_by_tenant_id_and_id(&mut db, &alice.tenant_id, &alice.id).await?;
+    let reloaded_user = User::get_by_tenant_id_and_id(&mut db, &alice.tenant_id, &alice.id).await?;
     assert_eq!(reloaded_user.name, "Alice");
 
     let reloaded_todo = Todo::get_by_tenant_id_and_user_id_and_id(
@@ -321,10 +320,7 @@ pub async fn three_tier_update_many_deepest_by_filter(test: &mut Test) -> Result
         .map(|t| t.title)
         .collect();
     titles.sort();
-    assert_eq!(
-        titles,
-        vec!["skip", "updated", "updated", "updated"],
-    );
+    assert_eq!(titles, vec!["skip", "updated", "updated", "updated"],);
 
     Ok(())
 }
@@ -348,7 +344,10 @@ pub async fn three_tier_delete_many_deepest_by_filter(test: &mut Test) -> Result
     .exec(&mut db)
     .await?;
 
-    for (i, label) in ["doomed", "doomed", "doomed", "survivor"].iter().enumerate() {
+    for (i, label) in ["doomed", "doomed", "doomed", "survivor"]
+        .iter()
+        .enumerate()
+    {
         toasty::create!(in alice.todos() {
             id: format!("t{i}"),
             title: label.to_string(),

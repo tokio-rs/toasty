@@ -399,12 +399,7 @@ pub async fn delete_child_with_filter(test: &mut Test) -> Result<()> {
         .await?;
     // Sibling under the same user. The filter must narrow to `target`
     // alone — otherwise this row would also disappear.
-    let sibling = user
-        .todos()
-        .create()
-        .title("keep me")
-        .exec(&mut db)
-        .await?;
+    let sibling = user.todos().create().title("keep me").exec(&mut db).await?;
 
     user.todos()
         .filter_by_id(target.id)
@@ -414,8 +409,7 @@ pub async fn delete_child_with_filter(test: &mut Test) -> Result<()> {
         .await?;
 
     assert_err!(Todo::get_by_user_id_and_id(&mut db, &target.user_id, &target.id).await);
-    let survivor =
-        Todo::get_by_user_id_and_id(&mut db, &sibling.user_id, &sibling.id).await?;
+    let survivor = Todo::get_by_user_id_and_id(&mut db, &sibling.user_id, &sibling.id).await?;
     assert_eq!(survivor.title, "keep me");
 
     Ok(())
@@ -508,10 +502,7 @@ pub async fn update_many_children_by_filter(test: &mut Test) -> Result<()> {
         .map(|t| t.title)
         .collect();
     titles.sort();
-    assert_eq!(
-        titles,
-        vec!["skip", "updated", "updated", "updated"],
-    );
+    assert_eq!(titles, vec!["skip", "updated", "updated", "updated"],);
 
     Ok(())
 }
@@ -565,9 +556,7 @@ pub async fn batch_create_children(test: &mut Test) -> Result<()> {
 
     let mut builder = Todo::create_many();
     for i in 0..5 {
-        builder = builder.item(
-            user.todos().create().title(format!("todo {i}")),
-        );
+        builder = builder.item(user.todos().create().title(format!("todo {i}")));
     }
     let todos = builder.exec(&mut db).await?;
     assert_eq!(5, todos.len());
@@ -587,4 +576,3 @@ pub async fn batch_create_children(test: &mut Test) -> Result<()> {
 
     Ok(())
 }
-

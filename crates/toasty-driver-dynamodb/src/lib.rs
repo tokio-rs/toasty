@@ -25,7 +25,10 @@ use async_trait::async_trait;
 use toasty_core::{
     Error, Result, Schema,
     driver::{Capability, Driver, ExecResponse, operation::Operation},
-    schema::db::{self, Column, ColumnId, IndexScope, Migration, Table},
+    schema::{
+        app::ModelId,
+        db::{self, Column, ColumnId, IndexScope, Migration, Table},
+    },
     stmt::{self, Expr, ExprContext, Visit},
 };
 
@@ -398,13 +401,28 @@ fn item_to_record<'a>(
 /// `ddb_expression` unchanged.  For item-collection tables where the sort key
 /// is synthesized as `__sk = "val1#val2#…"` this decomposes the filter into a
 /// hash-key equality condition plus a `begins_with(__sk, prefix)` expression.
+/// One sort-key segment as resolved during `BuildKeyExpression::visit_expr`.
+///
+/// Each variant captures *what the segment contributes to the SK prefix*,
+/// already in the form the consumer needs — no more re-parsing AST shapes.
+#[derive(Debug)]
+enum SkComponent {
+    /// The column is bound to a literal value; render the value as the segment.
+    Literal(stmt::Value),
+    /// The column is the item-collection discriminator; render the model
+    /// name (in upper-camel case) as the segment.
+    Model(ModelId),
+    /// The column is absent for this model type (matched via `IS NULL`); skip.
+    Skip,
+}
+
 struct BuildKeyExpression<'a> {
     table: &'a Table,
     attrs: &'a mut ExprAttrs,
     /// Column IDs of the Local-scoped PK columns (sort-key components).
     sk_cols: &'a [ColumnId],
-    /// Accumulated equality conditions keyed by column ID.
-    sk_components: HashMap<ColumnId, stmt::Expr>,
+    /// Resolved sort-key segments keyed by column ID.
+    sk_components: HashMap<ColumnId, SkComponent>,
     /// The partition-key equality sub-expression.
     pk_component: Option<stmt::Expr>,
     schema: Arc<Schema>,
@@ -438,23 +456,16 @@ impl<'a> BuildKeyExpression<'a> {
             assert!(!missing, "gap in sort-key component conditions");
 
             match sk_sub {
-                stmt::Expr::IsNull(_) => {
-                    // Null-check means this column is absent for this model type; skip.
-                }
-                // TODO: Something is odd here.
-                stmt::Expr::BinaryOp(op) if matches!(op.op, stmt::BinaryOp::Eq) => {
-                    let stmt::Expr::Value(val) = op.rhs.as_ref() else {
-                        todo!("sk_sub rhs = {:#?}", op.rhs);
-                    };
+                SkComponent::Skip => {}
+                SkComponent::Literal(val) => {
                     sk_prefix.push_str(&value_to_sk_part(val));
                     sk_prefix.push('#');
                 }
-                stmt::Expr::IsModel(e) => {
-                    let model_name = self.schema.app.model(e.model).name().upper_camel_case();
+                SkComponent::Model(model) => {
+                    let model_name = self.schema.app.model(*model).name().upper_camel_case();
                     sk_prefix.push_str(&model_name);
                     sk_prefix.push('#');
                 }
-                _ => todo!("sk_sub={sk_sub:#?}"),
             }
         }
 
@@ -500,7 +511,13 @@ impl Visit for BuildKeyExpression<'_> {
         };
 
         if self.sk_cols.contains(&col_id) {
-            self.sk_components.insert(col_id, Expr::BinaryOp(i.clone()));
+            // Sort-key component: extract the bound literal so the consumer
+            // doesn't have to re-pattern-match the AST.
+            let stmt::Expr::Value(val) = i.rhs.as_ref() else {
+                todo!("sort-key equality must bind a literal value; got {i:#?}");
+            };
+            self.sk_components
+                .insert(col_id, SkComponent::Literal(val.clone()));
         } else {
             self.pk_component = Some(Expr::BinaryOp(i.clone()));
         }
@@ -519,19 +536,18 @@ impl Visit for BuildKeyExpression<'_> {
             index: col_idx,
         };
         if self.sk_cols.contains(&col_id) {
-            self.sk_components.insert(col_id, Expr::IsNull(i.clone()));
+            self.sk_components.insert(col_id, SkComponent::Skip);
         }
     }
 
     fn visit_expr_is_model(&mut self, model: &stmt::ExprIsModel) {
-        // Need the prefix to build the sk == Prefix#id
         let mapping = self.schema.mapping_for(model.model);
         let disc_col_id = mapping
             .item_collection
             .model_column
             .expect("IsModel emitted for model without discriminator");
         self.sk_components
-            .insert(disc_col_id, Expr::IsModel(model.clone()));
+            .insert(disc_col_id, SkComponent::Model(model.model));
     }
 }
 
