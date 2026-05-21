@@ -391,21 +391,59 @@ pub async fn delete_child_with_filter(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
     let user = User::create().exec(&mut db).await?;
-    let todo = user
+    let target = user
         .todos()
         .create()
         .title("delete me")
         .exec(&mut db)
         .await?;
+    // Sibling under the same user. The filter must narrow to `target`
+    // alone — otherwise this row would also disappear.
+    let sibling = user
+        .todos()
+        .create()
+        .title("keep me")
+        .exec(&mut db)
+        .await?;
 
     user.todos()
-        .filter_by_id(todo.id)
+        .filter_by_id(target.id)
         .filter(Todo::fields().title().eq("delete me"))
         .delete()
         .exec(&mut db)
         .await?;
 
-    assert_err!(Todo::get_by_user_id_and_id(&mut db, &todo.user_id, &todo.id).await);
+    assert_err!(Todo::get_by_user_id_and_id(&mut db, &target.user_id, &target.id).await);
+    let survivor =
+        Todo::get_by_user_id_and_id(&mut db, &sibling.user_id, &sibling.id).await?;
+    assert_eq!(survivor.title, "keep me");
+
+    Ok(())
+}
+
+/// When the filter does not match, the delete is a no-op: the row remains
+/// in place. Proves the filter is consulted, not silently dropped.
+#[driver_test(requires(native_starts_with))]
+pub async fn delete_child_with_non_matching_filter(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let user = User::create().exec(&mut db).await?;
+    let todo = user
+        .todos()
+        .create()
+        .title("actual title")
+        .exec(&mut db)
+        .await?;
+
+    user.todos()
+        .filter_by_id(todo.id)
+        .filter(Todo::fields().title().eq("wrong title"))
+        .delete()
+        .exec(&mut db)
+        .await?;
+
+    let survivor = Todo::get_by_user_id_and_id(&mut db, &todo.user_id, &todo.id).await?;
+    assert_eq!(survivor.title, "actual title");
 
     Ok(())
 }
@@ -433,3 +471,4 @@ pub async fn update_child_with_filter(test: &mut Test) -> Result<()> {
 
     Ok(())
 }
+
