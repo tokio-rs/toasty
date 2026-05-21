@@ -277,6 +277,105 @@ pub async fn three_tier_scoped_update(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// Filter-driven update across multiple Todos under one user.
+/// The filter matches more than one Todo; all matching rows must be
+/// updated, non-matching rows must remain unchanged. Exercises the
+/// composite-FK + filter mutation path at the deepest tier.
+#[driver_test(requires(native_starts_with))]
+pub async fn three_tier_update_many_deepest_by_filter(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let acme = toasty::create!(Tenant { name: "Acme" })
+        .exec(&mut db)
+        .await?;
+
+    let alice = toasty::create!(in acme.users() {
+        id: "alice".to_string(),
+        name: "Alice",
+    })
+    .exec(&mut db)
+    .await?;
+
+    for (i, label) in ["match", "match", "match", "skip"].iter().enumerate() {
+        toasty::create!(in alice.todos() {
+            id: format!("t{i}"),
+            title: label.to_string(),
+        })
+        .exec(&mut db)
+        .await?;
+    }
+
+    alice
+        .todos()
+        .filter(Todo::fields().title().eq("match"))
+        .update()
+        .title("updated")
+        .exec(&mut db)
+        .await?;
+
+    let mut titles: Vec<String> = alice
+        .todos()
+        .exec(&mut db)
+        .await?
+        .into_iter()
+        .map(|t| t.title)
+        .collect();
+    titles.sort();
+    assert_eq!(
+        titles,
+        vec!["skip", "updated", "updated", "updated"],
+    );
+
+    Ok(())
+}
+
+/// Filter-driven delete across multiple Todos under one user.
+/// The filter matches more than one Todo; all matching rows must be
+/// deleted, non-matching rows must survive. Exercises the composite-FK +
+/// filter mutation path at the deepest tier.
+#[driver_test(requires(native_starts_with))]
+pub async fn three_tier_delete_many_deepest_by_filter(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let acme = toasty::create!(Tenant { name: "Acme" })
+        .exec(&mut db)
+        .await?;
+
+    let alice = toasty::create!(in acme.users() {
+        id: "alice".to_string(),
+        name: "Alice",
+    })
+    .exec(&mut db)
+    .await?;
+
+    for (i, label) in ["doomed", "doomed", "doomed", "survivor"].iter().enumerate() {
+        toasty::create!(in alice.todos() {
+            id: format!("t{i}"),
+            title: label.to_string(),
+        })
+        .exec(&mut db)
+        .await?;
+    }
+
+    alice
+        .todos()
+        .filter(Todo::fields().title().eq("doomed"))
+        .delete()
+        .exec(&mut db)
+        .await?;
+
+    let titles: Vec<String> = alice
+        .todos()
+        .exec(&mut db)
+        .await?
+        .into_iter()
+        .map(|t| t.title)
+        .collect();
+    assert_eq!(titles, vec!["survivor".to_string()]);
+
+    Ok(())
+}
+
 /// Batch-create children at the deepest tier. Each row's scope is
 /// `alice.todos()` — the same parent Scope target — so `Insert::merge`
 /// must collapse them into one VALUES list. The composite FK (tenant_id,

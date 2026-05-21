@@ -472,6 +472,86 @@ pub async fn update_child_with_filter(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// Filter-driven update across multiple child rows. The filter matches
+/// more than one Todo; all matching rows must be updated, non-matching
+/// rows must remain unchanged. Distinct from `update_child_with_filter`,
+/// which targets a single row by composite PK.
+#[driver_test(requires(native_starts_with))]
+pub async fn update_many_children_by_filter(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let user = User::create().exec(&mut db).await?;
+
+    let mut todos = vec![];
+    for label in ["match", "match", "match", "skip"] {
+        todos.push(
+            user.todos()
+                .create()
+                .title(label.to_string())
+                .exec(&mut db)
+                .await?,
+        );
+    }
+
+    user.todos()
+        .filter(Todo::fields().title().eq("match"))
+        .update()
+        .title("updated")
+        .exec(&mut db)
+        .await?;
+
+    let mut titles: Vec<String> = user
+        .todos()
+        .exec(&mut db)
+        .await?
+        .into_iter()
+        .map(|t| t.title)
+        .collect();
+    titles.sort();
+    assert_eq!(
+        titles,
+        vec!["skip", "updated", "updated", "updated"],
+    );
+
+    Ok(())
+}
+
+/// Filter-driven delete across multiple child rows. The filter matches
+/// more than one Todo; all matching rows must be deleted, non-matching
+/// rows must survive. Distinct from `delete_child_with_filter`, which
+/// targets a single row by composite PK.
+#[driver_test(requires(native_starts_with))]
+pub async fn delete_many_children_by_filter(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let user = User::create().exec(&mut db).await?;
+
+    for label in ["doomed", "doomed", "doomed", "survivor"] {
+        user.todos()
+            .create()
+            .title(label.to_string())
+            .exec(&mut db)
+            .await?;
+    }
+
+    user.todos()
+        .filter(Todo::fields().title().eq("doomed"))
+        .delete()
+        .exec(&mut db)
+        .await?;
+
+    let titles: Vec<String> = user
+        .todos()
+        .exec(&mut db)
+        .await?
+        .into_iter()
+        .map(|t| t.title)
+        .collect();
+    assert_eq!(titles, vec!["survivor".to_string()]);
+
+    Ok(())
+}
+
 /// Batch-create multiple child rows under one parent. Exercises
 /// `Insert::merge` for `InsertTarget::Scope` targets — the planner builds
 /// one INSERT per row and merges them into a single VALUES list before
