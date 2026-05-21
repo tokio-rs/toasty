@@ -40,6 +40,20 @@ cargo fmt
 
 Always run `cargo fmt` after finishing work on a change.
 
+## Design Philosophy
+
+Toasty does not hide differences between target databases. A query method that
+maps onto a native operator is a pass-through: it keeps that backend's behavior
+and is offered only where the operator exists.
+
+- `.like()` → each backend's own `LIKE` (case sensitivity varies; docs state each).
+- `.ilike()` → PostgreSQL `ILIKE` only; elsewhere rejected with `unsupported_feature`,
+  not emulated. Gated by `Capability::native_ilike` (`engine/verify.rs`; tests use `requires(native_ilike)`).
+
+Implement an operation uniformly across backends only when semantics are
+identical everywhere — e.g. `.starts_with()` (case-sensitive prefix match).
+`.ilike()` fails that test: backends disagree on case-folding.
+
 ## Architecture
 
 Toasty is a Rust ORM supporting SQL (SQLite, PostgreSQL, MySQL) and NoSQL (DynamoDB) databases. It is a Cargo workspace.

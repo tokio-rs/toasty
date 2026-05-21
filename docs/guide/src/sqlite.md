@@ -135,13 +135,17 @@ mutations, [batch operations](./batch-operations.md),
 serializable [transactions](./transactions.md) all run natively. A few
 behaviors differ from the other SQL backends:
 
-**`LIKE` is case-insensitive for ASCII.** SQLite's default `LIKE`
-ignores case for ASCII characters. The
-[`.ilike()`](./filtering-with-expressions.md#ilike) filter lowers to
-the same `LIKE`, so case-insensitive matching works — but a
-`.like("Rust")` filter also matches `"rust"` and `"RUST"`. Use
-`GLOB` (which Toasty does not currently expose) or a `CHECK` against
-exact bytes if you need case-sensitive pattern matching.
+**`LIKE` is case-insensitive for ASCII.** SQLite's `LIKE` ignores case for ASCII
+characters but is case-sensitive for non-ASCII ones. A
+[`.like("Rust")`](./filtering-with-expressions.md#like) filter also matches
+`"rust"` and `"RUST"`, but `.like("café")` does not match `"CAFÉ"`. Use `GLOB`
+(which Toasty does not currently expose) or a `CHECK` against exact bytes if you
+need case-sensitive pattern matching.
+
+**No `ILIKE`.** SQLite has no `ILIKE` operator, so
+[`.ilike()`](./filtering-with-expressions.md#ilike) is rejected with an
+`unsupported_feature` error. Since SQLite's `LIKE` already folds ASCII case, use
+`.like()` for case-insensitive ASCII matching.
 
 **No native prefix-match operator.**
 [`.starts_with("abc")`](./filtering-with-expressions.md#starts_with)
@@ -176,7 +180,8 @@ other isolation level returns `Error::UnsupportedFeature`. The
 default (no explicit level) is accepted and runs as serializable.
 
 ```rust,ignore
-let users = User::filter(User::fields().email().ilike("%@example.com"))
+// SQLite's LIKE folds ASCII case, so this matches "%@Example.com" too.
+let users = User::filter(User::fields().email().like("%@example.com"))
     .exec(&mut db)
     .await?;
 ```

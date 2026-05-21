@@ -25,9 +25,10 @@ async fn setup(test: &mut Test) -> toasty::Db {
 }
 
 /// ILIKE with an uppercase pattern matches rows regardless of their case.
-/// On PostgreSQL this requires `ILIKE`; on SQLite/MySQL plain `LIKE` is already
-/// case-insensitive for ASCII, so the same query works.
-#[driver_test(requires(sql))]
+/// `.ilike()` maps to PostgreSQL's native `ILIKE`; backends without one reject
+/// the query (see `filter_ilike_unsupported`), so these tests are gated on
+/// `native_ilike`.
+#[driver_test(requires(native_ilike))]
 pub async fn ilike_uppercase_pattern(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -47,7 +48,7 @@ pub async fn ilike_uppercase_pattern(test: &mut Test) -> Result<()> {
 
 /// ILIKE with a lowercase pattern — symmetric to the uppercase case. Catches
 /// the inverse bug if the serializer accidentally emitted a case-sensitive op.
-#[driver_test(requires(sql))]
+#[driver_test(requires(native_ilike))]
 pub async fn ilike_lowercase_pattern(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -66,7 +67,7 @@ pub async fn ilike_lowercase_pattern(test: &mut Test) -> Result<()> {
 }
 
 /// ILIKE with a pattern that matches nothing — returns empty result.
-#[driver_test(requires(sql))]
+#[driver_test(requires(native_ilike))]
 pub async fn ilike_no_match(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -82,7 +83,7 @@ pub async fn ilike_no_match(test: &mut Test) -> Result<()> {
 /// ILIKE on an `Option<String>` field — matches non-null values regardless of
 /// case; rows with NULL values are excluded since `NULL ILIKE pattern` is
 /// unknown.
-#[driver_test(requires(sql))]
+#[driver_test(requires(native_ilike))]
 pub async fn ilike_optional_field(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct OptItem {
@@ -114,6 +115,23 @@ pub async fn ilike_optional_field(test: &mut Test) -> Result<()> {
     assert_eq!(items[0].nickname.as_deref(), Some("Alice"));
     assert_eq!(items[1].nickname.as_deref(), Some("ALICIA"));
     assert_eq!(items[2].nickname.as_deref(), Some("alfred"));
+
+    Ok(())
+}
+
+/// On a SQL backend without a native `ILIKE` operator (SQLite, MySQL), `.ilike()`
+/// is rejected with an unsupported-feature error rather than silently degrading
+/// to plain `LIKE`.
+#[driver_test(requires(and(sql, not(native_ilike))))]
+pub async fn ilike_unsupported_without_native_operator(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let result: Result<Vec<Item>> = Item::filter(Item::fields().name().ilike("al%".to_string()))
+        .exec(&mut db)
+        .await;
+    let err = result.expect_err("ilike should be unsupported on a backend without a native ILIKE");
+
+    assert!(err.is_unsupported_feature(), "unexpected error: {err:?}");
 
     Ok(())
 }

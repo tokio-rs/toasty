@@ -29,6 +29,7 @@ toasty_driver_integration_suite::generate_driver_tests!(
     native_date: false,
     native_time: false,
     native_datetime: false,
+    native_ilike: false,
     native_array: false,
     vec_scalar: true,
     vec_remove: false,

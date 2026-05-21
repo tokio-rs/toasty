@@ -128,12 +128,12 @@ let admins = User::filter(User::fields().roles().contains("admin"))
     .await?;
 ```
 
-**Native `ILIKE`.** The [`.ilike()`](./filtering-with-expressions.md#ilike)
-filter method lowers directly to the SQL `ILIKE` operator. On other
-SQL drivers `.ilike()` falls back to plain `LIKE`, which is
-case-sensitive on PostgreSQL — so the behavior actually differs
-between backends. Reach for `.ilike()` when you need case-insensitive
-matching here.
+**Native `ILIKE`.** PostgreSQL's `LIKE` is case-sensitive, and PostgreSQL is the
+only backend with a native case-insensitive `ILIKE` operator. The
+[`.ilike()`](./filtering-with-expressions.md#ilike) filter maps directly to
+`ILIKE` and is supported only here; on the other backends it is rejected with an
+`unsupported_feature` error. Reach for `.ilike()` when you need case-insensitive
+matching.
 
 **Native prefix match.** The
 [`.starts_with()`](./filtering-with-expressions.md#starts_with) filter
