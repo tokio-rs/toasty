@@ -167,13 +167,13 @@ walks backwards from a page cursor.
 
 A few things that exist on PostgreSQL are absent here:
 
-**No `ILIKE`.** MySQL's [`.ilike()`](./filtering-with-expressions.md#ilike)
-filter lowers to plain `LIKE`, whose case sensitivity depends on the
-collation of the column.
-`utf8mb4_unicode_ci` and similar `_ci` collations match
-case-insensitively for free; binary or `_bin` collations match
-case-sensitively. Pick the collation that matches the semantics you
-want when declaring the column.
+**No `ILIKE`.** MySQL has no `ILIKE` operator, so
+[`.ilike()`](./filtering-with-expressions.md#ilike) is rejected with an
+`unsupported_feature` error. MySQL's `LIKE` case sensitivity is set by the
+column's collation: `utf8mb4_unicode_ci` and other `_ci` collations match
+case-insensitively, while binary and `_bin` collations match case-sensitively.
+Pick the collation that matches the semantics you want when declaring the
+column, then use [`.like()`](./filtering-with-expressions.md#like).
 
 **No `RETURNING` from INSERT or UPDATE.** MySQL does not support
 `RETURNING` clauses on mutations. For inserts into a table with an

@@ -609,6 +609,11 @@ where
     /// characters in `pattern`. Not supported by the DynamoDB driver — use
     /// [`starts_with`](Self::starts_with) instead.
     ///
+    /// `.like()` is a pass-through to the database's own `LIKE`, whose case
+    /// sensitivity differs by backend: case-sensitive on PostgreSQL,
+    /// case-insensitive for ASCII on SQLite, and collation-dependent on MySQL.
+    /// For a case-insensitive match on PostgreSQL, use [`ilike`](Self::ilike).
+    ///
     /// # Examples
     ///
     /// ```
@@ -627,14 +632,16 @@ where
         self.build_filter(move |path| stmt::Expr::like(path, pattern))
     }
 
-    /// Case-insensitive variant of [`like`](Self::like).
+    /// Case-insensitive variant of [`like`](Self::like), mapping to
+    /// PostgreSQL's `ILIKE` operator.
     ///
-    /// On PostgreSQL this serializes to `ILIKE`. On SQLite and MySQL it
-    /// serializes to plain `LIKE`, since both engines are already
-    /// case-insensitive for ASCII by default — note that Unicode case-folding
-    /// behavior depends on locale (PostgreSQL) or column collation (MySQL),
-    /// and SQLite's `LIKE` is ASCII-only without the ICU extension. Not
-    /// supported by the DynamoDB driver.
+    /// PostgreSQL is the only supported backend with a native `ILIKE`, so
+    /// `.ilike()` works only there. Toasty does not emulate it: on MySQL,
+    /// SQLite, and DynamoDB the query is rejected with an unsupported-feature
+    /// error. PostgreSQL's `LIKE` is case-sensitive and so provides `ILIKE` as
+    /// its case-insensitive companion; the other backends fold ASCII case in
+    /// `LIKE` (SQLite) or set it through the column collation (MySQL), so there
+    /// is no operator with matching semantics for `.ilike()` to pass through to.
     ///
     /// # Examples
     ///

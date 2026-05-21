@@ -122,6 +122,19 @@ pub struct Capability {
     /// will not produce one.
     pub native_like: bool,
 
+    /// Whether the database has a native case-insensitive `LIKE` operator
+    /// (`ILIKE`). Only PostgreSQL has one.
+    ///
+    /// Toasty does not emulate `ILIKE` on backends that lack it: `.ilike()`
+    /// is a pass-through to the database's own operator. When `native_ilike`
+    /// is `false`, the query-verify pass rejects a case-insensitive
+    /// `Expr::Like` with an
+    /// [`unsupported_feature`](crate::Error::unsupported_feature) error rather
+    /// than silently degrading to plain `LIKE`, whose case behavior differs.
+    ///
+    /// Implies `native_like`.
+    pub native_ilike: bool,
+
     /// Whether the driver can answer queries that don't match any primary key
     /// or index — i.e. supports unindexed full-table reads.
     ///
@@ -362,6 +375,14 @@ impl Capability {
             ));
         }
 
+        // ILIKE is a case-insensitive LIKE; a backend cannot offer it without
+        // a native LIKE.
+        if self.native_ilike && !self.native_like {
+            return Err(crate::Error::invalid_driver_configuration(
+                "native_ilike is true but native_like is false",
+            ));
+        }
+
         Ok(())
     }
 
@@ -434,6 +455,10 @@ impl Capability {
         native_starts_with: false,
         native_like: true,
 
+        // SQLite's `LIKE` is case-insensitive for ASCII only; it has no
+        // `ILIKE` operator, so `.ilike()` is rejected here.
+        native_ilike: false,
+
         // SQL drivers handle unindexed queries via QuerySql (see field doc).
         scan: true,
         scan_supports_sort: true,
@@ -481,6 +506,9 @@ impl Capability {
 
         // PostgreSQL has the `^@` prefix-match operator.
         native_starts_with: true,
+
+        // PostgreSQL is the only backend with a native `ILIKE` operator.
+        native_ilike: true,
 
         // PostgreSQL has CREATE TYPE ... AS ENUM
         native_enum: true,
@@ -582,9 +610,10 @@ impl Capability {
 
         index_or_predicate: false,
 
-        // DynamoDB has `begins_with()` but no LIKE.
+        // DynamoDB has `begins_with()` but no LIKE or ILIKE.
         native_starts_with: true,
         native_like: false,
+        native_ilike: false,
 
         scan: true,
         scan_supports_sort: false,

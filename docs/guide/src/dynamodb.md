@@ -254,12 +254,13 @@ from the index key condition and applies it as a post-filter, which
 forces a `Scan` instead of a `Query`. Avoid `!=` against the partition
 or sort key — it defeats the index.
 
-**`LIKE` and `ILIKE`.** DynamoDB has no `LIKE` operator. Calling
-[`.like(...)` or `.ilike(...)`](./filtering-with-expressions.md#string-pattern-matching)
-on a string field panics inside the driver. Use `.starts_with(...)`
-for prefix matching; substring and suffix matching are not supported
-by the backend at all and have to be done client-side after fetching
-the rows.
+**`LIKE` and `ILIKE`.** DynamoDB has neither operator. An
+[`.ilike(...)`](./filtering-with-expressions.md#ilike) query is rejected with an
+`unsupported_feature` error; [`.like(...)`](./filtering-with-expressions.md#like)
+panics inside the driver. Use
+[`.starts_with(...)`](./filtering-with-expressions.md#starts_with) for prefix
+matching; substring and suffix matching are not supported by the backend at all
+and have to be done client-side after fetching the rows.
 
 **Backward pagination.**
 [`.paginate(per_page).prev(&db)`](./sorting-limits-and-pagination.md#navigating-pages)
