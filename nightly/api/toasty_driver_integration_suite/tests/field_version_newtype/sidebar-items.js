@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["newtype_version_create_initializes","newtype_version_stale_delete_fails","newtype_version_stale_update_fails","newtype_version_update_increments"]};
