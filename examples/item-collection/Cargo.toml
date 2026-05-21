@@ -1,0 +1,22 @@
+[package]
+name = "example-item-collection"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+publish = false
+
+[features]
+default = [ "dynamodb" ]
+dynamodb = [ "toasty/dynamodb" ]
+postgresql = [ "toasty/postgresql" ]
+sqlite = [ "toasty/sqlite" ]
+
+[dependencies]
+toasty.workspace = true
+tokio.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true
