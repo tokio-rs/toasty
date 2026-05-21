@@ -24,7 +24,7 @@ impl Connection {
         let filter_expression = op
             .filter
             .as_ref()
-            .map(|expr| ddb_expression(&cx, &mut expr_attrs, false, expr));
+            .map(|expr| ddb_expression(schema, &cx, &mut expr_attrs, false, expr));
 
         tracing::trace!(table_name = %table.name, "scanning table");
 

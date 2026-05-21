@@ -339,3 +339,97 @@ pub async fn schema_item_collection_field_set(test: &mut Test) {
 
     assert_eq!(user_ic, None);
 }
+
+// ---------------------------------------------------------------------------
+// Filter-bearing operations on item-collection child models
+//
+// These exercise paths where the discriminator predicate (Expr::IsModel)
+// reaches the driver's general expression serializer rather than the
+// primary-key serializer:
+//
+//   - Scan filter:           query with no PK constraint, just a non-key filter.
+//   - DeleteByKey filter:    delete with both a PK identity and a row filter.
+//   - UpdateByKey filter:    update with both a PK identity and a row filter.
+//
+// On DynamoDB these flow through `ddb_expression`. On other DDB-shaped paths
+// (BuildKeyExpression) the discriminator already gets folded into the SK
+// prefix; these tests cover the second serializer.
+// ---------------------------------------------------------------------------
+
+/// Scan a child model with a filter on a non-key field. The lowering pipeline
+/// adds an `IsModel(Todo)` conjunct alongside the user filter; the planner
+/// can't promote it to a key condition (no PK column referenced), so it
+/// flows into the scan's filter expression and through `ddb_expression`.
+#[driver_test(requires(native_starts_with), requires(not(sql)))]
+pub async fn scan_child_model_with_non_key_filter(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let user = User::create().exec(&mut db).await?;
+    user.todos()
+        .create()
+        .title("match me")
+        .exec(&mut db)
+        .await?;
+    user.todos().create().title("skip me").exec(&mut db).await?;
+
+    let results: Vec<Todo> = Todo::filter(Todo::fields().title().eq("match me"))
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(1, results.len());
+    assert_eq!("match me", results[0].title);
+
+    Ok(())
+}
+
+/// Delete a child model row with a filter on a non-key field. The driver
+/// receives a `DeleteByKey` op whose filter contains `IsModel(Todo) AND
+/// title = "..."` — `ddb_expression` serializes the filter as a DynamoDB
+/// condition expression.
+#[driver_test(requires(native_starts_with))]
+pub async fn delete_child_with_filter(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let user = User::create().exec(&mut db).await?;
+    let todo = user
+        .todos()
+        .create()
+        .title("delete me")
+        .exec(&mut db)
+        .await?;
+
+    user.todos()
+        .filter_by_id(todo.id)
+        .filter(Todo::fields().title().eq("delete me"))
+        .delete()
+        .exec(&mut db)
+        .await?;
+
+    assert_err!(Todo::get_by_user_id_and_id(&mut db, &todo.user_id, &todo.id).await);
+
+    Ok(())
+}
+
+/// Update a child model row with a filter on a non-key field. The driver
+/// receives an `UpdateByKey` op whose filter contains `IsModel(Todo) AND
+/// title = "..."` — `ddb_expression` serializes it.
+#[driver_test(requires(native_starts_with))]
+pub async fn update_child_with_filter(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let user = User::create().exec(&mut db).await?;
+    let todo = user.todos().create().title("before").exec(&mut db).await?;
+
+    user.todos()
+        .filter_by_id(todo.id)
+        .filter(Todo::fields().title().eq("before"))
+        .update()
+        .title("after")
+        .exec(&mut db)
+        .await?;
+
+    let reloaded = Todo::get_by_user_id_and_id(&mut db, &todo.user_id, &todo.id).await?;
+    assert_eq!(reloaded.title, "after");
+
+    Ok(())
+}

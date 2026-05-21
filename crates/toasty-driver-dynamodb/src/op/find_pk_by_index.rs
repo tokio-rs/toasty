@@ -17,7 +17,7 @@ impl Connection {
         let cx = ExprContext::new_with_target(&schema.db, table);
 
         let mut expr_attrs = ExprAttrs::default();
-        let key_expression = ddb_expression(&cx, &mut expr_attrs, false, &op.filter);
+        let key_expression = ddb_expression(schema, &cx, &mut expr_attrs, false, &op.filter);
 
         let res = if index.unique {
             tracing::trace!(index_name = %index.name, "querying unique index as table");

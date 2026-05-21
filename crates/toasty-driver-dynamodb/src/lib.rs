@@ -182,8 +182,8 @@ impl Connection {
         match op {
             Operation::GetByKey(op) => self.exec_get_by_key(schema, op).await,
             Operation::QueryPk(op) => self.exec_query_pk(schema, op).await,
-            Operation::DeleteByKey(op) => self.exec_delete_by_key(&schema.db, op).await,
-            Operation::UpdateByKey(op) => self.exec_update_by_key(&schema.db, op).await,
+            Operation::DeleteByKey(op) => self.exec_delete_by_key(schema, op).await,
+            Operation::UpdateByKey(op) => self.exec_update_by_key(schema, op).await,
             Operation::FindPkByIndex(op) => self.exec_find_pk_by_index(schema, op).await,
             Operation::QuerySql(op) => {
                 assert!(
@@ -414,7 +414,7 @@ impl<'a> BuildKeyExpression<'a> {
     fn build(mut self, cx: &ExprContext<'_, db::Schema>, expr: &stmt::Expr) -> String {
         if self.sk_cols.len() <= 1 {
             // No composite sort key — pass through unchanged.
-            return ddb_expression(cx, self.attrs, true, expr);
+            return ddb_expression(&self.schema, cx, self.attrs, true, expr);
         }
 
         // Collect sub-expressions per column.
@@ -424,7 +424,7 @@ impl<'a> BuildKeyExpression<'a> {
             .pk_component
             .as_ref()
             .expect("key expression must include a hash-key condition");
-        let mut key_expr = ddb_expression(cx, self.attrs, true, pk_expr);
+        let mut key_expr = ddb_expression(&self.schema, cx, self.attrs, true, pk_expr);
 
         // Build the sort-key prefix from the collected components.
         let mut missing = false;
@@ -536,6 +536,7 @@ impl Visit for BuildKeyExpression<'_> {
 }
 
 fn ddb_expression(
+    schema: &Schema,
     cx: &ExprContext<'_, db::Schema>,
     attrs: &mut ExprAttrs,
     primary: bool,
@@ -549,8 +550,8 @@ fn ddb_expression(
             format!("{field} BETWEEN {low} AND {high}")
         }
         stmt::Expr::BinaryOp(expr_binary_op) => {
-            let lhs = ddb_expression(cx, attrs, primary, &expr_binary_op.lhs);
-            let rhs = ddb_expression(cx, attrs, primary, &expr_binary_op.rhs);
+            let lhs = ddb_expression(schema, cx, attrs, primary, &expr_binary_op.lhs);
+            let rhs = ddb_expression(schema, cx, attrs, primary, &expr_binary_op.rhs);
 
             match expr_binary_op.op {
                 stmt::BinaryOp::Eq => format!("{lhs} = {rhs}"),
@@ -589,7 +590,7 @@ fn ddb_expression(
             let operands = expr_and
                 .operands
                 .iter()
-                .map(|operand| ddb_expression(cx, attrs, primary, operand))
+                .map(|operand| ddb_expression(schema, cx, attrs, primary, operand))
                 .collect::<Vec<_>>();
             operands.join(" AND ")
         }
@@ -597,12 +598,12 @@ fn ddb_expression(
             let operands = expr_or
                 .operands
                 .iter()
-                .map(|operand| ddb_expression(cx, attrs, primary, operand))
+                .map(|operand| ddb_expression(schema, cx, attrs, primary, operand))
                 .collect::<Vec<_>>();
             format!("({})", operands.join(" OR "))
         }
         stmt::Expr::InList(in_list) => {
-            let expr = ddb_expression(cx, attrs, primary, &in_list.expr);
+            let expr = ddb_expression(schema, cx, attrs, primary, &in_list.expr);
 
             // Extract the list items and create individual attribute values
             let items = match &*in_list.list {
@@ -613,7 +614,7 @@ fn ddb_expression(
                     .join(", "),
                 _ => {
                     // If it's not a literal list, treat it as a single expression
-                    ddb_expression(cx, attrs, primary, &in_list.list)
+                    ddb_expression(schema, cx, attrs, primary, &in_list.list)
                 }
             };
 
@@ -628,17 +629,29 @@ fn ddb_expression(
             // `Option<Embed>` presence column — produces invalid syntax.)
             let inner = match &*expr_is_null.expr {
                 stmt::Expr::Reference(expr_reference) => column_alias(cx, attrs, expr_reference).1,
-                other => ddb_expression(cx, attrs, primary, other),
+                other => ddb_expression(schema, cx, attrs, primary, other),
             };
             format!("attribute_not_exists({inner})")
         }
+        stmt::Expr::IsModel(e) => {
+            // On DynamoDB the discriminator column is not stored as a top-level
+            // attribute on rows; it's encoded as the leading segment of the
+            // synthesized __sk. Filter by the SK prefix so scans and other
+            // filter-expression contexts find the right rows.
+            let model_name = schema.app.model(e.model).name().upper_camel_case();
+            let prefix_attr = attrs.value(&stmt::Value::String(format!("{model_name}#")));
+            attrs
+                .attr_names
+                .insert("#__sk".to_string(), "__sk".to_string());
+            format!("begins_with(#__sk, {prefix_attr})")
+        }
         stmt::Expr::Not(expr_not) => {
-            let inner = ddb_expression(cx, attrs, primary, &expr_not.expr);
+            let inner = ddb_expression(schema, cx, attrs, primary, &expr_not.expr);
             format!("(NOT {inner})")
         }
         stmt::Expr::StartsWith(expr_starts_with) => {
-            let expr = ddb_expression(cx, attrs, primary, &expr_starts_with.expr);
-            let prefix = ddb_expression(cx, attrs, primary, &expr_starts_with.prefix);
+            let expr = ddb_expression(schema, cx, attrs, primary, &expr_starts_with.expr);
+            let prefix = ddb_expression(schema, cx, attrs, primary, &expr_starts_with.prefix);
             format!("begins_with({expr}, {prefix})")
         }
         stmt::Expr::Like(_) => {
@@ -650,12 +663,12 @@ fn ddb_expression(
             // `Path::contains(value)` lowers to `value = ANY(col)`. On
             // DynamoDB that's `contains(path, value)` — the standard List
             // membership filter.
-            let value = ddb_expression(cx, attrs, primary, &any.lhs);
-            let path = ddb_expression(cx, attrs, primary, &any.rhs);
+            let value = ddb_expression(schema, cx, attrs, primary, &any.lhs);
+            let path = ddb_expression(schema, cx, attrs, primary, &any.rhs);
             format!("contains({path}, {value})")
         }
         stmt::Expr::Length(expr) => {
-            let inner = ddb_expression(cx, attrs, primary, &expr.expr);
+            let inner = ddb_expression(schema, cx, attrs, primary, &expr.expr);
             format!("size({inner})")
         }
         stmt::Expr::Cast(expr_cast) if expr_cast.ty == stmt::Type::Bool => {

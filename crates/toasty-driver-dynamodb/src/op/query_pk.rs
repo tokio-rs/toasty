@@ -36,13 +36,13 @@ impl Connection {
             }
             .build(&cx, &op.pk_filter)
         } else {
-            ddb_expression(&cx, &mut expr_attrs, false, &op.pk_filter)
+            ddb_expression(schema, &cx, &mut expr_attrs, false, &op.pk_filter)
         };
 
         let filter_expression = op
             .filter
             .as_ref()
-            .map(|expr| ddb_expression(&cx, &mut expr_attrs, false, expr));
+            .map(|expr| ddb_expression(schema, &cx, &mut expr_attrs, false, expr));
 
         // Build base query
         let mut query = self

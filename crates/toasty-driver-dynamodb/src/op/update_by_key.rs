@@ -1,12 +1,12 @@
 use crate::sort_key_columns;
 
 use super::{
-    Connection, Delete, ExprAttrs, Put, Result, ReturnValuesOnConditionCheckFailure, SdkError,
-    TransactWriteItem, TransactWriteItemsError, Update, UpdateItemError, Value, db, ddb_expression,
-    ddb_key, item_to_record, operation, stmt,
+    Connection, Delete, ExprAttrs, Put, Result, ReturnValuesOnConditionCheckFailure, Schema,
+    SdkError, TransactWriteItem, TransactWriteItemsError, Update, UpdateItemError, Value, db,
+    ddb_expression, ddb_key, item_to_record, operation, stmt,
 };
 use aws_sdk_dynamodb::types::{AttributeValue, CancellationReason, ReturnValue};
-use std::{collections::HashMap, fmt::Write};
+use std::{collections::HashMap, fmt::Write, sync::Arc};
 use toasty_core::{driver::ExecResponse, schema::db::ColumnId, stmt::ExprContext};
 
 /// An [`stmt::Input`] that resolves column references into a record produced
@@ -122,12 +122,13 @@ fn on_transaction_cancelled(
 impl Connection {
     pub(crate) async fn exec_update_by_key(
         &mut self,
-        schema: &db::Schema,
+        schema: &Arc<Schema>,
         op: operation::UpdateByKey,
     ) -> Result<ExecResponse> {
-        let table = schema.table(op.table);
+        let db_schema = &schema.db;
+        let table = db_schema.table(op.table);
         let sk_cols = sort_key_columns(table);
-        let cx = ExprContext::new_with_target(schema, table);
+        let cx = ExprContext::new_with_target(db_schema, table);
 
         let mut expr_attrs = ExprAttrs::default();
 
@@ -137,7 +138,7 @@ impl Connection {
             .filter(|index| {
                 if !index.primary_key && index.unique {
                     index.columns.iter().any(|index_column| {
-                        let column = index_column.table_column(schema);
+                        let column = index_column.table_column(db_schema);
                         op.assignments
                             .keys()
                             .any(|projection| *projection == column.id.index)
@@ -149,11 +150,19 @@ impl Connection {
             .collect::<Vec<_>>();
 
         let filter_expression = match (&op.filter, &op.condition) {
-            (Some(filter), None) => Some(ddb_expression(&cx, &mut expr_attrs, false, filter)),
-            (None, Some(condition)) => Some(ddb_expression(&cx, &mut expr_attrs, false, condition)),
+            (Some(filter), None) => {
+                Some(ddb_expression(schema, &cx, &mut expr_attrs, false, filter))
+            }
+            (None, Some(condition)) => Some(ddb_expression(
+                schema,
+                &cx,
+                &mut expr_attrs,
+                false,
+                condition,
+            )),
             (Some(filter), Some(condition)) => {
-                let f = ddb_expression(&cx, &mut expr_attrs, false, filter);
-                let c = ddb_expression(&cx, &mut expr_attrs, false, condition);
+                let f = ddb_expression(schema, &cx, &mut expr_attrs, false, filter);
+                let c = ddb_expression(schema, &cx, &mut expr_attrs, false, condition);
                 Some(format!("({f}) AND ({c})"))
             }
             _ => None,
@@ -455,7 +464,7 @@ impl Connection {
                 let attributes_to_get = index
                     .columns
                     .iter()
-                    .map(|index_column| index_column.table_column(schema).name.clone())
+                    .map(|index_column| index_column.table_column(db_schema).name.clone())
                     .collect();
 
                 // Records that have had their unique values set initially
@@ -536,7 +545,7 @@ impl Connection {
                 }
 
                 for index_column in &index.columns {
-                    let column = index_column.table_column(schema);
+                    let column = index_column.table_column(db_schema);
 
                     for (projection, _) in op.assignments.iter() {
                         if *projection != column.id.index {
@@ -600,12 +609,12 @@ impl Connection {
                     let mut condition_expression = String::new();
 
                     for column_id in set_unique_attrs.keys() {
-                        let column = expr_attrs.column(schema.column(*column_id)).to_string();
+                        let column = expr_attrs.column(db_schema.column(*column_id)).to_string();
                         condition_expression = format!("attribute_not_exists({column})");
                     }
 
                     for (column_id, prev) in &updated_unique_attrs {
-                        let column = expr_attrs.column(schema.column(*column_id)).to_string();
+                        let column = expr_attrs.column(db_schema.column(*column_id)).to_string();
                         let value = expr_attrs.ddb_value(prev.clone());
 
                         condition_expression = format!("{column} = {value}");
@@ -633,7 +642,7 @@ impl Connection {
                     );
 
                     for (column_id, prev) in &updated_unique_attrs {
-                        let name = &schema.column(*column_id).name;
+                        let name = &db_schema.column(*column_id).name;
                         transact_items.push(
                             TransactWriteItem::builder()
                                 .delete(
@@ -648,13 +657,30 @@ impl Connection {
                     }
 
                     for column_id in updated_unique_attrs.keys().chain(set_unique_attrs.keys()) {
-                        let name = &schema.column(*column_id).name;
+                        let name = &db_schema.column(*column_id).name;
 
                         let mut index_insert_items = HashMap::new();
 
                         for index_column in &index.columns {
                             let column = index_column.table_column(schema);
                             let value = &resolved_unique_values[column_id];
+                            let (_, assignment) = op
+                                .assignments
+                                .iter()
+                                .find(|(projection, _)| **projection == column_id.index)
+                                .unwrap();
+
+                            let stmt::Assignment::Set(expr) = assignment else {
+                                unreachable!(
+                                    "unique index assignments are always Set; got {assignment:#?}"
+                                );
+                            };
+                            let stmt::Expr::Value(value) = expr else {
+                                unreachable!(
+                                    "unique index assignment expression is always a Value; got {expr:#?}"
+                                );
+                            };
+
                             if !value.is_null() {
                                 index_insert_items.insert(
                                     column.name.clone(),
