@@ -22,7 +22,7 @@ impl Value {
         use stmt::Type;
 
         let core_value = match (ty, val) {
-            (Type::Bool, AV::Bool(val)) => stmt::Value::from(*val),
+            (Type::Bool, AV::N(val)) => stmt::Value::Bool(val == "1"),
             (Type::String, AV::S(val)) => stmt::Value::from(val.clone()),
             (Type::I8, AV::N(val)) => stmt::Value::from(val.parse::<i8>().unwrap()),
             (Type::I16, AV::N(val)) => stmt::Value::from(val.parse::<i16>().unwrap()),
@@ -54,7 +54,7 @@ impl Value {
         use AttributeValue as AV;
 
         match &self.0 {
-            stmt::Value::Bool(val) => AV::Bool(*val),
+            stmt::Value::Bool(val) => AV::N(if *val { "1" } else { "0" }.to_string()),
             stmt::Value::String(val) => AV::S(val.to_string()),
             stmt::Value::I8(val) => AV::N(val.to_string()),
             stmt::Value::I16(val) => AV::N(val.to_string()),
