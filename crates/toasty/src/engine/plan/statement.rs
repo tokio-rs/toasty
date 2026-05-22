@@ -281,122 +281,138 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             is_returning_projection || matches!(returning, None | Some(stmt::Returning::Expr(..)))
         );
 
-        // Walk scope-aware so that `Arg`/`Reference` nodes nested inside a
-        // `Map`/`Let` body (e.g. the via-include projection that strips the
-        // linking column with `Map(child, arg(1))`) are not mistaken for
-        // statement-level args/columns. Statement-level constructs only
-        // appear at the top scope (`scope_depth == 0`); a local arg inside a
-        // mapped body has `nesting < scope_depth`.
-        let mut walk = |expr: &mut stmt::Expr| {
-            visit_mut::walk_expr_scoped_mut(expr, 0, |expr, scope_depth| {
-                if scope_depth != 0 {
-                    return true;
-                }
-                match expr {
-                    stmt::Expr::Arg(expr_arg) => {
-                        match &self.stmt_info.args[expr_arg.position] {
-                            hir::Arg::Ref {
-                                stmt_id: target_id,
-                                returning_input,
-                                batch_load_index,
-                                target_expr_ref,
-                                ..
-                            } => {
-                                let target_stmt_info = &self.planner.hir[target_id];
-                                let back_ref = &target_stmt_info.back_refs[&self.stmt_id];
-
-                                // Find the column
-                                let column = back_ref.exprs.get_index_of(target_expr_ref).unwrap();
-
-                                if returning_input.get().is_none() {
-                                    // Find the node providing the data for the ref
-                                    let node_id = back_ref.node_id.get().unwrap();
-
-                                    let (index, _) = inputs.insert_full(node_id);
-                                    returning_input.set(Some(index));
-                                }
-
-                                let index = returning_input.get().unwrap();
-                                let row = batch_load_index.get().unwrap();
-                                let nesting = if self.stmt().is_insert() && is_returning_projection
-                                {
-                                    1
-                                } else {
-                                    0
-                                };
-
-                                *expr = stmt::Expr::project(
-                                    stmt::ExprArg {
-                                        position: index,
-                                        nesting,
-                                    },
-                                    [row, column],
-                                );
-                            }
-                            hir::Arg::Sub {
-                                stmt_id: target_id, ..
-                            } => {
-                                assert!(
-                                    !(self.stmt().is_insert() && is_returning_projection),
-                                    "TODO"
-                                );
-
-                                let target_stmt_info = &self.planner.hir[target_id];
-                                let target_node_id = target_stmt_info.output.get().expect("bug");
-
-                                let (index, _) = inputs.insert_full(target_node_id);
-
-                                *expr = stmt::Expr::arg(index);
-                            }
-                        }
-                        false
-                    }
-                    stmt::Expr::Project(expr_project) if !is_returning_projection => {
-                        // When returning an expression (not projection),
-                        // ExprReference projections need to be handled explicitly.
-                        if let stmt::Expr::Reference(expr_reference) = &*expr_project.base {
-                            let [row] = expr_project.projection.as_slice() else {
-                                todo!("expr_projec{expr_project:#?}")
-                            };
-
-                            let column = self.load_data_expr_reference_position(expr_reference);
-                            let (position, _) = inputs.insert_full(load_data_node_id);
-                            *expr = stmt::Expr::arg_project(position, [*row, column]);
-                            false
-                        } else {
-                            true
-                        }
-                    }
-                    stmt::Expr::Reference(expr_reference) if is_returning_projection => {
-                        let column = self.load_data_expr_reference_position(expr_reference);
-                        let (position, _) = inputs.insert_full(load_data_node_id);
-                        *expr = stmt::Expr::arg_project(position, [column]);
-                        false
-                    }
-                    stmt::Expr::Func(stmt::ExprFunc::Count(stmt::FuncCount {
-                        arg: None, ..
-                    })) if is_returning_projection => {
-                        let index = self
-                            .stmt_info
-                            .load_data_select_items
-                            .get()
-                            .unwrap()
-                            .get_index_of_count_star();
-                        let (position, _) = inputs.insert_full(load_data_node_id);
-                        *expr = stmt::Expr::arg_project(position, [index]);
-                        false
-                    }
-                    _ => true,
-                }
-            });
-        };
-
         match returning {
-            Some(stmt::Returning::Project(expr)) | Some(stmt::Returning::Expr(expr)) => walk(expr),
+            Some(stmt::Returning::Project(expr)) | Some(stmt::Returning::Expr(expr)) => {
+                self.rewrite_returning_inputs(
+                    expr,
+                    &mut inputs,
+                    load_data_node_id,
+                    is_returning_projection,
+                );
+            }
             _ => {}
         }
 
         inputs
+    }
+
+    /// Rewrite the returning clause expression so statement-level
+    /// `Arg`/`Reference`/`Count`/`Project` nodes reference the MIR inputs that
+    /// supply their data, collecting those inputs into `inputs`.
+    ///
+    /// Walk scope-aware so that `Arg`/`Reference` nodes nested inside a
+    /// `Map`/`Let` body (e.g. the via-include projection that strips the
+    /// linking column with `Map(child, arg(1))`) are not mistaken for
+    /// statement-level args/columns. Statement-level constructs only appear at
+    /// the top scope (`scope_depth == 0`); a local arg inside a mapped body has
+    /// `nesting < scope_depth`.
+    fn rewrite_returning_inputs(
+        &self,
+        expr: &mut stmt::Expr,
+        inputs: &mut IndexSet<mir::NodeId>,
+        load_data_node_id: mir::NodeId,
+        is_returning_projection: bool,
+    ) {
+        visit_mut::walk_expr_scoped_mut(expr, 0, |expr, scope_depth| {
+            if scope_depth != 0 {
+                return true;
+            }
+            match expr {
+                stmt::Expr::Arg(expr_arg) => {
+                    match &self.stmt_info.args[expr_arg.position] {
+                        hir::Arg::Ref {
+                            stmt_id: target_id,
+                            returning_input,
+                            batch_load_index,
+                            target_expr_ref,
+                            ..
+                        } => {
+                            let target_stmt_info = &self.planner.hir[target_id];
+                            let back_ref = &target_stmt_info.back_refs[&self.stmt_id];
+
+                            // Find the column
+                            let column = back_ref.exprs.get_index_of(target_expr_ref).unwrap();
+
+                            if returning_input.get().is_none() {
+                                // Find the node providing the data for the ref
+                                let node_id = back_ref.node_id.get().unwrap();
+
+                                let (index, _) = inputs.insert_full(node_id);
+                                returning_input.set(Some(index));
+                            }
+
+                            let index = returning_input.get().unwrap();
+                            let row = batch_load_index.get().unwrap();
+                            let nesting = if self.stmt().is_insert() && is_returning_projection {
+                                1
+                            } else {
+                                0
+                            };
+
+                            *expr = stmt::Expr::project(
+                                stmt::ExprArg {
+                                    position: index,
+                                    nesting,
+                                },
+                                [row, column],
+                            );
+                        }
+                        hir::Arg::Sub {
+                            stmt_id: target_id, ..
+                        } => {
+                            assert!(
+                                !(self.stmt().is_insert() && is_returning_projection),
+                                "TODO"
+                            );
+
+                            let target_stmt_info = &self.planner.hir[target_id];
+                            let target_node_id = target_stmt_info.output.get().expect("bug");
+
+                            let (index, _) = inputs.insert_full(target_node_id);
+
+                            *expr = stmt::Expr::arg(index);
+                        }
+                    }
+                    false
+                }
+                stmt::Expr::Project(expr_project) if !is_returning_projection => {
+                    // When returning an expression (not projection),
+                    // ExprReference projections need to be handled explicitly.
+                    if let stmt::Expr::Reference(expr_reference) = &*expr_project.base {
+                        let [row] = expr_project.projection.as_slice() else {
+                            todo!("expr_projec{expr_project:#?}")
+                        };
+
+                        let column = self.load_data_expr_reference_position(expr_reference);
+                        let (position, _) = inputs.insert_full(load_data_node_id);
+                        *expr = stmt::Expr::arg_project(position, [*row, column]);
+                        false
+                    } else {
+                        true
+                    }
+                }
+                stmt::Expr::Reference(expr_reference) if is_returning_projection => {
+                    let column = self.load_data_expr_reference_position(expr_reference);
+                    let (position, _) = inputs.insert_full(load_data_node_id);
+                    *expr = stmt::Expr::arg_project(position, [column]);
+                    false
+                }
+                stmt::Expr::Func(stmt::ExprFunc::Count(stmt::FuncCount { arg: None, .. }))
+                    if is_returning_projection =>
+                {
+                    let index = self
+                        .stmt_info
+                        .load_data_select_items
+                        .get()
+                        .unwrap()
+                        .get_index_of_count_star();
+                    let (position, _) = inputs.insert_full(load_data_node_id);
+                    *expr = stmt::Expr::arg_project(position, [index]);
+                    false
+                }
+                _ => true,
+            }
+        });
     }
 
     fn load_data_expr_reference_position(&self, expr_reference: &stmt::ExprReference) -> usize {
