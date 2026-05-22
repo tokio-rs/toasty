@@ -55,11 +55,9 @@ impl Connection {
                 let entry = row.entry(i).unwrap();
                 let value = entry.as_value_unwrap();
 
-                if concat_sk {
-                    if let Some(sk_pos) = sk_cols.iter().position(|&c| c == *column_id) {
-                        sk_vals[sk_pos] = Some(value.clone());
-                        continue;
-                    }
+                if concat_sk && let Some(sk_pos) = sk_cols.iter().position(|&c| c == *column_id) {
+                    sk_vals[sk_pos] = Some(value.clone());
+                    continue;
                 }
 
                 if !value.is_null() {

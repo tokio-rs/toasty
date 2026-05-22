@@ -146,9 +146,9 @@ async fn populate_users(db: &mut Db, tenant: &Tenant) -> Result<Vec<User>> {
             name: name,
         }));
     }
-    Ok(builder.exec(db).await?)
+    builder.exec(db).await
 }
-async fn populate_todos(db: &mut Db, user: &User) -> Result<()> {
+async fn populate_todos(db: &mut Db, user: &User) -> Result<Vec<Todo>> {
     let mut many = Todo::create_many();
     for i in 0..10 {
         many = many.item(toasty::create!(in user.todos() {
@@ -156,6 +156,5 @@ async fn populate_todos(db: &mut Db, user: &User) -> Result<()> {
             title: format!("Todo {} for {}", i, user.name)
         }))
     }
-    many.exec(db).await?;
-    Ok(())
+    many.exec(db).await
 }

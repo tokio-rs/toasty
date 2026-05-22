@@ -360,17 +360,17 @@ fn item_to_record<'a>(
     // Parse __sk back into individual column values when the table uses a
     // composite sort key.
     let mut sk_vals: HashMap<ColumnId, stmt::Value> = HashMap::new();
-    if sk_cols.len() > 1 {
-        if let Some(AttributeValue::S(sk)) = item.get("__sk") {
-            let mut parts: Vec<&str> = sk.split('#').collect();
-            // We write a trailing delimiter so pop the empty tail.
-            if parts.last() == Some(&"") {
-                parts.pop();
-            }
-            for (i, part) in parts.iter().enumerate() {
-                if let Some(&col_id) = sk_cols.get(i) {
-                    sk_vals.insert(col_id, stmt::Value::String((*part).to_string()));
-                }
+    if sk_cols.len() > 1
+        && let Some(AttributeValue::S(sk)) = item.get("__sk")
+    {
+        let mut parts: Vec<&str> = sk.split('#').collect();
+        // We write a trailing delimiter so pop the empty tail.
+        if parts.last() == Some(&"") {
+            parts.pop();
+        }
+        for (i, part) in parts.iter().enumerate() {
+            if let Some(&col_id) = sk_cols.get(i) {
+                sk_vals.insert(col_id, stmt::Value::String((*part).to_string()));
             }
         }
     }
