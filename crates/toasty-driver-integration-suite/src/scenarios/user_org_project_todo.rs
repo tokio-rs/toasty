@@ -5,6 +5,11 @@ scenario! {
     //!
     //! Used by tests that need a `via` path longer than the 2-step
     //! `user_comment_article` scenario.
+    //!
+    //! `User::todos` is the flat 3-step via (`organizations.projects.todos`).
+    //! `User::nested_todos` reaches the same todos through `organizations.todos`,
+    //! where `Organization::todos` is itself a via — a via-of-via, used to test
+    //! recursive flattening of a via path whose step names another via.
 
     #![id(ID)]
 
@@ -22,6 +27,11 @@ scenario! {
         // User → organizations → projects → todos
         #[has_many(via = organizations.projects.todos)]
         todos: toasty::HasMany<Todo>,
+
+        // User → organizations → Organization::todos, which is itself a via.
+        // The second step expands into another via path (via-of-via).
+        #[has_many(via = organizations.todos)]
+        nested_todos: toasty::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -40,6 +50,11 @@ scenario! {
 
         #[has_many]
         projects: toasty::HasMany<Project>,
+
+        // Organization → projects → todos. The via that `User::nested_todos`
+        // routes through, making that relation a via-of-via.
+        #[has_many(via = projects.todos)]
+        todos: toasty::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
