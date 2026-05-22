@@ -7,6 +7,7 @@ mod lift_in_subquery;
 mod paginate;
 mod relation;
 mod returning;
+mod via_join;
 
 #[cfg(test)]
 mod tests;
