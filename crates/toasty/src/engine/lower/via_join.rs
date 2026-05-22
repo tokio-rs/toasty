@@ -84,13 +84,10 @@ impl LowerStatement<'_, '_> {
         // A single (`has_one`) via yields one `[link_key, target_record]`
         // record; project the target out. A nullable single relation, though,
         // produces `Null` when the `INNER JOIN` matched nothing, and projecting
-        // into `Null` would panic — so encode loaded-None and strip the link key
-        // only on the non-null branch.
+        // into `Null` would panic — so strip the link key only on the non-null
+        // branch.
         if nullable {
-            super::encode_nullable_single(
-                sub_expr,
-                stmt::Expr::project(stmt::Expr::arg(0), [1usize]),
-            )
+            super::map_nullable_single(sub_expr, stmt::Expr::project(stmt::Expr::arg(0), [1usize]))
         } else {
             stmt::Expr::project(sub_expr, [1usize])
         }

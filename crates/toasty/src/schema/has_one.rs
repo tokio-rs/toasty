@@ -1,5 +1,5 @@
 use super::has_many::has_kind;
-use super::{Load, Register, Relation};
+use super::{Load, Register, Relation, lazy_slot};
 
 use toasty_core::schema::app::{self, FieldId, FieldTy};
 use toasty_core::stmt::{self, Value};
@@ -26,12 +26,30 @@ impl<T: Relation> Load for HasOne<T> {
     }
 
     fn load(input: Value) -> crate::Result<Self> {
-        Ok(match input {
-            Value::Null => Self::default(),
-            value => Self {
-                value: Some(Box::new(T::load_relation(value)?)),
+        load_single_relation(input, "has-one relation")
+    }
+}
+
+fn load_single_relation<T: Relation>(
+    input: Value,
+    label: &'static str,
+) -> crate::Result<HasOne<T>> {
+    match input {
+        Value::Null => Ok(HasOne::default()),
+        value => match T::load_relation(value.clone()) {
+            // Current relation include encoding: a loaded single-relation slot
+            // is the related model record directly.
+            Ok(value) => Ok(HasOne {
+                value: Some(Box::new(value)),
+            }),
+            Err(err) => match lazy_slot::decode(value, label, T::load_relation) {
+                Ok(lazy_slot::LazySlot::Unloaded) => Ok(HasOne::default()),
+                Ok(lazy_slot::LazySlot::Loaded(value)) => Ok(HasOne {
+                    value: Some(Box::new(value)),
+                }),
+                Err(_) => Err(err),
             },
-        })
+        },
     }
 }
 

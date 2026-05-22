@@ -1,4 +1,4 @@
-use super::{Field, Load};
+use super::{Field, Load, lazy_slot};
 use crate::Statement;
 use crate::stmt::{self, Expr, IntoExpr, IntoStatement};
 use toasty_core::schema::app::ModelSet;
@@ -145,17 +145,9 @@ impl<T: Load<Output = T>> Load for Deferred<T> {
         // and emits a bare Null when unloaded, so the two states are
         // distinguishable even when the inner column value is NULL (i.e. the
         // `Deferred<Option<T>>` case).
-        match value {
-            toasty_core::stmt::Value::Null => Ok(Self { value: None }),
-            toasty_core::stmt::Value::Record(record) if record.fields.len() == 1 => {
-                let mut iter = record.fields.into_iter();
-                Ok(Self {
-                    value: Some(T::load(iter.next().unwrap())?),
-                })
-            }
-            value => Err(toasty_core::Error::from_args(format_args!(
-                "deferred field decoder expected Null or single-field Record, got {value:?}"
-            ))),
+        match lazy_slot::decode(value, "deferred field", T::load)? {
+            lazy_slot::LazySlot::Unloaded => Ok(Self { value: None }),
+            lazy_slot::LazySlot::Loaded(value) => Ok(Self { value: Some(value) }),
         }
     }
 

@@ -1,4 +1,4 @@
-use super::{Load, Register, Relation, Scope};
+use super::{Load, Register, Relation, Scope, lazy_slot};
 
 use toasty_core::schema::Name;
 use toasty_core::schema::app::{self, FieldId, FieldTy, ModelId};
@@ -29,20 +29,35 @@ impl<T: Relation> Load for HasMany<T> {
     fn load(input: Value) -> crate::Result<Self> {
         match input {
             Value::List(items) => {
-                let mut values = vec![];
-
-                for value in items {
-                    values.push(T::load_relation(value)?);
-                }
-
-                Ok(Self {
-                    values: Some(values),
-                })
+                // Current relation include encoding: a loaded has-many slot is
+                // the related row list directly.
+                load_items(items)
             }
             Value::Null => Ok(Self::default()),
-            _ => todo!("unexpected input: input={:#?}", input),
+            input => match lazy_slot::decode(input, "has-many relation", |value| match value {
+                Value::List(items) => load_items(items),
+                value => Err(toasty_core::Error::type_conversion(
+                    value,
+                    "has-many relation",
+                )),
+            })? {
+                lazy_slot::LazySlot::Unloaded => Ok(Self::default()),
+                lazy_slot::LazySlot::Loaded(value) => Ok(value),
+            },
         }
     }
+}
+
+fn load_items<T: Relation>(items: Vec<Value>) -> crate::Result<HasMany<T>> {
+    let mut values = vec![];
+
+    for value in items {
+        values.push(T::load_relation(value)?);
+    }
+
+    Ok(HasMany {
+        values: Some(values),
+    })
 }
 
 impl<T: Relation> HasMany<T> {

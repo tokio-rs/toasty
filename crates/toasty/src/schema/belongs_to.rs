@@ -1,4 +1,4 @@
-use super::{Load, Register, Relation};
+use super::{Load, Register, Relation, lazy_slot};
 
 use toasty_core::schema::app::{self, FieldTy, ForeignKey};
 use toasty_core::stmt::{self, Value};
@@ -25,12 +25,27 @@ impl<T: Relation> Load for BelongsTo<T> {
     }
 
     fn load(input: Value) -> crate::Result<Self> {
-        Ok(match input {
-            Value::Null => Self::default(),
-            value => Self {
-                value: Some(Box::new(T::load_relation(value)?)),
+        load_single_relation(input)
+    }
+}
+
+fn load_single_relation<T: Relation>(input: Value) -> crate::Result<BelongsTo<T>> {
+    match input {
+        Value::Null => Ok(BelongsTo::default()),
+        value => match T::load_relation(value.clone()) {
+            // Current relation include encoding: a loaded belongs-to slot
+            // is the related model record directly.
+            Ok(value) => Ok(BelongsTo {
+                value: Some(Box::new(value)),
+            }),
+            Err(err) => match lazy_slot::decode(value, "belongs-to relation", T::load_relation) {
+                Ok(lazy_slot::LazySlot::Unloaded) => Ok(BelongsTo::default()),
+                Ok(lazy_slot::LazySlot::Loaded(value)) => Ok(BelongsTo {
+                    value: Some(Box::new(value)),
+                }),
+                Err(_) => Err(err),
             },
-        })
+        },
     }
 }
 

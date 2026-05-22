@@ -43,6 +43,7 @@ use toasty_core::{
 };
 
 use crate::engine::lower::LowerStatement;
+use crate::schema::lazy_slot;
 
 /// The include paths that target a single field, partitioned by whether
 /// they name the field itself or a sub-path within it.
@@ -135,7 +136,7 @@ impl LowerStatement<'_, '_> {
             if !is_insert && !matches.self_included() {
                 return;
             }
-            *returning = stmt::Expr::record([loaded_form(field, mapping)]);
+            *returning = lazy_slot::loaded_expr(loaded_form(field, mapping));
 
             // For an embed, the loaded form is the embed's `default_returning`, which
             // has its own deferred sub-fields pre-masked. Recurse so those get loaded
@@ -267,15 +268,17 @@ impl LowerStatement<'_, '_> {
         field_index: usize,
         nested: &[stmt::Projection],
     ) {
-        returning[field_index] = self.build_relation_subquery(field_index, nested);
+        returning[field_index] =
+            lazy_slot::loaded_expr(self.build_relation_subquery(field_index, nested));
     }
 
     /// Build a subquery that loads the related model(s) for a
     /// `BelongsTo`/`HasOne`/`HasMany` field, run the canonical lowering
     /// pipeline on it, and return it stitched onto the parent statement
-    /// as an `Expr::Arg`.  Used both by `.include(...)` (which splices
-    /// the result into a record slot) and by `.select(rel_field)` (which
-    /// uses the result as the entire projection expression).
+    /// as an `Expr::Arg`. Used both by `.include(...)` (which wraps the
+    /// result as a loaded lazy slot before splicing it into a record slot)
+    /// and by `.select(rel_field)` (which uses the raw result as the entire
+    /// projection expression).
     pub(super) fn build_relation_subquery(
         &mut self,
         field_index: usize,
@@ -374,16 +377,7 @@ impl LowerStatement<'_, '_> {
         // Run the canonical pipeline (pre-lower simplify, lowering walk,
         // post-lower simplify) on the synthesized subquery, stitching it onto
         // the parent as an `Expr::Arg`.
-        let mut sub_expr = self.lower_sub_stmt(stmt::Statement::Query(stmt));
-
-        // For nullable single relations (HasOne<Option<T>>, BelongsTo<Option<T>>),
-        // encode the result so a loaded-None is distinguishable from unloaded.
-        // The non-null row passes through as-is (the raw model record).
-        if field.nullable() && !field.ty.is_has_many() {
-            sub_expr = super::encode_nullable_single(sub_expr, stmt::Expr::arg(0));
-        }
-
-        sub_expr
+        self.lower_sub_stmt(stmt::Statement::Query(stmt))
     }
 }
 

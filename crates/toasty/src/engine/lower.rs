@@ -30,28 +30,29 @@ use toasty_core::{
 
 use crate::engine::{Engine, HirStatement, fold, hir, simplify::Simplify};
 
-/// Wrap a single-relation subquery so a loaded-`None` — the query yielded SQL
-/// `Null` — is encoded with the `I64(0)` sentinel, keeping it distinct from an
-/// unloaded relation. Used when lowering `.include()`/`.select()` of a nullable
-/// single (`HasOne<Option<_>>` / `BelongsTo<Option<_>>`) relation:
+/// Wrap a nullable single-relation subquery so a missing row passes through as
+/// `Null`, while a present row is transformed by `present`. Used when lowering
+/// `.include()`/`.select()` of nullable single (`HasOne<Option<_>>` /
+/// `BelongsTo<Option<_>>`) relations that need to project out of the subquery
+/// result:
 ///
 /// ```text
 ///   Let {
 ///     binding: subquery,
-///     body: Match { subject: arg(0), arms: [Null → I64(0)], else: present },
+///     body: Match { subject: arg(0), arms: [Null → Null], else: present },
 ///   }
 /// ```
 ///
 /// The subquery result is bound as `arg(0)`; `present` is the expression for a
 /// non-null row and may reference that binding (e.g. project a field out of it).
-fn encode_nullable_single(subquery: stmt::Expr, present: stmt::Expr) -> stmt::Expr {
+fn map_nullable_single(subquery: stmt::Expr, present: stmt::Expr) -> stmt::Expr {
     stmt::Expr::Let(stmt::ExprLet {
         bindings: vec![subquery],
         body: Box::new(stmt::Expr::match_expr(
             stmt::Expr::arg(0),
             vec![stmt::MatchArm {
                 pattern: stmt::Value::Null,
-                expr: stmt::Expr::from(0i64),
+                expr: stmt::Expr::Value(stmt::Value::Null),
             }],
             present,
         )),

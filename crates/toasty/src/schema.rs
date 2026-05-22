@@ -26,6 +26,8 @@ pub use has_many::HasMany;
 mod has_one;
 pub use has_one::HasOne;
 
+pub(crate) mod lazy_slot;
+
 mod load;
 pub use load::Load;
 

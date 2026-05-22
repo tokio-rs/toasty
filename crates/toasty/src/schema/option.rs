@@ -10,14 +10,7 @@ impl<T: Load> Load for Option<T> {
     }
 
     fn ty_relation() -> stmt::Type {
-        let ty = T::ty();
-
-        debug_assert!(!ty.is_u64());
-
-        let mut union = stmt::TypeUnion::new();
-        union.insert(stmt::Type::I64);
-        union.insert(ty);
-        union.into()
+        T::ty()
     }
 
     fn load(value: Value) -> Result<Self::Output, crate::Error> {
@@ -31,11 +24,7 @@ impl<T: Load> Load for Option<T> {
 
     fn load_relation(value: Value) -> Result<Self::Output, crate::Error> {
         match value {
-            // Encoded "loaded as None" from SELECT+include path.
-            // The nested merge's Match expression transforms Value::Null
-            // (no matching row) into I64(0) to distinguish from
-            // Value::Null (unloaded), which HasOne::load handles.
-            Value::I64(0) => Ok(None),
+            Value::Null => Ok(None),
             // Any other value is the raw model record (from INSERT or
             // SELECT+include when a matching row exists).
             v => Ok(Some(T::load(v)?)),

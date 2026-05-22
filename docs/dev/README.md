@@ -28,6 +28,7 @@ Guide-level design documents for specific features. Use
 - [Per-Call Column Projection](./design/column-projection.md)
 - [DynamoDB Scan Support](./design/ddb-scan.md)
 - [Deferred Fields](./design/deferred-fields.md)
+- [Deferred-backed Relations](./design/deferred-relations.md)
 - [Document and Collection Fields](./design/document-fields.md)
 - [Enums and Embedded Structs](./design/enums-and-embedded-structs.md)
 - [Optimistic Concurrency with `#[version]`](./design/field-version.md)
