@@ -240,6 +240,469 @@ pub async fn has_many_apply_multiple_inserts(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// Sanity check for plain `update().todos(stmt::remove(..))` — no
+/// `apply` involved. With a required FK, Remove deletes the child row.
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
+pub async fn has_many_update_remove(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let mut user = User::create().name("Alice").exec(&mut db).await?;
+    let old_todo = user.todos().create().title("old").exec(&mut db).await?;
+
+    user.update()
+        .todos(toasty::stmt::remove(&old_todo))
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(0, user.todos().exec(&mut db).await?.len());
+    Ok(())
+}
+
+/// `stmt::apply([insert(..), remove(..)])` mixes Insert and Remove on a
+/// has-many in one update. Each entry dispatches as its own Mutation:
+/// the Insert associates the new child; the Remove dissociates the old
+/// one (and for a required FK, deletes it).
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
+pub async fn has_many_apply_insert_and_remove(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let mut user = User::create().name("Alice").exec(&mut db).await?;
+    let old_todo = user.todos().create().title("old").exec(&mut db).await?;
+
+    user.update()
+        .todos(toasty::stmt::apply([
+            toasty::stmt::insert(Todo::create().title("new")),
+            toasty::stmt::remove(&old_todo),
+        ]))
+        .exec(&mut db)
+        .await?;
+
+    let titles: Vec<_> = user
+        .todos()
+        .exec(&mut db)
+        .await?
+        .into_iter()
+        .map(|t| t.title)
+        .collect();
+    assert_eq!(titles, ["new"]);
+    Ok(())
+}
+
+/// `stmt::apply([remove(..), insert(..)])` — the reverse of
+/// `has_many_apply_insert_and_remove`. `flatten_relation_batch` always
+/// emits the merged Insert first, so the final state is order-independent:
+/// the new child is associated and the old one is removed.
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
+pub async fn has_many_apply_remove_then_insert(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let mut user = User::create().name("Alice").exec(&mut db).await?;
+    let old_todo = user.todos().create().title("old").exec(&mut db).await?;
+
+    user.update()
+        .todos(toasty::stmt::apply([
+            toasty::stmt::remove(&old_todo),
+            toasty::stmt::insert(Todo::create().title("new")),
+        ]))
+        .exec(&mut db)
+        .await?;
+
+    let titles: Vec<_> = user
+        .todos()
+        .exec(&mut db)
+        .await?
+        .into_iter()
+        .map(|t| t.title)
+        .collect();
+    assert_eq!(titles, ["new"]);
+    Ok(())
+}
+
+/// `stmt::apply([insert(a), insert(b), remove(c)])` — multiple inserts
+/// merge into one multi-row INSERT, dispatched alongside a separate
+/// Remove. Exercises the Insert-merge path plus a sibling disassociate.
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
+pub async fn has_many_apply_two_inserts_and_remove(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let mut user = User::create().name("Alice").exec(&mut db).await?;
+    let old_todo = user.todos().create().title("old").exec(&mut db).await?;
+
+    user.update()
+        .todos(toasty::stmt::apply([
+            toasty::stmt::insert(Todo::create().title("a")),
+            toasty::stmt::insert(Todo::create().title("b")),
+            toasty::stmt::remove(&old_todo),
+        ]))
+        .exec(&mut db)
+        .await?;
+
+    let mut titles: Vec<_> = user
+        .todos()
+        .exec(&mut db)
+        .await?
+        .into_iter()
+        .map(|t| t.title)
+        .collect();
+    titles.sort();
+    assert_eq!(titles, ["a", "b"]);
+    Ok(())
+}
+
+/// `stmt::apply([remove(a), remove(b)])` — only disassociations, no
+/// Insert. `flatten_relation_batch` pushes no merged Insert, so both
+/// entries dispatch as standalone Disassociate mutations.
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
+pub async fn has_many_apply_multiple_removes(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let mut user = User::create().name("Alice").exec(&mut db).await?;
+    let t1 = user.todos().create().title("t1").exec(&mut db).await?;
+    let t2 = user.todos().create().title("t2").exec(&mut db).await?;
+    let t3 = user.todos().create().title("keep").exec(&mut db).await?;
+
+    user.update()
+        .todos(toasty::stmt::apply([
+            toasty::stmt::remove(&t1),
+            toasty::stmt::remove(&t2),
+        ]))
+        .exec(&mut db)
+        .await?;
+
+    let titles: Vec<_> = user
+        .todos()
+        .exec(&mut db)
+        .await?
+        .into_iter()
+        .map(|t| t.title)
+        .collect();
+    assert_eq!(titles, ["keep"]);
+
+    // Required FK: removed todos are deleted, not just unlinked.
+    assert_err!(Todo::get_by_id(&mut db, &t1.id).await);
+    assert_err!(Todo::get_by_id(&mut db, &t2.id).await);
+    assert_ok!(Todo::get_by_id(&mut db, &t3.id).await);
+    Ok(())
+}
+
+/// `stmt::apply([insert(..), remove(..)])` on a has-many with a *nullable*
+/// foreign key. Unlike the required-FK case (which deletes the child),
+/// Remove here takes the disassociate-nullify branch: the old todo
+/// persists with its FK set to NULL.
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_nullable_fk))]
+pub async fn has_many_apply_insert_and_remove_nullable_fk(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let mut user = User::create().exec(&mut db).await?;
+    let old_todo = user.todos().create().title("old").exec(&mut db).await?;
+
+    user.update()
+        .todos(toasty::stmt::apply([
+            toasty::stmt::insert(Todo::create().title("new")),
+            toasty::stmt::remove(&old_todo),
+        ]))
+        .exec(&mut db)
+        .await?;
+
+    let titles: Vec<_> = user
+        .todos()
+        .exec(&mut db)
+        .await?
+        .into_iter()
+        .map(|t| t.title)
+        .collect();
+    assert_eq!(titles, ["new"]);
+
+    // Nullable FK: the removed todo is unlinked, not deleted.
+    let reloaded = Todo::get_by_id(&mut db, &old_todo.id).await?;
+    assert_none!(reloaded.user_id);
+    Ok(())
+}
+
+/// Order-sensitive swap: the child has a `#[unique]` title and we replace
+/// the "X" todo by removing the old one and inserting a fresh "X". With a
+/// required FK, `remove` deletes the old row (freeing the unique title), so
+/// the insert can reuse it — but only if the delete runs first.
+///
+/// `flatten_relation_batch` dispatches the merged Insert after the batch's
+/// removes, so the delete lands before the insert and the swap succeeds
+/// regardless of the order the caller wrote the entries.
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_unique_title))]
+pub async fn has_many_apply_swap_unique_required_fk(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let mut user = User::create().exec(&mut db).await?;
+    let old = user.todos().create().title("X").exec(&mut db).await?;
+
+    user.update()
+        .todos(toasty::stmt::apply([
+            toasty::stmt::remove(&old),
+            toasty::stmt::insert(Todo::create().title("X")),
+        ]))
+        .exec(&mut db)
+        .await?;
+
+    let titles: Vec<_> = user
+        .todos()
+        .exec(&mut db)
+        .await?
+        .into_iter()
+        .map(|t| t.title)
+        .collect();
+    assert_eq!(titles, ["X"]);
+    Ok(())
+}
+
+/// Same unique-title swap, but with an unrelated `insert` at the *front* of
+/// the batch. `flatten_relation_batch` merges all inserts into one multi-row
+/// INSERT, so the unrelated "Y" insert and the swap's new "X" insert become a
+/// single statement. That merged INSERT must still be dispatched after the
+/// `remove`, or the new "X" collides with the old one on the unique
+/// constraint — i.e. coalescing inserts must not pull them ahead of removes.
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_unique_title))]
+pub async fn has_many_apply_swap_unique_with_extra_insert(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let mut user = User::create().exec(&mut db).await?;
+    let old = user.todos().create().title("X").exec(&mut db).await?;
+
+    user.update()
+        .todos(toasty::stmt::apply([
+            toasty::stmt::insert(Todo::create().title("Y")),
+            toasty::stmt::remove(&old),
+            toasty::stmt::insert(Todo::create().title("X")),
+        ]))
+        .exec(&mut db)
+        .await?;
+
+    let mut titles: Vec<_> = user
+        .todos()
+        .exec(&mut db)
+        .await?
+        .into_iter()
+        .map(|t| t.title)
+        .collect();
+    titles.sort();
+    assert_eq!(titles, ["X", "Y"]);
+    Ok(())
+}
+
+/// Inserting and removing the *same existing* record in one batch honors
+/// entry order. `insert(&t)` (associate an existing row) and `remove(&t)`
+/// (dissociate it) both lower to UPDATEs on the same row; the batch sequences
+/// its entries so the last-written op wins, instead of the two UPDATEs racing
+/// in the dependency graph.
+///
+/// Note this is orthogonal to `flatten_relation_batch`'s insert-last reorder —
+/// that only moves create-new inserts (`Todo::create()`), not
+/// associate-existing inserts (`&todo`), which keep their written position.
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_nullable_fk))]
+pub async fn has_many_apply_insert_remove_same_item(test: &mut Test) -> Result<()> {
+    use toasty_core::{
+        driver::Operation,
+        stmt::{Assignment, ExprSet, Statement, Update},
+    };
+
+    // Drain the op log into one marker per FK-writing UPDATE: "unlink" for
+    // `Set(NULL)` (dissociate), "link" otherwise (associate). Transaction,
+    // savepoint, and read (COUNT/EXISTS) ops are ignored. SQL drivers only —
+    // key-value drivers emit a different op shape.
+    fn fk_writes(test: &Test) -> Vec<&'static str> {
+        fn classify(update: &Update, out: &mut Vec<&'static str>) {
+            for (_, assignment) in update.assignments.iter() {
+                if let Assignment::Set(expr) = assignment {
+                    out.push(if expr.is_value_null() {
+                        "unlink"
+                    } else {
+                        "link"
+                    });
+                }
+            }
+        }
+
+        let mut out = vec![];
+        while !test.log().is_empty() {
+            let Operation::QuerySql(q) = test.log().pop().0 else {
+                continue;
+            };
+            match &q.stmt {
+                // The associate update, plus the dissociate's write half on
+                // drivers without `cte_with_update` (its conditional update
+                // lowers to a read-modify-write with a bare UPDATE).
+                Statement::Update(update) => classify(update, &mut out),
+                // On a `cte_with_update` driver (e.g. PostgreSQL), the
+                // conditional dissociate folds its count check and UPDATE into
+                // a single CTE query; the UPDATE lives in a `With` CTE.
+                Statement::Query(query) => {
+                    for cte in query.with.iter().flat_map(|with| &with.ctes) {
+                        if let ExprSet::Update(update) = &cte.query.body {
+                            classify(update, &mut out);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        out
+    }
+
+    let mut db = setup(test).await;
+
+    // remove then insert → insert wins → still associated.
+    let mut keep = User::create().exec(&mut db).await?;
+    let kt = keep.todos().create().title("t").exec(&mut db).await?;
+    test.log().clear();
+    keep.update()
+        .todos(toasty::stmt::apply([
+            toasty::stmt::remove(&kt),
+            toasty::stmt::insert(&kt),
+        ]))
+        .exec(&mut db)
+        .await?;
+    if test.capability().sql {
+        // Dissociate executes before associate.
+        assert_eq!(fk_writes(test), ["unlink", "link"]);
+    }
+    assert_eq!(keep.todos().exec(&mut db).await?.len(), 1);
+
+    // insert then remove → remove wins → dissociated.
+    let mut drop = User::create().exec(&mut db).await?;
+    let dt = drop.todos().create().title("t").exec(&mut db).await?;
+    test.log().clear();
+    drop.update()
+        .todos(toasty::stmt::apply([
+            toasty::stmt::insert(&dt),
+            toasty::stmt::remove(&dt),
+        ]))
+        .exec(&mut db)
+        .await?;
+    if test.capability().sql {
+        // Associate executes before dissociate.
+        assert_eq!(fk_writes(test), ["link", "unlink"]);
+    }
+    assert_eq!(drop.todos().exec(&mut db).await?.len(), 0);
+    Ok(())
+}
+
+/// Nested `stmt::apply([apply([..]), ..])`. The surface API flattens
+/// nested applies into a single flat `Batch` (the engine never sees
+/// nesting), so this must behave identically to the equivalent flat
+/// batch. Guards the flattening contract — if nesting ever stopped
+/// flattening, the engine's `flatten_relation_batch` dispatch would hit
+/// its `unreachable!` arm.
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
+pub async fn has_many_apply_nested(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let mut user = User::create().name("Alice").exec(&mut db).await?;
+    let old1 = user.todos().create().title("old1").exec(&mut db).await?;
+    let old2 = user.todos().create().title("old2").exec(&mut db).await?;
+
+    user.update()
+        .todos(toasty::stmt::apply([
+            toasty::stmt::apply([
+                toasty::stmt::insert(Todo::create().title("a")),
+                toasty::stmt::insert(Todo::create().title("b")),
+            ]),
+            toasty::stmt::apply([toasty::stmt::remove(&old1), toasty::stmt::remove(&old2)]),
+            toasty::stmt::insert(Todo::create().title("c")),
+        ]))
+        .exec(&mut db)
+        .await?;
+
+    let mut titles: Vec<_> = user
+        .todos()
+        .exec(&mut db)
+        .await?
+        .into_iter()
+        .map(|t| t.title)
+        .collect();
+    titles.sort();
+    assert_eq!(titles, ["a", "b", "c"]);
+    Ok(())
+}
+
+/// Deterministic matrix over batch shapes. For each
+/// `(existing, insert, remove)` combination, build one
+/// `stmt::apply([...])` carrying `insert` new children plus `remove`
+/// dissociations, then compare the resulting association set against a
+/// reference computed in memory. This covers larger batches and more
+/// combinations than the targeted tests above without the
+/// non-determinism (and sync/async friction) of a `proptest` runner.
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
+pub async fn has_many_apply_combinations(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    for num_existing in 0..=3usize {
+        for num_insert in 0..=3usize {
+            for num_remove in 0..=num_existing {
+                // An empty batch produces no assignments, which the engine
+                // rejects as an empty update. Covered by
+                // `has_many_apply_empty_is_noop`.
+                if num_insert == 0 && num_remove == 0 {
+                    continue;
+                }
+
+                let mut user = User::create()
+                    .name(format!("u-{num_existing}-{num_insert}-{num_remove}"))
+                    .exec(&mut db)
+                    .await?;
+
+                // Seed existing children: e0..e{num_existing}.
+                let mut existing = Vec::new();
+                for i in 0..num_existing {
+                    existing.push(
+                        user.todos()
+                            .create()
+                            .title(format!("e{i}"))
+                            .exec(&mut db)
+                            .await?,
+                    );
+                }
+
+                // One batch: `num_insert` inserts + `num_remove` removes.
+                let mut ops: Vec<toasty::stmt::Assignment<toasty::stmt::List<Todo>>> = Vec::new();
+                for i in 0..num_insert {
+                    ops.push(toasty::stmt::insert(Todo::create().title(format!("n{i}"))));
+                }
+                for todo in &existing[..num_remove] {
+                    ops.push(toasty::stmt::remove(todo));
+                }
+
+                user.update()
+                    .todos(toasty::stmt::apply(ops))
+                    .exec(&mut db)
+                    .await?;
+
+                // Reference: surviving existing + inserted.
+                let mut expected: Vec<String> = existing[num_remove..]
+                    .iter()
+                    .map(|t| t.title.clone())
+                    .collect();
+                for i in 0..num_insert {
+                    expected.push(format!("n{i}"));
+                }
+                expected.sort();
+
+                let mut actual: Vec<String> = user
+                    .todos()
+                    .exec(&mut db)
+                    .await?
+                    .into_iter()
+                    .map(|t| t.title)
+                    .collect();
+                actual.sort();
+
+                assert_eq!(
+                    actual, expected,
+                    "existing={num_existing} insert={num_insert} remove={num_remove}"
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 #[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn scoped_find_by_id(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
