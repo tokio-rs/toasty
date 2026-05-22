@@ -130,6 +130,12 @@ impl<T> Query<T> {
     /// belongs-to field). The related records are loaded in the same
     /// round-trip and attached to the parent model.
     ///
+    /// A multi-step (`via`) relation can also be included. Its targets are
+    /// reached through the relation path and grouped under each parent, with
+    /// duplicate targets collapsed so each one appears once. Including a `via`
+    /// relation is supported on SQL backends (SQLite, PostgreSQL, MySQL); it
+    /// is not yet available on DynamoDB.
+    ///
     /// # Examples
     ///
     /// ```
@@ -473,6 +479,12 @@ impl<M: Model> Query<List<M>> {
     /// (returning `Vec` of a tuple), or any other type that implements
     /// `IntoExpr<T>`.  The default model projection is replaced wholesale by
     /// the columns the projection expression references.
+    ///
+    /// A multi-step (`via`) relation can be projected as well: a `has_many`
+    /// `via` yields a `Vec` of the distinct targets reached through the path
+    /// per row, and a single (`has_one`) `via` yields one target (or `None`).
+    /// This is supported on SQL backends (SQLite, PostgreSQL, MySQL); it is
+    /// not yet available on DynamoDB.
     ///
     /// # Examples
     ///

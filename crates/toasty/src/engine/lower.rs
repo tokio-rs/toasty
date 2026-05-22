@@ -7,6 +7,7 @@ mod lift_in_subquery;
 mod paginate;
 mod relation;
 mod returning;
+mod via_join;
 
 #[cfg(test)]
 mod tests;
@@ -28,6 +29,35 @@ use toasty_core::{
 };
 
 use crate::engine::{Engine, HirStatement, fold, hir, simplify::Simplify};
+
+/// Wrap a nullable single-relation subquery so a missing row passes through as
+/// `Null`, while a present row is transformed by `present`. Used when lowering
+/// `.include()`/`.select()` of nullable single (`HasOne<Option<_>>` /
+/// `BelongsTo<Option<_>>`) relations that need to project out of the subquery
+/// result:
+///
+/// ```text
+///   Let {
+///     binding: subquery,
+///     body: Match { subject: arg(0), arms: [Null → Null], else: present },
+///   }
+/// ```
+///
+/// The subquery result is bound as `arg(0)`; `present` is the expression for a
+/// non-null row and may reference that binding (e.g. project a field out of it).
+fn map_nullable_single(subquery: stmt::Expr, present: stmt::Expr) -> stmt::Expr {
+    stmt::Expr::Let(stmt::ExprLet {
+        bindings: vec![subquery],
+        body: Box::new(stmt::Expr::match_expr(
+            stmt::Expr::arg(0),
+            vec![stmt::MatchArm {
+                pattern: stmt::Value::Null,
+                expr: stmt::Expr::Value(stmt::Value::Null),
+            }],
+            present,
+        )),
+    })
+}
 
 impl Engine {
     pub(super) fn lower_stmt(&self, stmt: stmt::Statement) -> Result<HirStatement> {

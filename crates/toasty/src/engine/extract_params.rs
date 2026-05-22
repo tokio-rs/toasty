@@ -530,11 +530,17 @@ fn refine_update(update: &stmt::Update, cx: &Cx<'_>, db_schema: &db::Schema, par
 }
 
 fn refine_query(query: &stmt::Query, cx: &Cx<'_>, params: &mut [Param]) {
+    // One scope per query — matching the `ExprColumn::nesting` model and the
+    // SQL serializer (which also scopes once per `Query`). `Query`'s target
+    // resolves through its body to the `Select` source, so this single scope
+    // is the source scope. Scoping the `Select` again would double-count a
+    // level, so a column inside a subquery that references an outer column
+    // (e.g. a JOIN-include's linking column lifted into an `EXISTS`) would
+    // resolve against the wrong source.
     let cx = cx.scope(query);
 
     match &query.body {
         stmt::ExprSet::Select(select) => {
-            let cx = cx.scope(&**select);
             refine_filter(&select.filter, &cx, params);
         }
         stmt::ExprSet::Values(values) => {

@@ -358,6 +358,23 @@ When you delete a parent, the behavior depends on the child's foreign key type:
 - **Optional foreign key** (`user_id: Option<u64>`): Toasty sets the foreign key
   to `NULL`, leaving the child record in place.
 
+## Multi-step relations (`via`)
+
+Like `HasMany`, a `HasOne` can reach its target through a path of existing
+relations with `via` instead of a single foreign key. Declare it when the path
+is expected to reach at most one target:
+
+```rust,ignore
+// User → account → subscription
+#[has_one(via = account.subscription)]
+subscription: toasty::HasOne<Option<Subscription>>,
+```
+
+See [Multi-step relations on HasMany](./has-many.md#multi-step-relations-via)
+for the full rules — distinct targets and read-only access apply the same way.
+Preload it with `.include()` or project it with `.select()` on SQL backends;
+both are not yet available on DynamoDB.
+
 ## What gets generated
 
 For a `User` model with `#[has_one] profile: HasOne<Option<Profile>>`, Toasty

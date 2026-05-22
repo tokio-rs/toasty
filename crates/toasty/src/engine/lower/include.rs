@@ -287,21 +287,24 @@ impl LowerStatement<'_, '_> {
         let field = &self.model_unwrap().fields[field_index];
 
         // A multi-step (`via`) relation reaches its target through a path of
-        // existing relations. It lowers to a correlated `IN` subquery, which
-        // the `NestedMerge` planner cannot yet evaluate as a per-parent
-        // qualification — so `.include()` / `.select()` of a `via` relation is
-        // not supported yet. Querying one directly
-        // (`user.commented_articles()`) does work.
-        let is_via = match &field.ty {
-            app::FieldTy::HasMany(rel) => rel.kind.via().is_some(),
-            app::FieldTy::HasOne(rel) => rel.kind.via().is_some(),
-            _ => false,
+        // existing relations. Build the child query as a single JOIN through
+        // the via chain so the engine can issue one query (per include) and
+        // group the children with the parent in `NestedMerge`. This relies on
+        // the database executing the join, so it is SQL-only — a key-value
+        // backend would need a cascade of per-step queries instead.
+        let via = match &field.ty {
+            app::FieldTy::HasMany(rel) => rel.kind.via(),
+            app::FieldTy::HasOne(rel) => rel.kind.via(),
+            _ => None,
         };
-        if is_via {
-            todo!(
-                "`.include()` / `.select()` of a multi-step `via` relation is not yet supported; \
-                 query the relation directly instead"
-            );
+        if let Some(via) = via {
+            if !self.capability().sql {
+                todo!(
+                    "`.include()` / `.select()` of a multi-step `via` relation is only \
+                     supported on SQL backends; query the relation directly instead"
+                );
+            }
+            return self.build_via_include_subquery(field_index, via, nested);
         }
 
         let (mut stmt, target_model_id) = match &field.ty {
