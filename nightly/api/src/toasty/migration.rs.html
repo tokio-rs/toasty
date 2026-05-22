@@ -6,6 +6,11 @@
 <a href=#6 id=6 data-nosnippet>6</a>//! in-memory representation of the TOML history file; each [`HistoryEntry`]
 <a href=#7 id=7 data-nosnippet>7</a>//! records one generated migration.
 <a href=#8 id=8 data-nosnippet>8</a>
-<a href=#9 id=9 data-nosnippet>9</a></span><span class="kw">mod </span>history;
-<a href=#10 id=10 data-nosnippet>10</a><span class="kw">pub use </span>history::{History, HistoryEntry};
+<a href=#9 id=9 data-nosnippet>9</a></span><span class="kw">mod </span>generate;
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">mod </span>history;
+<a href=#11 id=11 data-nosnippet>11</a><span class="kw">mod </span>snapshot;
+<a href=#12 id=12 data-nosnippet>12</a>
+<a href=#13 id=13 data-nosnippet>13</a><span class="kw">pub use </span>generate::{Generated, generate};
+<a href=#14 id=14 data-nosnippet>14</a><span class="kw">pub use </span>history::{History, HistoryEntry};
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">pub use </span>snapshot::Snapshot;
 </code></pre></div></section></main></body></html>
