@@ -2,10 +2,10 @@
 <p>Contains a [<code>Tables</code>] describing created, dropped, and altered tables.
 Constructed via <a href="struct.Schema.html#method.from" title="associated function toasty::schema::diff::Schema::from"><code>Schema::from</code></a>.</p>
 <h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
-<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>toasty_core::schema::{db::Schema <span class="kw">as </span>DbSchema, diff};
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>toasty_core::schema::{db, diff};
 
-<span class="kw">let </span>previous = DbSchema::default();
-<span class="kw">let </span>next = DbSchema::default();
+<span class="kw">let </span>previous = db::Schema::default();
+<span class="kw">let </span>next = db::Schema::default();
 <span class="kw">let </span>hints = diff::RenameHints::new();
 <span class="kw">let </span>d = diff::Schema::from(<span class="kw-2">&amp;</span>previous, <span class="kw-2">&amp;</span>next, <span class="kw-2">&amp;</span>hints);
 <span class="macro">assert!</span>(d.is_empty());</code></pre></div></div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Schema%3C'a%3E" class="impl"><a href="#impl-Schema%3C'a%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'a&gt; <a class="struct" href="struct.Schema.html" title="struct toasty::schema::diff::Schema">Schema</a>&lt;'a&gt;</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method"><h4 class="code-header">pub fn <a href="#method.from" class="fn">from</a>(
