@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-cf1f8c58.js";
+            window.path_to_searchindex_js = "searchindex-7256fe91.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-17951f78.js"></script>
@@ -402,6 +402,87 @@ let users = User::filter(
 )
 .exec(&amp;mut db)
 .await?;</code></pre>
+<h2 id="multi-step-relations-via"><a class="header" href="#multi-step-relations-via">Multi-step relations (<code>via</code>)</a></h2>
+<p>A <code>HasMany</code> can reach its target through a path of existing relations instead of
+a single foreign key. Declare it with <code>via</code> and a dotted chain of relation
+fields, read left to right from this model. This expresses a relationship that
+exists only <em>through</em> a third model — a user has many comments, each comment
+belongs to an article, so a user has many commented articles:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">use toasty::Model;
+</span>#[derive(Debug, toasty::Model)]
+struct User {
+    #[key]
+    #[auto]
+    id: u64,
+
+    name: String,
+
+    #[has_many]
+    comments: toasty::HasMany&lt;Comment&gt;,
+
+    // User → comments → article
+    #[has_many(via = comments.article)]
+    commented_articles: toasty::HasMany&lt;Article&gt;,
+}
+
+#[derive(Debug, toasty::Model)]
+struct Comment {
+    #[key]
+    #[auto]
+    id: u64,
+
+    #[index]
+    user_id: u64,
+
+    #[belongs_to(key = user_id, references = id)]
+    user: toasty::BelongsTo&lt;User&gt;,
+
+    #[index]
+    article_id: u64,
+
+    #[belongs_to(key = article_id, references = id)]
+    article: toasty::BelongsTo&lt;Article&gt;,
+}
+
+#[derive(Debug, toasty::Model)]
+struct Article {
+    #[key]
+    #[auto]
+    id: u64,
+
+    title: String,
+
+    #[has_many]
+    comments: toasty::HasMany&lt;Comment&gt;,
+}
+<span class="boring">}</span></code></pre>
+<p>The target type is <code>Article</code> because the path <code>comments.article</code> ends there.
+A <code>via</code> relation owns no foreign key — it is derived from the relations it
+traverses — so it needs no <code>pair</code>. Each step may be any relation kind, and the
+kinds can be mixed along one path.</p>
+<p>Query a <code>via</code> relation like any other relation:</p>
+<pre><code class="language-rust ignore">// Every article this user has commented on, each listed once.
+let articles = user.commented_articles().exec(&amp;mut db).await?;
+
+// Filtered and ordered like any other relation query.
+let recent = user
+    .commented_articles()
+    .filter(Article::fields().title().eq("Rust"))
+    .exec(&amp;mut db)
+    .await?;</code></pre>
+<p>A <code>via</code> relation yields <strong>distinct targets</strong>: a target reached through several
+intermediates appears once. A user who comments on the same article twice gets
+that article once.</p>
+<p>A <code>via</code> relation is <strong>read-only</strong>. You can query, filter, order, and preload it,
+but Toasty generates no <code>create</code>, <code>insert</code>, or <code>remove</code> methods — writing
+through a multi-step path would have to materialize intermediate records. Mutate
+the underlying relations directly instead.</p>
+<p>Preload a <code>via</code> relation with <code>.include()</code> to avoid the N+1 — see
+<a href="./preloading-associations.html">Preloading Associations</a>. Preloading or
+projecting a <code>via</code> relation is supported on SQL backends; both are not yet
+available on DynamoDB.</p>
 <h2 id="what-gets-generated"><a class="header" href="#what-gets-generated">What gets generated</a></h2>
 <p>For a <code>User</code> model with <code>#[has_many] posts: HasMany&lt;Post&gt;</code>, Toasty generates:</p>
 <p><strong>On the parent instance:</strong></p>

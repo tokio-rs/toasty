@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["query_returns_distinct_targets","query_with_no_intermediates_is_empty","via_relation_query_can_be_filtered"]};
+window.SIDEBAR_ITEMS = {"mod":["include_via_has_one","include_via_nested_via","include_via_three_step","include_via_three_step_no_intermediates","include_via_two_step","query_returns_distinct_targets","query_with_no_intermediates_is_empty","select_via_has_one","select_via_two_step","via_relation_query_can_be_filtered"]};

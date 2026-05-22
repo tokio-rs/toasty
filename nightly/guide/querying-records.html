@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-cf1f8c58.js";
+            window.path_to_searchindex_js = "searchindex-7256fe91.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-17951f78.js"></script>
@@ -408,6 +408,17 @@ columns from the matching rows:</p>
 <span class="boring">Ok(())
 </span><span class="boring">}
 </span><span class="boring">}</span></code></pre>
+<p><code>.select()</code> can also project a <a href="./has-many.html#multi-step-relations-via">multi-step (<code>via</code>)
+relation</a>, returning the related
+records per row — a <code>Vec&lt;T&gt;</code> for a <code>has_many</code> <code>via</code>, or a single optional
+record for a <code>has_one</code> <code>via</code>:</p>
+<pre><code class="language-rust ignore">// The distinct articles each user has commented on.
+let per_user: Vec&lt;Vec&lt;Article&gt;&gt; = User::all()
+    .select(User::fields().commented_articles())
+    .exec(&amp;mut db)
+    .await?;</code></pre>
+<p>Projecting a <code>via</code> relation is supported on SQL backends; it is not yet
+available on DynamoDB.</p>
 <h2 id="sorting-by-most-recent"><a class="header" href="#sorting-by-most-recent">Sorting by most recent</a></h2>
 <p><code>.latest_by(field)</code> sorts the query in descending order of the named
 field — shorthand for <code>order_by(field.desc())</code>:</p>
