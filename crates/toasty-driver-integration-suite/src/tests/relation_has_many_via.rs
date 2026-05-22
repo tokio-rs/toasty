@@ -533,7 +533,7 @@ pub async fn include_via_has_one(test: &mut Test) -> Result<()> {
 /// `.select()` of a single (`has_one`) `via` relation. Like
 /// [`include_via_has_one`] this drives the `query.single` via path, but through
 /// `.select()`, which projects each parent straight to its target rather than
-/// into a record slot. The loaded-None path is already covered by the include
+/// into a record slot. The missing-row path is already covered by the include
 /// test, so this focuses on a matched chain returning the target.
 #[driver_test(
     id(ID),

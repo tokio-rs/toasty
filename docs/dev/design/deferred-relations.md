@@ -167,7 +167,7 @@ use one lazy-slot convention for deferred fields and relations:
 - `Record([value])` means loaded.
 
 This lets `Deferred<Option<T>>` and `Deferred<Option<Model>>` represent loaded
-`None` as `Record([Null])` without a relation-specific sentinel.
+`None` as `Record([Null])` without a relation-specific special value.
 
 Eager relation cycles are rejected. Without this, a model graph such as
 `User { posts: Vec<Post> }` and `Post { user: User }` would recursively imply
@@ -198,9 +198,8 @@ the public relation syntax changes.
    `HasOne<T>`, and `BelongsTo<T>` should decode `Null` as unloaded and
    `Record([value])` as loaded.
 
-3. Done: remove the nullable single-relation sentinel. Replace the current
-   loaded `None` encoding for nullable has-one and belongs-to relations with
-   `Record([Null])`.
+3. Done: remove the nullable single-relation special case. Encode loaded
+   `None` for nullable has-one and belongs-to relations as `Record([Null])`.
 
 4. Split relation target traits from relation field traits. Keep the model
    target/query-builder information on a `Relation`-like trait, and introduce
