@@ -19,6 +19,7 @@ dynamodb = ["dep:toasty-driver-dynamodb"]
 mysql = ["dep:toasty-driver-mysql"]
 postgresql = ["dep:toasty-driver-postgresql"]
 sqlite = ["dep:toasty-driver-sqlite"]
+turso = ["dep:toasty-driver-turso"]
 rust_decimal = [
 	"dep:rust_decimal",
 	"toasty-core/rust_decimal",
@@ -49,6 +50,7 @@ toasty-driver-dynamodb = { workspace = true, optional = true }
 toasty-driver-mysql = { workspace = true, optional = true }
 toasty-driver-postgresql = { workspace = true, optional = true }
 toasty-driver-sqlite = { workspace = true, optional = true }
+toasty-driver-turso = { workspace = true, optional = true }
 serde_core = { version = "1.0.228", optional = true }
 serde_json = { workspace = true, optional = true }
 

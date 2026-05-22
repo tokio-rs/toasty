@@ -601,6 +601,26 @@ impl Capability {
         ..Self::SQLITE
     };
 
+    /// Turso capabilities.
+    ///
+    /// Identical to [`SQLITE`](Self::SQLITE) at the flag level. The driver
+    /// extends SQLite's behavior in two ways that don't fit a capability
+    /// bit:
+    ///
+    /// * It opens a real async connection per pool slot (sharing a cached
+    ///   `Database` across `connect()` calls), so the connection-pool test
+    ///   suite applies.
+    /// * When `Turso::concurrent_writes()` is enabled, the driver issues
+    ///   `BEGIN CONCURRENT` for `TransactionMode::Default`, opting the
+    ///   transaction into Turso's MVCC concurrency. The other
+    ///   `TransactionMode` variants pass through to the SQLite serializer
+    ///   unchanged, so callers can still request the classic locking
+    ///   strategies per transaction.
+    pub const TURSO: Self = Self {
+        test_connection_pool: true,
+        ..Self::SQLITE
+    };
+
     /// DynamoDB capabilities
     pub const DYNAMODB: Self = Self {
         sql: false,

@@ -84,6 +84,7 @@
 //! | `postgresql`   | `toasty-driver-postgresql`   |
 //! | `mysql`        | `toasty-driver-mysql`        |
 //! | `dynamodb`     | `toasty-driver-dynamodb`     |
+//! | `turso`        | `toasty-driver-turso`        |
 //!
 //! Additional feature flags: `rust_decimal`, `bigdecimal`, `jiff` (date/time
 //! via the `jiff` crate), and `serde` (JSON serialization support).

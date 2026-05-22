@@ -49,4 +49,5 @@
 - [PostgreSQL](./postgresql.md)
 - [MySQL](./mysql.md)
 - [SQLite](./sqlite.md)
+- [Turso](./turso.md)
 - [DynamoDB](./dynamodb.md)

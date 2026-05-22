@@ -1,0 +1,29 @@
+[package]
+name = "toasty-driver-turso"
+version = "0.6.1"
+description = "Turso (SQLite-compatible) driver for Toasty"
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+categories.workspace = true
+readme.workspace = true
+documentation = "https://docs.rs/toasty-driver-turso"
+
+[dependencies]
+async-trait.workspace = true
+toasty-core.workspace = true
+toasty-sql.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+turso.workspace = true
+url.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true

@@ -46,6 +46,7 @@ requires its corresponding feature flag in `Cargo.toml`.
 | Scheme | Database | Feature flag |
 |---|---|---|
 | `sqlite` | SQLite | `sqlite` |
+| `turso` | Turso (SQLite-compatible, async-native) | `turso` |
 | `postgresql` or `postgres` | PostgreSQL | `postgresql` |
 | `mysql` | MySQL | `mysql` |
 | `dynamodb` | DynamoDB | `dynamodb` |

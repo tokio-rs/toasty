@@ -35,6 +35,7 @@ impl Connect {
     /// | `postgresql` / `postgres` | PostgreSQL | `postgresql` |
     /// | `mysql` | MySQL | `mysql` |
     /// | `dynamodb` | DynamoDB | `dynamodb` |
+    /// | `turso` | Turso | `turso` |
     ///
     /// # Errors
     ///
@@ -46,7 +47,8 @@ impl Connect {
                 feature = "dynamodb",
                 feature = "mysql",
                 feature = "postgresql",
-                feature = "sqlite"
+                feature = "sqlite",
+                feature = "turso"
             )),
             allow(unused_variables, unreachable_code)
         )]
@@ -93,6 +95,15 @@ impl Connect {
             "sqlite" => {
                 return Err(toasty_core::Error::unsupported_feature(
                     "`sqlite` feature not enabled",
+                ));
+            }
+
+            #[cfg(feature = "turso")]
+            "turso" => Box::new(toasty_driver_turso::Turso::new(url)?),
+            #[cfg(not(feature = "turso"))]
+            "turso" => {
+                return Err(toasty_core::Error::unsupported_feature(
+                    "`turso` feature not enabled",
                 ));
             }
 

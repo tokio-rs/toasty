@@ -57,8 +57,8 @@ The SQL event carries three fields:
 
 | Field | Meaning |
 |---|---|
-| `db.system` | Driver that ran the statement: `sqlite`, `postgresql`, or `mysql`. |
-| `db.statement` | The serialized SQL, with `?N` (SQLite, MySQL) or `$N` (PostgreSQL) placeholders for parameters. |
+| `db.system` | Driver that ran the statement: `sqlite`, `turso`, `postgresql`, or `mysql`. |
+| `db.statement` | The serialized SQL, with `?N` (SQLite, Turso, MySQL) or `$N` (PostgreSQL) placeholders for parameters. |
 | `params` | Number of bound parameters. The values themselves are not logged. |
 
 `db.statement` is recorded with the `Display` representation, so the SQL
