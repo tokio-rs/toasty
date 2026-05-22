@@ -82,23 +82,15 @@ impl LowerStatement<'_, '_> {
         }
 
         // A single (`has_one`) via yields one `[link_key, target_record]`
-        // record. For a nullable single relation the merge produces `Null` when
-        // the `INNER JOIN` matched nothing, and projecting into `Null` would
-        // panic — so bind the merge result and match on it, encoding loaded-None
-        // as the `I64(0)` sentinel (the same shape the direct single-relation
-        // include uses) and otherwise projecting the target out.
+        // record; project the target out. A nullable single relation, though,
+        // produces `Null` when the `INNER JOIN` matched nothing, and projecting
+        // into `Null` would panic — so encode loaded-None and strip the link key
+        // only on the non-null branch.
         if nullable {
-            stmt::Expr::Let(stmt::ExprLet {
-                bindings: vec![sub_expr],
-                body: Box::new(stmt::Expr::match_expr(
-                    stmt::Expr::arg(0),
-                    vec![stmt::MatchArm {
-                        pattern: stmt::Value::Null,
-                        expr: stmt::Expr::from(0i64),
-                    }],
-                    stmt::Expr::project(stmt::Expr::arg(0), [1usize]),
-                )),
-            })
+            super::encode_nullable_single(
+                sub_expr,
+                stmt::Expr::project(stmt::Expr::arg(0), [1usize]),
+            )
         } else {
             stmt::Expr::project(sub_expr, [1usize])
         }

@@ -377,31 +377,10 @@ impl LowerStatement<'_, '_> {
         let mut sub_expr = self.lower_sub_stmt(stmt::Statement::Query(stmt));
 
         // For nullable single relations (HasOne<Option<T>>, BelongsTo<Option<T>>),
-        // wrap the sub-expression with a Let + Match to encode the result
-        // using variant-encoded values that distinguish loaded-None from
-        // unloaded.
-        //
-        //   Let {
-        //     binding: Stmt(query),
-        //     body: Match {
-        //       subject: Arg(0),
-        //       arms: [Null → I64(0)],
-        //       else_: Arg(0)
-        //     }
-        //   }
+        // encode the result so a loaded-None is distinguishable from unloaded.
+        // The non-null row passes through as-is (the raw model record).
         if field.nullable() && !field.ty.is_has_many() {
-            sub_expr = stmt::Expr::Let(stmt::ExprLet {
-                bindings: vec![sub_expr],
-                body: Box::new(stmt::Expr::match_expr(
-                    stmt::Expr::arg(0),
-                    vec![stmt::MatchArm {
-                        pattern: stmt::Value::Null,
-                        expr: stmt::Expr::from(0i64),
-                    }],
-                    // Non-null: pass through as-is (raw model record)
-                    stmt::Expr::arg(0),
-                )),
-            });
+            sub_expr = super::encode_nullable_single(sub_expr, stmt::Expr::arg(0));
         }
 
         sub_expr
