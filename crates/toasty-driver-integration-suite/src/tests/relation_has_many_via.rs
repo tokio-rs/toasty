@@ -119,17 +119,21 @@ pub async fn via_relation_query_can_be_filtered(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-// ===== `.include()` of multi-step `via` relations =====
+// ===== `.include()` / `.select()` of multi-step `via` relations =====
 //
-// The two scenarios below cover include over via paths of different lengths:
+// The scenarios below cover via paths of different lengths and shapes:
 //
 //   - `user_comment_article`        — 2 steps (HasMany → BelongsTo)
 //   - `user_org_project_todo`       — 3 steps (HasMany → HasMany → HasMany),
 //                                     plus a via-of-via whose path step is
 //                                     itself a via.
+//   - `user_account_subscription`   — 2 steps (HasOne → HasOne); a
+//                                     single-result via.
 //
 // The engine should fetch parents once, then issue a single child query that
 // `INNER JOIN`s each intermediate model and groups results by the parent FK.
+// `.include()` splices that child query into a record slot; `.select()` uses it
+// as the whole projection.
 
 /// `.include()` over a 2-step `via`: each parent gets its own filtered set
 /// of distinct targets reached through the path. Tests the HasMany →
@@ -425,6 +429,134 @@ pub async fn include_via_three_step_no_intermediates(test: &mut Test) -> Result<
         .get(&mut db)
         .await?;
     assert!(loaded.todos.get().is_empty());
+
+    Ok(())
+}
+
+/// `.select()` of a multi-step `via` relation. `.select()` and `.include()`
+/// share the via-JOIN child query (`build_relation_subquery`); the difference
+/// is that `.select()` uses the subquery as the whole projection (each parent
+/// row decodes to its own `Vec<Article>`) rather than splicing it into a record
+/// slot. Distinct targets still apply, so Rust appears once though commented
+/// twice.
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::user_comment_article)
+)]
+pub async fn select_via_two_step(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let alice = toasty::create!(User { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+
+    let articles = toasty::create!(Article::[
+        { title: "Rust" },
+        { title: "Toasty" },
+    ])
+    .exec(&mut db)
+    .await?;
+    let (rust, toasty_article) = (&articles[0], &articles[1]);
+
+    toasty::create!(Comment::[
+        { body: "a1", user: &alice, article: rust },
+        { body: "a2", user: &alice, article: rust },
+        { body: "a3", user: &alice, article: toasty_article },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let articles_per_user: Vec<Vec<Article>> = User::all()
+        .select(User::fields().commented_articles())
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(1, articles_per_user.len());
+    let titles: Vec<&str> = articles_per_user[0].iter().map(|a| &a.title[..]).collect();
+    assert_eq_unordered!(titles, ["Rust", "Toasty"]);
+
+    Ok(())
+}
+
+/// `.include()` of a `has_one` (single-result) `via` relation: `User` →
+/// `Account` → `Subscription`, both steps `has_one`. The via target is a single
+/// record, so this exercises the `query.single` branch of via-include lowering
+/// that the all-`has_many` scenarios never reach. The `INNER JOIN` drops a
+/// parent whose chain is incomplete at *either* step, so a missing leaf and a
+/// missing intermediate both surface as `None`.
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::user_account_subscription)
+)]
+pub async fn include_via_has_one(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    // Alice: account → subscription. Bob: account, no subscription.
+    // Carol: no account at all.
+    toasty::create!(User {
+        name: "Alice",
+        account: Account::create().subscription(Subscription::create().plan("pro")),
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(User {
+        name: "Bob",
+        account: Account::create(),
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(User { name: "Carol" })
+        .exec(&mut db)
+        .await?;
+
+    let loaded: Vec<User> = User::all()
+        .include(User::fields().subscription())
+        .exec(&mut db)
+        .await?;
+    assert_eq!(3, loaded.len());
+
+    for user in &loaded {
+        let plan = user.subscription.get().as_ref().map(|s| &s.plan[..]);
+        match &user.name[..] {
+            "Alice" => assert_eq!(plan, Some("pro")),
+            "Bob" => assert_eq!(plan, None, "Bob has an account but no subscription"),
+            "Carol" => assert_eq!(plan, None, "Carol has no account"),
+            other => panic!("unexpected user {other}"),
+        }
+    }
+
+    Ok(())
+}
+
+/// `.select()` of a single (`has_one`) `via` relation. Like
+/// [`include_via_has_one`] this drives the `query.single` via path, but through
+/// `.select()`, which projects each parent straight to its target rather than
+/// into a record slot. The loaded-None path is already covered by the include
+/// test, so this focuses on a matched chain returning the target.
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::user_account_subscription)
+)]
+pub async fn select_via_has_one(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    toasty::create!(User {
+        name: "Alice",
+        account: Account::create().subscription(Subscription::create().plan("pro")),
+    })
+    .exec(&mut db)
+    .await?;
+
+    let subscriptions: Vec<Subscription> = User::filter(User::fields().name().eq("Alice"))
+        .select(User::fields().subscription())
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(1, subscriptions.len());
+    assert_eq!(subscriptions[0].plan, "pro");
 
     Ok(())
 }

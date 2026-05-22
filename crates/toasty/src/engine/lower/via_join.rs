@@ -23,7 +23,9 @@ impl LowerStatement<'_, '_> {
     /// parent. It is emitted in fully-lowered form, so the standard lowering
     /// walk only has to rewrite the cross-statement parent-key reference into
     /// an `Arg::Ref`. Each child row is `[link_key, target_record]`; the
-    /// trailing `Map` drops the link key so the parent sees only the targets.
+    /// trailing projection drops the link key so the parent sees only the
+    /// targets (a `Map` over the list for `has_many`, a direct project for a
+    /// single `has_one`).
     pub(super) fn build_via_include_subquery(
         &mut self,
         field_index: usize,
@@ -37,6 +39,7 @@ impl LowerStatement<'_, '_> {
         let schema = self.schema();
         let model = self.model_unwrap();
         let single = !model.fields[field_index].ty.is_has_many();
+        let nullable = model.fields[field_index].nullable();
         let join = ViaJoin::resolve(schema, model.id, via);
 
         // WHERE: the linking column (on the root-adjacent model) equals the
@@ -71,8 +74,34 @@ impl LowerStatement<'_, '_> {
         let sub_expr = self.lower_sub_stmt(stmt::Statement::Query(query));
 
         // Drop the link key from each `[link_key, target_record]` row; the
-        // parent wants only the target. In a `Map` body `arg(0)` is the item.
-        stmt::Expr::map(sub_expr, stmt::Expr::project(stmt::Expr::arg(0), [1usize]))
+        // parent wants only the target.
+        if !single {
+            // A `has_many` via yields a list, so map over it (`arg(0)` is the
+            // item) and project the target out of each row.
+            return stmt::Expr::map(sub_expr, stmt::Expr::project(stmt::Expr::arg(0), [1usize]));
+        }
+
+        // A single (`has_one`) via yields one `[link_key, target_record]`
+        // record. For a nullable single relation the merge produces `Null` when
+        // the `INNER JOIN` matched nothing, and projecting into `Null` would
+        // panic — so bind the merge result and match on it, encoding loaded-None
+        // as the `I64(0)` sentinel (the same shape the direct single-relation
+        // include uses) and otherwise projecting the target out.
+        if nullable {
+            stmt::Expr::Let(stmt::ExprLet {
+                bindings: vec![sub_expr],
+                body: Box::new(stmt::Expr::match_expr(
+                    stmt::Expr::arg(0),
+                    vec![stmt::MatchArm {
+                        pattern: stmt::Value::Null,
+                        expr: stmt::Expr::from(0i64),
+                    }],
+                    stmt::Expr::project(stmt::Expr::arg(0), [1usize]),
+                )),
+            })
+        } else {
+            stmt::Expr::project(sub_expr, [1usize])
+        }
     }
 }
 

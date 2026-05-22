@@ -11,6 +11,7 @@ pub mod has_one_optional_belongs_to;
 pub mod in_list_item;
 pub mod tagged_item;
 pub mod two_models;
+pub mod user_account_subscription;
 pub mod user_comment_article;
 pub mod user_org_project_todo;
 pub mod user_unique_email;
