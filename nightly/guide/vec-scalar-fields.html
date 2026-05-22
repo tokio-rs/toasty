@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-f437a29e.js";
+            window.path_to_searchindex_js = "searchindex-cf1f8c58.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-46081a54.js"></script>
+        <script src="toc-17951f78.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -191,12 +191,12 @@ collection of one-byte integers.</p>
 <tbody>
 <tr><td>PostgreSQL</td><td>Native array column (<code>text[]</code>, <code>int8[]</code>, <code>double precision[]</code>, …)</td></tr>
 <tr><td>MySQL</td><td><code>JSON</code> column</td></tr>
-<tr><td>SQLite</td><td>JSON-encoded text</td></tr>
+<tr><td>SQLite, Turso</td><td>JSON-encoded text</td></tr>
 <tr><td>DynamoDB</td><td>List <code>L</code> attribute</td></tr>
 </tbody>
 </table>
 </div>
-<p>All four built-in drivers support <code>Vec&lt;scalar&gt;</code> fields. A driver that
+<p>All five built-in drivers support <code>Vec&lt;scalar&gt;</code> fields. A driver that
 does not will reject the model at schema build with an error naming the
 unsupported field rather than mis-storing it. The incremental update
 builders have narrower support — see <a href="#driver-support">Driver support</a>.</p>

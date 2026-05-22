@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-f437a29e.js";
+            window.path_to_searchindex_js = "searchindex-cf1f8c58.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-46081a54.js"></script>
+        <script src="toc-17951f78.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -176,8 +176,8 @@
                     <main>
                         <h1 id="transactions"><a class="header" href="#transactions">Transactions</a></h1>
 <p>A transaction groups multiple database operations so they either all succeed or
-all fail. Toasty supports interactive transactions on SQL databases (SQLite,
-PostgreSQL, MySQL).</p>
+all fail. Toasty supports interactive transactions on SQL databases
+(SQLite/Turso, PostgreSQL, MySQL).</p>
 <blockquote>
 <p><strong>Tip:</strong> If you just need multiple operations to execute atomically, consider
 using <a href="./batch-operations.html">batch operations</a> first. Batch operations are
@@ -348,11 +348,42 @@ let mut tx = db.transaction_builder()
 </tbody>
 </table>
 </div>
-<p>Driver support varies. SQLite only supports <code>Serializable</code>. PostgreSQL and MySQL
-support all four levels.</p>
+<p>Driver support varies. SQLite and Turso only support <code>Serializable</code>. PostgreSQL
+and MySQL support all four levels.</p>
 <h3 id="read-only-transactions"><a class="header" href="#read-only-transactions">Read-only transactions</a></h3>
 <p>Set <code>.read_only(true)</code> to create a read-only transaction. The database rejects
 write operations inside a read-only transaction.</p>
+<h3 id="lock-acquisition-modes"><a class="header" href="#lock-acquisition-modes">Lock-acquisition modes</a></h3>
+<p><code>TransactionMode</code> is a separate axis from isolation level: where the isolation
+level describes which anomalies a transaction can observe, the mode describes
+when the transaction acquires its locks. The builder accepts a mode via
+<code>.mode(...)</code>:</p>
+<pre><code class="language-rust ignore">use toasty_core::driver::operation::TransactionMode;
+
+let mut tx = db.transaction_builder()
+    .mode(TransactionMode::Immediate)
+    .begin()
+    .await?;</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Mode</th><th>SQLite SQL</th><th>Purpose</th></tr>
+</thead>
+<tbody>
+<tr><td><code>Default</code></td><td><code>BEGIN</code></td><td>The driver’s natural default.</td></tr>
+<tr><td><code>Deferred</code></td><td><code>BEGIN</code></td><td>Explicit deferred locking.</td></tr>
+<tr><td><code>Immediate</code></td><td><code>BEGIN IMMEDIATE</code></td><td>Acquire the write lock at begin time, so later writes inside the transaction cannot fail with <code>BUSY</code>.</td></tr>
+<tr><td><code>Exclusive</code></td><td><code>BEGIN EXCLUSIVE</code></td><td>Hold an exclusive lock for the entire transaction.</td></tr>
+</tbody>
+</table>
+</div>
+<p>PostgreSQL and MySQL accept only <code>Default</code> and <code>Deferred</code>; calling
+<code>.mode(TransactionMode::Immediate)</code> or <code>Exclusive</code> against either returns
+<code>Error::UnsupportedFeature</code>.</p>
+<p><code>Default</code> and <code>Deferred</code> look identical on SQLite — both emit <code>BEGIN</code> — but
+they diverge on Turso under <a href="./turso.html#concurrent-writes"><code>concurrent_writes()</code></a>:
+<code>Default</code> issues <code>BEGIN CONCURRENT</code> (MVCC) and <code>Deferred</code> is the way to opt
+out and request classic locking on a single transaction.</p>
 
                     </main>
 

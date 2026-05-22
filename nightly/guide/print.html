@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-f437a29e.js";
+            window.path_to_searchindex_js = "searchindex-cf1f8c58.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-46081a54.js"></script>
+        <script src="toc-17951f78.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -176,7 +176,7 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
-<p>Toasty is an async ORM for Rust. It supports both SQL databases (SQLite,
+<p>Toasty is an async ORM for Rust. It supports both SQL databases (SQLite/Turso,
 PostgreSQL, MySQL) and NoSQL databases (DynamoDB).</p>
 <p>You define your models as Rust structs and annotate them with
 <code>#[derive(toasty::Model)]</code>. Toasty infers the database schema from your
@@ -252,8 +252,8 @@ toasty = { version = "0.6", features = ["sqlite"] }
 tokio = { version = "1", features = ["full"] }
 </code></pre>
 <p>The <code>sqlite</code> feature enables the SQLite driver. Toasty also supports
-<code>postgresql</code>, <code>mysql</code>, and <code>dynamodb</code> — swap the feature flag to use a
-different database.</p>
+<code>postgresql</code>, <code>mysql</code>, <code>turso</code>, and <code>dynamodb</code> — swap the feature flag to use
+a different database.</p>
 <h2 id="define-a-model"><a class="header" href="#define-a-model">Define a model</a></h2>
 <p>Replace the contents of <code>src/main.rs</code> with:</p>
 <pre class="playground"><code class="language-rust"><span class="boring">use toasty::Model;
@@ -836,8 +836,8 @@ println!("post id: {}", post.id); // 1, 2, 3, ...
 <span class="boring">Ok(())
 </span><span class="boring">}
 </span><span class="boring">}</span></code></pre>
-<p>Auto-increment requires database support. SQLite, PostgreSQL, and MySQL all
-support auto-incrementing columns. DynamoDB does not.</p>
+<p>Auto-increment requires database support. SQLite, Turso, PostgreSQL, and MySQL
+all support auto-incrementing columns. DynamoDB does not.</p>
 <h2 id="composite-keys"><a class="header" href="#composite-keys">Composite keys</a></h2>
 <p>A composite key uses two or more fields as the primary key. Toasty supports
 three ways to define composite keys.</p>
@@ -1932,7 +1932,7 @@ statement.</li>
 generated.</p>
 <h2 id="unique-fields"><a class="header" href="#unique-fields">Unique fields</a></h2>
 <p>Add <code>#[unique]</code> to a field to create a unique index. Toasty enforces uniqueness
-on all supported databases. SQL databases (SQLite, PostgreSQL, MySQL) use a
+on all supported databases. SQL databases (SQLite/Turso, PostgreSQL, MySQL) use a
 native unique index. DynamoDB uses a separate index table keyed on the unique
 attribute; inserts and updates write to both tables in a single
 <code>TransactWriteItems</code> call with an <code>attribute_not_exists</code> condition that rejects
@@ -2429,8 +2429,9 @@ struct User {
 <p>Not all databases support all column types. Toasty validates explicit column
 types against the database’s capabilities when you call <code>db.push_schema()</code>. If a
 type is not supported, schema creation fails with an error. For example,
-<code>varchar</code> is supported by PostgreSQL and MySQL but not by SQLite or DynamoDB —
-using <code>#[column(type = varchar(100))]</code> with SQLite produces an error like
+<code>varchar</code> is supported by PostgreSQL and MySQL but not by SQLite, Turso, or
+DynamoDB — using <code>#[column(type = varchar(100))]</code> with SQLite produces an
+error like
 <code>"unsupported feature: VARCHAR type is not supported by this database"</code>. If the
 requested size exceeds the database’s maximum, Toasty reports that as well.</p>
 <h2 id="default-values"><a class="header" href="#default-values">Default values</a></h2>
@@ -2821,12 +2822,12 @@ collection of one-byte integers.</p>
 <tbody>
 <tr><td>PostgreSQL</td><td>Native array column (<code>text[]</code>, <code>int8[]</code>, <code>double precision[]</code>, …)</td></tr>
 <tr><td>MySQL</td><td><code>JSON</code> column</td></tr>
-<tr><td>SQLite</td><td>JSON-encoded text</td></tr>
+<tr><td>SQLite, Turso</td><td>JSON-encoded text</td></tr>
 <tr><td>DynamoDB</td><td>List <code>L</code> attribute</td></tr>
 </tbody>
 </table>
 </div>
-<p>All four built-in drivers support <code>Vec&lt;scalar&gt;</code> fields. A driver that
+<p>All five built-in drivers support <code>Vec&lt;scalar&gt;</code> fields. A driver that
 does not will reject the model at schema build with an error naming the
 unsupported field rather than mis-storing it. The incremental update
 builders have narrower support — see <a href="#driver-support">Driver support</a>.</p>
@@ -6495,8 +6496,8 @@ fields like <code>id</code>.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="transactions"><a class="header" href="#transactions">Transactions</a></h1>
 <p>A transaction groups multiple database operations so they either all succeed or
-all fail. Toasty supports interactive transactions on SQL databases (SQLite,
-PostgreSQL, MySQL).</p>
+all fail. Toasty supports interactive transactions on SQL databases
+(SQLite/Turso, PostgreSQL, MySQL).</p>
 <blockquote>
 <p><strong>Tip:</strong> If you just need multiple operations to execute atomically, consider
 using <a href="#batch-operations">batch operations</a> first. Batch operations are
@@ -6667,11 +6668,42 @@ let mut tx = db.transaction_builder()
 </tbody>
 </table>
 </div>
-<p>Driver support varies. SQLite only supports <code>Serializable</code>. PostgreSQL and MySQL
-support all four levels.</p>
+<p>Driver support varies. SQLite and Turso only support <code>Serializable</code>. PostgreSQL
+and MySQL support all four levels.</p>
 <h3 id="read-only-transactions"><a class="header" href="#read-only-transactions">Read-only transactions</a></h3>
 <p>Set <code>.read_only(true)</code> to create a read-only transaction. The database rejects
 write operations inside a read-only transaction.</p>
+<h3 id="lock-acquisition-modes"><a class="header" href="#lock-acquisition-modes">Lock-acquisition modes</a></h3>
+<p><code>TransactionMode</code> is a separate axis from isolation level: where the isolation
+level describes which anomalies a transaction can observe, the mode describes
+when the transaction acquires its locks. The builder accepts a mode via
+<code>.mode(...)</code>:</p>
+<pre><code class="language-rust ignore">use toasty_core::driver::operation::TransactionMode;
+
+let mut tx = db.transaction_builder()
+    .mode(TransactionMode::Immediate)
+    .begin()
+    .await?;</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Mode</th><th>SQLite SQL</th><th>Purpose</th></tr>
+</thead>
+<tbody>
+<tr><td><code>Default</code></td><td><code>BEGIN</code></td><td>The driver’s natural default.</td></tr>
+<tr><td><code>Deferred</code></td><td><code>BEGIN</code></td><td>Explicit deferred locking.</td></tr>
+<tr><td><code>Immediate</code></td><td><code>BEGIN IMMEDIATE</code></td><td>Acquire the write lock at begin time, so later writes inside the transaction cannot fail with <code>BUSY</code>.</td></tr>
+<tr><td><code>Exclusive</code></td><td><code>BEGIN EXCLUSIVE</code></td><td>Hold an exclusive lock for the entire transaction.</td></tr>
+</tbody>
+</table>
+</div>
+<p>PostgreSQL and MySQL accept only <code>Default</code> and <code>Deferred</code>; calling
+<code>.mode(TransactionMode::Immediate)</code> or <code>Exclusive</code> against either returns
+<code>Error::UnsupportedFeature</code>.</p>
+<p><code>Default</code> and <code>Deferred</code> look identical on SQLite — both emit <code>BEGIN</code> — but
+they diverge on Turso under <a href="#concurrent-writes"><code>concurrent_writes()</code></a>:
+<code>Default</code> issues <code>BEGIN CONCURRENT</code> (MVCC) and <code>Deferred</code> is the way to opt
+out and request classic locking on a single transaction.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="concurrency-control"><a class="header" href="#concurrency-control">Concurrency Control</a></h1>
 <p>When multiple writers modify the same record, you need a way to detect
@@ -6782,6 +6814,7 @@ requires its corresponding feature flag in <code>Cargo.toml</code>.</p>
 </thead>
 <tbody>
 <tr><td><code>sqlite</code></td><td>SQLite</td><td><code>sqlite</code></td></tr>
+<tr><td><code>turso</code></td><td>Turso (SQLite-compatible, async-native)</td><td><code>turso</code></td></tr>
 <tr><td><code>postgresql</code> or <code>postgres</code></td><td>PostgreSQL</td><td><code>postgresql</code></td></tr>
 <tr><td><code>mysql</code></td><td>MySQL</td><td><code>mysql</code></td></tr>
 <tr><td><code>dynamodb</code></td><td>DynamoDB</td><td><code>dynamodb</code></td></tr>
@@ -7105,8 +7138,8 @@ DEBUG toasty_driver_sqlite: executing SQL db.system="sqlite" db.statement=SELECT
 <tr><th>Field</th><th>Meaning</th></tr>
 </thead>
 <tbody>
-<tr><td><code>db.system</code></td><td>Driver that ran the statement: <code>sqlite</code>, <code>postgresql</code>, or <code>mysql</code>.</td></tr>
-<tr><td><code>db.statement</code></td><td>The serialized SQL, with <code>?N</code> (SQLite, MySQL) or <code>$N</code> (PostgreSQL) placeholders for parameters.</td></tr>
+<tr><td><code>db.system</code></td><td>Driver that ran the statement: <code>sqlite</code>, <code>turso</code>, <code>postgresql</code>, or <code>mysql</code>.</td></tr>
+<tr><td><code>db.statement</code></td><td>The serialized SQL, with <code>?N</code> (SQLite, Turso, MySQL) or <code>$N</code> (PostgreSQL) placeholders for parameters.</td></tr>
 <tr><td><code>params</code></td><td>Number of bound parameters. The values themselves are not logged.</td></tr>
 </tbody>
 </table>
@@ -7547,10 +7580,17 @@ evicted, so it does not cause stale-state issues after a backend
 restart.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="sqlite"><a class="header" href="#sqlite">SQLite</a></h1>
-<p>Toasty’s SQLite driver uses <a href="https://docs.rs/rusqlite"><code>rusqlite</code></a> under the hood. It runs the
+<p>Toasty’s SQLite driver uses <a href="https://docs.rs/rusqlite"><code>rusqlite</code></a>. It runs the
 full Toasty query surface — <code>SELECT</code>, <code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code>,
 <code>RETURNING</code>, transactions, scalar arrays via JSON1 — against either a
 file-backed database or an ephemeral in-memory one.</p>
+<blockquote>
+<p>Toasty also ships an async-native <a href="#turso">Turso</a> driver. It
+speaks the same SQL dialect as SQLite and shares this chapter’s
+type mapping and feature set; the <a href="#turso">Turso</a> chapter
+covers the differences (in-memory pool sharing, MVCC concurrent
+writes, experimental flags).</p>
+</blockquote>
 <h2 id="enabling-the-driver-2"><a class="header" href="#enabling-the-driver-2">Enabling the driver</a></h2>
 <p>Add the <code>sqlite</code> feature to Toasty in <code>Cargo.toml</code>:</p>
 <pre><code class="language-toml">[dependencies]
@@ -7773,6 +7813,203 @@ no work against a SQLite connection.</p>
 file-backed databases. In-memory mode pins the pool to a single
 connection regardless of <code>max_pool_size</code>.</p>
 <div style="break-before: page; page-break-before: always;"></div>
+<h1 id="turso"><a class="header" href="#turso">Turso</a></h1>
+<p><a href="https://turso.tech/">Turso</a> is a SQLite-compatible database engine with native async I/O.
+Toasty’s Turso driver speaks the same SQL dialect as the
+<a href="#sqlite">SQLite driver</a> and supports the same Rust types and
+queries. The differences from SQLite cover three areas: connection
+pooling against an in-memory database, an opt-in concurrent-writes
+mode that uses Turso’s MVCC journal, and a set of toggles for Turso’s
+experimental engine features.</p>
+<h2 id="enabling-the-driver-3"><a class="header" href="#enabling-the-driver-3">Enabling the driver</a></h2>
+<p>Add the <code>turso</code> feature to Toasty in <code>Cargo.toml</code>:</p>
+<pre><code class="language-toml">[dependencies]
+toasty = { version = "0.6", features = ["turso"] }
+</code></pre>
+<p>Then pass a <code>turso:</code> URL to <code>Db::builder</code>:</p>
+<pre><code class="language-rust ignore">let db = toasty::Db::builder()
+    .models(toasty::models!(crate::*))
+    .connect("turso::memory:")
+    .await?;</code></pre>
+<p>A file-backed database uses the same URL scheme with a path:</p>
+<pre><code class="language-rust ignore">let db = toasty::Db::builder()
+    .models(toasty::models!(crate::*))
+    .connect("turso:./app.db")
+    .await?;</code></pre>
+<p>You can also construct the driver directly and pass it to <code>build()</code>
+instead of <code>connect()</code>. This is the form to use when you want to set
+Turso-specific options that don’t fit in a URL:</p>
+<pre><code class="language-rust ignore">let driver = toasty_driver_turso::Turso::in_memory().concurrent_writes();
+let db = toasty::Db::builder()
+    .models(toasty::models!(crate::*))
+    .build(driver)
+    .await?;</code></pre>
+<h2 id="connection-url-options-3"><a class="header" href="#connection-url-options-3">Connection URL options</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>URL</th><th>Meaning</th></tr>
+</thead>
+<tbody>
+<tr><td><code>turso::memory:</code></td><td>An in-memory database, shared across every connection in the pool (see below).</td></tr>
+<tr><td><code>turso:&lt;path&gt;</code></td><td>A file-backed database at <code>&lt;path&gt;</code>. Relative paths resolve against the process’s working directory.</td></tr>
+</tbody>
+</table>
+</div>
+<p>The driver does not parse query parameters from the URL. To set
+options like <code>concurrent_writes()</code> or any of the <code>experimental_*</code>
+flags, construct the driver directly.</p>
+<h2 id="type-mapping-and-sql-behavior"><a class="header" href="#type-mapping-and-sql-behavior">Type mapping and SQL behavior</a></h2>
+<p>The Turso driver uses the same type mapping and SQL serializer as the
+<a href="#sqlite">SQLite driver</a> — see that chapter for the column-type
+table and notes on UUIDs as <code>BLOB</code>, ISO 8601 temporal types, decimals
+stored as <code>TEXT</code>, and so on. The list of Turso-specific behaviors
+below is everything that differs from the SQLite chapter.</p>
+<h2 id="in-memory-databases-share-state-across-the-pool"><a class="header" href="#in-memory-databases-share-state-across-the-pool">In-memory databases share state across the pool</a></h2>
+<p>Unlike the SQLite driver — which caps the pool at one connection
+because each <code>Connection::open(":memory:")</code> returns a private,
+disjoint database — the Turso driver caches a <code>turso::Database</code> at
+construction time and hands every pool slot a connection backed by
+the same database. An in-memory Turso database supports the full
+<code>max_pool_size</code> like a file-backed one: writes from one connection
+are immediately visible to readers on another.</p>
+<p>This means the connection-pool tests in Toasty’s integration suite
+run against in-memory Turso, and you can use <code>turso::memory:</code> for
+multi-connection tests where in-memory SQLite would not work.</p>
+<h2 id="concurrent-writes"><a class="header" href="#concurrent-writes">Concurrent writes</a></h2>
+<p>A classic SQLite database serializes all writers on a single
+write lock: a second writer’s <code>BEGIN</code> succeeds but its first write
+waits for the first writer to commit. Turso also supports an MVCC
+journal mode in which multiple writers can run concurrently and
+conflicting commits surface at write or commit time — <code>BEGIN CONCURRENT</code>. Toasty exposes this through the driver builder:</p>
+<pre><code class="language-rust ignore">let driver = toasty_driver_turso::Turso::file("app.db").concurrent_writes();</code></pre>
+<p>When <code>concurrent_writes()</code> is enabled, the driver issues
+<code>PRAGMA journal_mode = 'mvcc'</code> on each new connection and a
+transaction started with <code>TransactionMode::Default</code> — the form you
+get from <code>db.transaction()</code> — uses <code>BEGIN CONCURRENT</code>. A write-write
+conflict surfaces as <code>Error::SerializationFailure</code>, the same retry
+signal PostgreSQL emits for <code>40001</code> and MySQL for <code>1213</code>:</p>
+<pre><code class="language-rust ignore">let mut tx = db.transaction().await?;
+Counter::filter_by_id(1).update().tally(7).exec(&amp;mut tx).await?;
+match tx.commit().await {
+    Ok(()) =&gt; {}
+    Err(err) if err.is_serialization_failure() =&gt; {
+        // Another writer touched the same row — retry.
+    }
+    Err(err) =&gt; return Err(err),
+}</code></pre>
+<h3 id="overriding-the-default-per-transaction"><a class="header" href="#overriding-the-default-per-transaction">Overriding the default per-transaction</a></h3>
+<p>The other <a href="#lock-acquisition-modes"><code>TransactionMode</code></a>
+variants are an opt-out from MVCC: a transaction can request classic
+locking even when the driver is configured with <code>concurrent_writes()</code>.</p>
+<pre><code class="language-rust ignore">use toasty_core::driver::operation::TransactionMode;
+
+// Plain BEGIN, classic deferred locking, no MVCC concurrency.
+let mut tx = db
+    .transaction_builder()
+    .mode(TransactionMode::Deferred)
+    .begin()
+    .await?;
+
+// BEGIN IMMEDIATE — take the write lock at begin time so later writes
+// don't fail with BUSY. A second IMMEDIATE transaction on a separate
+// connection will fail at its own BEGIN.
+let mut tx = db
+    .transaction_builder()
+    .mode(TransactionMode::Immediate)
+    .begin()
+    .await?;
+
+// BEGIN EXCLUSIVE — reserve the database. Another writer's BEGIN
+// EXCLUSIVE fails until this transaction commits.
+let mut tx = db
+    .transaction_builder()
+    .mode(TransactionMode::Exclusive)
+    .begin()
+    .await?;</code></pre>
+<p>Without <code>concurrent_writes()</code>, all four <code>TransactionMode</code> variants
+behave the same as on the SQLite driver — <code>Default</code> and <code>Deferred</code>
+both emit <code>BEGIN</code>.</p>
+<h2 id="experimental-features"><a class="header" href="#experimental-features">Experimental features</a></h2>
+<p>Turso ships several engine features behind opt-in flags. The driver
+mirrors each one as a builder method on <code>Turso</code>:</p>
+<pre><code class="language-rust ignore">use toasty_driver_turso::Turso;
+
+let driver = Turso::file("app.db")
+    .experimental_attach(true)
+    .experimental_materialized_views(true)
+    .experimental_vacuum(true);</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Builder method</th><th>Turso feature</th></tr>
+</thead>
+<tbody>
+<tr><td><code>experimental_encryption(opts)</code></td><td>At-rest page encryption with a cipher + key</td></tr>
+<tr><td><code>experimental_attach(true)</code></td><td><code>ATTACH DATABASE</code></td></tr>
+<tr><td><code>experimental_custom_types(true)</code></td><td>User-defined types</td></tr>
+<tr><td><code>experimental_generated_columns(true)</code></td><td><code>GENERATED ALWAYS AS</code> columns</td></tr>
+<tr><td><code>experimental_index_method(true)</code></td><td>Alternative index methods</td></tr>
+<tr><td><code>experimental_materialized_views(true)</code></td><td>Materialized views</td></tr>
+<tr><td><code>experimental_vacuum(true)</code></td><td><code>VACUUM</code></td></tr>
+<tr><td><code>experimental_multiprocess_wal(true)</code></td><td>Multi-process WAL access</td></tr>
+<tr><td><code>experimental_without_rowid(true)</code></td><td><code>WITHOUT ROWID</code> tables</td></tr>
+</tbody>
+</table>
+</div>
+<p>These are passthrough toggles: Toasty does not validate or use the
+features itself. Turso enforces and implements them. As Turso adds or
+stabilizes features, the toggles may change name or move out of the
+<code>experimental_*</code> family — track the <a href="https://turso.tech/">turso</a> release notes.</p>
+<h3 id="encryption"><a class="header" href="#encryption">Encryption</a></h3>
+<p>Encryption is the one toggle that needs configuration beyond a bool.
+Construct an <code>EncryptionOpts</code> with a cipher name and a hex-encoded
+key:</p>
+<pre><code class="language-rust ignore">use toasty_driver_turso::{EncryptionOpts, Turso};
+
+let driver = Turso::file("encrypted.db")
+    .experimental_encryption(EncryptionOpts {
+        cipher: "aes256gcm".into(),
+        hexkey: "&lt;64-hex-character-key&gt;".into(),
+    });</code></pre>
+<p>Supplying <code>EncryptionOpts</code> enables encryption — the driver bundles
+the two upstream calls (<code>experimental_encryption(true)</code> and
+<code>with_encryption(opts)</code>) so you can’t enable encryption without
+supplying a key. Cipher names Turso accepts include <code>aes128gcm</code>,
+<code>aes256gcm</code>, and the AEGIS family; see Turso’s engine documentation
+for the current list. Key management — storage, rotation,
+provisioning — is the caller’s responsibility.</p>
+<h2 id="errors-and-the-connection-pool-3"><a class="header" href="#errors-and-the-connection-pool-3">Errors and the connection pool</a></h2>
+<p>The driver classifies a few specific Turso error variants into
+Toasty’s typed retry variants; everything else surfaces as
+<code>Error::DriverOperationFailed</code>:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Turso error</th><th>Toasty error</th></tr>
+</thead>
+<tbody>
+<tr><td><code>Busy</code>, <code>BusySnapshot</code></td><td><code>Error::SerializationFailure</code></td></tr>
+<tr><td><code>Error(msg)</code> containing <code>"conflict"</code></td><td><code>Error::SerializationFailure</code></td></tr>
+<tr><td><code>Readonly</code></td><td><code>Error::ReadOnlyTransaction</code></td></tr>
+<tr><td><code>IoError</code></td><td><code>Error::ConnectionLost</code></td></tr>
+</tbody>
+</table>
+</div>
+<p>The <code>"conflict"</code> substring check is a workaround for the upstream
+Turso 0.6 API: write-write conflicts under MVCC sometimes surface as
+the generic <code>Error</code> variant rather than as <code>Busy*</code>. The check matches
+the same heuristic Turso’s own
+<a href="https://docs.rs/turso/0.6/turso/examples/concurrent_writes/index.html"><code>examples/concurrent_writes.rs</code></a> uses; expect it to go away
+once the upstream API gives every retryable conflict a dedicated
+variant.</p>
+<h2 id="migrations-3"><a class="header" href="#migrations-3">Migrations</a></h2>
+<p><code>apply_migration</code> wraps each migration in <code>BEGIN</code> / <code>COMMIT</code>; a
+statement failure rolls the migration back. The migration generator
+emits the same SQLite-compatible DDL as the SQLite driver, including
+the same six-step rebuild for unsupported <code>ALTER COLUMN</code>s. See
+<a href="#migrations-2">SQLite migrations</a> for the mechanics.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="dynamodb-1"><a class="header" href="#dynamodb-1">DynamoDB</a></h1>
 <p>Toasty’s DynamoDB driver uses the official <a href="https://docs.rs/aws-sdk-dynamodb"><code>aws-sdk-dynamodb</code></a> crate.
 DynamoDB is a key-value / document store, not a SQL database, so the
@@ -7786,7 +8023,7 @@ model code still works — <a href="#creating-records"><code>create!</code></a>,
 of queries you can write is narrower, and the chapter below catalogues
 the gaps so you can avoid building a model that the driver cannot
 serve.</p>
-<h2 id="enabling-the-driver-3"><a class="header" href="#enabling-the-driver-3">Enabling the driver</a></h2>
+<h2 id="enabling-the-driver-4"><a class="header" href="#enabling-the-driver-4">Enabling the driver</a></h2>
 <p>Add the <code>dynamodb</code> feature to Toasty in <code>Cargo.toml</code>:</p>
 <pre><code class="language-toml">[dependencies]
 toasty = { version = "0.6", features = ["dynamodb"] }
@@ -8065,7 +8302,7 @@ record’s unique field issues a single <code>TransactWriteItems</code> that
 covers the base-table update, the old index entry’s delete, and the
 new index entry’s insert. Either everything commits or nothing does;
 the index table will not drift out of sync with the main table.</p>
-<h2 id="migrations-3"><a class="header" href="#migrations-3">Migrations</a></h2>
+<h2 id="migrations-4"><a class="header" href="#migrations-4">Migrations</a></h2>
 <p>The driver supports schema creation but does not generate migrations.
 On first run, <code>push_schema</code> issues <code>CreateTable</code> for each model — base
 tables plus one auxiliary table per unique index — with the GSIs and

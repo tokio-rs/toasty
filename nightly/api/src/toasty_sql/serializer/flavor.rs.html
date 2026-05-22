@@ -12,35 +12,50 @@
 <a href=#12 id=12 data-nosnippet>12</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; Serializer&lt;<span class="lifetime">'a</span>&gt; {
 <a href=#13 id=13 data-nosnippet>13</a>    <span class="doccomment">/// Creates a serializer that emits SQLite SQL.
 <a href=#14 id=14 data-nosnippet>14</a>    </span><span class="kw">pub fn </span>sqlite(schema: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>db::Schema) -&gt; <span class="self">Self </span>{
-<a href=#15 id=15 data-nosnippet>15</a>        Serializer {
-<a href=#16 id=16 data-nosnippet>16</a>            schema,
-<a href=#17 id=17 data-nosnippet>17</a>            flavor: Flavor::Sqlite,
-<a href=#18 id=18 data-nosnippet>18</a>        }
-<a href=#19 id=19 data-nosnippet>19</a>    }
-<a href=#20 id=20 data-nosnippet>20</a>
-<a href=#21 id=21 data-nosnippet>21</a>    <span class="doccomment">/// Returns `true` if this serializer targets SQLite.
-<a href=#22 id=22 data-nosnippet>22</a>    </span><span class="kw">pub fn </span>is_sqlite(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-<a href=#23 id=23 data-nosnippet>23</a>        <span class="macro">matches!</span>(<span class="self">self</span>.flavor, Flavor::Sqlite)
-<a href=#24 id=24 data-nosnippet>24</a>    }
-<a href=#25 id=25 data-nosnippet>25</a>
-<a href=#26 id=26 data-nosnippet>26</a>    <span class="doccomment">/// Creates a serializer that emits PostgreSQL SQL.
-<a href=#27 id=27 data-nosnippet>27</a>    </span><span class="kw">pub fn </span>postgresql(schema: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>db::Schema) -&gt; <span class="self">Self </span>{
-<a href=#28 id=28 data-nosnippet>28</a>        Serializer {
-<a href=#29 id=29 data-nosnippet>29</a>            schema,
-<a href=#30 id=30 data-nosnippet>30</a>            flavor: Flavor::Postgresql,
+<a href=#15 id=15 data-nosnippet>15</a>        <span class="self">Self</span>::sqlite_with_default_begin(schema, <span class="string">"BEGIN"</span>)
+<a href=#16 id=16 data-nosnippet>16</a>    }
+<a href=#17 id=17 data-nosnippet>17</a>
+<a href=#18 id=18 data-nosnippet>18</a>    <span class="doccomment">/// Creates a SQLite-flavored serializer with a custom SQL string for
+<a href=#19 id=19 data-nosnippet>19</a>    /// [`TransactionMode::Default`].
+<a href=#20 id=20 data-nosnippet>20</a>    ///
+<a href=#21 id=21 data-nosnippet>21</a>    /// Used by SQLite-compatible engines whose preferred "no opinion" BEGIN
+<a href=#22 id=22 data-nosnippet>22</a>    /// is not the classic deferred form — e.g. Turso with
+<a href=#23 id=23 data-nosnippet>23</a>    /// `concurrent_writes()` enabled, where `Default` means `BEGIN
+<a href=#24 id=24 data-nosnippet>24</a>    /// CONCURRENT`. The non-`Default` modes (`Deferred`, `Immediate`,
+<a href=#25 id=25 data-nosnippet>25</a>    /// `Exclusive`) still map to their standard SQLite SQL.
+<a href=#26 id=26 data-nosnippet>26</a>    </span><span class="kw">pub fn </span>sqlite_with_default_begin(schema: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>db::Schema, default_begin: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str) -&gt; <span class="self">Self </span>{
+<a href=#27 id=27 data-nosnippet>27</a>        Serializer {
+<a href=#28 id=28 data-nosnippet>28</a>            schema,
+<a href=#29 id=29 data-nosnippet>29</a>            flavor: Flavor::Sqlite,
+<a href=#30 id=30 data-nosnippet>30</a>            sqlite_default_begin: default_begin,
 <a href=#31 id=31 data-nosnippet>31</a>        }
 <a href=#32 id=32 data-nosnippet>32</a>    }
 <a href=#33 id=33 data-nosnippet>33</a>
-<a href=#34 id=34 data-nosnippet>34</a>    <span class="doccomment">/// Creates a serializer that emits MySQL SQL.
-<a href=#35 id=35 data-nosnippet>35</a>    </span><span class="kw">pub fn </span>mysql(schema: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>db::Schema) -&gt; <span class="self">Self </span>{
-<a href=#36 id=36 data-nosnippet>36</a>        Serializer {
-<a href=#37 id=37 data-nosnippet>37</a>            schema,
-<a href=#38 id=38 data-nosnippet>38</a>            flavor: Flavor::Mysql,
-<a href=#39 id=39 data-nosnippet>39</a>        }
-<a href=#40 id=40 data-nosnippet>40</a>    }
-<a href=#41 id=41 data-nosnippet>41</a>
-<a href=#42 id=42 data-nosnippet>42</a>    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>is_mysql(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-<a href=#43 id=43 data-nosnippet>43</a>        <span class="macro">matches!</span>(<span class="self">self</span>.flavor, Flavor::Mysql)
-<a href=#44 id=44 data-nosnippet>44</a>    }
-<a href=#45 id=45 data-nosnippet>45</a>}
+<a href=#34 id=34 data-nosnippet>34</a>    <span class="doccomment">/// Returns `true` if this serializer targets SQLite.
+<a href=#35 id=35 data-nosnippet>35</a>    </span><span class="kw">pub fn </span>is_sqlite(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#36 id=36 data-nosnippet>36</a>        <span class="macro">matches!</span>(<span class="self">self</span>.flavor, Flavor::Sqlite)
+<a href=#37 id=37 data-nosnippet>37</a>    }
+<a href=#38 id=38 data-nosnippet>38</a>
+<a href=#39 id=39 data-nosnippet>39</a>    <span class="doccomment">/// Creates a serializer that emits PostgreSQL SQL.
+<a href=#40 id=40 data-nosnippet>40</a>    </span><span class="kw">pub fn </span>postgresql(schema: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>db::Schema) -&gt; <span class="self">Self </span>{
+<a href=#41 id=41 data-nosnippet>41</a>        Serializer {
+<a href=#42 id=42 data-nosnippet>42</a>            schema,
+<a href=#43 id=43 data-nosnippet>43</a>            flavor: Flavor::Postgresql,
+<a href=#44 id=44 data-nosnippet>44</a>            sqlite_default_begin: <span class="string">"BEGIN"</span>,
+<a href=#45 id=45 data-nosnippet>45</a>        }
+<a href=#46 id=46 data-nosnippet>46</a>    }
+<a href=#47 id=47 data-nosnippet>47</a>
+<a href=#48 id=48 data-nosnippet>48</a>    <span class="doccomment">/// Creates a serializer that emits MySQL SQL.
+<a href=#49 id=49 data-nosnippet>49</a>    </span><span class="kw">pub fn </span>mysql(schema: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>db::Schema) -&gt; <span class="self">Self </span>{
+<a href=#50 id=50 data-nosnippet>50</a>        Serializer {
+<a href=#51 id=51 data-nosnippet>51</a>            schema,
+<a href=#52 id=52 data-nosnippet>52</a>            flavor: Flavor::Mysql,
+<a href=#53 id=53 data-nosnippet>53</a>            sqlite_default_begin: <span class="string">"BEGIN"</span>,
+<a href=#54 id=54 data-nosnippet>54</a>        }
+<a href=#55 id=55 data-nosnippet>55</a>    }
+<a href=#56 id=56 data-nosnippet>56</a>
+<a href=#57 id=57 data-nosnippet>57</a>    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>is_mysql(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#58 id=58 data-nosnippet>58</a>        <span class="macro">matches!</span>(<span class="self">self</span>.flavor, Flavor::Mysql)
+<a href=#59 id=59 data-nosnippet>59</a>    }
+<a href=#60 id=60 data-nosnippet>60</a>}
 </code></pre></div></section></main></body></html>

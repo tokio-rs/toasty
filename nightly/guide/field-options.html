@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-f437a29e.js";
+            window.path_to_searchindex_js = "searchindex-cf1f8c58.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-46081a54.js"></script>
+        <script src="toc-17951f78.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -257,8 +257,9 @@ struct User {
 <p>Not all databases support all column types. Toasty validates explicit column
 types against the database’s capabilities when you call <code>db.push_schema()</code>. If a
 type is not supported, schema creation fails with an error. For example,
-<code>varchar</code> is supported by PostgreSQL and MySQL but not by SQLite or DynamoDB —
-using <code>#[column(type = varchar(100))]</code> with SQLite produces an error like
+<code>varchar</code> is supported by PostgreSQL and MySQL but not by SQLite, Turso, or
+DynamoDB — using <code>#[column(type = varchar(100))]</code> with SQLite produces an
+error like
 <code>"unsupported feature: VARCHAR type is not supported by this database"</code>. If the
 requested size exceeds the database’s maximum, Toasty reports that as well.</p>
 <h2 id="default-values"><a class="header" href="#default-values">Default values</a></h2>

@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-f437a29e.js";
+            window.path_to_searchindex_js = "searchindex-cf1f8c58.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-46081a54.js"></script>
+        <script src="toc-17951f78.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -180,7 +180,7 @@
 generated.</p>
 <h2 id="unique-fields"><a class="header" href="#unique-fields">Unique fields</a></h2>
 <p>Add <code>#[unique]</code> to a field to create a unique index. Toasty enforces uniqueness
-on all supported databases. SQL databases (SQLite, PostgreSQL, MySQL) use a
+on all supported databases. SQL databases (SQLite/Turso, PostgreSQL, MySQL) use a
 native unique index. DynamoDB uses a separate index table keyed on the unique
 attribute; inserts and updates write to both tables in a single
 <code>TransactWriteItems</code> call with an <code>attribute_not_exists</code> condition that rejects
