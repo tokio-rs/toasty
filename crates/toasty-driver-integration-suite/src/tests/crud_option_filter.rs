@@ -1,13 +1,8 @@
 //! Test filtering models by Option fields using is_some() and is_none().
-//!
-//! Gated on `requires(sql)` until [#854] is fixed — `IS NULL` / `IS NOT NULL`
-//! currently fail on DynamoDB scan with an empty `ExpressionAttributeValues`.
-//!
-//! [#854]: https://github.com/tokio-rs/toasty/issues/854
 
 use crate::prelude::*;
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(scan))]
 pub async fn filter_option_is_none(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -48,7 +43,7 @@ pub async fn filter_option_is_none(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(scan))]
 pub async fn filter_option_is_some(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -91,7 +86,7 @@ pub async fn filter_option_is_some(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(scan))]
 pub async fn filter_option_combined_with_other_filters(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -156,7 +151,7 @@ pub async fn filter_option_combined_with_other_filters(test: &mut Test) -> Resul
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(scan))]
 pub async fn filter_option_multiple_nullable_fields(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Article {
@@ -325,7 +320,7 @@ pub async fn filter_option_with_partition_key(test: &mut Test) -> Result<()> {
 /// `is_none()` on an `Option<ID>` field panics because the lowering phase
 /// does not strip the `ExprCast` wrapper from the column expression inside
 /// `IsNull`. The cast leaks into the SQL serializer which does not handle it.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(scan))]
 pub async fn filter_option_id_is_none(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Player {
