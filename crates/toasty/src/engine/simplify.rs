@@ -170,6 +170,41 @@ impl VisitMut for Simplify<'_> {
         self.simplify_stmt_query_when_empty(stmt);
     }
 
+    fn visit_source_mut(&mut self, source: &mut stmt::Source) {
+        // A `Source::Table` JOIN constraint references columns in the
+        // source's own table list (`tbl_d_n.col`), so it must be simplified
+        // with that source in scope — not the outer query scope active here.
+        // Take the `from` items out so we can hold an immutable scope onto
+        // the (still table-list-bearing) source while simplifying the join
+        // constraint expressions, then put them back.
+        let from = match source {
+            stmt::Source::Table(table) if table.from.iter().any(|twj| !twj.joins.is_empty()) => {
+                Some(std::mem::take(&mut table.from))
+            }
+            _ => None,
+        };
+
+        if let Some(mut from) = from {
+            {
+                let mut scoped = self.scope(&*source);
+                for twj in &mut from {
+                    for join in &mut twj.joins {
+                        let (stmt::JoinOp::Inner(expr) | stmt::JoinOp::Left(expr)) =
+                            &mut join.constraint;
+                        scoped.visit_expr_mut(expr);
+                    }
+                }
+            }
+
+            if let stmt::Source::Table(table) = source {
+                table.from = from;
+            }
+            return;
+        }
+
+        stmt::visit_mut::visit_source_mut(self, source);
+    }
+
     fn visit_stmt_select_mut(&mut self, stmt: &mut stmt::Select) {
         if let stmt::Source::Model(model) = &mut stmt.source
             && let Some(via) = model.via.take()

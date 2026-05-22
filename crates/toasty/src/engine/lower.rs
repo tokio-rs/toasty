@@ -7,6 +7,7 @@ mod lift_in_subquery;
 mod paginate;
 mod relation;
 mod returning;
+mod via_join;
 
 #[cfg(test)]
 mod tests;
@@ -28,6 +29,34 @@ use toasty_core::{
 };
 
 use crate::engine::{Engine, HirStatement, fold, hir, simplify::Simplify};
+
+/// Wrap a single-relation subquery so a loaded-`None` — the query yielded SQL
+/// `Null` — is encoded with the `I64(0)` sentinel, keeping it distinct from an
+/// unloaded relation. Used when lowering `.include()`/`.select()` of a nullable
+/// single (`HasOne<Option<_>>` / `BelongsTo<Option<_>>`) relation:
+///
+/// ```text
+///   Let {
+///     binding: subquery,
+///     body: Match { subject: arg(0), arms: [Null → I64(0)], else: present },
+///   }
+/// ```
+///
+/// The subquery result is bound as `arg(0)`; `present` is the expression for a
+/// non-null row and may reference that binding (e.g. project a field out of it).
+fn encode_nullable_single(subquery: stmt::Expr, present: stmt::Expr) -> stmt::Expr {
+    stmt::Expr::Let(stmt::ExprLet {
+        bindings: vec![subquery],
+        body: Box::new(stmt::Expr::match_expr(
+            stmt::Expr::arg(0),
+            vec![stmt::MatchArm {
+                pattern: stmt::Value::Null,
+                expr: stmt::Expr::from(0i64),
+            }],
+            present,
+        )),
+    })
+}
 
 impl Engine {
     pub(super) fn lower_stmt(&self, stmt: stmt::Statement) -> Result<HirStatement> {

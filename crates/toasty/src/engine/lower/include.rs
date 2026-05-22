@@ -284,21 +284,24 @@ impl LowerStatement<'_, '_> {
         let field = &self.model_unwrap().fields[field_index];
 
         // A multi-step (`via`) relation reaches its target through a path of
-        // existing relations. It lowers to a correlated `IN` subquery, which
-        // the `NestedMerge` planner cannot yet evaluate as a per-parent
-        // qualification — so `.include()` / `.select()` of a `via` relation is
-        // not supported yet. Querying one directly
-        // (`user.commented_articles()`) does work.
-        let is_via = match &field.ty {
-            app::FieldTy::HasMany(rel) => rel.kind.via().is_some(),
-            app::FieldTy::HasOne(rel) => rel.kind.via().is_some(),
-            _ => false,
+        // existing relations. Build the child query as a single JOIN through
+        // the via chain so the engine can issue one query (per include) and
+        // group the children with the parent in `NestedMerge`. This relies on
+        // the database executing the join, so it is SQL-only — a key-value
+        // backend would need a cascade of per-step queries instead.
+        let via = match &field.ty {
+            app::FieldTy::HasMany(rel) => rel.kind.via(),
+            app::FieldTy::HasOne(rel) => rel.kind.via(),
+            _ => None,
         };
-        if is_via {
-            todo!(
-                "`.include()` / `.select()` of a multi-step `via` relation is not yet supported; \
-                 query the relation directly instead"
-            );
+        if let Some(via) = via {
+            if !self.capability().sql {
+                todo!(
+                    "`.include()` / `.select()` of a multi-step `via` relation is only \
+                     supported on SQL backends; query the relation directly instead"
+                );
+            }
+            return self.build_via_include_subquery(field_index, via, nested);
         }
 
         let (mut stmt, target_model_id) = match &field.ty {
@@ -374,31 +377,10 @@ impl LowerStatement<'_, '_> {
         let mut sub_expr = self.lower_sub_stmt(stmt::Statement::Query(stmt));
 
         // For nullable single relations (HasOne<Option<T>>, BelongsTo<Option<T>>),
-        // wrap the sub-expression with a Let + Match to encode the result
-        // using variant-encoded values that distinguish loaded-None from
-        // unloaded.
-        //
-        //   Let {
-        //     binding: Stmt(query),
-        //     body: Match {
-        //       subject: Arg(0),
-        //       arms: [Null → I64(0)],
-        //       else_: Arg(0)
-        //     }
-        //   }
+        // encode the result so a loaded-None is distinguishable from unloaded.
+        // The non-null row passes through as-is (the raw model record).
         if field.nullable() && !field.ty.is_has_many() {
-            sub_expr = stmt::Expr::Let(stmt::ExprLet {
-                bindings: vec![sub_expr],
-                body: Box::new(stmt::Expr::match_expr(
-                    stmt::Expr::arg(0),
-                    vec![stmt::MatchArm {
-                        pattern: stmt::Value::Null,
-                        expr: stmt::Expr::from(0i64),
-                    }],
-                    // Non-null: pass through as-is (raw model record)
-                    stmt::Expr::arg(0),
-                )),
-            });
+            sub_expr = super::encode_nullable_single(sub_expr, stmt::Expr::arg(0));
         }
 
         sub_expr

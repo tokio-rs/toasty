@@ -265,6 +265,7 @@ impl Field {
         match &self.ty {
             FieldTy::BelongsTo(belongs_to) => Some(belongs_to.target),
             FieldTy::HasMany(has_many) => Some(has_many.target),
+            FieldTy::HasOne(has_one) => Some(has_one.target),
             _ => None,
         }
     }

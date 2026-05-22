@@ -280,6 +280,97 @@ let users = User::filter(
 .await?;
 ```
 
+## Multi-step relations (`via`)
+
+A `HasMany` can reach its target through a path of existing relations instead of
+a single foreign key. Declare it with `via` and a dotted chain of relation
+fields, read left to right from this model. This expresses a relationship that
+exists only *through* a third model — a user has many comments, each comment
+belongs to an article, so a user has many commented articles:
+
+```rust
+# use toasty::Model;
+#[derive(Debug, toasty::Model)]
+struct User {
+    #[key]
+    #[auto]
+    id: u64,
+
+    name: String,
+
+    #[has_many]
+    comments: toasty::HasMany<Comment>,
+
+    // User → comments → article
+    #[has_many(via = comments.article)]
+    commented_articles: toasty::HasMany<Article>,
+}
+
+#[derive(Debug, toasty::Model)]
+struct Comment {
+    #[key]
+    #[auto]
+    id: u64,
+
+    #[index]
+    user_id: u64,
+
+    #[belongs_to(key = user_id, references = id)]
+    user: toasty::BelongsTo<User>,
+
+    #[index]
+    article_id: u64,
+
+    #[belongs_to(key = article_id, references = id)]
+    article: toasty::BelongsTo<Article>,
+}
+
+#[derive(Debug, toasty::Model)]
+struct Article {
+    #[key]
+    #[auto]
+    id: u64,
+
+    title: String,
+
+    #[has_many]
+    comments: toasty::HasMany<Comment>,
+}
+```
+
+The target type is `Article` because the path `comments.article` ends there.
+A `via` relation owns no foreign key — it is derived from the relations it
+traverses — so it needs no `pair`. Each step may be any relation kind, and the
+kinds can be mixed along one path.
+
+Query a `via` relation like any other relation:
+
+```rust,ignore
+// Every article this user has commented on, each listed once.
+let articles = user.commented_articles().exec(&mut db).await?;
+
+// Filtered and ordered like any other relation query.
+let recent = user
+    .commented_articles()
+    .filter(Article::fields().title().eq("Rust"))
+    .exec(&mut db)
+    .await?;
+```
+
+A `via` relation yields **distinct targets**: a target reached through several
+intermediates appears once. A user who comments on the same article twice gets
+that article once.
+
+A `via` relation is **read-only**. You can query, filter, order, and preload it,
+but Toasty generates no `create`, `insert`, or `remove` methods — writing
+through a multi-step path would have to materialize intermediate records. Mutate
+the underlying relations directly instead.
+
+Preload a `via` relation with `.include()` to avoid the N+1 — see
+[Preloading Associations](./preloading-associations.md). Preloading or
+projecting a `via` relation is supported on SQL backends; both are not yet
+available on DynamoDB.
+
 ## What gets generated
 
 For a `User` model with `#[has_many] posts: HasMany<Post>`, Toasty generates:
