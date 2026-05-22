@@ -31,10 +31,10 @@ impl<T: Load> Load for Option<T> {
 
     fn load_relation(value: Value) -> Result<Self::Output, crate::Error> {
         match value {
-            // Encoded "loaded as None" from SELECT+include path.
-            // The nested merge's Match expression transforms Value::Null
-            // (no matching row) into I64(0) to distinguish from
-            // Value::Null (unloaded), which HasOne::load handles.
+            Value::Null => Ok(None),
+            // Compatibility with the old SELECT+include encoding for nullable
+            // single relations. New lowering wraps loaded relation slots as
+            // Record([value]), so loaded None is Record([Null]).
             Value::I64(0) => Ok(None),
             // Any other value is the raw model record (from INSERT or
             // SELECT+include when a matching row exists).

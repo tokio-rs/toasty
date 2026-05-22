@@ -35,8 +35,7 @@ pub trait Load {
     /// Deserialize a value that was loaded as a relation target.
     ///
     /// The default delegates to [`load`](Self::load). Override this when
-    /// relation values use a different encoding (e.g., `Option<T>` uses a
-    /// sentinel integer to distinguish "loaded as None" from "not loaded").
+    /// relation values use a different encoding.
     fn load_relation(value: stmt::Value) -> Result<Self::Output, Error> {
         Self::load(value)
     }
