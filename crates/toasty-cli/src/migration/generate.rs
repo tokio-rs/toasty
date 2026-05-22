@@ -50,9 +50,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<dif
             .tables()
             .iter()
             .filter_map(|item| match item {
-                diff::TablesItem::DropTable(table) if !ignored_tables.contains(&table.id) => {
-                    Some(*table)
-                }
+                diff::Table::Drop(table) if !ignored_tables.contains(&table.id) => Some(*table),
                 _ => None,
             })
             .collect();
@@ -61,7 +59,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<dif
             .tables()
             .iter()
             .filter_map(|item| match item {
-                diff::TablesItem::CreateTable(table) => Some(*table),
+                diff::Table::Create(table) => Some(*table),
                 _ => None,
             })
             .collect();
@@ -98,7 +96,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<dif
 
         // Check for column and index renames within altered tables
         for item in diff.tables().iter() {
-            if let diff::TablesItem::AlterTable {
+            if let diff::Table::Alter {
                 previous,
                 next: _,
                 columns,
@@ -109,7 +107,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<dif
                 let dropped_columns: Vec<_> = columns
                     .iter()
                     .filter_map(|item| match item {
-                        diff::ColumnsItem::DropColumn(column)
+                        diff::Column::Drop(column)
                             if !ignored_columns
                                 .get(&previous.id)
                                 .is_some_and(|set| set.contains(&column.id)) =>
@@ -123,7 +121,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<dif
                 let added_columns: Vec<_> = columns
                     .iter()
                     .filter_map(|item| match item {
-                        diff::ColumnsItem::AddColumn(column) => Some(*column),
+                        diff::Column::Add(column) => Some(*column),
                         _ => None,
                     })
                     .collect();
@@ -167,7 +165,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<dif
                 let dropped_indices: Vec<_> = indices
                     .iter()
                     .filter_map(|item| match item {
-                        diff::IndicesItem::DropIndex(index)
+                        diff::Index::Drop(index)
                             if !ignored_indices
                                 .get(&previous.id)
                                 .is_some_and(|set| set.contains(&index.id)) =>
@@ -181,7 +179,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<dif
                 let added_indices: Vec<_> = indices
                     .iter()
                     .filter_map(|item| match item {
-                        diff::IndicesItem::CreateIndex(index) => Some(*index),
+                        diff::Index::Create(index) => Some(*index),
                         _ => None,
                     })
                     .collect();

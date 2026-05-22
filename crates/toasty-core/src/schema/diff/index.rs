@@ -1,39 +1,46 @@
 use super::Context;
-use crate::schema::db::Index;
+use crate::schema::db;
 
 use hashbrown::{HashMap, HashSet};
-use std::ops::Deref;
 
-/// The set of differences between two index lists.
+/// A single index-level change between two table versions.
 ///
-/// Computed by [`Indices::from`] and dereferences to `Vec<IndicesItem>` for
-/// iteration.
-///
-/// # Examples
-///
-/// ```ignore
-/// use toasty_core::schema::{db, diff};
-///
-/// let previous = db::Schema::default();
-/// let next = db::Schema::default();
-/// let hints = diff::RenameHints::new();
-/// let cx = diff::Context::new(&previous, &next, &hints);
-/// let d = diff::Indices::from(&cx, &[], &[]);
-/// assert!(d.is_empty());
-/// ```
-pub struct Indices<'a> {
-    items: Vec<IndicesItem<'a>>,
+/// Computed by [`Index::diff`].
+pub enum Index<'a> {
+    /// A new index was created.
+    Create(&'a db::Index),
+    /// An existing index was dropped.
+    Drop(&'a db::Index),
+    /// An index was modified (name, columns, uniqueness, or other property changed).
+    Alter {
+        /// The index definition before the change.
+        previous: &'a db::Index,
+        /// The index definition after the change.
+        next: &'a db::Index,
+    },
 }
 
-impl<'a> Indices<'a> {
+impl<'a> Index<'a> {
     /// Computes the diff between two index slices.
     ///
     /// Uses [`Context`] to resolve rename hints for both indices and columns.
     /// Indices matched by name (or by rename hint) are compared; unmatched
     /// indices in `previous` become drops, and unmatched indices in `next`
     /// become creates.
-    pub fn from(cx: &Context<'a>, previous: &'a [Index], next: &'a [Index]) -> Self {
-        fn has_diff(cx: &Context<'_>, previous: &Index, next: &Index) -> bool {
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use toasty_core::schema::{db, diff};
+    ///
+    /// let previous = db::Schema::default();
+    /// let next = db::Schema::default();
+    /// let hints = diff::RenameHints::new();
+    /// let cx = diff::Context::new(&previous, &next, &hints);
+    /// assert!(diff::Index::diff(&cx, &[], &[]).is_empty());
+    /// ```
+    pub fn diff(cx: &Context<'a>, previous: &'a [db::Index], next: &'a [db::Index]) -> Vec<Self> {
+        fn has_diff(cx: &Context<'_>, previous: &db::Index, next: &db::Index) -> bool {
             if previous.name != next.name
                 || previous.columns.len() != next.columns.len()
                 || previous.unique != next.unique
@@ -64,11 +71,11 @@ impl<'a> Indices<'a> {
             false
         }
 
-        let mut items = vec![];
+        let mut changes = vec![];
         let mut create_ids: HashSet<_> = next.iter().map(|to| to.id).collect();
 
         let next_map =
-            HashMap::<&str, &'a Index>::from_iter(next.iter().map(|to| (to.name.as_str(), to)));
+            HashMap::<&str, &'a db::Index>::from_iter(next.iter().map(|to| (to.name.as_str(), to)));
 
         for previous in previous {
             let next = if let Some(next_id) = cx.rename_hints().get_index(previous.id) {
@@ -76,49 +83,21 @@ impl<'a> Indices<'a> {
             } else if let Some(next) = next_map.get(previous.name.as_str()) {
                 next
             } else {
-                items.push(IndicesItem::DropIndex(previous));
+                changes.push(Self::Drop(previous));
                 continue;
             };
 
             create_ids.remove(&next.id);
 
             if has_diff(cx, previous, next) {
-                items.push(IndicesItem::AlterIndex { previous, next });
+                changes.push(Self::Alter { previous, next });
             }
         }
 
         for index_id in create_ids {
-            items.push(IndicesItem::CreateIndex(cx.next().index(index_id)));
+            changes.push(Self::Create(cx.next().index(index_id)));
         }
 
-        Self { items }
+        changes
     }
-
-    /// Returns `true` if there are no index changes.
-    pub const fn is_empty(&self) -> bool {
-        self.items.is_empty()
-    }
-}
-
-impl<'a> Deref for Indices<'a> {
-    type Target = Vec<IndicesItem<'a>>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.items
-    }
-}
-
-/// A single change detected between two index lists.
-pub enum IndicesItem<'a> {
-    /// A new index was created.
-    CreateIndex(&'a Index),
-    /// An existing index was dropped.
-    DropIndex(&'a Index),
-    /// An index was modified (name, columns, uniqueness, or other property changed).
-    AlterIndex {
-        /// The index definition before the change.
-        previous: &'a Index,
-        /// The index definition after the change.
-        next: &'a Index,
-    },
 }

@@ -1,4 +1,4 @@
-use super::{Context, RenameHints, Tables, Types};
+use super::{Context, RenameHints, Table, Type};
 use crate::schema::db::Schema as DbSchema;
 
 /// The top-level diff between two database schemas.
@@ -20,27 +20,27 @@ use crate::schema::db::Schema as DbSchema;
 pub struct Schema<'a> {
     previous: &'a DbSchema,
     next: &'a DbSchema,
-    tables: Tables<'a>,
+    tables: Vec<Table<'a>>,
 }
 
 impl<'a> Schema<'a> {
     /// Computes the diff between two schemas, using the provided rename hints.
     pub fn from(from: &'a DbSchema, to: &'a DbSchema, rename_hints: &'a RenameHints) -> Self {
-        let cx = &Context::new(from, to, rename_hints);
+        let cx = Context::new(from, to, rename_hints);
         Self {
             previous: from,
             next: to,
-            tables: Tables::from(cx, &from.tables, &to.tables),
+            tables: Table::diff(&cx, &from.tables, &to.tables),
         }
     }
 
     /// Computes the enum type diff between the two schemas.
-    pub fn types(&self) -> Types<'a> {
-        Types::from(self.previous, self.next)
+    pub fn types(&self) -> Vec<Type<'a>> {
+        Type::diff(self.previous, self.next)
     }
 
     /// Returns the table-level diff.
-    pub fn tables(&self) -> &Tables<'a> {
+    pub fn tables(&self) -> &[Table<'a>] {
         &self.tables
     }
 
