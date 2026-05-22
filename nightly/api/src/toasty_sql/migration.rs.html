@@ -11,7 +11,7 @@
 <a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span><span class="kw">crate</span>::stmt::{AlterColumnChanges, AlterTable, AlterTableAction, DropTable, Name, Statement};
 <a href=#12 id=12 data-nosnippet>12</a>
 <a href=#13 id=13 data-nosnippet>13</a><span class="doccomment">/// Returns `true` if the only difference between two columns is the variant
-<a href=#14 id=14 data-nosnippet>14</a>/// list of a named enum type. These changes are handled by `diff::Types`
+<a href=#14 id=14 data-nosnippet>14</a>/// list of a named enum type. These changes are handled by `diff::Type`
 <a href=#15 id=15 data-nosnippet>15</a>/// (`ALTER TYPE ... ADD VALUE`) and should not produce column-level DDL.
 <a href=#16 id=16 data-nosnippet>16</a></span><span class="kw">fn </span>is_named_enum_variant_only_change(previous: <span class="kw-2">&amp;</span>Column, next: <span class="kw-2">&amp;</span>Column) -&gt; bool {
 <a href=#17 id=17 data-nosnippet>17</a>    <span class="kw">if </span>previous.name != next.name
@@ -62,13 +62,13 @@
 <a href=#62 id=62 data-nosnippet>62</a>            <span class="kw">let </span>types_diff = schema_diff.types();
 <a href=#63 id=63 data-nosnippet>63</a>            <span class="kw">for </span>item <span class="kw">in </span>types_diff.iter() {
 <a href=#64 id=64 data-nosnippet>64</a>                <span class="kw">match </span>item {
-<a href=#65 id=65 data-nosnippet>65</a>                    diff::TypesItem::CreateType(ty) =&gt; {
+<a href=#65 id=65 data-nosnippet>65</a>                    diff::Type::Create(ty) =&gt; {
 <a href=#66 id=66 data-nosnippet>66</a>                        result.push(<span class="self">Self</span>::new(
 <a href=#67 id=67 data-nosnippet>67</a>                            Statement::create_enum_type(ty),
 <a href=#68 id=68 data-nosnippet>68</a>                            Cow::Borrowed(schema_diff.next()),
 <a href=#69 id=69 data-nosnippet>69</a>                        ));
 <a href=#70 id=70 data-nosnippet>70</a>                    }
-<a href=#71 id=71 data-nosnippet>71</a>                    diff::TypesItem::AddVariants { ty, added } =&gt; {
+<a href=#71 id=71 data-nosnippet>71</a>                    diff::Type::AddVariants { ty, added } =&gt; {
 <a href=#72 id=72 data-nosnippet>72</a>                        <span class="kw">let </span>type_name = ty.name.as_deref().expect(<span class="string">"named enum type"</span>);
 <a href=#73 id=73 data-nosnippet>73</a>                        <span class="kw">for </span>variant <span class="kw">in </span>added {
 <a href=#74 id=74 data-nosnippet>74</a>                            result.push(<span class="self">Self</span>::new(
@@ -83,7 +83,7 @@
 <a href=#83 id=83 data-nosnippet>83</a>
 <a href=#84 id=84 data-nosnippet>84</a>        <span class="kw">for </span>table <span class="kw">in </span>schema_diff.tables().iter() {
 <a href=#85 id=85 data-nosnippet>85</a>            <span class="kw">match </span>table {
-<a href=#86 id=86 data-nosnippet>86</a>                diff::TablesItem::CreateTable(table) =&gt; {
+<a href=#86 id=86 data-nosnippet>86</a>                diff::Table::Create(table) =&gt; {
 <a href=#87 id=87 data-nosnippet>87</a>                    result.push(<span class="self">Self</span>::new(
 <a href=#88 id=88 data-nosnippet>88</a>                        Statement::create_table(table, capability),
 <a href=#89 id=89 data-nosnippet>89</a>                        Cow::Borrowed(schema_diff.next()),
@@ -98,11 +98,11 @@
 <a href=#98 id=98 data-nosnippet>98</a>                        ));
 <a href=#99 id=99 data-nosnippet>99</a>                    }
 <a href=#100 id=100 data-nosnippet>100</a>                }
-<a href=#101 id=101 data-nosnippet>101</a>                diff::TablesItem::DropTable(table) =&gt; result.push(<span class="self">Self</span>::new(
+<a href=#101 id=101 data-nosnippet>101</a>                diff::Table::Drop(table) =&gt; result.push(<span class="self">Self</span>::new(
 <a href=#102 id=102 data-nosnippet>102</a>                    Statement::drop_table(table),
 <a href=#103 id=103 data-nosnippet>103</a>                    Cow::Borrowed(schema_diff.previous()),
 <a href=#104 id=104 data-nosnippet>104</a>                )),
-<a href=#105 id=105 data-nosnippet>105</a>                diff::TablesItem::AlterTable {
+<a href=#105 id=105 data-nosnippet>105</a>                diff::Table::Alter {
 <a href=#106 id=106 data-nosnippet>106</a>                    previous,
 <a href=#107 id=107 data-nosnippet>107</a>                    next,
 <a href=#108 id=108 data-nosnippet>108</a>                    columns,
@@ -124,7 +124,7 @@
 <a href=#124 id=124 data-nosnippet>124</a>                        &amp;&amp; columns.iter().any(|item| {
 <a href=#125 id=125 data-nosnippet>125</a>                            <span class="macro">matches!</span>(
 <a href=#126 id=126 data-nosnippet>126</a>                                item,
-<a href=#127 id=127 data-nosnippet>127</a>                                diff::ColumnsItem::AlterColumn {
+<a href=#127 id=127 data-nosnippet>127</a>                                diff::Column::Alter {
 <a href=#128 id=128 data-nosnippet>128</a>                                    previous: prev_col,
 <a href=#129 id=129 data-nosnippet>129</a>                                    next: next_col
 <a href=#130 id=130 data-nosnippet>130</a>                                } <span class="kw">if </span>AlterColumnChanges::from_diff(prev_col, next_col).has_type_change()
@@ -149,19 +149,19 @@
 <a href=#149 id=149 data-nosnippet>149</a>                    <span class="comment">// Indices diff
 <a href=#150 id=150 data-nosnippet>150</a>                    </span><span class="kw">for </span>item <span class="kw">in </span>indices.iter() {
 <a href=#151 id=151 data-nosnippet>151</a>                        <span class="kw">match </span>item {
-<a href=#152 id=152 data-nosnippet>152</a>                            diff::IndicesItem::CreateIndex(index) =&gt; {
+<a href=#152 id=152 data-nosnippet>152</a>                            diff::Index::Create(index) =&gt; {
 <a href=#153 id=153 data-nosnippet>153</a>                                result.push(<span class="self">Self</span>::new(
 <a href=#154 id=154 data-nosnippet>154</a>                                    Statement::create_index(index),
 <a href=#155 id=155 data-nosnippet>155</a>                                    Cow::Borrowed(schema_diff.next()),
 <a href=#156 id=156 data-nosnippet>156</a>                                ));
 <a href=#157 id=157 data-nosnippet>157</a>                            }
-<a href=#158 id=158 data-nosnippet>158</a>                            diff::IndicesItem::DropIndex(index) =&gt; {
+<a href=#158 id=158 data-nosnippet>158</a>                            diff::Index::Drop(index) =&gt; {
 <a href=#159 id=159 data-nosnippet>159</a>                                result.push(<span class="self">Self</span>::new(
 <a href=#160 id=160 data-nosnippet>160</a>                                    Statement::drop_index(index),
 <a href=#161 id=161 data-nosnippet>161</a>                                    Cow::Borrowed(schema_diff.previous()),
 <a href=#162 id=162 data-nosnippet>162</a>                                ));
 <a href=#163 id=163 data-nosnippet>163</a>                            }
-<a href=#164 id=164 data-nosnippet>164</a>                            diff::IndicesItem::AlterIndex { previous, next } =&gt; {
+<a href=#164 id=164 data-nosnippet>164</a>                            diff::Index::Alter { previous, next } =&gt; {
 <a href=#165 id=165 data-nosnippet>165</a>                                result.push(<span class="self">Self</span>::new(
 <a href=#166 id=166 data-nosnippet>166</a>                                    Statement::drop_index(previous),
 <a href=#167 id=167 data-nosnippet>167</a>                                    Cow::Borrowed(schema_diff.previous()),
@@ -184,7 +184,7 @@
 <a href=#184 id=184 data-nosnippet>184</a>        schema: Cow&lt;<span class="lifetime">'a</span>, Schema&gt;,
 <a href=#185 id=185 data-nosnippet>185</a>        previous: <span class="kw-2">&amp;</span>Table,
 <a href=#186 id=186 data-nosnippet>186</a>        next: <span class="kw-2">&amp;</span>Table,
-<a href=#187 id=187 data-nosnippet>187</a>        columns: <span class="kw-2">&amp;</span>diff::Columns&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#187 id=187 data-nosnippet>187</a>        columns: <span class="kw-2">&amp;</span>[diff::Column&lt;<span class="lifetime">'_</span>&gt;],
 <a href=#188 id=188 data-nosnippet>188</a>        capability: <span class="kw-2">&amp;</span>Capability,
 <a href=#189 id=189 data-nosnippet>189</a>    ) {
 <a href=#190 id=190 data-nosnippet>190</a>        <span class="kw">let </span>current_name = schema.table(previous.id).name.clone();
@@ -218,7 +218,7 @@
 <a href=#218 id=218 data-nosnippet>218</a>                <span class="comment">// Skip added columns (no source data)
 <a href=#219 id=219 data-nosnippet>219</a>                </span>!columns
 <a href=#220 id=220 data-nosnippet>220</a>                    .iter()
-<a href=#221 id=221 data-nosnippet>221</a>                    .any(|item| <span class="macro">matches!</span>(item, diff::ColumnsItem::AddColumn(c) <span class="kw">if </span>c.id == col.id))
+<a href=#221 id=221 data-nosnippet>221</a>                    .any(|item| <span class="macro">matches!</span>(item, diff::Column::Add(c) <span class="kw">if </span>c.id == col.id))
 <a href=#222 id=222 data-nosnippet>222</a>            })
 <a href=#223 id=223 data-nosnippet>223</a>            .map(|col| {
 <a href=#224 id=224 data-nosnippet>224</a>                <span class="kw">let </span>target_name = Name::from(<span class="kw-2">&amp;</span>col.name[..]);
@@ -226,7 +226,7 @@
 <a href=#226 id=226 data-nosnippet>226</a>                </span><span class="kw">let </span>source_name = columns
 <a href=#227 id=227 data-nosnippet>227</a>                    .iter()
 <a href=#228 id=228 data-nosnippet>228</a>                    .find_map(|item| <span class="kw">match </span>item {
-<a href=#229 id=229 data-nosnippet>229</a>                        diff::ColumnsItem::AlterColumn {
+<a href=#229 id=229 data-nosnippet>229</a>                        diff::Column::Alter {
 <a href=#230 id=230 data-nosnippet>230</a>                            previous: prev_col,
 <a href=#231 id=231 data-nosnippet>231</a>                            next: next_col,
 <a href=#232 id=232 data-nosnippet>232</a>                        } <span class="kw">if </span>next_col.id == col.id &amp;&amp; prev_col.name != next_col.name =&gt; {
@@ -278,26 +278,26 @@
 <a href=#278 id=278 data-nosnippet>278</a>    <span class="kw">fn </span>emit_column_changes(
 <a href=#279 id=279 data-nosnippet>279</a>        result: <span class="kw-2">&amp;mut </span>Vec&lt;<span class="self">Self</span>&gt;,
 <a href=#280 id=280 data-nosnippet>280</a>        schema: Cow&lt;<span class="lifetime">'a</span>, Schema&gt;,
-<a href=#281 id=281 data-nosnippet>281</a>        columns: <span class="kw-2">&amp;</span>diff::Columns&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#281 id=281 data-nosnippet>281</a>        columns: <span class="kw-2">&amp;</span>[diff::Column&lt;<span class="lifetime">'_</span>&gt;],
 <a href=#282 id=282 data-nosnippet>282</a>        capability: <span class="kw-2">&amp;</span>Capability,
 <a href=#283 id=283 data-nosnippet>283</a>    ) {
 <a href=#284 id=284 data-nosnippet>284</a>        <span class="kw">for </span>item <span class="kw">in </span>columns.iter() {
 <a href=#285 id=285 data-nosnippet>285</a>            <span class="kw">match </span>item {
-<a href=#286 id=286 data-nosnippet>286</a>                diff::ColumnsItem::AddColumn(column) =&gt; {
+<a href=#286 id=286 data-nosnippet>286</a>                diff::Column::Add(column) =&gt; {
 <a href=#287 id=287 data-nosnippet>287</a>                    result.push(<span class="self">Self</span>::new(
 <a href=#288 id=288 data-nosnippet>288</a>                        Statement::add_column(column, capability),
 <a href=#289 id=289 data-nosnippet>289</a>                        schema.clone(),
 <a href=#290 id=290 data-nosnippet>290</a>                    ));
 <a href=#291 id=291 data-nosnippet>291</a>                }
-<a href=#292 id=292 data-nosnippet>292</a>                diff::ColumnsItem::DropColumn(column) =&gt; {
+<a href=#292 id=292 data-nosnippet>292</a>                diff::Column::Drop(column) =&gt; {
 <a href=#293 id=293 data-nosnippet>293</a>                    result.push(<span class="self">Self</span>::new(Statement::drop_column(column), schema.clone()));
 <a href=#294 id=294 data-nosnippet>294</a>                }
-<a href=#295 id=295 data-nosnippet>295</a>                diff::ColumnsItem::AlterColumn {
+<a href=#295 id=295 data-nosnippet>295</a>                diff::Column::Alter {
 <a href=#296 id=296 data-nosnippet>296</a>                    previous,
 <a href=#297 id=297 data-nosnippet>297</a>                    next: col_next,
 <a href=#298 id=298 data-nosnippet>298</a>                } =&gt; {
 <a href=#299 id=299 data-nosnippet>299</a>                    <span class="comment">// Skip column-level DDL for named enum variant changes — those
-<a href=#300 id=300 data-nosnippet>300</a>                    // are handled by diff::Types (ALTER TYPE ... ADD VALUE).
+<a href=#300 id=300 data-nosnippet>300</a>                    // are handled by diff::Type (ALTER TYPE ... ADD VALUE).
 <a href=#301 id=301 data-nosnippet>301</a>                    </span><span class="kw">if </span>capability.named_enum_types
 <a href=#302 id=302 data-nosnippet>302</a>                        &amp;&amp; is_named_enum_variant_only_change(previous, col_next)
 <a href=#303 id=303 data-nosnippet>303</a>                    {
