@@ -1,6 +1,6 @@
 use toasty_core::schema::{
     db::{Column, ColumnId, IndexId, PrimaryKey, Schema, Table, TableId, Type},
-    diff::{self, Columns, ColumnsItem},
+    diff,
 };
 use toasty_core::stmt;
 
@@ -60,7 +60,7 @@ fn no_diff_same_columns() {
     let hints = diff::RenameHints::new();
     let cx = diff::Context::new(&from_schema, &to_schema, &hints);
 
-    let d = Columns::from(&cx, &from_cols, &to_cols);
+    let d = diff::Column::diff(&cx, &from_cols, &to_cols);
     assert!(d.is_empty());
 }
 
@@ -77,10 +77,10 @@ fn add_column() {
     let hints = diff::RenameHints::new();
     let cx = diff::Context::new(&from_schema, &to_schema, &hints);
 
-    let d = Columns::from(&cx, &from_cols, &to_cols);
+    let d = diff::Column::diff(&cx, &from_cols, &to_cols);
     assert_eq!(d.len(), 1);
-    assert!(matches!(d[0], ColumnsItem::AddColumn(_)));
-    if let ColumnsItem::AddColumn(col) = d[0] {
+    assert!(matches!(d[0], diff::Column::Add(_)));
+    if let diff::Column::Add(col) = d[0] {
         assert_eq!(col.name, "name");
     }
 }
@@ -98,10 +98,10 @@ fn drop_column() {
     let hints = diff::RenameHints::new();
     let cx = diff::Context::new(&from_schema, &to_schema, &hints);
 
-    let d = Columns::from(&cx, &from_cols, &to_cols);
+    let d = diff::Column::diff(&cx, &from_cols, &to_cols);
     assert_eq!(d.len(), 1);
-    assert!(matches!(d[0], ColumnsItem::DropColumn(_)));
-    if let ColumnsItem::DropColumn(col) = d[0] {
+    assert!(matches!(d[0], diff::Column::Drop(_)));
+    if let diff::Column::Drop(col) = d[0] {
         assert_eq!(col.name, "name");
     }
 }
@@ -116,9 +116,9 @@ fn alter_column_type() {
     let hints = diff::RenameHints::new();
     let cx = diff::Context::new(&from_schema, &to_schema, &hints);
 
-    let d = Columns::from(&cx, &from_cols, &to_cols);
+    let d = diff::Column::diff(&cx, &from_cols, &to_cols);
     assert_eq!(d.len(), 1);
-    assert!(matches!(d[0], ColumnsItem::AlterColumn { .. }));
+    assert!(matches!(d[0], diff::Column::Alter { .. }));
 }
 
 #[test]
@@ -131,9 +131,9 @@ fn alter_column_nullable() {
     let hints = diff::RenameHints::new();
     let cx = diff::Context::new(&from_schema, &to_schema, &hints);
 
-    let d = Columns::from(&cx, &from_cols, &to_cols);
+    let d = diff::Column::diff(&cx, &from_cols, &to_cols);
     assert_eq!(d.len(), 1);
-    assert!(matches!(d[0], ColumnsItem::AlterColumn { .. }));
+    assert!(matches!(d[0], diff::Column::Alter { .. }));
 }
 
 #[test]
@@ -157,10 +157,10 @@ fn rename_column_with_hint() {
     );
     let cx = diff::Context::new(&from_schema, &to_schema, &hints);
 
-    let d = Columns::from(&cx, &from_cols, &to_cols);
+    let d = diff::Column::diff(&cx, &from_cols, &to_cols);
     assert_eq!(d.len(), 1);
-    assert!(matches!(d[0], ColumnsItem::AlterColumn { .. }));
-    if let ColumnsItem::AlterColumn { previous, next } = d[0] {
+    assert!(matches!(d[0], diff::Column::Alter { .. }));
+    if let diff::Column::Alter { previous, next } = d[0] {
         assert_eq!(previous.name, "old_name");
         assert_eq!(next.name, "new_name");
     }
@@ -176,15 +176,11 @@ fn rename_column_without_hint_is_drop_and_add() {
     let hints = diff::RenameHints::new();
     let cx = diff::Context::new(&from_schema, &to_schema, &hints);
 
-    let d = Columns::from(&cx, &from_cols, &to_cols);
+    let d = diff::Column::diff(&cx, &from_cols, &to_cols);
     assert_eq!(d.len(), 2);
 
-    let has_drop = d
-        .iter()
-        .any(|item| matches!(item, ColumnsItem::DropColumn(_)));
-    let has_add = d
-        .iter()
-        .any(|item| matches!(item, ColumnsItem::AddColumn(_)));
+    let has_drop = d.iter().any(|item| matches!(item, diff::Column::Drop(_)));
+    let has_add = d.iter().any(|item| matches!(item, diff::Column::Add(_)));
     assert!(has_drop);
     assert!(has_add);
 }
@@ -218,6 +214,6 @@ fn multiple_operations() {
     );
     let cx = diff::Context::new(&from_schema, &to_schema, &hints);
 
-    let d = Columns::from(&cx, &from_cols, &to_cols);
+    let d = diff::Column::diff(&cx, &from_cols, &to_cols);
     assert_eq!(d.len(), 4);
 }
