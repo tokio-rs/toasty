@@ -115,8 +115,8 @@ pub use db::{Connection, Db, Executor, Transaction, TransactionBuilder};
 
 mod engine;
 
-/// Schema migration types: history files, snapshots, and supporting
-/// configuration.
+/// Schema migration types: history files, snapshots, and generation helpers.
+#[cfg(feature = "migration")]
 pub mod migration;
 
 /// Model, relation, and schema inspection types.
