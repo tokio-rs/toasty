@@ -465,6 +465,58 @@ use proc_macro::TokenStream;
 /// # }
 /// ```
 ///
+/// ### `via` — multi-step relations
+///
+/// Instead of pairing with a `belongs_to`, a `has_many` can reach its target
+/// through a path of existing relations with `via`. The path is a dotted
+/// chain of relation fields, read left to right starting from this model. A
+/// `via` relation owns no foreign key — it is derived from the relations it
+/// traverses — so it takes no `pair`:
+///
+/// ```
+/// # use toasty::Model;
+/// # #[derive(Model)]
+/// # struct Comment {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     #[index]
+/// #     user_id: i64,
+/// #     #[belongs_to(key = user_id, references = id)]
+/// #     user: toasty::BelongsTo<User>,
+/// #     #[index]
+/// #     article_id: i64,
+/// #     #[belongs_to(key = article_id, references = id)]
+/// #     article: toasty::BelongsTo<Article>,
+/// # }
+/// # #[derive(Model)]
+/// # struct Article {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     #[has_many]
+/// #     comments: toasty::HasMany<Comment>,
+/// # }
+/// # #[derive(Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     #[has_many]
+/// #     comments: toasty::HasMany<Comment>,
+/// // User → comments → article
+/// #[has_many(via = comments.article)]
+/// commented_articles: toasty::HasMany<Article>,
+/// # }
+/// ```
+///
+/// The target type is `Article` because the path `comments.article` ends
+/// there. A `via` relation is read-only and yields distinct targets — a target
+/// reached through several intermediates appears once. Query, filter, and order
+/// it like any other relation. Preloading it with `.include()` or projecting it
+/// with `.select()` is supported on SQL backends; both are not yet available on
+/// DynamoDB.
+///
 /// ## `#[has_one]` — one-to-one association
 ///
 /// Declares a single related model. The target model must have a
@@ -513,6 +565,50 @@ use proc_macro::TokenStream;
 /// #     id: i64,
 /// #[has_one]
 /// profile: toasty::HasOne<Option<Profile>>,
+/// # }
+/// ```
+///
+/// ### `via` — multi-step relations
+///
+/// Like `#[has_many]`, a `#[has_one]` can reach its target through a path of
+/// existing relations with `via` (see the `#[has_many]` `via` section above for
+/// the full rules). Declare it when the path is expected to reach at most one
+/// target:
+///
+/// ```
+/// # use toasty::Model;
+/// # #[derive(Model)]
+/// # struct Subscription {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     #[unique]
+/// #     account_id: Option<i64>,
+/// #     #[belongs_to(key = account_id, references = id)]
+/// #     account: toasty::BelongsTo<Option<Account>>,
+/// # }
+/// # #[derive(Model)]
+/// # struct Account {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     #[unique]
+/// #     user_id: Option<i64>,
+/// #     #[belongs_to(key = user_id, references = id)]
+/// #     user: toasty::BelongsTo<Option<User>>,
+/// #     #[has_one]
+/// #     subscription: toasty::HasOne<Option<Subscription>>,
+/// # }
+/// # #[derive(Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     #[has_one]
+/// #     account: toasty::HasOne<Option<Account>>,
+/// // User → account → subscription
+/// #[has_one(via = account.subscription)]
+/// subscription: toasty::HasOne<Option<Subscription>>,
 /// # }
 /// ```
 ///

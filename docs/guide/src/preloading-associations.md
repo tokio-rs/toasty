@@ -253,6 +253,34 @@ assert!(user.profile.get().is_none());
 # }
 ```
 
+## Preloading multi-step (`via`) relations
+
+A [multi-step (`via`) relation](./has-many.md#multi-step-relations-via) reaches
+its target through a path of existing relations. Preload it with `.include()`
+the same way as a single-step relation:
+
+```rust,ignore
+let users = User::all()
+    .include(User::fields().commented_articles())
+    .exec(&mut db)
+    .await?;
+
+for user in &users {
+    // Distinct articles this user has commented on — no N+1.
+    let articles: &[Article] = user.commented_articles.get();
+}
+```
+
+Toasty loads the parents once, then issues a single query that follows the
+relation path and groups the targets under each parent. Duplicate targets are
+collapsed, so an article a user commented on twice appears once. A
+`has_one(via = ...)` relation preloads a single optional target instead of a
+list.
+
+Preloading a `via` relation with `.include()` (and projecting one with
+`.select()`) is supported on SQL backends (SQLite, PostgreSQL, MySQL). It is
+not yet available on DynamoDB.
+
 ## Multiple includes
 
 Chain multiple `.include()` calls to preload several relations in one query:

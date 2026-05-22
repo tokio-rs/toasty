@@ -261,6 +261,22 @@ let name: Option<String> = User::filter_by_email("alice@example.com")
 # }
 ```
 
+`.select()` can also project a [multi-step (`via`)
+relation](./has-many.md#multi-step-relations-via), returning the related
+records per row — a `Vec<T>` for a `has_many` `via`, or a single optional
+record for a `has_one` `via`:
+
+```rust,ignore
+// The distinct articles each user has commented on.
+let per_user: Vec<Vec<Article>> = User::all()
+    .select(User::fields().commented_articles())
+    .exec(&mut db)
+    .await?;
+```
+
+Projecting a `via` relation is supported on SQL backends; it is not yet
+available on DynamoDB.
+
 ## Sorting by most recent
 
 `.latest_by(field)` sorts the query in descending order of the named
