@@ -1,14 +1,14 @@
-use super::SnapshotFile;
 use crate::Config;
 use anyhow::Result;
 use clap::Parser;
 use console::style;
 use toasty::Db;
+use toasty::migration::Snapshot;
 
 /// Prints the current schema as a TOML snapshot to stdout.
 ///
 /// Reads the schema registered on the [`Db`] and formats it as a
-/// [`SnapshotFile`]. Table headers, key-value pairs, and whitespace are
+/// [`Snapshot`]. Table headers, key-value pairs, and whitespace are
 /// syntax-highlighted for terminal display.
 #[derive(Parser, Debug)]
 pub struct SnapshotCommand {
@@ -24,10 +24,10 @@ impl SnapshotCommand {
         );
         println!();
 
-        let snapshot_file = SnapshotFile::new(toasty::schema::db::Schema::clone(&db.schema().db));
+        let snapshot = Snapshot::new(toasty::schema::db::Schema::clone(&db.schema().db));
 
         // Print the snapshot with nice formatting
-        let snapshot_str = snapshot_file.to_string();
+        let snapshot_str = snapshot.to_string();
         for line in snapshot_str.lines() {
             if line.starts_with('[') {
                 println!("  {}", style(line).yellow().bold());

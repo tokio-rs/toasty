@@ -12,6 +12,7 @@
 /// let m = Migration::new_sql("CREATE TABLE users (id INTEGER PRIMARY KEY)".to_string());
 /// assert_eq!(m.statements(), vec!["CREATE TABLE users (id INTEGER PRIMARY KEY)"]);
 /// ```
+#[derive(Debug)]
 pub enum Migration {
     /// A SQL migration containing one or more statements.
     Sql(String),
