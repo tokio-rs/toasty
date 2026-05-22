@@ -500,7 +500,7 @@ pub async fn has_many_apply_swap_unique_with_extra_insert(test: &mut Test) -> Re
 pub async fn has_many_apply_insert_remove_same_item(test: &mut Test) -> Result<()> {
     use toasty_core::{
         driver::Operation,
-        stmt::{Assignment, Statement},
+        stmt::{Assignment, ExprSet, Statement, Update},
     };
 
     // Drain the op log into one marker per FK-writing UPDATE: "unlink" for
@@ -508,14 +508,7 @@ pub async fn has_many_apply_insert_remove_same_item(test: &mut Test) -> Result<(
     // savepoint, and read (COUNT/EXISTS) ops are ignored. SQL drivers only —
     // key-value drivers emit a different op shape.
     fn fk_writes(test: &Test) -> Vec<&'static str> {
-        let mut out = vec![];
-        while !test.log().is_empty() {
-            let Operation::QuerySql(q) = test.log().pop().0 else {
-                continue;
-            };
-            let Statement::Update(update) = &q.stmt else {
-                continue;
-            };
+        fn classify(update: &Update, out: &mut Vec<&'static str>) {
             for (_, assignment) in update.assignments.iter() {
                 if let Assignment::Set(expr) = assignment {
                     out.push(if expr.is_value_null() {
@@ -524,6 +517,30 @@ pub async fn has_many_apply_insert_remove_same_item(test: &mut Test) -> Result<(
                         "link"
                     });
                 }
+            }
+        }
+
+        let mut out = vec![];
+        while !test.log().is_empty() {
+            let Operation::QuerySql(q) = test.log().pop().0 else {
+                continue;
+            };
+            match &q.stmt {
+                // The associate update, plus the dissociate's write half on
+                // drivers without `cte_with_update` (its conditional update
+                // lowers to a read-modify-write with a bare UPDATE).
+                Statement::Update(update) => classify(update, &mut out),
+                // On a `cte_with_update` driver (e.g. PostgreSQL), the
+                // conditional dissociate folds its count check and UPDATE into
+                // a single CTE query; the UPDATE lives in a `With` CTE.
+                Statement::Query(query) => {
+                    for cte in query.with.iter().flat_map(|with| &with.ctes) {
+                        if let ExprSet::Update(update) = &cte.query.body {
+                            classify(update, &mut out);
+                        }
+                    }
+                }
+                _ => {}
             }
         }
         out
