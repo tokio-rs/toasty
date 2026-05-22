@@ -125,7 +125,7 @@ pub async fn validates_no_belongs_to_in_pk(test: &mut Test) {
 // ---------------------------------------------------------------------------
 
 /// Basic create / read / delete cycle for a user + their todos sharing one table.
-#[driver_test(requires(native_starts_with))]
+#[driver_test(requires(not(sql)))]
 pub async fn crud_create_read_delete(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -162,7 +162,7 @@ pub async fn crud_create_read_delete(test: &mut Test) -> Result<()> {
 }
 
 /// Todos created for user A must not appear in user B's scope.
-#[driver_test(requires(native_starts_with))]
+#[driver_test(requires(not(sql)))]
 pub async fn scoped_isolation(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -193,7 +193,7 @@ pub async fn scoped_isolation(test: &mut Test) -> Result<()> {
 }
 
 /// Multiple todos under the same user can all be loaded, updated, and deleted.
-#[driver_test(requires(native_starts_with))]
+#[driver_test(requires(not(sql)))]
 pub async fn multiple_todos(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -214,7 +214,7 @@ pub async fn multiple_todos(test: &mut Test) -> Result<()> {
 }
 
 /// Todos can be included on the parent.
-#[driver_test(requires(native_starts_with))]
+#[driver_test(requires(not(sql)))]
 pub async fn include_todos(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -241,7 +241,7 @@ pub async fn include_todos(test: &mut Test) -> Result<()> {
 
 /// Scoped filter_by_id returns the right todo when the user matches and
 /// nothing when the user does not match.
-#[driver_test(requires(native_starts_with))]
+#[driver_test(requires(not(sql)))]
 pub async fn scoped_filter_by_id(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -268,7 +268,7 @@ pub async fn scoped_filter_by_id(test: &mut Test) -> Result<()> {
 }
 
 /// Scoped update modifies only the target todo and leaves others unchanged.
-#[driver_test(requires(native_starts_with))]
+#[driver_test(requires(not(sql)))]
 pub async fn scoped_update(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -296,7 +296,7 @@ pub async fn scoped_update(test: &mut Test) -> Result<()> {
 
 /// Deleting a user via its own scope does not silently fail.  After deletion
 /// the user and all their todos are gone.
-#[driver_test(requires(native_starts_with))]
+#[driver_test(requires(not(sql)))]
 pub async fn delete_user_removes_todos(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -360,7 +360,7 @@ pub async fn schema_item_collection_field_set(test: &mut Test) {
 /// adds an `IsModel(Todo)` conjunct alongside the user filter; the planner
 /// can't promote it to a key condition (no PK column referenced), so it
 /// flows into the scan's filter expression and through `ddb_expression`.
-#[driver_test(requires(native_starts_with), requires(not(sql)))]
+#[driver_test(requires(not(sql)), requires(not(sql)))]
 pub async fn scan_child_model_with_non_key_filter(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -386,7 +386,7 @@ pub async fn scan_child_model_with_non_key_filter(test: &mut Test) -> Result<()>
 /// receives a `DeleteByKey` op whose filter contains `IsModel(Todo) AND
 /// title = "..."` — `ddb_expression` serializes the filter as a DynamoDB
 /// condition expression.
-#[driver_test(requires(native_starts_with))]
+#[driver_test(requires(not(sql)))]
 pub async fn delete_child_with_filter(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -417,7 +417,7 @@ pub async fn delete_child_with_filter(test: &mut Test) -> Result<()> {
 
 /// When the filter does not match, the delete is a no-op: the row remains
 /// in place. Proves the filter is consulted, not silently dropped.
-#[driver_test(requires(native_starts_with))]
+#[driver_test(requires(not(sql)))]
 pub async fn delete_child_with_non_matching_filter(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -445,7 +445,7 @@ pub async fn delete_child_with_non_matching_filter(test: &mut Test) -> Result<()
 /// Update a child model row with a filter on a non-key field. The driver
 /// receives an `UpdateByKey` op whose filter contains `IsModel(Todo) AND
 /// title = "..."` — `ddb_expression` serializes it.
-#[driver_test(requires(native_starts_with))]
+#[driver_test(requires(not(sql)))]
 pub async fn update_child_with_filter(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -470,7 +470,7 @@ pub async fn update_child_with_filter(test: &mut Test) -> Result<()> {
 /// more than one Todo; all matching rows must be updated, non-matching
 /// rows must remain unchanged. Distinct from `update_child_with_filter`,
 /// which targets a single row by composite PK.
-#[driver_test(requires(native_starts_with))]
+#[driver_test(requires(not(sql)))]
 pub async fn update_many_children_by_filter(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -511,7 +511,7 @@ pub async fn update_many_children_by_filter(test: &mut Test) -> Result<()> {
 /// more than one Todo; all matching rows must be deleted, non-matching
 /// rows must survive. Distinct from `delete_child_with_filter`, which
 /// targets a single row by composite PK.
-#[driver_test(requires(native_starts_with))]
+#[driver_test(requires(not(sql)))]
 pub async fn delete_many_children_by_filter(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -548,7 +548,7 @@ pub async fn delete_many_children_by_filter(test: &mut Test) -> Result<()> {
 /// one INSERT per row and merges them into a single VALUES list before
 /// dispatching to the driver. All rows must round-trip and remain
 /// addressable by the user's scope.
-#[driver_test(requires(native_starts_with))]
+#[driver_test(requires(not(sql)))]
 pub async fn batch_create_children(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 

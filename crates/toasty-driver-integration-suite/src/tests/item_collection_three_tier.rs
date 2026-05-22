@@ -65,7 +65,7 @@ async fn setup(test: &mut Test) -> toasty::Db {
 /// Schema build round-trips: registering Tenant, User, Todo with their
 /// composite-FK relations and chained item_collection annotations is
 /// accepted by the schema validator.
-#[driver_test(requires(native_starts_with))]
+#[driver_test(requires(not(sql)))]
 pub async fn three_tier_setup(test: &mut Test) -> Result<()> {
     let _db = setup(test).await;
     Ok(())
@@ -74,7 +74,7 @@ pub async fn three_tier_setup(test: &mut Test) -> Result<()> {
 /// Create a Tenant, a scoped User under it, and a scoped Todo under that
 /// User. Verify each round-trips by primary key. Exercises the insert
 /// path for composite-FK child models at two depths.
-#[driver_test(requires(native_starts_with))]
+#[driver_test(requires(not(sql)))]
 pub async fn three_tier_create_each_tier(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -114,7 +114,7 @@ pub async fn three_tier_create_each_tier(test: &mut Test) -> Result<()> {
 /// Read each tier through its parent's scoped relation. Exercises the
 /// query-planning path that translates a parent reference into a
 /// composite-FK + SK-prefix DDB query.
-#[driver_test(requires(native_starts_with))]
+#[driver_test(requires(not(sql)))]
 pub async fn three_tier_scoped_reads(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -158,7 +158,7 @@ pub async fn three_tier_scoped_reads(test: &mut Test) -> Result<()> {
 /// composite-FK index match: (tenant_id, user_id) is a prefix of the
 /// PK, so the planner should drive a single-partition query instead of
 /// a scan.
-#[driver_test(requires(native_starts_with))]
+#[driver_test(requires(not(sql)))]
 pub async fn three_tier_filter_by_partial_composite_key(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -196,7 +196,7 @@ pub async fn three_tier_filter_by_partial_composite_key(test: &mut Test) -> Resu
 /// subquery joins Todo through that composite key. This is the path
 /// the example exercises and the original failure mode that drove the
 /// IsModel work.
-#[driver_test(requires(native_starts_with))]
+#[driver_test(requires(not(sql)))]
 pub async fn three_tier_include_deepest(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -234,7 +234,7 @@ pub async fn three_tier_include_deepest(test: &mut Test) -> Result<()> {
 
 /// Update the deepest tier through a chained scope. Exercises the
 /// update path against a composite-PK shared table.
-#[driver_test(requires(native_starts_with))]
+#[driver_test(requires(not(sql)))]
 pub async fn three_tier_scoped_update(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -280,7 +280,7 @@ pub async fn three_tier_scoped_update(test: &mut Test) -> Result<()> {
 /// The filter matches more than one Todo; all matching rows must be
 /// updated, non-matching rows must remain unchanged. Exercises the
 /// composite-FK + filter mutation path at the deepest tier.
-#[driver_test(requires(native_starts_with))]
+#[driver_test(requires(not(sql)))]
 pub async fn three_tier_update_many_deepest_by_filter(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -329,7 +329,7 @@ pub async fn three_tier_update_many_deepest_by_filter(test: &mut Test) -> Result
 /// The filter matches more than one Todo; all matching rows must be
 /// deleted, non-matching rows must survive. Exercises the composite-FK +
 /// filter mutation path at the deepest tier.
-#[driver_test(requires(native_starts_with))]
+#[driver_test(requires(not(sql)))]
 pub async fn three_tier_delete_many_deepest_by_filter(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -379,7 +379,7 @@ pub async fn three_tier_delete_many_deepest_by_filter(test: &mut Test) -> Result
 /// `alice.todos()` — the same parent Scope target — so `Insert::merge`
 /// must collapse them into one VALUES list. The composite FK (tenant_id,
 /// user_id) on Todo is what stresses the merge path beyond the 2-tier case.
-#[driver_test(requires(native_starts_with))]
+#[driver_test(requires(not(sql)))]
 pub async fn three_tier_batch_create_deepest(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -424,7 +424,7 @@ pub async fn three_tier_batch_create_deepest(test: &mut Test) -> Result<()> {
 /// (tenant_id only). Confirms the 2-tier merge fix continues to work
 /// when the Scope target is one level deep, even though the schema also
 /// has a deeper tier defined.
-#[driver_test(requires(native_starts_with))]
+#[driver_test(requires(not(sql)))]
 pub async fn three_tier_batch_create_middle(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -457,7 +457,7 @@ pub async fn three_tier_batch_create_middle(test: &mut Test) -> Result<()> {
 
 /// Cascade delete from the root: deleting a Tenant removes its Users
 /// and their Todos. Verifies the cascade chain reaches two levels deep.
-#[driver_test(requires(native_starts_with))]
+#[driver_test(requires(not(sql)))]
 pub async fn three_tier_cascade_delete(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
