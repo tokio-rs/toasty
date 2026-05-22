@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/toasty/src/schema/deferred.rs`."><title>deferred.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="toasty" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">toasty/schema/</div>deferred.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span>super::{Field, Load};
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/toasty/src/schema/deferred.rs`."><title>deferred.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="toasty" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">toasty/schema/</div>deferred.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span>super::{Field, Load, lazy_slot};
 <a href=#2 id=2 data-nosnippet>2</a><span class="kw">use </span><span class="kw">crate</span>::Statement;
 <a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span><span class="kw">crate</span>::stmt::{<span class="self">self</span>, Expr, IntoExpr, IntoStatement};
 <a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>toasty_core::schema::app::ModelSet;
@@ -145,93 +145,85 @@
 <a href=#145 id=145 data-nosnippet>145</a>        // and emits a bare Null when unloaded, so the two states are
 <a href=#146 id=146 data-nosnippet>146</a>        // distinguishable even when the inner column value is NULL (i.e. the
 <a href=#147 id=147 data-nosnippet>147</a>        // `Deferred&lt;Option&lt;T&gt;&gt;` case).
-<a href=#148 id=148 data-nosnippet>148</a>        </span><span class="kw">match </span>value {
-<a href=#149 id=149 data-nosnippet>149</a>            toasty_core::stmt::Value::Null =&gt; <span class="prelude-val">Ok</span>(<span class="self">Self </span>{ value: <span class="prelude-val">None </span>}),
-<a href=#150 id=150 data-nosnippet>150</a>            toasty_core::stmt::Value::Record(record) <span class="kw">if </span>record.fields.len() == <span class="number">1 </span>=&gt; {
-<a href=#151 id=151 data-nosnippet>151</a>                <span class="kw">let </span><span class="kw-2">mut </span>iter = record.fields.into_iter();
-<a href=#152 id=152 data-nosnippet>152</a>                <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-<a href=#153 id=153 data-nosnippet>153</a>                    value: <span class="prelude-val">Some</span>(T::load(iter.next().unwrap())<span class="question-mark">?</span>),
-<a href=#154 id=154 data-nosnippet>154</a>                })
-<a href=#155 id=155 data-nosnippet>155</a>            }
-<a href=#156 id=156 data-nosnippet>156</a>            value =&gt; <span class="prelude-val">Err</span>(toasty_core::Error::from_args(<span class="macro">format_args!</span>(
-<a href=#157 id=157 data-nosnippet>157</a>                <span class="string">"deferred field decoder expected Null or single-field Record, got {value:?}"
-<a href=#158 id=158 data-nosnippet>158</a>            </span>))),
-<a href=#159 id=159 data-nosnippet>159</a>        }
-<a href=#160 id=160 data-nosnippet>160</a>    }
-<a href=#161 id=161 data-nosnippet>161</a>
-<a href=#162 id=162 data-nosnippet>162</a>    <span class="kw">fn </span>reload(target: <span class="kw-2">&amp;mut </span><span class="self">Self</span>, value: toasty_core::stmt::Value) -&gt; <span class="kw">crate</span>::Result&lt;()&gt; {
-<a href=#163 id=163 data-nosnippet>163</a>        <span class="comment">// The caller already supplied the value as part of the update, so the
-<a href=#164 id=164 data-nosnippet>164</a>        // field becomes loaded regardless of its prior state — no follow-up
-<a href=#165 id=165 data-nosnippet>165</a>        // fetch is needed to read what was just written.
-<a href=#166 id=166 data-nosnippet>166</a>        //
-<a href=#167 id=167 data-nosnippet>167</a>        // Updates send the assigned value back unwrapped, unlike the SELECT
-<a href=#168 id=168 data-nosnippet>168</a>        // lowering which wraps a loaded deferred field in a 1-element record
-<a href=#169 id=169 data-nosnippet>169</a>        // to distinguish it from the unloaded case.
-<a href=#170 id=170 data-nosnippet>170</a>        </span>target.value = <span class="prelude-val">Some</span>(T::load(value)<span class="question-mark">?</span>);
-<a href=#171 id=171 data-nosnippet>171</a>        <span class="prelude-val">Ok</span>(())
-<a href=#172 id=172 data-nosnippet>172</a>    }
-<a href=#173 id=173 data-nosnippet>173</a>}
+<a href=#148 id=148 data-nosnippet>148</a>        </span><span class="kw">match </span>lazy_slot::decode(value, <span class="string">"deferred field"</span>, T::load)<span class="question-mark">? </span>{
+<a href=#149 id=149 data-nosnippet>149</a>            lazy_slot::LazySlot::Unloaded =&gt; <span class="prelude-val">Ok</span>(<span class="self">Self </span>{ value: <span class="prelude-val">None </span>}),
+<a href=#150 id=150 data-nosnippet>150</a>            lazy_slot::LazySlot::Loaded(value) =&gt; <span class="prelude-val">Ok</span>(<span class="self">Self </span>{ value: <span class="prelude-val">Some</span>(value) }),
+<a href=#151 id=151 data-nosnippet>151</a>        }
+<a href=#152 id=152 data-nosnippet>152</a>    }
+<a href=#153 id=153 data-nosnippet>153</a>
+<a href=#154 id=154 data-nosnippet>154</a>    <span class="kw">fn </span>reload(target: <span class="kw-2">&amp;mut </span><span class="self">Self</span>, value: toasty_core::stmt::Value) -&gt; <span class="kw">crate</span>::Result&lt;()&gt; {
+<a href=#155 id=155 data-nosnippet>155</a>        <span class="comment">// The caller already supplied the value as part of the update, so the
+<a href=#156 id=156 data-nosnippet>156</a>        // field becomes loaded regardless of its prior state — no follow-up
+<a href=#157 id=157 data-nosnippet>157</a>        // fetch is needed to read what was just written.
+<a href=#158 id=158 data-nosnippet>158</a>        //
+<a href=#159 id=159 data-nosnippet>159</a>        // Updates send the assigned value back unwrapped, unlike the SELECT
+<a href=#160 id=160 data-nosnippet>160</a>        // lowering which wraps a loaded deferred field in a 1-element record
+<a href=#161 id=161 data-nosnippet>161</a>        // to distinguish it from the unloaded case.
+<a href=#162 id=162 data-nosnippet>162</a>        </span>target.value = <span class="prelude-val">Some</span>(T::load(value)<span class="question-mark">?</span>);
+<a href=#163 id=163 data-nosnippet>163</a>        <span class="prelude-val">Ok</span>(())
+<a href=#164 id=164 data-nosnippet>164</a>    }
+<a href=#165 id=165 data-nosnippet>165</a>}
+<a href=#166 id=166 data-nosnippet>166</a>
+<a href=#167 id=167 data-nosnippet>167</a><span class="kw">impl</span>&lt;T: Field&lt;Output = T&gt;&gt; Field <span class="kw">for </span>Deferred&lt;T&gt; {
+<a href=#168 id=168 data-nosnippet>168</a>    <span class="kw">type </span>ExprTarget = T::ExprTarget;
+<a href=#169 id=169 data-nosnippet>169</a>    <span class="kw">type </span>Path&lt;Origin&gt; = T::Path&lt;Origin&gt;;
+<a href=#170 id=170 data-nosnippet>170</a>    <span class="kw">type </span>ListPath&lt;Origin&gt; = T::ListPath&lt;Origin&gt;;
+<a href=#171 id=171 data-nosnippet>171</a>    <span class="kw">type </span>Update&lt;<span class="lifetime">'a</span>&gt; = T::Update&lt;<span class="lifetime">'a</span>&gt;;
+<a href=#172 id=172 data-nosnippet>172</a>    <span class="kw">type </span>Inner = T::Inner;
+<a href=#173 id=173 data-nosnippet>173</a>    <span class="kw">const </span>NULLABLE: bool = T::NULLABLE;
 <a href=#174 id=174 data-nosnippet>174</a>
-<a href=#175 id=175 data-nosnippet>175</a><span class="kw">impl</span>&lt;T: Field&lt;Output = T&gt;&gt; Field <span class="kw">for </span>Deferred&lt;T&gt; {
-<a href=#176 id=176 data-nosnippet>176</a>    <span class="kw">type </span>ExprTarget = T::ExprTarget;
-<a href=#177 id=177 data-nosnippet>177</a>    <span class="kw">type </span>Path&lt;Origin&gt; = T::Path&lt;Origin&gt;;
-<a href=#178 id=178 data-nosnippet>178</a>    <span class="kw">type </span>ListPath&lt;Origin&gt; = T::ListPath&lt;Origin&gt;;
-<a href=#179 id=179 data-nosnippet>179</a>    <span class="kw">type </span>Update&lt;<span class="lifetime">'a</span>&gt; = T::Update&lt;<span class="lifetime">'a</span>&gt;;
-<a href=#180 id=180 data-nosnippet>180</a>    <span class="kw">type </span>Inner = T::Inner;
-<a href=#181 id=181 data-nosnippet>181</a>    <span class="kw">const </span>NULLABLE: bool = T::NULLABLE;
-<a href=#182 id=182 data-nosnippet>182</a>
-<a href=#183 id=183 data-nosnippet>183</a>    <span class="kw">fn </span>new_path&lt;Origin&gt;(_path: stmt::Path&lt;Origin, T::ExprTarget&gt;) -&gt; <span class="self">Self</span>::Path&lt;Origin&gt; {
-<a href=#184 id=184 data-nosnippet>184</a>        <span class="comment">// Deferred fields use a generated accessor that emits a path on the
-<a href=#185 id=185 data-nosnippet>185</a>        // inner type T directly (see `expand_primitive_field_method`'s
-<a href=#186 id=186 data-nosnippet>186</a>        // deferred arm). This impl is unreachable through normal codegen.
-<a href=#187 id=187 data-nosnippet>187</a>        </span><span class="macro">unreachable!</span>(<span class="string">"Deferred::new_path should not be called directly"</span>)
-<a href=#188 id=188 data-nosnippet>188</a>    }
-<a href=#189 id=189 data-nosnippet>189</a>
-<a href=#190 id=190 data-nosnippet>190</a>    <span class="kw">fn </span>new_list_path&lt;Origin&gt;(
-<a href=#191 id=191 data-nosnippet>191</a>        _path: stmt::Path&lt;Origin, stmt::List&lt;<span class="self">Self</span>&gt;&gt;,
-<a href=#192 id=192 data-nosnippet>192</a>    ) -&gt; <span class="self">Self</span>::ListPath&lt;Origin&gt; {
-<a href=#193 id=193 data-nosnippet>193</a>        <span class="macro">unreachable!</span>(<span class="string">"Deferred::new_list_path should not be called directly"</span>)
-<a href=#194 id=194 data-nosnippet>194</a>    }
-<a href=#195 id=195 data-nosnippet>195</a>
-<a href=#196 id=196 data-nosnippet>196</a>    <span class="kw">fn </span>new_update&lt;<span class="lifetime">'a</span>&gt;(
-<a href=#197 id=197 data-nosnippet>197</a>        assignments: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>toasty_core::stmt::Assignments,
-<a href=#198 id=198 data-nosnippet>198</a>        projection: toasty_core::stmt::Projection,
-<a href=#199 id=199 data-nosnippet>199</a>    ) -&gt; <span class="self">Self</span>::Update&lt;<span class="lifetime">'a</span>&gt; {
-<a href=#200 id=200 data-nosnippet>200</a>        T::new_update(assignments, projection)
-<a href=#201 id=201 data-nosnippet>201</a>    }
-<a href=#202 id=202 data-nosnippet>202</a>
-<a href=#203 id=203 data-nosnippet>203</a>    <span class="kw">fn </span>field_ty(
-<a href=#204 id=204 data-nosnippet>204</a>        storage_ty: <span class="prelude-ty">Option</span>&lt;toasty_core::schema::db::Type&gt;,
-<a href=#205 id=205 data-nosnippet>205</a>    ) -&gt; toasty_core::schema::app::FieldTy {
-<a href=#206 id=206 data-nosnippet>206</a>        T::field_ty(storage_ty)
-<a href=#207 id=207 data-nosnippet>207</a>    }
-<a href=#208 id=208 data-nosnippet>208</a>
-<a href=#209 id=209 data-nosnippet>209</a>    <span class="kw">fn </span>key_constraint&lt;Origin&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, _target: stmt::Path&lt;Origin, <span class="self">Self</span>::Inner&gt;) -&gt; Expr&lt;bool&gt; {
-<a href=#210 id=210 data-nosnippet>210</a>        <span class="comment">// Foreign keys cannot reference a deferred field.
-<a href=#211 id=211 data-nosnippet>211</a>        </span><span class="macro">unreachable!</span>(<span class="string">"Deferred fields cannot be used as foreign keys"</span>)
-<a href=#212 id=212 data-nosnippet>212</a>    }
-<a href=#213 id=213 data-nosnippet>213</a>
-<a href=#214 id=214 data-nosnippet>214</a>    <span class="kw">fn </span>register(model_set: <span class="kw-2">&amp;mut </span>ModelSet) {
-<a href=#215 id=215 data-nosnippet>215</a>        T::register(model_set);
-<a href=#216 id=216 data-nosnippet>216</a>    }
-<a href=#217 id=217 data-nosnippet>217</a>}
-<a href=#218 id=218 data-nosnippet>218</a>
-<a href=#219 id=219 data-nosnippet>219</a><span class="kw">impl</span>&lt;T: fmt::Debug&gt; fmt::Debug <span class="kw">for </span>Deferred&lt;T&gt; {
-<a href=#220 id=220 data-nosnippet>220</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
-<a href=#221 id=221 data-nosnippet>221</a>        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.value {
-<a href=#222 id=222 data-nosnippet>222</a>            <span class="prelude-val">Some</span>(value) =&gt; value.fmt(f),
-<a href=#223 id=223 data-nosnippet>223</a>            <span class="prelude-val">None </span>=&gt; <span class="macro">write!</span>(f, <span class="string">"&lt;not loaded&gt;"</span>),
-<a href=#224 id=224 data-nosnippet>224</a>        }
-<a href=#225 id=225 data-nosnippet>225</a>    }
-<a href=#226 id=226 data-nosnippet>226</a>}
-<a href=#227 id=227 data-nosnippet>227</a>
-<a href=#228 id=228 data-nosnippet>228</a><span class="attr">#[cfg(feature = <span class="string">"serde"</span>)]
-<a href=#229 id=229 data-nosnippet>229</a></span><span class="kw">impl</span>&lt;T: serde_core::Serialize&gt; serde_core::Serialize <span class="kw">for </span>Deferred&lt;T&gt; {
-<a href=#230 id=230 data-nosnippet>230</a>    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
-<a href=#231 id=231 data-nosnippet>231</a>    <span class="kw">where
-<a href=#232 id=232 data-nosnippet>232</a>        </span>S: serde_core::Serializer,
-<a href=#233 id=233 data-nosnippet>233</a>    {
-<a href=#234 id=234 data-nosnippet>234</a>        <span class="self">self</span>.value.serialize(serializer)
-<a href=#235 id=235 data-nosnippet>235</a>    }
-<a href=#236 id=236 data-nosnippet>236</a>}
+<a href=#175 id=175 data-nosnippet>175</a>    <span class="kw">fn </span>new_path&lt;Origin&gt;(_path: stmt::Path&lt;Origin, T::ExprTarget&gt;) -&gt; <span class="self">Self</span>::Path&lt;Origin&gt; {
+<a href=#176 id=176 data-nosnippet>176</a>        <span class="comment">// Deferred fields use a generated accessor that emits a path on the
+<a href=#177 id=177 data-nosnippet>177</a>        // inner type T directly (see `expand_primitive_field_method`'s
+<a href=#178 id=178 data-nosnippet>178</a>        // deferred arm). This impl is unreachable through normal codegen.
+<a href=#179 id=179 data-nosnippet>179</a>        </span><span class="macro">unreachable!</span>(<span class="string">"Deferred::new_path should not be called directly"</span>)
+<a href=#180 id=180 data-nosnippet>180</a>    }
+<a href=#181 id=181 data-nosnippet>181</a>
+<a href=#182 id=182 data-nosnippet>182</a>    <span class="kw">fn </span>new_list_path&lt;Origin&gt;(
+<a href=#183 id=183 data-nosnippet>183</a>        _path: stmt::Path&lt;Origin, stmt::List&lt;<span class="self">Self</span>&gt;&gt;,
+<a href=#184 id=184 data-nosnippet>184</a>    ) -&gt; <span class="self">Self</span>::ListPath&lt;Origin&gt; {
+<a href=#185 id=185 data-nosnippet>185</a>        <span class="macro">unreachable!</span>(<span class="string">"Deferred::new_list_path should not be called directly"</span>)
+<a href=#186 id=186 data-nosnippet>186</a>    }
+<a href=#187 id=187 data-nosnippet>187</a>
+<a href=#188 id=188 data-nosnippet>188</a>    <span class="kw">fn </span>new_update&lt;<span class="lifetime">'a</span>&gt;(
+<a href=#189 id=189 data-nosnippet>189</a>        assignments: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>toasty_core::stmt::Assignments,
+<a href=#190 id=190 data-nosnippet>190</a>        projection: toasty_core::stmt::Projection,
+<a href=#191 id=191 data-nosnippet>191</a>    ) -&gt; <span class="self">Self</span>::Update&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#192 id=192 data-nosnippet>192</a>        T::new_update(assignments, projection)
+<a href=#193 id=193 data-nosnippet>193</a>    }
+<a href=#194 id=194 data-nosnippet>194</a>
+<a href=#195 id=195 data-nosnippet>195</a>    <span class="kw">fn </span>field_ty(
+<a href=#196 id=196 data-nosnippet>196</a>        storage_ty: <span class="prelude-ty">Option</span>&lt;toasty_core::schema::db::Type&gt;,
+<a href=#197 id=197 data-nosnippet>197</a>    ) -&gt; toasty_core::schema::app::FieldTy {
+<a href=#198 id=198 data-nosnippet>198</a>        T::field_ty(storage_ty)
+<a href=#199 id=199 data-nosnippet>199</a>    }
+<a href=#200 id=200 data-nosnippet>200</a>
+<a href=#201 id=201 data-nosnippet>201</a>    <span class="kw">fn </span>key_constraint&lt;Origin&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, _target: stmt::Path&lt;Origin, <span class="self">Self</span>::Inner&gt;) -&gt; Expr&lt;bool&gt; {
+<a href=#202 id=202 data-nosnippet>202</a>        <span class="comment">// Foreign keys cannot reference a deferred field.
+<a href=#203 id=203 data-nosnippet>203</a>        </span><span class="macro">unreachable!</span>(<span class="string">"Deferred fields cannot be used as foreign keys"</span>)
+<a href=#204 id=204 data-nosnippet>204</a>    }
+<a href=#205 id=205 data-nosnippet>205</a>
+<a href=#206 id=206 data-nosnippet>206</a>    <span class="kw">fn </span>register(model_set: <span class="kw-2">&amp;mut </span>ModelSet) {
+<a href=#207 id=207 data-nosnippet>207</a>        T::register(model_set);
+<a href=#208 id=208 data-nosnippet>208</a>    }
+<a href=#209 id=209 data-nosnippet>209</a>}
+<a href=#210 id=210 data-nosnippet>210</a>
+<a href=#211 id=211 data-nosnippet>211</a><span class="kw">impl</span>&lt;T: fmt::Debug&gt; fmt::Debug <span class="kw">for </span>Deferred&lt;T&gt; {
+<a href=#212 id=212 data-nosnippet>212</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+<a href=#213 id=213 data-nosnippet>213</a>        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.value {
+<a href=#214 id=214 data-nosnippet>214</a>            <span class="prelude-val">Some</span>(value) =&gt; value.fmt(f),
+<a href=#215 id=215 data-nosnippet>215</a>            <span class="prelude-val">None </span>=&gt; <span class="macro">write!</span>(f, <span class="string">"&lt;not loaded&gt;"</span>),
+<a href=#216 id=216 data-nosnippet>216</a>        }
+<a href=#217 id=217 data-nosnippet>217</a>    }
+<a href=#218 id=218 data-nosnippet>218</a>}
+<a href=#219 id=219 data-nosnippet>219</a>
+<a href=#220 id=220 data-nosnippet>220</a><span class="attr">#[cfg(feature = <span class="string">"serde"</span>)]
+<a href=#221 id=221 data-nosnippet>221</a></span><span class="kw">impl</span>&lt;T: serde_core::Serialize&gt; serde_core::Serialize <span class="kw">for </span>Deferred&lt;T&gt; {
+<a href=#222 id=222 data-nosnippet>222</a>    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+<a href=#223 id=223 data-nosnippet>223</a>    <span class="kw">where
+<a href=#224 id=224 data-nosnippet>224</a>        </span>S: serde_core::Serializer,
+<a href=#225 id=225 data-nosnippet>225</a>    {
+<a href=#226 id=226 data-nosnippet>226</a>        <span class="self">self</span>.value.serialize(serializer)
+<a href=#227 id=227 data-nosnippet>227</a>    }
+<a href=#228 id=228 data-nosnippet>228</a>}
 </code></pre></div></section></main></body></html>
