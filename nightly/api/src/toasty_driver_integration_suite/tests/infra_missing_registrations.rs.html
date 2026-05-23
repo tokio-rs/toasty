@@ -12,7 +12,7 @@
 <a href=#12 id=12 data-nosnippet>12</a>
 <a href=#13 id=13 data-nosnippet>13</a>        child_id: ID,
 <a href=#14 id=14 data-nosnippet>14</a>        <span class="attr">#[belongs_to(key = child_id, references = id)]
-<a href=#15 id=15 data-nosnippet>15</a>        </span>child: toasty::BelongsTo&lt;Child&gt;,
+<a href=#15 id=15 data-nosnippet>15</a>        </span>child: toasty::Deferred&lt;Child&gt;,
 <a href=#16 id=16 data-nosnippet>16</a>    }
 <a href=#17 id=17 data-nosnippet>17</a>
 <a href=#18 id=18 data-nosnippet>18</a>    <span class="attr">#[derive(Debug, toasty::Model)]
@@ -39,7 +39,7 @@
 <a href=#39 id=39 data-nosnippet>39</a>        </span>id: ID,
 <a href=#40 id=40 data-nosnippet>40</a>
 <a href=#41 id=41 data-nosnippet>41</a>        <span class="attr">#[has_one]
-<a href=#42 id=42 data-nosnippet>42</a>        </span>child: toasty::HasOne&lt;Child&gt;,
+<a href=#42 id=42 data-nosnippet>42</a>        </span>child: toasty::Deferred&lt;Child&gt;,
 <a href=#43 id=43 data-nosnippet>43</a>    }
 <a href=#44 id=44 data-nosnippet>44</a>
 <a href=#45 id=45 data-nosnippet>45</a>    <span class="attr">#[derive(Debug, toasty::Model)]
@@ -51,7 +51,7 @@
 <a href=#51 id=51 data-nosnippet>51</a>        <span class="attr">#[index]
 <a href=#52 id=52 data-nosnippet>52</a>        </span>parent_id: ID,
 <a href=#53 id=53 data-nosnippet>53</a>        <span class="attr">#[belongs_to(key = parent_id, references = id)]
-<a href=#54 id=54 data-nosnippet>54</a>        </span>parent: toasty::BelongsTo&lt;Parent&gt;,
+<a href=#54 id=54 data-nosnippet>54</a>        </span>parent: toasty::Deferred&lt;Parent&gt;,
 <a href=#55 id=55 data-nosnippet>55</a>    }
 <a href=#56 id=56 data-nosnippet>56</a>
 <a href=#57 id=57 data-nosnippet>57</a>    <span class="comment">// Auto-discovery should find Child through the HasOne relation.
@@ -71,7 +71,7 @@
 <a href=#71 id=71 data-nosnippet>71</a>        </span>id: ID,
 <a href=#72 id=72 data-nosnippet>72</a>
 <a href=#73 id=73 data-nosnippet>73</a>        <span class="attr">#[has_many]
-<a href=#74 id=74 data-nosnippet>74</a>        </span>children: toasty::HasMany&lt;Child&gt;,
+<a href=#74 id=74 data-nosnippet>74</a>        </span>children: toasty::Deferred&lt;Vec&lt;Child&gt;&gt;,
 <a href=#75 id=75 data-nosnippet>75</a>    }
 <a href=#76 id=76 data-nosnippet>76</a>
 <a href=#77 id=77 data-nosnippet>77</a>    <span class="attr">#[derive(Debug, toasty::Model)]
@@ -83,7 +83,7 @@
 <a href=#83 id=83 data-nosnippet>83</a>        <span class="attr">#[index]
 <a href=#84 id=84 data-nosnippet>84</a>        </span>parent_id: ID,
 <a href=#85 id=85 data-nosnippet>85</a>        <span class="attr">#[belongs_to(key = parent_id, references = id)]
-<a href=#86 id=86 data-nosnippet>86</a>        </span>parent: toasty::BelongsTo&lt;Parent&gt;,
+<a href=#86 id=86 data-nosnippet>86</a>        </span>parent: toasty::Deferred&lt;Parent&gt;,
 <a href=#87 id=87 data-nosnippet>87</a>    }
 <a href=#88 id=88 data-nosnippet>88</a>
 <a href=#89 id=89 data-nosnippet>89</a>    <span class="comment">// Auto-discovery should find Child through the HasMany relation.

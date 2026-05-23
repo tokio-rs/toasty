@@ -19,11 +19,11 @@
 <a href=#19 id=19 data-nosnippet>19</a>        name: String,
 <a href=#20 id=20 data-nosnippet>20</a>
 <a href=#21 id=21 data-nosnippet>21</a>        <span class="attr">#[has_one]
-<a href=#22 id=22 data-nosnippet>22</a>        </span>account: toasty::HasOne&lt;<span class="prelude-ty">Option</span>&lt;Account&gt;&gt;,
+<a href=#22 id=22 data-nosnippet>22</a>        </span>account: toasty::Deferred&lt;<span class="prelude-ty">Option</span>&lt;Account&gt;&gt;,
 <a href=#23 id=23 data-nosnippet>23</a>
 <a href=#24 id=24 data-nosnippet>24</a>        <span class="comment">// User → account → subscription, all single (`has_one`) steps.
 <a href=#25 id=25 data-nosnippet>25</a>        </span><span class="attr">#[has_one(via = account.subscription)]
-<a href=#26 id=26 data-nosnippet>26</a>        </span>subscription: toasty::HasOne&lt;<span class="prelude-ty">Option</span>&lt;Subscription&gt;&gt;,
+<a href=#26 id=26 data-nosnippet>26</a>        </span>subscription: toasty::Deferred&lt;<span class="prelude-ty">Option</span>&lt;Subscription&gt;&gt;,
 <a href=#27 id=27 data-nosnippet>27</a>    }
 <a href=#28 id=28 data-nosnippet>28</a>
 <a href=#29 id=29 data-nosnippet>29</a>    <span class="attr">#[derive(Debug, toasty::Model)]
@@ -36,10 +36,10 @@
 <a href=#36 id=36 data-nosnippet>36</a>        </span>user_id: <span class="prelude-ty">Option</span>&lt;ID&gt;,
 <a href=#37 id=37 data-nosnippet>37</a>
 <a href=#38 id=38 data-nosnippet>38</a>        <span class="attr">#[belongs_to(key = user_id, references = id)]
-<a href=#39 id=39 data-nosnippet>39</a>        </span>user: toasty::BelongsTo&lt;<span class="prelude-ty">Option</span>&lt;User&gt;&gt;,
+<a href=#39 id=39 data-nosnippet>39</a>        </span>user: toasty::Deferred&lt;<span class="prelude-ty">Option</span>&lt;User&gt;&gt;,
 <a href=#40 id=40 data-nosnippet>40</a>
 <a href=#41 id=41 data-nosnippet>41</a>        <span class="attr">#[has_one]
-<a href=#42 id=42 data-nosnippet>42</a>        </span>subscription: toasty::HasOne&lt;<span class="prelude-ty">Option</span>&lt;Subscription&gt;&gt;,
+<a href=#42 id=42 data-nosnippet>42</a>        </span>subscription: toasty::Deferred&lt;<span class="prelude-ty">Option</span>&lt;Subscription&gt;&gt;,
 <a href=#43 id=43 data-nosnippet>43</a>    }
 <a href=#44 id=44 data-nosnippet>44</a>
 <a href=#45 id=45 data-nosnippet>45</a>    <span class="attr">#[derive(Debug, toasty::Model)]
@@ -52,7 +52,7 @@
 <a href=#52 id=52 data-nosnippet>52</a>        </span>account_id: <span class="prelude-ty">Option</span>&lt;ID&gt;,
 <a href=#53 id=53 data-nosnippet>53</a>
 <a href=#54 id=54 data-nosnippet>54</a>        <span class="attr">#[belongs_to(key = account_id, references = id)]
-<a href=#55 id=55 data-nosnippet>55</a>        </span>account: toasty::BelongsTo&lt;<span class="prelude-ty">Option</span>&lt;Account&gt;&gt;,
+<a href=#55 id=55 data-nosnippet>55</a>        </span>account: toasty::Deferred&lt;<span class="prelude-ty">Option</span>&lt;Account&gt;&gt;,
 <a href=#56 id=56 data-nosnippet>56</a>
 <a href=#57 id=57 data-nosnippet>57</a>        plan: String,
 <a href=#58 id=58 data-nosnippet>58</a>    }

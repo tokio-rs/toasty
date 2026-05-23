@@ -164,9 +164,9 @@
 <a href=#164 id=164 data-nosnippet>164</a>        #[auto]
 <a href=#165 id=165 data-nosnippet>165</a>        </span>id: ID,
 <a href=#166 id=166 data-nosnippet>166</a>        <span class="attr">#[has_many]
-<a href=#167 id=167 data-nosnippet>167</a>        </span>todos: toasty::HasMany&lt;Todo&gt;,
+<a href=#167 id=167 data-nosnippet>167</a>        </span>todos: toasty::Deferred&lt;Vec&lt;Todo&gt;&gt;,
 <a href=#168 id=168 data-nosnippet>168</a>        <span class="attr">#[has_many]
-<a href=#169 id=169 data-nosnippet>169</a>        </span>posts: toasty::HasMany&lt;Post&gt;,
+<a href=#169 id=169 data-nosnippet>169</a>        </span>posts: toasty::Deferred&lt;Vec&lt;Post&gt;&gt;,
 <a href=#170 id=170 data-nosnippet>170</a>    }
 <a href=#171 id=171 data-nosnippet>171</a>
 <a href=#172 id=172 data-nosnippet>172</a>    <span class="attr">#[derive(Debug, toasty::Model)]
@@ -177,7 +177,7 @@
 <a href=#177 id=177 data-nosnippet>177</a>        <span class="attr">#[index]
 <a href=#178 id=178 data-nosnippet>178</a>        </span>user_id: ID,
 <a href=#179 id=179 data-nosnippet>179</a>        <span class="attr">#[belongs_to(key = user_id, references = id)]
-<a href=#180 id=180 data-nosnippet>180</a>        </span>user: toasty::BelongsTo&lt;User&gt;,
+<a href=#180 id=180 data-nosnippet>180</a>        </span>user: toasty::Deferred&lt;User&gt;,
 <a href=#181 id=181 data-nosnippet>181</a>        title: String,
 <a href=#182 id=182 data-nosnippet>182</a>    }
 <a href=#183 id=183 data-nosnippet>183</a>
@@ -189,7 +189,7 @@
 <a href=#189 id=189 data-nosnippet>189</a>        <span class="attr">#[index]
 <a href=#190 id=190 data-nosnippet>190</a>        </span>user_id: ID,
 <a href=#191 id=191 data-nosnippet>191</a>        <span class="attr">#[belongs_to(key = user_id, references = id)]
-<a href=#192 id=192 data-nosnippet>192</a>        </span>user: toasty::BelongsTo&lt;User&gt;,
+<a href=#192 id=192 data-nosnippet>192</a>        </span>user: toasty::Deferred&lt;User&gt;,
 <a href=#193 id=193 data-nosnippet>193</a>        body: String,
 <a href=#194 id=194 data-nosnippet>194</a>    }
 <a href=#195 id=195 data-nosnippet>195</a>
@@ -221,9 +221,9 @@
 <a href=#221 id=221 data-nosnippet>221</a>        #[auto]
 <a href=#222 id=222 data-nosnippet>222</a>        </span>id: ID,
 <a href=#223 id=223 data-nosnippet>223</a>        <span class="attr">#[has_many]
-<a href=#224 id=224 data-nosnippet>224</a>        </span>todos: toasty::HasMany&lt;Todo&gt;,
+<a href=#224 id=224 data-nosnippet>224</a>        </span>todos: toasty::Deferred&lt;Vec&lt;Todo&gt;&gt;,
 <a href=#225 id=225 data-nosnippet>225</a>        <span class="attr">#[has_many]
-<a href=#226 id=226 data-nosnippet>226</a>        </span>posts: toasty::HasMany&lt;Post&gt;,
+<a href=#226 id=226 data-nosnippet>226</a>        </span>posts: toasty::Deferred&lt;Vec&lt;Post&gt;&gt;,
 <a href=#227 id=227 data-nosnippet>227</a>    }
 <a href=#228 id=228 data-nosnippet>228</a>
 <a href=#229 id=229 data-nosnippet>229</a>    <span class="attr">#[derive(Debug, toasty::Model)]
@@ -234,7 +234,7 @@
 <a href=#234 id=234 data-nosnippet>234</a>        <span class="attr">#[index]
 <a href=#235 id=235 data-nosnippet>235</a>        </span>user_id: ID,
 <a href=#236 id=236 data-nosnippet>236</a>        <span class="attr">#[belongs_to(key = user_id, references = id)]
-<a href=#237 id=237 data-nosnippet>237</a>        </span>user: toasty::BelongsTo&lt;User&gt;,
+<a href=#237 id=237 data-nosnippet>237</a>        </span>user: toasty::Deferred&lt;User&gt;,
 <a href=#238 id=238 data-nosnippet>238</a>        title: String,
 <a href=#239 id=239 data-nosnippet>239</a>    }
 <a href=#240 id=240 data-nosnippet>240</a>
@@ -246,7 +246,7 @@
 <a href=#246 id=246 data-nosnippet>246</a>        <span class="attr">#[index]
 <a href=#247 id=247 data-nosnippet>247</a>        </span>user_id: ID,
 <a href=#248 id=248 data-nosnippet>248</a>        <span class="attr">#[belongs_to(key = user_id, references = id)]
-<a href=#249 id=249 data-nosnippet>249</a>        </span>user: toasty::BelongsTo&lt;User&gt;,
+<a href=#249 id=249 data-nosnippet>249</a>        </span>user: toasty::Deferred&lt;User&gt;,
 <a href=#250 id=250 data-nosnippet>250</a>        body: String,
 <a href=#251 id=251 data-nosnippet>251</a>    }
 <a href=#252 id=252 data-nosnippet>252</a>

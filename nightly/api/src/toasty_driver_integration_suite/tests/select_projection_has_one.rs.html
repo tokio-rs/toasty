@@ -20,7 +20,7 @@
 <a href=#20 id=20 data-nosnippet>20</a>        name: String,
 <a href=#21 id=21 data-nosnippet>21</a>
 <a href=#22 id=22 data-nosnippet>22</a>        <span class="attr">#[has_one]
-<a href=#23 id=23 data-nosnippet>23</a>        </span>profile: toasty::HasOne&lt;Profile&gt;,
+<a href=#23 id=23 data-nosnippet>23</a>        </span>profile: toasty::Deferred&lt;Profile&gt;,
 <a href=#24 id=24 data-nosnippet>24</a>    }
 <a href=#25 id=25 data-nosnippet>25</a>
 <a href=#26 id=26 data-nosnippet>26</a>    <span class="attr">#[derive(Debug, toasty::Model)]
@@ -33,7 +33,7 @@
 <a href=#33 id=33 data-nosnippet>33</a>        </span>user_id: <span class="prelude-ty">Option</span>&lt;ID&gt;,
 <a href=#34 id=34 data-nosnippet>34</a>
 <a href=#35 id=35 data-nosnippet>35</a>        <span class="attr">#[belongs_to(key = user_id, references = id)]
-<a href=#36 id=36 data-nosnippet>36</a>        </span>user: toasty::BelongsTo&lt;<span class="prelude-ty">Option</span>&lt;User&gt;&gt;,
+<a href=#36 id=36 data-nosnippet>36</a>        </span>user: toasty::Deferred&lt;<span class="prelude-ty">Option</span>&lt;User&gt;&gt;,
 <a href=#37 id=37 data-nosnippet>37</a>
 <a href=#38 id=38 data-nosnippet>38</a>        bio: String,
 <a href=#39 id=39 data-nosnippet>39</a>    }
@@ -68,7 +68,7 @@
 <a href=#68 id=68 data-nosnippet>68</a>        name: String,
 <a href=#69 id=69 data-nosnippet>69</a>
 <a href=#70 id=70 data-nosnippet>70</a>        <span class="attr">#[has_one]
-<a href=#71 id=71 data-nosnippet>71</a>        </span>profile: toasty::HasOne&lt;Profile&gt;,
+<a href=#71 id=71 data-nosnippet>71</a>        </span>profile: toasty::Deferred&lt;Profile&gt;,
 <a href=#72 id=72 data-nosnippet>72</a>    }
 <a href=#73 id=73 data-nosnippet>73</a>
 <a href=#74 id=74 data-nosnippet>74</a>    <span class="attr">#[derive(Debug, toasty::Model)]
@@ -81,7 +81,7 @@
 <a href=#81 id=81 data-nosnippet>81</a>        </span>user_id: <span class="prelude-ty">Option</span>&lt;ID&gt;,
 <a href=#82 id=82 data-nosnippet>82</a>
 <a href=#83 id=83 data-nosnippet>83</a>        <span class="attr">#[belongs_to(key = user_id, references = id)]
-<a href=#84 id=84 data-nosnippet>84</a>        </span>user: toasty::BelongsTo&lt;<span class="prelude-ty">Option</span>&lt;User&gt;&gt;,
+<a href=#84 id=84 data-nosnippet>84</a>        </span>user: toasty::Deferred&lt;<span class="prelude-ty">Option</span>&lt;User&gt;&gt;,
 <a href=#85 id=85 data-nosnippet>85</a>
 <a href=#86 id=86 data-nosnippet>86</a>        bio: String,
 <a href=#87 id=87 data-nosnippet>87</a>    }
@@ -122,7 +122,7 @@
 <a href=#122 id=122 data-nosnippet>122</a>        name: String,
 <a href=#123 id=123 data-nosnippet>123</a>
 <a href=#124 id=124 data-nosnippet>124</a>        <span class="attr">#[has_one]
-<a href=#125 id=125 data-nosnippet>125</a>        </span>profile: toasty::HasOne&lt;Profile&gt;,
+<a href=#125 id=125 data-nosnippet>125</a>        </span>profile: toasty::Deferred&lt;Profile&gt;,
 <a href=#126 id=126 data-nosnippet>126</a>    }
 <a href=#127 id=127 data-nosnippet>127</a>
 <a href=#128 id=128 data-nosnippet>128</a>    <span class="attr">#[derive(Debug, toasty::Model)]
@@ -135,7 +135,7 @@
 <a href=#135 id=135 data-nosnippet>135</a>        </span>user_id: <span class="prelude-ty">Option</span>&lt;ID&gt;,
 <a href=#136 id=136 data-nosnippet>136</a>
 <a href=#137 id=137 data-nosnippet>137</a>        <span class="attr">#[belongs_to(key = user_id, references = id)]
-<a href=#138 id=138 data-nosnippet>138</a>        </span>user: toasty::BelongsTo&lt;<span class="prelude-ty">Option</span>&lt;User&gt;&gt;,
+<a href=#138 id=138 data-nosnippet>138</a>        </span>user: toasty::Deferred&lt;<span class="prelude-ty">Option</span>&lt;User&gt;&gt;,
 <a href=#139 id=139 data-nosnippet>139</a>
 <a href=#140 id=140 data-nosnippet>140</a>        bio: String,
 <a href=#141 id=141 data-nosnippet>141</a>    }

@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-7256fe91.js";
+            window.path_to_searchindex_js = "searchindex-66ef6eda.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-17951f78.js"></script>
@@ -200,7 +200,7 @@ one crate.</p>
 <p>You don’t need to list every model. Registering a model also registers any
 models reachable through its fields — <code>BelongsTo</code>, <code>HasMany</code>, <code>HasOne</code>, and
 embedded types are all discovered by traversing the model’s fields. For
-example, if <code>User</code> has a <code>HasMany&lt;Post&gt;</code> field and <code>Post</code> has a <code>BelongsTo&lt;User&gt;</code>
+example, if <code>User</code> has a <code>Deferred&lt;Vec&lt;Post&gt;&gt;</code> field and <code>Post</code> has a <code>Deferred&lt;User&gt;</code>
 field, <code>toasty::models!(User)</code> registers both <code>User</code> and <code>Post</code>.</p>
 <h2 id="connection-urls"><a class="header" href="#connection-urls">Connection URLs</a></h2>
 <p>The connection URL determines which database driver Toasty uses. Each driver

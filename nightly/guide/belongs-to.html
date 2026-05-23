@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-7256fe91.js";
+            window.path_to_searchindex_js = "searchindex-66ef6eda.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-17951f78.js"></script>
@@ -179,7 +179,7 @@
 foreign key. The child stores the parent’s ID in one of its own fields.</p>
 <h2 id="defining-a-belongsto-relationship"><a class="header" href="#defining-a-belongsto-relationship">Defining a BelongsTo relationship</a></h2>
 <p>A BelongsTo relationship requires two things on the child model: a foreign key
-field and a <code>BelongsTo&lt;T&gt;</code> relation field. The <code>#[belongs_to]</code> attribute tells
+field and a <code>Deferred&lt;T&gt;</code> relation field. The <code>#[belongs_to]</code> attribute tells
 Toasty which field holds the foreign key and which field on the parent it
 references.</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -194,7 +194,7 @@ struct User {
     name: String,
 
     #[has_many]
-    posts: toasty::HasMany&lt;Post&gt;,
+    posts: toasty::Deferred&lt;Vec&lt;Post&gt;&gt;,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -207,7 +207,7 @@ struct Post {
     user_id: u64,
 
     #[belongs_to(key = user_id, references = id)]
-    user: toasty::BelongsTo&lt;User&gt;,
+    user: toasty::Deferred&lt;User&gt;,
 
     title: String,
 }
@@ -249,7 +249,7 @@ struct Post {
     user_id: Option&lt;u64&gt;,
 
     #[belongs_to(key = user_id, references = id)]
-    user: toasty::BelongsTo&lt;Option&lt;User&gt;&gt;,
+    user: toasty::Deferred&lt;Option&lt;User&gt;&gt;,
 
     title: String,
 }
@@ -268,7 +268,7 @@ name matches the relation field name.</p>
 </span><span class="boring">    id: u64,
 </span><span class="boring">    name: String,
 </span><span class="boring">    #[has_many]
-</span><span class="boring">    posts: toasty::HasMany&lt;Post&gt;,
+</span><span class="boring">    posts: toasty::Deferred&lt;Vec&lt;Post&gt;&gt;,
 </span><span class="boring">}
 </span><span class="boring">#[derive(Debug, toasty::Model)]
 </span><span class="boring">struct Post {
@@ -278,7 +278,7 @@ name matches the relation field name.</p>
 </span><span class="boring">    #[index]
 </span><span class="boring">    user_id: u64,
 </span><span class="boring">    #[belongs_to(key = user_id, references = id)]
-</span><span class="boring">    user: toasty::BelongsTo&lt;User&gt;,
+</span><span class="boring">    user: toasty::Deferred&lt;User&gt;,
 </span><span class="boring">    title: String,
 </span><span class="boring">}
 </span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
@@ -308,7 +308,7 @@ println!("Author: {}", user.name);
 </span><span class="boring">    #[index]
 </span><span class="boring">    user_id: Option&lt;u64&gt;,
 </span><span class="boring">    #[belongs_to(key = user_id, references = id)]
-</span><span class="boring">    user: toasty::BelongsTo&lt;Option&lt;User&gt;&gt;,
+</span><span class="boring">    user: toasty::Deferred&lt;Option&lt;User&gt;&gt;,
 </span><span class="boring">    title: String,
 </span><span class="boring">}
 </span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
@@ -337,7 +337,7 @@ the parent, or by setting the foreign key directly.</p>
 </span><span class="boring">    id: u64,
 </span><span class="boring">    name: String,
 </span><span class="boring">    #[has_many]
-</span><span class="boring">    posts: toasty::HasMany&lt;Post&gt;,
+</span><span class="boring">    posts: toasty::Deferred&lt;Vec&lt;Post&gt;&gt;,
 </span><span class="boring">}
 </span><span class="boring">#[derive(Debug, toasty::Model)]
 </span><span class="boring">struct Post {
@@ -347,7 +347,7 @@ the parent, or by setting the foreign key directly.</p>
 </span><span class="boring">    #[index]
 </span><span class="boring">    user_id: u64,
 </span><span class="boring">    #[belongs_to(key = user_id, references = id)]
-</span><span class="boring">    user: toasty::BelongsTo&lt;User&gt;,
+</span><span class="boring">    user: toasty::Deferred&lt;User&gt;,
 </span><span class="boring">    title: String,
 </span><span class="boring">}
 </span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
@@ -378,7 +378,7 @@ automatically.</p>
 </span><span class="boring">    id: u64,
 </span><span class="boring">    name: String,
 </span><span class="boring">    #[has_many]
-</span><span class="boring">    posts: toasty::HasMany&lt;Post&gt;,
+</span><span class="boring">    posts: toasty::Deferred&lt;Vec&lt;Post&gt;&gt;,
 </span><span class="boring">}
 </span><span class="boring">#[derive(Debug, toasty::Model)]
 </span><span class="boring">struct Post {
@@ -388,7 +388,7 @@ automatically.</p>
 </span><span class="boring">    #[index]
 </span><span class="boring">    user_id: u64,
 </span><span class="boring">    #[belongs_to(key = user_id, references = id)]
-</span><span class="boring">    user: toasty::BelongsTo&lt;User&gt;,
+</span><span class="boring">    user: toasty::Deferred&lt;User&gt;,
 </span><span class="boring">    title: String,
 </span><span class="boring">}
 </span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
@@ -418,7 +418,7 @@ struct User {
     id: u64,
 
     #[has_many(pair = owner)]
-    todos: toasty::HasMany&lt;Todo&gt;,
+    todos: toasty::Deferred&lt;Vec&lt;Todo&gt;&gt;,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -431,7 +431,7 @@ struct Todo {
     owner_id: u64,
 
     #[belongs_to(key = owner_id, references = id)]
-    owner: toasty::BelongsTo&lt;User&gt;,
+    owner: toasty::Deferred&lt;User&gt;,
 
     title: String,
 }
@@ -439,7 +439,7 @@ struct Todo {
 <p>Here the child’s relation field is named <code>owner</code> instead of <code>user</code>, so the
 parent specifies <code>pair = owner</code> to establish the connection.</p>
 <h2 id="what-gets-generated"><a class="header" href="#what-gets-generated">What gets generated</a></h2>
-<p>For a <code>Post</code> model with <code>#[belongs_to] user: BelongsTo&lt;User&gt;</code>, Toasty generates:</p>
+<p>For a <code>Post</code> model with <code>#[belongs_to] user: Deferred&lt;User&gt;</code>, Toasty generates:</p>
 <div class="table-wrapper">
 <table>
 <thead>

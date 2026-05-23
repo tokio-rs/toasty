@@ -355,7 +355,7 @@
 <a href=#355 id=355 data-nosnippet>355</a>/// #     id: i64,
 <a href=#356 id=356 data-nosnippet>356</a>/// #     user_id: i64,
 <a href=#357 id=357 data-nosnippet>357</a>/// #[belongs_to(key = user_id, references = id)]
-<a href=#358 id=358 data-nosnippet>358</a>/// user: toasty::BelongsTo&lt;User&gt;,
+<a href=#358 id=358 data-nosnippet>358</a>/// user: toasty::Deferred&lt;User&gt;,
 <a href=#359 id=359 data-nosnippet>359</a>/// # }
 <a href=#360 id=360 data-nosnippet>360</a>/// ```
 <a href=#361 id=361 data-nosnippet>361</a>///
@@ -382,7 +382,7 @@
 <a href=#382 id=382 data-nosnippet>382</a>/// #     org_id: i64,
 <a href=#383 id=383 data-nosnippet>383</a>/// #     tenant_id: i64,
 <a href=#384 id=384 data-nosnippet>384</a>/// #[belongs_to(key = [org_id, tenant_id], references = [id, tenant_id])]
-<a href=#385 id=385 data-nosnippet>385</a>/// org: toasty::BelongsTo&lt;Org&gt;,
+<a href=#385 id=385 data-nosnippet>385</a>/// org: toasty::Deferred&lt;Org&gt;,
 <a href=#386 id=386 data-nosnippet>386</a>/// # }
 <a href=#387 id=387 data-nosnippet>387</a>/// ```
 <a href=#388 id=388 data-nosnippet>388</a>///
@@ -408,7 +408,7 @@
 <a href=#408 id=408 data-nosnippet>408</a>/// manager_id: Option&lt;i64&gt;,
 <a href=#409 id=409 data-nosnippet>409</a>///
 <a href=#410 id=410 data-nosnippet>410</a>/// #[belongs_to(key = manager_id, references = id)]
-<a href=#411 id=411 data-nosnippet>411</a>/// manager: toasty::BelongsTo&lt;Option&lt;User&gt;&gt;,
+<a href=#411 id=411 data-nosnippet>411</a>/// manager: toasty::Deferred&lt;Option&lt;User&gt;&gt;,
 <a href=#412 id=412 data-nosnippet>412</a>/// # }
 <a href=#413 id=413 data-nosnippet>413</a>/// ```
 <a href=#414 id=414 data-nosnippet>414</a>///
@@ -427,7 +427,7 @@
 <a href=#427 id=427 data-nosnippet>427</a>/// #     #[index]
 <a href=#428 id=428 data-nosnippet>428</a>/// #     example_id: i64,
 <a href=#429 id=429 data-nosnippet>429</a>/// #     #[belongs_to(key = example_id, references = id)]
-<a href=#430 id=430 data-nosnippet>430</a>/// #     example: toasty::BelongsTo&lt;Example&gt;,
+<a href=#430 id=430 data-nosnippet>430</a>/// #     example: toasty::Deferred&lt;Example&gt;,
 <a href=#431 id=431 data-nosnippet>431</a>/// # }
 <a href=#432 id=432 data-nosnippet>432</a>/// # #[derive(Model)]
 <a href=#433 id=433 data-nosnippet>433</a>/// # struct Example {
@@ -435,7 +435,7 @@
 <a href=#435 id=435 data-nosnippet>435</a>/// #     #[auto]
 <a href=#436 id=436 data-nosnippet>436</a>/// #     id: i64,
 <a href=#437 id=437 data-nosnippet>437</a>/// #[has_many]
-<a href=#438 id=438 data-nosnippet>438</a>/// posts: toasty::HasMany&lt;Post&gt;,
+<a href=#438 id=438 data-nosnippet>438</a>/// posts: toasty::Deferred&lt;Vec&lt;Post&gt;&gt;,
 <a href=#439 id=439 data-nosnippet>439</a>/// # }
 <a href=#440 id=440 data-nosnippet>440</a>/// ```
 <a href=#441 id=441 data-nosnippet>441</a>///
@@ -459,9 +459,9 @@
 <a href=#459 id=459 data-nosnippet>459</a>/// #     #[index]
 <a href=#460 id=460 data-nosnippet>460</a>/// #     parent_id: Option&lt;i64&gt;,
 <a href=#461 id=461 data-nosnippet>461</a>/// #     #[belongs_to(key = parent_id, references = id)]
-<a href=#462 id=462 data-nosnippet>462</a>/// #     parent: toasty::BelongsTo&lt;Option&lt;Self&gt;&gt;,
+<a href=#462 id=462 data-nosnippet>462</a>/// #     parent: toasty::Deferred&lt;Option&lt;Self&gt;&gt;,
 <a href=#463 id=463 data-nosnippet>463</a>/// #[has_many(pair = parent)]
-<a href=#464 id=464 data-nosnippet>464</a>/// children: toasty::HasMany&lt;Person&gt;,
+<a href=#464 id=464 data-nosnippet>464</a>/// children: toasty::Deferred&lt;Vec&lt;Person&gt;&gt;,
 <a href=#465 id=465 data-nosnippet>465</a>/// # }
 <a href=#466 id=466 data-nosnippet>466</a>/// ```
 <a href=#467 id=467 data-nosnippet>467</a>///
@@ -483,11 +483,11 @@
 <a href=#483 id=483 data-nosnippet>483</a>/// #     #[index]
 <a href=#484 id=484 data-nosnippet>484</a>/// #     user_id: i64,
 <a href=#485 id=485 data-nosnippet>485</a>/// #     #[belongs_to(key = user_id, references = id)]
-<a href=#486 id=486 data-nosnippet>486</a>/// #     user: toasty::BelongsTo&lt;User&gt;,
+<a href=#486 id=486 data-nosnippet>486</a>/// #     user: toasty::Deferred&lt;User&gt;,
 <a href=#487 id=487 data-nosnippet>487</a>/// #     #[index]
 <a href=#488 id=488 data-nosnippet>488</a>/// #     article_id: i64,
 <a href=#489 id=489 data-nosnippet>489</a>/// #     #[belongs_to(key = article_id, references = id)]
-<a href=#490 id=490 data-nosnippet>490</a>/// #     article: toasty::BelongsTo&lt;Article&gt;,
+<a href=#490 id=490 data-nosnippet>490</a>/// #     article: toasty::Deferred&lt;Article&gt;,
 <a href=#491 id=491 data-nosnippet>491</a>/// # }
 <a href=#492 id=492 data-nosnippet>492</a>/// # #[derive(Model)]
 <a href=#493 id=493 data-nosnippet>493</a>/// # struct Article {
@@ -495,7 +495,7 @@
 <a href=#495 id=495 data-nosnippet>495</a>/// #     #[auto]
 <a href=#496 id=496 data-nosnippet>496</a>/// #     id: i64,
 <a href=#497 id=497 data-nosnippet>497</a>/// #     #[has_many]
-<a href=#498 id=498 data-nosnippet>498</a>/// #     comments: toasty::HasMany&lt;Comment&gt;,
+<a href=#498 id=498 data-nosnippet>498</a>/// #     comments: toasty::Deferred&lt;Vec&lt;Comment&gt;&gt;,
 <a href=#499 id=499 data-nosnippet>499</a>/// # }
 <a href=#500 id=500 data-nosnippet>500</a>/// # #[derive(Model)]
 <a href=#501 id=501 data-nosnippet>501</a>/// # struct User {
@@ -503,10 +503,10 @@
 <a href=#503 id=503 data-nosnippet>503</a>/// #     #[auto]
 <a href=#504 id=504 data-nosnippet>504</a>/// #     id: i64,
 <a href=#505 id=505 data-nosnippet>505</a>/// #     #[has_many]
-<a href=#506 id=506 data-nosnippet>506</a>/// #     comments: toasty::HasMany&lt;Comment&gt;,
+<a href=#506 id=506 data-nosnippet>506</a>/// #     comments: toasty::Deferred&lt;Vec&lt;Comment&gt;&gt;,
 <a href=#507 id=507 data-nosnippet>507</a>/// // User → comments → article
 <a href=#508 id=508 data-nosnippet>508</a>/// #[has_many(via = comments.article)]
-<a href=#509 id=509 data-nosnippet>509</a>/// commented_articles: toasty::HasMany&lt;Article&gt;,
+<a href=#509 id=509 data-nosnippet>509</a>/// commented_articles: toasty::Deferred&lt;Vec&lt;Article&gt;&gt;,
 <a href=#510 id=510 data-nosnippet>510</a>/// # }
 <a href=#511 id=511 data-nosnippet>511</a>/// ```
 <a href=#512 id=512 data-nosnippet>512</a>///
@@ -532,7 +532,7 @@
 <a href=#532 id=532 data-nosnippet>532</a>/// #     #[index]
 <a href=#533 id=533 data-nosnippet>533</a>/// #     example_id: i64,
 <a href=#534 id=534 data-nosnippet>534</a>/// #     #[belongs_to(key = example_id, references = id)]
-<a href=#535 id=535 data-nosnippet>535</a>/// #     example: toasty::BelongsTo&lt;Example&gt;,
+<a href=#535 id=535 data-nosnippet>535</a>/// #     example: toasty::Deferred&lt;Example&gt;,
 <a href=#536 id=536 data-nosnippet>536</a>/// # }
 <a href=#537 id=537 data-nosnippet>537</a>/// # #[derive(Model)]
 <a href=#538 id=538 data-nosnippet>538</a>/// # struct Example {
@@ -540,7 +540,7 @@
 <a href=#540 id=540 data-nosnippet>540</a>/// #     #[auto]
 <a href=#541 id=541 data-nosnippet>541</a>/// #     id: i64,
 <a href=#542 id=542 data-nosnippet>542</a>/// #[has_one]
-<a href=#543 id=543 data-nosnippet>543</a>/// profile: toasty::HasOne&lt;Profile&gt;,
+<a href=#543 id=543 data-nosnippet>543</a>/// profile: toasty::Deferred&lt;Profile&gt;,
 <a href=#544 id=544 data-nosnippet>544</a>/// # }
 <a href=#545 id=545 data-nosnippet>545</a>/// ```
 <a href=#546 id=546 data-nosnippet>546</a>///
@@ -556,7 +556,7 @@
 <a href=#556 id=556 data-nosnippet>556</a>/// #     #[index]
 <a href=#557 id=557 data-nosnippet>557</a>/// #     example_id: i64,
 <a href=#558 id=558 data-nosnippet>558</a>/// #     #[belongs_to(key = example_id, references = id)]
-<a href=#559 id=559 data-nosnippet>559</a>/// #     example: toasty::BelongsTo&lt;Example&gt;,
+<a href=#559 id=559 data-nosnippet>559</a>/// #     example: toasty::Deferred&lt;Example&gt;,
 <a href=#560 id=560 data-nosnippet>560</a>/// # }
 <a href=#561 id=561 data-nosnippet>561</a>/// # #[derive(Model)]
 <a href=#562 id=562 data-nosnippet>562</a>/// # struct Example {
@@ -564,7 +564,7 @@
 <a href=#564 id=564 data-nosnippet>564</a>/// #     #[auto]
 <a href=#565 id=565 data-nosnippet>565</a>/// #     id: i64,
 <a href=#566 id=566 data-nosnippet>566</a>/// #[has_one]
-<a href=#567 id=567 data-nosnippet>567</a>/// profile: toasty::HasOne&lt;Option&lt;Profile&gt;&gt;,
+<a href=#567 id=567 data-nosnippet>567</a>/// profile: toasty::Deferred&lt;Option&lt;Profile&gt;&gt;,
 <a href=#568 id=568 data-nosnippet>568</a>/// # }
 <a href=#569 id=569 data-nosnippet>569</a>/// ```
 <a href=#570 id=570 data-nosnippet>570</a>///
@@ -585,7 +585,7 @@
 <a href=#585 id=585 data-nosnippet>585</a>/// #     #[unique]
 <a href=#586 id=586 data-nosnippet>586</a>/// #     account_id: Option&lt;i64&gt;,
 <a href=#587 id=587 data-nosnippet>587</a>/// #     #[belongs_to(key = account_id, references = id)]
-<a href=#588 id=588 data-nosnippet>588</a>/// #     account: toasty::BelongsTo&lt;Option&lt;Account&gt;&gt;,
+<a href=#588 id=588 data-nosnippet>588</a>/// #     account: toasty::Deferred&lt;Option&lt;Account&gt;&gt;,
 <a href=#589 id=589 data-nosnippet>589</a>/// # }
 <a href=#590 id=590 data-nosnippet>590</a>/// # #[derive(Model)]
 <a href=#591 id=591 data-nosnippet>591</a>/// # struct Account {
@@ -595,9 +595,9 @@
 <a href=#595 id=595 data-nosnippet>595</a>/// #     #[unique]
 <a href=#596 id=596 data-nosnippet>596</a>/// #     user_id: Option&lt;i64&gt;,
 <a href=#597 id=597 data-nosnippet>597</a>/// #     #[belongs_to(key = user_id, references = id)]
-<a href=#598 id=598 data-nosnippet>598</a>/// #     user: toasty::BelongsTo&lt;Option&lt;User&gt;&gt;,
+<a href=#598 id=598 data-nosnippet>598</a>/// #     user: toasty::Deferred&lt;Option&lt;User&gt;&gt;,
 <a href=#599 id=599 data-nosnippet>599</a>/// #     #[has_one]
-<a href=#600 id=600 data-nosnippet>600</a>/// #     subscription: toasty::HasOne&lt;Option&lt;Subscription&gt;&gt;,
+<a href=#600 id=600 data-nosnippet>600</a>/// #     subscription: toasty::Deferred&lt;Option&lt;Subscription&gt;&gt;,
 <a href=#601 id=601 data-nosnippet>601</a>/// # }
 <a href=#602 id=602 data-nosnippet>602</a>/// # #[derive(Model)]
 <a href=#603 id=603 data-nosnippet>603</a>/// # struct User {
@@ -605,10 +605,10 @@
 <a href=#605 id=605 data-nosnippet>605</a>/// #     #[auto]
 <a href=#606 id=606 data-nosnippet>606</a>/// #     id: i64,
 <a href=#607 id=607 data-nosnippet>607</a>/// #     #[has_one]
-<a href=#608 id=608 data-nosnippet>608</a>/// #     account: toasty::HasOne&lt;Option&lt;Account&gt;&gt;,
+<a href=#608 id=608 data-nosnippet>608</a>/// #     account: toasty::Deferred&lt;Option&lt;Account&gt;&gt;,
 <a href=#609 id=609 data-nosnippet>609</a>/// // User → account → subscription
 <a href=#610 id=610 data-nosnippet>610</a>/// #[has_one(via = account.subscription)]
-<a href=#611 id=611 data-nosnippet>611</a>/// subscription: toasty::HasOne&lt;Option&lt;Subscription&gt;&gt;,
+<a href=#611 id=611 data-nosnippet>611</a>/// subscription: toasty::Deferred&lt;Option&lt;Subscription&gt;&gt;,
 <a href=#612 id=612 data-nosnippet>612</a>/// # }
 <a href=#613 id=613 data-nosnippet>613</a>/// ```
 <a href=#614 id=614 data-nosnippet>614</a>///
@@ -648,7 +648,7 @@
 <a href=#648 id=648 data-nosnippet>648</a>///     updated_at: jiff::Timestamp,
 <a href=#649 id=649 data-nosnippet>649</a>///
 <a href=#650 id=650 data-nosnippet>650</a>///     #[has_many]
-<a href=#651 id=651 data-nosnippet>651</a>///     posts: toasty::HasMany&lt;Post&gt;,
+<a href=#651 id=651 data-nosnippet>651</a>///     posts: toasty::Deferred&lt;Vec&lt;Post&gt;&gt;,
 <a href=#652 id=652 data-nosnippet>652</a>/// }
 <a href=#653 id=653 data-nosnippet>653</a>///
 <a href=#654 id=654 data-nosnippet>654</a>/// #[derive(Debug, toasty::Model)]
@@ -665,7 +665,7 @@
 <a href=#665 id=665 data-nosnippet>665</a>///     user_id: i64,
 <a href=#666 id=666 data-nosnippet>666</a>///
 <a href=#667 id=667 data-nosnippet>667</a>///     #[belongs_to(key = user_id, references = id)]
-<a href=#668 id=668 data-nosnippet>668</a>///     user: toasty::BelongsTo&lt;User&gt;,
+<a href=#668 id=668 data-nosnippet>668</a>///     user: toasty::Deferred&lt;User&gt;,
 <a href=#669 id=669 data-nosnippet>669</a>/// }
 <a href=#670 id=670 data-nosnippet>670</a>/// ```
 <a href=#671 id=671 data-nosnippet>671</a></span><span class="attr">#[proc_macro_derive(
@@ -1467,7 +1467,7 @@
 <a href=#1467 id=1467 data-nosnippet>1467</a>/// #     id: i64,
 <a href=#1468 id=1468 data-nosnippet>1468</a>/// #     name: String,
 <a href=#1469 id=1469 data-nosnippet>1469</a>/// #     #[has_many]
-<a href=#1470 id=1470 data-nosnippet>1470</a>/// #     todos: toasty::HasMany&lt;Todo&gt;,
+<a href=#1470 id=1470 data-nosnippet>1470</a>/// #     todos: toasty::Deferred&lt;Vec&lt;Todo&gt;&gt;,
 <a href=#1471 id=1471 data-nosnippet>1471</a>/// # }
 <a href=#1472 id=1472 data-nosnippet>1472</a>/// # #[derive(toasty::Model)]
 <a href=#1473 id=1473 data-nosnippet>1473</a>/// # struct Todo {
@@ -1478,7 +1478,7 @@
 <a href=#1478 id=1478 data-nosnippet>1478</a>/// #     #[index]
 <a href=#1479 id=1479 data-nosnippet>1479</a>/// #     user_id: i64,
 <a href=#1480 id=1480 data-nosnippet>1480</a>/// #     #[belongs_to(key = user_id, references = id)]
-<a href=#1481 id=1481 data-nosnippet>1481</a>/// #     user: toasty::BelongsTo&lt;User&gt;,
+<a href=#1481 id=1481 data-nosnippet>1481</a>/// #     user: toasty::Deferred&lt;User&gt;,
 <a href=#1482 id=1482 data-nosnippet>1482</a>/// # }
 <a href=#1483 id=1483 data-nosnippet>1483</a>/// # async fn example(mut db: toasty::Db, user: User) -&gt; toasty::Result&lt;()&gt; {
 <a href=#1484 id=1484 data-nosnippet>1484</a>/// let todo = toasty::create!(in user.todos() { title: "buy milk" })
@@ -1649,7 +1649,7 @@
 <a href=#1649 id=1649 data-nosnippet>1649</a>/// #     #[index]
 <a href=#1650 id=1650 data-nosnippet>1650</a>/// #     user_id: i64,
 <a href=#1651 id=1651 data-nosnippet>1651</a>/// #     #[belongs_to(key = user_id, references = id)]
-<a href=#1652 id=1652 data-nosnippet>1652</a>/// #     user: toasty::BelongsTo&lt;User&gt;,
+<a href=#1652 id=1652 data-nosnippet>1652</a>/// #     user: toasty::Deferred&lt;User&gt;,
 <a href=#1653 id=1653 data-nosnippet>1653</a>/// # }
 <a href=#1654 id=1654 data-nosnippet>1654</a>/// let _ = toasty::create!(Todo {
 <a href=#1655 id=1655 data-nosnippet>1655</a>///     title: "buy milk",
@@ -1678,7 +1678,7 @@
 <a href=#1678 id=1678 data-nosnippet>1678</a>/// #     id: i64,
 <a href=#1679 id=1679 data-nosnippet>1679</a>/// #     name: String,
 <a href=#1680 id=1680 data-nosnippet>1680</a>/// #     #[has_many]
-<a href=#1681 id=1681 data-nosnippet>1681</a>/// #     todos: toasty::HasMany&lt;Todo&gt;,
+<a href=#1681 id=1681 data-nosnippet>1681</a>/// #     todos: toasty::Deferred&lt;Vec&lt;Todo&gt;&gt;,
 <a href=#1682 id=1682 data-nosnippet>1682</a>/// # }
 <a href=#1683 id=1683 data-nosnippet>1683</a>/// # #[derive(toasty::Model)]
 <a href=#1684 id=1684 data-nosnippet>1684</a>/// # struct Todo {
@@ -1689,7 +1689,7 @@
 <a href=#1689 id=1689 data-nosnippet>1689</a>/// #     #[index]
 <a href=#1690 id=1690 data-nosnippet>1690</a>/// #     user_id: i64,
 <a href=#1691 id=1691 data-nosnippet>1691</a>/// #     #[belongs_to(key = user_id, references = id)]
-<a href=#1692 id=1692 data-nosnippet>1692</a>/// #     user: toasty::BelongsTo&lt;User&gt;,
+<a href=#1692 id=1692 data-nosnippet>1692</a>/// #     user: toasty::Deferred&lt;User&gt;,
 <a href=#1693 id=1693 data-nosnippet>1693</a>/// # }
 <a href=#1694 id=1694 data-nosnippet>1694</a>/// let _ = toasty::create!(User {
 <a href=#1695 id=1695 data-nosnippet>1695</a>///     name: "Alice",
@@ -1719,7 +1719,7 @@
 <a href=#1719 id=1719 data-nosnippet>1719</a>/// #     id: i64,
 <a href=#1720 id=1720 data-nosnippet>1720</a>/// #     name: String,
 <a href=#1721 id=1721 data-nosnippet>1721</a>/// #     #[has_many]
-<a href=#1722 id=1722 data-nosnippet>1722</a>/// #     todos: toasty::HasMany&lt;Todo&gt;,
+<a href=#1722 id=1722 data-nosnippet>1722</a>/// #     todos: toasty::Deferred&lt;Vec&lt;Todo&gt;&gt;,
 <a href=#1723 id=1723 data-nosnippet>1723</a>/// # }
 <a href=#1724 id=1724 data-nosnippet>1724</a>/// # #[derive(toasty::Model)]
 <a href=#1725 id=1725 data-nosnippet>1725</a>/// # struct Todo {
@@ -1730,9 +1730,9 @@
 <a href=#1730 id=1730 data-nosnippet>1730</a>/// #     #[index]
 <a href=#1731 id=1731 data-nosnippet>1731</a>/// #     user_id: i64,
 <a href=#1732 id=1732 data-nosnippet>1732</a>/// #     #[belongs_to(key = user_id, references = id)]
-<a href=#1733 id=1733 data-nosnippet>1733</a>/// #     user: toasty::BelongsTo&lt;User&gt;,
+<a href=#1733 id=1733 data-nosnippet>1733</a>/// #     user: toasty::Deferred&lt;User&gt;,
 <a href=#1734 id=1734 data-nosnippet>1734</a>/// #     #[has_many]
-<a href=#1735 id=1735 data-nosnippet>1735</a>/// #     tags: toasty::HasMany&lt;Tag&gt;,
+<a href=#1735 id=1735 data-nosnippet>1735</a>/// #     tags: toasty::Deferred&lt;Vec&lt;Tag&gt;&gt;,
 <a href=#1736 id=1736 data-nosnippet>1736</a>/// # }
 <a href=#1737 id=1737 data-nosnippet>1737</a>/// # #[derive(toasty::Model)]
 <a href=#1738 id=1738 data-nosnippet>1738</a>/// # struct Tag {
@@ -1743,7 +1743,7 @@
 <a href=#1743 id=1743 data-nosnippet>1743</a>/// #     #[index]
 <a href=#1744 id=1744 data-nosnippet>1744</a>/// #     todo_id: i64,
 <a href=#1745 id=1745 data-nosnippet>1745</a>/// #     #[belongs_to(key = todo_id, references = id)]
-<a href=#1746 id=1746 data-nosnippet>1746</a>/// #     todo: toasty::BelongsTo&lt;Todo&gt;,
+<a href=#1746 id=1746 data-nosnippet>1746</a>/// #     todo: toasty::Deferred&lt;Todo&gt;,
 <a href=#1747 id=1747 data-nosnippet>1747</a>/// # }
 <a href=#1748 id=1748 data-nosnippet>1748</a>/// let _ = toasty::create!(User {
 <a href=#1749 id=1749 data-nosnippet>1749</a>///     name: "Alice",
@@ -1765,9 +1765,9 @@
 <a href=#1765 id=1765 data-nosnippet>1765</a>/// | `Option&lt;T&gt;` | Defaults to `None` (`NULL`) |
 <a href=#1766 id=1766 data-nosnippet>1766</a>/// | `#[default(expr)]` | Uses the default expression |
 <a href=#1767 id=1767 data-nosnippet>1767</a>/// | `#[update(expr)]` | Uses the expression as the initial value |
-<a href=#1768 id=1768 data-nosnippet>1768</a>/// | `HasMany&lt;T&gt;` | No related records created |
-<a href=#1769 id=1769 data-nosnippet>1769</a>/// | `HasOne&lt;Option&lt;T&gt;&gt;` | No related record created |
-<a href=#1770 id=1770 data-nosnippet>1770</a>/// | `BelongsTo&lt;Option&lt;T&gt;&gt;` | Foreign key set to `NULL` |
+<a href=#1768 id=1768 data-nosnippet>1768</a>/// | `#[has_many] Deferred&lt;Vec&lt;T&gt;&gt;` | No related records created |
+<a href=#1769 id=1769 data-nosnippet>1769</a>/// | `#[has_one] Deferred&lt;Option&lt;T&gt;&gt;` | No related record created |
+<a href=#1770 id=1770 data-nosnippet>1770</a>/// | `#[belongs_to] Deferred&lt;Option&lt;T&gt;&gt;` | Foreign key set to `NULL` |
 <a href=#1771 id=1771 data-nosnippet>1771</a>///
 <a href=#1772 id=1772 data-nosnippet>1772</a>/// Required fields (`String`, `i64`, non-optional `BelongsTo`, etc.) that are
 <a href=#1773 id=1773 data-nosnippet>1773</a>/// missing do not cause a compile-time error. The insert fails at runtime with
@@ -1793,7 +1793,7 @@
 <a href=#1793 id=1793 data-nosnippet>1793</a>/// #     #[index]
 <a href=#1794 id=1794 data-nosnippet>1794</a>/// #     user_id: i64,
 <a href=#1795 id=1795 data-nosnippet>1795</a>/// #     #[belongs_to(key = user_id, references = id)]
-<a href=#1796 id=1796 data-nosnippet>1796</a>/// #     user: toasty::BelongsTo&lt;User&gt;,
+<a href=#1796 id=1796 data-nosnippet>1796</a>/// #     user: toasty::Deferred&lt;User&gt;,
 <a href=#1797 id=1797 data-nosnippet>1797</a>/// # }
 <a href=#1798 id=1798 data-nosnippet>1798</a>/// // Error: remove the type prefix `User` — use `{ ... }` without a type name
 <a href=#1799 id=1799 data-nosnippet>1799</a>/// toasty::create!(Todo { user: User { name: "Alice" } })
@@ -1817,7 +1817,7 @@
 <a href=#1817 id=1817 data-nosnippet>1817</a>/// #     #[index]
 <a href=#1818 id=1818 data-nosnippet>1818</a>/// #     user_id: i64,
 <a href=#1819 id=1819 data-nosnippet>1819</a>/// #     #[belongs_to(key = user_id, references = id)]
-<a href=#1820 id=1820 data-nosnippet>1820</a>/// #     user: toasty::BelongsTo&lt;User&gt;,
+<a href=#1820 id=1820 data-nosnippet>1820</a>/// #     user: toasty::Deferred&lt;User&gt;,
 <a href=#1821 id=1821 data-nosnippet>1821</a>/// # }
 <a href=#1822 id=1822 data-nosnippet>1822</a>/// let _ = toasty::create!(Todo { user: { name: "Alice" } });
 <a href=#1823 id=1823 data-nosnippet>1823</a>/// ```

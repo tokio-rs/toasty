@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-7256fe91.js";
+            window.path_to_searchindex_js = "searchindex-66ef6eda.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-17951f78.js"></script>
@@ -176,10 +176,10 @@
                     <main>
                         <h1 id="hasmany"><a class="header" href="#hasmany">HasMany</a></h1>
 <p>A <code>HasMany</code> relationship connects a parent model to multiple child records. The
-parent declares a <code>HasMany&lt;T&gt;</code> field, and the child stores a foreign key
+parent declares a <code>Deferred&lt;Vec&lt;T&gt;&gt;</code> field, and the child stores a foreign key
 pointing back to the parent via <a href="./belongs-to.html">BelongsTo</a>.</p>
 <h2 id="defining-a-hasmany-relationship"><a class="header" href="#defining-a-hasmany-relationship">Defining a HasMany relationship</a></h2>
-<p>Add a <code>#[has_many]</code> field of type <code>HasMany&lt;T&gt;</code> on the parent model. The child
+<p>Add a <code>#[has_many]</code> field of type <code>Deferred&lt;Vec&lt;T&gt;&gt;</code> on the parent model. The child
 model must have a corresponding <code>#[belongs_to]</code> field.</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -193,7 +193,7 @@ struct User {
     name: String,
 
     #[has_many]
-    posts: toasty::HasMany&lt;Post&gt;,
+    posts: toasty::Deferred&lt;Vec&lt;Post&gt;&gt;,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -206,7 +206,7 @@ struct Post {
     user_id: u64,
 
     #[belongs_to(key = user_id, references = id)]
-    user: toasty::BelongsTo&lt;User&gt;,
+    user: toasty::Deferred&lt;User&gt;,
 
     title: String,
 }
@@ -226,7 +226,7 @@ children:</p>
 </span><span class="boring">    id: u64,
 </span><span class="boring">    name: String,
 </span><span class="boring">    #[has_many]
-</span><span class="boring">    posts: toasty::HasMany&lt;Post&gt;,
+</span><span class="boring">    posts: toasty::Deferred&lt;Vec&lt;Post&gt;&gt;,
 </span><span class="boring">}
 </span><span class="boring">#[derive(Debug, toasty::Model)]
 </span><span class="boring">struct Post {
@@ -236,7 +236,7 @@ children:</p>
 </span><span class="boring">    #[index]
 </span><span class="boring">    user_id: u64,
 </span><span class="boring">    #[belongs_to(key = user_id, references = id)]
-</span><span class="boring">    user: toasty::BelongsTo&lt;User&gt;,
+</span><span class="boring">    user: toasty::Deferred&lt;User&gt;,
 </span><span class="boring">    title: String,
 </span><span class="boring">}
 </span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
@@ -267,7 +267,7 @@ automatically sets the foreign key:</p>
 </span><span class="boring">    id: u64,
 </span><span class="boring">    name: String,
 </span><span class="boring">    #[has_many]
-</span><span class="boring">    posts: toasty::HasMany&lt;Post&gt;,
+</span><span class="boring">    posts: toasty::Deferred&lt;Vec&lt;Post&gt;&gt;,
 </span><span class="boring">}
 </span><span class="boring">#[derive(Debug, toasty::Model)]
 </span><span class="boring">struct Post {
@@ -277,7 +277,7 @@ automatically sets the foreign key:</p>
 </span><span class="boring">    #[index]
 </span><span class="boring">    user_id: u64,
 </span><span class="boring">    #[belongs_to(key = user_id, references = id)]
-</span><span class="boring">    user: toasty::BelongsTo&lt;User&gt;,
+</span><span class="boring">    user: toasty::Deferred&lt;User&gt;,
 </span><span class="boring">    title: String,
 </span><span class="boring">}
 </span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
@@ -304,7 +304,7 @@ relation name on the create builder:</p>
 </span><span class="boring">    id: u64,
 </span><span class="boring">    name: String,
 </span><span class="boring">    #[has_many]
-</span><span class="boring">    posts: toasty::HasMany&lt;Post&gt;,
+</span><span class="boring">    posts: toasty::Deferred&lt;Vec&lt;Post&gt;&gt;,
 </span><span class="boring">}
 </span><span class="boring">#[derive(Debug, toasty::Model)]
 </span><span class="boring">struct Post {
@@ -314,7 +314,7 @@ relation name on the create builder:</p>
 </span><span class="boring">    #[index]
 </span><span class="boring">    user_id: u64,
 </span><span class="boring">    #[belongs_to(key = user_id, references = id)]
-</span><span class="boring">    user: toasty::BelongsTo&lt;User&gt;,
+</span><span class="boring">    user: toasty::Deferred&lt;User&gt;,
 </span><span class="boring">    title: String,
 </span><span class="boring">}
 </span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
@@ -420,11 +420,11 @@ struct User {
     name: String,
 
     #[has_many]
-    comments: toasty::HasMany&lt;Comment&gt;,
+    comments: toasty::Deferred&lt;Vec&lt;Comment&gt;&gt;,
 
     // User → comments → article
     #[has_many(via = comments.article)]
-    commented_articles: toasty::HasMany&lt;Article&gt;,
+    commented_articles: toasty::Deferred&lt;Vec&lt;Article&gt;&gt;,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -437,13 +437,13 @@ struct Comment {
     user_id: u64,
 
     #[belongs_to(key = user_id, references = id)]
-    user: toasty::BelongsTo&lt;User&gt;,
+    user: toasty::Deferred&lt;User&gt;,
 
     #[index]
     article_id: u64,
 
     #[belongs_to(key = article_id, references = id)]
-    article: toasty::BelongsTo&lt;Article&gt;,
+    article: toasty::Deferred&lt;Article&gt;,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -455,7 +455,7 @@ struct Article {
     title: String,
 
     #[has_many]
-    comments: toasty::HasMany&lt;Comment&gt;,
+    comments: toasty::Deferred&lt;Vec&lt;Comment&gt;&gt;,
 }
 <span class="boring">}</span></code></pre>
 <p>The target type is <code>Article</code> because the path <code>comments.article</code> ends there.
@@ -484,7 +484,7 @@ the underlying relations directly instead.</p>
 projecting a <code>via</code> relation is supported on SQL backends; both are not yet
 available on DynamoDB.</p>
 <h2 id="what-gets-generated"><a class="header" href="#what-gets-generated">What gets generated</a></h2>
-<p>For a <code>User</code> model with <code>#[has_many] posts: HasMany&lt;Post&gt;</code>, Toasty generates:</p>
+<p>For a <code>User</code> model with <code>#[has_many] posts: Deferred&lt;Vec&lt;Post&gt;&gt;</code>, Toasty generates:</p>
 <p><strong>On the parent instance:</strong></p>
 <div class="table-wrapper">
 <table>

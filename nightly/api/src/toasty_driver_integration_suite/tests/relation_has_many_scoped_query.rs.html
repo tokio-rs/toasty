@@ -12,7 +12,7 @@
 <a href=#12 id=12 data-nosnippet>12</a>        </span>id: ID,
 <a href=#13 id=13 data-nosnippet>13</a>
 <a href=#14 id=14 data-nosnippet>14</a>        <span class="attr">#[has_many]
-<a href=#15 id=15 data-nosnippet>15</a>        </span>todos: toasty::HasMany&lt;Todo&gt;,
+<a href=#15 id=15 data-nosnippet>15</a>        </span>todos: toasty::Deferred&lt;Vec&lt;Todo&gt;&gt;,
 <a href=#16 id=16 data-nosnippet>16</a>    }
 <a href=#17 id=17 data-nosnippet>17</a>
 <a href=#18 id=18 data-nosnippet>18</a>    <span class="attr">#[derive(Debug, toasty::Model)]
@@ -26,7 +26,7 @@
 <a href=#26 id=26 data-nosnippet>26</a>        </span>user_id: ID,
 <a href=#27 id=27 data-nosnippet>27</a>
 <a href=#28 id=28 data-nosnippet>28</a>        <span class="attr">#[belongs_to(key = user_id, references = id)]
-<a href=#29 id=29 data-nosnippet>29</a>        </span>user: toasty::BelongsTo&lt;User&gt;,
+<a href=#29 id=29 data-nosnippet>29</a>        </span>user: toasty::Deferred&lt;User&gt;,
 <a href=#30 id=30 data-nosnippet>30</a>
 <a href=#31 id=31 data-nosnippet>31</a>        title: String,
 <a href=#32 id=32 data-nosnippet>32</a>
@@ -138,7 +138,7 @@
 <a href=#138 id=138 data-nosnippet>138</a>        </span>id: ID,
 <a href=#139 id=139 data-nosnippet>139</a>
 <a href=#140 id=140 data-nosnippet>140</a>        <span class="attr">#[has_many]
-<a href=#141 id=141 data-nosnippet>141</a>        </span>todos: toasty::HasMany&lt;Todo&gt;,
+<a href=#141 id=141 data-nosnippet>141</a>        </span>todos: toasty::Deferred&lt;Vec&lt;Todo&gt;&gt;,
 <a href=#142 id=142 data-nosnippet>142</a>    }
 <a href=#143 id=143 data-nosnippet>143</a>
 <a href=#144 id=144 data-nosnippet>144</a>    <span class="attr">#[derive(Debug, toasty::Model)]
@@ -152,7 +152,7 @@
 <a href=#152 id=152 data-nosnippet>152</a>        </span>user_id: ID,
 <a href=#153 id=153 data-nosnippet>153</a>
 <a href=#154 id=154 data-nosnippet>154</a>        <span class="attr">#[belongs_to(key = user_id, references = id)]
-<a href=#155 id=155 data-nosnippet>155</a>        </span>user: toasty::BelongsTo&lt;User&gt;,
+<a href=#155 id=155 data-nosnippet>155</a>        </span>user: toasty::Deferred&lt;User&gt;,
 <a href=#156 id=156 data-nosnippet>156</a>
 <a href=#157 id=157 data-nosnippet>157</a>        title: String,
 <a href=#158 id=158 data-nosnippet>158</a>

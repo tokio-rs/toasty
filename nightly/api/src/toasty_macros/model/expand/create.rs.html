@@ -202,7 +202,7 @@
 <a href=#202 id=202 data-nosnippet>202</a>                        // `List&lt;T&gt;` for `Vec&lt;T: Scalar&gt;`. Trait dispatch
 <a href=#203 id=203 data-nosnippet>203</a>                        // routes each case correctly; no type parsing here.
 <a href=#204 id=204 data-nosnippet>204</a>                        </span><span class="macro">quote!</span> {
-<a href=#205 id=205 data-nosnippet>205</a>                            #vis <span class="kw">fn </span>#name(<span class="kw-2">mut </span><span class="self">self</span>, #name: <span class="kw">impl </span>#toasty::IntoExpr&lt;&lt;#ty <span class="kw">as </span>#toasty::Field&gt;::ExprTarget&gt;) -&gt; <span class="self">Self </span>{
+<a href=#205 id=205 data-nosnippet>205</a>                            #vis <span class="kw">fn </span>#name(<span class="kw-2">mut </span><span class="self">self</span>, #name: <span class="kw">impl </span>IntoExpr&lt;FieldExprTarget&lt;#ty&gt;&gt;) -&gt; <span class="self">Self </span>{
 <a href=#206 id=206 data-nosnippet>206</a>                                <span class="self">self</span>.stmt.set(#index_tokenized, #name.into_expr());
 <a href=#207 id=207 data-nosnippet>207</a>                                <span class="self">self
 <a href=#208 id=208 data-nosnippet>208</a>                            </span>}

@@ -151,7 +151,7 @@
 <a href=#151 id=151 data-nosnippet>151</a>        name: String,
 <a href=#152 id=152 data-nosnippet>152</a>
 <a href=#153 id=153 data-nosnippet>153</a>        <span class="attr">#[has_many]
-<a href=#154 id=154 data-nosnippet>154</a>        </span>todos: toasty::HasMany&lt;Todo&gt;,
+<a href=#154 id=154 data-nosnippet>154</a>        </span>todos: toasty::Deferred&lt;Vec&lt;Todo&gt;&gt;,
 <a href=#155 id=155 data-nosnippet>155</a>
 <a href=#156 id=156 data-nosnippet>156</a>        <span class="comment">// This optional field triggers the unimplemented code path!
 <a href=#157 id=157 data-nosnippet>157</a>        // Without it, the batch create works fine.
@@ -169,7 +169,7 @@
 <a href=#169 id=169 data-nosnippet>169</a>        </span>user_id: ID,
 <a href=#170 id=170 data-nosnippet>170</a>
 <a href=#171 id=171 data-nosnippet>171</a>        <span class="attr">#[belongs_to(key = user_id, references = id)]
-<a href=#172 id=172 data-nosnippet>172</a>        </span>user: toasty::BelongsTo&lt;User&gt;,
+<a href=#172 id=172 data-nosnippet>172</a>        </span>user: toasty::Deferred&lt;User&gt;,
 <a href=#173 id=173 data-nosnippet>173</a>
 <a href=#174 id=174 data-nosnippet>174</a>        title: String,
 <a href=#175 id=175 data-nosnippet>175</a>    }
@@ -211,7 +211,7 @@
 <a href=#211 id=211 data-nosnippet>211</a>        </span>email: String,
 <a href=#212 id=212 data-nosnippet>212</a>
 <a href=#213 id=213 data-nosnippet>213</a>        <span class="attr">#[has_many]
-<a href=#214 id=214 data-nosnippet>214</a>        </span>todos: toasty::HasMany&lt;Todo&gt;,
+<a href=#214 id=214 data-nosnippet>214</a>        </span>todos: toasty::Deferred&lt;Vec&lt;Todo&gt;&gt;,
 <a href=#215 id=215 data-nosnippet>215</a>    }
 <a href=#216 id=216 data-nosnippet>216</a>
 <a href=#217 id=217 data-nosnippet>217</a>    <span class="attr">#[derive(Debug, toasty::Model)]
@@ -224,7 +224,7 @@
 <a href=#224 id=224 data-nosnippet>224</a>        </span>user_id: ID,
 <a href=#225 id=225 data-nosnippet>225</a>
 <a href=#226 id=226 data-nosnippet>226</a>        <span class="attr">#[belongs_to(key = user_id, references = id)]
-<a href=#227 id=227 data-nosnippet>227</a>        </span>user: toasty::BelongsTo&lt;User&gt;,
+<a href=#227 id=227 data-nosnippet>227</a>        </span>user: toasty::Deferred&lt;User&gt;,
 <a href=#228 id=228 data-nosnippet>228</a>
 <a href=#229 id=229 data-nosnippet>229</a>        title: String,
 <a href=#230 id=230 data-nosnippet>230</a>    }

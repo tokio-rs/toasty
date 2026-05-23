@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-7256fe91.js";
+            window.path_to_searchindex_js = "searchindex-66ef6eda.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-17951f78.js"></script>
@@ -666,7 +666,7 @@ field. Same syntax works through <code>BelongsTo</code> and through chains of
 </span><span class="boring">    id: u64,
 </span><span class="boring">    name: String,
 </span><span class="boring">    #[has_one]
-</span><span class="boring">    profile: toasty::HasOne&lt;Option&lt;Profile&gt;&gt;,
+</span><span class="boring">    profile: toasty::Deferred&lt;Option&lt;Profile&gt;&gt;,
 </span><span class="boring">}
 </span><span class="boring">#[derive(Debug, toasty::Model)]
 </span><span class="boring">struct Profile {
@@ -677,7 +677,7 @@ field. Same syntax works through <code>BelongsTo</code> and through chains of
 </span><span class="boring">    #[unique]
 </span><span class="boring">    user_id: Option&lt;u64&gt;,
 </span><span class="boring">    #[belongs_to(key = user_id, references = id)]
-</span><span class="boring">    user: toasty::BelongsTo&lt;Option&lt;User&gt;&gt;,
+</span><span class="boring">    user: toasty::Deferred&lt;Option&lt;User&gt;&gt;,
 </span><span class="boring">}
 </span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
 </span>// Users whose profile has a score above 50
@@ -700,7 +700,7 @@ matches a condition. This generates a subquery:</p>
 </span><span class="boring">    id: u64,
 </span><span class="boring">    name: String,
 </span><span class="boring">    #[has_many]
-</span><span class="boring">    todos: toasty::HasMany&lt;Todo&gt;,
+</span><span class="boring">    todos: toasty::Deferred&lt;Vec&lt;Todo&gt;&gt;,
 </span><span class="boring">}
 </span><span class="boring">#[derive(Debug, toasty::Model)]
 </span><span class="boring">struct Todo {
@@ -710,7 +710,7 @@ matches a condition. This generates a subquery:</p>
 </span><span class="boring">    #[index]
 </span><span class="boring">    user_id: u64,
 </span><span class="boring">    #[belongs_to(key = user_id, references = id)]
-</span><span class="boring">    user: toasty::BelongsTo&lt;User&gt;,
+</span><span class="boring">    user: toasty::Deferred&lt;User&gt;,
 </span><span class="boring">    title: String,
 </span><span class="boring">    complete: bool,
 </span><span class="boring">}
@@ -742,7 +742,7 @@ it tests whether <em>every</em> related record matches the filter. <strong>SQL-o
 </span><span class="boring">    id: u64,
 </span><span class="boring">    name: String,
 </span><span class="boring">    #[has_many]
-</span><span class="boring">    todos: toasty::HasMany&lt;Todo&gt;,
+</span><span class="boring">    todos: toasty::Deferred&lt;Vec&lt;Todo&gt;&gt;,
 </span><span class="boring">}
 </span><span class="boring">#[derive(Debug, toasty::Model)]
 </span><span class="boring">struct Todo {
@@ -752,7 +752,7 @@ it tests whether <em>every</em> related record matches the filter. <strong>SQL-o
 </span><span class="boring">    #[index]
 </span><span class="boring">    user_id: u64,
 </span><span class="boring">    #[belongs_to(key = user_id, references = id)]
-</span><span class="boring">    user: toasty::BelongsTo&lt;User&gt;,
+</span><span class="boring">    user: toasty::Deferred&lt;User&gt;,
 </span><span class="boring">    complete: bool,
 </span><span class="boring">}
 </span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {

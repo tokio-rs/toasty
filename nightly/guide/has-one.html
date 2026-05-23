@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-7256fe91.js";
+            window.path_to_searchindex_js = "searchindex-66ef6eda.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-17951f78.js"></script>
@@ -179,7 +179,7 @@
 <a href="./has-many.html">HasMany</a>, the foreign key lives on the child model, but
 <code>HasOne</code> enforces that at most one child exists per parent.</p>
 <h2 id="defining-a-hasone-relationship"><a class="header" href="#defining-a-hasone-relationship">Defining a HasOne relationship</a></h2>
-<p>Add a <code>#[has_one]</code> field of type <code>HasOne&lt;T&gt;</code> on the parent model. The child
+<p>Add a <code>#[has_one]</code> field of type <code>Deferred&lt;T&gt;</code> on the parent model. The child
 model must have a corresponding <code>#[belongs_to]</code> field with a <code>#[unique]</code> foreign
 key (since each parent maps to at most one child):</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -194,7 +194,7 @@ struct User {
     name: String,
 
     #[has_one]
-    profile: toasty::HasOne&lt;Option&lt;Profile&gt;&gt;,
+    profile: toasty::Deferred&lt;Option&lt;Profile&gt;&gt;,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -207,7 +207,7 @@ struct Profile {
     user_id: Option&lt;u64&gt;,
 
     #[belongs_to(key = user_id, references = id)]
-    user: toasty::BelongsTo&lt;Option&lt;User&gt;&gt;,
+    user: toasty::Deferred&lt;Option&lt;User&gt;&gt;,
 
     bio: String,
 }
@@ -223,7 +223,7 @@ CREATE UNIQUE INDEX idx_profiles_user_id ON profiles (user_id);
 </code></pre>
 <h2 id="optional-vs-required-hasone"><a class="header" href="#optional-vs-required-hasone">Optional vs required HasOne</a></h2>
 <p>The type parameter on <code>HasOne</code> controls whether the parent must have a child.</p>
-<h3 id="optional-hasoneoptionprofile"><a class="header" href="#optional-hasoneoptionprofile">Optional: <code>HasOne&lt;Option&lt;Profile&gt;&gt;</code></a></h3>
+<h3 id="optional-deferredoptionprofile"><a class="header" href="#optional-deferredoptionprofile">Optional: <code>Deferred&lt;Option&lt;Profile&gt;&gt;</code></a></h3>
 <p>The parent may or may not have a child. Creating a parent without a child is
 allowed:</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -236,7 +236,7 @@ allowed:</p>
 </span><span class="boring">    id: u64,
 </span><span class="boring">    name: String,
 </span><span class="boring">    #[has_one]
-</span><span class="boring">    profile: toasty::HasOne&lt;Option&lt;Profile&gt;&gt;,
+</span><span class="boring">    profile: toasty::Deferred&lt;Option&lt;Profile&gt;&gt;,
 </span><span class="boring">}
 </span><span class="boring">#[derive(Debug, toasty::Model)]
 </span><span class="boring">struct Profile {
@@ -246,7 +246,7 @@ allowed:</p>
 </span><span class="boring">    #[unique]
 </span><span class="boring">    user_id: Option&lt;u64&gt;,
 </span><span class="boring">    #[belongs_to(key = user_id, references = id)]
-</span><span class="boring">    user: toasty::BelongsTo&lt;Option&lt;User&gt;&gt;,
+</span><span class="boring">    user: toasty::Deferred&lt;Option&lt;User&gt;&gt;,
 </span><span class="boring">    bio: String,
 </span><span class="boring">}
 </span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
@@ -257,7 +257,7 @@ assert!(user.profile().exec(&amp;mut db).await?.is_none());
 <span class="boring">Ok(())
 </span><span class="boring">}
 </span><span class="boring">}</span></code></pre>
-<h3 id="required-hasoneprofile"><a class="header" href="#required-hasoneprofile">Required: <code>HasOne&lt;Profile&gt;</code></a></h3>
+<h3 id="required-deferredprofile"><a class="header" href="#required-deferredprofile">Required: <code>Deferred&lt;Profile&gt;</code></a></h3>
 <p>The parent must have a child. Creating a parent requires providing a child:</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -268,7 +268,7 @@ assert!(user.profile().exec(&amp;mut db).await?.is_none());
 </span><span class="boring">    #[auto]
 </span><span class="boring">    id: u64,
 </span><span class="boring">    #[has_one]
-</span><span class="boring">    profile: toasty::HasOne&lt;Profile&gt;,
+</span><span class="boring">    profile: toasty::Deferred&lt;Profile&gt;,
 </span><span class="boring">}
 </span><span class="boring">#[derive(Debug, toasty::Model)]
 </span><span class="boring">struct Profile {
@@ -278,7 +278,7 @@ assert!(user.profile().exec(&amp;mut db).await?.is_none());
 </span><span class="boring">    #[unique]
 </span><span class="boring">    user_id: Option&lt;u64&gt;,
 </span><span class="boring">    #[belongs_to(key = user_id, references = id)]
-</span><span class="boring">    user: toasty::BelongsTo&lt;Option&lt;User&gt;&gt;,
+</span><span class="boring">    user: toasty::Deferred&lt;Option&lt;User&gt;&gt;,
 </span><span class="boring">    bio: String,
 </span><span class="boring">}
 </span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
@@ -306,7 +306,7 @@ assert_eq!(profile.bio, "Hello");
 </span><span class="boring">    id: u64,
 </span><span class="boring">    name: String,
 </span><span class="boring">    #[has_one]
-</span><span class="boring">    profile: toasty::HasOne&lt;Option&lt;Profile&gt;&gt;,
+</span><span class="boring">    profile: toasty::Deferred&lt;Option&lt;Profile&gt;&gt;,
 </span><span class="boring">}
 </span><span class="boring">#[derive(Debug, toasty::Model)]
 </span><span class="boring">struct Profile {
@@ -316,14 +316,14 @@ assert_eq!(profile.bio, "Hello");
 </span><span class="boring">    #[unique]
 </span><span class="boring">    user_id: Option&lt;u64&gt;,
 </span><span class="boring">    #[belongs_to(key = user_id, references = id)]
-</span><span class="boring">    user: toasty::BelongsTo&lt;Option&lt;User&gt;&gt;,
+</span><span class="boring">    user: toasty::Deferred&lt;Option&lt;User&gt;&gt;,
 </span><span class="boring">    bio: String,
 </span><span class="boring">}
 </span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
 </span><span class="boring">let user = toasty::create!(User { name: "Alice", profile: { bio: "A person" } })
 </span><span class="boring">    .exec(&amp;mut db)
 </span><span class="boring">    .await?;
-</span>// For HasOne&lt;Option&lt;Profile&gt;&gt; — returns Option&lt;Profile&gt;
+</span>// For Deferred&lt;Option&lt;Profile&gt;&gt; — returns Option&lt;Profile&gt;
 let profile = user.profile().exec(&amp;mut db).await?;
 
 if let Some(profile) = profile {
@@ -332,7 +332,7 @@ if let Some(profile) = profile {
 <span class="boring">Ok(())
 </span><span class="boring">}
 </span><span class="boring">}</span></code></pre>
-<p>For a required <code>HasOne&lt;Profile&gt;</code>, <code>.get()</code> returns <code>Profile</code> directly (not
+<p>For a required <code>Deferred&lt;Profile&gt;</code>, <code>.get()</code> returns <code>Profile</code> directly (not
 wrapped in <code>Option</code>).</p>
 <p>Each call to <code>.profile().exec()</code> executes a database query. To avoid this, use
 <a href="./preloading-associations.html">preloading</a>.</p>
@@ -348,7 +348,7 @@ wrapped in <code>Option</code>).</p>
 </span><span class="boring">    id: u64,
 </span><span class="boring">    name: String,
 </span><span class="boring">    #[has_one]
-</span><span class="boring">    profile: toasty::HasOne&lt;Option&lt;Profile&gt;&gt;,
+</span><span class="boring">    profile: toasty::Deferred&lt;Option&lt;Profile&gt;&gt;,
 </span><span class="boring">}
 </span><span class="boring">#[derive(Debug, toasty::Model)]
 </span><span class="boring">struct Profile {
@@ -358,7 +358,7 @@ wrapped in <code>Option</code>).</p>
 </span><span class="boring">    #[unique]
 </span><span class="boring">    user_id: Option&lt;u64&gt;,
 </span><span class="boring">    #[belongs_to(key = user_id, references = id)]
-</span><span class="boring">    user: toasty::BelongsTo&lt;Option&lt;User&gt;&gt;,
+</span><span class="boring">    user: toasty::Deferred&lt;Option&lt;User&gt;&gt;,
 </span><span class="boring">    bio: String,
 </span><span class="boring">}
 </span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
@@ -383,7 +383,7 @@ assert_eq!(profile.user_id, Some(user.id));
 </span><span class="boring">    id: u64,
 </span><span class="boring">    name: String,
 </span><span class="boring">    #[has_one]
-</span><span class="boring">    profile: toasty::HasOne&lt;Option&lt;Profile&gt;&gt;,
+</span><span class="boring">    profile: toasty::Deferred&lt;Option&lt;Profile&gt;&gt;,
 </span><span class="boring">}
 </span><span class="boring">#[derive(Debug, toasty::Model)]
 </span><span class="boring">struct Profile {
@@ -393,7 +393,7 @@ assert_eq!(profile.user_id, Some(user.id));
 </span><span class="boring">    #[unique]
 </span><span class="boring">    user_id: Option&lt;u64&gt;,
 </span><span class="boring">    #[belongs_to(key = user_id, references = id)]
-</span><span class="boring">    user: toasty::BelongsTo&lt;Option&lt;User&gt;&gt;,
+</span><span class="boring">    user: toasty::Deferred&lt;Option&lt;User&gt;&gt;,
 </span><span class="boring">    bio: String,
 </span><span class="boring">}
 </span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
@@ -419,7 +419,7 @@ assert_eq!(profile.user_id, Some(user.id));
 </span><span class="boring">    id: u64,
 </span><span class="boring">    name: String,
 </span><span class="boring">    #[has_one]
-</span><span class="boring">    profile: toasty::HasOne&lt;Option&lt;Profile&gt;&gt;,
+</span><span class="boring">    profile: toasty::Deferred&lt;Option&lt;Profile&gt;&gt;,
 </span><span class="boring">}
 </span><span class="boring">#[derive(Debug, toasty::Model)]
 </span><span class="boring">struct Profile {
@@ -429,7 +429,7 @@ assert_eq!(profile.user_id, Some(user.id));
 </span><span class="boring">    #[unique]
 </span><span class="boring">    user_id: Option&lt;u64&gt;,
 </span><span class="boring">    #[belongs_to(key = user_id, references = id)]
-</span><span class="boring">    user: toasty::BelongsTo&lt;Option&lt;User&gt;&gt;,
+</span><span class="boring">    user: toasty::Deferred&lt;Option&lt;User&gt;&gt;,
 </span><span class="boring">    bio: String,
 </span><span class="boring">}
 </span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
@@ -457,7 +457,7 @@ assert_eq!(profile.bio, "New bio");
 </span><span class="boring">    #[auto]
 </span><span class="boring">    id: u64,
 </span><span class="boring">    #[has_one]
-</span><span class="boring">    profile: toasty::HasOne&lt;Option&lt;Profile&gt;&gt;,
+</span><span class="boring">    profile: toasty::Deferred&lt;Option&lt;Profile&gt;&gt;,
 </span><span class="boring">}
 </span><span class="boring">#[derive(Debug, toasty::Model)]
 </span><span class="boring">struct Profile {
@@ -467,7 +467,7 @@ assert_eq!(profile.bio, "New bio");
 </span><span class="boring">    #[unique]
 </span><span class="boring">    user_id: Option&lt;u64&gt;,
 </span><span class="boring">    #[belongs_to(key = user_id, references = id)]
-</span><span class="boring">    user: toasty::BelongsTo&lt;Option&lt;User&gt;&gt;,
+</span><span class="boring">    user: toasty::Deferred&lt;Option&lt;User&gt;&gt;,
 </span><span class="boring">}
 </span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
 </span>let user = toasty::create!(User {}).exec(&amp;mut db).await?;
@@ -514,13 +514,13 @@ relations with <code>via</code> instead of a single foreign key. Declare it when
 is expected to reach at most one target:</p>
 <pre><code class="language-rust ignore">// User → account → subscription
 #[has_one(via = account.subscription)]
-subscription: toasty::HasOne&lt;Option&lt;Subscription&gt;&gt;,</code></pre>
+subscription: toasty::Deferred&lt;Option&lt;Subscription&gt;&gt;,</code></pre>
 <p>See <a href="./has-many.html#multi-step-relations-via">Multi-step relations on HasMany</a>
 for the full rules — distinct targets and read-only access apply the same way.
 Preload it with <code>.include()</code> or project it with <code>.select()</code> on SQL backends;
 both are not yet available on DynamoDB.</p>
 <h2 id="what-gets-generated"><a class="header" href="#what-gets-generated">What gets generated</a></h2>
-<p>For a <code>User</code> model with <code>#[has_one] profile: HasOne&lt;Option&lt;Profile&gt;&gt;</code>, Toasty
+<p>For a <code>User</code> model with <code>#[has_one] profile: Deferred&lt;Option&lt;Profile&gt;&gt;</code>, Toasty
 generates:</p>
 <div class="table-wrapper">
 <table>

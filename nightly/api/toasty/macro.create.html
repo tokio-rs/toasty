@@ -126,9 +126,9 @@ records linked to that todo.</p>
 <tr><td><code>Option&lt;T&gt;</code></td><td>Defaults to <code>None</code> (<code>NULL</code>)</td></tr>
 <tr><td><code>#[default(expr)]</code></td><td>Uses the default expression</td></tr>
 <tr><td><code>#[update(expr)]</code></td><td>Uses the expression as the initial value</td></tr>
-<tr><td><code>HasMany&lt;T&gt;</code></td><td>No related records created</td></tr>
-<tr><td><code>HasOne&lt;Option&lt;T&gt;&gt;</code></td><td>No related record created</td></tr>
-<tr><td><code>BelongsTo&lt;Option&lt;T&gt;&gt;</code></td><td>Foreign key set to <code>NULL</code></td></tr>
+<tr><td><code>#[has_many] Deferred&lt;Vec&lt;T&gt;&gt;</code></td><td>No related records created</td></tr>
+<tr><td><code>#[has_one] Deferred&lt;Option&lt;T&gt;&gt;</code></td><td>No related record created</td></tr>
+<tr><td><code>#[belongs_to] Deferred&lt;Option&lt;T&gt;&gt;</code></td><td>Foreign key set to <code>NULL</code></td></tr>
 </tbody></table>
 </div>
 <p>Required fields (<code>String</code>, <code>i64</code>, non-optional <code>BelongsTo</code>, etc.) that are

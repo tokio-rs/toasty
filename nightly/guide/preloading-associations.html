@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-7256fe91.js";
+            window.path_to_searchindex_js = "searchindex-66ef6eda.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-17951f78.js"></script>
@@ -217,7 +217,7 @@ model’s <code>fields()</code> accessor:</p>
 </span><span class="boring">    id: u64,
 </span><span class="boring">    name: String,
 </span><span class="boring">    #[has_many]
-</span><span class="boring">    posts: toasty::HasMany&lt;Post&gt;,
+</span><span class="boring">    posts: toasty::Deferred&lt;Vec&lt;Post&gt;&gt;,
 </span><span class="boring">}
 </span><span class="boring">#[derive(Debug, toasty::Model)]
 </span><span class="boring">struct Post {
@@ -227,7 +227,7 @@ model’s <code>fields()</code> accessor:</p>
 </span><span class="boring">    #[index]
 </span><span class="boring">    user_id: u64,
 </span><span class="boring">    #[belongs_to(key = user_id, references = id)]
-</span><span class="boring">    user: toasty::BelongsTo&lt;User&gt;,
+</span><span class="boring">    user: toasty::Deferred&lt;User&gt;,
 </span><span class="boring">    title: String,
 </span><span class="boring">}
 </span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
@@ -274,22 +274,23 @@ loaded:</p>
 <pre><code class="language-rust ignore">fn post_count(user: &amp;User) -&gt; Option&lt;usize&gt; {
     user.posts.try_get().map(&lt;[_]&gt;::len)
 }</code></pre>
-<p><code>.try_get()</code> is available on all three relation types and returns the same
-reference shape as <code>.get()</code> wrapped in an <code>Option</code>:</p>
+<p><code>.try_get()</code> is available on relation fields and returns the same reference
+shape as <code>.get()</code> wrapped in an <code>Option</code>:</p>
 <div class="table-wrapper">
 <table>
 <thead>
-<tr><th>Relation type</th><th><code>.get()</code> returns</th><th><code>.try_get()</code> returns</th></tr>
+<tr><th>Field type</th><th><code>.get()</code> returns</th><th><code>.try_get()</code> returns</th></tr>
 </thead>
 <tbody>
-<tr><td><code>BelongsTo&lt;T&gt;</code></td><td><code>&amp;T</code></td><td><code>Option&lt;&amp;T&gt;</code></td></tr>
-<tr><td><code>HasOne&lt;T&gt;</code></td><td><code>&amp;T</code></td><td><code>Option&lt;&amp;T&gt;</code></td></tr>
-<tr><td><code>HasMany&lt;T&gt;</code></td><td><code>&amp;[T]</code></td><td><code>Option&lt;&amp;[T]&gt;</code></td></tr>
+<tr><td><code>Deferred&lt;T&gt;</code></td><td><code>&amp;T</code></td><td><code>Option&lt;&amp;T&gt;</code></td></tr>
+<tr><td><code>Deferred&lt;Option&lt;T&gt;&gt;</code></td><td><code>&amp;Option&lt;T&gt;</code></td><td><code>Option&lt;&amp;Option&lt;T&gt;&gt;</code></td></tr>
+<tr><td><code>Deferred&lt;Vec&lt;T&gt;&gt;</code></td><td><code>&amp;Vec&lt;T&gt;</code></td><td><code>Option&lt;&amp;Vec&lt;T&gt;&gt;</code></td></tr>
 </tbody>
 </table>
 </div>
-<p>For <code>HasMany</code>, an empty slice means the association was loaded and the record
-has no related rows, while <code>None</code> means the association was not loaded.</p>
+<p>For <code>Deferred&lt;Vec&lt;T&gt;&gt;</code>, an empty vector means the association was loaded and
+the record has no related rows, while <code>None</code> from <code>.try_get()</code> means the
+association was not loaded.</p>
 <p>Prefer <code>.get()</code> in code paths that control the query (the call site can see the
 matching <code>.include()</code>); reserve <code>.try_get()</code> for code that accepts records from
 elsewhere and needs to fall back when the data is missing.</p>
@@ -305,7 +306,7 @@ elsewhere and needs to fall back when the data is missing.</p>
 </span><span class="boring">    id: u64,
 </span><span class="boring">    name: String,
 </span><span class="boring">    #[has_many]
-</span><span class="boring">    posts: toasty::HasMany&lt;Post&gt;,
+</span><span class="boring">    posts: toasty::Deferred&lt;Vec&lt;Post&gt;&gt;,
 </span><span class="boring">}
 </span><span class="boring">#[derive(Debug, toasty::Model)]
 </span><span class="boring">struct Post {
@@ -315,7 +316,7 @@ elsewhere and needs to fall back when the data is missing.</p>
 </span><span class="boring">    #[index]
 </span><span class="boring">    user_id: u64,
 </span><span class="boring">    #[belongs_to(key = user_id, references = id)]
-</span><span class="boring">    user: toasty::BelongsTo&lt;User&gt;,
+</span><span class="boring">    user: toasty::Deferred&lt;User&gt;,
 </span><span class="boring">    title: String,
 </span><span class="boring">}
 </span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
@@ -346,7 +347,7 @@ assert_eq!("Alice", user.name);
 </span><span class="boring">    id: u64,
 </span><span class="boring">    name: String,
 </span><span class="boring">    #[has_one]
-</span><span class="boring">    profile: toasty::HasOne&lt;Option&lt;Profile&gt;&gt;,
+</span><span class="boring">    profile: toasty::Deferred&lt;Option&lt;Profile&gt;&gt;,
 </span><span class="boring">}
 </span><span class="boring">#[derive(Debug, toasty::Model)]
 </span><span class="boring">struct Profile {
@@ -357,7 +358,7 @@ assert_eq!("Alice", user.name);
 </span><span class="boring">    #[unique]
 </span><span class="boring">    user_id: Option&lt;u64&gt;,
 </span><span class="boring">    #[belongs_to(key = user_id, references = id)]
-</span><span class="boring">    user: toasty::BelongsTo&lt;Option&lt;User&gt;&gt;,
+</span><span class="boring">    user: toasty::Deferred&lt;Option&lt;User&gt;&gt;,
 </span><span class="boring">}
 </span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
 </span><span class="boring">let user = toasty::create!(User { name: "Alice", profile: { bio: "A person" } })
@@ -386,7 +387,7 @@ panic:</p>
 </span><span class="boring">    id: u64,
 </span><span class="boring">    name: String,
 </span><span class="boring">    #[has_one]
-</span><span class="boring">    profile: toasty::HasOne&lt;Option&lt;Profile&gt;&gt;,
+</span><span class="boring">    profile: toasty::Deferred&lt;Option&lt;Profile&gt;&gt;,
 </span><span class="boring">}
 </span><span class="boring">#[derive(Debug, toasty::Model)]
 </span><span class="boring">struct Profile {
@@ -397,7 +398,7 @@ panic:</p>
 </span><span class="boring">    #[unique]
 </span><span class="boring">    user_id: Option&lt;u64&gt;,
 </span><span class="boring">    #[belongs_to(key = user_id, references = id)]
-</span><span class="boring">    user: toasty::BelongsTo&lt;Option&lt;User&gt;&gt;,
+</span><span class="boring">    user: toasty::Deferred&lt;Option&lt;User&gt;&gt;,
 </span><span class="boring">}
 </span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
 </span>let user = toasty::create!(User { name: "No Profile" }).exec(&amp;mut db).await?;

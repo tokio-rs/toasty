@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-7256fe91.js";
+            window.path_to_searchindex_js = "searchindex-66ef6eda.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-17951f78.js"></script>
@@ -183,7 +183,7 @@ the value requires either a follow-up <code>.exec()</code> call or a preload wit
 read: a <code>Document</code> body, a binary blob, an audit-event JSON payload.
 Without the deferred annotation, every list query reads every column
 whether the caller needs it or not.</p>
-<p>The API mirrors <code>BelongsTo</code>: a synchronous <code>.get()</code> reads an
+<p>The API mirrors deferred relation fields: a synchronous <code>.get()</code> reads an
 already-loaded value, an async per-field accessor loads on demand, and
 <code>.include()</code> preloads as part of the parent query.</p>
 <h2 id="marking-a-field-as-deferred"><a class="header" href="#marking-a-field-as-deferred">Marking a field as deferred</a></h2>
@@ -420,7 +420,7 @@ coalesce, and they combine with relation <code>.include()</code>s:</p>
 <pre><code class="language-rust ignore">let doc = Document::filter_by_id(id)
     .include(Document::fields().body())
     .include(Document::fields().summary())
-    .include(Document::fields().author())   // BelongsTo
+    .include(Document::fields().author())   // relation
     .get(&amp;mut db)
     .await?;</code></pre>
 <p>Across a result set, <code>.include()</code> is the way to avoid N+1: a single

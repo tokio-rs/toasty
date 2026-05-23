@@ -100,7 +100,7 @@
 <a href=#100 id=100 data-nosnippet>100</a>        </span>id: ID,
 <a href=#101 id=101 data-nosnippet>101</a>
 <a href=#102 id=102 data-nosnippet>102</a>        <span class="attr">#[has_one]
-<a href=#103 id=103 data-nosnippet>103</a>        </span>profile: toasty::HasOne&lt;Profile&gt;,
+<a href=#103 id=103 data-nosnippet>103</a>        </span>profile: toasty::Deferred&lt;Profile&gt;,
 <a href=#104 id=104 data-nosnippet>104</a>    }
 <a href=#105 id=105 data-nosnippet>105</a>
 <a href=#106 id=106 data-nosnippet>106</a>    <span class="attr">#[derive(Debug, toasty::Model)]
@@ -113,7 +113,7 @@
 <a href=#113 id=113 data-nosnippet>113</a>        </span>user_id: <span class="prelude-ty">Option</span>&lt;ID&gt;,
 <a href=#114 id=114 data-nosnippet>114</a>
 <a href=#115 id=115 data-nosnippet>115</a>        <span class="attr">#[belongs_to(key = user_id, references = id)]
-<a href=#116 id=116 data-nosnippet>116</a>        </span>user: toasty::BelongsTo&lt;<span class="prelude-ty">Option</span>&lt;User&gt;&gt;,
+<a href=#116 id=116 data-nosnippet>116</a>        </span>user: toasty::Deferred&lt;<span class="prelude-ty">Option</span>&lt;User&gt;&gt;,
 <a href=#117 id=117 data-nosnippet>117</a>
 <a href=#118 id=118 data-nosnippet>118</a>        bio: String,
 <a href=#119 id=119 data-nosnippet>119</a>    }
@@ -151,7 +151,7 @@
 <a href=#151 id=151 data-nosnippet>151</a>        </span>id: ID,
 <a href=#152 id=152 data-nosnippet>152</a>
 <a href=#153 id=153 data-nosnippet>153</a>        <span class="attr">#[has_one]
-<a href=#154 id=154 data-nosnippet>154</a>        </span>profile: toasty::HasOne&lt;Profile&gt;,
+<a href=#154 id=154 data-nosnippet>154</a>        </span>profile: toasty::Deferred&lt;Profile&gt;,
 <a href=#155 id=155 data-nosnippet>155</a>    }
 <a href=#156 id=156 data-nosnippet>156</a>
 <a href=#157 id=157 data-nosnippet>157</a>    <span class="attr">#[derive(Debug, toasty::Model)]
@@ -164,7 +164,7 @@
 <a href=#164 id=164 data-nosnippet>164</a>        </span>user_id: <span class="prelude-ty">Option</span>&lt;ID&gt;,
 <a href=#165 id=165 data-nosnippet>165</a>
 <a href=#166 id=166 data-nosnippet>166</a>        <span class="attr">#[belongs_to(key = user_id, references = id)]
-<a href=#167 id=167 data-nosnippet>167</a>        </span>user: toasty::BelongsTo&lt;<span class="prelude-ty">Option</span>&lt;User&gt;&gt;,
+<a href=#167 id=167 data-nosnippet>167</a>        </span>user: toasty::Deferred&lt;<span class="prelude-ty">Option</span>&lt;User&gt;&gt;,
 <a href=#168 id=168 data-nosnippet>168</a>
 <a href=#169 id=169 data-nosnippet>169</a>        bio: String,
 <a href=#170 id=170 data-nosnippet>170</a>    }
@@ -257,7 +257,7 @@
 <a href=#257 id=257 data-nosnippet>257</a>        </span>id: ID,
 <a href=#258 id=258 data-nosnippet>258</a>
 <a href=#259 id=259 data-nosnippet>259</a>        <span class="attr">#[has_one]
-<a href=#260 id=260 data-nosnippet>260</a>        </span>profile: toasty::HasOne&lt;<span class="prelude-ty">Option</span>&lt;Profile&gt;&gt;,
+<a href=#260 id=260 data-nosnippet>260</a>        </span>profile: toasty::Deferred&lt;<span class="prelude-ty">Option</span>&lt;Profile&gt;&gt;,
 <a href=#261 id=261 data-nosnippet>261</a>    }
 <a href=#262 id=262 data-nosnippet>262</a>
 <a href=#263 id=263 data-nosnippet>263</a>    <span class="attr">#[derive(Debug, toasty::Model)]
@@ -270,7 +270,7 @@
 <a href=#270 id=270 data-nosnippet>270</a>        </span>user_id: ID,
 <a href=#271 id=271 data-nosnippet>271</a>
 <a href=#272 id=272 data-nosnippet>272</a>        <span class="attr">#[belongs_to(key = user_id, references = id)]
-<a href=#273 id=273 data-nosnippet>273</a>        </span>user: toasty::BelongsTo&lt;User&gt;,
+<a href=#273 id=273 data-nosnippet>273</a>        </span>user: toasty::Deferred&lt;User&gt;,
 <a href=#274 id=274 data-nosnippet>274</a>
 <a href=#275 id=275 data-nosnippet>275</a>        bio: String,
 <a href=#276 id=276 data-nosnippet>276</a>    }
@@ -304,7 +304,7 @@
 <a href=#304 id=304 data-nosnippet>304</a>        </span>id: ID,
 <a href=#305 id=305 data-nosnippet>305</a>
 <a href=#306 id=306 data-nosnippet>306</a>        <span class="attr">#[has_one]
-<a href=#307 id=307 data-nosnippet>307</a>        </span>profile: toasty::HasOne&lt;<span class="prelude-ty">Option</span>&lt;Profile&gt;&gt;,
+<a href=#307 id=307 data-nosnippet>307</a>        </span>profile: toasty::Deferred&lt;<span class="prelude-ty">Option</span>&lt;Profile&gt;&gt;,
 <a href=#308 id=308 data-nosnippet>308</a>    }
 <a href=#309 id=309 data-nosnippet>309</a>
 <a href=#310 id=310 data-nosnippet>310</a>    <span class="attr">#[derive(Debug, toasty::Model)]
@@ -317,7 +317,7 @@
 <a href=#317 id=317 data-nosnippet>317</a>        </span>user_id: <span class="prelude-ty">Option</span>&lt;ID&gt;,
 <a href=#318 id=318 data-nosnippet>318</a>
 <a href=#319 id=319 data-nosnippet>319</a>        <span class="attr">#[belongs_to(key = user_id, references = id)]
-<a href=#320 id=320 data-nosnippet>320</a>        </span>user: toasty::BelongsTo&lt;<span class="prelude-ty">Option</span>&lt;User&gt;&gt;,
+<a href=#320 id=320 data-nosnippet>320</a>        </span>user: toasty::Deferred&lt;<span class="prelude-ty">Option</span>&lt;User&gt;&gt;,
 <a href=#321 id=321 data-nosnippet>321</a>    }
 <a href=#322 id=322 data-nosnippet>322</a>
 <a href=#323 id=323 data-nosnippet>323</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = test.setup_db(<span class="macro">models!</span>(User, Profile)).<span class="kw">await</span>;
@@ -350,7 +350,7 @@
 <a href=#350 id=350 data-nosnippet>350</a>        </span>name: String,
 <a href=#351 id=351 data-nosnippet>351</a>
 <a href=#352 id=352 data-nosnippet>352</a>        <span class="attr">#[has_one]
-<a href=#353 id=353 data-nosnippet>353</a>        </span>profile: toasty::HasOne&lt;<span class="prelude-ty">Option</span>&lt;Profile&gt;&gt;,
+<a href=#353 id=353 data-nosnippet>353</a>        </span>profile: toasty::Deferred&lt;<span class="prelude-ty">Option</span>&lt;Profile&gt;&gt;,
 <a href=#354 id=354 data-nosnippet>354</a>    }
 <a href=#355 id=355 data-nosnippet>355</a>
 <a href=#356 id=356 data-nosnippet>356</a>    <span class="attr">#[derive(Debug, toasty::Model)]
@@ -363,7 +363,7 @@
 <a href=#363 id=363 data-nosnippet>363</a>        </span>user_id: ID,
 <a href=#364 id=364 data-nosnippet>364</a>
 <a href=#365 id=365 data-nosnippet>365</a>        <span class="attr">#[belongs_to(key = user_id, references = id)]
-<a href=#366 id=366 data-nosnippet>366</a>        </span>user: toasty::BelongsTo&lt;User&gt;,
+<a href=#366 id=366 data-nosnippet>366</a>        </span>user: toasty::Deferred&lt;User&gt;,
 <a href=#367 id=367 data-nosnippet>367</a>    }
 <a href=#368 id=368 data-nosnippet>368</a>
 <a href=#369 id=369 data-nosnippet>369</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = test.setup_db(<span class="macro">models!</span>(User, Profile)).<span class="kw">await</span>;
@@ -417,7 +417,7 @@
 <a href=#417 id=417 data-nosnippet>417</a>        </span>id: ID,
 <a href=#418 id=418 data-nosnippet>418</a>
 <a href=#419 id=419 data-nosnippet>419</a>        <span class="attr">#[has_one]
-<a href=#420 id=420 data-nosnippet>420</a>        </span>profile: toasty::HasOne&lt;<span class="prelude-ty">Option</span>&lt;Profile&gt;&gt;,
+<a href=#420 id=420 data-nosnippet>420</a>        </span>profile: toasty::Deferred&lt;<span class="prelude-ty">Option</span>&lt;Profile&gt;&gt;,
 <a href=#421 id=421 data-nosnippet>421</a>    }
 <a href=#422 id=422 data-nosnippet>422</a>
 <a href=#423 id=423 data-nosnippet>423</a>    <span class="attr">#[derive(Debug, toasty::Model)]
@@ -430,7 +430,7 @@
 <a href=#430 id=430 data-nosnippet>430</a>        </span>user_id: ID,
 <a href=#431 id=431 data-nosnippet>431</a>
 <a href=#432 id=432 data-nosnippet>432</a>        <span class="attr">#[belongs_to(key = user_id, references = id)]
-<a href=#433 id=433 data-nosnippet>433</a>        </span>user: toasty::BelongsTo&lt;User&gt;,
+<a href=#433 id=433 data-nosnippet>433</a>        </span>user: toasty::Deferred&lt;User&gt;,
 <a href=#434 id=434 data-nosnippet>434</a>    }
 <a href=#435 id=435 data-nosnippet>435</a>
 <a href=#436 id=436 data-nosnippet>436</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = test.setup_db(<span class="macro">models!</span>(User, Profile)).<span class="kw">await</span>;
@@ -468,7 +468,7 @@
 <a href=#468 id=468 data-nosnippet>468</a>        </span>email: String,
 <a href=#469 id=469 data-nosnippet>469</a>
 <a href=#470 id=470 data-nosnippet>470</a>        <span class="attr">#[has_one]
-<a href=#471 id=471 data-nosnippet>471</a>        </span>profile: toasty::HasOne&lt;<span class="prelude-ty">Option</span>&lt;Profile&gt;&gt;,
+<a href=#471 id=471 data-nosnippet>471</a>        </span>profile: toasty::Deferred&lt;<span class="prelude-ty">Option</span>&lt;Profile&gt;&gt;,
 <a href=#472 id=472 data-nosnippet>472</a>    }
 <a href=#473 id=473 data-nosnippet>473</a>
 <a href=#474 id=474 data-nosnippet>474</a>    <span class="attr">#[derive(Debug, toasty::Model)]
@@ -481,7 +481,7 @@
 <a href=#481 id=481 data-nosnippet>481</a>        </span>user_id: ID,
 <a href=#482 id=482 data-nosnippet>482</a>
 <a href=#483 id=483 data-nosnippet>483</a>        <span class="attr">#[belongs_to(key = user_id, references = id)]
-<a href=#484 id=484 data-nosnippet>484</a>        </span>user: toasty::BelongsTo&lt;User&gt;,
+<a href=#484 id=484 data-nosnippet>484</a>        </span>user: toasty::Deferred&lt;User&gt;,
 <a href=#485 id=485 data-nosnippet>485</a>    }
 <a href=#486 id=486 data-nosnippet>486</a>
 <a href=#487 id=487 data-nosnippet>487</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = test.setup_db(<span class="macro">models!</span>(User, Profile)).<span class="kw">await</span>;
@@ -514,7 +514,7 @@
 <a href=#514 id=514 data-nosnippet>514</a>        </span>id: ID,
 <a href=#515 id=515 data-nosnippet>515</a>
 <a href=#516 id=516 data-nosnippet>516</a>        <span class="attr">#[has_one]
-<a href=#517 id=517 data-nosnippet>517</a>        </span>profile: toasty::HasOne&lt;Profile&gt;,
+<a href=#517 id=517 data-nosnippet>517</a>        </span>profile: toasty::Deferred&lt;Profile&gt;,
 <a href=#518 id=518 data-nosnippet>518</a>    }
 <a href=#519 id=519 data-nosnippet>519</a>
 <a href=#520 id=520 data-nosnippet>520</a>    <span class="attr">#[derive(Debug, toasty::Model)]
@@ -527,7 +527,7 @@
 <a href=#527 id=527 data-nosnippet>527</a>        </span>user_id: <span class="prelude-ty">Option</span>&lt;ID&gt;,
 <a href=#528 id=528 data-nosnippet>528</a>
 <a href=#529 id=529 data-nosnippet>529</a>        <span class="attr">#[belongs_to(key = user_id, references = id)]
-<a href=#530 id=530 data-nosnippet>530</a>        </span>user: toasty::BelongsTo&lt;<span class="prelude-ty">Option</span>&lt;User&gt;&gt;,
+<a href=#530 id=530 data-nosnippet>530</a>        </span>user: toasty::Deferred&lt;<span class="prelude-ty">Option</span>&lt;User&gt;&gt;,
 <a href=#531 id=531 data-nosnippet>531</a>
 <a href=#532 id=532 data-nosnippet>532</a>        bio: String,
 <a href=#533 id=533 data-nosnippet>533</a>    }

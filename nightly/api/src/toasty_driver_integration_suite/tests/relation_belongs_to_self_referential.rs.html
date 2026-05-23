@@ -15,10 +15,10 @@
 <a href=#15 id=15 data-nosnippet>15</a>        </span>parent_id: <span class="prelude-ty">Option</span>&lt;ID&gt;,
 <a href=#16 id=16 data-nosnippet>16</a>
 <a href=#17 id=17 data-nosnippet>17</a>        <span class="attr">#[belongs_to(key = parent_id, references = id)]
-<a href=#18 id=18 data-nosnippet>18</a>        </span>parent: toasty::BelongsTo&lt;<span class="prelude-ty">Option</span>&lt;Person&gt;&gt;,
+<a href=#18 id=18 data-nosnippet>18</a>        </span>parent: toasty::Deferred&lt;<span class="prelude-ty">Option</span>&lt;Person&gt;&gt;,
 <a href=#19 id=19 data-nosnippet>19</a>
 <a href=#20 id=20 data-nosnippet>20</a>        <span class="attr">#[has_many(pair = parent)]
-<a href=#21 id=21 data-nosnippet>21</a>        </span>children: toasty::HasMany&lt;Person&gt;,
+<a href=#21 id=21 data-nosnippet>21</a>        </span>children: toasty::Deferred&lt;Vec&lt;Person&gt;&gt;,
 <a href=#22 id=22 data-nosnippet>22</a>    }
 <a href=#23 id=23 data-nosnippet>23</a>
 <a href=#24 id=24 data-nosnippet>24</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = t.setup_db(<span class="macro">models!</span>(Person)).<span class="kw">await</span>;

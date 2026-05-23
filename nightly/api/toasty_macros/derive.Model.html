@@ -182,7 +182,7 @@ wrap the other way: <code>Json&lt;Option&lt;T&gt;&gt;</code>.</p>
 key stored on this model.</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[belongs_to(key = user_id, references = id)]
-</span>user: toasty::BelongsTo&lt;User&gt;,</code></pre></div><div><table><thead><tr><th>Parameter</th><th>Meaning</th></tr></thead><tbody>
+</span>user: toasty::Deferred&lt;User&gt;,</code></pre></div><div><table><thead><tr><th>Parameter</th><th>Meaning</th></tr></thead><tbody>
 <tr><td><code>key = &lt;field&gt;</code></td><td>Local field holding the foreign key value</td></tr>
 <tr><td><code>references = &lt;field&gt;</code></td><td>Field on the target model being referenced</td></tr>
 </tbody></table>
@@ -190,7 +190,7 @@ key stored on this model.</p>
 <p>For composite foreign keys, pass arrays to <code>key</code> and <code>references</code>:</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[belongs_to(key = [org_id, tenant_id]</span>, references = [id, tenant_id])]
-org: toasty::BelongsTo&lt;Org&gt;,</code></pre></div>
+org: toasty::Deferred&lt;Org&gt;,</code></pre></div>
 <p>The number of fields in <code>key</code> must equal the number of fields in
 <code>references</code>.</p>
 <p>Wrap the target type in <code>Option</code> for an optional (nullable) foreign key:</p>
@@ -199,12 +199,12 @@ org: toasty::BelongsTo&lt;Org&gt;,</code></pre></div>
 </span>manager_id: <span class="prelude-ty">Option</span>&lt;i64&gt;,
 
 <span class="attr">#[belongs_to(key = manager_id, references = id)]
-</span>manager: toasty::BelongsTo&lt;<span class="prelude-ty">Option</span>&lt;User&gt;&gt;,</code></pre></div><h3 id="has_many--one-to-many-association"><a class="doc-anchor" href="#has_many--one-to-many-association">§</a><code>#[has_many]</code> — one-to-many association</h3>
+</span>manager: toasty::Deferred&lt;<span class="prelude-ty">Option</span>&lt;User&gt;&gt;,</code></pre></div><h3 id="has_many--one-to-many-association"><a class="doc-anchor" href="#has_many--one-to-many-association">§</a><code>#[has_many]</code> — one-to-many association</h3>
 <p>Declares a collection of related models. The target model must have a
 <code>#[belongs_to]</code> field pointing back to this model.</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[has_many]
-</span>posts: toasty::HasMany&lt;Post&gt;,</code></pre></div>
+</span>posts: toasty::Deferred&lt;Vec&lt;Post&gt;&gt;,</code></pre></div>
 <p>Toasty generates an accessor method (e.g. <code>.posts()</code>) and an insert
 helper (e.g. <code>.insert_post()</code>), where the insert helper name is the
 auto-singularized field name.</p>
@@ -214,7 +214,7 @@ the same model (or points to itself), use <code>pair</code> to specify which
 <code>belongs_to</code> field this <code>has_many</code> corresponds to:</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[has_many(pair = parent)]
-</span>children: toasty::HasMany&lt;Person&gt;,</code></pre></div><h4 id="via--multi-step-relations"><a class="doc-anchor" href="#via--multi-step-relations">§</a><code>via</code> — multi-step relations</h4>
+</span>children: toasty::Deferred&lt;Vec&lt;Person&gt;&gt;,</code></pre></div><h4 id="via--multi-step-relations"><a class="doc-anchor" href="#via--multi-step-relations">§</a><code>via</code> — multi-step relations</h4>
 <p>Instead of pairing with a <code>belongs_to</code>, a <code>has_many</code> can reach its target
 through a path of existing relations with <code>via</code>. The path is a dotted
 chain of relation fields, read left to right starting from this model. A
@@ -223,7 +223,7 @@ traverses — so it takes no <code>pair</code>:</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// User → comments → article
 </span><span class="attr">#[has_many(via = comments.article)]
-</span>commented_articles: toasty::HasMany&lt;Article&gt;,</code></pre></div>
+</span>commented_articles: toasty::Deferred&lt;Vec&lt;Article&gt;&gt;,</code></pre></div>
 <p>The target type is <code>Article</code> because the path <code>comments.article</code> ends
 there. A <code>via</code> relation is read-only and yields distinct targets — a target
 reached through several intermediates appears once. Query, filter, and order
@@ -235,11 +235,11 @@ DynamoDB.</p>
 <code>#[belongs_to]</code> field pointing back to this model.</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[has_one]
-</span>profile: toasty::HasOne&lt;Profile&gt;,</code></pre></div>
+</span>profile: toasty::Deferred&lt;Profile&gt;,</code></pre></div>
 <p>Wrap in <code>Option</code> for an optional association:</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[has_one]
-</span>profile: toasty::HasOne&lt;<span class="prelude-ty">Option</span>&lt;Profile&gt;&gt;,</code></pre></div><h4 id="via--multi-step-relations-1"><a class="doc-anchor" href="#via--multi-step-relations-1">§</a><code>via</code> — multi-step relations</h4>
+</span>profile: toasty::Deferred&lt;<span class="prelude-ty">Option</span>&lt;Profile&gt;&gt;,</code></pre></div><h4 id="via--multi-step-relations-1"><a class="doc-anchor" href="#via--multi-step-relations-1">§</a><code>via</code> — multi-step relations</h4>
 <p>Like <code>#[has_many]</code>, a <code>#[has_one]</code> can reach its target through a path of
 existing relations with <code>via</code> (see the <code>#[has_many]</code> <code>via</code> section above for
 the full rules). Declare it when the path is expected to reach at most one
@@ -247,7 +247,7 @@ target:</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// User → account → subscription
 </span><span class="attr">#[has_one(via = account.subscription)]
-</span>subscription: toasty::HasOne&lt;<span class="prelude-ty">Option</span>&lt;Subscription&gt;&gt;,</code></pre></div><h2 id="constraints"><a class="doc-anchor" href="#constraints">§</a>Constraints</h2>
+</span>subscription: toasty::Deferred&lt;<span class="prelude-ty">Option</span>&lt;Subscription&gt;&gt;,</code></pre></div><h2 id="constraints"><a class="doc-anchor" href="#constraints">§</a>Constraints</h2>
 <ul>
 <li>The struct must have named fields (tuple structs are not supported).</li>
 <li>Generic parameters are not supported.</li>
@@ -281,7 +281,7 @@ models.</li>
     </span>updated_at: jiff::Timestamp,
 
     <span class="attr">#[has_many]
-    </span>posts: toasty::HasMany&lt;Post&gt;,
+    </span>posts: toasty::Deferred&lt;Vec&lt;Post&gt;&gt;,
 }
 
 <span class="attr">#[derive(Debug, toasty::Model)]
@@ -298,5 +298,5 @@ models.</li>
     </span>user_id: i64,
 
     <span class="attr">#[belongs_to(key = user_id, references = id)]
-    </span>user: toasty::BelongsTo&lt;User&gt;,
+    </span>user: toasty::Deferred&lt;User&gt;,
 }</code></pre></div></div></details></section></div></main></body></html>

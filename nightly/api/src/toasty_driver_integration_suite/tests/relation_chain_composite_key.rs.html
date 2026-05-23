@@ -361,7 +361,7 @@
 <a href=#361 id=361 data-nosnippet>361</a>        revision: i64,
 <a href=#362 id=362 data-nosnippet>362</a>        name: String,
 <a href=#363 id=363 data-nosnippet>363</a>        <span class="attr">#[has_many]
-<a href=#364 id=364 data-nosnippet>364</a>        </span>posts: toasty::HasMany&lt;Post&gt;,
+<a href=#364 id=364 data-nosnippet>364</a>        </span>posts: toasty::Deferred&lt;Vec&lt;Post&gt;&gt;,
 <a href=#365 id=365 data-nosnippet>365</a>    }
 <a href=#366 id=366 data-nosnippet>366</a>
 <a href=#367 id=367 data-nosnippet>367</a>    <span class="attr">#[derive(Debug, toasty::Model)]
@@ -373,10 +373,10 @@
 <a href=#373 id=373 data-nosnippet>373</a>        author_id: uuid::Uuid,
 <a href=#374 id=374 data-nosnippet>374</a>        author_revision: i64,
 <a href=#375 id=375 data-nosnippet>375</a>        <span class="attr">#[belongs_to(key = [author_id, author_revision]</span>, references = [id, revision])]
-<a href=#376 id=376 data-nosnippet>376</a>        author: toasty::BelongsTo&lt;Author&gt;,
+<a href=#376 id=376 data-nosnippet>376</a>        author: toasty::Deferred&lt;Author&gt;,
 <a href=#377 id=377 data-nosnippet>377</a>        title: String,
 <a href=#378 id=378 data-nosnippet>378</a>        <span class="attr">#[has_many]
-<a href=#379 id=379 data-nosnippet>379</a>        </span>comments: toasty::HasMany&lt;Comment&gt;,
+<a href=#379 id=379 data-nosnippet>379</a>        </span>comments: toasty::Deferred&lt;Vec&lt;Comment&gt;&gt;,
 <a href=#380 id=380 data-nosnippet>380</a>    }
 <a href=#381 id=381 data-nosnippet>381</a>
 <a href=#382 id=382 data-nosnippet>382</a>    <span class="attr">#[derive(Debug, toasty::Model)]
@@ -387,7 +387,7 @@
 <a href=#387 id=387 data-nosnippet>387</a>        <span class="attr">#[index]
 <a href=#388 id=388 data-nosnippet>388</a>        </span>post_id: uuid::Uuid,
 <a href=#389 id=389 data-nosnippet>389</a>        <span class="attr">#[belongs_to(key = post_id, references = id)]
-<a href=#390 id=390 data-nosnippet>390</a>        </span>post: toasty::BelongsTo&lt;Post&gt;,
+<a href=#390 id=390 data-nosnippet>390</a>        </span>post: toasty::Deferred&lt;Post&gt;,
 <a href=#391 id=391 data-nosnippet>391</a>        body: String,
 <a href=#392 id=392 data-nosnippet>392</a>    }
 <a href=#393 id=393 data-nosnippet>393</a>
