@@ -188,8 +188,8 @@ the public relation syntax changes.
 
 9. Update tests and docs for the new syntax.
 
-10. Deprecate, then remove, `HasMany<T>`, `HasOne<T>`, and `BelongsTo<T>` from
-    the public API.
+10. Done: remove `HasMany<T>`, `HasOne<T>`, and `BelongsTo<T>` from the public
+    API.
 
 11. Cleanup: investigate folding some or all `Relation` associated types into
     the relation field traits. The step 4 split currently requires generated

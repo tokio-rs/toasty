@@ -1,9 +1,9 @@
+use toasty::Deferred;
 use toasty::schema::{
     self, BelongsToField, CreateMeta, HasManyField, HasOneField, Load, Model, ModelSet, Register,
     Relation,
 };
 use toasty::stmt::{Expr, Insert, IntoExpr, IntoInsert, Path};
-use toasty::{BelongsTo, Deferred, HasMany, HasOne};
 use toasty_core::stmt::{self, Value};
 
 #[derive(Debug, PartialEq)]
@@ -103,14 +103,6 @@ impl Relation for Dummy {
     }
 }
 
-fn dummy_record(id: i64) -> Value {
-    Value::record_from_vec(vec![Value::I64(id)])
-}
-
-fn loaded_slot(value: Value) -> Value {
-    Value::record_from_vec(vec![value])
-}
-
 fn assert_has_many_field<F: HasManyField<Target = Dummy>>() {}
 
 fn assert_has_one_field<F: HasOneField<Target = Target>, Target: Relation>() {}
@@ -126,80 +118,4 @@ fn deferred_relation_field_shapes_are_supported() {
 
     assert_belongs_to_field::<Deferred<Dummy>, Dummy>();
     assert_belongs_to_field::<Deferred<Option<Dummy>>, Option<Dummy>>();
-}
-
-#[test]
-fn has_many_loads_current_direct_list_shape() {
-    let relation =
-        <HasMany<Dummy> as Load>::load(Value::List(vec![dummy_record(1), dummy_record(2)]))
-            .unwrap();
-
-    assert_eq!(
-        relation
-            .get()
-            .iter()
-            .map(|item| item.id)
-            .collect::<Vec<_>>(),
-        vec![1, 2]
-    );
-}
-
-#[test]
-fn has_many_loads_lazy_slot_shape() {
-    let relation = <HasMany<Dummy> as Load>::load(loaded_slot(Value::List(vec![
-        dummy_record(1),
-        dummy_record(2),
-    ])))
-    .unwrap();
-
-    assert_eq!(
-        relation
-            .get()
-            .iter()
-            .map(|item| item.id)
-            .collect::<Vec<_>>(),
-        vec![1, 2]
-    );
-}
-
-#[test]
-fn has_one_loads_current_direct_record_shape() {
-    let relation = <HasOne<Dummy> as Load>::load(dummy_record(1)).unwrap();
-
-    assert_eq!(relation.get(), &Dummy { id: 1 });
-}
-
-#[test]
-fn has_one_loads_lazy_slot_shape() {
-    let relation = <HasOne<Dummy> as Load>::load(loaded_slot(dummy_record(1))).unwrap();
-
-    assert_eq!(relation.get(), &Dummy { id: 1 });
-}
-
-#[test]
-fn has_one_option_loads_lazy_slot_null_shape() {
-    let relation = <HasOne<Option<Dummy>> as Load>::load(loaded_slot(Value::Null)).unwrap();
-
-    assert_eq!(relation.get(), &None);
-}
-
-#[test]
-fn belongs_to_loads_current_direct_record_shape() {
-    let relation = <BelongsTo<Dummy> as Load>::load(dummy_record(1)).unwrap();
-
-    assert_eq!(relation.get(), &Dummy { id: 1 });
-}
-
-#[test]
-fn belongs_to_loads_lazy_slot_shape() {
-    let relation = <BelongsTo<Dummy> as Load>::load(loaded_slot(dummy_record(1))).unwrap();
-
-    assert_eq!(relation.get(), &Dummy { id: 1 });
-}
-
-#[test]
-fn belongs_to_option_loads_lazy_slot_null_shape() {
-    let relation = <BelongsTo<Option<Dummy>> as Load>::load(loaded_slot(Value::Null)).unwrap();
-
-    assert_eq!(relation.get(), &None);
 }
