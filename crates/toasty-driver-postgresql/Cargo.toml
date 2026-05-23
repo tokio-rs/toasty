@@ -17,9 +17,7 @@ documentation = "https://docs.rs/toasty-driver-postgresql"
 default = ["tls"]
 tls = [
     "dep:rustls",
-    "dep:tokio-rustls",
-    "dep:sha2",
-    "dep:x509-cert",
+    "dep:tokio-postgres-rustls",
     "dep:rustls-platform-verifier",
     "dep:rustls-pemfile",
     "dep:rustls-webpki",
@@ -47,9 +45,7 @@ tokio-postgres.workspace = true
 uuid.workspace = true
 url.workspace = true
 rustls = { workspace = true, optional = true }
-tokio-rustls = { workspace = true, optional = true }
-sha2 = { workspace = true, optional = true }
-x509-cert = { workspace = true, optional = true }
+tokio-postgres-rustls = { workspace = true, optional = true }
 rustls-platform-verifier = { workspace = true, optional = true }
 rustls-pemfile = { workspace = true, optional = true }
 rustls-webpki = { workspace = true, optional = true }
