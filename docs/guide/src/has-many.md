@@ -1,12 +1,12 @@
 # HasMany
 
 A `HasMany` relationship connects a parent model to multiple child records. The
-parent declares a `HasMany<T>` field, and the child stores a foreign key
+parent declares a `Deferred<Vec<T>>` field, and the child stores a foreign key
 pointing back to the parent via [BelongsTo](./belongs-to.md).
 
 ## Defining a HasMany relationship
 
-Add a `#[has_many]` field of type `HasMany<T>` on the parent model. The child
+Add a `#[has_many]` field of type `Deferred<Vec<T>>` on the parent model. The child
 model must have a corresponding `#[belongs_to]` field.
 
 ```rust
@@ -20,7 +20,7 @@ struct User {
     name: String,
 
     #[has_many]
-    posts: toasty::HasMany<Post>,
+    posts: toasty::Deferred<Vec<Post>>,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -33,7 +33,7 @@ struct Post {
     user_id: u64,
 
     #[belongs_to(key = user_id, references = id)]
-    user: toasty::BelongsTo<User>,
+    user: toasty::Deferred<User>,
 
     title: String,
 }
@@ -56,7 +56,7 @@ children:
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     posts: toasty::HasMany<Post>,
+#     posts: toasty::Deferred<Vec<Post>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Post {
@@ -66,7 +66,7 @@ children:
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<User>,
+#     user: toasty::Deferred<User>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -103,7 +103,7 @@ automatically sets the foreign key:
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     posts: toasty::HasMany<Post>,
+#     posts: toasty::Deferred<Vec<Post>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Post {
@@ -113,7 +113,7 @@ automatically sets the foreign key:
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<User>,
+#     user: toasty::Deferred<User>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -143,7 +143,7 @@ relation name on the create builder:
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     posts: toasty::HasMany<Post>,
+#     posts: toasty::Deferred<Vec<Post>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Post {
@@ -153,7 +153,7 @@ relation name on the create builder:
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<User>,
+#     user: toasty::Deferred<User>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -299,11 +299,11 @@ struct User {
     name: String,
 
     #[has_many]
-    comments: toasty::HasMany<Comment>,
+    comments: toasty::Deferred<Vec<Comment>>,
 
     // User → comments → article
     #[has_many(via = comments.article)]
-    commented_articles: toasty::HasMany<Article>,
+    commented_articles: toasty::Deferred<Vec<Article>>,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -316,13 +316,13 @@ struct Comment {
     user_id: u64,
 
     #[belongs_to(key = user_id, references = id)]
-    user: toasty::BelongsTo<User>,
+    user: toasty::Deferred<User>,
 
     #[index]
     article_id: u64,
 
     #[belongs_to(key = article_id, references = id)]
-    article: toasty::BelongsTo<Article>,
+    article: toasty::Deferred<Article>,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -334,7 +334,7 @@ struct Article {
     title: String,
 
     #[has_many]
-    comments: toasty::HasMany<Comment>,
+    comments: toasty::Deferred<Vec<Comment>>,
 }
 ```
 
@@ -373,7 +373,7 @@ available on DynamoDB.
 
 ## What gets generated
 
-For a `User` model with `#[has_many] posts: HasMany<Post>`, Toasty generates:
+For a `User` model with `#[has_many] posts: Deferred<Vec<Post>>`, Toasty generates:
 
 **On the parent instance:**
 

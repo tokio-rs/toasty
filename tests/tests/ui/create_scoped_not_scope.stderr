@@ -17,11 +17,6 @@ error[E0277]: the trait bound `i64: toasty::schema::Scope` is not satisfied
 11 |     let _ = toasty::create!(in 42_i64 { name: "Carl" });
    |                                ^^^^^^ the trait `toasty::schema::Scope` is not implemented for `i64`
    |
-help: the trait `toasty::schema::Scope` is implemented for `toasty::HasMany<T>`
-  --> $WORKSPACE/crates/toasty/src/schema/has_many.rs
-   |
-   | impl<T: Relation> Scope for HasMany<T> {
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 note: required by a bound in `toasty::codegen_support::scope_fields`
   --> $WORKSPACE/crates/toasty/src/codegen_support.rs
    |

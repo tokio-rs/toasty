@@ -14,7 +14,7 @@ use std::fmt;
 ///
 /// `Deferred<Option<T>>` is supported when the column is nullable.
 pub struct Deferred<T> {
-    value: Option<T>,
+    value: Option<Box<T>>,
 }
 
 /// Marker trait identifying a deferred-load field wrapper, exposing the wrapped
@@ -65,7 +65,7 @@ impl<T> Deferred<T> {
     /// Panics if the field has not been loaded.
     #[track_caller]
     pub fn into_inner(self) -> T {
-        self.value.expect("deferred field not loaded")
+        *self.value.expect("deferred field not loaded")
     }
 }
 
@@ -102,7 +102,9 @@ impl<T> From<T> for Deferred<T> {
     /// `#[deferred]` sub-fields, where the user supplies the inner value
     /// directly: `Metadata { author, notes: "...".into() }`.
     fn from(value: T) -> Self {
-        Self { value: Some(value) }
+        Self {
+            value: Some(Box::new(value)),
+        }
     }
 }
 
@@ -143,11 +145,13 @@ impl<T: Load<Output = T>> Load for Deferred<T> {
     fn load(value: toasty_core::stmt::Value) -> crate::Result<Self> {
         // The lowering wraps a loaded deferred field in a 1-element record
         // and emits a bare Null when unloaded, so the two states are
-        // distinguishable even when the inner column value is NULL (i.e. the
+        // distinguishable even when the inner value is NULL (i.e. the
         // `Deferred<Option<T>>` case).
         match lazy_slot::decode(value, "deferred field", T::load)? {
             lazy_slot::LazySlot::Unloaded => Ok(Self { value: None }),
-            lazy_slot::LazySlot::Loaded(value) => Ok(Self { value: Some(value) }),
+            lazy_slot::LazySlot::Loaded(value) => Ok(Self {
+                value: Some(Box::new(value)),
+            }),
         }
     }
 
@@ -159,7 +163,7 @@ impl<T: Load<Output = T>> Load for Deferred<T> {
         // Updates send the assigned value back unwrapped, unlike the SELECT
         // lowering which wraps a loaded deferred field in a 1-element record
         // to distinguish it from the unloaded case.
-        target.value = Some(T::load(value)?);
+        target.value = Some(Box::new(T::load(value)?));
         Ok(())
     }
 }

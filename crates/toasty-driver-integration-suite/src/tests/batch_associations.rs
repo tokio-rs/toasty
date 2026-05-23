@@ -164,9 +164,9 @@ pub async fn batch_scoped_across_relations(t: &mut Test) -> Result<()> {
         #[auto]
         id: ID,
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
         #[has_many]
-        posts: toasty::HasMany<Post>,
+        posts: toasty::Deferred<Vec<Post>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -177,7 +177,7 @@ pub async fn batch_scoped_across_relations(t: &mut Test) -> Result<()> {
         #[index]
         user_id: ID,
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
         title: String,
     }
 
@@ -189,7 +189,7 @@ pub async fn batch_scoped_across_relations(t: &mut Test) -> Result<()> {
         #[index]
         user_id: ID,
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
         body: String,
     }
 
@@ -221,9 +221,9 @@ pub async fn batch_query_across_relations(t: &mut Test) -> Result<()> {
         #[auto]
         id: ID,
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
         #[has_many]
-        posts: toasty::HasMany<Post>,
+        posts: toasty::Deferred<Vec<Post>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -234,7 +234,7 @@ pub async fn batch_query_across_relations(t: &mut Test) -> Result<()> {
         #[index]
         user_id: ID,
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
         title: String,
     }
 
@@ -246,7 +246,7 @@ pub async fn batch_query_across_relations(t: &mut Test) -> Result<()> {
         #[index]
         user_id: ID,
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
         body: String,
     }
 

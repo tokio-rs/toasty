@@ -25,10 +25,8 @@
 //! [`Auto`](schema::Auto), a wrapper for auto-generated values such as
 //! database-assigned IDs.
 //!
-//! The module also provides the types that represent associations between
-//! models: [`HasMany`](schema::HasMany), [`HasOne`](schema::HasOne), and
-//! [`BelongsTo`](schema::BelongsTo). These appear as fields on model structs
-//! and are populated through the generated relation accessors.
+//! Relation fields use [`Deferred`](schema::Deferred) and are populated through
+//! `.include(...)` or generated relation accessors.
 //!
 //! The module also re-exports from `toasty-core` for inspecting the
 //! app-level and db-level schema representations at runtime.
@@ -121,7 +119,7 @@ pub mod migration;
 
 /// Model, relation, and schema inspection types.
 pub mod schema;
-pub use schema::{BelongsTo, Deferred, HasMany, HasOne};
+pub use schema::Deferred;
 
 // `Page` lives in `stmt`.
 

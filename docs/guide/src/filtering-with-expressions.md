@@ -510,7 +510,7 @@ field. Same syntax works through `BelongsTo` and through chains of
 #     id: u64,
 #     name: String,
 #     #[has_one]
-#     profile: toasty::HasOne<Option<Profile>>,
+#     profile: toasty::Deferred<Option<Profile>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Profile {
@@ -521,7 +521,7 @@ field. Same syntax works through `BelongsTo` and through chains of
 #     #[unique]
 #     user_id: Option<u64>,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<Option<User>>,
+#     user: toasty::Deferred<Option<User>>,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
 // Users whose profile has a score above 50
@@ -546,7 +546,7 @@ matches a condition. This generates a subquery:
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     todos: toasty::HasMany<Todo>,
+#     todos: toasty::Deferred<Vec<Todo>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Todo {
@@ -556,7 +556,7 @@ matches a condition. This generates a subquery:
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<User>,
+#     user: toasty::Deferred<User>,
 #     title: String,
 #     complete: bool,
 # }
@@ -591,7 +591,7 @@ it tests whether *every* related record matches the filter. **SQL-only.**
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     todos: toasty::HasMany<Todo>,
+#     todos: toasty::Deferred<Vec<Todo>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Todo {
@@ -601,7 +601,7 @@ it tests whether *every* related record matches the filter. **SQL-only.**
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<User>,
+#     user: toasty::Deferred<User>,
 #     complete: bool,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {

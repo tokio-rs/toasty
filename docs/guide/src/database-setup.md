@@ -35,7 +35,7 @@ one crate.
 You don't need to list every model. Registering a model also registers any
 models reachable through its fields — `BelongsTo`, `HasMany`, `HasOne`, and
 embedded types are all discovered by traversing the model's fields. For
-example, if `User` has a `HasMany<Post>` field and `Post` has a `BelongsTo<User>`
+example, if `User` has a `Deferred<Vec<Post>>` field and `Post` has a `Deferred<User>`
 field, `toasty::models!(User)` registers both `User` and `Post`.
 
 ## Connection URLs

@@ -18,7 +18,7 @@ pub async fn belongs_to_with_embed_pk(t: &mut Test) -> Result<()> {
         pub id: MeetingId,
 
         #[has_many]
-        pub agenda_items: toasty::HasMany<AgendaItem>,
+        pub agenda_items: toasty::Deferred<Vec<AgendaItem>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -30,7 +30,7 @@ pub async fn belongs_to_with_embed_pk(t: &mut Test) -> Result<()> {
         pub meeting_id: MeetingId,
 
         #[belongs_to(key = meeting_id, references = id)]
-        pub meeting: toasty::BelongsTo<Meeting>,
+        pub meeting: toasty::Deferred<Meeting>,
     }
 
     let mut db = t

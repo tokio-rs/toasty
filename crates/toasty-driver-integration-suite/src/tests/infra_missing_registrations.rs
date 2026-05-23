@@ -12,7 +12,7 @@ pub async fn missing_registration_belongs_to(t: &mut Test) -> Result<()> {
 
         child_id: ID,
         #[belongs_to(key = child_id, references = id)]
-        child: toasty::BelongsTo<Child>,
+        child: toasty::Deferred<Child>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -39,7 +39,7 @@ pub async fn missing_registration_has_one(t: &mut Test) -> Result<()> {
         id: ID,
 
         #[has_one]
-        child: toasty::HasOne<Child>,
+        child: toasty::Deferred<Child>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -51,7 +51,7 @@ pub async fn missing_registration_has_one(t: &mut Test) -> Result<()> {
         #[index]
         parent_id: ID,
         #[belongs_to(key = parent_id, references = id)]
-        parent: toasty::BelongsTo<Parent>,
+        parent: toasty::Deferred<Parent>,
     }
 
     // Auto-discovery should find Child through the HasOne relation.
@@ -71,7 +71,7 @@ pub async fn missing_registration_has_many(t: &mut Test) -> Result<()> {
         id: ID,
 
         #[has_many]
-        children: toasty::HasMany<Child>,
+        children: toasty::Deferred<Vec<Child>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -83,7 +83,7 @@ pub async fn missing_registration_has_many(t: &mut Test) -> Result<()> {
         #[index]
         parent_id: ID,
         #[belongs_to(key = parent_id, references = id)]
-        parent: toasty::BelongsTo<Parent>,
+        parent: toasty::Deferred<Parent>,
     }
 
     // Auto-discovery should find Child through the HasMany relation.

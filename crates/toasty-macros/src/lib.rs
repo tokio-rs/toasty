@@ -355,7 +355,7 @@ use proc_macro::TokenStream;
 /// #     id: i64,
 /// #     user_id: i64,
 /// #[belongs_to(key = user_id, references = id)]
-/// user: toasty::BelongsTo<User>,
+/// user: toasty::Deferred<User>,
 /// # }
 /// ```
 ///
@@ -382,7 +382,7 @@ use proc_macro::TokenStream;
 /// #     org_id: i64,
 /// #     tenant_id: i64,
 /// #[belongs_to(key = [org_id, tenant_id], references = [id, tenant_id])]
-/// org: toasty::BelongsTo<Org>,
+/// org: toasty::Deferred<Org>,
 /// # }
 /// ```
 ///
@@ -408,7 +408,7 @@ use proc_macro::TokenStream;
 /// manager_id: Option<i64>,
 ///
 /// #[belongs_to(key = manager_id, references = id)]
-/// manager: toasty::BelongsTo<Option<User>>,
+/// manager: toasty::Deferred<Option<User>>,
 /// # }
 /// ```
 ///
@@ -427,7 +427,7 @@ use proc_macro::TokenStream;
 /// #     #[index]
 /// #     example_id: i64,
 /// #     #[belongs_to(key = example_id, references = id)]
-/// #     example: toasty::BelongsTo<Example>,
+/// #     example: toasty::Deferred<Example>,
 /// # }
 /// # #[derive(Model)]
 /// # struct Example {
@@ -435,7 +435,7 @@ use proc_macro::TokenStream;
 /// #     #[auto]
 /// #     id: i64,
 /// #[has_many]
-/// posts: toasty::HasMany<Post>,
+/// posts: toasty::Deferred<Vec<Post>>,
 /// # }
 /// ```
 ///
@@ -459,9 +459,9 @@ use proc_macro::TokenStream;
 /// #     #[index]
 /// #     parent_id: Option<i64>,
 /// #     #[belongs_to(key = parent_id, references = id)]
-/// #     parent: toasty::BelongsTo<Option<Self>>,
+/// #     parent: toasty::Deferred<Option<Self>>,
 /// #[has_many(pair = parent)]
-/// children: toasty::HasMany<Person>,
+/// children: toasty::Deferred<Vec<Person>>,
 /// # }
 /// ```
 ///
@@ -483,11 +483,11 @@ use proc_macro::TokenStream;
 /// #     #[index]
 /// #     user_id: i64,
 /// #     #[belongs_to(key = user_id, references = id)]
-/// #     user: toasty::BelongsTo<User>,
+/// #     user: toasty::Deferred<User>,
 /// #     #[index]
 /// #     article_id: i64,
 /// #     #[belongs_to(key = article_id, references = id)]
-/// #     article: toasty::BelongsTo<Article>,
+/// #     article: toasty::Deferred<Article>,
 /// # }
 /// # #[derive(Model)]
 /// # struct Article {
@@ -495,7 +495,7 @@ use proc_macro::TokenStream;
 /// #     #[auto]
 /// #     id: i64,
 /// #     #[has_many]
-/// #     comments: toasty::HasMany<Comment>,
+/// #     comments: toasty::Deferred<Vec<Comment>>,
 /// # }
 /// # #[derive(Model)]
 /// # struct User {
@@ -503,10 +503,10 @@ use proc_macro::TokenStream;
 /// #     #[auto]
 /// #     id: i64,
 /// #     #[has_many]
-/// #     comments: toasty::HasMany<Comment>,
+/// #     comments: toasty::Deferred<Vec<Comment>>,
 /// // User → comments → article
 /// #[has_many(via = comments.article)]
-/// commented_articles: toasty::HasMany<Article>,
+/// commented_articles: toasty::Deferred<Vec<Article>>,
 /// # }
 /// ```
 ///
@@ -532,7 +532,7 @@ use proc_macro::TokenStream;
 /// #     #[index]
 /// #     example_id: i64,
 /// #     #[belongs_to(key = example_id, references = id)]
-/// #     example: toasty::BelongsTo<Example>,
+/// #     example: toasty::Deferred<Example>,
 /// # }
 /// # #[derive(Model)]
 /// # struct Example {
@@ -540,7 +540,7 @@ use proc_macro::TokenStream;
 /// #     #[auto]
 /// #     id: i64,
 /// #[has_one]
-/// profile: toasty::HasOne<Profile>,
+/// profile: toasty::Deferred<Profile>,
 /// # }
 /// ```
 ///
@@ -556,7 +556,7 @@ use proc_macro::TokenStream;
 /// #     #[index]
 /// #     example_id: i64,
 /// #     #[belongs_to(key = example_id, references = id)]
-/// #     example: toasty::BelongsTo<Example>,
+/// #     example: toasty::Deferred<Example>,
 /// # }
 /// # #[derive(Model)]
 /// # struct Example {
@@ -564,7 +564,7 @@ use proc_macro::TokenStream;
 /// #     #[auto]
 /// #     id: i64,
 /// #[has_one]
-/// profile: toasty::HasOne<Option<Profile>>,
+/// profile: toasty::Deferred<Option<Profile>>,
 /// # }
 /// ```
 ///
@@ -585,7 +585,7 @@ use proc_macro::TokenStream;
 /// #     #[unique]
 /// #     account_id: Option<i64>,
 /// #     #[belongs_to(key = account_id, references = id)]
-/// #     account: toasty::BelongsTo<Option<Account>>,
+/// #     account: toasty::Deferred<Option<Account>>,
 /// # }
 /// # #[derive(Model)]
 /// # struct Account {
@@ -595,9 +595,9 @@ use proc_macro::TokenStream;
 /// #     #[unique]
 /// #     user_id: Option<i64>,
 /// #     #[belongs_to(key = user_id, references = id)]
-/// #     user: toasty::BelongsTo<Option<User>>,
+/// #     user: toasty::Deferred<Option<User>>,
 /// #     #[has_one]
-/// #     subscription: toasty::HasOne<Option<Subscription>>,
+/// #     subscription: toasty::Deferred<Option<Subscription>>,
 /// # }
 /// # #[derive(Model)]
 /// # struct User {
@@ -605,10 +605,10 @@ use proc_macro::TokenStream;
 /// #     #[auto]
 /// #     id: i64,
 /// #     #[has_one]
-/// #     account: toasty::HasOne<Option<Account>>,
+/// #     account: toasty::Deferred<Option<Account>>,
 /// // User → account → subscription
 /// #[has_one(via = account.subscription)]
-/// subscription: toasty::HasOne<Option<Subscription>>,
+/// subscription: toasty::Deferred<Option<Subscription>>,
 /// # }
 /// ```
 ///
@@ -648,7 +648,7 @@ use proc_macro::TokenStream;
 ///     updated_at: jiff::Timestamp,
 ///
 ///     #[has_many]
-///     posts: toasty::HasMany<Post>,
+///     posts: toasty::Deferred<Vec<Post>>,
 /// }
 ///
 /// #[derive(Debug, toasty::Model)]
@@ -665,7 +665,7 @@ use proc_macro::TokenStream;
 ///     user_id: i64,
 ///
 ///     #[belongs_to(key = user_id, references = id)]
-///     user: toasty::BelongsTo<User>,
+///     user: toasty::Deferred<User>,
 /// }
 /// ```
 #[proc_macro_derive(
@@ -1467,7 +1467,7 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     id: i64,
 /// #     name: String,
 /// #     #[has_many]
-/// #     todos: toasty::HasMany<Todo>,
+/// #     todos: toasty::Deferred<Vec<Todo>>,
 /// # }
 /// # #[derive(toasty::Model)]
 /// # struct Todo {
@@ -1478,7 +1478,7 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     #[index]
 /// #     user_id: i64,
 /// #     #[belongs_to(key = user_id, references = id)]
-/// #     user: toasty::BelongsTo<User>,
+/// #     user: toasty::Deferred<User>,
 /// # }
 /// # async fn example(mut db: toasty::Db, user: User) -> toasty::Result<()> {
 /// let todo = toasty::create!(in user.todos() { title: "buy milk" })
@@ -1649,7 +1649,7 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     #[index]
 /// #     user_id: i64,
 /// #     #[belongs_to(key = user_id, references = id)]
-/// #     user: toasty::BelongsTo<User>,
+/// #     user: toasty::Deferred<User>,
 /// # }
 /// let _ = toasty::create!(Todo {
 ///     title: "buy milk",
@@ -1678,7 +1678,7 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     id: i64,
 /// #     name: String,
 /// #     #[has_many]
-/// #     todos: toasty::HasMany<Todo>,
+/// #     todos: toasty::Deferred<Vec<Todo>>,
 /// # }
 /// # #[derive(toasty::Model)]
 /// # struct Todo {
@@ -1689,7 +1689,7 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     #[index]
 /// #     user_id: i64,
 /// #     #[belongs_to(key = user_id, references = id)]
-/// #     user: toasty::BelongsTo<User>,
+/// #     user: toasty::Deferred<User>,
 /// # }
 /// let _ = toasty::create!(User {
 ///     name: "Alice",
@@ -1719,7 +1719,7 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     id: i64,
 /// #     name: String,
 /// #     #[has_many]
-/// #     todos: toasty::HasMany<Todo>,
+/// #     todos: toasty::Deferred<Vec<Todo>>,
 /// # }
 /// # #[derive(toasty::Model)]
 /// # struct Todo {
@@ -1730,9 +1730,9 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     #[index]
 /// #     user_id: i64,
 /// #     #[belongs_to(key = user_id, references = id)]
-/// #     user: toasty::BelongsTo<User>,
+/// #     user: toasty::Deferred<User>,
 /// #     #[has_many]
-/// #     tags: toasty::HasMany<Tag>,
+/// #     tags: toasty::Deferred<Vec<Tag>>,
 /// # }
 /// # #[derive(toasty::Model)]
 /// # struct Tag {
@@ -1743,7 +1743,7 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     #[index]
 /// #     todo_id: i64,
 /// #     #[belongs_to(key = todo_id, references = id)]
-/// #     todo: toasty::BelongsTo<Todo>,
+/// #     todo: toasty::Deferred<Todo>,
 /// # }
 /// let _ = toasty::create!(User {
 ///     name: "Alice",
@@ -1765,9 +1765,9 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// | `Option<T>` | Defaults to `None` (`NULL`) |
 /// | `#[default(expr)]` | Uses the default expression |
 /// | `#[update(expr)]` | Uses the expression as the initial value |
-/// | `HasMany<T>` | No related records created |
-/// | `HasOne<Option<T>>` | No related record created |
-/// | `BelongsTo<Option<T>>` | Foreign key set to `NULL` |
+/// | `#[has_many] Deferred<Vec<T>>` | No related records created |
+/// | `#[has_one] Deferred<Option<T>>` | No related record created |
+/// | `#[belongs_to] Deferred<Option<T>>` | Foreign key set to `NULL` |
 ///
 /// Required fields (`String`, `i64`, non-optional `BelongsTo`, etc.) that are
 /// missing do not cause a compile-time error. The insert fails at runtime with
@@ -1793,7 +1793,7 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     #[index]
 /// #     user_id: i64,
 /// #     #[belongs_to(key = user_id, references = id)]
-/// #     user: toasty::BelongsTo<User>,
+/// #     user: toasty::Deferred<User>,
 /// # }
 /// // Error: remove the type prefix `User` — use `{ ... }` without a type name
 /// toasty::create!(Todo { user: User { name: "Alice" } })
@@ -1817,7 +1817,7 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     #[index]
 /// #     user_id: i64,
 /// #     #[belongs_to(key = user_id, references = id)]
-/// #     user: toasty::BelongsTo<User>,
+/// #     user: toasty::Deferred<User>,
 /// # }
 /// let _ = toasty::create!(Todo { user: { name: "Alice" } });
 /// ```

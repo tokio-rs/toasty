@@ -489,14 +489,17 @@ impl Expand<'_> {
                 FieldTy::Primitive(ty) => {
                     quote!(#field_name <#ty as #toasty::Load>::load(record[#index_tokenized].take())?,)
                 }
-                FieldTy::BelongsTo(_) => {
-                    quote!(#field_name #toasty::BelongsTo::load(record[#index].take())?,)
+                FieldTy::BelongsTo(rel) => {
+                    let ty = &rel.ty;
+                    quote!(#field_name <#ty as #toasty::Load>::load(record[#index].take())?,)
                 }
-                FieldTy::HasMany(_) => {
-                    quote!(#field_name #toasty::HasMany::load(record[#index].take())?,)
+                FieldTy::HasMany(rel) => {
+                    let ty = &rel.ty;
+                    quote!(#field_name <#ty as #toasty::Load>::load(record[#index].take())?,)
                 }
-                FieldTy::HasOne(_) => {
-                    quote!(#field_name #toasty::HasOne::load(record[#index].take())?,)
+                FieldTy::HasOne(rel) => {
+                    let ty = &rel.ty;
+                    quote!(#field_name <#ty as #toasty::Load>::load(record[#index].take())?,)
                 }
             }
         });

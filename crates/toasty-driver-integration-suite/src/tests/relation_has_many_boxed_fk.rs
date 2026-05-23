@@ -10,7 +10,7 @@ pub async fn boxed_u64_fk_crud(test: &mut Test) -> Result<()> {
         id: u64,
         name: String,
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -20,7 +20,7 @@ pub async fn boxed_u64_fk_crud(test: &mut Test) -> Result<()> {
         #[index]
         user_id: Box<u64>,
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
         title: String,
     }
 
@@ -84,7 +84,7 @@ pub async fn boxed_u64_fk_batch_create(test: &mut Test) -> Result<()> {
         id: u64,
         name: String,
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -94,7 +94,7 @@ pub async fn boxed_u64_fk_batch_create(test: &mut Test) -> Result<()> {
         #[index]
         user_id: Box<u64>,
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
         title: String,
     }
 
@@ -127,7 +127,7 @@ pub async fn boxed_u64_fk_delete_and_update(test: &mut Test) -> Result<()> {
         id: u64,
         name: String,
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -137,7 +137,7 @@ pub async fn boxed_u64_fk_delete_and_update(test: &mut Test) -> Result<()> {
         #[index]
         user_id: Box<u64>,
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
         title: String,
     }
 
@@ -182,7 +182,7 @@ pub async fn arc_u64_fk_crud(test: &mut Test) -> Result<()> {
         id: u64,
         name: String,
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -192,7 +192,7 @@ pub async fn arc_u64_fk_crud(test: &mut Test) -> Result<()> {
         #[index]
         user_id: Arc<u64>,
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
         title: String,
     }
 
@@ -258,7 +258,7 @@ pub async fn rc_u64_fk_crud(test: &mut Test) -> Result<()> {
         id: u64,
         name: String,
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -268,7 +268,7 @@ pub async fn rc_u64_fk_crud(test: &mut Test) -> Result<()> {
         #[index]
         user_id: Rc<u64>,
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
         title: String,
     }
 

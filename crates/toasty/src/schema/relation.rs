@@ -8,9 +8,8 @@ use toasty_core::stmt;
 /// Describes how a model participates in associations.
 ///
 /// This trait is implemented by `#[derive(Model)]` and provides the associated
-/// types that the generated `HasMany`, `HasOne`, and `BelongsTo` wrappers use
-/// to construct query builders, create builders, and field accessors for
-/// the relation target.
+/// types that generated relation code uses to construct query builders, create
+/// builders, and field accessors for the relation target.
 ///
 /// Users do not implement this trait manually.
 pub trait Relation: Load<Output = Self> {
@@ -66,17 +65,16 @@ pub trait Relation: Load<Output = Self> {
 
 /// A Rust field type that represents a `#[has_many]` relation.
 ///
-/// This is implemented by relation field containers such as
-/// [`HasMany`](super::HasMany). The target model/query-builder metadata stays
-/// on [`Relation`]; this trait only describes how the field itself contributes
-/// relation schema metadata.
+/// This is implemented by [`Deferred<Vec<T>>`](super::Deferred). The target
+/// model/query-builder metadata stays on [`Relation`]; this trait only
+/// describes how the field itself contributes relation schema metadata.
 pub trait HasManyField: Load<Output = Self> {
     /// The relation target type carried by this field.
     type Target: Relation;
 
     /// Returns `true` if this relation field is nullable.
     fn nullable() -> bool {
-        Self::Target::nullable()
+        <Self::Target as Relation>::nullable()
     }
 
     /// Build the [`FieldTy`] for a `HasMany` relation field, given the
@@ -100,7 +98,7 @@ pub trait HasOneField: Load<Output = Self> {
 
     /// Returns `true` if this relation field is nullable.
     fn nullable() -> bool {
-        Self::Target::nullable()
+        <Self::Target as Relation>::nullable()
     }
 
     /// Build the [`FieldTy`] for a `HasOne` relation field, given an
@@ -122,7 +120,7 @@ pub trait BelongsToField: Load<Output = Self> {
 
     /// Returns `true` if this relation field is nullable.
     fn nullable() -> bool {
-        Self::Target::nullable()
+        <Self::Target as Relation>::nullable()
     }
 
     /// Build the [`FieldTy`] for a `BelongsTo` relation field, given the

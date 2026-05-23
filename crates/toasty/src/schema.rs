@@ -2,7 +2,6 @@ mod auto;
 pub use auto::Auto;
 
 mod belongs_to;
-pub use belongs_to::BelongsTo;
 
 /// Compile-time metadata and validation for `create!` macro field checking.
 pub mod create_meta;
@@ -21,10 +20,8 @@ pub use field::{Field, Scalar};
 mod jiff;
 
 mod has_many;
-pub use has_many::HasMany;
 
 mod has_one;
-pub use has_one::HasOne;
 
 pub(crate) mod lazy_slot;
 

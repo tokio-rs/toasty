@@ -61,7 +61,7 @@ struct User {
 
     // User's table has no FK — declares has_many
     #[has_many]
-    posts: toasty::HasMany<Post>,
+    posts: toasty::Deferred<Vec<Post>>,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -75,7 +75,7 @@ struct Post {
     user_id: u64,
 
     #[belongs_to(key = user_id, references = id)]
-    user: toasty::BelongsTo<User>,
+    user: toasty::Deferred<User>,
 
     title: String,
 }
@@ -93,7 +93,7 @@ a model with two `BelongsTo` relations pointing to the same parent type), use
 ```rust,ignore
 // On User: the child's relation field is named "owner", not "user"
 #[has_many(pair = owner)]
-posts: toasty::HasMany<Post>,
+posts: toasty::Deferred<Vec<Post>>,
 ```
 
 You can define one-sided relationships with only `#[belongs_to]` on the child
@@ -115,7 +115,7 @@ required or optional.
 user_id: u64,
 
 #[belongs_to(key = user_id, references = id)]
-user: toasty::BelongsTo<User>,
+user: toasty::Deferred<User>,
 ```
 
 Every post must have a user. The `user_id` column is `NOT NULL` in the database.
@@ -127,7 +127,7 @@ Every post must have a user. The `user_id` column is `NOT NULL` in the database.
 user_id: Option<u64>,
 
 #[belongs_to(key = user_id, references = id)]
-user: toasty::BelongsTo<Option<User>>,
+user: toasty::Deferred<Option<User>>,
 ```
 
 A post can exist without a user. The `user_id` column allows `NULL`.
@@ -160,7 +160,7 @@ the child in place.
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     posts: toasty::HasMany<Post>,
+#     posts: toasty::Deferred<Vec<Post>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Post {
@@ -170,7 +170,7 @@ the child in place.
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<User>,
+#     user: toasty::Deferred<User>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -203,9 +203,9 @@ generates the appropriate cascade deletes or null-setting updates automatically.
 
 | You want to express… | Use | FK goes on |
 |---|---|---|
-| A post has one author | `Post` → `BelongsTo<User>` + `User` → `HasMany<Post>` | `posts.user_id` |
-| A user has one profile | `User` → `HasOne<Profile>` + `Profile` → `BelongsTo<User>` | `profiles.user_id` |
-| A comment belongs to a post | `Comment` → `BelongsTo<Post>` + `Post` → `HasMany<Comment>` | `comments.post_id` |
+| A post has one author | `Post` → `Deferred<User>` + `User` → `Deferred<Vec<Post>>` | `posts.user_id` |
+| A user has one profile | `User` → `Deferred<Profile>` + `Profile` → `Deferred<User>` | `profiles.user_id` |
+| A comment belongs to a post | `Comment` → `Deferred<Post>` + `Post` → `Deferred<Vec<Comment>>` | `comments.post_id` |
 
 When deciding between `HasOne` and `HasMany`, ask: "Can the parent have more
 than one?" If yes, use `HasMany`. If exactly one (or zero), use `HasOne`. The
@@ -231,7 +231,7 @@ struct Team {
     id: u64,
 
     #[has_many]
-    members: toasty::HasMany<Member>,
+    members: toasty::Deferred<Vec<Member>>,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -245,7 +245,7 @@ struct Member {
     team_id: u64,
 
     #[belongs_to(key = [org_id, team_id], references = [org_id, id])]
-    team: toasty::BelongsTo<Team>,
+    team: toasty::Deferred<Team>,
 }
 ```
 

@@ -5,6 +5,7 @@ use toasty_core::{
 };
 
 use crate::engine::{hir, lower::LowerStatement};
+use crate::schema::lazy_slot;
 
 #[derive(Debug)]
 enum Mutation {
@@ -991,5 +992,5 @@ fn set_returning_slot(record: &mut stmt::ExprRecord, index: usize, expr: stmt::E
         "TODO: probably need to merge instead of overwrite; actual={:#?}",
         record.fields[index]
     );
-    record.fields[index] = expr;
+    record.fields[index] = lazy_slot::loaded_expr(expr);
 }

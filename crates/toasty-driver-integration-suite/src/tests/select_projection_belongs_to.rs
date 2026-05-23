@@ -26,7 +26,7 @@ pub async fn select_belongs_to_basic(t: &mut Test) -> Result<()> {
         author_id: ID,
 
         #[belongs_to(key = author_id, references = id)]
-        author: toasty::BelongsTo<User>,
+        author: toasty::Deferred<User>,
     }
 
     let mut db = t.setup_db(models!(User, Post)).await;
@@ -72,7 +72,7 @@ pub async fn select_belongs_to_with_filter(t: &mut Test) -> Result<()> {
         author_id: ID,
 
         #[belongs_to(key = author_id, references = id)]
-        author: toasty::BelongsTo<User>,
+        author: toasty::Deferred<User>,
     }
 
     let mut db = t.setup_db(models!(User, Post)).await;
@@ -119,7 +119,7 @@ pub async fn select_belongs_to_first(t: &mut Test) -> Result<()> {
         author_id: ID,
 
         #[belongs_to(key = author_id, references = id)]
-        author: toasty::BelongsTo<User>,
+        author: toasty::Deferred<User>,
     }
 
     let mut db = t.setup_db(models!(User, Post)).await;

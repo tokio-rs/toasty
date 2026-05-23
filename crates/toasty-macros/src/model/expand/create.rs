@@ -202,7 +202,7 @@ impl Expand<'_> {
                         // `List<T>` for `Vec<T: Scalar>`. Trait dispatch
                         // routes each case correctly; no type parsing here.
                         quote! {
-                            #vis fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::Field>::ExprTarget>) -> Self {
+                            #vis fn #name(mut self, #name: impl IntoExpr<FieldExprTarget<#ty>>) -> Self {
                                 self.stmt.set(#index_tokenized, #name.into_expr());
                                 self
                             }

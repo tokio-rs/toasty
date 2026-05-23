@@ -19,11 +19,11 @@ scenario! {
         name: String,
 
         #[has_one]
-        account: toasty::HasOne<Option<Account>>,
+        account: toasty::Deferred<Option<Account>>,
 
         // User → account → subscription, all single (`has_one`) steps.
         #[has_one(via = account.subscription)]
-        subscription: toasty::HasOne<Option<Subscription>>,
+        subscription: toasty::Deferred<Option<Subscription>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -36,10 +36,10 @@ scenario! {
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::Deferred<Option<User>>,
 
         #[has_one]
-        subscription: toasty::HasOne<Option<Subscription>>,
+        subscription: toasty::Deferred<Option<Subscription>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -52,7 +52,7 @@ scenario! {
         account_id: Option<ID>,
 
         #[belongs_to(key = account_id, references = id)]
-        account: toasty::BelongsTo<Option<Account>>,
+        account: toasty::Deferred<Option<Account>>,
 
         plan: String,
     }

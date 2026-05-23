@@ -20,7 +20,7 @@ pub async fn select_has_one_basic(t: &mut Test) -> Result<()> {
         name: String,
 
         #[has_one]
-        profile: toasty::HasOne<Profile>,
+        profile: toasty::Deferred<Profile>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -33,7 +33,7 @@ pub async fn select_has_one_basic(t: &mut Test) -> Result<()> {
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::Deferred<Option<User>>,
 
         bio: String,
     }
@@ -68,7 +68,7 @@ pub async fn select_has_one_with_filter(t: &mut Test) -> Result<()> {
         name: String,
 
         #[has_one]
-        profile: toasty::HasOne<Profile>,
+        profile: toasty::Deferred<Profile>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -81,7 +81,7 @@ pub async fn select_has_one_with_filter(t: &mut Test) -> Result<()> {
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::Deferred<Option<User>>,
 
         bio: String,
     }
@@ -122,7 +122,7 @@ pub async fn select_has_one_first(t: &mut Test) -> Result<()> {
         name: String,
 
         #[has_one]
-        profile: toasty::HasOne<Profile>,
+        profile: toasty::Deferred<Profile>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -135,7 +135,7 @@ pub async fn select_has_one_first(t: &mut Test) -> Result<()> {
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::Deferred<Option<User>>,
 
         bio: String,
     }
