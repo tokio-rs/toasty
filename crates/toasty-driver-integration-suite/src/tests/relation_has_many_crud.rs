@@ -774,7 +774,7 @@ pub async fn has_many_when_fk_is_composite(test: &mut Test) -> Result<()> {
         id: ID,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -786,7 +786,7 @@ pub async fn has_many_when_fk_is_composite(test: &mut Test) -> Result<()> {
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
 
         title: String,
     }
@@ -959,7 +959,7 @@ pub async fn delete_when_belongs_to_optional(test: &mut Test) -> Result<()> {
         id: ID,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -972,7 +972,7 @@ pub async fn delete_when_belongs_to_optional(test: &mut Test) -> Result<()> {
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::Deferred<Option<User>>,
     }
 
     let mut db = test.setup_db(models!(User, Todo)).await;
@@ -1057,7 +1057,7 @@ pub async fn update_user_with_null_todo_is_err(test: &mut Test) -> Result<()> {
         id: ID,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -1070,7 +1070,7 @@ pub async fn update_user_with_null_todo_is_err(test: &mut Test) -> Result<()> {
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
     }
 
     use toasty::stmt::{self, IntoExpr};
@@ -1224,7 +1224,7 @@ pub async fn has_many_when_fk_is_composite_with_snippets(test: &mut Test) -> Res
         id: ID,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -1236,7 +1236,7 @@ pub async fn has_many_when_fk_is_composite_with_snippets(test: &mut Test) -> Res
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
 
         title: String,
     }

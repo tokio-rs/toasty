@@ -8,7 +8,7 @@ a query carry the field in an unloaded state; accessing the value
 requires either a follow-up `.exec()` call or preloading through
 `.include()`. A `Deferred<T>` field whose inner type is not `Option<_>`
 is a required argument at create time, exactly like any other
-non-nullable field. The API mirrors `BelongsTo<T>`: load on demand with
+non-nullable field. The API mirrors deferred relation fields: load on demand with
 `.exec()`, preload with `.include()`, read a preloaded value with
 `.get()`. One feature covers SQL and DynamoDB.
 
@@ -57,9 +57,9 @@ The attribute is what tells the macro to treat the field as deferred —
 to skip it from the default projection, generate a load method, and
 register a non-`Primitive` schema entry. The wrapper type carries the
 unloaded-state runtime API. Both are required; one without the other
-is a compile error. This matches Toasty's existing pattern for
-relations, where `#[belongs_to]` and `BelongsTo<T>` always travel
-together.
+is a compile error. This matches Toasty's existing pattern for relation
+fields, where a relation attribute and `Deferred<_>` field type always
+travel together.
 
 `body` is required — every `Document` row stores a value. `summary` is
 nullable. Both are excluded from the default `SELECT` list. Querying for
@@ -68,8 +68,8 @@ fields in an unloaded state.
 
 `#[deferred]` works with primitives or embedded types (`#[derive(Embed)]`
 structs and enums) at the root model, and inside embedded types
-themselves. It does not compose with `BelongsTo`, `HasMany`, or
-`HasOne` — relations are already lazy.
+themselves. It does not compose with relation attributes — relation fields
+already use `Deferred<_>`.
 
 A deferred embedded value omits all of the embed's columns from the
 default projection:
@@ -119,9 +119,9 @@ println!("{}", doc.title);          // loaded
 assert!(doc.body.is_unloaded());    // deferred — no value yet
 ```
 
-`doc.body.get()` panics in this state. The contract matches `BelongsTo`:
-`.get()` is the synchronous accessor for a value the engine has already
-materialized.
+`doc.body.get()` panics in this state. The contract matches deferred relation
+fields: `.get()` is the synchronous accessor for a value the engine has
+already materialized.
 
 ### Loading on demand
 
@@ -163,7 +163,7 @@ deferred fields and relation includes works as expected:
 let doc = Document::filter_by_id(id)
     .include(Document::fields().body())
     .include(Document::fields().summary())
-    .include(Document::fields().author())   // BelongsTo
+    .include(Document::fields().author())   // relation
     .get(&mut db)
     .await?;
 ```
@@ -266,10 +266,10 @@ from the column list it requests from the driver. The list of deferred
 columns is part of the model schema and is consulted at lower-time when
 the engine expands `*` into concrete columns.
 
-**`Deferred<T>` value lifecycle.** A `Deferred<T>` carries `Option<T>`
-internally. It is `None` after a default load, `Some(...)` after a
-preload, and `None` again after `.unload()`. `is_unloaded()` and
-`.get()` mirror `BelongsTo`. `.unload()` returns the field to the
+**`Deferred<T>` value lifecycle.** A `Deferred<T>` carries an optional
+loaded value internally. It is empty after a default load, populated after
+a preload, and empty again after `.unload()`. `is_unloaded()` and `.get()`
+mirror deferred relation fields. `.unload()` returns the field to the
 unloaded state without touching the database.
 
 **`.exec()` on a deferred field.** Issues a single-record read keyed on
@@ -301,8 +301,9 @@ post-update scalar without a follow-up read.
   used. The two are independent: an eager embed may contain deferred
   fields, and a deferred embed may contain eager fields (which are
   still pulled when the embed itself is included).
-- *Relations.* `Deferred<BelongsTo<T>>` is a build error. Use `.include()`
-  to control relation loading.
+- *Relations.* Do not combine `#[deferred]` with `#[belongs_to]`,
+  `#[has_many]`, or `#[has_one]`. Relation fields already use
+  `Deferred<_>` and `.include()` controls when they load.
 - *Indexes.* A `#[index]` on a deferred field is allowed and creates an
   index on the underlying column. Filtering still works without
   loading.
@@ -461,8 +462,8 @@ themselves.
 
 - **Per-call column projection** — `.select(...)` / `.exclude(...)` on a
   query. A separate feature; deferred is the schema-default version.
-- **Deferred relations** — `BelongsTo`, `HasMany`, and `HasOne` are
-  already lazy; `Deferred<Relation<T>>` does not add anything.
+- **Deferred relations** — relation fields already use `Deferred<_>`;
+  this design covers scalar and embedded fields.
 - **Cross-row batching of `.exec()`** — a Vec-level batch loader is
   noted in open questions; not part of this design.
 - **Compression or out-of-band storage** — moving the column into S3 or

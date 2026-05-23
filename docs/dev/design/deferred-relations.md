@@ -4,9 +4,8 @@
 
 Relations should use the same loaded/unloaded value model as deferred fields.
 Instead of declaring relation fields with dedicated wrapper types such as
-`HasMany<T>`, `HasOne<T>`, and `BelongsTo<T>`, users will declare lazy
-relations with `Deferred<T>` and eager relations with the relation value
-directly:
+`HasMany<T>`, `HasOne<T>`, and `BelongsTo<T>`, users will declare relations
+with `Deferred<T>`:
 
 ```rust
 #[has_many]
@@ -17,19 +16,6 @@ profile: toasty::Deferred<Option<Profile>>,
 
 #[belongs_to(key = user_id, references = id)]
 user: toasty::Deferred<User>,
-```
-
-The direct forms become eager relation fields:
-
-```rust
-#[has_many]
-foos: Vec<Foo>,
-
-#[has_one]
-profile: Option<Profile>,
-
-#[belongs_to(key = user_id, references = id)]
-user: User,
 ```
 
 This removes the public relation wrapper types and makes relation loading
@@ -45,11 +31,9 @@ are separate:
 - `HasMany<T>`, `HasOne<T>`, and `BelongsTo<T>` are used for relations.
 
 The split leaks into the API. Users must learn separate wrapper names, separate
-loaded-state types, and separate rules for when `.include()` matters. It also
-makes a useful concept awkward to express: a relation that is always eager
-loaded. Once relations are modeled as either `Deferred<RelationValue>` or the
-relation value directly, eager and lazy loading become a property of the field
-type rather than a separate family of relation-specific wrappers.
+loaded-state types, and separate rules for when `.include()` matters. Once
+relations are modeled as `Deferred<RelationValue>`, relation fields use the
+same loaded-state API as other deferred fields.
 
 ## User-facing API
 
@@ -98,22 +82,6 @@ for post in user.posts.get() {
 }
 ```
 
-Direct relation values are eager by default:
-
-```rust
-#[derive(Debug, toasty::Model)]
-struct User {
-    #[key]
-    id: toasty::Id<Self>,
-
-    #[has_many]
-    posts: Vec<Post>,
-}
-```
-
-Loading a `User` loads `posts` as part of the model's default projection. This
-is useful for small, ownership-like relations that are expected by every caller.
-
 Before:
 
 ```rust
@@ -145,10 +113,8 @@ exist. `#[has_one] Deferred<Option<T>>` and
 `#[belongs_to] Deferred<Option<T>>` load as `None` when the relation was loaded
 and no related row exists.
 
-Direct relation fields are eager. A default model load includes them without an
-explicit `.include(...)`. Eager relation loading must be acyclic: a cycle of
-eager relation fields is a schema error. Break the cycle by making at least one
-edge `Deferred<_>`.
+Direct relation fields are not supported until the engine has eager relation
+loading. Every relation field must use `Deferred<_>`.
 
 Relation accessors remain available. A `user.posts()` method still returns a
 relation query builder for querying, filtering, inserting into, or removing
@@ -169,9 +135,9 @@ use one lazy-slot convention for deferred fields and relations:
 This lets `Deferred<Option<T>>` and `Deferred<Option<Model>>` represent loaded
 `None` as `Record([Null])` without a relation-specific special value.
 
-Eager relation cycles are rejected. Without this, a model graph such as
-`User { posts: Vec<Post> }` and `Post { user: User }` would recursively imply
-loading users with posts with users with posts.
+Eager relation fields remain out of scope for this phase. When eager relations
+are added, cycles such as `User { posts: Vec<Post> }` and `Post { user: User }`
+must be rejected or bounded.
 
 Multi-step `via` relations should remain lazy-only until include/select support
 for `via` relations exists. The current relation include path already rejects
@@ -205,24 +171,22 @@ the public relation syntax changes.
    target/query-builder information stays on `Relation`; field schema
    construction moved to `HasManyField`, `HasOneField`, and `BelongsToField`.
 
-5. Implement the field-level relation traits for both old and new field shapes.
-   The compatibility set should include `HasMany<T>`, `HasOne<T>`,
-   `BelongsTo<T>`, `Deferred<Vec<T>>`, `Vec<T>`, `Deferred<T>`, `T`,
-   `Deferred<Option<T>>`, and `Option<T>` where applicable.
+5. Done: implement the field-level relation traits for the deferred field
+   shapes. The accepted set is `Deferred<Vec<T>>`, `Deferred<T>`, and
+   `Deferred<Option<T>>` where applicable.
 
-6. Change macro parsing and expansion to use field-level relation traits.
-   Relation attributes should accept `Deferred<_>` and direct value types while
-   old wrapper types continue to compile.
+6. Done: change macro parsing and expansion to use field-level relation traits.
+   Relation attributes accept `Deferred<_>`. Old wrapper types and direct value
+   types are rejected as relation fields.
 
-7. Teach default returning lowering to include non-deferred relation fields.
-   `Deferred<_>` relation fields stay unloaded by default; direct relation
-   fields are included automatically.
+7. Future: teach default returning lowering to include non-deferred relation
+   fields. `Deferred<_>` relation fields stay unloaded by default; direct
+   relation fields are included automatically once eager loading exists.
 
 8. Add schema verification for eager relation cycles and unsupported eager
    `via` relations.
 
-9. Update tests and docs for the new syntax. Keep the old wrapper syntax as a
-   compatibility path until the migration is complete.
+9. Update tests and docs for the new syntax.
 
 10. Deprecate, then remove, `HasMany<T>`, `HasOne<T>`, and `BelongsTo<T>` from
     the public API.
@@ -238,6 +202,7 @@ the public relation syntax changes.
     the options by checking generated rustdocs and compiler error messages.
     TODO: investigate whether `Relation` is still needed at all, or whether
     generated code can use `Model` plus the relation field traits directly.
+    TODO: consider renaming the shared `lazy_slot` helper module to `lazy`.
 
 ## Alternatives considered
 

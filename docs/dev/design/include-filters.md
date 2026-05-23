@@ -306,10 +306,10 @@ unchanged — a bare path is an unfiltered include.
   #[derive(Model)]
   struct User {
       #[has_many]
-      todos: HasMany<Todo>,
+      todos: Deferred<Vec<Todo>>,
 
       #[has_many(filter = Todo::fields().active().eq(true))]
-      active_todos: HasMany<Todo>,
+      active_todos: Deferred<Vec<Todo>>,
   }
   ```
 

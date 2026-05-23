@@ -52,7 +52,7 @@ model's `fields()` accessor:
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     posts: toasty::HasMany<Post>,
+#     posts: toasty::Deferred<Vec<Post>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Post {
@@ -62,7 +62,7 @@ model's `fields()` accessor:
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<User>,
+#     user: toasty::Deferred<User>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -113,17 +113,18 @@ fn post_count(user: &User) -> Option<usize> {
 }
 ```
 
-`.try_get()` is available on all three relation types and returns the same
-reference shape as `.get()` wrapped in an `Option`:
+`.try_get()` is available on relation fields and returns the same reference
+shape as `.get()` wrapped in an `Option`:
 
-| Relation type | `.get()` returns | `.try_get()` returns |
+| Field type | `.get()` returns | `.try_get()` returns |
 |---|---|---|
-| `BelongsTo<T>` | `&T` | `Option<&T>` |
-| `HasOne<T>` | `&T` | `Option<&T>` |
-| `HasMany<T>` | `&[T]` | `Option<&[T]>` |
+| `Deferred<T>` | `&T` | `Option<&T>` |
+| `Deferred<Option<T>>` | `&Option<T>` | `Option<&Option<T>>` |
+| `Deferred<Vec<T>>` | `&Vec<T>` | `Option<&Vec<T>>` |
 
-For `HasMany`, an empty slice means the association was loaded and the record
-has no related rows, while `None` means the association was not loaded.
+For `Deferred<Vec<T>>`, an empty vector means the association was loaded and
+the record has no related rows, while `None` from `.try_get()` means the
+association was not loaded.
 
 Prefer `.get()` in code paths that control the query (the call site can see the
 matching `.include()`); reserve `.try_get()` for code that accepts records from
@@ -142,7 +143,7 @@ Preload a parent record from the child side:
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     posts: toasty::HasMany<Post>,
+#     posts: toasty::Deferred<Vec<Post>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Post {
@@ -152,7 +153,7 @@ Preload a parent record from the child side:
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<User>,
+#     user: toasty::Deferred<User>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -185,7 +186,7 @@ Preload a single child record from the parent side:
 #     id: u64,
 #     name: String,
 #     #[has_one]
-#     profile: toasty::HasOne<Option<Profile>>,
+#     profile: toasty::Deferred<Option<Profile>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Profile {
@@ -196,7 +197,7 @@ Preload a single child record from the parent side:
 #     #[unique]
 #     user_id: Option<u64>,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<Option<User>>,
+#     user: toasty::Deferred<Option<User>>,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
 # let user = toasty::create!(User { name: "Alice", profile: { bio: "A person" } })
@@ -226,7 +227,7 @@ panic:
 #     id: u64,
 #     name: String,
 #     #[has_one]
-#     profile: toasty::HasOne<Option<Profile>>,
+#     profile: toasty::Deferred<Option<Profile>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Profile {
@@ -237,7 +238,7 @@ panic:
 #     #[unique]
 #     user_id: Option<u64>,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<Option<User>>,
+#     user: toasty::Deferred<Option<User>>,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
 let user = toasty::create!(User { name: "No Profile" }).exec(&mut db).await?;

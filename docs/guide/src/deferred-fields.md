@@ -10,7 +10,7 @@ read: a `Document` body, a binary blob, an audit-event JSON payload.
 Without the deferred annotation, every list query reads every column
 whether the caller needs it or not.
 
-The API mirrors `BelongsTo`: a synchronous `.get()` reads an
+The API mirrors deferred relation fields: a synchronous `.get()` reads an
 already-loaded value, an async per-field accessor loads on demand, and
 `.include()` preloads as part of the parent query.
 
@@ -275,7 +275,7 @@ coalesce, and they combine with relation `.include()`s:
 let doc = Document::filter_by_id(id)
     .include(Document::fields().body())
     .include(Document::fields().summary())
-    .include(Document::fields().author())   // BelongsTo
+    .include(Document::fields().author())   // relation
     .get(&mut db)
     .await?;
 ```

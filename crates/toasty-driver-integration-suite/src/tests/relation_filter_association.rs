@@ -14,7 +14,7 @@ pub async fn filter_by_has_one_field(t: &mut Test) -> Result<()> {
         name: String,
 
         #[has_one]
-        profile: toasty::HasOne<Option<Profile>>,
+        profile: toasty::Deferred<Option<Profile>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -29,7 +29,7 @@ pub async fn filter_by_has_one_field(t: &mut Test) -> Result<()> {
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::Deferred<Option<User>>,
     }
 
     let mut db = t.setup_db(models!(User, Profile)).await;
@@ -99,7 +99,7 @@ pub async fn filter_by_nested_has_one_chain(t: &mut Test) -> Result<()> {
         label: String,
 
         #[has_one]
-        b: toasty::HasOne<Option<B>>,
+        b: toasty::Deferred<Option<B>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -112,10 +112,10 @@ pub async fn filter_by_nested_has_one_chain(t: &mut Test) -> Result<()> {
         a_id: Option<ID>,
 
         #[belongs_to(key = a_id, references = id)]
-        a: toasty::BelongsTo<Option<A>>,
+        a: toasty::Deferred<Option<A>>,
 
         #[has_one]
-        c: toasty::HasOne<Option<C>>,
+        c: toasty::Deferred<Option<C>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -130,7 +130,7 @@ pub async fn filter_by_nested_has_one_chain(t: &mut Test) -> Result<()> {
         b_id: Option<ID>,
 
         #[belongs_to(key = b_id, references = id)]
-        b: toasty::BelongsTo<Option<B>>,
+        b: toasty::Deferred<Option<B>>,
     }
 
     let mut db = t.setup_db(models!(A, B, C)).await;

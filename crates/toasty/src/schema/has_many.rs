@@ -99,39 +99,7 @@ impl<T: Relation> HasMany<T> {
     }
 }
 
-impl<T: Relation> HasManyField for HasMany<T> {
-    type Target = T;
-
-    fn nullable() -> bool {
-        <T as Relation>::nullable()
-    }
-
-    fn has_many_field_ty(
-        singular: Name,
-        pair: Option<FieldId>,
-        via: Option<stmt::Path>,
-    ) -> FieldTy {
-        has_many_field_ty::<T>(singular, pair, via)
-    }
-}
-
 impl<T: Relation> HasManyField for Deferred<Vec<T>> {
-    type Target = T;
-
-    fn nullable() -> bool {
-        <T as Relation>::nullable()
-    }
-
-    fn has_many_field_ty(
-        singular: Name,
-        pair: Option<FieldId>,
-        via: Option<stmt::Path>,
-    ) -> FieldTy {
-        has_many_field_ty::<T>(singular, pair, via)
-    }
-}
-
-impl<T: Relation> HasManyField for Vec<T> {
     type Target = T;
 
     fn nullable() -> bool {

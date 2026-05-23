@@ -19,7 +19,7 @@ pub async fn select_has_many_basic(t: &mut Test) -> Result<()> {
         name: String,
 
         #[has_many]
-        posts: toasty::HasMany<Post>,
+        posts: toasty::Deferred<Vec<Post>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -33,7 +33,7 @@ pub async fn select_has_many_basic(t: &mut Test) -> Result<()> {
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
     }
 
     let mut db = t.setup_db(models!(User, Post)).await;
@@ -68,7 +68,7 @@ pub async fn select_has_many_with_filter(t: &mut Test) -> Result<()> {
         name: String,
 
         #[has_many]
-        posts: toasty::HasMany<Post>,
+        posts: toasty::Deferred<Vec<Post>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -82,7 +82,7 @@ pub async fn select_has_many_with_filter(t: &mut Test) -> Result<()> {
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
     }
 
     let mut db = t.setup_db(models!(User, Post)).await;
@@ -126,7 +126,7 @@ pub async fn select_has_many_first(t: &mut Test) -> Result<()> {
         name: String,
 
         #[has_many]
-        posts: toasty::HasMany<Post>,
+        posts: toasty::Deferred<Vec<Post>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -140,7 +140,7 @@ pub async fn select_has_many_first(t: &mut Test) -> Result<()> {
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
     }
 
     let mut db = t.setup_db(models!(User, Post)).await;

@@ -7,7 +7,7 @@ struct User {
     name: String,
 
     #[has_one]
-    profile: toasty::HasOne<Option<Profile>>,
+    profile: toasty::Deferred<Option<Profile>>,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -17,7 +17,7 @@ struct Profile {
     id: uuid::Uuid,
 
     #[belongs_to(key = user_id, references = id)]
-    user: toasty::BelongsTo<Option<User>>,
+    user: toasty::Deferred<Option<User>>,
 
     #[unique]
     user_id: Option<uuid::Uuid>,

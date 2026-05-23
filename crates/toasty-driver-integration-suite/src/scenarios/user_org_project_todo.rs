@@ -22,16 +22,16 @@ scenario! {
         name: String,
 
         #[has_many]
-        organizations: toasty::HasMany<Organization>,
+        organizations: toasty::Deferred<Vec<Organization>>,
 
         // User → organizations → projects → todos
         #[has_many(via = organizations.projects.todos)]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
 
         // User → organizations → Organization::todos, which is itself a via.
         // The second step expands into another via path (via-of-via).
         #[has_many(via = organizations.todos)]
-        nested_todos: toasty::HasMany<Todo>,
+        nested_todos: toasty::Deferred<Vec<Todo>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -46,15 +46,15 @@ scenario! {
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
 
         #[has_many]
-        projects: toasty::HasMany<Project>,
+        projects: toasty::Deferred<Vec<Project>>,
 
         // Organization → projects → todos. The via that `User::nested_todos`
         // routes through, making that relation a via-of-via.
         #[has_many(via = projects.todos)]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -69,10 +69,10 @@ scenario! {
         organization_id: ID,
 
         #[belongs_to(key = organization_id, references = id)]
-        organization: toasty::BelongsTo<Organization>,
+        organization: toasty::Deferred<Organization>,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -87,7 +87,7 @@ scenario! {
         project_id: ID,
 
         #[belongs_to(key = project_id, references = id)]
-        project: toasty::BelongsTo<Project>,
+        project: toasty::Deferred<Project>,
     }
 
     async fn setup(test: &mut Test) -> toasty::Db {

@@ -218,7 +218,7 @@ pub async fn create_macro_deeply_nested(test: &mut Test) -> Result<()> {
         name: String,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -231,12 +231,12 @@ pub async fn create_macro_deeply_nested(test: &mut Test) -> Result<()> {
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
 
         title: String,
 
         #[has_many]
-        tags: toasty::HasMany<Tag>,
+        tags: toasty::Deferred<Vec<Tag>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -249,7 +249,7 @@ pub async fn create_macro_deeply_nested(test: &mut Test) -> Result<()> {
         todo_id: ID,
 
         #[belongs_to(key = todo_id, references = id)]
-        todo: toasty::BelongsTo<Todo>,
+        todo: toasty::Deferred<Todo>,
 
         name: String,
     }

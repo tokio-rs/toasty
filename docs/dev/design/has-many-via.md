@@ -6,7 +6,7 @@ Today a `has_many` or `has_one` relation is a single hop: one foreign key
 links the two models. This adds a `via` option that lets a relation reach a
 target by following a path of *existing* relations. A `User` that has many
 `Comment`s, where each `Comment` belongs to an `Article`, can declare
-`#[has_many(via = comments.article)] commented_articles: HasMany<Article>`
+`#[has_many(via = comments.article)] commented_articles: Deferred<Vec<Article>>`
 and query the distinct articles a user has commented on as a relation —
 filterable, includable, and composable with the rest of the query API. The
 `via` path may also step through embedded struct fields to reach a relation
@@ -56,11 +56,11 @@ struct User {
     name: String,
 
     #[has_many]
-    comments: toasty::HasMany<Comment>,
+    comments: toasty::Deferred<Vec<Comment>>,
 
     // User → comments → article
     #[has_many(via = comments.article)]
-    commented_articles: toasty::HasMany<Article>,
+    commented_articles: toasty::Deferred<Vec<Article>>,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -75,13 +75,13 @@ struct Comment {
     user_id: u64,
 
     #[belongs_to(key = user_id, references = id)]
-    user: toasty::BelongsTo<User>,
+    user: toasty::Deferred<User>,
 
     #[index]
     article_id: u64,
 
     #[belongs_to(key = article_id, references = id)]
-    article: toasty::BelongsTo<Article>,
+    article: toasty::Deferred<Article>,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -93,14 +93,14 @@ struct Article {
     title: String,
 
     #[has_many]
-    comments: toasty::HasMany<Comment>,
+    comments: toasty::Deferred<Vec<Comment>>,
 }
 ```
 
 The relation's target type is `Article` because the path
-`comments.article` ends at `Article`: `comments` is a `HasMany<Comment>`, and
-`article` is a `BelongsTo<Article>` on `Comment`. Toasty checks at schema-build
-time that the resolved target matches the declared `HasMany<Article>`.
+`comments.article` ends at `Article`: `comments` is a `Deferred<Vec<Comment>>`, and
+`article` is a `Deferred<Article>` on `Comment`. Toasty checks at schema-build
+time that the resolved target matches the declared `Deferred<Vec<Article>>`.
 
 A `via` relation needs no `pair` — it has no foreign key of its own. It is
 *derived* entirely from the relations it traverses. Each step in the path may
@@ -152,7 +152,7 @@ struct Order {
 
     #[index] customer_id: u64,
     #[belongs_to(key = customer_id, references = id)]
-    customer: toasty::BelongsTo<Customer>,
+    customer: toasty::Deferred<Customer>,
 
     // ShippingInfo is an embedded struct holding the warehouse FK.
     shipping: ShippingInfo,
@@ -162,7 +162,7 @@ struct Order {
 struct ShippingInfo {
     warehouse_id: u64,
     #[belongs_to(key = warehouse_id, references = id)]
-    warehouse: toasty::BelongsTo<Warehouse>,
+    warehouse: toasty::Deferred<Warehouse>,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -170,11 +170,11 @@ struct Customer {
     #[key] #[auto] id: u64,
 
     #[has_many]
-    orders: toasty::HasMany<Order>,
+    orders: toasty::Deferred<Vec<Order>>,
 
     // Customer → orders → shipping (embedded) → warehouse
     #[has_many(via = orders.shipping.warehouse)]
-    warehouses: toasty::HasMany<Warehouse>,
+    warehouses: toasty::Deferred<Vec<Warehouse>>,
 }
 ```
 
@@ -234,8 +234,8 @@ time:
 - A segment that is not a relation and not an embedded field (e.g. a
   primitive `String` field) — the path cannot continue through it.
 - A segment that does not name a field on the current model.
-- A resolved target type that does not match the declared `HasMany<T>` /
-  `HasOne<T>`.
+- A resolved target type that does not match the declared `Deferred<Vec<T>>` /
+  `Deferred<T>`.
 
 **Interaction with `.include()`.** A `via` relation can be the target of
 `.include()`. The include subquery builder follows the multi-step path the

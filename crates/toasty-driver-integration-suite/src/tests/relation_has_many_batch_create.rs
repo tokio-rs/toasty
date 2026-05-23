@@ -151,7 +151,7 @@ pub async fn user_batch_create_todos_with_optional_field(test: &mut Test) -> Res
         name: String,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
 
         // This optional field triggers the unimplemented code path!
         // Without it, the batch create works fine.
@@ -169,7 +169,7 @@ pub async fn user_batch_create_todos_with_optional_field(test: &mut Test) -> Res
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
 
         title: String,
     }
@@ -211,7 +211,7 @@ pub async fn user_batch_create_two_todos_simple(test: &mut Test) -> Result<()> {
         email: String,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -224,7 +224,7 @@ pub async fn user_batch_create_two_todos_simple(test: &mut Test) -> Result<()> {
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
 
         title: String,
     }

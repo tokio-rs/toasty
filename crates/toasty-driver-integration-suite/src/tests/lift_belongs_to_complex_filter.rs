@@ -43,7 +43,7 @@ pub async fn lift_belongs_to_preserves_embedded_field_filter(t: &mut Test) -> Re
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
     }
 
     let mut db = t.setup_db(models!(User, Post, Address)).await;

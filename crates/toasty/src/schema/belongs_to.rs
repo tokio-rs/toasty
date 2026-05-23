@@ -86,31 +86,7 @@ impl<T: Relation> BelongsTo<T> {
     }
 }
 
-impl<T: Relation> BelongsToField for BelongsTo<T> {
-    type Target = T;
-
-    fn nullable() -> bool {
-        <T as Relation>::nullable()
-    }
-
-    fn belongs_to_field_ty(foreign_key: ForeignKey) -> FieldTy {
-        belongs_to_field_ty::<T>(foreign_key)
-    }
-}
-
 impl<T: Relation> BelongsToField for Deferred<T> {
-    type Target = T;
-
-    fn nullable() -> bool {
-        <T as Relation>::nullable()
-    }
-
-    fn belongs_to_field_ty(foreign_key: ForeignKey) -> FieldTy {
-        belongs_to_field_ty::<T>(foreign_key)
-    }
-}
-
-impl<T: Relation> BelongsToField for T {
     type Target = T;
 
     fn nullable() -> bool {

@@ -175,10 +175,10 @@ let metas: Vec<Metadata> = Document::all()
 ### Selecting relation fields
 
 A relation field is a valid projection target.  Selecting one
-projects to the relation's value shape: a `BelongsTo<T>` or `HasOne<T>`
-field yields one element per parent row (`T`, or `Option<T>` for a
-nullable association); a `HasMany<T>` field yields a `Vec<T>` per
-parent row.  The engine reuses the include-subquery machinery already
+projects to the relation's value shape: a `Deferred<T>` field yields one
+element per parent row (`T`, or `Option<T>` for a nullable association);
+a `Deferred<Vec<T>>` field yields a `Vec<T>` per parent row.  The engine
+reuses the include-subquery machinery already
 used by `.include(...)`; the difference is the surrounding shape.
 `.include(...)` returns a model record with the relation attached;
 `.select(...)` returns the relation value directly.
@@ -192,7 +192,7 @@ used by `.include(...)`; the difference is the surrounding shape.
 #     #[key] #[auto] id: u64,
 #     title: String,
 #     #[belongs_to(key = author_id, references = id)]
-#     author: toasty::BelongsTo<Author>,
+#     author: toasty::Deferred<Author>,
 #     author_id: u64,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -217,7 +217,7 @@ adds none (or `Option` if the association is nullable):
 #     #[key] #[auto] id: u64,
 #     title: String,
 #     #[belongs_to(key = author_id, references = id)]
-#     author: toasty::BelongsTo<Author>,
+#     author: toasty::Deferred<Author>,
 #     author_id: u64,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -385,8 +385,8 @@ projection surface needs:
 What the macro must add for projection to work end-to-end:
 
 1. `IntoExpr<T>` impls for relation field handles, where `T` is the
-   relation's value shape (`Author` for a `BelongsTo<Author>`,
-   `Vec<Comment>` for a `HasMany<Comment>`, `Option<T>` for nullable
+   relation's value shape (`Author` for a `Deferred<Author>`,
+   `Vec<Comment>` for a `Deferred<Vec<Comment>>`, `Option<T>` for nullable
    associations).  These reduce to the same subquery expression
    `.include(...)` already constructs, wrapped in a typed `Expr<T>`.
 2. `IntoExpr<T>` impls for relation-traversal field paths

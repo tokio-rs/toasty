@@ -31,7 +31,7 @@ pub async fn composite_belongs_to_missing_index_is_error(test: &mut Test) -> Res
         revision: i64,
 
         #[has_many]
-        children: toasty::HasMany<Child>,
+        children: toasty::Deferred<Vec<Child>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -47,7 +47,7 @@ pub async fn composite_belongs_to_missing_index_is_error(test: &mut Test) -> Res
         parent_revision: i64,
 
         #[belongs_to(key = [parent_id, parent_revision], references = [id, revision])]
-        parent: toasty::BelongsTo<Parent>,
+        parent: toasty::Deferred<Parent>,
     }
 
     let err = test
@@ -286,7 +286,7 @@ pub async fn composite_delete_when_belongs_to_optional(test: &mut Test) -> Resul
         id: ID,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
     }
 
     // Composite FK where the FK is *optional* — modeled by leaving the
@@ -303,7 +303,7 @@ pub async fn composite_delete_when_belongs_to_optional(test: &mut Test) -> Resul
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::Deferred<Option<User>>,
     }
 
     let mut db = test.setup_db(models!(User, Todo)).await;
@@ -550,7 +550,7 @@ pub async fn composite_user_batch_create_todos_with_optional_field(test: &mut Te
         name: String,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
 
         // Optional field exercises the RETURNING/constantize path that
         // regressed in #user_batch_create_todos_with_optional_field.
@@ -567,7 +567,7 @@ pub async fn composite_user_batch_create_todos_with_optional_field(test: &mut Te
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
 
         title: String,
     }
@@ -599,7 +599,7 @@ pub async fn composite_remove_add_single_relation_option_belongs_to(test: &mut T
         id: ID,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -612,7 +612,7 @@ pub async fn composite_remove_add_single_relation_option_belongs_to(test: &mut T
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::Deferred<Option<User>>,
     }
 
     let mut db = test.setup_db(models!(User, Todo)).await;
@@ -714,7 +714,7 @@ pub async fn composite_add_remove_multiple_relation_option_belongs_to(
         id: ID,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -727,7 +727,7 @@ pub async fn composite_add_remove_multiple_relation_option_belongs_to(
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::Deferred<Option<User>>,
     }
 
     let mut db = test.setup_db(models!(User, Todo)).await;
@@ -815,7 +815,7 @@ pub async fn composite_preload_has_many_with_optional_belongs_to(test: &mut Test
         name: String,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -828,7 +828,7 @@ pub async fn composite_preload_has_many_with_optional_belongs_to(test: &mut Test
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::Deferred<Option<User>>,
 
         title: String,
     }
@@ -892,7 +892,7 @@ pub async fn composite_crud_has_one_required(test: &mut Test) -> Result<()> {
         id: ID,
 
         #[has_one]
-        profile: toasty::HasOne<Option<Profile>>,
+        profile: toasty::Deferred<Option<Profile>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -904,7 +904,7 @@ pub async fn composite_crud_has_one_required(test: &mut Test) -> Result<()> {
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
 
         bio: String,
     }
@@ -951,7 +951,7 @@ pub async fn composite_filter_by_belongs_to_field(test: &mut Test) -> Result<()>
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
 
         bio: String,
     }
@@ -1029,7 +1029,7 @@ pub async fn composite_select_belongs_to_basic(test: &mut Test) -> Result<()> {
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        author: toasty::BelongsTo<User>,
+        author: toasty::Deferred<User>,
     }
 
     let mut db = test.setup_db(models!(User, Post)).await;

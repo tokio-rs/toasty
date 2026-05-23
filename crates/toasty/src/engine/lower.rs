@@ -32,8 +32,8 @@ use crate::engine::{Engine, HirStatement, fold, hir, simplify::Simplify};
 
 /// Wrap a nullable single-relation subquery so a missing row passes through as
 /// `Null`, while a present row is transformed by `present`. Used when lowering
-/// `.include()`/`.select()` of nullable single (`HasOne<Option<_>>` /
-/// `BelongsTo<Option<_>>`) relations that need to project out of the subquery
+/// `.include()`/`.select()` of nullable single (`Deferred<Option<_>>` /
+/// `Deferred<Option<_>>`) relations that need to project out of the subquery
 /// result:
 ///
 /// ```text

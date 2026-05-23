@@ -90,31 +90,7 @@ impl<T: Relation> HasOne<T> {
     }
 }
 
-impl<T: Relation> HasOneField for HasOne<T> {
-    type Target = T;
-
-    fn nullable() -> bool {
-        <T as Relation>::nullable()
-    }
-
-    fn has_one_field_ty(pair: Option<FieldId>, via: Option<stmt::Path>) -> FieldTy {
-        has_one_field_ty::<T>(pair, via)
-    }
-}
-
 impl<T: Relation> HasOneField for Deferred<T> {
-    type Target = T;
-
-    fn nullable() -> bool {
-        <T as Relation>::nullable()
-    }
-
-    fn has_one_field_ty(pair: Option<FieldId>, via: Option<stmt::Path>) -> FieldTy {
-        has_one_field_ty::<T>(pair, via)
-    }
-}
-
-impl<T: Relation> HasOneField for T {
     type Target = T;
 
     fn nullable() -> bool {

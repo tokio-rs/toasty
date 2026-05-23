@@ -36,7 +36,7 @@ pub async fn query_by_index_optimization(test: &mut Test) -> Result<()> {
         name: String,
 
         #[has_many]
-        users: toasty::HasMany<User>,
+        users: toasty::Deferred<Vec<User>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -51,7 +51,7 @@ pub async fn query_by_index_optimization(test: &mut Test) -> Result<()> {
         board_id: ID,
 
         #[belongs_to(key = board_id, references = id)]
-        board: toasty::BelongsTo<Board>,
+        board: toasty::Deferred<Board>,
     }
 
     let mut db = test.setup_db(models!(Board, User)).await;

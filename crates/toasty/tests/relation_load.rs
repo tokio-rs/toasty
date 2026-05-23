@@ -118,24 +118,14 @@ fn assert_has_one_field<F: HasOneField<Target = Target>, Target: Relation>() {}
 fn assert_belongs_to_field<F: BelongsToField<Target = Target>, Target: Relation>() {}
 
 #[test]
-fn direct_and_deferred_relation_field_shapes_are_supported() {
-    assert_has_many_field::<HasMany<Dummy>>();
+fn deferred_relation_field_shapes_are_supported() {
     assert_has_many_field::<Deferred<Vec<Dummy>>>();
-    assert_has_many_field::<Vec<Dummy>>();
 
-    assert_has_one_field::<HasOne<Dummy>, Dummy>();
-    assert_has_one_field::<HasOne<Option<Dummy>>, Option<Dummy>>();
     assert_has_one_field::<Deferred<Dummy>, Dummy>();
     assert_has_one_field::<Deferred<Option<Dummy>>, Option<Dummy>>();
-    assert_has_one_field::<Dummy, Dummy>();
-    assert_has_one_field::<Option<Dummy>, Option<Dummy>>();
 
-    assert_belongs_to_field::<BelongsTo<Dummy>, Dummy>();
-    assert_belongs_to_field::<BelongsTo<Option<Dummy>>, Option<Dummy>>();
     assert_belongs_to_field::<Deferred<Dummy>, Dummy>();
     assert_belongs_to_field::<Deferred<Option<Dummy>>, Option<Dummy>>();
-    assert_belongs_to_field::<Dummy, Dummy>();
-    assert_belongs_to_field::<Option<Dummy>, Option<Dummy>>();
 }
 
 #[test]
