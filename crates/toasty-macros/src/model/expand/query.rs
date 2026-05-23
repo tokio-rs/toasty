@@ -161,7 +161,8 @@ impl Expand<'_> {
     fn expand_belongs_to_method(&self, field: &Field, rel: &BelongsTo) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
-        let target = &rel.ty;
+        let ty = &rel.ty;
+        let target = quote!(<#ty as #toasty::BelongsToField>::Target);
         let model_ident = &self.model.ident;
         let field_ident = &field.name.ident;
 
@@ -180,7 +181,8 @@ impl Expand<'_> {
     fn expand_has_many_method(&self, field: &Field, rel: &HasMany) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
-        let target = &rel.ty;
+        let ty = &rel.ty;
+        let target = quote!(<#ty as #toasty::HasManyField>::Target);
         let model_ident = &self.model.ident;
         let field_ident = &field.name.ident;
 
@@ -199,7 +201,8 @@ impl Expand<'_> {
     fn expand_has_one_method(&self, field: &Field, rel: &HasOne) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
-        let target = &rel.ty;
+        let ty = &rel.ty;
+        let target = quote!(<#ty as #toasty::HasOneField>::Target);
         let model_ident = &self.model.ident;
         let field_ident = &field.name.ident;
 

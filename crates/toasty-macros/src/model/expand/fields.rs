@@ -73,10 +73,20 @@ impl Expand<'_> {
                         self.expand_primitive_field_method(field_ident, ty, &field_offset)
                     }
                     BelongsTo(rel) => {
-                        self.expand_one_relation_field_method(field_ident, &rel.ty, &field_offset)
+                        self.expand_one_relation_field_method(
+                            field_ident,
+                            quote!(#toasty::BelongsToField),
+                            &rel.ty,
+                            &field_offset,
+                        )
                     }
                     HasOne(rel) => {
-                        self.expand_one_relation_field_method(field_ident, &rel.ty, &field_offset)
+                        self.expand_one_relation_field_method(
+                            field_ident,
+                            quote!(#toasty::HasOneField),
+                            &rel.ty,
+                            &field_offset,
+                        )
                     }
                     HasMany(rel) => {
                         let ty = &rel.ty;
@@ -86,8 +96,8 @@ impl Expand<'_> {
                         };
 
                         quote_spanned! { span=>
-                            #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::ManyField<__Origin> {
-                                <#ty as #toasty::Relation>::ManyField::from_path(#path)
+                            #vis fn #field_ident(&self) -> <<#ty as #toasty::HasManyField>::Target as #toasty::Relation>::ManyField<__Origin> {
+                                <<#ty as #toasty::HasManyField>::Target as #toasty::Relation>::ManyField::from_path(#path)
                             }
                         }
                     }
@@ -175,15 +185,30 @@ impl Expand<'_> {
                     // All relations from a list context return the list variant
                     BelongsTo(rel) => {
                         let ty = &rel.ty;
-                        self.expand_list_relation_field_method(field_ident, ty, &field_offset)
+                        self.expand_list_relation_field_method(
+                            field_ident,
+                            quote!(#toasty::BelongsToField),
+                            ty,
+                            &field_offset,
+                        )
                     }
                     HasOne(rel) => {
                         let ty = &rel.ty;
-                        self.expand_list_relation_field_method(field_ident, ty, &field_offset)
+                        self.expand_list_relation_field_method(
+                            field_ident,
+                            quote!(#toasty::HasOneField),
+                            ty,
+                            &field_offset,
+                        )
                     }
                     HasMany(rel) => {
                         let ty = &rel.ty;
-                        self.expand_list_relation_field_method(field_ident, ty, &field_offset)
+                        self.expand_list_relation_field_method(
+                            field_ident,
+                            quote!(#toasty::HasManyField),
+                            ty,
+                            &field_offset,
+                        )
                     }
                 }
             });
@@ -358,6 +383,7 @@ impl Expand<'_> {
     fn expand_list_relation_field_method(
         &self,
         field_ident: &syn::Ident,
+        field_trait: TokenStream,
         ty: &syn::Type,
         field_offset: &TokenStream,
     ) -> TokenStream {
@@ -367,8 +393,8 @@ impl Expand<'_> {
         let span = field_ident.span();
 
         quote_spanned! { span=>
-            #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::ManyField<__Origin> {
-                <#ty as #toasty::Relation>::ManyField::from_path(
+            #vis fn #field_ident(&self) -> <<#ty as #field_trait>::Target as #toasty::Relation>::ManyField<__Origin> {
+                <<#ty as #field_trait>::Target as #toasty::Relation>::ManyField::from_path(
                     self.path().chain(
                         #toasty::Path::<#model_ident, _>::from_field_index(#field_offset)
                     )
