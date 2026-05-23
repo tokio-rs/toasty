@@ -201,9 +201,9 @@ the public relation syntax changes.
 3. Done: remove the nullable single-relation special case. Encode loaded
    `None` for nullable has-one and belongs-to relations as `Record([Null])`.
 
-4. Split relation target traits from relation field traits. Keep the model
-   target/query-builder information on a `Relation`-like trait, and introduce
-   field-level traits for `has_many`, `has_one`, and `belongs_to` fields.
+4. Done: split relation target traits from relation field traits. Model
+   target/query-builder information stays on `Relation`; field schema
+   construction moved to `HasManyField`, `HasOneField`, and `BelongsToField`.
 
 5. Implement the field-level relation traits for both old and new field shapes.
    The compatibility set should include `HasMany<T>`, `HasOne<T>`,
@@ -227,6 +227,16 @@ the public relation syntax changes.
 10. Deprecate, then remove, `HasMany<T>`, `HasOne<T>`, and `BelongsTo<T>` from
     the public API.
 
+11. Cleanup: investigate folding some or all `Relation` associated types into
+    the relation field traits. The step 4 split currently requires generated
+    code to hop from a field type through `HasManyField::Target`,
+    `HasOneField::Target`, or `BelongsToField::Target` before reaching
+    `Relation` associated types such as `Model`, `Expr`, `Query`, `Many`, and
+    `One`. Also investigate whether generated local type aliases such as
+    `type __RelationTarget = <#target_ty as #field_trait>::Target;` are enough
+    to keep the expansion readable without changing trait ownership. Compare
+    the options by checking generated rustdocs and compiler error messages.
+
 ## Alternatives considered
 
 Keep the existing wrappers and add eager wrapper variants. This would avoid a
@@ -244,8 +254,6 @@ without overloading `Option`.
 
 ## Open questions
 
-- Blocking implementation: what exact trait names should replace the wrapper
-  side of `Relation`?
 - Blocking implementation: should eager `belongs_to` be allowed for required
   relations only, or also for nullable `Option<T>`?
 - Blocking implementation: should eager relation cycle detection reject every

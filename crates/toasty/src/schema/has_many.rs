@@ -1,4 +1,4 @@
-use super::{Load, Register, Relation, Scope, lazy_slot};
+use super::{HasManyField, Load, Register, Relation, Scope, lazy_slot};
 
 use toasty_core::schema::Name;
 use toasty_core::schema::app::{self, FieldId, FieldTy, ModelId};
@@ -99,26 +99,8 @@ impl<T: Relation> HasMany<T> {
     }
 }
 
-impl<T: Relation> Relation for HasMany<T> {
-    type Model = T::Model;
-    type Expr = T::Expr;
-    type Query = T::Query;
-    type Create = T::Create;
-    type Many = T::Many;
-    type ManyField<__Origin> = T::ManyField<__Origin>;
-    type One = T::One;
-    type OneField<__Origin> = T::OneField<__Origin>;
-    type OptionOne = T::OptionOne;
-
-    fn new_many_field<__Origin>(
-        path: crate::stmt::Path<__Origin, crate::stmt::List<Self::Model>>,
-    ) -> Self::ManyField<__Origin> {
-        T::new_many_field(path)
-    }
-
-    fn field_name_to_id(name: &str) -> toasty_core::schema::app::FieldId {
-        T::field_name_to_id(name)
-    }
+impl<T: Relation> HasManyField for HasMany<T> {
+    type Target = T;
 
     fn nullable() -> bool {
         T::nullable()

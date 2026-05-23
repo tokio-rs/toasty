@@ -43,7 +43,7 @@ pub use register::{DiscoverItem, Register, generate_unique_id};
 mod num;
 
 mod relation;
-pub use relation::Relation;
+pub use relation::{BelongsToField, HasManyField, HasOneField, Relation};
 
 mod scope;
 pub use scope::Scope;
