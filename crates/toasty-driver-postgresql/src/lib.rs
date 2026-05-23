@@ -73,12 +73,28 @@ fn classify_pg_error(e: tokio_postgres::Error) -> toasty_core::Error {
 ///
 /// let driver = PostgreSQL::new("postgresql://localhost/mydb").unwrap();
 /// ```
-#[derive(Debug)]
 pub struct PostgreSQL {
     url: String,
     config: Config,
     #[cfg(feature = "tls")]
-    tls: Option<tls::MakeRustlsConnect>,
+    tls: Option<tokio_postgres_rustls::MakeRustlsConnect>,
+}
+
+impl std::fmt::Debug for PostgreSQL {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self {
+            url,
+            config,
+            #[cfg(feature = "tls")]
+            tls,
+        } = self;
+        let mut s = f.debug_struct("PostgreSQL");
+        s.field("url", url);
+        s.field("config", config);
+        #[cfg(feature = "tls")]
+        s.field("tls", &tls.as_ref().map(|_| "MakeRustlsConnect"));
+        s.finish()
+    }
 }
 
 impl PostgreSQL {
