@@ -76,7 +76,7 @@ pub trait HasManyField: Load<Output = Self> {
 
     /// Returns `true` if this relation field is nullable.
     fn nullable() -> bool {
-        Self::Target::nullable()
+        <Self::Target as Relation>::nullable()
     }
 
     /// Build the [`FieldTy`] for a `HasMany` relation field, given the
@@ -100,7 +100,7 @@ pub trait HasOneField: Load<Output = Self> {
 
     /// Returns `true` if this relation field is nullable.
     fn nullable() -> bool {
-        Self::Target::nullable()
+        <Self::Target as Relation>::nullable()
     }
 
     /// Build the [`FieldTy`] for a `HasOne` relation field, given an
@@ -122,7 +122,7 @@ pub trait BelongsToField: Load<Output = Self> {
 
     /// Returns `true` if this relation field is nullable.
     fn nullable() -> bool {
-        Self::Target::nullable()
+        <Self::Target as Relation>::nullable()
     }
 
     /// Build the [`FieldTy`] for a `BelongsTo` relation field, given the

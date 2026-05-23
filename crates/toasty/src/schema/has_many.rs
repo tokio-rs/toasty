@@ -1,4 +1,4 @@
-use super::{HasManyField, Load, Register, Relation, Scope, lazy_slot};
+use super::{Deferred, HasManyField, Load, Register, Relation, Scope, lazy_slot};
 
 use toasty_core::schema::Name;
 use toasty_core::schema::app::{self, FieldId, FieldTy, ModelId};
@@ -103,7 +103,7 @@ impl<T: Relation> HasManyField for HasMany<T> {
     type Target = T;
 
     fn nullable() -> bool {
-        T::nullable()
+        <T as Relation>::nullable()
     }
 
     fn has_many_field_ty(
@@ -111,13 +111,53 @@ impl<T: Relation> HasManyField for HasMany<T> {
         pair: Option<FieldId>,
         via: Option<stmt::Path>,
     ) -> FieldTy {
-        FieldTy::HasMany(app::HasMany {
-            target: <T::Model as Register>::id(),
-            expr_ty: stmt::Type::List(Box::new(stmt::Type::Model(<T::Model as Register>::id()))),
-            singular,
-            kind: has_kind(pair, via),
-        })
+        has_many_field_ty::<T>(singular, pair, via)
     }
+}
+
+impl<T: Relation> HasManyField for Deferred<Vec<T>> {
+    type Target = T;
+
+    fn nullable() -> bool {
+        <T as Relation>::nullable()
+    }
+
+    fn has_many_field_ty(
+        singular: Name,
+        pair: Option<FieldId>,
+        via: Option<stmt::Path>,
+    ) -> FieldTy {
+        has_many_field_ty::<T>(singular, pair, via)
+    }
+}
+
+impl<T: Relation> HasManyField for Vec<T> {
+    type Target = T;
+
+    fn nullable() -> bool {
+        <T as Relation>::nullable()
+    }
+
+    fn has_many_field_ty(
+        singular: Name,
+        pair: Option<FieldId>,
+        via: Option<stmt::Path>,
+    ) -> FieldTy {
+        has_many_field_ty::<T>(singular, pair, via)
+    }
+}
+
+fn has_many_field_ty<T: Relation>(
+    singular: Name,
+    pair: Option<FieldId>,
+    via: Option<stmt::Path>,
+) -> FieldTy {
+    FieldTy::HasMany(app::HasMany {
+        target: <T::Model as Register>::id(),
+        expr_ty: stmt::Type::List(Box::new(stmt::Type::Model(<T::Model as Register>::id()))),
+        singular,
+        kind: has_kind(pair, via),
+    })
 }
 
 /// Build a [`HasKind`](app::HasKind) from the macro-supplied `pair` / `via`

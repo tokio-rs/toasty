@@ -1,4 +1,4 @@
-use super::{BelongsToField, Load, Register, Relation, lazy_slot};
+use super::{BelongsToField, Deferred, Load, Register, Relation, lazy_slot};
 
 use toasty_core::schema::app::{self, FieldTy, ForeignKey};
 use toasty_core::stmt::{self, Value};
@@ -90,18 +90,46 @@ impl<T: Relation> BelongsToField for BelongsTo<T> {
     type Target = T;
 
     fn nullable() -> bool {
-        T::nullable()
+        <T as Relation>::nullable()
     }
 
     fn belongs_to_field_ty(foreign_key: ForeignKey) -> FieldTy {
-        FieldTy::BelongsTo(app::BelongsTo {
-            target: <T::Model as Register>::id(),
-            expr_ty: stmt::Type::Model(<T::Model as Register>::id()),
-            // The pair is populated at runtime.
-            pair: None,
-            foreign_key,
-        })
+        belongs_to_field_ty::<T>(foreign_key)
     }
+}
+
+impl<T: Relation> BelongsToField for Deferred<T> {
+    type Target = T;
+
+    fn nullable() -> bool {
+        <T as Relation>::nullable()
+    }
+
+    fn belongs_to_field_ty(foreign_key: ForeignKey) -> FieldTy {
+        belongs_to_field_ty::<T>(foreign_key)
+    }
+}
+
+impl<T: Relation> BelongsToField for T {
+    type Target = T;
+
+    fn nullable() -> bool {
+        <T as Relation>::nullable()
+    }
+
+    fn belongs_to_field_ty(foreign_key: ForeignKey) -> FieldTy {
+        belongs_to_field_ty::<T>(foreign_key)
+    }
+}
+
+fn belongs_to_field_ty<T: Relation>(foreign_key: ForeignKey) -> FieldTy {
+    FieldTy::BelongsTo(app::BelongsTo {
+        target: <T::Model as Register>::id(),
+        expr_ty: stmt::Type::Model(<T::Model as Register>::id()),
+        // The pair is populated at runtime.
+        pair: None,
+        foreign_key,
+    })
 }
 
 impl<T> Default for BelongsTo<T> {

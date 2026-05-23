@@ -236,6 +236,8 @@ the public relation syntax changes.
     `type __RelationTarget = <#target_ty as #field_trait>::Target;` are enough
     to keep the expansion readable without changing trait ownership. Compare
     the options by checking generated rustdocs and compiler error messages.
+    TODO: investigate whether `Relation` is still needed at all, or whether
+    generated code can use `Model` plus the relation field traits directly.
 
 ## Alternatives considered
 
