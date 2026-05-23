@@ -464,6 +464,14 @@ fn wrap_in_const(code: TokenStream) -> TokenStream {
     quote! {
         const _: () = {
             use toasty as _toasty;
+            // Import the setter-bound names unqualified so the `impl Trait`
+            // parameter types on create/update setters render as
+            // `impl IntoExpr<FieldExprTarget<..>>` in compiler errors rather
+            // than the much longer `_toasty::codegen_support::..` paths. Not
+            // every model uses all three (a model with only relation setters
+            // never names `Assign` here), so silence the unused-import lint.
+            #[allow(unused_imports)]
+            use _toasty::codegen_support::{Assign, FieldExprTarget, IntoExpr};
             #code
         };
     }

@@ -120,12 +120,12 @@ impl Expand<'_> {
                 // accepts whatever its expression-level type permits —
                 // `Self` for scalars, `List<T>` for `Vec<T: Scalar>`.
                 quote! {
-                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::Field>::ExprTarget>) -> Self {
+                    #vis fn #field_ident(mut self, #field_ident: impl Assign<FieldExprTarget<#ty>>) -> Self {
                         self.#set_field_ident(#field_ident);
                         self
                     }
 
-                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::Field>::ExprTarget>) -> &mut Self {
+                    #vis fn #set_field_ident(&mut self, #field_ident: impl Assign<FieldExprTarget<#ty>>) -> &mut Self {
                         let projection = #projection;
                         #field_ident.assign(&mut self.assignments, projection);
                         self
