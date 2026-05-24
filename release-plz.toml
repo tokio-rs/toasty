@@ -51,6 +51,10 @@ name = "toasty-driver-sqlite"
 version_group = "toasty"
 
 [[package]]
+name = "toasty-driver-turso"
+version_group = "toasty"
+
+[[package]]
 name = "toasty-driver-integration-suite"
 version_group = "toasty"
 
