@@ -10,7 +10,7 @@
 <a href=#10 id=10 data-nosnippet>10</a>/// - Primitive fields map to a single column
 <a href=#11 id=11 data-nosnippet>11</a>/// - Struct fields flatten an embedded struct to multiple columns
 <a href=#12 id=12 data-nosnippet>12</a>/// - Enum fields map to a discriminant column plus per-variant data columns
-<a href=#13 id=13 data-nosnippet>13</a>/// - Relation fields (`BelongsTo`, `HasMany`, `HasOne`) don't have direct column storage
+<a href=#13 id=13 data-nosnippet>13</a>/// - Relation fields (`BelongsTo`, `Has`) don't have direct column storage
 <a href=#14 id=14 data-nosnippet>14</a>///
 <a href=#15 id=15 data-nosnippet>15</a>/// # Examples
 <a href=#16 id=16 data-nosnippet>16</a>///
@@ -298,7 +298,7 @@
 <a href=#298 id=298 data-nosnippet>298</a>    </span><span class="kw">pub </span>fields: Vec&lt;Field&gt;,
 <a href=#299 id=299 data-nosnippet>299</a>}
 <a href=#300 id=300 data-nosnippet>300</a>
-<a href=#301 id=301 data-nosnippet>301</a><span class="doccomment">/// Maps a relation field (`BelongsTo`, `HasMany`, `HasOne`).
+<a href=#301 id=301 data-nosnippet>301</a><span class="doccomment">/// Maps a relation field (`BelongsTo`, `Has`).
 <a href=#302 id=302 data-nosnippet>302</a>///
 <a href=#303 id=303 data-nosnippet>303</a>/// Relations don't map to columns in this table -- they are resolved through
 <a href=#304 id=304 data-nosnippet>304</a>/// joins or foreign keys in other tables. A unique bit is assigned in the

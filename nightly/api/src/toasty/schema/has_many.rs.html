@@ -54,10 +54,10 @@
 <a href=#54 id=54 data-nosnippet>54</a>    pair: <span class="prelude-ty">Option</span>&lt;FieldId&gt;,
 <a href=#55 id=55 data-nosnippet>55</a>    via: <span class="prelude-ty">Option</span>&lt;stmt::Path&gt;,
 <a href=#56 id=56 data-nosnippet>56</a>) -&gt; FieldTy {
-<a href=#57 id=57 data-nosnippet>57</a>    FieldTy::HasMany(app::HasMany {
+<a href=#57 id=57 data-nosnippet>57</a>    FieldTy::Has(app::Has {
 <a href=#58 id=58 data-nosnippet>58</a>        target: &lt;T::Model <span class="kw">as </span>Register&gt;::id(),
 <a href=#59 id=59 data-nosnippet>59</a>        expr_ty: stmt::Type::List(Box::new(stmt::Type::Model(&lt;T::Model <span class="kw">as </span>Register&gt;::id()))),
-<a href=#60 id=60 data-nosnippet>60</a>        singular,
+<a href=#60 id=60 data-nosnippet>60</a>        cardinality: app::HasCardinality::Many { singular },
 <a href=#61 id=61 data-nosnippet>61</a>        kind: has_kind(pair, via),
 <a href=#62 id=62 data-nosnippet>62</a>    })
 <a href=#63 id=63 data-nosnippet>63</a>}

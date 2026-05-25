@@ -13,7 +13,7 @@
 <a href=#13 id=13 data-nosnippet>13</a>//! - [`Model`] -- a single model, which can be a [`ModelRoot`] (backed by a
 <a href=#14 id=14 data-nosnippet>14</a>//!   database table), an [`EmbeddedStruct`], or an [`EmbeddedEnum`].
 <a href=#15 id=15 data-nosnippet>15</a>//! - [`Field`] -- one field on a model, identified by a [`FieldId`].
-<a href=#16 id=16 data-nosnippet>16</a>//! - [`BelongsTo`], [`HasMany`], [`HasOne`] -- relation types.
+<a href=#16 id=16 data-nosnippet>16</a>//! - [`BelongsTo`], [`Has`] -- relation types.
 <a href=#17 id=17 data-nosnippet>17</a>//! - [`Index`] -- a secondary index on a model's fields.
 <a href=#18 id=18 data-nosnippet>18</a>//! - [`PrimaryKey`] -- a model's primary key definition.
 <a href=#19 id=19 data-nosnippet>19</a>//!
@@ -57,7 +57,7 @@
 <a href=#57 id=57 data-nosnippet>57</a><span class="kw">pub use </span>pk::PrimaryKey;
 <a href=#58 id=58 data-nosnippet>58</a>
 <a href=#59 id=59 data-nosnippet>59</a><span class="kw">mod </span>relation;
-<a href=#60 id=60 data-nosnippet>60</a><span class="kw">pub use </span>relation::{BelongsTo, HasKind, HasMany, HasOne, Via};
+<a href=#60 id=60 data-nosnippet>60</a><span class="kw">pub use </span>relation::{BelongsTo, Has, HasCardinality, HasKind, Via};
 <a href=#61 id=61 data-nosnippet>61</a>
 <a href=#62 id=62 data-nosnippet>62</a><span class="kw">mod </span>schema;
 <a href=#63 id=63 data-nosnippet>63</a><span class="kw">pub use </span>schema::{Resolved, Schema};

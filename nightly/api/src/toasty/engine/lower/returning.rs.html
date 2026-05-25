@@ -59,8 +59,8 @@
 <a href=#59 id=59 data-nosnippet>59</a>
 <a href=#60 id=60 data-nosnippet>60</a>            <span class="kw">if </span>is_insert &amp;&amp; is_insert_local_eager_relation(<span class="kw-2">&amp;</span>field.ty) {
 <a href=#61 id=61 data-nosnippet>61</a>                record[field.id.index] = <span class="kw">match </span>field.ty {
-<a href=#62 id=62 data-nosnippet>62</a>                    FieldTy::HasMany(<span class="kw">_</span>) =&gt; stmt::Expr::list_from_vec(<span class="macro">vec!</span>[]),
-<a href=#63 id=63 data-nosnippet>63</a>                    FieldTy::HasOne(<span class="kw">_</span>) =&gt; stmt::Expr::null(),
+<a href=#62 id=62 data-nosnippet>62</a>                    FieldTy::Has(<span class="kw-2">ref </span>rel) <span class="kw">if </span>rel.is_many() =&gt; stmt::Expr::list_from_vec(<span class="macro">vec!</span>[]),
+<a href=#63 id=63 data-nosnippet>63</a>                    FieldTy::Has(<span class="kw">_</span>) =&gt; stmt::Expr::null(),
 <a href=#64 id=64 data-nosnippet>64</a>                    <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
 <a href=#65 id=65 data-nosnippet>65</a>                };
 <a href=#66 id=66 data-nosnippet>66</a>                <span class="kw">continue</span>;
@@ -370,7 +370,7 @@
 <a href=#370 id=370 data-nosnippet>370</a>}
 <a href=#371 id=371 data-nosnippet>371</a>
 <a href=#372 id=372 data-nosnippet>372</a><span class="kw">fn </span>is_insert_local_eager_relation(field_ty: <span class="kw-2">&amp;</span>FieldTy) -&gt; bool {
-<a href=#373 id=373 data-nosnippet>373</a>    <span class="macro">matches!</span>(field_ty, FieldTy::HasMany(<span class="kw">_</span>) | FieldTy::HasOne(<span class="kw">_</span>))
+<a href=#373 id=373 data-nosnippet>373</a>    <span class="macro">matches!</span>(field_ty, FieldTy::Has(<span class="kw">_</span>))
 <a href=#374 id=374 data-nosnippet>374</a>}
 <a href=#375 id=375 data-nosnippet>375</a>
 <a href=#376 id=376 data-nosnippet>376</a><span class="kw">fn </span>first_model_field(path: <span class="kw-2">&amp;</span>stmt::Path, model_id: ModelId) -&gt; <span class="prelude-ty">Option</span>&lt;usize&gt; {

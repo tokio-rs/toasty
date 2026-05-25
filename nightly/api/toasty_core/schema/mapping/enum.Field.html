@@ -9,7 +9,7 @@
 <li>Primitive fields map to a single column</li>
 <li>Struct fields flatten an embedded struct to multiple columns</li>
 <li>Enum fields map to a discriminant column plus per-variant data columns</li>
-<li>Relation fields (<code>BelongsTo</code>, <code>HasMany</code>, <code>HasOne</code>) don’t have direct column storage</li>
+<li>Relation fields (<code>BelongsTo</code>, <code>Has</code>) don’t have direct column storage</li>
 </ul>
 <h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
 <div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>toasty_core::schema::mapping::Field;
