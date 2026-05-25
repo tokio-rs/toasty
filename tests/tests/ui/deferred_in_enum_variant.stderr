@@ -1,5 +1,0 @@
-error: cannot find attribute `deferred` in this scope
- --> tests/ui/deferred_in_enum_variant.rs:7:11
-  |
-7 |         #[deferred]
-  |           ^^^^^^^^
